@@ -1876,7 +1876,6 @@ void MainWindow::ResetHorizontalScroll(const DiveTreeView &tree_view)
     if (h_scroll_bar)
     {
         h_scroll_bar->triggerAction(QAbstractSlider::SliderToMinimum);
-        QApplication::processEvents();
     }
 }
 
@@ -1886,7 +1885,6 @@ void MainWindow::ResetVerticalScroll(const DiveTreeView &tree_view)
     if (v_scroll_bar)
     {
         v_scroll_bar->triggerAction(QAbstractSlider::SliderToMinimum);
-        QApplication::processEvents();
     }
 }
 
@@ -3254,7 +3252,6 @@ void MainWindow::OnCorrelationFilterApplied(uint64_t           gfxr_draw_call_in
             m_pm4_command_hierarchy_view->expand(proxy_index);
 
             m_pm4_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
         }
     }
 
@@ -3272,7 +3269,6 @@ void MainWindow::OnCorrelationFilterApplied(uint64_t           gfxr_draw_call_in
     m_command_hierarchy_view->expand(vulkan_draw_call_model_index);
 
     m_command_hierarchy_view->viewport()->update();
-    QApplication::processEvents();
 
     CorrelateCounter(vulkan_draw_call_model_index, true);
 
@@ -3346,7 +3342,6 @@ void MainWindow::ClearViewModelSelection(DiveTreeView &tree_view, bool should_cl
     }
 
     tree_view.viewport()->update();
-    QApplication::processEvents();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3478,7 +3473,6 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
             m_pm4_command_hierarchy_view->expand(proxy_index);
 
             m_pm4_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
 
             CorrelateCounter(index, true);
             emit EventSelected(corresponding_pm4_draw_call_index);
@@ -3553,7 +3547,6 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
             m_command_hierarchy_view->expand(proxy_index);
 
             m_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
 
             CorrelateCounter(index, false);
         }
@@ -3608,7 +3601,6 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
             m_command_hierarchy_view->expand(proxy_index);
 
             m_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
         }
     }
 
@@ -3640,7 +3632,6 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
                 m_pm4_command_hierarchy_view->expand(proxy_index);
 
                 m_pm4_command_hierarchy_view->viewport()->update();
-                QApplication::processEvents();
             }
         }
     }
@@ -3763,6 +3754,5 @@ void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
         m_command_hierarchy_view->expand(proxy_index);
 
         m_command_hierarchy_view->viewport()->update();
-        QApplication::processEvents();
     }
 }

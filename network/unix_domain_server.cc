@@ -53,10 +53,10 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
             HandshakeResponse response;
             response.SetMajorVersion(request->GetMajorVersion());
             response.SetMinorVersion(request->GetMinorVersion());
-            auto status = SendMessage(client_conn, response);
+            auto status = SendSocketMessage(client_conn, response);
             if (!status.ok())
             {
-                LOGW("DefaultMessageHandler::HandleMessage: SendMessage fail: %.*s",
+                LOGW("DefaultMessageHandler::HandleMessage: SendSocketMessage fail: %.*s",
                      static_cast<int>(status.message().length()),
                      status.message().data());
             }
@@ -73,10 +73,10 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
         if (request)
         {
             PongMessage response;
-            auto        status = SendMessage(client_conn, response);
+            auto        status = SendSocketMessage(client_conn, response);
             if (!status.ok())
             {
-                LOGW("DefaultMessageHandler::HandleMessage: SendMessage fail: %.*s",
+                LOGW("DefaultMessageHandler::HandleMessage: SendSocketMessage fail: %.*s",
                      static_cast<int>(status.message().length()),
                      status.message().data());
             }
@@ -207,18 +207,18 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
                 continue;
             }
 
-            auto recv_message = ReceiveMessage(m_client_connection.get());
+            auto recv_message = ReceiveSocketMessage(m_client_connection.get());
             if (!recv_message.ok())
             {
                 if (!m_is_running.load())
                 {
-                    LOGI(
-                    "AcceptAndHandleClientLoop: ReceiveMessage: Exiting loop due to shutdown.");
+                    LOGI("AcceptAndHandleClientLoop: ReceiveSocketMessage: Exiting loop due to "
+                         "shutdown.");
                     m_handler->OnDisconnect();
                     break;
                 }
 
-                LOGI("AcceptAndHandleClientLoop: ReceiveMessage failed: %.*s",
+                LOGI("AcceptAndHandleClientLoop: ReceiveSocketMessage failed: %.*s",
                      static_cast<int>(recv_message.status().message().length()),
                      recv_message.status().message().data());
                 m_handler->OnDisconnect();

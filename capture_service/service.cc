@@ -32,7 +32,7 @@ namespace Dive
 absl::Status SendPong(Network::SocketConnection *client_conn)
 {
     Network::PongMessage response;
-    return Network::SendMessage(client_conn, response);
+    return Network::SendSocketMessage(client_conn, response);
 }
 
 absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn)
@@ -40,7 +40,7 @@ absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnec
     Network::HandshakeResponse response;
     response.SetMajorVersion(request->GetMajorVersion());
     response.SetMinorVersion(request->GetMinorVersion());
-    return Network::SendMessage(client_conn, response);
+    return Network::SendSocketMessage(client_conn, response);
 }
 
 absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
@@ -51,7 +51,7 @@ absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
 
     Network::Pm4CaptureResponse response;
     response.SetString(capture_file_path);
-    return Network::SendMessage(client_conn, response);
+    return Network::SendSocketMessage(client_conn, response);
 }
 
 absl::Status DownloadFile(Network::DownloadFileRequest *request,
@@ -74,7 +74,7 @@ absl::Status DownloadFile(Network::DownloadFileRequest *request,
         response.SetErrorReason(ec.message());
     }
 
-    auto status = Network::SendMessage(client_conn, response);
+    auto status = Network::SendSocketMessage(client_conn, response);
     if (!status.ok())
     {
         return status;
@@ -103,7 +103,7 @@ absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConne
         response.SetFound(false);
         response.SetErrorReason(ec.message());
     }
-    return Network::SendMessage(client_conn, response);
+    return Network::SendSocketMessage(client_conn, response);
 }
 
 void ServerMessageHandler::OnConnect()

@@ -32,8 +32,6 @@ constexpr SocketType kInvalidSocketValue = ~static_cast<SocketType>(0);
 
 using ssize_t = SSIZE_T;
 
-#    undef SendMessage
-
 #else
 #    include <netdb.h>
 #    include <poll.h>

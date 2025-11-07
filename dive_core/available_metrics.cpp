@@ -45,11 +45,14 @@ const std::filesystem::path& file_path)
 
     auto        available_metrics = std::unique_ptr<AvailableMetrics>(new AvailableMetrics());
     std::string line;
+    size_t      line_number = 0;
     // Read and validate header line
     if (!StringUtils::GetTrimmedLine(file, line) || line.empty())
     {
+        std::cerr << "File is empty or missing header: " << file_path << std::endl;
         return nullptr;
     }
+    line_number++;
 
     std::stringstream header_ss(line);
     std::string       header_field;
@@ -66,11 +69,17 @@ const std::filesystem::path& file_path)
         }
         column_index++;
     }
-    if (column_index < kExpectedHeaders.size())
+    if (column_index != kExpectedHeaders.size())
+    {
+        std::cerr << "Invalid header format in " << file_path << ". Expected "
+                  << kExpectedHeaders.size() << " columns, found " << column_index << "."
+                  << std::endl;
         return nullptr;
+    }
 
     while (StringUtils::GetTrimmedLine(file, line))
     {
+        line_number++;
         std::stringstream        ss(line);
         std::string              field;
         std::vector<std::string> fields;
@@ -79,8 +88,11 @@ const std::filesystem::path& file_path)
             fields.push_back(field);
         }
 
-        if (fields.size() < kExpectedHeaders.size())
+        if (fields.size() != kExpectedHeaders.size())
         {
+            std::cerr << "Skipping malformed row at line " << line_number << " in " << file_path
+                      << ": Found " << fields.size() << " columns, expected "
+                      << kExpectedHeaders.size() << "." << std::endl;
             continue;
         }
 

@@ -360,7 +360,7 @@ TEST(StringUtils, GetTrimmedField_QuotedSimple)
 TEST(StringUtils, GetTrimmedField_QuotedWithDelimiters)
 {
     // Delimiters inside quotes should be ignored
-    std::stringstream ss("\"Doe, John\",30,\"New York, NY\"");
+    std::stringstream ss("  \"Doe, John\"  ,30,\"New York, NY\"");
     std::string       field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));

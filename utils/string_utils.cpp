@@ -108,6 +108,12 @@ bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter)
         }
     }
 
+    // Eat leading whitespace (but not newlines).
+    while (ss.peek() != EOF && std::isspace(ss.peek()) && ss.peek() != '\n')
+    {
+        ss.get();
+    }
+
     if (ss.peek() == EOF)
     {
         return false;
@@ -159,7 +165,6 @@ bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter)
     }
 
     Trim(field);
-    RemoveQuotes(field);
     return true;
 }
 

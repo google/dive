@@ -772,7 +772,7 @@ void AnalyzeDialog::ReplayImpl()
 
         UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess,
                            "Normal Replay completed successfully.");
-        // MainView needs to reload the capture so the correct PM4 data (or absence thereof) is
+        // MainWindow needs to reload the capture so the correct PM4 data (or absence thereof) is
         // displayed
         emit CaptureUpdated(m_selected_capture_file_string);
         return;

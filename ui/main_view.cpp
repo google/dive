@@ -14,6 +14,7 @@
  limitations under the License.
 */
 #include "main_view.h"
+
 #include "adreno.h"
 #include <QAction>
 #include <QComboBox>
@@ -211,7 +212,8 @@ enum class EventMode
 // =================================================================================================
 // MainView
 // =================================================================================================
-MainView::MainView()
+MainView::MainView(QWidget *parent) :
+    QWidget(parent)
 {
     // Output logs to both the "record" as well as console output
     m_log_compound.AddLog(&m_log_record);
@@ -554,11 +556,7 @@ MainView::MainView()
 
     m_overlay = new OverlayHelper(this);
     m_overlay->Initialize(horizontal_splitter);
-
-    // Main Window requires a central widget.
-    auto central_widget = new QWidget;
-    central_widget->setLayout(m_overlay->GetLayout());
-    setCentralWidget(central_widget);
+    setLayout(m_overlay->GetLayout());
 
     m_middle_group_box->hide();
 
@@ -611,13 +609,6 @@ MainView::MainView()
                      &MainView::OnPendingPerfCounterResults);
     QObject::connect(this, &MainView::PendingScreenshot, this, &MainView::OnPendingScreenshot);
 
-    CreateActions();
-    CreateMenus();
-    CreateStatusBar();
-    CreateShortcuts();
-    CreateToolBars();
-    UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
-
     // Capture overlay widget
     QObject::connect(&m_progress_tracker,
                      SIGNAL(sendMessageSignal(const QString &)),
@@ -633,34 +624,10 @@ MainView::MainView()
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
     m_hover_help->SetDataCore(m_data_core.get());
     setAccessibleName("DiveMainView");
-
-    m_plugin_manager = std::make_unique<Dive::PluginLoader>();
-    m_plugin_manager->Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow, this);
 }
 
 //--------------------------------------------------------------------------------------------------
 MainView::~MainView() {}
-
-//--------------------------------------------------------------------------------------------------
-bool MainView::InitializePlugins()
-{
-    // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
-    std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
-
-    std::filesystem::path plugins_dir_path(plugin_path);
-
-    if (absl::Status load_status = m_plugin_manager->LoadPlugins(plugins_dir_path);
-        !load_status.ok())
-    {
-        QMessageBox::warning(this,
-                             tr("Plugin Loading Failed"),
-                             tr("Failed to load plugins from '%1'. \nError: %2")
-                             .arg(QString::fromStdString(plugin_path))
-                             .arg(QString::fromStdString(std::string(load_status.message()))));
-        return false;
-    }
-    return true;
-}
 
 //--------------------------------------------------------------------------------------------------
 void MainView::OnTraceAvailable(const QString &path)
@@ -1113,7 +1080,7 @@ bool MainView::LoadFile(const std::string &file_name, bool is_temp_file, bool as
     if (release_capture)
     {
         // We don't want other UI interaction as they cause race conditions.
-        setDisabled(true);
+        InteractiveStateUpdated(true);
 
         m_log_record.Reset();
 
@@ -1276,7 +1243,7 @@ void MainView::OnFileLoaded(const LoadFileResult &loaded_file)
     }
 
     // Re-enable UI interaction now we are done async loading.
-    setDisabled(false);
+    InteractiveStateUpdated(false);
     HideOverlay();
 
     if (load_succeed)
@@ -1470,42 +1437,6 @@ void MainView::OnShortcuts()
                      shortcuts,
                      &ShortcutsDialog::deleteLater);
     shortcuts->open();
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainView::closeEvent(QCloseEvent *closeEvent)
-{
-    DIVE_ASSERT(m_plugin_manager != nullptr);
-    m_plugin_manager->UnloadPlugins();
-
-    if (!m_capture_saved && !m_unsaved_capture_path.empty())
-    {
-        switch (QMessageBox::question(this,
-                                      QString("Save current capture"),
-                                      (QString("Do you want to save current capture")),
-                                      QMessageBox::Yes | QMessageBox::No,
-                                      QMessageBox::No))
-        {
-        case QMessageBox::Yes:
-            OnSaveCapture();
-            break;
-        case QMessageBox::No:
-        {
-            // Remove unsaved capture files.
-            if (!m_unsaved_capture_path.empty())
-            {
-                std::filesystem::remove(m_unsaved_capture_path);
-                m_unsaved_capture_path.clear();
-            }
-            break;
-        }
-        default:
-            DIVE_ASSERT(false);
-        }
-    }
-    if (m_trace_dig)
-        m_trace_dig->Cleanup();
-    closeEvent->accept();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1781,147 +1712,15 @@ void MainView::LoadAvailableMetrics()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainView::CreateActions()
+void MainView::InstallShortcut(QWidget *widget)
 {
-    // Open file action
-    m_open_action = new QAction(tr("&Open"), this);
-    m_open_action->setIcon(QIcon(":/images/open.png"));
-    m_open_action->setShortcuts(QKeySequence::Open);
-    m_open_action->setStatusTip(tr("Open an existing capture"));
-    connect(m_open_action, &QAction::triggered, this, &MainView::OnOpenFile);
-
-    // Exit application action
-    m_exit_action = new QAction(tr("E&xit"), this);
-    m_exit_action->setIcon(QIcon(":/images/exit.png"));
-    m_exit_action->setShortcut(tr("Ctrl+Q"));
-    m_exit_action->setStatusTip(tr("Exit the application"));
-    connect(m_exit_action, SIGNAL(triggered()), this, SLOT(close()));
-
-    // Save file action
-    m_save_action = new QAction(tr("&Save"), this);
-    m_save_action->setStatusTip(tr("Save the current capture"));
-    m_save_action->setIcon(QIcon(":/images/save.png"));
-    m_save_action->setShortcut(QKeySequence::Save);
-    m_save_action->setEnabled(false);
-    connect(m_save_action, &QAction::triggered, this, &MainView::OnSaveCapture);
-    connect(this, &MainView::SetSaveMenuStatus, m_save_action, &QAction::setEnabled);
-
-    // Save as file action
-    m_save_as_action = new QAction(tr("&Save As"), this);
-    m_save_as_action->setStatusTip(tr("Save the current capture"));
-    m_save_as_action->setShortcut(QKeySequence::SaveAs);
-    m_save_as_action->setEnabled(false);
-    connect(m_save_as_action, &QAction::triggered, this, &MainView::OnSaveCapture);
-    connect(this, &MainView::SetSaveAsMenuStatus, m_save_as_action, &QAction::setEnabled);
-
-    // Recent file actions
-    for (auto &action : m_recent_file_actions)
-    {
-        action = new QAction(this);
-        action->setVisible(false);
-        connect(action, SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
-    }
-
-    // Capture action
-    m_capture_action = new QAction(tr("&Capture"), this);
-    m_capture_action->setStatusTip(tr("Capture a Dive trace"));
-    m_capture_action->setShortcut(QKeySequence("f5"));
-    connect(m_capture_action, &QAction::triggered, this, &MainView::OnNormalCapture);
-
-    // PM4 Capture action
-    m_pm4_capture_action = new QAction(tr("PM4 Capture"), this);
-    m_pm4_capture_action->setStatusTip(tr("Capture a Dive trace (PM4)"));
-    m_pm4_capture_action->setShortcut(QKeySequence("f5"));
-    connect(m_pm4_capture_action, &QAction::triggered, this, &MainView::OnNormalCapture);
-    // GFXR Capture action
-    m_gfxr_capture_action = new QAction(tr("GFXR Capture"), this);
-    m_gfxr_capture_action->setStatusTip(tr("Capture a Dive trace (GFXR)"));
-    m_gfxr_capture_action->setShortcut(QKeySequence("f6"));
-    connect(m_gfxr_capture_action, &QAction::triggered, this, &MainView::OnGFXRCapture);
-
-    // Capture with delay action
-    m_capture_delay_action = new QAction(tr("Capture with delay"), this);
-    m_capture_delay_action->setStatusTip(tr("Capture a Dive trace after a delay"));
-    m_capture_delay_action->setShortcut(QKeySequence("Ctrl+f5"));
-    connect(m_capture_delay_action, &QAction::triggered, this, &MainView::OnCaptureTrigger);
-
-    // Analyze action
-    m_analyze_action = new QAction(tr("Analyze Capture"), this);
-    m_analyze_action->setStatusTip(tr("Analyze a Capture"));
-    m_analyze_action->setIcon(QIcon(":/images/analyze.png"));
-    m_analyze_action->setShortcut(QKeySequence("f7"));
-    connect(m_analyze_action, &QAction::triggered, this, &MainView::OnAnalyzeCapture);
-
-    // Shortcuts action
-    m_shortcuts_action = new QAction(tr("&Shortcuts"), this);
-    m_shortcuts_action->setStatusTip(tr("Display application keyboard shortcuts"));
-    connect(m_shortcuts_action, &QAction::triggered, this, &MainView::OnShortcuts);
-
-    // About action
-    m_about_action = new QAction(tr("&About Dive"), this);
-    m_about_action->setStatusTip(tr("Display application version information"));
-    connect(m_about_action, &QAction::triggered, this, &MainView::OnAbout);
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainView::CreateMenus()
-{
-    // File Menu
-    m_file_menu = menuBar()->addMenu(tr("&File"));
-    m_file_menu->addAction(m_open_action);
-    m_file_menu->addAction(m_save_action);
-
-    // TODO (b/447422197) Show this action when the save/load system has been implemented.
-    // m_file_menu->addAction(m_save_as_action);
-    m_file_menu->addSeparator();
-    m_recent_captures_menu = m_file_menu->addMenu(tr("Recent captures"));
-    for (auto action : m_recent_file_actions)
-        m_recent_captures_menu->addAction(action);
-    m_file_menu->addSeparator();
-    m_file_menu->addAction(m_exit_action);
-
-    m_capture_menu = menuBar()->addMenu(tr("&Capture"));
-    m_capture_menu->addAction(m_pm4_capture_action);
-    m_capture_menu->addAction(m_gfxr_capture_action);
-
-    m_analyze_menu = menuBar()->addMenu(tr("&Analyze"));
-    m_analyze_menu->addAction(m_analyze_action);
-
-    m_help_menu = menuBar()->addMenu(tr("&Help"));
-    m_help_menu->addAction(m_shortcuts_action);
-    m_help_menu->addAction(m_about_action);
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainView::CreateToolBars()
-{
-    // Create the capture button for the toolbar
-    QToolButton *capture_button = new QToolButton(this);
-    capture_button->setPopupMode(QToolButton::InstantPopup);
-    capture_button->setMenu(m_capture_menu);
-    capture_button->setIcon(QIcon(":/images/capture.png"));
-
-    QToolButton *open_button = new QToolButton(this);
-    open_button->setPopupMode(QToolButton::MenuButtonPopup);
-    open_button->setDefaultAction(m_open_action);
-    open_button->setMenu(m_recent_captures_menu);
-
-    m_file_tool_bar = addToolBar(tr("&File"));
-    m_file_tool_bar->addWidget(open_button);
-    m_file_tool_bar->addAction(m_save_action);
-    m_file_tool_bar->addWidget(capture_button);
-    m_file_tool_bar->addAction(m_analyze_action);
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainView::CreateShortcuts()
-{
+    widget = (widget ? widget : this);
     // Search Shortcut
-    m_search_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), this);
+    m_search_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), widget);
     connect(m_search_shortcut, &QShortcut::activated, this, &MainView::OnSearchTrigger);
 
     // TabView Search Shortcut
-    m_search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), this);
+    m_search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), widget);
     connect(m_search_tab_view_shortcut, &QShortcut::activated, [this]() {
         int current_tab_index = m_tab_widget->currentIndex();
         if (current_tab_index == m_command_view_tab_index)
@@ -1949,28 +1748,28 @@ void MainView::CreateShortcuts()
     });
 
     // Overview Shortcut
-    m_overview_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
+    m_overview_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), widget);
     connect(m_overview_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_overview_view_tab_index);
     });
     // Commands Shortcut
-    m_command_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
+    m_command_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), widget);
     connect(m_command_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_command_view_tab_index);
     });
     // Shaders Shortcut
-    m_shader_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
+    m_shader_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), widget);
     connect(m_shader_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
     });
     // Event State Shortcut
-    m_event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
+    m_event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), widget);
     connect(m_event_state_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
     });
     // Gfxr Vulkan Command Arguments Shortcut
     m_gfxr_vulkan_command_arguments_tab_shortcut =
-    new QShortcut(QKeySequence(SHORTCUT_GFXR_VULKAN_COMMAND_ARGUMENTS_TAB), this);
+    new QShortcut(QKeySequence(SHORTCUT_GFXR_VULKAN_COMMAND_ARGUMENTS_TAB), widget);
     connect(m_gfxr_vulkan_command_arguments_tab_shortcut, &QShortcut::activated, [this]() {
         if (m_gfxr_vulkan_command_arguments_view_tab_index != -1)
         {
@@ -1979,14 +1778,7 @@ void MainView::CreateShortcuts()
     });
 }
 
-//--------------------------------------------------------------------------------------------------
-void MainView::CreateStatusBar()
-{
-    // Create status bar on the main window.
-    m_status_bar = new QStatusBar(this);
-    m_status_bar->setStyleSheet("background:#D0D0D0; color:#282828");
-    setStatusBar(m_status_bar);
-}
+void ConnectActions(const MainWindowActions &actions) {}
 
 //--------------------------------------------------------------------------------------------------
 void MainView::UpdateOverlay(const QString &message)
@@ -2001,13 +1793,6 @@ void MainView::OnHideOverlay()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainView::ShowTempStatus(const QString &status_message)
-{
-    m_status_bar->showMessage(status_message, MESSAGE_TIMEOUT);
-    m_status_bar->repaint();
-}
-
-//--------------------------------------------------------------------------------------------------
 void MainView::ExpandResizeHierarchyView(DiveTreeView                &tree_view,
                                          const QSortFilterProxyModel &model)
 {
@@ -2019,51 +1804,6 @@ void MainView::ExpandResizeHierarchyView(DiveTreeView                &tree_view,
     uint32_t column_count = (uint32_t)model.columnCount(QModelIndex());
     for (uint32_t column = 0; column < column_count; ++column)
         tree_view.resizeColumnToContents(column);
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainView::SetCurrentFile(const QString &file_name, bool is_temp_file)
-{
-    QString shownName = tr("Untitled");
-    if (!file_name.isEmpty() && is_temp_file == false)
-    {
-        shownName = StrippedName(file_name);
-
-        QStringList recent_files = Settings::Get()->ReadRecentFiles();
-        recent_files.removeAll(file_name);
-        recent_files.prepend(file_name);
-        Settings::Get()->WriteRecentFiles(recent_files);
-        UpdateRecentFileActions(recent_files);
-    }
-
-    setWindowTitle(tr("%1[*] - %2").arg(shownName).arg(tr("Dive")));
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainView::UpdateRecentFileActions(QStringList recent_files)
-{
-    int next_file_index = 0;
-    for (auto action : m_recent_file_actions)
-    {
-        int file_index = next_file_index++;
-        if (file_index < recent_files.count())
-        {
-            QString text = tr("%1").arg(StrippedName(recent_files[file_index]));
-            action->setText(text);
-            action->setData(recent_files[file_index]);
-            action->setVisible(true);
-        }
-        else
-        {
-            action->setVisible(false);
-        }
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-QString MainView::StrippedName(const QString &fullFileName)
-{
-    return QFileInfo(fullFileName).fileName();
 }
 
 //--------------------------------------------------------------------------------------------------

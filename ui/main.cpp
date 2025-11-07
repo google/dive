@@ -23,12 +23,14 @@
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
-#include "main_view.h"
+#include "main_window.h"
 #include "common/dive_version.h"
 #include "custom_metatypes.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
+
+#include "application_controller.h"
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
@@ -141,9 +143,11 @@ int main(int argc, char *argv[])
     // Initialize packet info query data structures needed for parsing
     Pm4InfoInit();
 
-    MainView *main_window = new MainView();
+    ApplicationController *controller = new ApplicationController(&app);
 
-    if (!main_window->InitializePlugins())
+    MainWindow *main_window = new MainWindow(*controller);
+
+    if (!controller->InitializePlugins())
     {
         qDebug()
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
@@ -152,7 +156,7 @@ int main(int argc, char *argv[])
     if (argc == 2)
     {
         // This is executed async.
-        main_window->LoadFile(argv[1]);
+        controller->LoadFile(argv[1]);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));

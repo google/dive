@@ -75,6 +75,8 @@ class QAbstractProxyModel;
 class FrameTabView;
 class QScrollArea;
 
+struct MainWindowActions;
+
 struct LoadFileResult;
 class CaptureFileManager;
 
@@ -111,19 +113,18 @@ inline static constexpr const char
 
 #define MESSAGE_TIMEOUT 2500
 
-class MainView : public QMainWindow
+class MainView : public QWidget
 {
     Q_OBJECT
 public:
     class Worker;
 
-    MainView();
+    explicit MainView(QWidget *parent);
     ~MainView();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
-
-protected:
-    virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
+    void ConnectActions(const MainWindowActions &);
+    void InstallShortcut(QWidget *widget = nullptr);
 
 signals:
     void HideOverlay();
@@ -136,6 +137,10 @@ signals:
     void PendingScreenshot(const QString &file_name);
     void AsyncTraceStatsDone();
     void AnalyzeCaptureStarted(const QString &file_path);
+    void InteractiveStateUpdated(bool);
+
+    void ShowTempStatus(const QString &status_message);
+    void SetCurrentFile(const QString &fileName, bool is_temp_file = false);
 
 public slots:
     void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
@@ -152,7 +157,7 @@ public slots:
     void OnPendingGpuTimingResults(const QString &file_name);
     void OnPendingScreenshot(const QString &file_name);
 
-private slots:
+    // private slots:
     void OnCommandViewModeChange(const QString &string);
     void OnCommandViewModeComboBoxHover(const QString &);
     void OnSelectionChanged(const QModelIndex &index);
@@ -205,19 +210,12 @@ private:
 
     void StartTraceStats();
 
-    void    CreateActions();
-    void    CreateMenus();
-    void    CreateToolBars();
-    void    CreateShortcuts();
-    void    CreateStatusBar();
-    void    LoadAvailableMetrics();
-    void    ShowTempStatus(const QString &status_message);
-    void    ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
-    void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
-    void    UpdateRecentFileActions(QStringList recent_files);
-    QString StrippedName(const QString &fullFileName);
-    void    UpdateTabAvailability();
-    void    ResetTabWidget();
+    void LoadAvailableMetrics();
+
+    void ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
+
+    void                    UpdateTabAvailability();
+    void                    ResetTabWidget();
     QModelIndex             FindSourceIndexFromNode(QAbstractItemModel *model,
                                                     uint64_t            target_node_index,
                                                     const QModelIndex  &parent = QModelIndex());
@@ -233,28 +231,8 @@ private:
     const std::vector<uint64_t> &draw_call_indices,
     CorrelationTarget            target);
 
-    QMenu         *m_file_menu;
-    QMenu         *m_recent_captures_menu;
-    QAction       *m_open_action;
-    QAction       *m_save_action;
-    QAction       *m_save_as_action;
-    QAction       *m_exit_action;
-    QMenu         *m_capture_menu;
-    QAction       *m_gfxr_capture_action;
-    QAction       *m_pm4_capture_action;
-    QAction       *m_capture_action;
-    QAction       *m_capture_delay_action;
-    QAction       *m_capture_setting_action;
-    QMenu         *m_analyze_menu;
-    QAction       *m_analyze_action;
-    QMenu         *m_help_menu;
-    QAction       *m_about_action;
-    QAction       *m_shortcuts_action;
-    QToolBar      *m_file_tool_bar;
     TraceDialog   *m_trace_dig;
     AnalyzeDialog *m_analyze_dig;
-
-    std::array<QAction *, 3> m_recent_file_actions = {};
 
     CaptureFileManager *m_capture_manager = nullptr;
 
@@ -265,8 +243,6 @@ private:
     Dive::LogRecord                 m_log_record;
     Dive::LogConsole                m_log_console;
     Dive::LogCompound               m_log_compound;
-
-    QStatusBar *m_status_bar;
 
     // Left pane
     QGroupBox    *m_left_group_box;
@@ -354,7 +330,6 @@ private:
     // Overlay to be displayed while capture
     OverlayHelper *m_overlay;
 
-    std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
     std::unique_ptr<Dive::CaptureStats>         m_capture_stats;

@@ -36,7 +36,6 @@ class QListWidget;
 class QSpinBox;
 class QTextEdit;
 class OverlayHelper;
-class MainView;
 class QCheckBox;
 
 namespace Dive

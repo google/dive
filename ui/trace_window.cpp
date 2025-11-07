@@ -807,12 +807,11 @@ void GfxrCaptureWorker::SetGfxrTargetCaptureDir(const std::string &target_captur
     }
 }
 
-bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
-                                             std::vector<std::string> previous_timestamps)
+bool GfxrCaptureWorker::areTimestampsCurrent(
+Dive::AndroidDevice                      *device,
+const std::map<std::string, std::string> &previous_timestamps)
 {
-    std::vector<std::string> current_time_stamps;
-
-    for (const auto &file_name : m_file_list)
+    for (const auto &[file_name, timestamp] : previous_timestamps)
     {
         std::string get_timestamp_command = absl::StrCat("shell stat -c %Y ",
                                                          m_source_capture_dir,
@@ -827,10 +826,14 @@ bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
                      << current_timestamp.status().message().data();
             return false;
         }
-        current_time_stamps.push_back(current_timestamp->data());
+
+        if (current_timestamp->data() != timestamp)
+        {
+            return false;
+        }
     }
 
-    return current_time_stamps == previous_timestamps;
+    return true;
 }
 
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
@@ -859,8 +862,8 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
     }
 
     // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written to.
-    int64_t                  size = 0;
-    std::vector<std::string> current_timestamps;
+    int64_t                            size = 0;
+    std::map<std::string, std::string> current_timestamps;
 
     while (true)
     {
@@ -890,7 +893,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
             }
 
             // Add the timestamp for the last time the file was udpated.
-            current_timestamps.push_back(file_update_timestamp->data());
+            current_timestamps[file] = file_update_timestamp->data();
 
             // Update the total size of the gfxr capture directory.
             size += std::stoll(str_num->c_str());

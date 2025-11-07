@@ -39,63 +39,78 @@ limitations under the License.
 namespace Dive
 {
 
-namespace {
+namespace
+{
 
-std::string GetPythonPath() {
+std::string GetPythonPath()
+{
     std::string python_path;
 #if defined(_WIN32)
     absl::StatusOr<std::string> result = Dive::RunCommand("where python");
-    if (result.ok()) {
+    if (result.ok())
+    {
         std::vector<std::string> lines = absl::StrSplit(*result, '\n');
-        for (const auto& line : lines) {
+        for (const auto &line : lines)
+        {
             std::string current_path = std::string(absl::StripAsciiWhitespace(line));
-            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps")) {
+            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps"))
+            {
                 python_path = current_path;
-                break; 
+                break;
             }
         }
-        if (python_path.empty() && !lines.empty()) {
+        if (python_path.empty() && !lines.empty())
+        {
             python_path = std::string(absl::StripAsciiWhitespace(lines[0]));
         }
     }
 #else
     absl::StatusOr<std::string> result = Dive::RunCommand("which python3");
-    if (result.ok()) {
+    if (result.ok())
+    {
         python_path = std::string(absl::StripAsciiWhitespace(*result));
     }
-    if (python_path.empty()) {
+    if (python_path.empty())
+    {
         result = Dive::RunCommand("which python");
-        if (result.ok()) {
+        if (result.ok())
+        {
             python_path = std::string(absl::StripAsciiWhitespace(*result));
         }
     }
 #endif
-    if (python_path.empty()) {
+    if (python_path.empty())
+    {
         python_path = "python";
     }
     LOGD("GetPythonPath() returning: %s\n", python_path.c_str());
     return python_path;
 }
 
-absl::Status ValidatePythonPath(const std::string& python_path)
+absl::Status ValidatePythonPath(const std::string &python_path)
 {
     if (python_path.empty())
     {
         return absl::InvalidArgumentError("Python path is empty.");
     }
-    absl::StatusOr<std::string> result = Dive::RunCommand(absl::StrFormat("%s --version", python_path));
+    absl::StatusOr<std::string> result = Dive::RunCommand(
+    absl::StrFormat("%s --version", python_path));
     if (!result.ok())
     {
-        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s", python_path, result.status().message()));
+        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
+                                                      python_path,
+                                                      result.status().message()));
     }
     if (!absl::StrContains(*result, "Python 3"))
     {
-        return absl::FailedPreconditionError(absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s", python_path, *result));
+        return absl::FailedPreconditionError(
+        absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s",
+                        python_path,
+                        *result));
     }
     LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
     return absl::OkStatus();
 }
-
 
 absl::Status SetSystemProperty(const AdbSession &adb,
                                std::string_view  property,
@@ -750,7 +765,7 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
     }
 
-     RETURN_IF_ERROR(RequestRootAccess());
+    RETURN_IF_ERROR(RequestRootAccess());
     if (m_gfxr_enabled)
     {
         std::string cpu_abi = device_architecture;

@@ -209,10 +209,10 @@ absl::Status ReceiveBuffer(SocketConnection* conn,
 absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t size);
 
 // Returns a fully-formed message or an error status.
-absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* conn,
-                                                              int timeout_ms = kNoTimeout);
+absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnection* conn,
+                                                                    int timeout_ms = kNoTimeout);
 
 // Sends a full message (header + payload).
-absl::Status SendMessage(SocketConnection* conn, const ISerializable& message);
+absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& message);
 
 }  // namespace Network

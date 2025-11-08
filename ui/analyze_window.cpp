@@ -524,7 +524,6 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
 {
     m_replay_button->setEnabled(is_enabled);
     m_replay_button->setText(message.c_str());
-    QApplication::processEvents();
 }
 
 //--------------------------------------------------------------------------------------------------

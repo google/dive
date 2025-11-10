@@ -29,3 +29,7 @@ limitations under the License.
     "to understand and optimize their applications. It currently supports AndroidXR devices that " \
     "use Qualcomm Adreno 7xx series GPUs."
 #define DIVE_COPYRIGHT_DESCRIPTION "Copyright 2025 Google LLC. All rights reserved."
+
+#define DIVE_HOST_PLATFORM_STRING CMAKE_GENERATED_HOST_PLATFORM
+#define DIVE_INSTALL_DIR_PATH CMAKE_GENERATED_INSTALL_DIR_PATH
+#define DIVE_BUILD_TYPE CMAKE_GENERATED_BUILD_TYPE

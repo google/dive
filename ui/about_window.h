@@ -34,13 +34,30 @@ public:
     AboutDialog(QWidget *parent = 0);
 
 private:
-    QIcon          *m_icon;                  // The Dive icon
-    QLabel         *m_icon_label;            // A label widget to hold the icon.
-    QLabel         *m_build_information;     // The build info and version string.
-    QLabel         *m_third_party_licenses;  // The NOTICE file text.
-    QPlainTextEdit *m_license_notice;        // An edit box to hold the NOTICE text.
-    QPushButton    *m_close_button;          // A button to close the dialog.
-    QHBoxLayout *m_version_layout;  // The version layout is Icon + Build Info arranged horizontally
-    QHBoxLayout *m_button_layout;   // The button layout is stretch + Close Button
-    QVBoxLayout *m_main_layout;     // The main layout Version + Text + Licenses arranged vertically
+    void CreateHeaderLayout();
+    void CreateVersionLayout();
+    void CreateLicenseLayout();
+    void CreateButtonLayout();
+
+    QVBoxLayout *m_main_layout;
+
+    // Contains the Dive logo and a high-level summary
+    QHBoxLayout *m_header_layout;
+    QIcon       *m_icon;
+    QLabel      *m_icon_label;
+    QLabel      *m_build_information;
+
+    // Contains detailed version info for different components of the Dive tool
+    QVBoxLayout    *m_version_layout;
+    QLabel         *m_version_label;
+    QPlainTextEdit *m_version_details;
+
+    // Contains aggregated license info
+    QVBoxLayout    *m_license_layout;
+    QLabel         *m_third_party_licenses;
+    QPlainTextEdit *m_license_notice;
+
+    // Close button
+    QHBoxLayout *m_button_layout;
+    QPushButton *m_close_button;
 };

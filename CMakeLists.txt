@@ -37,6 +37,15 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
 endif()
 
+set(HOST_PLATFORM_STRING "Unknown")
+if(NOT ANDROID)
+    if(CMAKE_HOST_WIN32)
+        set(HOST_PLATFORM_STRING "Windows")
+    else()
+        set(HOST_PLATFORM_STRING "Linux")
+    endif()
+endif()
+
 # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
 if(NOT ANDROID)
     # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
@@ -155,6 +164,13 @@ else()
         )
         message(CHECK_PASS "successful")
     endif()
+
+    message(CHECK_START "Make version file for Android build type")
+    file(
+        WRITE ${CMAKE_INSTALL_PREFIX}/TARGETTING_ANDROID_BUILD_TYPE.txt
+        ${CMAKE_BUILD_TYPE}
+    )
+    message(CHECK_PASS "successful")
 endif()
 
 option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")

@@ -29,6 +29,7 @@
 #include <sstream>
 
 #include "common/dive_version.h"
+#include "utils/version_info.h"
 
 // =================================================================================================
 // AboutDialog
@@ -36,18 +37,64 @@
 
 AboutDialog::AboutDialog(QWidget *parent)
 {
-    // Build version string
+    m_main_layout = new QVBoxLayout;
+    CreateHeaderLayout();
+    CreateVersionLayout();
+    CreateLicenseLayout();
+    CreateButtonLayout();
+
+    // Disable help icon, set size, title, and layout
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    setMinimumSize(640, 480);
+    setWindowTitle("About Dive");
+    setLayout(m_main_layout);
+}
+
+void AboutDialog::CreateHeaderLayout()
+{
+    m_icon = new QIcon(":/images/dive.ico");
+    m_icon_label = new QLabel();
+    m_icon_label->setPixmap(m_icon->pixmap(64, 64));
+    m_icon_label->setFixedSize(64, 64);
+
     std::ostringstream os;
-    os << DIVE_PRODUCT_NAME << std::endl;
-    os << DIVE_PRODUCT_DESCRIPTION << std::endl;
-    os << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
+    os << DIVE_PRODUCT_NAME << " " << Dive::GetVersionNumberString() << std::endl;
     os << std::endl;
-    os << "Version ";
-    os << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "." << DIVE_VERSION_REVISION;
+    os << DIVE_PRODUCT_DESCRIPTION << std::endl;
+    os << std::endl;
+    os << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
     m_build_information = new QLabel(os.str().c_str());
     m_build_information->setWordWrap(true);
 
-    // Load third party license information
+    m_header_layout = new QHBoxLayout;
+    m_header_layout->addWidget(m_icon_label);
+    m_header_layout->addWidget(m_build_information);
+
+    m_main_layout->addLayout(m_header_layout);
+}
+
+void AboutDialog::CreateVersionLayout()
+{
+    m_version_label = new QLabel("Version details:");
+
+    std::ostringstream os;
+    os << Dive::GetVersionDetailedSummary(DIVE_INSTALL_DIR_PATH, DIVE_BUILD_TYPE);
+    m_version_details = new QPlainTextEdit();
+    m_version_details->setPlainText(os.str().c_str());
+    m_version_details->setReadOnly(true);
+    m_version_details->setFixedHeight(100);
+
+    m_version_layout = new QVBoxLayout;
+    m_version_layout->addWidget(m_version_label);
+    m_version_layout->addWidget(m_version_details);
+
+    m_main_layout->addLayout(m_version_layout);
+}
+
+void AboutDialog::CreateLicenseLayout()
+{
+    m_third_party_licenses = new QLabel("Third Party Licenses:");
+
     m_license_notice = new QPlainTextEdit();
     QFile licenseFile{ QDir{ QCoreApplication::applicationDirPath() }.filePath("NOTICE") };
     if (licenseFile.open(QIODevice::ReadOnly))
@@ -56,18 +103,15 @@ AboutDialog::AboutDialog(QWidget *parent)
     }
     m_license_notice->setReadOnly(true);
 
-    // Load icon
-    m_icon = new QIcon(":/images/dive.ico");
-    m_icon_label = new QLabel();
-    m_icon_label->setPixmap(m_icon->pixmap(64, 64));
-    m_icon_label->setFixedSize(64, 64);
+    m_license_layout = new QVBoxLayout;
+    m_license_layout->addWidget(m_third_party_licenses);
+    m_license_layout->addWidget(m_license_notice);
 
-    // Version layout is Icon + Build Info
-    m_version_layout = new QHBoxLayout;
-    m_version_layout->addWidget(m_icon_label);
-    m_version_layout->addWidget(m_build_information);
+    m_main_layout->addLayout(m_license_layout);
+}
 
-    // Close button
+void AboutDialog::CreateButtonLayout()
+{
     m_close_button = new QPushButton;
     m_close_button->setText("Close");
     connect(m_close_button, SIGNAL(clicked()), this, SLOT(close()));
@@ -76,17 +120,5 @@ AboutDialog::AboutDialog(QWidget *parent)
     m_button_layout->addStretch();
     m_button_layout->addWidget(m_close_button);
 
-    // Main layout is Version + Label + NOTICE
-    m_main_layout = new QVBoxLayout;
-    m_main_layout->addLayout(m_version_layout);
-    m_third_party_licenses = new QLabel("Third Party Licenses:");
-    m_main_layout->addWidget(m_third_party_licenses);
-    m_main_layout->addWidget(m_license_notice);
     m_main_layout->addLayout(m_button_layout);
-
-    // Disable help icon, set size, title, and layout
-    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    setMinimumSize(640, 480);
-    setWindowTitle("About Dive");
-    setLayout(m_main_layout);
 }

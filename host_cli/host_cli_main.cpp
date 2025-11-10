@@ -29,10 +29,10 @@
 
 #include "common/dive_version.h"
 #include "data_core_wrapper.h"
+#include "utils/version_info.h"
 
 namespace
 {
-constexpr const char kDiveVersionSHA1String[] = DIVE_VERSION_SHA1;
 constexpr std::array kAllowedInputFileExtensions = { ".gfxr" };
 }  // namespace
 
@@ -81,18 +81,6 @@ absl::Status ValidateFlags()
     return absl::OkStatus();
 }
 
-std::string GetDiveRepositoryVersion()
-{
-    if constexpr (std::size(kDiveVersionSHA1String) > 0 && kDiveVersionSHA1String[0] != 0)
-    {
-        return kDiveVersionSHA1String;
-    }
-    else
-    {
-        return "(unknown version)";
-    }
-}
-
 int main(int argc, char **argv)
 {
     absl::SetProgramUsageMessage(
@@ -107,7 +95,8 @@ int main(int argc, char **argv)
     bool show_version = absl::GetFlag(FLAGS_version_info);
     if (show_version)
     {
-        std::cout << "Dive " << GetDiveRepositoryVersion() << std::endl;
+        std::cout << Dive::GetVersionDetailedSummary(DIVE_INSTALL_DIR_PATH, DIVE_BUILD_TYPE)
+                  << std::endl;
         return 0;
     }
 

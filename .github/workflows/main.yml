@@ -249,11 +249,15 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-O0" -DCMAKE_CXX_FLAGS="-O0" \
             -GNinja \
             -Bbuild .
       - name: Build Dive host tools with ninja
         run: |
           ninja -C build
+      - name: Build log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -280,11 +284,15 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-O0" -DCMAKE_CXX_FLAGS="-O0" \
             -GNinja \
             -Bbuild .
       - name: Build Dive host tools with ninja
         run: |
           ninja -C build
+      - name: Build log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build

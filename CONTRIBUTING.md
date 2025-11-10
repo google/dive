@@ -28,7 +28,7 @@ Guidelines](https://opensource.google/conduct/).
 ### Formatting
 
 - The C++ code in this repository is formatted with LLVM clang-format version 18.1.8
-- The cmake files are formatted with [gersemi](https://pypi.org/project/gersemi/)
+- The cmake files are formatted with [gersemi](https://pypi.org/project/gersemi/) version 0.23.1
 
 #### Setup clang-format on Linux
 
@@ -42,7 +42,7 @@ Suggested usage is using your preferred IDE, set it to format on save, and point
 
 #### Setup gersemi
 
-Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to install the package. To run for this project, use provided `scripts/format_cmake.bat` or `scripts/format_cmake.sh` scripts.
+Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to install the package. Make sure to install the version supported by Dive, it is recommended to use Python virtual environments. To run for this project, use provided `scripts/format_cmake.bat` or `scripts/format_cmake.sh` scripts.
 
 #### Pull requests
 

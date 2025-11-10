@@ -144,6 +144,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_capture_type_layout->addWidget(m_capture_type_label);
     m_capture_type_layout->addWidget(m_gfxr_capture_type_button);
     m_capture_type_layout->addWidget(m_pm4_capture_type_button);
+    m_capture_type_layout->addStretch(1);
 
     m_cmd_layout = new QHBoxLayout();
     m_file_label = new QLabel("Executable:");
@@ -160,7 +161,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_args_layout->addWidget(m_args_input_box);
 
     m_capture_layout->addWidget(m_dev_label);
-    m_capture_layout->addWidget(m_dev_box);
+    m_capture_layout->addWidget(m_dev_box, 1);
     m_capture_layout->addWidget(m_dev_refresh_button);
 
     m_pkg_filter_layout = new QHBoxLayout();
@@ -171,13 +172,13 @@ TraceDialog::TraceDialog(QWidget *parent) :
 
     m_pkg_layout = new QHBoxLayout();
     m_pkg_layout->addWidget(m_pkg_label);
-    m_pkg_layout->addWidget(m_pkg_box);
+    m_pkg_layout->addWidget(m_pkg_box, 1);
     m_pkg_layout->addWidget(m_pkg_refresh_button);
     m_pkg_layout->addWidget(m_pkg_filter_button);
 
     m_type_layout = new QHBoxLayout();
     m_type_layout->addWidget(m_app_type_label);
-    m_type_layout->addWidget(m_app_type_box);
+    m_type_layout->addWidget(m_app_type_box, 1);
 
     m_gfxr_capture_file_directory_layout = new QHBoxLayout();
     m_gfxr_capture_file_directory_input_box = new QLineEdit();
@@ -215,7 +216,8 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_main_layout->addLayout(m_type_layout);
 
     m_main_layout->addLayout(m_button_layout);
-    m_main_layout->setSizeConstraint(QLayout::SetFixedSize);
+    m_main_layout->setSizeConstraint(QLayout::SetDefaultConstraint);
+    setSizeGripEnabled(true);
     setLayout(m_main_layout);
 
     QObject::connect(m_dev_box,

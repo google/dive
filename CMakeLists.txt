@@ -181,9 +181,16 @@ add_test(
 
 # MacOS has limited thread stack size, allocating large object in stack makes its stack overflow
 # This has been fixed in https://github.com/google/dive/pull/541
+if(APPLE)
+    set(DIVE_EXECUTABLE_PATH
+        ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive
+    )
+else()
+    set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
+endif()
 add_test(
     NAME Regression_StackOverflow_MacOS
     COMMAND
-        ${CMAKE_BINARY_DIR}/ui/dive --exit-after-load
+        ${DIVE_EXECUTABLE_PATH} --exit-after-load
         ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
 )

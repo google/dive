@@ -1261,8 +1261,13 @@ void TraceDialog::RetrieveGfxrCapture()
 
     if (m_gfxr_capture_file_local_directory_input_box->text() == "")
     {
+#if defined(__APPLE__)
+        m_gfxr_capture_file_local_directory_input_box->setText(
+        QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+#else
         m_gfxr_capture_file_local_directory_input_box->setText(
         "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+#endif
     }
 
     std::string

@@ -22,5 +22,5 @@ jobs:
       with:
         source: '.'
         exclude: './third_party'
-        extensions: 'h,cpp'
+        extensions: 'h,cpp,cc'
         clangFormatVersion: 18.1.8

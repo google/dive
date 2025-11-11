@@ -14,14 +14,14 @@ concurrency:
 
 jobs:
   # Check the formatting on all source files
-  gersemi_on_dive_sources:
+  gersemi_v_0_23_1_on_dive_sources:
     runs-on: windows-2022
     steps:
     - name: Check out code
       uses: actions/checkout@v4
     - name: Install dependencies
       run: |
-        python3 -m pip install gersemi
+        python3 -m pip install gersemi==0.23.1
     - name: Run windows cmake formatting script
       run: |
         scripts\format_cmake.bat

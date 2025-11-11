@@ -189,8 +189,8 @@ absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t si
     return conn->Send(buffer, size);
 }
 
-absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* conn,
-                                                              int               timeout_ms)
+absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnection* conn,
+                                                                    int               timeout_ms)
 {
     if (!conn)
     {
@@ -278,7 +278,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveMessage(SocketConnection* 
     return message;
 }
 
-absl::Status SendMessage(SocketConnection* conn, const ISerializable& message)
+absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& message)
 {
     if (!conn)
     {

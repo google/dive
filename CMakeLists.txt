@@ -103,6 +103,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)
     set(D3D12_SUPPORT OFF CACHE BOOL "")
+    set(GFXRECON_ENABLE_OPENXR OFF CACHE BOOL "" FORCE)
     include(libarchive.cmake)
     add_subdirectory(third_party/gfxreconstruct)
     add_subdirectory(gfxr_ext/decode)

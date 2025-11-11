@@ -347,7 +347,11 @@ bool RunPackage(Dive::DeviceManager& mgr,
     }
     else if (app_type == "vulkan_cli")
     {
-        ret = dev->SetupApp(command, command_args, Dive::ApplicationType::VULKAN_CLI);
+        ret = dev->SetupApp(command,
+                            command_args,
+                            Dive::ApplicationType::VULKAN_CLI,
+                            device_architecture,
+                            gfxr_capture_directory);
     }
     else
     {
@@ -569,9 +573,7 @@ bool RetrieveGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_captu
     return true;
 }
 
-void TriggerGfxrCapture(Dive::DeviceManager& mgr,
-                        const std::string&   package,
-                        const std::string&   gfxr_capture_directory)
+void TriggerGfxrCapture(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
     std::cout
     << "Press key g+enter to trigger a capture and g+enter to retrieve the capture. Press "
@@ -708,7 +710,7 @@ bool RunAndCapture(Dive::DeviceManager& mgr,
 
     if (is_gfxr_capture)
     {
-        TriggerGfxrCapture(mgr, package, gfxr_capture_directory);
+        TriggerGfxrCapture(mgr, gfxr_capture_directory);
     }
     else
     {

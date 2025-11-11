@@ -215,5 +215,4 @@ void CommandTabView::DisconnectSearchBar()
 void CommandTabView::ResetHorizontalScroll()
 {
     m_command_buffer_view->horizontalScrollBar()->triggerAction(QAbstractSlider::SliderToMinimum);
-    QApplication::processEvents();
 }

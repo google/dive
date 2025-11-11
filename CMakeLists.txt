@@ -87,11 +87,6 @@ configure_file(
 
 include_directories("${CMAKE_BINARY_DIR}/generated_include")
 
-option(DIVE_NO_DISASSEMBLY, "Include builtin shader disassembly.")
-if(DIVE_NO_DISASSEMBLY)
-    add_definitions(-DDIVE_NO_DISASSEMBLY=1)
-endif()
-
 add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)
@@ -113,9 +108,7 @@ if(NOT ANDROID)
     add_subdirectory(lrz_validator)
     add_subdirectory(trace_stats)
 
-    if(NOT DIVE_NO_DISASSEMBLY)
-        add_subdirectory(ui)
-    endif()
+    add_subdirectory(ui)
 
     add_subdirectory(gfxr_dump_resources)
 

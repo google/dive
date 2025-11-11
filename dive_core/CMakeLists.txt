@@ -123,11 +123,7 @@ file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
 list(FILTER SRC_FILES EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/tests/.*")
 
-if(DIVE_NO_DISASSEMBLY)
-    list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly\\.cpp")
-else()
-    list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
-endif() # DIVE_NO_DISASSEMBLY
+list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
 
 file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
 file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
@@ -232,23 +228,23 @@ elseif(UNIX AND NOT APPLE)
     target_compile_definitions(
         freedreno_ir3
         PRIVATE
-                -DHAVE_ENDIAN_H
-                -DHAVE_FUNC_ATTRIBUTE_PACKED
-                -DHAVE_STRUCT_TIMESPEC
-                -DHAVE_PTHREAD
-                -DHAVE_SYSCONF
-                -D_GNU_SOURCE
-                -DHAVE_SECURE_GETENV
+            -DHAVE_ENDIAN_H
+            -DHAVE_FUNC_ATTRIBUTE_PACKED
+            -DHAVE_STRUCT_TIMESPEC
+            -DHAVE_PTHREAD
+            -DHAVE_SYSCONF
+            -D_GNU_SOURCE
+            -DHAVE_SECURE_GETENV
     )
 elseif(APPLE)
     target_compile_definitions(
         freedreno_ir3
         PRIVATE
-                -DHAVE_FUNC_ATTRIBUTE_PACKED
-                -DHAVE_STRUCT_TIMESPEC
-                -DHAVE_PTHREAD
-                -DHAVE_SYSCONF
-                -D_GNU_SOURCE
+            -DHAVE_FUNC_ATTRIBUTE_PACKED
+            -DHAVE_STRUCT_TIMESPEC
+            -DHAVE_PTHREAD
+            -DHAVE_SYSCONF
+            -D_GNU_SOURCE
     )
     target_sources(
         freedreno_ir3

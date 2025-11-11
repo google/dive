@@ -1122,7 +1122,10 @@ void MainWindow::OnUnsupportedFile(const std::string &file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool async)
+bool MainWindow::LoadFile(const std::string &file_name,
+                          bool               is_temp_file,
+                          bool               async,
+                          bool               exit_after_load)
 {
     if (m_loading_result.valid())
     {
@@ -1158,10 +1161,17 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
     if (async)
     {
         // Start async file loading, at the end of loading FileLoaded will be triggered.
-        m_loading_result = std::async([this, file_name = file_name, is_temp_file = is_temp_file]() {
+        m_loading_result = std::async([this,
+                                       file_name = file_name,
+                                       is_temp_file = is_temp_file,
+                                       exit_after_load = exit_after_load]() {
             std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
             auto file_type = LoadFileImpl(file_name, is_temp_file);
+            if (exit_after_load)
+            {
+                QMetaObject::invokeMethod(this, &MainWindow::close, Qt::QueuedConnection);
+            }
             [[maybe_unused]] int64_t
             time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - begin)
@@ -1181,6 +1191,10 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         auto file_type = LoadFileImpl(file_name, is_temp_file);
+        if (exit_after_load)
+        {
+            QMetaObject::invokeMethod(this, &MainWindow::close, Qt::QueuedConnection);
+        }
         [[maybe_unused]] int64_t
         time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now() - begin)

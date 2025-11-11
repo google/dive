@@ -62,7 +62,7 @@ if(NOT ANDROID)
     gtest_discover_tests(messages_test)
 
     # The UnixDomainServer listens only on UNIX OS (Android/Linux).
-    if(NOT WIN32)
+    if(NOT WIN32 AND NOT APPLE)
         add_executable(unix_domain_server_test unix_domain_server_test.cc)
         target_link_libraries(
             unix_domain_server_test

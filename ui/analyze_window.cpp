@@ -20,6 +20,7 @@
 #include <QCheckBox>
 #include <QDebug>
 #include <QFileDialog>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -43,6 +44,7 @@
 #include "absl/strings/str_cat.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
+#include "application_controller.h"
 #include "settings.h"
 #include "overlay.h"
 #include "common/macros.h"
@@ -63,10 +65,11 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
-AnalyzeDialog::AnalyzeDialog(
-std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
-QWidget                                                            *parent) :
+AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
+                             const Dive::AvailableMetrics *available_metrics,
+                             QWidget                      *parent) :
     QDialog(parent),
+    m_controller(controller),
     m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
@@ -121,41 +124,76 @@ QWidget                                                            *parent) :
     m_selected_file_layout->addWidget(m_selected_file_label);
     m_selected_file_layout->addWidget(m_selected_file_input_box);
 
-    // Enable GPU Time
-    m_gpu_time_layout = new QHBoxLayout();
-    m_gpu_time_label = new QLabel(tr("Enable GPU Time:"));
-    m_gpu_time_layout->addWidget(m_gpu_time_label);
-    m_gpu_time_box = new QCheckBox();
-    m_gpu_time_box->setCheckState(Qt::Unchecked);
-    m_gpu_time_layout->addWidget(m_gpu_time_box);
-    m_gpu_time_layout->addStretch();
+    // Custom replay
+    {
+        auto frame_count_layout = new QHBoxLayout();
+        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+        auto frame_count_box = new QSpinBox(this);
+        frame_count_box->setRange(1, std::numeric_limits<int>::max());
+        frame_count_box->setValue(kDefaultFrameCount);
+        frame_count_layout->addWidget(frame_count_label);
+        frame_count_layout->addWidget(frame_count_box);
+
+        auto group_box = new QGroupBox();
+        group_box->setTitle("Custom Replay");
+        group_box->setCheckable(true);
+        group_box->setChecked(false);
+        group_box->setLayout(frame_count_layout);
+
+        m_custom_replay_box = group_box;
+        m_custom_replay_frame_count = frame_count_box;
+
+        m_custom_replay_box->setVisible(m_controller.AdvancedOptionEnabled());
+        QObject::connect(&m_controller,
+                         &ApplicationController::AdvancedOptionToggled,
+                         m_custom_replay_box,
+                         &QGroupBox::setVisible);
+    }
 
     // Enable Dump Pm4
-    m_dump_pm4_layout = new QHBoxLayout();
-    m_dump_pm4_label = new QLabel(tr("Enable Dump Pm4:"));
-    m_dump_pm4_layout->addWidget(m_dump_pm4_label);
-    m_dump_pm4_box = new QCheckBox();
-    m_dump_pm4_box->setCheckState(Qt::Unchecked);
-    m_dump_pm4_layout->addWidget(m_dump_pm4_box);
-    m_dump_pm4_layout->addStretch();
+    {
+        m_dump_pm4_box = new QCheckBox();
+        m_dump_pm4_box->setText(tr("Enable Dump Pm4"));
+        m_dump_pm4_box->setCheckState(Qt::Unchecked);
+    }
+
+    // Enable perf counter
+    {
+        m_perf_counter_box = new QCheckBox();
+        m_perf_counter_box->setText(tr("Enable Perf Counters"));
+        m_perf_counter_box->setCheckState(Qt::Unchecked);
+        QObject::connect(m_perf_counter_box, &QCheckBox::toggled, this, [this](bool checked) {
+            UpdatePerfCounterElements(checked);
+        });
+        UpdatePerfCounterElements(false);
+    }
+
+    // Enable GPU Time
+    {
+        auto frame_count_layout = new QHBoxLayout();
+        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+        auto frame_count_box = new QSpinBox(this);
+        frame_count_box->setRange(1, std::numeric_limits<int>::max());
+        frame_count_box->setValue(kDefaultFrameCount);
+        frame_count_layout->addWidget(frame_count_label);
+        frame_count_layout->addWidget(frame_count_box);
+
+        auto group_box = new QGroupBox();
+        group_box->setTitle("Enable GPU Time");
+        group_box->setCheckable(true);
+        group_box->setChecked(false);
+        group_box->setLayout(frame_count_layout);
+
+        m_gpu_time_replay_box = group_box;
+        m_gpu_time_replay_frame_count = frame_count_box;
+    }
 
     // Enable RenderDoc capture
-    m_renderdoc_capture_layout = new QHBoxLayout();
-    m_renderdoc_capture_label = new QLabel(tr("Enable RenderDoc capture:"));
-    m_renderdoc_capture_layout->addWidget(m_renderdoc_capture_label);
-    m_renderdoc_capture_box = new QCheckBox();
-    m_renderdoc_capture_box->setCheckState(Qt::Unchecked);
-    m_renderdoc_capture_layout->addWidget(m_renderdoc_capture_box);
-    m_renderdoc_capture_layout->addStretch();
-
-    // Single Frame Loop Count
-    m_frame_count_layout = new QHBoxLayout();
-    m_frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-    m_frame_count_box = new QSpinBox(this);
-    m_frame_count_box->setRange(1, std::numeric_limits<int>::max());
-    m_frame_count_box->setValue(kDefaultFrameCount);
-    m_frame_count_layout->addWidget(m_frame_count_label);
-    m_frame_count_layout->addWidget(m_frame_count_box);
+    {
+        m_renderdoc_capture_box = new QCheckBox();
+        m_renderdoc_capture_box->setText(tr("Enable RenderDoc capture"));
+        m_renderdoc_capture_box->setCheckState(Qt::Unchecked);
+    }
 
     // Replay Warning
     m_replay_warning_layout = new QHBoxLayout();
@@ -183,10 +221,11 @@ QWidget                                                            *parent) :
     m_right_panel_layout->addWidget(m_enabled_metrics_list);
     m_right_panel_layout->addLayout(m_device_layout);
     m_right_panel_layout->addLayout(m_selected_file_layout);
-    m_right_panel_layout->addLayout(m_dump_pm4_layout);
-    m_right_panel_layout->addLayout(m_renderdoc_capture_layout);
-    m_right_panel_layout->addLayout(m_gpu_time_layout);
-    m_right_panel_layout->addLayout(m_frame_count_layout);
+    m_right_panel_layout->addWidget(m_custom_replay_box);
+    m_right_panel_layout->addWidget(m_dump_pm4_box);
+    m_right_panel_layout->addWidget(m_perf_counter_box);
+    m_right_panel_layout->addWidget(m_gpu_time_replay_box);
+    m_right_panel_layout->addWidget(m_renderdoc_capture_box);
     m_right_panel_layout->addLayout(m_replay_warning_layout);
     m_right_panel_layout->addLayout(m_delete_replay_artifacts_layout);
     m_right_panel_layout->addLayout(m_button_layout);
@@ -275,14 +314,14 @@ void AnalyzeDialog::ShowMessage(const std::string &message)
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::PopulateMetrics()
 {
-    if (m_available_metrics.has_value())
+    if (m_available_metrics)
     {
         // Get the list of all available metrics
-        std::vector<std::string> all_keys = m_available_metrics->get().GetAllMetricKeys();
+        std::vector<std::string> all_keys = m_available_metrics->GetAllMetricKeys();
 
         for (const auto &key : all_keys)
         {
-            const Dive::MetricInfo *info = m_available_metrics->get().GetMetricInfo(key);
+            const Dive::MetricInfo *info = m_available_metrics->GetMetricInfo(key);
             if (info)
             {
                 CsvItem item;
@@ -310,6 +349,27 @@ void AnalyzeDialog::PopulateMetrics()
         spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
         m_metrics_list->addItem(spacer);
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::UpdatePerfCounterElements(bool show)
+{
+    if (m_metrics_list->count() == 0)
+    {
+        m_perf_counter_box->setVisible(false);
+        m_metrics_list_label->setVisible(false);
+        m_metrics_list->setVisible(false);
+        m_enabled_metrics_list_label->setVisible(false);
+        m_enabled_metrics_list->setVisible(false);
+        m_selected_metrics_description_label->setVisible(false);
+        m_selected_metrics_description->setVisible(false);
+    }
+    m_metrics_list_label->setEnabled(show);
+    m_metrics_list->setEnabled(show);
+    m_enabled_metrics_list_label->setEnabled(show);
+    m_enabled_metrics_list->setEnabled(show);
+    m_selected_metrics_description_label->setEnabled(show);
+    m_selected_metrics_description->setEnabled(show);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -537,7 +597,7 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kNormal;
 
     // Variant-specific config
-    replay_settings.loop_single_frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame_count = m_custom_replay_frame_count->value();
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -582,7 +642,7 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
     replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
     // Variant-specific config
-    replay_settings.loop_single_frame_count = m_frame_count_box->value();
+    replay_settings.loop_single_frame_count = m_gpu_time_replay_frame_count->value();
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -611,10 +671,30 @@ void AnalyzeDialog::OnReplay()
         return;
     }
 
+    // Get info on which variants of replay to initiate runs for
+    ReplayConfig config = {
+        .replay_dump_pm4 = m_dump_pm4_box->isChecked(),
+        .replay_gpu_time = m_gpu_time_replay_box->isChecked(),
+        .replay_renderdoc = m_renderdoc_capture_box->isChecked(),
+        .replay_perf_counter = m_perf_counter_box->isChecked() &&
+                               !m_enabled_metrics_vector->empty(),
+        .replay_custom = m_custom_replay_box->isVisible() && m_custom_replay_box->isChecked(),
+    };
+    bool any_selected = config.replay_dump_pm4 || config.replay_gpu_time ||
+                        config.replay_renderdoc || config.replay_perf_counter ||
+                        config.replay_custom;
+    if (!any_selected)
+    {
+        if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
+        {
+            return ShowMessage("Select at least one metrics.");
+        }
+        return ShowMessage("Select at least one option.");
+    }
     OverlayMessage("Replaying...");
 
     m_replay_active = std::async([=, this]() {
-        ReplayImpl();
+        ReplayImpl(config);
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
 }
@@ -714,7 +794,7 @@ void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std:
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ReplayImpl()
+void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
 {
     Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
     auto                 device = device_manager.GetDevice();
@@ -750,27 +830,19 @@ void AnalyzeDialog::ReplayImpl()
         return;
     }
 
-    // Get info on which variants of replay to initiate runs for
-    bool dump_pm4_run_enabled = m_dump_pm4_box->isChecked();
-    bool gpu_time_run_enabled = m_gpu_time_box->isChecked();
-    bool renderdoc_run_enabled = m_renderdoc_capture_box->isChecked();
-    bool perf_counter_run_enabled = !m_enabled_metrics_vector->empty();
-    bool normal_run_enabled = (!dump_pm4_run_enabled) && (!gpu_time_run_enabled) &&
-                              (!perf_counter_run_enabled) && (!renderdoc_run_enabled);
-
     // Run only replay with default settings
-    if (normal_run_enabled)
+    if (config.replay_custom)
     {
         ret = NormalReplay(device_manager, remote_file.value());
         if (!ret.ok())
         {
-            std::string err_msg = absl::StrCat("Failed to run normal replay: ", ret.message());
+            std::string err_msg = absl::StrCat("Failed to run custom replay: ", ret.message());
             UpdateReplayStatus(ReplayStatusUpdateCode::kFailure, err_msg);
             return;
         }
 
         UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess,
-                           "Normal Replay completed successfully.");
+                           "Custom Replay completed successfully.");
         // MainWindow needs to reload the capture so the correct PM4 data (or absence thereof) is
         // displayed
         emit CaptureUpdated(m_selected_capture_file_string);
@@ -778,7 +850,7 @@ void AnalyzeDialog::ReplayImpl()
     }
 
     // Run the pm4 replay
-    if (dump_pm4_run_enabled)
+    if (config.replay_dump_pm4)
     {
         ret = Pm4Replay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -793,7 +865,7 @@ void AnalyzeDialog::ReplayImpl()
     }
 
     // Run the perf counter replay
-    if (perf_counter_run_enabled)
+    if (config.replay_perf_counter)
     {
         ret = PerfCounterReplay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -820,7 +892,7 @@ void AnalyzeDialog::ReplayImpl()
     }
 
     // Run the gpu_time replay
-    if (gpu_time_run_enabled)
+    if (config.replay_gpu_time)
     {
         ret = GpuTimeReplay(device_manager, remote_file.value());
         if (!ret.ok())
@@ -845,7 +917,7 @@ void AnalyzeDialog::ReplayImpl()
         emit DisplayGpuTimingResults("");
     }
 
-    if (renderdoc_run_enabled)
+    if (config.replay_renderdoc)
     {
         ret = RenderDocReplay(device_manager, remote_file.value());
         if (!ret.ok())

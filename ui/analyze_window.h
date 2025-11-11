@@ -38,6 +38,9 @@ class QTextEdit;
 class OverlayHelper;
 class MainWindow;
 class QCheckBox;
+class QGroupBox;
+
+class ApplicationController;
 
 namespace Dive
 {
@@ -91,9 +94,9 @@ class AnalyzeDialog : public QDialog
     };
 
 public:
-    AnalyzeDialog(
-    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics,
-    QWidget                                                            *parent = nullptr);
+    AnalyzeDialog(ApplicationController        &controller,
+                  const Dive::AvailableMetrics *available_metrics,
+                  QWidget                      *parent = nullptr);
     ~AnalyzeDialog();
     void UpdateDeviceList(bool isInitialized);
 private slots:
@@ -117,10 +120,19 @@ signals:
     void DisableOverlay();
 
 private:
+    struct ReplayConfig
+    {
+        bool replay_dump_pm4 = false;
+        bool replay_gpu_time = false;
+        bool replay_renderdoc = false;
+        bool replay_perf_counter = false;
+        bool replay_custom = false;
+    };
     void                        ShowMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateMetrics();
     void                        UpdateSelectedMetricsList();
+    void                        UpdatePerfCounterElements(bool show);
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice *device,
                                                   const std::string   &local_asset_file_path);
     absl::Status                NormalReplay(Dive::DeviceManager &device_manager,
@@ -137,9 +149,11 @@ private:
     void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &messge = "");
     void ExecuteStatusUpdate();
 
-    void ReplayImpl();
+    void ReplayImpl(const ReplayConfig &);
     void DeleteReplayArtifactsImpl();
     void OnAnalyzeCaptureEnded();
+
+    ApplicationController &m_controller;
 
     QLabel      *m_metrics_list_label;
     QListWidget *m_metrics_list;
@@ -163,21 +177,14 @@ private:
     QLabel      *m_selected_file_label;
     QLineEdit   *m_selected_file_input_box;
 
-    QHBoxLayout *m_dump_pm4_layout;
-    QLabel      *m_dump_pm4_label;
-    QCheckBox   *m_dump_pm4_box;
+    QGroupBox *m_custom_replay_box = nullptr;
+    QCheckBox *m_dump_pm4_box = nullptr;
+    QCheckBox *m_perf_counter_box = nullptr;
+    QGroupBox *m_gpu_time_replay_box = nullptr;
+    QCheckBox *m_renderdoc_capture_box = nullptr;
 
-    QHBoxLayout *m_gpu_time_layout;
-    QLabel      *m_gpu_time_label;
-    QCheckBox   *m_gpu_time_box;
-
-    QHBoxLayout *m_renderdoc_capture_layout = nullptr;
-    QLabel      *m_renderdoc_capture_label = nullptr;
-    QCheckBox   *m_renderdoc_capture_box = nullptr;
-
-    QHBoxLayout *m_frame_count_layout;
-    QLabel      *m_frame_count_label;
-    QSpinBox    *m_frame_count_box;
+    QSpinBox *m_gpu_time_replay_frame_count = nullptr;
+    QSpinBox *m_custom_replay_frame_count = nullptr;
 
     QHBoxLayout *m_replay_warning_layout;
     QLabel      *m_replay_warning_label;
@@ -203,9 +210,9 @@ private:
     // Other artifacts
     Dive::ComponentFilePaths m_local_capture_files = {};
 
-    QVector<CsvItem>                                                   *m_csv_items;
-    std::vector<std::string>                                           *m_enabled_metrics_vector;
-    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> m_available_metrics;
+    QVector<CsvItem>             *m_csv_items;
+    std::vector<std::string>     *m_enabled_metrics_vector;
+    const Dive::AvailableMetrics *m_available_metrics = nullptr;
     // Used to store a csv item's key in the enabled metrics vector.
     const int         kDataRole = Qt::UserRole + 1;
     const int         kDefaultFrameCount = 3;

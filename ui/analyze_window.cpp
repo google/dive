@@ -43,6 +43,8 @@
 #include "absl/strings/str_cat.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
+#include "dive_core/common.h"
+#include "debug_utils.h"
 #include "settings.h"
 #include "overlay.h"
 #include "common/macros.h"
@@ -530,6 +532,9 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
 absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
                                          const std::string   &remote_gfxr_file)
 {
+    DebugScopeTimer debug_timer{ [](double duration) {
+        DIVE_DEBUG_LOG("Normal replay took %f seconds.\n", duration);
+    } };
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartNormalReplay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
@@ -546,6 +551,9 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
 absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
                                       const std::string   &remote_gfxr_file)
 {
+    DebugScopeTimer debug_timer{ [](double duration) {
+        DIVE_DEBUG_LOG("PM4 replay took %f seconds.\n", duration);
+    } };
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPm4Replay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
@@ -559,6 +567,9 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
 absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manager,
                                               const std::string   &remote_gfxr_file)
 {
+    DebugScopeTimer debug_timer{ [](double duration) {
+        DIVE_DEBUG_LOG("PerfCounter replay took %f seconds.\n", duration);
+    } };
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPerfCounterReplay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;
@@ -575,6 +586,9 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
 absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
                                           const std::string   &remote_gfxr_file)
 {
+    DebugScopeTimer debug_timer{ [](double duration) {
+        DIVE_DEBUG_LOG("GpuTime replay took %f seconds.\n", duration);
+    } };
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartGpuTimeReplay);
     Dive::GfxrReplaySettings replay_settings;
     replay_settings.remote_capture_path = remote_gfxr_file;

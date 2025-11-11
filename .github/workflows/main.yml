@@ -105,6 +105,9 @@ jobs:
       - name: Build Dive host tools with ninja with gcc-14
         run: |
           ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -144,6 +147,9 @@ jobs:
       - name: Build Dive host tools with ninja with gcc-14
         run: |
           ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -183,6 +189,9 @@ jobs:
       - name: Build Dive host tools with ninja with clang-19
         run: |
           ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -222,6 +231,9 @@ jobs:
       - name: Build Dive host tools with ninja with clang-19
         run: |
           ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -254,6 +266,9 @@ jobs:
       - name: Build Dive host tools with ninja
         run: |
           ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -285,6 +300,9 @@ jobs:
       - name: Build Dive host tools with ninja
         run: |
           ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -339,3 +357,6 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log

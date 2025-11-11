@@ -178,3 +178,10 @@ add_test(
         ${CMAKE_BINARY_DIR}/bin/divecli extract -o .
         ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd
 )
+
+add_test(
+    NAME ReproduceCrash
+    COMMAND
+        ${CMAKE_BINARY_DIR}/ui/dive
+        ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
+)

@@ -37,6 +37,9 @@ class AndroidDevice;
 class AndroidApplication
 {
 public:
+    static std::string ParsePackageForActivity(const std::string &input,
+                                               const std::string &package);
+
     AndroidApplication(AndroidDevice  &dev,
                        std::string     package,
                        ApplicationType type,

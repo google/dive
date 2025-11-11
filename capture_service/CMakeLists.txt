@@ -104,6 +104,14 @@ else()
     )
     gtest_discover_tests(device_mgr_test)
 
+    add_executable(android_application_test android_application_test.cc)
+    target_link_libraries(android_application_test device_mgr gtest gtest_main)
+    target_include_directories(
+        android_application_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+    gtest_discover_tests(android_application_test)
+
     add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
     target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)
     gtest_discover_tests(android_trace_mgr_test)

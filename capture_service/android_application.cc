@@ -59,7 +59,8 @@ Activity Resolver Table:
 35ec1d8 Action: "android.intent.action.MAIN" Category: "android.intent.category.LAUNCHER"
 ...
 */
-std::string ParsePackageForActivity(const std::string &input, const std::string &package)
+std::string AndroidApplication::ParsePackageForActivity(const std::string &input,
+                                                        const std::string &package)
 {
     bool        in_non_data = false;
     bool        in_main_action = false;
@@ -120,14 +121,14 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
 
             std::vector<absl::string_view> fields = absl::StrSplit(trimmed_line, ' ');
 
-            for (const auto &f : fields)
+            for (const auto &field : fields)
             {
-                if (absl::StrContains(f, target_str))
+                if (absl::StrContains(field, target_str))
                 {
-                    std::vector<absl::string_view> pa = absl::StrSplit(f, '/');
-                    if (pa.size() == 2 && pa[0] == package)
+                    std::vector<absl::string_view> package_activity = absl::StrSplit(field, '/');
+                    if (package_activity.size() == 2 && package_activity[0] == package)
                     {
-                        return std::string(pa[1]);
+                        return std::string(package_activity[1]);
                     }
                 }
             }

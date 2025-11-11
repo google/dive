@@ -517,7 +517,7 @@ MainWindow::MainWindow(ApplicationController &controller) :
     // Retrieve the available metrics
     LoadAvailableMetrics();
 
-    m_trace_dig = new TraceDialog(this);
+    m_trace_dig = new TraceDialog(m_controller, this);
     m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
 
     m_overlay = new OverlayHelper(this);

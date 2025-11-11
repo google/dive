@@ -135,6 +135,7 @@ else()
                 ./gradlew layer:assemble${CMAKE_BUILD_TYPE}
                 replay:assemble${CMAKE_BUILD_TYPE}
                 --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
+                -PDisableOpenXR
             WORKING_DIRECTORY
                 ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
             COMMAND_ERROR_IS_FATAL ANY

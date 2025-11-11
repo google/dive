@@ -38,3 +38,10 @@ target_link_libraries(
     gtest_main
 )
 gtest_discover_tests(component_files_test)
+
+add_library(string_utils string_utils.h string_utils.cpp)
+target_include_directories(string_utils PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+add_executable(string_utils_test string_utils_test.cpp)
+target_link_libraries(string_utils_test string_utils gtest gtest_main)
+gtest_discover_tests(string_utils_test)

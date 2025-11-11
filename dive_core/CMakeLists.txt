@@ -256,6 +256,8 @@ target_include_directories(
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/gfxreconstruct/framework
 )
 
+target_link_libraries(${PROJECT_NAME} PRIVATE string_utils)
+
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     target_link_libraries(${PROJECT_NAME} PRIVATE dl)
     target_link_libraries(${PROJECT_NAME} PRIVATE pthread)

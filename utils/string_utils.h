@@ -102,7 +102,7 @@ template<typename T> bool SafeConvertFromString(const std::string &s, T &out)
     }
 }
 
-bool GetTrimmedLine(std::ifstream &file, std::string &line);
+bool GetTrimmedLine(std::istream &file, std::string &line);
 
 bool GetTrimmedField(std::stringstream &ss, std::string &field, char delimiter = ',');
 

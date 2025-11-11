@@ -62,10 +62,27 @@ enum class AppTypes
     kVulkanCLI,      // Vulkan command line app
     kOpenXR_GLES,    // OpenXR GLES app
 };
-const std::vector<std::string> kAppTypes{ "OpenXR-Vulkan", "Vulkan", "Vulkan CLI", "OpenXR-GLES" };
-const int                      kGfxrCaptureButtonId = 1;
-const int                      kPm4CaptureButtonId = 2;
-const int                      kNumGfxrCaptureAppTypes = 3;
+struct AppTypeInfo
+{
+    AppTypes         type;
+    std::string_view name;
+    bool             is_gfxr_capture_supported;
+};
+
+constexpr std::array<AppTypeInfo, 4> kAppTypeInfos = { {
+{ AppTypes::kOpenXR_Vulkan, "OpenXR-Vulkan", true },
+{ AppTypes::kVulkan, "Vulkan", true },
+{ AppTypes::kVulkanCLI, "Vulkan CLI", true },
+{ AppTypes::kOpenXR_GLES, "OpenXR-GLES", false },
+} };
+
+constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(kAppTypeInfos.begin(),
+                                                         kAppTypeInfos.end(),
+                                                         [](const AppTypeInfo &info) {
+                                                             return info.is_gfxr_capture_supported;
+                                                         });
+const int        kGfxrCaptureButtonId = 1;
+const int        kPm4CaptureButtonId = 2;
 }  // namespace
 
 // =================================================================================================
@@ -115,9 +132,9 @@ TraceDialog::TraceDialog(QWidget *parent) :
 
     m_devices = Dive::GetDeviceManager().ListDevice();
     UpdateDeviceList(false);
-    for (const auto &ty : kAppTypes)
+    for (const auto &ty : kAppTypeInfos)
     {
-        QStandardItem *item = new QStandardItem(ty.c_str());
+        QStandardItem *item = new QStandardItem(ty.name.data());
         m_app_type_model->appendRow(item);
     }
     m_app_type_filter_model = new AppTypeFilterModel(this);
@@ -523,8 +540,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         }
     }
 
-    if (app_type == kAppTypes[static_cast<size_t>(AppTypes::kOpenXR_Vulkan)] ||
-        app_type == kAppTypes[static_cast<size_t>(AppTypes::kOpenXR_GLES)])
+    if (app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kOpenXR_Vulkan)].name.data() ||
+        app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kOpenXR_GLES)].name.data())
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::OPENXR_APK,
@@ -532,7 +549,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
-    else if (app_type == kAppTypes[static_cast<size_t>(AppTypes::kVulkan)])
+    else if (app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kVulkan)].name.data())
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::VULKAN_APK,
@@ -540,7 +557,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
-    else if (app_type == kAppTypes[static_cast<size_t>(AppTypes::kVulkanCLI)])
+    else if (app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kVulkanCLI)].name.data())
     {
         m_executable = m_cmd_input_box->text().toStdString();
         if (m_executable.empty())
@@ -634,7 +651,7 @@ void TraceDialog::OnStartClicked()
         ShowErrorMessage(QString("Please select application type"));
         return;
     }
-    std::string ty_str = kAppTypes[ty];
+    std::string ty_str = kAppTypeInfos[ty].name.data();
 
     if (m_run_button->text() == QString(kStart_Application))
     {
@@ -1347,7 +1364,7 @@ bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sour
 {
     if (m_filter_active)
     {
-        return sourceRow < kNumGfxrCaptureAppTypes;
+        return sourceRow < static_cast<int>(kNumGfxrCaptureAppTypes);
     }
     return true;
 }

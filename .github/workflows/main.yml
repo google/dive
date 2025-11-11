@@ -240,7 +240,11 @@ jobs:
           # Link it so standard commands might find it, or just set env vars below
           echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
           echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
-
+      - name: Install llvm@19 via Homebrew
+        run: |
+          brew install llvm@19
+          echo "PATH=$(brew --prefix llvm@19)/bin:$PATH" >> $GITHUB_ENV
+          echo "SDKROOT=$(xcrun --show-sdk-path)" >> $GITHUB_ENV
       - name: Check Qt Version
         run: qmake --version
       - name: Install dependency
@@ -249,6 +253,9 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER:FILEPATH=$(brew --prefix llvm@19)/bin/clang \
+            -DCMAKE_CXX_COMPILER:FILEPATH=$(brew --prefix llvm@19)/bin/clang++ \
+            -DCMAKE_OSX_SYSROOT=${SDKROOT} \
             -GNinja \
             -Bbuild .
       - name: Build Dive host tools with ninja
@@ -272,6 +279,11 @@ jobs:
           # Link it so standard commands might find it, or just set env vars below
           echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
           echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
+      - name: Install llvm@19 via Homebrew
+        run: |
+          brew install llvm@19
+          echo "PATH=$(brew --prefix llvm@19)/bin:$PATH" >> $GITHUB_ENV
+          echo "SDKROOT=$(xcrun --show-sdk-path)" >> $GITHUB_ENV
       - name: Check Qt Version
         run: qmake --version
       - name: Install dependency
@@ -280,6 +292,9 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER:FILEPATH=$(brew --prefix llvm@19)/bin/clang \
+            -DCMAKE_CXX_COMPILER:FILEPATH=$(brew --prefix llvm@19)/bin/clang++ \
+            -DCMAKE_OSX_SYSROOT=${SDKROOT} \
             -GNinja \
             -Bbuild .
       - name: Build Dive host tools with ninja

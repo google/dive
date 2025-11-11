@@ -20,8 +20,24 @@ if(WIN32)
     add_compile_definitions(LIBARCHIVE_STATIC)
 endif()
 
-find_package(LibArchive QUIET)
-
+if(APPLE)
+    set(LIBARCHIVE_BREW_PREFIX_RESULT "")
+    execute_process(
+        COMMAND brew --prefix libarchive
+        OUTPUT_VARIABLE LIBARCHIVE_BREW_PREFIX_RESULT
+        RESULT_VARIABLE BREW_EXIT_CODE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(BREW_EXIT_CODE EQUAL 0 AND LIBARCHIVE_BREW_PREFIX_RESULT)
+        find_library(LibArchive_LIBRARIES NAMES archive PATHS "${LIBARCHIVE_BREW_PREFIX_RESULT}/lib")
+        find_path(LibArchive_INCLUDE_DIRS NAMES archive.h PATHS "${LIBARCHIVE_BREW_PREFIX_RESULT}/include")
+        if(LibArchive_LIBRARIES AND LibArchive_INCLUDE_DIRS)
+            set(LibArchive_FOUND TRUE)
+        endif()
+    endif()
+else()
+    find_package(LibArchive QUIET)
+endif()
 if(LibArchive_FOUND)
     if(WIN32)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/prebuild/zlib")

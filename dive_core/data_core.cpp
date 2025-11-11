@@ -17,6 +17,8 @@
 #include "data_core.h"
 #include <assert.h>
 #include <optional>
+#include "dive_core/command_hierarchy.h"
+#include "dive_core/gfxr_vulkan_command_hierarchy.h"
 #include "pm4_info.h"
 
 namespace Dive
@@ -119,10 +121,15 @@ bool DataCore::CreateGfxrCommandHierarchy()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreateDiveMetaData()
 {
-    CaptureMetadataCreator metadata_creator(m_capture_metadata);
+    std::unique_ptr<CaptureMetadataCreator>
+    metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
+    if (!metadata_creator)
+    {
+        return false;
+    }
     if (!metadata_creator
-         .ProcessSubmits(m_dive_capture_data.GetPm4CaptureData().GetSubmits(),
-                         m_dive_capture_data.GetPm4CaptureData().GetMemoryManager()))
+         ->ProcessSubmits(m_dive_capture_data.GetPm4CaptureData().GetSubmits(),
+                          m_dive_capture_data.GetPm4CaptureData().GetMemoryManager()))
     {
         return false;
     }
@@ -132,9 +139,14 @@ bool DataCore::CreateDiveMetaData()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreatePm4MetaData()
 {
-    CaptureMetadataCreator metadata_creator(m_capture_metadata);
-    if (!metadata_creator.ProcessSubmits(m_pm4_capture_data.GetSubmits(),
-                                         m_pm4_capture_data.GetMemoryManager()))
+    std::unique_ptr<CaptureMetadataCreator>
+    metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
+    if (!metadata_creator)
+    {
+        return false;
+    }
+    if (!metadata_creator->ProcessSubmits(m_pm4_capture_data.GetSubmits(),
+                                          m_pm4_capture_data.GetMemoryManager()))
     {
         return false;
     }

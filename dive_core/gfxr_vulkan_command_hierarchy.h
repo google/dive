@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  Copyright 2025 Google LLC
  Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,6 +31,7 @@ class GfxrVulkanCommandHierarchyCreator
 public:
     GfxrVulkanCommandHierarchyCreator(CommandHierarchy      &command_hierarchy,
                                       const GfxrCaptureData &capture_data);
+    virtual ~GfxrVulkanCommandHierarchyCreator();
 
     bool CreateTrees(bool used_in_mixed_command_hierarchy = false);
     bool ProcessGfxrSubmits(const GfxrCaptureData &capture_date);

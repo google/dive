@@ -148,7 +148,7 @@ class CaptureMetadataCreator : public EmulateCallbacksBase
 {
 public:
     CaptureMetadataCreator(CaptureMetadata &capture_metadata);
-    ~CaptureMetadataCreator();
+    virtual ~CaptureMetadataCreator();
 
     virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
     virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;

@@ -518,6 +518,8 @@ CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy     &command_h
 {
 }
 
+CommandHierarchyCreator::~CommandHierarchyCreator() {}
+
 //--------------------------------------------------------------------------------------------------
 bool CommandHierarchyCreator::CreateTrees(bool                    flatten_chain_nodes,
                                           std::optional<uint64_t> reserve_size)

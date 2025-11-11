@@ -807,7 +807,7 @@ void GfxrCaptureWorker::SetGfxrTargetCaptureDir(const std::string &target_captur
     }
 }
 
-bool GfxrCaptureWorker::areTimestampsCurrent(
+bool GfxrCaptureWorker::AreTimestampsCurrent(
 Dive::AndroidDevice                      *device,
 const std::map<std::string, std::string> &previous_timestamps)
 {
@@ -861,12 +861,13 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         }
     }
 
-    // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written to.
-    int64_t                            size = 0;
-    std::map<std::string, std::string> current_timestamps;
-
     while (true)
     {
+        // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written
+        // to.
+        int64_t                            size = 0;
+        std::map<std::string, std::string> current_timestamps;
+
         for (std::string file : m_file_list)
         {
             std::string path = absl::StrCat(m_source_capture_dir, "/", file.data());
@@ -905,13 +906,10 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         {
 
             // If the timestamps are current, return the size of the directory.
-            if (areTimestampsCurrent(device, current_timestamps))
+            if (AreTimestampsCurrent(device, current_timestamps))
             {
-                current_timestamps.clear();
                 return size;
             }
-            current_timestamps.clear();
-            size = 0;
         }
     }
 }

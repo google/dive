@@ -45,14 +45,13 @@ const std::filesystem::path& file_path)
 
     auto        available_metrics = std::unique_ptr<AvailableMetrics>(new AvailableMetrics());
     std::string line;
-    size_t      line_number = 0;
     // Read and validate header line
     if (!StringUtils::GetTrimmedLine(file, line) || line.empty())
     {
         std::cerr << "File is empty or missing header: " << file_path << std::endl;
         return nullptr;
     }
-    line_number++;
+    size_t line_number = 1;
 
     std::stringstream header_ss(line);
     std::string       header_field;

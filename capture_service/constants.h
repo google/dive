@@ -77,4 +77,7 @@ inline constexpr char kReplayCreateRenderDocCapture[] = "debug.gfxrecon.replay.r
 inline constexpr char kRenderDocCaptureLayerName[] = "VK_LAYER_RENDERDOC_Capture";
 inline constexpr char kRenderDocAppName[] = "org.renderdoc.renderdoccmd.arm64";
 
+// For log filtering
+inline constexpr char kLogPrefixCleanup[] = "##### CLEANUP:";
+
 }  // namespace Dive

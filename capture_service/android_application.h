@@ -44,7 +44,11 @@ public:
     virtual ~AndroidApplication() = default;
 
     virtual absl::Status Setup() = 0;
+
+    // Common cleanup for device properties and settings that may be touched by Dive when running an
+    // application
     virtual absl::Status Cleanup();
+
     virtual absl::Status Start();
     virtual absl::Status Stop();
     const std::string   &GetMainActivity() const { return m_main_activity; };
@@ -57,10 +61,12 @@ public:
     {
         m_gfxr_capture_file_directory = capture_file_directory;
     };
-    absl::Status CreateGfxrDirectory(const std::string command_args);
-    absl::Status GfxrSetup();
-    absl::Status HasInternetPermission();
-    absl::Status GrantAllFilesAccess();
+    absl::Status         CreateGfxrDirectory(const std::string command_args);
+    virtual absl::Status GfxrSetup();
+    virtual absl::Status Pm4CaptureSetup();
+    virtual absl::Status Pm4CaptureCleanup();
+    absl::Status         HasInternetPermission();
+    absl::Status         GrantAllFilesAccess();
 
 protected:
     absl::Status ParsePackage();
@@ -82,53 +88,53 @@ protected:
 class VulkanApplication : public AndroidApplication
 {
 public:
-    VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args) :
-        AndroidApplication(dev,
-                           std::move(package),
-                           ApplicationType::VULKAN_APK,
-                           std::move(command_args))
-    {
-        ParsePackage().IgnoreError();
-    };
+    VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args);
     virtual ~VulkanApplication();
     virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to a Vulkan APK
     virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
 };
 
 class OpenXRApplication : public AndroidApplication
 {
 public:
-    OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args) :
-        AndroidApplication(dev,
-                           std::move(package),
-                           ApplicationType::OPENXR_APK,
-                           std::move(command_args))
-    {
-        ParsePackage().IgnoreError();
-    };
+    OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args);
     virtual ~OpenXRApplication();
     virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to an OpenXR APK
     virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
 };
 
 class VulkanCliApplication : public AndroidApplication
 {
 public:
-    VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args) :
-        AndroidApplication(dev, "", ApplicationType::VULKAN_CLI, std::move(command_args)),
-        m_command(std::move(command))
-    {
-    }
+    VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args);
     virtual ~VulkanCliApplication();
     virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to a Vulkan CLI application
     virtual absl::Status Cleanup() override;
+
     virtual absl::Status Start() override;
     virtual absl::Status Stop() override;
     virtual bool         IsRunning() const override;
+    absl::Status         GfxrSetup() override;
 
 private:
-    std::string m_command;
-    std::string m_pid;
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
+    std::string          m_command;
+    std::string          m_pid;
 };
 
 }  // namespace Dive

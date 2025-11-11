@@ -130,24 +130,24 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
 
     Pm4CaptureRequest pm4_request;
     std::cout << "Client: StartPm4Capture request." << std::endl;
-    auto send_status = SendMessage(m_connection.get(), pm4_request);
+    auto send_status = SendSocketMessage(m_connection.get(), pm4_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::
-                                       Status(send_status.code(),
-                                              absl::StrCat("StartPm4Capture: SendMessage fail: ",
-                                                           send_status.message())));
+                                       absl::Status(send_status.code(),
+                                                    absl::StrCat("StartPm4Capture: "
+                                                                 "SendSocketMessage fail: ",
+                                                                 send_status.message())));
     }
 
-    auto receive = ReceiveMessage(m_connection.get());
+    auto receive = ReceiveSocketMessage(m_connection.get());
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::
-                                       Status(receive.status().code(),
-                                              absl::StrCat("StartPm4Capture: ReceiveMessage fail: ",
-                                                           receive.status().message())));
+                                       absl::Status(receive.status().code(),
+                                                    absl::StrCat("StartPm4Capture: "
+                                                                 "ReceiveSocketMessage fail: ",
+                                                                 receive.status().message())));
     }
 
     auto response = *std::move(receive);
@@ -189,23 +189,23 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string&          remot
 
     std::cout << "Client: Requesting to download file from server '" << remote_file_path << "' to '"
               << local_save_path << "'." << std::endl;
-    auto send_status = SendMessage(m_connection.get(), download_request);
+    auto send_status = SendSocketMessage(m_connection.get(), download_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::Status(send_status.code(),
                                                     absl::StrCat("DownloadFileFromServer: "
-                                                                 "SendMessage fail: ",
+                                                                 "SendSocketMessage fail: ",
                                                                  send_status.message())));
     }
 
-    auto receive = ReceiveMessage(m_connection.get());
+    auto receive = ReceiveSocketMessage(m_connection.get());
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::Status(receive.status().code(),
                                                     absl::StrCat("DownloadFileFromServer: "
-                                                                 "ReceiveMessage fail: ",
+                                                                 "ReceiveSocketMessage fail: ",
                                                                  receive.status().message())));
     }
 
@@ -277,23 +277,23 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
     FileSizeRequest file_size_request;
     file_size_request.SetString(remote_file_path);
     std::cout << "Client: Requesting file size of " << remote_file_path << std::endl;
-    auto send_status = SendMessage(m_connection.get(), file_size_request);
+    auto send_status = SendSocketMessage(m_connection.get(), file_size_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::Status(send_status.code(),
                                                     absl::StrCat("GetCaptureFileSize: "
-                                                                 "SendMessage fail: ",
+                                                                 "SendSocketMessage fail: ",
                                                                  send_status.message())));
     }
 
-    auto receive = ReceiveMessage(m_connection.get());
+    auto receive = ReceiveSocketMessage(m_connection.get());
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
                                        absl::Status(receive.status().code(),
                                                     absl::StrCat("GetCaptureFileSize: "
-                                                                 "ReceiveMessage fail: ",
+                                                                 "ReceiveSocketMessage fail: ",
                                                                  receive.status().message())));
     }
 
@@ -348,23 +348,24 @@ absl::Status TcpClient::PingServer()
 
     PingMessage ping_request;
     std::cout << "Client: Send PING." << std::endl;
-    auto send_status = SendMessage(m_connection.get(), ping_request);
+    auto send_status = SendSocketMessage(m_connection.get(), ping_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::Status(send_status.code(),
-                                                    absl::StrCat("PingServer: SendMessage fail: ",
-                                                                 send_status.message())));
+                                       absl::
+                                       Status(send_status.code(),
+                                              absl::StrCat("PingServer: SendSocketMessage fail: ",
+                                                           send_status.message())));
     }
 
-    auto receive = ReceiveMessage(m_connection.get(), kPingTimeoutMs);
+    auto receive = ReceiveSocketMessage(m_connection.get(), kPingTimeoutMs);
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::
-                                       Status(receive.status().code(),
-                                              absl::StrCat("PingServer: ReceiveMessage fail: ",
-                                                           receive.status().message())));
+                                       absl::Status(receive.status().code(),
+                                                    absl::StrCat("PingServer: ReceiveSocketMessage "
+                                                                 "fail: ",
+                                                                 receive.status().message())));
     }
 
     auto response = *std::move(receive);
@@ -403,24 +404,25 @@ absl::Status TcpClient::PerformHandshake()
     std::cout << "Client: Sending Handshake (Client v" << hs_request.GetMajorVersion() << "."
               << hs_request.GetMinorVersion() << ")" << std::endl;
 
-    auto send_status = SendMessage(m_connection.get(), hs_request);
+    auto send_status = SendSocketMessage(m_connection.get(), hs_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::
-                                       Status(send_status.code(),
-                                              absl::StrCat("PerformHandshake: SendMessage fail: ",
-                                                           send_status.message())));
+                                       absl::Status(send_status.code(),
+                                                    absl::StrCat("PerformHandshake: "
+                                                                 "SendSocketMessage fail: ",
+                                                                 send_status.message())));
     }
 
-    auto receive = ReceiveMessage(m_connection.get());
+    auto receive = ReceiveSocketMessage(m_connection.get());
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       absl::Status(receive.status().code(),
-                                                    absl::StrCat("PerformHandshake: ReceiveMessage "
-                                                                 "fail: ",
-                                                                 receive.status().message())));
+                                       absl::
+                                       Status(receive.status().code(),
+                                              absl::StrCat("PerformHandshake: ReceiveSocketMessage "
+                                                           "fail: ",
+                                                           receive.status().message())));
     }
 
     auto response = *std::move(receive);

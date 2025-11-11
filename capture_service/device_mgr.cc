@@ -42,7 +42,76 @@ namespace Dive
 namespace
 {
 
-// adb shell setprop `property` `value`
+std::string GetPythonPath()
+{
+    std::string python_path;
+#if defined(_WIN32)
+    absl::StatusOr<std::string> result = Dive::RunCommand("where python");
+    if (result.ok())
+    {
+        std::vector<std::string> lines = absl::StrSplit(*result, '\n');
+        for (const auto &line : lines)
+        {
+            std::string current_path = std::string(absl::StripAsciiWhitespace(line));
+            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps"))
+            {
+                python_path = current_path;
+                break;
+            }
+        }
+        if (python_path.empty() && !lines.empty())
+        {
+            python_path = std::string(absl::StripAsciiWhitespace(lines[0]));
+        }
+    }
+#else
+    absl::StatusOr<std::string> result = Dive::RunCommand("which python3");
+    if (result.ok())
+    {
+        python_path = std::string(absl::StripAsciiWhitespace(*result));
+    }
+    if (python_path.empty())
+    {
+        result = Dive::RunCommand("which python");
+        if (result.ok())
+        {
+            python_path = std::string(absl::StripAsciiWhitespace(*result));
+        }
+    }
+#endif
+    if (python_path.empty())
+    {
+        python_path = "python";
+    }
+    LOGD("GetPythonPath() returning: %s\n", python_path.c_str());
+    return python_path;
+}
+
+absl::Status ValidatePythonPath(const std::string &python_path)
+{
+    if (python_path.empty())
+    {
+        return absl::InvalidArgumentError("Python path is empty.");
+    }
+    absl::StatusOr<std::string> result = Dive::RunCommand(
+    absl::StrFormat("%s --version", python_path));
+    if (!result.ok())
+    {
+        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
+                                                      python_path,
+                                                      result.status().message()));
+    }
+    if (!absl::StrContains(*result, "Python 3"))
+    {
+        return absl::FailedPreconditionError(
+        absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s",
+                        python_path,
+                        *result));
+    }
+    LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
+    return absl::OkStatus();
+}
+
 absl::Status SetSystemProperty(const AdbSession &adb,
                                std::string_view  property,
                                std::string_view  value)
@@ -245,7 +314,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         }
         if (validated_settings.use_validation_layer)
         {
-            return absl::InvalidArgumentError("use_validation_layer is not allowed for kPerfCounters");
+            return absl::InvalidArgumentError(
+            "use_validation_layer is not allowed for kPerfCounters");
         }
         break;
     }
@@ -319,6 +389,7 @@ AndroidDevice::AndroidDevice(const std::string &serial) :
     m_gfxr_enabled(false),
     m_port(kFirstPort)
 {
+    CleanupDevice().IgnoreError();
 }
 
 AndroidDevice::~AndroidDevice()
@@ -533,7 +604,9 @@ absl::Status AndroidDevice::SetupDevice()
 
 absl::Status AndroidDevice::CleanupDevice()
 {
-    LOGD("Cleanup device %s\n", m_serial.c_str());
+    LOGI("%s AndroidDevice::CleanupDevice(): package %s\n",
+         Dive::kLogPrefixCleanup,
+         m_serial.c_str());
 
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
@@ -613,15 +686,21 @@ absl::Status AndroidDevice::CleanupDevice()
     .Run(absl::StrFormat("shell rm -rf -- %s/%s", kTargetPath, kProfilingPluginFolderName))
     .IgnoreError();
 
-    LOGD("Cleanup device %s done\n", m_serial.c_str());
+    LOGI("%s AndroidDevice::CleanupDevice(): package %s done\n",
+         Dive::kLogPrefixCleanup,
+         m_serial.c_str());
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::CleanupPackage(const std::string &package)
+absl::Status AndroidDevice::CleanupPackageProperties(const std::string &package)
 {
-    LOGD("Cleanup package %s\n", package.c_str());
+    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s\n",
+         Dive::kLogPrefixCleanup,
+         package.c_str());
     Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)).IgnoreError();
-    LOGD("Cleanup package %s done\n", package.c_str());
+    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s done\n",
+         Dive::kLogPrefixCleanup,
+         package.c_str());
     return absl::OkStatus();
 }
 
@@ -674,7 +753,9 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
 
 absl::Status AndroidDevice::SetupApp(const std::string    &command,
                                      const std::string    &command_args,
-                                     const ApplicationType type)
+                                     const ApplicationType type,
+                                     const std::string    &device_architecture,
+                                     const std::string    &gfxr_capture_directory)
 {
     assert(type == ApplicationType::VULKAN_CLI);
     m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
@@ -682,6 +763,23 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
     if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
+    }
+
+    RETURN_IF_ERROR(RequestRootAccess());
+    if (m_gfxr_enabled)
+    {
+        std::string cpu_abi = device_architecture;
+        if (cpu_abi.empty())
+        {
+            ASSIGN_OR_RETURN(cpu_abi, Adb().RunAndGetResult("shell getprop ro.product.cpu.abi"));
+        }
+        m_app->SetArchitecture(cpu_abi);
+        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
+        m_app->SetGfxrEnabled(true);
+    }
+    else
+    {
+        m_app->SetGfxrEnabled(false);
     }
 
     return m_app->Setup();
@@ -793,9 +891,13 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 {
     LOGD("DeployReplayApk(): starting\n");
 
+    std::string python_path = GetPythonPath();
+    RETURN_IF_ERROR(ValidatePythonPath(python_path));
+
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("python %s install-apk %s -s %s",
+    std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
+                                      python_path,
                                       recon_py_path,
                                       replay_apk_path,
                                       serial);
@@ -897,8 +999,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     }
 
     LOGD("RunReplayGfxrScript(): RUN\n");
+    std::string python_path = GetPythonPath();
+    RETURN_IF_ERROR(ValidatePythonPath(python_path));
     std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
-    std::string cmd = absl::StrFormat("python %s replay %s %s",
+    std::string cmd = absl::StrFormat("%s %s replay %s %s",
+                                      python_path,
                                       local_recon_py_path,
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);
@@ -1133,17 +1238,17 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::Cleanup(const std::string &serial, const std::string &package)
+absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
 {
-    // If package specified, remove package related settings.
-    if (!package.empty())
+    if (package.empty())
     {
-        GetDevice()->CleanupPackage(package).IgnoreError();
+        return absl::FailedPreconditionError(
+        "Cannot clean package properties of unspecified package");
     }
-
-    // Cleanup of device settings and installed libraries is handled in
-    // AndroidDevice::CleanupDevice.
-
+    if (absl::Status ret = GetDevice()->CleanupPackageProperties(package); !ret.ok())
+    {
+        return ret;
+    }
     return absl::OkStatus();
 }
 

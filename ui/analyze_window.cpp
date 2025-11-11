@@ -524,7 +524,6 @@ void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
 {
     m_replay_button->setEnabled(is_enabled);
     m_replay_button->setText(message.c_str());
-    QApplication::processEvents();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -770,7 +769,8 @@ void AnalyzeDialog::ReplayImpl()
             return;
         }
 
-        UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess);
+        UpdateReplayStatus(ReplayStatusUpdateCode::kSuccess,
+                           "Normal Replay completed successfully.");
         // MainWindow needs to reload the capture so the correct PM4 data (or absence thereof) is
         // displayed
         emit CaptureUpdated(m_selected_capture_file_string);

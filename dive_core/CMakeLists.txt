@@ -17,14 +17,14 @@
 project(dive_core)
 
 set(CMAKE_CXX_STANDARD 20)
-
+include(CheckFunctionExists)
 if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
     file(GLOB_RECURSE NATVIS_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.natvis")
 else()
     set(NATVIS_FILES "")
-endif()
+endif() # MSVC
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -43,12 +43,12 @@ set(TRACE_STATS_SRC_FILE "${CMAKE_SOURCE_DIR}/trace_stats/trace_stats.cpp")
 
 if(WIN32)
     set(Python3_FIND_REGISTRY "NEVER")
-endif()
+endif() # WIN32
 find_package(Python3 COMPONENTS Interpreter)
 
 if(NOT Python3_EXECUTABLE)
     message(FATAL_ERROR "python3 not found")
-endif()
+endif() # NOT Python3_EXECUTABLE
 
 add_custom_command(
     OUTPUT ${PM4_GENERATED_HDR_FILE} ${PM4_GENERATED_SRC_FILE}
@@ -116,18 +116,18 @@ if(MSVC)
         freedreno_devices_header
         PROPERTIES FOLDER "freedreno"
     )
-endif()
+endif() # MSVC
 
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
 list(FILTER SRC_FILES EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/tests/.*")
 
-if(DIVE_NO_DISASSEMBLY)
+if(DIVE_NO_DISASSEMBLY OR APPLE)
     list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly\\.cpp")
 else()
     list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
-endif()
+endif() # DIVE_NO_DISASSEMBLY OR APPLE
 
 file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
 file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
@@ -148,9 +148,9 @@ include_directories(${THIRDPARTY_DIRECTORY}/mesa/src/)
 include_directories(${THIRDPARTY_DIRECTORY}/mesa/include/)
 include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT APPLE)
     add_definitions(-DHAVE_ENDIAN_H) # Required for freedreno_dev_info.c on Linux
-endif()
+endif() # NOT MSVC AND NOT APPLE
 
 add_library(
     ${PROJECT_NAME}
@@ -170,80 +170,83 @@ add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
-add_custom_command(
-    OUTPUT ${FREEDRENO_IR3_ISA_SRC_FILE} ${FREEDRENO_IR3_ISA_HDR_FILE}
-    COMMAND
-        ${Python3_EXECUTABLE}
-        ${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py "--xml"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml" "--out-c"
-        ${FREEDRENO_IR3_ISA_SRC_FILE} "--out-h" ${FREEDRENO_IR3_ISA_HDR_FILE}
-    DEPENDS
-        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
-    VERBATIM
-)
-
-add_library(
-    freedreno_ir3
-    STATIC
-    ${FREEDRENO_IR3_ISA_SRC_FILE}
-    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/isaspec.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/blob.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/hash_table.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/log.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_file.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_misc.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/simple_mtx.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/softfloat.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_call_once.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_cpu_detect.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_debug.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_printf.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_process.c"
-    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_thread.c"
-)
-
-target_include_directories(
-    freedreno_ir3
-    PRIVATE
-        "${THIRDPARTY_DIRECTORY}/mesa/include"
-        "${THIRDPARTY_DIRECTORY}/mesa/src"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa"
-)
-
-if(MSVC)
-    target_compile_definitions(freedreno_ir3 PRIVATE -DHAVE_STRUCT_TIMESPEC)
-    set_property(TARGET freedreno_ir3 PROPERTY C_STANDARD 11) # To support alignas
-    target_sources(
-        freedreno_ir3
-        PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c"
+if(NOT APPLE)
+    add_custom_command(
+        OUTPUT ${FREEDRENO_IR3_ISA_SRC_FILE} ${FREEDRENO_IR3_ISA_HDR_FILE}
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py "--xml"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml" "--out-c"
+            ${FREEDRENO_IR3_ISA_SRC_FILE} "--out-h"
+            ${FREEDRENO_IR3_ISA_HDR_FILE}
+        DEPENDS
+            "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
+        VERBATIM
     )
-    set_target_properties(freedreno_ir3 PROPERTIES FOLDER "freedreno")
-else()
-    #set_source_files_properties(PROPERTIES LANGUAGE CXX
-    target_compile_definitions(
+
+    add_library(
+        freedreno_ir3
+        STATIC
+        ${FREEDRENO_IR3_ISA_SRC_FILE}
+        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/isaspec.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/blob.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/hash_table.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/log.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_file.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_misc.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/simple_mtx.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/softfloat.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_call_once.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_cpu_detect.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_debug.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_printf.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_process.c"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_thread.c"
+    )
+
+    target_include_directories(
         freedreno_ir3
         PRIVATE
-            -DHAVE_ENDIAN_H
-            -DHAVE_FUNC_ATTRIBUTE_PACKED
-            -DHAVE_STRUCT_TIMESPEC
-            -DHAVE_PTHREAD
-            -DHAVE_SYSCONF
-            -D_GNU_SOURCE
-            -DHAVE_SECURE_GETENV
+            "${THIRDPARTY_DIRECTORY}/mesa/include"
+            "${THIRDPARTY_DIRECTORY}/mesa/src"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa"
     )
-endif()
 
-target_compile_options(freedreno_ir3 PRIVATE -fPIC)
-add_dependencies(${PROJECT_NAME} freedreno_ir3)
-target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
+    if(MSVC)
+        target_compile_definitions(freedreno_ir3 PRIVATE -DHAVE_STRUCT_TIMESPEC)
+        set_property(TARGET freedreno_ir3 PROPERTY C_STANDARD 11) # To support alignas
+        target_sources(
+            freedreno_ir3
+            PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c"
+        )
+        set_target_properties(freedreno_ir3 PROPERTIES FOLDER "freedreno")
+    else()
+        #set_source_files_properties(PROPERTIES LANGUAGE CXX
+        target_compile_definitions(
+            freedreno_ir3
+            PRIVATE
+                -DHAVE_ENDIAN_H
+                -DHAVE_FUNC_ATTRIBUTE_PACKED
+                -DHAVE_STRUCT_TIMESPEC
+                -DHAVE_PTHREAD
+                -DHAVE_SYSCONF
+                -D_GNU_SOURCE
+                -DHAVE_SECURE_GETENV
+        )
+    endif() # MSVC
+
+    target_compile_options(freedreno_ir3 PRIVATE -fPIC)
+    add_dependencies(${PROJECT_NAME} freedreno_ir3)
+    target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
+endif() # NOT APPLE
 
 # This is linked privately because gfxr contains X11 headers that contain preprocessor macros which cause collisions
 # gfxr_decode_ext_lib itself can't link gfxrecon_decode privately because it's a dependency of a target (gfxrecon-replay) that doesn't specify PRIVATE/PUBLIC
@@ -260,12 +263,12 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
     target_link_libraries(${PROJECT_NAME} PRIVATE z)
     target_link_libraries(${PROJECT_NAME} PRIVATE tinfo)
-endif()
+endif() # "${CMAKE_SYSTEM_NAME}" STREQUAL "Linux"
 if(WIN32)
     # Supress warning about deprecation of std::iterator when compile with c++17
     add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${ZLIB_LIBRARIES} -static)
-endif()
+endif() # WIN32
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE ${LibArchive_LIBRARIES} ${PEFFETTO_TRACE_READER_LIB}
@@ -275,7 +278,7 @@ target_link_libraries(
 check_function_exists(secure_getenv HAVE_SECURE_GETENV)
 if(HAVE_SECURE_GETENV)
     target_compile_definitions(${PROJECT_NAME} PRIVATE -DHAVE_SECURE_GETENV)
-endif()
+endif() # HAVE_SECURE_GETENV
 
 include_directories(${LibArchive_INCLUDE_DIRS})
 if(MSVC)
@@ -307,7 +310,7 @@ else()
             -fPIC
             $<$<COMPILE_LANGUAGE:C>:-Wno-override-init>
     )
-endif()
+endif() # MSVC
 
 enable_testing()
 add_subdirectory(tests)

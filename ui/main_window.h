@@ -134,7 +134,7 @@ signals:
     void AnalyzeCaptureStarted(const QString &file_path);
 
 public slots:
-    void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
+    void OnCapture(bool is_capture_delayed = false);
     void OnCaptureUpdated(const QString &file_path);
     void OnSwitchToShaderTab();
     void OnOpenVulkanDrawCallMenu(const QPoint &pos);
@@ -155,7 +155,6 @@ private slots:
     void OnFilterModeChange(const QString &string);
     void OnGfxrFilterModeChange();
     void OnOpenFile();
-    void OnGFXRCapture();
     void OnNormalCapture();
     void OnCaptureTrigger();
     void OnAnalyzeCapture();
@@ -236,8 +235,10 @@ private:
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
     void    UpdateRecentFileActions(QStringList recent_files);
     QString StrippedName(const QString &fullFileName);
-    void    UpdateTabAvailability();
-    void    ResetTabWidget();
+
+    using TabMask = uint32_t;
+    void UpdateTabAvailability(TabMask mask);
+
     QModelIndex             FindSourceIndexFromNode(QAbstractItemModel *model,
                                                     uint64_t            target_node_index,
                                                     const QModelIndex  &parent = QModelIndex());
@@ -260,8 +261,6 @@ private:
     QAction       *m_save_as_action;
     QAction       *m_exit_action;
     QMenu         *m_capture_menu;
-    QAction       *m_gfxr_capture_action;
-    QAction       *m_pm4_capture_action;
     QAction       *m_capture_action;
     QAction       *m_capture_delay_action;
     QAction       *m_capture_setting_action;
@@ -320,33 +319,64 @@ private:
     TreeViewComboBox *m_pm4_view_mode_combo_box;
     TreeViewComboBox *m_pm4_filter_mode_combo_box;
 
+    struct TabMaskBits
+    {
+        enum : TabMask
+        {
+            kOverview = 1u << 0,
+            kCommand = 1u << 1,
+            kShader = 1u << 2,
+            kEventState = 1u << 3,
+            kGfxrVulkanCommandArguments = 1u << 4,
+            kPerfCounters = 1u << 5,
+            kGpuTiming = 1u << 6,
+            kFrame = 1u << 7,
+            kBuffer = 1u << 8,
+            kEventTiming = 1u << 9,
+            kTextFile = 1u << 10,
+            kNone = 0u,
+            kAll = kOverview | kCommand | kShader | kEventState | kGfxrVulkanCommandArguments |
+                   kPerfCounters | kGpuTiming | kFrame | kEventTiming | kTextFile,
+            kViewsForCorrelated = kOverview | kCommand | kShader | kEventState |
+                                  kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
+            kViewsForRdFile = kOverview | kCommand | kShader | kEventState | kBuffer,
+            kViewsForGfxrFile = kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
+        };
+    };
+    struct TabIndices
+    {
+        int overview = -1;
+        int command = -1;
+        int shader = -1;
+        int event_state = -1;
+        int gfxr_vulkan_command_arguments = -1;
+        int perf_counter = -1;
+        int gpu_timing = -1;
+        int frame = -1;
+        int buffer = -1;
+        int event_timing = -1;
+        int text_file = -1;
+    };
     // Right pane
-    QTabWidget                        *m_tab_widget;
-    CommandTabView                    *m_command_tab_view;
-    int                                m_command_view_tab_index;
-    OverviewTabView                   *m_overview_tab_view;
-    int                                m_overview_view_tab_index;
-    ShaderView                        *m_shader_view;
-    int                                m_shader_view_tab_index;
-    EventStateView                    *m_event_state_view;
-    int                                m_event_state_view_tab_index;
-    GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view;
-    int                                m_gfxr_vulkan_command_arguments_view_tab_index;
-    PerfCounterTabView                *m_perf_counter_tab_view;
-    int                                m_perf_counter_view_tab_index;
-    GpuTimingTabView                  *m_gpu_timing_tab_view;
-    int                                m_gpu_timing_view_tab_index;
-    FrameTabView                      *m_frame_tab_view;
-    int                                m_frame_view_tab_index;
+    QTabWidget *m_tab_widget = nullptr;
+
+    CommandTabView                    *m_command_tab_view = nullptr;
+    OverviewTabView                   *m_overview_tab_view = nullptr;
+    ShaderView                        *m_shader_view = nullptr;
+    EventStateView                    *m_event_state_view = nullptr;
+    GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view = nullptr;
+    PerfCounterTabView                *m_perf_counter_tab_view = nullptr;
+    GpuTimingTabView                  *m_gpu_timing_tab_view = nullptr;
+    FrameTabView                      *m_frame_tab_view = nullptr;
 #if defined(ENABLE_CAPTURE_BUFFERS)
-    BufferView *m_buffer_view;
+    BufferView *m_buffer_view = nullptr;
 #endif
 #ifndef NDEBUG
-    EventTimingView *m_event_timing_view;
-    int              m_event_timing_view_tab_index;
+    EventTimingView *m_event_timing_view = nullptr;
 #endif
     TextFileView *m_text_file_view;
-    int           m_text_file_view_tab_index = -1;
+    TabIndices    m_tabs;
+    bool          m_tabs_updating = false;
 
     DiveFilterModel *m_filter_model;
 

@@ -226,6 +226,69 @@ jobs:
         run: |
           ctest --output-on-failure -C Release --test-dir build
 
+  build_MacOS_Debug:
+    name: "MacOS debug build"
+    runs-on: macos-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt 5.15 via Homebrew
+        run: |
+          brew install qt@5
+          # Link it so standard commands might find it, or just set env vars below
+          echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
+          echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Check Qt Version
+        run: qmake --version
+      - name: Install dependency
+        run: |
+          python3 -m pip install --break-system-packages mako
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Debug \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja
+        run: |
+          ninja -C build
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C Debug --test-dir build
+
+  build_MacOS_Release:
+    name: "MacOS release build"
+    runs-on: macos-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt 5.15 via Homebrew
+        run: |
+          brew install qt@5
+          # Link it so standard commands might find it, or just set env vars below
+          echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
+          echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
+      - name: Check Qt Version
+        run: qmake --version
+      - name: Install dependency
+        run: |
+          python3 -m pip install --break-system-packages mako
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Release \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja
+        run: |
+          ninja -C build
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C Release --test-dir build
+
   build_Android_from_Linux_Debug:
     name: "Android Debug build on Linux platform"
     runs-on: ubuntu-24.04

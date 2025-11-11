@@ -43,7 +43,7 @@ public:
     std::string PluginName() const override { return "Plugin Test"; }
     std::string PluginVersion() const override { return "1.0.0"; }
 
-    bool Initialize(MainWindow& main_window) override;
+    bool Initialize(IDivePluginBridge& bridge) override;
     void Shutdown() override;
 
 private slots:

@@ -103,6 +103,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)
     set(D3D12_SUPPORT OFF CACHE BOOL "")
+    set(GFXRECON_ENABLE_OPENXR OFF CACHE BOOL "" FORCE)
     include(libarchive.cmake)
     add_subdirectory(third_party/gfxreconstruct)
     add_subdirectory(gfxr_ext/decode)
@@ -134,6 +135,7 @@ else()
                 ./gradlew layer:assemble${CMAKE_BUILD_TYPE}
                 replay:assemble${CMAKE_BUILD_TYPE}
                 --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
+                -PDisableOpenXR
             WORKING_DIRECTORY
                 ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
             COMMAND_ERROR_IS_FATAL ANY

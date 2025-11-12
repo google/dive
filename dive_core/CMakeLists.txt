@@ -17,7 +17,7 @@
 project(dive_core)
 
 set(CMAKE_CXX_STANDARD 20)
-
+include(CheckFunctionExists)
 if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
@@ -255,6 +255,8 @@ target_include_directories(
     ${PROJECT_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/gfxreconstruct/framework
 )
+
+target_link_libraries(${PROJECT_NAME} PRIVATE string_utils)
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     target_link_libraries(${PROJECT_NAME} PRIVATE dl)

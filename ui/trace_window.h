@@ -72,9 +72,10 @@ public:
 
     // Appends/increments the numerical suffix "_#" to target_capture_path for a fresh directory, if
     // the directory already exists
-    void                    SetGfxrTargetCaptureDir(const std::string &target_capture_dir);
-    bool                    areTimestampsCurrent(Dive::AndroidDevice     *device,
-                                                 std::vector<std::string> previous_timestamps);
+    void SetGfxrTargetCaptureDir(const std::string &target_capture_dir);
+    bool AreTimestampsCurrent(Dive::AndroidDevice                      *device,
+                              const std::map<std::string, std::string> &previous_timestamps);
+
     absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
 signals:
     void DownloadedSize(uint64_t size);

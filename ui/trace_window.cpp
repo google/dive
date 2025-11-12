@@ -144,6 +144,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_capture_type_layout->addWidget(m_capture_type_label);
     m_capture_type_layout->addWidget(m_gfxr_capture_type_button);
     m_capture_type_layout->addWidget(m_pm4_capture_type_button);
+    m_capture_type_layout->addStretch(1);
 
     m_cmd_layout = new QHBoxLayout();
     m_file_label = new QLabel("Executable:");
@@ -160,7 +161,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_args_layout->addWidget(m_args_input_box);
 
     m_capture_layout->addWidget(m_dev_label);
-    m_capture_layout->addWidget(m_dev_box);
+    m_capture_layout->addWidget(m_dev_box, 1);
     m_capture_layout->addWidget(m_dev_refresh_button);
 
     m_pkg_filter_layout = new QHBoxLayout();
@@ -171,13 +172,13 @@ TraceDialog::TraceDialog(QWidget *parent) :
 
     m_pkg_layout = new QHBoxLayout();
     m_pkg_layout->addWidget(m_pkg_label);
-    m_pkg_layout->addWidget(m_pkg_box);
+    m_pkg_layout->addWidget(m_pkg_box, 1);
     m_pkg_layout->addWidget(m_pkg_refresh_button);
     m_pkg_layout->addWidget(m_pkg_filter_button);
 
     m_type_layout = new QHBoxLayout();
     m_type_layout->addWidget(m_app_type_label);
-    m_type_layout->addWidget(m_app_type_box);
+    m_type_layout->addWidget(m_app_type_box, 1);
 
     m_gfxr_capture_file_directory_layout = new QHBoxLayout();
     m_gfxr_capture_file_directory_input_box = new QLineEdit();
@@ -215,7 +216,8 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_main_layout->addLayout(m_type_layout);
 
     m_main_layout->addLayout(m_button_layout);
-    m_main_layout->setSizeConstraint(QLayout::SetFixedSize);
+    m_main_layout->setSizeConstraint(QLayout::SetDefaultConstraint);
+    setSizeGripEnabled(true);
     setLayout(m_main_layout);
 
     QObject::connect(m_dev_box,
@@ -854,35 +856,33 @@ void GfxrCaptureWorker::SetGfxrTargetCaptureDir(const std::string &target_captur
     }
 }
 
-bool GfxrCaptureWorker::areTimestampsCurrent(Dive::AndroidDevice     *device,
-                                             std::vector<std::string> previous_timestamps)
+bool GfxrCaptureWorker::AreTimestampsCurrent(
+Dive::AndroidDevice                      *device,
+const std::map<std::string, std::string> &previous_timestamps)
 {
-    std::vector<std::string> current_time_stamps;
-    std::string              get_first_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                   m_source_capture_dir,
-                                                                   "/",
-                                                                   m_file_list[0].data());
-    std::string get_second_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                    m_source_capture_dir,
-                                                                    "/",
-                                                                    m_file_list[1].data());
-    std::string get_third_current_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                                   m_source_capture_dir,
-                                                                   "/",
-                                                                   m_file_list[2].data());
-    absl::StatusOr<std::string> first_current_timestamp = device->Adb().RunAndGetResult(
-    get_first_current_timestamp_command);
-    absl::StatusOr<std::string> second_current_timestamp = device->Adb().RunAndGetResult(
-    get_second_current_timestamp_command);
-    absl::StatusOr<std::string> third_current_timestamp = device->Adb().RunAndGetResult(
-    get_third_current_timestamp_command);
+    for (const auto &[file_name, timestamp] : previous_timestamps)
+    {
+        std::string get_timestamp_command = absl::StrCat("shell stat -c %Y ",
+                                                         m_source_capture_dir,
+                                                         "/",
+                                                         file_name.data());
 
-    current_time_stamps.push_back(first_current_timestamp->data());
-    current_time_stamps.push_back(second_current_timestamp->data());
-    current_time_stamps.push_back(third_current_timestamp->data());
-    return (current_time_stamps[0] == previous_timestamps[0] &&
-            current_time_stamps[1] == previous_timestamps[1] &&
-            current_time_stamps[2] == previous_timestamps[2]);
+        absl::StatusOr<std::string> current_timestamp = device->Adb().RunAndGetResult(
+        get_timestamp_command);
+        if (!current_timestamp.ok())
+        {
+            qDebug() << "Failed to get timestamp for " << file_name.data() << ": "
+                     << current_timestamp.status().message().data();
+            return false;
+        }
+
+        if (current_timestamp->data() != timestamp)
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
@@ -910,12 +910,13 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         }
     }
 
-    // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written to.
-    int64_t                  size = 0;
-    std::vector<std::string> current_timestamps;
-
     while (true)
     {
+        // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written
+        // to.
+        int64_t                            size = 0;
+        std::map<std::string, std::string> current_timestamps;
+
         for (std::string file : m_file_list)
         {
             std::string path = absl::StrCat(m_source_capture_dir, "/", file.data());
@@ -942,7 +943,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
             }
 
             // Add the timestamp for the last time the file was udpated.
-            current_timestamps.push_back(file_update_timestamp->data());
+            current_timestamps[file] = file_update_timestamp->data();
 
             // Update the total size of the gfxr capture directory.
             size += std::stoll(str_num->c_str());
@@ -954,13 +955,10 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         {
 
             // If the timestamps are current, return the size of the directory.
-            if (areTimestampsCurrent(device, current_timestamps))
+            if (AreTimestampsCurrent(device, current_timestamps))
             {
-                current_timestamps.clear();
                 return size;
             }
-            current_timestamps.clear();
-            size = 0;
         }
     }
 }

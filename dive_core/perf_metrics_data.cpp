@@ -32,7 +32,7 @@
 
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/available_metrics.h"
-#include "dive_core/common/string_utils.h"
+#include "utils/string_utils.h"
 
 namespace Dive
 {

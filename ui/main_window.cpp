@@ -486,24 +486,27 @@ MainWindow::MainWindow()
 
         m_frame_tab_view = new FrameTabView(this);
 
-        m_text_file_view = new TextFileView(*m_data_core);
-        m_text_file_view->setParent(this);
-        m_text_file_view_tab_index = m_tab_widget->addTab(m_text_file_view, "Text File");
-
-        m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-
-        m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
-        m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
-        m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
-        m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
-
 #if defined(ENABLE_CAPTURE_BUFFERS)
         m_buffer_view = new BufferView(*m_data_core);
-        m_tab_widget->addTab(m_buffer_view, "Buffers");
 #endif
+        m_text_file_view = new TextFileView(*m_data_core);
 
-        // Set to not visible by default.
-        SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, false);
+        m_tabs.frame = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
+        m_tabs.command = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
+        m_tabs.event_state = m_tab_widget->addTab(m_event_state_view, "Event State");
+        m_tabs.gpu_timing = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
+        m_tabs.perf_counter = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
+        m_tabs.text_file = m_tab_widget->addTab(m_text_file_view, "Text File");
+        m_tabs.shader = m_tab_widget->addTab(m_shader_view, "Shaders");
+#if defined(ENABLE_CAPTURE_BUFFERS)
+        m_tabs.buffer = m_tab_widget->addTab(m_buffer_view, "Buffers");
+#endif
+        // Note: qt bug, the last widget can't be set as invisible, otherwise navagation breaks
+        //       when widget width is smaller than required to show all tabs.
+        //       Workaround: keep overview tab always visible.
+        m_tabs.overview = m_tab_widget->addTab(m_overview_tab_view, "Overview");
+
+        UpdateTabAvailability(0);
     }
     // Side panel
     // TODO (b/445754645) Remove the PropertyPanel and replace with a tooltip or overlay.
@@ -631,7 +634,8 @@ MainWindow::MainWindow()
     m_hover_help->SetDataCore(m_data_core.get());
     setAccessibleName("DiveMainWindow");
 
-    m_plugin_manager = std::unique_ptr<Dive::PluginLoader>(new Dive::PluginLoader(*this));
+    m_plugin_manager = std::make_unique<Dive::PluginLoader>();
+    m_plugin_manager->Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow, this);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -845,36 +849,6 @@ void MainWindow::OnGfxrFilterModeChange()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::ResetTabWidget()
-{
-    // Disconnect OnTabViewChange so that it is not triggered during the reset of the tab widget.
-    QObject::disconnect(m_tab_widget,
-                        &QTabWidget::currentChanged,
-                        this,
-                        &MainWindow::OnTabViewChange);
-
-    // Remove all the tabs.
-    while (m_tab_widget->count() > 0)
-    {
-        m_tab_widget->removeTab(0);
-    }
-
-    // Reset all of the tab indices.
-    m_gfxr_vulkan_command_arguments_view_tab_index = -1;
-    m_text_file_view_tab_index = -1;
-    m_overview_view_tab_index = -1;
-    m_command_view_tab_index = -1;
-    m_shader_view_tab_index = -1;
-    m_event_state_view_tab_index = -1;
-    m_perf_counter_view_tab_index = -1;
-    m_gpu_timing_view_tab_index = -1;
-    m_frame_view_tab_index = -1;
-
-    // Reconnect OnTabViewChange.
-    QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
-}
-
-//--------------------------------------------------------------------------------------------------
 void MainWindow::OnDiveFileLoaded()
 {
     // Reset models and views that display data from the capture
@@ -896,32 +870,7 @@ void MainWindow::OnDiveFileLoaded()
 
     m_command_hierarchy_model->BeginResetModel();
 
-    // Reset the tab widget.
-    ResetTabWidget();
-
-    // Add the tabs required for an Dive file or .rd and .gfxr file.
-    m_gfxr_vulkan_command_arguments_view_tab_index =
-    m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
-    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
-    m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
-    m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-    m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
-    m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
-    m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
-    m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    // If m_buffer_view is dynamically created/deleted, handle it here.
-    // If it's a fixed member, ensure it's reset.
-    if (!m_buffer_view)
-    {  // Only create if null, otherwise just reset
-        m_buffer_view = new BufferView(*m_data_core);
-    }
-    else
-    {
-        // m_buffer_view->Reset(); // Assuming it has a reset method
-    }
-    m_tab_widget->addTab(m_buffer_view, "Buffers");
-#endif
+    UpdateTabAvailability(TabMaskBits::kViewsForCorrelated);
 
     // Left Panel contains gfxr display
     m_command_hierarchy_view->setModel(m_gfxr_vulkan_commands_filter_proxy_model);
@@ -983,27 +932,7 @@ void MainWindow::OnAdrenoRdFileLoaded()
 
     m_command_hierarchy_model->BeginResetModel();
 
-    // Reset the tab widget.
-    ResetTabWidget();
-
-    // Add the tabs required for an AdrenoRd file.
-    m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
-    m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
-    m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    // If m_buffer_view is dynamically created/deleted, handle it here.
-    // If it's a fixed member, ensure it's reset.
-    if (!m_buffer_view)
-    {  // Only create if null, otherwise just reset
-        m_buffer_view = new BufferView(*m_data_core);
-    }
-    else
-    {
-        // m_buffer_view->Reset(); // Assuming it has a reset method
-    }
-    m_tab_widget->addTab(m_buffer_view, "Buffers");
-#endif
+    UpdateTabAvailability(TabMaskBits::kViewsForRdFile);
 
     m_filter_model->SetMode(kDefaultFilterMode);
     m_command_hierarchy_view->setModel(m_filter_model);
@@ -1047,20 +976,13 @@ void MainWindow::OnGfxrFileLoaded()
 
     m_gfxr_vulkan_command_hierarchy_model->BeginResetModel();
 
-    // Reset the tab widget.
-    ResetTabWidget();
-
     m_gfxr_vulkan_commands_filter_proxy_model->setSourceModel(
     m_gfxr_vulkan_command_hierarchy_model);
     m_command_hierarchy_view->setModel(m_gfxr_vulkan_commands_filter_proxy_model);
 
-    ConnectGfxrFileTabs();
+    UpdateTabAvailability(TabMaskBits::kViewsForGfxrFile);
 
-    m_gfxr_vulkan_command_arguments_view_tab_index =
-    m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
-    m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
-    m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
-    m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
+    ConnectGfxrFileTabs();
 
     // Ensure the All Event topology is displayed.
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
@@ -1218,6 +1140,7 @@ bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool 
 
     // Disconnect the signals for all of the possible tabs.
     DisconnectAllTabs();
+    UpdateTabAvailability(0);
 
     // Clear vectors of draw call indices as they are only used for a correlated view.
     m_filter_model->ClearDrawCallIndices();
@@ -1590,8 +1513,6 @@ void MainWindow::OnFileLoaded()
     }
     HideOverlay();
     ShowTempStatus(tr("File loaded successfully"));
-
-    UpdateTabAvailability();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1937,7 +1858,7 @@ void MainWindow::OnSearchTrigger()
     SearchBar   *tab_wiget_search_bar;
     QPushButton *tab_wiget_search_button;
 
-    if (current_index == m_command_view_tab_index)
+    if (current_index == m_tabs.command)
     {
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName);
         tab_wiget_search_button = current_tab->findChild<QPushButton *>(
@@ -1949,7 +1870,7 @@ void MainWindow::OnSearchTrigger()
         }
         tab_wiget_search_button->show();
     }
-    else if (current_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+    else if (current_index == m_tabs.gfxr_vulkan_command_arguments)
     {
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(
         kGfxrVulkanCommandArgumentsSearchBarName);
@@ -1963,7 +1884,7 @@ void MainWindow::OnSearchTrigger()
         }
         tab_wiget_search_button->show();
     }
-    else if (current_index == m_perf_counter_view_tab_index)
+    else if (current_index == m_tabs.perf_counter)
     {
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName);
         tab_wiget_search_button = current_tab->findChild<QPushButton *>(
@@ -2163,21 +2084,21 @@ void MainWindow::CreateShortcuts()
     m_search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), this);
     connect(m_search_tab_view_shortcut, &QShortcut::activated, [this]() {
         int current_tab_index = m_tab_widget->currentIndex();
-        if (current_tab_index == m_command_view_tab_index)
+        if (current_tab_index == m_tabs.command)
         {
             m_command_tab_view->OnSearchCommandBuffer();
         }
-        else if (current_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+        else if (current_tab_index == m_tabs.gfxr_vulkan_command_arguments)
         {
             m_gfxr_vulkan_command_arguments_tab_view->OnSearchCommandArgs();
         }
-        else if (current_tab_index == m_perf_counter_view_tab_index)
+        else if (current_tab_index == m_tabs.perf_counter)
         {
             m_perf_counter_tab_view->OnSearchCounters();
         }
         else
         {
-            m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+            m_tab_widget->setCurrentIndex(m_tabs.command);
             m_command_tab_view->OnSearchCommandBuffer();
         }
         ResetEventSearchBar();
@@ -2190,30 +2111,30 @@ void MainWindow::CreateShortcuts()
     // Overview Shortcut
     m_overview_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
     connect(m_overview_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_overview_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.overview);
     });
     // Commands Shortcut
     m_command_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
     connect(m_command_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.command);
     });
     // Shaders Shortcut
     m_shader_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
     connect(m_shader_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.shader);
     });
     // Event State Shortcut
     m_event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
     connect(m_event_state_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.event_state);
     });
     // Gfxr Vulkan Command Arguments Shortcut
     m_gfxr_vulkan_command_arguments_tab_shortcut =
     new QShortcut(QKeySequence(SHORTCUT_GFXR_VULKAN_COMMAND_ARGUMENTS_TAB), this);
     connect(m_gfxr_vulkan_command_arguments_tab_shortcut, &QShortcut::activated, [this]() {
-        if (m_gfxr_vulkan_command_arguments_view_tab_index != -1)
+        if (m_tabs.gfxr_vulkan_command_arguments != -1)
         {
-            m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+            m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
         }
     });
 }
@@ -2306,16 +2227,33 @@ QString MainWindow::StrippedName(const QString &fullFileName)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::UpdateTabAvailability()
+void MainWindow::UpdateTabAvailability(TabMask mask)
 {
-    bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
-    SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, has_text);
-
-    SetTabAvailable(m_tab_widget, m_event_state_view_tab_index, true);
-
-#ifndef NDEBUG
-    SetTabAvailable(m_tab_widget, m_event_timing_view_tab_index, true);
+    m_tabs_updating = true;
+    if (m_tabs.overview >= 0)
+    {
+        m_tab_widget->setTabEnabled(m_tabs.overview, (mask & TabMaskBits::kOverview) > 0);
+    }
+    SetTabAvailable(m_tab_widget, m_tabs.command, mask & TabMaskBits::kCommand);
+    SetTabAvailable(m_tab_widget, m_tabs.shader, mask & TabMaskBits::kShader);
+    SetTabAvailable(m_tab_widget, m_tabs.event_state, mask & TabMaskBits::kEventState);
+    SetTabAvailable(m_tab_widget,
+                    m_tabs.gfxr_vulkan_command_arguments,
+                    mask & TabMaskBits::kGfxrVulkanCommandArguments);
+    SetTabAvailable(m_tab_widget, m_tabs.perf_counter, mask & TabMaskBits::kPerfCounters);
+    SetTabAvailable(m_tab_widget, m_tabs.gpu_timing, mask & TabMaskBits::kGpuTiming);
+    SetTabAvailable(m_tab_widget, m_tabs.frame, mask & TabMaskBits::kFrame);
+#if defined(ENABLE_CAPTURE_BUFFERS)
+    SetTabAvailable(m_tab_widget, m_tabs.buffer, mask & TabMaskBits::kBuffer);
 #endif
+#ifndef NDEBUG
+    SetTabAvailable(m_tab_widget, m_tabs.event_timing, mask & TabMaskBits::kEventTiming);
+#endif
+    bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
+    SetTabAvailable(m_tab_widget, m_tabs.text_file, (mask & TabMaskBits::kTextFile) && has_text);
+    m_tabs_updating = false;
+
+    OnTabViewChange();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2325,7 +2263,7 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
     {
     case Dive::CrossRefType::kShaderAddress:
         if (m_shader_view->OnCrossReference(ref))
-            m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+            m_tab_widget->setCurrentIndex(m_tabs.shader);
         break;
     case Dive::CrossRefType::kGFRIndex:
         m_command_hierarchy_view->setCurrentNode(ref.Id());
@@ -2339,8 +2277,8 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnSwitchToShaderTab()
 {
-    DIVE_ASSERT(m_shader_view_tab_index >= 0);
-    m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+    DIVE_ASSERT(m_tabs.shader >= 0);
+    m_tab_widget->setCurrentIndex(m_tabs.shader);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2359,6 +2297,11 @@ void MainWindow::OnTabViewSearchBarVisibilityChange(bool isHidden)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnTabViewChange()
 {
+    if (m_tabs_updating)
+    {
+        return;
+    }
+
     int current_index = m_tab_widget->currentIndex();
 
     // If no current index is selected, return.
@@ -2373,15 +2316,15 @@ void MainWindow::OnTabViewChange()
         QWidget *previous_tab = m_tab_widget->widget(m_previous_tab_index);
         if (previous_tab)
         {
-            if (m_previous_tab_index == m_command_view_tab_index)
+            if (m_previous_tab_index == m_tabs.command)
             {
                 m_command_tab_view->OnSearchBarVisibilityChange(true);
             }
-            else if (m_previous_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+            else if (m_previous_tab_index == m_tabs.gfxr_vulkan_command_arguments)
             {
                 m_gfxr_vulkan_command_arguments_tab_view->OnSearchBarVisibilityChange(true);
             }
-            else if (m_previous_tab_index == m_perf_counter_view_tab_index)
+            else if (m_previous_tab_index == m_tabs.perf_counter)
             {
                 m_perf_counter_tab_view->OnSearchBarVisibilityChange(true);
             }
@@ -2389,7 +2332,7 @@ void MainWindow::OnTabViewChange()
     }
 
     QWidget *current_tab = m_tab_widget->widget(current_index);
-    if (current_index == m_command_view_tab_index &&
+    if (current_index == m_tabs.command &&
         !current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
     {
         ResetEventSearchBar();
@@ -2398,7 +2341,7 @@ void MainWindow::OnTabViewChange()
             ResetPm4EventSearchBar();
         }
     }
-    else if (current_index == m_gfxr_vulkan_command_arguments_view_tab_index &&
+    else if (current_index == m_tabs.gfxr_vulkan_command_arguments &&
              current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName))
     {
         if (!current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName)
@@ -2411,7 +2354,7 @@ void MainWindow::OnTabViewChange()
             }
         }
     }
-    else if (current_index == m_perf_counter_view_tab_index &&
+    else if (current_index == m_tabs.perf_counter &&
              current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName))
     {
         if (!current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName)->isHidden())
@@ -3201,11 +3144,11 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     QVariant selected_action_data = selected_action->data();
     if (selected_action_data == Dive::kPerfCounterData)
     {
-        m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.perf_counter);
     }
     else if (selected_action_data == Dive::kArguments)
     {
-        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
     }
     else
     {
@@ -3315,11 +3258,11 @@ void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
     QVariant selected_action_data = selected_action->data();
     if (selected_action_data == Dive::kGpuTimeData)
     {
-        m_tab_widget->setCurrentIndex(m_gpu_timing_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.gpu_timing);
     }
     else if (selected_action_data == Dive::kArguments)
     {
-        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
     }
 }
 

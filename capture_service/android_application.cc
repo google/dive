@@ -48,68 +48,82 @@ int GetIndentation(const std::string &line)
     return indention;
 }
 
-/*
-Parsing dumpsys package to get the main activity of the package.
-An example output from the dumpsys command:
-flame:/ # dumpsys package de.saschawillems.vulkanBloom
-Activity Resolver Table:
-  Non-Data Actions:
-      android.intent.action.MAIN:
-        1e368bb de.saschawillems.vulkanBloom/de.saschawillems.vulkanSample.VulkanActivity filter
-35ec1d8 Action: "android.intent.action.MAIN" Category: "android.intent.category.LAUNCHER"
-...
-*/
 std::string ParsePackageForActivity(const std::string &input, const std::string &package)
 {
-    bool        non_data_action_found = false;
-    std::string activity;
+    bool        in_non_data = false;
+    bool        in_main_action = false;
+    int         non_data_indent = -1;
+    int         main_action_indent = -1;
     std::string target_str = package + "/";
 
-    std::vector<std::string> lines = absl::StrSplit(input, '\n');
-    int                      indention = 0;
+    std::vector<absl::string_view> lines = absl::StrSplit(input, '\n');
+
     for (const auto &line : lines)
     {
-        if (absl::StrContains(line, "Non-Data Actions"))
+        // Skip empty lines
+        if (absl::StripAsciiWhitespace(line).empty())
         {
-            non_data_action_found = true;
-            indention = GetIndentation(line);
             continue;
         }
 
-        if (!non_data_action_found)
-            continue;
+        int cur_indent = GetIndentation(std::string(line));
 
-        int cur_indention = GetIndentation(line);
-        if (cur_indention <= indention)
+        if (!in_non_data)
         {
-            non_data_action_found = false;
-            break;
+            if (absl::StrContains(line, "Non-Data Actions:"))
+            {
+                in_non_data = true;
+                non_data_indent = cur_indent;
+            }
+            continue;
         }
 
+        if (cur_indent <= non_data_indent)
+        {
+            in_non_data = false;
+            in_main_action = false;
+            continue;
+        }
+
+        if (!in_main_action)
+        {
+            if (absl::StrContains(line, "android.intent.action.MAIN:"))
+            {
+                in_main_action = true;
+                main_action_indent = cur_indent;
+            }
+            continue;
+        }
+
+        if (cur_indent <= main_action_indent)
+        {
+            in_main_action = false;
+            continue;
+        }
+
+        // Look for the package inside the MAIN action block
+        // Always take the activity from the 1st android.intent.action.MAIN if there are multiple
         if (absl::StrContains(line, target_str))
         {
-            std::string trimmed_line = line;
-            trimmed_line = absl::StripAsciiWhitespace(trimmed_line);
-            std::vector<std::string> fields = absl::StrSplit(trimmed_line, " ");
-            if (fields.size() <= 2)
+            absl::string_view trimmed_line = absl::StripAsciiWhitespace(line);
+
+            std::vector<absl::string_view> fields = absl::StrSplit(trimmed_line, ' ');
+
+            for (const auto &field : fields)
             {
-                break;
-            }
-            for (const auto &f : fields)
-            {
-                if (absl::StrContains(f, package))
+                if (absl::StrContains(field, target_str))
                 {
-                    std::vector<std::string> pa = absl::StrSplit(f, "/");
-                    if (pa.size() == 2 && pa[0] == package)
+                    std::vector<absl::string_view> package_activity = absl::StrSplit(field, '/');
+                    if (package_activity.size() == 2 && package_activity[0] == package)
                     {
-                        activity = pa[1];
+                        return std::string(package_activity[1]);
                     }
                 }
             }
         }
     }
 
-    return activity;
+    return "";
 }
 
 AndroidApplication::AndroidApplication(AndroidDevice  &dev,

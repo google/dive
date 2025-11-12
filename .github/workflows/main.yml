@@ -258,14 +258,13 @@ jobs:
         run: qmake --version
       - name: Install ccache
         run: brew install ccache
-      - name: Cache ccache
-        uses: actions/cache@v3
+      - name: Restore ccache
+        uses: actions/cache/restore@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-Debug-ccache-${{ github.ref }}-${{ github.sha }}
+          key: ${{ runner.os }}-Debug-ccache-main-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-Debug-ccache-${{ github.ref }}-
-            ${{ runner.os }}-Debug-ccache-refs/heads/main-
+            ${{ runner.os }}-Debug-ccache-main-
       - name: Install dependency
         run: |
           python3 -m pip install --break-system-packages mako
@@ -291,6 +290,12 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
+      - name: Save ccache
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-Debug-ccache-main-${{ github.sha }}
 
   build_MacOS_Release:
     name: "MacOS release build"
@@ -312,14 +317,13 @@ jobs:
         run: qmake --version
       - name: Install ccache
         run: brew install ccache
-      - name: Cache ccache
-        uses: actions/cache@v3
+      - name: Restore ccache
+        uses: actions/cache/restore@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-Release-ccache-${{ github.ref }}-${{ github.sha }}
+          key: ${{ runner.os }}-Release-ccache-main-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-Release-ccache-${{ github.ref }}-
-            ${{ runner.os }}-Release-ccache-refs/heads/main-
+            ${{ runner.os }}-Release-ccache-main-
       - name: Install dependency
         run: |
           python3 -m pip install --break-system-packages mako
@@ -345,6 +349,12 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
+      - name: Save ccache
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-Release-ccache-main-${{ github.sha }}
 
   build_Android_from_Linux_Debug:
     name: "Android Debug build on Linux platform"

@@ -241,6 +241,8 @@ jobs:
   build_MacOS_Debug:
     name: "MacOS debug build"
     runs-on: macos-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -252,20 +254,36 @@ jobs:
           # Link it so standard commands might find it, or just set env vars below
           echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
           echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
-
       - name: Check Qt Version
         run: qmake --version
+      - name: Install ccache
+        run: brew install ccache
+      - name: Cache ccache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-Debug-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-Debug-ccache-
       - name: Install dependency
         run: |
           python3 -m pip install --break-system-packages mako
+      - name: Zero ccache stats
+        run: ccache -z
       - name: Generate build files with cmake
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Debug \
+          time cmake -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
+            -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
             -GNinja \
             -Bbuild .
       - name: Build Dive host tools with ninja
         run: |
-          ninja -C build
+          time ninja -C build -d stats
+      - name: Show ccache stats
+        run: ccache -s
       - name: Ninja log
         run: |
           cat build/.ninja_log
@@ -276,6 +294,8 @@ jobs:
   build_MacOS_Release:
     name: "MacOS release build"
     runs-on: macos-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -289,17 +309,34 @@ jobs:
           echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
       - name: Check Qt Version
         run: qmake --version
+      - name: Install ccache
+        run: brew install ccache
+      - name: Cache ccache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-Release-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-Release-ccache-
       - name: Install dependency
         run: |
           python3 -m pip install --break-system-packages mako
+      - name: Zero ccache stats
+        run: ccache -z
       - name: Generate build files with cmake
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Release \
+          time cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
+            -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
             -GNinja \
             -Bbuild .
       - name: Build Dive host tools with ninja
         run: |
-          ninja -C build
+          time ninja -C build -d stats
+      - name: Show ccache stats
+        run: ccache -s
       - name: Ninja log
         run: |
           cat build/.ninja_log

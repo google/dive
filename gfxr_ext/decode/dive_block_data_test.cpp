@@ -29,9 +29,9 @@ protected:
     void SetUp() override
     {
         // Set of blocks with valid contiguous offset & size
-        o.push_back(std::make_pair<uint32_t, uint32_t>(100, 10));
-        o.push_back(std::make_pair<uint32_t, uint32_t>(110, 90));
-        o.push_back(std::make_pair<uint32_t, uint32_t>(200, 50));
+        o.push_back(std::pair<uint32_t, uint32_t>(100, 10));
+        o.push_back(std::pair<uint32_t, uint32_t>(110, 90));
+        o.push_back(std::pair<uint32_t, uint32_t>(200, 50));
     }
 
     void PopulateExampleModifications()

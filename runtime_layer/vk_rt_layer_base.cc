@@ -631,7 +631,7 @@ extern "C"
         // When not called with this layer's name, call down to retrieve the
         // properties.
         uint32_t downstream_ext_count = 0;
-        ;
+
         result = pChain->CallDown(pLayerName, &downstream_ext_count, NULL);
         if (result != VK_SUCCESS)
             return result;

@@ -47,10 +47,12 @@ TEST(StringUtils, SafeConvertFromStringInt)
     EXPECT_EQ(val, std::numeric_limits<int>::min());
 
     // Out of range
+    // NOLINTBEGIN
     constexpr long long too_big = static_cast<long long>(std::numeric_limits<int>::max()) + 1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_big), val));
     constexpr long long too_small = static_cast<long long>(std::numeric_limits<int>::min()) - 1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_small), val));
+    // NOLINTEND
 }
 
 TEST(StringUtils, SafeConvertFromStringUnsignedInt)
@@ -75,10 +77,12 @@ TEST(StringUtils, SafeConvertFromStringUnsignedInt)
     EXPECT_EQ(val, std::numeric_limits<unsigned int>::max());
 
     // Out of range
+    // NOLINTBEGIN
     constexpr unsigned long long too_big = static_cast<unsigned long long>(
                                            std::numeric_limits<unsigned int>::max()) +
                                            1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_big), val));
+    // NOLINTEND
 }
 
 TEST(StringUtils, SafeConvertFromStringFloat)

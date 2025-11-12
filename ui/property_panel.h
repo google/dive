@@ -11,6 +11,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QFrame>
 #include <QScrollArea>
 

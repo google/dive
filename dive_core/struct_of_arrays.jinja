@@ -76,6 +76,7 @@
 # soa_h
 #############################################################################}
 {% macro soa_h(soas, includes, namespace, gen_name) %}
+// NOLINTBEGIN
 {{header(gen_name)}}
 #pragma once
 
@@ -91,6 +92,7 @@ namespace {{namespace}} {
 {% if namespace %}
 } // namespace {{namespace}}
 {% endif %}
+// NOLINTEND
 {% endmacro %}
 
 
@@ -1404,7 +1406,7 @@ py::class_<{{concrete_soa}}>(m, "{{concrete_soa}}")
                 `Optional="true"` attribute tells natvis that this node should be
                 ommitted if there is an error parsing the value. However, the `Optional`
                 mechanism only triggers if the error comes from the element itself,
-                rather than a sub-element. The 
+                rather than a sub-element. The
                 `|| {{concrete_soa}}::{{field_offset_name(field)}} != {{concrete_soa}}::{{field_offset_name(field)}}`
                 expression in the `Conditional` attribute ensures that we immediately
                 try to access a variable that is only defined if {{field.name}} is not
@@ -1471,7 +1473,7 @@ py::class_<{{concrete_soa}}>(m, "{{concrete_soa}}")
             `Optional="true"` attribute tells natvis that this node should be
             ommitted if there is an error parsing the value. However, the `Optional`
             mechanism only triggers if the error comes from the element itself,
-            rather than a sub-element. The 
+            rather than a sub-element. The
             `|| {{concrete_soa}}::{{field_offset_name(field)}} != {{concrete_soa}}::{{field_offset_name(field)}}`
             expression in the `Conditional` attribute ensures that we immediately
             try to access a variable that is only defined if {{field.name}} is not

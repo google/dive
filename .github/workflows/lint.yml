@@ -1,0 +1,51 @@
+name: Dive Lint
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint_cpplint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          python3 -m pip install cpplint
+      - name: Fetch base commit
+        run: |
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+      - name: Diff files
+        run: |
+          git diff "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" --name-only | tee git_diff.txt
+      - name: Run cpplint
+        run: |
+          python3 scripts/dive_cpplint_wrapper.py --mode=ci --git_diff_file=git_diff.txt
+
+  lint_cmake_format:
+    runs-on: windows-2022
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+        python3 -m pip install gersemi==0.23.1
+    - name: Run windows cmake formatting script
+      run: |
+        scripts\format_cmake.bat
+    - name: Check git diff
+      run: |
+        scripts\check_git_diff.bat
+
+  lint_clang_format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: DoozyX/clang-format-lint-action@v0.20
+      with:
+        source: '.'
+        exclude: './third_party'
+        extensions: 'h,cpp,cc'
+        clangFormatVersion: 18.1.8

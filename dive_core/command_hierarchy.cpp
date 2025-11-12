@@ -716,7 +716,6 @@ bool CommandHierarchyCreator::CreateTrees(EngineType             engine_type,
     private:
         std::vector<uint32_t> &m_command_dwords;
         uint32_t               m_size_in_dwords;
-        ;
     };
 
     // Clear/Reset internal data structures, just in case

@@ -226,7 +226,7 @@ struct MemoryAllocationData
     uint64_t m_marker_bus_addr;                 // until the memory is made resident. Client needs to call
                                                 // InitBusAddressableGpuMemory() to query and update before this is valid.
 
-    uint32_t m_preferred_heap           : 8;	// The preferred heap of the GPU memory.
+    uint32_t m_preferred_heap           : 8;    // The preferred heap of the GPU memory.
     uint32_t m_is_virtual               : 1;    // GPU memory is not backed by physical memory and must be remapped before the
                                                 // GPU can safely access it. Will also be set for sdiExternal allocations. See
                                                 // GpuMemoryCreateFlags::sdiExternal

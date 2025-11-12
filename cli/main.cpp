@@ -18,7 +18,7 @@
 #include "commands.h"
 #include "pm4_info.h"
 
-using namespace Dive::cli;
+using namespace Dive::cli;  // NOLINT
 
 int main(int argc, char** argv)
 {

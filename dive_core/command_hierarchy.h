@@ -92,7 +92,7 @@ constexpr bool IsDrawDispatchBlitNode(NodeType node_type)
 class Topology
 {
 public:
-    const static uint64_t kRootNodeIndex = 0;
+    static const uint64_t kRootNodeIndex = 0;
 
     virtual uint64_t GetNumNodes() const;
 

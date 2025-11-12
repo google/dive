@@ -69,7 +69,7 @@ template<typename T> bool SafeConvertFromString(const std::string &s, T &out)
     {
         if constexpr (std::is_signed_v<T>)
         {
-            long long val = std::strtoll(start, &end, 10);
+            long long val = std::strtoll(start, &end, 10);  // NOLINT
             if (errno == ERANGE || *end != '\0' || start == end)
             {
                 return false;
@@ -83,7 +83,7 @@ template<typename T> bool SafeConvertFromString(const std::string &s, T &out)
         }
         else
         {
-            unsigned long long val = std::strtoull(start, &end, 10);
+            unsigned long long val = std::strtoull(start, &end, 10);  // NOLINT
             if (errno == ERANGE || *end != '\0' || start == end)
             {
                 return false;

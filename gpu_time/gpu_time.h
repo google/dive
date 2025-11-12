@@ -200,7 +200,7 @@ private:
             usage_one_submit = false;
             reusable = false;
         }
-        const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
+        static constexpr uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
 
         std::vector<uint32_t> renderpass_slots;
         VkCommandPool         pool = VK_NULL_HANDLE;

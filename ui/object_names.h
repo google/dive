@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QString>
 
 const QString kCommandBufferSearchBarName = "command_buffer_search_bar";

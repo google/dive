@@ -31,7 +31,7 @@ class GfxrVulkanCommandHierarchyCreator
 public:
     GfxrVulkanCommandHierarchyCreator(CommandHierarchy      &command_hierarchy,
                                       const GfxrCaptureData &capture_data);
-    virtual ~GfxrVulkanCommandHierarchyCreator();
+    ~GfxrVulkanCommandHierarchyCreator();
 
     bool CreateTrees(bool used_in_mixed_command_hierarchy = false);
     bool ProcessGfxrSubmits(const GfxrCaptureData &capture_date);

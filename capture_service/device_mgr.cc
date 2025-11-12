@@ -21,6 +21,7 @@ limitations under the License.
 #include <memory>
 
 #include "../dive_core/common/common.h"
+#include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -32,7 +33,6 @@ limitations under the License.
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
-#include "common/defer.h"
 #include "remote_files.h"
 #include "utils/component_files.h"
 
@@ -924,7 +924,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
 {
     const AdbSession &adb = m_device->Adb();
-    Defer             cleanup([&]() {
+
+    absl::Cleanup cleanup([&]() {
         LOGD("RunReplayGfxrScript(): CLEANUP\n");
         if (settings.run_type == GfxrReplayOptions::kPm4Dump)
         {
@@ -1103,7 +1104,8 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     std::string remote_profiling_dir = absl::StrFormat("%s/%s",
                                                        kTargetPath,
                                                        kProfilingPluginFolderName);
-    Defer       cleanup([&]() {
+
+    absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
         std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
         m_device->Adb().Run(clean_cmd).IgnoreError();

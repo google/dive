@@ -148,6 +148,10 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
+    if (exit_after_load)
+    {
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+    }
 
     if (!main_window->InitializePlugins())
     {
@@ -158,7 +162,7 @@ int main(int argc, char *argv[])
     if (argc == 2)
     {
         // This is executed async.
-        main_window->LoadFile(argv[1], false, true, exit_after_load);
+        main_window->LoadFile(argv[1], false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));

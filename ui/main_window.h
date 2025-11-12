@@ -119,10 +119,7 @@ public:
 
     explicit MainWindow(ApplicationController &controller);
     ~MainWindow();
-    bool LoadFile(const std::string &file_name,
-                  bool               is_temp_file = false,
-                  bool               async = true,
-                  bool               exit_after_load = false);
+    bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
 
 protected:

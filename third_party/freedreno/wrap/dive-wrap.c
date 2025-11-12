@@ -73,7 +73,12 @@ void SetCaptureState(int state)
             if (!num)
                 num = "0";
             int frame_num = atoi(num);
-            snprintf(path, 1024, "/sdcard/Download/trace-frame-%04u.rd", frame_num);
+
+            const char* name = getenv("TESTNAME");
+            if (!name)
+                name = "/sdcard/Download/trace-frame";
+
+            snprintf(path, 1024, "%s-%04u.rd", name, frame_num);
         }
         collect_trace_file(path);
     }

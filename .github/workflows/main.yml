@@ -262,9 +262,10 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-Debug-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-Debug-ccache-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-Debug-ccache-
+            ${{ runner.os }}-Debug-ccache-${{ github.ref }}-
+            ${{ runner.os }}-Debug-ccache-refs/heads/main-
       - name: Install dependency
         run: |
           python3 -m pip install --break-system-packages mako
@@ -315,9 +316,10 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-Release-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-Release-ccache-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-Release-ccache-
+            ${{ runner.os }}-Release-ccache-${{ github.ref }}-
+            ${{ runner.os }}-Release-ccache-refs/heads/main-
       - name: Install dependency
         run: |
           python3 -m pip install --break-system-packages mako

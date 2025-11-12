@@ -62,8 +62,11 @@ class KhronosStructToJsonHeaderGenerator():
         write(body, file=self.outFile)
 
     def write_header_contents(self):
+        write('template<typename T> struct IsFieldToJsonStruct { static constexpr bool value = false; };', file=self.outFile)
         for struct in self.get_all_filtered_struct_names():
             if self.should_decode_struct(struct):
+                body = "template<> struct IsFieldToJsonStruct<Decoded_{0}> {{ static constexpr bool value = true; }};".format(struct)
+                write(body, file=self.outFile)
                 body = "void FieldToJson(nlohmann::ordered_json& jdata, const Decoded_{0}* data, const util::JsonOptions& options = util::JsonOptions());".format(struct)
                 write(body, file=self.outFile)
         self.newline()

@@ -11,8 +11,7 @@
  limitations under the License.
 */
 
-#ifndef GFXRVULKANCOMMANDFILTERPROXYMODEL_H
-#define GFXRVULKANCOMMANDFILTERPROXYMODEL_H
+#pragma once
 
 #include <QSortFilterProxyModel>
 #include "dive_core/command_hierarchy.h"
@@ -57,5 +56,3 @@ private:
     FilterMode                    m_filter_mode;
     std::vector<uint64_t>         m_gfxr_draw_call_indices;
 };
-
-#endif  // GFXRVULKANCOMMANDFILTERPROXYMODEL_H

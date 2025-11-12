@@ -1,3 +1,4 @@
+// NOLINTBEGIN
 /*
  Copyright 2020 Google LLC
 
@@ -8776,3 +8777,4 @@ class EventStateInfo : public EventStateInfoT<EventStateInfo_CONFIG>
 {};
 
 }  // namespace Dive
+// NOLINTEND

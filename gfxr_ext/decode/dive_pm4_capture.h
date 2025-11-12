@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// NOLINT(build/header_guard)
 #ifndef GFXRECON_DECODE_DIVE_PM4_CAPTURE_H
 #define GFXRECON_DECODE_DIVE_PM4_CAPTURE_H
 

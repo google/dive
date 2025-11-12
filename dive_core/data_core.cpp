@@ -125,7 +125,7 @@ bool DataCore::CreateGfxrCommandHierarchy()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreateDiveMetaData()
 {
-    auto metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
+    auto metadata_creator = CaptureMetadataCreator::Create(m_capture_metadata);
     if (!metadata_creator)
     {
         return false;
@@ -142,7 +142,7 @@ bool DataCore::CreateDiveMetaData()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreatePm4MetaData()
 {
-    auto metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
+    auto metadata_creator = CaptureMetadataCreator::Create(m_capture_metadata);
     if (!metadata_creator)
     {
         return false;
@@ -252,6 +252,12 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 // =================================================================================================
 // CaptureMetadataCreator
 // =================================================================================================
+std::unique_ptr<CaptureMetadataCreator> CaptureMetadataCreator::Create(
+CaptureMetadata &capture_metadata)
+{
+    return std::unique_ptr<CaptureMetadataCreator>(new CaptureMetadataCreator(capture_metadata));
+}
+
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
 {

@@ -66,6 +66,7 @@ else()
     )
     target_link_libraries(
         device_mgr
+        absl::cleanup
         absl::flags
         absl::flags_parse
         absl::algorithm

@@ -48,19 +48,7 @@ int GetIndentation(const std::string &line)
     return indention;
 }
 
-/*
-Parsing dumpsys package to get the main activity of the package.
-An example output from the dumpsys command:
-flame:/ # dumpsys package de.saschawillems.vulkanBloom
-Activity Resolver Table:
-  Non-Data Actions:
-      android.intent.action.MAIN:
-        1e368bb de.saschawillems.vulkanBloom/de.saschawillems.vulkanSample.VulkanActivity filter
-35ec1d8 Action: "android.intent.action.MAIN" Category: "android.intent.category.LAUNCHER"
-...
-*/
-std::string AndroidApplication::ParsePackageForActivity(const std::string &input,
-                                                        const std::string &package)
+std::string ParsePackageForActivity(const std::string &input, const std::string &package)
 {
     bool        in_non_data = false;
     bool        in_main_action = false;

@@ -33,7 +33,7 @@ Activity Resolver Table:
           Action: "android.intent.action.MAIN"
           Category: "android.intent.category.LAUNCHER"
 )";
-    EXPECT_EQ(AndroidApplication::ParsePackageForActivity(kInput, "de.saschawillems.vulkanBloom"),
+    EXPECT_EQ(ParsePackageForActivity(kInput, "de.saschawillems.vulkanBloom"),
               "de.saschawillems.vulkanSample.VulkanActivity");
 }
 
@@ -50,8 +50,7 @@ Activity Resolver Table:
           Action: "android.intent.action.MAIN"
           Category: "android.intent.category.LEANBACK_LAUNCHER"
 )";
-    EXPECT_EQ(AndroidApplication::ParsePackageForActivity(kInput, "com.example.app"),
-              "com.example.app.MainActivity");
+    EXPECT_EQ(ParsePackageForActivity(kInput, "com.example.app"), "com.example.app.MainActivity");
 }
 
 TEST(ParsePackageForActivityTest, RegressionTestMixedActions)
@@ -75,8 +74,7 @@ Activity Resolver Table:
       android.intent.action.SEND:
         bd1f6ec com.google.android.apps.gmm.dev/com.google.android.maps.MapsActivity filter fb1b997
 )";
-    EXPECT_EQ(AndroidApplication::ParsePackageForActivity(kInput,
-                                                          "com.google.android.apps.gmm.dev"),
+    EXPECT_EQ(ParsePackageForActivity(kInput, "com.google.android.apps.gmm.dev"),
               "com.google.android.maps.MapsActivity");
 }
 
@@ -88,7 +86,7 @@ Activity Resolver Table:
       android.intent.action.VIEW:
         89fc44d com.example.app/com.example.app.DeepLinkActivity filter a643b02
 )";
-    EXPECT_EQ(AndroidApplication::ParsePackageForActivity(kInput, "com.example.app"), "");
+    EXPECT_EQ(ParsePackageForActivity(kInput, "com.example.app"), "");
 }
 
 TEST(ParsePackageForActivityTest, ReturnsEmptyIfPackageNotInMain)
@@ -99,7 +97,7 @@ Activity Resolver Table:
       android.intent.action.MAIN:
         82a3ab5 com.other.app/com.other.app.MainActivity filter 82a3ab5
 )";
-    EXPECT_EQ(AndroidApplication::ParsePackageForActivity(kInput, "com.example.app"), "");
+    EXPECT_EQ(ParsePackageForActivity(kInput, "com.example.app"), "");
 }
 
 }  // namespace

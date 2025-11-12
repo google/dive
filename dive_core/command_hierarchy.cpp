@@ -511,6 +511,14 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, Syn
 // =================================================================================================
 // CommandHierarchyCreator
 // =================================================================================================
+std::unique_ptr<CommandHierarchyCreator> CommandHierarchyCreator::Create(
+CommandHierarchy     &command_hierarchy,
+const Pm4CaptureData &capture_data)
+{
+    return std::unique_ptr<CommandHierarchyCreator>(
+    new CommandHierarchyCreator(command_hierarchy, capture_data));
+}
+
 CommandHierarchyCreator::CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
                                                  const Pm4CaptureData &capture_data) :
     m_command_hierarchy(command_hierarchy),

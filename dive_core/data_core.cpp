@@ -97,9 +97,13 @@ bool DataCore::CreatePm4CommandHierarchy()
     uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
     // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                             m_pm4_capture_data);
-    if (!cmd_hier_creator.CreateTrees(m_pm4_capture_data, true, reserve_size))
+    auto cmd_hier_creator = CommandHierarchyCreator::Create(m_capture_metadata.m_command_hierarchy,
+                                                            m_pm4_capture_data);
+    if (!cmd_hier_creator)
+    {
+        return false;
+    }
+    if (!cmd_hier_creator->CreateTrees(m_pm4_capture_data, true, reserve_size))
     {
         return false;
     }
@@ -121,8 +125,7 @@ bool DataCore::CreateGfxrCommandHierarchy()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreateDiveMetaData()
 {
-    std::unique_ptr<CaptureMetadataCreator>
-    metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
+    auto metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
     if (!metadata_creator)
     {
         return false;
@@ -139,8 +142,7 @@ bool DataCore::CreateDiveMetaData()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreatePm4MetaData()
 {
-    std::unique_ptr<CaptureMetadataCreator>
-    metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
+    auto metadata_creator = std::make_unique<CaptureMetadataCreator>(m_capture_metadata);
     if (!metadata_creator)
     {
         return false;

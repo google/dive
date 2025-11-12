@@ -20,6 +20,7 @@
 // =====================================================================================================================
 
 #pragma once
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -436,8 +437,8 @@ private:
 class CommandHierarchyCreator : public EmulateCallbacksBase
 {
 public:
-    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
-                            const Pm4CaptureData &capture_data);
+    static std::unique_ptr<CommandHierarchyCreator> Create(CommandHierarchy     &command_hierarchy,
+                                                           const Pm4CaptureData &capture_data);
     virtual ~CommandHierarchyCreator();
 
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
@@ -500,6 +501,10 @@ public:
     {
         return m_node_root_node_indices[type];
     }
+
+protected:
+    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+                            const Pm4CaptureData &capture_data);
 
 private:
     union Type3Ordinal2

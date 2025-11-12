@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  Copyright 2025 Google LLC
  Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +10,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
+#pragma once
 
 // =====================================================================================================================
 // The VulkanCommandHierarchy class parses and creates a tree of Nodes in the command buffer. The

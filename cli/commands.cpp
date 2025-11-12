@@ -448,13 +448,15 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
         break;
     }
 
-    Dive::CommandHierarchy        command_hierarchy;
-    Pm4CaptureData                capture_data;
-    Dive::CommandHierarchyCreator cmd_hier_creator(command_hierarchy, capture_data);
-    if (!cmd_hier_creator.CreateTrees(engine_type,
-                                      queue_type,
-                                      dword_buffer,
-                                      static_cast<uint32_t>(dword_buffer.size())))
+    Dive::CommandHierarchy command_hierarchy;
+    Pm4CaptureData         capture_data;
+    auto cmd_hier_creator = Dive::CommandHierarchyCreator::Create(command_hierarchy, capture_data);
+
+    if (!cmd_hier_creator ||
+        !cmd_hier_creator->CreateTrees(engine_type,
+                                       queue_type,
+                                       dword_buffer,
+                                       static_cast<uint32_t>(dword_buffer.size())))
         return false;
 
     const Dive::SharedNodeTopology* topology_ptr = &command_hierarchy.GetSubmitHierarchyTopology();

@@ -34,8 +34,9 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
                                               bool                    flatten_chain_nodes,
                                               std::optional<uint64_t> reserve_size)
 {
-    auto pm4_command_hierarchy_creator = std::make_unique<
-    CommandHierarchyCreator>(m_command_hierarchy, dive_capture_data.GetPm4CaptureData());
+    auto pm4_command_hierarchy_creator = CommandHierarchyCreator::Create(m_command_hierarchy,
+                                                                         dive_capture_data
+                                                                         .GetPm4CaptureData());
     auto gfxr_command_hierarchy_creator = std::make_unique<
     GfxrVulkanCommandHierarchyCreator>(m_command_hierarchy, dive_capture_data.GetGfxrCaptureData());
 

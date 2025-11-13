@@ -1,26 +1,23 @@
 # Copied from https://github.com/actions/cache/blob/main/tips-and-workarounds.md#force-deletion-of-caches-overriding-default-cache-eviction-policy
 
-# Note: this is a pull_request_target workflow, please read
-# https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
-# before making modification.
-
 name: Pull Request Cleanup
 on:
-  pull_request_target: # required for pull request from forks
-    types: [ closed ]
+  pull_request: # required for pull request from forks
+    # types: [ closed ]
     branches: [ main ]
+
+permissions:
+  # `actions:write` permission is required to delete caches
+  #   See also: https://docs.github.com/en/rest/actions/cache?apiVersion=2022-11-28#delete-a-github-actions-cache-for-a-repository-using-a-cache-id
+  actions: write
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    permissions:
-      # `actions:write` permission is required to delete caches
-      #   See also: https://docs.github.com/en/rest/actions/cache?apiVersion=2022-11-28#delete-a-github-actions-cache-for-a-repository-using-a-cache-id
-      actions: write
-      contents: read
     steps:
       - name: Cleanup
         run: |
+          echo "???"
           echo "Fetching list of cache key"
           cacheKeysForPR=$(gh cache list --ref $BRANCH --limit 100 --json id --jq '.[].id')
 

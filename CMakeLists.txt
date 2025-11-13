@@ -179,6 +179,8 @@ add_test(
         ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd
 )
 
+# MacOS has limited thread stack size, allocating large object in stack makes its stack overflow
+# This has been fixed in https://github.com/google/dive/pull/541
 add_test(
     NAME Regression_StackOverflow_MacOS
     COMMAND

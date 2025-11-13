@@ -44,6 +44,9 @@ class MainWindow : public QMainWindow
     MainWindow& operator=(MainWindow&&) = delete;
 
     bool LoadFile(const std::string& file_name, bool is_temp_file = false, bool async = true);
+    TraceDialog& GetTraceDialog();
+
+    ProgressTrackerCallback m_progress_tracker;
 
  protected:
     void closeEvent(QCloseEvent* closeEvent) Q_DECL_OVERRIDE;
@@ -74,6 +77,7 @@ class MainWindow : public QMainWindow
     void OnPendingPerfCounterResults(const QString& file_name);
     void OnPendingGpuTimingResults(const QString& file_name);
     void OnPendingScreenshot(const QString& file_name);
+    void OnHideOverlay();
 
  private slots:
     void OnCommandViewModeChange(const QString& string);
@@ -92,7 +96,6 @@ class MainWindow : public QMainWindow
     void OnSearchTrigger();
     void OpenRecentFile();
     void UpdateOverlay(const QString&);
-    void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded(const LoadFileResult& loaded_file);
     void OnTraceAvailable(const QString&);
@@ -183,7 +186,6 @@ class MainWindow : public QMainWindow
 
     CaptureFileManager* m_capture_manager = nullptr;
 
-    ProgressTrackerCallback m_progress_tracker;
     std::shared_ptr<Dive::DataCore> m_data_core;
     QString m_capture_file;
     QString m_last_file_path;

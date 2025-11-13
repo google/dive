@@ -42,6 +42,9 @@ option(
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
 
+# Ensures static libraries are compatible with shared libraries used by the plugin system.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # ------------------------------------------------------------------------------
 # Determining version info
 find_package(Git QUIET)

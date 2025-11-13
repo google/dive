@@ -19,6 +19,7 @@
 #include <QThread>
 #include <QSortFilterProxyModel>
 #include <cstdint>
+#include <string>
 
 #include "capture_service/device_mgr.h"
 #include "package_filter.h"
@@ -68,13 +69,23 @@ class TraceDialog : public QDialog
 public:
     TraceDialog(ApplicationController &controller, QWidget *parent = 0);
     ~TraceDialog();
-    void UpdateDeviceList(bool isInitialized);
-    void UpdatePackageList();
-    void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
-    void ShowGfxrFields();
-    void HideGfxrFields();
-    void EnableCaptureTypeButtons(bool enable);
-    void RetrieveGfxrCapture();
+    void                 UpdateDeviceList(bool isInitialized);
+    void                 UpdatePackageList();
+    void                 Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
+    void                 ShowGfxrFields();
+    void                 HideGfxrFields();
+    void                 EnableDialogInputs(bool enable);
+    void                 RetrieveGfxrCapture();
+    Dive::AndroidDevice &GetDevice() { return *m_device; }
+    void                 SetResetDialogOnClose(bool reset) { m_dialog_reset_on_close = reset; }
+    void UpdateCaptureFileDirectories(std::string on_device_capture_file_directory = "");
+    void SetTraceDialogForCapture();
+    void ResetTraceDialogOnAppStop();
+
+public slots:
+    void OnPackageListSet(QList<std::string> package_list);
+    void OnStartPackage();
+    void OnStopPackage();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -82,7 +93,7 @@ protected:
 private slots:
     void         OnDeviceSelected(const QString &);
     void         OnPackageSelected(const QString &);
-    void         OnStartClicked();
+    void         OnRunButtonClicked();
     void         OnTraceClicked();
     void         OnTraceAvailable(const QString &);
     void         OnGFXRCaptureAvailable(const QString &);
@@ -100,6 +111,11 @@ private slots:
 
 signals:
     void TraceAvailable(const QString &);
+    void PackageSelected(const QString &curr_package_name, const QString &prev_package_name);
+    void PackageListAvailable(bool gfrx_capture_enabled, QList<std::string> package_list);
+    void StartPackageClicked(const QString &capture_dir = "", bool gfrx_capture_enabled = false);
+    void StopPackageClicked(bool gfrx_capture_enabled = false);
+    void CloseDialog(bool gfrx_capture_enabled);
 
 private:
     bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
@@ -108,6 +124,7 @@ private:
     ApplicationController &m_controller;
 
     const QString kStart_Application = "&Start Application";
+    const QString kStop_Application = "&Stop Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
     const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
@@ -168,8 +185,11 @@ private:
     std::vector<Dive::DeviceInfo> m_devices;
     std::string                   m_cur_dev;
     std::vector<std::string>      m_pkg_list;
-    std::string                   m_cur_pkg;
+    QString                       m_cur_pkg;
     std::string                   m_executable;
     std::string                   m_command_args;
+    std::string                   m_on_device_capture_file_directory;
     bool                          m_gfxr_capture = false;
+    bool                          m_dialog_reset_on_close = true;
+    Dive::AndroidDevice          *m_device = nullptr;
 };

@@ -43,76 +43,6 @@ namespace Dive
 namespace
 {
 
-std::string GetPythonPath()
-{
-    std::string python_path;
-#if defined(_WIN32)
-    absl::StatusOr<std::string> result = Dive::RunCommand("where python");
-    if (result.ok())
-    {
-        std::vector<std::string> lines = absl::StrSplit(*result, '\n');
-        for (const auto &line : lines)
-        {
-            std::string current_path = std::string(absl::StripAsciiWhitespace(line));
-            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps"))
-            {
-                python_path = current_path;
-                break;
-            }
-        }
-        if (python_path.empty() && !lines.empty())
-        {
-            python_path = std::string(absl::StripAsciiWhitespace(lines[0]));
-        }
-    }
-#else
-    absl::StatusOr<std::string> result = Dive::RunCommand("which python3");
-    if (result.ok())
-    {
-        python_path = std::string(absl::StripAsciiWhitespace(*result));
-    }
-    if (python_path.empty())
-    {
-        result = Dive::RunCommand("which python");
-        if (result.ok())
-        {
-            python_path = std::string(absl::StripAsciiWhitespace(*result));
-        }
-    }
-#endif
-    if (python_path.empty())
-    {
-        python_path = "python";
-    }
-    LOGD("GetPythonPath() returning: %s\n", python_path.c_str());
-    return python_path;
-}
-
-absl::Status ValidatePythonPath(const std::string &python_path)
-{
-    if (python_path.empty())
-    {
-        return absl::InvalidArgumentError("Python path is empty.");
-    }
-    absl::StatusOr<std::string> result = Dive::RunCommand(
-    absl::StrFormat("%s --version", python_path));
-    if (!result.ok())
-    {
-        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
-                                                      python_path,
-                                                      result.status().message()));
-    }
-    if (!absl::StrContains(*result, "Python 3"))
-    {
-        return absl::FailedPreconditionError(
-        absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s",
-                        python_path,
-                        *result));
-    }
-    LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
-    return absl::OkStatus();
-}
-
 absl::Status SetSystemProperty(const AdbSession &adb,
                                std::string_view  property,
                                std::string_view  value)
@@ -824,6 +754,76 @@ absl::Status AndroidDevice::StopApp()
     return absl::OkStatus();
 }
 
+std::string DeviceManager::GetPythonPath() const
+{
+    std::string python_path;
+#if defined(_WIN32)
+    absl::StatusOr<std::string> result = Dive::RunCommand("where python");
+    if (result.ok())
+    {
+        std::vector<std::string> lines = absl::StrSplit(*result, '\n');
+        for (const auto &line : lines)
+        {
+            std::string current_path = std::string(absl::StripAsciiWhitespace(line));
+            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps"))
+            {
+                python_path = current_path;
+                break;
+            }
+        }
+        if (python_path.empty() && !lines.empty())
+        {
+            python_path = std::string(absl::StripAsciiWhitespace(lines[0]));
+        }
+    }
+#else
+    absl::StatusOr<std::string> result = Dive::RunCommand("which python3");
+    if (result.ok())
+    {
+        python_path = std::string(absl::StripAsciiWhitespace(*result));
+    }
+    if (python_path.empty())
+    {
+        result = Dive::RunCommand("which python");
+        if (result.ok())
+        {
+            python_path = std::string(absl::StripAsciiWhitespace(*result));
+        }
+    }
+#endif
+    if (python_path.empty())
+    {
+        python_path = "python";
+    }
+    LOGD("GetPythonPath() returning: %s\n", python_path.c_str());
+    return python_path;
+}
+
+absl::Status DeviceManager::ValidatePythonPath(const std::string &python_path) const
+{
+    if (python_path.empty())
+    {
+        return absl::InvalidArgumentError("Python path is empty.");
+    }
+    absl::StatusOr<std::string> result = Dive::RunCommand(
+    absl::StrFormat("%s --version", python_path));
+    if (!result.ok())
+    {
+        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
+                                                      python_path,
+                                                      result.status().message()));
+    }
+    if (!absl::StrContains(*result, "Python 3"))
+    {
+        return absl::FailedPreconditionError(
+        absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s",
+                        python_path,
+                        *result));
+    }
+    LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
+    return absl::OkStatus();
+}
+
 std::vector<DeviceInfo> DeviceManager::ListDevice() const
 {
     std::vector<std::string> serial_list;
@@ -1449,14 +1449,21 @@ const std::filesystem::path &on_device_screenshot_dir)
                   on_device_screenshot_dir.string()));
     }
 
-    std::filesystem::path full_capture_path = std::filesystem::path(Dive::kDeviceCapturePath) /
-                                              on_device_screenshot_dir /
+    absl::Status ret = m_adb.Run(
+    absl::StrFormat("shell mkdir -p %s", on_device_screenshot_dir.string()));
+
+    if (!ret.ok())
+    {
+        return absl::InternalError(
+        absl::StrCat("Failed to create screenshot directory on device: ", ret.message()));
+    }
+
+    std::filesystem::path full_capture_path = on_device_screenshot_dir /
                                               Dive::kCaptureScreenshotFile;
 
     std::string on_device_capture_screen_shot = full_capture_path.generic_string();
 
-    absl::Status ret = m_adb.Run(
-    absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+    ret = m_adb.Run(absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
     return ret;
 }
 

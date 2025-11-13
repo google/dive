@@ -197,11 +197,10 @@ ABSL_FLAG(std::string, vulkan_command_args, "", "the arguments for vulkan cli ap
 ABSL_FLAG(std::string,
           type,
           "openxr_vulkan",
-          "application type: \n\t`openxr_vulkan` for Vulkan OpenXR applications(apk) \n\t `vulkan` "
-          "for Vulkan "
-          "applications(apk)"
-          "\n\t`vulkan_cli` for command line Vulkan application"
-          "\n\t`openxr_gles` for GLES OpenXR applications(apk)");
+          "application type: \n\t`openxr_vulkan` for Vulkan OpenXR applications(apk)\n\t"
+          "`vulkan` for Vulkan applications(apk)\n\t"
+          "`vulkan_cli` for command line Vulkan application\n\t"
+          "`openxr_gles` for GLES OpenXR applications(apk)");
 ABSL_FLAG(
 std::string,
 download_dir,

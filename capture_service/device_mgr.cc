@@ -1311,30 +1311,43 @@ bool AndroidDevice::FileExists(const std::string& file_path)
     return result.ok();
 }
 
-absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& package_name)
+absl::Status AndroidDevice::CheckShellOutput(const std::string& command,
+                                             const std::string& expected,
+                                             const std::string& error_msg)
 {
-    absl::StatusOr<std::string> output = Adb().RunAndGetResult(
-        absl::StrFormat("shell \"dumpsys activity activities 2>/dev/null | "
-                        "awk '/%s/ && /visible=true/ && /visibleRequested=true/ {found=1; exit} "
-                        "END {print found+0}'\"",
-                        package_name));
-    if (!output.ok())
-    {
-        return output.status();
-    }
+    auto output = Adb().RunAndGetResult(absl::StrFormat("shell \"%s\"", command));
+    if (!output.ok()) return output.status();
 
     std::string result = *output;
     absl::StripAsciiWhitespace(&result);
-    if (result != "1")
+
+    if (result != expected)
     {
-        return absl::FailedPreconditionError(absl::StrCat(
-            "The application '", package_name,
-            "' is not fully visible or active. The device might be locked, asleep, or the app is "
-            "running in the background. Please ensure the device is unlocked and the app is "
-            "running in the foreground on screen, then try again."));
+        return absl::FailedPreconditionError(error_msg);
+    }
+    return absl::OkStatus();
+}
+
+absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& package_name)
+{
+    if (package_name == "surfaceflinger")
+    {
+        return CheckShellOutput("service check SurfaceFlinger", "Service SurfaceFlinger: found",
+                                "The system compositor (SurfaceFlinger) is not responding.");
     }
 
-    return absl::OkStatus();
+    std::string cmd = absl::StrFormat(
+        "dumpsys activity activities 2>/dev/null | "
+        "awk '/%s/ && /visible=true/ && /visibleRequested=true/ {found=1; exit} "
+        "END {print found+0}'",
+        package_name);
+
+    return CheckShellOutput(
+        cmd, "1",
+        absl::StrCat("The application '", package_name,
+                     "' is not fully visible or active. The device might be locked, asleep, or the "
+                     "app is running in the background. Please ensure the device is unlocked and "
+                     "the app is running in the foreground on screen, then try again."));
 }
 
 absl::Status AndroidDevice::PinGpuClock(uint32_t freq_mhz) const

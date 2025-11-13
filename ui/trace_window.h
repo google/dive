@@ -19,7 +19,9 @@
 #include <QDialog>
 #include <QSortFilterProxyModel>
 #include <QThread>
+#include <QStringList>
 #include <cstdint>
+#include <string>
 
 #include "capture_service/device_mgr.h"
 #include "device_dialog.h"
@@ -80,7 +82,7 @@ class TraceDialog : public DeviceDialog
     void ResetTraceDialogOnAppStop();
 
  public slots:
-    void OnPackageListSet(QList<std::string> package_list);
+    void OnPackageListSet(QStringList package_list);
     void OnStartPackage();
     void OnStopPackage();
 
@@ -109,7 +111,7 @@ class TraceDialog : public DeviceDialog
  signals:
     void TraceAvailable(const QString&);
     void PackageSelected(const QString& curr_package_name, const QString& prev_package_name);
-    void PackageListAvailable(bool gfrx_capture_enabled, QList<std::string> package_list);
+    void PackageListAvailable(bool gfrx_capture_enabled, QStringList package_list);
     void StartPackageClicked(const QString& capture_dir = "", bool gfrx_capture_enabled = false);
     void StopPackageClicked(bool gfrx_capture_enabled = false);
     void CloseDialog(bool gfrx_capture_enabled);
@@ -181,7 +183,7 @@ class TraceDialog : public DeviceDialog
     QLineEdit* m_capture_file_local_root_directory_input_box;
 
     QVBoxLayout* m_main_layout;
-    std::vector<std::string> m_pkg_list;
+    QStringList m_pkg_list;
     QString m_cur_pkg;
     std::string m_executable;
     std::string m_command_args;

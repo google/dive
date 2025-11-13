@@ -78,14 +78,17 @@ absl::StatusOr<std::filesystem::path> ResolvePluginsDir()
     std::filesystem::path base_dir_installed = "..";
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+#ifdef __APPLE__
         // Apple bundle
         base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES /
             CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+#else
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
         // For launching host tool from Windows VS debugger, assuming other parts were installed
         // under pkg/
         dive_build_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+#endif
     };
 
     absl::StatusOr<std::filesystem::path> plugins_dir_path = ResolvePath(search_dirs, ".");

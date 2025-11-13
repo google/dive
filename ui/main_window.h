@@ -17,6 +17,13 @@
 #pragma once
 
 #include <QMainWindow>
+#if defined(_MSC_VER)
+#ifdef DIVE_UI_LIB_BUILD
+#pragma message("Compiling main_window.h with DIVE_UI_LIB_BUILD defined (dllexport context)")
+#else
+#pragma message("Compiling main_window.h without DIVE_UI_LIB_BUILD defined (dllimport context)")
+#endif
+#endif
 #include <array>
 #include <functional>
 #include <memory>
@@ -26,9 +33,10 @@
 #include "dive/ui/forward.h"
 #include "dive_core/cross_ref.h"
 #include "dive_core/log.h"
+#include "dive_ui_lib_export.h"
 #include "ui/progress_tracker_callback.h"
 
-class MainWindow : public QMainWindow
+class DIVE_UI_LIB_EXPORT MainWindow : public QMainWindow
 {
     Q_OBJECT
 
@@ -44,6 +52,8 @@ class MainWindow : public QMainWindow
     MainWindow& operator=(MainWindow&&) = delete;
 
     bool LoadFile(const std::string& file_name, bool is_temp_file = false, bool async = true);
+    TraceDialog& GetTraceDialog();
+    ProgressTrackerCallback& GetProgressTracker();
 
  protected:
     void closeEvent(QCloseEvent* closeEvent) Q_DECL_OVERRIDE;
@@ -77,6 +87,7 @@ class MainWindow : public QMainWindow
     void OnConfigureWhatIfModification();
     void OnWhatIfSetupTrigger();
     void OnWhatIfRuntimeEnabled(const QString& package_name, bool is_runtime_what_if_enabled);
+    void OnHideOverlay();
 
  private slots:
     void OnCommandViewModeChange(const QString& string);
@@ -95,7 +106,6 @@ class MainWindow : public QMainWindow
     void OnSearchTrigger();
     void OpenRecentFile();
     void UpdateOverlay(const QString&);
-    void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded(const LoadFileResult& loaded_file);
     void OnTraceAvailable(const QString&);

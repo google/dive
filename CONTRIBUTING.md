@@ -44,6 +44,15 @@ Suggested usage is using your preferred IDE, set it to format on save, and point
 
 Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to install the package. Make sure to install the version supported by Dive, it is recommended to use Python virtual environments. To run for this project, use provided `scripts/format_cmake.bat` or `scripts/format_cmake.sh` scripts.
 
+### Setup cpplint on Linux
+
+Checkout `https://github.com/cpplint/cpplint.git`
+
+Use wrapper script:
+`python3 scripts/dive_cpplint_wrapper.py --base_commit=origin/main --cpplint=${CPPLINT_REPO}/cpplint.py`
+
+Note: `--mode=ci` will run cpplint with presubmit filter set.
+
 #### Pull requests
 
 There is a lint github action that will run clang-format on all source code in the project, and another one that runs the format_cmake scripts with gersemi.

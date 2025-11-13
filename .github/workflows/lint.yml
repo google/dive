@@ -22,7 +22,7 @@ jobs:
           git diff "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" --name-only | tee git_diff.txt
       - name: Run cpplint
         run: |
-          python3 scripts/dive_cpplint_wrapper.py --git_diff_file=git_diff.txt
+          python3 scripts/dive_cpplint_wrapper.py --mode=ci --git_diff_file=git_diff.txt
 
   lint_cmake_format:
     runs-on: windows-2022
@@ -43,6 +43,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Use lenient version of clang-format for workflow
+      run: |
+        cp -f .clang-format-github-workflow .clang-format
     - uses: DoozyX/clang-format-lint-action@v0.20
       with:
         source: '.'

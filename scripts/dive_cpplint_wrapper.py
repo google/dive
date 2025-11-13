@@ -14,7 +14,7 @@ DIVE_SOURCE_DIRS_FUTURE = ("include", "src")
 DIVE_SOURCE_DIRS = DIVE_SOURCE_DIRS_CURRENT + DIVE_SOURCE_DIRS_FUTURE
 DIVE_SOURCE_DIRS_SET = frozenset(DIVE_SOURCE_DIRS)
 DIVE_CPPLINT_FILE_SUFFIX = (".cpp", ".cc", ".h")
-DIVE_CPPLINT_FILTERS = (
+DIVE_CPPLINT_FILTERS_COMMON = (
     # Dive repo specific
     "-build/c++17",  # <filesystem>
     "-readability/todo",
@@ -31,7 +31,11 @@ DIVE_CPPLINT_FILTERS = (
     "-runtime/explicit",
     "-readability/casting",
     "-whitespace/comments",
-    # To be fixed soon
+)
+
+DIVE_CPPLINT_FILTERS = DIVE_CPPLINT_FILTERS_COMMON
+
+DIVE_CPPLINT_FILTERS_CI = DIVE_CPPLINT_FILTERS_COMMON + (
     "-whitespace/line_length",
     "-readability/namespace",
     "-build/namespaces/source/namespace/nonliterals",
@@ -39,8 +43,8 @@ DIVE_CPPLINT_FILTERS = (
     "-readability/inheritance",
 )
 
-DIVE_CPPLINT_FILTERS_EXT = tuple()
-DIVE_CPPLINT_FILTERS_G3 = (
+DIVE_CPPLINT_FILTERS_G3 = DIVE_CPPLINT_FILTERS_COMMON + (
+    "-whitespace/line_length",
     "-build/c++11",
     "-build/include",
     "-build/header_guard",
@@ -49,11 +53,16 @@ DIVE_CPPLINT_FILTERS_G3 = (
 
 DIVE_CPPLINT_FLAGS = (
     "--linelength=100",
-    "--filter="+",".join(DIVE_CPPLINT_FILTERS + DIVE_CPPLINT_FILTERS_EXT),
+    "--filter="+",".join(DIVE_CPPLINT_FILTERS),
+)
+
+DIVE_CPPLINT_FLAGS_CI = (
+    "--linelength=100",
+    "--filter="+",".join(DIVE_CPPLINT_FILTERS_CI),
 )
 
 DIVE_CPPLINT_FLAGS_G3 = (
-    "--filter="+",".join(DIVE_CPPLINT_FILTERS + DIVE_CPPLINT_FILTERS_G3),
+    "--filter="+",".join(DIVE_CPPLINT_FILTERS_G3),
 )
 
 
@@ -128,11 +137,13 @@ def main(args):
         print("Nothing for cpplint")
         return
     files_strings = tuple(sorted(str(path) for path in files))
-    if args.g3mode:
+    if args.mode == "g3":
         command = (args.cpplint,) + DIVE_CPPLINT_FLAGS_G3 + files_strings
+    elif args.mode == "ci":
+        command = (args.cpplint,) + DIVE_CPPLINT_FLAGS_CI + files_strings
     else:
         command = (args.cpplint,) + DIVE_CPPLINT_FLAGS + files_strings
-    print("Running cpplint:", command)
+    print("Running cpplint:", " ".join(command))
     subprocess.run(command, check=True, text=True)
 
 
@@ -146,7 +157,7 @@ def parse_args():
     parser.add_argument("--dive_root", default=str(dive_root))
     parser.add_argument("--cpplint", default="cpplint")
     parser.add_argument("--base_commit", default="origin/main")
-    parser.add_argument("--g3mode", action="store_true")
+    parser.add_argument("--mode", choices=["", "g3", "ci"])
     return parser.parse_args()
 
 

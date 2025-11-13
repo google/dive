@@ -1,3 +1,4 @@
+// NOLINTBEGIN
 /*
 Copyright 2023 Google Inc.
 
@@ -158,3 +159,4 @@ extern "C"
     }
 }
 #endif
+// NOLINTEND

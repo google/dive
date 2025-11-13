@@ -111,8 +111,7 @@ void BufferView::OnEventSelected(uint32_t event_index)
             treeItem->setText(1, tr(str_buffer));
 
             // Column 2
-            static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
-            snprintf(str_buffer, str_buffer_size, "%llu", (unsigned long long)buffer_info.m_size);
+            snprintf(str_buffer, str_buffer_size, "%" PRIu64, buffer_info.m_size);
             treeItem->setText(2, tr(str_buffer));
             /*
             // Column 3

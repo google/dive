@@ -11,8 +11,7 @@
  limitations under the License.
 */
 
-#ifndef GFXRVULKANCOMMANDMODEL_H
-#define GFXRVULKANCOMMANDMODEL_H
+#pragma once
 
 #include <QAbstractItemModel>
 #include <QList>
@@ -66,4 +65,3 @@ private:
     const std::unordered_map<std::string, const char *> &m_vulkan_command_tool_tip_summaries;
     mutable std::vector<QPersistentModelIndex>           m_node_lookup;
 };
-#endif

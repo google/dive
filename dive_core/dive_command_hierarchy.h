@@ -12,6 +12,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 // =====================================================================================================================
 // The VulkanCommandHierarchy class parses and creates a tree of Nodes in the command buffer. The
 // primary client for this class is the Model class for the Vulkan command and argument Views in the

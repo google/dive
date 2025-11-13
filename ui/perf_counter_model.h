@@ -11,6 +11,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include "dive_core/perf_metrics_data.h"
 #include <QAbstractItemModel>
 #include <QVector>

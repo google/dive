@@ -311,7 +311,7 @@ double RulerGraphicsItem::DetermineTextStepSize(uint64_t max_cycles,
     Settings::DisplayUnit unit = Settings::Get()->ReadRulerDisplayUnit();
 
     double max_units = max_cycles;
-    ;
+
     if (unit == Settings::DisplayUnit::kCycle)
     {
         text_step_size = 1.0;

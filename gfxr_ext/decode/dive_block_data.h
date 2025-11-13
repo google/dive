@@ -18,6 +18,7 @@ limitations under the License.
 // - Assemble a modified GFXR file quickly with data chunks from the original file and from stored
 // modifications
 
+// NOLINT(build/header_guard)
 #ifndef GFXRECON_DECODE_DIVE_BLOCK_DATA_H
 #define GFXRECON_DECODE_DIVE_BLOCK_DATA_H
 

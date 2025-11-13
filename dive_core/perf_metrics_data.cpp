@@ -77,7 +77,7 @@ public:
     }
 
     // std::optional
-    bool      has_value() const { return m_value != kInvalid; };
+    bool      has_value() const { return m_value != kInvalid; }
     ValueType value() const
     {
         assert(has_value());

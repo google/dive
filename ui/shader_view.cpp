@@ -253,18 +253,17 @@ void ShaderView::paintEvent(QPaintEvent *event)
                     }
 
                     // Column 2: Address
-                    const uint32_t buffer_size = 256;
-                    char           buffer[buffer_size];
-                    snprintf(buffer, buffer_size, "%p", (void *)shader_info.GetShaderAddr());
+                    constexpr uint32_t kBufferSize = 256;
+                    char               buffer[kBufferSize];
+                    snprintf(buffer, kBufferSize, "%p", (void *)shader_info.GetShaderAddr());
                     treeItem->setText(2, tr(buffer));
 
                     // Column 3: size
-                    static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
-                    snprintf(buffer, 256, "%llu", (unsigned long long)shader_info.GetShaderSize());
+                    snprintf(buffer, kBufferSize, "%" PRIu64, shader_info.GetShaderSize());
                     treeItem->setText(3, tr(buffer));
 
                     // Column 4: GPRs
-                    snprintf(buffer, 256, "%u", shader_info.GetGPRCount());
+                    snprintf(buffer, kBufferSize, "%u", shader_info.GetGPRCount());
                     treeItem->setText(4, tr(buffer));
                 }
             }

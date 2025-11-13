@@ -17,6 +17,7 @@ limitations under the License.
 // Implementing a custom file processor is necessary to support these changes:
 // - Loop a single frame for N times, or infinitely
 
+// NOLINT(build/header_guard)
 #ifndef GFXRECON_DECODE_DIVE_FILE_PROCESSOR_H
 #define GFXRECON_DECODE_DIVE_FILE_PROCESSOR_H
 

@@ -45,8 +45,10 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
         return false;
     }
 
-    pm4_command_hierarchy_creator->CreateTrees(flatten_chain_nodes, false, reserve_size);
-    gfxr_command_hierarchy_creator->CreateTrees(true);
+    pm4_command_hierarchy_creator->CreateTrees(flatten_chain_nodes,
+                                               /*createTopologies=*/false,
+                                               reserve_size);
+    gfxr_command_hierarchy_creator->CreateTrees(/*used_in_mixed_command_hierarchy=*/true);
 
     bool result = pm4_command_hierarchy_creator
                   ->ProcessSubmits(dive_capture_data.GetPm4CaptureData().GetSubmits(),

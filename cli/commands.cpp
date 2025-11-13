@@ -467,7 +467,11 @@ bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
         uint64_t child_node_index = topology_ptr
                                     ->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex,
                                                         child);
-        PrintNodes(std::cout, &command_hierarchy, *topology_ptr, child_node_index, true);
+        PrintNodes(std::cout,
+                   &command_hierarchy,
+                   *topology_ptr,
+                   child_node_index,
+                   /*verbose=*/true);
     }
     return true;
 }

@@ -103,7 +103,9 @@ bool DataCore::CreatePm4CommandHierarchy()
     {
         return false;
     }
-    if (!cmd_hier_creator->CreateTrees(m_pm4_capture_data, true, reserve_size))
+    if (!cmd_hier_creator->CreateTrees(m_pm4_capture_data,
+                                       /*flatten_chain_nodes=*/true,
+                                       reserve_size))
     {
         return false;
     }
@@ -115,7 +117,7 @@ bool DataCore::CreateGfxrCommandHierarchy()
 {
     GfxrVulkanCommandHierarchyCreator vk_cmd_creator(m_capture_metadata.m_command_hierarchy,
                                                      m_gfxr_capture_data);
-    if (!vk_cmd_creator.CreateTrees(false))
+    if (!vk_cmd_creator.CreateTrees(/*used_in_mixed_command_hierarchy=*/false))
     {
         return false;
     }

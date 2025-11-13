@@ -32,54 +32,42 @@ const std::string kTestServerAddress = "test_server_socket";
 // UnixDomainServer, we will start an instance of it and use a basic, raw socket client to verify
 // its behavior, such as handling connections and basic messages.
 class UnixDomainServerTest : public ::testing::Test
+{};
+
+// Creates a raw socket client and connects to the Unix Domain Server.
+absl::StatusOr<std::unique_ptr<SocketConnection>> ConnectClient()
 {
-protected:
-    void SetUp() override { server = std::make_unique<UnixDomainServer>(); }
-
-    void TearDown() override
+    SocketType client_socket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (client_socket < 0)
     {
-        if (server)
-        {
-            server->Stop();
-        }
+        return absl::InternalError("Client: socket creation failed.");
+    }
+    /// Connects to an Unix (Local) Domain with abstract namespace.
+    sockaddr_un addr = {};
+    addr.sun_family = AF_UNIX;
+    // first char is '\0'
+    addr.sun_path[0] = '\0';
+    strncpy(addr.sun_path + 1, kTestServerAddress.c_str(), kTestServerAddress.size());
+    if (connect(client_socket,
+                (sockaddr*)&addr,
+                offsetof(sockaddr_un, sun_path) + 1 + kTestServerAddress.size()) < 0)
+    {
+        close(client_socket);
+        return absl::UnavailableError("Client: connect failed.");
     }
 
-    // Creates a raw socket client and connects to the Unix Domain Server.
-    absl::StatusOr<std::unique_ptr<SocketConnection>> ConnectClient()
+    absl::StatusOr<std::unique_ptr<SocketConnection>> connection = SocketConnection::Create(
+    client_socket);
+    if (!connection.ok())
     {
-        SocketType client_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (client_socket < 0)
-        {
-            return absl::InternalError("Client: socket creation failed.");
-        }
-        /// Connects to an Unix (Local) Domain with abstract namespace.
-        sockaddr_un addr = {};
-        addr.sun_family = AF_UNIX;
-        // first char is '\0'
-        addr.sun_path[0] = '\0';
-        strncpy(addr.sun_path + 1, kTestServerAddress.c_str(), kTestServerAddress.size());
-        if (connect(client_socket,
-                    (sockaddr*)&addr,
-                    offsetof(sockaddr_un, sun_path) + 1 + kTestServerAddress.size()) < 0)
-        {
-            close(client_socket);
-            return absl::UnavailableError("Client: connect failed.");
-        }
-
-        absl::StatusOr<std::unique_ptr<SocketConnection>> connection = SocketConnection::Create(
-        client_socket);
-        if (!connection.ok())
-        {
-            return connection.status();
-        }
-        return *std::move(connection);
+        return connection.status();
     }
-
-    std::unique_ptr<UnixDomainServer> server;
-};
+    return *std::move(connection);
+}
 
 TEST_F(UnixDomainServerTest, StartAndStop)
 {
+    auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
     // Give the server enough time to start.
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -90,17 +78,23 @@ TEST_F(UnixDomainServerTest, StartAndStop)
 
 TEST_F(UnixDomainServerTest, ClientConnectAndDisconnect)
 {
+    auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
+
     absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
     EXPECT_TRUE((*client_conn)->IsOpen());
     (*client_conn)->Close();
     EXPECT_FALSE((*client_conn)->IsOpen());
+
+    server->Stop();
 }
 
 TEST_F(UnixDomainServerTest, HandShakeSuccess)
 {
+    auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
+
     absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
 
@@ -122,11 +116,15 @@ TEST_F(UnixDomainServerTest, HandShakeSuccess)
     ASSERT_NE(response, nullptr);
     EXPECT_EQ(response->GetMajorVersion(), request.GetMajorVersion());
     EXPECT_EQ(response->GetMinorVersion(), request.GetMinorVersion());
+
+    server->Stop();
 }
 
 TEST_F(UnixDomainServerTest, HandShakeFails)
 {
+    auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
+
     absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
 
@@ -140,12 +138,16 @@ TEST_F(UnixDomainServerTest, HandShakeFails)
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
     ASSERT_NE((*response_msg)->GetMessageType(), MessageType::HANDSHAKE_RESPONSE);
+
+    server->Stop();
 }
 
 TEST_F(UnixDomainServerTest, PingPongSuccess)
 {
+    auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
-    auto client_conn = ConnectClient();
+
+    absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
 
     // Client sends ping.
@@ -153,16 +155,21 @@ TEST_F(UnixDomainServerTest, PingPongSuccess)
     ASSERT_TRUE(SendSocketMessage((*client_conn).get(), ping).ok());
 
     // Client receives pong.
-    auto response_msg = ReceiveSocketMessage((*client_conn).get());
+    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(
+    (*client_conn).get());
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
     ASSERT_EQ((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);
+
+    server->Stop();
 }
 
 TEST_F(UnixDomainServerTest, PingPongFails)
 {
+    auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
-    auto client_conn = ConnectClient();
+
+    absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
 
     // Client sends HandShakeRequest rather than ping message.
@@ -170,10 +177,13 @@ TEST_F(UnixDomainServerTest, PingPongFails)
     ASSERT_TRUE(SendSocketMessage((*client_conn).get(), ping).ok());
 
     // Client receives HandShakeResponse rather than pong message.
-    auto response_msg = ReceiveSocketMessage((*client_conn).get());
+    absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(
+    (*client_conn).get());
     ASSERT_TRUE(response_msg.ok());
     ASSERT_NE(*response_msg, nullptr);
     ASSERT_NE((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);
+
+    server->Stop();
 }
 
 }  // namespace

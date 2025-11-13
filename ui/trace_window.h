@@ -19,7 +19,9 @@
 #include <QDialog>
 #include <QSortFilterProxyModel>
 #include <QThread>
+#include <QStringList>
 #include <cstdint>
+#include <string>
 
 #include "capture_service/device_mgr.h"
 #include "device_dialog.h"

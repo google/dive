@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
-project(dive)
+project(dive VERSION 1.0.1)
 
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
@@ -35,15 +35,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
     set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
-endif()
-
-set(HOST_PLATFORM_STRING "Unknown")
-if(NOT ANDROID)
-    if(CMAKE_HOST_WIN32)
-        set(HOST_PLATFORM_STRING "Windows")
-    else()
-        set(HOST_PLATFORM_STRING "Linux")
-    endif()
+else()
+    message(FATAL_ERROR "Must set -DCMAKE_BUILD_TYPE")
 endif()
 
 # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
@@ -86,6 +79,43 @@ if(GIT_FOUND)
         OUTPUT_VARIABLE REPO_SHA1
     )
     string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
+endif()
+
+# Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>
+set(DIVE_RELEASE_TYPE "dev" CACHE STRING "")
+string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
+
+# For host tools version info
+set(HOST_PLATFORM_STRING "Unknown")
+if(NOT ANDROID)
+    if(CMAKE_HOST_WIN32)
+        set(HOST_PLATFORM_STRING "win")
+    elseif(CMAKE_HOST_APPLE)
+        set(HOST_PLATFORM_STRING "mac")
+    else()
+        set(HOST_PLATFORM_STRING "linux")
+    endif()
+endif()
+string(STRIP "${HOST_PLATFORM_STRING}" HOST_PLATFORM_STRING)
+
+# For device libraries version info
+set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")
+if(ANDROID)
+    message(CHECK_START "Make version file for Dive device libraries")
+    file(
+        WRITE ${CMAKE_INSTALL_PREFIX}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        "sha,"
+        ${DIVE_VERSION_SHA1}
+        "\nversion,"
+        ${CMAKE_PROJECT_VERSION}
+        "\nbuild_type,"
+        ${CMAKE_BUILD_TYPE}
+        "\nrelease_type,"
+        ${DIVE_RELEASE_TYPE}
+        "\nabi,"
+        ${ANDROID_ABI}
+    )
+    message(CHECK_PASS "successful")
 endif()
 
 # Adds all the configure time information into dive_cmake_generated.h.in
@@ -164,13 +194,6 @@ else()
         )
         message(CHECK_PASS "successful")
     endif()
-
-    message(CHECK_START "Make version file for Android build type")
-    file(
-        WRITE ${CMAKE_INSTALL_PREFIX}/TARGETTING_ANDROID_BUILD_TYPE.txt
-        ${CMAKE_BUILD_TYPE}
-    )
-    message(CHECK_PASS "successful")
 endif()
 
 option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")

@@ -28,7 +28,6 @@
 #include <QVBoxLayout>
 #include <sstream>
 
-#include "common/dive_version.h"
 #include "utils/version_info.h"
 
 // =================================================================================================
@@ -57,13 +56,7 @@ void AboutDialog::CreateHeaderLayout()
     m_icon_label->setPixmap(m_icon->pixmap(64, 64));
     m_icon_label->setFixedSize(64, 64);
 
-    std::ostringstream os;
-    os << DIVE_PRODUCT_NAME << " " << Dive::GetVersionNumberString() << std::endl;
-    os << std::endl;
-    os << DIVE_PRODUCT_DESCRIPTION << std::endl;
-    os << std::endl;
-    os << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
-    m_build_information = new QLabel(os.str().c_str());
+    m_build_information = new QLabel(Dive::GetDiveDescription().c_str());
     m_build_information->setWordWrap(true);
 
     m_header_layout = new QHBoxLayout;
@@ -77,10 +70,8 @@ void AboutDialog::CreateVersionLayout()
 {
     m_version_label = new QLabel("Version details:");
 
-    std::ostringstream os;
-    os << Dive::GetVersionDetailedSummary(DIVE_INSTALL_DIR_PATH, DIVE_BUILD_TYPE);
     m_version_details = new QPlainTextEdit();
-    m_version_details->setPlainText(os.str().c_str());
+    m_version_details->setPlainText(Dive::GetLongVersionString().c_str());
     m_version_details->setReadOnly(true);
     m_version_details->setFixedHeight(100);
 

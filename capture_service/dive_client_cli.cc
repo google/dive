@@ -34,6 +34,7 @@ limitations under the License.
 #include "device_mgr.h"
 #include "network/tcp_client.h"
 #include "absl/strings/str_cat.h"
+#include "utils/version_info.h"
 
 using namespace std::chrono_literals;
 
@@ -47,6 +48,7 @@ enum class Command
     kRunPackage,
     kRunAndCapture,
     kCleanup,
+    kVersionInfo,
 };
 
 bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
@@ -86,6 +88,11 @@ bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
         *command = Command::kGfxrReplay;
         return true;
     }
+    if (text == "version_info")
+    {
+        *command = Command::kVersionInfo;
+        return true;
+    }
     if (text.empty())
     {
         *command = Command::kNone;
@@ -115,6 +122,8 @@ std::string AbslUnparseFlag(Command command)
         return "capture";
     case Command::kCleanup:
         return "cleanup";
+    case Command::kVersionInfo:
+        return "version_info";
 
     default:
         return absl::StrCat(command);
@@ -207,7 +216,7 @@ download_dir,
 ABSL_FLAG(std::string,
           device_architecture,
           "",
-          "specify the device architecture to capture with gfxr (arm64-v8, armeabi-v7a, x86, or "
+          "specify the device architecture to capture with gfxr (arm64-v8a, armeabi-v7a, x86, or "
           "x86_64). If not specified, the default is the architecture of --device.");
 ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
@@ -850,6 +859,12 @@ int main(int argc, char** argv)
     replay_settings.metrics = absl::GetFlag(FLAGS_metrics);
     // loop_single_frame_count is parsed from --gfxr_replay_flags
 
+    if (cmd == Command::kVersionInfo)
+    {
+        std::cout << Dive::GetLongVersionString() << std::endl;
+        return 0;
+    }
+
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
     if (list.empty())
@@ -868,6 +883,10 @@ int main(int argc, char** argv)
 
     switch (cmd)
     {
+    case Command::kVersionInfo:
+    {
+        break;
+    }
     case Command::kGfxrCapture:
     {
         RunAndCapture(mgr,

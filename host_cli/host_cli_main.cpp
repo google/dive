@@ -27,7 +27,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_cat.h"
 
-#include "common/dive_version.h"
 #include "data_core_wrapper.h"
 #include "utils/version_info.h"
 
@@ -95,8 +94,7 @@ int main(int argc, char **argv)
     bool show_version = absl::GetFlag(FLAGS_version_info);
     if (show_version)
     {
-        std::cout << Dive::GetVersionDetailedSummary(DIVE_INSTALL_DIR_PATH, DIVE_BUILD_TYPE)
-                  << std::endl;
+        std::cout << Dive::GetLongVersionString() << std::endl;
         return 0;
     }
 

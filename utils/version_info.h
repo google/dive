@@ -23,20 +23,43 @@ limitations under the License.
 
 namespace Dive
 {
-// Returns a string with the following structure:
-//
-// <DIVE_VERSION_MAJOR>.<DIVE_VERSION_MINOR>.<DIVE_VERSION_REVISION>
-std::string GetVersionNumberString();
 
 // Returns a string with the following structure:
 //
-// Host Platform: <>
-// Dive Version: <>
-// Dive SHA: <>
-// Dive Host Tools Build Type: <>
-// Dive Android Libraries Build Type: <> (added if it exists under install/)
-// Dive Profiling Plugin SHA: <> (added if it exists under install/)
-std::string GetVersionDetailedSummary(std::filesystem::path install_dir_path,
-                                      std::string           host_tools_build_type);
+// (major).(minor).(revision)-(dev|release|internal|canary)-(7 digit SHA)
+std::string GetHostShortVersionString();
+
+// Returns a string with the following structure:
+//
+// clang-format off
+// -----
+// Device Libraries Build: (major).(minor).(revision)-(dev|release|canary)-(arm64-v8a|armeabi-v7a|x86|x86_64)
+// Device Libraries Build Type: (Debug | Release)
+// Device Libraries SHA: (40 digit SHA)
+// -----
+// clang-format on
+std::string GetDeviceLibrariesVersionInfo();
+
+// Returns a short blurb about Dive with product description and copyright info
+std::string GetDiveDescription();
+
+// Returns a string with the following structure:
+//
+// clang-format off
+// -----
+// Host Tools Build: (major).(minor).(revision)-(dev|release|internal|canary)-(linux|mac|win)-(7 digit SHA)
+// Host Tools Build Type: (Debug | Release)
+// Host Tools SHA: (40 digit SHA)
+//
+// Device Libraries Build: (major).(minor).(revision)-(dev|release|canary)-(arm64-v8a|armeabi-v7a|x86|x86_64)
+// Device Libraries Build Type: (Debug | Release)
+// Device Libraries SHA: (40 digit SHA)
+//
+// Profiling Plugin SHA: (40 digit SHA)
+// -----
+// clang-format on
+//
+// NOTE: Other than host tools info, info is retrieved from within DIVE_INSTALL_DIR_PATH
+std::string GetLongVersionString();
 
 }  // namespace Dive

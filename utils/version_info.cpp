@@ -22,36 +22,80 @@ limitations under the License.
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_split.h"
 
 namespace
 {
-// These are relative to install/
-static constexpr std::string_view
-kDiveAndroidLibrariesBuildTypePath = "TARGETTING_ANDROID_BUILD_TYPE.txt";
-static constexpr std::string_view kProfilingPluginShaPath = "dive_profiling_plugin/SHA";
 
-absl::StatusOr<std::string> ReadFileSingleLine(std::filesystem::path file_path)
+constexpr size_t nShortSha = 7;
+constexpr size_t nLongSha = 40;
+
+// This is relative to install/
+constexpr std::string_view kProfilingPluginShaPath = "dive_profiling_plugin/SHA";
+
+// Upper bound of file size to avoid reading long files
+constexpr size_t nMaxCharactersDeviceLibraryFile = 200;
+
+// Expected fields in DIVE_DEVICE_LIBRARIES_VERSION_FILENAME
+constexpr std::string_view kNameSha = "sha";
+constexpr std::string_view kNameVersion = "version";
+constexpr std::string_view kNameReleaseType = "release_type";
+constexpr std::string_view kNameBuildType = "build_type";
+constexpr std::string_view kNameAbi = "abi";
+
+absl::StatusOr<std::string> ReadFileCapped(const std::filesystem::path& file_path,
+                                           size_t                       max_characters)
 {
     if (!std::filesystem::exists(file_path))
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("File does not exist: %s", file_path.string()));
+        absl::StrFormat("File does not exist: %s", file_path.generic_string()));
     }
 
     std::ifstream file(file_path);
     if (!file.is_open())
     {
-        return absl::InternalError(absl::StrFormat("Failed to open file: %s", file_path.string()));
+        return absl::InternalError(
+        absl::StrFormat("Failed to open file: %s", file_path.generic_string()));
     }
 
-    // TODO: Use stringutils trim
-    std::string line;
-    if (!std::getline(file, line))
+    assert((max_characters > 0) && (max_characters <= nMaxCharactersDeviceLibraryFile));
+    char buffer[nMaxCharactersDeviceLibraryFile] = "";
+    file.read(buffer, sizeof(buffer) - 1);
+
+    return buffer;
+}
+
+// Returns a string of the Dive repo SHA with the first n_digits digits:
+std::string_view GetSHAString(std::string_view full_sha, size_t n_digits)
+{
+    assert((n_digits > 0) && (n_digits <= nLongSha));
+    return full_sha.substr(0, n_digits);
+}
+
+absl::Status ValidateDeviceLibrariesMap(const std::map<std::string_view, std::string_view>& map)
+{
+    if (map.count(kNameSha) != 1)
     {
-        return absl::InternalError(
-        absl::StrFormat("Failed to read line from file: %s", file_path.string()));
+        return absl::FailedPreconditionError(absl::StrFormat("key error: %s", kNameSha));
     }
-    return line;
+    if (map.count(kNameVersion) != 1)
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("key error: %s", kNameVersion));
+    }
+    if (map.count(kNameBuildType) != 1)
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("key error: %s", kNameBuildType));
+    }
+    if (map.count(kNameReleaseType) != 1)
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("key error: %s", kNameReleaseType));
+    }
+    if (map.count(kNameAbi) != 1)
+    {
+        return absl::FailedPreconditionError(absl::StrFormat("key error: %s", kNameAbi));
+    }
+    return absl::OkStatus();
 }
 
 }  // namespace
@@ -59,51 +103,100 @@ absl::StatusOr<std::string> ReadFileSingleLine(std::filesystem::path file_path)
 namespace Dive
 {
 
-std::string GetVersionNumberString()
+std::string GetHostShortVersionString()
 {
-    std::stringstream ss;
-    ss << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "." << DIVE_VERSION_REVISION;
-    return ss.str();
+    std::string      full_sha = DIVE_VERSION_SHA1;
+    std::string_view short_sha = GetSHAString(full_sha, nShortSha);
+    return absl::StrFormat("%s-%s-%s", DIVE_VERSION, DIVE_RELEASE_TYPE, short_sha);
 }
 
-std::string GetVersionDetailedSummary(std::filesystem::path install_dir_path_generic,
-                                      std::string           host_tools_build_type)
+std::string GetHostToolsVersionInfo()
 {
-    std::stringstream ss;
-    ss << "Host Platform: " << DIVE_HOST_PLATFORM_STRING << std::endl;
-    ss << "Dive Version: " << GetVersionNumberString() << std::endl;
-    ss << "Dive SHA: " << DIVE_VERSION_SHA1 << std::endl;
-    ss << "Dive Host Tools Build Type: " << host_tools_build_type << std::endl;
+    std::string      full_sha = DIVE_VERSION_SHA1;
+    std::string_view short_sha = GetSHAString(full_sha, nShortSha);
+    std::string      host_tools_build_string = absl::StrFormat("%s-%s-%s-%s",
+                                                          DIVE_VERSION,
+                                                          DIVE_RELEASE_TYPE,
+                                                          DIVE_HOST_PLATFORM_STRING,
+                                                          short_sha);
 
-    std::filesystem::path
-    android_libraries_build_type = absl::StrFormat("%s/%s",
-                                                   install_dir_path_generic.generic_string(),
-                                                   kDiveAndroidLibrariesBuildTypePath);
-    if (absl::StatusOr<std::string> ret = ReadFileSingleLine(android_libraries_build_type);
+    return absl::StrFormat("Host Tools Build: %s\nHost Tools Build Type: %s\nHost Tools SHA: %s\n",
+                           host_tools_build_string,
+                           DIVE_BUILD_TYPE,
+                           GetSHAString(DIVE_VERSION_SHA1, nLongSha));
+}
+
+std::string GetDiveDescription()
+{
+    return absl::StrFormat("%s (%s)\n\n%s\n\n%s\n",
+                           DIVE_PRODUCT_NAME,
+                           GetHostShortVersionString(),
+                           DIVE_PRODUCT_DESCRIPTION,
+                           DIVE_COPYRIGHT_DESCRIPTION);
+}
+
+// This parses the device libraries version CSV file generated by top-level cmake
+std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
+{
+    std::map<std::string_view, std::string_view> device_info_map;
+    std::vector<std::string_view>                rows = absl::StrSplit(csv_content, '\n');
+    for (std::string_view row : rows)
+    {
+        std::vector<std::string_view> key_value = absl::StrSplit(row, ',');
+        if (key_value.size() != 2)
+        {
+            std::cerr << "GetDeviceLibrariesVersionInfo() unexpected number of fields in row: "
+                      << row << std::endl;
+            return "";
+        }
+        device_info_map[key_value[0]] = key_value[1];
+    }
+    if (absl::Status ret = ValidateDeviceLibrariesMap(device_info_map); !ret.ok())
+    {
+        std::cerr << "GetDeviceLibrariesVersionInfo() device map wrong: " << ret.message()
+                  << std::endl;
+        return "";
+    }
+
+    std::string_view short_sha = GetSHAString(device_info_map[kNameSha], nShortSha);
+    std::string      device_libraries_build_string = absl::StrFormat("%s-%s-%s-%s",
+                                                                device_info_map[kNameVersion],
+                                                                device_info_map[kNameReleaseType],
+                                                                device_info_map[kNameAbi],
+                                                                short_sha);
+
+    return absl::StrFormat("Device Libraries Build: %s\nDevice Libraries Build Type: %s\nDevice "
+                           "Libraries SHA: %s\n",
+                           device_libraries_build_string,
+                           DIVE_BUILD_TYPE,
+                           GetSHAString(std::string(device_info_map[kNameSha]), nLongSha));
+}
+
+std::string GetLongVersionString()
+{
+    std::string summary = GetHostToolsVersionInfo();
+
+    std::filesystem::path device_libraries_version_path = DIVE_INSTALL_DIR_PATH;
+    device_libraries_version_path /= DIVE_DEVICE_LIBRARIES_VERSION_FILENAME;
+    if (absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,
+                                                         nMaxCharactersDeviceLibraryFile);
         ret.ok())
     {
-        ss << "Dive Android Libraries Build Type: " << *ret << std::endl;
+        summary += "\n" + GetDeviceLibrariesVersionInfo(*ret);
     }
-    else
-    {
-        // TODEL UNICORN
-        std::cerr << ret.status().message() << std::endl;
-    }
+    // Want silent failure or else the CLI stdout can confuse users
 
-    std::filesystem::path profiling_plugin_sha = absl::StrFormat("%s/%s",
-                                                                 install_dir_path_generic
-                                                                 .generic_string(),
-                                                                 kProfilingPluginShaPath);
-    if (absl::StatusOr<std::string> ret = ReadFileSingleLine(profiling_plugin_sha); ret.ok())
+    std::filesystem::path profiling_plugin_version_path = DIVE_INSTALL_DIR_PATH;
+    profiling_plugin_version_path /= kProfilingPluginShaPath;
+    if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path, nLongSha);
+        ret.ok())
     {
-        ss << "Dive Profiling Plugin SHA: " << *ret << std::endl;
+        std::string profiling_plugin_section = absl::StrFormat("Profiling Plugin SHA: %s\n", *ret);
+        summary += "\n" + profiling_plugin_section;
     }
-    else
-    {
-        // TODEL UNICORN
-        std::cerr << ret.status().message() << std::endl;
-    }
-    return ss.str();
+    // Want silent failure or else the CLI stdout can confuse users
+
+    return summary;
 }
 
 }  // namespace Dive

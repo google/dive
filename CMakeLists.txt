@@ -180,7 +180,7 @@ add_test(
 )
 
 add_test(
-    NAME ReproduceCrash
+    NAME Regression_StackOverflow_MacOS
     COMMAND
         ${CMAKE_BINARY_DIR}/ui/dive --exit-after-load
         ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr

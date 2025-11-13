@@ -51,6 +51,7 @@ set(DIVE_INSTALL_DEST_DEVICE "device") # Should only be used as destination for 
 set(DIVE_PLUGINS_PARENT_DIR "plugins")
 set(DIVE_INSTALL_DEST_SAMPLE_PLUGIN "dive_sample_plugin")
 set(DIVE_PROFILING_PLUGIN_DIR "dive_profiling_plugin") # This is not built within Dive
+set(DIVE_INSTALL_DEST_SYSTEM_TRACE_PLUGIN "dive_system_trace_plugin") # This is not built within Dive
 # macOS bundle
 set(DIVE_MACOS_BUNDLE_RESOURCES "Resources")
 # License file
@@ -62,6 +63,9 @@ set(INSTALL_GTEST OFF)
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
+
+# Ensures static libraries are compatible with shared libraries used by the plugin system.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ------------------------------------------------------------------------------
 # Determining version info

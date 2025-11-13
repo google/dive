@@ -48,16 +48,9 @@ if(APPLE)
     )
 endif()
 
-add_executable(
-    ${PROJECT_NAME}
-    # Qt
-    resources.qrc
-    # Add resource files for Windows build (for version information)
-    $<$<PLATFORM_ID:Windows>:version.rc>
-    # MacOS icon
-    $<$<PLATFORM_ID:Darwin>:dive.icns>
-    # Entry point:
-    main.cpp
+add_library(
+    ${PROJECT_NAME}_lib
+    SHARED
     # Dive Gui Source:
     about_window.cpp
     about_window.h
@@ -168,6 +161,72 @@ add_executable(
     window_scissors_stats_model.h
 )
 
+target_link_libraries(
+    ${PROJECT_NAME}_lib
+    PUBLIC
+        Qt5::Widgets
+        dive_core
+        dive_lib_os
+        device_mgr
+        absl::span
+        absl::status
+        absl::statusor
+        absl::strings
+    PRIVATE
+        network
+        dive_lib_ui
+        dive_plugin_loader
+        component_files
+        dive_device_resources
+        version_info
+        dive_build_defs
+        dive_lib_trace_stats
+        dive_src_includes
+        absl::flags
+        absl::flags_parse
+        absl::failure_signal_handler
+        absl::symbolize
+)
+
+set_target_properties(
+    ${PROJECT_NAME}_lib
+    PROPERTIES
+        CXX_VISIBILITY_PRESET default
+        VISIBILITY_INLINES_HIDDEN OFF
+        OUTPUT_NAME "dive_ui_lib"
+        INSTALL_NAME_DIR "@rpath"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${DIVE_RPATH}"
+)
+
+target_include_directories(
+    ${PROJECT_NAME}_lib
+    PUBLIC "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/src"
+)
+
+add_executable(
+    ${PROJECT_NAME}
+    # Qt
+    resources.qrc
+    # Add resource files for Windows build (for version information)
+    $<$<PLATFORM_ID:Windows>:version.rc>
+    # MacOS icon
+    $<$<PLATFORM_ID:Darwin>:dive.icns>
+    # Entry point:
+    main.cpp
+)
+
+if(APPLE)
+    set(DIVE_RPATH "@executable_path/../Frameworks")
+else()
+    set(DIVE_RPATH "$ORIGIN")
+endif()
+
+set_target_properties(
+    ${PROJECT_NAME}
+    PROPERTIES INSTALL_RPATH "${DIVE_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+)
+
 target_include_directories(
     ${PROJECT_NAME}
     PUBLIC
@@ -199,24 +258,11 @@ endif()
 
 target_link_libraries(
     ${PROJECT_NAME}
-    Qt5::Widgets
-    absl::flags
-    absl::flags_parse
-    absl::failure_signal_handler
-    absl::span
-    absl::symbolize
-    network
-    dive_core
-    dive_lib_os
-    dive_lib_ui
-    device_mgr
-    dive_plugin_loader
-    component_files
-    dive_device_resources
-    version_info
-    dive_build_defs
-    dive_lib_trace_stats
-    dive_src_includes
+    PRIVATE
+        ${PROJECT_NAME}_lib
+        Qt5::Widgets
+        absl::failure_signal_handler
+        absl::symbolize
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
@@ -304,11 +350,18 @@ endif()
 
 if(APPLE)
     install(
-        TARGETS ${PROJECT_NAME}
+        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_lib
         BUNDLE DESTINATION "${DIVE_INSTALL_DEST_HOST}"
     )
+    install(
+        TARGETS ${PROJECT_NAME}_lib
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
+    )
 else()
-    install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+    install(
+        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_lib
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+    )
 endif()
 
 install(

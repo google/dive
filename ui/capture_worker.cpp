@@ -47,14 +47,6 @@ void CaptureWorker::run()
         qDebug() << "Failed to connect to device";
         return;
     }
-    auto app = device->GetCurrentApplication();
-    if (app == nullptr || !app->IsRunning())
-    {
-        std::string err_msg = "Application is not running, possibly crashed.";
-        qDebug() << err_msg.c_str();
-        emit ShowMessage(QString::fromStdString(err_msg));
-        return;
-    }
 
     Network::TcpClient client;
     const std::string host = "127.0.0.1";

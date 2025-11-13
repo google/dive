@@ -636,6 +636,12 @@ bool MainWindow::InitializePlugins()
 }
 
 //--------------------------------------------------------------------------------------------------
+TraceDialog &MainWindow::GetTraceDialog()
+{
+    return *m_trace_dig;
+}
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString &path)
 {
     qDebug() << "Trace is at " << path;

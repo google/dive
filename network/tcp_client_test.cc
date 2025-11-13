@@ -65,7 +65,7 @@ private:
     {
         while (m_running && m_conn && m_conn->IsOpen())
         {
-            auto msg = ReceiveSocketMessage(m_conn.get(), 100);
+            auto msg = ReceiveSocketMessage(m_conn.get());
             if (!msg.ok())
             {
                 if (absl::IsDeadlineExceeded(msg.status()))
@@ -221,6 +221,7 @@ TEST_F(TcpClientFakeTest, DownloadFileFromServerSuccess)
                              std::istreambuf_iterator<char>());
     EXPECT_EQ(read_content, file_content);
 
+    ifs.close();
     std::filesystem::remove(local_path);
 }
 

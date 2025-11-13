@@ -35,6 +35,19 @@ public:
     {
     }
 
+    ~FakeSocketConnection() override
+    {
+        Close();
+        if (m_peer)
+        {
+            std::lock_guard<std::mutex> lock(m_peer->m_mutex);
+            if (m_peer->m_peer == this)
+            {
+                m_peer->m_peer = nullptr;
+            }
+        }
+    }
+
     void PairWith(FakeSocketConnection* peer)
     {
         m_peer = peer;

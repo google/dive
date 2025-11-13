@@ -1,11 +1,14 @@
 # Copied from https://github.com/actions/cache/blob/main/tips-and-workarounds.md#force-deletion-of-caches-overriding-default-cache-eviction-policy
 
+# Note: this is a pull_request_target workflow, please read
+# https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+# before making modification.
+
 name: Pull Request Cleanup
 on:
-  pull_request:
-    types:
-      - closed
-  workflow_dispatch:
+  pull_request_target: # required for pull request from forks
+    types: [ closed ]
+    branches: [ main ]
 
 jobs:
   cleanup:

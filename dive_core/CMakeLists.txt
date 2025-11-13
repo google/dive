@@ -165,6 +165,8 @@ add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
+target_link_libraries(${PROJECT_NAME} PUBLIC absl::no_destructor)
+
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
 
 add_custom_command(

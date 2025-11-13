@@ -74,6 +74,7 @@ class QSortFilterProxyModel;
 class QAbstractProxyModel;
 class FrameTabView;
 class QScrollArea;
+class ApplicationController;
 
 enum class EventMode;
 
@@ -110,10 +111,13 @@ inline static constexpr const char
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+
+    friend class ApplicationController;
+
 public:
     class Worker;
 
-    MainWindow();
+    explicit MainWindow(ApplicationController &controller);
     ~MainWindow();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
@@ -253,6 +257,8 @@ private:
     const QAbstractProxyModel   &proxy_model,
     const std::vector<uint64_t> &draw_call_indices,
     CorrelationTarget            target);
+
+    ApplicationController &m_controller;
 
     QMenu         *m_file_menu;
     QMenu         *m_recent_captures_menu;

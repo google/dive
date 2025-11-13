@@ -23,6 +23,7 @@
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
+#include "application_controller.h"
 #include "main_window.h"
 #include "common/dive_version.h"
 #ifdef __linux__
@@ -138,7 +139,8 @@ int main(int argc, char *argv[])
     // Initialize packet info query data structures needed for parsing
     Pm4InfoInit();
 
-    MainWindow *main_window = new MainWindow();
+    ApplicationController controller;
+    MainWindow           *main_window = new MainWindow(controller);
 
     if (!main_window->InitializePlugins())
     {

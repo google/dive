@@ -49,6 +49,7 @@
 #include "absl/status/statusor.h"
 
 #include "about_window.h"
+#include "application_controller.h"
 #include "buffer_view.h"
 #include "capture_service/constants.h"
 #include "command_buffer_model.h"
@@ -208,8 +209,11 @@ MainWindow::Worker::~Worker()
 // =================================================================================================
 // MainWindow
 // =================================================================================================
-MainWindow::MainWindow()
+MainWindow::MainWindow(ApplicationController &controller) :
+    m_controller(controller)
 {
+    controller.Register(*this);
+
     m_worker = std::make_unique<Worker>(this);
 
     // Output logs to both the "record" as well as console output
@@ -536,12 +540,7 @@ MainWindow::MainWindow()
     LoadAvailableMetrics();
 
     m_trace_dig = new TraceDialog(this);
-    m_analyze_dig = new AnalyzeDialog(m_available_metrics.get() ?
-                                      std::optional<
-                                      std::reference_wrapper<const Dive::AvailableMetrics>>(
-                                      std::ref(*m_available_metrics.get())) :
-                                      std::nullopt,
-                                      this);
+    m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
 
     m_overlay = new OverlayHelper(this);
     m_overlay->Initialize(horizontal_splitter);
@@ -636,6 +635,8 @@ MainWindow::MainWindow()
 
     m_plugin_manager = std::make_unique<Dive::PluginLoader>();
     m_plugin_manager->Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow, this);
+
+    controller.MainWindowInitialized();
 }
 
 //--------------------------------------------------------------------------------------------------

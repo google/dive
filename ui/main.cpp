@@ -87,6 +87,13 @@ void setDarkMode(QApplication &app)
 int main(int argc, char *argv[])
 {
     // Check number of arguments
+    bool exit_after_load = false;
+    if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)
+    {
+        exit_after_load = true;
+        argc--;
+        argv++;
+    }
     if (argc != 1 && argc != 2)
         return 0;
 
@@ -141,6 +148,10 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
+    if (exit_after_load)
+    {
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+    }
 
     if (!main_window->InitializePlugins())
     {
@@ -151,7 +162,7 @@ int main(int argc, char *argv[])
     if (argc == 2)
     {
         // This is executed async.
-        main_window->LoadFile(argv[1]);
+        main_window->LoadFile(argv[1], false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));

@@ -28,6 +28,8 @@ const GfxrCaptureData &capture_data) :
 {
 }
 
+GfxrVulkanCommandHierarchyCreator::~GfxrVulkanCommandHierarchyCreator() {}
+
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_index)
 {

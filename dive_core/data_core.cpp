@@ -17,6 +17,8 @@
 #include "data_core.h"
 #include <assert.h>
 #include <optional>
+#include "dive_core/command_hierarchy.h"
+#include "dive_core/gfxr_vulkan_command_hierarchy.h"
 #include "pm4_info.h"
 
 namespace Dive
@@ -95,9 +97,13 @@ bool DataCore::CreatePm4CommandHierarchy()
     uint64_t reserve_size = m_capture_metadata.m_num_pm4_packets * 10;
 
     // Command hierarchy tree creation
-    CommandHierarchyCreator cmd_hier_creator(m_capture_metadata.m_command_hierarchy,
-                                             m_pm4_capture_data);
-    if (!cmd_hier_creator.CreateTrees(m_pm4_capture_data, true, reserve_size))
+    auto cmd_hier_creator = CommandHierarchyCreator::Create(m_capture_metadata.m_command_hierarchy,
+                                                            m_pm4_capture_data);
+    if (!cmd_hier_creator)
+    {
+        return false;
+    }
+    if (!cmd_hier_creator->CreateTrees(m_pm4_capture_data, true, reserve_size))
     {
         return false;
     }
@@ -119,10 +125,14 @@ bool DataCore::CreateGfxrCommandHierarchy()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreateDiveMetaData()
 {
-    CaptureMetadataCreator metadata_creator(m_capture_metadata);
+    auto metadata_creator = CaptureMetadataCreator::Create(m_capture_metadata);
+    if (!metadata_creator)
+    {
+        return false;
+    }
     if (!metadata_creator
-         .ProcessSubmits(m_dive_capture_data.GetPm4CaptureData().GetSubmits(),
-                         m_dive_capture_data.GetPm4CaptureData().GetMemoryManager()))
+         ->ProcessSubmits(m_dive_capture_data.GetPm4CaptureData().GetSubmits(),
+                          m_dive_capture_data.GetPm4CaptureData().GetMemoryManager()))
     {
         return false;
     }
@@ -132,9 +142,13 @@ bool DataCore::CreateDiveMetaData()
 //--------------------------------------------------------------------------------------------------
 bool DataCore::CreatePm4MetaData()
 {
-    CaptureMetadataCreator metadata_creator(m_capture_metadata);
-    if (!metadata_creator.ProcessSubmits(m_pm4_capture_data.GetSubmits(),
-                                         m_pm4_capture_data.GetMemoryManager()))
+    auto metadata_creator = CaptureMetadataCreator::Create(m_capture_metadata);
+    if (!metadata_creator)
+    {
+        return false;
+    }
+    if (!metadata_creator->ProcessSubmits(m_pm4_capture_data.GetSubmits(),
+                                          m_pm4_capture_data.GetMemoryManager()))
     {
         return false;
     }
@@ -238,6 +252,12 @@ const CaptureMetadata &DataCore::GetCaptureMetadata() const
 // =================================================================================================
 // CaptureMetadataCreator
 // =================================================================================================
+std::unique_ptr<CaptureMetadataCreator> CaptureMetadataCreator::Create(
+CaptureMetadata &capture_metadata)
+{
+    return std::unique_ptr<CaptureMetadataCreator>(new CaptureMetadataCreator(capture_metadata));
+}
+
 CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata) :
     m_capture_metadata(capture_metadata)
 {

@@ -123,11 +123,7 @@ file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER SRC_FILES EXCLUDE REGEX "_tests.cpp$")
 list(FILTER SRC_FILES EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/tests/.*")
 
-if(DIVE_NO_DISASSEMBLY OR APPLE)
-    list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly\\.cpp")
-else()
-    list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
-endif() # DIVE_NO_DISASSEMBLY OR APPLE
+list(FILTER SRC_FILES EXCLUDE REGEX "shader_disassembly_dummy\\.cpp")
 
 file(GLOB_RECURSE COMMON_HDR_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.h")
 file(GLOB_RECURSE COMMON_SRC_FILES "${CMAKE_SOURCE_DIR}/dive_core/common/*.cpp")
@@ -172,83 +168,97 @@ add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 target_link_libraries(${PROJECT_NAME} PUBLIC absl::no_destructor)
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
-if(NOT APPLE)
-    add_custom_command(
-        OUTPUT ${FREEDRENO_IR3_ISA_SRC_FILE} ${FREEDRENO_IR3_ISA_HDR_FILE}
-        COMMAND
-            ${Python3_EXECUTABLE}
-            ${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py "--xml"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml" "--out-c"
-            ${FREEDRENO_IR3_ISA_SRC_FILE} "--out-h"
-            ${FREEDRENO_IR3_ISA_HDR_FILE}
-        DEPENDS
-            "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
-        VERBATIM
-    )
 
-    add_library(
+add_custom_command(
+    OUTPUT ${FREEDRENO_IR3_ISA_SRC_FILE} ${FREEDRENO_IR3_ISA_HDR_FILE}
+    COMMAND
+        ${Python3_EXECUTABLE}
+        ${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py "--xml"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml" "--out-c"
+        ${FREEDRENO_IR3_ISA_SRC_FILE} "--out-h" ${FREEDRENO_IR3_ISA_HDR_FILE}
+    DEPENDS
+        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/decode.py"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa/ir3.xml"
+    VERBATIM
+)
+
+add_library(
+    freedreno_ir3
+    STATIC
+    ${FREEDRENO_IR3_ISA_SRC_FILE}
+    "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/isaspec.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/blob.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/hash_table.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/log.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_file.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_misc.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/simple_mtx.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/softfloat.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_call_once.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_cpu_detect.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_debug.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_printf.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_process.c"
+    "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_thread.c"
+)
+
+target_include_directories(
+    freedreno_ir3
+    PRIVATE
+        "${THIRDPARTY_DIRECTORY}/mesa/include"
+        "${THIRDPARTY_DIRECTORY}/mesa/src"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common"
+        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa"
+)
+
+if(MSVC)
+    target_compile_definitions(freedreno_ir3 PRIVATE -DHAVE_STRUCT_TIMESPEC)
+    set_property(TARGET freedreno_ir3 PROPERTY C_STANDARD 11) # To support alignas
+    target_sources(
         freedreno_ir3
-        STATIC
-        ${FREEDRENO_IR3_ISA_SRC_FILE}
-        "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/ir3/disasm-a3xx.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec/isaspec.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/blob.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/half_float.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/hash_table.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/log.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_file.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/os_misc.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/ralloc.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/simple_mtx.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/softfloat.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_call_once.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_cpu_detect.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_debug.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_printf.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_process.c"
-        "${THIRDPARTY_DIRECTORY}/mesa/src/util/u_thread.c"
+        PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c"
     )
-
-    target_include_directories(
+    set_target_properties(freedreno_ir3 PROPERTIES FOLDER "freedreno")
+elseif(UNIX AND NOT APPLE)
+    #set_source_files_properties(PROPERTIES LANGUAGE CXX
+    target_compile_definitions(
         freedreno_ir3
         PRIVATE
-            "${THIRDPARTY_DIRECTORY}/mesa/include"
-            "${THIRDPARTY_DIRECTORY}/mesa/src"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/compiler"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/compiler/isaspec"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common"
-            "${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/isa"
+            -DHAVE_ENDIAN_H
+            -DHAVE_FUNC_ATTRIBUTE_PACKED
+            -DHAVE_STRUCT_TIMESPEC
+            -DHAVE_PTHREAD
+            -DHAVE_SYSCONF
+            -D_GNU_SOURCE
+            -DHAVE_SECURE_GETENV
     )
+elseif(APPLE)
+    target_compile_definitions(
+        freedreno_ir3
+        PRIVATE
+            -DHAVE_FUNC_ATTRIBUTE_PACKED
+            -DHAVE_STRUCT_TIMESPEC
+            -DHAVE_PTHREAD
+            -DHAVE_SYSCONF
+            -D_GNU_SOURCE
+    )
+    target_sources(
+        freedreno_ir3
+        PRIVATE
+            "${THIRDPARTY_DIRECTORY}/mesa/src/c11/impl/threads_posix.c"
+            "${THIRDPARTY_DIRECTORY}/mesa/src/c11/impl/time.c"
+    )
+endif() # MSVC
 
-    if(MSVC)
-        target_compile_definitions(freedreno_ir3 PRIVATE -DHAVE_STRUCT_TIMESPEC)
-        set_property(TARGET freedreno_ir3 PROPERTY C_STANDARD 11) # To support alignas
-        target_sources(
-            freedreno_ir3
-            PRIVATE "${THIRDPARTY_DIRECTORY}/mesa/src/util/google_dive_ext.c"
-        )
-        set_target_properties(freedreno_ir3 PROPERTIES FOLDER "freedreno")
-    else()
-        #set_source_files_properties(PROPERTIES LANGUAGE CXX
-        target_compile_definitions(
-            freedreno_ir3
-            PRIVATE
-                -DHAVE_ENDIAN_H
-                -DHAVE_FUNC_ATTRIBUTE_PACKED
-                -DHAVE_STRUCT_TIMESPEC
-                -DHAVE_PTHREAD
-                -DHAVE_SYSCONF
-                -D_GNU_SOURCE
-                -DHAVE_SECURE_GETENV
-        )
-    endif() # MSVC
-
-    target_compile_options(freedreno_ir3 PRIVATE -fPIC)
-    add_dependencies(${PROJECT_NAME} freedreno_ir3)
-    target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
-endif() # NOT APPLE
+target_compile_options(freedreno_ir3 PRIVATE -fPIC)
+add_dependencies(${PROJECT_NAME} freedreno_ir3)
+target_link_libraries(${PROJECT_NAME} PRIVATE freedreno_ir3)
 
 # This is linked privately because gfxr contains X11 headers that contain preprocessor macros which cause collisions
 # gfxr_decode_ext_lib itself can't link gfxrecon_decode privately because it's a dependency of a target (gfxrecon-replay) that doesn't specify PRIVATE/PUBLIC
@@ -269,7 +279,6 @@ endif() # "${CMAKE_SYSTEM_NAME}" STREQUAL "Linux"
 if(WIN32)
     # Supress warning about deprecation of std::iterator when compile with c++17
     add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${ZLIB_LIBRARIES} -static)
 endif() # WIN32
 target_link_libraries(
     ${PROJECT_NAME}

@@ -20,6 +20,7 @@
 // =====================================================================================================================
 
 #pragma once
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -436,8 +437,10 @@ private:
 class CommandHierarchyCreator : public EmulateCallbacksBase
 {
 public:
-    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
-                            const Pm4CaptureData &capture_data);
+    static std::unique_ptr<CommandHierarchyCreator> Create(CommandHierarchy     &command_hierarchy,
+                                                           const Pm4CaptureData &capture_data);
+    ~CommandHierarchyCreator() override;
+
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
@@ -459,25 +462,25 @@ public:
                      std::vector<uint32_t> &command_dwords,
                      uint32_t               size_in_dwords);
 
-    virtual bool OnIbStart(uint32_t                  submit_index,
-                           uint32_t                  ib_index,
-                           const IndirectBufferInfo &ib_info,
-                           IbType                    type) override;
+    bool OnIbStart(uint32_t                  submit_index,
+                   uint32_t                  ib_index,
+                   const IndirectBufferInfo &ib_info,
+                   IbType                    type) override;
 
-    virtual bool OnIbEnd(uint32_t                  submit_index,
-                         uint32_t                  ib_index,
-                         const IndirectBufferInfo &ib_info) override;
+    bool OnIbEnd(uint32_t                  submit_index,
+                 uint32_t                  ib_index,
+                 const IndirectBufferInfo &ib_info) override;
 
-    virtual bool OnPacket(const IMemoryManager &mem_manager,
-                          uint32_t              submit_index,
-                          uint32_t              ib_index,
-                          uint64_t              va_addr,
-                          Pm4Header             header) override;
+    bool OnPacket(const IMemoryManager &mem_manager,
+                  uint32_t              submit_index,
+                  uint32_t              ib_index,
+                  uint64_t              va_addr,
+                  Pm4Header             header) override;
 
     void CreateTopologies();
 
-    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
-    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
 
     const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type, size_t sub_index) const
     {
@@ -498,6 +501,10 @@ public:
     {
         return m_node_root_node_indices[type];
     }
+
+protected:
+    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+                            const Pm4CaptureData &capture_data);
 
 private:
     union Type3Ordinal2

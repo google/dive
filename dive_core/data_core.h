@@ -19,6 +19,7 @@
 #include <deque>
 #include <map>
 #include <vector>
+#include <memory>
 #include "pm4_capture_data.h"
 #include "gfxr_capture_data.h"
 #include "dive_capture_data.h"
@@ -147,29 +148,32 @@ public:
 class CaptureMetadataCreator : public EmulateCallbacksBase
 {
 public:
-    CaptureMetadataCreator(CaptureMetadata &capture_metadata);
-    ~CaptureMetadataCreator();
+    static std::unique_ptr<CaptureMetadataCreator> Create(CaptureMetadata &capture_metadata);
+    ~CaptureMetadataCreator() override;
 
-    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
-    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
 
     const EmulateStateTracker &GetStateTracker() const { return m_state_tracker; }
 
     // Callbacks
-    virtual bool OnIbStart(uint32_t                  submit_index,
-                           uint32_t                  ib_index,
-                           const IndirectBufferInfo &ib_info,
-                           IbType                    type) override;
+    bool OnIbStart(uint32_t                  submit_index,
+                   uint32_t                  ib_index,
+                   const IndirectBufferInfo &ib_info,
+                   IbType                    type) override;
 
-    virtual bool OnIbEnd(uint32_t                  submit_index,
-                         uint32_t                  ib_index,
-                         const IndirectBufferInfo &ib_info) override;
+    bool OnIbEnd(uint32_t                  submit_index,
+                 uint32_t                  ib_index,
+                 const IndirectBufferInfo &ib_info) override;
 
-    virtual bool OnPacket(const IMemoryManager &mem_manager,
-                          uint32_t              submit_index,
-                          uint32_t              ib_index,
-                          uint64_t              va_addr,
-                          Pm4Header             header) override;
+    bool OnPacket(const IMemoryManager &mem_manager,
+                  uint32_t              submit_index,
+                  uint32_t              ib_index,
+                  uint64_t              va_addr,
+                  Pm4Header             header) override;
+
+protected:
+    CaptureMetadataCreator(CaptureMetadata &capture_metadata);
 
 private:
     bool HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t opcode);

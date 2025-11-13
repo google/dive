@@ -71,7 +71,6 @@ else()
     include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 endif()
 
-link_directories(LibArchive_LIBRARIES)
 include_directories(LibArchive_INCLUDE_DIRS)
 message("LibArchive_LIBRARIES is " ${LibArchive_LIBRARIES})
 message("LibArchive_INCLUDE_DIRS is " ${LibArchive_INCLUDE_DIRS})

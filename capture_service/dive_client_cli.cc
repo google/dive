@@ -26,6 +26,7 @@ limitations under the License.
 #include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/flags/usage_config.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "android_application.h"
@@ -34,6 +35,7 @@ limitations under the License.
 #include "device_mgr.h"
 #include "network/tcp_client.h"
 #include "absl/strings/str_cat.h"
+#include "utils/version_info.h"
 
 using namespace std::chrono_literals;
 
@@ -207,7 +209,7 @@ download_dir,
 ABSL_FLAG(std::string,
           device_architecture,
           "",
-          "specify the device architecture to capture with gfxr (arm64-v8, armeabi-v7a, x86, or "
+          "specify the device architecture to capture with gfxr (arm64-v8a, armeabi-v7a, x86, or "
           "x86_64). If not specified, the default is the architecture of --device.");
 ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
@@ -830,6 +832,9 @@ bool DeployAndRunGfxrReplay(Dive::DeviceManager&            mgr,
 
 int main(int argc, char** argv)
 {
+    absl::FlagsUsageConfig flags_usage_config;
+    flags_usage_config.version_string = Dive::GetCompleteVersionString;
+    absl::SetFlagsUsageConfig(flags_usage_config);
     absl::SetProgramUsageMessage("Run app with --help for more details");
     absl::ParseCommandLine(argc, argv);
     Command     cmd = absl::GetFlag(FLAGS_command);

@@ -3411,6 +3411,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 
             selection_model->setCurrentIndex(proxy_index, flags);
             m_command_tab_view->OnSelectionChanged(proxy_index);
+            m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(source_index);
 
             m_pm4_command_hierarchy_view->scrollTo(proxy_index,
                                                    QAbstractItemView::PositionAtCenter);
@@ -3432,6 +3433,7 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 {
     m_gpu_timing_tab_view->ClearSelection();
     m_perf_counter_tab_view->ClearSelection();
+    m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(QModelIndex());
 
     QItemSelectionModel *gfxr_selection_model = m_command_hierarchy_view->selectionModel();
     QSignalBlocker       blocker(gfxr_selection_model);
@@ -3485,6 +3487,8 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
                                                         QItemSelectionModel::Rows;
 
             gfxr_selection_model->setCurrentIndex(proxy_index, flags);
+            m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(
+            gfxr_draw_call_index_from_source);
 
             ResetVerticalScroll(*m_command_hierarchy_view);
             m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
@@ -3539,6 +3543,8 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
             flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
 
             selection_model->setCurrentIndex(proxy_index, flags);
+            m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(
+            gfxr_draw_call_index_from_source);
 
             ResetVerticalScroll(*m_command_hierarchy_view);
             m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
@@ -3692,6 +3698,8 @@ void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
         flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
 
         selection_model->setCurrentIndex(proxy_index, flags);
+        m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(
+        gfxr_draw_call_index_from_source);
 
         ResetVerticalScroll(*m_command_hierarchy_view);
         m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);

@@ -74,6 +74,7 @@ target_link_libraries(
     device_mgr
     dive_plugin_loader
     component_files
+    version_info
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0

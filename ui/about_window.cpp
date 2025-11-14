@@ -28,65 +28,88 @@
 #include <QVBoxLayout>
 #include <sstream>
 
-#include "common/dive_version.h"
+#include "utils/version_info.h"
 
 // =================================================================================================
 // AboutDialog
 // =================================================================================================
 
-AboutDialog::AboutDialog(QWidget *parent)
+AboutDialog::AboutDialog(QWidget* parent)
 {
-    // Build version string
-    std::ostringstream os;
-    os << DIVE_PRODUCT_NAME << std::endl;
-    os << DIVE_PRODUCT_DESCRIPTION << std::endl;
-    os << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
-    os << std::endl;
-    os << "Version ";
-    os << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "." << DIVE_VERSION_REVISION;
-    m_build_information = new QLabel(os.str().c_str());
-    m_build_information->setWordWrap(true);
-
-    // Load third party license information
-    m_license_notice = new QPlainTextEdit();
-    QFile licenseFile{ QDir{ QCoreApplication::applicationDirPath() }.filePath("NOTICE") };
-    if (licenseFile.open(QIODevice::ReadOnly))
-    {
-        m_license_notice->setPlainText(licenseFile.readAll());
-    }
-    m_license_notice->setReadOnly(true);
-
-    // Load icon
-    m_icon = new QIcon(":/images/dive.ico");
-    m_icon_label = new QLabel();
-    m_icon_label->setPixmap(m_icon->pixmap(64, 64));
-    m_icon_label->setFixedSize(64, 64);
-
-    // Version layout is Icon + Build Info
-    m_version_layout = new QHBoxLayout;
-    m_version_layout->addWidget(m_icon_label);
-    m_version_layout->addWidget(m_build_information);
-
-    // Close button
-    m_close_button = new QPushButton;
-    m_close_button->setText("Close");
-    connect(m_close_button, SIGNAL(clicked()), this, SLOT(close()));
-
-    m_button_layout = new QHBoxLayout;
-    m_button_layout->addStretch();
-    m_button_layout->addWidget(m_close_button);
-
-    // Main layout is Version + Label + NOTICE
-    m_main_layout = new QVBoxLayout;
-    m_main_layout->addLayout(m_version_layout);
-    m_third_party_licenses = new QLabel("Third Party Licenses:");
-    m_main_layout->addWidget(m_third_party_licenses);
-    m_main_layout->addWidget(m_license_notice);
-    m_main_layout->addLayout(m_button_layout);
+    auto main_layout = new QVBoxLayout;
+    main_layout->addLayout(CreateHeaderLayout());
+    main_layout->addLayout(CreateVersionLayout());
+    main_layout->addLayout(CreateLicenseLayout());
+    main_layout->addLayout(CreateButtonLayout());
 
     // Disable help icon, set size, title, and layout
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     setMinimumSize(640, 480);
     setWindowTitle("About Dive");
-    setLayout(m_main_layout);
+    setLayout(main_layout);
+}
+
+QHBoxLayout* AboutDialog::CreateHeaderLayout()
+{
+    auto icon = new QIcon(":/images/dive.ico");
+    auto icon_label = new QLabel();
+    icon_label->setPixmap(icon->pixmap(64, 64));
+    icon_label->setFixedSize(64, 64);
+
+    auto build_information = new QLabel(Dive::GetDiveDescription().c_str());
+    build_information->setWordWrap(true);
+
+    QHBoxLayout* header_layout = new QHBoxLayout;
+    header_layout->addWidget(icon_label);
+    header_layout->addWidget(build_information);
+
+    return header_layout;
+}
+
+QVBoxLayout* AboutDialog::CreateVersionLayout()
+{
+    auto version_label = new QLabel("Version details:");
+
+    auto version_details = new QPlainTextEdit();
+    version_details->setPlainText(Dive::GetLongVersionString().c_str());
+    version_details->setReadOnly(true);
+    version_details->setFixedHeight(100);
+
+    QVBoxLayout* version_layout = new QVBoxLayout;
+    version_layout->addWidget(version_label);
+    version_layout->addWidget(version_details);
+
+    return version_layout;
+}
+
+QVBoxLayout* AboutDialog::CreateLicenseLayout()
+{
+    auto third_party_licenses = new QLabel("Third Party Licenses:");
+
+    auto  license_notice = new QPlainTextEdit();
+    QFile licenseFile{ QDir{ QCoreApplication::applicationDirPath() }.filePath("NOTICE") };
+    if (licenseFile.open(QIODevice::ReadOnly))
+    {
+        license_notice->setPlainText(licenseFile.readAll());
+    }
+    license_notice->setReadOnly(true);
+
+    QVBoxLayout* license_layout = new QVBoxLayout;
+    license_layout->addWidget(third_party_licenses);
+    license_layout->addWidget(license_notice);
+
+    return license_layout;
+}
+
+QHBoxLayout* AboutDialog::CreateButtonLayout()
+{
+    auto close_button = new QPushButton;
+    close_button->setText("Close");
+    connect(close_button, SIGNAL(clicked()), this, SLOT(close()));
+
+    QHBoxLayout* button_layout = new QHBoxLayout;
+    button_layout->addStretch();
+    button_layout->addWidget(close_button);
+
+    return button_layout;
 }

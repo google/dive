@@ -36,17 +36,17 @@
 
 AboutDialog::AboutDialog(QWidget* parent)
 {
-    m_main_layout = new QVBoxLayout;
-    m_main_layout->addLayout(CreateHeaderLayout());
-    m_main_layout->addLayout(CreateVersionLayout());
-    m_main_layout->addLayout(CreateLicenseLayout());
-    m_main_layout->addLayout(CreateButtonLayout());
+    auto main_layout = new QVBoxLayout;
+    main_layout->addLayout(CreateHeaderLayout());
+    main_layout->addLayout(CreateVersionLayout());
+    main_layout->addLayout(CreateLicenseLayout());
+    main_layout->addLayout(CreateButtonLayout());
 
     // Disable help icon, set size, title, and layout
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     setMinimumSize(640, 480);
     setWindowTitle("About Dive");
-    setLayout(m_main_layout);
+    setLayout(main_layout);
 }
 
 QHBoxLayout* AboutDialog::CreateHeaderLayout()

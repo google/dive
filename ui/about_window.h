@@ -42,6 +42,4 @@ private:
     QVBoxLayout* CreateLicenseLayout();
     // Close button
     QHBoxLayout* CreateButtonLayout();
-
-    QVBoxLayout* m_main_layout;
 };

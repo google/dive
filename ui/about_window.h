@@ -31,33 +31,17 @@ class AboutDialog : public QDialog
     Q_OBJECT
 
 public:
-    AboutDialog(QWidget *parent = 0);
+    AboutDialog(QWidget* parent = 0);
 
 private:
-    void CreateHeaderLayout();
-    void CreateVersionLayout();
-    void CreateLicenseLayout();
-    void CreateButtonLayout();
-
-    QVBoxLayout *m_main_layout;
-
     // Contains the Dive logo and a high-level summary
-    QHBoxLayout *m_header_layout;
-    QIcon       *m_icon;
-    QLabel      *m_icon_label;
-    QLabel      *m_build_information;
-
+    QHBoxLayout* CreateHeaderLayout();
     // Contains detailed version info for different components of the Dive tool
-    QVBoxLayout    *m_version_layout;
-    QLabel         *m_version_label;
-    QPlainTextEdit *m_version_details;
-
+    QVBoxLayout* CreateVersionLayout();
     // Contains aggregated license info
-    QVBoxLayout    *m_license_layout;
-    QLabel         *m_third_party_licenses;
-    QPlainTextEdit *m_license_notice;
-
+    QVBoxLayout* CreateLicenseLayout();
     // Close button
-    QHBoxLayout *m_button_layout;
-    QPushButton *m_close_button;
+    QHBoxLayout* CreateButtonLayout();
+
+    QVBoxLayout* m_main_layout;
 };

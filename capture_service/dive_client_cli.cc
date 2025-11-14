@@ -192,7 +192,7 @@ ABSL_FLAG(Command,
           command,
           Command::kNone,
           "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay "
-          "\n\tlist_package \n\trun \n\tcapture \n\tcleanup");
+          "\n\tlist_package \n\trun \n\tcapture \n\tcleanup \n\tversion_info");
 ABSL_FLAG(
 std::string,
 device,

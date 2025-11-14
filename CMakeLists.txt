@@ -29,6 +29,7 @@ if(MSVC)
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
+# TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_BUILD_TYPE_LOWERCASE "release")
     set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
@@ -81,8 +82,11 @@ if(GIT_FOUND)
     string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
 endif()
 
-# Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>
-set(DIVE_RELEASE_TYPE "dev" CACHE STRING "")
+set(DIVE_RELEASE_TYPE
+    "dev"
+    CACHE STRING
+    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>"
+)
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
 
 # For host tools version info
@@ -96,7 +100,6 @@ if(NOT ANDROID)
         set(HOST_PLATFORM_STRING "linux")
     endif()
 endif()
-string(STRIP "${HOST_PLATFORM_STRING}" HOST_PLATFORM_STRING)
 
 # For device libraries version info
 set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")

@@ -199,4 +199,9 @@ std::string GetLongVersionString()
     return summary;
 }
 
+std::string GetCompleteVersionString()
+{
+    return absl::StrFormat("Dive (%s)\n\n%s", GetHostShortVersionString(), GetLongVersionString());
+}
+
 }  // namespace Dive

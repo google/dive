@@ -26,6 +26,7 @@ limitations under the License.
 #include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/flags/usage_config.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "android_application.h"
@@ -48,7 +49,6 @@ enum class Command
     kRunPackage,
     kRunAndCapture,
     kCleanup,
-    kVersionInfo,
 };
 
 bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
@@ -88,11 +88,6 @@ bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
         *command = Command::kGfxrReplay;
         return true;
     }
-    if (text == "version_info")
-    {
-        *command = Command::kVersionInfo;
-        return true;
-    }
     if (text.empty())
     {
         *command = Command::kNone;
@@ -122,8 +117,6 @@ std::string AbslUnparseFlag(Command command)
         return "capture";
     case Command::kCleanup:
         return "cleanup";
-    case Command::kVersionInfo:
-        return "version_info";
 
     default:
         return absl::StrCat(command);
@@ -192,7 +185,7 @@ ABSL_FLAG(Command,
           command,
           Command::kNone,
           "list of actions: \n\tlist_device \n\tgfxr_capture \n\tgfxr_replay "
-          "\n\tlist_package \n\trun \n\tcapture \n\tcleanup \n\tversion_info");
+          "\n\tlist_package \n\trun \n\tcapture \n\tcleanup");
 ABSL_FLAG(
 std::string,
 device,
@@ -839,6 +832,9 @@ bool DeployAndRunGfxrReplay(Dive::DeviceManager&            mgr,
 
 int main(int argc, char** argv)
 {
+    absl::FlagsUsageConfig flags_usage_config;
+    flags_usage_config.version_string = Dive::GetCompleteVersionString;
+    absl::SetFlagsUsageConfig(flags_usage_config);
     absl::SetProgramUsageMessage("Run app with --help for more details");
     absl::ParseCommandLine(argc, argv);
     Command     cmd = absl::GetFlag(FLAGS_command);
@@ -859,12 +855,6 @@ int main(int argc, char** argv)
     replay_settings.metrics = absl::GetFlag(FLAGS_metrics);
     // loop_single_frame_count is parsed from --gfxr_replay_flags
 
-    if (cmd == Command::kVersionInfo)
-    {
-        std::cout << Dive::GetLongVersionString() << std::endl;
-        return 0;
-    }
-
     Dive::DeviceManager mgr;
     auto                list = mgr.ListDevice();
     if (list.empty())
@@ -883,10 +873,6 @@ int main(int argc, char** argv)
 
     switch (cmd)
     {
-    case Command::kVersionInfo:
-    {
-        break;
-    }
     case Command::kGfxrCapture:
     {
         RunAndCapture(mgr,

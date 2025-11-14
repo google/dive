@@ -23,6 +23,7 @@
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "absl/flags/usage_config.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_cat.h"
@@ -35,7 +36,6 @@ namespace
 constexpr std::array kAllowedInputFileExtensions = { ".gfxr" };
 }  // namespace
 
-ABSL_FLAG(bool, version_info, false, "Shows the version of Dive host tools and quits");
 ABSL_FLAG(std::string,
           input_file_path,
           "",
@@ -82,6 +82,9 @@ absl::Status ValidateFlags()
 
 int main(int argc, char **argv)
 {
+    absl::FlagsUsageConfig flags_usage_config;
+    flags_usage_config.version_string = Dive::GetCompleteVersionString;
+    absl::SetFlagsUsageConfig(flags_usage_config);
     absl::SetProgramUsageMessage(
     absl::StrCat("This CLI tool is intended to provide access to the dive_core"
                  "\nlibrary for utility and for testing. Currently it supports"
@@ -89,14 +92,6 @@ int main(int argc, char **argv)
                  argv[0],
                  " --help"));
     absl::ParseCommandLine(argc, argv);
-
-    // Early termination flags
-    bool show_version = absl::GetFlag(FLAGS_version_info);
-    if (show_version)
-    {
-        std::cout << Dive::GetLongVersionString() << std::endl;
-        return 0;
-    }
 
     absl::Status res = ValidateFlags();
     if (!res.ok())

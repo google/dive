@@ -61,7 +61,7 @@ absl::StatusOr<std::string> ReadFileCapped(const std::filesystem::path& file_pat
 
     assert((max_characters > 0) && (max_characters <= kMaxCharactersDeviceLibraryFile));
     char buffer[kMaxCharactersDeviceLibraryFile] = "";
-    file.read(buffer, sizeof(buffer) - 1);
+    file.read(buffer, std::min(max_characters, sizeof(buffer) - 1));
 
     return buffer;
 }
@@ -169,7 +169,7 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
                            "Libraries SHA: %s\n",
                            device_libraries_build_string,
                            DIVE_BUILD_TYPE,
-                           GetSHAString(std::string(device_info_map[kNameSha]), kLongSha));
+                           GetSHAString(device_info_map[kNameSha], kLongSha));
 }
 
 std::string GetLongVersionString()

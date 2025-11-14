@@ -84,6 +84,7 @@ else()
         absl::flags_parse
         absl::algorithm
         absl::strings
+        version_info
     )
     target_include_directories(
         dive_client_cli

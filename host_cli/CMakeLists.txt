@@ -47,6 +47,7 @@ target_link_libraries(
         absl::flags_parse
         absl::status
         absl::str_format
+        version_info
 )
 
 # ---------------------

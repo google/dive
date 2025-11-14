@@ -27,14 +27,14 @@ limitations under the License.
 namespace
 {
 
-constexpr size_t nShortSha = 7;
-constexpr size_t nLongSha = 40;
+constexpr size_t kShortSha = 7;
+constexpr size_t kLongSha = 40;
 
 // This is relative to install/
 constexpr std::string_view kProfilingPluginShaPath = "dive_profiling_plugin/SHA";
 
 // Upper bound of file size to avoid reading long files
-constexpr size_t nMaxCharactersDeviceLibraryFile = 200;
+constexpr size_t kMaxCharactersDeviceLibraryFile = 200;
 
 // Expected fields in DIVE_DEVICE_LIBRARIES_VERSION_FILENAME
 constexpr std::string_view kNameSha = "sha";
@@ -59,8 +59,8 @@ absl::StatusOr<std::string> ReadFileCapped(const std::filesystem::path& file_pat
         absl::StrFormat("Failed to open file: %s", file_path.generic_string()));
     }
 
-    assert((max_characters > 0) && (max_characters <= nMaxCharactersDeviceLibraryFile));
-    char buffer[nMaxCharactersDeviceLibraryFile] = "";
+    assert((max_characters > 0) && (max_characters <= kMaxCharactersDeviceLibraryFile));
+    char buffer[kMaxCharactersDeviceLibraryFile] = "";
     file.read(buffer, sizeof(buffer) - 1);
 
     return buffer;
@@ -69,7 +69,7 @@ absl::StatusOr<std::string> ReadFileCapped(const std::filesystem::path& file_pat
 // Returns a string of the Dive repo SHA with the first n_digits digits:
 std::string_view GetSHAString(std::string_view full_sha, size_t n_digits)
 {
-    assert((n_digits > 0) && (n_digits <= nLongSha));
+    assert((n_digits > 0) && (n_digits <= kLongSha));
     return full_sha.substr(0, n_digits);
 }
 
@@ -106,14 +106,14 @@ namespace Dive
 std::string GetHostShortVersionString()
 {
     std::string      full_sha = DIVE_VERSION_SHA1;
-    std::string_view short_sha = GetSHAString(full_sha, nShortSha);
+    std::string_view short_sha = GetSHAString(full_sha, kShortSha);
     return absl::StrFormat("%s-%s-%s", DIVE_VERSION, DIVE_RELEASE_TYPE, short_sha);
 }
 
 std::string GetHostToolsVersionInfo()
 {
     std::string      full_sha = DIVE_VERSION_SHA1;
-    std::string_view short_sha = GetSHAString(full_sha, nShortSha);
+    std::string_view short_sha = GetSHAString(full_sha, kShortSha);
     std::string      host_tools_build_string = absl::StrFormat("%s-%s-%s-%s",
                                                           DIVE_VERSION,
                                                           DIVE_RELEASE_TYPE,
@@ -123,7 +123,7 @@ std::string GetHostToolsVersionInfo()
     return absl::StrFormat("Host Tools Build: %s\nHost Tools Build Type: %s\nHost Tools SHA: %s\n",
                            host_tools_build_string,
                            DIVE_BUILD_TYPE,
-                           GetSHAString(DIVE_VERSION_SHA1, nLongSha));
+                           GetSHAString(DIVE_VERSION_SHA1, kLongSha));
 }
 
 std::string GetDiveDescription()
@@ -158,7 +158,7 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
         return "";
     }
 
-    std::string_view short_sha = GetSHAString(device_info_map[kNameSha], nShortSha);
+    std::string_view short_sha = GetSHAString(device_info_map[kNameSha], kShortSha);
     std::string      device_libraries_build_string = absl::StrFormat("%s-%s-%s-%s",
                                                                 device_info_map[kNameVersion],
                                                                 device_info_map[kNameReleaseType],
@@ -169,7 +169,7 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
                            "Libraries SHA: %s\n",
                            device_libraries_build_string,
                            DIVE_BUILD_TYPE,
-                           GetSHAString(std::string(device_info_map[kNameSha]), nLongSha));
+                           GetSHAString(std::string(device_info_map[kNameSha]), kLongSha));
 }
 
 std::string GetLongVersionString()
@@ -179,7 +179,7 @@ std::string GetLongVersionString()
     std::filesystem::path device_libraries_version_path = DIVE_INSTALL_DIR_PATH;
     device_libraries_version_path /= DIVE_DEVICE_LIBRARIES_VERSION_FILENAME;
     if (absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,
-                                                         nMaxCharactersDeviceLibraryFile);
+                                                         kMaxCharactersDeviceLibraryFile);
         ret.ok())
     {
         summary += "\n" + GetDeviceLibrariesVersionInfo(*ret);
@@ -188,7 +188,7 @@ std::string GetLongVersionString()
 
     std::filesystem::path profiling_plugin_version_path = DIVE_INSTALL_DIR_PATH;
     profiling_plugin_version_path /= kProfilingPluginShaPath;
-    if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path, nLongSha);
+    if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path, kLongSha);
         ret.ok())
     {
         std::string profiling_plugin_section = absl::StrFormat("Profiling Plugin SHA: %s\n", *ret);

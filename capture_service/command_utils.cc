@@ -18,11 +18,19 @@ limitations under the License.
 
 #include <cstdio>
 #include <cstring>
+#include <vector>
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
 #include "common/log.h"
+
+#if defined(__APPLE__)
+#    include <mach-o/dyld.h>
+#elif defined(__linux__)
+#    include <unistd.h>
+#    include <climits>
+#endif
 
 namespace Dive
 {
@@ -74,13 +82,23 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
 
 absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
 {
+#if defined(__linux__)
     char    buffer[PATH_MAX];
     ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
-    if (length > 0)
+    if (length > 0 && length < PATH_MAX)
     {
         buffer[length] = '\0';
         return std::filesystem::path(buffer).parent_path();
     }
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::vector<char> buffer(size);
+    if (_NSGetExecutablePath(buffer.data(), &size) == 0)
+    {
+        return std::filesystem::path(buffer.data()).parent_path();
+    }
+#endif
     return absl::InternalError("Failed to get executable directory.");
 }
 

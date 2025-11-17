@@ -70,10 +70,10 @@ struct AppTypeInfo
 };
 
 constexpr std::array<AppTypeInfo, 4> kAppTypeInfos = { {
-{ AppTypes::kVulkan_OpenXR, "OpenXR-Vulkan", true },
+{ AppTypes::kVulkan_OpenXR, "Vulkan (OpenXR)", true },
 { AppTypes::kVulkan_Non_OpenXR, "Vulkan (Non-OpenXR)", true },
 { AppTypes::kVulkanCLI_Non_OpenXR, "Vulkan CLI (Non-OpenXR)", true },
-{ AppTypes::kGLES_OpenXR, "OpenXR-GLES", false },
+{ AppTypes::kGLES_OpenXR, "GLES (OpenXR)", false },
 } };
 
 constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(kAppTypeInfos.begin(),

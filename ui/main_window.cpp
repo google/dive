@@ -44,20 +44,26 @@
 #include <optional>
 #include <QAbstractItemModel>
 #include <QVariant>
+#include <qwidget.h>
 
 #include "absl/strings/str_format.h"
 #include "absl/status/statusor.h"
 
 #include "about_window.h"
+#include "application_controller.h"
 #include "buffer_view.h"
+#include "capture_file_manager.h"
 #include "capture_service/constants.h"
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
 #include "command_model.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/common/common.h"
 #include "dive_core/log.h"
 #include "dive_tree_view.h"
+#include "error_dialog.h"
+#include "file_path.h"
 #include "object_names.h"
 #include "settings.h"
 #include "trace_window.h"
@@ -168,56 +174,34 @@ enum class EventMode
 };
 
 // =================================================================================================
-// MainWindow::Worker
-// =================================================================================================
-class MainWindow::Worker
-{
-public:
-    explicit Worker(QObject *parent);
-    Worker(const Worker &) = delete;
-    Worker(Worker &&) = delete;
-    Worker &operator=(const Worker &) = delete;
-    Worker &operator=(Worker &&) = delete;
-    ~Worker();
-
-    template<typename Func> void Run(Func func)
-    {
-        QMetaObject::invokeMethod(m_object, [=]() { func(); });
-    }
-
-private:
-    QThread *m_thread = nullptr;
-    QObject *m_object = nullptr;
-};
-
-MainWindow::Worker::Worker(QObject *parent)
-{
-    m_thread = new QThread(parent);
-    m_object = new QObject;
-    m_object->moveToThread(m_thread);
-    QObject::connect(m_thread, &QThread::finished, m_object, &QObject::deleteLater);
-    m_thread->start();
-}
-
-MainWindow::Worker::~Worker()
-{
-    m_thread->quit();
-    m_thread->wait();
-}
-
-// =================================================================================================
 // MainWindow
 // =================================================================================================
-MainWindow::MainWindow()
+MainWindow::MainWindow(ApplicationController &controller) :
+    m_controller(controller)
 {
-    m_worker = std::make_unique<Worker>(this);
+    controller.Register(*this);
 
     // Output logs to both the "record" as well as console output
     m_log_compound.AddLog(&m_log_record);
     m_log_compound.AddLog(&m_log_console);
 
+    m_error_dialog = new ErrorDialog(this);
+
     m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
-    m_data_core_lock.lockForRead();
+
+    m_capture_manager = new CaptureFileManager(this);
+    m_capture_manager->Start(*m_data_core);
+    m_capture_manager->GetDataCoreLock().lockForRead();
+    m_capture_acquired = true;
+
+    QObject::connect(m_capture_manager,
+                     &CaptureFileManager::FileLoadingFinished,
+                     this,
+                     &MainWindow::OnFileLoaded);
+    QObject::connect(m_capture_manager,
+                     &CaptureFileManager::TraceStatsUpdated,
+                     this,
+                     &MainWindow::OnTraceStatsUpdated);
 
     m_event_selection = new EventSelection(m_data_core->GetCommandHierarchy());
 
@@ -468,9 +452,7 @@ MainWindow::MainWindow()
         m_command_tab_view = new CommandTabView(m_data_core->GetCommandHierarchy());
         m_shader_view = new ShaderView(*m_data_core);
 
-        m_trace_stats = std::make_unique<Dive::TraceStats>();
         m_capture_stats = std::make_unique<Dive::CaptureStats>();
-        m_async_capture_stats = std::make_unique<Dive::CaptureStats>();
         m_overview_tab_view = new OverviewTabView(m_data_core->GetCaptureMetadata(),
                                                   *m_capture_stats);
         m_event_state_view = new EventStateView(*m_data_core);
@@ -486,24 +468,27 @@ MainWindow::MainWindow()
 
         m_frame_tab_view = new FrameTabView(this);
 
-        m_text_file_view = new TextFileView(*m_data_core);
-        m_text_file_view->setParent(this);
-        m_text_file_view_tab_index = m_tab_widget->addTab(m_text_file_view, "Text File");
-
-        m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-
-        m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
-        m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
-        m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
-        m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
-
 #if defined(ENABLE_CAPTURE_BUFFERS)
         m_buffer_view = new BufferView(*m_data_core);
-        m_tab_widget->addTab(m_buffer_view, "Buffers");
 #endif
+        m_text_file_view = new TextFileView(*m_data_core);
 
-        // Set to not visible by default.
-        SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, false);
+        m_tabs.frame = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
+        m_tabs.command = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
+        m_tabs.event_state = m_tab_widget->addTab(m_event_state_view, "Event State");
+        m_tabs.gpu_timing = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
+        m_tabs.perf_counter = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
+        m_tabs.text_file = m_tab_widget->addTab(m_text_file_view, "Text File");
+        m_tabs.shader = m_tab_widget->addTab(m_shader_view, "Shaders");
+#if defined(ENABLE_CAPTURE_BUFFERS)
+        m_tabs.buffer = m_tab_widget->addTab(m_buffer_view, "Buffers");
+#endif
+        // Note: qt bug, the last widget can't be set as invisible, otherwise navagation breaks
+        //       when widget width is smaller than required to show all tabs.
+        //       Workaround: keep overview tab always visible.
+        m_tabs.overview = m_tab_widget->addTab(m_overview_tab_view, "Overview");
+
+        UpdateTabAvailability(0);
     }
     // Side panel
     // TODO (b/445754645) Remove the PropertyPanel and replace with a tooltip or overlay.
@@ -533,12 +518,7 @@ MainWindow::MainWindow()
     LoadAvailableMetrics();
 
     m_trace_dig = new TraceDialog(this);
-    m_analyze_dig = new AnalyzeDialog(m_available_metrics.get() ?
-                                      std::optional<
-                                      std::reference_wrapper<const Dive::AvailableMetrics>>(
-                                      std::ref(*m_available_metrics.get())) :
-                                      std::nullopt,
-                                      this);
+    m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
 
     m_overlay = new OverlayHelper(this);
     m_overlay->Initialize(horizontal_splitter);
@@ -566,7 +546,6 @@ MainWindow::MainWindow()
                      &MainWindow::OnTraceAvailable);
 
     QObject::connect(this, &MainWindow::FileLoaded, m_text_file_view, &TextFileView::OnFileLoaded);
-    QObject::connect(this, &MainWindow::FileLoaded, this, &MainWindow::OnFileLoaded);
     QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchTrigger()));
 
     QObject::connect(m_event_search_bar,
@@ -602,11 +581,6 @@ MainWindow::MainWindow()
                      this,
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(this, &MainWindow::PendingScreenshot, this, &MainWindow::OnPendingScreenshot);
-    QObject::connect(this,
-                     &MainWindow::AsyncTraceStatsDone,
-                     this,
-                     &MainWindow::OnAsyncTraceStatsDone,
-                     Qt::QueuedConnection);
 
     CreateActions();
     CreateMenus();
@@ -631,7 +605,10 @@ MainWindow::MainWindow()
     m_hover_help->SetDataCore(m_data_core.get());
     setAccessibleName("DiveMainWindow");
 
-    m_plugin_manager = std::unique_ptr<Dive::PluginLoader>(new Dive::PluginLoader(*this));
+    m_plugin_manager = std::make_unique<Dive::PluginLoader>();
+    m_plugin_manager->Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow, this);
+
+    controller.MainWindowInitialized();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -845,36 +822,6 @@ void MainWindow::OnGfxrFilterModeChange()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::ResetTabWidget()
-{
-    // Disconnect OnTabViewChange so that it is not triggered during the reset of the tab widget.
-    QObject::disconnect(m_tab_widget,
-                        &QTabWidget::currentChanged,
-                        this,
-                        &MainWindow::OnTabViewChange);
-
-    // Remove all the tabs.
-    while (m_tab_widget->count() > 0)
-    {
-        m_tab_widget->removeTab(0);
-    }
-
-    // Reset all of the tab indices.
-    m_gfxr_vulkan_command_arguments_view_tab_index = -1;
-    m_text_file_view_tab_index = -1;
-    m_overview_view_tab_index = -1;
-    m_command_view_tab_index = -1;
-    m_shader_view_tab_index = -1;
-    m_event_state_view_tab_index = -1;
-    m_perf_counter_view_tab_index = -1;
-    m_gpu_timing_view_tab_index = -1;
-    m_frame_view_tab_index = -1;
-
-    // Reconnect OnTabViewChange.
-    QObject::connect(m_tab_widget, &QTabWidget::currentChanged, this, &MainWindow::OnTabViewChange);
-}
-
-//--------------------------------------------------------------------------------------------------
 void MainWindow::OnDiveFileLoaded()
 {
     // Reset models and views that display data from the capture
@@ -896,32 +843,7 @@ void MainWindow::OnDiveFileLoaded()
 
     m_command_hierarchy_model->BeginResetModel();
 
-    // Reset the tab widget.
-    ResetTabWidget();
-
-    // Add the tabs required for an Dive file or .rd and .gfxr file.
-    m_gfxr_vulkan_command_arguments_view_tab_index =
-    m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
-    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
-    m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
-    m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-    m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
-    m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
-    m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
-    m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    // If m_buffer_view is dynamically created/deleted, handle it here.
-    // If it's a fixed member, ensure it's reset.
-    if (!m_buffer_view)
-    {  // Only create if null, otherwise just reset
-        m_buffer_view = new BufferView(*m_data_core);
-    }
-    else
-    {
-        // m_buffer_view->Reset(); // Assuming it has a reset method
-    }
-    m_tab_widget->addTab(m_buffer_view, "Buffers");
-#endif
+    UpdateTabAvailability(TabMaskBits::kViewsForCorrelated);
 
     // Left Panel contains gfxr display
     m_command_hierarchy_view->setModel(m_gfxr_vulkan_commands_filter_proxy_model);
@@ -983,27 +905,7 @@ void MainWindow::OnAdrenoRdFileLoaded()
 
     m_command_hierarchy_model->BeginResetModel();
 
-    // Reset the tab widget.
-    ResetTabWidget();
-
-    // Add the tabs required for an AdrenoRd file.
-    m_overview_view_tab_index = m_tab_widget->addTab(m_overview_tab_view, "Overview");
-    m_command_view_tab_index = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
-    m_shader_view_tab_index = m_tab_widget->addTab(m_shader_view, "Shaders");
-    m_event_state_view_tab_index = m_tab_widget->addTab(m_event_state_view, "Event State");
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    // If m_buffer_view is dynamically created/deleted, handle it here.
-    // If it's a fixed member, ensure it's reset.
-    if (!m_buffer_view)
-    {  // Only create if null, otherwise just reset
-        m_buffer_view = new BufferView(*m_data_core);
-    }
-    else
-    {
-        // m_buffer_view->Reset(); // Assuming it has a reset method
-    }
-    m_tab_widget->addTab(m_buffer_view, "Buffers");
-#endif
+    UpdateTabAvailability(TabMaskBits::kViewsForRdFile);
 
     m_filter_model->SetMode(kDefaultFilterMode);
     m_command_hierarchy_view->setModel(m_filter_model);
@@ -1047,20 +949,13 @@ void MainWindow::OnGfxrFileLoaded()
 
     m_gfxr_vulkan_command_hierarchy_model->BeginResetModel();
 
-    // Reset the tab widget.
-    ResetTabWidget();
-
     m_gfxr_vulkan_commands_filter_proxy_model->setSourceModel(
     m_gfxr_vulkan_command_hierarchy_model);
     m_command_hierarchy_view->setModel(m_gfxr_vulkan_commands_filter_proxy_model);
 
-    ConnectGfxrFileTabs();
+    UpdateTabAvailability(TabMaskBits::kViewsForGfxrFile);
 
-    m_gfxr_vulkan_command_arguments_view_tab_index =
-    m_tab_widget->addTab(m_gfxr_vulkan_command_arguments_tab_view, "Command Arguments");
-    m_perf_counter_view_tab_index = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
-    m_gpu_timing_view_tab_index = m_tab_widget->addTab(m_gpu_timing_tab_view, "Gpu Timing");
-    m_frame_view_tab_index = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
+    ConnectGfxrFileTabs();
 
     // Ensure the All Event topology is displayed.
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
@@ -1088,187 +983,57 @@ void MainWindow::StartTraceStats()
 {
     *m_capture_stats = {};
     m_overview_tab_view->LoadStatistics();
-
-    if (m_async_capture_stats_state != AsyncCaptureStatsState::kNone)
-    {
-        if (!m_async_capture_stats_context.IsNull())
-        {
-            m_async_capture_stats_context->Cancel();
-        }
-        m_async_capture_stats_state = AsyncCaptureStatsState::kPendingRestart;
-        return;
-    }
-
-    m_async_capture_stats_context = Dive::SimpleContext::Create();
-    m_async_capture_stats_state = AsyncCaptureStatsState::kRunning;
-    m_worker->Run([=, this, context = Dive::Context{ m_async_capture_stats_context }]() {
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-        QReadLocker locker(&m_data_core_lock);
-        // Gather the trace stats and display in the overview tab
-        m_trace_stats->GatherTraceStats(context,
-                                        m_data_core->GetCaptureMetadata(),
-                                        *m_async_capture_stats);
-
-        [[maybe_unused]] int64_t
-        time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::steady_clock::now() - begin)
-                               .count();
-        if (context.Cancelled())
-        {
-            DIVE_DEBUG_LOG("Trace stats cancelled after %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-        }
-        else
-        {
-            DIVE_DEBUG_LOG("Time used to load the trace stats is %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-        }
-        AsyncTraceStatsDone();
-    });
+    m_capture_manager->GatherTraceStats();
 }
 
-void MainWindow::OnAsyncTraceStatsDone()
+void MainWindow::OnTraceStatsUpdated()
 {
-    *m_capture_stats = *m_async_capture_stats;
-
-    bool restart = (m_async_capture_stats_state == AsyncCaptureStatsState::kPendingRestart);
-    m_async_capture_stats_state = AsyncCaptureStatsState::kNone;
-
-    if (restart)
-    {
-        StartTraceStats();
-        return;
-    }
+    m_capture_manager->FillCaptureStatsResult(*m_capture_stats);
     m_overview_tab_view->LoadStatistics();
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::RunOnUIThread(std::function<void()> f)
-{
-
-    QMetaObject::invokeMethod(this, [=]() { f(); });
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnLoadFailure(Dive::CaptureData::LoadResult result, const std::string &file_name)
-{
-    if (result == Dive::CaptureData::LoadResult::kSuccess)
-    {
-        return;
-    }
-
-    // Do dialog on main thread.
-    QMetaObject::invokeMethod(this, [=, this]() {
-        HideOverlay();
-        QString error_msg;
-        if (result == Dive::CaptureData::LoadResult::kFileIoError)
-            error_msg = QString("File I/O error!");
-        else if (result == Dive::CaptureData::LoadResult::kCorruptData)
-            error_msg = QString("File corrupt!");
-        else if (result == Dive::CaptureData::LoadResult::kVersionError)
-            error_msg = QString("Incompatible version!");
-        QMessageBox::critical(this,
-                              (QString("Unable to open file: ") + file_name.c_str()),
-                              error_msg);
-    });
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnParseFailure(const std::string &file_name)
-{
-
-    // Do dialog on main thread.
-    QMetaObject::invokeMethod(this, [=, this]() {
-        HideOverlay();
-        QMessageBox::critical(this,
-                              QString("Error parsing file"),
-                              (QString("Unable to parse file: ") + file_name.c_str()));
-    });
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnUnsupportedFile(const std::string &file_name)
-{
-    QMetaObject::invokeMethod(this, [=, this]() {
-        QString error_msg = QString("File type not supported!");
-        QMessageBox::critical(this,
-                              (QString("Unable to open file: ") + file_name.c_str()),
-                              error_msg);
-    });
 }
 
 //--------------------------------------------------------------------------------------------------
 bool MainWindow::LoadFile(const std::string &file_name, bool is_temp_file, bool async)
 {
-    if (m_loading_result.valid())
-    {
-        // We are still loading something else.
-        return false;
-    }
+    bool release_capture = m_capture_acquired;
+    m_capture_acquired = false;
 
-    // We don't want other UI interaction as they cause race conditions.
-    setDisabled(true);
+    m_gfxr_capture_loaded = false;
+    m_correlated_capture_loaded = false;
+
+    if (release_capture)
+    {
+        // We don't want other UI interaction as they cause race conditions.
+        setDisabled(true);
+
+        m_log_record.Reset();
+
+        m_command_hierarchy_view->setCurrentIndex(QModelIndex());
+
+        // Disconnect the signals for all of the possible tabs.
+        DisconnectAllTabs();
+
+        // Clear vectors of draw call indices as they are only used for a correlated view.
+        m_filter_model->ClearDrawCallIndices();
+
+        // Discard associated timing results.
+        m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
+        m_gpu_timing_model->OnGpuTimingResultsGenerated("");
+        m_capture_manager->GetDataCoreLock().unlock();
+
+        *m_capture_stats = {};
+        m_overview_tab_view->LoadStatistics();
+    }
 
     m_progress_tracker.sendMessage("Loading " + file_name);
+    m_last_request = LastRequest{ .file_name = file_name, .is_temp_file = is_temp_file };
 
-    m_log_record.Reset();
-
-    m_command_hierarchy_view->setCurrentIndex(QModelIndex());
-
-    // Disconnect the signals for all of the possible tabs.
-    DisconnectAllTabs();
-
-    // Clear vectors of draw call indices as they are only used for a correlated view.
-    m_filter_model->ClearDrawCallIndices();
-
-    // Discard associated timing results.
-    m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
-    m_gpu_timing_model->OnGpuTimingResultsGenerated("");
-    m_data_core_lock.unlock();
-
-    if (!m_async_capture_stats_context.IsNull())
-    {
-        m_async_capture_stats_context->Cancel();
-    }
-    if (async)
-    {
-        // Start async file loading, at the end of loading FileLoaded will be triggered.
-        m_loading_result = std::async([this, file_name = file_name, is_temp_file = is_temp_file]() {
-            std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-            auto file_type = LoadFileImpl(file_name, is_temp_file);
-            [[maybe_unused]] int64_t
-            time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - begin)
-                                   .count();
-
-            DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
-                           (time_used_to_load_ms / 1000.0));
-            // Now that the file is loaded, we can send a signal to UI thread.
-            FileLoaded();
-            return LoadFileResult{ file_type, file_name, is_temp_file };
-        });
-    }
-    else
-    {
-        // This code path is for UI element that can't handle async operations.
-        // e.g. AnalyzeWindow
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-        auto file_type = LoadFileImpl(file_name, is_temp_file);
-        [[maybe_unused]] int64_t
-        time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::steady_clock::now() - begin)
-                               .count();
-        DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n",
-                       (time_used_to_load_ms / 1000.0));
-
-        std::promise<LoadFileResult> p;
-        p.set_value(LoadFileResult{ file_type, file_name, is_temp_file });
-        m_loading_result = p.get_future();
-        FileLoaded();
-    }
+    auto reference = Dive::FilePath{ file_name };
+    auto components = m_capture_manager->ResolveComponents(reference);
+    m_capture_manager->LoadFile(reference, components);
+    // Clear task queue for fresh capture.
+    m_loading_pending_task.clear();
+    EmitLoadAssociatedFileTasks(components);
     return true;
 }
 
@@ -1288,7 +1053,7 @@ void MainWindow::OnPendingPerfCounterResults(const QString &file_name)
             qDebug() << "Loaded: " << file_path.string().c_str();
         }
     };
-    if (m_loading_result.valid())
+    if (!m_capture_acquired)
     {
         m_loading_pending_task.push_back(task);
         return;
@@ -1309,7 +1074,7 @@ void MainWindow::OnPendingGpuTimingResults(const QString &file_name)
             qDebug() << "Loaded: " << file_name;
         }
     };
-    if (m_loading_result.valid())
+    if (!m_capture_acquired)
     {
         m_loading_pending_task.push_back(task);
         return;
@@ -1330,7 +1095,7 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
             qDebug() << "Loaded: " << file_name;
         }
     };
-    if (m_loading_result.valid())
+    if (!m_capture_acquired)
     {
         m_loading_pending_task.push_back(task);
         return;
@@ -1339,208 +1104,56 @@ void MainWindow::OnPendingScreenshot(const QString &file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-MainWindow::LoadedFileType MainWindow::LoadFileImpl(const std::string &file_name, bool is_temp_file)
+void MainWindow::EmitLoadAssociatedFileTasks(const Dive::ComponentFilePaths &components)
 {
-    QWriteLocker locker(&m_data_core_lock);
-    // Note: this function might not run on UI thread, thus can't do any UI modification.
-
-    // Check if the file loaded is a .gfxr file.
-    m_gfxr_capture_loaded = Dive::IsGfxrFile(file_name);
-
-    // Reset the correlated capture variable
-    m_correlated_capture_loaded = false;
-
-    if (m_gfxr_capture_loaded)
+    if (!components.perf_counter_csv.empty() &&
+        std::filesystem::exists(components.perf_counter_csv))
     {
-        // Convert the filename to a string to perform a replacement.
-        std::string potential_asset_name(file_name);
-
-        const std::string trim_str = "_trim_trigger";
-        const std::string asset_str = "_asset_file";
-
-        // Find and replace the last occurrence of "trim_trigger" part of the filename.
-        size_t pos = potential_asset_name.rfind(trim_str);
-        if (pos != std::string::npos)
-        {
-            potential_asset_name.replace(pos, trim_str.length(), asset_str);
-        }
-
-        // Create a path object to the asset file.
-        std::filesystem::path asset_file_path(potential_asset_name);
-        asset_file_path.replace_extension(".gfxa");
-
-        // Check if the required asset file exists.
-        bool asset_file_exists = std::filesystem::exists(asset_file_path);
-
-        if (!asset_file_exists)
-        {
-            RunOnUIThread([=, this]() {
-                HideOverlay();
-                QString title = QString("Unable to open file: %1").arg(file_name.c_str());
-                QString description = QString("Required .gfxa file: %1 not found!")
-                                      .arg(QString::fromStdString(asset_file_path.string()));
-                QMessageBox::critical(this, title, description);
-                m_gfxr_capture_loaded = false;
-            });
-            return LoadedFileType::kUnknown;
-        }
-
-        // Paths of associated files produced by Dive's GFXR replay
-        std::filesystem::path    capture_file_path = file_name;
-        Dive::ComponentFilePaths local_component_files;
-        {
-            absl::StatusOr<Dive::ComponentFilePaths>
-            ret = Dive::GetComponentFilesHostPaths(capture_file_path.parent_path(),
-                                                   capture_file_path.stem().string());
-            if (!ret.ok())
-            {
-                std::string err_msg = absl::StrFormat("Failed to get component files: %s",
-                                                      ret.status().message());
-                qDebug() << err_msg.c_str();
-                return LoadedFileType::kUnknown;
-            }
-            local_component_files = *ret;
-        }
-
-        // Check if there is a corresponding .rd file
-        if (std::filesystem::exists(local_component_files.pm4_rd))
-        {
-            m_gfxr_capture_loaded = false;
-            m_correlated_capture_loaded = true;
-        }
-
-        // Check if there is existing perf counter data
         qDebug() << "Attempting to load perf counter data from: "
-                 << local_component_files.perf_counter_csv.string().c_str();
-        if (std::filesystem::exists(local_component_files.perf_counter_csv))
-        {
-            PendingPerfCounterResults(
-            QString::fromStdString(local_component_files.perf_counter_csv.string()));
-        }
-        else
-        {
-            PendingPerfCounterResults("");
-            qDebug() << "Failed to find perf counter data";
-        }
-
-        // Check if there is existing gpu timing data
-        qDebug() << "Attempting to load gpu timing data from: "
-                 << local_component_files.gpu_timing_csv.string().c_str();
-        if (std::filesystem::exists(local_component_files.gpu_timing_csv))
-        {
-            PendingGpuTimingResults(
-            QString::fromStdWString(local_component_files.gpu_timing_csv.wstring()));
-        }
-        else
-        {
-            PendingGpuTimingResults("");
-            qDebug() << "Failed to find gpu timing data";
-        }
-
-        // Check if there is an existing screenshot
-        qDebug() << "Attempting to load screenshot from: "
-                 << local_component_files.screenshot_png.string().c_str();
-        if (std::filesystem::exists(local_component_files.screenshot_png))
-        {
-            PendingScreenshot(
-            QString::fromStdWString(local_component_files.screenshot_png.wstring()));
-            qDebug() << "Loaded: " << local_component_files.screenshot_png.string().c_str();
-        }
-        else
-        {
-            PendingScreenshot("");
-            qDebug() << "Failed to find gfxr capture screenshot";
-        }
-    }
-
-    LoadedFileType file_type = LoadedFileType::kUnknown;
-    if (m_gfxr_capture_loaded)
-    {
-        file_type = LoadedFileType::kGfxrFile;
-    }
-    else if (m_correlated_capture_loaded)
-    {
-        file_type = LoadedFileType::kDiveFile;
-    }
-    else if (Dive::IsDiveFile(file_name))
-    {
-        qDebug() << "WARNING: .dive files not well supported";
-        file_type = LoadedFileType::kRdFile;
-    }
-    else if (Dive::IsRdFile(file_name))
-    {
-        file_type = LoadedFileType::kRdFile;
+                 << components.perf_counter_csv.string().c_str();
+        PendingPerfCounterResults(QString::fromStdString(components.perf_counter_csv.string()));
     }
     else
     {
-        file_type = LoadedFileType::kUnknown;
+        PendingPerfCounterResults("");
     }
 
-    switch (file_type)
+    if (!components.gpu_timing_csv.empty() && std::filesystem::exists(components.gpu_timing_csv))
     {
-    case LoadedFileType::kUnknown:
-        OnUnsupportedFile(file_name);
-        break;
-    case LoadedFileType::kDiveFile:
+        qDebug() << "Attempting to load gpu timing data from: "
+                 << components.gpu_timing_csv.string().c_str();
+        PendingGpuTimingResults(QString::fromStdWString(components.gpu_timing_csv.wstring()));
+    }
+    else
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(file_name);
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
-        {
-            OnLoadFailure(load_res, file_name);
-            return LoadedFileType::kUnknown;
-        }
+        PendingGpuTimingResults("");
+    }
 
-        if (!m_data_core->ParseDiveCaptureData())
-        {
-            OnParseFailure(file_name);
-            return LoadedFileType::kUnknown;
-        }
-    }
-    break;
-    case LoadedFileType::kRdFile:
+    if (!components.screenshot_png.empty() && std::filesystem::exists(components.screenshot_png))
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(file_name);
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
-        {
-            OnLoadFailure(load_res, file_name);
-            return LoadedFileType::kUnknown;
-        }
-
-        if (!m_data_core->ParsePm4CaptureData())
-        {
-            OnParseFailure(file_name);
-            return LoadedFileType::kUnknown;
-        }
+        qDebug() << "Attempting to load screenshot from: "
+                 << components.screenshot_png.string().c_str();
+        PendingScreenshot(QString::fromStdWString(components.screenshot_png.wstring()));
     }
-    break;
-    case LoadedFileType::kGfxrFile:
+    else
     {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadGfxrCaptureData(file_name);
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
-        {
-            OnLoadFailure(load_res, file_name);
-            return LoadedFileType::kUnknown;
-        }
-
-        if (!m_data_core->ParseGfxrCaptureData())
-        {
-            OnParseFailure(file_name);
-            return LoadedFileType::kUnknown;
-        }
+        PendingScreenshot("");
     }
-    break;
-    }
-    return file_type;
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnFileLoaded()
+void MainWindow::OnFileLoaded(const LoadFileResult &loaded_file)
 {
-    DIVE_ASSERT(m_loading_result.valid());
+    DIVE_ASSERT(!m_capture_acquired);
+    m_capture_manager->GetDataCoreLock().lockForRead();
+    m_capture_acquired = true;
 
-    // It should return almost immediately, the signal is sent just before async call return.
-    auto result = m_loading_result.get();
-    m_data_core_lock.lockForRead();
+    bool load_succeed = (loaded_file.status == LoadFileResult::Status::kSuccess);
+    if (!load_succeed)
+    {
+        m_loading_pending_task.clear();
+        m_error_dialog->OnLoadingFailure(loaded_file);
+    }
 
     std::vector<std::function<void()>> tasks;
     std::swap(tasks, m_loading_pending_task);
@@ -1553,45 +1166,53 @@ void MainWindow::OnFileLoaded()
     setDisabled(false);
     HideOverlay();
 
-    switch (result.file_type)
+    if (load_succeed)
     {
-    case LoadedFileType::kUnknown:
-        return;
-    case LoadedFileType::kDiveFile:
-        OnDiveFileLoaded();
-        ExpandResizeHierarchyView(*m_command_hierarchy_view,
-                                  *m_gfxr_vulkan_commands_filter_proxy_model);
-        ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
-        break;
-    case LoadedFileType::kRdFile:
-        OnAdrenoRdFileLoaded();
-        ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
-        break;
-    case LoadedFileType::kGfxrFile:
-        OnGfxrFileLoaded();
-        ExpandResizeHierarchyView(*m_command_hierarchy_view,
-                                  *m_gfxr_vulkan_commands_filter_proxy_model);
-        break;
-    }
+        switch (loaded_file.file_type)
+        {
+        case LoadFileResult::FileType::kUnknown:
+            break;
+        case LoadFileResult::FileType::kCorrelatedFiles:
+            m_correlated_capture_loaded = true;
+            OnDiveFileLoaded();
+            ExpandResizeHierarchyView(*m_command_hierarchy_view,
+                                      *m_gfxr_vulkan_commands_filter_proxy_model);
+            ExpandResizeHierarchyView(*m_pm4_command_hierarchy_view, *m_filter_model);
+            break;
+        case LoadFileResult::FileType::kRdFile:
+            OnAdrenoRdFileLoaded();
+            ExpandResizeHierarchyView(*m_command_hierarchy_view, *m_filter_model);
+            break;
+        case LoadFileResult::FileType::kGfxrFile:
+            m_gfxr_capture_loaded = true;
+            OnGfxrFileLoaded();
+            ExpandResizeHierarchyView(*m_command_hierarchy_view,
+                                      *m_gfxr_vulkan_commands_filter_proxy_model);
+            break;
+        }
 
-    m_hover_help->SetCurItem(HoverHelp::Item::kNone);
-    m_capture_file = QString(result.file_name.c_str());
-    qDebug() << "MainWindow::OnFileLoaded: m_capture_file: " << m_capture_file;
-    QFileInfo file_info(m_capture_file);
-    SetCurrentFile(m_capture_file, result.is_temp_file);
-    emit SetSaveAsMenuStatus(true);
-    if (m_unsaved_capture_path.empty())
-    {
-        emit SetSaveMenuStatus(false);
+        m_hover_help->SetCurItem(HoverHelp::Item::kNone);
+        m_capture_file = QString(m_last_request.file_name.c_str());
+        qDebug() << "MainWindow::OnFileLoaded: m_capture_file: " << m_capture_file;
+        QFileInfo file_info(m_capture_file);
+        SetCurrentFile(m_capture_file, m_last_request.is_temp_file);
+        emit SetSaveAsMenuStatus(true);
+        if (m_unsaved_capture_path.empty())
+        {
+            emit SetSaveMenuStatus(false);
+        }
+        else
+        {
+            emit SetSaveMenuStatus(true);
+        }
+        ShowTempStatus(tr("File loaded successfully"));
     }
     else
     {
-        emit SetSaveMenuStatus(true);
+        SetCurrentFile("", false);
     }
-    HideOverlay();
-    ShowTempStatus(tr("File loaded successfully"));
 
-    UpdateTabAvailability();
+    emit FileLoaded();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1615,12 +1236,6 @@ void MainWindow::OnOpenFile()
                                   (QString("Unable to open file: ") + file_name));
         }
     }
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnGFXRCapture()
-{
-    emit OnCapture(false, true);
 }
 
 // =================================================================================================
@@ -1681,9 +1296,8 @@ void MainWindow::OnCaptureTrigger()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnCapture(bool is_capture_delayed, bool is_gfxr_capture)
+void MainWindow::OnCapture(bool is_capture_delayed)
 {
-    m_trace_dig->UseGfxrCapture(is_gfxr_capture);
     m_trace_dig->UpdateDeviceList(true);
     m_trace_dig->open();
 }
@@ -1883,7 +1497,6 @@ void MainWindow::ResetHorizontalScroll(const DiveTreeView &tree_view)
     if (h_scroll_bar)
     {
         h_scroll_bar->triggerAction(QAbstractSlider::SliderToMinimum);
-        QApplication::processEvents();
     }
 }
 
@@ -1893,7 +1506,6 @@ void MainWindow::ResetVerticalScroll(const DiveTreeView &tree_view)
     if (v_scroll_bar)
     {
         v_scroll_bar->triggerAction(QAbstractSlider::SliderToMinimum);
-        QApplication::processEvents();
     }
 }
 
@@ -1946,7 +1558,7 @@ void MainWindow::OnSearchTrigger()
     SearchBar   *tab_wiget_search_bar;
     QPushButton *tab_wiget_search_button;
 
-    if (current_index == m_command_view_tab_index)
+    if (current_index == m_tabs.command)
     {
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName);
         tab_wiget_search_button = current_tab->findChild<QPushButton *>(
@@ -1958,7 +1570,7 @@ void MainWindow::OnSearchTrigger()
         }
         tab_wiget_search_button->show();
     }
-    else if (current_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+    else if (current_index == m_tabs.gfxr_vulkan_command_arguments)
     {
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(
         kGfxrVulkanCommandArgumentsSearchBarName);
@@ -1972,7 +1584,7 @@ void MainWindow::OnSearchTrigger()
         }
         tab_wiget_search_button->show();
     }
-    else if (current_index == m_perf_counter_view_tab_index)
+    else if (current_index == m_tabs.perf_counter)
     {
         tab_wiget_search_bar = current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName);
         tab_wiget_search_button = current_tab->findChild<QPushButton *>(
@@ -2090,19 +1702,9 @@ void MainWindow::CreateActions()
     // Capture action
     m_capture_action = new QAction(tr("&Capture"), this);
     m_capture_action->setStatusTip(tr("Capture a Dive trace"));
+    m_capture_action->setIcon(QIcon(":/images/capture.png"));
     m_capture_action->setShortcut(QKeySequence("f5"));
     connect(m_capture_action, &QAction::triggered, this, &MainWindow::OnNormalCapture);
-
-    // PM4 Capture action
-    m_pm4_capture_action = new QAction(tr("PM4 Capture"), this);
-    m_pm4_capture_action->setStatusTip(tr("Capture a Dive trace (PM4)"));
-    m_pm4_capture_action->setShortcut(QKeySequence("f5"));
-    connect(m_pm4_capture_action, &QAction::triggered, this, &MainWindow::OnNormalCapture);
-    // GFXR Capture action
-    m_gfxr_capture_action = new QAction(tr("GFXR Capture"), this);
-    m_gfxr_capture_action->setStatusTip(tr("Capture a Dive trace (GFXR)"));
-    m_gfxr_capture_action->setShortcut(QKeySequence("f6"));
-    connect(m_gfxr_capture_action, &QAction::triggered, this, &MainWindow::OnGFXRCapture);
 
     // Capture with delay action
     m_capture_delay_action = new QAction(tr("Capture with delay"), this);
@@ -2146,8 +1748,7 @@ void MainWindow::CreateMenus()
     m_file_menu->addAction(m_exit_action);
 
     m_capture_menu = menuBar()->addMenu(tr("&Capture"));
-    m_capture_menu->addAction(m_pm4_capture_action);
-    m_capture_menu->addAction(m_gfxr_capture_action);
+    m_capture_menu->addAction(m_capture_action);
 
     m_analyze_menu = menuBar()->addMenu(tr("&Analyze"));
     m_analyze_menu->addAction(m_analyze_action);
@@ -2160,12 +1761,6 @@ void MainWindow::CreateMenus()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::CreateToolBars()
 {
-    // Create the capture button for the toolbar
-    QToolButton *capture_button = new QToolButton(this);
-    capture_button->setPopupMode(QToolButton::InstantPopup);
-    capture_button->setMenu(m_capture_menu);
-    capture_button->setIcon(QIcon(":/images/capture.png"));
-
     QToolButton *open_button = new QToolButton(this);
     open_button->setPopupMode(QToolButton::MenuButtonPopup);
     open_button->setDefaultAction(m_open_action);
@@ -2174,7 +1769,7 @@ void MainWindow::CreateToolBars()
     m_file_tool_bar = addToolBar(tr("&File"));
     m_file_tool_bar->addWidget(open_button);
     m_file_tool_bar->addAction(m_save_action);
-    m_file_tool_bar->addWidget(capture_button);
+    m_file_tool_bar->addAction(m_capture_action);
     m_file_tool_bar->addAction(m_analyze_action);
 }
 
@@ -2189,21 +1784,21 @@ void MainWindow::CreateShortcuts()
     m_search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), this);
     connect(m_search_tab_view_shortcut, &QShortcut::activated, [this]() {
         int current_tab_index = m_tab_widget->currentIndex();
-        if (current_tab_index == m_command_view_tab_index)
+        if (current_tab_index == m_tabs.command)
         {
             m_command_tab_view->OnSearchCommandBuffer();
         }
-        else if (current_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+        else if (current_tab_index == m_tabs.gfxr_vulkan_command_arguments)
         {
             m_gfxr_vulkan_command_arguments_tab_view->OnSearchCommandArgs();
         }
-        else if (current_tab_index == m_perf_counter_view_tab_index)
+        else if (current_tab_index == m_tabs.perf_counter)
         {
             m_perf_counter_tab_view->OnSearchCounters();
         }
         else
         {
-            m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+            m_tab_widget->setCurrentIndex(m_tabs.command);
             m_command_tab_view->OnSearchCommandBuffer();
         }
         ResetEventSearchBar();
@@ -2216,30 +1811,30 @@ void MainWindow::CreateShortcuts()
     // Overview Shortcut
     m_overview_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
     connect(m_overview_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_overview_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.overview);
     });
     // Commands Shortcut
     m_command_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
     connect(m_command_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_command_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.command);
     });
     // Shaders Shortcut
     m_shader_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
     connect(m_shader_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.shader);
     });
     // Event State Shortcut
     m_event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
     connect(m_event_state_tab_shortcut, &QShortcut::activated, [this]() {
-        m_tab_widget->setCurrentIndex(m_event_state_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.event_state);
     });
     // Gfxr Vulkan Command Arguments Shortcut
     m_gfxr_vulkan_command_arguments_tab_shortcut =
     new QShortcut(QKeySequence(SHORTCUT_GFXR_VULKAN_COMMAND_ARGUMENTS_TAB), this);
     connect(m_gfxr_vulkan_command_arguments_tab_shortcut, &QShortcut::activated, [this]() {
-        if (m_gfxr_vulkan_command_arguments_view_tab_index != -1)
+        if (m_tabs.gfxr_vulkan_command_arguments != -1)
         {
-            m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+            m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
         }
     });
 }
@@ -2332,16 +1927,33 @@ QString MainWindow::StrippedName(const QString &fullFileName)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::UpdateTabAvailability()
+void MainWindow::UpdateTabAvailability(TabMask mask)
 {
-    bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
-    SetTabAvailable(m_tab_widget, m_text_file_view_tab_index, has_text);
-
-    SetTabAvailable(m_tab_widget, m_event_state_view_tab_index, true);
-
-#ifndef NDEBUG
-    SetTabAvailable(m_tab_widget, m_event_timing_view_tab_index, true);
+    m_tabs_updating = true;
+    if (m_tabs.overview >= 0)
+    {
+        m_tab_widget->setTabEnabled(m_tabs.overview, (mask & TabMaskBits::kOverview) > 0);
+    }
+    SetTabAvailable(m_tab_widget, m_tabs.command, mask & TabMaskBits::kCommand);
+    SetTabAvailable(m_tab_widget, m_tabs.shader, mask & TabMaskBits::kShader);
+    SetTabAvailable(m_tab_widget, m_tabs.event_state, mask & TabMaskBits::kEventState);
+    SetTabAvailable(m_tab_widget,
+                    m_tabs.gfxr_vulkan_command_arguments,
+                    mask & TabMaskBits::kGfxrVulkanCommandArguments);
+    SetTabAvailable(m_tab_widget, m_tabs.perf_counter, mask & TabMaskBits::kPerfCounters);
+    SetTabAvailable(m_tab_widget, m_tabs.gpu_timing, mask & TabMaskBits::kGpuTiming);
+    SetTabAvailable(m_tab_widget, m_tabs.frame, mask & TabMaskBits::kFrame);
+#if defined(ENABLE_CAPTURE_BUFFERS)
+    SetTabAvailable(m_tab_widget, m_tabs.buffer, mask & TabMaskBits::kBuffer);
 #endif
+#ifndef NDEBUG
+    SetTabAvailable(m_tab_widget, m_tabs.event_timing, mask & TabMaskBits::kEventTiming);
+#endif
+    bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
+    SetTabAvailable(m_tab_widget, m_tabs.text_file, (mask & TabMaskBits::kTextFile) && has_text);
+    m_tabs_updating = false;
+
+    OnTabViewChange();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2351,7 +1963,7 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
     {
     case Dive::CrossRefType::kShaderAddress:
         if (m_shader_view->OnCrossReference(ref))
-            m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+            m_tab_widget->setCurrentIndex(m_tabs.shader);
         break;
     case Dive::CrossRefType::kGFRIndex:
         m_command_hierarchy_view->setCurrentNode(ref.Id());
@@ -2365,8 +1977,8 @@ void MainWindow::OnCrossReference(Dive::CrossRef ref)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnSwitchToShaderTab()
 {
-    DIVE_ASSERT(m_shader_view_tab_index >= 0);
-    m_tab_widget->setCurrentIndex(m_shader_view_tab_index);
+    DIVE_ASSERT(m_tabs.shader >= 0);
+    m_tab_widget->setCurrentIndex(m_tabs.shader);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -2385,6 +1997,11 @@ void MainWindow::OnTabViewSearchBarVisibilityChange(bool isHidden)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnTabViewChange()
 {
+    if (m_tabs_updating)
+    {
+        return;
+    }
+
     int current_index = m_tab_widget->currentIndex();
 
     // If no current index is selected, return.
@@ -2399,15 +2016,15 @@ void MainWindow::OnTabViewChange()
         QWidget *previous_tab = m_tab_widget->widget(m_previous_tab_index);
         if (previous_tab)
         {
-            if (m_previous_tab_index == m_command_view_tab_index)
+            if (m_previous_tab_index == m_tabs.command)
             {
                 m_command_tab_view->OnSearchBarVisibilityChange(true);
             }
-            else if (m_previous_tab_index == m_gfxr_vulkan_command_arguments_view_tab_index)
+            else if (m_previous_tab_index == m_tabs.gfxr_vulkan_command_arguments)
             {
                 m_gfxr_vulkan_command_arguments_tab_view->OnSearchBarVisibilityChange(true);
             }
-            else if (m_previous_tab_index == m_perf_counter_view_tab_index)
+            else if (m_previous_tab_index == m_tabs.perf_counter)
             {
                 m_perf_counter_tab_view->OnSearchBarVisibilityChange(true);
             }
@@ -2415,7 +2032,7 @@ void MainWindow::OnTabViewChange()
     }
 
     QWidget *current_tab = m_tab_widget->widget(current_index);
-    if (current_index == m_command_view_tab_index &&
+    if (current_index == m_tabs.command &&
         !current_tab->findChild<SearchBar *>(kCommandBufferSearchBarName)->isHidden())
     {
         ResetEventSearchBar();
@@ -2424,7 +2041,7 @@ void MainWindow::OnTabViewChange()
             ResetPm4EventSearchBar();
         }
     }
-    else if (current_index == m_gfxr_vulkan_command_arguments_view_tab_index &&
+    else if (current_index == m_tabs.gfxr_vulkan_command_arguments &&
              current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName))
     {
         if (!current_tab->findChild<SearchBar *>(kGfxrVulkanCommandArgumentsSearchBarName)
@@ -2437,7 +2054,7 @@ void MainWindow::OnTabViewChange()
             }
         }
     }
-    else if (current_index == m_perf_counter_view_tab_index &&
+    else if (current_index == m_tabs.perf_counter &&
              current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName))
     {
         if (!current_tab->findChild<SearchBar *>(kPerfCounterSearchBarName)->isHidden())
@@ -3227,11 +2844,11 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     QVariant selected_action_data = selected_action->data();
     if (selected_action_data == Dive::kPerfCounterData)
     {
-        m_tab_widget->setCurrentIndex(m_perf_counter_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.perf_counter);
     }
     else if (selected_action_data == Dive::kArguments)
     {
-        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
     }
     else
     {
@@ -3278,7 +2895,6 @@ void MainWindow::OnCorrelationFilterApplied(uint64_t           gfxr_draw_call_in
             m_pm4_command_hierarchy_view->expand(proxy_index);
 
             m_pm4_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
         }
     }
 
@@ -3296,7 +2912,6 @@ void MainWindow::OnCorrelationFilterApplied(uint64_t           gfxr_draw_call_in
     m_command_hierarchy_view->expand(vulkan_draw_call_model_index);
 
     m_command_hierarchy_view->viewport()->update();
-    QApplication::processEvents();
 
     CorrelateCounter(vulkan_draw_call_model_index, true);
 
@@ -3343,11 +2958,11 @@ void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
     QVariant selected_action_data = selected_action->data();
     if (selected_action_data == Dive::kGpuTimeData)
     {
-        m_tab_widget->setCurrentIndex(m_gpu_timing_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.gpu_timing);
     }
     else if (selected_action_data == Dive::kArguments)
     {
-        m_tab_widget->setCurrentIndex(m_gfxr_vulkan_command_arguments_view_tab_index);
+        m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
     }
 }
 
@@ -3370,7 +2985,6 @@ void MainWindow::ClearViewModelSelection(DiveTreeView &tree_view, bool should_cl
     }
 
     tree_view.viewport()->update();
-    QApplication::processEvents();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -3496,13 +3110,13 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 
             selection_model->setCurrentIndex(proxy_index, flags);
             m_command_tab_view->OnSelectionChanged(proxy_index);
+            m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(source_index);
 
             m_pm4_command_hierarchy_view->scrollTo(proxy_index,
                                                    QAbstractItemView::PositionAtCenter);
             m_pm4_command_hierarchy_view->expand(proxy_index);
 
             m_pm4_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
 
             CorrelateCounter(index, true);
             emit EventSelected(corresponding_pm4_draw_call_index);
@@ -3518,6 +3132,7 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
 {
     m_gpu_timing_tab_view->ClearSelection();
     m_perf_counter_tab_view->ClearSelection();
+    m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(QModelIndex());
 
     QItemSelectionModel *gfxr_selection_model = m_command_hierarchy_view->selectionModel();
     QSignalBlocker       blocker(gfxr_selection_model);
@@ -3571,13 +3186,14 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
                                                         QItemSelectionModel::Rows;
 
             gfxr_selection_model->setCurrentIndex(proxy_index, flags);
+            m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(
+            gfxr_draw_call_index_from_source);
 
             ResetVerticalScroll(*m_command_hierarchy_view);
             m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
             m_command_hierarchy_view->expand(proxy_index);
 
             m_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
 
             CorrelateCounter(index, false);
         }
@@ -3626,13 +3242,14 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
             flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
 
             selection_model->setCurrentIndex(proxy_index, flags);
+            m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(
+            gfxr_draw_call_index_from_source);
 
             ResetVerticalScroll(*m_command_hierarchy_view);
             m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
             m_command_hierarchy_view->expand(proxy_index);
 
             m_command_hierarchy_view->viewport()->update();
-            QApplication::processEvents();
         }
     }
 
@@ -3664,7 +3281,6 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
                 m_pm4_command_hierarchy_view->expand(proxy_index);
 
                 m_pm4_command_hierarchy_view->viewport()->update();
-                QApplication::processEvents();
             }
         }
     }
@@ -3781,12 +3397,13 @@ void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
         flags = QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows;
 
         selection_model->setCurrentIndex(proxy_index, flags);
+        m_gfxr_vulkan_command_arguments_tab_view->OnSelectionChanged(
+        gfxr_draw_call_index_from_source);
 
         ResetVerticalScroll(*m_command_hierarchy_view);
         m_command_hierarchy_view->scrollTo(proxy_index, QAbstractItemView::PositionAtCenter);
         m_command_hierarchy_view->expand(proxy_index);
 
         m_command_hierarchy_view->viewport()->update();
-        QApplication::processEvents();
     }
 }

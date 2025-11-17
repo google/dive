@@ -23,8 +23,10 @@
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
+#include "application_controller.h"
 #include "main_window.h"
-#include "common/dive_version.h"
+#include "utils/version_info.h"
+#include "custom_metatypes.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -86,6 +88,13 @@ void setDarkMode(QApplication &app)
 int main(int argc, char *argv[])
 {
     // Check number of arguments
+    bool exit_after_load = false;
+    if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)
+    {
+        exit_after_load = true;
+        argc--;
+        argv++;
+    }
     if (argc != 1 && argc != 2)
         return 0;
 
@@ -94,11 +103,7 @@ int main(int argc, char *argv[])
     // On Windows, users can right-click the .exe and look at Properties/Details.
     if (argc > 1 && strcasecmp(argv[1], "--version") == 0)
     {
-        std::cout << DIVE_PRODUCT_NAME << std::endl;
-        std::cout << DIVE_PRODUCT_DESCRIPTION << std::endl;
-        std::cout << DIVE_COPYRIGHT_DESCRIPTION << std::endl;
-        std::cout << "Version " << DIVE_VERSION_MAJOR << "." << DIVE_VERSION_MINOR << "."
-                  << DIVE_VERSION_REVISION << std::endl;
+        std::cout << Dive::GetDiveDescription() << std::endl;
         return 0;
     }
 
@@ -119,6 +124,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    Dive::RegisterCustomMetaType();
+
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
@@ -138,7 +145,12 @@ int main(int argc, char *argv[])
     // Initialize packet info query data structures needed for parsing
     Pm4InfoInit();
 
-    MainWindow *main_window = new MainWindow();
+    ApplicationController controller;
+    MainWindow           *main_window = new MainWindow(controller);
+    if (exit_after_load)
+    {
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+    }
 
     if (!main_window->InitializePlugins())
     {
@@ -149,7 +161,7 @@ int main(int argc, char *argv[])
     if (argc == 2)
     {
         // This is executed async.
-        main_window->LoadFile(argv[1]);
+        main_window->LoadFile(argv[1], false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));

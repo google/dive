@@ -152,7 +152,9 @@ public:
                           const std::string    &gfxr_capture_directory);
     absl::Status SetupApp(const std::string    &binary,
                           const std::string    &args,
-                          const ApplicationType type);
+                          const ApplicationType type,
+                          const std::string    &device_architecture,
+                          const std::string    &gfxr_capture_directory);
 
     absl::Status      CleanupApp();
     absl::Status      StartApp();

@@ -66,6 +66,7 @@ else()
     )
     target_link_libraries(
         device_mgr
+        absl::cleanup
         absl::flags
         absl::flags_parse
         absl::algorithm
@@ -83,6 +84,7 @@ else()
         absl::flags_parse
         absl::algorithm
         absl::strings
+        version_info
     )
     target_include_directories(
         dive_client_cli
@@ -103,6 +105,14 @@ else()
         gtest_main
     )
     gtest_discover_tests(device_mgr_test)
+
+    add_executable(android_application_test android_application_test.cc)
+    target_link_libraries(android_application_test device_mgr gtest gtest_main)
+    target_include_directories(
+        android_application_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+    gtest_discover_tests(android_application_test)
 
     add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
     target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)

@@ -209,6 +209,7 @@ public:
     virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) = 0;
 
 protected:
+    virtual ~EmulateCallbacksBase() = default;
     EmulateStateTracker m_state_tracker;
 };
 

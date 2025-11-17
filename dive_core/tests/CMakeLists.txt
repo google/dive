@@ -25,10 +25,6 @@ target_compile_definitions(
 )
 gtest_discover_tests(available_metrics_test)
 
-add_executable(string_utils_test string_utils_test.cpp)
-target_link_libraries(string_utils_test gtest gtest_main gmock dive_core)
-gtest_discover_tests(string_utils_test)
-
 add_executable(perf_metrics_data_test perf_metrics_data_test.cpp)
 target_link_libraries(perf_metrics_data_test gtest gtest_main gmock dive_core)
 target_compile_definitions(

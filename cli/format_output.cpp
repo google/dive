@@ -468,7 +468,7 @@ void ExtractTopology(std::filesystem::path           path,
         uint64_t child_node_index = topology_ptr
                                     ->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex,
                                                         child);
-        PrintNodes(out, command_hierarchy_ptr, *topology_ptr, child_node_index, true);
+        PrintNodes(out, command_hierarchy_ptr, *topology_ptr, child_node_index, /*verbose=*/true);
     }
 }
 //--------------------------------------------------------------------------------------------------
@@ -548,8 +548,13 @@ bool ParseCapture(const char                              *filename,
 
     std::unique_ptr<Dive::CommandHierarchy> &command_hierarchy = *out_command_hierarchy;
     command_hierarchy = std::make_unique<Dive::CommandHierarchy>();
-    Dive::CommandHierarchyCreator creator(*command_hierarchy, *capture_data);
-    if (!creator.CreateTrees(true, std::nullopt))
+    if (!command_hierarchy)
+    {
+        return false;
+    }
+    auto creator = Dive::CommandHierarchyCreator::Create(*command_hierarchy, *capture_data);
+    if (!creator ||
+        !creator->CreateTrees(/*flatten_chain_nodes=*/true, /*reserve_size=*/std::nullopt))
     {
         command_hierarchy.reset();
         std::cerr << "Error parsing capture!" << std::endl;
@@ -572,8 +577,8 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 
     std::unique_ptr<Dive::CommandHierarchy> command_hierarchy_ptr(
     std::make_unique<Dive::CommandHierarchy>());
-    Dive::CommandHierarchyCreator creator(*command_hierarchy_ptr, *capture_data_ptr);
-    if (!creator.CreateTrees(true, std::nullopt))
+    auto creator = Dive::CommandHierarchyCreator::Create(*command_hierarchy_ptr, *capture_data_ptr);
+    if (!creator->CreateTrees(/*flatten_chain_nodes=*/true, /*reserve_size=*/std::nullopt))
     {
         std::cerr << "Error parsing capture!" << std::endl;
         return EXIT_FAILURE;

@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
-project(dive)
+project(dive VERSION 1.0.1)
 
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
@@ -29,12 +29,15 @@ if(MSVC)
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
+# TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_BUILD_TYPE_LOWERCASE "release")
     set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
     set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
+else()
+    message(FATAL_ERROR "Must set -DCMAKE_BUILD_TYPE")
 endif()
 
 # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
@@ -79,6 +82,45 @@ if(GIT_FOUND)
     string(STRIP "${REPO_SHA1}" DIVE_VERSION_SHA1)
 endif()
 
+set(DIVE_RELEASE_TYPE
+    "dev"
+    CACHE STRING
+    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>"
+)
+string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
+
+# For host tools version info
+set(HOST_PLATFORM_STRING "Unknown")
+if(NOT ANDROID)
+    if(CMAKE_HOST_WIN32)
+        set(HOST_PLATFORM_STRING "win")
+    elseif(CMAKE_HOST_APPLE)
+        set(HOST_PLATFORM_STRING "mac")
+    else()
+        set(HOST_PLATFORM_STRING "linux")
+    endif()
+endif()
+
+# For device libraries version info
+set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")
+if(ANDROID)
+    message(CHECK_START "Make version file for Dive device libraries")
+    file(
+        WRITE ${CMAKE_INSTALL_PREFIX}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        "sha,"
+        ${DIVE_VERSION_SHA1}
+        "\nversion,"
+        ${CMAKE_PROJECT_VERSION}
+        "\nbuild_type,"
+        ${CMAKE_BUILD_TYPE}
+        "\nrelease_type,"
+        ${DIVE_RELEASE_TYPE}
+        "\nabi,"
+        ${ANDROID_ABI}
+    )
+    message(CHECK_PASS "successful")
+endif()
+
 # Adds all the configure time information into dive_cmake_generated.h.in
 configure_file(
     "${CMAKE_SOURCE_DIR}/common/dive_cmake_generated.h.in"
@@ -86,11 +128,6 @@ configure_file(
 )
 
 include_directories("${CMAKE_BINARY_DIR}/generated_include")
-
-option(DIVE_NO_DISASSEMBLY, "Include builtin shader disassembly.")
-if(DIVE_NO_DISASSEMBLY)
-    add_definitions(-DDIVE_NO_DISASSEMBLY=1)
-endif()
 
 add_subdirectory(network)
 add_subdirectory(capture_service)
@@ -103,6 +140,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 if(NOT ANDROID)
     set(D3D12_SUPPORT OFF CACHE BOOL "")
+    set(GFXRECON_ENABLE_OPENXR OFF CACHE BOOL "" FORCE)
     include(libarchive.cmake)
     add_subdirectory(third_party/gfxreconstruct)
     add_subdirectory(gfxr_ext/decode)
@@ -112,9 +150,7 @@ if(NOT ANDROID)
     add_subdirectory(lrz_validator)
     add_subdirectory(trace_stats)
 
-    if(NOT DIVE_NO_DISASSEMBLY)
-        add_subdirectory(ui)
-    endif()
+    add_subdirectory(ui)
 
     add_subdirectory(gfxr_dump_resources)
 
@@ -134,6 +170,7 @@ else()
                 ./gradlew layer:assemble${CMAKE_BUILD_TYPE}
                 replay:assemble${CMAKE_BUILD_TYPE}
                 --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
+                -PDisableOpenXR
             WORKING_DIRECTORY
                 ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
             COMMAND_ERROR_IS_FATAL ANY
@@ -182,4 +219,20 @@ add_test(
     COMMAND
         ${CMAKE_BINARY_DIR}/bin/divecli extract -o .
         ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd
+)
+
+# MacOS has limited thread stack size, allocating large object in stack makes its stack overflow
+# This has been fixed in https://github.com/google/dive/pull/541
+if(APPLE)
+    set(DIVE_EXECUTABLE_PATH
+        ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive
+    )
+else()
+    set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
+endif()
+add_test(
+    NAME Regression_StackOverflow_MacOS
+    COMMAND
+        ${DIVE_EXECUTABLE_PATH} --exit-after-load
+        ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
 )

@@ -21,6 +21,7 @@ limitations under the License.
 #include <memory>
 
 #include "../dive_core/common/common.h"
+#include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -32,70 +33,84 @@ limitations under the License.
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
-#include "common/defer.h"
 #include "remote_files.h"
 #include "utils/component_files.h"
 
 namespace Dive
 {
 
-namespace {
+namespace
+{
 
-std::string GetPythonPath() {
+std::string GetPythonPath()
+{
     std::string python_path;
 #if defined(_WIN32)
     absl::StatusOr<std::string> result = Dive::RunCommand("where python");
-    if (result.ok()) {
+    if (result.ok())
+    {
         std::vector<std::string> lines = absl::StrSplit(*result, '\n');
-        for (const auto& line : lines) {
+        for (const auto &line : lines)
+        {
             std::string current_path = std::string(absl::StripAsciiWhitespace(line));
-            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps")) {
+            if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps"))
+            {
                 python_path = current_path;
-                break; 
+                break;
             }
         }
-        if (python_path.empty() && !lines.empty()) {
+        if (python_path.empty() && !lines.empty())
+        {
             python_path = std::string(absl::StripAsciiWhitespace(lines[0]));
         }
     }
 #else
     absl::StatusOr<std::string> result = Dive::RunCommand("which python3");
-    if (result.ok()) {
+    if (result.ok())
+    {
         python_path = std::string(absl::StripAsciiWhitespace(*result));
     }
-    if (python_path.empty()) {
+    if (python_path.empty())
+    {
         result = Dive::RunCommand("which python");
-        if (result.ok()) {
+        if (result.ok())
+        {
             python_path = std::string(absl::StripAsciiWhitespace(*result));
         }
     }
 #endif
-    if (python_path.empty()) {
+    if (python_path.empty())
+    {
         python_path = "python";
     }
     LOGD("GetPythonPath() returning: %s\n", python_path.c_str());
     return python_path;
 }
 
-absl::Status ValidatePythonPath(const std::string& python_path)
+absl::Status ValidatePythonPath(const std::string &python_path)
 {
     if (python_path.empty())
     {
         return absl::InvalidArgumentError("Python path is empty.");
     }
-    absl::StatusOr<std::string> result = Dive::RunCommand(absl::StrFormat("%s --version", python_path));
+    absl::StatusOr<std::string> result = Dive::RunCommand(
+    absl::StrFormat("%s --version", python_path));
     if (!result.ok())
     {
-        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s", python_path, result.status().message()));
+        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
+                                                      python_path,
+                                                      result.status().message()));
     }
     if (!absl::StrContains(*result, "Python 3"))
     {
-        return absl::FailedPreconditionError(absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s", python_path, *result));
+        return absl::FailedPreconditionError(
+        absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s",
+                        python_path,
+                        *result));
     }
     LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
     return absl::OkStatus();
 }
-
 
 absl::Status SetSystemProperty(const AdbSession &adb,
                                std::string_view  property,
@@ -518,14 +533,16 @@ std::filesystem::path ResolveAndroidLibPath(const std::string &name,
     }
 
     std::vector<std::filesystem::path> search_paths{
-        exe_dir / "install", "./install", "../../build_android/Release/bin", "../../install", "./"
+        exe_dir / "install", exe_dir / "../Resources",
+        "./install",         "../../build_android/Release/bin",
+        "../../install",     "./"
     };
 
     if (!device_architecture.empty())
     {
         const std::filesystem::path gfxr_sub_path = std::filesystem::path("gfxr_layer") / "jni" /
                                                     device_architecture;
-
+        search_paths.push_back(exe_dir / "../Resources" / gfxr_sub_path);
         search_paths.push_back(exe_dir / "install" / gfxr_sub_path);
         search_paths.push_back("./install" / gfxr_sub_path);
         search_paths.push_back("../../install" / gfxr_sub_path);
@@ -657,6 +674,7 @@ absl::Status AndroidDevice::CleanupDevice()
     .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default", kGfxrReplayAppName))
     .IgnoreError();
     Adb().Run(absl::StrFormat("uninstall %s", kGfxrReplayAppName)).IgnoreError();
+    Adb().Run("shell settings delete global verifier_verify_adb_installs").IgnoreError();
 
     // cleanup for gfxr PM4 capture
     Adb()
@@ -738,7 +756,9 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
 
 absl::Status AndroidDevice::SetupApp(const std::string    &command,
                                      const std::string    &command_args,
-                                     const ApplicationType type)
+                                     const ApplicationType type,
+                                     const std::string    &device_architecture,
+                                     const std::string    &gfxr_capture_directory)
 {
     assert(type == ApplicationType::VULKAN_CLI);
     m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
@@ -746,6 +766,23 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
     if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for VulkanCliApplication");
+    }
+
+    RETURN_IF_ERROR(RequestRootAccess());
+    if (m_gfxr_enabled)
+    {
+        std::string cpu_abi = device_architecture;
+        if (cpu_abi.empty())
+        {
+            ASSIGN_OR_RETURN(cpu_abi, Adb().RunAndGetResult("shell getprop ro.product.cpu.abi"));
+        }
+        m_app->SetArchitecture(cpu_abi);
+        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
+        m_app->SetGfxrEnabled(true);
+    }
+    else
+    {
+        m_app->SetGfxrEnabled(false);
     }
 
     return m_app->Setup();
@@ -860,6 +897,26 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     std::string python_path = GetPythonPath();
     RETURN_IF_ERROR(ValidatePythonPath(python_path));
 
+    const AdbSession &adb = m_device->Adb();
+    if (absl::Status status = adb.Run("shell settings put global verifier_verify_adb_installs 0");
+        !status.ok())
+    {
+        LOGI("Couldn't set verifier_verify_adb_installs to 0. If replay doesn't install, look "
+             "at the device for popups or logcat for the reason. This can also be set manually "
+             "by turning off 'Verify apps over USB' in Developer Options. Reason: %s\n",
+             std::string(status.message()).c_str());
+    }
+    absl::Cleanup enable_verify_adb_installs = [&adb] {
+        if (absl::Status status = adb.Run(
+            "shell settings delete global verifier_verify_adb_installs");
+            !status.ok())
+        {
+            LOGI("Couldn't set verifier_verify_adb_installs to 1. Manually turn on 'Verify "
+                 "apps over USB' in Developer Options as soon as possible! Reason: %s\n",
+                 std::string(status.message()).c_str());
+        }
+    };
+
     std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName, "").generic_string();
     std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath, "").generic_string();
     std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
@@ -890,7 +947,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
 {
     const AdbSession &adb = m_device->Adb();
-    Defer             cleanup([&]() {
+
+    absl::Cleanup cleanup([&]() {
         LOGD("RunReplayGfxrScript(): CLEANUP\n");
         if (settings.run_type == GfxrReplayOptions::kPm4Dump)
         {
@@ -1069,7 +1127,8 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     std::string remote_profiling_dir = absl::StrFormat("%s/%s",
                                                        kTargetPath,
                                                        kProfilingPluginFolderName);
-    Defer       cleanup([&]() {
+
+    absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
         std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
         m_device->Adb().Run(clean_cmd).IgnoreError();

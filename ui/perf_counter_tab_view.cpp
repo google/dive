@@ -160,6 +160,7 @@ void PerfCounterTabView::OnSearch(const QString &text)
 
     if (text.isEmpty())
     {
+        ClearSelection();
         emit UpdateSearchInfo(0, 0);
         return;
     }
@@ -179,12 +180,25 @@ void PerfCounterTabView::OnSearch(const QString &text)
         m_perf_counter_model.SetIteratorToNearest(currentIndex);
     }
 
-    QModelIndex firstMatch = m_perf_counter_model.NextMatch();
+    QModelIndex firstMatchSource = m_perf_counter_model.FirstMatch();
 
-    if (firstMatch.isValid())
+    if (firstMatchSource.isValid())
     {
-        m_perf_counter_view->setCurrentIndex(firstMatch);
-        m_perf_counter_view->scrollTo(firstMatch);
+        QModelIndex firstMatchProxy = m_proxy_model->mapFromSource(firstMatchSource);
+
+        if (firstMatchProxy.isValid())
+        {
+            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            if (selection_model)
+            {
+                selection_model->select(firstMatchProxy,
+                                        QItemSelectionModel::ClearAndSelect |
+                                        QItemSelectionModel::Rows);
+            }
+
+            m_perf_counter_view->setCurrentIndex(firstMatchProxy);
+            m_perf_counter_view->scrollTo(firstMatchProxy, QAbstractItemView::EnsureVisible);
+        }
     }
 
     emit UpdateSearchInfo(m_perf_counter_model.GetCurrentMatchIndex(),
@@ -194,11 +208,23 @@ void PerfCounterTabView::OnSearch(const QString &text)
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnNextMatch()
 {
-    QModelIndex nextMatch = m_perf_counter_model.NextMatch();
-    if (nextMatch.isValid())
+    QModelIndex nextMatchSource = m_perf_counter_model.NextMatch();
+    if (nextMatchSource.isValid())
     {
-        m_perf_counter_view->setCurrentIndex(nextMatch);
-        m_perf_counter_view->scrollTo(nextMatch);
+        QModelIndex nextMatchProxy = m_proxy_model->mapFromSource(nextMatchSource);
+        if (nextMatchProxy.isValid())
+        {
+            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            if (selection_model)
+            {
+                selection_model->select(nextMatchProxy,
+                                        QItemSelectionModel::ClearAndSelect |
+                                        QItemSelectionModel::Rows);
+            }
+
+            m_perf_counter_view->setCurrentIndex(nextMatchProxy);
+            m_perf_counter_view->scrollTo(nextMatchProxy, QAbstractItemView::EnsureVisible);
+        }
     }
 
     emit UpdateSearchInfo(m_perf_counter_model.GetCurrentMatchIndex(),
@@ -208,11 +234,24 @@ void PerfCounterTabView::OnNextMatch()
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnPrevMatch()
 {
-    QModelIndex prevMatch = m_perf_counter_model.PreviousMatch();
-    if (prevMatch.isValid())
+    QModelIndex prevMatchSource = m_perf_counter_model.PreviousMatch();
+    if (prevMatchSource.isValid())
     {
-        m_perf_counter_view->setCurrentIndex(prevMatch);
-        m_perf_counter_view->scrollTo(prevMatch);
+        QModelIndex prevMatchProxy = m_proxy_model->mapFromSource(prevMatchSource);
+        if (prevMatchProxy.isValid())
+        {
+            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+
+            if (selection_model)
+            {
+                selection_model->select(prevMatchProxy,
+                                        QItemSelectionModel::ClearAndSelect |
+                                        QItemSelectionModel::Rows);
+            }
+
+            m_perf_counter_view->setCurrentIndex(prevMatchProxy);
+            m_perf_counter_view->scrollTo(prevMatchProxy, QAbstractItemView::EnsureVisible);
+        }
     }
 
     emit UpdateSearchInfo(m_perf_counter_model.GetCurrentMatchIndex(),

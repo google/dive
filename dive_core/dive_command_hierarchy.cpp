@@ -34,23 +34,31 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
                                               bool                    flatten_chain_nodes,
                                               std::optional<uint64_t> reserve_size)
 {
-    CommandHierarchyCreator pm4_command_hierarchy_creator(m_command_hierarchy,
-                                                          dive_capture_data.GetPm4CaptureData());
-    GfxrVulkanCommandHierarchyCreator
-    gfxr_command_hierarchy_creator(m_command_hierarchy, dive_capture_data.GetGfxrCaptureData());
+    auto pm4_command_hierarchy_creator = CommandHierarchyCreator::Create(m_command_hierarchy,
+                                                                         dive_capture_data
+                                                                         .GetPm4CaptureData());
+    auto gfxr_command_hierarchy_creator = std::make_unique<
+    GfxrVulkanCommandHierarchyCreator>(m_command_hierarchy, dive_capture_data.GetGfxrCaptureData());
 
-    pm4_command_hierarchy_creator.CreateTrees(flatten_chain_nodes, false, reserve_size);
-    gfxr_command_hierarchy_creator.CreateTrees(true);
+    if (!pm4_command_hierarchy_creator || !gfxr_command_hierarchy_creator)
+    {
+        return false;
+    }
+
+    pm4_command_hierarchy_creator->CreateTrees(flatten_chain_nodes,
+                                               /*createTopologies=*/false,
+                                               reserve_size);
+    gfxr_command_hierarchy_creator->CreateTrees(/*used_in_mixed_command_hierarchy=*/true);
 
     bool result = pm4_command_hierarchy_creator
-                  .ProcessSubmits(dive_capture_data.GetPm4CaptureData().GetSubmits(),
-                                  dive_capture_data.GetPm4CaptureData().GetMemoryManager());
+                  ->ProcessSubmits(dive_capture_data.GetPm4CaptureData().GetSubmits(),
+                                   dive_capture_data.GetPm4CaptureData().GetMemoryManager());
     if (!result)
     {
         return false;
     }
 
-    result = gfxr_command_hierarchy_creator.ProcessGfxrSubmits(
+    result = gfxr_command_hierarchy_creator->ProcessGfxrSubmits(
     dive_capture_data.GetGfxrCaptureData());
 
     if (!result)
@@ -58,7 +66,7 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
         return false;
     }
 
-    CreateTopologies(pm4_command_hierarchy_creator, gfxr_command_hierarchy_creator);
+    CreateTopologies(*pm4_command_hierarchy_creator, *gfxr_command_hierarchy_creator);
 
     return true;
 }

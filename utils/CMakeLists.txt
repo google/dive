@@ -25,6 +25,13 @@ target_include_directories(
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
+add_library(version_info version_info.h version_info.cpp)
+target_link_libraries(version_info PUBLIC absl::statusor absl::strings)
+target_include_directories(
+    version_info
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_BINARY_DIR}/generated_include/
+)
+
 enable_testing()
 include(GoogleTest)
 
@@ -38,3 +45,10 @@ target_link_libraries(
     gtest_main
 )
 gtest_discover_tests(component_files_test)
+
+add_library(string_utils string_utils.h string_utils.cpp)
+target_include_directories(string_utils PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+add_executable(string_utils_test string_utils_test.cpp)
+target_link_libraries(string_utils_test string_utils gtest gtest_main)
+gtest_discover_tests(string_utils_test)

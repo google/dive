@@ -102,16 +102,19 @@ void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &in
         return;
     }
 
-    QModelIndex source_index = index;
-    auto       *selection_model = qobject_cast<QItemSelectionModel *>(sender());
+    QAbstractItemModel *source_model_ptr = m_command_hierarchy_model;
+    QModelIndex         source_index = index;
 
-    if (selection_model)
+    if (index.model() != source_model_ptr)
     {
-        // Try to get the proxy model from the selection model's model.
-        auto *proxy_model = qobject_cast<QSortFilterProxyModel *>(selection_model->model());
-        if (proxy_model)
+        auto *selection_model = qobject_cast<QItemSelectionModel *>(sender());
+        if (selection_model)
         {
-            source_index = proxy_model->mapToSource(index);
+            auto *proxy_model = qobject_cast<QSortFilterProxyModel *>(selection_model->model());
+            if (proxy_model)
+            {
+                source_index = proxy_model->mapToSource(index);
+            }
         }
     }
 

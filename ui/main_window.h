@@ -74,6 +74,11 @@ class QSortFilterProxyModel;
 class QAbstractProxyModel;
 class FrameTabView;
 class QScrollArea;
+class ApplicationController;
+
+struct LoadFileResult;
+class ErrorDialog;
+class CaptureFileManager;
 
 enum class EventMode;
 
@@ -84,6 +89,7 @@ class PluginLoader;
 class AvailableMetrics;
 class TraceStats;
 struct CaptureStats;
+struct ComponentFilePaths;
 
 enum DrawCallContextMenuOption : uint32_t
 {
@@ -110,10 +116,13 @@ inline static constexpr const char
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+
+    friend class ApplicationController;
+
 public:
     class Worker;
 
-    MainWindow();
+    explicit MainWindow(ApplicationController &controller);
     ~MainWindow();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
     bool InitializePlugins();
@@ -134,7 +143,7 @@ signals:
     void AnalyzeCaptureStarted(const QString &file_path);
 
 public slots:
-    void OnCapture(bool is_capture_delayed = false, bool is_gfxr_capture = false);
+    void OnCapture(bool is_capture_delayed = false);
     void OnCaptureUpdated(const QString &file_path);
     void OnSwitchToShaderTab();
     void OnOpenVulkanDrawCallMenu(const QPoint &pos);
@@ -155,7 +164,6 @@ private slots:
     void OnFilterModeChange(const QString &string);
     void OnGfxrFilterModeChange();
     void OnOpenFile();
-    void OnGFXRCapture();
     void OnNormalCapture();
     void OnCaptureTrigger();
     void OnAnalyzeCapture();
@@ -168,7 +176,7 @@ private slots:
     void UpdateOverlay(const QString &);
     void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
-    void OnFileLoaded();
+    void OnFileLoaded(const LoadFileResult &loaded_file);
     void OnTraceAvailable(const QString &);
     void OnTabViewSearchBarVisibilityChange(bool isHidden);
     void OnTabViewChange();
@@ -180,48 +188,24 @@ private slots:
     void ConnectPm4SearchBar();
     void DisconnectPm4SearchBar();
     void DisconnectAllTabs();
-    void OnAsyncTraceStatsDone();
+    void OnTraceStatsUpdated();
 
 private:
-    enum class LoadedFileType
+    struct LastRequest
     {
-        kUnknown,  // Load failure
-        kDiveFile,
-        kRdFile,
-        kGfxrFile,
+        std::string file_name;
+        bool        is_temp_file;
     };
-
-    struct LoadFileResult
-    {
-        LoadedFileType file_type;
-        std::string    file_name;
-        bool           is_temp_file;
-    };
-
     enum class CorrelationTarget
     {
         kGfxrDrawCall,
         kPm4DrawCall
     };
 
-    enum class AsyncCaptureStatsState
-    {
-        kNone,
-        kRunning,
-        kPendingRestart,
-    };
-
-    LoadedFileType LoadFileImpl(const std::string &file_name, bool is_temp_file = false);
-
     void OnDiveFileLoaded();
     void OnAdrenoRdFileLoaded();
     void OnGfxrFileLoaded();
-
-    void RunOnUIThread(std::function<void()> f);
-    // Dialogs for async loading:
-    void OnLoadFailure(Dive::CaptureData::LoadResult result, const std::string &file_name);
-    void OnParseFailure(const std::string &file_name);
-    void OnUnsupportedFile(const std::string &file_name);
+    void EmitLoadAssociatedFileTasks(const Dive::ComponentFilePaths &);
 
     void StartTraceStats();
 
@@ -236,8 +220,10 @@ private:
     void    SetCurrentFile(const QString &fileName, bool is_temp_file = false);
     void    UpdateRecentFileActions(QStringList recent_files);
     QString StrippedName(const QString &fullFileName);
-    void    UpdateTabAvailability();
-    void    ResetTabWidget();
+
+    using TabMask = uint32_t;
+    void UpdateTabAvailability(TabMask mask);
+
     QModelIndex             FindSourceIndexFromNode(QAbstractItemModel *model,
                                                     uint64_t            target_node_index,
                                                     const QModelIndex  &parent = QModelIndex());
@@ -253,6 +239,8 @@ private:
     const std::vector<uint64_t> &draw_call_indices,
     CorrelationTarget            target);
 
+    ApplicationController &m_controller;
+
     QMenu         *m_file_menu;
     QMenu         *m_recent_captures_menu;
     QAction       *m_open_action;
@@ -260,8 +248,6 @@ private:
     QAction       *m_save_as_action;
     QAction       *m_exit_action;
     QMenu         *m_capture_menu;
-    QAction       *m_gfxr_capture_action;
-    QAction       *m_pm4_capture_action;
     QAction       *m_capture_action;
     QAction       *m_capture_delay_action;
     QAction       *m_capture_setting_action;
@@ -273,13 +259,13 @@ private:
     QToolBar      *m_file_tool_bar;
     TraceDialog   *m_trace_dig;
     AnalyzeDialog *m_analyze_dig;
+    ErrorDialog   *m_error_dialog = nullptr;
 
     std::array<QAction *, 3> m_recent_file_actions = {};
 
-    std::unique_ptr<Worker> m_worker;
+    CaptureFileManager *m_capture_manager = nullptr;
 
     ProgressTrackerCallback         m_progress_tracker;
-    QReadWriteLock                  m_data_core_lock;
     std::unique_ptr<Dive::DataCore> m_data_core;
     QString                         m_capture_file;
     QString                         m_last_file_path;
@@ -320,33 +306,64 @@ private:
     TreeViewComboBox *m_pm4_view_mode_combo_box;
     TreeViewComboBox *m_pm4_filter_mode_combo_box;
 
+    struct TabMaskBits
+    {
+        enum : TabMask
+        {
+            kOverview = 1u << 0,
+            kCommand = 1u << 1,
+            kShader = 1u << 2,
+            kEventState = 1u << 3,
+            kGfxrVulkanCommandArguments = 1u << 4,
+            kPerfCounters = 1u << 5,
+            kGpuTiming = 1u << 6,
+            kFrame = 1u << 7,
+            kBuffer = 1u << 8,
+            kEventTiming = 1u << 9,
+            kTextFile = 1u << 10,
+            kNone = 0u,
+            kAll = kOverview | kCommand | kShader | kEventState | kGfxrVulkanCommandArguments |
+                   kPerfCounters | kGpuTiming | kFrame | kEventTiming | kTextFile,
+            kViewsForCorrelated = kOverview | kCommand | kShader | kEventState |
+                                  kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
+            kViewsForRdFile = kOverview | kCommand | kShader | kEventState | kBuffer,
+            kViewsForGfxrFile = kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
+        };
+    };
+    struct TabIndices
+    {
+        int overview = -1;
+        int command = -1;
+        int shader = -1;
+        int event_state = -1;
+        int gfxr_vulkan_command_arguments = -1;
+        int perf_counter = -1;
+        int gpu_timing = -1;
+        int frame = -1;
+        int buffer = -1;
+        int event_timing = -1;
+        int text_file = -1;
+    };
     // Right pane
-    QTabWidget                        *m_tab_widget;
-    CommandTabView                    *m_command_tab_view;
-    int                                m_command_view_tab_index;
-    OverviewTabView                   *m_overview_tab_view;
-    int                                m_overview_view_tab_index;
-    ShaderView                        *m_shader_view;
-    int                                m_shader_view_tab_index;
-    EventStateView                    *m_event_state_view;
-    int                                m_event_state_view_tab_index;
-    GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view;
-    int                                m_gfxr_vulkan_command_arguments_view_tab_index;
-    PerfCounterTabView                *m_perf_counter_tab_view;
-    int                                m_perf_counter_view_tab_index;
-    GpuTimingTabView                  *m_gpu_timing_tab_view;
-    int                                m_gpu_timing_view_tab_index;
-    FrameTabView                      *m_frame_tab_view;
-    int                                m_frame_view_tab_index;
+    QTabWidget *m_tab_widget = nullptr;
+
+    CommandTabView                    *m_command_tab_view = nullptr;
+    OverviewTabView                   *m_overview_tab_view = nullptr;
+    ShaderView                        *m_shader_view = nullptr;
+    EventStateView                    *m_event_state_view = nullptr;
+    GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view = nullptr;
+    PerfCounterTabView                *m_perf_counter_tab_view = nullptr;
+    GpuTimingTabView                  *m_gpu_timing_tab_view = nullptr;
+    FrameTabView                      *m_frame_tab_view = nullptr;
 #if defined(ENABLE_CAPTURE_BUFFERS)
-    BufferView *m_buffer_view;
+    BufferView *m_buffer_view = nullptr;
 #endif
 #ifndef NDEBUG
-    EventTimingView *m_event_timing_view;
-    int              m_event_timing_view_tab_index;
+    EventTimingView *m_event_timing_view = nullptr;
 #endif
     TextFileView *m_text_file_view;
-    int           m_text_file_view_tab_index = -1;
+    TabIndices    m_tabs;
+    bool          m_tabs_updating = false;
 
     DiveFilterModel *m_filter_model;
 
@@ -378,13 +395,10 @@ private:
     std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
-    std::unique_ptr<Dive::TraceStats>           m_trace_stats;
     std::unique_ptr<Dive::CaptureStats>         m_capture_stats;
-    std::unique_ptr<Dive::CaptureStats>         m_async_capture_stats;
 
-    Dive::SimpleContext    m_async_capture_stats_context;
-    AsyncCaptureStatsState m_async_capture_stats_state = AsyncCaptureStatsState::kNone;
+    bool        m_capture_acquired = false;
+    LastRequest m_last_request;
 
-    std::future<LoadFileResult>        m_loading_result;
     std::vector<std::function<void()>> m_loading_pending_task;
 };

@@ -32,6 +32,19 @@ enum class ApplicationType
     UNKNOWN,
 };
 
+/*
+Parsing dumpsys package to get the main activity of the package.
+An example output from the dumpsys command:
+flame:/ # dumpsys package de.saschawillems.vulkanBloom
+Activity Resolver Table:
+  Non-Data Actions:
+      android.intent.action.MAIN:
+        1e368bb de.saschawillems.vulkanBloom/de.saschawillems.vulkanSample.VulkanActivity filter
+35ec1d8 Action: "android.intent.action.MAIN" Category: "android.intent.category.LAUNCHER"
+...
+*/
+std::string ParsePackageForActivity(const std::string &input, const std::string &package);
+
 class AndroidDevice;
 
 class AndroidApplication
@@ -61,10 +74,12 @@ public:
     {
         m_gfxr_capture_file_directory = capture_file_directory;
     };
-    absl::Status CreateGfxrDirectory(const std::string command_args);
-    absl::Status GfxrSetup();
-    absl::Status HasInternetPermission();
-    absl::Status GrantAllFilesAccess();
+    absl::Status         CreateGfxrDirectory(const std::string command_args);
+    virtual absl::Status GfxrSetup();
+    virtual absl::Status Pm4CaptureSetup();
+    virtual absl::Status Pm4CaptureCleanup();
+    absl::Status         HasInternetPermission();
+    absl::Status         GrantAllFilesAccess();
 
 protected:
     absl::Status ParsePackage();
@@ -74,7 +89,7 @@ protected:
     ApplicationType m_type;
     std::string     m_main_activity;
     std::string     m_command_args;
-    // Available architectures are arm64-v8, armeabi-v7a, x86, and x86_64.
+    // Available architectures are arm64-v8a, armeabi-v7a, x86, and x86_64.
     std::string m_device_architecture;
     std::string m_gfxr_capture_file_directory;
     bool        m_is_debuggable;
@@ -92,6 +107,10 @@ public:
 
     // Cleanup for device properties and settings related to a Vulkan APK
     virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
 };
 
 class OpenXRApplication : public AndroidApplication
@@ -103,6 +122,10 @@ public:
 
     // Cleanup for device properties and settings related to an OpenXR APK
     virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
 };
 
 class VulkanCliApplication : public AndroidApplication
@@ -118,10 +141,13 @@ public:
     virtual absl::Status Start() override;
     virtual absl::Status Stop() override;
     virtual bool         IsRunning() const override;
+    absl::Status         GfxrSetup() override;
 
 private:
-    std::string m_command;
-    std::string m_pid;
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
+    std::string          m_command;
+    std::string          m_pid;
 };
 
 }  // namespace Dive

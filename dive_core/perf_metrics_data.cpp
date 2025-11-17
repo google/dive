@@ -30,9 +30,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "absl/base/no_destructor.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/available_metrics.h"
-#include "dive_core/common/string_utils.h"
+#include "utils/string_utils.h"
 
 namespace Dive
 {
@@ -746,6 +747,11 @@ uint64_t index) const
 
 const std::vector<std::string>& PerfMetricsDataProvider::GetMetricsNames() const
 {
+    if (m_raw_data == nullptr)
+    {
+        static const absl::NoDestructor<std::vector<std::string>> empty;
+        return *empty;
+    }
     return m_raw_data->GetMetricNames();
 }
 

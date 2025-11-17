@@ -11,6 +11,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 // =====================================================================================================================
 // The VulkanCommandHierarchy class parses and creates a tree of Nodes in the command buffer. The
 // primary client for this class is the Model class for the Vulkan command and argument Views in the
@@ -29,6 +31,7 @@ class GfxrVulkanCommandHierarchyCreator
 public:
     GfxrVulkanCommandHierarchyCreator(CommandHierarchy      &command_hierarchy,
                                       const GfxrCaptureData &capture_data);
+    ~GfxrVulkanCommandHierarchyCreator();
 
     bool CreateTrees(bool used_in_mixed_command_hierarchy = false);
     bool ProcessGfxrSubmits(const GfxrCaptureData &capture_date);

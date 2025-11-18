@@ -68,7 +68,7 @@ void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command
         {
             continue;
         }
-        uint64_t       node_index = (uint64_t)index.internalPointer();
+        uint64_t       node_index = index.internalId();
         Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
         std::string    node_desc = m_command_hierarchy.GetNodeDesc(node_index);
         CollectTimingIndex(node_type, node_desc, index);
@@ -97,7 +97,7 @@ void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
     case Dive::NodeType::
     kGfxrVulkanBeginRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
     {
-        uint64_t index_address = (uint64_t)model_index.internalPointer();
+        uint64_t index_address = model_index.internalId();
         m_timed_event_indices.push_back(index_address);
     }
     default:
@@ -125,7 +125,7 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
         return -1;
     }
 
-    uint64_t index_address = (uint64_t)model_index.internalPointer();
+    uint64_t index_address = model_index.internalId();
 
     const auto it = std::find(m_timed_event_indices.cbegin(),
                               m_timed_event_indices.cend(),

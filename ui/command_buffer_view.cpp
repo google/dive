@@ -101,7 +101,7 @@ void CommandBufferView::searchCommandBufferByText(const QString &search_text)
         if (curr_idx.isValid() && curr_idx != *search_index_it)
         {
             search_index_it = search_indexes.begin() +
-                              getNearestSearchCommand((uint64_t)(curr_idx.internalPointer()));
+                              getNearestSearchCommand(curr_idx.internalId());
         }
         setAndScrollToIndex(*search_index_it);
     }
@@ -118,7 +118,7 @@ void CommandBufferView::nextCommandInSearch()
         if (curr_idx.isValid() && curr_idx != *search_index_it)
         {
             search_index_it = search_indexes.begin() +
-                              getNearestSearchCommand((uint64_t)(curr_idx.internalPointer()));
+                              getNearestSearchCommand(curr_idx.internalId());
             if (*search_index_it == curr_idx)
                 ++search_index_it;
         }
@@ -140,7 +140,7 @@ void CommandBufferView::prevCommandInSearch()
         if (curr_idx.isValid() && curr_idx != *search_index_it)
         {
             search_index_it = search_indexes.begin() +
-                              getNearestSearchCommand((uint64_t)(curr_idx.internalPointer()));
+                              getNearestSearchCommand(curr_idx.internalId());
             if (*search_index_it == curr_idx)
                 --search_index_it;
         }
@@ -156,13 +156,10 @@ void CommandBufferView::prevCommandInSearch()
 //--------------------------------------------------------------------------------------------------
 int CommandBufferView::getNearestSearchCommand(uint64_t target_index)
 {
-    auto get_internal_pointer = [this](int index) {
-        return (uint64_t)(search_indexes[index].internalPointer());
-    };
+    auto get_internal_id = [this](int index) { return search_indexes[index].internalId(); };
 
     auto get_nearest = [this](int x, int y, uint64_t target) {
-        if (target - (uint64_t)(search_indexes[x].internalPointer()) >=
-            (uint64_t)(search_indexes[y].internalPointer()) - target)
+        if (target - search_indexes[x].internalId() >= search_indexes[y].internalId() - target)
             return y;
         else
             return x;
@@ -171,27 +168,27 @@ int CommandBufferView::getNearestSearchCommand(uint64_t target_index)
     int n = search_indexes.size();
     int left = 0, right = n, mid = 0;
 
-    if (target_index <= get_internal_pointer(left))
+    if (target_index <= get_internal_id(left))
         return left;
 
-    if (target_index >= get_internal_pointer(right - 1))
+    if (target_index >= get_internal_id(right - 1))
         return right - 1;
 
     while (left < right)
     {
         mid = (left + right) / 2;
 
-        if (target_index == get_internal_pointer(mid))
+        if (target_index == get_internal_id(mid))
             return mid;
-        if (target_index < get_internal_pointer(mid))
+        if (target_index < get_internal_id(mid))
         {
-            if (mid > 0 && target_index > get_internal_pointer(mid - 1))
+            if (mid > 0 && target_index > get_internal_id(mid - 1))
                 return get_nearest(mid - 1, mid, target_index);
             right = mid;
         }
         else
         {
-            if (mid < n - 1 && target_index < get_internal_pointer(mid + 1))
+            if (mid < n - 1 && target_index < get_internal_id(mid + 1))
                 return get_nearest(mid, mid + 1, target_index);
             left = mid + 1;
         }

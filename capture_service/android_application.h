@@ -113,6 +113,22 @@ private:
     virtual absl::Status Pm4CaptureCleanup() override;
 };
 
+class GLESApplication : public AndroidApplication
+{
+public:
+    GLESApplication(AndroidDevice &dev, std::string package, std::string command_args);
+    virtual ~GLESApplication();
+    virtual absl::Status Setup() override;
+
+    // Cleanup for device properties and settings related to a GLES APK
+    virtual absl::Status Cleanup() override;
+
+private:
+    virtual absl::Status Pm4CaptureSetup() override;
+    virtual absl::Status Pm4CaptureCleanup() override;
+};
+
+
 class OpenXRApplication : public AndroidApplication
 {
 public:

@@ -196,10 +196,11 @@ ABSL_FLAG(std::string, vulkan_command, "", "the command for vulkan cli applicati
 ABSL_FLAG(std::string, vulkan_command_args, "", "the arguments for vulkan cli application to run");
 ABSL_FLAG(std::string,
           type,
-          "openxr",
-          "application type: \n\t`openxr` for OpenXR applications(apk) \n\t `vulkan` for Vulkan "
-          "applications(apk)"
-          "\n\t`vulkan_cli` for command line Vulkan application.");
+          "vulkan_openxr",
+          "application type: \n\t`vulkan_openxr` for Vulkan OpenXR applications(apk)\n\t"
+          "`vulkan_non_openxr` for Vulkan applications(apk)\n\t"
+          "`vulkan_cli_non_openxr` for command line Vulkan application\n\t"
+          "`gles_openxr` for GLES OpenXR applications(apk)");
 ABSL_FLAG(
 std::string,
 download_dir,
@@ -324,14 +325,15 @@ bool RunPackage(Dive::DeviceManager& mgr,
     }
     auto dev = *dev_ret;
     dev->EnableGfxr(is_gfxr_capture);
-    auto ret = dev->SetupDevice();
+    auto        ret = dev->SetupDevice();
+    std::string gfxr_capture_arg = "gfxr_capture";
     if (!ret.ok())
     {
         std::cout << "Failed to setup device, error: " << ret.message() << std::endl;
         return false;
     }
 
-    if (app_type == "openxr")
+    if (app_type == "vulkan_openxr")
     {
         ret = dev->SetupApp(package,
                             Dive::ApplicationType::OPENXR_APK,
@@ -339,7 +341,7 @@ bool RunPackage(Dive::DeviceManager& mgr,
                             device_architecture,
                             gfxr_capture_directory);
     }
-    else if (app_type == "vulkan")
+    else if (app_type == "vulkan_non_openxr")
     {
         ret = dev->SetupApp(package,
                             Dive::ApplicationType::VULKAN_APK,
@@ -347,11 +349,25 @@ bool RunPackage(Dive::DeviceManager& mgr,
                             device_architecture,
                             gfxr_capture_directory);
     }
-    else if (app_type == "vulkan_cli")
+    else if (app_type == "vulkan_cli_non_openxr")
     {
         ret = dev->SetupApp(command,
                             command_args,
                             Dive::ApplicationType::VULKAN_CLI,
+                            device_architecture,
+                            gfxr_capture_directory);
+    }
+    else if (app_type == "gles_openxr")
+    {
+        if (command == gfxr_capture_arg)
+        {
+            std::cout << "GFXR capture is not supported for GLES OpenXR applications." << std::endl;
+            return false;
+        }
+
+        ret = dev->SetupApp(package,
+                            Dive::ApplicationType::OPENXR_APK,
+                            command_args,
                             device_architecture,
                             gfxr_capture_directory);
     }

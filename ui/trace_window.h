@@ -17,6 +17,7 @@
 #include <qspinbox.h>
 #include <QDialog>
 #include <QThread>
+#include <QSortFilterProxyModel>
 #include <cstdint>
 
 #include "capture_service/device_mgr.h"
@@ -124,6 +125,25 @@ private:
     int64_t          m_downloaded_size;
 };
 
+class AppTypeFilterModel : public QSortFilterProxyModel
+{
+    Q_OBJECT
+
+public:
+    explicit AppTypeFilterModel(QObject *parent = nullptr) :
+        QSortFilterProxyModel(parent)
+    {
+    }
+
+    void setFilterActive(bool active);
+
+protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+
+private:
+    bool m_filter_active = false;
+};
+
 class TraceDialog : public QDialog
 {
     Q_OBJECT
@@ -197,6 +217,7 @@ private:
     QHBoxLayout        *m_type_layout;
     QLabel             *m_app_type_label;
     QStandardItemModel *m_app_type_model;
+    AppTypeFilterModel *m_app_type_filter_model;
     QComboBox          *m_app_type_box;
 
     QPushButton *m_capture_button;

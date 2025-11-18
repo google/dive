@@ -201,7 +201,7 @@ ABSL_FLAG(std::string,
           "`vulkan_non_openxr` for Vulkan applications(apk)\n\t"
           "`vulkan_cli_non_openxr` for command line Vulkan application\n\t"
           "`gles_openxr` for GLES OpenXR applications(apk)\n\t"
-          "`gles` for GLES applications(apk)");
+          "`gles_non_openxr` for GLES applications(apk)");
 ABSL_FLAG(
 std::string,
 download_dir,

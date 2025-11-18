@@ -721,7 +721,6 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
     {
         m_app = std::make_unique<GLESApplication>(*this, package, command_args);
     }
-
     else if (type == ApplicationType::OPENXR_APK)
     {
         m_app = std::make_unique<OpenXRApplication>(*this, package, command_args);

@@ -113,7 +113,7 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
     else
     {
         // Check if the current parent node is filtered out.
-        uint64_t parent_node_index = (uint64_t)parent_index.internalPointer();
+        uint64_t parent_node_index = parent_index.internalId();
 
         if (!IncludeIndex(parent_node_index))
         {
@@ -127,7 +127,7 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
         QModelIndex index = sourceModel()->index(row, 0, parent_index);
         if (index.isValid())
         {
-            uint64_t       node_index = (uint64_t)index.internalPointer();
+            uint64_t       node_index = index.internalId();
             Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
             if (Dive::IsDrawDispatchNode(node_type))
             {
@@ -151,7 +151,7 @@ void DiveFilterModel::ClearDrawCallIndices()
 bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-    uint64_t    node_index = (uint64_t)index.internalPointer();
+    uint64_t    node_index = index.internalId();
 
     Dive::NodeType current_node_type = m_command_hierarchy.GetNodeType(node_index);
 
@@ -323,7 +323,7 @@ uint64_t DiveTreeView::GetNodeSourceIndex(const QModelIndex &proxy_model_index) 
         return kInvalidNodeIndex;
     }
 
-    return (uint64_t)(source_model_index.internalPointer());
+    return source_model_index.internalId();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -512,7 +512,7 @@ void DiveTreeView::GotoEvent(bool is_above)
             break;
         }
 
-        uint64_t node_idx = (uint64_t)(source_node_idx.internalPointer());
+        uint64_t node_idx = source_node_idx.internalId();
         auto     node_type = m_command_hierarchy.GetNodeType(node_idx);
 
         // Check for Draw/Dispatch/Blit or relevant Marker

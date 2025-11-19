@@ -731,12 +731,12 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     if (m_gfxr_capture_loaded)
     {
         QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(index);
-        selected_item_node_index = (uint64_t)(source_index.internalPointer());
+        selected_item_node_index = source_index.internalId();
     }
     else
     {
         QModelIndex source_model_index = m_filter_model->mapToSource(index);
-        selected_item_node_index = (uint64_t)(source_model_index.internalPointer());
+        selected_item_node_index = source_model_index.internalId();
     }
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(selected_item_node_index);
@@ -2770,7 +2770,7 @@ QModelIndex MainWindow::FindSourceIndexFromNode(QAbstractItemModel *model,
     for (int r = 0; r < model->rowCount(parent); ++r)
     {
         QModelIndex index = model->index(r, 0, parent);
-        if (index.isValid() && (uint64_t)index.internalPointer() == target_node_index)
+        if (index.isValid() && index.internalId() == target_node_index)
         {
             return index;
         }
@@ -2793,7 +2793,7 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     QModelIndex vulkan_draw_call_index = m_command_hierarchy_view->indexAt(pos);
     QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(
     vulkan_draw_call_index);
-    uint64_t node_index = (uint64_t)(source_index.internalPointer());
+    uint64_t node_index = source_index.internalId();
 
     if ((!source_index.isValid()) || (m_data_core->GetCommandHierarchy().GetNodeType(node_index) !=
                                       Dive::NodeType::kGfxrVulkanDrawCommandNode))
@@ -2923,7 +2923,7 @@ void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
 {
     QModelIndex source_index = m_gfxr_vulkan_commands_filter_proxy_model->mapToSource(
     m_command_hierarchy_view->indexAt(pos));
-    uint64_t node_index = (uint64_t)(source_index.internalPointer());
+    uint64_t node_index = source_index.internalId();
 
     std::string    node_desc = m_data_core->GetCommandHierarchy().GetNodeDesc(node_index);
     Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(node_index);
@@ -3000,7 +3000,7 @@ CorrelationTarget            target)
         return std::nullopt;
     }
 
-    uint64_t       node_index = (uint64_t)(source_index.internalPointer());
+    uint64_t       node_index = source_index.internalId();
     Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(node_index);
     bool           type_is_valid = false;
 
@@ -3037,7 +3037,7 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
 
     // Check if the selected node is a GPU timing node. If so, do not correlate with the PM4 view
     // and performance counters. Only correlate with GPU timing view.
-    uint64_t       source_node_index = (uint64_t)source_index.internalPointer();
+    uint64_t       source_node_index = source_index.internalId();
     Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(source_node_index);
 
     bool is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||
@@ -3343,9 +3343,9 @@ void MainWindow::CorrelateCounter(const QModelIndex &index, bool called_from_gfx
         }
         else
         {
-            uint64_t source_node_index = (uint64_t)m_gfxr_vulkan_commands_filter_proxy_model
+            uint64_t source_node_index = m_gfxr_vulkan_commands_filter_proxy_model
                                          ->mapToSource(index)
-                                         .internalPointer();
+                                         .internalId();
             Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(
             source_node_index);
             bool is_gpu_timing_node = (node_type == Dive::NodeType::kGfxrRootFrameNode) ||

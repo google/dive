@@ -39,12 +39,12 @@ cd <dive_path>
 git submodule update --init --recursive
 mkdir build
 cd build
-cmake -GNinja ..
+cmake -GNinja .. -DCMAKE_BUILD_TYPE=Debug
 ninja
 ```
 
-You can specify the build type for debug/release as well
-with `-DCMAKE_BUILD_TYPE=Debug` or `-DCMAKE_BUILD_TYPE=Release` when running cmake.
+You can specify the build type for release as well
+with `-DCMAKE_BUILD_TYPE=Release` instead.
 
 Host tool:
 ```
@@ -60,14 +60,16 @@ cd <dive_path>
 git submodule update --init --recursive
 mkdir build
 cd build
-cmake -G "Visual Studio 17 2022" ..
+cmake -G "Visual Studio 17 2022" .. -DCMAKE_BUILD_TYPE=Debug
 ```
 
-Open `dive.sln` and build in Debug or Release 
+You can specify the build type for release as well
+with `-DCMAKE_BUILD_TYPE=Release` instead.
+
+Open `dive.sln` and build.
 Or run:
 ```
-cmake --build . --config Debug
-cmake --build . --config Release
+cmake --build .
 ```
 
 Host tool:

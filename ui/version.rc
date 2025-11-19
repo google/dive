@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "common/dive_version.h"
+#include "dive/build_defs/version_defs.h"
 #define CONCAT2(a, b) a.b
 #define STRINGIZE_(x) #x
 #define STRINGIZE(x) STRINGIZE_(x)

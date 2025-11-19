@@ -15,7 +15,7 @@ limitations under the License.
 */
 #pragma once
 
-#include "common/dive_cmake_generated.h"
+#include "dive/build_defs/dive_cmake_generated.h"
 
 #define DIVE_VERSION_SHA1 CMAKE_GENERATED_DIVE_VERSION_SHA1
 

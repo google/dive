@@ -16,11 +16,7 @@ limitations under the License.
 
 #pragma once
 
-#include <filesystem>
 #include <string>
-
-#include "common/dive_version.h"
-
 namespace Dive
 {
 

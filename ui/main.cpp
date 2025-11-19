@@ -27,12 +27,59 @@
 #include "main_window.h"
 #include "utils/version_info.h"
 #include "custom_metatypes.h"
+
+#include "client/crashpad_client.h"
+#include "client/crash_report_database.h"
+#include "client/settings.h"
+
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
+
+bool startCrashpad()
+{
+    // 1. Path to the handler binary
+    //    This assumes 'crashpad_handler' is in the same directory as the 'dive' executable.
+    base::FilePath handler("./crashpad_handler");
+
+    // 2. Database and Metrics directories
+    //    These will be created in the current working directory.
+    base::FilePath reportsDir("./crash_reports");
+    base::FilePath metricsDir("./crash_metrics");
+
+    // 3. Upload URL
+    //    Set this to your upload server URL. Passing an empty string disables automatic uploads.
+    std::string url = "";
+
+    // 4. Annotations
+    //    Metadata associated with the crash report.
+    std::map<std::string, std::string> annotations;
+    annotations["app_name"] = "DiveUI";
+    annotations["version"] = "1.0.0";
+
+    // 5. Arguments
+    //    --no-rate-limit: Upload/store every crash (don't throttle to 1 per hour).
+    std::vector<std::string> arguments;
+    arguments.push_back("--no-rate-limit");
+
+    // 6. Start the handler
+    //    This method handles database creation and setting configuration automatically.
+    crashpad::CrashpadClient client;
+    bool                     success = client.StartHandler(handler,
+                                       reportsDir,
+                                       metricsDir,
+                                       url,
+                                       annotations,
+                                       arguments,
+                                       true,  // restartable
+                                       false  // asynchronous_start
+    );
+
+    return success;
+}
 
 //--------------------------------------------------------------------------------------------------
 bool SetApplicationStyle(QString style_key)
@@ -87,6 +134,19 @@ void setDarkMode(QApplication &app)
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+
+    // Initialize Crashpad immediately
+    if (!startCrashpad())
+    {
+        std::cerr << "[Crashpad] Failed to initialize! Check if 'crashpad_handler' is in the "
+                     "executable directory."
+                  << std::endl;
+    }
+    else
+    {
+        std::cout << "[Crashpad] Initialized successfully." << std::endl;
+    }
+
     // Check number of arguments
     bool exit_after_load = false;
     if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)

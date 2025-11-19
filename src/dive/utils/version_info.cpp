@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "version_info.h"
+#include "dive/utils/version_info.h"
 
 #include <filesystem>
 #include <fstream>

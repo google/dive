@@ -1,0 +1,10 @@
+---
+
+BasedOnStyle: InheritParentConfig
+
+---
+
+Language: Cpp
+
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup

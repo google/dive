@@ -24,15 +24,10 @@
 #endif
 
 #include "cli.h"
-#include "common/dive_version.h"
 #include "dive_core/common/dive_capture_format.h"
 
 namespace Dive
 {
-namespace
-{
-constexpr const char kDiveVersionSHA1String[] = DIVE_VERSION_SHA1;
-}
 namespace cli
 {
 
@@ -46,18 +41,6 @@ bool IsConsoleOutput()
 #else
     return isatty(fileno(stdout)) != 0;
 #endif
-}
-
-const char* RepositoryVersion()
-{
-    if constexpr (std::size(kDiveVersionSHA1String) > 0 && kDiveVersionSHA1String[0] != 0)
-    {
-        return kDiveVersionSHA1String;
-    }
-    else
-    {
-        return nullptr;
-    }
 }
 
 std::string FileFormatVersion()

@@ -27,6 +27,7 @@ target_include_directories(
 
 add_library(version_info version_info.h version_info.cpp)
 target_link_libraries(version_info PUBLIC absl::statusor absl::strings)
+target_link_libraries(version_info PRIVATE dive_build_defs)
 target_include_directories(
     version_info
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_BINARY_DIR}/generated_include/

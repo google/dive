@@ -30,6 +30,7 @@ plugins ^
 runtime_layer ^
 trace_stats ^
 ui ^
-utils
+utils ^
+src
 
 gersemi -i --definitions %SRC_DIRS% --indent 4 CMakeLists.txt %SRC_DIRS%

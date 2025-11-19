@@ -82,6 +82,8 @@ target_include_directories(
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
         ${CMAKE_CURRENT_SOURCE_DIR}/../../
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../src/dive # to be removed
 )
 
 # ------------------------

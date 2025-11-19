@@ -15,3 +15,4 @@
 #
 
 add_subdirectory(build_defs)
+add_subdirectory(utils)

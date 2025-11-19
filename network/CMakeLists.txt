@@ -41,7 +41,7 @@ if(ANDROID)
     list(APPEND NETWORK_LINK_LIBS log)
 endif()
 
-target_link_libraries(network PRIVATE ${NETWORK_LINK_LIBS})
+target_link_libraries(network PRIVATE dive_legacy_includes ${NETWORK_LINK_LIBS})
 
 target_include_directories(network PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 

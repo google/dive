@@ -86,7 +86,6 @@
 #include "overview_tab_view.h"
 #include "perf_counter_tab_view.h"
 #include "perf_counter_model.h"
-#include "plugins/plugin_loader.h"
 #include "property_panel.h"
 #include "search_bar.h"
 #include "shader_view.h"
@@ -605,35 +604,11 @@ MainWindow::MainWindow(ApplicationController &controller) :
     m_hover_help->SetDataCore(m_data_core.get());
     setAccessibleName("DiveMainWindow");
 
-    m_plugin_manager = std::make_unique<Dive::PluginLoader>();
-    m_plugin_manager->Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow, this);
-
     controller.MainWindowInitialized();
 }
 
 //--------------------------------------------------------------------------------------------------
 MainWindow::~MainWindow() {}
-
-//--------------------------------------------------------------------------------------------------
-bool MainWindow::InitializePlugins()
-{
-    // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
-    std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
-
-    std::filesystem::path plugins_dir_path(plugin_path);
-
-    if (absl::Status load_status = m_plugin_manager->LoadPlugins(plugins_dir_path);
-        !load_status.ok())
-    {
-        QMessageBox::warning(this,
-                             tr("Plugin Loading Failed"),
-                             tr("Failed to load plugins from '%1'. \nError: %2")
-                             .arg(QString::fromStdString(plugin_path))
-                             .arg(QString::fromStdString(std::string(load_status.message()))));
-        return false;
-    }
-    return true;
-}
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString &path)
@@ -1354,9 +1329,6 @@ void MainWindow::OnShortcuts()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::closeEvent(QCloseEvent *closeEvent)
 {
-    DIVE_ASSERT(m_plugin_manager != nullptr);
-    m_plugin_manager->UnloadPlugins();
-
     if (!m_capture_saved && !m_unsaved_capture_path.empty())
     {
         switch (QMessageBox::question(this,

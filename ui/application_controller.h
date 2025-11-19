@@ -32,7 +32,11 @@ public:
     ~ApplicationController();
 
     void Register(MainWindow&);
+
     void MainWindowInitialized();
+    void MainWindowClosed();
+
+    bool InitializePlugins();
 
     bool AdvancedOptionEnabled() const;
 signals:

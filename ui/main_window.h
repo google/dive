@@ -85,7 +85,6 @@ enum class EventMode;
 namespace Dive
 {
 class DataCore;
-class PluginLoader;
 class AvailableMetrics;
 class TraceStats;
 struct CaptureStats;
@@ -125,7 +124,6 @@ public:
     explicit MainWindow(ApplicationController &controller);
     ~MainWindow();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
-    bool InitializePlugins();
 
 protected:
     virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
@@ -392,7 +390,6 @@ private:
     // Overlay to be displayed while capture
     OverlayHelper *m_overlay;
 
-    std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
     std::unique_ptr<Dive::CaptureStats>         m_capture_stats;

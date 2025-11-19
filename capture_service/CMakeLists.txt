@@ -31,7 +31,12 @@ endif()
 add_library(trace_mgr android_trace_mgr.cc trace_mgr.cc)
 target_link_libraries(
     trace_mgr
-    PUBLIC absl::core_headers absl::synchronization absl::time
+    PUBLIC
+        absl::core_headers
+        absl::synchronization
+        absl::time
+        absl::str_format
+        absl::strings
 )
 # for #include "common/log.h"
 target_include_directories(trace_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)

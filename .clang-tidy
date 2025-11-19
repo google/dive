@@ -1,0 +1,12 @@
+Checks:
+  - "abseil-*"
+  - "bugprone-*"
+  - "clang-diagnostic-*"
+  - "clang-analyzer-*"
+  - "cppcoreguidelines-*"
+  - "google-*"
+  - "readability-*"
+  - "-bugprone-throwing-static-initialization" # ABSL_FLAG
+  - "-cppcoreguidelines-avoid-non-const-global-variables" # ABSL_FLAG
+  - "-cppcoreguidelines-use-enum-class"
+  - "-readability-redundant-access-specifiers" # qt

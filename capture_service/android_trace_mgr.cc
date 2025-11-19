@@ -21,6 +21,8 @@ limitations under the License.
 #include <string>
 #include <thread>
 
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "common/log.h"
 
 extern "C"
@@ -36,6 +38,11 @@ const static std::string kTraceFilePath{ "/sdcard/Download/" };
 
 namespace Dive
 {
+
+AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration) :
+    m_trace_duration(trace_duration)
+{
+}
 
 void AndroidTraceManager::TraceByFrame()
 {
@@ -74,8 +81,7 @@ void AndroidTraceManager::TraceByDuration()
     }
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
 
-    // TODO: pass in this duration in stead of hard code a number.
-    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+    absl::SleepFor(m_trace_duration);
     {
         absl::MutexLock lock(&m_state_lock);
         SetCaptureState(0);
@@ -85,6 +91,10 @@ void AndroidTraceManager::TraceByDuration()
 
 void AndroidTraceManager::TriggerTrace()
 {
+    // There are two kinds of traces: by duration, and by frame. If OnNewFrame is called then trace
+    // by frame for GetNumFrameToTrace() frames; this function immediately returns and the trace
+    // will be collected the next time OnFewFrame is called. Otherwise, trace by duration for
+    // `m_trace_duration` time; this function will block until the trace is done.
     if (m_frame_num > 0)
     {
         TraceByFrame();

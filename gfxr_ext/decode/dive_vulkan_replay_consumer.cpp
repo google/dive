@@ -67,11 +67,9 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
                                                   &CommonObjectInfoTable::GetVkDeviceInfo);
     device_ = device;
 
-    PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(
-    GetDeviceTable(device)->CreateQueryPool);
+    PFN_vkCreateQueryPool CreateQueryPool = GetDeviceTable(device)->CreateQueryPool;
 
-    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
-    GetDeviceTable(device)->ResetQueryPool);
+    PFN_vkResetQueryPool ResetQueryPool = GetDeviceTable(device)->ResetQueryPool;
 
     auto in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
     VkPhysicalDeviceProperties deviceProperties;
@@ -96,12 +94,10 @@ const ApiCallInfo&                                   call_info,
 format::HandleId                                     device,
 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice            in_device = MapHandle<VulkanDeviceInfo>(device,
+    VkDevice               in_device = MapHandle<VulkanDeviceInfo>(device,
                                                      &CommonObjectInfoTable::GetVkDeviceInfo);
-    PFN_vkQueueWaitIdle QueueWaitIdle = reinterpret_cast<PFN_vkQueueWaitIdle>(
-    GetDeviceTable(device_)->QueueWaitIdle);
-    PFN_vkDestroyQueryPool DestroyQueryPool = reinterpret_cast<PFN_vkDestroyQueryPool>(
-    GetDeviceTable(device_)->DestroyQueryPool);
+    PFN_vkQueueWaitIdle    QueueWaitIdle = GetDeviceTable(device_)->QueueWaitIdle;
+    PFN_vkDestroyQueryPool DestroyQueryPool = GetDeviceTable(device_)->DestroyQueryPool;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyDevice(in_device,
                                                                     QueueWaitIdle,
@@ -268,8 +264,7 @@ StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_
                                           .OnBeginCommandBuffer(in_commandBuffer,
@@ -288,8 +283,7 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnEndCommandBuffer(in_commandBuffer,
                                                                        CmdWriteTimestamp);
@@ -316,14 +310,11 @@ format::HandleId                            fence)
                                                 pSubmits,
                                                 fence);
 
-    PFN_vkDeviceWaitIdle DeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
-    GetDeviceTable(device_)->DeviceWaitIdle);
+    PFN_vkDeviceWaitIdle DeviceWaitIdle = GetDeviceTable(device_)->DeviceWaitIdle;
 
-    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
-    GetDeviceTable(device_)->ResetQueryPool);
+    PFN_vkResetQueryPool ResetQueryPool = GetDeviceTable(device_)->ResetQueryPool;
 
-    PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
-    GetDeviceTable(device_)->GetQueryPoolResults);
+    PFN_vkGetQueryPoolResults GetQueryPoolResults = GetDeviceTable(device_)->GetQueryPoolResults;
 
     const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
     auto                submit_status = gpu_time_.OnQueueSubmit(submitCount,
@@ -458,8 +449,7 @@ VkSubpassContents                                    contents)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass(in_commandBuffer,
                                                                          CmdWriteTimestamp);
@@ -481,8 +471,7 @@ void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass(const ApiCallInfo& cal
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass(in_commandBuffer,
                                                                        CmdWriteTimestamp);
@@ -501,8 +490,7 @@ StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass2(in_commandBuffer,
                                                                           CmdWriteTimestamp);
@@ -527,8 +515,7 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp);
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass2(in_commandBuffer,
                                                                         CmdWriteTimestamp);

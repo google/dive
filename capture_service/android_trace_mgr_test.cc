@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "trace_mgr.h"
 
+#include "absl/time/time.h"
 #include "gtest/gtest.h"
 
 // AndroidTraceManager uses these functions to talk with libwrap. They must be defined at link time.
@@ -55,6 +56,20 @@ TEST(AndroidTraceManagerTest, OnFrameBoundaryDetectedTraceByFrameForOneFrame)
     // We should stop tracing on this frame boundary
     android_trace_manager.OnNewFrame();
     EXPECT_EQ(android_trace_manager.GetState(), TraceState::Finished);
+}
+
+TEST(AndroidTraceManagerTest, TraceByDurationTransistionsToFinishAndUsesByDurationFileName)
+{
+    // TODO: b/462154186 - Never sleep in tests.
+    AndroidTraceManager android_trace_manager(absl::Milliseconds(1));
+    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Idle);
+
+    // Trace by duration since OnNewFrame is not called.
+    android_trace_manager.TriggerTrace();
+    // Unlike trace by frame, all states transitions occur during TriggerTrace.
+    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Finished);
+    // Can detect trace by duration based on the trace file path.
+    EXPECT_EQ(android_trace_manager.GetTraceFilePath(), "/sdcard/Download/trace-0001.rd");
 }
 
 }  // namespace

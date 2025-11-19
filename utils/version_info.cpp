@@ -168,7 +168,7 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
     return absl::StrFormat("Device Libraries Build: %s\nDevice Libraries Build Type: %s\nDevice "
                            "Libraries SHA: %s\n",
                            device_libraries_build_string,
-                           DIVE_BUILD_TYPE,
+                           device_info_map[kNameBuildType],
                            GetSHAString(device_info_map[kNameSha], kLongSha));
 }
 

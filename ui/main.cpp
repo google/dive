@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
         QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
     }
 
-    if (!main_window->InitializePlugins())
+    if (!controller.InitializePlugins())
     {
         qDebug()
         << "Application: Plugin initialization failed. Application may proceed without plugins.";

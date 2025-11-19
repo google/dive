@@ -17,7 +17,7 @@ limitations under the License.
 #include "trace_mgr.h"
 
 #include <string>
-#include <thread>
+#include <string_view>
 
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -33,7 +33,7 @@ extern "C"
 
 namespace
 {
-constexpr auto kTraceFilePath = "/sdcard/Download/";
+constexpr std::string_view kTraceFilePath = "/sdcard/Download/";
 }
 
 namespace Dive

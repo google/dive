@@ -48,6 +48,18 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
+# Integrate backward-cpp for Linux only
+if(UNIX AND NOT APPLE)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/backward-cpp/CMakeLists.txt")
+        add_subdirectory(
+            "${CMAKE_SOURCE_DIR}/third_party/backward-cpp"
+            "${CMAKE_CURRENT_BINARY_DIR}/backward-cpp_build"
+        )
+    else()
+        message(WARNING "backward-cpp not found...")
+    endif()
+endif()
+
 # Tell CMake to create the Dive executable
 add_executable(
     ${PROJECT_NAME}
@@ -76,6 +88,10 @@ target_link_libraries(
     component_files
     version_info
 )
+
+if(TARGET backward)
+    target_link_libraries(${PROJECT_NAME} backward)
+endif()
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)

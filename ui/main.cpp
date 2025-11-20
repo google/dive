@@ -31,6 +31,13 @@
 #    include <dlfcn.h>
 #endif
 
+#include "backward.hpp"
+
+namespace
+{
+backward::SignalHandling sh;
+}  // namespace
+
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
 

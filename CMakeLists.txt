@@ -106,7 +106,8 @@ set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")
 if(ANDROID)
     message(CHECK_START "Make version file for Dive device libraries")
     file(
-        WRITE ${CMAKE_INSTALL_PREFIX}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        WRITE
+        ${CMAKE_INSTALL_PREFIX}/${DEVICE_LIBRARIES_VERSION_FILENAME}
         "sha,"
         ${DIVE_VERSION_SHA1}
         "\nversion,"

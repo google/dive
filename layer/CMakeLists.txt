@@ -55,7 +55,8 @@ set(TARGET_LINK_LIBS PRIVATE service)
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 list(
-    APPEND TARGET_LINK_LIBS
+    APPEND
+    TARGET_LINK_LIBS
     PRIVATE
     -lm
     PRIVATE

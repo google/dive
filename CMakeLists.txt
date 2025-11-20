@@ -30,14 +30,20 @@ endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 # TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if(
+    CMAKE_BUILD_TYPE STREQUAL "Release"
+    OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"
+)
     set(CMAKE_BUILD_TYPE_LOWERCASE "release")
     set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
     set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
 else()
-    message(FATAL_ERROR "Must set -DCMAKE_BUILD_TYPE")
+    message(
+        FATAL_ERROR
+        "Must set -DCMAKE_BUILD_TYPE to Debug, Release, or RelWithDebInfo"
+    )
 endif()
 
 # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
@@ -106,7 +112,8 @@ set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")
 if(ANDROID)
     message(CHECK_START "Make version file for Dive device libraries")
     file(
-        WRITE ${CMAKE_INSTALL_PREFIX}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        WRITE
+        ${CMAKE_INSTALL_PREFIX}/${DEVICE_LIBRARIES_VERSION_FILENAME}
         "sha,"
         ${DIVE_VERSION_SHA1}
         "\nversion,"

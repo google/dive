@@ -746,6 +746,11 @@ void TraceWorker::run()
     const std::string  host = "127.0.0.1";
     int                port = device->Port();
     auto               status = client.Connect(host, port);
+
+    // intentional error
+    int *x = nullptr;
+    *x = 0;
+
     if (!status.ok())
     {
         std::string err_msg(status.message());

@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cstdint>
 #include <string>
 
 namespace Dive
@@ -29,7 +28,6 @@ namespace cli
 void Init();
 bool IsConsoleOutput();
 
-const char *RepositoryVersion();
 std::string FileFormatVersion();
 
 //--------------------------------------------------------------------------------------------------

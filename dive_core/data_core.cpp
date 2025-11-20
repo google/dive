@@ -375,65 +375,18 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         // Add a new event to the EventInfo metadata array
         EventInfo event_info = {};
         event_info.m_submit_index = submit_index;
-        if (IsDrawEventOpcode(type7_header->opcode))
+        event_info.m_type = Util::GetEventType(mem_manager,
+                                               submit_index,
+                                               va_addr,
+                                               type7_header->opcode,
+                                               m_state_tracker);
+
+        if (event_info.m_type == Util::EventType::kDraw)
         {
-            event_info.m_type = EventInfo::EventType::kDraw;
             event_info.m_num_indices = Util::GetIndexCount(mem_manager,
                                                            submit_index,
                                                            va_addr,
                                                            *type7_header);
-        }
-        else if (IsDispatchEventOpcode(type7_header->opcode))
-            event_info.m_type = EventInfo::EventType::kDispatch;
-        else if (type7_header->opcode == CP_BLIT)
-            event_info.m_type = EventInfo::EventType::kBlit;
-        else
-        {
-            SyncType sync_type = Util::GetSyncType(mem_manager,
-                                                   submit_index,
-                                                   va_addr,
-                                                   type7_header->opcode,
-                                                   m_state_tracker);
-
-            switch (sync_type)
-            {
-            case SyncType::kColorSysMemToGmemResolve:
-                event_info.m_type = EventInfo::EventType::kColorSysMemToGmemResolve;
-                break;
-            case SyncType::kColorGmemToSysMemResolve:
-                event_info.m_type = EventInfo::EventType::kColorGmemToSysMemResolve;
-                break;
-            case SyncType::kColorGmemToSysMemResolveAndClear:
-                event_info.m_type = EventInfo::EventType::kColorGmemToSysMemResolveAndClear;
-                break;
-            case SyncType::kColorClearGmem:
-                event_info.m_type = EventInfo::EventType::kColorClearGmem;
-                break;
-            case SyncType::kDepthSysMemToGmemResolve:
-                event_info.m_type = EventInfo::EventType::kDepthSysMemToGmemResolve;
-                break;
-            case SyncType::kDepthGmemToSysMemResolve:
-                event_info.m_type = EventInfo::EventType::kDepthGmemToSysMemResolve;
-                break;
-            case SyncType::kDepthGmemToSysMemResolveAndClear:
-                event_info.m_type = EventInfo::EventType::kDepthGmemToSysMemResolveAndClear;
-                break;
-            case SyncType::kDepthClearGmem:
-                event_info.m_type = EventInfo::EventType::kDepthClearGmem;
-                break;
-            case SyncType::kWaitMemWrites:
-                event_info.m_type = EventInfo::EventType::kWaitMemWrites;
-                break;
-            case SyncType::kWaitForIdle:
-                event_info.m_type = EventInfo::EventType::kWaitForIdle;
-                break;
-            case SyncType::kWaitForMe:
-                event_info.m_type = EventInfo::EventType::kWaitForMe;
-                break;
-            default:
-                DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
-                break;
-            }
         }
 
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();
@@ -448,16 +401,25 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         m_capture_metadata.m_event_info.push_back(event_info);
 
         // Parse and add the shader(s) info to the metadata
-        if (event_info.m_type == EventInfo::EventType::kDraw ||
-            event_info.m_type == EventInfo::EventType::kDispatch)
+        if (event_info.m_type == Util::EventType::kDraw ||
+            event_info.m_type == Util::EventType::kDispatch)
         {
-            if (event_info.m_type == EventInfo::EventType::kDraw)
+            if (event_info.m_type == Util::EventType::kDraw)
             {
-                FillEventStateInfo(it);
+                FillDrawEventStateInfo(it);
             }
 
             if (!HandleShaders(mem_manager, submit_index, type7_header->opcode))
                 return false;
+        }
+        else if (EventInfo::IsResolve(event_info.m_type))
+        {
+            FillResolveOrClearEventStateInfo(it);
+            FillResolveEventStateInfo(it);
+        }
+        else if (EventInfo::IsGmemClear(event_info.m_type))
+        {
+            FillResolveOrClearEventStateInfo(it);
         }
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
@@ -555,7 +517,7 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::FillEventStateInfo(EventStateInfo::Iterator event_state_it)
+void CaptureMetadataCreator::FillDrawEventStateInfo(EventStateInfo::Iterator event_state_it)
 {
     // Vulkan states
     FillInputAssemblyState(event_state_it);
@@ -569,6 +531,58 @@ void CaptureMetadataCreator::FillEventStateInfo(EventStateInfo::Iterator event_s
     // Hardware-specific non-Vulkan states
     FillHardwareSpecificStates(event_state_it);
 }
+
+//--------------------------------------------------------------------------------------------------
+void CaptureMetadataCreator::FillResolveOrClearEventStateInfo(
+EventStateInfo::Iterator event_state_it)
+{
+    uint32_t rb_resolve_gmem_buffer_base_reg_offset = GetRegOffsetByName(
+    "RB_RESOLVE_GMEM_BUFFER_BASE");
+    if (m_state_tracker.IsRegSet(rb_resolve_gmem_buffer_base_reg_offset))
+    {
+        event_state_it->SetResolveBaseGmem(
+        m_state_tracker.GetRegValue(rb_resolve_gmem_buffer_base_reg_offset));
+    }
+
+    uint32_t rb_resolve_cntl_1_reg_offset = GetRegOffsetByName("RB_RESOLVE_CNTL_1");
+    DIVE_ASSERT(rb_resolve_cntl_1_reg_offset != kInvalidRegOffset);
+    if (m_state_tracker.IsRegSet(rb_resolve_cntl_1_reg_offset))
+    {
+        // Assumption: These are all set together. All-or-nothing.
+        RB_RESOLVE_CNTL_1 rb_resolve_cntl_1_reg;
+        RB_RESOLVE_CNTL_2 rb_resolve_cntl_2_reg;
+        uint32_t          rb_resolve_cntl_2_reg_offset = GetRegOffsetByName("RB_RESOLVE_CNTL_2");
+        if (m_state_tracker.IsRegSet(rb_resolve_cntl_2_reg_offset))
+        {
+            rb_resolve_cntl_1_reg.u32All = m_state_tracker.GetRegValue(
+            rb_resolve_cntl_1_reg_offset);
+            rb_resolve_cntl_2_reg.u32All = m_state_tracker.GetRegValue(
+            rb_resolve_cntl_2_reg_offset);
+
+            VkRect2D rect;
+            rect.offset.x = rb_resolve_cntl_1_reg.bitfields.X;
+            rect.offset.y = rb_resolve_cntl_1_reg.bitfields.Y;
+            rect.extent.width = rb_resolve_cntl_2_reg.bitfields.X - rect.offset.x;
+            rect.extent.height = rb_resolve_cntl_2_reg.bitfields.Y - rect.offset.y;
+            event_state_it->SetResolveScissor(rect);
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CaptureMetadataCreator::FillResolveEventStateInfo(EventStateInfo::Iterator event_state_it)
+{
+    uint32_t rb_resolve_sysmem_buffer_base_reg_offset = GetRegOffsetByName(
+    "RB_RESOLVE_SYSTEM_BUFFER_BASE");
+    if (m_state_tracker.IsRegSet(rb_resolve_sysmem_buffer_base_reg_offset))
+    {
+        uint64_t addr = m_state_tracker.GetReg64Value(rb_resolve_sysmem_buffer_base_reg_offset);
+        event_state_it->SetResolveBaseSysmem(addr);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void CaptureMetadataCreator::FillClearEventStateInfo(EventStateInfo::Iterator event_state_it) {}
 
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::FillInputAssemblyState(EventStateInfo::Iterator event_state_it)

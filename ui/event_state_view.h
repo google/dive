@@ -49,9 +49,11 @@ private:
 
     Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo &state,
                                                              uint32_t                    event_id);
-    void BuildDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
-    void DisplayEventStateInfo(Dive::EventStateInfo::ConstIterator event_state_it,
-                               Dive::EventStateInfo::ConstIterator prev_event_state_it);
+
+    // For draw/dispatches
+    void BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayDrawEventStateInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                   Dive::EventStateInfo::ConstIterator prev_event_state_it);
     void DisplayInputAssemblyState(Dive::EventStateInfo::ConstIterator event_state_it,
                                    Dive::EventStateInfo::ConstIterator);
     void DisplayTessellationState(Dive::EventStateInfo::ConstIterator event_state_it,
@@ -70,4 +72,15 @@ private:
                                 Dive::EventStateInfo::ConstIterator prev_event_state_it);
     void DisplayHardwareSpecificStates(Dive::EventStateInfo::ConstIterator event_state_it,
                                        Dive::EventStateInfo::ConstIterator prev_event_state_it);
+
+    // For resolves and/or clears
+    void BuildResolveDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayResolveState(Dive::EventStateInfo::ConstIterator event_state_it,
+                             Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void BuildResolveGmemDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                Dive::EventStateInfo::ConstIterator prev_event_state_it);
+    void BuildResolveSysmemDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);
+    void DisplayResolveSysmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                  Dive::EventStateInfo::ConstIterator prev_event_state_it);
 };

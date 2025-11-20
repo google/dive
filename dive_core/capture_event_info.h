@@ -25,6 +25,55 @@ namespace Dive
 {
 
 //--------------------------------------------------------------------------------------------------
+// Helper functions
+namespace Util
+{
+enum class EventType : uint8_t
+{
+    kUnknown,
+    kDraw,
+    kDispatch,
+    kBlit,
+    kColorSysMemToGmemResolve,
+    kColorGmemToSysMemResolve,
+    kColorGmemToSysMemResolveAndClear,
+    kColorClearGmem,
+    kDepthSysMemToGmemResolve,
+    kDepthGmemToSysMemResolve,
+    kDepthGmemToSysMemResolveAndClear,
+    kDepthClearGmem,
+    kSysmemToGmemResolve,
+    kWaitMemWrites,
+    kWaitForIdle,
+    kWaitForMe,
+    kEventWriteStart,
+    kEventWriteEnd
+};
+
+bool IsEvent(const IMemoryManager      &mem_manager,
+             uint32_t                   submit_index,
+             uint64_t                   addr,
+             uint32_t                   opcode,
+             const EmulateStateTracker &state_tracker);
+
+EventType GetEventType(const IMemoryManager      &mem_manager,
+                       uint32_t                   submit_index,
+                       uint64_t                   va_addr,
+                       uint32_t                   opcode,
+                       const EmulateStateTracker &state_tracker);
+
+std::string GetEventString(const IMemoryManager      &mem_manager,
+                           uint32_t                   submit_index,
+                           uint64_t                   va_addr,
+                           Pm4Type7Header             header,
+                           const EmulateStateTracker &state_tracker);
+uint32_t    GetIndexCount(const IMemoryManager &mem_manager,
+                          uint32_t              submit_index,
+                          uint64_t              va_addr,
+                          Pm4Type7Header        header);
+};  // namespace Util
+
+//--------------------------------------------------------------------------------------------------
 struct BufferInfo
 {
     uint64_t                      m_addr;
@@ -85,81 +134,42 @@ struct EventInfo
     // Submit that contains this event
     uint32_t m_submit_index;
 
-    // Type of event
-    enum class EventType
-    {
-        kDraw,
-        kDispatch,
-        kBlit,
-        kColorSysMemToGmemResolve,
-        kColorGmemToSysMemResolve,
-        kColorGmemToSysMemResolveAndClear,
-        kColorClearGmem,
-        kDepthSysMemToGmemResolve,
-        kDepthGmemToSysMemResolve,
-        kDepthGmemToSysMemResolveAndClear,
-        kDepthClearGmem,
-        kSysmemToGmemResolve,
-        kWaitMemWrites,
-        kWaitForIdle,
-        kWaitForMe,
-        kEventWriteStart,
-        kEventWriteEnd,
-    };
-    EventType m_type;
+    Util::EventType m_type;
 
     RenderModeType m_render_mode = RenderModeType::kUnknown;
     std::string    m_str;
-};
 
-//--------------------------------------------------------------------------------------------------
-// Helper functions
-enum class SyncType
-{
-    // Map to EVENT_WRITEs (vgt_event_type)
-    kEventWriteStart = vgt_event_type::VS_DEALLOC,
-    kEventWriteEnd = vgt_event_type::CACHE_INVALIDATE7,
-
-    // Various configurations of a resolve/clear
-    kColorSysMemToGmemResolve,
-    kColorGmemToSysMemResolve,
-    kColorGmemToSysMemResolveAndClear,
-    kColorClearGmem,
-    kDepthSysMemToGmemResolve,
-    kDepthGmemToSysMemResolve,
-    kDepthGmemToSysMemResolveAndClear,
-    kDepthClearGmem,
-
-    kWaitMemWrites,
-    kWaitForIdle,
-    kWaitForMe,
-
-    kNone
-};
-
-class Util
-{
-public:
-    static bool IsEvent(const IMemoryManager &mem_manager,
-                        uint32_t              submit_index,
-                        uint64_t              addr,
-                        uint32_t              opcode,
-                        EmulateStateTracker  &state_tracker);
-
-    static SyncType    GetSyncType(const IMemoryManager &mem_manager,
-                                   uint32_t              submit_index,
-                                   uint64_t              addr,
-                                   uint32_t              opcode,
-                                   EmulateStateTracker  &state_tracker);
-    static std::string GetEventString(const IMemoryManager &mem_manager,
-                                      uint32_t              submit_index,
-                                      uint64_t              va_addr,
-                                      Pm4Type7Header        header,
-                                      EmulateStateTracker  &state_tracker);
-    static uint32_t    GetIndexCount(const IMemoryManager &mem_manager,
-                                     uint32_t              submit_index,
-                                     uint64_t              va_addr,
-                                     Pm4Type7Header        header);
+    static constexpr bool IsResolve(Util::EventType type)
+    {
+        switch (type)
+        {
+        case Util::EventType::kColorSysMemToGmemResolve:
+        case Util::EventType::kColorGmemToSysMemResolve:
+        case Util::EventType::kColorGmemToSysMemResolveAndClear:
+        case Util::EventType::kDepthSysMemToGmemResolve:
+        case Util::EventType::kDepthGmemToSysMemResolve:
+        case Util::EventType::kDepthGmemToSysMemResolveAndClear:
+        case Util::EventType::kSysmemToGmemResolve:
+            return true;
+        default:
+            break;
+        }
+        return false;
+    }
+    static constexpr bool IsGmemClear(Util::EventType type)
+    {
+        switch (type)
+        {
+        case Util::EventType::kColorGmemToSysMemResolveAndClear:
+        case Util::EventType::kColorClearGmem:
+        case Util::EventType::kDepthGmemToSysMemResolveAndClear:
+        case Util::EventType::kDepthClearGmem:
+            return true;
+        default:
+            break;
+        }
+        return false;
+    }
 };
 
 }  // namespace Dive

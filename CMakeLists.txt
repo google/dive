@@ -29,15 +29,18 @@ if(MSVC)
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
-# TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_BUILD_TYPE_LOWERCASE "release")
-    set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
-elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
-    set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
-else()
-    message(FATAL_ERROR "Must set -DCMAKE_BUILD_TYPE")
+
+if(ANDROID)
+    # TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(CMAKE_BUILD_TYPE_LOWERCASE "release")
+        set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
+        set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
+    else()
+        message(FATAL_ERROR "Must set -DCMAKE_BUILD_TYPE")
+    endif()
 endif()
 
 # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
@@ -121,14 +124,7 @@ if(ANDROID)
     message(CHECK_PASS "successful")
 endif()
 
-# Adds all the configure time information into dive_cmake_generated.h.in
-configure_file(
-    "${CMAKE_SOURCE_DIR}/common/dive_cmake_generated.h.in"
-    "${CMAKE_BINARY_DIR}/generated_include/common/dive_cmake_generated.h"
-)
-
-include_directories("${CMAKE_BINARY_DIR}/generated_include")
-
+add_subdirectory(src)
 add_subdirectory(network)
 add_subdirectory(capture_service)
 add_subdirectory(layer)

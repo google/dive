@@ -740,7 +740,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex &index)
     }
 
     Dive::NodeType node_type = command_hierarchy.GetNodeType(selected_item_node_index);
-    if (Dive::IsDrawDispatchBlitNode(node_type) || node_type == Dive::NodeType::kMarkerNode)
+    if (node_type == Dive::NodeType::kEventNode || node_type == Dive::NodeType::kMarkerNode)
     {
         emit EventSelected(selected_item_node_index);
     }
@@ -3000,9 +3000,10 @@ CorrelationTarget            target)
         return std::nullopt;
     }
 
-    uint64_t       node_index = source_index.internalId();
-    Dive::NodeType node_type = m_data_core->GetCommandHierarchy().GetNodeType(node_index);
-    bool           type_is_valid = false;
+    uint64_t                      node_index = source_index.internalId();
+    const Dive::CommandHierarchy &command_hierarchy = m_data_core->GetCommandHierarchy();
+    Dive::NodeType                node_type = command_hierarchy.GetNodeType(node_index);
+    bool                          type_is_valid = false;
 
     if (target == CorrelationTarget::kGfxrDrawCall)
     {
@@ -3010,7 +3011,13 @@ CorrelationTarget            target)
     }
     else if (target == CorrelationTarget::kPm4DrawCall)
     {
-        type_is_valid = Dive::IsDrawDispatchNode(node_type);
+        type_is_valid = false;
+        if (node_type == Dive::NodeType::kEventNode)
+        {
+            Dive::Util::EventType type = command_hierarchy.GetEventNodeType(node_index);
+            if (type == Dive::Util::EventType::kDraw || type == Dive::Util::EventType::kDispatch)
+                type_is_valid = true;
+        }
     }
 
     if (!type_is_valid)

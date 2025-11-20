@@ -313,10 +313,19 @@ uint32_t CommandHierarchy::GetMarkerNodeId(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
+Util::EventType CommandHierarchy::GetEventNodeType(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
+    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kEventNode);
+    const AuxInfo &info = m_nodes.m_aux_info[node_index];
+    return info.event_node.m_type;
+}
+
+//--------------------------------------------------------------------------------------------------
 uint32_t CommandHierarchy::GetEventNodeId(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
-    DIVE_ASSERT(IsDrawDispatchBlitNode(m_nodes.m_node_type[node_index]));
+    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kEventNode);
     const AuxInfo &info = m_nodes.m_aux_info[node_index];
     return info.event_node.m_event_id;
 }
@@ -355,24 +364,6 @@ bool CommandHierarchy::GetRegFieldNodeIsCe(uint64_t node_index) const
                 m_nodes.m_node_type[node_index] == Dive::NodeType::kFieldNode);
     const AuxInfo &info = m_nodes.m_aux_info[node_index];
     return info.reg_field_node.m_is_ce_packet;
-}
-
-//--------------------------------------------------------------------------------------------------
-SyncType CommandHierarchy::GetSyncNodeSyncType(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
-    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kSyncNode);
-    const AuxInfo &info = m_nodes.m_aux_info[node_index];
-    return (SyncType)info.sync_node.m_sync_type;
-}
-
-//--------------------------------------------------------------------------------------------------
-SyncInfo CommandHierarchy::GetSyncNodeSyncInfo(uint64_t node_index) const
-{
-    DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
-    DIVE_ASSERT(m_nodes.m_node_type[node_index] == Dive::NodeType::kSyncNode);
-    const AuxInfo &info = m_nodes.m_aux_info[node_index];
-    return info.sync_node.m_sync_info;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -483,10 +474,12 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::RegFieldNode(bool is_ce_pac
 }
 
 //--------------------------------------------------------------------------------------------------
-CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::EventNode(uint32_t event_id)
+CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::EventNode(uint32_t        event_id,
+                                                               Util::EventType type)
 {
     AuxInfo info(0);
     info.event_node.m_event_id = event_id;
+    info.event_node.m_type = type;
     return info;
 }
 
@@ -496,15 +489,6 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::MarkerNode(MarkerType type,
     AuxInfo info(0);
     info.marker_node.m_type = type;
     info.marker_node.m_id = id;
-    return info;
-}
-
-//--------------------------------------------------------------------------------------------------
-CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::SyncNode(SyncType type, SyncInfo sync_info)
-{
-    AuxInfo info(0);
-    info.sync_node.m_sync_type = (uint32_t)type;
-    info.sync_node.m_sync_info = sync_info;
     return info;
 }
 
@@ -1003,35 +987,17 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
                                                             va_addr,
                                                             *type7_header,
                                                             m_state_tracker);
-            uint32_t        event_id = m_num_events++;
 
-            uint64_t node_index;
-            SyncType sync_type = Util::GetSyncType(mem_manager,
-                                                   submit_index,
-                                                   va_addr,
-                                                   opcode,
-                                                   m_state_tracker);
-            if (sync_type != SyncType::kNone)
-            {
-                SyncInfo                  sync_info = {};
-                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::SyncNode(sync_type,
-                                                                                         sync_info);
-                node_index = AddNode(NodeType::kSyncNode, std::move(event_string), aux_info);
-            }
-            else
-            {
-                CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id);
-                if (IsDrawDispatchEventOpcode(opcode))
-                {
-                    node_index = AddNode(NodeType::kDrawDispatchNode,
-                                         std::move(event_string),
-                                         aux_info);
-                }
-                else
-                {
-                    node_index = AddNode(NodeType::kBlitNode, std::move(event_string), aux_info);
-                }
-            }
+            uint32_t event_id = m_num_events++;
+
+            Util::EventType           type = Util::GetEventType(mem_manager,
+                                                      submit_index,
+                                                      va_addr,
+                                                      opcode,
+                                                      m_state_tracker);
+            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id,
+                                                                                      type);
+            uint64_t node_index = AddNode(NodeType::kEventNode, std::move(event_string), aux_info);
             AppendEventNodeIndex(node_index);
             event_node_index = node_index;
         }

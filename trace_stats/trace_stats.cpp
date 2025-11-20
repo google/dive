@@ -228,31 +228,31 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
             stats_list[resolve_type]++;
         };
 
-        if (info.m_type == Dive::EventInfo::EventType::kDispatch)
+        if (info.m_type == Util::EventType::kDispatch)
             stats_list[Stats::kDispatches]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kWaitMemWrites)
+        else if (info.m_type == Util::EventType::kWaitMemWrites)
             stats_list[Stats::kWaitMemWrites]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kWaitForIdle)
+        else if (info.m_type == Util::EventType::kWaitForIdle)
             stats_list[Stats::kWaitForIdle]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kWaitForMe)
+        else if (info.m_type == Util::EventType::kWaitForMe)
             stats_list[Stats::kWaitForMe]++;
-        else if (info.m_type == Dive::EventInfo::EventType::kColorSysMemToGmemResolve)
+        else if (info.m_type == Util::EventType::kColorSysMemToGmemResolve)
             GatherResolves(Stats::kColorSysMemToGmemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kColorGmemToSysMemResolve ||
-                 info.m_type == Dive::EventInfo::EventType::kColorGmemToSysMemResolveAndClear)
+        else if (info.m_type == Util::EventType::kColorGmemToSysMemResolve ||
+                 info.m_type == Util::EventType::kColorGmemToSysMemResolveAndClear)
             GatherResolves(Stats::kColorGmemToSysMemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kDepthSysMemToGmemResolve)
+        else if (info.m_type == Util::EventType::kDepthSysMemToGmemResolve)
             GatherResolves(Stats::kDepthSysMemToGmemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolve ||
-                 info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolveAndClear)
+        else if (info.m_type == Util::EventType::kDepthGmemToSysMemResolve ||
+                 info.m_type == Util::EventType::kDepthGmemToSysMemResolveAndClear)
             GatherResolves(Stats::kDepthGmemToSysMemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kColorClearGmem ||
-                 info.m_type == Dive::EventInfo::EventType::kColorGmemToSysMemResolveAndClear)
+        else if (info.m_type == Util::EventType::kColorClearGmem ||
+                 info.m_type == Util::EventType::kColorGmemToSysMemResolveAndClear)
             GatherResolves(Stats::kColorClearGmemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kDepthClearGmem ||
-                 info.m_type == Dive::EventInfo::EventType::kDepthGmemToSysMemResolveAndClear)
+        else if (info.m_type == Util::EventType::kDepthClearGmem ||
+                 info.m_type == Util::EventType::kDepthGmemToSysMemResolveAndClear)
             GatherResolves(Stats::kDepthClearGmemResolves);
-        else if (info.m_type == Dive::EventInfo::EventType::kDraw)
+        else if (info.m_type == Util::EventType::kDraw)
         {
             if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
                 info.m_render_mode == Dive::RenderModeType::kBinningDirect)

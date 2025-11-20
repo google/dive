@@ -27,6 +27,8 @@
 #include "main_window.h"
 #include "utils/version_info.h"
 #include "custom_metatypes.h"
+#include "absl/debugging/failure_signal_handler.h"
+#include "absl/debugging/symbolize.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -87,6 +89,8 @@ void setDarkMode(QApplication &app)
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    absl::InitializeSymbolizer(argv[0]);
+    absl::InstallFailureSignalHandler({});
     // Check number of arguments
     bool exit_after_load = false;
     if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)

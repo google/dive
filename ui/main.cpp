@@ -27,6 +27,12 @@
 #include "main_window.h"
 #include "utils/version_info.h"
 #include "custom_metatypes.h"
+
+// [NEW] Boost Stacktrace Includes
+#include <boost/stacktrace.hpp>
+#include <csignal>
+#include <iostream>  // Ensure iostream is included for std::cerr
+
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -84,9 +90,23 @@ void setDarkMode(QApplication &app)
     QApplication::setPalette(darkPalette);
 }
 
+void crash_handler(int signum)
+{
+    ::signal(signum, SIG_DFL);  // Reset signal handler to default to avoid infinite loops
+    std::cerr << "\n\n[CRASH] Signal " << signum << " received.\n";
+    std::cerr << "Stacktrace:\n";
+    std::cerr << boost::stacktrace::stacktrace();
+    std::cerr << std::endl;
+    std::raise(signum);  // Re-raise the signal to let the OS handle the termination
+}
+
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    // Registering for Segmentation Fault (SIGSEGV) and Abort (SIGABRT)
+    ::signal(SIGSEGV, &crash_handler);
+    ::signal(SIGABRT, &crash_handler);
+
     // Check number of arguments
     bool exit_after_load = false;
     if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)

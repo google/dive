@@ -34,6 +34,10 @@ set(CMAKE_CXX_STANDARD 20)
 # Find the QtWidgets library
 find_package(Qt5Widgets CONFIG REQUIRED)
 
+find_package(Backtrace REQUIRED)
+
+find_package(Boost REQUIRED COMPONENTS stacktrace_backtrace)
+
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(MSVC)
@@ -69,6 +73,9 @@ target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
 target_link_libraries(
     ${PROJECT_NAME}
+    Boost::stacktrace_backtrace
+    Backtrace::Backtrace
+    ${CMAKE_DL_LIBS} # Required for dladdr() on Linux
     network
     dive_core
     device_mgr
@@ -76,6 +83,17 @@ target_link_libraries(
     component_files
     version_info
 )
+
+# Without this, it defaults to "Basic" (no line numbers) even if linked!
+target_compile_definitions(
+    ${PROJECT_NAME} 
+    PRIVATE 
+    BOOST_STACKTRACE_USE_BACKTRACE
+)
+
+if(UNIX AND NOT APPLE)
+    target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
+endif()
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)

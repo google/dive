@@ -30,7 +30,8 @@ function(
 
     foreach(file ${files})
         file(
-            APPEND "${OUTPUT_FILE}"
+            APPEND
+            "${OUTPUT_FILE}"
             "================================================================================\n"
         )
         file(APPEND "${OUTPUT_FILE}" "${file}:\n\n")

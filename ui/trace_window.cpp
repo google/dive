@@ -61,7 +61,7 @@ enum class AppTypes
     kVulkan_Non_OpenXR,     // Vulkan app
     kVulkanCLI_Non_OpenXR,  // Vulkan command line app
     kGLES_OpenXR,           // OpenXR GLES app
-    kGLES_Non_OpenXR,       // GELS app
+    kGLES_Non_OpenXR,       // GLES app
 };
 struct AppTypeInfo
 {

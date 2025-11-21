@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for gfxr_dump_resources")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 add_library(
     gfxr_dump_resources_lib
     STATIC
@@ -89,3 +96,6 @@ add_gfxr_dump_resources_test(
         ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250625T180445_dump_resources_last_draw_only.json
     ADDITIONAL_ARGUMENTS --last_draw_only
 )
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

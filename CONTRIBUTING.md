@@ -63,3 +63,35 @@ for this purpose.
 - Merging reviews approval from 2 Google reviewers.
 - "Squash and merge" is the preferred option to merge a PR since we like a linear git history.
 - "Update with rebase" only when the branch is out-of-date. This ensures a linear history in case "Rebase and merge" is used to submit a PR.
+- Add a comment to the PR describing what manual tests were performed by the contributor.
+
+## Updating Dive's gfxreconstruct subtree
+
+1. Create a branch to contain the merge
+2. Run the pull command: 
+```
+git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
+```
+3. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
+```
+git add third_party/gfxreconstruct
+git commit -m "Merge third_party/gfxreconstruct updates"
+```
+4. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+5. Update submodules:
+```
+git submodule update --init --recursive
+```
+6. Regenerate GFXR Vulkan code:
+```
+cd third_party/gfxreconstruct/framework/generated
+python generate_vulkan.py
+```
+7. Try to build. Fix any errors and commit.
+```
+cmake --build build
+./scripts/build_android.sh Debug
+```
+8. Create a pull request for the updates.
+9. Monitor PR builds; you might need to fix the GitHub workflows.
+10. Ensure the commit is not squash merged so that git can find the subtree updates.

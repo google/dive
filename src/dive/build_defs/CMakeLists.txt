@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for src/dive/build_defs")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 # Adds all the configure time information into dive_cmake_generated.h.in
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/dive_cmake_generated.h.in"
@@ -31,3 +34,6 @@ target_include_directories(
     dive_build_defs
     INTERFACE ${CMAKE_BINARY_DIR}/generated/$<CONFIG>/include
 )
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

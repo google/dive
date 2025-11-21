@@ -65,7 +65,6 @@ public:
         // If we couldn't write next to the exe (permission denied), use temp folder.
         // Windows: %TEMP%
         // Linux: /tmp
-        // MacOS: $TMPDIR
         if (m_fd == kInvalidFd)
         {
             QString temp_dir = QDir::tempPath();
@@ -110,9 +109,6 @@ public:
         {
             SysWrite(m_fd, data, len);
         }
-
-        constexpr uint32_t stderr_fd = 2;
-        SysWrite(stderr_fd, data, len);
     }
 
 private:

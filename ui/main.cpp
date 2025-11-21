@@ -59,36 +59,20 @@ public:
         // Try to open in the executable directory
         // This might fail if the executable folder is not writable
         QString exe_dir = QFileInfo(argv0).absolutePath();
-        QString full_path = QDir(exe_dir).filePath(filename);
-        m_fd = SysOpen(full_path.toLocal8Bit().constData());
+        QString exe_full_path = QDir(exe_dir).filePath(filename);
 
         // If we couldn't write next to the exe (permission denied), use temp folder.
         // Windows: %TEMP%
         // Linux: /tmp
-        if (m_fd == kInvalidFd)
-        {
-            QString temp_dir = QDir::tempPath();
-            full_path = QDir(temp_dir).filePath(filename);
-            m_fd = SysOpen(full_path.toLocal8Bit().constData());
-        }
+        QString temp_dir = QDir::tempPath();
+        QString temp_full_path = QDir(temp_dir).filePath(filename);
 
-        if (m_fd != kInvalidFd)
-        {
-            std::cout << "Crash logging initialized at: " << full_path.toStdString() << std::endl;
-        }
-        else
-        {
-            std::cerr << "Warning: Failed to initialize crash log." << std::endl;
-        }
-    }
+        SafeStrCopy(m_primary_path, exe_full_path.toLocal8Bit().constData());
+        SafeStrCopy(m_fallback_path, temp_full_path.toLocal8Bit().constData());
 
-    static void Shutdown()
-    {
-        if (m_fd != kInvalidFd)
-        {
-            SysClose(m_fd);
-            m_fd = kInvalidFd;
-        }
+        std::cout << "Crash handler initialized" << std::endl;
+        std::cout << "  1. Primary Log Path:  " << exe_full_path.toStdString() << std::endl;
+        std::cout << "  2. Fallback Log Path: " << temp_full_path.toStdString() << std::endl;
     }
 
     static void Writer(const char *data)
@@ -105,6 +89,16 @@ public:
             len++;
         }
 
+        if (m_fd == kInvalidFd)
+        {
+            m_fd = SysOpen(m_primary_path);
+
+            if (m_fd == kInvalidFd)
+            {
+                m_fd = SysOpen(m_fallback_path);
+            }
+        }
+
         if (m_fd != kInvalidFd)
         {
             SysWrite(m_fd, data, len);
@@ -113,7 +107,28 @@ public:
 
 private:
     static constexpr int kInvalidFd = -1;
-    inline static int    m_fd = kInvalidFd;
+    static constexpr int kMaxPath = 2048;
+
+    inline static int m_fd = kInvalidFd;
+
+    // Use char array to avoid potential allocation within the crash handler
+    inline static char m_primary_path[kMaxPath] = { 0 };
+    inline static char m_fallback_path[kMaxPath] = { 0 };
+
+    template<size_t N> static void SafeStrCopy(char (&dest)[N], const char *src)
+    {
+        if (!src)
+        {
+            return;
+        }
+
+        size_t i = 0;
+        for (; i < N - 1 && src[i] != '\0'; ++i)
+        {
+            dest[i] = src[i];
+        }
+        dest[i] = '\0';
+    }
 
     static int SysOpen(const char *path)
     {
@@ -129,15 +144,6 @@ private:
         // 4: (Others): Read (4) = Read Only
         constexpr int mode = 0664;
         return open(path, flags, mode);
-#endif
-    }
-
-    static void SysClose(int fd)
-    {
-#if defined(_WIN32)
-        _close(fd);
-#else
-        close(fd);
 #endif
     }
 
@@ -292,9 +298,5 @@ int main(int argc, char *argv[])
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
     QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
 
-    int result = app.exec();
-
-    CrashHandler::Shutdown();
-
-    return result;
+    return app.exec();
 }

@@ -41,6 +41,46 @@ const VulkanReplayOptions&                options) :
 
 DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer() {}
 
+void DiveVulkanReplayConsumer::Process_vkCreateInstance(
+const ApiCallInfo&                                   call_info,
+VkResult                                             returnValue,
+StructPointerDecoder<Decoded_VkInstanceCreateInfo>*  pCreateInfo,
+StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+HandlePointerDecoder<VkInstance>*                    pInstance)
+{
+    // Fix VUID-vkCreateInstance-ppEnabledExtensionNames-01388. GFXR Replay adds the platform
+    // surface extension but not VK_KHR_surface (which they all depend on). It's easier to fix here
+    // than to patch GFXR.
+    VkInstanceCreateInfo&    create_info = *pCreateInfo->GetPointer();
+    std::vector<const char*> extensions(create_info.ppEnabledExtensionNames,
+                                        create_info.ppEnabledExtensionNames +
+                                        create_info.enabledExtensionCount);
+    if (const auto iter = std::find_if(extensions.cbegin(),
+                                       extensions.cend(),
+                                       [](const char* extension) {
+                                           return strcmp(extension,
+                                                         VK_KHR_SURFACE_EXTENSION_NAME) == 0;
+                                       });
+        iter == extensions.cend())
+    {
+        // This is brittle since if the user calls
+        // GetMetaStructPointer()->ppEnabledExtensionNames->GetPointer() they will get the original
+        // value in the .gfxr file (not any of our modifications). There's really no reason to do
+        // this but it's still possible.
+        extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+        create_info.ppEnabledExtensionNames = extensions.data();
+        create_info.enabledExtensionCount = extensions.size();
+        // The pointers that we are replacing are owned by the DecodeAllocator so they will get
+        // cleaned up at the appropriate time.
+    }
+
+    VulkanReplayConsumer::Process_vkCreateInstance(call_info,
+                                                   returnValue,
+                                                   pCreateInfo,
+                                                   pAllocator,
+                                                   pInstance);
+}
+
 void DiveVulkanReplayConsumer::Process_vkCreateDevice(
 const ApiCallInfo&                                   call_info,
 VkResult                                             returnValue,

@@ -35,6 +35,12 @@ public:
 
     ~DiveVulkanReplayConsumer() override;
 
+    void Process_vkCreateInstance(const ApiCallInfo&                                   call_info,
+                                  VkResult                                             returnValue,
+                                  StructPointerDecoder<Decoded_VkInstanceCreateInfo>*  pCreateInfo,
+                                  StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                  HandlePointerDecoder<VkInstance>* pInstance) override;
+
     void Process_vkCreateDevice(const ApiCallInfo&                                   call_info,
                                 VkResult                                             returnValue,
                                 format::HandleId                                     physicalDevice,

@@ -36,7 +36,7 @@ public:
     explicit OverlayHelper(QObject* parent);
     ~OverlayHelper();
 
-    void Initialize(QLayout* layout);
+    void Initialize(QLayout* layout, QWidget* parent = nullptr);
     void Initialize(QWidget* widget);
 
     QLayout* GetLayout() const;

@@ -235,7 +235,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
     m_main_layout->addLayout(m_left_panel_layout);
     m_main_layout->addLayout(m_right_panel_layout);
 
-    m_overlay->Initialize(m_main_layout);
+    m_overlay->Initialize(m_main_layout, this);
     setLayout(m_overlay->GetLayout());
 
     // Connect the name list's selection change to a lambda

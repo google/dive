@@ -48,6 +48,7 @@ target_link_libraries(
         absl::status
         absl::str_format
         version_info
+        dive_legacy_includes
 )
 
 # ---------------------

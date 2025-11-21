@@ -49,7 +49,10 @@ add_library(
     ${PM4_GENERATED_SRC_FILE}
     ${PM4_GENERATED_HDR_FILE}
 )
-target_link_libraries(${PROJECT_NAME}_lib PRIVATE dive_core version_info)
+target_link_libraries(
+    ${PROJECT_NAME}_lib
+    PRIVATE dive_core version_info dive_legacy_includes
+)
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
 target_link_libraries(

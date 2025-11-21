@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for src/dive/utils")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 # === component_files ==========================================================
 
 if(NOT ANDROID)
@@ -67,3 +70,6 @@ if(NOT ANDROID)
     )
     gtest_discover_tests(string_utils_test)
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

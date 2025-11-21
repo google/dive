@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for capture_service")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(DiveService)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -126,3 +129,6 @@ else()
     target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)
     gtest_discover_tests(android_trace_mgr_test)
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

@@ -14,9 +14,11 @@
  limitations under the License.
 */
 
-#include "string_utils.h"
-#include "gtest/gtest.h"
+#include "dive/utils/string_utils.h"
+
 #include <limits>
+
+#include "gtest/gtest.h"
 
 namespace Dive
 {

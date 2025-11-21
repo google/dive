@@ -39,7 +39,7 @@ include_directories(
 
 add_library(${target_name} SHARED ${HDR_FILES} ${SRC_FILES})
 
-target_link_libraries(${target_name} gpu_time)
+target_link_libraries(${target_name} dive_legacy_includes gpu_time)
 
 if(ANDROID)
     add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)

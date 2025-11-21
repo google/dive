@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "component_files.h"
+#include "dive/utils/component_files.h"
 
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"

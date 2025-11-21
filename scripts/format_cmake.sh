@@ -31,7 +31,6 @@ SRC_DIRS=(
     "runtime_layer"
     "trace_stats"
     "ui"
-    "utils"
     "src"
 )
 

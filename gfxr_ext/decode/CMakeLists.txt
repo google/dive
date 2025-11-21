@@ -14,7 +14,12 @@
 # limitations under the License.
 #
 
-# Since this is called from gfxrecon-replay's CMakeLists.txt, we will inhereit
+message(CHECK_START "Generate build files for gfxr_ext/decode")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
+# This can be called from two separate top level CMakeLists.txt, Dive and GFXR.
+#
+# When this is called from gfxrecon-replay's CMakeLists.txt, we will inhereit
 # gfxreconstruct's cmake_minimum_required. For consistency between host and
 # Android builds, explicitly set the cmake_minimum_required to what's in the
 # Dive root CMakeLists.txt
@@ -108,3 +113,6 @@ if(WIN32)
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../..
     )
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

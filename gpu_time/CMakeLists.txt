@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+message(CHECK_START "Generate build files for gpu_time")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 add_library(gpu_time STATIC gpu_time.cpp gpu_time.h)
+if(NOT TARGET gpu_time)
+    message(FATAL_ERROR "Target gpu_time does not exist.")
+endif()
 
 # This is to fix build on Linux
 set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -35,3 +41,6 @@ if(NOT ANDROID)
     target_link_libraries(gpu_time_test PRIVATE gpu_time gtest gtest_main gmock)
     gtest_discover_tests(gpu_time_test)
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

@@ -14,32 +14,17 @@
 # limitations under the License.
 #
 
-if(ANDROID)
-    message("Build diveCaptureLayer for Android.")
-else()
-    message("Not Android platform.")
+message(CHECK_START "Generate build files for layer (diveCaptureLayer)")
+if(NOT ANDROID)
+    message(CHECK_FAIL "not Android platform, skipping")
     return()
 endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
 project(diveCaptureLayer)
 
 set(CMAKE_CXX_STANDARD 20)
 set(target_name VkLayer_dive)
-
-set(HDR_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.h"
-)
-
-set(SRC_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_dispatch.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_base.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_impl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/vk_layer_android.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/gles_layer.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
-)
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
@@ -47,7 +32,19 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp/
 )
 
-add_library(${target_name} SHARED ${HDR_FILES} ${SRC_FILES})
+add_library(
+    ${target_name}
+    SHARED
+    layer_common.h
+    layer_common.cc
+    vk_dispatch.h
+    vk_dispatch.cc
+    vk_layer_impl.h
+    vk_layer_android.cc
+    vk_layer_base.cc
+    vk_layer_impl.cc
+    gles_layer.cc
+)
 
 add_definitions(-DLAYERNAME=Dive)
 
@@ -133,3 +130,6 @@ install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

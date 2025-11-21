@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for runtime_layer (diveRuntimeLayer)")
+if(NOT ANDROID)
+    message(CHECK_FAIL "not Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(diveRuntimeLayer)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -41,10 +48,8 @@ add_library(${target_name} SHARED ${HDR_FILES} ${SRC_FILES})
 
 target_link_libraries(${target_name} dive_legacy_includes gpu_time)
 
-if(ANDROID)
-    add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-    target_link_libraries(${target_name} -lm -ldl -llog -landroid)
-endif()
+add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
+target_link_libraries(${target_name} -lm -ldl -llog -landroid)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
@@ -65,6 +70,8 @@ set_target_properties(
     ${target_name}
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
-if(ANDROID)
-    install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
-endif()
+
+install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

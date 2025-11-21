@@ -30,8 +30,9 @@ constexpr uint32_t kHandshakeMinorVersion = 0;
 namespace Network
 {
 
-TcpClient::TcpClient() :
-    m_status(ClientStatus::DISCONNECTED)
+TcpClient::TcpClient(ConnectionFactory factory) :
+    m_status(ClientStatus::DISCONNECTED),
+    m_conn_factory(std::move(factory))
 {
     m_keep_alive.running = false;
     m_keep_alive.interval_sec = kKeepAliveIntervalSec;
@@ -55,7 +56,16 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
     m_connection.reset();
 
     SetClientStatus(ClientStatus::CONNECTING);
-    auto connection = SocketConnection::Create();
+    absl::StatusOr<std::unique_ptr<SocketConnection>> connection;
+    if (m_conn_factory)
+    {
+        connection = m_conn_factory();
+    }
+    else
+    {
+        connection = SocketConnection::Create();
+    }
+
     if (!connection.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,

@@ -22,6 +22,7 @@ limitations under the License.
 #include <string>
 #include <thread>
 #include <memory>
+#include <functional>
 
 #include "messages.h"
 
@@ -36,10 +37,13 @@ enum class ClientStatus
     CONNECTION_FAILED
 };
 
+using ConnectionFactory = std::function<absl::StatusOr<std::unique_ptr<SocketConnection>>()>;
+
 class TcpClient
 {
 public:
-    TcpClient();
+    explicit TcpClient(ConnectionFactory factory = nullptr);
+
     ~TcpClient();
 
     // Connects to the server and performs the handshake.
@@ -89,6 +93,7 @@ private:
     std::mutex                        m_connection_mutex;
     ClientStatus                      m_status;
     mutable std::mutex                m_status_mutex;
+    ConnectionFactory                 m_conn_factory;
 
     // KeepAlive is used to check the connection with the server periodically via a ping-pong
     // mechanism.

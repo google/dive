@@ -59,9 +59,12 @@ add_executable(
 )
 
 # For release builds, build Dive UI as WIN32 GUI application instead of a console application.
-# This will supress logging to stdout.
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+if(MSVC)
+    set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES
+            WIN32_EXECUTABLE $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
+    )
 endif()
 
 # Use the Widgets module from Qt 5

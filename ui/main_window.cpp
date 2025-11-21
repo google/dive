@@ -487,7 +487,7 @@ MainWindow::MainWindow(ApplicationController &controller) :
         //       Workaround: keep overview tab always visible.
         m_tabs.overview = m_tab_widget->addTab(m_overview_tab_view, "Overview");
 
-        UpdateTabAvailability(0);
+        UpdateTabAvailability(TabMaskBits::kNone);
     }
     // Side panel
     // TODO (b/445754645) Remove the PropertyPanel and replace with a tooltip or overlay.
@@ -501,7 +501,7 @@ MainWindow::MainWindow(ApplicationController &controller) :
     m_tab_widget->setMinimumSize(QSize(50, 0));
 
     // The main horizontal splitter (Left, Middle, and Right panels, with a 1:1:1 size ratio)
-    QSplitter *horizontal_splitter = new QSplitter(Qt::Horizontal);
+    QSplitter *horizontal_splitter = new QSplitter(Qt::Horizontal, this);
     horizontal_splitter->addWidget(m_left_group_box);
     horizontal_splitter->addWidget(m_middle_group_box);
     horizontal_splitter->addWidget(m_tab_widget);
@@ -1902,10 +1902,6 @@ QString MainWindow::StrippedName(const QString &fullFileName)
 void MainWindow::UpdateTabAvailability(TabMask mask)
 {
     m_tabs_updating = true;
-    if (m_tabs.overview >= 0)
-    {
-        m_tab_widget->setTabEnabled(m_tabs.overview, (mask & TabMaskBits::kOverview) > 0);
-    }
     SetTabAvailable(m_tab_widget, m_tabs.command, mask & TabMaskBits::kCommand);
     SetTabAvailable(m_tab_widget, m_tabs.shader, mask & TabMaskBits::kShader);
     SetTabAvailable(m_tab_widget, m_tabs.event_state, mask & TabMaskBits::kEventState);
@@ -1923,6 +1919,11 @@ void MainWindow::UpdateTabAvailability(TabMask mask)
 #endif
     bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
     SetTabAvailable(m_tab_widget, m_tabs.text_file, (mask & TabMaskBits::kTextFile) && has_text);
+    // Disable overview at the end, so qt end up with a disabled tab instead of invisible one.
+    if (m_tabs.overview >= 0)
+    {
+        m_tab_widget->setTabEnabled(m_tabs.overview, (mask & TabMaskBits::kOverview) > 0);
+    }
     m_tabs_updating = false;
 
     OnTabViewChange();

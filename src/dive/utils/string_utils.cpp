@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "string_utils.h"
+#include "dive/utils/string_utils.h"
 
 namespace Dive
 {

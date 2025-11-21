@@ -15,11 +15,16 @@
 */
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
+#include <cstdio>
+#include <fcntl.h>
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
@@ -27,12 +32,124 @@
 #include "main_window.h"
 #include "utils/version_info.h"
 #include "custom_metatypes.h"
+#include "absl/debugging/failure_signal_handler.h"
+#include "absl/debugging/symbolize.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
 
+#if defined(_WIN32)
+#    include <io.h>
+#else
+#    include <unistd.h>
+#endif
+
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
+
+//--------------------------------------------------------------------------------------------------
+class CrashHandler
+{
+public:
+    static void Initialize(const char *argv0)
+    {
+        QString filename = "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") +
+                           ".log.txt";
+
+        // Try to open in the executable directory
+        // This might fail if the executable folder is not writable
+        QString exe_dir = QFileInfo(argv0).absolutePath();
+        QString full_path = QDir(exe_dir).filePath(filename);
+        m_fd = SysOpen(full_path.toLocal8Bit().constData());
+
+        // If we couldn't write next to the exe (permission denied), use temp folder.
+        // Windows: %TEMP%
+        // Linux: /tmp
+        if (m_fd == kInvalidFd)
+        {
+            QString temp_dir = QDir::tempPath();
+            full_path = QDir(temp_dir).filePath(filename);
+            m_fd = SysOpen(full_path.toLocal8Bit().constData());
+        }
+
+        if (m_fd != kInvalidFd)
+        {
+            std::cout << "Crash logging initialized at: " << full_path.toStdString() << std::endl;
+        }
+        else
+        {
+            std::cerr << "Warning: Failed to initialize crash log." << std::endl;
+        }
+    }
+
+    static void Shutdown()
+    {
+        if (m_fd != kInvalidFd)
+        {
+            SysClose(m_fd);
+            m_fd = kInvalidFd;
+        }
+    }
+
+    static void Writer(const char *data)
+    {
+        if (data == nullptr)
+        {
+            return;
+        }
+
+        // Avoid strlen for crash handler to be safe
+        uint32_t len = 0;
+        while (data[len] != '\0')
+        {
+            len++;
+        }
+
+        if (m_fd != kInvalidFd)
+        {
+            SysWrite(m_fd, data, len);
+        }
+    }
+
+private:
+    static constexpr int kInvalidFd = -1;
+    inline static int    m_fd = kInvalidFd;
+
+    static int SysOpen(const char *path)
+    {
+#if defined(_WIN32)
+        constexpr int flags = _O_CREAT | _O_TRUNC | _O_WRONLY | _O_TEXT;
+        constexpr int mode = _S_IREAD | _S_IWRITE;
+        return _open(path, flags, mode);
+#else
+        constexpr int flags = O_CREAT | O_TRUNC | O_WRONLY;
+        // 0: Indicates this is an octal number
+        // 6: (Owner):  Read (4) + Write (2) = Read/Write
+        // 6: (Group):  Read (4) + Write (2) = Read/Write
+        // 4: (Others): Read (4) = Read Only
+        constexpr int mode = 0664;
+        return open(path, flags, mode);
+#endif
+    }
+
+    static void SysClose(int fd)
+    {
+#if defined(_WIN32)
+        _close(fd);
+#else
+        close(fd);
+#endif
+    }
+
+    static void SysWrite(int fd, const char *data, uint32_t len)
+    {
+#if defined(_WIN32)
+        _write(fd, data, len);
+#else
+        [[maybe_unused]] ssize_t res = write(fd, data, len);
+#endif
+    }
+};
 
 //--------------------------------------------------------------------------------------------------
 bool SetApplicationStyle(QString style_key)
@@ -50,7 +167,7 @@ bool SetApplicationStyle(QString style_key)
 }
 
 //--------------------------------------------------------------------------------------------------
-void setDarkMode(QApplication &app)
+void SetDarkMode(QApplication &app)
 {
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, QColor(40, 40, 40));
@@ -87,6 +204,14 @@ void setDarkMode(QApplication &app)
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    absl::InitializeSymbolizer(argv[0]);
+
+    CrashHandler::Initialize(argv[0]);
+
+    absl::FailureSignalHandlerOptions options;
+    options.writerfn = CrashHandler::Writer;
+    absl::InstallFailureSignalHandler(options);
+
     // Check number of arguments
     bool exit_after_load = false;
     if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)
@@ -129,7 +254,7 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
-    setDarkMode(app);
+    SetDarkMode(app);
 
     // Load and apply the style sheet
     QFile style_sheet(":/stylesheet.qss");
@@ -167,5 +292,9 @@ int main(int argc, char *argv[])
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
     QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
 
-    return app.exec();
+    int result = app.exec();
+
+    CrashHandler::Shutdown();
+
+    return result;
 }

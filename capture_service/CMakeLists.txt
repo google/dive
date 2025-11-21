@@ -32,14 +32,13 @@ add_library(trace_mgr android_trace_mgr.cc trace_mgr.cc)
 target_link_libraries(
     trace_mgr
     PUBLIC
+        dive_legacy_includes
         absl::core_headers
         absl::synchronization
         absl::time
         absl::str_format
         absl::strings
 )
-# for #include "common/log.h"
-target_include_directories(trace_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 if(ANDROID)
     add_library(service service.cc ${COMMAND_UTILS_SRC})
@@ -74,6 +73,7 @@ else()
     )
     target_link_libraries(
         device_mgr
+        dive_legacy_includes
         absl::cleanup
         absl::flags
         absl::flags_parse

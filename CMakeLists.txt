@@ -65,8 +65,6 @@ add_subdirectory(third_party/abseil-cpp)
 
 if(ANDROID)
     add_subdirectory(third_party/freedreno)
-else()
-    add_subdirectory(utils)
 endif()
 
 # `dive_core/common.h` is used in more places other than dive_core now

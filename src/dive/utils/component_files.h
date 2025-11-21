@@ -20,7 +20,7 @@ limitations under the License.
 #include <string>
 
 #include "absl/status/statusor.h"
-#include "component_files_constants.h"
+#include "dive/utils/component_files_constants.h"  // IWYU pragma: export
 
 namespace Dive
 {

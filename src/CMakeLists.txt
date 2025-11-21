@@ -20,4 +20,10 @@ target_include_directories(
     INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+add_library(dive_legacy_includes INTERFACE)
+target_include_directories(
+    dive_legacy_includes
+    INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/dive"
+)
+
 add_subdirectory(dive)

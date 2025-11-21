@@ -84,6 +84,8 @@ public:
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
 private:
+    void PaintImpl(QPainter *painter, QStyleOptionViewItem &&option) const;
+
     const int           kMargin = 5;
     const DiveTreeView *m_dive_tree_view_ptr;
     HoverHelp          *m_hover_help_ptr;

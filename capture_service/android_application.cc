@@ -226,6 +226,90 @@ VulkanApplication::~VulkanApplication()
     Cleanup().IgnoreError();
 }
 
+GLESApplication::GLESApplication(AndroidDevice &dev,
+                                 std::string    package,
+                                 std::string    command_args) :
+    AndroidApplication(dev, std::move(package), ApplicationType::GLES_APK, std::move(command_args))
+{
+    ParsePackage().IgnoreError();
+    Cleanup().IgnoreError();
+}
+
+GLESApplication::~GLESApplication()
+{
+    if (m_started)
+    {
+        Stop().IgnoreError();
+    }
+    Cleanup().IgnoreError();
+}
+
+absl::Status GLESApplication::Setup()
+{
+    LOGD("Setup GLES application: %s\n", m_package.c_str());
+    RETURN_IF_ERROR(GrantAllFilesAccess());
+    Stop().IgnoreError();
+    if (m_gfxr_enabled)
+    {
+        LOGW("GFXR capture for GLES application is not supported.\n");
+        return absl::UnimplementedError("GFXR capture for GLES application is not supported.");
+    }
+    else
+    {
+        RETURN_IF_ERROR(Pm4CaptureSetup());
+    }
+    LOGD("Setup GLES application %s done\n", m_package.c_str());
+    return absl::OkStatus();
+}
+
+absl::Status GLESApplication::Pm4CaptureSetup()
+{
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell run-as %s cp %s/%s .", m_package, kTargetPath, kVkLayerLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat("shell settings put global gpu_debug_layers_gles %s", kVkLayerLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
+                                                    m_package,
+                                                    kTargetPath,
+                                                    kWrapLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package)));
+
+    return absl::OkStatus();
+}
+
+absl::Status GLESApplication::Pm4CaptureCleanup()
+{
+    RETURN_IF_ERROR(
+    m_dev.Adb().Run(absl::StrFormat("shell run-as %s rm %s", m_package, kVkLayerLibName)));
+    return absl::OkStatus();
+}
+
+absl::Status GLESApplication::Cleanup()
+{
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    LOGI("%s GLESApplication::Cleanup(): package %s\n", Dive::kLogPrefixCleanup, m_package.c_str());
+    if (!m_gfxr_enabled)
+    {
+        RETURN_IF_ERROR(Pm4CaptureCleanup());
+    }
+
+    RETURN_IF_ERROR(m_dev.CleanupPackageProperties(m_package));
+    LOGI("%s GLESApplication::Cleanup(): package %s done\n",
+         Dive::kLogPrefixCleanup,
+         m_package.c_str());
+    return absl::OkStatus();
+}
+
 absl::Status VulkanApplication::Setup()
 {
     LOGD("Setup Vulkan application: %s\n", m_package.c_str());

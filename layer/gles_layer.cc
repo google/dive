@@ -26,6 +26,10 @@ limitations under the License.
 #include <cstring>
 #include <string>
 #include <unordered_map>
+
+#include "capture_service/trace_mgr.h"
+#include "layer_common.h"
+
 #if defined __ANDROID__
 
 #    define xstr(a) str(a)
@@ -63,7 +67,6 @@ EGLAPI EGLBoolean EGLAPIENTRY glesLayer_eglInitialize(EGLDisplay dpy, EGLint* ma
 
 EGLAPI EGLBoolean EGLAPIENTRY glesLayer_eglSwapBuffers(EGLDisplay display, EGLSurface surface)
 {
-
     frame_num++;
     const char* msg = "glesLayer_eglSwapBuffers called in glesLayer" xstr(LAYERNAME);
     ALOGI("%s", msg);
@@ -75,7 +78,9 @@ EGLAPI EGLBoolean EGLAPIENTRY glesLayer_eglSwapBuffers(EGLDisplay display, EGLSu
     typedef EGLBoolean (*PFNEGLSWAPBUFFERSPROC)(EGLDisplay display, EGLSurface surface);
     PFNEGLSWAPBUFFERSPROC next = reinterpret_cast<PFNEGLSWAPBUFFERSPROC>(entry);
 
-    return next(display, surface);
+    auto ret = next(display, surface);
+    Dive::GetTraceMgr().OnNewFrame();
+    return ret;
 }
 
 EGLAPI void* EGLAPIENTRY glesLayer_eglGetProcAddress(const char* procname)
@@ -122,6 +127,7 @@ glesLayer_InitializeLayer(void*                             layer_id,
           ") with layer_id (",
           (unsigned long long)layer_id,
           ")");
+    SetLayerStatusLoaded();
 }
 EGLAPI EGLFuncPointer EGLAPIENTRY glesLayer_GetLayerProcAddress(const char*    funcName,
                                                                 EGLFuncPointer next)

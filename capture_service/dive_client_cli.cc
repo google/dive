@@ -200,7 +200,8 @@ ABSL_FLAG(std::string,
           "application type: \n\t`vulkan_openxr` for Vulkan OpenXR applications(apk)\n\t"
           "`vulkan_non_openxr` for Vulkan applications(apk)\n\t"
           "`vulkan_cli_non_openxr` for command line Vulkan application\n\t"
-          "`gles_openxr` for GLES OpenXR applications(apk)");
+          "`gles_openxr` for GLES OpenXR applications(apk)\n\t"
+          "`gles_non_openxr` for GLES applications(apk)");
 ABSL_FLAG(
 std::string,
 download_dir,
@@ -354,6 +355,14 @@ bool RunPackage(Dive::DeviceManager& mgr,
         ret = dev->SetupApp(command,
                             command_args,
                             Dive::ApplicationType::VULKAN_CLI,
+                            device_architecture,
+                            gfxr_capture_directory);
+    }
+    else if (app_type == "gles")
+    {
+        ret = dev->SetupApp(package,
+                            Dive::ApplicationType::GLES_APK,
+                            command_args,
                             device_architecture,
                             gfxr_capture_directory);
     }

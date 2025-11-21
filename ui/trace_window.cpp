@@ -61,6 +61,7 @@ enum class AppTypes
     kVulkan_Non_OpenXR,     // Vulkan app
     kVulkanCLI_Non_OpenXR,  // Vulkan command line app
     kGLES_OpenXR,           // OpenXR GLES app
+    kGLES_Non_OpenXR,       // GLES app
 };
 struct AppTypeInfo
 {
@@ -69,11 +70,12 @@ struct AppTypeInfo
     bool             is_gfxr_capture_supported;
 };
 
-constexpr std::array<AppTypeInfo, 4> kAppTypeInfos = { {
+constexpr std::array<AppTypeInfo, 5> kAppTypeInfos = { {
 { AppTypes::kVulkan_OpenXR, "Vulkan (OpenXR)", true },
 { AppTypes::kVulkan_Non_OpenXR, "Vulkan (Non-OpenXR)", true },
 { AppTypes::kVulkanCLI_Non_OpenXR, "Vulkan CLI (Non-OpenXR)", true },
 { AppTypes::kGLES_OpenXR, "GLES (OpenXR)", false },
+{ AppTypes::kGLES_Non_OpenXR, "GLES (Non-OpenXR)", false },
 } };
 
 constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(kAppTypeInfos.begin(),
@@ -554,6 +556,14 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::VULKAN_APK,
+                               m_command_args,
+                               device_architecture,
+                               m_gfxr_capture_file_directory_input_box->text().toStdString());
+    }
+    else if (app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kGLES_Non_OpenXR)].name.data())
+    {
+        ret = device->SetupApp(m_cur_pkg,
+                               Dive::ApplicationType::GLES_APK,
                                m_command_args,
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());

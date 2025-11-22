@@ -48,6 +48,26 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
+# Create a shared library for the UI components.
+add_library(${PROJECT_NAME}_lib SHARED ${HDR_FILES} ${SRC_FILES})
+
+set_property(TARGET ${PROJECT_NAME}_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(
+    ${PROJECT_NAME}_lib
+    PRIVATE
+        Qt5::Widgets
+        absl::failure_signal_handler
+        absl::symbolize
+        network
+        dive_core
+        device_mgr
+        dive_plugin_loader
+        component_files
+        version_info
+        dive_build_defs
+)
+
 # Tell CMake to create the Dive executable
 add_executable(
     ${PROJECT_NAME}

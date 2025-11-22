@@ -61,6 +61,7 @@ if(NOT ANDROID)
     set(ABSL_USE_EXTERNAL_GOOGLETEST ON CACHE BOOL "")
     set(ABSL_FIND_GOOGLETEST OFF CACHE BOOL "")
 endif()
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(third_party/abseil-cpp)
 
 if(ANDROID)

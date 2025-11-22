@@ -76,6 +76,7 @@ target_link_libraries(
     absl::symbolize
     network
     dive_core
+    dive_lib_os
     device_mgr
     dive_plugin_loader
     component_files

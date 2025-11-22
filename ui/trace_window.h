@@ -40,6 +40,8 @@ class QCheckBox;
 class QRadioButton;
 class QButtonGroup;
 
+class ApplicationController;
+
 class TraceWorker : public QThread
 {
     Q_OBJECT
@@ -149,7 +151,7 @@ class TraceDialog : public QDialog
     Q_OBJECT
 
 public:
-    TraceDialog(QWidget *parent = 0);
+    TraceDialog(ApplicationController &controller, QWidget *parent = 0);
     ~TraceDialog();
     void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
@@ -179,6 +181,7 @@ private slots:
     void         ShowErrorMessage(const QString &err_msg);
     absl::Status StopPackageAndCleanup();
     void         OnCaptureTypeChanged(int id);
+    void         OnShowAdvancedOptions(bool show);
 
 signals:
     void TraceAvailable(const QString &);
@@ -186,6 +189,8 @@ signals:
 private:
     bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice *device, const std::string &capture_directory);
+
+    ApplicationController &m_controller;
 
     const QString kStart_Application = "&Start Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
@@ -202,6 +207,9 @@ private:
     QButtonGroup *m_capture_type_button_group;
     QRadioButton *m_gfxr_capture_type_button;
     QRadioButton *m_pm4_capture_type_button;
+
+    QHBoxLayout *m_capture_warning_layout;
+    QLabel      *m_capture_warning_label;
 
     QHBoxLayout                            *m_pkg_filter_layout;
     QLabel                                 *m_pkg_filter_label;

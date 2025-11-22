@@ -52,6 +52,7 @@
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"
 #include "utils/component_files.h"
+#include "application_controller.h"
 
 namespace
 {
@@ -90,8 +91,9 @@ const int        kPm4CaptureButtonId = 2;
 // =================================================================================================
 // TraceDialog
 // =================================================================================================
-TraceDialog::TraceDialog(QWidget *parent) :
-    QDialog(parent)
+TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
+    QDialog(parent),
+    m_controller(controller)
 {
     qDebug() << "TraceDialog created.";
     m_capture_layout = new QHBoxLayout();
@@ -126,6 +128,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_pkg_filter_button->setIcon(QIcon(":/images/filter.png"));
     m_pkg_refresh_button->setDisabled(true);
     m_pkg_filter_button->setDisabled(true);
+    m_pkg_filter_button->hide();
     m_pkg_filter_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_pkg_filter->hide();
     m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
@@ -160,7 +163,14 @@ TraceDialog::TraceDialog(QWidget *parent) :
     completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     m_pkg_box->setCompleter(completer);
 
-    m_app_type_box->setModel(m_app_type_filter_model);
+    // Capture Debuggable Applications Only Warning
+    m_capture_warning_layout = new QHBoxLayout();
+    m_capture_warning_label = new QLabel(
+    tr("⚠ The list below displays debuggable APKs available for capture on the selected device."));
+    m_capture_warning_label->setWordWrap(true);
+    m_capture_warning_layout->addWidget(m_capture_warning_label);
+
+    m_app_type_box->setModel(m_app_type_model);
 
     m_capture_type_layout = new QHBoxLayout();
     m_capture_type_label = new QLabel("Capture Type:");
@@ -238,6 +248,7 @@ TraceDialog::TraceDialog(QWidget *parent) :
     m_main_layout->addLayout(m_capture_type_layout);
     m_main_layout->addLayout(m_cmd_layout);
     m_main_layout->addLayout(m_pkg_filter_layout);
+    m_main_layout->addLayout(m_capture_warning_layout);
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_directory_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_local_directory_layout);
@@ -291,6 +302,11 @@ TraceDialog::TraceDialog(QWidget *parent) :
                      QOverload<int>::of(&QButtonGroup::buttonClicked),
                      this,
                      &TraceDialog::OnCaptureTypeChanged);
+
+    QObject::connect(&m_controller,
+                     &ApplicationController::AdvancedOptionToggled,
+                     this,
+                     &TraceDialog::OnShowAdvancedOptions);
 }
 
 TraceDialog::~TraceDialog()
@@ -475,6 +491,19 @@ void TraceDialog::OnCaptureTypeChanged(int button_id)
     else
     {
         HideGfxrFields();
+    }
+}
+
+void TraceDialog::OnShowAdvancedOptions(bool show)
+{
+    m_pkg_filter_button->setVisible(show);
+
+    m_capture_warning_label->setVisible(!show);
+
+    if (!show)
+    {
+        m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
+        UpdatePackageList();
     }
 }
 

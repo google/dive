@@ -1,11 +1,11 @@
-name: Dive CI
+name: Dive Presubmit
 
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the main branch
 on:
   push:
     branches: [ main ]
-  pull_request:
+  pull_request: # Note it also runs as postsubmit
 
 # Cancel previous runs if a more recent commit is pushed.
 concurrency:
@@ -299,10 +299,10 @@ jobs:
       - name: Install ccache
         run: brew install ccache
       - name: Cache ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-Debug-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-Debug-ccache-presubmit-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-Debug-ccache-
       - name: Install dependency
@@ -352,10 +352,10 @@ jobs:
       - name: Install ccache
         run: brew install ccache
       - name: Cache ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-Release-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-Release-ccache-presubmit-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-Release-ccache-
       - name: Install dependency

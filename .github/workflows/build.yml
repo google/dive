@@ -4,7 +4,7 @@ name: Dive Build
 # events but only for the main branch
 on:
   schedule:
-    cron: "40 5 * * 1,2,3,4,5" # 5:40 UTC (1:40 or 2:40 eastern)
+    - cron: "40 5 * * 1,2,3,4,5" # 5:40 UTC (1:40 or 2:40 eastern)
   workflow_dispatch: # manual
 
 jobs:

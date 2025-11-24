@@ -895,12 +895,13 @@ absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &s
 
 absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
 {
+    const AdbSession &adb = m_device->Adb();
+
     LOGD("DeployReplayApk(): starting\n");
 
     std::string python_path = GetPythonPath();
     RETURN_IF_ERROR(ValidatePythonPath(python_path));
 
-    const AdbSession &adb = m_device->Adb();
     if (absl::Status status = adb.Run("shell settings put global verifier_verify_adb_installs 0");
         !status.ok())
     {
@@ -991,11 +992,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     {
         LOGD("RunReplayGfxrScript(): PM4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string cmd = absl::StrFormat("shell setprop %s 1", kEnableReplayPm4DumpPropertyName);
-        RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+        RETURN_IF_ERROR(adb.Run(cmd));
         cmd = absl::StrFormat("shell setprop %s \"%s\"",
                               kReplayPm4DumpFileNamePropertyName,
                               dump_pm4_file_name);
-        RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+        RETURN_IF_ERROR(adb.Run(cmd));
     }
     else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
     {
@@ -1121,12 +1122,14 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
 absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &settings) const
 {
+    const AdbSession &adb = m_device->Adb();
+
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
     std::string copy_cmd = absl::StrFormat(R"(push "%s" "%s")",
                                            ResolveAndroidLibPath(kProfilingPluginFolderName, ""),
                                            kTargetPath);
-    RETURN_IF_ERROR(m_device->Adb().Run(copy_cmd));
+    RETURN_IF_ERROR(adb.Run(copy_cmd));
     std::string remote_profiling_dir = absl::StrFormat("%s/%s",
                                                        kTargetPath,
                                                        kProfilingPluginFolderName);
@@ -1134,13 +1137,13 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
         std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
-        m_device->Adb().Run(clean_cmd).IgnoreError();
+        adb.Run(clean_cmd).IgnoreError();
     });
 
     std::string binary_path_on_device = absl::StrFormat("%s/%s",
                                                         remote_profiling_dir,
                                                         kProfilingPluginName);
-    RETURN_IF_ERROR(m_device->Adb().Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
+    RETURN_IF_ERROR(adb.Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
 
     LOGD("RunReplayProfilingBinary(): RUN\n");
     std::string metrics_str = absl::StrJoin(settings.metrics, " ");
@@ -1155,7 +1158,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
                                       metrics_str);
     // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
     LOGD("Profiling binary cmd: %s\n", cmd.c_str());
-    RETURN_IF_ERROR(m_device->Adb().Run(cmd));
+    RETURN_IF_ERROR(adb.Run(cmd));
 
     LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
     std::filesystem::path parse_remote_path = settings.remote_capture_path;
@@ -1193,6 +1196,8 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 
 absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) const
 {
+    const AdbSession &adb = m_device->Adb();
+
     LOGD("RunReplayApk(): Check settings before run\n");
     absl::StatusOr<Dive::GfxrReplaySettings>
     validated_settings = ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
@@ -1203,15 +1208,15 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
 
     LOGD("RunReplayApk(): Attempt to pin GPU clock frequency\n");
     bool trouble_pinning_clock = false;
-    auto ret = m_device->Adb().Run("shell setprop compositor.high_priority 0");
+    auto ret = adb.Run("shell setprop compositor.high_priority 0");
     if (!ret.ok())
     {
         LOGW("WARNING: Could not disable the compositor preemption: %s\n",
              std::string(ret.message()).c_str());
         trouble_pinning_clock = true;
     }
-    absl::Cleanup enable_compositor_preemption = [this] {
-        absl::Status ret = m_device->Adb().Run("shell setprop compositor.high_priority 1");
+    absl::Cleanup enable_compositor_preemption = [this, &adb] {
+        absl::Status ret = adb.Run("shell setprop compositor.high_priority 1");
         if (!ret.ok())
         {
             LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
@@ -1249,7 +1254,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     };
 
     // Wake up the screen.
-    RETURN_IF_ERROR(m_device->Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
+    RETURN_IF_ERROR(adb.Run("shell input keyevent KEYCODE_WAKEUP"));
 
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;

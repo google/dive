@@ -16,9 +16,6 @@ message(CHECK_START "Generate build files for gpu_time")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
 add_library(gpu_time STATIC gpu_time.cpp gpu_time.h)
-if(NOT TARGET gpu_time)
-    message(FATAL_ERROR "Target gpu_time does not exist.")
-endif()
 
 # This is to fix build on Linux
 set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)

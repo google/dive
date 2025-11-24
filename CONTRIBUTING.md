@@ -26,7 +26,6 @@ Guidelines](https://opensource.google/conduct/).
 ## Contribution process
 
 ### Formatting
-
 - The C++ code in this repository is formatted with LLVM clang-format version 18.1.8
 - The cmake files are formatted with [gersemi](https://pypi.org/project/gersemi/) version 0.23.1
 
@@ -49,7 +48,6 @@ Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to inst
 There is a lint github action that will run clang-format on all source code in the project, and another one that runs the format_cmake scripts with gersemi.
 
 ### Code style
-
 - `CamelCase` for class and function names. The exception is overriding methods, like Qt, where adopting their naming convention is required.
 - `snake_case` for variable names.
 - Prefix class member variables with `m_`
@@ -68,26 +66,26 @@ for this purpose.
 ## Updating Dive's gfxreconstruct subtree
 
 1. Create a branch to contain the merge
-2. Run the pull command: 
-```
-git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
-```
-3. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
-```
-git add third_party/gfxreconstruct
-git commit -m "Merge third_party/gfxreconstruct updates"
-```
-4. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
-5. Update submodules:
-```
-git submodule update --init --recursive
-```
-6. Regenerate GFXR Vulkan code:
-```
-cd third_party/gfxreconstruct/framework/generated
-python generate_vulkan.py
-```
-7. Try to [build](BUILD.md). Fix any errors and commit.
-8. Create a pull request for the updates.
-9. Monitor PR builds; you might need to fix the GitHub workflows.
-10. Ensure the commit is not squash merged so that git can find the subtree updates.
+1. Run the pull command: 
+    ```sh
+    git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
+    ```
+1. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
+    ```sh
+    git add third_party/gfxreconstruct
+    git commit -m "Merge third_party/gfxreconstruct updates"
+    ```
+1. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+1. Update submodules:
+    ```sh
+    git submodule update --init --recursive
+    ```
+1. Regenerate GFXR Vulkan code:
+    ```sh
+    cd third_party/gfxreconstruct/framework/generated
+    python generate_vulkan.py
+    ```
+1. Try to [build](BUILD.md). Fix any errors and commit.
+1. Create a pull request for the updates.
+1. Monitor PR builds; you might need to fix the GitHub workflows.
+1. Ensure the commit is not squash merged so that git can find the subtree updates.

@@ -12,7 +12,7 @@
 :: See the License for the specific language governing permissions and
 :: limitations under the License.
 
-:: This script automates the standard build process. For comprehensive documentation and advanced options, please refer to BUILD.md
+:: This script automates the standard build process. For comprehensive documentation and advanced options, please refer to BUILD.md, "Dive Device Libraries" section
 
 @echo off
 setlocal enabledelayedexpansion

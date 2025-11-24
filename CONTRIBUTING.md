@@ -87,11 +87,7 @@ git submodule update --init --recursive
 cd third_party/gfxreconstruct/framework/generated
 python generate_vulkan.py
 ```
-7. Try to build. Fix any errors and commit.
-```
-cmake --build build
-./scripts/build_android.sh Debug
-```
+7. Try to [build](BUILD.md). Fix any errors and commit.
 8. Create a pull request for the updates.
 9. Monitor PR builds; you might need to fix the GitHub workflows.
 10. Ensure the commit is not squash merged so that git can find the subtree updates.

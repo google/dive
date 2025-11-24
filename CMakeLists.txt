@@ -32,10 +32,12 @@ set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
 # `dive_core/common.h` is used in more places other than dive_core now
-add_definitions(-DDIVE_GUI_TOOL) # TODO: evaluate if this add_definitions() follows cmake best practices
+# TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
+add_definitions(-DDIVE_GUI_TOOL)
 
 # Ignore Qt5.15 deprecations.
-add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff) # TODO: evaluate if this add_definitions() follows cmake best practices
+# TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
+add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
 
 # ------------------------------------------------------------------------------
 # Determining version info
@@ -124,7 +126,8 @@ if(NOT ANDROID)
 
     set(D3D12_SUPPORT OFF CACHE BOOL "")
     set(GFXRECON_ENABLE_OPENXR OFF CACHE BOOL "" FORCE)
-    include(libarchive.cmake) # TODO: evaluate if this include() follows cmake best practices
+    # TODO(b/463357129): evaluate if this include() follows cmake best practices
+    include(libarchive.cmake)
 
     message(CHECK_START "Generate build files for third_party/gfxreconstruct")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
@@ -137,6 +140,7 @@ if(NOT ANDROID)
         message(CHECK_START "Generate build files for third_party/pybind11")
         list(APPEND CMAKE_MESSAGE_INDENT "  ")
         find_package(PythonLibs 3.7 REQUIRED)
+        # TODO(b/463357493): potentially remove pybind11
         set(PYBIND11_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/pybind11")
         add_subdirectory(third_party/pybind11)
         list(POP_BACK CMAKE_MESSAGE_INDENT)
@@ -249,7 +253,7 @@ if(ANDROID)
             "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
     )
-    # TODO (b/462175713): Don't put the entire folder containing layers with different architectures into the install folder, just mark that specific libVkLayer_gfxreconstruct.so for install
+    # TODO(b/462175713): Don't put the entire folder containing layers with different architectures into the install folder, just mark that specific libVkLayer_gfxreconstruct.so for install
     install(
         DIRECTORY ${CMAKE_BINARY_DIR}/gfxr_layer
         DESTINATION ${CMAKE_INSTALL_PREFIX}

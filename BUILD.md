@@ -16,9 +16,9 @@ pip install Mako
   - Android Studio. Make sure to install an SDK and accept the licenses.
   - On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
     - Note: Use Java 17, because this uses an older version of Gradle. Set the `JAVA_HOME` environment variable before building:
-    ```
-    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-    ```
+```
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
 
 # Building Dive
 
@@ -61,8 +61,9 @@ rmdir /s build
 cmake . -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Debug -Bbuild
 ```
 
-You can specify the build type for release as well
-with `-DCMAKE_BUILD_TYPE=Release` instead.
+You can specify other build types as well with `-DCMAKE_BUILD_TYPE=<Debug/Release/RelWithDebInfo/MinSizeRel>`. If you are opening the VS IDE to build, make sure the selected build type in the dropdown matches the type specified earlier, to ensure proper version info is reflected by the built host tools.
+
+TODO(b/460765024): Support multi-configuration generator (VS) for Windows build and disallow `-DCMAKE_BUILD_TYPE=` flag
 
 Open `dive.sln` in Visual Studio and build.
 

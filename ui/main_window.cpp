@@ -472,6 +472,9 @@ MainWindow::MainWindow(ApplicationController &controller) :
 #endif
         m_text_file_view = new TextFileView(*m_data_core);
 
+        m_tabs.gfxr_vulkan_command_arguments = m_tab_widget
+                                               ->addTab(m_gfxr_vulkan_command_arguments_tab_view,
+                                                        "Arguments");
         m_tabs.frame = m_tab_widget->addTab(m_frame_tab_view, "Frame View");
         m_tabs.command = m_tab_widget->addTab(m_command_tab_view, "PM4 Packets");
         m_tabs.event_state = m_tab_widget->addTab(m_event_state_view, "Event State");

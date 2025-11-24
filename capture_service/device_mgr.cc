@@ -675,6 +675,7 @@ absl::Status AndroidDevice::CleanupDevice()
     .IgnoreError();
     Adb().Run(absl::StrFormat("uninstall %s", kGfxrReplayAppName)).IgnoreError();
     Adb().Run("shell settings delete global verifier_verify_adb_installs").IgnoreError();
+    Adb().Run("shell am clear-debug-app").IgnoreError();
 
     // cleanup for gfxr PM4 capture
     Adb()
@@ -1250,6 +1251,18 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
         if (!ret.ok())
         {
             LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
+        }
+    };
+
+    if (validated_settings->wait_for_debugger)
+    {
+        RETURN_IF_ERROR(
+        adb.Run(absl::StrFormat("shell am set-debug-app -w %s", kGfxrReplayAppName)));
+    }
+    absl::Cleanup clear_debug_app = [&validated_settings, &adb]() {
+        if (validated_settings->wait_for_debugger)
+        {
+            adb.Run("shell am clear-debug-app").IgnoreError();
         }
     };
 

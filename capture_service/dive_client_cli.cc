@@ -244,6 +244,7 @@ ABSL_FLAG(Dive::GfxrReplayOptions,
           "\n\tperf_counters: Collect metrics\n\tgpu_timing: Collect GPU timing\n\trenderdoc: "
           "Create a RenderDoc capture");
 ABSL_FLAG(bool, validation_layer, false, "Run GFXR replay with the Vulkan Validation Layer");
+ABSL_FLAG(bool, wait_for_debugger, false, "Tell GFXR replay app to wait for a debugger before continuing to replay");
 
 void PrintUsage()
 {
@@ -875,6 +876,7 @@ int main(int argc, char** argv)
     replay_settings.remote_capture_path = absl::GetFlag(FLAGS_gfxr_replay_file_path);
     replay_settings.local_download_dir = absl::GetFlag(FLAGS_download_dir);
     replay_settings.use_validation_layer = absl::GetFlag(FLAGS_validation_layer);
+    replay_settings.wait_for_debugger = absl::GetFlag(FLAGS_wait_for_debugger);
     replay_settings.run_type = absl::GetFlag(FLAGS_gfxr_replay_run_type);
     replay_settings.replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags);
     replay_settings.metrics = absl::GetFlag(FLAGS_metrics);

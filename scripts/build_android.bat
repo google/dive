@@ -12,6 +12,8 @@
 :: See the License for the specific language governing permissions and
 :: limitations under the License.
 
+:: This script automates the standard build process. For comprehensive documentation and advanced options, please refer to BUILD.md, "Dive Device Libraries" section
+
 @echo off
 setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
@@ -34,7 +36,6 @@ echo Building all the following types: !BUILD_TYPE!
 (for %%b in (!BUILD_TYPE!) do (
     setlocal enabledelayedexpansion
     echo.
-    echo %%b : Building dive android layer
     set build=%%b
     set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
     echo BUILD_DIR: !BUILD_DIR!
@@ -52,57 +53,15 @@ echo Building all the following types: !BUILD_TYPE!
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER ^
         %SRC_DIR%
 
+    if not !ERRORLEVEL!==0 exit /b 1
+
     cmake --build . --config=!build! -j
+    if not !ERRORLEVEL!==0 exit /b 1
+
     cmake --install .
+    if not !ERRORLEVEL!==0 exit /b 1
+
     popd
-))
-
-pushd !GFXR_ROOT_DIR!
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    echo.
-    echo %%b : Building gfxr android layer
-    set build=%%b
-    
-    echo GFXR_ROOT_DIR: !GFXR_ROOT_DIR!
-    call gradlew layer:assemble!build! replay:assemble!build! --console=verbose -Parm64-v8a -PDisableOpenXR
-))
-popd
-
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    if "%%b" == "Release" set build_lowercase=release
-    if "%%b" == "Debug" set build_lowercase=debug
-    echo.
-    echo %%b : Moving gfxr files
-    set build=%%b
-    set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
-
-    set DIVE_INSTALL_DIR=%PROJECT_ROOT%\\install
-
-    echo Extracting gfxr android layer into the dive install directory
-    set GFXR_LAYER_SRC=!GFXR_ROOT_DIR!\\layer\\build\\outputs\\aar\\layer-!build_lowercase!.aar
-    set GFXR_LAYER_DST=!DIVE_INSTALL_DIR!\\gfxr_layer
-    if exist !GFXR_LAYER_DST! rm -rf !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    md !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-    tar -xf !GFXR_LAYER_SRC! -C !GFXR_LAYER_DST!
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    echo Copying gfxr android replay apk into the dive install directory
-    set GFXR_REPLAY_SRC=!GFXR_ROOT_DIR!\\tools\\replay\\build\\outputs\\apk\\!build_lowercase!
-    xcopy /i !GFXR_REPLAY_SRC!\\replay-*.apk !DIVE_INSTALL_DIR!
-    pushd !DIVE_INSTALL_DIR!
-    if exist gfxr-replay.apk rm gfxr-replay.apk
-    ren replay-*.apk gfxr-replay.apk
-    popd
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    echo Copying gfxrecon.py into the dive install directory
-    set GFXRECON_PY=!GFXR_ROOT_DIR!\\scripts\\gfxrecon.py
-    xcopy !GFXRECON_PY! !DIVE_INSTALL_DIR! /I /Y
-    if not !ERRORLEVEL!==0 exit /b 1
 ))
 
 echo Start Time: %startTime%

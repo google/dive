@@ -20,6 +20,13 @@
 #   set CMAKE_PREFIX_PATH=%QTDIR%;%CMAKE_PREFIX_PATH%
 #   set PATH=%QTDIR%\\bin;%PATH%                        # (Windows) To allow DLLS to be found
 
+message(CHECK_START "Generate build files for ui")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(dive_ui)
 
 # Find includes in corresponding build directories
@@ -204,3 +211,6 @@ install(
     DESTINATION "${CMAKE_INSTALL_PREFIX}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

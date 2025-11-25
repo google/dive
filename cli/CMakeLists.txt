@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for cli")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(divecli)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -125,3 +132,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             ${PEFFETTO_TRACE_READER_LIB}
     )
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

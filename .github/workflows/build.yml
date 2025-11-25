@@ -1,0 +1,430 @@
+name: Dive Build
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+  schedule:
+    - cron: "40 5 * * 1,2,3,4,5" # 5:40 UTC (1:40 or 2:40 eastern)
+  workflow_dispatch: # manual
+
+jobs:
+  build_Windows_Debug:
+    name: "Windows debug build"
+    runs-on: windows-2022
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+            version: 5.15.2
+            target: desktop
+            arch: win64_msvc2019_64
+      - uses: ilammy/setup-nasm@v1
+      - name: Install dependency
+        run: |
+          python3 -m pip install mako
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 -Bbuild .
+      - name: Build Dive host tools with VS 2022
+        run: |
+          cmake --build build --config Debug
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C Debug --test-dir build
+  build_Windows_Release:
+    name: "Windows release build"
+    runs-on: windows-2022
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+            version: 5.15.2
+            target: desktop
+            arch: win64_msvc2019_64
+      - uses: ilammy/setup-nasm@v1
+      - name: Install dependency
+        run: |
+          python3 -m pip install mako
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -Bbuild .
+      - name: Build Dive host tools with VS 2022
+        run: |
+          cmake --build build --config Release
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C Release --test-dir build
+
+
+  build_Linux_Gcc_Debug:
+    name: "Linux gcc debug build"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt dependencies (including xcb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes \
+            cmake \
+            gcc-14 \
+            libsystemd-dev \
+            libbsd-dev \
+            ninja-build \
+            python3-mako \
+            libxcb-glx0-dev
+          which gcc-14
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with gcc-14
+        run: |
+          ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+
+      - name: Run tests
+        run: |
+          export DISPLAY=:99
+          ctest --output-on-failure -C Debug --test-dir build
+
+  build_Linux_Gcc_Release:
+    name: "Linux gcc release build"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt dependencies (including xcb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes \
+            cmake gcc-14 \
+            libsystemd-dev \
+            libbsd-dev \
+            ninja-build \
+            python3-mako \
+            libxcb-glx0-dev
+          which gcc-14
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with gcc-14
+        run: |
+          ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+
+      - name: Run tests
+        run: |
+          export DISPLAY=:99
+          ctest --output-on-failure -C Release --test-dir build
+
+  build_Linux_Clang_Debug:
+    name: "Linux clang debug build"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt dependencies (including xcb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes \
+          cmake clang-19 \
+          libsystemd-dev \
+          libbsd-dev \
+          ninja-build \
+          python3-mako \
+          libxcb-glx0-dev
+          which clang-19
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with clang-19
+        run: |
+          ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+
+      - name: Run tests
+        run: |
+          export DISPLAY=:99
+          ctest --output-on-failure -C Debug --test-dir build
+
+  build_Linux_Clang_Release:
+    name: "Linux clang release build"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt dependencies (including xcb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes \
+          cmake clang-19 \
+          libsystemd-dev \
+          libbsd-dev \
+          ninja-build \
+          python3-mako \
+          libxcb-glx0-dev
+          which clang-19
+      - name: Generate build files with cmake
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with clang-19
+        run: |
+          ninja -C build
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+
+      - name: Run tests
+        run: |
+          export DISPLAY=:99
+          ctest --output-on-failure -C Release --test-dir build
+
+  build_MacOS_Debug:
+    name: "MacOS debug build"
+    runs-on: macos-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt 5.15 via Homebrew
+        run: |
+          brew install qt@5
+          # Link it so standard commands might find it, or just set env vars below
+          echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
+          echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
+      - name: Check Qt Version
+        run: qmake --version
+      - name: Install ccache
+        run: brew install ccache
+      - name: Install dependency
+        run: |
+          python3 -m pip install --break-system-packages mako
+      - name: Zero ccache stats
+        run: ccache -z
+      - name: Generate build files with cmake
+        run: |
+          time cmake -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
+            -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja
+        run: |
+          time ninja -C build -d stats
+      - name: Show ccache stats
+        run: ccache -s
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C Debug --test-dir build
+      - name: Upload cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-Debug-ccache-continuous-${{ github.sha }}
+
+  build_MacOS_Release:
+    name: "MacOS release build"
+    runs-on: macos-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Qt 5.15 via Homebrew
+        run: |
+          brew install qt@5
+          # Link it so standard commands might find it, or just set env vars below
+          echo "Qt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5" >> $GITHUB_ENV
+          echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
+      - name: Check Qt Version
+        run: qmake --version
+      - name: Install ccache
+        run: brew install ccache
+      - name: Install dependency
+        run: |
+          python3 -m pip install --break-system-packages mako
+      - name: Zero ccache stats
+        run: ccache -z
+      - name: Generate build files with cmake
+        run: |
+          time cmake -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
+            -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
+            -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
+            -GNinja \
+            -Bbuild .
+      - name: Build Dive host tools with ninja
+        run: |
+          time ninja -C build -d stats
+      - name: Show ccache stats
+        run: ccache -s
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C Release --test-dir build
+      - name: Upload cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-Release-ccache-continuous-${{ github.sha }}
+
+  build_Android_from_Linux_Debug:
+    name: "Android Debug build on Linux platform"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v3
+        id: setup-java
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake ninja-build
+          sudo apt-get install python3-mako --yes
+          sudo apt-get install libxcb-glx0-dev
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25
+          add-to-path: true
+
+      - name: Gemerate build files with cmake
+        run: |
+          # DIVE_GFXR_GRADLE_CONSOLE=plain produces more readable output in CI
+          cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+          -G "Ninja" \
+          -DCMAKE_MAKE_PROGRAM="ninja" \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_SYSTEM_NAME=Android \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-26 \
+          -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
+          -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          -DDIVE_GFXR_GRADLE_CONSOLE=plain \
+          -Bbuild .
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Build lib with NDK
+        run: |
+          ninja -C build
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log

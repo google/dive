@@ -32,10 +32,8 @@ Reference environment (Ubuntu 24.04):
 ```bash
 sudo apt-get update
 sudo apt-get install -y cmake ninja-build python3-mako
-# Install Qt 5.15.2 via Online Installer (Select version 5.15.2 and gcc_64)
-# https://download.qt.io/archive/online_installers/
-# Then install Qt dependencies
-sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1 libxcb-glx0-dev libsystemd-dev libbsd-dev
+# Install Qt dependencies
+sudo apt-get install -y qtbase5-dev libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1 libxcb-glx0-dev libsystemd-dev libbsd-dev
 # Install Clang 19
 sudo apt-get install -y clang-19
 ```
@@ -87,10 +85,6 @@ cmake --build build --config Debug
 cmake -GNinja -DCMAKE_BUILD_TYPE=Debug -Bbuild .
 ninja -C build
 ```
-
-*Note: Replace `Debug` with `Release` for release builds.*
-
-*Note: The `scripts/build_android.sh` script (mentioned below) also works on macOS for Android builds.*
 
 ## Android Build
 

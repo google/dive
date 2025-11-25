@@ -33,7 +33,7 @@ Reference environment (Ubuntu 24.04):
 sudo apt-get update
 sudo apt-get install -y cmake ninja-build python3-mako
 # Install Qt dependencies
-sudo apt-get install -y qtbase5-dev libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1 libxcb-glx0-dev libsystemd-dev libbsd-dev
+sudo apt-get install -y qtbase5-dev libxcb-glx0-dev libsystemd-dev libbsd-dev
 # Install Clang 19
 sudo apt-get install -y clang-19
 ```

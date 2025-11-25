@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
-project(dive VERSION 1.1.1)
+project(dive VERSION 1.1.2)
 
 # Global properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+

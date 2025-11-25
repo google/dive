@@ -17,6 +17,7 @@
         <file>images/dive.png</file>
         <file>images/dive.ico</file>
         <file>stylesheet.qss</file>
+        <file>stylesheet_adaptive.qss</file>
         <file>images/filter.png</file>
         <file>images/analyze.png</file>
         <file>images/copy.png</file>

@@ -125,6 +125,8 @@ public:
     ~MainWindow();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
 
+    void SetUseDefaultStyle(bool use_default_style) { m_use_default_style = use_default_style; }
+
 protected:
     virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
 
@@ -238,6 +240,8 @@ private:
     CorrelationTarget            target);
 
     ApplicationController &m_controller;
+    
+    bool m_use_default_style = false;
 
     QMenu         *m_file_menu;
     QMenu         *m_recent_captures_menu;

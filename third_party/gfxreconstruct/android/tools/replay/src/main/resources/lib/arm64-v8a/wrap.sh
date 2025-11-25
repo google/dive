@@ -15,11 +15,26 @@
 # limitations under the License.
 
 # GOOGLE: this script is used for preloading libwrap for PM4 capture
+# The rest is to allow for debugging. See https://developer.android.com/ndk/guides/wrap-script
+
+cmd=$1
+shift
+
 capture_pm4_enabled=$(getprop debug.dive.replay.capture_pm4)
+os_version=$(getprop ro.build.version.sdk)
+
+if [ "$os_version" -eq "27" ]; then
+  cmd="$cmd -Xrunjdwp:transport=dt_android_adb,suspend=n,server=y -Xcompiler-option --debuggable $@"
+elif [ "$os_version" -eq "28" ]; then
+  cmd="$cmd -XjdwpProvider:adbconnection -XjdwpOptions:suspend=n,server=y -Xcompiler-option --debuggable $@"
+else
+  # Unlike what the docs claim, need -Xcompiler-option --debuggable here as well
+  cmd="$cmd -XjdwpProvider:adbconnection -XjdwpOptions:suspend=n,server=y -Xcompiler-option --debuggable $@"
+fi
 
 echo "capture_pm4_enabled is " $capture_pm4_enabled
 if [[ "$capture_pm4_enabled" == "true" || "$capture_pm4_enabled" == "1" ]]; then
-    export LD_PRELOAD=/data/local/tmp/libwrap.so 
+    export LD_PRELOAD=/data/local/tmp/libwrap.so
 fi
 
-"$@"
+exec $cmd

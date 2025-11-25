@@ -1215,6 +1215,14 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
              std::string(ret.message()).c_str());
         trouble_pinning_clock = true;
     }
+    absl::Cleanup enable_compositor_preemption = [this, &adb] {
+        absl::Status ret = adb.Run("shell setprop compositor.high_priority 1");
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
+                 std::string(ret.message()).c_str());
+        }
+    };
 
     if (!trouble_pinning_clock)
     {
@@ -1225,6 +1233,25 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
             trouble_pinning_clock = true;
         }
     }
+    absl::Cleanup unpin_clock = [this, &trouble_pinning_clock] {
+        if (trouble_pinning_clock)
+        {
+            return;
+        }
+
+        LOGD("RunReplayApk(): Attempt to unpin GPU clock frequency\n");
+        auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
+        if (!ret.ok())
+        {
+            LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
+        }
+
+        ret = m_device->UnpinGpuClock();
+        if (!ret.ok())
+        {
+            LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
+        }
+    };
 
     // Wake up the screen.
     RETURN_IF_ERROR(adb.Run("shell input keyevent KEYCODE_WAKEUP"));
@@ -1242,29 +1269,6 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     if (!ret_run.ok())
     {
         return ret_run;
-    }
-
-    LOGD("RunReplayApk(): Attempt to unpin GPU clock frequency\n");
-    if (!trouble_pinning_clock)
-    {
-        auto ret = m_device->IsGpuClockPinned(kPinGpuClockMHz);
-        if (!ret.ok())
-        {
-            LOGW("WARNING: GPU clock was not pinned: %s\n", std::string(ret.message()).c_str());
-        }
-
-        ret = m_device->UnpinGpuClock();
-        if (!ret.ok())
-        {
-            LOGW("WARNING: Could not unpin GPU clock: %s\n", std::string(ret.message()).c_str());
-        }
-    }
-
-    ret = adb.Run("shell setprop compositor.high_priority 1");
-    if (!ret.ok())
-    {
-        LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
-             std::string(ret.message()).c_str());
     }
 
     LOGD("RunReplayApk(): Completed successfully\n");

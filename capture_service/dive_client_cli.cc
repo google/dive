@@ -452,8 +452,8 @@ absl::Status IsCaptureDirectoryBusy(Dive::DeviceManager& mgr,
                                     const std::string&   gfxr_capture_directory)
 {
     std::string                 on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                                           "/",
-                                                                           gfxr_capture_directory);
+                                                           "/",
+                                                           gfxr_capture_directory);
     std::string                 command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 

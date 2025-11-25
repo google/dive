@@ -20,7 +20,7 @@ Before building the project, ensure you have the following dependencies installe
 
 ### Common Dependencies
 
--   **CMake**: Version 3.5 or higher.
+-   **CMake**: Version 3.22 or higher.
 -   **Ninja**: Recommended build system generator.
 -   **Python 3**: With `mako` package installed (`pip install mako`).
 -   **Qt 5.15.2**: Required for the UI.
@@ -32,7 +32,9 @@ Reference environment (Ubuntu 24.04):
 ```bash
 sudo apt-get update
 sudo apt-get install -y cmake ninja-build python3-mako
-# Install Qt dependencies
+# Install Qt 5.15.2 via Online Installer (Select version 5.15.2 and gcc_64)
+# https://download.qt.io/archive/online_installers/
+# Then install Qt dependencies
 sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1 libxcb-glx0-dev libsystemd-dev libbsd-dev
 # Install Clang 19
 sudo apt-get install -y clang-19
@@ -87,6 +89,8 @@ ninja -C build
 ```
 
 *Note: Replace `Debug` with `Release` for release builds.*
+
+*Note: The `scripts/build_android.sh` script (mentioned below) also works on macOS for Android builds.*
 
 ## Android Build
 

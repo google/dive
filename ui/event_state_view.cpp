@@ -20,6 +20,7 @@
 #include <QVBoxLayout>
 #include <map>
 #include <string>
+#include "color_utils.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
@@ -41,8 +42,18 @@
         _item->setText(1, _string);                                                   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set ||                    \
             QString::compare(_prev_string, _string) != 0)                             \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
+            _item->setForeground(1, QBrush(m_accent_color));                          \
         _items.append(_item);                                                         \
+    }
+
+#define ADD_FIELD_TYPE_ENUM(_field, _to_string, _num, _prev_field_set, _prev_num, _items) \
+    {                                                                                     \
+        QTreeWidgetItem *_item = new QTreeWidgetItem;                                     \
+        _item->setText(0, QString(_field));                                               \
+        _item->setText(1, QString(_to_string(_num)));                                     \
+        if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num)     \
+            _item->setForeground(1, QBrush(m_accent_color));                              \
+        _items.append(_item);                                                             \
     }
 
 #define ADD_FIELD_TYPE_NUMBER(_field, _num, _prev_field_set, _prev_num, _items)       \
@@ -51,7 +62,7 @@
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, QString::number(_num));                                     \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
+            _item->setForeground(1, QBrush(m_accent_color));                          \
         _items.append(_item);                                                         \
     }
 
@@ -61,7 +72,7 @@
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, "0x" + QString::number(static_cast<uint32_t>(_num), 16));   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
+            _item->setForeground(1, QBrush(m_accent_color));                          \
         _items.append(_item);                                                         \
     }
 
@@ -81,7 +92,7 @@
         _item->setText(0, QString(_field));                                             \
         _item->setText(1, (_bool ? "true" : "false"));                                  \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_bool != _bool) \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                          \
+            _item->setForeground(1, QBrush(m_accent_color));                            \
         _items.append(_item);                                                           \
     }
 
@@ -163,6 +174,8 @@ void EventStateView::OnEventSelected(uint64_t node_index)
     m_event_state_tree->clear();
     if (node_index == UINT64_MAX)
         return;
+
+    m_accent_color = GetTextAccentColor();
 
     auto &metadata = m_data_core.GetCaptureMetadata();
     auto &command_hierarchy = m_data_core.GetCommandHierarchy();
@@ -901,66 +914,91 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
         {
             if (event_state_it->IsAttachmentSet(i))
             {
+                QList<QTreeWidgetItem *> attachment_items;
                 // LogicOpEnabled
                 if (event_state_it->IsLogicOpEnabledSet(i))
-                    ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName() +
-                                        QString::number(i),
+                    ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName(),
                                         event_state_it->LogicOpEnabled(i),
                                         prev_event_state_it->IsLogicOpEnabledSet(i),
                                         prev_event_state_it->LogicOpEnabled(i),
-                                        child_items)
+                                        attachment_items)
                 else
-                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpEnabledName() + QString::number(i),
-                                      child_items)
+                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpEnabledName(), attachment_items)
 
                 // LogicOp
                 if (event_state_it->IsLogicOpSet(i))
                 {
-                    ADD_FIELD_TYPE_STRING(event_state_it->GetLogicOpName() + QString::number(i),
+                    ADD_FIELD_TYPE_STRING(event_state_it->GetLogicOpName(),
                                           GetVkLogicOp(event_state_it->LogicOp(i)),
                                           prev_event_state_it->IsLogicOpSet(i),
                                           GetVkLogicOp(prev_event_state_it->LogicOp(i)),
-                                          child_items)
+                                          attachment_items)
                 }
                 else
                 {
-                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpName() + QString::number(i),
-                                      child_items)
+                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpName(), attachment_items)
                 }
 
-                auto GetBlendString = [](VkPipelineColorBlendAttachmentState attach) {
-                    return "blendEnabled: " + QString::number(attach.blendEnable) +
-                           ", srcColorBlendFactor: " +
-                           QString(GetVkBlendFactor(attach.srcColorBlendFactor)) +
-                           ", dstColorBlendFactor: " +
-                           QString(GetVkBlendFactor(attach.dstColorBlendFactor)) +
-                           ", colorBlendOp: " + QString(GetVkBlendOp(attach.colorBlendOp)) +
-                           ", srcAlphaBlendFactor: " +
-                           QString(GetVkBlendFactor(attach.srcAlphaBlendFactor)) +
-                           ", dstAlphaBlendFactor: " +
-                           QString(GetVkBlendFactor(attach.dstAlphaBlendFactor)) +
-                           ", alphaBlendOp: " + QString(GetVkBlendOp(attach.alphaBlendOp)) +
-                           ", colorWriteMask: 0x" + QString::number(attach.colorWriteMask, 16);
-                };
-
-                QString                             value;
-                VkPipelineColorBlendAttachmentState attach = event_state_it->Attachment(i);
-
-                value = GetBlendString(attach);
-
-                QString                             prev_value;
-                VkPipelineColorBlendAttachmentState prev_attach;
+                const VkPipelineColorBlendAttachmentState curr_attach = event_state_it->Attachment(
+                i);
+                const bool prev_set = prev_event_state_it->IsAttachmentSet(i);
+                VkPipelineColorBlendAttachmentState prev_attach = {};
                 if (prev_event_state_it->IsValid())
                 {
                     prev_attach = prev_event_state_it->Attachment(i);
-                    prev_value = GetBlendString(prev_attach);
                 }
+                ADD_FIELD_TYPE_BOOL("BlendEnabled",
+                                    curr_attach.blendEnable,
+                                    prev_set,
+                                    prev_attach.blendEnable,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("SrcColorBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.srcColorBlendFactor,
+                                    prev_set,
+                                    prev_attach.srcColorBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("DstColorBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.dstColorBlendFactor,
+                                    prev_set,
+                                    prev_attach.dstColorBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("ColorBlendOp",
+                                    GetVkBlendOp,
+                                    curr_attach.colorBlendOp,
+                                    prev_set,
+                                    prev_attach.colorBlendOp,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("SrcAlphaBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.srcAlphaBlendFactor,
+                                    prev_set,
+                                    prev_attach.srcAlphaBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("DstAlphaBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.dstAlphaBlendFactor,
+                                    prev_set,
+                                    prev_attach.dstAlphaBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("AlphaBlendOp",
+                                    GetVkBlendOp,
+                                    curr_attach.alphaBlendOp,
+                                    prev_set,
+                                    prev_attach.alphaBlendOp,
+                                    attachment_items);
+                ADD_FIELD_TYPE_NUMBER_HEX("ColorWriteMask",
+                                          curr_attach.colorWriteMask,
+                                          prev_set,
+                                          prev_attach.colorWriteMask,
+                                          attachment_items);
 
-                ADD_FIELD_TYPE_STRING(QString::number(i),
-                                      value,
-                                      prev_event_state_it->IsAttachmentSet(i),
-                                      prev_value,
-                                      child_items);
+                QTreeWidgetItem *attachment_item = new QTreeWidgetItem((QTreeWidget *)0,
+                                                                       QStringList(
+                                                                       QString::number(i)));
+                attachment_item->insertChildren(0, attachment_items);
+                child_items.append(attachment_item);
             }
             else
                 ADD_FIELD_NOT_SET(QString::number(i), child_items);

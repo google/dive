@@ -49,9 +49,6 @@ target_include_directories(gfxrecon-quest-replay
                                ${GFXRECON_SOURCE_DIR}
                                ${CMAKE_BINARY_DIR})
 
-# GOOGLE: Add dive root folder
-target_include_directories(gfxrecon-quest-replay PUBLIC ${GFXRECON_SOURCE_DIR}/../..)
-
 target_include_directories(gfxrecon-quest-replay PUBLIC ${GFXRECON_SOURCE_DIR}/external/OpenXR-SDK/include)
 target_compile_definitions(gfxrecon-quest-replay PUBLIC ENABLE_OPENXR_SUPPORT=1)
 

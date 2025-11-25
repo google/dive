@@ -37,9 +37,6 @@ target_include_directories(gfxrecon-replay
                                ${GFXRECON_SOURCE_DIR}
                                ${CMAKE_BINARY_DIR})
 
-# GOOGLE: Add dive root folder
-target_include_directories(gfxrecon-replay PUBLIC ${GFXRECON_SOURCE_DIR}/../..)
-
 target_link_libraries(
         gfxrecon-replay
         gfxrecon_application_multiwin
@@ -50,6 +47,5 @@ target_link_libraries(
 
 # GOOGLE: Add gfxr_decode_ext_lib
 target_link_libraries(gfxrecon-replay gfxr_decode_ext_lib)
-
 
 message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")

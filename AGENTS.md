@@ -32,7 +32,7 @@ Reference environment (Ubuntu 24.04):
 ```bash
 sudo apt-get update
 sudo apt-get install -y cmake ninja-build python3-mako
-# Install Qt dependencies
+# Install Qt
 sudo apt-get install -y qtbase5-dev libxcb-glx0-dev libsystemd-dev libbsd-dev
 # Install Clang 19
 sudo apt-get install -y clang-19

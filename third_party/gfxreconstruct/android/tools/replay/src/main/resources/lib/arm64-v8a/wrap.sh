@@ -25,10 +25,8 @@ os_version=$(getprop ro.build.version.sdk)
 
 if [ "$os_version" -eq "27" ]; then
   cmd="$cmd -Xrunjdwp:transport=dt_android_adb,suspend=n,server=y -Xcompiler-option --debuggable $@"
-elif [ "$os_version" -eq "28" ]; then
-  cmd="$cmd -XjdwpProvider:adbconnection -XjdwpOptions:suspend=n,server=y -Xcompiler-option --debuggable $@"
 else
-  # Unlike what the docs claim, need -Xcompiler-option --debuggable here as well
+  # Despite what the Android docs claim, need -Xcompiler-option --debuggable here as well
   cmd="$cmd -XjdwpProvider:adbconnection -XjdwpOptions:suspend=n,server=y -Xcompiler-option --debuggable $@"
 fi
 

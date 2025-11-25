@@ -244,7 +244,10 @@ ABSL_FLAG(Dive::GfxrReplayOptions,
           "\n\tperf_counters: Collect metrics\n\tgpu_timing: Collect GPU timing\n\trenderdoc: "
           "Create a RenderDoc capture");
 ABSL_FLAG(bool, validation_layer, false, "Run GFXR replay with the Vulkan Validation Layer");
-ABSL_FLAG(bool, wait_for_debugger, false, "Tell GFXR replay app to wait for a debugger before continuing to replay");
+ABSL_FLAG(bool,
+          wait_for_debugger,
+          false,
+          "Tell GFXR replay app to wait for a debugger before continuing to replay");
 
 void PrintUsage()
 {
@@ -449,8 +452,8 @@ absl::Status IsCaptureDirectoryBusy(Dive::DeviceManager& mgr,
                                     const std::string&   gfxr_capture_directory)
 {
     std::string                 on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                           "/",
-                                                           gfxr_capture_directory);
+                                                                           "/",
+                                                                           gfxr_capture_directory);
     std::string                 command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 

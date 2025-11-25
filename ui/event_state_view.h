@@ -46,6 +46,7 @@ private:
     std::map<std::string, std::string> m_field_desc;
     const Dive::DataCore              &m_data_core;
     QTreeWidget                       *m_event_state_tree;
+    QColor                             m_accent_color;
 
     Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo &state,
                                                              uint32_t                    event_id);

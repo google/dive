@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <sstream>
+#include "color_utils.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_tree_view.h"
 
@@ -92,7 +93,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
 
     uint64_t node_index = index.internalId();
     if (role == Qt::ForegroundRole && IsSelected(node_index))
-        return QColor(255, 128, 128);
+        return GetTextAccentColor();
 
     if (role != Qt::DisplayRole)
         return QVariant();

@@ -31,6 +31,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_proxy_model->setSourceModel(&m_perf_counter_model);
 
     m_perf_counter_view = new QTableView();
+    m_perf_counter_view->verticalHeader()->hide();
     m_perf_counter_view->setSortingEnabled(true);
 
     m_perf_counter_view->setModel(m_proxy_model);

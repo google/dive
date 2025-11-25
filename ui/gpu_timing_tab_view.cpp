@@ -15,6 +15,7 @@
 
 #include <QAbstractItemModel>
 #include <QDebug>
+#include <QHeaderView>
 #include <QItemSelectionModel>
 
 #include "ui/gpu_timing_model.h"
@@ -27,6 +28,7 @@ GpuTimingTabView::GpuTimingTabView(GpuTimingModel               &gpu_timing_mode
     m_command_hierarchy(command_hierarchy)
 {
     m_table_view = new QTableView(this);
+    m_table_view->verticalHeader()->hide();
     m_table_view->setModel(&m_model);
 
     // Used otherwise the table does not expand to fit available space

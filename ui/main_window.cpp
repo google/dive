@@ -2878,7 +2878,7 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
         m_tab_widget->setCurrentIndex(m_tabs.perf_counter);
         break;
     case DrawCallContextMenuOption::kGpuTimeData:
-        m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
+        m_tab_widget->setCurrentIndex(m_tabs.gpu_timing);
         break;
     }
 }

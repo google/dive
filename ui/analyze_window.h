@@ -127,6 +127,8 @@ private:
         bool replay_perf_counter = false;
         bool replay_custom = false;
     };
+    void InitializeLayout();
+
     void                        ShowMessage(const std::string &message);
     void                        SetReplayButton(const std::string &message, bool is_enabled);
     void                        PopulateMetrics();
@@ -209,8 +211,8 @@ private:
     // Other artifacts
     Dive::ComponentFilePaths m_local_capture_files = {};
 
-    QVector<CsvItem>             *m_csv_items;
-    std::vector<std::string>     *m_enabled_metrics_vector;
+    QVector<CsvItem>              m_csv_items;
+    std::vector<std::string>      m_enabled_metrics_vector;
     const Dive::AvailableMetrics *m_available_metrics = nullptr;
     // Used to store a csv item's key in the enabled metrics vector.
     const int         kDataRole = Qt::UserRole + 1;

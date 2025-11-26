@@ -43,27 +43,28 @@ add_library(gfxrecon-quest-replay
                 ${GFXRECON_SOURCE_DIR}/tools/replay/replay_settings.h
                 ${GFXRECON_SOURCE_DIR}/tools/replay/android_main.cpp)
 
-# GOOGLE: Add dive root folder
 target_include_directories(gfxrecon-quest-replay
                            PUBLIC
                                ${GFXRECON_SOURCE_DIR}/external/precompiled/android/include
-                               ${CMAKE_BINARY_DIR}
-                               ${GFXRECON_SOURCE_DIR}/../..)
+                               ${GFXRECON_SOURCE_DIR}
+                               ${CMAKE_BINARY_DIR})
 
 target_include_directories(gfxrecon-quest-replay PUBLIC ${GFXRECON_SOURCE_DIR}/external/OpenXR-SDK/include)
 target_compile_definitions(gfxrecon-quest-replay PUBLIC ENABLE_OPENXR_SUPPORT=1)
 
-# GOOGLE: Add gfxr_decode_ext_lib
 target_link_libraries(
         gfxrecon-quest-replay
         nlohmann_json
         gfxrecon_application
         gfxrecon_decode
-        gfxr_decode_ext_lib
         gfxrecon_graphics
         gfxrecon_format
         platform_specific
         OpenXR::openxr_loader)
+
+# GOOGLE: Add gfxr_decode_ext_lib
+target_link_libraries(gfxrecon-quest-replay gfxr_decode_ext_lib)
+
 else()
     message(WARNING "OpenXR support disabled!")
 endif()

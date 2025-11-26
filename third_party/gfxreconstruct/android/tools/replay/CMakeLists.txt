@@ -37,6 +37,9 @@ target_include_directories(gfxrecon-replay
                                ${GFXRECON_SOURCE_DIR}
                                ${CMAKE_BINARY_DIR})
 
+# GOOGLE: Add gfxr_decode_ext_lib. Prefer to place it before the end of file to avoid merge conflicts.
+target_link_libraries(gfxrecon-replay gfxr_decode_ext_lib)
+
 target_link_libraries(
         gfxrecon-replay
         gfxrecon_application
@@ -44,6 +47,3 @@ target_link_libraries(
         gfxrecon_graphics
         gfxrecon_format
         platform_specific)
-
-# GOOGLE: Add gfxr_decode_ext_lib
-target_link_libraries(gfxrecon-replay gfxr_decode_ext_lib)

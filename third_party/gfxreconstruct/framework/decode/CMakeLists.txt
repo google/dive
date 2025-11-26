@@ -205,9 +205,6 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_json_consumer_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/marker_json_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/metadata_json_consumer.h
-                    # GOOGLE: Include custom dive consumers.
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_dive_consumer_base.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_dive_consumer_base.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_enum_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_util.cpp
@@ -289,9 +286,6 @@ target_sources(gfxrecon_decode
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_json.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.cpp
-                    # GOOGLE: Include the custom generated vulkan dive consumer.
-                    ${PROJECT_SOURCE_DIR}/framework//generated/generated_vulkan_dive_consumer.h
-                    ${PROJECT_SOURCE_DIR}/framework//generated/generated_vulkan_dive_consumer.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_feature_util.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_decoder.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.h
@@ -326,6 +320,15 @@ target_sources(gfxrecon_decode
                     $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_enum_to_json.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_struct_decoders_to_json.h>
                     $<$<BOOL:${D3D12_SUPPORT}>:${PROJECT_SOURCE_DIR}/framework/generated/generated_dx12_struct_decoders_to_json.cpp>
+)
+
+# GOOGLE: Include custom dive consumers.
+target_sources(gfxrecon_decode
+               PRIVATE
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_dive_consumer_base.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_dive_consumer_base.cpp
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_dive_consumer.h
+                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_dive_consumer.cpp
 )
 
 if (${GFXRECON_AGS_SUPPORT_FINAL})

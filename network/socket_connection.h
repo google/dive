@@ -42,28 +42,29 @@ private:
     bool m_initialized;
 };
 
-class SocketConnection
+class ISocketConnection
 {
 public:
-    static absl::StatusOr<std::unique_ptr<SocketConnection>> Create(
-    SocketType initial_socket_value = kInvalidSocketValue);
+    virtual ~ISocketConnection() = default;
 
-    // Mark this as virtual for faking.
-    virtual ~SocketConnection();
-
-    SocketConnection& operator=(const SocketConnection&) = delete;
-    SocketConnection(const SocketConnection&) = delete;
+    ISocketConnection& operator=(const ISocketConnection&) = delete;
+    ISocketConnection(const ISocketConnection&) = delete;
 
     // Server methods.
-    absl::Status BindAndListenOnUnixDomain(const std::string& server_address);
-    absl::StatusOr<std::unique_ptr<SocketConnection>> Accept();
+    virtual absl::Status BindAndListenOnUnixDomain(const std::string& server_address) = 0;
+    virtual absl::StatusOr<std::unique_ptr<ISocketConnection>> Accept() = 0;
 
-    // Client method. Mark this as virtual for faking.
-    virtual absl::Status Connect(const std::string& host, int port);
+    // Client method.
+    virtual absl::Status Connect(const std::string& host, int port) = 0;
 
-    // Data transfer methods. Mark them as virtual for faking.
-    virtual absl::Status           Send(const uint8_t* data, size_t size);
-    virtual absl::StatusOr<size_t> Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout);
+    // Data transfer methods.
+    virtual absl::Status           Send(const uint8_t* data, size_t size) = 0;
+    virtual absl::StatusOr<size_t> Recv(uint8_t* data,
+                                        size_t   size,
+                                        int      timeout_ms = kNoTimeout) = 0;
+
+    virtual void Close() = 0;
+    virtual bool IsOpen() const = 0;
 
     absl::Status                SendString(const std::string& s);
     absl::StatusOr<std::string> ReceiveString();
@@ -72,15 +73,29 @@ public:
                                             size_t                      file_size,
                                             std::function<void(size_t)> progress_callback = nullptr);
 
-    // Mark this as virtual for faking.
-    virtual void Close();
-    virtual bool IsOpen() const;
-
-    void SetIsListening(bool is_listening) { m_is_listening = is_listening; }
-    bool IsListening() const { return m_is_listening; }
-
 protected:
+    ISocketConnection() = default;
+};
+
+class SocketConnection : public ISocketConnection
+{
+public:
+    static absl::StatusOr<std::unique_ptr<SocketConnection>> Create(
+    SocketType initial_socket_value = kInvalidSocketValue);
+
     explicit SocketConnection(SocketType initial_socket_value);
+    ~SocketConnection() override;
+
+    absl::Status BindAndListenOnUnixDomain(const std::string& server_address) override;
+    absl::StatusOr<std::unique_ptr<ISocketConnection>> Accept() override;
+
+    absl::Status Connect(const std::string& host, int port) override;
+
+    absl::Status           Send(const uint8_t* data, size_t size) override;
+    absl::StatusOr<size_t> Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout) override;
+
+    void Close() override;
+    bool IsOpen() const override;
 
 private:
     SocketType m_socket;

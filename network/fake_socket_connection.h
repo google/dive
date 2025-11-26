@@ -27,14 +27,9 @@ limitations under the License.
 namespace Network
 {
 
-class FakeSocketConnection : public SocketConnection
+class FakeSocketConnection : public ISocketConnection
 {
 public:
-    FakeSocketConnection() :
-        SocketConnection(kInvalidSocketValue)
-    {
-    }
-
     ~FakeSocketConnection() override
     {
         Close();
@@ -57,6 +52,16 @@ public:
     }
 
     FakeSocketConnection* GetPeer() const { return m_peer; }
+
+    absl::Status BindAndListenOnUnixDomain(const std::string& addr) override
+    {
+        return absl::UnimplementedError("This method is not implemented for FakeSocketConnection.");
+    }
+
+    absl::StatusOr<std::unique_ptr<ISocketConnection>> Accept() override
+    {
+        return absl::UnimplementedError("This method is not implemented for FakeSocketConnection.");
+    }
 
     absl::Status Connect(const std::string& host, int port) override
     {

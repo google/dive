@@ -159,7 +159,7 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     return absl::OkStatus();
 }
 
-absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size, int timeout_ms)
+absl::Status ReceiveBuffer(ISocketConnection* conn, uint8_t* buffer, size_t size, int timeout_ms)
 {
     if (!conn)
     {
@@ -180,7 +180,7 @@ absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size,
     return absl::OkStatus();
 }
 
-absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t size)
+absl::Status SendBuffer(ISocketConnection* conn, const uint8_t* buffer, size_t size)
 {
     if (!conn)
     {
@@ -189,8 +189,8 @@ absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t si
     return conn->Send(buffer, size);
 }
 
-absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnection* conn,
-                                                                    int               timeout_ms)
+absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(ISocketConnection* conn,
+                                                                    int                timeout_ms)
 {
     if (!conn)
     {
@@ -278,7 +278,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     return message;
 }
 
-absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& message)
+absl::Status SendSocketMessage(ISocketConnection* conn, const ISerializable& message)
 {
     if (!conn)
     {

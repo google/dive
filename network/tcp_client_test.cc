@@ -123,7 +123,7 @@ protected:
 
         // Inject the pre-created fake into the client
         m_client = std::make_unique<TcpClient>(
-        [this]() { return std::unique_ptr<SocketConnection>(m_client_fake); });
+        [this]() { return std::unique_ptr<FakeSocketConnection>(m_client_fake); });
 
         m_fake_server.Start(m_server_fake);
         ASSERT_TRUE(m_client->Connect("fake_host", 0).ok());

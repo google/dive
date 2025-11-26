@@ -37,7 +37,7 @@ enum class ClientStatus
     CONNECTION_FAILED
 };
 
-using ConnectionFactory = std::function<absl::StatusOr<std::unique_ptr<SocketConnection>>()>;
+using ConnectionFactory = std::function<absl::StatusOr<std::unique_ptr<ISocketConnection>>()>;
 
 class TcpClient
 {
@@ -89,11 +89,11 @@ private:
     void         SetClientStatus(ClientStatus status);
     absl::Status SetStatusAndReturnError(ClientStatus status, const absl::Status& error_status);
 
-    std::unique_ptr<SocketConnection> m_connection;
-    std::mutex                        m_connection_mutex;
-    ClientStatus                      m_status;
-    mutable std::mutex                m_status_mutex;
-    ConnectionFactory                 m_conn_factory;
+    std::unique_ptr<ISocketConnection> m_connection;
+    std::mutex                         m_connection_mutex;
+    ClientStatus                       m_status;
+    mutable std::mutex                 m_status_mutex;
+    ConnectionFactory                  m_conn_factory;
 
     // KeepAlive is used to check the connection with the server periodically via a ping-pong
     // mechanism.

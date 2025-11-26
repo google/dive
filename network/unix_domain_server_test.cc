@@ -23,7 +23,7 @@ namespace Network
 namespace
 {
 
-const std::string kTestServerAddress = "test_server_socket";
+constexpr char kTestServerAddress[] = "test_server_socket";
 
 // The tests assume the client and server are running on a PC (Linux), as we are not using
 // an Android device. However, this creates a limitation: we cannot directly test the TcpClient
@@ -31,8 +31,6 @@ const std::string kTestServerAddress = "test_server_socket";
 // uses TCP/IP sockets, while the UnixDomainServer uses Unix domain sockets (UDS). To test the
 // UnixDomainServer, we will start an instance of it and use a basic, raw socket client to verify
 // its behavior, such as handling connections and basic messages.
-class UnixDomainServerTest : public ::testing::Test
-{};
 
 // Creates a raw socket client and connects to the Unix Domain Server.
 absl::StatusOr<std::unique_ptr<SocketConnection>> ConnectClient()
@@ -47,10 +45,10 @@ absl::StatusOr<std::unique_ptr<SocketConnection>> ConnectClient()
     addr.sun_family = AF_UNIX;
     // first char is '\0'
     addr.sun_path[0] = '\0';
-    strncpy(addr.sun_path + 1, kTestServerAddress.c_str(), kTestServerAddress.size());
+    strncpy(addr.sun_path + 1, kTestServerAddress, std::size(kTestServerAddress));
     if (connect(client_socket,
                 (sockaddr*)&addr,
-                offsetof(sockaddr_un, sun_path) + 1 + kTestServerAddress.size()) < 0)
+                offsetof(sockaddr_un, sun_path) + std::size(kTestServerAddress)) < 0)
     {
         close(client_socket);
         return absl::UnavailableError("Client: connect failed.");
@@ -65,18 +63,16 @@ absl::StatusOr<std::unique_ptr<SocketConnection>> ConnectClient()
     return *std::move(connection);
 }
 
-TEST_F(UnixDomainServerTest, StartAndStop)
+TEST(UnixDomainServerTest, StartAndStop)
 {
     auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
-    // Give the server enough time to start.
-    std::this_thread::sleep_for(std::chrono::seconds(1));
     server->Stop();
     // Should return immediately.
     server->Wait();
 }
 
-TEST_F(UnixDomainServerTest, ClientConnectAndDisconnect)
+TEST(UnixDomainServerTest, ClientConnectAndDisconnect)
 {
     auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
@@ -90,7 +86,7 @@ TEST_F(UnixDomainServerTest, ClientConnectAndDisconnect)
     server->Stop();
 }
 
-TEST_F(UnixDomainServerTest, HandShakeSuccess)
+TEST(UnixDomainServerTest, HandShakeSuccess)
 {
     auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
@@ -120,7 +116,7 @@ TEST_F(UnixDomainServerTest, HandShakeSuccess)
     server->Stop();
 }
 
-TEST_F(UnixDomainServerTest, HandShakeFails)
+TEST(UnixDomainServerTest, HandShakeFails)
 {
     auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
@@ -128,21 +124,32 @@ TEST_F(UnixDomainServerTest, HandShakeFails)
     absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
 
-    // Client sends ping message rather than HandShakeRequest.
-    PingMessage request;
-    ASSERT_TRUE(SendSocketMessage((*client_conn).get(), request).ok());
+    // Client sends a HANDSHAKE_REQUEST header, but claims a payload length of 0.
+    // The server expects 8 bytes (2 uint32) for a handshake. Deserialization should fail,
+    // causing the server to close the connection.
 
-    // Client receives pong message rather than HandShakeResponse.
+    uint32_t type = htonl(static_cast<uint32_t>(MessageType::HANDSHAKE_REQUEST));
+    // Invalid length (Too small)
+    uint32_t len = htonl(0);
+
+    std::vector<uint8_t> buffer;
+    buffer.insert(buffer.end(), (uint8_t*)&type, (uint8_t*)&type + sizeof(type));
+    buffer.insert(buffer.end(), (uint8_t*)&len, (uint8_t*)&len + sizeof(len));
+
+    // Send the malformed message.
+    ASSERT_TRUE((*client_conn)->Send(buffer.data(), buffer.size()).ok());
+
+    // The server should detect the error and close the connection.
+    // ReceiveSocketMessage should return an error.
     absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(
     (*client_conn).get());
-    ASSERT_TRUE(response_msg.ok());
-    ASSERT_NE(*response_msg, nullptr);
-    ASSERT_NE((*response_msg)->GetMessageType(), MessageType::HANDSHAKE_RESPONSE);
+
+    EXPECT_FALSE(response_msg.ok());
 
     server->Stop();
 }
 
-TEST_F(UnixDomainServerTest, PingPongSuccess)
+TEST(UnixDomainServerTest, PingPongSuccess)
 {
     auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
@@ -164,7 +171,7 @@ TEST_F(UnixDomainServerTest, PingPongSuccess)
     server->Stop();
 }
 
-TEST_F(UnixDomainServerTest, PingPongFails)
+TEST(UnixDomainServerTest, PingPongFails)
 {
     auto server = std::make_unique<UnixDomainServer>();
     ASSERT_TRUE(server->Start(kTestServerAddress).ok());
@@ -172,16 +179,26 @@ TEST_F(UnixDomainServerTest, PingPongFails)
     absl::StatusOr<std::unique_ptr<SocketConnection>> client_conn = ConnectClient();
     ASSERT_TRUE(client_conn.ok());
 
-    // Client sends HandShakeRequest rather than ping message.
-    HandshakeRequest ping;
-    ASSERT_TRUE(SendSocketMessage((*client_conn).get(), ping).ok());
+    // Client sends a PING_MESSAGE header but declares an invalid payload size.
+    // We choose a size larger than kMaxPayloadSize (16MB) to trigger the security check
+    // in ReceiveSocketMessage on the server side immediately.
 
-    // Client receives HandShakeResponse rather than pong message.
+    const uint32_t kTooBigSize = 32 * 1024 * 1024;
+    uint32_t       type = htonl(static_cast<uint32_t>(MessageType::PING_MESSAGE));
+    uint32_t       len = htonl(kTooBigSize);
+
+    std::vector<uint8_t> buffer;
+    buffer.insert(buffer.end(), (uint8_t*)&type, (uint8_t*)&type + sizeof(type));
+    buffer.insert(buffer.end(), (uint8_t*)&len, (uint8_t*)&len + sizeof(len));
+
+    // Send the malicious header.
+    ASSERT_TRUE((*client_conn)->Send(buffer.data(), buffer.size()).ok());
+
+    // The server should detect the excessive size in the header and close the connection.
     absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(
     (*client_conn).get());
-    ASSERT_TRUE(response_msg.ok());
-    ASSERT_NE(*response_msg, nullptr);
-    ASSERT_NE((*response_msg)->GetMessageType(), MessageType::PONG_MESSAGE);
+
+    EXPECT_FALSE(response_msg.ok());
 
     server->Stop();
 }

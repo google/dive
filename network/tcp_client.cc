@@ -56,7 +56,7 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
     m_connection.reset();
 
     SetClientStatus(ClientStatus::CONNECTING);
-    absl::StatusOr<std::unique_ptr<SocketConnection>> connection;
+    absl::StatusOr<std::unique_ptr<ISocketConnection>> connection;
     if (m_conn_factory)
     {
         connection = m_conn_factory();

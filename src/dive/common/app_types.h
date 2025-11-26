@@ -20,6 +20,9 @@ limitations under the License.
 #include <array>
 #include <string_view>
 
+namespace Dive
+{
+
 enum class AppType
 {
     kVulkan_OpenXR,         // OpenXR Vulkan app
@@ -66,9 +69,4 @@ inline constexpr std::array<AppTypeInfo, 5> kAppTypeInfos = { {
   "for GLES applications(apk)" },
 } };
 
-inline constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(kAppTypeInfos.begin(),
-                                                                kAppTypeInfos.end(),
-                                                                [](const AppTypeInfo &info) {
-                                                                    return info
-                                                                    .is_gfxr_capture_supported;
-                                                                });
+}  // namespace Dive

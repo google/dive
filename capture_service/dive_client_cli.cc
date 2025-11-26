@@ -34,23 +34,23 @@ limitations under the License.
 
 #include "android_application.h"
 #include "command_utils.h"
-#include "common/app_types.h"
 #include "constants.h"
 #include "device_mgr.h"
+#include "dive/common/app_types.h"
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
 
 struct GlobalOptions
 {
-    std::string serial;
-    std::string package;
-    std::string vulkan_command;
-    std::string vulkan_command_args;
-    AppType     app_type;
-    std::string device_architecture;
-    std::string download_dir;
-    std::string gfxr_capture_file_dir;
-    int         trigger_capture_after;
+    std::string   serial;
+    std::string   package;
+    std::string   vulkan_command;
+    std::string   vulkan_command_args;
+    Dive::AppType app_type;
+    std::string   device_architecture;
+    std::string   download_dir;
+    std::string   gfxr_capture_file_dir;
+    int           trigger_capture_after;
 
     Dive::GfxrReplaySettings replay_settings;
 };
@@ -121,13 +121,13 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
         return absl::InvalidArgumentError("Cannot use both --package and --vulkan_command");
     }
 
-    if (!options.vulkan_command.empty() && options.app_type != AppType::kVulkanCLI_Non_OpenXR)
+    if (!options.vulkan_command.empty() && options.app_type != Dive::AppType::kVulkanCLI_Non_OpenXR)
     {
         return absl::InvalidArgumentError(
         "Cannot use --vulkan_command with --type other than vulkan_cli_non_openxr");
     }
 
-    if (options.app_type == AppType::kGLES_OpenXR && options.vulkan_command == "gfxr_capture")
+    if (options.app_type == Dive::AppType::kGLES_OpenXR && options.vulkan_command == "gfxr_capture")
     {
         return absl::InvalidArgumentError(
         "GFXR capture is not supported for GLES OpenXR applications.");
@@ -220,7 +220,7 @@ std::string GenerateCommandFlagHelp()
 std::string GenerateAppTypeFlagHelp()
 {
     std::string usage = "Available application types:\n";
-    for (const auto& info : kAppTypeInfos)
+    for (const auto& info : Dive::kAppTypeInfos)
     {
         absl::StrAppend(&usage, absl::StrFormat("\t%-25s : %s\n", info.cli_name, info.description));
     }
@@ -317,35 +317,35 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
 
     switch (ctx.options.app_type)
     {
-    case AppType::kVulkan_OpenXR:
+    case Dive::AppType::kVulkan_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::OPENXR_APK,
                                ctx.options.vulkan_command_args,
                                ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
-    case AppType::kVulkan_Non_OpenXR:
+    case Dive::AppType::kVulkan_Non_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::VULKAN_APK,
                                ctx.options.vulkan_command_args,
                                ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
-    case AppType::kVulkanCLI_Non_OpenXR:
+    case Dive::AppType::kVulkanCLI_Non_OpenXR:
         ret = device->SetupApp(ctx.options.vulkan_command,
                                ctx.options.vulkan_command_args,
                                Dive::ApplicationType::VULKAN_CLI,
                                ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
-    case AppType::kGLES_OpenXR:
+    case Dive::AppType::kGLES_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::OPENXR_APK,
                                ctx.options.vulkan_command_args,
                                ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
-    case AppType::kGLES_Non_OpenXR:
+    case Dive::AppType::kGLES_Non_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::GLES_APK,
                                ctx.options.vulkan_command_args,
@@ -795,10 +795,15 @@ std::string AbslUnparseFlag(Command command)
     return "unknown";
 }
 
-// Overload for parsing the AppType enum from command line flags.
-bool AbslParseFlag(absl::string_view text, AppType* type, std::string* error)
+// Abseil flags parsing uses ADL. AppType and GfxrReplayOptions are in the Dive namespace so
+// AbslParseFlag and AbslUnparseFlag need to be as well.
+namespace Dive
 {
-    for (const auto& info : kAppTypeInfos)
+
+// Overload for parsing the AppType enum from command line flags.
+bool AbslParseFlag(absl::string_view text, Dive::AppType* type, std::string* error)
+{
+    for (const auto& info : Dive::kAppTypeInfos)
     {
         if (text == info.cli_name)
         {
@@ -811,9 +816,9 @@ bool AbslParseFlag(absl::string_view text, AppType* type, std::string* error)
 }
 
 // Overload for converting the AppType enum back to a string.
-std::string AbslUnparseFlag(AppType type)
+std::string AbslUnparseFlag(Dive::AppType type)
 {
-    for (const auto& info : kAppTypeInfos)
+    for (const auto& info : Dive::kAppTypeInfos)
     {
         if (info.type == type)
         {
@@ -822,11 +827,6 @@ std::string AbslUnparseFlag(AppType type)
     }
     return absl::StrCat(static_cast<int>(type));
 }
-
-// Abseil flags parsing uses ADL. GfxrReplayOptions is in the Dive namespace so AbslParseFlag
-// and AbslUnparseFlag need to be as well.
-namespace Dive
-{
 
 bool AbslParseFlag(absl::string_view text, GfxrReplayOptions* run_type, std::string* error)
 {
@@ -903,7 +903,7 @@ ABSL_FLAG(std::string,
 
 ABSL_FLAG(std::string, vulkan_command_args, "", "Arguments to pass to the Vulkan CLI application.");
 
-ABSL_FLAG(AppType, type, AppType::kVulkan_OpenXR, GenerateAppTypeFlagHelp());
+ABSL_FLAG(Dive::AppType, type, Dive::AppType::kVulkan_OpenXR, GenerateAppTypeFlagHelp());
 
 ABSL_FLAG(
 std::string,
@@ -1001,7 +1001,7 @@ int main(int argc, char** argv)
     {
         std::cout << "Error: No valid command specified.\n"
                   << GenerateCommandFlagHelp() << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
     Dive::DeviceManager mgr;
@@ -1011,7 +1011,7 @@ int main(int argc, char** argv)
         if (!device.ok())
         {
             std::cout << device.status().message() << std::endl;
-            return 1;
+            return EXIT_FAILURE;
         }
     }
 
@@ -1021,8 +1021,8 @@ int main(int argc, char** argv)
     {
         std::cout << "Error executing command '" << selected_def->name << "': " << ret.message()
                   << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

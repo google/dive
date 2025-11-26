@@ -16,9 +16,10 @@
 #include "window_scissors_stats_model.h"
 #include "search_bar.h"
 #include <QHBoxLayout>
-#include <QVBoxLayout>
+#include <QHeaderView>
 #include <QIcon>
 #include <QPoint>
+#include <QVBoxLayout>
 #include <iostream>
 #include "object_names.h"
 #include "trace_stats/trace_stats.h"
@@ -29,11 +30,13 @@ TileStatsTabView::TileStatsTabView(const Dive::CaptureStats &stats, QWidget *par
 {
     m_viewport_stats_model = new ViewportStatsModel();
     m_viewport_stats_view = new QTableView();
+    m_viewport_stats_view->verticalHeader()->hide();
     m_viewport_stats_view->setModel(m_viewport_stats_model);
     ResizeColumns(m_viewport_stats_model, m_viewport_stats_view);
 
     m_window_scissors_stats_model = new WindowScissorsStatsModel();
     m_window_scissors_stats_view = new QTableView();
+    m_window_scissors_stats_view->verticalHeader()->hide();
     m_window_scissors_stats_view->setModel(m_window_scissors_stats_model);
     ResizeColumns(m_viewport_stats_model, m_window_scissors_stats_view);
 

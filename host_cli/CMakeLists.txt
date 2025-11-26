@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for host_cli")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
@@ -93,3 +100,6 @@ add_modify_gfxr_test(
     GOLDEN_FILE
         ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
 )
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

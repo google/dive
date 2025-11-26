@@ -15,6 +15,7 @@
 #include "misc_stats_model.h"
 #include "search_bar.h"
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
@@ -28,6 +29,7 @@ MiscStatsTabView::MiscStatsTabView(const Dive::CaptureStats &stats, QWidget *par
 {
     m_misc_stats_model = new MiscStatsModel();
     m_misc_stats_view = new QTableView();
+    m_misc_stats_view->verticalHeader()->hide();
     m_misc_stats_view->setModel(m_misc_stats_model);
     ResizeColumns(m_misc_stats_model, m_misc_stats_view);
 

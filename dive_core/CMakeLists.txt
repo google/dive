@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for dive_core")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(dive_core)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -325,3 +332,6 @@ endif() # MSVC
 
 enable_testing()
 add_subdirectory(tests)
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

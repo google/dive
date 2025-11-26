@@ -31,21 +31,21 @@ add_library(gfxrecon-replay
                 ${GFXRECON_SOURCE_DIR}/tools/replay/replay_pre_processing.h
                 ${GFXRECON_SOURCE_DIR}/tools/replay/android_main.cpp)
 
-# GOOGLE: Add dive root folder               
 target_include_directories(gfxrecon-replay
                            PUBLIC
                                ${GFXRECON_SOURCE_DIR}/external/precompiled/android/include
-                               ${CMAKE_BINARY_DIR}
-                               ${GFXRECON_SOURCE_DIR}/../..)
+                               ${GFXRECON_SOURCE_DIR}
+                               ${CMAKE_BINARY_DIR})
 
-# GOOGLE: Add gfxr_decode_ext_lib                             
 target_link_libraries(
         gfxrecon-replay
         gfxrecon_application_multiwin
         gfxrecon_decode
-        gfxr_decode_ext_lib
         gfxrecon_graphics
         gfxrecon_format
         platform_specific)
+
+# GOOGLE: Add gfxr_decode_ext_lib
+target_link_libraries(gfxrecon-replay gfxr_decode_ext_lib)
 
 message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")

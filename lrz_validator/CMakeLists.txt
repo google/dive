@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for lrz_validator")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(lrz_validator)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -56,3 +63,6 @@ else()
         PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
     )
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

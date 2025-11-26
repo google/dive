@@ -34,6 +34,7 @@
 #include "custom_metatypes.h"
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
+#include "dive/os/terminal.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -228,6 +229,8 @@ int main(int argc, char *argv[])
     }
     if (argc != 1 && argc != 2)
         return 0;
+
+    Dive::AttachToTerminalOutputIfAvailable();
 
     // Print version info if asked to on the command line.
     // This will only work on linux as we are a UI app on Windows.

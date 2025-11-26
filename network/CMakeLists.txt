@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for network")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(network)
 
 set(NETWORK_SRCS
@@ -61,3 +64,6 @@ if(NOT ANDROID)
     )
     gtest_discover_tests(messages_test)
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

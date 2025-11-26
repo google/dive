@@ -22,7 +22,7 @@ $DIVE_ROOT_PATH/build/ui/dive
 
 ```bat
 REM On Windows
-%DIVE_ROOT_PATH%\build\ui\%DIVE_HOST_TOOLS_BUILD_TYPE%\dive.exe
+%DIVE_ROOT_PATH%\build\ui\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\dive.exe
 ```
 
 TODO(b/462767957): Figure out where these binaries are expected with the install flow
@@ -40,9 +40,9 @@ $DIVE_ROOT_PATH/build/bin/host_cli
 
 ```bat
 REM On Windows
-%DIVE_ROOT_PATH%\build\bin\%DIVE_HOST_TOOLS_BUILD_TYPE%\dive_client_cli.exe
-%DIVE_ROOT_PATH%\build\bin\%DIVE_HOST_TOOLS_BUILD_TYPE%\divecli.exe
-%DIVE_ROOT_PATH%\build\bin\%DIVE_HOST_TOOLS_BUILD_TYPE%\host_cli.exe
+%DIVE_ROOT_PATH%\build\bin\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\dive_client_cli.exe
+%DIVE_ROOT_PATH%\build\bin\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\divecli.exe
+%DIVE_ROOT_PATH%\build\bin\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\host_cli.exe
 ```
 
 TODO(b/462767957): Figure out where these binaries are expected with the install flow
@@ -59,7 +59,7 @@ Modifications to the GFXR file can be made using the Dive Host Tool `host_cli`
 Example:
 ```sh
 # On Linux
-./host_cli --input_file_path ${path/to/original/file.gfxr} --output_gfxr_path ${path/to/new/file.gfxr}
+./host_cli --input_file_path LOCAL/PATH/TO/ORIGINAL/FILE.GFXR --output_gfxr_path LOCAL/PATH/TO/NEW/FILE.GFXR
 ```
 
 ## `dive_client_cli`
@@ -73,13 +73,13 @@ Examples:
 - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
     ```sh
     # On Linux
-    ./dive_client_cli --command capture --package ${de.saschawillems.vulkanBloom} --type vulkan --trigger_capture_after ${5} --download_dir ${/path/to/save/captures}
+    ./dive_client_cli --command capture --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --trigger_capture_after 5 --download_dir LOCAL/DIR/TO/SAVE/CAPTURES
     ```
 
 - Install the dependencies on device and start the package
     ```sh
     # On Linux
-    ./dive_client_cli --command run --package ${com.google.bigwheels.project_cube_xr.debug} --type openxr --download_dir ${"/path/to/save/captures"}
+    ./dive_client_cli --command run --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --download_dir LOCAL\DIR\TO\SAVE\CAPTURES
     ```
 
 Then you can follow the hint output to trigger a capture by press key `t` and `enter` or exit by press key `enter` only.
@@ -97,7 +97,7 @@ Examples:
 - Install the dependencies on device, start the package, and initiate a GFXR capture.
     ```sh
     # On Linux
-    ./dive_client_cli --command gfxr_capture --package ${com.google.bigwheels.project_cube_xr.debug} --type vulkan --gfxr_capture_file_dir ${gfxr_bigwheels_capture} --download_dir ${/path/to/save/captures}
+    ./dive_client_cli --command gfxr_capture --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --gfxr_capture_file_dir REMOTE/DIR --download_dir LOCAL/DIR/TO/SAVE/CAPTURES
     ```
 
 Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.
@@ -115,7 +115,7 @@ Using the `gfxr-replay` command will install the `gfxr-replay.apk` found in the 
 Example:
 ```sh
 # On Linux
-./dive_client_cli --command gfxr_replay --gfxr_replay_file_path ${/storage/emulated/0/Download/gfxrFileName.gfxr}
+./dive_client_cli --command gfxr_replay --gfxr_replay_file_path REMOTE/PATH/TO/FILE.GFXR
 ```
 
 For a capture that is a single frame, it can be replayed in a loop.
@@ -123,21 +123,21 @@ For a capture that is a single frame, it can be replayed in a loop.
 Example:
 ```sh
 # On Linux
-./dive_client_cli  --command gfxr_replay --gfxr_replay_file_path ${/storage/emulated/0/Download/gfxrFileName.gfxr} --gfxr_replay_flags "--loop-single-frame-count 300"
+./dive_client_cli  --command gfxr_replay --gfxr_replay_file_path REMOTE/PATH/TO/FILE.GFXR --gfxr_replay_flags "--loop-single-frame-count 300"
 ```
 
 To replay with the Vulkan Validation Layers, provide `--validation_layer`:
 
 ```sh
 # On Linux
-./dive_client_cli  --command gfxr_replay --gfxr_replay_file_path ${/storage/emulated/0/Download/gfxrFileName.gfxr} --validation_layer
+./dive_client_cli  --command gfxr_replay --gfxr_replay_file_path REMOTE/PATH/TO/FILE.GFXR --validation_layer
 ```
 
 To trigger analysis during replay, specify `--gfxr_replay_run_type`. See `--help` for all options.
 
 ```sh
 # On Linux
-./dive_client_cli  --command gfxr_replay --gfxr_replay_file_path ${/storage/emulated/0/Download/gfxrFileName.gfxr} --gfxr_replay_run_type pm4_dump
+./dive_client_cli  --command gfxr_replay --gfxr_replay_file_path REMOTE/PATH/TO/FILE.GFXR --gfxr_replay_run_type pm4_dump
 ```
 
 ### Device Cleanup
@@ -146,6 +146,6 @@ The command line tool will clean up the device and application automatically at 
 
 ```sh
 # On Linux
-./dive_client_cli --command cleanup --package ${de.saschawillems.vulkanBloom}
+./dive_client_cli --command cleanup --package YOUR.PACKAGE.NAME.HERE
 ```
 This will remove all the libraries installed and the settings that had been setup by Dive for the package.

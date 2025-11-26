@@ -30,11 +30,11 @@
 #include "dive_core/pm4_info.h"
 #include "application_controller.h"
 #include "main_window.h"
-#include "utils/version_info.h"
 #include "custom_metatypes.h"
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
-#include "dive/os/terminal.h"
+#include "utils/version_info.h"
+#include "os/terminal.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif

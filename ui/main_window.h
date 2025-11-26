@@ -124,6 +124,9 @@ public:
     explicit MainWindow(ApplicationController &controller);
     ~MainWindow();
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
+    TraceDialog &GetTraceDialog();
+
+    ProgressTrackerCallback m_progress_tracker;
 
 protected:
     virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
@@ -154,6 +157,7 @@ public slots:
     void OnPendingPerfCounterResults(const QString &file_name);
     void OnPendingGpuTimingResults(const QString &file_name);
     void OnPendingScreenshot(const QString &file_name);
+    void OnHideOverlay();
 
 private slots:
     void OnCommandViewModeChange(const QString &string);
@@ -172,7 +176,6 @@ private slots:
     void OnSearchTrigger();
     void OpenRecentFile();
     void UpdateOverlay(const QString &);
-    void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
     void OnFileLoaded(const LoadFileResult &loaded_file);
     void OnTraceAvailable(const QString &);
@@ -263,7 +266,6 @@ private:
 
     CaptureFileManager *m_capture_manager = nullptr;
 
-    ProgressTrackerCallback         m_progress_tracker;
     std::unique_ptr<Dive::DataCore> m_data_core;
     QString                         m_capture_file;
     QString                         m_last_file_path;

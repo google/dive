@@ -34,7 +34,6 @@ private slots:
     void OnFitToView();
     void OnZoomIn();
     void OnZoomOut();
-    void OnCalculateInitialScale();
 
 private:
     void ScaleAndDisplayImage();
@@ -49,5 +48,4 @@ private:
     qreal        m_scale_factor = 1.0;
     qreal        m_initial_scale_factor = 1.0;
     qreal        m_max_scale_factor = 5.0;
-    bool         m_initial_scale_needed = false;
 };

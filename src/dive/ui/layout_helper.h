@@ -24,6 +24,16 @@
 
 #include "dive/ui/lint.h"
 
+// Examples
+//
+// Setup layout for a widget:
+//   auto layout = NewWidgetLayout<QHBoxLayout>(widget);
+//   auto* label = layout.New<QLabel>(tr("text"));
+//
+// Add a new item to an existing layout:
+//   auto* label = NewWidgetLayout{layout}.New<QLabel>(tr("text"));
+//
+
 template<typename LayoutT>  //
 struct LayoutHelper
 {

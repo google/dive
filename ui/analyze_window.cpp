@@ -337,17 +337,17 @@ void AnalyzeDialog::PopulateMetrics()
         // Populate the metrics list
         for (const auto &item : m_csv_items)
         {
-            QListWidgetItem *csv_item = QtNew<QListWidgetItem>(item.name);
+            auto csv_item = std::make_unique<QListWidgetItem>(item.name);
             csv_item->setData(kDataRole, item.key);
             csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
             csv_item->setCheckState(Qt::Unchecked);
-            m_metrics_list->addItem(csv_item);
+            m_metrics_list->addItem(csv_item.release());
         }
 
         // Add spacer so that all metrics are visible at the end of the list.
-        QListWidgetItem *spacer = QtNew<QListWidgetItem>();
+        auto spacer = std::make_unique<QListWidgetItem>();
         spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
-        m_metrics_list->addItem(spacer);
+        m_metrics_list->addItem(spacer.release());
     }
 }
 
@@ -411,9 +411,9 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 
     if (m_devices.empty())
     {
-        QStandardItem *item = QtNew<QStandardItem>("No devices found");
+        auto item = std::make_unique<QStandardItem>("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        m_device_model->appendRow(item);
+        m_device_model->appendRow(item.release());
         m_device_box->setCurrentIndex(0);
     }
     else
@@ -422,14 +422,14 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
         {
             if (i == 0)
             {
-                QStandardItem *item = QtNew<QStandardItem>("Please select a device");
+                auto item = std::make_unique<QStandardItem>("Please select a device");
                 item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-                m_device_model->appendRow(item);
+                m_device_model->appendRow(item.release());
                 m_device_box->setCurrentIndex(0);
             }
 
-            QStandardItem *item = QtNew<QStandardItem>(m_devices[i].GetDisplayName().c_str());
-            m_device_model->appendRow(item);
+            m_device_model->appendRow(
+            QtNewUnowned<QStandardItem>(m_devices[i].GetDisplayName().c_str()));
             // Keep the original selected devices as selected.
             if (m_cur_device == m_devices[i].m_serial)
             {

@@ -52,7 +52,6 @@
 
 using DiveLint::QtNew;
 using DiveLint::QtNewUnowned;
-using DiveLint::QtOwned;
 
 //--------------------------------------------------------------------------------------------------
 void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
@@ -83,7 +82,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
 
 void AnalyzeDialog::InitializeLayout()
 {
-    m_overlay = QtOwned(new OverlayHelper(this));
+    m_overlay = QtNew<OverlayHelper>(this);
 
     // Metrics List
     m_metrics_list_label = QtNew<QLabel>(tr("Available Metrics:"), this);

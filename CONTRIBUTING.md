@@ -39,6 +39,10 @@ Suggested usage is to run `./scripts/clangformat.sh` after committing changes, a
 Install clang-format 18.1.8 using the appropriate Windows installer at: https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.8
 Suggested usage is using your preferred IDE, set it to format on save, and point to the installed `clang-format.exe`.
 
+#### Run clang-tidy (Recommended)
+
+It is recommended to install clang-tidy (see instructions for clang-format above) and use it to tidy your C++ files before submitting a PR. This is not required but it's a recommended step, with the eventual goal of having the Dive codebase ready for a clang-tidy presubmit.
+
 #### Setup gersemi
 
 Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to install the package. Make sure to install the version supported by Dive, it is recommended to use Python virtual environments. To run for this project, use provided `scripts/format_cmake.bat` or `scripts/format_cmake.sh` scripts.

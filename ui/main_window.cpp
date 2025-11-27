@@ -130,6 +130,9 @@ std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
         const auto &exe_dir = *ret;
         search_paths.push_back(exe_dir / "install");
         search_paths.push_back(exe_dir);
+#if defined(__APPLE__)
+        search_paths.push_back(exe_dir / "../Resources/");
+#endif
     }
     else
     {

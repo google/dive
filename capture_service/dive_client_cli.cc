@@ -47,7 +47,6 @@ struct GlobalOptions
     std::string   vulkan_command;
     std::string   vulkan_command_args;
     Dive::AppType app_type;
-    std::string   device_architecture;
     std::string   download_dir;
     std::string   gfxr_capture_file_dir;
     int           trigger_capture_after;
@@ -131,21 +130,6 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
     {
         return absl::InvalidArgumentError(
         "GFXR capture is not supported for GLES OpenXR applications.");
-    }
-
-    if (!options.device_architecture.empty())
-    {
-        static const std::set<std::string> valid_archs = {
-            "arm64-v8a", "arm64-v8", "armeabi-v7a", "x86", "x86_64"
-        };
-
-        if (valid_archs.find(options.device_architecture) == valid_archs.end())
-        {
-            return absl::InvalidArgumentError(
-            absl::StrCat("Invalid --device_architecture '",
-                         options.device_architecture,
-                         "'. Valid values: arm64-v8a, arm64-v8, armeabi-v7a, x86, x86_64"));
-        }
     }
 
     return absl::OkStatus();
@@ -321,35 +305,30 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::OPENXR_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kVulkan_Non_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::VULKAN_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kVulkanCLI_Non_OpenXR:
         ret = device->SetupApp(ctx.options.vulkan_command,
                                ctx.options.vulkan_command_args,
                                Dive::ApplicationType::VULKAN_CLI,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kGLES_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::OPENXR_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kGLES_Non_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::GLES_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     default:
@@ -912,12 +891,6 @@ download_dir,
 "The local host directory where captured files will be saved. Defaults to the current directory.");
 
 ABSL_FLAG(std::string,
-          device_architecture,
-          "",
-          "The target CPU ABI for GFXR injection (arm64-v8a, arm64-v8, armeabi-v7a, x86, x86_64). "
-          "If unspecified, the tool attempts to detect the architecture from the device.");
-
-ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
           "gfxr_capture",
           "The name of the subdirectory created on the device to store GFXR capture files.");
@@ -972,7 +945,6 @@ int main(int argc, char** argv)
                         .vulkan_command = absl::GetFlag(FLAGS_vulkan_command),
                         .vulkan_command_args = absl::GetFlag(FLAGS_vulkan_command_args),
                         .app_type = absl::GetFlag(FLAGS_type),
-                        .device_architecture = absl::GetFlag(FLAGS_device_architecture),
                         .download_dir = absl::GetFlag(FLAGS_download_dir),
                         .gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir),
                         .trigger_capture_after = absl::GetFlag(FLAGS_trigger_capture_after),

@@ -69,6 +69,18 @@ if(NOT ANDROID)
         dive_src_includes
     )
     gtest_discover_tests(string_utils_test)
+
+    add_executable(version_info_test version_info_test.cpp)
+    target_link_libraries(
+        version_info_test
+        version_info
+        absl::status_matchers
+        gmock
+        gtest
+        gtest_main
+        dive_src_includes
+    )
+    gtest_discover_tests(version_info_test)
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

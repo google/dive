@@ -14,7 +14,10 @@ Checks:
   - "-cppcoreguidelines-avoid-non-const-global-variables" # ABSL_FLAG
   - "-cppcoreguidelines-use-enum-class"
   - "-readability-redundant-access-specifiers" # qt
+  - "-cppcoreguidelines-pro-bounds-avoid-unchecked-container-access" # https://abseil.io/tips/224
 
 CheckOptions:
   - key: readability-implicit-bool-conversion.AllowPointerConditions
+    value: true
+  - key: cppcoreguidelines-avoid-do-while.IgnoreMacros #define X(x) do{(x);} while(0)
     value: true

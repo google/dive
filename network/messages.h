@@ -200,19 +200,19 @@ private:
 // Message Helper Functions (TLV Framing).
 
 // Helper to receive an exact number of bytes.
-absl::Status ReceiveBuffer(SocketConnection* conn,
-                           uint8_t*          buffer,
-                           size_t            size,
-                           int               timeout_ms = kNoTimeout);
+absl::Status ReceiveBuffer(ISocketConnection* conn,
+                           uint8_t*           buffer,
+                           size_t             size,
+                           int                timeout_ms = kNoTimeout);
 
 // Helper to send an exact number of bytes.
-absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t size);
+absl::Status SendBuffer(ISocketConnection* conn, const uint8_t* buffer, size_t size);
 
 // Returns a fully-formed message or an error status.
-absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnection* conn,
+absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(ISocketConnection* conn,
                                                                     int timeout_ms = kNoTimeout);
 
 // Sends a full message (header + payload).
-absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& message);
+absl::Status SendSocketMessage(ISocketConnection* conn, const ISerializable& message);
 
 }  // namespace Network

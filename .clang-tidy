@@ -1,3 +1,7 @@
+# https://clang.llvm.org/extra/clang-tidy/
+
+---
+
 Checks:
   - "abseil-*"
   - "bugprone-*"
@@ -10,3 +14,7 @@ Checks:
   - "-cppcoreguidelines-avoid-non-const-global-variables" # ABSL_FLAG
   - "-cppcoreguidelines-use-enum-class"
   - "-readability-redundant-access-specifiers" # qt
+
+CheckOptions:
+  - key: readability-implicit-bool-conversion.AllowPointerConditions
+    value: true

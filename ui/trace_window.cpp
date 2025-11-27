@@ -52,36 +52,15 @@
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"
 #include "utils/component_files.h"
+#include "dive/common/app_types.h"
 #include "application_controller.h"
 
 namespace
 {
-enum class AppTypes
-{
-    kVulkan_OpenXR,         // OpenXR Vulkan app
-    kVulkan_Non_OpenXR,     // Vulkan app
-    kVulkanCLI_Non_OpenXR,  // Vulkan command line app
-    kGLES_OpenXR,           // OpenXR GLES app
-    kGLES_Non_OpenXR,       // GLES app
-};
-struct AppTypeInfo
-{
-    AppTypes         type;
-    std::string_view name;
-    bool             is_gfxr_capture_supported;
-};
 
-constexpr std::array<AppTypeInfo, 5> kAppTypeInfos = { {
-{ AppTypes::kVulkan_OpenXR, "Vulkan (OpenXR)", true },
-{ AppTypes::kVulkan_Non_OpenXR, "Vulkan (Non-OpenXR)", true },
-{ AppTypes::kVulkanCLI_Non_OpenXR, "Vulkan CLI (Non-OpenXR)", true },
-{ AppTypes::kGLES_OpenXR, "GLES (OpenXR)", false },
-{ AppTypes::kGLES_Non_OpenXR, "GLES (Non-OpenXR)", false },
-} };
-
-constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(kAppTypeInfos.begin(),
-                                                         kAppTypeInfos.end(),
-                                                         [](const AppTypeInfo &info) {
+constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(Dive::kAppTypeInfos.begin(),
+                                                         Dive::kAppTypeInfos.end(),
+                                                         [](const Dive::AppTypeInfo &info) {
                                                              return info.is_gfxr_capture_supported;
                                                          });
 const int        kGfxrCaptureButtonId = 1;
@@ -137,9 +116,9 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
 
     m_devices = Dive::GetDeviceManager().ListDevice();
     UpdateDeviceList(false);
-    for (const auto &ty : kAppTypeInfos)
+    for (const auto &ty : Dive::kAppTypeInfos)
     {
-        QStandardItem *item = new QStandardItem(ty.name.data());
+        QStandardItem *item = new QStandardItem(ty.ui_name.data());
         m_app_type_model->appendRow(item);
     }
     m_app_type_filter_model = new AppTypeFilterModel(this);
@@ -571,8 +550,10 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         }
     }
 
-    if (app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kVulkan_OpenXR)].name.data() ||
-        app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kGLES_OpenXR)].name.data())
+    if (app_type ==
+        Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)].ui_name.data() ||
+        app_type ==
+        Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_OpenXR)].ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::OPENXR_APK,
@@ -580,8 +561,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
-    else if (app_type ==
-             kAppTypeInfos[static_cast<size_t>(AppTypes::kVulkan_Non_OpenXR)].name.data())
+    else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
+                         .ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::VULKAN_APK,
@@ -589,7 +570,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
-    else if (app_type == kAppTypeInfos[static_cast<size_t>(AppTypes::kGLES_Non_OpenXR)].name.data())
+    else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_Non_OpenXR)]
+                         .ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::GLES_APK,
@@ -598,7 +580,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type ==
-             kAppTypeInfos[static_cast<size_t>(AppTypes::kVulkanCLI_Non_OpenXR)].name.data())
+             Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
+             .ui_name.data())
     {
         m_executable = m_cmd_input_box->text().toStdString();
         if (m_executable.empty())
@@ -692,7 +675,7 @@ void TraceDialog::OnStartClicked()
         ShowErrorMessage(QString("Please select application type"));
         return;
     }
-    std::string ty_str = kAppTypeInfos[ty].name.data();
+    std::string ty_str = Dive::kAppTypeInfos[ty].ui_name.data();
 
     if (m_run_button->text() == QString(kStart_Application))
     {

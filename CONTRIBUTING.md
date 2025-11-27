@@ -26,7 +26,6 @@ Guidelines](https://opensource.google/conduct/).
 ## Contribution process
 
 ### Formatting
-
 - The C++ code in this repository is formatted with LLVM clang-format version 18.1.8
 - The cmake files are formatted with [gersemi](https://pypi.org/project/gersemi/) version 0.23.1
 
@@ -40,6 +39,10 @@ Suggested usage is to run `./scripts/clangformat.sh` after committing changes, a
 Install clang-format 18.1.8 using the appropriate Windows installer at: https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.8
 Suggested usage is using your preferred IDE, set it to format on save, and point to the installed `clang-format.exe`.
 
+#### Run clang-tidy (Recommended)
+
+It is recommended to install clang-tidy (see instructions for clang-format above) and use it to tidy your C++ files before submitting a PR. This is not required but it's a recommended step, with the eventual goal of having the Dive codebase ready for a clang-tidy presubmit.
+
 #### Setup gersemi
 
 Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to install the package. Make sure to install the version supported by Dive, it is recommended to use Python virtual environments. To run for this project, use provided `scripts/format_cmake.bat` or `scripts/format_cmake.sh` scripts.
@@ -49,7 +52,6 @@ Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to inst
 There is a lint github action that will run clang-format on all source code in the project, and another one that runs the format_cmake scripts with gersemi.
 
 ### Code style
-
 - `CamelCase` for class and function names. The exception is overriding methods, like Qt, where adopting their naming convention is required.
 - `snake_case` for variable names.
 - Prefix class member variables with `m_`
@@ -63,3 +65,31 @@ for this purpose.
 - Merging reviews approval from 2 Google reviewers.
 - "Squash and merge" is the preferred option to merge a PR since we like a linear git history.
 - "Update with rebase" only when the branch is out-of-date. This ensures a linear history in case "Rebase and merge" is used to submit a PR.
+- Add a comment to the PR describing what manual tests were performed by the contributor.
+
+## Updating Dive's gfxreconstruct subtree
+
+1. Create a branch to contain the merge
+1. Run the pull command: 
+    ```sh
+    git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
+    ```
+1. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
+    ```sh
+    git add third_party/gfxreconstruct
+    git commit -m "Merge third_party/gfxreconstruct updates"
+    ```
+1. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+1. Update submodules:
+    ```sh
+    git submodule update --init --recursive
+    ```
+1. Regenerate GFXR Vulkan code:
+    ```sh
+    cd third_party/gfxreconstruct/framework/generated
+    python generate_vulkan.py
+    ```
+1. Try to [build](BUILD.md). Fix any errors and commit.
+1. Create a pull request for the updates.
+1. Monitor PR builds; you might need to fix the GitHub workflows.
+1. Ensure the commit is not squash merged so that git can find the subtree updates.

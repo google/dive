@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for plugins")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(DYNAMIC_LIBRARY_LOADER_HEADERS idynamic_library_loader.h)
@@ -38,7 +45,7 @@ elseif(APPLE)
 else()
     message(
         FATAL_ERROR
-        "Unsupported platform for dynamic library loading. Only Windows and Linux are supported."
+        "Unsupported platform for dynamic library loading. Only Windows, Linux, and Mac are supported."
     )
 endif()
 
@@ -68,3 +75,6 @@ target_link_libraries(
 add_subdirectory(plugin_sample)
 
 install(CODE "file(MAKE_DIRECTORY ${CMAKE_INSTALL_PREFIX}/plugins)")
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

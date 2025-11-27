@@ -14,100 +14,102 @@
  limitations under the License.
 */
 #include "main_window.h"
-#include "adreno.h"
+
+#include <QAbstractItemModel>
 #include <QAction>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDebug>
 #include <QFile>
 #include <QFileDialog>
+#include <QGroupBox>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QReadLocker>
+#include <QReadWriteLock>
+#include <QScrollBar>
+#include <QShortcut>
 #include <QSplitter>
 #include <QStandardItemModel>
+#include <QStatusBar>
 #include <QTabWidget>
+#include <QTemporaryDir>
+#include <QThread>
+#include <QTimer>
+#include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
-#include <QtWidgets/QDesktopWidget>
-#include <QtWidgets>
-#include <QReadLocker>
+#include <QVariant>
+#include <QWidget>
 #include <QWriteLocker>
-#include <QReadWriteLock>
-#include <QThread>
-#include <chrono>
 #include <cstdlib>
 #include <filesystem>
-#include <future>
 #include <memory>
 #include <optional>
-#include <QAbstractItemModel>
-#include <QVariant>
-#include <qwidget.h>
 
-#include "absl/strings/str_format.h"
 #include "absl/status/statusor.h"
-
-#include "about_window.h"
-#include "application_controller.h"
-#include "buffer_view.h"
-#include "capture_file_manager.h"
+#include "absl/types/span.h"
 #include "capture_service/constants.h"
-#include "command_buffer_model.h"
-#include "command_buffer_view.h"
-#include "command_model.h"
-#include "dive_core/capture_data.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
-#include "dive_core/log.h"
-#include "dive_tree_view.h"
-#include "error_dialog.h"
-#include "file_path.h"
-#include "object_names.h"
-#include "settings.h"
-#include "trace_window.h"
-#include "analyze_window.h"
-#ifndef NDEBUG
-#    include "event_timing/event_timing_view.h"
-#endif
-#include "command_tab_view.h"
 #include "dive_core/data_core.h"
-#include "event_selection_model.h"
-#include "event_state_view.h"
-#include "gfxr_vulkan_command_model.h"
-#include "gfxr_vulkan_command_filter_proxy_model.h"
-#include "gfxr_vulkan_command_arguments_filter_proxy_model.h"
-#include "gfxr_vulkan_command_arguments_tab_view.h"
-#include "gpu_timing_model.h"
-#include "gpu_timing_tab_view.h"
-#include "hover_help_model.h"
-#include "overlay.h"
-#include "overview_tab_view.h"
-#include "perf_counter_tab_view.h"
-#include "perf_counter_model.h"
-#include "property_panel.h"
-#include "search_bar.h"
-#include "shader_view.h"
-#include "shortcuts.h"
-#include "shortcuts_window.h"
-#include "text_file_view.h"
-#include "ui/dive_tree_view.h"
-#include "gfxr_vulkan_command_filter.h"
-#include "viewport_stats_model.h"
-#include "window_scissors_stats_model.h"
+#include "dive_core/log.h"
 #include "trace_stats/trace_stats.h"
-#include "frame_tab_view.h"
+#include "ui/about_window.h"
+#include "ui/analyze_window.h"
+#include "ui/application_controller.h"
+#include "ui/buffer_view.h"
+#include "ui/capture_file_manager.h"
+#include "ui/command_buffer_model.h"
+#include "ui/command_buffer_view.h"
+#include "ui/command_model.h"
+#include "ui/command_tab_view.h"
+#include "ui/dive_tree_view.h"
+#include "ui/error_dialog.h"
+#include "ui/event_selection_model.h"
+#include "ui/event_state_view.h"
+#include "ui/file_path.h"
+#include "ui/frame_tab_view.h"
+#include "ui/gfxr_vulkan_command_arguments_filter_proxy_model.h"
+#include "ui/gfxr_vulkan_command_arguments_tab_view.h"
+#include "ui/gfxr_vulkan_command_filter.h"
+#include "ui/gfxr_vulkan_command_filter_proxy_model.h"
+#include "ui/gfxr_vulkan_command_model.h"
+#include "ui/gpu_timing_model.h"
+#include "ui/gpu_timing_tab_view.h"
+#include "ui/hover_help_model.h"
+#include "ui/object_names.h"
+#include "ui/overlay.h"
+#include "ui/overview_tab_view.h"
+#include "ui/perf_counter_model.h"
+#include "ui/perf_counter_tab_view.h"
+#include "ui/property_panel.h"
+#include "ui/search_bar.h"
+#include "ui/settings.h"
+#include "ui/shader_view.h"
+#include "ui/shortcuts.h"
+#include "ui/shortcuts_window.h"
+#include "ui/text_file_view.h"
+#include "ui/trace_window.h"
 
-static constexpr int         kViewModeStringCount = 2;
-static constexpr int         kEventViewModeStringCount = 1;
-static constexpr int         kFrameTitleStringCount = 3;
-static constexpr const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
-static constexpr const char *kEventViewModeStrings[kEventViewModeStringCount] = { "GPU Events" };
-static constexpr const char *kFrameTitleStrings[kFrameTitleStringCount] = { "No File Loaded",
-                                                                            "Gfxr Capture",
-                                                                            "Adreno Rd Capture" };
-static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] = {
+namespace
+{
+constexpr int kMessageTimeoutMs = 2500;
+
+constexpr int kViewModeStringCount = 2;
+constexpr int kEventViewModeStringCount = 1;
+constexpr int kFrameTitleStringCount = 3;
+
+constexpr const char *kViewModeStrings[kViewModeStringCount] = { "Submit", "Events" };
+constexpr const char *kEventViewModeStrings[kEventViewModeStringCount] = { "GPU Events" };
+constexpr const char *kFrameTitleStrings[kFrameTitleStringCount] = { "No File Loaded",
+                                                                     "Gfxr Capture",
+                                                                     "Adreno Rd Capture" };
+constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] = {
     "None",
     "BinningPassOnly",
     "FirstTilePassOnly",
@@ -115,11 +117,57 @@ static constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] =
 };
 constexpr DiveFilterModel::FilterMode kDefaultFilterMode = DiveFilterModel::kFirstTilePassOnly;
 
-static constexpr const char *kMetricsFilePath = ":/resources/available_metrics.csv";
-static constexpr const char *kMetricsFileName = "available_metrics.csv";
+constexpr const char *kMetricsFilePath = ":/resources/available_metrics.csv";
+constexpr const char *kMetricsFileName = "available_metrics.csv";
 
-namespace
+enum class DrawCallContextMenuOption : int
 {
+    kUnknown,
+    kArguments,
+    kBinningPassOnly,
+    kFirstTilePassOnly,
+    kPerfCounterData,
+    kGpuTimeData,
+};
+
+constexpr std::array kCorrelatedContextOptions{
+    DrawCallContextMenuOption::kArguments,          //
+    DrawCallContextMenuOption::kBinningPassOnly,    //
+    DrawCallContextMenuOption::kFirstTilePassOnly,  //
+    DrawCallContextMenuOption::kPerfCounterData,    //
+    DrawCallContextMenuOption::kGpuTimeData,        //
+};
+
+constexpr std::array kNonCorrelatedContextOptions{
+    DrawCallContextMenuOption::kArguments,        //
+    DrawCallContextMenuOption::kPerfCounterData,  //
+    DrawCallContextMenuOption::kGpuTimeData,      //
+};
+
+constexpr std::array kCommandBufferContextOptions{
+    DrawCallContextMenuOption::kArguments,    //
+    DrawCallContextMenuOption::kGpuTimeData,  //
+};
+
+QString ToQString(DrawCallContextMenuOption opt)
+{
+    switch (opt)
+    {
+    case DrawCallContextMenuOption::kUnknown:
+        break;
+    case DrawCallContextMenuOption::kArguments:
+        return "Arguments";
+    case DrawCallContextMenuOption::kBinningPassOnly:
+        return "PM4 Events with BinningPassOnly Filter";
+    case DrawCallContextMenuOption::kFirstTilePassOnly:
+        return "PM4 Events with FirstTilePassOnly Filter";
+    case DrawCallContextMenuOption::kPerfCounterData:
+        return "Perf Counter Data";
+    case DrawCallContextMenuOption::kGpuTimeData:
+        return "Gpu Time Data";
+    }
+    return "Unknown";
+}
 
 std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
 {
@@ -169,11 +217,6 @@ void SetTabAvailable(QTabWidget *widget, int index, bool available)
     widget->setTabEnabled(index, available);
 #endif
 }
-
-enum class EventMode
-{
-    AllEvent = 0
-};
 
 // =================================================================================================
 // MainWindow
@@ -601,9 +644,6 @@ MainWindow::MainWindow(ApplicationController &controller) :
                      SLOT(UpdateOverlay(const QString &)));
     QObject::connect(this, &MainWindow::HideOverlay, this, &MainWindow::OnHideOverlay);
 
-#ifndef NDEBUG
-    showMaximized();
-#endif
     // Set default view mode
     OnCommandViewModeChange(tr(kEventViewModeStrings[0]));
     m_hover_help->SetCurItem(HoverHelp::Item::kNone);
@@ -1755,12 +1795,12 @@ void MainWindow::CreateToolBars()
 void MainWindow::CreateShortcuts()
 {
     // Search Shortcut
-    m_search_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), this);
-    connect(m_search_shortcut, &QShortcut::activated, this, &MainWindow::OnSearchTrigger);
+    auto *search_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENTS_SEARCH), this);
+    connect(search_shortcut, &QShortcut::activated, this, &MainWindow::OnSearchTrigger);
 
     // TabView Search Shortcut
-    m_search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), this);
-    connect(m_search_tab_view_shortcut, &QShortcut::activated, [this]() {
+    auto *search_tab_view_shortcut = new QShortcut(QKeySequence(SHORTCUT_TAB_VIEW_SEARCH), this);
+    connect(search_tab_view_shortcut, &QShortcut::activated, [this]() {
         int current_tab_index = m_tab_widget->currentIndex();
         if (current_tab_index == m_tabs.command)
         {
@@ -1787,29 +1827,29 @@ void MainWindow::CreateShortcuts()
     });
 
     // Overview Shortcut
-    m_overview_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
-    connect(m_overview_tab_shortcut, &QShortcut::activated, [this]() {
+    auto *overview_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_OVERVIEW_TAB), this);
+    connect(overview_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_tabs.overview);
     });
     // Commands Shortcut
-    m_command_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
-    connect(m_command_tab_shortcut, &QShortcut::activated, [this]() {
+    auto *command_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_COMMANDS_TAB), this);
+    connect(command_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_tabs.command);
     });
     // Shaders Shortcut
-    m_shader_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
-    connect(m_shader_tab_shortcut, &QShortcut::activated, [this]() {
+    auto *shader_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_SHADERS_TAB), this);
+    connect(shader_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_tabs.shader);
     });
     // Event State Shortcut
-    m_event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
-    connect(m_event_state_tab_shortcut, &QShortcut::activated, [this]() {
+    auto *event_state_tab_shortcut = new QShortcut(QKeySequence(SHORTCUT_EVENT_STATE_TAB), this);
+    connect(event_state_tab_shortcut, &QShortcut::activated, [this]() {
         m_tab_widget->setCurrentIndex(m_tabs.event_state);
     });
     // Gfxr Vulkan Command Arguments Shortcut
-    m_gfxr_vulkan_command_arguments_tab_shortcut =
+    auto *gfxr_vulkan_command_arguments_tab_shortcut =
     new QShortcut(QKeySequence(SHORTCUT_GFXR_VULKAN_COMMAND_ARGUMENTS_TAB), this);
-    connect(m_gfxr_vulkan_command_arguments_tab_shortcut, &QShortcut::activated, [this]() {
+    connect(gfxr_vulkan_command_arguments_tab_shortcut, &QShortcut::activated, [this]() {
         if (m_tabs.gfxr_vulkan_command_arguments != -1)
         {
             m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
@@ -1841,7 +1881,7 @@ void MainWindow::OnHideOverlay()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::ShowTempStatus(const QString &status_message)
 {
-    m_status_bar->showMessage(status_message, MESSAGE_TIMEOUT);
+    m_status_bar->showMessage(status_message, kMessageTimeoutMs);
     m_status_bar->repaint();
 }
 
@@ -1919,9 +1959,6 @@ void MainWindow::UpdateTabAvailability(TabMask mask)
     SetTabAvailable(m_tab_widget, m_tabs.frame, mask & TabMaskBits::kFrame);
 #if defined(ENABLE_CAPTURE_BUFFERS)
     SetTabAvailable(m_tab_widget, m_tabs.buffer, mask & TabMaskBits::kBuffer);
-#endif
-#ifndef NDEBUG
-    SetTabAvailable(m_tab_widget, m_tabs.event_timing, mask & TabMaskBits::kEventTiming);
 #endif
     bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
     SetTabAvailable(m_tab_widget, m_tabs.text_file, (mask & TabMaskBits::kTextFile) && has_text);
@@ -2739,6 +2776,12 @@ void MainWindow::OnCaptureUpdated(const QString &file_path)
 }
 
 //--------------------------------------------------------------------------------------------------
+
+QModelIndex MainWindow::FindSourceIndexFromNode(QAbstractItemModel *model,
+                                                uint64_t            target_node_index)
+{
+    return FindSourceIndexFromNode(model, target_node_index, QModelIndex());
+}
 QModelIndex MainWindow::FindSourceIndexFromNode(QAbstractItemModel *model,
                                                 uint64_t            target_node_index,
                                                 const QModelIndex  &parent)
@@ -2797,17 +2840,14 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     uint64_t found_gfxr_draw_call_index = std::distance(gfxr_draw_call_indices.begin(), it);
 
     QMenu context_menu;
-    for (size_t i = 0; i < std::size(Dive::kDrawCallContextMenuOptionStrings) - 1; ++i)
-    {
-        if (!m_correlated_capture_loaded &&
-            (i == Dive::DrawCallContextMenuOption::kBinningPassOnly ||
-             i == Dive::DrawCallContextMenuOption::kFirstTilePassOnly))
-        {
-            continue;
-        }
 
-        QAction *action = context_menu.addAction(Dive::kDrawCallContextMenuOptionStrings[i]);
-        action->setData(static_cast<int>(i));
+    auto context_menu_options = m_correlated_capture_loaded ?
+                                absl::MakeSpan(kCorrelatedContextOptions) :
+                                absl::MakeSpan(kNonCorrelatedContextOptions);
+    for (auto opt : context_menu_options)
+    {
+        QAction *action = context_menu.addAction(ToQString(opt));
+        action->setData(static_cast<int>(opt));
     }
 
     QAction *selected_action = context_menu.exec(
@@ -2821,26 +2861,32 @@ void MainWindow::OnOpenVulkanDrawCallMenu(const QPoint &pos)
     }
 
     QVariant selected_action_data = selected_action->data();
-    if (selected_action_data == Dive::kPerfCounterData)
+    switch (static_cast<DrawCallContextMenuOption>(selected_action_data.toInt()))
     {
-        m_tab_widget->setCurrentIndex(m_tabs.perf_counter);
-    }
-    else if (selected_action_data == Dive::kArguments)
-    {
+    case DrawCallContextMenuOption::kUnknown:
+        break;
+    case DrawCallContextMenuOption::kArguments:
         m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
-    }
-    else
-    {
-        m_pm4_filter_mode_combo_box->setCurrentIndex(selected_action->data().toInt());
-
-        OnCorrelationFilterApplied(found_gfxr_draw_call_index,
-                                   selected_action->data().toInt(),
-                                   vulkan_draw_call_index);
+        OnCorrelationFilterApplied(found_gfxr_draw_call_index, vulkan_draw_call_index);
+        break;
+    case DrawCallContextMenuOption::kBinningPassOnly:
+        m_pm4_filter_mode_combo_box->setCurrentIndex(DiveFilterModel::kBinningPassOnly);
+        OnCorrelationFilterApplied(found_gfxr_draw_call_index, vulkan_draw_call_index);
+        break;
+    case DrawCallContextMenuOption::kFirstTilePassOnly:
+        m_pm4_filter_mode_combo_box->setCurrentIndex(DiveFilterModel::kFirstTilePassOnly);
+        OnCorrelationFilterApplied(found_gfxr_draw_call_index, vulkan_draw_call_index);
+        break;
+    case DrawCallContextMenuOption::kPerfCounterData:
+        m_tab_widget->setCurrentIndex(m_tabs.perf_counter);
+        break;
+    case DrawCallContextMenuOption::kGpuTimeData:
+        m_tab_widget->setCurrentIndex(m_tabs.gpu_timing);
+        break;
     }
 }
 
 void MainWindow::OnCorrelationFilterApplied(uint64_t           gfxr_draw_call_index,
-                                            int                filter_index,
                                             const QModelIndex &vulkan_draw_call_model_index)
 {
     std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
@@ -2916,13 +2962,12 @@ void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
         return;
     }
 
-    QMenu    context_menu;
-    QAction *arguments_action = context_menu.addAction(
-    Dive::kDrawCallContextMenuOptionStrings[Dive::kArguments]);
-    arguments_action->setData(Dive::kArguments);
-    QAction *gpu_time_action = context_menu.addAction(
-    Dive::kDrawCallContextMenuOptionStrings[Dive::kGpuTimeData]);
-    gpu_time_action->setData(Dive::kGpuTimeData);
+    QMenu context_menu;
+    for (auto opt : kCommandBufferContextOptions)
+    {
+        QAction *action = context_menu.addAction(ToQString(opt));
+        action->setData(static_cast<int>(opt));
+    }
 
     QAction *selected_action = context_menu.exec(
     m_command_hierarchy_view->viewport()->mapToGlobal(pos));
@@ -2935,13 +2980,19 @@ void MainWindow::OnOpenVulkanCallMenu(const QPoint &pos)
     }
 
     QVariant selected_action_data = selected_action->data();
-    if (selected_action_data == Dive::kGpuTimeData)
+    switch (static_cast<DrawCallContextMenuOption>(selected_action_data.toInt()))
     {
-        m_tab_widget->setCurrentIndex(m_tabs.gpu_timing);
-    }
-    else if (selected_action_data == Dive::kArguments)
-    {
+    case DrawCallContextMenuOption::kUnknown:
+    case DrawCallContextMenuOption::kBinningPassOnly:
+    case DrawCallContextMenuOption::kFirstTilePassOnly:
+    case DrawCallContextMenuOption::kPerfCounterData:
+        break;
+    case DrawCallContextMenuOption::kArguments:
         m_tab_widget->setCurrentIndex(m_tabs.gfxr_vulkan_command_arguments);
+        break;
+    case DrawCallContextMenuOption::kGpuTimeData:
+        m_tab_widget->setCurrentIndex(m_tabs.gpu_timing);
+        break;
     }
 }
 
@@ -3039,8 +3090,8 @@ void MainWindow::OnCorrelateVulkanDrawCall(const QModelIndex &index)
     }
 
     if (m_correlated_capture_loaded &&
-        (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
-         m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly))
+        (m_pm4_filter_mode_combo_box->currentIndex() != DiveFilterModel::kBinningPassOnly &&
+         m_pm4_filter_mode_combo_box->currentIndex() != DiveFilterModel::kFirstTilePassOnly))
     {
         CorrelateCounter(index, true);
         ClearViewModelSelection(*m_pm4_command_hierarchy_view, false);
@@ -3123,8 +3174,8 @@ void MainWindow::OnCorrelatePm4DrawCall(const QModelIndex &index)
     QItemSelectionModel *gfxr_selection_model = m_command_hierarchy_view->selectionModel();
     QSignalBlocker       blocker(gfxr_selection_model);
 
-    if (m_pm4_filter_mode_combo_box->currentIndex() != Dive::kBinningPassOnly &&
-        m_pm4_filter_mode_combo_box->currentIndex() != Dive::kFirstTilePassOnly)
+    if (m_pm4_filter_mode_combo_box->currentIndex() != DiveFilterModel::kBinningPassOnly &&
+        m_pm4_filter_mode_combo_box->currentIndex() != DiveFilterModel::kFirstTilePassOnly)
     {
         ResetHorizontalScroll(*m_pm4_command_hierarchy_view);
         ClearViewModelSelection(*m_command_hierarchy_view, false);
@@ -3240,8 +3291,8 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
     }
 
     if (m_pm4_filter_mode_combo_box->isEnabled() &&
-        (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
-         m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly))
+        (m_pm4_filter_mode_combo_box->currentIndex() == DiveFilterModel::kBinningPassOnly ||
+         m_pm4_filter_mode_combo_box->currentIndex() == DiveFilterModel::kFirstTilePassOnly))
     {
         std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
                                                       m_pm4_command_hierarchy_view->model())
@@ -3290,8 +3341,8 @@ void MainWindow::CorrelateCounter(const QModelIndex &index, bool called_from_gfx
     {
         m_gpu_timing_tab_view->ClearSelection();
 
-        if (m_pm4_filter_mode_combo_box->currentIndex() == Dive::kBinningPassOnly ||
-            m_pm4_filter_mode_combo_box->currentIndex() == Dive::kFirstTilePassOnly)
+        if (m_pm4_filter_mode_combo_box->currentIndex() == DiveFilterModel::kBinningPassOnly ||
+            m_pm4_filter_mode_combo_box->currentIndex() == DiveFilterModel::kFirstTilePassOnly)
         {
             std::vector<uint64_t> pm4_draw_call_indices = qobject_cast<DiveFilterModel *>(
                                                           m_pm4_command_hierarchy_view->model())

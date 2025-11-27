@@ -16,8 +16,9 @@
 
 #include "analyze_window.h"
 
-#include <QComboBox>
+#include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDebug>
 #include <QFileDialog>
 #include <QGroupBox>
@@ -25,31 +26,29 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QSpinBox>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QTemporaryDir>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <filesystem>
 #include <future>
 #include <optional>
-#include <qapplication.h>
-#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "capture_service/constants.h"
-#include "capture_service/device_mgr.h"
 #include "application_controller.h"
-#include "settings.h"
-#include "overlay.h"
+#include "capture_service/device_mgr.h"
 #include "common/macros.h"
 #include "dive/ui/layout_helper.h"
 #include "dive/ui/lint.h"
+#include "ui/overlay.h"
+#include "ui/settings.h"
 
 using DiveLint::QtNew;
 using DiveLint::QtNewUnowned;
@@ -134,14 +133,14 @@ void AnalyzeDialog::InitializeLayout()
 
     // Custom replay
     {
-        auto group_box = QtNew<QGroupBox>(this);
+        auto *group_box = QtNew<QGroupBox>(this);
         group_box->setTitle("Custom Replay");
         group_box->setCheckable(true);
         group_box->setChecked(false);
 
         auto layout = NewWidgetLayout<QHBoxLayout>(group_box);
         layout.New<QLabel>(tr("Loop Single Frame Count:"));
-        auto frame_count_box = layout.New<QSpinBox>(this);
+        auto *frame_count_box = layout.New<QSpinBox>(this);
         frame_count_box->setRange(1, std::numeric_limits<int>::max());
         frame_count_box->setValue(kDefaultFrameCount);
 
@@ -175,14 +174,14 @@ void AnalyzeDialog::InitializeLayout()
 
     // Enable GPU Time
     {
-        auto group_box = QtNew<QGroupBox>(this);
+        auto *group_box = QtNew<QGroupBox>(this);
         group_box->setTitle("Enable GPU Time");
         group_box->setCheckable(true);
         group_box->setChecked(false);
 
         auto layout = NewWidgetLayout<QHBoxLayout>(group_box);
         layout.New<QLabel>(tr("Loop Single Frame Count:"));
-        auto frame_count_box = layout.New<QSpinBox>(this);
+        auto *frame_count_box = layout.New<QSpinBox>(this);
         frame_count_box->setRange(1, std::numeric_limits<int>::max());
         frame_count_box->setValue(kDefaultFrameCount);
 
@@ -261,9 +260,9 @@ void AnalyzeDialog::InitializeLayout()
     });
 
     QObject::connect(m_device_box,
-                     SIGNAL(currentIndexChanged(const QString &)),
+                     qOverload<const QString &>(&QComboBox::currentIndexChanged),
                      this,
-                     SLOT(OnDeviceSelected(const QString &)));
+                     &AnalyzeDialog::OnDeviceSelected);
     QObject::connect(m_device_refresh_button,
                      &QPushButton::clicked,
                      this,
@@ -305,7 +304,7 @@ void AnalyzeDialog::OnDisableOverlay()
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::ShowMessage(const std::string &message)
 {
-    auto message_box = QtNew<QMessageBox>(this);
+    auto *message_box = QtNew<QMessageBox>(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message.c_str());
     message_box->open();
@@ -325,7 +324,6 @@ void AnalyzeDialog::PopulateMetrics()
             if (info)
             {
                 CsvItem item;
-                item.id = info->m_metric_id;
                 item.type = info->m_metric_type;
                 item.key = QString::fromStdString(key);
                 item.name = QString::fromStdString(info->m_name);
@@ -440,9 +438,9 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceSelected(const QString &s)
+void AnalyzeDialog::OnDeviceSelected()
 {
-    if (s.isEmpty() || m_device_box->currentIndex() == 0)
+    if (m_device_box->currentIndex() == 0)
     {
         qDebug() << "No devices selected";
         return;
@@ -686,13 +684,17 @@ void AnalyzeDialog::OnReplay()
     {
         if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector.empty())
         {
-            return ShowMessage("Select at least one metrics.");
+            ShowMessage("Select at least one metrics.");
         }
-        return ShowMessage("Select at least one option.");
+        else
+        {
+            ShowMessage("Select at least one option.");
+        }
+        return;
     }
     OverlayMessage("Replaying...");
 
-    m_replay_active = std::async([=, this]() {
+    m_replay_active = std::async([this, config = config]() {
         ReplayImpl(config);
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
@@ -707,7 +709,7 @@ void AnalyzeDialog::OnDeleteReplayArtifacts()
         return;
     }
 
-    m_replay_active = std::async([=, this]() {
+    m_replay_active = std::async([this]() {
         DeleteReplayArtifactsImpl();
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
@@ -796,7 +798,7 @@ void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std:
 void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
 {
     Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
-    auto                 device = device_manager.GetDevice();
+    auto                *device = device_manager.GetDevice();
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSetup);
 

@@ -534,12 +534,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
              << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
 
-    std::string device_architecture = "";
     if (m_gfxr_capture)
     {
-        auto retrieve_device_architecture = device->Adb().RunAndGetResult(
-        "shell getprop ro.product.cpu.abi");
-        device_architecture = retrieve_device_architecture.value_or("");
         m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
         m_gfxr_capture_button->setEnabled(true);
 
@@ -558,7 +554,6 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::OPENXR_APK,
                                m_command_args,
-                               device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
@@ -567,7 +562,6 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::VULKAN_APK,
                                m_command_args,
-                               device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_Non_OpenXR)]
@@ -576,7 +570,6 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         ret = device->SetupApp(m_cur_pkg,
                                Dive::ApplicationType::GLES_APK,
                                m_command_args,
-                               device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type ==
@@ -595,7 +588,6 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         ret = device->SetupApp(m_executable,
                                m_command_args,
                                Dive::ApplicationType::VULKAN_CLI,
-                               device_architecture,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     if (!ret.ok())

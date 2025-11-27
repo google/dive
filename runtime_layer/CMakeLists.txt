@@ -71,7 +71,7 @@ set_target_properties(
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 
-install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DESTINATION}")
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

@@ -28,9 +28,12 @@ if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
-set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
+set(INSTALL_GTEST OFF)
+set(INSTALL_GFXRECON OFF)
+
+set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
+set(DIVE_INSTALL_DESTINATION "opt/dive-profiler")
 # `dive_core/common.h` is used in more places other than dive_core now
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DDIVE_GUI_TOOL)
@@ -90,7 +93,7 @@ if(ANDROID)
     )
     install(
         FILES ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -131,7 +134,7 @@ if(NOT ANDROID)
 
     message(CHECK_START "Generate build files for third_party/gfxreconstruct")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/gfxreconstruct)
+    add_subdirectory(third_party/gfxreconstruct EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
@@ -142,7 +145,7 @@ if(NOT ANDROID)
         find_package(PythonLibs 3.7 REQUIRED)
         # TODO(b/463357493): potentially remove pybind11
         set(PYBIND11_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/pybind11")
-        add_subdirectory(third_party/pybind11)
+        add_subdirectory(third_party/pybind11 EXCLUDE_FROM_ALL)
         list(POP_BACK CMAKE_MESSAGE_INDENT)
         message(CHECK_PASS "done")
     endif()
@@ -256,18 +259,18 @@ if(ANDROID)
     # TODO(b/462175713): Don't put the entire folder containing layers with different architectures into the install folder, just mark that specific libVkLayer_gfxreconstruct.so for install
     install(
         DIRECTORY ${CMAKE_BINARY_DIR}/gfxr_layer
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
         RENAME "gfxr-replay.apk"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")

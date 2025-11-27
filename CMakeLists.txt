@@ -30,10 +30,12 @@ if(MSVC)
 endif()
 
 set(INSTALL_GTEST OFF)
-set(INSTALL_GFXRECON OFF)
 
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-set(DIVE_INSTALL_DESTINATION "opt/dive-profiler")
+set(DIVE_INSTALL_DESTINATION "opt/dive-profiler" CACHE STRING "Dive installer location")
+set(DIVE_ANDROID_PREBUILT "${CMAKE_SOURCE_DIR}/build_android/install/${DIVE_INSTALL_DESTINATION}" CACHE STRING "Dive android prebuilt")
+message("Prebuilt: ${DIVE_ANDROID_PREBUILT}")
+
 # `dive_core/common.h` is used in more places other than dive_core now
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DDIVE_GUI_TOOL)
@@ -155,7 +157,7 @@ else()
         "Generate build files for third_party/freedreno (libwrap)"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/freedreno)
+    add_subdirectory(third_party/freedreno EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
@@ -164,7 +166,7 @@ else()
         "Generate build files for third_party/Vulkan-ValidationLayers"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/Vulkan-ValidationLayers)
+    add_subdirectory(third_party/Vulkan-ValidationLayers EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 endif()

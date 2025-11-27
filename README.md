@@ -106,7 +106,11 @@ The capture file directory will be saved at the path specified with the `--downl
 
 ### GFXR Replay
 
-First, push the GFXR capture to the device or find the path where it is located on the device.
+Ensure the device is rooted with `adb root`
+
+First, push the GFXR capture to the device or find the path where it is located on the device. 
+
+TIP: Push the file to the standard Android Download directory: `/storage/emulated/0/Download/`
 
 If multiple Android Devices are connected, set the enviroment variable `ANDROID_SERIAL` to the device serial in preparation for the GFXR replay script.
 

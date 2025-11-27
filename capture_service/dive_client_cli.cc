@@ -15,23 +15,18 @@ limitations under the License.
 */
 
 #include <filesystem>
-#include <future>
 #include <iostream>
 #include <ostream>
 #include <string>
-#include <system_error>
 #include <thread>
 
-#include "absl/base/no_destructor.h"
 #include "absl/flags/flag.h"
-#include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
-
 #include "android_application.h"
 #include "command_utils.h"
 #include "constants.h"
@@ -57,8 +52,10 @@ struct GlobalOptions
 
 struct CommandContext
 {
+    // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
     Dive::DeviceManager& mgr;
     const GlobalOptions& options;
+    // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 };
 
 enum class Command
@@ -98,14 +95,15 @@ absl::Status CmdGfxrCapture(const CommandContext& ctx);
 absl::Status CmdGfxrReplay(const CommandContext& ctx);
 absl::Status CmdCleanup(const CommandContext& ctx);
 
-absl::Status ValidateAlwaysOk(const GlobalOptions&)
+absl::Status ValidateAlwaysOk(const GlobalOptions& /*options*/)
 {
     return absl::OkStatus();
 }
 
-absl::Status ValidateCleanup(const GlobalOptions& o)
+absl::Status ValidateCleanup(const GlobalOptions& options)
 {
-    return o.package.empty() ? absl::InvalidArgumentError("Missing --package") : absl::OkStatus();
+    return options.package.empty() ? absl::InvalidArgumentError("Missing --package") :
+                                     absl::OkStatus();
 }
 
 // Helper to validate options common to run/capture commands.
@@ -139,7 +137,7 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
             "arm64-v8a", "arm64-v8", "armeabi-v7a", "x86", "x86_64"
         };
 
-        if (valid_archs.find(options.device_architecture) == valid_archs.end())
+        if (!valid_archs.contains(options.device_architecture))
         {
             return absl::InvalidArgumentError(
             absl::StrCat("Invalid --device_architecture '",
@@ -167,43 +165,43 @@ absl::Status ValidateGfxrReplayOptions(const GlobalOptions& options)
     return absl::OkStatus();
 }
 
-constexpr std::array<CommandDef, 7> kCommandDefs = { {
-{ Command::kListDevice,
-  "list_device",
-  "List connected Android devices.",
-  ValidateAlwaysOk,
-  CmdListDevice },
-{ Command::kListPackage,
-  "list_package",
-  "List installable packages on the selected device.",
-  ValidateAlwaysOk,
-  CmdListPackage },
-{ Command::kRunPackage,
-  "run",
-  "Run an app for manual testing or external capture.",
-  ValidateRunOptions,
-  CmdRunPackage },
-{ Command::kPm4Capture,
-  "pm4_capture",
-  "Run an app and trigger a PM4 capture after a delay.",
-  ValidateRunOptions,
-  CmdPm4Capture },
-{ Command::kGfxrCapture,
-  "gfxr_capture",
-  "Run an app and enable GFXR capture via key-press.",
-  ValidateRunOptions,
-  CmdGfxrCapture },
-{ Command::kGfxrReplay,
-  "gfxr_replay",
-  "Deploy and run a GFXR replay.",
-  ValidateGfxrReplayOptions,
-  CmdGfxrReplay },
-{ Command::kCleanup,
-  "cleanup",
-  "Clean up app-specific settings on the device.",
-  ValidateCleanup,
-  CmdCleanup },
-} };
+constexpr std::array kCommandDefs = {
+    CommandDef{ .cmd = Command::kListDevice,
+                .name = "list_device",
+                .description = "List connected Android devices.",
+                .validator = ValidateAlwaysOk,
+                .executor = CmdListDevice },
+    CommandDef{ .cmd = Command::kListPackage,
+                .name = "list_package",
+                .description = "List installable packages on the selected device.",
+                .validator = ValidateAlwaysOk,
+                .executor = CmdListPackage },
+    CommandDef{ .cmd = Command::kRunPackage,
+                .name = "run",
+                .description = "Run an app for manual testing or external capture.",
+                .validator = ValidateRunOptions,
+                .executor = CmdRunPackage },
+    CommandDef{ .cmd = Command::kPm4Capture,
+                .name = "pm4_capture",
+                .description = "Run an app and trigger a PM4 capture after a delay.",
+                .validator = ValidateRunOptions,
+                .executor = CmdPm4Capture },
+    CommandDef{ .cmd = Command::kGfxrCapture,
+                .name = "gfxr_capture",
+                .description = "Run an app and enable GFXR capture via key-press.",
+                .validator = ValidateRunOptions,
+                .executor = CmdGfxrCapture },
+    CommandDef{ .cmd = Command::kGfxrReplay,
+                .name = "gfxr_replay",
+                .description = "Deploy and run a GFXR replay.",
+                .validator = ValidateGfxrReplayOptions,
+                .executor = CmdGfxrReplay },
+    CommandDef{ .cmd = Command::kCleanup,
+                .name = "cleanup",
+                .description = "Clean up app-specific settings on the device.",
+                .validator = ValidateCleanup,
+                .executor = CmdCleanup },
+};
 
 // Generates the help string dynamically for ABSL_FLAG.
 std::string GenerateCommandFlagHelp()
@@ -261,9 +259,9 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
         {
             std::string
             msg = "Multiple devices connected. Specify --device [serial].\nAvailables:\n";
-            for (const auto& d : list)
+            for (const auto& device_info : list)
             {
-                msg.append("\t" + d.GetDisplayName() + "\n");
+                msg.append("\t" + device_info.GetDisplayName() + "\n");
             }
             return absl::InvalidArgumentError(msg);
         }
@@ -272,14 +270,14 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
     {
         bool        found = false;
         std::string msg;
-        for (const auto& d : list)
+        for (const auto& device_info : list)
         {
-            if (d.m_serial == target_serial)
+            if (device_info.m_serial == target_serial)
             {
                 found = true;
                 break;
             }
-            msg.append("\t" + d.GetDisplayName() + "\n");
+            msg.append("\t" + device_info.GetDisplayName() + "\n");
         }
         if (!found)
         {
@@ -387,10 +385,14 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
         return absl::UnavailableError("Connection failed: " + std::string(status.message()));
     }
 
-    absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture();
-    if (!capture_file_path.ok())
+    std::string capture_file_path;
     {
-        return capture_file_path.status();
+        auto res = client.StartPm4Capture();
+        if (!res.ok())
+        {
+            return res.status();
+        }
+        capture_file_path = *res;
     }
 
     std::filesystem::path target_download_dir(download_dir);
@@ -400,10 +402,10 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
                                           target_download_dir.string());
     }
 
-    std::filesystem::path p(*capture_file_path);
-    std::string           download_file_path = (target_download_dir / p.filename()).string();
+    auto        capture_file_name = std::filesystem::path(capture_file_path).filename();
+    std::string download_file_path = (target_download_dir / capture_file_name).string();
 
-    status = client.DownloadFileFromServer(*capture_file_path, download_file_path);
+    status = client.DownloadFileFromServer(capture_file_path, download_file_path);
     if (!status.ok())
     {
         return status;
@@ -416,9 +418,10 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
 // Checks if the capture directory on the device is currently done.
 absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
 {
-    std::string                 on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
+    std::string on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
                                                            "/",
                                                            gfxr_capture_directory);
+
     std::string                 command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
 
@@ -427,10 +430,10 @@ absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr
         std::cout << "Error checking directory: " << output.status().message() << std::endl;
     }
 
-    std::stringstream ss(output->c_str());
+    std::stringstream sst(output->c_str());
     std::string       line;
     int               line_count = 0;
-    while (std::getline(ss, line))
+    while (std::getline(sst, line))
     {
         line_count++;
     }
@@ -440,6 +443,7 @@ absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr
 }
 
 // Renames the screenshot file locally to match the GFXR capture file name.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 absl::Status RenameScreenshotFile(const std::filesystem::path& full_target_download_dir,
                                   const std::filesystem::path& gfxr_capture_file_name)
 {
@@ -518,9 +522,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
                                    std::string(output.status().message()));
     }
 
-    std::vector<std::string> file_list = absl::StrSplit(std::string(output->data()),
-                                                        '\n',
-                                                        absl::SkipEmpty());
+    std::vector<std::string> file_list = absl::StrSplit(*output, '\n', absl::SkipEmpty());
 
     if (file_list.empty())
     {
@@ -570,6 +572,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
 }
 
 // Triggers a GFXR capture on the device, allowing for multiple captures and screenshot.
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& options)
 {
     std::cout
@@ -786,11 +789,15 @@ bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
 std::string AbslUnparseFlag(Command command)
 {
     if (command == Command::kNone)
+    {
         return "";
+    }
     for (const auto& def : kCommandDefs)
     {
         if (def.cmd == command)
+        {
             return def.name;
+        }
     }
     return "unknown";
 }

@@ -117,7 +117,6 @@ constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] = {
 };
 constexpr DiveFilterModel::FilterMode kDefaultFilterMode = DiveFilterModel::kFirstTilePassOnly;
 
-constexpr const char *kMetricsFilePath = ":/resources/available_metrics.csv";
 constexpr const char *kMetricsFileName = "available_metrics.csv";
 
 enum class DrawCallContextMenuOption : int
@@ -1628,43 +1627,6 @@ void MainWindow::LoadAvailableMetrics()
         {
             metrics_description_file_path = file_path;
         }
-    }
-
-    std::optional<QTemporaryDir> temp_dir;
-    if (!metrics_description_file_path)
-    {
-        QFile input_file(QString::fromStdString(kMetricsFilePath));
-        if (!input_file.open(QIODevice::ReadOnly))
-        {
-            std::cerr << "Failed to open resource file: " << kMetricsFilePath << std::endl;
-            return;
-        }
-
-        QByteArray file_contents = input_file.readAll();
-        input_file.close();
-
-        temp_dir.emplace();
-        if (!temp_dir->isValid())
-        {
-            std::cerr << "Failed to create temporary directory." << std::endl;
-            return;
-        }
-
-        // Get the temporary file path as a QString
-        QString temp_file_path = QDir(temp_dir->path()).filePath(kMetricsFileName);
-
-        QFile temp_file(temp_file_path);
-        if (!temp_file.open(QIODevice::WriteOnly))
-        {
-            std::cerr << "Failed to create temporary file: " << temp_file_path.toStdString()
-                      << std::endl;
-            return;
-        }
-
-        temp_file.write(file_contents);
-        temp_file.close();
-
-        metrics_description_file_path = std::filesystem::path(temp_file_path.toStdString());
     }
 
     if (!metrics_description_file_path)

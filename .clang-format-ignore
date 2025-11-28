@@ -2,7 +2,6 @@
 ./third_party/OpenXR-SDK/*
 ./third_party/Vulkan-Headers/*
 ./third_party/libarchive/*
-./third_party/pybind11/*
 
 # ignore third_party subtree code from clang-format checks
 # TODO: figure out what kind of formatting is required for these subtrees

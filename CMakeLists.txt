@@ -134,18 +134,6 @@ if(NOT ANDROID)
     add_subdirectory(third_party/gfxreconstruct)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
-
-    option(DIVE_PYTHON_BINDINGS "Build Python bindings for dive")
-    if(DIVE_PYTHON_BINDINGS)
-        message(CHECK_START "Generate build files for third_party/pybind11")
-        list(APPEND CMAKE_MESSAGE_INDENT "  ")
-        find_package(PythonLibs 3.7 REQUIRED)
-        # TODO(b/463357493): potentially remove pybind11
-        set(PYBIND11_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/pybind11")
-        add_subdirectory(third_party/pybind11)
-        list(POP_BACK CMAKE_MESSAGE_INDENT)
-        message(CHECK_PASS "done")
-    endif()
 else()
     message(
         CHECK_START

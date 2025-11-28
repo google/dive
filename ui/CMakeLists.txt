@@ -145,10 +145,6 @@ file(
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/
 )
 file(
-    COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/
-)
-file(
     COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/renderdoc/
 )

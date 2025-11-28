@@ -1156,6 +1156,9 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
                                       settings.remote_capture_path,
                                       gfxr_replay_flag,
                                       metrics_str);
+
+    // Wake up the screen.
+    RETURN_IF_ERROR(adb.Run("shell input keyevent KEYCODE_WAKEUP"));
     // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
     LOGD("Profiling binary cmd: %s\n", cmd.c_str());
     RETURN_IF_ERROR(adb.Run(cmd));

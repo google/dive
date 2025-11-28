@@ -37,6 +37,7 @@ FrameTabView::FrameTabView(QWidget *parent) :
     m_scroll_area->setBackgroundRole(QPalette::Dark);
     m_scroll_area->setWidget(m_image_label);
     m_scroll_area->setAlignment(Qt::AlignCenter);
+    m_scroll_area->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     m_actual_size_button = new QPushButton("1:1", this);
     m_fit_to_fill_button = new QPushButton("Fit", this);
@@ -64,39 +65,12 @@ FrameTabView::FrameTabView(QWidget *parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void FrameTabView::OnCalculateInitialScale()
-{
-    if (!m_image.isNull() && m_initial_scale_needed)
-    {
-        QSize viewport_size = m_scroll_area->viewport()->size();
-        QSize image_size = m_image.size();
-
-        double width_ratio = static_cast<double>(viewport_size.width()) /
-                             static_cast<double>(image_size.width());
-        double height_ratio = static_cast<double>(viewport_size.height()) /
-                              static_cast<double>(image_size.height());
-
-        // Use the smaller ratio to guarantee the whole image fits.
-        m_scale_factor = qMin(width_ratio, height_ratio);
-
-        ScaleAndDisplayImage();
-
-        // Mark the initial scaling as complete.
-        m_initial_scale_needed = false;
-        m_initial_scale_factor = m_scale_factor;
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
 void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
 {
     if (m_image.load(file_path))
     {
-        m_scale_factor = 1.0;
-        m_initial_scale_needed = true;
-
-        // Defer the scaling calculation until the event queue has processed
-        QTimer::singleShot(10, this, &FrameTabView::OnCalculateInitialScale);
+        m_scale_factor = m_initial_scale_factor;
+        ScaleAndDisplayImage();
     }
     else
     {

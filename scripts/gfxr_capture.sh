@@ -31,7 +31,7 @@ GFXR_CAPTURE_LIB=libVkLayer_gfxreconstruct.so
 
 # Install GFXR layer.
 # Adapted from https://developer.android.com/ndk/guides/graphics/validation-layer.
-adb push "./install/gfxr_layer/jni/arm64-v8a/${GFXR_CAPTURE_LIB}" "${REMOTE_TEMP_DIR}"
+adb push "./install/${GFXR_CAPTURE_LIB}" "${REMOTE_TEMP_DIR}"
 adb shell run-as "${PACKAGE}" cp "${REMOTE_TEMP_DIR}/${GFXR_CAPTURE_LIB}" .
 adb shell settings put global enable_gpu_debug_layers 1
 adb shell settings put global gpu_debug_app "${PACKAGE}"

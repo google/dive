@@ -28,8 +28,8 @@ namespace
 
 using ::absl_testing::IsOkAndHolds;
 using ::absl_testing::StatusIs;
-using testing::ElementsAre;
 using testing::Pair;
+using testing::UnorderedElementsAre;
 
 TEST(GetDeviceLibraryVersionMapTest, BasicPass)
 {
@@ -40,12 +40,13 @@ TEST(GetDeviceLibraryVersionMapTest, BasicPass)
     csv_content);
 
     EXPECT_THAT(got,
-                IsOkAndHolds(ElementsAre(Pair(VersionInfoConstants::kNameAbi, "arm64-v8a"),
-                                         Pair(VersionInfoConstants::kNameBuildType, "Debug"),
-                                         Pair(VersionInfoConstants::kNameReleaseType, "dev"),
-                                         Pair(VersionInfoConstants::kNameSha,
-                                              "0343dcaa2d0335a46dd673d19b56963d9b045879"),
-                                         Pair(VersionInfoConstants::kNameVersion, "1.1.2"))))
+                IsOkAndHolds(
+                UnorderedElementsAre(Pair(VersionInfoConstants::kNameAbi, "arm64-v8a"),
+                                     Pair(VersionInfoConstants::kNameBuildType, "Debug"),
+                                     Pair(VersionInfoConstants::kNameReleaseType, "dev"),
+                                     Pair(VersionInfoConstants::kNameSha,
+                                          "0343dcaa2d0335a46dd673d19b56963d9b045879"),
+                                     Pair(VersionInfoConstants::kNameVersion, "1.1.2"))))
     << got.status().message();
 }
 

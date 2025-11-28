@@ -198,6 +198,7 @@ else()
     add_subdirectory(src)
     add_subdirectory(trace_stats)
     add_subdirectory(ui)
+    add_subdirectory(runtime_layer)
 endif()
 
 # ------------------------------------------------------------------------------

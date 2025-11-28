@@ -15,10 +15,6 @@
 #
 
 message(CHECK_START "Generate build files for runtime_layer (diveRuntimeLayer)")
-if(NOT ANDROID)
-    message(CHECK_FAIL "not Android platform, skipping")
-    return()
-endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
 project(diveRuntimeLayer)

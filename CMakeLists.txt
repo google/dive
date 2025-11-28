@@ -96,6 +96,13 @@ if(ANDROID)
     message(CHECK_PASS "done")
 endif()
 
+# Add an option to allow users to easily toggle the runtime layer build
+option(
+    DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
+    "Build the Dive runtime layer (VkLayer_rt_dive) for Windows"
+    ON
+)
+
 # ------------------------------------------------------------------------------
 # For generated headers
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
@@ -198,6 +205,9 @@ else()
     add_subdirectory(src)
     add_subdirectory(trace_stats)
     add_subdirectory(ui)
+    if(DIVE_BUILD_RUNTIME_LAYER_FOR_WIN AND CMAKE_HOST_WIN32)
+        add_subdirectory(runtime_layer)
+    endif()
 endif()
 
 # ------------------------------------------------------------------------------

@@ -32,7 +32,7 @@ endif()
 set(INSTALL_GTEST OFF)
 
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-set(DIVE_INSTALL_DESTINATION "opt/dive-profiler" CACHE STRING "Dive installer location")
+set(DIVE_INSTALL_DESTINATION "dive-profiler" CACHE STRING "Dive installer location")
 set(DIVE_ANDROID_PREBUILT "${CMAKE_SOURCE_DIR}/build_android/install/${DIVE_INSTALL_DESTINATION}" CACHE STRING "Dive android prebuilt")
 message("Prebuilt: ${DIVE_ANDROID_PREBUILT}")
 

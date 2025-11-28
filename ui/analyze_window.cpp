@@ -16,8 +16,9 @@
 
 #include "analyze_window.h"
 
-#include <QComboBox>
+#include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDebug>
 #include <QFileDialog>
 #include <QGroupBox>
@@ -25,29 +26,32 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QSpinBox>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QTemporaryDir>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <filesystem>
 #include <future>
 #include <optional>
-#include <qapplication.h>
-#include <qtemporarydir.h>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "capture_service/constants.h"
-#include "capture_service/device_mgr.h"
 #include "application_controller.h"
-#include "settings.h"
-#include "overlay.h"
+#include "capture_service/device_mgr.h"
 #include "common/macros.h"
+#include "dive/ui/layout_helper.h"
+#include "dive/ui/lint.h"
+#include "ui/overlay.h"
+#include "ui/settings.h"
+
+using DiveLint::QtNew;
+using DiveLint::QtNewUnowned;
 
 //--------------------------------------------------------------------------------------------------
 void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
@@ -73,51 +77,53 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
     m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
+    InitializeLayout();
+}
 
-    m_overlay = new OverlayHelper(this);
+void AnalyzeDialog::InitializeLayout()
+{
+    m_overlay = QtNew<OverlayHelper>(this);
 
     // Metrics List
-    m_metrics_list_label = new QLabel(tr("Available Metrics:"));
-    m_metrics_list = new QListWidget();
-    m_csv_items = new QVector<CsvItem>();
-    m_enabled_metrics_vector = new std::vector<std::string>();
+    m_metrics_list_label = QtNew<QLabel>(tr("Available Metrics:"), this);
+    m_metrics_list = QtNew<QListWidget>(this);
     PopulateMetrics();
 
     // Metrics Description
-    m_selected_metrics_description_label = new QLabel(tr("Description:"));
-    m_selected_metrics_description = new QTextEdit();
+    m_selected_metrics_description_label = QtNew<QLabel>(tr("Description:"), this);
+    m_selected_metrics_description = QtNew<QTextEdit>(this);
     m_selected_metrics_description->setReadOnly(true);
     m_selected_metrics_description->setPlaceholderText("Select a metric to see its description...");
 
     // Enabled Metrics
-    m_enabled_metrics_list_label = new QLabel(tr("Enabled Metrics:"));
-    m_enabled_metrics_list = new QListWidget();
+    m_enabled_metrics_list_label = QtNew<QLabel>(tr("Enabled Metrics:"), this);
+    m_enabled_metrics_list = QtNew<QListWidget>(this);
 
     // Replay Button
-    m_button_layout = new QHBoxLayout();
-    m_replay_button = new QPushButton("&Replay", this);
+    m_button_layout = QtNewUnowned<QHBoxLayout>();
+    m_replay_button = QtNew<QPushButton>("&Replay", this);
     m_replay_button->setEnabled(false);
     m_button_layout->addWidget(m_replay_button);
 
     // Device Selector
-    m_device_layout = new QHBoxLayout();
-    m_device_label = new QLabel(tr("Devices:"));
-    m_device_model = new QStandardItemModel();
-    m_device_box = new QComboBox();
-    m_device_refresh_button = new QPushButton("&Refresh", this);
+    m_device_layout = QtNewUnowned<QHBoxLayout>();
+    m_device_model = QtNew<QStandardItemModel>(this);
+    {
+        auto layout = LayoutHelper{ m_device_layout };
+        m_device_label = layout.New<QLabel>(tr("Devices:"));
+        m_device_box = layout.New<QComboBox>();
+        m_device_refresh_button = layout.New<QPushButton>("&Refresh");
+    }
     m_devices = Dive::GetDeviceManager().ListDevice();
     UpdateDeviceList(false);
     m_device_box->setCurrentText("Please select a device");
     m_device_box->setModel(m_device_model);
     m_device_box->setCurrentIndex(0);
-    m_device_layout->addWidget(m_device_label);
-    m_device_layout->addWidget(m_device_box);
-    m_device_layout->addWidget(m_device_refresh_button);
 
     // Selected File
-    m_selected_file_layout = new QHBoxLayout();
-    m_selected_file_label = new QLabel("Selected Capture file:");
-    m_selected_file_input_box = new QLineEdit();
+    m_selected_file_layout = QtNewUnowned<QHBoxLayout>();
+    m_selected_file_label = QtNew<QLabel>("Selected Capture file:", this);
+    m_selected_file_input_box = QtNew<QLineEdit>(this);
     m_selected_capture_file_string = "";
     m_selected_file_input_box->setText(m_selected_capture_file_string);
     m_selected_file_input_box->setReadOnly(true);
@@ -126,19 +132,16 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
 
     // Custom replay
     {
-        auto frame_count_layout = new QHBoxLayout();
-        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto frame_count_box = new QSpinBox(this);
-        frame_count_box->setRange(1, std::numeric_limits<int>::max());
-        frame_count_box->setValue(kDefaultFrameCount);
-        frame_count_layout->addWidget(frame_count_label);
-        frame_count_layout->addWidget(frame_count_box);
-
-        auto group_box = new QGroupBox();
+        auto *group_box = QtNew<QGroupBox>(this);
         group_box->setTitle("Custom Replay");
         group_box->setCheckable(true);
         group_box->setChecked(false);
-        group_box->setLayout(frame_count_layout);
+
+        auto layout = NewWidgetLayout<QHBoxLayout>(group_box);
+        layout.New<QLabel>(tr("Loop Single Frame Count:"));
+        auto *frame_count_box = layout.New<QSpinBox>(this);
+        frame_count_box->setRange(1, std::numeric_limits<int>::max());
+        frame_count_box->setValue(kDefaultFrameCount);
 
         m_custom_replay_box = group_box;
         m_custom_replay_frame_count = frame_count_box;
@@ -152,14 +155,14 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
 
     // Enable Dump Pm4
     {
-        m_dump_pm4_box = new QCheckBox();
+        m_dump_pm4_box = QtNew<QCheckBox>(this);
         m_dump_pm4_box->setText(tr("Enable Dump Pm4"));
         m_dump_pm4_box->setCheckState(Qt::Unchecked);
     }
 
     // Enable perf counter
     {
-        m_perf_counter_box = new QCheckBox();
+        m_perf_counter_box = QtNew<QCheckBox>(this);
         m_perf_counter_box->setText(tr("Enable Perf Counters"));
         m_perf_counter_box->setCheckState(Qt::Unchecked);
         QObject::connect(m_perf_counter_box, &QCheckBox::toggled, this, [this](bool checked) {
@@ -170,19 +173,16 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
 
     // Enable GPU Time
     {
-        auto frame_count_layout = new QHBoxLayout();
-        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto frame_count_box = new QSpinBox(this);
-        frame_count_box->setRange(1, std::numeric_limits<int>::max());
-        frame_count_box->setValue(kDefaultFrameCount);
-        frame_count_layout->addWidget(frame_count_label);
-        frame_count_layout->addWidget(frame_count_box);
-
-        auto group_box = new QGroupBox();
+        auto *group_box = QtNew<QGroupBox>(this);
         group_box->setTitle("Enable GPU Time");
         group_box->setCheckable(true);
         group_box->setChecked(false);
-        group_box->setLayout(frame_count_layout);
+
+        auto layout = NewWidgetLayout<QHBoxLayout>(group_box);
+        layout.New<QLabel>(tr("Loop Single Frame Count:"));
+        auto *frame_count_box = layout.New<QSpinBox>(this);
+        frame_count_box->setRange(1, std::numeric_limits<int>::max());
+        frame_count_box->setValue(kDefaultFrameCount);
 
         m_gpu_time_replay_box = group_box;
         m_gpu_time_replay_frame_count = frame_count_box;
@@ -190,31 +190,30 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
 
     // Enable RenderDoc capture
     {
-        m_renderdoc_capture_box = new QCheckBox();
+        m_renderdoc_capture_box = QtNew<QCheckBox>(this);
         m_renderdoc_capture_box->setText(tr("Enable RenderDoc capture"));
         m_renderdoc_capture_box->setCheckState(Qt::Unchecked);
     }
 
     // Replay Warning
-    m_replay_warning_layout = new QHBoxLayout();
-    m_replay_warning_label = new QLabel(
+    m_replay_warning_layout = QtNewUnowned<QHBoxLayout>();
+    m_replay_warning_label = LayoutHelper{ m_replay_warning_layout }.New<QLabel>(
     tr("⚠ Initiating replay will use and potentially overwrite temporary artifacts from previous "
        "replays. Save any desired artifacts manually in a separate folder before proceeding."));
     m_replay_warning_label->setWordWrap(true);
-    m_replay_warning_layout->addWidget(m_replay_warning_label);
 
     // Delete replay artifacts
-    m_delete_replay_artifacts_layout = new QHBoxLayout();
-    m_delete_replay_artifacts_button = new QPushButton("&Delete Previous Replay Artifacts", this);
-    m_delete_replay_artifacts_layout->addWidget(m_delete_replay_artifacts_button);
+    m_delete_replay_artifacts_layout = QtNewUnowned<QHBoxLayout>();
+    m_delete_replay_artifacts_button = LayoutHelper{ m_delete_replay_artifacts_layout }
+                                       .New<QPushButton>("&Delete Previous Replay Artifacts", this);
 
     // Left Panel Layout
-    m_left_panel_layout = new QVBoxLayout();
+    m_left_panel_layout = QtNewUnowned<QVBoxLayout>();
     m_left_panel_layout->addWidget(m_metrics_list_label);
     m_left_panel_layout->addWidget(m_metrics_list);
 
     // Right Panel Layout
-    m_right_panel_layout = new QVBoxLayout();
+    m_right_panel_layout = QtNewUnowned<QVBoxLayout>();
     m_right_panel_layout->addWidget(m_selected_metrics_description_label);
     m_right_panel_layout->addWidget(m_selected_metrics_description);
     m_right_panel_layout->addWidget(m_enabled_metrics_list_label);
@@ -231,7 +230,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
     m_right_panel_layout->addLayout(m_button_layout);
 
     // Main Layout
-    m_main_layout = new QHBoxLayout();
+    m_main_layout = QtNewUnowned<QHBoxLayout>();
     m_main_layout->addLayout(m_left_panel_layout);
     m_main_layout->addLayout(m_right_panel_layout);
 
@@ -245,10 +244,10 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
                          if (current)
                          {
                              int index = m_metrics_list->row(current);
-                             if (index >= 0 && index < m_csv_items->size())
+                             if (index >= 0 && index < m_csv_items.size())
                              {
                                  m_selected_metrics_description->setText(
-                                 m_csv_items->at(index).description);
+                                 m_csv_items.at(index).description);
                              }
                          }
                      });
@@ -260,9 +259,9 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
     });
 
     QObject::connect(m_device_box,
-                     SIGNAL(currentIndexChanged(const QString &)),
+                     qOverload<const QString &>(&QComboBox::currentIndexChanged),
                      this,
-                     SLOT(OnDeviceSelected(const QString &)));
+                     &AnalyzeDialog::OnDeviceSelected);
     QObject::connect(m_device_refresh_button,
                      &QPushButton::clicked,
                      this,
@@ -304,11 +303,10 @@ void AnalyzeDialog::OnDisableOverlay()
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::ShowMessage(const std::string &message)
 {
-    auto message_box = new QMessageBox(this);
+    auto *message_box = QtNew<QMessageBox>(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message.c_str());
     message_box->open();
-    return;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -325,29 +323,28 @@ void AnalyzeDialog::PopulateMetrics()
             if (info)
             {
                 CsvItem item;
-                item.id = info->m_metric_id;
                 item.type = info->m_metric_type;
                 item.key = QString::fromStdString(key);
                 item.name = QString::fromStdString(info->m_name);
                 item.description = QString::fromStdString(info->m_description);
-                m_csv_items->append(item);
+                m_csv_items.append(item);
             }
         }
 
         // Populate the metrics list
-        for (const auto &item : *m_csv_items)
+        for (const auto &item : m_csv_items)
         {
-            QListWidgetItem *csv_item = new QListWidgetItem(item.name);
+            auto csv_item = std::make_unique<QListWidgetItem>(item.name);
             csv_item->setData(kDataRole, item.key);
             csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
             csv_item->setCheckState(Qt::Unchecked);
-            m_metrics_list->addItem(csv_item);
+            m_metrics_list->addItem(csv_item.release());
         }
 
         // Add spacer so that all metrics are visible at the end of the list.
-        QListWidgetItem *spacer = new QListWidgetItem();
+        auto spacer = std::make_unique<QListWidgetItem>();
         spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
-        m_metrics_list->addItem(spacer);
+        m_metrics_list->addItem(spacer.release());
     }
 }
 
@@ -377,7 +374,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
 {
     // Clear the existing items in the target list
     m_enabled_metrics_list->clear();
-    m_enabled_metrics_vector->clear();
+    m_enabled_metrics_vector.clear();
 
     // Iterate through the source list to find checked items
     for (int i = 0; i < m_metrics_list->count(); ++i)
@@ -388,7 +385,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
         if (item->checkState() == Qt::Checked)
         {
             m_enabled_metrics_list->addItem(item->text());
-            m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
+            m_enabled_metrics_vector.push_back(item->data(kDataRole).toString().toStdString());
         }
     }
 }
@@ -411,9 +408,9 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 
     if (m_devices.empty())
     {
-        QStandardItem *item = new QStandardItem("No devices found");
+        auto item = std::make_unique<QStandardItem>("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        m_device_model->appendRow(item);
+        m_device_model->appendRow(item.release());
         m_device_box->setCurrentIndex(0);
     }
     else
@@ -422,14 +419,14 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
         {
             if (i == 0)
             {
-                QStandardItem *item = new QStandardItem("Please select a device");
+                auto item = std::make_unique<QStandardItem>("Please select a device");
                 item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-                m_device_model->appendRow(item);
+                m_device_model->appendRow(item.release());
                 m_device_box->setCurrentIndex(0);
             }
 
-            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
-            m_device_model->appendRow(item);
+            m_device_model->appendRow(
+            QtNewUnowned<QStandardItem>(m_devices[i].GetDisplayName().c_str()));
             // Keep the original selected devices as selected.
             if (m_cur_device == m_devices[i].m_serial)
             {
@@ -440,9 +437,9 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceSelected(const QString &s)
+void AnalyzeDialog::OnDeviceSelected()
 {
-    if (s.isEmpty() || m_device_box->currentIndex() == 0)
+    if (m_device_box->currentIndex() == 0)
     {
         qDebug() << "No devices selected";
         return;
@@ -626,7 +623,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
 
     // Variant-specific config
-    replay_settings.metrics = *m_enabled_metrics_vector;
+    replay_settings.metrics = m_enabled_metrics_vector;
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -676,8 +673,7 @@ void AnalyzeDialog::OnReplay()
         .replay_dump_pm4 = m_dump_pm4_box->isChecked(),
         .replay_gpu_time = m_gpu_time_replay_box->isChecked(),
         .replay_renderdoc = m_renderdoc_capture_box->isChecked(),
-        .replay_perf_counter = m_perf_counter_box->isChecked() &&
-                               !m_enabled_metrics_vector->empty(),
+        .replay_perf_counter = m_perf_counter_box->isChecked() && !m_enabled_metrics_vector.empty(),
         .replay_custom = m_custom_replay_box->isVisible() && m_custom_replay_box->isChecked(),
     };
     bool any_selected = config.replay_dump_pm4 || config.replay_gpu_time ||
@@ -685,15 +681,19 @@ void AnalyzeDialog::OnReplay()
                         config.replay_custom;
     if (!any_selected)
     {
-        if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
+        if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector.empty())
         {
-            return ShowMessage("Select at least one metrics.");
+            ShowMessage("Select at least one metrics.");
         }
-        return ShowMessage("Select at least one option.");
+        else
+        {
+            ShowMessage("Select at least one option.");
+        }
+        return;
     }
     OverlayMessage("Replaying...");
 
-    m_replay_active = std::async([=, this]() {
+    m_replay_active = std::async([this, config = config]() {
         ReplayImpl(config);
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
@@ -708,7 +708,7 @@ void AnalyzeDialog::OnDeleteReplayArtifacts()
         return;
     }
 
-    m_replay_active = std::async([=, this]() {
+    m_replay_active = std::async([this]() {
         DeleteReplayArtifactsImpl();
         UpdateReplayStatus(ReplayStatusUpdateCode::kDone);
     });
@@ -797,7 +797,7 @@ void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std:
 void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
 {
     Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
-    auto                 device = device_manager.GetDevice();
+    auto                *device = device_manager.GetDevice();
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSetup);
 

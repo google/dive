@@ -48,8 +48,9 @@ class TraceWorker : public QThread
     void run() override;
 
 public:
-    TraceWorker(QProgressDialog *pd) :
-        m_progress_bar(pd)
+    TraceWorker(QProgressDialog *pd, const QString &path) :
+        m_progress_bar(pd),
+        m_download_path(path)
     {
     }
 signals:
@@ -59,6 +60,7 @@ signals:
 
 private:
     QProgressDialog *m_progress_bar;
+    QString          m_download_path;
 };
 
 class GfxrCaptureWorker : public QThread
@@ -250,6 +252,10 @@ private:
     QHBoxLayout *m_gfxr_capture_file_local_directory_layout;
     QLabel      *m_gfxr_capture_file_local_directory_label;
     QLineEdit   *m_gfxr_capture_file_local_directory_input_box;
+
+    QHBoxLayout *m_pm4_capture_file_local_directory_layout;
+    QLabel      *m_pm4_capture_file_local_directory_label;
+    QLineEdit   *m_pm4_capture_file_local_directory_input_box;
 
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;

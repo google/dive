@@ -219,6 +219,15 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_gfxr_capture_file_local_directory_label->hide();
     m_gfxr_capture_file_local_directory_input_box->hide();
 
+    m_pm4_capture_file_local_directory_layout = new QHBoxLayout();
+    m_pm4_capture_file_local_directory_label = new QLabel(tr("Local PM4 Capture Save Location:"));
+    m_pm4_capture_file_local_directory_input_box = new QLineEdit();
+    m_pm4_capture_file_local_directory_input_box->setPlaceholderText(
+    "Input the location to save the file to");
+    m_pm4_capture_file_local_directory_layout->addWidget(m_pm4_capture_file_local_directory_label);
+    m_pm4_capture_file_local_directory_layout->addWidget(
+    m_pm4_capture_file_local_directory_input_box);
+
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
     m_button_layout->addWidget(m_gfxr_capture_button);
@@ -231,6 +240,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_directory_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_local_directory_layout);
+    m_main_layout->addLayout(m_pm4_capture_file_local_directory_layout);
     m_main_layout->addLayout(m_args_layout);
 
     m_main_layout->addLayout(m_type_layout);
@@ -712,16 +722,26 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
+    QString file_path = m_pm4_capture_file_local_directory_input_box->text();
+    if (file_path.isEmpty())
+    {
+        file_path = QDir::homePath() + "/trace-frame.rd";
+    }
+
     QProgressDialog *progress_bar = new QProgressDialog("Downloading ... ", nullptr, 0, 100, this);
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
     progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
     progress_bar->setMinimumDuration(0);
-    TraceWorker *workerThread = new TraceWorker(progress_bar);
+    TraceWorker *workerThread = new TraceWorker(progress_bar, file_path);
     connect(workerThread, &TraceWorker::TraceAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &TraceWorker::finished, workerThread, &QObject::deleteLater);
-    connect(workerThread, &TraceWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
+    connect(workerThread,
+            &TraceWorker::ErrorMessage,
+            this,
+            &TraceDialog::ShowErrorMessage,
+            Qt::QueuedConnection);
     workerThread->start();
     std::cout << "OnTraceClicked done " << std::endl;
 }
@@ -788,10 +808,16 @@ void TraceWorker::run()
         emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
-    std::string           download_path = ".";
     std::filesystem::path p(*capture_file_path);
-    std::filesystem::path target_download_path(download_path);
-    target_download_path /= p.filename();
+    std::filesystem::path target_download_path(m_download_path.toStdString());
+    if (target_download_path.has_extension() && target_download_path.filename() != p.filename())
+    {
+        target_download_path.replace_filename(p.filename());
+    }
+    else if (!target_download_path.has_extension())
+    {
+        target_download_path /= p.filename();
+    }
     qDebug() << "Begin to download the capture file to "
              << target_download_path.generic_string().c_str();
 
@@ -841,6 +867,9 @@ void TraceWorker::run()
     {
         qDebug() << "Capture saved at "
                  << std::filesystem::canonical(target_download_path).generic_string().c_str();
+        emit ErrorMessage(QString("Capture saved at %1")
+                          .arg(QString::fromStdString(
+                          std::filesystem::canonical(target_download_path).generic_string())));
     }
     else
     {
@@ -1230,6 +1259,8 @@ void TraceDialog::ShowGfxrFields()
     m_gfxr_capture_file_directory_input_box->show();
     m_gfxr_capture_file_local_directory_label->show();
     m_gfxr_capture_file_local_directory_input_box->show();
+    m_pm4_capture_file_local_directory_label->hide();
+    m_pm4_capture_file_local_directory_input_box->hide();
 }
 
 void TraceDialog::HideGfxrFields()
@@ -1241,6 +1272,8 @@ void TraceDialog::HideGfxrFields()
     m_gfxr_capture_file_directory_input_box->hide();
     m_gfxr_capture_file_local_directory_label->hide();
     m_gfxr_capture_file_local_directory_input_box->hide();
+    m_pm4_capture_file_local_directory_label->show();
+    m_pm4_capture_file_local_directory_input_box->show();
 }
 
 void TraceDialog::EnableCaptureTypeButtons(bool enable)
@@ -1353,7 +1386,11 @@ void TraceDialog::RetrieveGfxrCapture()
             this,
             &TraceDialog::OnGFXRCaptureAvailable);
     connect(workerThread, &GfxrCaptureWorker::finished, workerThread, &QObject::deleteLater);
-    connect(workerThread, &GfxrCaptureWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
+    connect(workerThread,
+            &GfxrCaptureWorker::ErrorMessage,
+            this,
+            &TraceDialog::ShowErrorMessage,
+            Qt::QueuedConnection);
     workerThread->start();
 
     m_gfxr_capture_button->setEnabled(false);

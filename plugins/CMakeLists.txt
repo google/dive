@@ -74,7 +74,5 @@ target_link_libraries(
 # For each new plugin, you can add an add_subdirectory call here.
 add_subdirectory(plugin_sample)
 
-install(CODE "file(MAKE_DIRECTORY ${CMAKE_INSTALL_PREFIX}/plugins)")
-
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

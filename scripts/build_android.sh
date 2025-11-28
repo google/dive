@@ -56,7 +56,7 @@ do
 
     cmake --build . --config=${build} -j || exit 1
 
-    cmake --install . || exit 1
+    cmake --install . --prefix "${BUILD_DIR_ROOT}/install" || exit 1
 
     popd
 done

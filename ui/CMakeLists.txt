@@ -214,14 +214,16 @@ if(APPLE)
     "
     )
 else()
-    install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DESTINATION}")
 endif()
 
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
-    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    DESTINATION "${DIVE_INSTALL_DESTINATION}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+add_subdirectory(pkg)

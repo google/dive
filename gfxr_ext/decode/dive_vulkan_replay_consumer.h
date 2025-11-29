@@ -99,6 +99,12 @@ public:
                                StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
                                format::HandleId                            fence) override;
 
+    void Process_vkQueuePresentKHR(
+    const ApiCallInfo&                              call_info,
+    VkResult                                        returnValue,
+    format::HandleId                                queue,
+    StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo) override;
+
     void Process_vkBeginCommandBuffer(
     const ApiCallInfo&                                      call_info,
     VkResult                                                returnValue,

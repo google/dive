@@ -561,6 +561,28 @@ GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer         comma
     return GPUTime::GpuTimeStatus();
 }
 
+GPUTime::GpuTimeStatus GPUTime::OnFrameBoundary(
+PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
+PFN_vkResetQueryPool      pfn_reset_query_pool,
+PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+{
+    //  force sync to make sure the gpu is done with this frame
+    pfn_device_wait_idle(m_device);
+
+    GPUTime::GpuTimeStatus update_status;
+    if (m_valid_frame)
+    {
+        update_status = UpdateFrameMetrics(pfn_get_query_pool_results);
+    }
+
+    m_frame_index++;
+    m_frame_cmds.clear();
+
+    pfn_reset_query_pool(m_device, m_query_pool, 0, TimeStampSlotAllocator::kTotalSlots);
+    m_valid_frame = true;
+    return update_status;
+}
+
 GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
 PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
 {
@@ -857,26 +879,28 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t                  submit_co
 
     if (is_frame_boundary)
     {
-        //  force sync to make sure the gpu is done with this frame
-        pfn_device_wait_idle(m_device);
+        GPUTime::GpuTimeStatus update_status = OnFrameBoundary(pfn_device_wait_idle,
+                                                               pfn_reset_query_pool,
+                                                               pfn_get_query_pool_results);
 
-        GPUTime::GpuTimeStatus update_status;
-        if (m_valid_frame)
-        {
-            update_status = UpdateFrameMetrics(pfn_get_query_pool_results);
-        }
-
-        m_frame_index++;
-        m_frame_cmds.clear();
-
-        pfn_reset_query_pool(m_device, m_query_pool, 0, TimeStampSlotAllocator::kTotalSlots);
-        m_valid_frame = true;
         if (!update_status.success)
         {
             return { update_status, true };
         }
     }
     return { GPUTime::GpuTimeStatus(), is_frame_boundary };
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnQueuePresent(PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
+                                               PFN_vkResetQueryPool      pfn_reset_query_pool,
+                                               PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+{
+    if (!m_enable)
+    {
+        return GPUTime::GpuTimeStatus();
+    }
+
+    return OnFrameBoundary(pfn_device_wait_idle, pfn_reset_query_pool, pfn_get_query_pool_results);
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)

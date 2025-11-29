@@ -37,7 +37,8 @@ static bool sEnableDrawcallReport = false;
 static bool sEnableDrawcallLimit = false;
 static bool sEnableDrawcallFilter = false;
 
-static bool sEnableOpenXRGPUTiming = false;
+// For OpenXR Apps, this requires enabling the frame delimiter
+static bool sEnableGPUTiming = false;
 static bool sRemoveImageFlagFDMOffset = false;
 static bool sRemoveImageFlagSubSampled = false;
 static bool sDisableTimestamp = false;
@@ -61,7 +62,36 @@ VkResult DiveRuntimeLayer::QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
                                            const VkPresentInfoKHR* pPresentInfo)
 {
     // Be careful, this func is NOT called for OpenXR app!!!
-    return pfn(queue, pPresentInfo);
+    VkResult result = pfn(queue, pPresentInfo);
+
+    if (result != VK_SUCCESS)
+    {
+        return result;
+    }
+
+    PFN_vkDeviceWaitIdle DeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkDeviceWaitIdle"));
+
+    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkResetQueryPool"));
+
+    PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
+    m_device_proc_addr(m_gpu_time.GetDevice(), "vkGetQueryPoolResults"));
+
+    auto status = m_gpu_time.OnQueuePresent(DeviceWaitIdle, ResetQueryPool, GetQueryPoolResults);
+
+    if (!status.success)
+    {
+        LOGE("Frame Boundary!");
+        LOGE("%s", status.message.c_str());
+    }
+    else
+    {
+
+        LOGI("%s", m_gpu_time.GetStatsString().c_str());
+    }
+
+    return result;
 }
 
 VkResult DiveRuntimeLayer::CreateImage(PFN_vkCreateImage            pfn,
@@ -300,7 +330,7 @@ VkResult DiveRuntimeLayer::CreateDevice(PFN_vkGetDeviceProcAddr      pa,
         return result;
     }
 
-    m_gpu_time.SetEnable(sEnableOpenXRGPUTiming);
+    m_gpu_time.SetEnable(sEnableGPUTiming);
 
     PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(
     m_device_proc_addr(*pDevice, "vkCreateQueryPool"));

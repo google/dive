@@ -43,6 +43,22 @@ namespace Dive
 namespace
 {
 
+void RestoreSetting(const AdbSession  &adb,
+                    const std::string &name_space,
+                    const std::string &setting,
+                    const std::string &value)
+{
+    if (!value.empty() && value != "null")
+    {
+        adb.Run(absl::StrFormat("shell settings put %s %s %s", name_space, setting, value))
+        .IgnoreError();
+    }
+    else
+    {
+        adb.Run(absl::StrFormat("shell settings delete %s %s", name_space, setting)).IgnoreError();
+    }
+}
+
 std::string GetPythonPath()
 {
     std::string python_path;
@@ -425,6 +441,30 @@ absl::Status AndroidDevice::Init()
     }
     LOGD("is_adreno_gpu: %d\n", m_dev_info.m_is_adreno_gpu);
 
+    res = Adb().RunAndGetResult("shell settings get global development_settings_enabled");
+    if (res.ok())
+    {
+        m_original_state.m_development_settings_enabled = std::string(
+        absl::StripAsciiWhitespace(*res));
+    }
+    res = Adb().RunAndGetResult("shell settings get global stay_on_while_plugged_in");
+    if (res.ok())
+    {
+        m_original_state.m_stay_on_while_plugged_in = std::string(absl::StripAsciiWhitespace(*res));
+    }
+    res = Adb().RunAndGetResult("shell settings get system screen_off_timeout");
+    if (res.ok())
+    {
+        m_original_state.m_screen_off_timeout = std::string(absl::StripAsciiWhitespace(*res));
+    }
+    res = Adb().RunAndGetResult("shell settings get system doff_screen_timeout_ms");
+    if (res.ok())
+    {
+        m_original_state.m_doff_screen_timeout_ms = std::string(absl::StripAsciiWhitespace(*res));
+    }
+
+    SetEnableScreenAlwaysOn(true);
+
     if (absl::Status ret = CheckAbi(); !ret.ok())
     {
         return ret;
@@ -457,7 +497,6 @@ absl::Status AndroidDevice::CheckAbi()
                                   installed_abi);
         return absl::FailedPreconditionError(err_msg);
     }
-
     return absl::OkStatus();
 }
 
@@ -632,6 +671,8 @@ absl::Status AndroidDevice::CleanupDevice()
          Dive::kLogPrefixCleanup,
          m_serial.c_str());
 
+    SetEnableScreenAlwaysOn(false);
+
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
 
@@ -798,6 +839,37 @@ absl::Status AndroidDevice::SetupApp(const std::string    &command,
     }
 
     return m_app->Setup();
+}
+
+void AndroidDevice::SetEnableScreenAlwaysOn(bool enable_screen_always_on)
+{
+    if (enable_screen_always_on)
+    {
+        Adb().Run("shell settings put global development_settings_enabled 1").IgnoreError();
+        Adb().Run("shell settings put global stay_on_while_plugged_in 7").IgnoreError();
+        Adb().Run("shell settings put system screen_off_timeout 600000").IgnoreError();
+        Adb().Run("shell settings put system doff_screen_timeout_ms 0").IgnoreError();
+        Adb().Run("shell input keyevent KEYCODE_WAKEUP").IgnoreError();
+    }
+    else
+    {
+        RestoreSetting(Adb(),
+                       "global",
+                       "development_settings_enabled",
+                       m_original_state.m_development_settings_enabled);
+        RestoreSetting(Adb(),
+                       "global",
+                       "stay_on_while_plugged_in",
+                       m_original_state.m_stay_on_while_plugged_in);
+        RestoreSetting(Adb(),
+                       "system",
+                       "screen_off_timeout",
+                       m_original_state.m_screen_off_timeout);
+        RestoreSetting(Adb(),
+                       "system",
+                       "doff_screen_timeout_ms",
+                       m_original_state.m_doff_screen_timeout_ms);
+    }
 }
 
 absl::Status AndroidDevice::CleanupApp()
@@ -988,7 +1060,6 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     });
     LOGD("RunReplayGfxrScript(): SETUP\n");
     std::filesystem::path parse_remote_capture = settings.remote_capture_path;
-
     // These are only used if kPm4Dump
     std::string dump_pm4_file_name = parse_remote_capture.stem().string() + ".rd";
     std::string remote_pm4_path = absl::StrFormat("%s/%s",
@@ -1148,8 +1219,7 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
         std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
         adb.Run(clean_cmd).IgnoreError();
     });
-
-    std::string binary_path_on_device = absl::StrFormat("%s/%s",
+    std::string   binary_path_on_device = absl::StrFormat("%s/%s",
                                                         remote_profiling_dir,
                                                         kProfilingPluginName);
     RETURN_IF_ERROR(adb.Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));

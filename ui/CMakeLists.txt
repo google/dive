@@ -211,7 +211,7 @@ if(APPLE)
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/XrApiLayer_dive.json\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_rt_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libwrap.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/gfxr_layer/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/gfxr_layer\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         message(STATUS \"Copying dive_client_cli to app bundle\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_client_cli\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
 

@@ -985,7 +985,7 @@ int main(int argc, char** argv)
                             .local_download_dir = absl::GetFlag(FLAGS_download_dir),
                             .run_type = absl::GetFlag(FLAGS_gfxr_replay_run_type),
                             .replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags),
-                            .wait_for_debugger = absl::GetFlag(FLAGS_validation_layer),
+                            .wait_for_debugger = absl::GetFlag(FLAGS_wait_for_debugger),
                             .metrics = absl::GetFlag(FLAGS_metrics),
                             .use_validation_layer = absl::GetFlag(FLAGS_validation_layer),
                          },

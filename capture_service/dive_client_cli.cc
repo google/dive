@@ -931,6 +931,10 @@ ABSL_FLAG(bool,
           validation_layer,
           false,
           "If true, runs the GFXR replay with the Vulkan Validation Layer enabled.");
+ABSL_FLAG(bool,
+          wait_for_debugger,
+          false,
+          "Tell GFXR replay app to wait for a debugger before continuing to replay");
 
 int main(int argc, char** argv)
 {
@@ -953,6 +957,7 @@ int main(int argc, char** argv)
                             .local_download_dir = absl::GetFlag(FLAGS_download_dir),
                             .run_type = absl::GetFlag(FLAGS_gfxr_replay_run_type),
                             .replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags),
+                            .wait_for_debugger = absl::GetFlag(FLAGS_wait_for_debugger),
                             .metrics = absl::GetFlag(FLAGS_metrics),
                             .use_validation_layer = absl::GetFlag(FLAGS_validation_layer),
                          },

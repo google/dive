@@ -46,6 +46,8 @@ public:
     {
     }
 
+    LayoutT* absl_nonnull Get() const { return m_layout; }
+
     template<typename T, typename... Args>  //
     T* absl_nonnull NewWidget(Args&&... args)
     {

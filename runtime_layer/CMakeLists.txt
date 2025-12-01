@@ -15,7 +15,7 @@
 #
 
 message(CHECK_START "Generate build files for runtime_layer (diveRuntimeLayer)")
-if(NOT (ANDROID OR MSVC))
+if(NOT (ANDROID OR CMAKE_HOST_WIN32))
     message(CHECK_FAIL "not Android or Windows platform, skipping")
     return()
 endif()

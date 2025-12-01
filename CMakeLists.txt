@@ -263,9 +263,9 @@ if(ANDROID)
             "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
     )
-    # TODO(b/462175713): Don't put the entire folder containing layers with different architectures into the install folder, just mark that specific libVkLayer_gfxreconstruct.so for install
     install(
-        DIRECTORY ${CMAKE_BINARY_DIR}/gfxr_layer
+        FILES
+            ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
         DESTINATION ${CMAKE_INSTALL_PREFIX}
     )
     install(

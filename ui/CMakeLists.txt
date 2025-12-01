@@ -49,6 +49,15 @@ if(MSVC)
     set(SRC_FILES ${SRC_FILES} ${RC_FILES})
 endif()
 
+if(APPLE)
+    set(MACOSX_ICON_FILE "dive.icns")
+    set_source_files_properties(
+        ${MACOSX_ICON_FILE}
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    set(SRC_FILES ${SRC_FILES} ${MACOSX_ICON_FILE})
+endif()
+
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
 include_directories(${CMAKE_SOURCE_DIR})
 # Include CMAKE_BINARY_DIR for generated files.
@@ -176,7 +185,12 @@ if(MSVC)
 endif()
 
 if(APPLE)
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE TRUE)
+    set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
+    )
 endif()
 
 if(APPLE)
@@ -197,8 +211,18 @@ if(APPLE)
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/XrApiLayer_dive.json\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_rt_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libwrap.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/dive_profiling_plugin\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/gfxr_layer/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/gfxr_layer\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
+        message(STATUS \"Copying dive_client_cli to app bundle\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_client_cli\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
+
+        if(IS_DIRECTORY \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin\")
+            message(STATUS \"Copying dive_profiling_plugin to app bundle\")
+                execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/dive_profiling_plugin\")
+        endif()
+        if(EXISTS \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\")
+            message(STATUS \"Copying dive_compositor_capture.sh to app bundle\")
+            execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
+        endif()
         message(STATUS \"Ad-hoc signing the application bundle\")
         execute_process(COMMAND \"codesign\" --force --deep --sign - \"${CMAKE_INSTALL_PREFIX}/dive.app\")
     "

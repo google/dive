@@ -84,6 +84,7 @@ else()
         absl::strings
         absl::statusor
         component_files
+        version_info
     )
 
     add_executable(dive_client_cli dive_client_cli.cc)

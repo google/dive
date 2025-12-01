@@ -422,6 +422,35 @@ format::HandleId                            fence)
     }
 }
 
+void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
+const ApiCallInfo&                              call_info,
+VkResult                                        returnValue,
+format::HandleId                                queue,
+StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo)
+{
+    VulkanReplayConsumer::Process_vkQueuePresentKHR(call_info, returnValue, queue, pPresentInfo);
+
+    PFN_vkDeviceWaitIdle DeviceWaitIdle = GetDeviceTable(device_)->DeviceWaitIdle;
+
+    PFN_vkResetQueryPool ResetQueryPool = GetDeviceTable(device_)->ResetQueryPool;
+
+    PFN_vkGetQueryPoolResults GetQueryPoolResults = GetDeviceTable(device_)->GetQueryPoolResults;
+
+    auto status = gpu_time_.OnQueuePresent(DeviceWaitIdle, ResetQueryPool, GetQueryPoolResults);
+
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR("Frame Boundary!");
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
+    else
+    {
+
+        GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
+        gpu_time_stats_csv_str_ = gpu_time_.GetStatsCSVString();
+    }
+}
+
 void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue2(
 const ApiCallInfo&                                call_info,
 format::HandleId                                  device,

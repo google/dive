@@ -8,3 +8,4 @@ Language: Cpp
 
 SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
+AlwaysBreakTemplateDeclarations: Yes

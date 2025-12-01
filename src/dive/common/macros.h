@@ -31,7 +31,8 @@ limitations under the License.
             return status;                  \
     } while (0)
 
-template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
+template<typename T>
+absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
 {
     if (result.ok())
     {

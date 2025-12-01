@@ -50,8 +50,8 @@
 #include "ui/overlay.h"
 #include "ui/settings.h"
 
-using DiveLint::QtNew;
-using DiveLint::QtNewUnowned;
+using ::DiveLint::QtNew;
+using ::DiveLint::QtNewUnowned;
 
 //--------------------------------------------------------------------------------------------------
 void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)

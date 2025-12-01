@@ -85,6 +85,7 @@ target_link_libraries(
     network
     dive_core
     dive_lib_os
+    dive_lib_ui
     device_mgr
     dive_plugin_loader
     component_files

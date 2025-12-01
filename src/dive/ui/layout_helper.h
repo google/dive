@@ -22,6 +22,7 @@
 #include <QWidget>
 #include <utility>
 
+#include "absl/base/nullability.h"
 #include "dive/ui/lint.h"
 
 // Examples
@@ -34,14 +35,19 @@
 //   auto* label = NewWidgetLayout{layout}.New<QLabel>(tr("text"));
 //
 
-template<typename LayoutT>  //
-struct LayoutHelper
+template<typename LayoutT>
+class LayoutHelper
 {
+public:
     static_assert((std::is_convertible_v<LayoutT*, QLayout*>));
 
-    LayoutT* m_layout = nullptr;
+    explicit LayoutHelper(LayoutT* absl_nonnull layout) :
+        m_layout(layout)
+    {
+    }
+
     template<typename T, typename... Args>  //
-    T* NewWidget(Args&&... args)
+    T* absl_nonnull NewWidget(Args&&... args)
     {
         static_assert((std::is_convertible_v<T*, QWidget*>));
         auto widget = DiveLint::QtOwned(new T(std::forward<Args>(args)...));
@@ -70,6 +76,9 @@ struct LayoutHelper
             return NewWidget<T, Args...>(std::forward<Args>(args)...);
         }
     }
+
+private:
+    LayoutT* absl_nonnull m_layout;
 };
 
 template<typename T, typename... Args>  //

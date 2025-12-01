@@ -25,7 +25,7 @@
 namespace gsl
 {
 
-template<class T, std::enable_if_t<std::is_pointer_v<T>, bool> = true>  //
+template<class T, std::enable_if_t<std::is_pointer_v<T>, bool> = true>
 using owner = T;
 
 }

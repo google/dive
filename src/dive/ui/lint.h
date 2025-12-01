@@ -27,7 +27,7 @@ namespace DiveLint
 {
 
 // Tell lint that this pointer uses Qt ownership semantics.
-template<typename T>  //
+template<typename T>
 constexpr T* QtOwned(gsl::owner<T*> ptr)
 {
     return ptr;  // NOLINT
@@ -36,7 +36,8 @@ constexpr T* QtOwned(gsl::owner<T*> ptr)
 // Create a new Qt object.
 // - Suppress clang-tidy/cppcoreguidelines-owning-memory
 // - Heuristically checked that the object have parent.
-template<typename T, typename... Args>  //
+// e.g. write `QtNew<QSpinBox>(this)` instead of `new QSpinBox(this)`
+template<typename T, typename... Args>
 T* QtNew(Args&&... args)
 {
     // Check at least one parameter can be converted to QObject for parent.
@@ -48,7 +49,7 @@ T* QtNew(Args&&... args)
 
 // Tell lint that we intend this pointer to be unowned for now.
 // e.g. we are adding it to a model: model->appendRow(QtNewUnowned<Item>())
-template<typename T, typename... Args>  //
+template<typename T, typename... Args>
 T* QtNewUnowned(Args&&... args)
 {
     return QtOwned(new T(std::forward<Args>(args)...));

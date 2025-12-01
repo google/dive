@@ -91,7 +91,7 @@ GFXR capturing can be triggered in the ui or within the cli.
 
 To begin a GFXR capture in the ui, either press key `F6` or click `Capture` at the top left corner and select `GFXR Capture` from the dropdown menu.
 
-To begin a GFXR capture with the cli, first ensure that you built the device libraries targetting the correct architecture for the device you are attempting to capture on.
+To begin a GFXR capture with the cli, first ensure that you built the device libraries targetting the correct ABI for the device you are attempting to capture on.
 
 Examples:
 - Install the dependencies on device, start the package, and initiate a GFXR capture.

@@ -20,7 +20,7 @@ readonly DIVE_ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/nu
 readonly GIT_DIFF_BASE="${GIT_DIFF_BASE:="origin/main"}"
 
 if [[ ! -d "${DIVE_ROOT}/build" ]]; then
-    echo "Build directory not found: ${DIVE_ROOT}/build not found"
+    echo "Build directory ${DIVE_ROOT}/build not found"
     exit
 fi
 

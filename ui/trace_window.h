@@ -162,9 +162,9 @@ private:
     QLabel      *m_gfxr_capture_file_on_device_directory_label;
     QLineEdit   *m_gfxr_capture_file_directory_input_box;
 
-    QHBoxLayout *m_gfxr_capture_file_local_directory_layout;
-    QLabel      *m_gfxr_capture_file_local_directory_label;
-    QLineEdit   *m_gfxr_capture_file_local_directory_input_box;
+    QHBoxLayout *m_capture_file_local_directory_layout;
+    QLabel      *m_capture_file_local_directory_label;
+    QLineEdit   *m_capture_file_local_directory_input_box;
 
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;

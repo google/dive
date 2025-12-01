@@ -82,7 +82,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_app_type_label = new QLabel(tr("Application Type:"));
     m_gfxr_capture_file_on_device_directory_label = new QLabel(
     tr("On Device GFXR Capture File Directory Name:"));
-    m_gfxr_capture_file_local_directory_label = new QLabel(tr("Local GFXR Capture Save Location:"));
+    m_capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
 
     m_dev_model = new QStandardItemModel();
     m_pkg_model = new QStandardItemModel();
@@ -209,16 +209,12 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_gfxr_capture_file_on_device_directory_label->hide();
     m_gfxr_capture_file_directory_input_box->hide();
 
-    m_gfxr_capture_file_local_directory_layout = new QHBoxLayout();
-    m_gfxr_capture_file_local_directory_input_box = new QLineEdit();
-    m_gfxr_capture_file_local_directory_input_box->setPlaceholderText(
+    m_capture_file_local_directory_layout = new QHBoxLayout();
+    m_capture_file_local_directory_input_box = new QLineEdit();
+    m_capture_file_local_directory_input_box->setPlaceholderText(
     "Input the location to save the directory to");
-    m_gfxr_capture_file_local_directory_layout->addWidget(
-    m_gfxr_capture_file_local_directory_label);
-    m_gfxr_capture_file_local_directory_layout->addWidget(
-    m_gfxr_capture_file_local_directory_input_box);
-    m_gfxr_capture_file_local_directory_label->hide();
-    m_gfxr_capture_file_local_directory_input_box->hide();
+    m_capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_label);
+    m_capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_input_box);
 
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
@@ -231,7 +227,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_main_layout->addLayout(m_capture_warning_layout);
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_directory_layout);
-    m_main_layout->addLayout(m_gfxr_capture_file_local_directory_layout);
+    m_main_layout->addLayout(m_capture_file_local_directory_layout);
     m_main_layout->addLayout(m_args_layout);
 
     m_main_layout->addLayout(m_type_layout);
@@ -714,6 +710,20 @@ void TraceDialog::OnTraceClicked()
     progress_bar->setAutoClose(true);
     progress_bar->setMinimumDuration(0);
     CaptureWorker *workerThread = new CaptureWorker(progress_bar);
+
+    if (m_capture_file_local_directory_input_box->text() == "")
+    {
+#if defined(__APPLE__)
+        m_capture_file_local_directory_input_box->setText(
+        QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+#else
+        m_capture_file_local_directory_input_box->setText(
+        "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+#endif
+    }
+
+    workerThread->SetTargetCaptureDir(
+    m_capture_file_local_directory_input_box->text().toStdString());
     connect(workerThread, &CaptureWorker::CaptureAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &CaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &CaptureWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
@@ -903,13 +913,13 @@ void TraceDialog::RetrieveGfxrCapture()
         return;
     }
 
-    if (m_gfxr_capture_file_local_directory_input_box->text() == "")
+    if (m_capture_file_local_directory_input_box->text() == "")
     {
 #if defined(__APPLE__)
-        m_gfxr_capture_file_local_directory_input_box->setText(
+        m_capture_file_local_directory_input_box->setText(
         QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
 #else
-        m_gfxr_capture_file_local_directory_input_box->setText(
+        m_capture_file_local_directory_input_box->setText(
         "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
 #endif
     }
@@ -935,7 +945,7 @@ void TraceDialog::RetrieveGfxrCapture()
     workerThread->SetGfxrSourceCaptureDir(on_device_capture_file_directory);
 
     workerThread->SetTargetCaptureDir(
-    m_gfxr_capture_file_local_directory_input_box->text().toStdString());
+    m_capture_file_local_directory_input_box->text().toStdString());
 
     connect(workerThread,
             &GfxrCaptureWorker::CaptureAvailable,

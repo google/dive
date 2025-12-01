@@ -223,9 +223,9 @@ absl::Status WaitForExitConfirmation()
     return absl::OkStatus();
 }
 
-// Selects and sets up the target device based on the serial flag.
-absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
-                                                     const std::string&   serial)
+// Selects and sets up the target device based on the serial flag. If `serial` is empty then try to
+// choose a device; `serial` will be updated to the serial of the chosen device.
+absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr, std::string& serial)
 {
     auto list = mgr.ListDevice();
     if (list.empty())
@@ -233,13 +233,12 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
         return absl::UnavailableError("No Android devices connected.");
     }
 
-    std::string target_serial = serial;
-    if (target_serial.empty())
+    if (serial.empty())
     {
         if (list.size() == 1)
         {
-            target_serial = list.front().m_serial;
-            std::cout << "Using single connected device: " << target_serial << std::endl;
+            serial = list.front().m_serial;
+            std::cout << "Using single connected device: " << serial << std::endl;
         }
         else
         {
@@ -258,7 +257,7 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
         std::string msg;
         for (const auto& d : list)
         {
-            if (d.m_serial == target_serial)
+            if (d.m_serial == serial)
             {
                 found = true;
                 break;
@@ -267,12 +266,12 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
         }
         if (!found)
         {
-            return absl::InvalidArgumentError("Device with serial '" + target_serial +
-                                              "' not found.\n" + "Available devices:\n" + msg);
+            return absl::InvalidArgumentError("Device with serial '" + serial + "' not found.\n" +
+                                              "Available devices:\n" + msg);
         }
     }
 
-    auto device = mgr.SelectDevice(target_serial);
+    auto device = mgr.SelectDevice(serial);
     if (!device.ok())
     {
         return device.status();

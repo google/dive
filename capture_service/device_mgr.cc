@@ -872,6 +872,38 @@ void AndroidDevice::SetEnableScreenAlwaysOn(bool enable_screen_always_on)
     }
 }
 
+absl::StatusOr<bool> AndroidDevice::IsScreenOn() const
+{
+    absl::StatusOr<std::string> output_or = Adb().RunAndGetResult(
+    "shell dumpsys display | grep -E 'mScreenState'");
+    if (!output_or.ok())
+    {
+        return output_or.status();
+    }
+    const std::string       &output = *output_or;
+    std::vector<std::string> lines = absl::StrSplit(output, '\n', absl::SkipEmpty());
+    for (const auto &line : lines)
+    {
+        if (absl::StrContains(line, "mScreenState="))
+        {
+            std::vector<std::string> parts = absl::StrSplit(line, '=');
+            if (parts.size() == 2)
+            {
+                std::string state = std::string(absl::StripAsciiWhitespace(parts[1]));
+                if (state == "ON")
+                {
+                    return true;
+                }
+                if (state == "OFF")
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return absl::InternalError(absl::StrFormat("Failed to parse screen state: %s", output));
+}
+
 absl::Status AndroidDevice::CleanupApp()
 {
     m_app = nullptr;
@@ -882,6 +914,11 @@ absl::Status AndroidDevice::StartApp()
 {
     if (m_app)
     {
+        absl::StatusOr<bool> screen_on_status = IsScreenOn();
+        if (!screen_on_status.ok() || !*screen_on_status)
+        {
+            LOGE("Screen is not on, Dive might not work as expected");
+        }
         return m_app->Start();
     }
     return absl::OkStatus();
@@ -1219,7 +1256,14 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
         std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
         adb.Run(clean_cmd).IgnoreError();
     });
-    std::string   binary_path_on_device = absl::StrFormat("%s/%s",
+
+    absl::StatusOr<bool> screen_on_status = m_device->IsScreenOn();
+    if (!screen_on_status.ok() || !*screen_on_status)
+    {
+        LOGE("Screen is not on, Dive might not work as expected");
+    }
+
+    std::string binary_path_on_device = absl::StrFormat("%s/%s",
                                                         remote_profiling_dir,
                                                         kProfilingPluginName);
     RETURN_IF_ERROR(adb.Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
@@ -1346,6 +1390,11 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
 
     // Wake up the screen.
     RETURN_IF_ERROR(adb.Run("shell input keyevent KEYCODE_WAKEUP"));
+    absl::StatusOr<bool> screen_on_status = m_device->IsScreenOn();
+    if (!screen_on_status.ok() || !*screen_on_status)
+    {
+        LOGE("Screen is not on, Dive might not work as expected");
+    }
 
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;

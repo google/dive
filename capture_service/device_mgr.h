@@ -188,7 +188,8 @@ public:
     // Triggers a screenshot and saves it to the specified path.
     absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
 
-    void SetEnableScreenAlwaysOn(bool enable_screen_always_on);
+    void                 SetEnableScreenAlwaysOn(bool enable_screen_always_on);
+    absl::StatusOr<bool> IsScreenOn() const;
 
 private:
     // The ABI must be consistent between the connected device and the Dive device libraries

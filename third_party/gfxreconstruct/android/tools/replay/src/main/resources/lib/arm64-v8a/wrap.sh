@@ -23,6 +23,9 @@ shift
 capture_pm4_enabled=$(getprop debug.dive.replay.capture_pm4)
 os_version=$(getprop ro.build.version.sdk)
 
+# Up to and including SDK 27 (Android 8.1), -Xrunjdwp is the documented approach for using the debugger.
+# SDK 28 (Android 9) added -XjdwpProvider -XjdwpOptions as the preferred way of using the debugger.
+# -Xrunjdwp would later be removed in SDK 30 (Android 11)
 if [ "$os_version" -eq "27" ]; then
   cmd="$cmd -Xrunjdwp:transport=dt_android_adb,suspend=n,server=y -Xcompiler-option --debuggable $@"
 else

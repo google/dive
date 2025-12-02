@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <algorithm>
 #include <filesystem>
 #include <future>
 #include <iostream>
@@ -227,7 +228,8 @@ absl::Status WaitForExitConfirmation()
     return absl::OkStatus();
 }
 
-// Make a human-readable string representation of the list of devices.
+// Makes a human-readable string representation of the list of devices. Assumes `devices` is not
+// empty.
 std::string GetPrintableDeviceList(const std::vector<DeviceInfo>& devices)
 {
     return absl::StrCat("Available devices:\n\t",
@@ -239,7 +241,7 @@ std::string GetPrintableDeviceList(const std::vector<DeviceInfo>& devices)
                                       }));
 }
 
-// Picks a suitable serial from a list of devices.
+// Picks a suitable serial from a list of devices. Assumes `devices` is not empty.
 absl::StatusOr<std::string> AutoSelectSerial(const std::vector<DeviceInfo>& devices)
 {
     if (devices.size() == 1)
@@ -254,7 +256,8 @@ absl::StatusOr<std::string> AutoSelectSerial(const std::vector<DeviceInfo>& devi
                  GetPrintableDeviceList(devices)));
 }
 
-// Returns a valid serial based on what the user provided in `--device serial`.
+// Returns a valid serial based on what the user provided in `--device serial`.  Assumes `devices`
+// is not empty.
 absl::StatusOr<std::string> ValidateSerial(const std::vector<DeviceInfo>& devices,
                                            std::string_view               serial)
 {
@@ -263,9 +266,9 @@ absl::StatusOr<std::string> ValidateSerial(const std::vector<DeviceInfo>& device
         return AutoSelectSerial(devices);
     }
 
-    if (std::find_if(devices.cbegin(), devices.cend(), [&serial](const DeviceInfo& info) {
+    if (std::none_of(devices.cbegin(), devices.cend(), [&serial](const DeviceInfo& info) {
             return info.m_serial == serial;
-        }) == devices.cend())
+        }))
     {
         return absl::InvalidArgumentError(absl::StrCat("Device with serial '",
                                                        serial,

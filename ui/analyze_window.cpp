@@ -540,7 +540,7 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
     Settings::Get()->WriteLastFilePath(last_file_path);
 
     // Open the dialog for users to initiate analysis
-    open();
+    show();
 }
 
 //--------------------------------------------------------------------------------------------------

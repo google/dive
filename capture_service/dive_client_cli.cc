@@ -30,6 +30,7 @@ limitations under the License.
 #include "absl/flags/usage_config.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 
 #include "android_application.h"
@@ -39,6 +40,12 @@ limitations under the License.
 #include "dive/common/app_types.h"
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
+
+namespace
+{
+
+using ::Dive::DeviceInfo;
+using ::Dive::DeviceManager;
 
 struct GlobalOptions
 {
@@ -84,9 +91,6 @@ struct CommandDef
     absl::Status (*validator)(const GlobalOptions&);
     absl::Status (*executor)(const CommandContext&);
 };
-
-namespace
-{
 
 // Forward declaration of command executors.
 absl::Status CmdListDevice(const CommandContext& ctx);
@@ -223,54 +227,59 @@ absl::Status WaitForExitConfirmation()
     return absl::OkStatus();
 }
 
-// Selects and sets up the target device based on the serial flag. If `serial` is empty then try to
-// choose a device; `serial` will be updated to the serial of the chosen device.
-absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr, std::string& serial)
+// Make a human-readable string representation of the list of devices.
+std::string GetPrintableDeviceList(const std::vector<DeviceInfo>& devices)
 {
-    auto list = mgr.ListDevice();
-    if (list.empty())
+    return absl::StrCat("Available devices:\n\t",
+                        absl::StrJoin(devices.cbegin(),
+                                      devices.cend(),
+                                      "\n\t",
+                                      [](std::string* out, const DeviceInfo& info) {
+                                          absl::StrAppend(out, info.m_serial);
+                                      }));
+}
+
+// Picks a suitable serial from a list of devices.
+absl::StatusOr<std::string> AutoSelectSerial(const std::vector<DeviceInfo>& devices)
+{
+    if (devices.size() == 1)
     {
-        return absl::UnavailableError("No Android devices connected.");
+        const std::string& serial = devices.front().m_serial;
+        std::cout << "Using single connected device: " << serial << std::endl;
+        return serial;
     }
 
+    return absl::InvalidArgumentError(
+    absl::StrCat("Multiple devices connected. Specify --device [serial].\n",
+                 GetPrintableDeviceList(devices)));
+}
+
+// Returns a valid serial based on what the user provided in `--device serial`.
+absl::StatusOr<std::string> ValidateSerial(const std::vector<DeviceInfo>& devices,
+                                           std::string_view               serial)
+{
     if (serial.empty())
     {
-        if (list.size() == 1)
-        {
-            serial = list.front().m_serial;
-            std::cout << "Using single connected device: " << serial << std::endl;
-        }
-        else
-        {
-            std::string
-            msg = "Multiple devices connected. Specify --device [serial].\nAvailables:\n";
-            for (const auto& d : list)
-            {
-                msg.append("\t" + d.GetDisplayName() + "\n");
-            }
-            return absl::InvalidArgumentError(msg);
-        }
-    }
-    else
-    {
-        bool        found = false;
-        std::string msg;
-        for (const auto& d : list)
-        {
-            if (d.m_serial == serial)
-            {
-                found = true;
-                break;
-            }
-            msg.append("\t" + d.GetDisplayName() + "\n");
-        }
-        if (!found)
-        {
-            return absl::InvalidArgumentError("Device with serial '" + serial + "' not found.\n" +
-                                              "Available devices:\n" + msg);
-        }
+        return AutoSelectSerial(devices);
     }
 
+    if (std::find_if(devices.cbegin(), devices.cend(), [&serial](const DeviceInfo& info) {
+            return info.m_serial == serial;
+        }) == devices.cend())
+    {
+        return absl::InvalidArgumentError(absl::StrCat("Device with serial '",
+                                                       serial,
+                                                       "' not found.\n",
+                                                       GetPrintableDeviceList(devices)));
+    }
+
+    return std::string(serial);
+}
+
+// Selects and sets up the target device based on the serial flag. Assumes `serial` is a connected
+// device.
+absl::Status InitializeDevice(Dive::DeviceManager& mgr, const std::string& serial)
+{
     auto device = mgr.SelectDevice(serial);
     if (!device.ok())
     {
@@ -282,7 +291,7 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr, s
     {
         return absl::InternalError("Failed to setup device: " + std::string(ret.message()));
     }
-    return *device;
+    return absl::OkStatus();
 }
 
 // Internal helper to run a package on the device.
@@ -738,8 +747,6 @@ absl::Status CmdCleanup(const CommandContext& ctx)
     return ctx.mgr.CleanupPackageProperties(ctx.options.package);
 }
 
-}  // namespace
-
 // Overload for parsing the Command enum from command line flags.
 bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
 {
@@ -772,6 +779,8 @@ std::string AbslUnparseFlag(Command command)
     }
     return "unknown";
 }
+
+}  // namespace
 
 // Abseil flags parsing uses ADL. AppType and GfxrReplayOptions are in the Dive namespace so
 // AbslParseFlag and AbslUnparseFlag need to be as well.
@@ -989,10 +998,24 @@ int main(int argc, char** argv)
     Dive::DeviceManager mgr;
     if (cmd != Command::kListDevice)
     {
-        auto device = GetTargetDevice(mgr, opts.serial);
-        if (!device.ok())
+        std::vector<DeviceInfo> devices = mgr.ListDevice();
+        if (devices.empty())
         {
-            std::cout << device.status().message() << std::endl;
+            std::cout << "No Android devices connected." << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        absl::StatusOr<std::string> validated_serial = ValidateSerial(devices, opts.serial);
+        if (!validated_serial.ok())
+        {
+            std::cout << validated_serial.status().message() << std::endl;
+            return EXIT_FAILURE;
+        }
+        opts.serial = *validated_serial;
+
+        if (absl::Status status = InitializeDevice(mgr, opts.serial); !status.ok())
+        {
+            std::cout << status.message() << std::endl;
             return EXIT_FAILURE;
         }
     }

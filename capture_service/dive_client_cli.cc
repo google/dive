@@ -981,6 +981,12 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    if (absl::Status status = selected_def->validator(opts); !status.ok())
+    {
+        std::cout << status.message() << std::endl;
+        return EXIT_FAILURE;
+    }
+
     Dive::DeviceManager mgr;
     if (cmd != Command::kListDevice)
     {

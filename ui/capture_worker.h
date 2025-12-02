@@ -14,11 +14,11 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QThread>
 #include <QProgressDialog>
 #include <filesystem>
-
-#pragma once
 
 class ProgressBarWorker : public QThread
 {

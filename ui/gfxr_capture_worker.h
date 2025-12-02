@@ -14,11 +14,11 @@
  limitations under the License.
 */
 
-#include "capture_service/device_mgr.h"
-#include <capture_worker.h>
-#include <filesystem>
-
 #pragma once
+
+#include "capture_service/device_mgr.h"
+#include "capture_worker.h"
+#include <filesystem>
 
 class GfxrCaptureWorker : public CaptureWorker
 {

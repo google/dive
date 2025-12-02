@@ -82,7 +82,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_app_type_label = new QLabel(tr("Application Type:"));
     m_gfxr_capture_file_on_device_directory_label = new QLabel(
     tr("On Device GFXR Capture File Directory Name:"));
-    m_capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
+    QLabel *capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
 
     m_dev_model = new QStandardItemModel();
     m_pkg_model = new QStandardItemModel();
@@ -209,12 +209,12 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_gfxr_capture_file_on_device_directory_label->hide();
     m_gfxr_capture_file_directory_input_box->hide();
 
-    m_capture_file_local_directory_layout = new QHBoxLayout();
+    QHBoxLayout *capture_file_local_directory_layout = new QHBoxLayout();
     m_capture_file_local_directory_input_box = new QLineEdit();
     m_capture_file_local_directory_input_box->setPlaceholderText(
     "Input the location to save the directory to");
-    m_capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_label);
-    m_capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_input_box);
+    capture_file_local_directory_layout->addWidget(capture_file_local_directory_label);
+    capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_input_box);
 
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
@@ -227,7 +227,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_main_layout->addLayout(m_capture_warning_layout);
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_directory_layout);
-    m_main_layout->addLayout(m_capture_file_local_directory_layout);
+    m_main_layout->addLayout(capture_file_local_directory_layout);
     m_main_layout->addLayout(m_args_layout);
 
     m_main_layout->addLayout(m_type_layout);

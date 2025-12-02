@@ -17,7 +17,6 @@
 #include "capture_worker.h"
 
 #include <QDebug>
-#include <iostream>
 #include "absl/strings/str_cat.h"
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"

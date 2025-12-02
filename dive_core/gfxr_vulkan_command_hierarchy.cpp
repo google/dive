@@ -11,8 +11,11 @@
  limitations under the License.
 */
 
-#include "gfxr_vulkan_command_hierarchy.h"
-#include "dive_strings.h"
+#include "dive_core/gfxr_vulkan_command_hierarchy.h"
+
+#include <iostream>
+
+#include "dive_core/dive_strings.h"
 
 namespace Dive
 {
@@ -50,6 +53,33 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
 }
 
 //--------------------------------------------------------------------------------------------------
+std::string GfxrVulkanCommandHierarchyCreator::GetCurrDrawCallString()
+{
+    // Early return for zero instance count
+    if (m_cur_draw_call_info.instance_count == 0)
+    {
+        return "";
+    }
+
+    std::ostringstream s;
+
+    s << "(";
+
+    if (m_cur_draw_call_info.index_count > 0)
+    {
+        s << "indexCount:" << m_cur_draw_call_info.index_count << ",";
+    }
+    else if (m_cur_draw_call_info.vertex_count > 0)
+    {
+        s << "vertexCount:" << m_cur_draw_call_info.vertex_count << ",";
+    }
+
+    s << "instanceCount:" << m_cur_draw_call_info.instance_count << ")";
+
+    return s.str();
+}
+
+//--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
 const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info,
 uint64_t                                          draw_call_count,
@@ -65,7 +95,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
         uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanBeginCommandBufferNode,
                                             vk_cmd_string_stream.str());
         m_cur_command_buffer_node_index = cmd_buffer_index;
-        GetArgs(vulkan_cmd_args, m_cur_command_buffer_node_index, "");
+        GetArgs(vulkan_cmd_args, m_cur_command_buffer_node_index);
         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                  m_cur_submit_node_index,
                  cmd_buffer_index);
@@ -75,7 +105,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
         uint64_t cmd_buffer_index = AddNode(NodeType::kGfxrVulkanEndCommandBufferNode,
                                             vk_cmd_string_stream.str());
 
-        GetArgs(vulkan_cmd_args, cmd_buffer_index, "");
+        GetArgs(vulkan_cmd_args, cmd_buffer_index);
         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                  m_cur_command_buffer_node_index,
                  cmd_buffer_index);
@@ -87,7 +117,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
         uint64_t
         begin_debug_utils_label_cmd_index = AddNode(NodeType::kGfxrBeginDebugUtilsLabelCommandNode,
                                                     label_name.c_str());
-        GetArgs(vulkan_cmd_args, begin_debug_utils_label_cmd_index, "");
+        GetArgs(vulkan_cmd_args, begin_debug_utils_label_cmd_index);
         ConditionallyAddChild(begin_debug_utils_label_cmd_index);
         m_cur_parent_node_index_stack.push(begin_debug_utils_label_cmd_index);
     }
@@ -104,10 +134,23 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     else if (vulkan_cmd_name.find("vkCmdDraw") != std::string::npos ||
              vulkan_cmd_name.find("vkCmdDispatch") != std::string::npos)
     {
+        m_cur_draw_call_info = {};
+
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanDrawCommandNode,
                                         vk_cmd_string_stream.str());
-        GetArgs(vulkan_cmd_args, vk_cmd_index, "");
+        GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
+
+        if (vulkan_cmd_name.find("vkCmdDraw") != std::string::npos)
+        {
+            std::string extra_info = GetCurrDrawCallString();
+            if (!extra_info.empty())
+            {
+                // Update the draw node description with info obtained from its args
+                vk_cmd_string_stream << extra_info;
+                m_command_hierarchy.SetNodeDesc(vk_cmd_index, vk_cmd_string_stream.str());
+            }
+        }
     }
     else if (vulkan_cmd_name.find("vkCmdBeginRenderPass") != std::string::npos)
     {
@@ -119,7 +162,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
         vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanBeginRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
-        GetArgs(vulkan_cmd_args, vk_cmd_index, "");
+        GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
         m_cur_parent_node_index_stack.push(vk_cmd_index);
     }
@@ -127,7 +170,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanEndRenderPassCommandNode,
                                         vk_cmd_string_stream.str());
-        GetArgs(vulkan_cmd_args, vk_cmd_index, "");
+        GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
         if (!m_cur_parent_node_index_stack.empty())
         {
@@ -139,7 +182,7 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     {
         uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
                                         vk_cmd_string_stream.str());
-        GetArgs(vulkan_cmd_args, vk_cmd_index, "");
+        GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
     }
 }
@@ -238,15 +281,12 @@ uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string &
         uint64_t local_node_index = m_node_children[CommandHierarchy::kAllEventTopology].size();
         m_dive_indices_to_local_indices_map[node_index] = local_node_index;
         m_node_children[CommandHierarchy::kAllEventTopology].resize(local_node_index + 1);
-        m_node_root_node_indices[CommandHierarchy::kAllEventTopology].resize(local_node_index + 1);
     }
     else
     {
         DIVE_ASSERT(m_node_children[CommandHierarchy::kAllEventTopology].size() == node_index);
         m_node_children[CommandHierarchy::kAllEventTopology].resize(
         m_node_children[CommandHierarchy::kAllEventTopology].size() + 1);
-        m_node_root_node_indices[CommandHierarchy::kAllEventTopology].resize(
-        m_node_root_node_indices[CommandHierarchy::kAllEventTopology].size() + 1);
     }
 
     return node_index;
@@ -275,8 +315,7 @@ void GfxrVulkanCommandHierarchyCreator::AddChild(CommandHierarchy::TopologyType 
 }
 
 void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &json_args,
-                                                uint64_t                      curr_index,
-                                                const std::string            &current_path)
+                                                uint64_t                      curr_index)
 {
     // This block processes key-value pairs where keys represent field names
     // and values can be objects, arrays, or primitives.
@@ -294,7 +333,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                          curr_index,
                          object_node_index);
 
-                GetArgs(val, object_node_index, "");
+                GetArgs(val, object_node_index);
             }
             else if (val.is_array())
             {
@@ -311,7 +350,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                     if (element.is_object())
                     {
                         // If an array element is an object, recursively process it.
-                        GetArgs(element, array_node_index, "");
+                        GetArgs(element, array_node_index);
                     }
                     else if (element.is_array())
                     {
@@ -323,7 +362,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                                  array_node_index,
                                  nested_array_node_index);
-                        GetArgs(element, nested_array_node_index, "");
+                        GetArgs(element, nested_array_node_index);
                     }
                     else
                     {
@@ -345,6 +384,53 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                 // create a node containing the "key:value" pair.
                 std::ostringstream vk_cmd_arg_string_stream;
                 vk_cmd_arg_string_stream << key << ":" << val;
+
+                std::ostringstream val_stream;
+                val_stream << val;
+
+                if (key == "indexCount")
+                {
+                    uint64_t value = 0;
+                    try
+                    {
+                        value = std::stoi(val_stream.str());
+                    }
+                    catch (const std::exception &e)
+                    {
+                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() stoi err for: ("
+                                  << val_stream.str() << "), exception:" << e.what() << std::endl;
+                    }
+                    m_cur_draw_call_info.index_count = value;
+                }
+                else if (key == "vertexCount")
+                {
+                    uint64_t value = 0;
+                    try
+                    {
+                        value = std::stoi(val_stream.str());
+                    }
+                    catch (const std::exception &e)
+                    {
+                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() stoi err for: ("
+                                  << val_stream.str() << "), exception:" << e.what() << std::endl;
+                    }
+                    m_cur_draw_call_info.vertex_count = value;
+                }
+                else if (key == "instanceCount")
+                {
+                    uint64_t value = 0;
+                    try
+                    {
+                        value = std::stoi(val_stream.str());
+                    }
+                    catch (const std::exception &e)
+                    {
+                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() stoi err for: ("
+                                  << val_stream.str() << "), exception:" << e.what() << std::endl;
+                    }
+                    m_cur_draw_call_info.instance_count = value;
+                }
+
                 uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
                                                     vk_cmd_arg_string_stream.str());
                 AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
@@ -363,7 +449,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             {
                 // If an array element is an object or another array,
                 // recursively process it, and associate it with the current parent node.
-                GetArgs(element, curr_index, "");
+                GetArgs(element, curr_index);
             }
             else
             {

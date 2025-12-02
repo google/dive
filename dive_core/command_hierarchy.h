@@ -218,6 +218,7 @@ public:
 
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
+    void        SetNodeDesc(uint64_t node_index, const std::string &desc);
 
     Dive::EngineType GetSubmitNodeEngineType(uint64_t node_index) const;
     uint32_t         GetSubmitNodeIndex(uint64_t node_index) const;

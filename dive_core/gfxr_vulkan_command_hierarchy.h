@@ -59,15 +59,24 @@ public:
     void ClearCreatedDiveIndices() { m_dive_indices_to_local_indices_map.clear(); }
 
 private:
-    void     GetArgs(const nlohmann::ordered_json &j,
-                     uint64_t                      curr_index,
-                     const std::string            &current_path = "");
-    void     CreateTopologies();
+    // Helper function to parse json representation of GFXR file into nodes and make calls to
+    // AddNode() and AddChild() in hiearachical order.
+    void GetArgs(const nlohmann::ordered_json &json_args, uint64_t curr_index);
+
+    void CreateTopologies();
+
+    // Wrapper for m_command_hierarchy.AddNode(), returns the command buffer index representing this
+    // node's place in m_command_hierarchy.m_node_type DiveVector.
+    //
+    // Also may add node to m_dive_indices_to_local_indices_map and reserve space in m_node_children
+    // for future appends
     uint64_t AddNode(NodeType type, std::string &&desc);
-    void     AddChild(CommandHierarchy::TopologyType type,
-                      uint64_t                       node_index,
-                      uint64_t                       child_node_index);
-    void     ConditionallyAddChild(uint64_t node_index);
+
+    // Updates m_node_children
+    void AddChild(CommandHierarchy::TopologyType type,
+                  uint64_t                       node_index,
+                  uint64_t                       child_node_index);
+    void ConditionallyAddChild(uint64_t node_index);
 
     uint64_t               m_cur_submit_node_index = 0;
     uint64_t               m_cur_command_buffer_node_index = 0;
@@ -76,10 +85,27 @@ private:
     const GfxrCaptureData &m_capture_data;
     // This is a list of child indices per node, ie. topology info
     // Once parsing is complete, we will create a topology from this
-    DiveVector<DiveVector<uint64_t>> m_node_children[CommandHierarchy::kTopologyTypeCount];
-    DiveVector<uint64_t>             m_node_root_node_indices[CommandHierarchy::kTopologyTypeCount];
-    Topology                         m_topology[CommandHierarchy::kTopologyTypeCount];
-    bool                             m_used_in_mixed_command_hierarchy = false;
+    DiveVector<DiveVector<uint64_t>>       m_node_children[CommandHierarchy::kTopologyTypeCount];
+    Topology                               m_topology[CommandHierarchy::kTopologyTypeCount];
+    bool                                   m_used_in_mixed_command_hierarchy = false;
     std::unordered_map<uint64_t, uint64_t> m_dive_indices_to_local_indices_map;
+
+    // Additional info that will be displayed in the description of a draw call node
+    struct DrawCallDescInfo
+    {
+        uint64_t index_count = 0;
+        uint64_t vertex_count = 0;
+        uint64_t instance_count = 0;
+    };
+
+    // Forms string of drawcall info, some examples:
+    //
+    // vkCmdDraw: "(vertexCount=#,instanceCount=#)"
+    // vkCmdDrawIndexed: "(indexCount=#,instanceCount=#)"
+    // vkCmdDrawMultiEXT: "(instanceCount=#)"
+    // vkCmdDraw* without instanceCount parameter: ""
+    std::string GetCurrDrawCallString();
+
+    DrawCallDescInfo m_cur_draw_call_info;
 };
 }  // namespace Dive

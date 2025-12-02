@@ -16,51 +16,18 @@
 
 #pragma once
 
-#include <QThread>
+#include <QObject>
 #include <QProgressDialog>
+#include <QThread>
 #include <filesystem>
-
-class ProgressBarWorker : public QThread
-{
-    Q_OBJECT
-
-public:
-    ProgressBarWorker(QProgressDialog   *pd,
-                      const std::string &path,
-                      int64_t            size,
-                      const bool         is_gfxr_capture) :
-        m_progress_bar(pd),
-        m_capture_name(path),
-        m_capture_size(size),
-        m_gfxr_capture(is_gfxr_capture),
-        m_downloaded_size(0)
-    {
-    }
-
-    void    run() override;
-    int64_t GetDownloadedSize() const { return m_downloaded_size; }
-
-public slots:
-    void SetDownloadedSize(uint64_t size) { m_downloaded_size = size; }
-
-signals:
-    void SetProgressBarValue(int percentage);
-
-private:
-    QProgressDialog *m_progress_bar;
-    std::string      m_capture_name;
-    int64_t          m_capture_size;
-    bool             m_gfxr_capture;
-    int64_t          m_downloaded_size;
-};
 
 class CaptureWorker : public QThread
 {
     Q_OBJECT
 
 public:
-    CaptureWorker(QProgressDialog *pd) :
-        m_progress_bar(pd)
+    CaptureWorker(QObject *parent = nullptr) :
+        QThread(parent)
     {
     }
 
@@ -70,10 +37,10 @@ public:
     void SetTargetCaptureDir(const std::string &target_capture_dir);
 signals:
     void CaptureAvailable(const QString &);
-    void DownloadedSize(uint64_t size);
+    void DownloadedSize(int64_t size, int64_t total_size);
     void ErrorMessage(const QString &err_msg);
 
 protected:
-    QProgressDialog      *m_progress_bar;
     std::filesystem::path m_target_capture_dir;
+    int64_t               m_capture_size;
 };

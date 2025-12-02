@@ -717,6 +717,17 @@ void TraceDialog::OnTraceClicked()
     connect(workerThread, &CaptureWorker::CaptureAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &CaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &CaptureWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
+    connect(workerThread,
+            &CaptureWorker::DownloadedSize,
+            progress_bar,
+            [progress_bar](int64_t downloaded_size, int64_t total_size) {
+                int percentage = 0;
+                if (total_size > 0)
+                {
+                    percentage = (int)(((double)downloaded_size / total_size) * 100.0);
+                }
+                progress_bar->setValue(percentage);
+            });
     workerThread->start();
     std::cout << "OnTraceClicked done " << std::endl;
 }
@@ -932,6 +943,17 @@ void TraceDialog::RetrieveGfxrCapture()
             &TraceDialog::OnGFXRCaptureAvailable);
     connect(workerThread, &GfxrCaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &GfxrCaptureWorker::ErrorMessage, this, &TraceDialog::ShowErrorMessage);
+    connect(workerThread,
+            &GfxrCaptureWorker::DownloadedSize,
+            progress_bar,
+            [progress_bar](int64_t downloaded_size, int64_t total_size) {
+                int percentage = 0;
+                if (total_size > 0)
+                {
+                    percentage = (int)(((double)downloaded_size / total_size) * 100.0);
+                }
+                progress_bar->setValue(percentage);
+            });
     workerThread->start();
 
     m_gfxr_capture_button->setEnabled(false);

@@ -30,6 +30,7 @@ void RegisterCustomMetaType()
     qRegisterMetaType<Dive::Context>();
     qRegisterMetaType<Dive::FilePath>();
     qRegisterMetaType<Dive::ComponentFilePaths>();
+    qRegisterMetaType<int64_t>("int64_t");
 
     CaptureFileManager::RegisterCustomMetaType();
 }

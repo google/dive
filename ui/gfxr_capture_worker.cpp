@@ -159,23 +159,6 @@ void GfxrCaptureWorker::run()
         capture_directory_size = *ret;
     }
 
-    ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
-                                                                   m_target_capture_dir
-                                                                   .generic_string(),
-                                                                   capture_directory_size,
-                                                                   true);
-    connect(progress_bar_worker,
-            &ProgressBarWorker::finished,
-            progress_bar_worker,
-            &QObject::deleteLater);
-
-    connect(this,
-            &GfxrCaptureWorker::DownloadedSize,
-            progress_bar_worker,
-            &ProgressBarWorker::SetDownloadedSize);
-
-    progress_bar_worker->start();
-
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the gfxr capture file to "
              << m_target_capture_dir.generic_string().c_str();
@@ -220,7 +203,7 @@ void GfxrCaptureWorker::run()
         }
 
         size += static_cast<int64_t>(std::filesystem::file_size(target_path.string()));
-        emit DownloadedSize(size);
+        emit DownloadedSize(size, capture_directory_size);
     }
 
     if (!original_screenshot_path.empty() && !gfxr_stem.empty())

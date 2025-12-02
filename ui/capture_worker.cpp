@@ -22,22 +22,6 @@
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"
 
-void ProgressBarWorker::run()
-{
-    int64_t cur_size = 0;
-    int     percent = 0;
-    while (m_capture_size && cur_size < m_capture_size)
-    {
-        QThread::msleep(10);  // 10 milliseconds
-        cur_size = GetDownloadedSize();
-        percent = cur_size * 100 / m_capture_size;
-        emit SetProgressBarValue(percent);
-        std::cout << "percent " << percent << ", cursize: " << cur_size << ", total "
-                  << m_capture_size << std::endl;
-    }
-    emit SetProgressBarValue(100);
-}
-
 //--------------------------------------------------------------------------------------------------
 void CaptureWorker::SetTargetCaptureDir(const std::string &target_capture_dir)
 {
@@ -146,31 +130,15 @@ void CaptureWorker::run()
         return;
     }
 
-    ProgressBarWorker *progress_bar_worker = new ProgressBarWorker(m_progress_bar,
-                                                                   target_download_path
-                                                                   .generic_string(),
-                                                                   *file_size,
-                                                                   false);
-    connect(progress_bar_worker,
-            &ProgressBarWorker::finished,
-            progress_bar_worker,
-            &QObject::deleteLater);
-    connect(this,
-            &CaptureWorker::DownloadedSize,
-            progress_bar_worker,
-            &ProgressBarWorker::SetDownloadedSize);
-    connect(progress_bar_worker,
-            &ProgressBarWorker::SetProgressBarValue,
-            m_progress_bar,
-            &QProgressDialog::setValue);
-
-    progress_bar_worker->start();
+    const int64_t total_size = *file_size;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the capture file to "
              << target_download_path.generic_string().c_str();
 
-    auto progress = [this](size_t size) { emit DownloadedSize(size); };
+    auto progress = [this, total_size](size_t size) {
+        emit DownloadedSize(static_cast<int64_t>(size), total_size);
+    };
     status = client.DownloadFileFromServer(*capture_file_path,
                                            target_download_path.generic_string(),
                                            progress);

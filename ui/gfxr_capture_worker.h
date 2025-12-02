@@ -19,14 +19,15 @@
 #include "capture_service/device_mgr.h"
 #include "capture_worker.h"
 #include <filesystem>
+#include <qobject.h>
 
 class GfxrCaptureWorker : public CaptureWorker
 {
     Q_OBJECT
 
 public:
-    GfxrCaptureWorker(QProgressDialog *pd) :
-        CaptureWorker(pd)
+    GfxrCaptureWorker(QObject *parent = nullptr) :
+        CaptureWorker(parent)
     {
     }
 

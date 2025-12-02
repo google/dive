@@ -156,7 +156,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_capture_type_button_group = new QButtonGroup(this);
     m_gfxr_capture_type_button = new QRadioButton(tr("GFXR"));
     m_pm4_capture_type_button = new QRadioButton(tr("PM4"));
-    m_pm4_capture_type_button->setChecked(true);
+    m_gfxr_capture_type_button->setChecked(true);
     m_capture_type_button_group->addButton(m_gfxr_capture_type_button, kGfxrCaptureButtonId);
     m_capture_type_button_group->addButton(m_pm4_capture_type_button, kPm4CaptureButtonId);
 
@@ -286,6 +286,8 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
                      &ApplicationController::AdvancedOptionToggled,
                      this,
                      &TraceDialog::OnShowAdvancedOptions);
+
+    OnCaptureTypeChanged(kGfxrCaptureButtonId);
 }
 
 TraceDialog::~TraceDialog()
@@ -360,8 +362,8 @@ void TraceDialog::closeEvent(QCloseEvent *event)
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
         EnableCaptureTypeButtons(true);
-        m_pm4_capture_type_button->setChecked(true);
-        OnCaptureTypeChanged(kPm4CaptureButtonId);
+        m_gfxr_capture_type_button->setChecked(true);
+        OnCaptureTypeChanged(kGfxrCaptureButtonId);
         event->accept();
         return;
     }

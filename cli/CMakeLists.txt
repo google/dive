@@ -43,7 +43,6 @@ include_directories(
     ${LibArchive_INCLUDE_DIRS}
 )
 
-add_definitions(-DDIVE_GUI_TOOL) # suppress DIVE_PAL_CAPTURE in common.h
 add_definitions(-DLITTLEENDIAN_CPU)
 
 set(LIB_SRC_FILES ${SRC_FILES})
@@ -93,7 +92,6 @@ endif()
 # Fuzz only on Clang for now.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_executable(capture_fuzzer fuzz_main.cpp)
-    target_compile_definitions(capture_fuzzer PUBLIC -DDIVE_GUI_TOOL)
     target_compile_options(
         capture_fuzzer
         PRIVATE
@@ -112,7 +110,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     )
 
     add_executable(capture_fuzzer_loader fuzz_main.cpp)
-    target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_GUI_TOOL)
     target_compile_definitions(capture_fuzzer_loader PUBLIC -DDIVE_FUZZ_LOADER)
 
     target_compile_options(

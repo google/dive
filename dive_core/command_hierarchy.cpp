@@ -241,6 +241,14 @@ const char *CommandHierarchy::GetNodeDesc(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
+void CommandHierarchy::SetNodeDesc(uint64_t node_index, const std::string &desc)
+{
+    DIVE_ASSERT(node_index < m_nodes.m_description.size());
+    m_nodes.m_description[node_index] = desc;
+    return;
+}
+
+//--------------------------------------------------------------------------------------------------
 Dive::EngineType CommandHierarchy::GetSubmitNodeEngineType(uint64_t node_index) const
 {
     DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());

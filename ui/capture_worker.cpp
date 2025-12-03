@@ -32,7 +32,7 @@ void CaptureWorker::SetTargetCaptureDir(const std::string &target_capture_dir)
         {
             std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
             qDebug() << err_msg.c_str();
-            emit ErrorMessage(QString::fromStdString(err_msg));
+            emit ShowMessage(QString::fromStdString(err_msg));
             return;
         }
 
@@ -55,7 +55,7 @@ void CaptureWorker::SetTargetCaptureDir(const std::string &target_capture_dir)
                 {
                     std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
                     qDebug() << err_msg.c_str();
-                    emit ErrorMessage(QString::fromStdString(err_msg));
+                    emit ShowMessage(QString::fromStdString(err_msg));
                     return;
                 }
                 m_target_capture_dir = newDirPath;
@@ -80,7 +80,7 @@ void CaptureWorker::run()
     {
         std::string err_msg = "Application is not running, possibly crashed.";
         qDebug() << err_msg.c_str();
-        emit ErrorMessage(QString::fromStdString(err_msg));
+        emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -98,6 +98,7 @@ void CaptureWorker::run()
     absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture();
     if (capture_file_path.ok())
     {
+        emit UpdateProgressDialog("Triggering PM4 Capture ...");
         qDebug() << "Trigger capture: " << (*capture_file_path).c_str();
     }
     else
@@ -105,7 +106,7 @@ void CaptureWorker::run()
         std::string err_msg = absl::StrCat("Trigger capture failed: ",
                                            capture_file_path.status().message());
         qDebug() << err_msg.c_str();
-        emit ErrorMessage(QString::fromStdString(err_msg));
+        emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
     std::filesystem::path p(*capture_file_path);
@@ -124,7 +125,7 @@ void CaptureWorker::run()
         std::string err_msg = absl::StrCat("Failed to retrieve capture file size, error: ",
                                            file_size.status().message());
         qDebug() << err_msg.c_str();
-        emit ErrorMessage(QString::fromStdString(err_msg));
+        emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -134,6 +135,7 @@ void CaptureWorker::run()
     qDebug() << "Begin to download the capture file to "
              << target_download_path.generic_string().c_str();
 
+    emit UpdateProgressDialog("Downloading ...");
     auto progress = [this, total_size](size_t size) {
         emit DownloadedSize(static_cast<qlonglong>(size), total_size);
     };
@@ -150,15 +152,18 @@ void CaptureWorker::run()
         std::string err_msg = absl::StrCat("Failed to download capture file, error: ",
                                            status.message());
         qDebug() << err_msg.c_str();
-        emit ErrorMessage(QString::fromStdString(err_msg));
+        emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - begin)
                                    .count();
-    qDebug() << "Time used to download the capture is " << (time_used_to_load_ms / 1000.0)
-             << " seconds.";
+    QString download_msg = QString("Capture downloaded to %1 in %2 seconds)")
+                           .arg(target_download_path.generic_string().c_str())
+                           .arg(time_used_to_load_ms / 1000.0);
+    qDebug() << download_msg;
 
     QString capture_saved_path(target_download_path.generic_string().c_str());
+    emit    ShowMessage(download_msg);
     emit    CaptureAvailable(capture_saved_path);
 }

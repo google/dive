@@ -93,7 +93,7 @@ private slots:
     void         OnPackageListFilter();
     void         OnPackageListFilterApplied(const QString &filter);
     void         OnGfxrCaptureClicked();
-    void         ShowErrorMessage(const QString &err_msg);
+    void         ShowMessage(const QString &msg);
     absl::Status StopPackageAndCleanup();
     void         OnCaptureTypeChanged(int id);
     void         OnShowAdvancedOptions(bool show);

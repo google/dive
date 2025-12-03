@@ -38,7 +38,8 @@ public:
 signals:
     void CaptureAvailable(const QString &);
     void DownloadedSize(qlonglong size, qlonglong total_size);
-    void ErrorMessage(const QString &err_msg);
+    void ShowMessage(const QString &msg);
+    void UpdateProgressDialog(const QString &msg);
 
 protected:
     std::filesystem::path m_target_capture_dir;

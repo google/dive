@@ -22,6 +22,7 @@
 #include "utils/component_files.h"
 
 static constexpr int kStallTimeoutSeconds = 10;
+static constexpr int kFileStatusPollingIntervalMs = 50;
 
 void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string &source_capture_dir)
 {
@@ -170,7 +171,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         // restart the size calculation.
         if (found_zero_size)
         {
-            QThread::msleep(10);
+            QThread::msleep(kFileStatusPollingIntervalMs);
             continue;
         }
 
@@ -185,12 +186,12 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
             }
 
             // If timestamps are not current, wait and restart the loop.
-            QThread::msleep(10);
+            QThread::msleep(kFileStatusPollingIntervalMs);
             continue;
         }
 
         // If total_size == 0 or current_timestamps is empty, wait/restart.
-        QThread::msleep(10);
+        QThread::msleep(kFileStatusPollingIntervalMs);
     }
 }
 

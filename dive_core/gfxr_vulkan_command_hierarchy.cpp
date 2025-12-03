@@ -315,6 +315,44 @@ void GfxrVulkanCommandHierarchyCreator::AddChild(CommandHierarchy::TopologyType 
     }
 }
 
+bool GfxrVulkanCommandHierarchyCreator::ParseCurDrawCallInfo(std::string_view key,
+                                                             std::string_view val)
+{
+    if (key == "indexCount")
+    {
+        uint64_t value = 0;
+        if (!absl::SimpleAtoi(val, &value))
+        {
+            return false;
+        }
+        m_cur_draw_call_info.index_count = value;
+        return true;
+    }
+    if (key == "vertexCount")
+    {
+        uint64_t value = 0;
+        if (!absl::SimpleAtoi(val, &value))
+        {
+            return false;
+        }
+        m_cur_draw_call_info.vertex_count = value;
+        return true;
+    }
+    if (key == "instanceCount")
+    {
+        uint64_t value = 0;
+        if (!absl::SimpleAtoi(val, &value))
+        {
+            return false;
+        }
+        m_cur_draw_call_info.instance_count = value;
+        return true;
+    }
+
+    // key is unrelated to DrawCallDescInfo
+    return true;
+}
+
 void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &json_args,
                                                 uint64_t                      curr_index)
 {
@@ -381,59 +419,26 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
             }
             else
             {
+                std::ostringstream s;
+                std::string        val_str;
+
+                s.str("");
+                s << val;
+                val_str = s.str();
+
+                s.str("");
+                s << key << ":" << val;
+
+                if (!ParseCurDrawCallInfo(key, val_str))
+                {
+                    std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
+                              << "could not parse draw call info from: " << s.str() << std::endl;
+                }
+
                 // If the value is a primitive,
                 // create a node containing the "key:value" pair.
-                std::ostringstream vk_cmd_arg_string_stream;
-                vk_cmd_arg_string_stream << key << ":" << val;
 
-                std::ostringstream val_stream;
-                val_stream << val;
-
-                if (key == "indexCount")
-                {
-                    uint64_t value = 0;
-                    if (bool res = absl::SimpleAtoi(val_stream.str(), &value); !res)
-                    {
-                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
-                                     "absl::SimpleAtoi err for: ("
-                                  << val_stream.str() << ")" << std::endl;
-                    }
-                    else
-                    {
-                        m_cur_draw_call_info.index_count = value;
-                    }
-                }
-                else if (key == "vertexCount")
-                {
-                    uint64_t value = 0;
-                    if (bool res = absl::SimpleAtoi(val_stream.str(), &value); !res)
-                    {
-                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
-                                     "absl::SimpleAtoi err for: ("
-                                  << val_stream.str() << ")" << std::endl;
-                    }
-                    else
-                    {
-                        m_cur_draw_call_info.vertex_count = value;
-                    }
-                }
-                else if (key == "instanceCount")
-                {
-                    uint64_t value = 0;
-                    if (bool res = absl::SimpleAtoi(val_stream.str(), &value); !res)
-                    {
-                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
-                                     "absl::SimpleAtoi err for: ("
-                                  << val_stream.str() << ")" << std::endl;
-                    }
-                    else
-                    {
-                        m_cur_draw_call_info.instance_count = value;
-                    }
-                }
-
-                uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
-                                                    vk_cmd_arg_string_stream.str());
+                uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode, s.str());
                 AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                          curr_index,
                          vk_cmd_arg_index);

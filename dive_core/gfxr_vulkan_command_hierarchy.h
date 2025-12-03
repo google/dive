@@ -98,6 +98,10 @@ private:
         uint64_t instance_count = 0;
     };
 
+    // Returns false if key was recognized to correspond to a DrawCallDescInfo field but val could
+    // not be parsed
+    bool ParseCurDrawCallInfo(std::string_view key, std::string_view val);
+
     // Forms string of drawcall info, some examples:
     //
     // vkCmdDraw: "(vertexCount=#,instanceCount=#)"

@@ -15,6 +15,7 @@
 
 #include <iostream>
 
+#include "absl/strings/numbers.h"
 #include "dive_core/dive_strings.h"
 
 namespace Dive
@@ -391,44 +392,44 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                 if (key == "indexCount")
                 {
                     uint64_t value = 0;
-                    try
+                    if (bool res = absl::SimpleAtoi(val_stream.str(), &value); !res)
                     {
-                        value = std::stoi(val_stream.str());
+                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
+                                     "absl::SimpleAtoi err for: ("
+                                  << val_stream.str() << ")" << std::endl;
                     }
-                    catch (const std::exception &e)
+                    else
                     {
-                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() stoi err for: ("
-                                  << val_stream.str() << "), exception:" << e.what() << std::endl;
+                        m_cur_draw_call_info.index_count = value;
                     }
-                    m_cur_draw_call_info.index_count = value;
                 }
                 else if (key == "vertexCount")
                 {
                     uint64_t value = 0;
-                    try
+                    if (bool res = absl::SimpleAtoi(val_stream.str(), &value); !res)
                     {
-                        value = std::stoi(val_stream.str());
+                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
+                                     "absl::SimpleAtoi err for: ("
+                                  << val_stream.str() << ")" << std::endl;
                     }
-                    catch (const std::exception &e)
+                    else
                     {
-                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() stoi err for: ("
-                                  << val_stream.str() << "), exception:" << e.what() << std::endl;
+                        m_cur_draw_call_info.vertex_count = value;
                     }
-                    m_cur_draw_call_info.vertex_count = value;
                 }
                 else if (key == "instanceCount")
                 {
                     uint64_t value = 0;
-                    try
+                    if (bool res = absl::SimpleAtoi(val_stream.str(), &value); !res)
                     {
-                        value = std::stoi(val_stream.str());
+                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
+                                     "absl::SimpleAtoi err for: ("
+                                  << val_stream.str() << ")" << std::endl;
                     }
-                    catch (const std::exception &e)
+                    else
                     {
-                        std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() stoi err for: ("
-                                  << val_stream.str() << "), exception:" << e.what() << std::endl;
+                        m_cur_draw_call_info.instance_count = value;
                     }
-                    m_cur_draw_call_info.instance_count = value;
                 }
 
                 uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,

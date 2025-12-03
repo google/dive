@@ -21,7 +21,7 @@
 #include "absl/strings/str_split.h"
 #include "utils/component_files.h"
 
-static constexpr int kMaxWaitSeconds = 60;
+static constexpr int kStallTimeoutSeconds = 10;
 
 void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string &source_capture_dir)
 {
@@ -82,19 +82,19 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         }
     }
 
-    auto loop_start_time = std::chrono::steady_clock::now();
+    auto last_progress_time = std::chrono::steady_clock::now();
 
     while (true)
     {
-        auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(
-                            std::chrono::steady_clock::now() - loop_start_time)
-                            .count();
+        auto elapsed_since_progress = std::chrono::duration_cast<std::chrono::seconds>(
+                                      std::chrono::steady_clock::now() - last_progress_time)
+                                      .count();
 
-        if (elapsed_time > kMaxWaitSeconds)
+        if (elapsed_since_progress > kStallTimeoutSeconds)
         {
             std::string err_msg = absl::
-            StrFormat("Timed out attempting to get the GFXR capture directory after %d seconds.",
-                      kMaxWaitSeconds);
+            StrFormat("GFXR capture stalled: No change in file status observed for %d seconds.",
+                      kStallTimeoutSeconds);
             qDebug() << err_msg.c_str();
             return absl::DeadlineExceededError(err_msg);
         }
@@ -158,6 +158,8 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
                 found_zero_size = true;
                 break;
             }
+
+            last_progress_time = std::chrono::steady_clock::now();
 
             // Add the timestamp and update the total size.
             current_timestamps[file_name] = file_timestamp;

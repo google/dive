@@ -21,6 +21,8 @@
 #include "absl/strings/str_split.h"
 #include "utils/component_files.h"
 
+static constexpr int kMaxWaitSeconds = 60;
+
 void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string &source_capture_dir)
 {
     m_source_capture_dir = source_capture_dir;
@@ -68,8 +70,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         return ls_output.status();
     }
 
-    m_file_list = absl::StrSplit(std::string(ls_output->data()), '\n');
-
+    m_file_list = absl::StrSplit(std::string(ls_output->data()), '\n', absl::SkipEmpty());
     for (std::string &file_with_trailing : m_file_list)
     {
         // Windows-style line endings use \r\n. When absl::StrSplit splits by \n, the \r remains
@@ -81,56 +82,111 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
         }
     }
 
+    auto loop_start_time = std::chrono::steady_clock::now();
+
     while (true)
     {
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(
+                            std::chrono::steady_clock::now() - loop_start_time)
+                            .count();
+
+        if (elapsed_time > kMaxWaitSeconds)
+        {
+            std::string err_msg = absl::
+            StrFormat("Timed out attempting to get the GFXR capture directory after %d seconds.",
+                      kMaxWaitSeconds);
+            qDebug() << err_msg.c_str();
+            return absl::DeadlineExceededError(err_msg);
+        }
+
         // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written
         // to.
-        int64_t                            size = 0;
+        int64_t                            total_size = 0;
         std::map<std::string, std::string> current_timestamps;
-
-        for (std::string file : m_file_list)
+        bool                               found_zero_size = false;
+        // Get the size of the file and timestamp for the last time the file was updated.
+        std::string                 combined_cmd = absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ",
+                                                m_source_capture_dir,
+                                                "/*'");
+        absl::StatusOr<std::string> stat_output = device->Adb().RunAndGetResult(combined_cmd);
+        if (!stat_output.ok())
         {
-            std::string path = absl::StrCat(m_source_capture_dir, "/", file.data());
+            std::cout << "Error getting capture file stats: " << stat_output.status().message()
+                      << std::endl;
+            return stat_output.status();
+        }
 
-            // Get the size of the file.
-            std::string get_file_size_command = "shell stat -c %s " + path;
+        std::vector<std::string> stat_lines = absl::StrSplit(*stat_output, '\n', absl::SkipEmpty());
 
-            // Get the timestamp for last time the file was updated.
-            std::string get_file_update_timestamp_command = "shell stat -c %Y " + path;
+        for (const std::string &line : stat_lines)
+        {
+            std::vector<std::string> parts = absl::StrSplit(line, '|');
 
-            absl::StatusOr<std::string> str_num = device->Adb().RunAndGetResult(
-            get_file_size_command);
-            absl::StatusOr<std::string> file_update_timestamp = device->Adb().RunAndGetResult(
-            get_file_update_timestamp_command);
-            int64_t num = std::stoll(str_num->c_str());
-            // If a file size is 0, then the file has finished being written to yet. Sleep and
-            // restart the size calculation.
-            if (num == 0)
+            // Expected format: [file_path, size, timestamp]
+            if (parts.size() < 3)
             {
-                QThread::msleep(10);
-                size = 0;
-                current_timestamps.clear();
+                qDebug() << "Warning: Could not parse stat output line: " << line.c_str();
+                continue;
+            }
+
+            // Extract filename from the full path
+            std::filesystem::path full_path = parts[0];
+            std::string           file_name = full_path.filename().string();
+
+            // Check if this file is one we expect from m_file_list
+            if (std::find(m_file_list.begin(), m_file_list.end(), file_name) == m_file_list.end())
+            {
+                continue;
+            }
+
+            int64_t file_size = 0;
+
+            // Check if the size string can be parsed into an integer
+            if (!absl::SimpleAtoi(parts[1], &file_size))
+            {
+                qDebug() << "Failed to parse size for file: " << file_name.c_str();
+                continue;
+            }
+
+            std::string file_timestamp = parts[2];
+
+            // If a file size is 0, then the file has not finished being written to yet.
+            if (file_size == 0)
+            {
+                found_zero_size = true;
                 break;
             }
 
-            // Add the timestamp for the last time the file was udpated.
-            current_timestamps[file] = file_update_timestamp->data();
+            // Add the timestamp and update the total size.
+            current_timestamps[file_name] = file_timestamp;
+            total_size += file_size;
+        }
 
-            // Update the total size of the gfxr capture directory.
-            size += std::stoll(str_num->c_str());
+        // If a file size is 0, then the file has finished being written to yet. Sleep and
+        // restart the size calculation.
+        if (found_zero_size)
+        {
+            QThread::msleep(10);
+            continue;
         }
 
         // If the size is greater than zero and the timestamps have been recorded check if the
         // timestamps are current.
-        if (size > 0 && !current_timestamps.empty())
+        if (total_size > 0 && !current_timestamps.empty())
         {
-
             // If the timestamps are current, return the size of the directory.
             if (AreTimestampsCurrent(device, current_timestamps))
             {
-                return size;
+                return total_size;
             }
+
+            // If timestamps are not current, wait and restart the loop.
+            QThread::msleep(10);
+            continue;
         }
+
+        // If total_size == 0 or current_timestamps is empty, wait/restart.
+        QThread::msleep(10);
     }
 }
 

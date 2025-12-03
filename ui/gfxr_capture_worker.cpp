@@ -134,7 +134,9 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
             std::string           file_name = full_path.filename().string();
 
             // Check if this file is one we expect from m_file_list
-            if (std::find(m_file_list.begin(), m_file_list.end(), file_name) == m_file_list.end())
+            if (std::none_of(m_file_list.begin(),
+                             m_file_list.end(),
+                             [&file_name](const auto &item) { return item == file_name; }))
             {
                 continue;
             }
@@ -162,7 +164,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
             total_size += file_size;
         }
 
-        // If a file size is 0, then the file has finished being written to yet. Sleep and
+        // If a file size is 0, then the file has not finished being written to yet. Sleep and
         // restart the size calculation.
         if (found_zero_size)
         {

@@ -31,11 +31,11 @@ public:
     {
     }
 
-    void                    run() override;
-    void                    SetGfxrSourceCaptureDir(const std::string &source_capture_dir);
-    bool                    AreTimestampsCurrent(Dive::AndroidDevice                      *device,
-                                                 const std::map<std::string, std::string> &previous_timestamps);
-    absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
+    void                      run() override;
+    void                      SetGfxrSourceCaptureDir(const std::string &source_capture_dir);
+    bool                      AreTimestampsCurrent(Dive::AndroidDevice                      *device,
+                                                   const std::map<std::string, std::string> &previous_timestamps);
+    absl::StatusOr<qlonglong> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
 
 private:
     std::string m_source_capture_dir;  // On Android, better to keep as std::string since the

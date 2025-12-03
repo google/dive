@@ -129,14 +129,14 @@ void CaptureWorker::run()
         return;
     }
 
-    const int64_t total_size = *file_size;
+    const qlonglong total_size = *file_size;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the capture file to "
              << target_download_path.generic_string().c_str();
 
     auto progress = [this, total_size](size_t size) {
-        emit DownloadedSize(static_cast<int64_t>(size), total_size);
+        emit DownloadedSize(static_cast<qlonglong>(size), total_size);
     };
     status = client.DownloadFileFromServer(*capture_file_path,
                                            target_download_path.generic_string(),

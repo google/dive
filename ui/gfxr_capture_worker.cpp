@@ -59,7 +59,8 @@ const std::map<std::string, std::string> &previous_timestamps)
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::AndroidDevice *device)
+absl::StatusOr<qlonglong> GfxrCaptureWorker::getGfxrCaptureDirectorySize(
+Dive::AndroidDevice *device)
 {
     // Retrieve the names of the files in the capture directory on the device.
     std::string                 ls_command = "shell ls " + m_source_capture_dir;
@@ -102,7 +103,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
 
         // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written
         // to.
-        int64_t                            total_size = 0;
+        qlonglong                          total_size = 0;
         std::map<std::string, std::string> current_timestamps;
         bool                               found_zero_size = false;
         // Get the size of the file and timestamp for the last time the file was updated.
@@ -142,7 +143,7 @@ absl::StatusOr<int64_t> GfxrCaptureWorker::getGfxrCaptureDirectorySize(Dive::And
                 continue;
             }
 
-            int64_t file_size = 0;
+            qlonglong file_size = 0;
 
             // Check if the size string can be parsed into an integer
             if (!absl::SimpleAtoi(parts[1], &file_size))
@@ -205,9 +206,9 @@ void GfxrCaptureWorker::run()
         return;
     }
 
-    int64_t capture_directory_size = 0;
+    qlonglong capture_directory_size = 0;
     {
-        absl::StatusOr<int64_t> ret = getGfxrCaptureDirectorySize(device);
+        absl::StatusOr<qlonglong> ret = getGfxrCaptureDirectorySize(device);
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to get size of gfxr capture directory",
@@ -224,7 +225,7 @@ void GfxrCaptureWorker::run()
     qDebug() << "Begin to download the gfxr capture file to "
              << m_target_capture_dir.generic_string().c_str();
 
-    int64_t     size = 0;
+    qlonglong   size = 0;
     std::string gfxr_stem;
     std::string original_screenshot_path;
 
@@ -263,7 +264,7 @@ void GfxrCaptureWorker::run()
             original_screenshot_path = target_path.string();
         }
 
-        size += static_cast<int64_t>(std::filesystem::file_size(target_path.string()));
+        size += static_cast<qlonglong>(std::filesystem::file_size(target_path.string()));
         emit DownloadedSize(size, capture_directory_size);
     }
 

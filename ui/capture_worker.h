@@ -37,10 +37,9 @@ public:
     void SetTargetCaptureDir(const std::string &target_capture_dir);
 signals:
     void CaptureAvailable(const QString &);
-    void DownloadedSize(int64_t size, int64_t total_size);
+    void DownloadedSize(qlonglong size, qlonglong total_size);
     void ErrorMessage(const QString &err_msg);
 
 protected:
     std::filesystem::path m_target_capture_dir;
-    int64_t               m_capture_size;
 };

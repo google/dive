@@ -166,12 +166,10 @@ class FileProcessor
 
     void HandleBlockReadError(BlockIOError error_code, const char* error_message);
 
-<<<<<<< HEAD
-    bool ProcessAnnotation(const format::BlockHeader& block_header, format::AnnotationType annotation_type);
-=======
     bool ProcessExecuteBlocksFromFile(const ExecuteBlocksFromFileArgs& execute_blocks_info);
     void ProcessStateBeginMarker(const StateBeginMarkerArgs& state_begin);
-    void ProcessStateEndMarker(const StateEndMarkerArgs& state_end);
+    // GOOGLE: [single-frame-looping] Allow overriding State End to know where to start looping from. NOTE This happens before dispatch to consumers.
+    virtual void ProcessStateEndMarker(const StateEndMarkerArgs& state_end);
     void ProcessAnnotation(const AnnotationArgs& annotation);
 
   protected:
@@ -196,8 +194,8 @@ class FileProcessor
 
     // Returns whether the call_id is a frame delimiter and handles frame delimiting logic
     bool ProcessFrameDelimiter(format::ApiCallId call_id);
-    bool ProcessFrameDelimiter(const FrameEndMarkerArgs& end_frame);
->>>>>>> 158aed6c6b1eed622fc7badcb8315b0aaa11e473
+    // GOOGLE: [single-frame-looping] Allow overriding Frame End to know when to loop. NOTE This happens before dispatch to consumers.
+    virtual bool ProcessFrameDelimiter(const FrameEndMarkerArgs& end_frame);
 
     void PrintBlockInfo() const;
 
@@ -393,12 +391,11 @@ class FileProcessor
         }
     }
 
-<<<<<<< HEAD
-    bool OpenFile(const std::string& filename);
-=======
+    // GOOGLE: [single-frame-looping] Let subclasses seek to support looping
+  protected:
     bool SeekActiveFile(const FileInputStreamPtr& file, int64_t offset, util::platform::FileSeekOrigin origin);
->>>>>>> 158aed6c6b1eed622fc7badcb8315b0aaa11e473
 
+  private:
     bool SeekActiveFile(int64_t offset, util::platform::FileSeekOrigin origin);
 
     bool SetActiveFile(const std::string& filename, bool execute_till_eof);
@@ -426,7 +423,6 @@ class FileProcessor
     int64_t                             block_index_to_{ 0 };
     bool                                loading_trimmed_capture_state_;
 
-    std::string absolute_path_;
     format::FileHeader file_header_;
 
   protected:
@@ -443,11 +439,8 @@ class FileProcessor
         bool        execute_till_eof{ false };
     };
 
-<<<<<<< HEAD
-=======
     std::deque<ActiveFileContext> file_stack_;
 
->>>>>>> 158aed6c6b1eed622fc7badcb8315b0aaa11e473
   private:
     ActiveFileContext& GetCurrentFile()
     {
@@ -455,22 +448,15 @@ class FileProcessor
         return file_stack_.back();
     }
 
-<<<<<<< HEAD
     // GOOGLE: Access modifications for derived FileProcessor classes
   protected:
-    uint64_t    GetFirstFrame() const { return first_frame_; }
-    void        SetUsesFrameMarkers(bool uses_frame_markers) { capture_uses_frame_markers_ = uses_frame_markers; }
-    std::string GetActiveFilename();
-    bool        SeekActiveFile(const std::string& filename, int64_t offset, util::platform::FileSeekOrigin origin);
-    int64_t     TellFile(const std::string& filename);
-    virtual bool
-    ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type, bool& should_break);
-    virtual bool ProcessStateMarker(const format::BlockHeader& block_header, format::MarkerType marker_type);
+    uint64_t     GetFirstFrame() { return first_frame_; }
     virtual void StoreBlockInfo() {}
 
     bool        run_without_decoders_ = false;
     std::string absolute_path_;
-=======
+
+  private:
     struct InputStreamGetKey
     {
         const std::string& operator()(const FileInputStreamPtr& input_stream)
@@ -481,7 +467,6 @@ class FileProcessor
     };
     using ActiveStreamCache = util::ClockCache<FileInputStreamPtr, 3, std::string, InputStreamGetKey>;
     ActiveStreamCache stream_cache_;
->>>>>>> 158aed6c6b1eed622fc7badcb8315b0aaa11e473
 };
 
 GFXRECON_END_NAMESPACE(decode)

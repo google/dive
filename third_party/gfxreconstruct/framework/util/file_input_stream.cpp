@@ -204,5 +204,12 @@ DataSpan FStreamFileInputStream::ReadSpan(const size_t bytes)
     return DataSpan();
 }
 
+// GOOGLE: [single-frame-looping] Add tell so we can find the loop point
+int64_t FStreamFileInputStream::FileTell()
+{
+    GFXRECON_ASSERT(fd_);
+    return util::platform::FileTell(fd_);
+}
+
 GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)

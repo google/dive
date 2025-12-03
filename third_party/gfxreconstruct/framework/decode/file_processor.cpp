@@ -658,22 +658,6 @@ void FileProcessor::PrintBlockInfo() const
     }
 }
 
-<<<<<<< HEAD
-// GOOGLE: Retrieve name of current active file
-std::string FileProcessor::GetActiveFilename()
-{
-    GFXRECON_ASSERT(!file_stack_.empty());
-    return file_stack_.back().filename;
-}
-
-// GOOGLE: [single-frame-looping] Active file tell utility
-int64_t FileProcessor::TellFile(const std::string& filename)
-{
-    auto file_entry = active_files_.find(filename);
-    assert(file_entry != active_files_.end());
-
-    return util::platform::FileTell(file_entry->second.fd);
-=======
 bool FileProcessor::HandleBlockEof(const char* operation, bool report_frame_and_block)
 {
 
@@ -711,7 +695,6 @@ bool FileProcessor::HandleBlockEof(const char* operation, bool report_frame_and_
         }
     }
     return success;
->>>>>>> 158aed6c6b1eed622fc7badcb8315b0aaa11e473
 }
 
 GFXRECON_END_NAMESPACE(decode)

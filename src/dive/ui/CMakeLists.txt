@@ -14,7 +14,5 @@
 # limitations under the License.
 #
 
-add_subdirectory(build_defs)
-add_subdirectory(os)
-add_subdirectory(ui)
-add_subdirectory(utils)
+add_library(dive_lib_ui INTERFACE)
+target_link_libraries(dive_lib_ui INTERFACE dive_src_includes absl::nullability)

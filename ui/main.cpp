@@ -51,7 +51,9 @@
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
+constexpr int kScreenshotDelay = 5000;       // 5s
 
+ABSL_FLAG(std::string, test_screenshot, "", "Take screenshot after load, then exit.");
 ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
 ABSL_FLAG(bool, native_style, false, "Use system provided style");
 
@@ -299,6 +301,21 @@ int main(int argc, char *argv[])
         QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
     }
 
+    bool maximize = false;
+    if (auto savepath = absl::GetFlag(FLAGS_test_screenshot); !savepath.empty())
+    {
+        maximize = true;
+        auto func = [main_window, savepath]() {
+            QPixmap pixmap(main_window->size());
+            main_window->render(&pixmap);
+            pixmap.save(QString::fromStdString(savepath));
+            main_window->close();
+        };
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, [func, main_window]() {
+            QTimer::singleShot(kScreenshotDelay, main_window, func);
+        });
+    }
+
     if (!controller.InitializePlugins())
     {
         qDebug()
@@ -312,7 +329,15 @@ int main(int argc, char *argv[])
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
-    QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
+    if (maximize)
+    {
+
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::showMaximized);
+    }
+    else
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::show);
+    }
 
     return app.exec();
 }

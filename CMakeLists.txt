@@ -276,6 +276,7 @@ endif()
 
 if(NOT ANDROID)
     enable_testing()
+    set(DIVE_TEST_OUTPUT_PATH ${CMAKE_BINARY_DIR}/test_output)
     add_test(
         NAME TestLoadingUncompressedTrace
         COMMAND
@@ -298,10 +299,25 @@ if(NOT ANDROID)
     else()
         set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
     endif()
+    make_directory(${DIVE_TEST_OUTPUT_PATH})
     add_test(
         NAME Regression_StackOverflow_MacOS
         COMMAND
             ${DIVE_EXECUTABLE_PATH} --test_exit_after_load
+            ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
+    )
+    add_test(
+        NAME DiveUI_Screenshot
+        COMMAND
+            ${DIVE_EXECUTABLE_PATH}
+            --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot.png
+            ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
+    )
+    add_test(
+        NAME DiveUI_Screenshot_NativeStyle
+        COMMAND
+            ${DIVE_EXECUTABLE_PATH} --native_style
+            --test_screenshot=${DIVE_TEST_OUTPUT_PATH}/screenshot_native_style.png
             ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
     )
 endif()

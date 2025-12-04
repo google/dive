@@ -215,7 +215,7 @@ void GfxrCaptureWorker::run()
                                                " error: ",
                                                ret.status().message());
             qDebug() << err_msg.c_str();
-            emit ErrorMessage(QString::fromStdString(err_msg));
+            emit ShowMessage(QString::fromStdString(err_msg));
             return;
         }
         capture_directory_size = *ret;
@@ -247,7 +247,7 @@ void GfxrCaptureWorker::run()
             std::cout << "Failed to retrieve gfxr capture: " << retrieve_file.message()
                       << std::endl;
             qDebug() << retrieve_file.message().data();
-            emit ErrorMessage(QString::fromStdString(retrieve_file.message().data()));
+            emit ShowMessage(QString::fromStdString(retrieve_file.message().data()));
             return;
         }
 

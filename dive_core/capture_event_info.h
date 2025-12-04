@@ -20,6 +20,7 @@
 #include "common.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "shader_disassembly.h"
+#include "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
 
 namespace Dive
 {
@@ -62,15 +63,19 @@ EventType GetEventType(const IMemoryManager      &mem_manager,
                        uint32_t                   opcode,
                        const EmulateStateTracker &state_tracker);
 
-std::string GetEventString(const IMemoryManager      &mem_manager,
-                           uint32_t                   submit_index,
-                           uint64_t                   va_addr,
-                           Pm4Type7Header             header,
-                           const EmulateStateTracker &state_tracker);
-uint32_t    GetIndexCount(const IMemoryManager &mem_manager,
-                          uint32_t              submit_index,
-                          uint64_t              va_addr,
-                          Pm4Type7Header        header);
+std::string                        GetEventString(const IMemoryManager      &mem_manager,
+                                                  uint32_t                   submit_index,
+                                                  uint64_t                   va_addr,
+                                                  Pm4Type7Header             header,
+                                                  const EmulateStateTracker &state_tracker);
+uint32_t                           GetIndexCount(const IMemoryManager &mem_manager,
+                                                 uint32_t              submit_index,
+                                                 uint64_t              va_addr,
+                                                 Pm4Type7Header        header);
+std::optional<VkPrimitiveTopology> GetTopology(const IMemoryManager &mem_manager,
+                                               uint32_t              submit_index,
+                                               uint64_t              va_addr,
+                                               Pm4Type7Header        header);
 };  // namespace Util
 
 //--------------------------------------------------------------------------------------------------

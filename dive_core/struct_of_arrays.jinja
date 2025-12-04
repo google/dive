@@ -146,8 +146,6 @@ namespace {{namespace}} {
 
 #include "py_common.h"
 
-using namespace pybind11::literals;
-
 {% if namespace %}
 namespace {{namespace}} {
 {% endif %}
@@ -1273,53 +1271,6 @@ void {{soa.name}}RefT<{{template_args}}>::swap(const {{concrete_ref}} &other) co
             }
         }
     {% endif %}
-{% endmacro %}
-
-
-{#############################################################################
-# py_binds
-#############################################################################}
-{% macro py_binds(soas) %}
-{% for soa in soas %}
-{% set concrete_soa %}
-    {%- if soa.custom %}{{soa.custom}}
-    {%- else %}{{soa.name}}
-    {%- endif -%}
-{% endset %}
-py::class_<{{concrete_soa}}>(m, "{{concrete_soa}}")
-{% for field in soa.fields %}
-    {{ begin_field_guard(field) -}}
-    .def("{{snake_field_name(field)}}", [](const {{concrete_soa}} &self) {
-        return {{py_array(soa, field)}};
-    })
-    {{ end_field_guard(field) -}}
-{% endfor %}
-.def("to_dataframe", [](const {{concrete_soa}} &self) {
-    py::object DataFrame = py::module::import("pandas").attr("DataFrame");
-    py::dict dict;
-    {% for field in soa.fields %}
-        {{ begin_field_guard(field) -}}
-        {% if field.array_dims %}
-            {% for d in field.array_dims %}
-                for(uint32_t {{d.name}}=0; {{d.name}}<{{d.count}}; ++{{d.name}})
-            {% endfor %}
-            {
-                std::ostringstream key;
-                key << "{{snake_field_name(field)}}"
-                {%- for d in field.array_dims -%}
-                     << "_" <<  {{d.name}}
-                {%- endfor -%}
-                ;
-                dict[py::cast(key.str())] = {{py_array(soa, field, dim_vars=field.array_dims | map(attribute="name") | list)}};
-            }
-        {% else %}
-            dict["{{snake_field_name(field)}}"] = {{py_array(soa, field)}};
-        {% endif %}
-        {{ end_field_guard(field) -}}
-    {% endfor %}
-    return DataFrame(dict);
-});
-{% endfor %}
 {% endmacro %}
 
 

@@ -109,7 +109,18 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
 
     PFN_vkCreateQueryPool CreateQueryPool = GetDeviceTable(device)->CreateQueryPool;
 
-    PFN_vkResetQueryPool ResetQueryPool = GetDeviceTable(device)->ResetQueryPool;
+    // Initialize all vk func pointers
+    pfn_vkResetQueryPool_ = GetDeviceTable(device)->ResetQueryPool;
+    pfn_vkQueueWaitIdle_ = GetDeviceTable(device)->QueueWaitIdle;
+    pfn_vkDestroyQueryPool_ = GetDeviceTable(device)->DestroyQueryPool;
+    pfn_vkCmdWriteTimestamp_ = GetDeviceTable(device)->CmdWriteTimestamp;
+    pfn_vkDeviceWaitIdle_ = GetDeviceTable(device)->DeviceWaitIdle;
+    pfn_vkResetQueryPool_ = GetDeviceTable(device)->ResetQueryPool;
+    pfn_vkGetQueryPoolResults_ = GetDeviceTable(device)->GetQueryPoolResults;
+    pfn_vkGetFenceStatus_ = GetDeviceTable(device)->GetFenceStatus;
+    pfn_vkQueueSubmit_ = GetDeviceTable(device)->QueueSubmit;
+    pfn_vkResetFences_ = GetDeviceTable(device)->ResetFences;
+    pfn_vkGetFenceFdKHR_ = GetDeviceTable(device)->GetFenceFdKHR;
 
     auto in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
     VkPhysicalDeviceProperties deviceProperties;
@@ -121,7 +132,7 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
                                                           pAllocator->GetPointer(),
                                                           deviceProperties.limits.timestampPeriod,
                                                           CreateQueryPool,
-                                                          ResetQueryPool);
+                                                          pfn_vkResetQueryPool_);
 
     if (!status.success)
     {
@@ -134,20 +145,30 @@ const ApiCallInfo&                                   call_info,
 format::HandleId                                     device,
 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice               in_device = MapHandle<VulkanDeviceInfo>(device,
+    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device,
                                                      &CommonObjectInfoTable::GetVkDeviceInfo);
-    PFN_vkQueueWaitIdle    QueueWaitIdle = GetDeviceTable(device_)->QueueWaitIdle;
-    PFN_vkDestroyQueryPool DestroyQueryPool = GetDeviceTable(device_)->DestroyQueryPool;
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyDevice(in_device,
-                                                                    QueueWaitIdle,
-                                                                    DestroyQueryPool);
+                                                                    pfn_vkQueueWaitIdle_,
+                                                                    pfn_vkDestroyQueryPool_);
     fence_signal_queue_ = VK_NULL_HANDLE;
     device_ = VK_NULL_HANDLE;
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
+
+    pfn_vkResetQueryPool_ = nullptr;
+    pfn_vkQueueWaitIdle_ = nullptr;
+    pfn_vkDestroyQueryPool_ = nullptr;
+    pfn_vkDeviceWaitIdle_ = nullptr;
+    pfn_vkGetQueryPoolResults_ = nullptr;
+    pfn_vkCmdWriteTimestamp_ = nullptr;
+    pfn_vkGetFenceStatus_ = nullptr;
+    pfn_vkQueueSubmit_ = nullptr;
+    pfn_vkResetFences_ = nullptr;
+    pfn_vkGetFenceFdKHR_ = nullptr;
+
     VulkanReplayConsumer::Process_vkDestroyDevice(call_info, device, pAllocator);
 }
 
@@ -304,12 +325,10 @@ StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
-
     Dive::GPUTime::GpuTimeStatus status = gpu_time_
                                           .OnBeginCommandBuffer(in_commandBuffer,
                                                                 pBeginInfo->GetPointer()->flags,
-                                                                CmdWriteTimestamp);
+                                                                pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -323,10 +342,8 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
-
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnEndCommandBuffer(in_commandBuffer,
-                                                                       CmdWriteTimestamp);
+                                                                       pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -350,18 +367,12 @@ format::HandleId                            fence)
                                                 pSubmits,
                                                 fence);
 
-    PFN_vkDeviceWaitIdle DeviceWaitIdle = GetDeviceTable(device_)->DeviceWaitIdle;
-
-    PFN_vkResetQueryPool ResetQueryPool = GetDeviceTable(device_)->ResetQueryPool;
-
-    PFN_vkGetQueryPoolResults GetQueryPoolResults = GetDeviceTable(device_)->GetQueryPoolResults;
-
     const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
     auto                submit_status = gpu_time_.OnQueueSubmit(submitCount,
                                                  submit_infos,
-                                                 DeviceWaitIdle,
-                                                 ResetQueryPool,
-                                                 GetQueryPoolResults);
+                                                 pfn_vkDeviceWaitIdle_,
+                                                 pfn_vkResetQueryPool_,
+                                                 pfn_vkGetQueryPoolResults_);
 
     auto IsFrameBoundary = [](Decoded_VkSubmitInfo*  submit_info_data,
                               uint32_t               submit_count,
@@ -401,7 +412,7 @@ format::HandleId                            fence)
     // called in GPUTime::OnQueueSubmit)
     if (!gpu_time_.IsEnabled() && is_frame_boundary)
     {
-        DeviceWaitIdle(device_);
+        pfn_vkDeviceWaitIdle_(device_);
     }
 
     if (!submit_status.gpu_time_status.success)
@@ -430,13 +441,9 @@ StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo)
 {
     VulkanReplayConsumer::Process_vkQueuePresentKHR(call_info, returnValue, queue, pPresentInfo);
 
-    PFN_vkDeviceWaitIdle DeviceWaitIdle = GetDeviceTable(device_)->DeviceWaitIdle;
-
-    PFN_vkResetQueryPool ResetQueryPool = GetDeviceTable(device_)->ResetQueryPool;
-
-    PFN_vkGetQueryPoolResults GetQueryPoolResults = GetDeviceTable(device_)->GetQueryPoolResults;
-
-    auto status = gpu_time_.OnQueuePresent(DeviceWaitIdle, ResetQueryPool, GetQueryPoolResults);
+    auto status = gpu_time_.OnQueuePresent(pfn_vkDeviceWaitIdle_,
+                                           pfn_vkResetQueryPool_,
+                                           pfn_vkGetQueryPoolResults_);
 
     if (!status.success)
     {
@@ -518,10 +525,8 @@ VkSubpassContents                                    contents)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
-
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass(in_commandBuffer,
-                                                                         CmdWriteTimestamp);
+                                                                         pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -540,10 +545,8 @@ void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass(const ApiCallInfo& cal
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
-
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass(in_commandBuffer,
-                                                                       CmdWriteTimestamp);
+                                                                       pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -559,10 +562,8 @@ StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
-
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass2(in_commandBuffer,
-                                                                          CmdWriteTimestamp);
+                                                                          pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -584,10 +585,8 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
     VkCommandBuffer in_commandBuffer = MapHandle<
     VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = GetDeviceTable(in_commandBuffer)->CmdWriteTimestamp;
-
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass2(in_commandBuffer,
-                                                                        CmdWriteTimestamp);
+                                                                        pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -711,13 +710,11 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
     gpu_time_.ClearFrameCache();
     setup_finished_ = true;
 
-    PFN_vkGetFenceStatus GetFenceStatus = GetDeviceTable(device_)->GetFenceStatus;
-
     // We keep the inital status of all fences that are created in the setup phase before the 1st
     // frame starts. ProcessStateEndMarker is called only once when the setup phase is finished
     for (auto& [fence, initial_status] : fence_initial_status_)
     {
-        const VkResult status = GetFenceStatus(device_, fence);
+        const VkResult status = pfn_vkGetFenceStatus_(device_, fence);
         GFXRECON_ASSERT((status == VK_NOT_READY) || (status == VK_SUCCESS));
         initial_status = (status == VK_SUCCESS) ? FenceStatus::kSignaled : FenceStatus::kUnsignaled;
     }
@@ -725,16 +722,12 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 
 void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 {
-    PFN_vkGetFenceStatus GetFenceStatus = GetDeviceTable(device_)->GetFenceStatus;
-
-    PFN_vkQueueSubmit QueueSubmit = GetDeviceTable(device_)->QueueSubmit;
-
     std::vector<VkFence> reset_fence_list = {};
 
     // We try to bring back the initial status for all fences at the end of each loop
     for (const auto& [fence, initial_status] : fence_initial_status_)
     {
-        const VkResult status = GetFenceStatus(device_, fence);
+        const VkResult status = pfn_vkGetFenceStatus_(device_, fence);
         GFXRECON_ASSERT((status == VK_NOT_READY) || (status == VK_SUCCESS));
         const FenceStatus current_status = (status == VK_SUCCESS) ? FenceStatus::kSignaled :
                                                                     FenceStatus::kUnsignaled;
@@ -749,7 +742,7 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
             // vkQueueSubmit here is only for signaling the fence.
             // There will be some CPU overhead, but GPU cost is negligible. It doesn't matter which
             // type of queue it is if we submit 0 cmd
-            QueueSubmit(fence_signal_queue_, 0, nullptr, fence);
+            pfn_vkQueueSubmit_(fence_signal_queue_, 0, nullptr, fence);
             break;
         case FenceStatus::kUnsignaled:
             reset_fence_list.push_back(fence);
@@ -759,10 +752,9 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 
     if (!reset_fence_list.empty())
     {
-        PFN_vkResetFences ResetFences = GetDeviceTable(device_)->ResetFences;
-        VkResult          result = ResetFences(device_,
-                                      static_cast<uint32_t>(reset_fence_list.size()),
-                                      reset_fence_list.data());
+        VkResult result = pfn_vkResetFences_(device_,
+                                             static_cast<uint32_t>(reset_fence_list.size()),
+                                             reset_fence_list.data());
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }
 }
@@ -783,8 +775,7 @@ PointerDecoder<int>*                               pFd)
     auto in_pGetFdInfo = pGetFdInfo->GetPointer();
     int* out_pFd = pFd->IsNull() ? nullptr : pFd->AllocateOutputData(1, -1);
 
-    VkResult replay_result = GetDeviceTable(in_device->handle)
-                             ->GetFenceFdKHR(in_device->handle, in_pGetFdInfo, out_pFd);
+    VkResult replay_result = pfn_vkGetFenceFdKHR_(in_device->handle, in_pGetFdInfo, out_pFd);
 
     if (replay_result != VK_SUCCESS)
     {

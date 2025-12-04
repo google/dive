@@ -125,9 +125,10 @@ if(MSVC)
     # 4100: unreferenced formal parameter
     # 4201: prevent nameless struct/union
     # 4127: "conditional expression is constant" warnings
+    # 4324: structure was padded due to alignment specifier
     target_compile_options(
         ${PROJECT_NAME}
-        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127
+        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324
     )
 else()
     target_compile_options(

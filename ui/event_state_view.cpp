@@ -941,7 +941,8 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
 
                 const VkPipelineColorBlendAttachmentState curr_attach = event_state_it->Attachment(
                 i);
-                const bool prev_set = prev_event_state_it->IsAttachmentSet(i);
+                const bool prev_set = prev_event_state_it->IsValid() &&
+                                      prev_event_state_it->IsAttachmentSet(i);
                 VkPipelineColorBlendAttachmentState prev_attach = {};
                 if (prev_event_state_it->IsValid())
                 {

@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <algorithm>
 #include <filesystem>
 #include <future>
 #include <iostream>
@@ -30,6 +31,7 @@ limitations under the License.
 #include "absl/flags/usage_config.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 
 #include "android_application.h"
@@ -40,6 +42,12 @@ limitations under the License.
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
 
+namespace
+{
+
+using ::Dive::DeviceInfo;
+using ::Dive::DeviceManager;
+
 struct GlobalOptions
 {
     std::string   serial;
@@ -47,7 +55,6 @@ struct GlobalOptions
     std::string   vulkan_command;
     std::string   vulkan_command_args;
     Dive::AppType app_type;
-    std::string   device_architecture;
     std::string   download_dir;
     std::string   gfxr_capture_file_dir;
     int           trigger_capture_after;
@@ -85,9 +92,6 @@ struct CommandDef
     absl::Status (*validator)(const GlobalOptions&);
     absl::Status (*executor)(const CommandContext&);
 };
-
-namespace
-{
 
 // Forward declaration of command executors.
 absl::Status CmdListDevice(const CommandContext& ctx);
@@ -131,21 +135,6 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
     {
         return absl::InvalidArgumentError(
         "GFXR capture is not supported for GLES OpenXR applications.");
-    }
-
-    if (!options.device_architecture.empty())
-    {
-        static const std::set<std::string> valid_archs = {
-            "arm64-v8a", "arm64-v8", "armeabi-v7a", "x86", "x86_64"
-        };
-
-        if (valid_archs.find(options.device_architecture) == valid_archs.end())
-        {
-            return absl::InvalidArgumentError(
-            absl::StrCat("Invalid --device_architecture '",
-                         options.device_architecture,
-                         "'. Valid values: arm64-v8a, arm64-v8, armeabi-v7a, x86, x86_64"));
-        }
     }
 
     return absl::OkStatus();
@@ -239,56 +228,62 @@ absl::Status WaitForExitConfirmation()
     return absl::OkStatus();
 }
 
-// Selects and sets up the target device based on the serial flag.
-absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
-                                                     const std::string&   serial)
+// Makes a human-readable string representation of the list of devices. Assumes `devices` is not
+// empty.
+std::string GetPrintableDeviceList(const std::vector<DeviceInfo>& devices)
 {
-    auto list = mgr.ListDevice();
-    if (list.empty())
+    return absl::StrCat("Available devices:\n\t",
+                        absl::StrJoin(devices.cbegin(),
+                                      devices.cend(),
+                                      "\n\t",
+                                      [](std::string* out, const DeviceInfo& info) {
+                                          absl::StrAppend(out, info.m_serial);
+                                      }));
+}
+
+// Picks a suitable serial from a list of devices. Assumes `devices` is not empty.
+absl::StatusOr<std::string> AutoSelectSerial(const std::vector<DeviceInfo>& devices)
+{
+    if (devices.size() == 1)
     {
-        return absl::UnavailableError("No Android devices connected.");
+        const std::string& serial = devices.front().m_serial;
+        std::cout << "Using single connected device: " << serial << std::endl;
+        return serial;
     }
 
-    std::string target_serial = serial;
-    if (target_serial.empty())
+    return absl::InvalidArgumentError(
+    absl::StrCat("Multiple devices connected. Specify --device [serial].\n",
+                 GetPrintableDeviceList(devices)));
+}
+
+// Returns a valid serial based on what the user provided in `--device serial`.  Assumes `devices`
+// is not empty.
+absl::StatusOr<std::string> ValidateSerial(const std::vector<DeviceInfo>& devices,
+                                           std::string_view               serial)
+{
+    if (serial.empty())
     {
-        if (list.size() == 1)
-        {
-            target_serial = list.front().m_serial;
-            std::cout << "Using single connected device: " << target_serial << std::endl;
-        }
-        else
-        {
-            std::string
-            msg = "Multiple devices connected. Specify --device [serial].\nAvailables:\n";
-            for (const auto& d : list)
-            {
-                msg.append("\t" + d.GetDisplayName() + "\n");
-            }
-            return absl::InvalidArgumentError(msg);
-        }
-    }
-    else
-    {
-        bool        found = false;
-        std::string msg;
-        for (const auto& d : list)
-        {
-            if (d.m_serial == target_serial)
-            {
-                found = true;
-                break;
-            }
-            msg.append("\t" + d.GetDisplayName() + "\n");
-        }
-        if (!found)
-        {
-            return absl::InvalidArgumentError("Device with serial '" + target_serial +
-                                              "' not found.\n" + "Available devices:\n" + msg);
-        }
+        return AutoSelectSerial(devices);
     }
 
-    auto device = mgr.SelectDevice(target_serial);
+    if (std::none_of(devices.cbegin(), devices.cend(), [&serial](const DeviceInfo& info) {
+            return info.m_serial == serial;
+        }))
+    {
+        return absl::InvalidArgumentError(absl::StrCat("Device with serial '",
+                                                       serial,
+                                                       "' not found.\n",
+                                                       GetPrintableDeviceList(devices)));
+    }
+
+    return std::string(serial);
+}
+
+// Selects and sets up the target device based on the serial flag. Assumes `serial` is a connected
+// device.
+absl::Status InitializeDevice(Dive::DeviceManager& mgr, const std::string& serial)
+{
+    auto device = mgr.SelectDevice(serial);
     if (!device.ok())
     {
         return device.status();
@@ -299,7 +294,7 @@ absl::StatusOr<Dive::AndroidDevice*> GetTargetDevice(Dive::DeviceManager& mgr,
     {
         return absl::InternalError("Failed to setup device: " + std::string(ret.message()));
     }
-    return *device;
+    return absl::OkStatus();
 }
 
 // Internal helper to run a package on the device.
@@ -321,35 +316,30 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::OPENXR_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kVulkan_Non_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::VULKAN_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kVulkanCLI_Non_OpenXR:
         ret = device->SetupApp(ctx.options.vulkan_command,
                                ctx.options.vulkan_command_args,
                                Dive::ApplicationType::VULKAN_CLI,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kGLES_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::OPENXR_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     case Dive::AppType::kGLES_Non_OpenXR:
         ret = device->SetupApp(ctx.options.package,
                                Dive::ApplicationType::GLES_APK,
                                ctx.options.vulkan_command_args,
-                               ctx.options.device_architecture,
                                ctx.options.gfxr_capture_file_dir);
         break;
     default:
@@ -760,8 +750,6 @@ absl::Status CmdCleanup(const CommandContext& ctx)
     return ctx.mgr.CleanupPackageProperties(ctx.options.package);
 }
 
-}  // namespace
-
 // Overload for parsing the Command enum from command line flags.
 bool AbslParseFlag(absl::string_view text, Command* command, std::string* error)
 {
@@ -794,6 +782,8 @@ std::string AbslUnparseFlag(Command command)
     }
     return "unknown";
 }
+
+}  // namespace
 
 // Abseil flags parsing uses ADL. AppType and GfxrReplayOptions are in the Dive namespace so
 // AbslParseFlag and AbslUnparseFlag need to be as well.
@@ -912,12 +902,6 @@ download_dir,
 "The local host directory where captured files will be saved. Defaults to the current directory.");
 
 ABSL_FLAG(std::string,
-          device_architecture,
-          "",
-          "The target CPU ABI for GFXR injection (arm64-v8a, arm64-v8, armeabi-v7a, x86, x86_64). "
-          "If unspecified, the tool attempts to detect the architecture from the device.");
-
-ABSL_FLAG(std::string,
           gfxr_capture_file_dir,
           "gfxr_capture",
           "The name of the subdirectory created on the device to store GFXR capture files.");
@@ -958,6 +942,10 @@ ABSL_FLAG(bool,
           validation_layer,
           false,
           "If true, runs the GFXR replay with the Vulkan Validation Layer enabled.");
+ABSL_FLAG(bool,
+          wait_for_debugger,
+          false,
+          "Tell GFXR replay app to wait for a debugger before continuing to replay");
 
 int main(int argc, char** argv)
 {
@@ -972,7 +960,6 @@ int main(int argc, char** argv)
                         .vulkan_command = absl::GetFlag(FLAGS_vulkan_command),
                         .vulkan_command_args = absl::GetFlag(FLAGS_vulkan_command_args),
                         .app_type = absl::GetFlag(FLAGS_type),
-                        .device_architecture = absl::GetFlag(FLAGS_device_architecture),
                         .download_dir = absl::GetFlag(FLAGS_download_dir),
                         .gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir),
                         .trigger_capture_after = absl::GetFlag(FLAGS_trigger_capture_after),
@@ -981,6 +968,7 @@ int main(int argc, char** argv)
                             .local_download_dir = absl::GetFlag(FLAGS_download_dir),
                             .run_type = absl::GetFlag(FLAGS_gfxr_replay_run_type),
                             .replay_flags_str = absl::GetFlag(FLAGS_gfxr_replay_flags),
+                            .wait_for_debugger = absl::GetFlag(FLAGS_wait_for_debugger),
                             .metrics = absl::GetFlag(FLAGS_metrics),
                             .use_validation_layer = absl::GetFlag(FLAGS_validation_layer),
                          },
@@ -1004,13 +992,33 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    if (absl::Status status = selected_def->validator(opts); !status.ok())
+    {
+        std::cout << status.message() << std::endl;
+        return EXIT_FAILURE;
+    }
+
     Dive::DeviceManager mgr;
     if (cmd != Command::kListDevice)
     {
-        auto device = GetTargetDevice(mgr, opts.serial);
-        if (!device.ok())
+        std::vector<DeviceInfo> devices = mgr.ListDevice();
+        if (devices.empty())
         {
-            std::cout << device.status().message() << std::endl;
+            std::cout << "No Android devices connected." << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        absl::StatusOr<std::string> validated_serial = ValidateSerial(devices, opts.serial);
+        if (!validated_serial.ok())
+        {
+            std::cout << validated_serial.status().message() << std::endl;
+            return EXIT_FAILURE;
+        }
+        opts.serial = *validated_serial;
+
+        if (absl::Status status = InitializeDevice(mgr, opts.serial); !status.ok())
+        {
+            std::cout << status.message() << std::endl;
             return EXIT_FAILURE;
         }
     }

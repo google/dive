@@ -31,9 +31,12 @@ endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
-# `dive_core/common.h` is used in more places other than dive_core now
-# TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
-add_definitions(-DDIVE_GUI_TOOL)
+# Add an option to allow users to easily toggle the runtime layer build
+option(
+    DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
+    "Build the Dive runtime layer (VkLayer_rt_dive) for Windows"
+    ON
+)
 
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
@@ -186,6 +189,9 @@ else()
     add_subdirectory(src)
     add_subdirectory(trace_stats)
     add_subdirectory(ui)
+    if(DIVE_BUILD_RUNTIME_LAYER_FOR_WIN AND CMAKE_HOST_WIN32)
+        add_subdirectory(runtime_layer)
+    endif()
 endif()
 
 # ------------------------------------------------------------------------------
@@ -241,9 +247,9 @@ if(ANDROID)
             "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
     )
-    # TODO(b/462175713): Don't put the entire folder containing layers with different architectures into the install folder, just mark that specific libVkLayer_gfxreconstruct.so for install
     install(
-        DIRECTORY ${CMAKE_BINARY_DIR}/gfxr_layer
+        FILES
+            ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
         DESTINATION ${CMAKE_INSTALL_PREFIX}
     )
     install(

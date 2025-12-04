@@ -460,13 +460,13 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
     }
 
     m_cur_device = m_devices[device_index].m_serial;
-    auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_device);
-    if (!dev_ret.ok())
+    if (absl::StatusOr<Dive::AndroidDevice *> ret = Dive::GetDeviceManager().SelectDevice(
+        m_cur_device);
+        !ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to select device ",
-                                           m_cur_device.c_str(),
-                                           ", error: ",
-                                           dev_ret.status().message());
+        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s",
+                                              m_cur_device.c_str(),
+                                              ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(err_msg);
         OnDeviceListRefresh();
@@ -540,7 +540,7 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
     Settings::Get()->WriteLastFilePath(last_file_path);
 
     // Open the dialog for users to initiate analysis
-    open();
+    show();
 }
 
 //--------------------------------------------------------------------------------------------------

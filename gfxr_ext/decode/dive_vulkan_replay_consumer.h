@@ -99,6 +99,12 @@ public:
                                StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
                                format::HandleId                            fence) override;
 
+    void Process_vkQueuePresentKHR(
+    const ApiCallInfo&                              call_info,
+    VkResult                                        returnValue,
+    format::HandleId                                queue,
+    StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo) override;
+
     void Process_vkBeginCommandBuffer(
     const ApiCallInfo&                                      call_info,
     VkResult                                                returnValue,
@@ -224,7 +230,18 @@ private:
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";
     VkDevice    device_ = VK_NULL_HANDLE;
-    bool        enable_gpu_time_ = false;
+    // Cache all vk function pointers
+    PFN_vkResetQueryPool      pfn_vkResetQueryPool_ = nullptr;
+    PFN_vkQueueWaitIdle       pfn_vkQueueWaitIdle_ = nullptr;
+    PFN_vkDestroyQueryPool    pfn_vkDestroyQueryPool_ = nullptr;
+    PFN_vkDeviceWaitIdle      pfn_vkDeviceWaitIdle_ = nullptr;
+    PFN_vkGetQueryPoolResults pfn_vkGetQueryPoolResults_ = nullptr;
+    PFN_vkCmdWriteTimestamp   pfn_vkCmdWriteTimestamp_ = nullptr;
+    PFN_vkGetFenceStatus      pfn_vkGetFenceStatus_ = nullptr;
+    PFN_vkQueueSubmit         pfn_vkQueueSubmit_ = nullptr;
+    PFN_vkResetFences         pfn_vkResetFences_ = nullptr;
+    PFN_vkGetFenceFdKHR       pfn_vkGetFenceFdKHR_ = nullptr;
+    bool                      enable_gpu_time_ = false;
     // This is a flag that indicates if the Setup Phase is finised or not for gfx Replay
     // The Setup Phase is done when StateEndMarker is triggered
     bool setup_finished_ = false;

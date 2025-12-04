@@ -299,7 +299,6 @@ void TraceDialog::ShowMessage(const QString &message)
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message);
     message_box->open();
-    return;
 }
 
 absl::Status TraceDialog::StopPackageAndCleanup()

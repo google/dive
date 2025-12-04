@@ -88,6 +88,8 @@ target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
 target_link_libraries(
     ${PROJECT_NAME}
+    absl::flags
+    absl::flags_parse
     absl::failure_signal_handler
     absl::span
     absl::symbolize

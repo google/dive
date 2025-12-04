@@ -297,7 +297,7 @@ if(NOT ANDROID)
     add_test(
         NAME Regression_StackOverflow_MacOS
         COMMAND
-            ${DIVE_EXECUTABLE_PATH} --exit-after-load
+            ${DIVE_EXECUTABLE_PATH} --test_exit_after_load
             ${CMAKE_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr
     )
 endif()

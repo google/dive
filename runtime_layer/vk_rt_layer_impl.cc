@@ -69,16 +69,9 @@ VkResult DiveRuntimeLayer::QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
         return result;
     }
 
-    PFN_vkDeviceWaitIdle DeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkDeviceWaitIdle"));
-
-    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkResetQueryPool"));
-
-    PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkGetQueryPoolResults"));
-
-    auto status = m_gpu_time.OnQueuePresent(DeviceWaitIdle, ResetQueryPool, GetQueryPoolResults);
+    auto status = m_gpu_time.OnQueuePresent(m_pfn_vkDeviceWaitIdle,
+                                            m_pfn_vkResetQueryPool,
+                                            m_pfn_vkGetQueryPoolResults);
 
     if (!status.success)
     {
@@ -285,12 +278,10 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer        pf
     sDrawcallCounter = 0;
     sTotalIndexCounter = 0;
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
-
-    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnBeginCommandBuffer(commandBuffer,
-                                                                          pBeginInfo->flags,
-                                                                          CmdWriteTimestamp);
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time
+                                          .OnBeginCommandBuffer(commandBuffer,
+                                                                pBeginInfo->flags,
+                                                                m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -302,11 +293,8 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer        pf
 VkResult DiveRuntimeLayer::EndCommandBuffer(PFN_vkEndCommandBuffer pfn,
                                             VkCommandBuffer        commandBuffer)
 {
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
-
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnEndCommandBuffer(commandBuffer,
-                                                                        CmdWriteTimestamp);
+                                                                        m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -332,17 +320,31 @@ VkResult DiveRuntimeLayer::CreateDevice(PFN_vkGetDeviceProcAddr      pa,
 
     m_gpu_time.SetEnable(sEnableGPUTiming);
 
+    // Initialize all vk func pointers
     PFN_vkCreateQueryPool CreateQueryPool = reinterpret_cast<PFN_vkCreateQueryPool>(
     m_device_proc_addr(*pDevice, "vkCreateQueryPool"));
 
-    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
+    m_pfn_vkResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
     m_device_proc_addr(*pDevice, "vkResetQueryPool"));
+    m_pfn_vkQueueWaitIdle = reinterpret_cast<PFN_vkQueueWaitIdle>(
+    m_device_proc_addr(*pDevice, "vkQueueWaitIdle"));
+    m_pfn_vkDestroyQueryPool = reinterpret_cast<PFN_vkDestroyQueryPool>(
+    m_device_proc_addr(*pDevice, "vkDestroyQueryPool"));
+
+    m_pfn_vkDeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
+    m_device_proc_addr(*pDevice, "vkDeviceWaitIdle"));
+
+    m_pfn_vkGetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
+    m_device_proc_addr(*pDevice, "vkGetQueryPoolResults"));
+
+    m_pfn_vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
+    m_device_proc_addr(*pDevice, "vkCmdWriteTimestamp"));
 
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCreateDevice(*pDevice,
                                                                     pAllocator,
                                                                     timestampPeriod,
                                                                     CreateQueryPool,
-                                                                    ResetQueryPool);
+                                                                    m_pfn_vkResetQueryPool);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -361,18 +363,21 @@ void DiveRuntimeLayer::DestroyDevice(PFN_vkDestroyDevice          pfn,
         return;
     }
 
-    PFN_vkQueueWaitIdle QueueWaitIdle = reinterpret_cast<PFN_vkQueueWaitIdle>(
-    m_device_proc_addr(device, "vkQueueWaitIdle"));
-    PFN_vkDestroyQueryPool DestroyQueryPool = reinterpret_cast<PFN_vkDestroyQueryPool>(
-    m_device_proc_addr(device, "vkDestroyQueryPool"));
-
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnDestroyDevice(device,
-                                                                     QueueWaitIdle,
-                                                                     DestroyQueryPool);
+                                                                     m_pfn_vkQueueWaitIdle,
+                                                                     m_pfn_vkDestroyQueryPool);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
     }
+
+    m_pfn_vkResetQueryPool = nullptr;
+    m_pfn_vkQueueWaitIdle = nullptr;
+    m_pfn_vkDestroyQueryPool = nullptr;
+    m_pfn_vkDeviceWaitIdle = nullptr;
+    m_pfn_vkGetQueryPoolResults = nullptr;
+    m_pfn_vkCmdWriteTimestamp = nullptr;
+
     pfn(device, pAllocator);
 }
 
@@ -401,20 +406,11 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit   pfn,
         return result;
     }
 
-    PFN_vkDeviceWaitIdle DeviceWaitIdle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkDeviceWaitIdle"));
-
-    PFN_vkResetQueryPool ResetQueryPool = reinterpret_cast<PFN_vkResetQueryPool>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkResetQueryPool"));
-
-    PFN_vkGetQueryPoolResults GetQueryPoolResults = reinterpret_cast<PFN_vkGetQueryPoolResults>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkGetQueryPoolResults"));
-
     auto submit_status = m_gpu_time.OnQueueSubmit(submitCount,
                                                   pSubmits,
-                                                  DeviceWaitIdle,
-                                                  ResetQueryPool,
-                                                  GetQueryPoolResults);
+                                                  m_pfn_vkDeviceWaitIdle,
+                                                  m_pfn_vkResetQueryPool,
+                                                  m_pfn_vkGetQueryPoolResults);
     if (!submit_status.gpu_time_status.success)
     {
         if (submit_status.contains_frame_boundary)
@@ -480,11 +476,8 @@ void DiveRuntimeLayer::CmdBeginRenderPass(PFN_vkCmdBeginRenderPass     pfn,
                                           const VkRenderPassBeginInfo* pRenderPassBegin,
                                           VkSubpassContents            contents)
 {
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
-
-    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass(commandBuffer,
-                                                                          CmdWriteTimestamp);
+    Dive::GPUTime::GpuTimeStatus
+    status = m_gpu_time.OnCmdBeginRenderPass(commandBuffer, m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -497,11 +490,8 @@ void DiveRuntimeLayer::CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuf
 {
     pfn(commandBuffer);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
-
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass(commandBuffer,
-                                                                        CmdWriteTimestamp);
+                                                                        m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -513,11 +503,8 @@ void DiveRuntimeLayer::CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2    pfn,
                                            const VkRenderPassBeginInfo* pRenderPassBegin,
                                            const VkSubpassBeginInfo*    pSubpassBeginInfo)
 {
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
-
-    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdBeginRenderPass2(commandBuffer,
-                                                                           CmdWriteTimestamp);
+    Dive::GPUTime::GpuTimeStatus
+    status = m_gpu_time.OnCmdBeginRenderPass2(commandBuffer, m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -531,11 +518,8 @@ void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn,
 {
     pfn(commandBuffer, pSubpassEndInfo);
 
-    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
-    m_device_proc_addr(m_gpu_time.GetDevice(), "vkCmdWriteTimestamp"));
-
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCmdEndRenderPass2(commandBuffer,
-                                                                         CmdWriteTimestamp);
+                                                                         m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());

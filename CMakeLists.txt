@@ -38,10 +38,6 @@ option(
     ON
 )
 
-# `dive_core/common.h` is used in more places other than dive_core now
-# TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
-add_definitions(-DDIVE_GUI_TOOL)
-
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)

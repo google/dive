@@ -111,7 +111,6 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
 
 # Required for some PAL files
 add_definitions(-DLITTLEENDIAN_CPU)
-add_definitions(-DDIVE_GUI_TOOL)
 
 # Set working directory for visual studio, so it can properly load resources
 set_target_properties(

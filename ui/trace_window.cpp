@@ -293,12 +293,12 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
-void TraceDialog::ShowMessage(const QString &msg)
+void TraceDialog::ShowMessage(const QString &message)
 {
-    QMessageBox msgBox;
-    msgBox.setText(msg);
-    msgBox.exec();
-    return;
+    auto message_box = new QMessageBox(this);
+    message_box->setAttribute(Qt::WA_DeleteOnClose, true);
+    message_box->setText(message);
+    message_box->open();
 }
 
 absl::Status TraceDialog::StopPackageAndCleanup()

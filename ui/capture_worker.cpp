@@ -108,9 +108,8 @@ void CaptureWorker::run()
         emit ErrorMessage(QString::fromStdString(err_msg));
         return;
     }
-    std::string           download_path = ".";
     std::filesystem::path p(*capture_file_path);
-    std::filesystem::path target_download_path(download_path);
+    std::filesystem::path target_download_path(m_target_capture_dir);
     target_download_path /= p.filename();
     qDebug() << "Begin to download the capture file to "
              << target_download_path.generic_string().c_str();

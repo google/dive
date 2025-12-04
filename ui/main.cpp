@@ -34,6 +34,10 @@
 #include "custom_metatypes.h"
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
+#include "absl/flags/flag.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
+#include "absl/flags/usage_config.h"
 #include "dive/os/terminal.h"
 #ifdef __linux__
 #    include <dlfcn.h>
@@ -47,6 +51,16 @@
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
+
+ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
+ABSL_FLAG(bool, native_style, false, "Use system provided style");
+
+// QApplication flags:
+ABSL_RETIRED_FLAG(std::string, style, "", "Set the application GUI style");
+ABSL_RETIRED_FLAG(std::string, stylesheet, "", "Set the application stylesheet");
+ABSL_RETIRED_FLAG(bool, widgetcount, false, "Qt flag widgetcount");
+ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
+ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
 //--------------------------------------------------------------------------------------------------
 class CrashHandler
@@ -209,8 +223,21 @@ void SetDarkMode(QApplication &app)
 }
 
 //--------------------------------------------------------------------------------------------------
+auto SetupFlags(int argc, char **argv)
+{
+    absl::FlagsUsageConfig flags_usage_config;
+    flags_usage_config.version_string = Dive::GetCompleteVersionString;
+    absl::SetFlagsUsageConfig(flags_usage_config);
+    absl::SetProgramUsageMessage("Dive GPU Profiler GUI");
+    return absl::ParseCommandLine(argc, argv);
+}
+
+//--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    Dive::AttachToTerminalOutputIfAvailable();
+    std::vector<char *> positional_args = SetupFlags(argc, argv);
+
     absl::InitializeSymbolizer(argv[0]);
 
     CrashHandler::Initialize(argv[0]);
@@ -219,41 +246,23 @@ int main(int argc, char *argv[])
     options.writerfn = CrashHandler::Writer;
     absl::InstallFailureSignalHandler(options);
 
-    // Check number of arguments
-    bool exit_after_load = false;
-    if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)
+    const bool native_style = absl::GetFlag(FLAGS_native_style);
+    if (!native_style)
     {
-        exit_after_load = true;
-        argc--;
-        argv++;
-    }
-    if (argc != 1 && argc != 2)
-        return 0;
+        // Optional command arg loading method for fast iteration
+        // Note: Set the style *before* QApplication constructor. This allows commandline
+        // "-style <style>" style override to still work properly.
 
-    Dive::AttachToTerminalOutputIfAvailable();
-
-    // Print version info if asked to on the command line.
-    // This will only work on linux as we are a UI app on Windows.
-    // On Windows, users can right-click the .exe and look at Properties/Details.
-    if (argc > 1 && strcasecmp(argv[1], "--version") == 0)
-    {
-        std::cout << Dive::GetDiveDescription() << std::endl;
-        return 0;
-    }
-
-    // Optional command arg loading method for fast iteration
-    // Note: Set the style *before* QApplication constructor. This allows commandline
-    // "-style <style>" style override to still work properly.
-
-    // Try setting "Fusion" style. If not found, set "Windows".
-    // And if that's not found, default to whatever style the factory provides.
-    if (!SetApplicationStyle("Fusion"))
-    {
-        if (!SetApplicationStyle("Windows"))
+        // Try setting "Fusion" style. If not found, set "Windows".
+        // And if that's not found, default to whatever style the factory provides.
+        if (!SetApplicationStyle("Fusion"))
         {
-            if (!QStyleFactory::keys().empty())
+            if (!SetApplicationStyle("Windows"))
             {
-                SetApplicationStyle(QStyleFactory::keys()[0]);
+                if (!QStyleFactory::keys().empty())
+                {
+                    SetApplicationStyle(QStyleFactory::keys()[0]);
+                }
             }
         }
     }
@@ -263,13 +272,17 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
-    SetDarkMode(app);
 
-    // Load and apply the style sheet
-    QFile style_sheet(":/stylesheet.qss");
-    style_sheet.open(QFile::ReadOnly);
-    QString style(style_sheet.readAll());
-    app.setStyleSheet(style);
+    if (!native_style)
+    {
+        SetDarkMode(app);
+
+        // Load and apply the style sheet
+        QFile style_sheet(":/stylesheet.qss");
+        style_sheet.open(QFile::ReadOnly);
+        QString style(style_sheet.readAll());
+        app.setStyleSheet(style);
+    }
 
     // Display splash screen
     QSplashScreen *splash_screen = new QSplashScreen();
@@ -281,7 +294,7 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
-    if (exit_after_load)
+    if (absl::GetFlag(FLAGS_test_exit_after_load))
     {
         QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
     }
@@ -292,10 +305,10 @@ int main(int argc, char *argv[])
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
     }
 
-    if (argc == 2)
+    if (positional_args.size() == 2)
     {
         // This is executed async.
-        main_window->LoadFile(argv[1], false, true);
+        main_window->LoadFile(positional_args.back(), false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));

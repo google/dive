@@ -106,10 +106,14 @@ Dive::AndroidDevice *device)
         qlonglong                          total_size = 0;
         std::map<std::string, std::string> current_timestamps;
         bool                               found_zero_size = false;
-        // Get the size of the file and timestamp for the last time the file was updated.
-        std::string                 combined_cmd = absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ",
-                                                m_source_capture_dir,
-                                                "/*'");
+        std::string                        combined_cmd;
+// Get the size of the file and timestamp for the last time the file was updated.
+#ifdef WIN32
+        combined_cmd = absl::StrCat("shell stat -c \"%n|%s|%Y\" ", m_source_capture_dir, "/*");
+#else
+        combined_cmd = absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ", m_source_capture_dir, "/*'");
+#endif
+
         absl::StatusOr<std::string> stat_output = device->Adb().RunAndGetResult(combined_cmd);
         if (!stat_output.ok())
         {

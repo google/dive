@@ -107,9 +107,15 @@ Dive::AndroidDevice *device)
         std::map<std::string, std::string> current_timestamps;
         bool                               found_zero_size = false;
         // Get the size of the file and timestamp for the last time the file was updated.
-        std::string                 combined_cmd = absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ",
+#if defined(_WIN32)
+        std::string combined_cmd = absl::StrCat("shell stat -c \\\"%n|%s|%Y\\\" ",
+                                                m_source_capture_dir,
+                                                "/*");
+#else
+        std::string combined_cmd = absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ",
                                                 m_source_capture_dir,
                                                 "/*'");
+#endif
         absl::StatusOr<std::string> stat_output = device->Adb().RunAndGetResult(combined_cmd);
         if (!stat_output.ok())
         {
@@ -153,6 +159,11 @@ Dive::AndroidDevice *device)
             }
 
             std::string file_timestamp = parts[2];
+
+            if (!file_timestamp.empty() && file_timestamp.back() == '\r')
+            {
+                file_timestamp.pop_back();
+            }
 
             // If a file size is 0, then the file has not finished being written to yet.
             if (file_size == 0)

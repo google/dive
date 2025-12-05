@@ -204,6 +204,8 @@ public:
     DeviceManager &operator=(const DeviceManager &) = delete;
     DeviceManager(const DeviceManager &) = delete;
 
+    std::string                     GetPythonPath() const;
+    absl::Status                    ValidatePythonPath(const std::string &python_path) const;
     std::vector<DeviceInfo>         ListDevice() const;
     absl::StatusOr<AndroidDevice *> SelectDevice(const std::string &serial);
     void                            RemoveDevice() { m_device = nullptr; }

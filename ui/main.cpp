@@ -14,6 +14,15 @@
  limitations under the License.
 */
 
+#include <cstdio>
+#include <fcntl.h>
+
+#include <iostream>
+#include <filesystem>
+#include <map>
+#include <string>
+#include <vector>
+
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -23,22 +32,28 @@
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
-#include <cstdio>
-#include <fcntl.h>
-#include <iostream>
-#include "dive_core/common.h"
-#include "dive_core/pm4_info.h"
-#include "application_controller.h"
-#include "main_window.h"
-#include "utils/version_info.h"
-#include "custom_metatypes.h"
+
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
+
+// Crashpad Headers
+#include "client/crash_report_database.h"
+#include "client/crashpad_client.h"
+#include "client/settings.h"
+
+#include "application_controller.h"
+#include "capture_service/command_utils.h"
+#include "custom_metatypes.h"
 #include "dive/os/terminal.h"
+#include "dive_core/common.h"
+#include "dive_core/pm4_info.h"
+#include "main_window.h"
+#include "utils/version_info.h"
+
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -61,6 +76,48 @@ ABSL_RETIRED_FLAG(std::string, stylesheet, "", "Set the application stylesheet")
 ABSL_RETIRED_FLAG(bool, widgetcount, false, "Qt flag widgetcount");
 ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
+
+absl::Status InitializeCrashpad()
+{
+    absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
+    if (!exe_dir.ok())
+    {
+        return exe_dir.status();
+    }
+
+#ifdef _WIN32
+    std::wstring handler_path = (*exe_dir / L"crashpad_handler.exe").wstring();
+    std::wstring database_path = L"crash_db";
+    std::wstring metrics_path = L"crash_metrics";
+
+#else
+    std::string handler_path = (*exe_dir / "handler").string();
+    std::string database_path = "./crash_db";
+    std::string metrics_path = "./crash_metrics";
+#endif
+
+    std::string url = "";
+
+    std::map<std::string, std::string> annotations;
+    annotations["format"] = "minidump";
+    annotations["product"] = "Dive";
+    annotations["version"] = "1.2.1";
+
+    std::vector<std::string> arguments;
+    arguments.push_back("--no-rate-limit");
+
+    crashpad::CrashpadClient client;
+    bool                     success = client.StartHandler(base::FilePath(handler_path),
+                                       base::FilePath(database_path),
+                                       base::FilePath(metrics_path),
+                                       url,
+                                       annotations,
+                                       arguments,
+                                       true,
+                                       false);
+
+    return success ? absl::OkStatus() : absl::InternalError("Failed to start Crashpad handler.");
+}
 
 //--------------------------------------------------------------------------------------------------
 class CrashHandler
@@ -235,6 +292,15 @@ auto SetupFlags(int argc, char **argv)
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    if (auto ret = InitializeCrashpad(); ret.ok())
+    {
+        std::cout << "Crashpad initialized successfully!" << std::endl;
+    }
+    else
+    {
+        std::cout << ret.message() << std::endl;
+    }
+
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char *> positional_args = SetupFlags(argc, argv);
 
@@ -314,5 +380,9 @@ int main(int argc, char *argv[])
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
     QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
 
-    return app.exec();
+    int  ret = app.exec();
+    int *x = nullptr;
+    *x = 1;
+
+    return ret;
 }

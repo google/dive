@@ -101,7 +101,15 @@ target_link_libraries(
     component_files
     version_info
     dive_build_defs
+    # Crashpad client
+    client
 )
+
+# Linux Specific: Crashpad requires pthread and dl
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PROJECT_NAME} Threads::Threads ${CMAKE_DL_LIBS})
+endif()
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
@@ -237,3 +245,16 @@ add_dependencies(${PROJECT_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+add_custom_command(
+    TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:handler>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying Crashpad handler to output directory"
+)
+
+if(NOT APPLE AND NOT ANDROID)
+    install(PROGRAMS $<TARGET_FILE:handler> DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()

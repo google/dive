@@ -79,7 +79,8 @@ if(ANDROID)
     message(CHECK_START "Make version file for Dive device libraries")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     file(
-        WRITE ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        WRITE
+        ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
         "sha,"
         ${DIVE_VERSION_SHA1}
         "\nversion,"
@@ -135,6 +136,16 @@ if(NOT ANDROID)
     message(CHECK_START "Generate build files for third_party/gfxreconstruct")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     add_subdirectory(third_party/gfxreconstruct)
+    list(POP_BACK CMAKE_MESSAGE_INDENT)
+    message(CHECK_PASS "done")
+
+    message(CHECK_START "Generate build files for third_party/crashpad")
+    list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    # Disable Crashpad tests/examples to speed up build
+    set(CRASHPAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(CRASHPAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    # Add the directory
+    add_subdirectory(third_party/crashpad)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 else()

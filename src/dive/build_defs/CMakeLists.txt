@@ -24,7 +24,7 @@ configure_file(
 )
 file(
     GENERATE OUTPUT
-        "${CMAKE_BINARY_DIR}/generated/$<CONFIG>/include/dive/build_defs/dive_cmake_generated.h"
+    "${CMAKE_BINARY_DIR}/generated/$<CONFIG>/include/dive/build_defs/dive_cmake_generated.h"
     INPUT "${CMAKE_CURRENT_BINARY_DIR}/dive_cmake_generated_tmp.h.in"
 )
 

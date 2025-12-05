@@ -15,8 +15,11 @@ limitations under the License.
 */
 
 #include "messages.h"
-#include "common/macros.h"
+
 #include "absl/strings/str_cat.h"
+
+#include "dive/common/macros.h"
+#include "dive/common/status_helper.h"
 
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 
@@ -40,7 +43,7 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
 {
     if (src.size() < offset + sizeof(uint32_t))
     {
-        return absl::InvalidArgumentError("Buffer too small to read a uint32_t.");
+        return Dive::InvalidArgumentError("Buffer too small to read an uint32_t.");
     }
     uint32_t net_val;
     std::memcpy(&net_val, src.data() + offset, sizeof(uint32_t));
@@ -54,7 +57,7 @@ absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offs
     ASSIGN_OR_RETURN(len, ReadUint32FromBuffer(src, offset));
     if (src.size() < offset + len)
     {
-        return absl::InvalidArgumentError("Buffer too small for declared string length.");
+        return Dive::InvalidArgumentError("Buffer too small for declared string length.");
     }
     std::string result(reinterpret_cast<const char*>(src.data() + offset), len);
     offset += len;
@@ -76,7 +79,7 @@ absl::Status HandshakeMessage::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_minor_version, ReadUint32FromBuffer(src, offset));
     if (offset != src.size())
     {
-        return absl::InvalidArgumentError("Handshake message has unexpected trailing data.");
+        return Dive::InvalidArgumentError("Handshake message has unexpected trailing data.");
     }
     return absl::OkStatus();
 }
@@ -94,7 +97,7 @@ absl::Status StringMessage::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
-        return absl::InvalidArgumentError("String message has unexpected trailing data.");
+        return Dive::InvalidArgumentError("String message has unexpected trailing data.");
     }
     return absl::OkStatus();
 }
@@ -115,7 +118,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     // Deserialize the 'found' boolean.
     if (src.size() < offset + sizeof(uint8_t))
     {
-        return absl::InvalidArgumentError("Buffer too small for 'found' field.");
+        return Dive::InvalidArgumentError("Buffer too small for 'found' field.");
     }
     m_found = (src[offset] != 0);
     offset += sizeof(uint8_t);
@@ -125,7 +128,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
-        return absl::InvalidArgumentError("Message has unexpected trailing data.");
+        return Dive::InvalidArgumentError("Message has unexpected trailing data.");
     }
     return absl::OkStatus();
 }
@@ -145,7 +148,7 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     // Deserialize the 'found' boolean.
     if (src.size() < offset + sizeof(uint8_t))
     {
-        return absl::InvalidArgumentError("Buffer too small for 'found' field.");
+        return Dive::InvalidArgumentError("Buffer too small for 'found' field.");
     }
     m_found = (src[offset] != 0);
     offset += sizeof(uint8_t);
@@ -154,7 +157,7 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
     {
-        return absl::InvalidArgumentError("Message has unexpected trailing data.");
+        return Dive::InvalidArgumentError("Message has unexpected trailing data.");
     }
     return absl::OkStatus();
 }
@@ -163,7 +166,7 @@ absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size,
 {
     if (!conn)
     {
-        return absl::InvalidArgumentError("Provided SocketConnection is null.");
+        return Dive::InvalidArgumentError("Provided SocketConnection is null.");
     }
     size_t total_received = 0;
     while (total_received < size)
@@ -184,7 +187,7 @@ absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t si
 {
     if (!conn)
     {
-        return absl::InvalidArgumentError("Provided SocketConnection is null.");
+        return Dive::InvalidArgumentError("Provided SocketConnection is null.");
     }
     return conn->Send(buffer, size);
 }
@@ -194,7 +197,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
 {
     if (!conn)
     {
-        return absl::InvalidArgumentError("Provided SocketConnection is null.");
+        return Dive::InvalidArgumentError("Provided SocketConnection is null.");
     }
 
     const size_t header_size = sizeof(uint32_t) * 2;
@@ -217,7 +220,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     if (payload_length > kMaxPayloadSize)
     {
         conn->Close();
-        return absl::InvalidArgumentError(
+        return Dive::InvalidArgumentError(
         absl::StrCat("Payload size ", payload_length, " exceeds limit."));
     }
 
@@ -265,7 +268,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
         break;
     default:
         conn->Close();
-        return absl::InvalidArgumentError(absl::StrCat("Unknown message type: ", type));
+        return Dive::InvalidArgumentError(absl::StrCat("Unknown message type: ", type));
     }
 
     status = message->Deserialize(payload_buffer);
@@ -282,7 +285,7 @@ absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& mess
 {
     if (!conn)
     {
-        return absl::InvalidArgumentError("Provided SocketConnection is null.");
+        return Dive::InvalidArgumentError("Provided SocketConnection is null.");
     }
 
     // Serialize the message payload.
@@ -294,7 +297,7 @@ absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& mess
     }
     if (payload_buffer.size() > kMaxPayloadSize)
     {
-        return absl::InvalidArgumentError("Serialized payload size exceeds limit.");
+        return Dive::InvalidArgumentError("Serialized payload size exceeds limit.");
     }
 
     // Construct and send the header.

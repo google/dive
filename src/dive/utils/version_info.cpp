@@ -24,6 +24,7 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "dive/build_defs/version_defs.h"
+#include "dive/os/command_utils.h"
 
 namespace
 {
@@ -194,12 +195,39 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
                            GetSHAString(device_info_map[VersionInfoConstants::kNameSha], kLongSha));
 }
 
+std::filesystem::path ResolvePath(std::string_view file_name)
+{
+    std::vector<std::filesystem::path> search_paths{ DIVE_INSTALL_DIR_PATH };
+    if (auto exe_dir = Dive::GetExecutableDirectory(); exe_dir.ok())
+    {
+        search_paths.push_back(*exe_dir);
+        search_paths.push_back(*exe_dir / "install");
+    }
+    else
+    {
+        std::cerr << exe_dir.status().message() << std::endl;
+    }
+
+    for (const auto& p : search_paths)
+    {
+        const auto potential_path = p / file_name;
+        if (std::filesystem::exists(potential_path))
+        {
+            auto canonical_path = std::filesystem::canonical(potential_path);
+            std::cout << "Found " << file_name << " at " << canonical_path << "\n";
+            return canonical_path;
+        }
+    }
+    std::cerr << "Could not find '" << file_name << "' in any of the search paths.\n";
+    return {};
+}
+
 std::string GetLongVersionString()
 {
     std::string summary = GetHostToolsVersionInfo();
 
-    std::filesystem::path device_libraries_version_path = DIVE_INSTALL_DIR_PATH;
-    device_libraries_version_path /= DIVE_DEVICE_LIBRARIES_VERSION_FILENAME;
+    std::filesystem::path device_libraries_version_path = ResolvePath(
+    DIVE_DEVICE_LIBRARIES_VERSION_FILENAME);
     if (absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,
                                                          kMaxCharactersDeviceLibraryFile);
         ret.ok())
@@ -211,8 +239,7 @@ std::string GetLongVersionString()
         std::cerr << ret.status().message() << std::endl;
     }
 
-    std::filesystem::path profiling_plugin_version_path = DIVE_INSTALL_DIR_PATH;
-    profiling_plugin_version_path /= kProfilingPluginShaPath;
+    std::filesystem::path profiling_plugin_version_path = ResolvePath(kProfilingPluginShaPath);
     if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path, kLongSha);
         ret.ok())
     {
@@ -231,8 +258,8 @@ std::string GetCompleteVersionString()
 
 absl::StatusOr<std::string> GetDeviceLibraryInfo(std::string_view key)
 {
-    std::filesystem::path device_libraries_version_path = DIVE_INSTALL_DIR_PATH;
-    device_libraries_version_path /= DIVE_DEVICE_LIBRARIES_VERSION_FILENAME;
+    std::filesystem::path device_libraries_version_path = ResolvePath(
+    DIVE_DEVICE_LIBRARIES_VERSION_FILENAME);
     std::string csv_content;
     {
         absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,

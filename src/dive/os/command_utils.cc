@@ -19,16 +19,18 @@ limitations under the License.
 #include <cstdio>
 #include <cstring>
 #include <vector>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
-#include "common/log.h"
+#include "dive/common/log.h"
 
 #if defined(__APPLE__)
 #    include <mach-o/dyld.h>
 #elif defined(__linux__)
 #    include <unistd.h>
+
 #    include <climits>
 #endif
 

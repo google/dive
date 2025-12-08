@@ -20,7 +20,6 @@ limitations under the License.
 #include <future>
 #include <memory>
 
-#include "../dive_core/common/common.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -28,8 +27,10 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+
+#include "../dive_core/common/common.h"
 #include "android_application.h"
-#include "command_utils.h"
+#include "dive/os/command_utils.h"
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"

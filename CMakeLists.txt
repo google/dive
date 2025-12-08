@@ -294,10 +294,11 @@ if(NOT ANDROID)
     # This has been fixed in https://github.com/google/dive/pull/541
     if(APPLE)
         set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive
+            ${CMAKE_BINARY_DIR}/ui/dive_ui_scripted
+            --install_prefix=${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS
         )
     else()
-        set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
+        set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive_ui_scripted)
     endif()
     set(DIVE_TEST_TRACE_DIR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces)
     set(DIVE_TEST_TRACE
@@ -310,6 +311,7 @@ if(NOT ANDROID)
             ${DIVE_EXECUTABLE_PATH} --test_scenario=exit-after-load
             ${DIVE_TEST_TRACE}
     )
+    set_tests_properties(Regression_StackOverflow_MacOS PROPERTIES TIMEOUT 60)
     add_test(
         NAME DiveUI_Screenshot
         COMMAND
@@ -317,6 +319,7 @@ if(NOT ANDROID)
             --test_scenario=screenshot --test_output=${DIVE_TEST_OUTPUT_PATH}
             --test_prefix=screenshot-
     )
+    set_tests_properties(DiveUI_Screenshot PROPERTIES TIMEOUT 60)
     add_test(
         NAME DiveUI_Screenshot_NativeStyle
         COMMAND
@@ -324,4 +327,5 @@ if(NOT ANDROID)
             --test_scenario=screenshot --test_output=${DIVE_TEST_OUTPUT_PATH}
             --test_prefix=screenshot-native_style-
     )
+    set_tests_properties(DiveUI_Screenshot_NativeStyle PROPERTIES TIMEOUT 60)
 endif()

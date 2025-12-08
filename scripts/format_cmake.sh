@@ -16,6 +16,8 @@
 
 echo "Format in-place using gersemi tool"
 
+readonly GERSEMI_BINARY="${GERSEMI_BINARY:-gersemi}"
+
 SRC_DIRS=(
     "capture_service"
     "cli"
@@ -34,4 +36,4 @@ SRC_DIRS=(
     "src"
 )
 
-gersemi -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"
+"${GERSEMI_BINARY}" -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"

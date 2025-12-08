@@ -16,32 +16,25 @@
 
 #pragma once
 
-#include <QObject>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
 
-#include "impl_pointer.h"
-
-class MainWindow;
-
-class ApplicationController : public QObject
+namespace Dive
 {
-    Q_OBJECT
+
+class ResourceResolver
+{
 public:
-    struct Impl;
+    static ResourceResolver& Get();
 
-    ApplicationController();
-    ~ApplicationController();
+    void AddInstallPrefix(const std::filesystem::path& install_prefix);
 
-    void Register(MainWindow&);
-
-    void MainWindowInitialized();
-    void MainWindowClosed();
-
-    bool InitializePlugins(const std::string& install_prefix);
-
-    bool AdvancedOptionEnabled() const;
-signals:
-    void AdvancedOptionToggled(bool enabled);
+    std::optional<std::filesystem::path> ResolveAssetPath(const std::string& name);
 
 private:
-    ImplPointer<Impl> m_impl;
+    std::vector<std::filesystem::path> m_install_prefix;
 };
+
+}  // namespace Dive

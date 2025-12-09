@@ -68,14 +68,16 @@ void ApplicationController::MainWindowClosed()
     m_impl->m_plugin_manager.UnloadPlugins();
 }
 
-bool ApplicationController::InitializePlugins()
+bool ApplicationController::InitializePlugins(const std::string& install_prefix)
 {
     if (!m_impl->m_main_window)
     {
         return false;
     }
     // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
-    std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
+    std::string plugin_path = (!install_prefix.empty() ?
+                               install_prefix + "/plugins" :
+                               QCoreApplication::applicationDirPath().toStdString() + "/plugins");
 
     std::filesystem::path plugins_dir_path(plugin_path);
 

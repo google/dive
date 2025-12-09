@@ -14,34 +14,10 @@
  limitations under the License.
 */
 
-#pragma once
+#include "ui/main.h"
 
-#include <QObject>
-
-#include "impl_pointer.h"
-
-class MainWindow;
-
-class ApplicationController : public QObject
+int main(int argc, char** argv)
 {
-    Q_OBJECT
-public:
-    struct Impl;
-
-    ApplicationController();
-    ~ApplicationController();
-
-    void Register(MainWindow&);
-
-    void MainWindowInitialized();
-    void MainWindowClosed();
-
-    bool InitializePlugins(const std::string& install_prefix);
-
-    bool AdvancedOptionEnabled() const;
-signals:
-    void AdvancedOptionToggled(bool enabled);
-
-private:
-    ImplPointer<Impl> m_impl;
-};
+    DiveUIMain dive_ui(argc, argv);
+    return dive_ui.Run();
+}

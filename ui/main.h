@@ -16,31 +16,32 @@
 
 #pragma once
 
-#include <QObject>
+#include <string>
 
-#include "impl_pointer.h"
+#include "ui/impl_pointer.h"
 
-class MainWindow;
-
-class ApplicationController : public QObject
+class DiveUIMain
 {
-    Q_OBJECT
 public:
+    struct TestOptions
+    {
+        std::string output;  // Output directory path
+        std::string prefix;  // Filename prefix for test
+        std::string scenario;
+    };
     struct Impl;
 
-    ApplicationController();
-    ~ApplicationController();
+    DiveUIMain(const DiveUIMain&) = delete;
+    DiveUIMain(DiveUIMain&&) = delete;
+    DiveUIMain& operator=(const DiveUIMain&) = delete;
+    DiveUIMain& operator=(DiveUIMain&&) = delete;
 
-    void Register(MainWindow&);
+    DiveUIMain(int argc, char** argv);
+    ~DiveUIMain();
 
-    void MainWindowInitialized();
-    void MainWindowClosed();
+    void SetOptions(const TestOptions& options);
 
-    bool InitializePlugins(const std::string& install_prefix);
-
-    bool AdvancedOptionEnabled() const;
-signals:
-    void AdvancedOptionToggled(bool enabled);
+    int Run();
 
 private:
     ImplPointer<Impl> m_impl;

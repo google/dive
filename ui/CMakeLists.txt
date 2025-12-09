@@ -38,11 +38,19 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 20)
 
+set(DIVE_UI_TARGET_NAME ${PROJECT_NAME})
+set(DIVE_SCRIPTED_UI_TARGET_NAME ${PROJECT_NAME}_scripted)
+
 # Find the QtWidgets library
 find_package(Qt5Widgets CONFIG REQUIRED)
 
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+file(
+    GLOB SRC_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sqtt/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/event_timing/*.cpp"
+)
 if(MSVC)
     # Add resource files for Windows build (for version information)
     file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
@@ -65,29 +73,19 @@ include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
 # Tell CMake to create the Dive executable
-add_executable(
-    ${PROJECT_NAME}
+add_library(
+    dive_ui_impl
     ${HDR_FILES}
     ${SRC_FILES}
     ${COMMON_HDR_FILES}
     ${COMMON_SRC_FILES}
-    resources.qrc
 )
 
-# For release builds, build Dive UI as WIN32 GUI application instead of a console application.
-if(MSVC)
-    set_target_properties(
-        ${PROJECT_NAME}
-        PROPERTIES
-            WIN32_EXECUTABLE $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
-    )
-endif()
-
 # Use the Widgets module from Qt 5
-target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
+target_link_libraries(dive_ui_impl Qt5::Widgets)
 
 target_link_libraries(
-    ${PROJECT_NAME}
+    dive_ui_impl
     absl::flags
     absl::flags_parse
     absl::failure_signal_handler
@@ -105,20 +103,11 @@ target_link_libraries(
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-    target_link_libraries(${PROJECT_NAME} stdc++fs)
+    target_link_libraries(dive_ui_impl stdc++fs)
 endif()
-
-# Custom executable name
-set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
 
 # Required for some PAL files
 add_definitions(-DLITTLEENDIAN_CPU)
-
-# Set working directory for visual studio, so it can properly load resources
-set_target_properties(
-    ${PROJECT_NAME}
-    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-)
 
 if(MSVC)
     # 4099: missing PDB file for lib
@@ -127,12 +116,12 @@ if(MSVC)
     # 4127: "conditional expression is constant" warnings
     # 4324: structure was padded due to alignment specifier
     target_compile_options(
-        ${PROJECT_NAME}
+        dive_ui_impl
         PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324
     )
 else()
     target_compile_options(
-        ${PROJECT_NAME}
+        dive_ui_impl
         PRIVATE
             -Wall
             -Wextra
@@ -143,10 +132,40 @@ else()
     )
 endif()
 
+macro(add_dive_ui_executable TARGET_NAME ENTRY_POINT)
+    add_executable(${TARGET_NAME} ${ENTRY_POINT} resources.qrc)
+    target_link_libraries(${TARGET_NAME} dive_ui_impl)
+
+    # For release builds, build Dive UI as WIN32 GUI application instead of a console application.
+    if(MSVC)
+        set_target_properties(
+            ${TARGET_NAME}
+            PROPERTIES
+                WIN32_EXECUTABLE
+                    $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
+        )
+    endif()
+
+    # Set working directory for visual studio, so it can properly load resources
+    set_target_properties(
+        ${TARGET_NAME}
+        PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endmacro()
+
+add_dive_ui_executable(${DIVE_UI_TARGET_NAME} "entry_point/main.cpp")
+add_dive_ui_executable(
+    ${DIVE_SCRIPTED_UI_TARGET_NAME}
+    "entry_point/main_scripted.cpp"
+)
+
+# Custom executable name
+set_property(TARGET ${DIVE_UI_TARGET_NAME} PROPERTY OUTPUT_NAME "dive")
+
 if(MSVC)
     set_property(
         DIRECTORY ${CMAKE_SOURCE_DIR}
-        PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME}
+        PROPERTY VS_STARTUP_PROJECT ${DIVE_UI_TARGET_NAME}
     )
 endif()
 
@@ -173,7 +192,7 @@ GenerateThirdPartyLicenseFile(
 add_custom_target(notice_file ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/NOTICE")
 if(MSVC)
     add_custom_command(
-        TARGET ${PROJECT_NAME}
+        TARGET ${DIVE_UI_TARGET_NAME}
         POST_BUILD
         COMMAND
             "${CMAKE_COMMAND}" -E copy_if_different
@@ -184,7 +203,7 @@ endif()
 
 if(APPLE)
     set_target_properties(
-        ${PROJECT_NAME}
+        ${DIVE_UI_TARGET_NAME}
         PROPERTIES
             MACOSX_BUNDLE TRUE
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
@@ -192,7 +211,7 @@ if(APPLE)
 endif()
 
 if(APPLE)
-    install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    install(TARGETS ${DIVE_UI_TARGET_NAME} BUNDLE DESTINATION .)
     install(
         CODE
             "
@@ -226,14 +245,14 @@ if(APPLE)
     "
     )
 else()
-    install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS ${DIVE_UI_TARGET_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
 
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
     DESTINATION "${CMAKE_INSTALL_PREFIX}"
 )
-add_dependencies(${PROJECT_NAME} notice_file)
+add_dependencies(${DIVE_UI_TARGET_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

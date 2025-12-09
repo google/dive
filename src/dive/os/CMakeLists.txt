@@ -18,4 +18,8 @@ file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 add_library(dive_lib_os ${HDR_FILES} ${SRC_FILES})
-target_link_libraries(dive_lib_os PUBLIC dive_src_includes)
+target_link_libraries(
+    dive_lib_os
+    PUBLIC dive_src_includes
+    PRIVATE absl::no_destructor
+)

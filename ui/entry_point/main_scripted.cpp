@@ -14,34 +14,20 @@
  limitations under the License.
 */
 
-#pragma once
+#include "absl/flags/flag.h"
+#include "ui/main.h"
 
-#include <QObject>
+ABSL_FLAG(std::string, test_output, "", "Output directory for tests.");
+ABSL_FLAG(std::string, test_prefix, "", "Filename prefix for tests.");
+ABSL_FLAG(std::string, test_scenario, "", "Execute test scenario.");
 
-#include "impl_pointer.h"
-
-class MainWindow;
-
-class ApplicationController : public QObject
+int main(int argc, char** argv)
 {
-    Q_OBJECT
-public:
-    struct Impl;
-
-    ApplicationController();
-    ~ApplicationController();
-
-    void Register(MainWindow&);
-
-    void MainWindowInitialized();
-    void MainWindowClosed();
-
-    bool InitializePlugins(const std::string& install_prefix);
-
-    bool AdvancedOptionEnabled() const;
-signals:
-    void AdvancedOptionToggled(bool enabled);
-
-private:
-    ImplPointer<Impl> m_impl;
-};
+    DiveUIMain dive_ui(argc, argv);
+    dive_ui.SetOptions({
+    .output = absl::GetFlag(FLAGS_test_output),
+    .prefix = absl::GetFlag(FLAGS_test_prefix),
+    .scenario = absl::GetFlag(FLAGS_test_scenario),
+    });
+    return dive_ui.Run();
+}

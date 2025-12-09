@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <cstdio>
 #include <fcntl.h>
+#include <filesystem>
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
@@ -38,7 +39,9 @@
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
+#include "dive/os/resources.h"
 #include "dive/os/terminal.h"
+#include "ui/main.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -51,9 +54,10 @@
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
-
-ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
+constexpr int kScreenshotDelay = 5000;       // 5s
 ABSL_FLAG(bool, native_style, false, "Use system provided style");
+ABSL_FLAG(bool, maximize, false, "Launch application maximized");
+ABSL_FLAG(std::string, install_prefix, "", "Dive installation prefix.");
 
 // QApplication flags:
 ABSL_RETIRED_FLAG(std::string, style, "", "Set the application GUI style");
@@ -229,18 +233,111 @@ auto SetupFlags(int argc, char **argv)
     flags_usage_config.version_string = Dive::GetCompleteVersionString;
     absl::SetFlagsUsageConfig(flags_usage_config);
     absl::SetProgramUsageMessage("Dive GPU Profiler GUI");
-    return absl::ParseCommandLine(argc, argv);
+    auto result = absl::ParseCommandLine(argc, argv);
+    if (auto install_prefix = absl::GetFlag(FLAGS_install_prefix); !install_prefix.empty())
+    {
+        Dive::ResourceResolver::Get().AddInstallPrefix(std::filesystem::path(install_prefix));
+    }
+    return result;
 }
 
 //--------------------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+std::optional<std::filesystem::path> GetTestSavePath(const DiveUIMain::TestOptions &options,
+                                                     std::string_view               filename)
 {
+    if (options.output.empty())
+    {
+        return std::nullopt;
+    }
+    std::filesystem::path output_dir(options.output);
+    std::filesystem::create_directories(output_dir);
+    if (!std::filesystem::is_directory(output_dir))
+    {
+        return std::nullopt;
+    }
+    std::string full_filename = options.prefix;
+    full_filename += filename;
+    return output_dir / full_filename;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool ExecuteScenario(const DiveUIMain::TestOptions &options, MainWindow *main_window)
+{
+    if (options.scenario == "exit-after-load")
+    {
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+        return true;
+    }
+
+    if (options.scenario == "screenshot")
+    {
+        auto savepath = GetTestSavePath(options, "MainWindow.png");
+        if (!savepath)
+        {
+            qDebug() << "Invalid screenshot path";
+            return false;
+        }
+        auto func = [main_window, savepath]() {
+            QPixmap pixmap(main_window->size());
+            main_window->render(&pixmap);
+            pixmap.save(QString::fromStdString(savepath->string()));
+            main_window->close();
+        };
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, [func, main_window]() {
+            QTimer::singleShot(kScreenshotDelay, main_window, func);
+        });
+        return true;
+    }
+
+    qDebug() << "Test scenario " << QString::fromStdString(std::string(options.scenario))
+             << "not found";
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
+struct DiveUIMain::Impl
+{
+    int    argc = 0;
+    char **argv = nullptr;
+
+    std::vector<std::string> args;
+    std::string              program_name = "dive";
+
+    TestOptions test_options;
+};
+
+//--------------------------------------------------------------------------------------------------
+DiveUIMain::DiveUIMain(int argc, char **argv)
+{
+    m_impl->argc = argc;
+    m_impl->argv = argv;
     Dive::AttachToTerminalOutputIfAvailable();
-    std::vector<char *> positional_args = SetupFlags(argc, argv);
+    for (char *arg : SetupFlags(argc, argv))
+    {
+        m_impl->args.push_back(arg);
+    }
+    if (!m_impl->args.empty())
+    {
+        m_impl->program_name = m_impl->args.front();
+    }
+}
 
-    absl::InitializeSymbolizer(argv[0]);
+DiveUIMain::~DiveUIMain()
+{
+    // For m_impl.~ImplPointer();
+}
 
-    CrashHandler::Initialize(argv[0]);
+void DiveUIMain::SetOptions(const TestOptions &options)
+{
+    m_impl->test_options = options;
+}
+
+//--------------------------------------------------------------------------------------------------
+int DiveUIMain::Run()
+{
+    absl::InitializeSymbolizer(m_impl->program_name.c_str());
+
+    CrashHandler::Initialize(m_impl->program_name.c_str());
 
     absl::FailureSignalHandlerOptions options;
     options.writerfn = CrashHandler::Writer;
@@ -270,9 +367,12 @@ int main(int argc, char *argv[])
     Dive::RegisterCustomMetaType();
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication app(argc, argv);
+
+    QApplication app(m_impl->argc, m_impl->argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
 
+    Dive::ResourceResolver::Get().AddInstallPrefix(
+    std::filesystem::path(QCoreApplication::applicationDirPath().toStdString()));
     if (!native_style)
     {
         SetDarkMode(app);
@@ -294,25 +394,37 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
-    if (absl::GetFlag(FLAGS_test_exit_after_load))
+
+    if (!m_impl->test_options.scenario.empty())
     {
-        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+        if (!ExecuteScenario(m_impl->test_options, main_window))
+        {
+            return EXIT_FAILURE;
+        }
     }
 
-    if (!controller.InitializePlugins())
+    if (!controller.InitializePlugins(absl::GetFlag(FLAGS_install_prefix)))
     {
         qDebug()
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
     }
 
-    if (positional_args.size() == 2)
+    if (m_impl->args.size() == 2)
     {
         // This is executed async.
-        main_window->LoadFile(positional_args.back(), false, true);
+        main_window->LoadFile(m_impl->args.back(), false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
-    QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
+
+    if (absl::GetFlag(FLAGS_maximize))
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::showMaximized);
+    }
+    else
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::show);
+    }
 
     return app.exec();
 }

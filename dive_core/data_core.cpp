@@ -381,14 +381,6 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                                type7_header->opcode,
                                                m_state_tracker);
 
-        if (event_info.m_type == Util::EventType::kDraw)
-        {
-            event_info.m_num_indices = Util::GetIndexCount(mem_manager,
-                                                           submit_index,
-                                                           va_addr,
-                                                           *type7_header);
-        }
-
         EventStateInfo::Iterator it = m_capture_metadata.m_event_state.Add();
 
         event_info.m_render_mode = m_current_render_mode;
@@ -399,6 +391,21 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                                 m_state_tracker);
 
         m_capture_metadata.m_event_info.push_back(event_info);
+
+        if (event_info.m_type == Util::EventType::kDraw)
+        {
+            event_info.m_num_indices = Util::GetIndexCount(mem_manager,
+                                                           submit_index,
+                                                           va_addr,
+                                                           *type7_header);
+
+            std::optional<VkPrimitiveTopology> topology = Util::GetTopology(mem_manager,
+                                                                            submit_index,
+                                                                            va_addr,
+                                                                            *type7_header);
+            if (topology.has_value())
+                it->SetTopology(topology.value());
+        }
 
         // Parse and add the shader(s) info to the metadata
         if (event_info.m_type == Util::EventType::kDraw ||

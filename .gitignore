@@ -22,9 +22,6 @@ third_party/freedreno/obj
 g_*.h
 g_*.cpp
 
-.ipynb_checkpoints/
-local_notebooks/*.ipynb
-
 .env
 
 install/

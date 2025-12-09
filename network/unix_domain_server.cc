@@ -19,7 +19,7 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 
 #include "dive/common/log.h"
-#include "dive/common/status_helper.h"
+#include "dive/common/status.h"
 
 namespace Network
 {
@@ -134,7 +134,7 @@ absl::Status UnixDomainServer::Start(const std::string& server_address)
     m_listen_connection = *std::move(connection);
     m_is_running.store(true);
     m_server_thread = std::thread(&UnixDomainServer::AcceptAndHandleClientLoop, this);
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 void UnixDomainServer::Wait()

@@ -19,7 +19,7 @@ limitations under the License.
 
 #include "absl/strings/str_cat.h"
 
-#include "dive/common/status_helper.h"
+#include "dive/common/status.h"
 
 namespace
 {
@@ -101,7 +101,7 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
         }
     }
     std::cout << "Client: Succesfully connected." << std::endl;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 void TcpClient::Disconnect()
@@ -255,7 +255,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string&          remot
 
     std::cout << "Client: File from server '" << download_request.GetString()
               << "' downloaded successfully to '" << local_save_path << "'." << std::endl;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_file_path)
@@ -374,7 +374,7 @@ absl::Status TcpClient::PingServer()
         return Dive::InternalError("PingServer: Failed to cast received message to PongMessage.");
     }
     std::cout << "Client: Ping successful." << std::endl;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status TcpClient::PerformHandshake()
@@ -446,7 +446,7 @@ absl::Status TcpClient::PerformHandshake()
                      hs_request.GetMinorVersion()));
     }
     std::cout << "Client: Handshake versions compatible." << std::endl;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status TcpClient::StartKeepAlive()
@@ -465,7 +465,7 @@ absl::Status TcpClient::StartKeepAlive()
 
     std::cout << "Client: Keep-alive thread started. Interval: " << m_keep_alive.interval_sec
               << " s, Ping Timeout: " << kPingTimeoutMs << " ms." << std::endl;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 void TcpClient::KeepAliveLoop()

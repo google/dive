@@ -22,7 +22,7 @@ limitations under the License.
 
 #include "absl/strings/str_cat.h"
 
-#include "dive/common/status_helper.h"
+#include "dive/common/status.h"
 
 namespace Network
 {
@@ -124,7 +124,7 @@ absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& serv
         return status;
     }
     m_is_listening = true;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 #endif
 }
 
@@ -215,7 +215,7 @@ absl::Status SocketConnection::Connect(const std::string& host, int port)
         return last_attempt_status;
     }
     m_is_listening = false;
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
@@ -227,7 +227,7 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
     }
     if (size == 0)
     {
-        return absl::OkStatus();
+        return Dive::OkStatus();
     }
 
     size_t total_sent = 0;
@@ -287,7 +287,7 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
         total_sent += static_cast<size_t>(sent);
     }
 
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int timeout_ms)
@@ -485,7 +485,7 @@ absl::Status SocketConnection::SendFile(const std::string& file_path)
         total_sent += static_cast<std::streamsize>(current_read);
     }
     file_stream.close();
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status SocketConnection::ReceiveFile(const std::string&          file_path,
@@ -528,7 +528,7 @@ absl::Status SocketConnection::ReceiveFile(const std::string&          file_path
         }
     }
     file_stream.close();
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 void SocketConnection::Close()

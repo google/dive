@@ -39,7 +39,7 @@ limitations under the License.
 #include "constants.h"
 #include "device_mgr.h"
 #include "dive/common/app_types.h"
-#include "dive/common/status_helper.h"
+#include "dive/common/status.h"
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
 
@@ -948,15 +948,6 @@ ABSL_FLAG(bool,
           false,
           "Tell GFXR replay app to wait for a debugger before continuing to replay");
 
-void ShowLogicalStackTrace(const absl::Status& status)
-{
-    auto stack_trace = status.GetPayload(Dive::kStackTraceKey);
-    if (stack_trace.has_value())
-    {
-        std::cout << "Logical stack trace:\n" << stack_trace.value() << std::endl;
-    }
-}
-
 int main(int argc, char** argv)
 {
     absl::FlagsUsageConfig flags_usage_config;
@@ -1005,7 +996,7 @@ int main(int argc, char** argv)
     if (absl::Status status = selected_def->validator(opts); !status.ok())
     {
         std::cout << status.message() << std::endl;
-        ShowLogicalStackTrace(status);
+        std::cout << Dive::GetStackTrace(status) << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -1023,7 +1014,7 @@ int main(int argc, char** argv)
         if (!validated_serial.ok())
         {
             std::cout << validated_serial.status().message() << std::endl;
-            ShowLogicalStackTrace(validated_serial.status());
+            std::cout << Dive::GetStackTrace(validated_serial.status()) << std::endl;
             return EXIT_FAILURE;
         }
         opts.serial = *validated_serial;
@@ -1031,7 +1022,7 @@ int main(int argc, char** argv)
         if (absl::Status status = InitializeDevice(mgr, opts.serial); !status.ok())
         {
             std::cout << status.message() << std::endl;
-            ShowLogicalStackTrace(status);
+            std::cout << Dive::GetStackTrace(status) << std::endl;
             return EXIT_FAILURE;
         }
     }
@@ -1042,7 +1033,7 @@ int main(int argc, char** argv)
     {
         std::cout << "Error executing command '" << selected_def->name << "': " << ret.message()
                   << std::endl;
-        ShowLogicalStackTrace(ret);
+        std::cout << Dive::GetStackTrace(ret) << std::endl;
         return EXIT_FAILURE;
     }
 

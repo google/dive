@@ -19,7 +19,7 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 
 #include "dive/common/macros.h"
-#include "dive/common/status_helper.h"
+#include "dive/common/status.h"
 
 constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 
@@ -69,7 +69,7 @@ absl::Status HandshakeMessage::Serialize(Buffer& dest) const
     dest.clear();
     WriteUint32ToBuffer(m_major_version, dest);
     WriteUint32ToBuffer(m_minor_version, dest);
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status HandshakeMessage::Deserialize(const Buffer& src)
@@ -81,14 +81,14 @@ absl::Status HandshakeMessage::Deserialize(const Buffer& src)
     {
         return Dive::InvalidArgumentError("Handshake message has unexpected trailing data.");
     }
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status StringMessage::Serialize(Buffer& dest) const
 {
     dest.clear();
     WriteStringToBuffer(m_str, dest);
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status StringMessage::Deserialize(const Buffer& src)
@@ -99,7 +99,7 @@ absl::Status StringMessage::Deserialize(const Buffer& src)
     {
         return Dive::InvalidArgumentError("String message has unexpected trailing data.");
     }
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
@@ -109,7 +109,7 @@ absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
     WriteStringToBuffer(m_file_path, dest);
     WriteStringToBuffer(m_file_size_str, dest);
 
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
@@ -130,7 +130,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     {
         return Dive::InvalidArgumentError("Message has unexpected trailing data.");
     }
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status FileSizeResponse::Serialize(Buffer& dest) const
@@ -139,7 +139,7 @@ absl::Status FileSizeResponse::Serialize(Buffer& dest) const
     WriteStringToBuffer(m_error_reason, dest);
     WriteStringToBuffer(m_file_size_str, dest);
 
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status FileSizeResponse::Deserialize(const Buffer& src)
@@ -159,7 +159,7 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     {
         return Dive::InvalidArgumentError("Message has unexpected trailing data.");
     }
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size, int timeout_ms)
@@ -180,7 +180,7 @@ absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size,
         }
         total_received += *received;
     }
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t size)
@@ -321,7 +321,7 @@ absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& mess
         return status;
     }
 
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 }  // namespace Network

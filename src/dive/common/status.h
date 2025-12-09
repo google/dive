@@ -22,39 +22,28 @@ limitations under the License.
 #include "absl/debugging/stacktrace.h"
 #include "absl/debugging/symbolize.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 
 namespace Dive
 {
 
 constexpr const char* kStackTraceKey = "dive.logical_stack_trace";
-constexpr int         kMaxDepth = 64;
-constexpr int         kMaxSymbolLength = 1024;
 
-inline std::string StackTraceString(int skip_count = 0)
-{
-    void* frames[kMaxDepth];
-    // skip_count + 1 to ignore this function's own frame
-    int depth = absl::GetStackTrace(frames, kMaxDepth, skip_count + 1);
+std::string StackTraceString(int skip_count = 0);
 
-    std::string stack;
-    char        buf[kMaxSymbolLength];
-    for (int i = 0; i < depth; ++i)
-    {
-        const char* symbol = "(unknown)";
-        if (absl::Symbolize(frames[i], buf, sizeof(buf)))
-        {
-            symbol = buf;
-        }
-        absl::StrAppendFormat(&stack, "@%p %s\n", frames[i], symbol);
-    }
-    return stack;
-}
+std::string GetStackTrace(const absl::Status& status);
 
 inline void AddStackTrace(absl::Status& status, int skip_count = 0)
 {
     status.SetPayload(kStackTraceKey, absl::Cord(StackTraceString(skip_count + 1)));
+}
+
+inline absl::Status OkStatus()
+{
+    return absl::OkStatus();
 }
 
 inline absl::Status InvalidArgumentError(std::string_view message)
@@ -141,11 +130,17 @@ inline absl::Status PermissionDeniedError(std::string_view message)
     return status;
 }
 
+// Creates a new Status by prepending the provided context string to the original
+// status message. The function preserves the original error code and copies
+// all existing payloads (e.g., the stack trace) to the new Status object.
 inline absl::Status StatusWithContext(const absl::Status& status, std::string_view context)
 {
     absl::Status new_status = absl::Status(status.code(),
                                            absl::StrCat(context, ": ", status.message()));
-    new_status.SetPayload(kStackTraceKey, status.GetPayload(kStackTraceKey).value_or(absl::Cord()));
+    if (auto stack_trace = status.GetPayload(kStackTraceKey); stack_trace.has_value())
+    {
+        new_status.SetPayload(kStackTraceKey, stack_trace.value());
+    }
     return new_status;
 }
 

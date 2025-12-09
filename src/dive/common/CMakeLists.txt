@@ -14,7 +14,5 @@
 # limitations under the License.
 #
 
-add_subdirectory(build_defs)
-add_subdirectory(os)
-add_subdirectory(utils)
-add_subdirectory(common)
+add_library(status status.h status.cpp)
+target_link_libraries(status PUBLIC dive_src_includes absl::stacktrace)

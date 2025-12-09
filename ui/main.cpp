@@ -273,19 +273,22 @@ bool ExecuteScenario(std::string_view scenario, MainWindow *main_window)
             qDebug() << "Invalid screenshot path";
             return false;
         }
-        auto func = [main_window, savepath]() {
+        auto take_screenshot = [main_window, savepath]() {
             QPixmap pixmap(main_window->size());
             main_window->render(&pixmap);
             pixmap.save(QString::fromStdString(savepath->string()));
             main_window->close();
         };
-        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, [func, main_window]() {
-            QTimer::singleShot(kScreenshotDelay, main_window, func);
-        });
+        QObject::connect(main_window,
+                         &MainWindow::FileLoaded,
+                         main_window,
+                         [take_screenshot, main_window]() {
+                             QTimer::singleShot(kScreenshotDelay, main_window, take_screenshot);
+                         });
         return true;
     }
 
-    qDebug() << "Test scenario " << QString::fromStdString(std::string(scenario)) << "not found";
+    qDebug() << "Test scenario " << QString::fromStdString(std::string(scenario)) << " not found";
     return false;
 }
 

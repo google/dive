@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <QObject>
-#include <QDebug>
 #include <QAction>
+#include <QDebug>
 #include <QMessageBox>
+#include <QObject>
 #include <string>
 
-#include "idive_plugin.h"
+#include "dive/plugin/abi/idive_plugin.h"
 
 class MainWindow;
 

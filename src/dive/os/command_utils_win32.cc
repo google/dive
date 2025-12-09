@@ -19,8 +19,8 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
-#include "command_utils.h"
 #include "dive/common/log.h"
+#include "dive/os/command_utils.h"
 
 #ifndef WIN32
 #    error "Build this for Win32 platform only"

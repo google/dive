@@ -197,7 +197,7 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
 
 std::filesystem::path ResolvePath(std::string_view file_name)
 {
-    std::vector<std::filesystem::path> search_paths{ DIVE_INSTALL_DIR_PATH };
+    std::vector<std::filesystem::path> search_paths;
     if (auto exe_dir = Dive::GetExecutableDirectory(); exe_dir.ok())
     {
         search_paths.push_back(*exe_dir);
@@ -207,6 +207,7 @@ std::filesystem::path ResolvePath(std::string_view file_name)
     {
         std::cerr << exe_dir.status().message() << std::endl;
     }
+    search_paths.push_back(DIVE_INSTALL_DIR_PATH);
 
     for (const auto& p : search_paths)
     {

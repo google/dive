@@ -34,6 +34,10 @@ if(MSVC)
     set_target_properties(gfxrecon_decode PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
+if(NOT MSVC)
+    target_compile_options(gfxrecon_decode PRIVATE -Wno-switch)
+endif()
+
 target_sources(gfxrecon_decode
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/annotation_handler.h

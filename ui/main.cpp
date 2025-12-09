@@ -25,6 +25,7 @@
 #include <QTimer>
 #include <cstdio>
 #include <fcntl.h>
+#include <filesystem>
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
@@ -51,9 +52,14 @@
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
+constexpr int kScreenshotDelay = 5000;       // 5s
 
-ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
+ABSL_FLAG(std::string, test_output, "", "Output directory for tests.");
+ABSL_FLAG(std::string, test_prefix, "", "Filename prefix for tests.");
+ABSL_FLAG(std::string, test_scenario, "", "Execute test scenario.");
+
 ABSL_FLAG(bool, native_style, false, "Use system provided style");
+ABSL_FLAG(bool, maximize, false, "Launch application maximized");
 
 // QApplication flags:
 ABSL_RETIRED_FLAG(std::string, style, "", "Set the application GUI style");
@@ -233,6 +239,60 @@ auto SetupFlags(int argc, char **argv)
 }
 
 //--------------------------------------------------------------------------------------------------
+std::optional<std::filesystem::path> GetTestSavePath(std::string_view filename)
+{
+    if (absl::GetFlag(FLAGS_test_output).empty())
+    {
+        return std::nullopt;
+    }
+    std::filesystem::path output_dir(absl::GetFlag(FLAGS_test_output));
+    std::filesystem::create_directories(output_dir);
+    if (!std::filesystem::is_directory(output_dir))
+    {
+        return std::nullopt;
+    }
+    std::string full_filename = absl::GetFlag(FLAGS_test_prefix);
+    full_filename += filename;
+    return output_dir / full_filename;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool ExecuteScenario(std::string_view scenario, MainWindow *main_window)
+{
+    if (scenario == "exit-after-load")
+    {
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+        return true;
+    }
+
+    if (scenario == "screenshot")
+    {
+        auto savepath = GetTestSavePath("MainWindow.png");
+        if (!savepath)
+        {
+            qDebug() << "Invalid screenshot path";
+            return false;
+        }
+        auto take_screenshot = [main_window, savepath]() {
+            QPixmap pixmap(main_window->size());
+            main_window->render(&pixmap);
+            pixmap.save(QString::fromStdString(savepath->string()));
+            main_window->close();
+        };
+        QObject::connect(main_window,
+                         &MainWindow::FileLoaded,
+                         main_window,
+                         [take_screenshot, main_window]() {
+                             QTimer::singleShot(kScreenshotDelay, main_window, take_screenshot);
+                         });
+        return true;
+    }
+
+    qDebug() << "Test scenario " << QString::fromStdString(std::string(scenario)) << " not found";
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
     Dive::AttachToTerminalOutputIfAvailable();
@@ -294,9 +354,13 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
-    if (absl::GetFlag(FLAGS_test_exit_after_load))
+
+    if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {
-        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+        if (!ExecuteScenario(scenario, main_window))
+        {
+            return EXIT_FAILURE;
+        }
     }
 
     if (!controller.InitializePlugins())
@@ -312,7 +376,15 @@ int main(int argc, char *argv[])
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
-    QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
+
+    if (absl::GetFlag(FLAGS_maximize))
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::showMaximized);
+    }
+    else
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::show);
+    }
 
     return app.exec();
 }

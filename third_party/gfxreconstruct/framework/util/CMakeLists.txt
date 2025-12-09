@@ -34,6 +34,10 @@ if(MSVC)
     set_target_properties(gfxrecon_util PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
+if(NOT MSVC)
+    target_compile_options(gfxrecon_util PRIVATE -Wno-switch)
+endif()
+
 target_sources(gfxrecon_util
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/alignment_utils.h

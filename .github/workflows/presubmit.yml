@@ -67,6 +67,11 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
+      - name: Upload test output
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_output_windows
+          path: build/test_output
 
 
   build_Linux_Gcc_Debug:
@@ -277,6 +282,11 @@ jobs:
         run: |
           export DISPLAY=:99
           ctest --output-on-failure -C Release --test-dir build
+      - name: Upload test output
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_output_linux
+          path: build/test_output
 
   build_MacOS_Debug:
     name: "MacOS debug build"
@@ -383,6 +393,11 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
+      - name: Upload test output
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_output_macos
+          path: build/test_output
 
   build_Android_from_Linux_Debug:
     name: "Android Debug build on Linux platform"

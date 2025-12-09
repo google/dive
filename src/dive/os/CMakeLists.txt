@@ -19,3 +19,15 @@ file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 add_library(dive_lib_os ${HDR_FILES} ${SRC_FILES})
 target_link_libraries(dive_lib_os PUBLIC dive_src_includes)
+
+if(WIN32)
+    set(COMMAND_UTILS_SRC "command_utils_win32.cc")
+    add_definitions(-DUNICODE -D_UNICODE)
+else()
+    set(COMMAND_UTILS_SRC "command_utils.cc")
+endif()
+
+# === command_utils ==========================================================
+
+add_library(command_utils command_utils.h ${COMMAND_UTILS_SRC})
+target_link_libraries(command_utils PRIVATE dive_src_includes absl::status)

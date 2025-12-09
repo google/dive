@@ -491,4 +491,51 @@ uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
     return index_count;
 }
 
+//--------------------------------------------------------------------------------------------------
+std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager &mem_manager,
+                                                     uint32_t              submit_index,
+                                                     uint64_t              va_addr,
+                                                     Pm4Type7Header        header)
+{
+    // Get primitive-type. The primitive-type is always the least-significant 6-bits of the
+    // given word
+
+    // For all draw call PM4 packets other than the INDX variety, the relevant DWORD is
+    // the first dword after the header
+    uint64_t prim_dword_addr = va_addr + sizeof(header);
+    if (header.opcode == CP_DRAW_INDX)
+        prim_dword_addr += sizeof(uint32_t);  // 2nd dword
+
+    uint32_t prim_dword;
+    DIVE_VERIFY(
+    mem_manager.RetrieveMemoryData(&prim_dword, submit_index, prim_dword_addr, sizeof(prim_dword)));
+    pc_di_primtype gpu_type = static_cast<pc_di_primtype>(prim_dword & 0x3f);
+    switch (gpu_type)
+    {
+    case DI_PT_LINELIST:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    case DI_PT_LINESTRIP:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+    case DI_PT_TRILIST:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    case DI_PT_TRIFAN:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    case DI_PT_TRISTRIP:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    case DI_PT_POINTLIST:
+        return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    case DI_PT_LINE_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY;
+    case DI_PT_LINESTRIP_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
+    case DI_PT_TRI_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
+    case DI_PT_TRISTRIP_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
+    default:
+        // These hardware options to not map to Vulkan!
+        return std::nullopt;
+    };
+}
+
 }  // namespace Dive

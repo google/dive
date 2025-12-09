@@ -248,6 +248,10 @@ if(ANDROID)
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
     )
     install(
+        CODE
+            "file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\")"
+    )
+    install(
         FILES
             ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
         DESTINATION ${CMAKE_INSTALL_PREFIX}

@@ -35,11 +35,11 @@ limitations under the License.
 #include "absl/strings/str_split.h"
 
 #include "android_application.h"
-#include "command_utils.h"
 #include "constants.h"
 #include "device_mgr.h"
 #include "dive/common/app_types.h"
 #include "dive/common/status.h"
+#include "dive/os/command_utils.h"
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
 

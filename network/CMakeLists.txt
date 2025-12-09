@@ -44,15 +44,7 @@ if(ANDROID)
     list(APPEND NETWORK_LINK_LIBS log)
 endif()
 
-target_link_libraries(
-    network
-    PRIVATE dive_legacy_includes ${NETWORK_LINK_LIBS} status
-)
-
-target_include_directories(
-    network
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR}/src
-)
+target_link_libraries(network PUBLIC dive_status PRIVATE ${NETWORK_LINK_LIBS})
 
 if(NOT ANDROID)
     enable_testing()

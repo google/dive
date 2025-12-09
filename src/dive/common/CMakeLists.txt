@@ -14,5 +14,5 @@
 # limitations under the License.
 #
 
-add_library(status status.h status.cpp)
-target_link_libraries(status PUBLIC dive_src_includes absl::stacktrace)
+add_library(dive_status status.h status.cpp)
+target_link_libraries(dive_status PUBLIC dive_src_includes absl::stacktrace)

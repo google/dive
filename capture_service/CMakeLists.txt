@@ -22,13 +22,6 @@ project(DiveService)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-if(WIN32)
-    set(COMMAND_UTILS_SRC "command_utils_win32.cc")
-    add_definitions(-DUNICODE -D_UNICODE)
-else()
-    set(COMMAND_UTILS_SRC "command_utils.cc")
-endif()
-
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
 # Group both cc files in the same target since the public header trace_mgr.h declares both.
 add_library(trace_mgr android_trace_mgr.cc trace_mgr.cc)
@@ -44,16 +37,15 @@ target_link_libraries(
 )
 
 if(ANDROID)
-    add_library(service service.cc ${COMMAND_UTILS_SRC})
-
+    add_library(service service.cc)
     target_link_libraries(service PRIVATE log)
 else()
-    add_library(service service.cc trace_mgr.cc ${COMMAND_UTILS_SRC})
+    add_library(service service.cc trace_mgr.cc)
 endif()
 target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(
     service
-    PRIVATE network absl::flags absl::flags_parse trace_mgr
+    PRIVATE network absl::flags absl::flags_parse trace_mgr command_utils
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
@@ -64,12 +56,7 @@ target_link_libraries(server PRIVATE service absl::flags absl::flags_parse)
 if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
 else()
-    add_library(
-        device_mgr
-        device_mgr.cc
-        ${COMMAND_UTILS_SRC}
-        android_application.cc
-    )
+    add_library(device_mgr device_mgr.cc android_application.cc)
     target_include_directories(
         device_mgr
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -85,6 +72,7 @@ else()
         absl::statusor
         component_files
         version_info
+        command_utils
     )
 
     add_executable(dive_client_cli dive_client_cli.cc)

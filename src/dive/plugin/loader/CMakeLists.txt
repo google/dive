@@ -21,8 +21,6 @@ if(ANDROID)
 endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
 if(WIN32)
     set(DIVE_LIBRARY_LOADER_SOURCE library_loader_windows.cpp)
 elseif(LINUX)

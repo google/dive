@@ -112,109 +112,117 @@ private:
     std::mutex                            m_handler_mutex;
 };
 
-class TcpClientFakeTest : public ::testing::Test
+struct TestContext
 {
-protected:
-    void SetUp() override
+    std::shared_ptr<FakeSocketConnection> server_socket;
+    FakeServer                            server;
+    std::unique_ptr<TcpClient>            client;
+
+    TestContext()
     {
-        m_client_fake = new FakeSocketConnection();
-        m_server_fake = std::make_shared<FakeSocketConnection>();
-        m_client_fake->PairWith(m_server_fake.get());
+        server_socket = std::make_shared<FakeSocketConnection>();
 
-        // Inject the pre-created fake into the client
-        m_client = std::make_unique<TcpClient>(
-        [this]() { return std::unique_ptr<FakeSocketConnection>(m_client_fake); });
+        client = std::make_unique<TcpClient>([this]() {
+            auto connection = std::make_unique<FakeSocketConnection>();
+            connection->PairWith(server_socket.get());
+            return connection;
+        });
 
-        m_fake_server.Start(m_server_fake);
-        ASSERT_TRUE(m_client->Connect("fake_host", 0).ok());
+        server.Start(server_socket);
+        EXPECT_TRUE(client->Connect("fake_host", 0).ok());
     }
 
-    void TearDown() override
+    ~TestContext()
     {
-        m_client->Disconnect();
-        m_fake_server.Stop();
+        client->Disconnect();
+        server.Stop();
     }
-
-    std::unique_ptr<TcpClient>            m_client;
-    FakeServer                            m_fake_server;
-    FakeSocketConnection*                 m_client_fake;
-    std::shared_ptr<FakeSocketConnection> m_server_fake;
 };
 
-TEST_F(TcpClientFakeTest, GetCaptureFileSizeSuccess)
+TEST(TcpClientFakeTest, GetCaptureFileSizeSuccess)
 {
-    const size_t kExpectedSize = 12345;
-    m_fake_server.SetHandler(
-    [kExpectedSize](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
-        ASSERT_EQ(req->GetMessageType(), MessageType::FILE_SIZE_REQUEST);
+    TestContext      ctx;
+    constexpr size_t kExpectedSize = 12345;
+    MessageType      received_type = MessageType::UNKNOWN;
+
+    ctx.server.SetHandler([&](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        received_type = req->GetMessageType();
+
         FileSizeResponse resp;
         resp.SetFound(true);
         resp.SetFileSizeStr(std::to_string(kExpectedSize));
-        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+        (void)SendSocketMessage(conn, resp);
     });
 
-    auto result = m_client->GetCaptureFileSize("/remote/file");
+    auto result = ctx.client->GetCaptureFileSize("/remote/file");
+
+    ASSERT_EQ(received_type, MessageType::FILE_SIZE_REQUEST);
     ASSERT_TRUE(result.ok());
     EXPECT_EQ(*result, kExpectedSize);
 }
 
-TEST_F(TcpClientFakeTest, GetCaptureFileSizeNotFound)
+TEST(TcpClientFakeTest, GetCaptureFileSizeNotFound)
 {
-    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+    TestContext ctx;
+
+    ctx.server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
         FileSizeResponse resp;
         resp.SetFound(false);
         resp.SetErrorReason("File does not exist");
-        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+        (void)SendSocketMessage(conn, resp);
     });
 
-    auto result = m_client->GetCaptureFileSize("/remote/missing");
+    auto result = ctx.client->GetCaptureFileSize("/remote/missing");
+
     EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.status().code(), absl::StatusCode::kNotFound);
     EXPECT_TRUE(std::string(result.status().message()).find("File does not exist") !=
                 std::string::npos);
 }
 
-TEST_F(TcpClientFakeTest, GetCaptureFileSizeInvalidResponse)
+TEST(TcpClientFakeTest, GetCaptureFileSizeInvalidResponse)
 {
-    // Server sends non-numeric size
-    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+    TestContext ctx;
+
+    ctx.server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
         FileSizeResponse resp;
         resp.SetFound(true);
         resp.SetFileSizeStr("not a number");
-        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+        (void)SendSocketMessage(conn, resp);
     });
 
-    auto result = m_client->GetCaptureFileSize("/remote/file");
+    auto result = ctx.client->GetCaptureFileSize("/remote/file");
     EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.status().code(), absl::StatusCode::kInvalidArgument);
 }
 
-TEST_F(TcpClientFakeTest, DownloadFileFromServerSuccess)
+TEST(TcpClientFakeTest, DownloadFileFromServerSuccess)
 {
+    TestContext ctx;
     std::string file_content = "Mock file content data";
     std::string local_path = (std::filesystem::temp_directory_path() / "test_download.tmp")
                              .string();
 
-    // Configure server to send response AND file data immediately
-    m_fake_server.SetHandler(
-    [file_content](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
-        ASSERT_EQ(req->GetMessageType(), MessageType::DOWNLOAD_FILE_REQUEST);
+    MessageType received_type = MessageType::UNKNOWN;
+
+    ctx.server.SetHandler([&](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        received_type = req->GetMessageType();
 
         DownloadFileResponse resp;
         resp.SetFound(true);
         resp.SetFileSizeStr(std::to_string(file_content.size()));
-        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
-
-        // Immediately send the "file" raw data through the fake connection
-        ASSERT_TRUE(
-        conn->Send(reinterpret_cast<const uint8_t*>(file_content.data()), file_content.size())
-        .ok());
+        if (SendSocketMessage(conn, resp).ok())
+        {
+            (void)conn->Send(reinterpret_cast<const uint8_t*>(file_content.data()),
+                             file_content.size());
+        }
     });
 
-    auto status = m_client->DownloadFileFromServer("/remote/file", local_path);
+    auto status = ctx.client->DownloadFileFromServer("/remote/file", local_path);
+
+    ASSERT_EQ(received_type, MessageType::DOWNLOAD_FILE_REQUEST);
     ASSERT_TRUE(status.ok()) << status.message();
 
-    // Verify file was written to disk by TcpClient's base SocketConnection::ReceiveFile
     std::ifstream ifs(local_path, std::ios::binary);
     ASSERT_TRUE(ifs.good());
     std::string read_content((std::istreambuf_iterator<char>(ifs)),
@@ -225,42 +233,56 @@ TEST_F(TcpClientFakeTest, DownloadFileFromServerSuccess)
     std::filesystem::remove(local_path);
 }
 
-TEST_F(TcpClientFakeTest, DownloadFileNotFound)
+TEST(TcpClientFakeTest, DownloadFileFromServerNotFound)
 {
-    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+    TestContext ctx;
+    ctx.server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
         DownloadFileResponse resp;
         resp.SetFound(false);
         resp.SetErrorReason("Restricted access");
-        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+        (void)SendSocketMessage(conn, resp);
     });
 
-    auto status = m_client->DownloadFileFromServer("/remote/secret", "dont_care.tmp");
+    auto status = ctx.client->DownloadFileFromServer("/remote/secret", "dont_care.tmp");
     EXPECT_FALSE(status.ok());
     EXPECT_EQ(status.code(), absl::StatusCode::kNotFound);
     EXPECT_TRUE(std::string(status.message()).find("Restricted access") != std::string::npos);
 }
 
-TEST_F(TcpClientFakeTest, StartPm4CaptureSuccess)
+TEST(TcpClientFakeTest, StartPm4CaptureSuccess)
 {
-    m_fake_server.SetHandler([](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
-        ASSERT_EQ(req->GetMessageType(), MessageType::PM4_CAPTURE_REQUEST);
+    TestContext ctx;
+    MessageType received_type = MessageType::UNKNOWN;
+
+    ctx.server.SetHandler([&](FakeSocketConnection* conn, std::unique_ptr<ISerializable> req) {
+        received_type = req->GetMessageType();
         Pm4CaptureResponse resp;
         resp.SetString("/var/log/capture.pm4");
-        ASSERT_TRUE(SendSocketMessage(conn, resp).ok());
+        (void)SendSocketMessage(conn, resp);
     });
 
-    auto result = m_client->StartPm4Capture();
+    auto result = ctx.client->StartPm4Capture();
+
+    ASSERT_EQ(received_type, MessageType::PM4_CAPTURE_REQUEST);
     ASSERT_TRUE(result.ok());
     EXPECT_EQ(*result, "/var/log/capture.pm4");
 }
 
-TEST_F(TcpClientFakeTest, DisconnectStopsKeepAlive)
+TEST(TcpClientFakeTest, DisconnectAndReconnect)
 {
-    EXPECT_TRUE(m_client->IsConnected());
-    m_client->Disconnect();
-    EXPECT_FALSE(m_client->IsConnected());
-    // Wait a bit to ensure no crashes from background threads
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    TestContext ctx;
+    EXPECT_TRUE(ctx.client->IsConnected());
+
+    ctx.client->Disconnect();
+    EXPECT_FALSE(ctx.client->IsConnected());
+
+    ctx.server.Stop();
+    ctx.server_socket = std::make_shared<FakeSocketConnection>();
+    ctx.server.Start(ctx.server_socket);
+
+    auto status = ctx.client->Connect("fake_host", 0);
+    EXPECT_TRUE(status.ok()) << status.message();
+    EXPECT_TRUE(ctx.client->IsConnected());
 }
 
 }  // namespace

@@ -36,6 +36,7 @@ absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offs
 
 enum class MessageType : uint32_t
 {
+    UNKNOWN = 0,
     HANDSHAKE_REQUEST = 1,
     HANDSHAKE_RESPONSE = 2,
     PING_MESSAGE = 3,

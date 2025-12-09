@@ -30,59 +30,76 @@ namespace Network
 class FakeSocketConnection : public ISocketConnection
 {
 public:
+    FakeSocketConnection() :
+        m_is_open(true)
+    {
+    }
+
     ~FakeSocketConnection() override
     {
         Close();
-        if (m_peer)
-        {
-            std::lock_guard<std::mutex> lock(m_peer->m_mutex);
-            if (m_peer->m_peer == this)
-            {
-                m_peer->m_peer = nullptr;
-            }
-        }
+        Unpair();
     }
 
     void PairWith(FakeSocketConnection* peer)
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_peer = peer;
-        peer->m_peer = this;
-        m_is_open = true;
-        peer->m_is_open = true;
+        if (peer)
+        {
+            std::lock_guard<std::mutex> peer_lock(peer->m_mutex);
+            peer->m_peer = this;
+        }
     }
 
-    FakeSocketConnection* GetPeer() const { return m_peer; }
+    FakeSocketConnection* GetPeer() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_peer;
+    }
 
     absl::Status BindAndListenOnUnixDomain(const std::string& addr) override
     {
-        return absl::UnimplementedError("This method is not implemented for FakeSocketConnection.");
+        return absl::UnimplementedError("Not implemented for FakeSocketConnection.");
     }
 
     absl::StatusOr<std::unique_ptr<ISocketConnection>> Accept() override
     {
-        return absl::UnimplementedError("This method is not implemented for FakeSocketConnection.");
+        return absl::UnimplementedError("Not implemented for FakeSocketConnection.");
     }
 
     absl::Status Connect(const std::string& host, int port) override
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         if (m_peer && m_is_open)
         {
             return absl::OkStatus();
         }
-        return absl::UnavailableError("Fake connection not paired.");
+        return absl::UnavailableError("Fake connection not paired or closed.");
     }
 
     absl::Status Send(const uint8_t* data, size_t size) override
     {
-        if (!m_is_open || !m_peer)
+        FakeSocketConnection* peer_ptr = nullptr;
         {
-            return absl::AbortedError("Connection closed");
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (!m_is_open || !m_peer)
+            {
+                return absl::AbortedError("Connection closed");
+            }
+            peer_ptr = m_peer;
         }
+
         {
-            std::lock_guard<std::mutex> lock(m_peer->m_mutex);
-            m_peer->m_recv_buffer.insert(m_peer->m_recv_buffer.end(), data, data + size);
+            std::lock_guard<std::mutex> lock(peer_ptr->m_mutex);
+            if (!peer_ptr->m_is_open)
+            {
+                return absl::AbortedError("Connection closed by peer");
+            }
+            peer_ptr->m_recv_buffer.insert(peer_ptr->m_recv_buffer.end(), data, data + size);
         }
-        m_peer->m_cv.notify_one();
+
+        peer_ptr->m_cv.notify_one();
         return absl::OkStatus();
     }
 
@@ -96,43 +113,81 @@ public:
                                                 return !m_recv_buffer.empty() || !m_is_open;
                                             });
 
-        if (!m_is_open && m_recv_buffer.empty())
+        if (!m_recv_buffer.empty())
         {
-            return absl::OutOfRangeError("Connection closed by peer");
-        }
-        if (!data_available && m_recv_buffer.empty())
-        {
-            return absl::DeadlineExceededError("Fake recv timeout");
+            size_t to_read = std::min(size, m_recv_buffer.size());
+            std::copy_n(m_recv_buffer.begin(), to_read, data);
+            m_recv_buffer.erase(m_recv_buffer.begin(), m_recv_buffer.begin() + to_read);
+            return to_read;
         }
 
-        size_t to_read = std::min(size, m_recv_buffer.size());
-        std::copy_n(m_recv_buffer.begin(), to_read, data);
-        m_recv_buffer.erase(m_recv_buffer.begin(), m_recv_buffer.begin() + to_read);
-        return to_read;
+        if (!m_is_open)
+        {
+            return absl::OutOfRangeError("Connection closed");
+        }
+
+        return absl::DeadlineExceededError("Fake recv timeout");
     }
 
     void Close() override
     {
+        FakeSocketConnection* peer_ptr = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            peer_ptr = m_peer;
+        }
+
+        // Lock both safely to avoid deadlock if both close at once.
+        if (peer_ptr)
+        {
+            std::unique_lock<std::mutex> lock1(m_mutex, std::defer_lock);
+            std::unique_lock<std::mutex> lock2(peer_ptr->m_mutex, std::defer_lock);
+            std::lock(lock1, lock2);
+
+            m_is_open = false;
+            if (peer_ptr->m_peer == this)
+            {
+                peer_ptr->m_cv.notify_all();
+            }
+        }
+        else
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_is_open = false;
         }
         m_cv.notify_all();
-        if (m_peer)
+    }
+
+    bool IsOpen() const override
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_is_open;
+    }
+
+private:
+    void Unpair()
+    {
+        FakeSocketConnection* peer_ptr = nullptr;
         {
-            std::lock_guard<std::mutex> peer_lock(m_peer->m_mutex);
-            m_peer->m_is_open = false;
-            m_peer->m_cv.notify_all();
+            std::lock_guard<std::mutex> lock(m_mutex);
+            peer_ptr = m_peer;
+            m_peer = nullptr;
+        }
+
+        if (peer_ptr)
+        {
+            std::lock_guard<std::mutex> lock(peer_ptr->m_mutex);
+            if (peer_ptr->m_peer == this)
+            {
+                peer_ptr->m_peer = nullptr;
+            }
         }
     }
 
-    bool IsOpen() const override { return m_is_open; }
-
-private:
     FakeSocketConnection*   m_peer = nullptr;
-    bool                    m_is_open = false;
+    bool                    m_is_open = true;
     std::deque<uint8_t>     m_recv_buffer;
-    std::mutex              m_mutex;
+    mutable std::mutex      m_mutex;
     std::condition_variable m_cv;
 };
 

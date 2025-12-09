@@ -35,6 +35,7 @@ if(NOT ANDROID)
         version_info
         PUBLIC absl::statusor absl::strings
         PRIVATE dive_build_defs dive_src_includes
+        PRIVATE command_utils
     )
 endif()
 

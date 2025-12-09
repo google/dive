@@ -16,18 +16,19 @@ limitations under the License.
 
 #pragma once
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "android_application.h"
-#include "command_utils.h"
-#include "constants.h"
-
 #include <cassert>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+
+#include "android_application.h"
+#include "dive/os/command_utils.h"
+#include "constants.h"
 
 namespace Dive
 {

@@ -53,6 +53,13 @@ inline absl::Status InvalidArgumentError(std::string_view message)
     return status;
 }
 
+inline absl::Status UnimplementedError(std::string_view message)
+{
+    absl::Status status(absl::StatusCode::kUnimplemented, message);
+    AddStackTrace(status, /*skip_count = */ 1);
+    return status;
+}
+
 inline absl::Status NotFoundError(std::string_view message)
 {
     absl::Status status(absl::StatusCode::kNotFound, message);

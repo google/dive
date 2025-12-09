@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QMutex>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
@@ -54,6 +55,10 @@ constexpr int kStartDelay = 500;             // 0.5s
 
 ABSL_FLAG(bool, test_exit_after_load, false, "Test file loading");
 ABSL_FLAG(bool, native_style, false, "Use system provided style");
+ABSL_FLAG(bool,
+          log_to_console,
+          false,
+          "Print application logs (qDebug, qWarning, etc.) to the console/stderr.");
 
 // QApplication flags:
 ABSL_RETIRED_FLAG(std::string, style, "", "Set the application GUI style");
@@ -62,32 +67,52 @@ ABSL_RETIRED_FLAG(bool, widgetcount, false, "Qt flag widgetcount");
 ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
+struct LogPaths
+{
+    QString primary_path;
+    QString fallback_path;
+};
+
+//--------------------------------------------------------------------------------------------------
+LogPaths ResolveBaseLogPaths(const char *argv0, const QString &filename)
+{
+    LogPaths paths;
+
+    QString argv0_path = QString::fromLocal8Bit(argv0);
+
+    // Try to open in the executable directory
+    // This might fail if the executable folder is not writable
+    QString exe_dir = QFileInfo(argv0_path).absolutePath();
+    paths.primary_path = QDir(exe_dir).filePath(filename);
+
+    // If we couldn't write next to the exe (permission denied), use temp folder.
+    // Windows: %TEMP%
+    // Linux: /tmp
+    QString temp_dir = QDir::tempPath();
+    paths.fallback_path = QDir(temp_dir).filePath(filename);
+
+    return paths;
+}
+
 //--------------------------------------------------------------------------------------------------
 class CrashHandler
 {
 public:
     static void Initialize(const char *argv0)
     {
-        QString filename = "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") +
+        QString filename = "dive-crash" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") +
                            ".log.txt";
 
-        // Try to open in the executable directory
-        // This might fail if the executable folder is not writable
-        QString exe_dir = QFileInfo(argv0).absolutePath();
-        QString exe_full_path = QDir(exe_dir).filePath(filename);
+        LogPaths resolved_paths = ResolveBaseLogPaths(argv0, filename);
 
-        // If we couldn't write next to the exe (permission denied), use temp folder.
-        // Windows: %TEMP%
-        // Linux: /tmp
-        QString temp_dir = QDir::tempPath();
-        QString temp_full_path = QDir(temp_dir).filePath(filename);
-
-        SafeStrCopy(m_primary_path, exe_full_path.toLocal8Bit().constData());
-        SafeStrCopy(m_fallback_path, temp_full_path.toLocal8Bit().constData());
+        SafeStrCopy(m_primary_path, resolved_paths.primary_path.toLocal8Bit().constData());
+        SafeStrCopy(m_fallback_path, resolved_paths.fallback_path.toLocal8Bit().constData());
 
         std::cout << "Crash handler initialized" << std::endl;
-        std::cout << "  1. Primary Log Path:  " << exe_full_path.toStdString() << std::endl;
-        std::cout << "  2. Fallback Log Path: " << temp_full_path.toStdString() << std::endl;
+        std::cout << "  1. Primary Log Path:  " << resolved_paths.primary_path.toStdString()
+                  << std::endl;
+        std::cout << "  2. Fallback Log Path: " << resolved_paths.fallback_path.toStdString()
+                  << std::endl;
     }
 
     static void Writer(const char *data)
@@ -173,6 +198,101 @@ private:
 };
 
 //--------------------------------------------------------------------------------------------------
+class LogHandler
+{
+public:
+    static void Initialize(const char *argv0)
+    {
+        // Use a fixed, non-timestamped filename for the standard application log
+        QString filename = "dive" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") +
+                           ".log.txt";
+        LogPaths paths = ResolveBaseLogPaths(argv0, filename);
+
+        // Test for writability to choose the final path
+        QFile test_file(paths.primary_path);
+
+        if (test_file.open(QIODevice::WriteOnly | QIODevice::Append))
+        {
+            m_resolved_path = paths.primary_path;
+            test_file.close();
+        }
+        else
+        {
+            m_resolved_path = paths.fallback_path;
+        }
+
+        // Install the static message handler function
+        qInstallMessageHandler(LogHandler::MessageOutput);
+
+        qDebug() << "Application log handler initialized. Log file path:" << m_resolved_path;
+    }
+
+private:
+    inline static QString m_resolved_path;
+    inline static QMutex  m_mutex;
+
+    static void MessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+    {
+        QMutexLocker lock(&m_mutex);
+
+        QString log_level_prefix;
+        switch (type)
+        {
+        case QtDebugMsg:
+            log_level_prefix = "DEBUG";
+            break;
+        case QtInfoMsg:
+            log_level_prefix = "INFO";
+            break;
+        case QtWarningMsg:
+            log_level_prefix = "WARNING";
+            break;
+        case QtCriticalMsg:
+            log_level_prefix = "CRITICAL";
+            break;
+        case QtFatalMsg:
+            log_level_prefix = "FATAL";
+            break;
+        default:
+            log_level_prefix = "UNKNOWN";
+            break;
+        }
+
+        // Format the log line: [Time] [Level] Message
+        QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+        QString formatted_message = QString("[%1] [%2] %3 (%4:%5 %6)")
+                                    .arg(currentTime)
+                                    .arg(log_level_prefix)
+                                    .arg(msg)
+                                    .arg(QFileInfo(context.file).fileName())
+                                    .arg(context.line)
+                                    .arg(context.function);
+
+        // Output to console only if the flag is set
+        if (absl::GetFlag(FLAGS_log_to_console))
+        {
+            fprintf(stderr, "%s\n", formatted_message.toLocal8Bit().constData());
+        }
+
+        // Write to file using the resolved path
+        QFile logFile(m_resolved_path);
+
+        if (logFile.open(QIODevice::WriteOnly | QIODevice::Append))
+        {
+            QTextStream ts(&logFile);
+            ts << formatted_message << "\n";
+            logFile.close();
+        }
+
+        // On fatal errors, abort the program.
+        if (type == QtFatalMsg)
+        {
+            abort();
+        }
+    }
+};
+
+//--------------------------------------------------------------------------------------------------
 bool SetApplicationStyle(QString style_key)
 {
     QStringList style_list = QStyleFactory::keys();
@@ -245,6 +365,8 @@ int main(int argc, char *argv[])
     absl::FailureSignalHandlerOptions options;
     options.writerfn = CrashHandler::Writer;
     absl::InstallFailureSignalHandler(options);
+
+    LogHandler::Initialize(argv[0]);
 
     const bool native_style = absl::GetFlag(FLAGS_native_style);
     if (!native_style)

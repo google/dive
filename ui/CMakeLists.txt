@@ -36,6 +36,11 @@ set(CMAKE_AUTOMOC ON)
 # Create code from a list of Qt designer ui files
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
+option(
+    DIVE_ENABLE_SIGNING
+    "Enable ad-hoc signing of the application bundle"
+    OFF
+)
 set(CMAKE_CXX_STANDARD 20)
 
 # Find the QtWidgets library
@@ -221,8 +226,10 @@ if(APPLE)
             message(STATUS \"Copying dive_compositor_capture.sh to app bundle\")
             execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
         endif()
-        message(STATUS \"Ad-hoc signing the application bundle\")
-        execute_process(COMMAND \"codesign\" --force --deep --sign - \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        if(${DIVE_ENABLE_SIGNING})
+            message(STATUS \"Ad-hoc signing the application bundle\")
+            execute_process(COMMAND \"codesign\" --force --deep --sign - \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        endif()
     "
     )
 else()

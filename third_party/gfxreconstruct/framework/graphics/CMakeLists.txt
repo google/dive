@@ -34,6 +34,10 @@ if(MSVC)
     set_target_properties(gfxrecon_graphics PROPERTIES FOLDER "gfxreconstruct")
 endif()
 
+if(NOT MSVC)
+    target_compile_options(gfxrecon_graphics PRIVATE -Wno-switch)
+endif()
+
 target_sources(gfxrecon_graphics
                PRIVATE
                     $<$<BOOL:${D3D12_SUPPORT}>:${CMAKE_CURRENT_LIST_DIR}/dx12_gpu_va_map.h>

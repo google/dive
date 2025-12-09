@@ -88,6 +88,8 @@ add_executable(
     command_tab_view.h
     custom_metatypes.cpp
     custom_metatypes.h
+    dive_application.cpp
+    dive_application.h
     dive_tree_view.cpp
     dive_tree_view.h
     draw_dispatch_stats_model.cpp

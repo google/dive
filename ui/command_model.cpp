@@ -13,13 +13,14 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "command_model.h"
+#include "ui/command_model.h"
 
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
 
 #include "dive_core/command_hierarchy.h"
+#include "ui/color_utils.h"
 
 static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
@@ -80,7 +81,7 @@ QVariant CommandModel::data(const QModelIndex& index, int role) const
                 if (marker_type == Dive::CommandHierarchy::MarkerType::kInsert ||
                     marker_type == Dive::CommandHierarchy::MarkerType::kBeginEnd)
                 {
-                    return QVariant(QBrush(QColor(85, 139, 47)));  // Shade of green
+                    return QVariant(QBrush(GetTextAccentColor()));
                 }
             }
         }

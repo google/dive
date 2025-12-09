@@ -17,6 +17,7 @@
 
 #include <QAbstractItemModel>
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDebug>
@@ -1589,6 +1590,7 @@ void MainWindow::CreateActions()
     for (auto& action : m_recent_file_actions)
     {
         action = new QAction(this);
+        action->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileIcon));
         action->setVisible(false);
         connect(action, SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
     }
@@ -1733,7 +1735,6 @@ void MainWindow::CreateStatusBar()
 {
     // Create status bar on the main window.
     m_status_bar = new QStatusBar(this);
-    m_status_bar->setStyleSheet("background:#D0D0D0; color:#282828");
     setStatusBar(m_status_bar);
 }
 

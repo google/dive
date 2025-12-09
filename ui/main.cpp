@@ -22,6 +22,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QScopedPointer>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
@@ -301,12 +302,12 @@ int main(int argc, char* argv[])
     Dive::RegisterCustomMetaType();
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    DiveApplication app(argc, argv);
-    app.setWindowIcon(QIcon(":/images/dive.ico"));
+    QScopedPointer<DiveApplication> app{new DiveApplication(argc, argv)};
+    app->setWindowIcon(QIcon(":/images/dive.ico"));
 
     if (!native_style)
     {
-        app.ApplyCustomStyle();
+        app->ApplyCustomStyle();
     }
 
     // Display splash screen
@@ -317,18 +318,17 @@ int main(int argc, char* argv[])
     // Initialize packet info query data structures needed for parsing
     Pm4InfoInit();
 
-    ApplicationController controller;
-    MainWindow* main_window = new MainWindow(controller);
+    QScopedPointer<MainWindow> main_window{new MainWindow(app->GetController())};
 
     if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {
-        if (!ExecuteScenario(scenario, main_window))
+        if (!ExecuteScenario(scenario, main_window.get()))
         {
             return EXIT_FAILURE;
         }
     }
 
-    if (!app.GetController().InitializePlugins())
+    if (!app->GetController().InitializePlugins())
     {
         qDebug() << "Application: Plugin initialization failed. Application may proceed without "
                     "plugins.";
@@ -344,12 +344,12 @@ int main(int argc, char* argv[])
 
     if (absl::GetFlag(FLAGS_maximize))
     {
-        QTimer::singleShot(kStartDelay, main_window, &MainWindow::showMaximized);
+        QTimer::singleShot(kStartDelay, main_window.get(), &MainWindow::showMaximized);
     }
     else
     {
-        QTimer::singleShot(kStartDelay, main_window, &MainWindow::show);
+        QTimer::singleShot(kStartDelay, main_window.get(), &MainWindow::show);
     }
 
-    return app.exec();
+    return app->exec();
 }

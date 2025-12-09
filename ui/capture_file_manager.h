@@ -75,7 +75,7 @@ class CaptureFileManager : public QObject
     CaptureFileManager& operator=(const CaptureFileManager&) = delete;
     CaptureFileManager& operator=(CaptureFileManager&&) = delete;
 
-    void Start(Dive::DataCore&);
+    void Start(const std::shared_ptr<Dive::DataCore>& data_core);
 
     // Locking:
     QReadWriteLock& GetDataCoreLock() { return m_data_core_lock; }
@@ -104,7 +104,7 @@ class CaptureFileManager : public QObject
         Dive::FilePath reference;
         Dive::ComponentFilePaths components;
     };
-    Dive::DataCore* m_data_core = nullptr;
+    std::shared_ptr<Dive::DataCore> m_data_core = nullptr;
     QReadWriteLock m_data_core_lock;
 
     bool m_loading_in_progress = false;

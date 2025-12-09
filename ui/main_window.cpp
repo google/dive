@@ -190,10 +190,10 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 
     m_error_dialog = new ErrorDialog(this);
 
-    m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
+    m_data_core = std::make_shared<Dive::DataCore>(&m_progress_tracker);
 
     m_capture_manager = new CaptureFileManager(this);
-    m_capture_manager->Start(*m_data_core);
+    m_capture_manager->Start(m_data_core);
     m_capture_manager->GetDataCoreLock().lockForRead();
     m_capture_acquired = true;
 

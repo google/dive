@@ -23,7 +23,7 @@ add_library(dive_plugin_sample SHARED plugin_sample.h plugin_sample.cpp)
 
 target_link_libraries(
     dive_plugin_sample
-    PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets
+    PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets dive_plugin_abi_includes
 )
 
 set_property(TARGET dive_plugin_sample PROPERTY AUTOMOC ON)

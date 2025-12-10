@@ -21,9 +21,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "idive_plugin.h"
-#include "idynamic_library_loader.h"
 #include "absl/status/status.h"
+#include "dive/plugin/abi/idive_plugin.h"
+#include "dive/plugin/loader/library_loader.h"
 
 class MainWindow;
 

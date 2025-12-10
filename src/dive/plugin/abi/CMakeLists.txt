@@ -14,8 +14,5 @@
 # limitations under the License.
 #
 
-add_subdirectory(build_defs)
-add_subdirectory(os)
-add_subdirectory(plugin)
-add_subdirectory(utils)
-add_subdirectory(common)
+add_library(dive_plugin_abi_includes INTERFACE)
+target_link_libraries(dive_plugin_abi_includes INTERFACE dive_src_includes)

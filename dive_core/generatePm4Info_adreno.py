@@ -371,8 +371,6 @@ def outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, attr
       for i in range(7):
           cur_variant_bitfield = (1<<i)
           if cur_variant_bitfield & variants_bitfield:
-              if attributes.name == "GRAS_SC_WINDOW_SCISSOR_BR":
-                blah = 5
               pm4_info_file.write('    g_sRegInfoVariant[(0x%x << kGPUVariantsBits) | 0x%x] = { "%s", %s, %s, %s, %d, %d, %d, {' % (attributes.offset, cur_variant_bitfield, attributes.name, is_64_string, getTypeEnumString(attributes.type), enum_handle, attributes.shr, attributes.bit_width, attributes.radix))
               AppendBitfield(pm4_info_file, enum_index_dict, bitfields, attributes.is_64)
               pm4_info_file.write('} };\n')
@@ -524,6 +522,10 @@ def outputRegisterInfo(pm4_info_file, registers_et_root, enum_index_dict):
           reg_attributes.shr = shr
           reg_attributes.bit_width = bit_width
           reg_attributes.radix = radix
+
+          # if no register variants, check if there are array-level variants (e.g. GRAS_CL_VIEWPORT)
+          if (not reg_attributes.variants) and ('variants' in array.attrib):
+            reg_attributes.variants = array.attrib['variants']
           outputSingleRegister(pm4_info_file, registers_et_root, enum_index_dict, reg_attributes)
   return
 

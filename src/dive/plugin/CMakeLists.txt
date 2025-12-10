@@ -14,8 +14,5 @@
 # limitations under the License.
 #
 
-add_subdirectory(build_defs)
-add_subdirectory(os)
-add_subdirectory(plugin)
-add_subdirectory(utils)
-add_subdirectory(common)
+add_subdirectory(abi)
+add_subdirectory(loader)

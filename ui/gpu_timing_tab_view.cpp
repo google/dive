@@ -143,15 +143,23 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
 {
+    int row_count = m_model.rowCount();
+
+    if (row_count == 0)
+    {
+        qDebug() << "GPU timing model is empty. No data to correlate.";
+        return;
+    }
+
     QItemSelectionModel *selection_model = m_table_view->selectionModel();
     QSignalBlocker       blocker(selection_model);
     // Verify that the number of rows in the model is consistent with the rows of
     // m_timed_event_indices
-    if (m_model.rowCount() != static_cast<int>(m_timed_event_indices.size()))
+    if (row_count != static_cast<int>(m_timed_event_indices.size()))
     {
         qDebug()
         << "GpuTimingTabView::OnEventSelectionChanged() ERROR: inconsistent model row count ("
-        << m_model.rowCount() << ") and count of collected indices of timed Vulkan events: "
+        << row_count << ") and count of collected indices of timed Vulkan events: "
         << m_timed_event_indices.size();
     }
 

@@ -27,7 +27,7 @@ class DiveApplication : public QApplication
     Q_OBJECT
 public:
     struct Impl;
-    DiveApplication(int argc, char** argv);
+    DiveApplication(int& argc, char** argv);
     ~DiveApplication() override;
 
     ApplicationController& GetController();

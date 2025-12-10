@@ -69,7 +69,7 @@ struct DiveApplication::Impl
     std::optional<QString> m_style_sheet;
 };
 
-DiveApplication::DiveApplication(int argc, char** argv) :
+DiveApplication::DiveApplication(int& argc, char** argv) :
     QApplication(argc, argv)
 {
 }

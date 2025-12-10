@@ -79,6 +79,18 @@ add_executable(
     resources.qrc
 )
 
+# Enable asan and ubsan
+if(DIVE_BUILD_WITH_SANITIZER AND NOT MSVC)
+    target_compile_options(
+        ${PROJECT_NAME}
+        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+    )
+    target_link_options(
+        ${PROJECT_NAME}
+        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+    )
+endif()
+
 # For release builds, build Dive UI as WIN32 GUI application instead of a console application.
 if(MSVC)
     set_target_properties(

@@ -38,6 +38,8 @@ option(
     ON
 )
 
+option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
+
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
@@ -324,4 +326,12 @@ if(NOT ANDROID)
             --test_scenario=screenshot --test_output=${DIVE_TEST_OUTPUT_PATH}
             --test_prefix=screenshot-native_style-
     )
+    if(DIVE_BUILD_WITH_SANITIZER)
+        set_tests_properties(
+            Regression_StackOverflow_MacOS
+            DiveUI_Screenshot
+            DiveUI_Screenshot_NativeStyle
+            PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_container_overflow=0"
+        )
+    endif()
 endif()

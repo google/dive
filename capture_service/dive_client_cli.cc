@@ -38,6 +38,7 @@ limitations under the License.
 #include "constants.h"
 #include "device_mgr.h"
 #include "dive/common/app_types.h"
+#include "dive/common/status.h"
 #include "dive/os/command_utils.h"
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
@@ -109,7 +110,7 @@ absl::Status ValidateAlwaysOk(const GlobalOptions&)
 
 absl::Status ValidateCleanup(const GlobalOptions& o)
 {
-    return o.package.empty() ? absl::InvalidArgumentError("Missing --package") : absl::OkStatus();
+    return o.package.empty() ? Dive::InvalidArgumentError("Missing --package") : absl::OkStatus();
 }
 
 // Helper to validate options common to run/capture commands.
@@ -117,23 +118,23 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
 {
     if (options.package.empty() && options.vulkan_command.empty())
     {
-        return absl::InvalidArgumentError("Missing required flag: --package or --vulkan_command");
+        return Dive::InvalidArgumentError("Missing required flag: --package or --vulkan_command");
     }
 
     if (!options.package.empty() && !options.vulkan_command.empty())
     {
-        return absl::InvalidArgumentError("Cannot use both --package and --vulkan_command");
+        return Dive::InvalidArgumentError("Cannot use both --package and --vulkan_command");
     }
 
     if (!options.vulkan_command.empty() && options.app_type != Dive::AppType::kVulkanCLI_Non_OpenXR)
     {
-        return absl::InvalidArgumentError(
+        return Dive::InvalidArgumentError(
         "Cannot use --vulkan_command with --type other than vulkan_cli_non_openxr");
     }
 
     if (options.app_type == Dive::AppType::kGLES_OpenXR && options.vulkan_command == "gfxr_capture")
     {
-        return absl::InvalidArgumentError(
+        return Dive::InvalidArgumentError(
         "GFXR capture is not supported for GLES OpenXR applications.");
     }
 
@@ -145,11 +146,11 @@ absl::Status ValidateGfxrReplayOptions(const GlobalOptions& options)
 {
     if (options.replay_settings.remote_capture_path.empty())
     {
-        return absl::InvalidArgumentError("Missing required flag: --gfxr_replay_file_path");
+        return Dive::InvalidArgumentError("Missing required flag: --gfxr_replay_file_path");
     }
     if (!absl::EndsWith(options.replay_settings.remote_capture_path, ".gfxr"))
     {
-        return absl::InvalidArgumentError(absl::StrCat("Invalid --gfxr_replay_file_path '",
+        return Dive::InvalidArgumentError(absl::StrCat("Invalid --gfxr_replay_file_path '",
                                                        options.replay_settings.remote_capture_path,
                                                        "'. File must have a .gfxr extension."));
     }
@@ -251,7 +252,7 @@ absl::StatusOr<std::string> AutoSelectSerial(const std::vector<DeviceInfo>& devi
         return serial;
     }
 
-    return absl::InvalidArgumentError(
+    return Dive::InvalidArgumentError(
     absl::StrCat("Multiple devices connected. Specify --device [serial].\n",
                  GetPrintableDeviceList(devices)));
 }
@@ -270,7 +271,7 @@ absl::StatusOr<std::string> ValidateSerial(const std::vector<DeviceInfo>& device
             return info.m_serial == serial;
         }))
     {
-        return absl::InvalidArgumentError(absl::StrCat("Device with serial '",
+        return Dive::InvalidArgumentError(absl::StrCat("Device with serial '",
                                                        serial,
                                                        "' not found.\n",
                                                        GetPrintableDeviceList(devices)));
@@ -292,7 +293,7 @@ absl::Status InitializeDevice(Dive::DeviceManager& mgr, const std::string& seria
     auto ret = (*device)->SetupDevice();
     if (!ret.ok())
     {
-        return absl::InternalError("Failed to setup device: " + std::string(ret.message()));
+        return Dive::StatusWithContext(ret, "Failed to setup device");
     }
     return absl::OkStatus();
 }
@@ -303,7 +304,7 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
     auto* device = ctx.mgr.GetDevice();
     if (device == nullptr)
     {
-        return absl::FailedPreconditionError(
+        return Dive::FailedPreconditionError(
         "No device selected. Did you provide --device serial?");
     }
     device->EnableGfxr(enable_gfxr);
@@ -343,18 +344,18 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
                                ctx.options.gfxr_capture_file_dir);
         break;
     default:
-        return absl::InvalidArgumentError("Unknown application type.");
+        return Dive::InvalidArgumentError("Unknown application type.");
     }
 
     if (!ret.ok())
     {
-        return absl::InternalError("Setup failed: " + std::string(ret.message()));
+        return Dive::StatusWithContext(ret, "Setup failed");
     }
 
     ret = device->StartApp();
     if (!ret.ok())
     {
-        return absl::InternalError("Start app failed: " + std::string(ret.message()));
+        return Dive::StatusWithContext(ret, "Start app failed");
     }
     return absl::OkStatus();
 }
@@ -364,7 +365,7 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
 {
     if (mgr.GetDevice() == nullptr)
     {
-        return absl::FailedPreconditionError("No device selected, can't capture.");
+        return Dive::FailedPreconditionError("No device selected, can't capture.");
     }
 
     Network::TcpClient client;
@@ -374,19 +375,19 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
     absl::Status status = client.Connect(host, port);
     if (!status.ok())
     {
-        return absl::UnavailableError("Connection failed: " + std::string(status.message()));
+        return Dive::StatusWithContext(status, "Connection failed");
     }
 
     absl::StatusOr<std::string> capture_file_path = client.StartPm4Capture();
     if (!capture_file_path.ok())
     {
-        return capture_file_path.status();
+        return Dive::StatusWithContext(capture_file_path.status(), "StartPm4Capture failed");
     }
 
     std::filesystem::path target_download_dir(download_dir);
     if (!std::filesystem::is_directory(target_download_dir))
     {
-        return absl::InvalidArgumentError("Invalid download directory: " +
+        return Dive::InvalidArgumentError("Invalid download directory: " +
                                           target_download_dir.string());
     }
 
@@ -426,7 +427,7 @@ absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr
     }
 
     return line_count <= 1 ? absl::OkStatus() :
-                             absl::InternalError("Capture file operation in progress.");
+                             Dive::InternalError("Capture file operation in progress.");
 }
 
 // Renames the screenshot file locally to match the GFXR capture file name.
@@ -439,7 +440,7 @@ absl::Status RenameScreenshotFile(const std::filesystem::path& full_target_downl
     // Ensure the file to rename actually exists.
     if (!std::filesystem::exists(old_screenshot_file_path))
     {
-        return absl::NotFoundError(absl::StrCat("Could not find the expected screenshot file: ",
+        return Dive::NotFoundError(absl::StrCat("Could not find the expected screenshot file: ",
                                                 old_screenshot_file_path.string()));
     }
 
@@ -463,7 +464,7 @@ absl::Status RenameScreenshotFile(const std::filesystem::path& full_target_downl
     }
     catch (const std::exception& e)
     {
-        return absl::InternalError("Failed to rename screenshot file locally: " +
+        return Dive::InternalError("Failed to rename screenshot file locally: " +
                                    std::string(e.what()));
     }
 
@@ -483,7 +484,7 @@ const std::vector<std::string>& file_list)
             return full_target_download_dir / trimmed_filename;
         }
     }
-    return absl::NotFoundError("No file with '.gfxr' extension found in the list.");
+    return Dive::NotFoundError("No file with '.gfxr' extension found in the list.");
 }
 
 // Retrieves a GFXR capture from the device and downloads it.
@@ -504,7 +505,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
     absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
     if (!output.ok())
     {
-        return absl::InternalError("Error getting capture_file name: " +
+        return Dive::InternalError("Error getting capture_file name: " +
                                    std::string(output.status().message()));
     }
 
@@ -514,7 +515,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
 
     if (file_list.empty())
     {
-        return absl::NotFoundError("Error, captures not present on device at: " +
+        return Dive::NotFoundError("Error, captures not present on device at: " +
                                    on_device_capture_directory);
     }
 
@@ -538,7 +539,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
     output = mgr.GetDevice()->Adb().RunAndGetResult(command);
     if (!output.ok())
     {
-        return absl::InternalError("Error pulling files: " +
+        return Dive::InternalError("Error pulling files: " +
                                    std::string(output.status().message()));
     }
 
@@ -592,7 +593,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
                 "shell setprop debug.gfxrecon.capture_android_trigger false");
                 if (!ret.ok())
                 {
-                    return absl::InternalError("Error stopping gfxr runtime capture: " +
+                    return Dive::InternalError("Error stopping gfxr runtime capture: " +
                                                std::string(ret.message()));
                 }
 
@@ -616,7 +617,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
                 "shell setprop debug.gfxrecon.capture_android_trigger true");
                 if (!ret.ok())
                 {
-                    return absl::InternalError("Error starting gfxr runtime capture: " +
+                    return Dive::InternalError("Error starting gfxr runtime capture: " +
                                                std::string(ret.message()));
                 }
 
@@ -624,7 +625,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
                 ret = mgr.GetDevice()->TriggerScreenCapture(gfxr_capture_directory_path);
                 if (!ret.ok())
                 {
-                    return absl::InternalError("Error creating capture screenshot: " +
+                    return Dive::InternalError("Error creating capture screenshot: " +
                                                std::string(ret.message()));
                 }
 
@@ -714,7 +715,7 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
     if (!status.ok())
     {
-        return status;
+        return Dive::StatusWithContext(status, "Triggering PM4 capture failed");
     }
     return WaitForExitConfirmation();
 }
@@ -734,13 +735,13 @@ absl::Status CmdGfxrReplay(const CommandContext& ctx)
     absl::Status status = ctx.mgr.DeployReplayApk(ctx.options.serial);
     if (!status.ok())
     {
-        return absl::InternalError("Failed to deploy replay apk: " + std::string(status.message()));
+        return Dive::StatusWithContext(status, "Failed to deploy replay apk");
     }
 
     status = ctx.mgr.RunReplayApk(ctx.options.replay_settings);
     if (!status.ok())
     {
-        return absl::InternalError("Failed to run replay apk: " + std::string(status.message()));
+        return Dive::StatusWithContext(status, "Failed to run replay apk");
     }
     return absl::OkStatus();
 }
@@ -995,6 +996,7 @@ int main(int argc, char** argv)
     if (absl::Status status = selected_def->validator(opts); !status.ok())
     {
         std::cout << status.message() << std::endl;
+        std::cout << Dive::GetStackTrace(status) << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -1012,6 +1014,7 @@ int main(int argc, char** argv)
         if (!validated_serial.ok())
         {
             std::cout << validated_serial.status().message() << std::endl;
+            std::cout << Dive::GetStackTrace(validated_serial.status()) << std::endl;
             return EXIT_FAILURE;
         }
         opts.serial = *validated_serial;
@@ -1019,6 +1022,7 @@ int main(int argc, char** argv)
         if (absl::Status status = InitializeDevice(mgr, opts.serial); !status.ok())
         {
             std::cout << status.message() << std::endl;
+            std::cout << Dive::GetStackTrace(status) << std::endl;
             return EXIT_FAILURE;
         }
     }
@@ -1029,6 +1033,7 @@ int main(int argc, char** argv)
     {
         std::cout << "Error executing command '" << selected_def->name << "': " << ret.message()
                   << std::endl;
+        std::cout << Dive::GetStackTrace(ret) << std::endl;
         return EXIT_FAILURE;
     }
 

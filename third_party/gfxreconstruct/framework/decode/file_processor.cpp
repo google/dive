@@ -353,6 +353,9 @@ bool FileProcessor::ProcessBlocks()
 // the correct sizing of the block payload are done by the caller
 bool FileProcessor::ReadBlockBuffer(BlockParser& parser, BlockBuffer& block_buffer)
 {
+    // GOOGLE: Store info about block offset before any bytes are read
+    StoreBlockInfo();
+
     bool         success = true;
     BlockIOError status  = parser.ReadBlockBuffer(GetCurrentFile().active_file, block_buffer);
     if (status == kErrorNone)
@@ -390,9 +393,6 @@ bool FileProcessor::PeekBytes(void* buffer, size_t buffer_size)
 bool FileProcessor::PeekBlockHeader(format::BlockHeader* block_header)
 {
     assert(block_header != nullptr);
-
-    // GOOGLE: Store info about block offset before any bytes are read
-    StoreBlockInfo();
 
     bool success = false;
 

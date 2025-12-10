@@ -97,10 +97,12 @@ Examples:
 - Install the dependencies on device, start the package, and initiate a GFXR capture.
     ```sh
     # On Linux
-    ./dive_client_cli --command gfxr_capture --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --gfxr_capture_file_dir REMOTE/DIR --download_dir LOCAL/DIR/TO/SAVE/CAPTURES
+    ./dive_client_cli --command gfxr_capture --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --gfxr_capture_file_dir REMOTE/SUBDIR --download_dir LOCAL/DIR/TO/SAVE/CAPTURES
     ```
 
 Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.
+
+Note that `--gfxr_capture_file_dir` refers to the subdirectory temporarily created on the device to store the GFXR capture. Its default value is `gfxr_capture`.
 
 The capture file directory will be saved at the path specified with the `--download_dir` option or the current directory if this option not specified.
 

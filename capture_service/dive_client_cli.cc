@@ -902,10 +902,11 @@ download_dir,
 ".",
 "The local host directory where captured files will be saved. Defaults to the current directory.");
 
-ABSL_FLAG(std::string,
-          gfxr_capture_file_dir,
-          "gfxr_capture",
-          "The name of the subdirectory created on the device to store GFXR capture files.");
+ABSL_FLAG(
+std::string,
+gfxr_capture_file_dir,
+"gfxr_capture",
+"The name of the subdirectory temporarily created on the device to store GFXR capture files.");
 
 ABSL_FLAG(
 int,

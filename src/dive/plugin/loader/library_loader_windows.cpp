@@ -14,13 +14,17 @@
  limitations under the License.
 */
 
-#include "idynamic_library_loader.h"
 #include <windows.h>
-#include <string>
+
 #include <memory>
+#include <string>
+
 #include "absl/strings/str_cat.h"
+#include "dive/plugin/loader/library_loader.h"
 
 namespace Dive
+{
+namespace
 {
 class WindowsLibraryLoader : public IDynamicLibraryLoader
 {
@@ -68,6 +72,7 @@ public:
 
     std::string GetPluginFileExtension() const override { return ".dll"; }
 };
+}  // namespace
 
 std::unique_ptr<IDynamicLibraryLoader> CreateDynamicLibraryLoader()
 {

@@ -14,9 +14,11 @@
  limitations under the License.
 */
 
+#include "dive/plugin/loader/plugin_loader.h"
+
 #include <iostream>
 #include <string>
-#include "plugin_loader.h"
+
 #include "absl/strings/str_cat.h"
 
 namespace Dive

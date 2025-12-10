@@ -14,15 +14,15 @@
  limitations under the License.
 */
 
-#include "application_controller.h"
+#include "ui/application_controller.h"
 
 #include <QAction>
 #include <QCoreApplication>
 #include <QMenu>
 #include <QMessageBox>
 
-#include "main_window.h"
-#include "plugins/plugin_loader.h"
+#include "dive/plugin/loader/plugin_loader.h"
+#include "ui/main_window.h"
 
 struct ApplicationController::Impl
 {

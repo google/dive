@@ -39,6 +39,7 @@ target_include_directories(${TARGET_NAME}
 
 set(GFXRECON_TEST_LAUNCHER_LINK_LIBRARIES
     gfxrecon-testapp-acquired-image
+    gfxrecon-testapp-ahb
     gfxrecon-testapp-host-image-copy
     gfxrecon-testapp-multisample-depth
     gfxrecon-testapp-pipeline-binaries
@@ -57,7 +58,8 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux|BSD|GNU")
 endif()
 
 target_link_libraries(${TARGET_NAME}
-                      ${GFXRECON_TEST_LAUNCHER_LINK_LIBRARIES})
+                      ${GFXRECON_TEST_LAUNCHER_LINK_LIBRARIES}
+                      project_version)
 
 common_build_directives(${TARGET_NAME})
 

@@ -80,7 +80,7 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    virtual void Process_ExeFileInfo(gfxrecon::util::filepath::FileInfo& info) override
+    virtual void Process_ExeFileInfo(const gfxrecon::util::filepath::FileInfo& info) override
     {
         const util::JsonOptions& json_options = GetOptions();
         auto&                    jdata        = WriteMetaCommandStart("ExeFileInfo");
@@ -224,9 +224,7 @@ class MetadataJsonConsumer : public Base
         const util::JsonOptions& json_options = GetJsonOptions();
         auto&                    jdata        = WriteMetaCommandStart("InitializeMetaCommand");
         HandleToJson(jdata["MetaCommand_id"], command_header.capture_id, json_options);
-        FieldToJson(jdata["InitializationParametersDataSizeInBytes"],
-                    command_header.initialization_parameters_data_size,
-                    json_options);
+        FieldToJson(jdata["InitializationParametersDataSizeInBytes"], command_header.data_size, json_options);
         WriteBlockEnd();
     }
 
@@ -237,6 +235,8 @@ class MetadataJsonConsumer : public Base
         const JsonOptions& json_options = GetJsonOptions();
         auto&              jdata        = WriteMetaCommandStart("BeginResourceInitCommand");
         HandleToJson(jdata["device_id"], device_id, json_options);
+
+        // TODO: should be "total_copy_size"
         FieldToJson(jdata["max_resource_size"], max_resource_size, json_options);
         FieldToJson(jdata["max_copy_size"], max_copy_size, json_options);
         WriteBlockEnd();
@@ -283,8 +283,8 @@ class MetadataJsonConsumer : public Base
         WriteBlockEnd();
     }
 
-    virtual void ProcessSetEnvironmentVariablesCommand(format::SetEnvironmentVariablesCommand& header,
-                                                       const char*                             env_string) override
+    virtual void ProcessSetEnvironmentVariablesCommand(const format::SetEnvironmentVariablesCommand& header,
+                                                       const char* env_string) override
     {
         const JsonOptions& json_options = GetJsonOptions();
         auto&              json_data    = WriteMetaCommandStart("SetEnvironmentVariablesCommand");

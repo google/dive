@@ -189,27 +189,7 @@ void FieldToJson(nlohmann::ordered_json& jdata, const std::string_view data, con
 
 void FieldToJson(nlohmann::ordered_json& jdata, const std::wstring_view data, const util::JsonOptions& options)
 {
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_conv;
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
-
-    jdata = utf8_conv.to_bytes(data.data(), data.data() + data.length());
+    jdata = util::strings::convert_wstring_to_utf8(data);
 }
 
 #if defined(D3D12_SUPPORT)
@@ -409,7 +389,7 @@ bool RepresentBinaryFile(const util::JsonOptions& json_options,
         {
             std::string filename = GenerateFilename(filename_base, instance_counter);
             std::string basename = gfxrecon::util::filepath::Join(json_options.data_sub_dir, filename);
-            std::string filepath = gfxrecon::util::filepath::Join(json_options.root_dir, basename);
+            std::string filepath = gfxrecon::util::filepath::Join(json_options.root_dir, filename);
             if (WriteBinaryFile(filepath, data_size, data))
             {
                 FieldToJson(jdata, basename, json_options);

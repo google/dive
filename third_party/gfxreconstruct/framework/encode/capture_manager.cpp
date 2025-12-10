@@ -1,7 +1,7 @@
 /*
 ** Copyright (c) 2018-2022 Valve Corporation
 ** Copyright (c) 2018-2025 LunarG, Inc.
-** Copyright (c) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
+** Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and associated documentation files (the "Software"),
@@ -59,8 +59,38 @@ CommonCaptureManager*                          CommonCaptureManager::singleton_;
 std::mutex                                     CommonCaptureManager::instance_lock_;
 thread_local std::unique_ptr<util::ThreadData> CommonCaptureManager::thread_data_;
 CommonCaptureManager::ApiCallMutexT            CommonCaptureManager::api_call_mutex_;
+bool                                           CommonCaptureManager::initialize_log_ = true;
+std::atomic<format::HandleId>              CommonCaptureManager::default_unique_id_counter_{ format::kNullHandleId };
+uint64_t                                   CommonCaptureManager::default_unique_id_offset_ = 0;
+thread_local bool                          CommonCaptureManager::force_default_unique_id_  = false;
+thread_local std::vector<format::HandleId> CommonCaptureManager::unique_id_stack_;
 
-std::atomic<format::HandleId> CommonCaptureManager::unique_id_counter_{ format::kNullHandleId };
+format::HandleId CommonCaptureManager::GetUniqueId()
+{
+    uint64_t result = 0;
+    if (force_default_unique_id_ || unique_id_stack_.empty())
+    {
+        result = GetDefaultUniqueId();
+    }
+    else
+    {
+        result = unique_id_stack_.back();
+        unique_id_stack_.pop_back();
+    }
+    return result;
+}
+
+void CommonCaptureManager::PushUniqueId(const format::HandleId id)
+{
+    GFXRECON_ASSERT(id != format::kNullHandleId);
+
+    unique_id_stack_.push_back(id);
+}
+
+void CommonCaptureManager::ClearUniqueIds()
+{
+    unique_id_stack_.clear();
+}
 
 CommonCaptureManager::CommonCaptureManager() :
     force_file_flush_(false), timestamp_filename_(true),
@@ -112,29 +142,35 @@ bool CommonCaptureManager::LockedCreateInstance(ApiCaptureManager*           api
             GFXRECON_LOG_WARNING("Failed registering atexit");
         }
 
-        // Initialize logging to report only errors (to stderr).
-        util::Log::Settings stderr_only_log_settings;
-        stderr_only_log_settings.min_severity            = util::Log::kErrorSeverity;
-        stderr_only_log_settings.output_errors_to_stderr = true;
-        util::Log::Init(stderr_only_log_settings);
+        if (initialize_log_)
+        {
+            // Initialize logging to report only errors (to stderr).
+            util::Log::Settings stderr_only_log_settings;
+            stderr_only_log_settings.min_severity            = util::Log::kErrorSeverity;
+            stderr_only_log_settings.output_errors_to_stderr = true;
+            util::Log::Init(stderr_only_log_settings);
+        }
 
         // NOTE: FIRST Api Instance is used for settings -- actual multiple simulatenous API support will need to
         // resolve. Get capture settings which can be different per capture manager.
         default_settings_ = api_capture_singleton->GetDefaultTraceSettings();
         capture_settings_ = api_capture_singleton->GetDefaultTraceSettings();
 
-        // Load log settings.
-        CaptureSettings::LoadLogSettings(&capture_settings_);
+        if (initialize_log_)
+        {
+            // Load log settings.
+            CaptureSettings::LoadLogSettings(&capture_settings_);
 
-        // Reinitialize logging with values retrieved from settings.
-        util::Log::Release();
-        util::Log::Init(capture_settings_.GetLogSettings());
+            // Reinitialize logging with values retrieved from settings.
+            util::Log::Release();
+            util::Log::Init(capture_settings_.GetLogSettings());
+        }
 
         // Load all settings with final logging settings active.
-        CaptureSettings::LoadSettings(&capture_settings_);
+        CaptureSettings::LoadSettings(&capture_settings_, initialize_log_);
 
         GFXRECON_LOG_INFO("Initializing GFXReconstruct capture layer");
-        GFXRECON_LOG_INFO("  GFXReconstruct Version %s", GFXRECON_PROJECT_VERSION_STRING);
+        GFXRECON_LOG_INFO("  GFXReconstruct Version %s", GetProjectVersionString());
 
         CaptureSettings::TraceSettings trace_settings = capture_settings_.GetTraceSettings();
         std::string                    base_filename  = trace_settings.capture_file;
@@ -360,6 +396,7 @@ bool CommonCaptureManager::Initialize(format::ApiFamilyId                   api_
     screenshot_indices_   = CalcScreenshotIndices(trace_settings.screenshot_ranges, trace_settings.screenshot_interval);
     screenshot_prefix_    = PrepScreenshotPrefix(trace_settings.screenshot_dir);
     disable_dxr_          = trace_settings.disable_dxr;
+    disable_meta_command_ = trace_settings.disable_meta_command;
     accel_struct_padding_ = trace_settings.accel_struct_padding;
     iunknown_wrapping_    = trace_settings.iunknown_wrapping;
     force_command_serialization_     = trace_settings.force_command_serialization;
@@ -598,7 +635,7 @@ bool CommonCaptureManager::IsCaptureModeWrite() const
 
 bool CommonCaptureManager::IsCaptureModeDisabled() const
 {
-    return (GetCaptureMode() & kModeDisabled) == kModeDisabled;
+    return GetCaptureMode() == kModeDisabled;
 }
 
 ParameterEncoder* CommonCaptureManager::InitApiCallCapture(format::ApiCallId call_id)
@@ -1177,8 +1214,12 @@ std::string CommonCaptureManager::CreateAssetFilename(const std::string& base_fi
 
 bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, const std::string& base_filename)
 {
-    bool success      = true;
-    capture_filename_ = base_filename;
+    bool success = true;
+
+    util::filepath::FileInfo info{};
+    util::filepath::GetApplicationInfo(info);
+
+    capture_filename_ = util::filepath::ExpandPathVariables(info, base_filename);
 
     if (timestamp_filename_)
     {
@@ -1192,8 +1233,6 @@ bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, con
         GFXRECON_LOG_INFO("Recording graphics API capture to %s", capture_filename_.c_str());
         WriteFileHeader();
 
-        gfxrecon::util::filepath::FileInfo info{};
-        gfxrecon::util::filepath::GetApplicationInfo(info);
         WriteExeFileInfo(api_family, info);
 
         // Save parameters of the capture in an annotation.
@@ -1206,7 +1245,7 @@ bool CommonCaptureManager::CreateCaptureFile(format::ApiFamilyId api_family, con
         operation_annotation += "\",\n";
         operation_annotation += "    \"";
         operation_annotation += gfxrecon::format::kOperationAnnotationGfxreconstructVersion;
-        operation_annotation += "\": \"" GFXRECON_PROJECT_VERSION_STRING "\",\n";
+        operation_annotation += "\": \"" + std::string(GetProjectVersionString()) + "\",\n";
         operation_annotation += "    \"";
         operation_annotation += gfxrecon::format::kOperationAnnotationVulkanVersion;
         operation_annotation += "\": \"";
@@ -1350,8 +1389,8 @@ void CommonCaptureManager::WriteFileHeader(util::FileOutputStream* file_stream)
 
     format::FileHeader file_header;
     file_header.fourcc        = GFXRECON_FOURCC;
-    file_header.major_version = 0;
-    file_header.minor_version = 0;
+    file_header.major_version = GFXRECON_CURRENT_FILE_MAJOR;
+    file_header.minor_version = GFXRECON_CURRENT_FILE_MINOR;
     file_header.num_options   = static_cast<uint32_t>(option_list.size());
 
     CombineAndWriteToFile({ { &file_header, sizeof(file_header) },
@@ -1517,6 +1556,7 @@ void CommonCaptureManager::WriteFillMemoryCmd(
 
 void CommonCaptureManager::WriteBeginResourceInitCmd(format::ApiFamilyId api_family,
                                                      format::HandleId    device_id,
+                                                     uint64_t            total_copy_size,
                                                      uint64_t            max_resource_size)
 {
     if ((capture_mode_ & kModeWrite) != kModeWrite)
@@ -1526,7 +1566,7 @@ void CommonCaptureManager::WriteBeginResourceInitCmd(format::ApiFamilyId api_fam
 
     GFXRECON_CHECK_CONVERSION_DATA_LOSS(size_t, max_resource_size);
 
-    format::BeginResourceInitCommand init_cmd;
+    format::BeginResourceInitCommand init_cmd = {};
 
     auto thread_data = GetThreadData();
     GFXRECON_ASSERT(thread_data != nullptr);
@@ -1535,10 +1575,10 @@ void CommonCaptureManager::WriteBeginResourceInitCmd(format::ApiFamilyId api_fam
     init_cmd.meta_header.block_header.size = format::GetMetaDataBlockBaseSize(init_cmd);
     init_cmd.meta_header.meta_data_id =
         format::MakeMetaDataId(api_family, format::MetaDataType::kBeginResourceInitCommand);
-    init_cmd.thread_id         = thread_data->thread_id_;
-    init_cmd.device_id         = device_id;
-    init_cmd.max_resource_size = max_resource_size;
-    init_cmd.max_copy_size     = max_resource_size;
+    init_cmd.thread_id       = thread_data->thread_id_;
+    init_cmd.device_id       = device_id;
+    init_cmd.total_copy_size = total_copy_size;
+    init_cmd.max_copy_size   = max_resource_size;
 
     WriteToFile(&init_cmd, sizeof(init_cmd));
 }

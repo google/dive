@@ -102,8 +102,6 @@ Examples:
 
 Then you can follow the hint output to trigger a capture by pressing key `g` and `enter`, stopping it with the same key combination, or exiting by pressing key `enter`.
 
-Note that `--gfxr_capture_file_dir` refers to the subdirectory temporarily created on the device to store the GFXR capture. Its default value is `gfxr_capture`.
-
 The capture file directory will be saved at the path specified with the `--download_dir` option or the current directory if this option not specified.
 
 ### GFXR Replay

@@ -906,7 +906,11 @@ ABSL_FLAG(
 std::string,
 gfxr_capture_file_dir,
 "gfxr_capture",
-"The name of the subdirectory temporarily created on the device to store GFXR capture files.");
+absl::StrCat(
+"The name of the temporary subdirectory on the Android device (under '",
+Dive::kDeviceCapturePath,
+"') where the GFXR capture is stored. This subdirectory name is mirrored on the host within ",
+"'--download_dir'."));
 
 ABSL_FLAG(
 int,

@@ -452,3 +452,57 @@ jobs:
       - name: Ninja log
         run: |
           cat build/.ninja_log
+
+  build_dpkg:
+    name: "Build Debian Package"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v3
+        id: setup-java
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes cmake ninja-build
+          sudo apt-get install python3-mako --yes
+          sudo apt-get install libxcb-glx0-dev
+          sudo apt-get install qtbase5-dev --yes
+      - name: Install Qt dependencies (including xcb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
+      - name: Install dependency
+        run: |
+          sudo apt-get install --yes \
+          cmake clang-19 \
+          libsystemd-dev \
+          libbsd-dev \
+          ninja-build \
+          python3-mako \
+          libxcb-glx0-dev
+          which clang-19
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25
+          add-to-path: true
+      - name: Build
+        run: |
+          bash scripts/package_linux.sh
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Upload debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: package_linux
+          path: |
+            build/package_linux/dive_linux/
+            build/package_linux/*.deb

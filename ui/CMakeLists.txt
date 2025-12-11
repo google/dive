@@ -48,6 +48,7 @@ find_package(Qt5Widgets CONFIG REQUIRED)
 
 file(GLOB_RECURSE HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+list(REMOVE_ITEM SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 if(MSVC)
     # Add resource files for Windows build (for version information)
     file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
@@ -69,11 +70,34 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${LibArchive_INCLUDE_DIRS})
 
+# Create a shared library for the UI components.
+add_library(${PROJECT_NAME}_lib SHARED ${HDR_FILES} ${SRC_FILES})
+
+set_property(TARGET ${PROJECT_NAME}_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(
+    ${PROJECT_NAME}_lib
+    PUBLIC
+        Qt5::Widgets
+        absl::flags
+        absl::flags_parse
+        absl::failure_signal_handler
+        absl::span
+        absl::symbolize
+        network
+        dive_core
+        dive_lib_os
+        device_mgr
+        dive_plugin_loader
+        component_files
+        version_info
+        dive_build_defs
+)
+
 # Tell CMake to create the Dive executable
 add_executable(
     ${PROJECT_NAME}
-    ${HDR_FILES}
-    ${SRC_FILES}
+    main.cpp
     ${COMMON_HDR_FILES}
     ${COMMON_SRC_FILES}
     resources.qrc
@@ -100,24 +124,15 @@ if(MSVC)
     )
 endif()
 
-# Use the Widgets module from Qt 5
-target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
+# Link the executable to the shared library
+target_link_libraries(${PROJECT_NAME} PUBLIC Qt5::Widgets ${PROJECT_NAME}_lib)
 
-target_link_libraries(
+# Directories needed for the executable
+target_include_directories(
     ${PROJECT_NAME}
-    absl::flags
-    absl::flags_parse
-    absl::failure_signal_handler
-    absl::span
-    absl::symbolize
-    network
-    dive_core
-    dive_lib_os
-    device_mgr
-    dive_plugin_loader
-    component_files
-    version_info
-    dive_build_defs
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp
+        ${CMAKE_SOURCE_DIR}/src/dive
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0

@@ -38,6 +38,14 @@
 #define GFXRECON_FOURCC GFXRECON_MAKE_FOURCC('G', 'F', 'X', 'R')
 #define GFXRECON_FILE_EXTENSION ".gfxr"
 
+#define GFXRECON_MAKE_FILE_VERSION(major, minor) ((static_cast<uint64_t>(major) << 32) | minor)
+#define GFXRECON_CURRENT_FILE_VERSION GFXRECON_MAKE_FILE_VERSION(0, 1)
+#define GFXRECON_CURRENT_FILE_MAJOR static_cast<uint32_t>(GFXRECON_CURRENT_FILE_VERSION >> 32)
+#define GFXRECON_CURRENT_FILE_MINOR static_cast<uint32_t>(GFXRECON_CURRENT_FILE_VERSION)
+
+// After this version, implicit frame boundaries are ignored
+#define GFXRECON_EXPLICIT_FRAME_MARKER_FILE_VERSION GFXRECON_MAKE_FILE_VERSION(0, 1)
+
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(format)
 
@@ -160,6 +168,9 @@ enum class MetaDataType : uint16_t
     kExecuteBlocksFromFile                              = 34,
     kCreateHardwareBufferCommand                        = 35,
     kInitializeMetaCommand                              = 36,
+
+    //! reserve values with highest-bit for special purposes
+    kBeginExperimentalReservedRange = 1U << 15U
 };
 
 // MetaDataId is stored in the capture file and its type must be uint32_t to avoid breaking capture file compatibility.
@@ -484,8 +495,12 @@ struct BeginResourceInitCommand
     MetaDataHeader   meta_header;
     format::ThreadId thread_id;
     format::HandleId device_id;
-    uint64_t         max_resource_size; // Size of largest resource in upload data set.
-    uint64_t         max_copy_size;     // Size of largest resource requiring a staging copy at capture.
+
+    // sum of all resource-size in bytes.
+    uint64_t total_copy_size;
+
+    // size of single largest resource requiring a staging copy, in bytes.
+    uint64_t max_copy_size;
 };
 
 struct EndResourceInitCommand
@@ -750,7 +765,7 @@ struct InitializeMetaCommand
     format::HandleId capture_id;
     uint32_t         block_index{ 0 };
     uint32_t         total_number_of_initializemetacommand{ 0 };
-    uint64_t         initialization_parameters_data_size{ 0 };
+    uint64_t         data_size{ 0 };
 
     // In the capture file, initialize metacommand data is written in the following order:
     // InitializeMetaCommandHeder

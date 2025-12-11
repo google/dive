@@ -19,6 +19,9 @@ to one of these other documents:
  * [GFXReconstruct for Desktop Vulkan](./USAGE_desktop_Vulkan.md)
  * [GFXReconstruct for Desktop D3D12](./USAGE_desktop_D3D12.md)
 
+Additional instructions for debugging the GFXReconstruct capture layer on Android can be found here:
+ * [GFXReconstruct Capture layer debugging - Android](./docs/DEBUG_android.md)
+
 ## Index
 
 1. [Capturing API Calls](#capturing-api-calls)
@@ -62,7 +65,7 @@ locations that can be tried are:
  - `/mnt/shell/emulated/0`
 
 Where `${Application Full Name}` is the full name of the application, such
-as `com.khronos.vulkand_samples`.
+as `com.khronos.vulkan_samples`.
 
 Some devices won't allow access to those folders for certain applications.
 In those cases, the following folders can be used, but will require `adb` root
@@ -266,6 +269,18 @@ adb shell settings put global gpu_debug_layers VK_LAYER_LUNARG_gfxreconstruct
 adb shell settings put global gpu_debug_layer_app com.lunarg.gfxreconstruct.replay
 ```
 
+You can also restrict the layer to a specific application using these three steps:
+1. Push the GFXReconstruct capture layer to `/data/local/debug/vulkan` directory.
+2. Enable the global layer.
+3. Set the `capture_process_name` capture option.
+
+For example like this:
+```
+adb shell setprop debug.vulkan.layer.1 VK_LAYER_LUNARG_gfxreconstruct
+adb shell setprop debug.gfxrecon.capture_process_name ${Package name}
+```
+
+
 If you attempt to capture and nothing is happening, check the `logcat` output.
 A successful run of GFXReconstruct should show a message like the following:
 
@@ -302,8 +317,9 @@ option values.
 
 | Option                                         | Property                                                      | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------------------------- | ------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capture File Name                              | debug.gfxrecon.capture_file                                   | STRING  | Path to use when creating the capture file.  Default is: `/sdcard/gfxrecon_capture.gfxr`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Capture File Name                              | debug.gfxrecon.capture_file                                   | STRING  | Path to use when creating the capture file. Supports variable patterns for dynamic file paths, such as `${AppName}` (the application package name) and `${InternalDataPath}` (app's internal data directory, Android only). For example, `/sdcard/${AppName}/capture.gfxr` will expand to `/sdcard/com.example.your-android-app/capture.gfxr`. Default is: `/sdcard/gfxrecon_capture.gfxr` |
 | Capture Specific Frames                        | debug.gfxrecon.capture_frames                                 | STRING  | Specify one or more comma-separated frame ranges to capture.  Each range will be written to its own file.  A frame range can be specified as a single value, to specify a single frame to capture, or as two hyphenated values, to specify the first and last frame to capture.  Frame ranges should be specified in ascending order and cannot overlap. Note that frame numbering is 1-based (i.e. the first frame is frame 1).  Example: `200,301-305` will create two capture files, one containing a single frame and one containing five frames.  Default is: Empty string (all frames are captured).                                                                                                                                                                                                                                                                                                                                                                  |
+| Capture Specific app                           | debug.gfxrecon.capture_process_name                           | STRING  | Specify one app package name to be captured. Default is: ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Quit after capturing frame ranges              | debug.gfxrecon.quit_after_capture_frames                      | BOOL    | Setting it to `true` will force the application to terminate once all frame ranges specified by `debug.gfxrecon.capture_frames` have been captured. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Capture trigger for Android                    | debug.gfxrecon.capture_android_trigger                        | BOOL    | Set during runtime to `true` to start capturing and to `false` to stop. If not set at all then it is disabled (non-trimmed capture). Default is not set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Capture Trigger Frames                         | debug.gfxrecon.capture_trigger_frames                         | STRING  | Specify a limit on the number of frames to be captured via trim trigger. Example: `1` will capture exactly one frame when the trimming is triggered. Default is: Empty string (no limit) |
@@ -327,10 +343,10 @@ option values.
 | Page Guard Persistent Memory                   | debug.gfxrecon.page_guard_persistent_memory                   | BOOL    | When the `page_guard` memory tracking mode is enabled, this option changes the way that the shadow memory used to detect modifications to mapped memory is allocated. The default behavior is to allocate and copy the mapped memory range on map and free the allocation on unmap. When this option is enabled, an allocation with a size equal to that of the object being mapped is made once on the first map and is not freed until the object is destroyed.  This option is intended to be used with applications that frequently map and unmap large memory ranges, to avoid frequent allocation and copy operations that can have a negative impact on performance.  This option is ignored when GFXRECON_PAGE_GUARD_EXTERNAL_MEMORY is enabled. Default is `false`                                                                                                                                                                                                 |
 | Page Guard Align Buffer Sizes                  | debug.gfxrecon.page_guard_align_buffer_sizes                  | BOOL    | When the `page_guard` memory tracking mode is enabled, this option overrides the Vulkan API calls that report buffer memory properties to report that buffer sizes and alignments must be a multiple of the system page size.  This option is intended to be used with applications that perform CPU writes and GPU writes/copies to different buffers that are bound to the same page of mapped memory, which may result in data being lost when copying pages from the `page_guard` shadow allocation to the real allocation.  This data loss can result in visible corruption during capture.  Forcing buffer sizes and alignments to a multiple of the system page size prevents multiple buffers from being bound to the same page, avoiding data loss from simultaneous CPU writes to the shadow allocation and GPU writes to the real allocation for different buffers bound to the same page.  This option is only available for the Vulkan API.  Default is `true` |
 | Omit calls with NULL AHardwareBuffer*          | debug.gfxrecon.omit_null_hardware_buffers                     | BOOL    | Some GFXReconstruct capture files may replay with a NULL AHardwareBuffer* parameter, for example, vkGetAndroidHardwareBufferPropertiesANDROID.  Although this is invalid Vulkan usage, some drivers may ignore these calls and some may not. This option causes replay to omit Vulkan calls for which the AHardwareBuffer* would be NULL. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Page guard unblock SIGSEGV                     | debug.gfxrecon.page_guard_unblock_sigsegv                     | BOOL    | When the `page_guard` memory tracking mode is enabled and in the case that SIGSEGV has been marked as blocked in thread's signal mask, setting this enviroment variable to `true` will forcibly re-enable the signal in the thread's signal mask. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Page guard signal handler watcher              | debug.gfxrecon.page_guard_signal_handler_watcher              | BOOL    | When the `page_guard` memory tracking mode is enabled, setting this enviroment variable to `true` will spawn a thread which will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Page guard unblock SIGSEGV                     | debug.gfxrecon.page_guard_unblock_sigsegv                     | BOOL    | When the `page_guard` memory tracking mode is enabled and in the case that SIGSEGV has been marked as blocked in thread's signal mask, setting this environment variable to `true` will forcibly re-enable the signal in the thread's signal mask. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Page guard signal handler watcher              | debug.gfxrecon.page_guard_signal_handler_watcher              | BOOL    | When the `page_guard` memory tracking mode is enabled, setting this environment variable to `true` will spawn a thread which will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Page guard signal handler watcher max restores | debug.gfxrecon.page_guard_signal_handler_watcher_max_restores | INTEGER | Sets the number of times the watcher will attempt to restore the signal handler. Setting it to a negative value will make the watcher thread run indefinitely. Default is `1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Force FIFO present mode                        | debug.gfxrecon.force_fifo_present_mode                        | BOOL    | When the `force_fifo_present_mode` is enabled, force all present modes in vkGetPhysicalDeviceSurfacePresentModesKHR to VK_PRESENT_MODE_FIFO_KHR, app present mode is set in vkCreateSwapchain to VK_PRESENT_MODE_FIFO_KHR. Otherwise the original present mode will be used. Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Force FIFO present mode                        | debug.gfxrecon.force_fifo_present_mode                        | BOOL    | When the `force_fifo_present_mode` is enabled, force all present modes in vkGetPhysicalDeviceSurfacePresentModesKHR to VK_PRESENT_MODE_FIFO_KHR, app present mode is set in vkCreateSwapchain to VK_PRESENT_MODE_FIFO_KHR. Otherwise the original present mode will be used. Default is: `true`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 #### Settings File
 
@@ -360,6 +376,52 @@ A sample layer settings file, documenting each available setting, can be found
 in the GFXReconstruct GitHub repository at `layer/vk_layer_settings.txt`. Most
 binary distributions of the GFXReconstruct software will also include a sample
 settings file.
+
+#### Layer Settings via VK_EXT_layer_settings
+
+An alternative way to configure the GFXReconstruct Vulkan capture layer is via the Vulkan
+`VK_EXT_layer_settings` extension, which allows settings to be passed directly through the
+Vulkan API at instance creation time. This is especially useful in environments where
+environment variables and settings files are not available or convenient (such as some
+launchers or embedded systems).
+
+GFXReconstruct supports reading capture options from `VkLayerSettingEXT` structures
+provided in the `pNext` chain of `VkInstanceCreateInfo` when creating a Vulkan instance.
+This allows you to specify settings programmatically, without relying on environment
+variables or external files.
+
+To use this feature, add a `VkLayerSettingsCreateInfoEXT` structure to the `pNext` chain
+of your `VkInstanceCreateInfo`, and include settings for the
+`VK_LAYER_LUNARG_gfxreconstruct` layer. For example, to set the capture file name:
+
+```c
+const char* capture_file_value[] = { "my_capture.gfxr" };
+
+VkLayerSettingEXT capture_file_setting = {
+    .pLayerName = "VK_LAYER_LUNARG_gfxreconstruct",
+    .pSettingName = "capture_file",
+    .type = VK_LAYER_SETTING_TYPE_STRING_EXT,
+    .valueCount = 1,
+    .pValues = capture_file_value,
+};
+
+VkLayerSettingsCreateInfoEXT layer_settings_info = {
+    .sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT,
+    .pNext = NULL,
+    .settingCount = 1,
+    .pSettings = &capture_file_setting
+};
+
+VkInstanceCreateInfo instance_info = {
+    .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+    .pNext = &layer_settings_info,
+    // ... other fields ...
+};
+```
+
+Supported settings include:
+
+- `capture_file` (string): Path to use when creating the capture file (same as `GFXRECON_CAPTURE_FILE`).
 
 #### Selecting Settings for the page_guard Memory Tracking Mode
 
@@ -474,7 +536,7 @@ some content may be fast enough using the trigger property may be difficult.)
 ### Asset files
 
 When doing a trimmed capture, `debug.gfxrecon.capture_use_asset_file` gives the
-option to dump all assets (images, buffers and descriptors) separetly in a
+option to dump all assets (images, buffers and descriptors) separately in a
 different capture file called the asset file. When this option is enabled
 assets are tracked and only those that are changed during a tracking period
 (outside of a trim range) are dumped into the asset file. This first time a
@@ -710,6 +772,7 @@ usage: gfxrecon.py replay [-h] [-p LOCAL_FILE] [--version] [--log-level LEVEL]
                           [--screenshot-prefix PREFIX]
                           [--screenshot-interval INTERVAL]
                           [--screenshot-size SIZE] [--screenshot-scale SCALE]
+                          [--capture]
                           [--sfa] [--opcd] [--surface-index N] [--sync]
                           [--remove-unsupported] [--validate] [--onhb]
                           [--use-colorspace-fallback]
@@ -719,21 +782,11 @@ usage: gfxrecon.py replay [-h] [-p LOCAL_FILE] [--version] [--log-level LEVEL]
                           [--flush-measurement-range]
                           [--flush-inside-measurement-range] [--sgfs STATUS]
                           [--sgfr FRAME-RANGES] [--wait-before-present]
-                          [-m MODE] [--swapchain MODE] [--vssb]
-                          [--use-captured-swapchain-indices]
-                          [--dump-resources DUMP_RESOURCES]
-                          [--dump-resources-before-draw]
-                          [--dump-resources-image-format FORMAT]
-                          [--dump-resources-scale DR_SCALE]
+                          [-m MODE] [--swapchain MODE] [--present-mode MODE]
+                          [--vssb] [--use-captured-swapchain-indices]
+                          [--dump-resources <filename>.json]
                           [--dump-resources-dir DIR]
-                          [--dump-resources-dump-depth-attachment]
-                          [--dump-resources-dump-color-attachment-index N]
-                          [--dump-resources-dump-vertex-index-buffers]
-                          [--dump-resources-json-output-per-command]
-                          [--dump-resources-dump-immutable-resources]
-                          [--dump-resources-dump-all-image-subresources]
-                          [--dump-resources-dump-raw-images]
-                          [--dump-resources-dump-separate-alpha] [--pbi-all]
+                          [--pbi-all]
                           [--pbis RANGES] [--pcj]
                           [--save-pipeline-cache DEVICE_FILE]
                           [--load-pipeline-cache DEVICE_FILE]
@@ -813,6 +866,12 @@ options:
                         Scale screenshot dimensions. Overrides --screenshot-
                         size, if specified. Expects a number which can be
                         decimal
+  --capture             Capture the replaying GFXR file. Capture uses the same log
+                        options as replay. All other capture option behavior and
+                        usage is the same as when capturing with the GFXR layer. The
+                        capture functionality is included in the `gfxrecon-replay`
+                        executable--no GFXR capture layer is added to the Vulkan layer
+                        chain.
   --sfa, --skip-failed-allocations
                         Skip vkAllocateMemory, vkAllocateCommandBuffers, and
                         vkAllocateDescriptorSets calls that failed during
@@ -880,7 +939,7 @@ options:
                         frame inside the measurement range. (forwarded to
                         replay tool)
   --sgfs STATUS, --skip-get-fence-status STATUS
-                        Specify behaviour to skip calls to vkWaitForFences and
+                        Specify behavior to skip calls to vkWaitForFences and
                         vkGetFenceStatus. Default is 0 - No skip (forwarded to
                         replay tool)
   --sgfr FRAME-RANGES, --skip-get-fence-ranges FRAME-RANGES
@@ -899,55 +958,22 @@ options:
   --swapchain MODE      Choose a swapchain mode to replay. Available modes
                         are: virtual, captured, offscreen (forwarded to replay
                         tool)
+  --present-mode MODE   Set swapchain's VkPresentModeKHR. Available modes are:
+                        capture, immediate, mailbox, fifo, fifo_relaxed
+                        (forwarded to replay tool)
   --vssb, --virtual-swapchain-skip-blit
                         Skip blit to real swapchain to gain performance during
                         replay.
   --use-captured-swapchain-indices
                         Same as "--swapchain captured". Ignored if the "--
                         swapchain" option is used.
-  --dump-resources DUMP_RESOURCES
-                        The capture file will be examined, and <submit-
-                        index,command-index,draw-call-index> will be converted
-                        to <arg> as used in --dump-resources <arg>. The
-                        converted args will be used used as the args for dump
-                        resources.
-  --dump-resources-before-draw
-                        In addition to dumping gpu resources after the Vulkan
-                        draw calls specified by the --dump-resources argument,
-                        also dump resources before the draw calls.
-  --dump-resources-image-format FORMAT
-                        Image file format to use when dumping image resources.
-                        Available formats are: bmp, png
-  --dump-resources-scale DR_SCALE
-                        tScale images generated by dump resources by the given
-                        scale factor. The scale factor must be a floating
-                        point number greater than 0. Values greater than 10
-                        are capped at 10. Default value is 1.0.
+  --dump-resources <filename>.json
+                        Extract dump resources block indices and options from the
+                        specified json file. The format for the json file is
+                        documented in detail in vulkan_dump_resources.md.
   --dump-resources-dir DIR
                         Directory to write dump resources output files.
                         Default is "/sdcard" (forwarded to replay tool)
-  --dump-resources-dump-depth-attachment
-                        Dump depth attachment when dumping a draw call.
-                        Default is false.
-  --dump-resources-dump-color-attachment-index N
-                        Specify which color attachment to dump when dumping
-                        draw calls. It should be an unsigned zero based
-                        integer. Default is to dump all color attachments.
-  --dump-resources-dump-vertex-index-buffers
-                        Enables dumping of vertex and index buffers while
-                        dumping draw call resources. Default is disabled.
-  --dump-resources-json-output-per-command
-                        Enables storing a json output file for each dumped
-                        command. Default is disabled.
-  --dump-resources-dump-immutable-resources
-                        Dump immutable immutable shader resources.
-  --dump-resources-dump-all-image-subresources
-                        Dump all available mip levels and layers when dumping
-                        images.
-  --dump-resources-dump-raw-images
-                        Dump images verbatim as raw binary files.
-  --dump-resources-dump-separate-alpha
-                        Dump image alpha in a separate image file.
   --pbi-all             Print all block information.
   --pbis RANGES         Print block information between block index1 and block
                         index2
@@ -985,8 +1011,8 @@ adb shell am force-stop com.lunarg.gfxreconstruct.replay
 adb shell am start -n "com.lunarg.gfxreconstruct.replay/android.app.NativeActivity" \
                    -a android.intent.action.MAIN \
                    -c android.intent.category.LAUNCHER \
-                   --es "args" \
-                   "<arg-list>"
+                   --es args \
+                   '"<arg-list>"'
 ```
 
 If `gfxrecon-replay` was built with Vulkan Validation Layer support,

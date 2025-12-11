@@ -16,6 +16,8 @@
 
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
+include(cmake/SetupVcpkg.cmake)
+
 project(dive VERSION 1.1.2)
 
 # ------------------------------------------------------------------------------
@@ -43,6 +45,10 @@ option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
+
+if(NOT ANDROID)
+    find_package(crashpad CONFIG REQUIRED)
+endif()
 
 # ------------------------------------------------------------------------------
 # Determining version info

@@ -40,6 +40,12 @@
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
 #include "dive/os/terminal.h"
+
+#include "client/crashpad_client.h"
+#include "client/crash_report_database.h"
+#include "client/settings.h"
+#include "dive/os/command_utils.h"
+
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
@@ -69,6 +75,58 @@ ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
 //--------------------------------------------------------------------------------------------------
+
+absl::Status InitializeCrashpad()
+{
+    absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
+    if (!exe_dir.ok())
+    {
+        return exe_dir.status();
+    }
+
+    std::string handler_name = "crashpad_handler";
+#ifdef _WIN32
+    handler_name += ".exe";
+#endif
+
+    std::filesystem::path handler_fs = *exe_dir / handler_name;
+    std::filesystem::path db_fs = *exe_dir / "crash_db";
+    std::filesystem::path metrics_fs = *exe_dir / "crash_metrics";
+
+#ifdef _WIN32
+    std::wstring handler_path = handler_fs.wstring();
+    std::wstring database_path = db_fs.wstring();
+    std::wstring metrics_path = metrics_fs.wstring();
+#else
+    std::string handler_path = handler_fs.string();
+    std::string database_path = db_fs.string();
+    std::string metrics_path = metrics_fs.string();
+#endif
+
+    std::string url = "";
+
+    std::map<std::string, std::string> annotations;
+    annotations["format"] = "minidump";
+    annotations["product"] = "Dive";
+    annotations["version"] = "1.2.1";
+
+    std::vector<std::string> arguments;
+    arguments.push_back("--no-rate-limit");
+
+    static crashpad::CrashpadClient client;
+
+    bool success = client.StartHandler(base::FilePath(handler_path),
+                                       base::FilePath(database_path),
+                                       base::FilePath(metrics_path),
+                                       url,
+                                       annotations,
+                                       arguments,
+                                       /* restartable */ true,
+                                       /* asynchronous_start */ false);
+
+    return success ? absl::OkStatus() : absl::InternalError("Failed to start Crashpad handler.");
+}
+
 class CrashHandler
 {
 public:

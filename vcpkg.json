@@ -1,0 +1,6 @@
+{
+  "name": "dive",
+  "dependencies": [
+    "crashpad"
+  ]
+}

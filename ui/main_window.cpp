@@ -445,7 +445,6 @@ MainWindow::MainWindow(ApplicationController &controller) :
 
         m_pm4_event_search_bar = new SearchBar(this);
         m_pm4_event_search_bar->setObjectName("Event Search Bar");
-        m_pm4_event_search_bar->setView(m_pm4_command_hierarchy_view);
 
         QHBoxLayout *search_layout = new QHBoxLayout;
         search_layout->addWidget(m_pm4_event_search_bar);

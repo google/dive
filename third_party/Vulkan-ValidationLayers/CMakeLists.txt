@@ -17,5 +17,5 @@
 # License is handled by ui/CMakeLists.txt
 install(
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/android/${ANDROID_ABI}/libVkLayer_khronos_validation.so
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION "${DIVE_INSTALL_DESTINATION}"
 )

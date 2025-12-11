@@ -49,6 +49,7 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
         ${CMAKE_CURRENT_SOURCE_DIR}/../../
 )
+target_link_libraries(dive_renderdoc PUBLIC vulkan_registry)
 
 # The Android Gradle script invokes its own CMake, starting from gfxrecon-replay's CMakeLists.txt.
 # This build system is isolated and does not see the gpu_time target defined in the root CMakeLists.txt.
@@ -77,6 +78,7 @@ target_link_libraries(
     dive_renderdoc
     gfxrecon_decode
     gpu_time
+    vulkan_registry
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if(WIN32)

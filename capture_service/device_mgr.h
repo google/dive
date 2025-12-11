@@ -59,6 +59,10 @@ struct DeviceState
     std::string m_enforce;
     bool        m_root_access_requested = false;
     bool        m_is_root_shell = false;
+    std::string m_development_settings_enabled;
+    std::string m_stay_on_while_plugged_in;
+    std::string m_screen_off_timeout;
+    std::string m_doff_screen_timeout_ms;
 };
 
 enum class GfxrReplayOptions
@@ -184,6 +188,9 @@ public:
 
     // Triggers a screenshot and saves it to the specified path.
     absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
+
+    void                 SetEnableScreenAlwaysOn(bool enable_screen_always_on);
+    absl::StatusOr<bool> IsScreenOn() const;
 
 private:
     // The ABI must be consistent between the connected device and the Dive device libraries

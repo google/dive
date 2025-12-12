@@ -151,7 +151,7 @@ TEST(TcpClientFakeTest, GetCaptureFileSizeSuccess)
         FileSizeResponse resp;
         resp.SetFound(true);
         resp.SetFileSizeStr(std::to_string(kExpectedSize));
-        (void)SendSocketMessage(conn, resp);
+        SendSocketMessage(conn, resp).IgnoreError();
     });
 
     auto result = ctx.client->GetCaptureFileSize("/remote/file");
@@ -169,7 +169,7 @@ TEST(TcpClientFakeTest, GetCaptureFileSizeNotFound)
         FileSizeResponse resp;
         resp.SetFound(false);
         resp.SetErrorReason("File does not exist");
-        (void)SendSocketMessage(conn, resp);
+        SendSocketMessage(conn, resp).IgnoreError();
     });
 
     auto result = ctx.client->GetCaptureFileSize("/remote/missing");
@@ -188,7 +188,7 @@ TEST(TcpClientFakeTest, GetCaptureFileSizeInvalidResponse)
         FileSizeResponse resp;
         resp.SetFound(true);
         resp.SetFileSizeStr("not a number");
-        (void)SendSocketMessage(conn, resp);
+        SendSocketMessage(conn, resp).IgnoreError();
     });
 
     auto result = ctx.client->GetCaptureFileSize("/remote/file");
@@ -213,8 +213,8 @@ TEST(TcpClientFakeTest, DownloadFileFromServerSuccess)
         resp.SetFileSizeStr(std::to_string(file_content.size()));
         if (SendSocketMessage(conn, resp).ok())
         {
-            (void)conn->Send(reinterpret_cast<const uint8_t*>(file_content.data()),
-                             file_content.size());
+            conn->Send(reinterpret_cast<const uint8_t*>(file_content.data()), file_content.size())
+            .IgnoreError();
         }
     });
 
@@ -240,7 +240,7 @@ TEST(TcpClientFakeTest, DownloadFileFromServerNotFound)
         DownloadFileResponse resp;
         resp.SetFound(false);
         resp.SetErrorReason("Restricted access");
-        (void)SendSocketMessage(conn, resp);
+        SendSocketMessage(conn, resp).IgnoreError();
     });
 
     auto status = ctx.client->DownloadFileFromServer("/remote/secret", "dont_care.tmp");
@@ -258,7 +258,7 @@ TEST(TcpClientFakeTest, StartPm4CaptureSuccess)
         received_type = req->GetMessageType();
         Pm4CaptureResponse resp;
         resp.SetString("/var/log/capture.pm4");
-        (void)SendSocketMessage(conn, resp);
+        SendSocketMessage(conn, resp).IgnoreError();
     });
 
     auto result = ctx.client->StartPm4Capture();

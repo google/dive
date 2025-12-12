@@ -30,10 +30,7 @@ namespace Network
 class FakeSocketConnection : public ISocketConnection
 {
 public:
-    FakeSocketConnection() :
-        m_is_open(true)
-    {
-    }
+    FakeSocketConnection() {}
 
     ~FakeSocketConnection() override
     {

@@ -32,7 +32,7 @@ void DefaultMessageHandler::OnConnect()
 }
 
 void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message,
-                                          SocketConnection*              client_conn)
+                                          ISocketConnection*             client_conn)
 {
     if (!message)
     {

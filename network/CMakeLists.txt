@@ -61,6 +61,25 @@ if(NOT ANDROID)
             absl::status_matchers
     )
     gtest_discover_tests(messages_test)
+
+    add_executable(tcp_client_test tcp_client_test.cc)
+    target_link_libraries(
+        tcp_client_test
+        PRIVATE network gtest gtest_main absl::status absl::statusor
+    )
+    gtest_discover_tests(tcp_client_test PROPERTIES TIMEOUT 5)
+
+    # The UnixDomainServer (UDS) with abstract namespace listens only on UNIX OS (Android/Linux).
+    # UDS is not supported by Windows.
+    # UDS with abstract namespace is not supported by Apple.
+    if(NOT WIN32 AND NOT APPLE)
+        add_executable(unix_domain_server_test unix_domain_server_test.cc)
+        target_link_libraries(
+            unix_domain_server_test
+            PRIVATE network gtest gtest_main absl::status absl::statusor
+        )
+        gtest_discover_tests(unix_domain_server_test PROPERTIES TIMEOUT 5)
+    endif()
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

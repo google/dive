@@ -187,7 +187,7 @@ private:
     CaptureFileManager *m_capture_manager = nullptr;
 
     ProgressTrackerCallback         m_progress_tracker;
-    std::unique_ptr<Dive::DataCore> m_data_core;
+    std::shared_ptr<Dive::DataCore> m_data_core;
     QString                         m_capture_file;
     QString                         m_last_file_path;
     Dive::LogRecord                 m_log_record;

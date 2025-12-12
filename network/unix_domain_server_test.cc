@@ -138,6 +138,7 @@ TEST(UnixDomainServerTest, HandShakeFails)
 
     // Send the malformed message.
     ASSERT_TRUE((*client_conn)->Send(buffer.data(), buffer.size()).ok());
+    absl::SleepFor(absl::Milliseconds(50));
 
     // The server should detect the error and close the connection.
     // ReceiveSocketMessage should return an error.
@@ -193,6 +194,7 @@ TEST(UnixDomainServerTest, PingPongFails)
 
     // Send the malicious header.
     ASSERT_TRUE((*client_conn)->Send(buffer.data(), buffer.size()).ok());
+    absl::SleepFor(absl::Milliseconds(50));
 
     // The server should detect the excessive size in the header and close the connection.
     absl::StatusOr<std::unique_ptr<ISerializable>> response_msg = ReceiveSocketMessage(

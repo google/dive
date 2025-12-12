@@ -91,7 +91,8 @@ jobs:
             libbsd-dev \
             ninja-build \
             python3-mako \
-            libxcb-glx0-dev
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
           which gcc-14
       - name: Generate build files with cmake
         run: |
@@ -143,7 +144,8 @@ jobs:
             libbsd-dev \
             ninja-build \
             python3-mako \
-            libxcb-glx0-dev
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
           which gcc-14
       - name: Generate build files with cmake
         run: |
@@ -195,7 +197,8 @@ jobs:
           libbsd-dev \
           ninja-build \
           python3-mako \
-          libxcb-glx0-dev
+          libxcb-glx0-dev \
+          libcurl4-openssl-dev
           which clang-19
       - name: Generate build files with cmake
         run: |
@@ -247,7 +250,8 @@ jobs:
           libbsd-dev \
           ninja-build \
           python3-mako \
-          libxcb-glx0-dev
+          libxcb-glx0-dev \
+          libcurl4-openssl-dev
           which clang-19
       - name: Generate build files with cmake
         run: |
@@ -298,6 +302,13 @@ jobs:
           python3 -m pip install --break-system-packages mako
       - name: Zero ccache stats
         run: ccache -z
+      - name: Patch Crashpad (fix macOS exc.defs path)
+        run: |
+          # Use xcrun to dynamically find the SDK path. 
+          # The sed command uses this path to update CMakeLists.txt.
+          SDK_PATH=$(xcrun --show-sdk-path)
+          echo "Detected SDK Path: $SDK_PATH"
+          sed -i '' "s|/usr/include/mach/exc.defs|$SDK_PATH/usr/include/mach/exc.defs|g" third_party/crashpad/util/CMakeLists.txt
       - name: Generate build files with cmake
         run: |
           time cmake -DCMAKE_BUILD_TYPE=Debug \
@@ -349,6 +360,13 @@ jobs:
           python3 -m pip install --break-system-packages mako
       - name: Zero ccache stats
         run: ccache -z
+      - name: Patch Crashpad (fix macOS exc.defs path)
+        run: |
+          # Use xcrun to dynamically find the SDK path. 
+          # The sed command uses this path to update CMakeLists.txt.
+          SDK_PATH=$(xcrun --show-sdk-path)
+          echo "Detected SDK Path: $SDK_PATH"
+          sed -i '' "s|/usr/include/mach/exc.defs|$SDK_PATH/usr/include/mach/exc.defs|g" third_party/crashpad/util/CMakeLists.txt
       - name: Generate build files with cmake
         run: |
           time cmake -DCMAKE_BUILD_TYPE=Release \

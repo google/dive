@@ -37,10 +37,14 @@ pushd build/package_linux/device
     cmake --install . --prefix install || exit 1
 popd
 
+mkdir -p build/package_linux/extras/folder
+touch build/package_linux/extras/folder/example.txt
+
 pushd build/package_linux/host
     cmake -G "Ninja" \
         -DCMAKE_BUILD_TYPE=Release \
         -DDIVE_ANDROID_PREBUILT="`pwd`/../device/install" \
+        -DDIVE_INSTALL_EXTRAS="`pwd`/../extras" \
         -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
         -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
         ${DIVE_ROOT} || exit 1

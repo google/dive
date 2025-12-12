@@ -22,6 +22,14 @@ if(EXISTS "${DIVE_ANDROID_PREBUILT}")
     )
 endif()
 
+# Extra resources, e.g. private plugins
+if(EXISTS "${DIVE_INSTALL_EXTRAS}")
+    install(
+        DIRECTORY "${DIVE_INSTALL_EXTRAS}/"
+        DESTINATION "${DIVE_INSTALL_DESTINATION}/"
+    )
+endif()
+
 if(CMAKE_HOST_LINUX)
     add_subdirectory(linux)
 endif()

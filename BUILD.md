@@ -62,103 +62,113 @@ set DIVE_ROOT_PATH=C:\path\to\dive
 
 ### Linux
 
-```sh
-# Assumes python is on the path
+1. Configure
+    ```sh
+    # Assumes python is on the path
 
-cd $DIVE_ROOT_PATH
-rm -rf build
+    cd $DIVE_ROOT_PATH
+    rm -rf build/host
+    rm -rf build/pkg/host
 
-cmake . -GNinja -DCMAKE_BUILD_TYPE=Debug -Bbuild 
-
-ninja -C build
-
-cmake --install build
-```
-
-You can specify the build type for release as well
-with `-DCMAKE_BUILD_TYPE=Release` instead.
+    cmake . -G "Ninja Multi-Config" -Bbuild/host
+    ```
+1. Build
+    ```sh
+    cmake --build build/host --config=Debug
+    ```
+    You can specify the build type for release as well
+    with `--config=Release` instead.
+1.  Install in a predetermined location so that the host tools can locate the device libraries
+    ```sh
+    cmake --install build/host --prefix build/pkg/host --config Debug
+    ```
 
 ### Windows
 
-```bat
-REM Assumes python is on the path
+1. Configure
+    ```bat
+    REM Assumes python is on the path
 
-cd %DIVE_ROOT_PATH%
-rmdir /s build
+    cd %DIVE_ROOT_PATH%
+    rmdir /s build\host
+    rmdir /s build\pkg\host
 
-cmake . -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Debug -Bbuild
-```
-
-You can specify other build types as well with `-DCMAKE_BUILD_TYPE=<Debug/Release/RelWithDebInfo/MinSizeRel>`. If you are opening the VS IDE to build, make sure the selected build type in the dropdown matches the type specified earlier, to ensure proper version info is reflected by the built host tools.
-
-TODO(b/460765024): Support multi-configuration generator (VS) for Windows build and disallow `-DCMAKE_BUILD_TYPE=` flag
-
-Open `dive.sln` in Visual Studio and build.
-
-Or run:
-```bat
-cmake --build build
-```
-
-TODO(b/462767957): Fix Windows build host tools install
+    cmake . -G "Visual Studio 17 2022" -Bbuild\host
+    ```
+1. Build with Visual Studio by opening `dive.sln` using IDE and selecting the appropriate build type, or build using cmake:
+    ```sh
+    cmake --build build\host --config=Debug
+    ```
+    You can specify other build types as well
+    with `--config=<Debug/Release/RelWithDebInfo/MinSizeRel>` instead.
+1.  Install in a predetermined location so that the host tools can locate the device libraries
+    ```sh
+    cmake --install build\host --prefix build\pkg\host --config Debug
+    ```
 
 ## Dive Device Libraries
 
-### Linux
-
-Warning: Release build is not supported
+Warning: We only support "Debug" for the gradle build for GFXR portion, so it will be hardcoded and not depend on the `--config` below.
 
 Provide the appropriate `ANDROID_ABI` depending on your device.
 
-```sh
-cd $DIVE_ROOT_PATH
+### Linux
 
-rm -rf build_android
+1. Configure
+    ```sh
+    cd $DIVE_ROOT_PATH
 
-cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-    -G "Ninja" \
-    -Bbuild_android \
-    -DCMAKE_MAKE_PROGRAM="ninja" \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_SYSTEM_NAME=Android \
-    -DANDROID_ABI=arm64-v8a \
-    -DANDROID_PLATFORM=android-26 \
-    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
-    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+    rm -rf build/device
+    rm -rf build/pkg/device
 
-cmake --build build_android --config=Debug
-
-cmake --install build_android
-```
+    cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+        -G "Ninja Multi-Config" \
+        -Bbuild/device \
+        -DCMAKE_MAKE_PROGRAM="ninja" \
+        -DCMAKE_SYSTEM_NAME=Android \
+        -DANDROID_ABI=arm64-v8a \
+        -DANDROID_PLATFORM=android-26 \
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+    ```
+1. Build
+    ```sh
+    cmake --build build/device --config=Debug
+    ```
+1. Install in a predetermined location so that the host tools can locate the device libraries
+    ```sh
+    cmake --install build/device --prefix build/pkg/device --config Debug
+    ```
 
 ### Windows
 
-Warning: Release build is not supported
+Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019)
 
-Provide the appropriate `ANDROID_ABI` depending on your device.
+1. Configure
+    ```bat
+    cd %DIVE_ROOT_PATH%
 
-Note: On Windows, run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+    rmdir /s build\device
+    rmdir /s build\pkg\device
 
-```bat
-cd %DIVE_ROOT_PATH%
-
-rmdir /s build_android
-
-cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
-    -G "Ninja" ^
-    -Bbuild_android ^
-    -DCMAKE_MAKE_PROGRAM="ninja" ^
-    -DCMAKE_BUILD_TYPE=Debug  ^
-    -DCMAKE_SYSTEM_NAME=Android ^
-    -DANDROID_ABI=arm64-v8a ^
-    -DANDROID_PLATFORM=android-26 ^
-    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
-    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
-
-cmake --build build_android --config=Debug
-
-cmake --install build_android
-```
+    cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
+        -G "Ninja Multi-Config" ^
+        -Bbuild\device ^
+        -DCMAKE_MAKE_PROGRAM="ninja" ^
+        -DCMAKE_SYSTEM_NAME=Android ^
+        -DANDROID_ABI=arm64-v8a ^
+        -DANDROID_PLATFORM=android-26 ^
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+    ```
+1. Build
+    ```bat
+    cmake --build build\device --config=Debug
+    ```
+1. Install
+    ```bat
+    cmake --install build\device --prefix build\pkg\device --config Debug
+    ```
 
 ### Troubleshooting Tips
 

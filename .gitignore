@@ -13,7 +13,6 @@
 
 # Build-related directories
 build/
-build_android/
 third_party/freedreno/libs/
 third_party/freedreno/obj
 .gradle/
@@ -24,7 +23,6 @@ g_*.cpp
 
 .env
 
-install/
 gfxr_capture/
 gfxr_capture_*/
 **/.DS_Store

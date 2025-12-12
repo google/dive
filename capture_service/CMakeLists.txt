@@ -71,6 +71,7 @@ else()
         absl::strings
         absl::statusor
         component_files
+        resolve_device_path
         version_info
         command_utils
     )
@@ -91,7 +92,7 @@ else()
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
 
-    install(TARGETS dive_client_cli DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS dive_client_cli DESTINATION ${DIVE_INSTALL_DESTINATION})
 
     enable_testing()
     include(GoogleTest)

@@ -27,6 +27,21 @@ if(NOT ANDROID)
     )
 endif()
 
+# === resolve_device_path ======================================================
+
+if(NOT ANDROID)
+    add_library(
+        resolve_device_path
+        resolve_device_path.h
+        resolve_device_path.cpp
+    )
+    target_link_libraries(
+        resolve_device_path
+        PUBLIC absl::statusor absl::strings
+        PRIVATE dive_src_includes command_utils
+    )
+endif()
+
 # === version_info =============================================================
 
 if(NOT ANDROID)
@@ -34,8 +49,7 @@ if(NOT ANDROID)
     target_link_libraries(
         version_info
         PUBLIC absl::statusor absl::strings
-        PRIVATE dive_build_defs dive_src_includes
-        PRIVATE command_utils
+        PRIVATE dive_build_defs dive_src_includes resolve_device_path
     )
 endif()
 

@@ -24,7 +24,7 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 # For each new plugin, you can add an add_subdirectory call here.
 add_subdirectory(plugin_sample)
 
-install(CODE "file(MAKE_DIRECTORY ${CMAKE_INSTALL_PREFIX}/plugins)")
+install(CODE "file(MAKE_DIRECTORY ${DIVE_INSTALL_DESTINATION}/plugins)")
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

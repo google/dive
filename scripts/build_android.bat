@@ -18,8 +18,6 @@
 setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
 set BUILD_TYPE=Debug
-set SRC_DIR=%PROJECT_ROOT%
-set GFXR_ROOT_DIR=%PROJECT_ROOT%\\third_party\\gfxreconstruct\\android
 set startTime=%time%
 
 if "%~1"=="" goto parsingdone
@@ -33,36 +31,33 @@ if not !BUILD_TYPE!==%1 (
 :parsingdone
 echo Building all the following types: !BUILD_TYPE!
 
+pushd %PROJECT_ROOT%
+
+cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
+    -G "Ninja Multi-Config"^
+    -Bbuild/device ^
+    -DCMAKE_MAKE_PROGRAM="ninja" ^
+    -DCMAKE_SYSTEM_NAME=Android ^
+    -DANDROID_ABI=arm64-v8a ^
+    -DANDROID_PLATFORM=android-26 ^
+    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
+    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER ^
+
+if not !ERRORLEVEL!==0 exit /b 1
+
 (for %%b in (!BUILD_TYPE!) do (
     setlocal enabledelayedexpansion
     echo.
     set build=%%b
-    set BUILD_DIR=%PROJECT_ROOT%\\build_android\\!build!
-    echo BUILD_DIR: !BUILD_DIR!
-    md !BUILD_DIR!
 
-    pushd !BUILD_DIR!
-    cmake  -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
-        -G "Ninja"^
-        -DCMAKE_MAKE_PROGRAM="ninja" ^
-        -DCMAKE_BUILD_TYPE=!build!  ^
-        -DCMAKE_SYSTEM_NAME=Android ^
-        -DANDROID_ABI=arm64-v8a ^
-        -DANDROID_PLATFORM=android-26 ^
-        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
-        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER ^
-        %SRC_DIR%
-
+    cmake --build build/device --config=!build!
     if not !ERRORLEVEL!==0 exit /b 1
 
-    cmake --build . --config=!build! -j
+    cmake --install build/device --prefix build/pkg/device --config=!build! 
     if not !ERRORLEVEL!==0 exit /b 1
-
-    cmake --install .
-    if not !ERRORLEVEL!==0 exit /b 1
-
-    popd
 ))
+
+popd
 
 echo Start Time: %startTime%
 echo Finish Time: %time%

@@ -33,13 +33,17 @@ jobs:
           python3 -m pip install mako
       - name: Generate build files with cmake
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 -Bbuild .
+          cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64 -Bbuild/host .
       - name: Build Dive host tools with VS 2022
         run: |
-          cmake --build build --config Debug
+          cmake --build build/host --config Debug
       - name: Run tests
         run: |
-          ctest --output-on-failure -C Debug --test-dir build
+          ctest --output-on-failure -C Debug --test-dir build/host
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Debug
+
   build_Windows_Release:
     name: "Windows release build"
     runs-on: windows-2022
@@ -60,18 +64,21 @@ jobs:
           python3 -m pip install mako
       - name: Generate build files with cmake
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -Bbuild .
+          cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64 -Bbuild/host .
       - name: Build Dive host tools with VS 2022
         run: |
-          cmake --build build --config Release
+          cmake --build build/host --config Release
       - name: Run tests
         run: |
-          ctest --output-on-failure -C Release --test-dir build
+          ctest --output-on-failure -C Release --test-dir build/host
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Release
       - name: Upload test output
         uses: actions/upload-artifact@v4
         with:
           name: test_output_windows
-          path: build/test_output
+          path: build/host/test_output
 
 
   build_Linux_Gcc_Debug:
@@ -106,26 +113,27 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 \
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 \
-            -GNinja \
-            -Bbuild .
+            -G "Ninja Multi-Config" \
+            -Bbuild/host .
       - name: Build Dive host tools with ninja with gcc-14
         run: |
-          ninja -C build
+          cmake --build build/host --config Debug
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
-
       - name: Run tests
         run: |
           export DISPLAY=:99
-          ctest --output-on-failure -C Debug --test-dir build
+          ctest --output-on-failure -C Debug --test-dir build/host
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Debug
 
   build_Linux_Gcc_Release:
     name: "Linux gcc release build"
@@ -158,26 +166,27 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc-14 \
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++-14 \
-            -GNinja \
-            -Bbuild .
+            -G"Ninja Multi-Config" \
+            -Bbuild/host .
       - name: Build Dive host tools with ninja with gcc-14
         run: |
-          ninja -C build
+          cmake --build build/host --config Release
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
-
       - name: Run tests
         run: |
           export DISPLAY=:99
-          ctest --output-on-failure -C Release --test-dir build
+          ctest --output-on-failure -C Release --test-dir build/host
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Release
 
   build_Linux_Clang_Debug:
     name: "Linux clang debug build"
@@ -210,26 +219,27 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
-            -GNinja \
-            -Bbuild .
+            -G"Ninja Multi-Config" \
+            -Bbuild/host .
       - name: Build Dive host tools with ninja with clang-19
         run: |
-          ninja -C build
+          cmake --build build/host --config Debug
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
-
       - name: Run tests
         run: |
           export DISPLAY=:99
-          ctest --output-on-failure -C Debug --test-dir build
+          ctest --output-on-failure -C Debug --test-dir build/host
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Debug
 
   build_Linux_Clang_Release:
     name: "Linux clang release build"
@@ -262,31 +272,32 @@ jobs:
       - name: Generate build files with cmake
         run: |
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
-            -GNinja \
-            -Bbuild .
+            -G"Ninja Multi-Config" \
+            -Bbuild/host .
       - name: Build Dive host tools with ninja with clang-19
         run: |
-          ninja -C build
+          cmake --build build/host --config Release
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
-
       - name: Run tests
         run: |
           export DISPLAY=:99
-          ctest --output-on-failure -C Release --test-dir build
+          ctest --output-on-failure -C Release --test-dir build/host
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Release
       - name: Upload test output
         uses: actions/upload-artifact@v4
         with:
           name: test_output_linux
-          path: build/test_output
+          path: build/host/test_output
 
   build_MacOS_Debug:
     name: "MacOS debug build"
@@ -322,24 +333,27 @@ jobs:
         run: ccache -z
       - name: Generate build files with cmake
         run: |
-          time cmake -DCMAKE_BUILD_TYPE=Debug \
+          time cmake \
             -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
             -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
-            -GNinja \
-            -Bbuild .
+            -G"Ninja Multi-Config" \
+            -Bbuild/host .
       - name: Build Dive host tools with ninja
         run: |
-          time ninja -C build -d stats
+          time cmake --build build/host --config Debug
       - name: Show ccache stats
         run: ccache -s
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Debug
       - name: Run tests
         run: |
-          ctest --output-on-failure -C Debug --test-dir build
+          ctest --output-on-failure -C Debug --test-dir build/host
 
   build_MacOS_Release:
     name: "MacOS release build"
@@ -375,24 +389,27 @@ jobs:
         run: ccache -z
       - name: Generate build files with cmake
         run: |
-          time cmake -DCMAKE_BUILD_TYPE=Release \
+          time cmake \
             -DCMAKE_C_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
             -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
-            -GNinja \
-            -Bbuild .
+            -G"Ninja Multi-Config" \
+            -Bbuild/host .
       - name: Build Dive host tools with ninja
         run: |
-          time ninja -C build -d stats
+          time cmake --build build/host --config Release
       - name: Show ccache stats
         run: ccache -s
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
+      - name: Install under build dir
+        run: |
+          cmake --install build/host --prefix build/pkg/host --config Release
       - name: Run tests
         run: |
-          ctest --output-on-failure -C Release --test-dir build
+          ctest --output-on-failure -C Release --test-dir build/host
       - name: Upload test output
         uses: actions/upload-artifact@v4
         with:
@@ -424,14 +441,12 @@ jobs:
         with:
           ndk-version: r25
           add-to-path: true
-
-      - name: Gemerate build files with cmake
+      - name: Generate build files with cmake
         run: |
           # DIVE_GFXR_GRADLE_CONSOLE=plain produces more readable output in CI
           cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-          -G "Ninja" \
+          -G "Ninja Multi-Config" \
           -DCMAKE_MAKE_PROGRAM="ninja" \
-          -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_SYSTEM_NAME=Android \
           -DANDROID_ABI=arm64-v8a \
           -DANDROID_PLATFORM=android-26 \
@@ -439,16 +454,19 @@ jobs:
           -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
           -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
           -DDIVE_GFXR_GRADLE_CONSOLE=plain \
-          -Bbuild .
+          -Bbuild/device .
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Build lib with NDK
         run: |
-          ninja -C build
+          cmake --build build/device --config Debug
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Install under build dir
+        run: |
+          cmake --install build/device --prefix build/pkg/device --config Debug
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/device/.ninja_log

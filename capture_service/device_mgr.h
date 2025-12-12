@@ -225,7 +225,5 @@ private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name);
-
 DeviceManager &GetDeviceManager();
 }  // namespace Dive

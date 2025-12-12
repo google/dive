@@ -13,39 +13,35 @@ Follow the instructions in [BUILD.md](BUILD.md) to build
 
 # UI
 
-The recommended way of using Dive. Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device libraries.
+The recommended way of using Dive. Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device libraries, and have them installed under `build/`
 
 ```sh
 # On Linux
-$DIVE_ROOT_PATH/build/ui/dive
+$DIVE_ROOT_PATH/build/pkg/host/dive
 ```
 
 ```bat
 REM On Windows
-%DIVE_ROOT_PATH%\build\ui\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\dive.exe
+%DIVE_ROOT_PATH%\build\pkg\host\dive.exe
 ```
-
-TODO(b/462767957): Figure out where these binaries are expected with the install flow
 
 # CLI Tools
 
-Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device libraries.
+Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device libraries, and have them installed under `build/`
 
 ```sh
 # On Linux
-$DIVE_ROOT_PATH/build/bin/dive_client_cli
-$DIVE_ROOT_PATH/build/bin/divecli
-$DIVE_ROOT_PATH/build/bin/host_cli
+$DIVE_ROOT_PATH/build/pkg/host/dive_client_cli
+$DIVE_ROOT_PATH/build/pkg/host/divecli
+$DIVE_ROOT_PATH/build/pkg/host/host_cli
 ```
 
 ```bat
 REM On Windows
-%DIVE_ROOT_PATH%\build\bin\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\dive_client_cli.exe
-%DIVE_ROOT_PATH%\build\bin\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\divecli.exe
-%DIVE_ROOT_PATH%\build\bin\DIVE_HOST_TOOLS_BUILD_TYPE_HERE\host_cli.exe
+%DIVE_ROOT_PATH%\build\pkg\host\dive_client_cli.exe
+%DIVE_ROOT_PATH%\build\pkg\host\divecli.exe
+%DIVE_ROOT_PATH%\build\pkg\host\host_cli.exe
 ```
-
-TODO(b/462767957): Figure out where these binaries are expected with the install flow
 
 ## `divecli`
 Supports manipulation of PM4-related files and raw strings

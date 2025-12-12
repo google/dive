@@ -14,8 +14,14 @@
 # limitations under the License.
 #
 
-# License is handled by ui/CMakeLists.txt
-install(
-    FILES ${CMAKE_CURRENT_SOURCE_DIR}/android/${ANDROID_ABI}/libVkLayer_khronos_validation.so
-    DESTINATION "${DIVE_INSTALL_DESTINATION}"
+set(CPACK_DEBIAN_PACKAGE_NAME "dive-profiler")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER
+    "Dive Profiler Developers <dive-dev-team@google.com>"
 )
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Dive is a GPU Profiler.")
+set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/dive-profiler")
+include(CPack)

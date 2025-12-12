@@ -58,5 +58,5 @@ target_include_directories(
 # This ensures that when Dive is installed, its plugins are correctly placed.
 install(
     TARGETS dive_plugin_sample
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/plugins
+    DESTINATION "${DIVE_PLUGINS_INSTALL_DESTINATION}"
 )

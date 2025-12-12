@@ -14,8 +14,14 @@
 # limitations under the License.
 #
 
-# License is handled by ui/CMakeLists.txt
-install(
-    FILES ${CMAKE_CURRENT_SOURCE_DIR}/android/${ANDROID_ABI}/libVkLayer_khronos_validation.so
-    DESTINATION "${DIVE_INSTALL_DESTINATION}"
-)
+if(EXISTS "${DIVE_ANDROID_PREBUILT}")
+    install(
+        DIRECTORY "${DIVE_ANDROID_PREBUILT}/"
+        # TODO: fix device resources location.
+        DESTINATION "${DIVE_INSTALL_DESTINATION}/install"
+    )
+endif()
+
+if(CMAKE_HOST_LINUX)
+    add_subdirectory(linux)
+endif()

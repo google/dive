@@ -118,6 +118,7 @@ target_link_libraries(
     component_files
     version_info
     dive_build_defs
+    crashpad::crashpad
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
@@ -256,3 +257,57 @@ add_dependencies(${PROJECT_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+if(NOT VCPKG_TARGET_TRIPLET)
+    if(WIN32)
+        set(VCPKG_TARGET_TRIPLET "x64-windows")
+    elseif(APPLE)
+        if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+            set(VCPKG_TARGET_TRIPLET "arm64-osx")
+        else()
+            set(VCPKG_TARGET_TRIPLET "x64-osx")
+        endif()
+    else()
+        set(VCPKG_TARGET_TRIPLET "x64-linux")
+    endif()
+endif()
+
+if(WIN32)
+    set(CRASHPAD_HANDLER_NAME "crashpad_handler.exe")
+else()
+    set(CRASHPAD_HANDLER_NAME "crashpad_handler")
+endif()
+
+set(CRASHPAD_HANDLER_PATH
+    "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/${CRASHPAD_HANDLER_NAME}"
+)
+
+if(NOT EXISTS "${CRASHPAD_HANDLER_PATH}")
+    message(
+        WARNING
+        "Could not find crashpad_handler at: ${CRASHPAD_HANDLER_PATH}. Crash reporting will fail at runtime."
+    )
+endif()
+
+add_custom_command(
+    TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different "${CRASHPAD_HANDLER_PATH}"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${CRASHPAD_HANDLER_NAME}"
+    COMMENT "Copying crashpad_handler to output directory ..."
+)
+
+if(APPLE)
+    # TODO: Setup correctly for macOS.
+    install(
+        PROGRAMS "${CRASHPAD_HANDLER_PATH}"
+        DESTINATION "."
+        COMPONENT Runtime
+    )
+else()
+    install(
+        PROGRAMS "${CRASHPAD_HANDLER_PATH}"
+        DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    )
+endif()

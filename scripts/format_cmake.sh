@@ -27,6 +27,7 @@ SRC_DIRS=(
     "layer"
     "lrz_validator"
     "network"
+    "packaging"
     "plugins"
     "runtime_layer"
     "trace_stats"

@@ -942,12 +942,30 @@ void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_
 
         event_state_it->SetAttachment(rt_id, attach);
 
-        const bool logic_op_enabled = (rb_mrt_control.bitfields.ROP_ENABLE == 1);
-        // Be careful!!! Here we assume the enum `VkLogicOp` matches exactly `a3xx_rop_code`
-        const VkLogicOp op = static_cast<VkLogicOp>(rb_mrt_control.bitfields.ROP_CODE);
-        event_state_it->SetLogicOpEnabled(rt_id, logic_op_enabled);
-        event_state_it->SetLogicOp(rt_id, op);
-
+        // 'VkLogicOp' does not map directly to 'a3xx_rop_code'.  Use lookup table.
+        const bool      logic_op_enabled = (rb_mrt_control.bitfields.ROP_ENABLE == 1);
+        const VkLogicOp lookup[] = { VK_LOGIC_OP_CLEAR,          // ROP_CLEAR
+                                     VK_LOGIC_OP_NOR,            // ROP_NOR
+                                     VK_LOGIC_OP_AND_INVERTED,   // ROP_AND_INVERTED
+                                     VK_LOGIC_OP_COPY_INVERTED,  // ROP_COPY_INVERTED
+                                     VK_LOGIC_OP_AND_REVERSE,    // ROP_AND_REVERSE
+                                     VK_LOGIC_OP_INVERT,         // ROP_INVERT
+                                     VK_LOGIC_OP_XOR,            // ROP_XOR
+                                     VK_LOGIC_OP_NAND,           // ROP_NAND
+                                     VK_LOGIC_OP_AND,            // ROP_AND
+                                     VK_LOGIC_OP_EQUIVALENT,     // ROP_EQUIV
+                                     VK_LOGIC_OP_NO_OP,          // ROP_NOOP
+                                     VK_LOGIC_OP_OR_INVERTED,    // ROP_OR_INVERTED
+                                     VK_LOGIC_OP_COPY,           // ROP_COPY
+                                     VK_LOGIC_OP_OR_REVERSE,     // ROP_OR_REVERSE
+                                     VK_LOGIC_OP_OR,             // ROP_OR
+                                     VK_LOGIC_OP_SET };          // ROP_SET
+        if (rb_mrt_control.bitfields.ROP_CODE < (sizeof(lookup) / sizeof(lookup[0])))
+        {
+            VkLogicOp op = lookup[rb_mrt_control.bitfields.ROP_CODE];
+            event_state_it->SetLogicOpEnabled(rt_id, logic_op_enabled);
+            event_state_it->SetLogicOp(rt_id, op);
+        }
         ++rt_id;
     }
 

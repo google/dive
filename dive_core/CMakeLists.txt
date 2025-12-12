@@ -14,6 +14,13 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for dive_core")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(dive_core)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -165,7 +172,7 @@ add_dependencies(${PROJECT_NAME} adreno_header)
 add_dependencies(${PROJECT_NAME} a6xx_py)
 add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC absl::no_destructor)
+target_link_libraries(${PROJECT_NAME} PUBLIC absl::no_destructor absl::strings)
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
 
@@ -325,3 +332,6 @@ endif() # MSVC
 
 enable_testing()
 add_subdirectory(tests)
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

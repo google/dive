@@ -15,6 +15,7 @@
 
 #include <QAbstractItemModel>
 #include <QDebug>
+#include <QHeaderView>
 #include <QItemSelectionModel>
 
 #include "ui/gpu_timing_model.h"
@@ -27,6 +28,7 @@ GpuTimingTabView::GpuTimingTabView(GpuTimingModel               &gpu_timing_mode
     m_command_hierarchy(command_hierarchy)
 {
     m_table_view = new QTableView(this);
+    m_table_view->verticalHeader()->hide();
     m_table_view->setModel(&m_model);
 
     // Used otherwise the table does not expand to fit available space
@@ -68,7 +70,7 @@ void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command
         {
             continue;
         }
-        uint64_t       node_index = (uint64_t)index.internalPointer();
+        uint64_t       node_index = index.internalId();
         Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
         std::string    node_desc = m_command_hierarchy.GetNodeDesc(node_index);
         CollectTimingIndex(node_type, node_desc, index);
@@ -97,7 +99,7 @@ void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
     case Dive::NodeType::
     kGfxrVulkanBeginRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
     {
-        uint64_t index_address = (uint64_t)model_index.internalPointer();
+        uint64_t index_address = model_index.internalId();
         m_timed_event_indices.push_back(index_address);
     }
     default:
@@ -125,7 +127,7 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
         return -1;
     }
 
-    uint64_t index_address = (uint64_t)model_index.internalPointer();
+    uint64_t index_address = model_index.internalId();
 
     const auto it = std::find(m_timed_event_indices.cbegin(),
                               m_timed_event_indices.cend(),
@@ -141,15 +143,23 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
 {
+    int row_count = m_model.rowCount();
+
+    if (row_count == 0)
+    {
+        qDebug() << "GPU timing model is empty. No data to correlate.";
+        return;
+    }
+
     QItemSelectionModel *selection_model = m_table_view->selectionModel();
     QSignalBlocker       blocker(selection_model);
     // Verify that the number of rows in the model is consistent with the rows of
     // m_timed_event_indices
-    if (m_model.rowCount() != static_cast<int>(m_timed_event_indices.size()))
+    if (row_count != static_cast<int>(m_timed_event_indices.size()))
     {
         qDebug()
         << "GpuTimingTabView::OnEventSelectionChanged() ERROR: inconsistent model row count ("
-        << m_model.rowCount() << ") and count of collected indices of timed Vulkan events: "
+        << row_count << ") and count of collected indices of timed Vulkan events: "
         << m_timed_event_indices.size();
     }
 

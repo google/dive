@@ -31,7 +31,7 @@ SRC_DIRS=(
     "runtime_layer"
     "trace_stats"
     "ui"
-    "utils"
+    "src"
 )
 
 gersemi -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"

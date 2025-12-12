@@ -15,11 +15,13 @@ limitations under the License.
 */
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 
 namespace Dive
 {
@@ -61,9 +63,12 @@ private:
 class AndroidTraceManager : public TraceManager
 {
 public:
-    virtual void TriggerTrace() override;
-    virtual void OnNewFrame() override;
-    virtual void WaitForTraceDone() override;
+    // `trace_duration` is ignored during trace by frame.
+    explicit AndroidTraceManager(absl::Duration trace_duration = absl::Seconds(3));
+
+    void TriggerTrace() override;
+    void OnNewFrame() override;
+    void WaitForTraceDone() override;
 
     TraceState GetState() ABSL_LOCKS_EXCLUDED(m_state_lock)
     {
@@ -83,6 +88,7 @@ private:
     uint32_t           m_frame_num = 0;
     uint32_t           m_trace_start_frame = 0;
     uint32_t           m_trace_num = 0;
+    absl::Duration     m_trace_duration;
 };
 
 TraceManager &GetTraceMgr();

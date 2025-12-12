@@ -11,8 +11,7 @@
  limitations under the License.
 */
 
-#ifndef GFXRVULKANCOMMANDARGUMENTSFILTERPROXYMODEL_H
-#define GFXRVULKANCOMMANDARGUMENTSFILTERPROXYMODEL_H
+#pragma once
 
 #include <QSortFilterProxyModel>
 #include <QColor>
@@ -42,5 +41,3 @@ private:
     const Dive::CommandHierarchy *m_command_hierarchy;
     int                           m_filterFunctionNodeIndex;
 };
-
-#endif  // GFXRVULKANCOMMANDARGUMENTSFILTERPROXYMODEL_H

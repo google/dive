@@ -14,36 +14,38 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for capture_service")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(DiveService)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-if(WIN32)
-    set(COMMAND_UTILS_SRC "command_utils_win32.cc")
-    add_definitions(-DUNICODE -D_UNICODE)
-else()
-    set(COMMAND_UTILS_SRC "command_utils.cc")
-endif()
-
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
 # Group both cc files in the same target since the public header trace_mgr.h declares both.
 add_library(trace_mgr android_trace_mgr.cc trace_mgr.cc)
-target_link_libraries(trace_mgr PUBLIC absl::core_headers absl::synchronization)
-# for #include "common/log.h"
-target_include_directories(trace_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(
+    trace_mgr
+    PUBLIC
+        dive_legacy_includes
+        absl::core_headers
+        absl::synchronization
+        absl::time
+        absl::str_format
+        absl::strings
+)
 
 if(ANDROID)
-    add_library(service service.cc ${COMMAND_UTILS_SRC})
-
+    add_library(service service.cc)
     target_link_libraries(service PRIVATE log)
 else()
-    add_library(service service.cc trace_mgr.cc ${COMMAND_UTILS_SRC})
+    add_library(service service.cc trace_mgr.cc)
 endif()
 target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(
     service
-    PRIVATE network absl::flags absl::flags_parse trace_mgr
+    PRIVATE network absl::flags absl::flags_parse trace_mgr command_utils
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
@@ -54,18 +56,14 @@ target_link_libraries(server PRIVATE service absl::flags absl::flags_parse)
 if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
 else()
-    add_library(
-        device_mgr
-        device_mgr.cc
-        ${COMMAND_UTILS_SRC}
-        android_application.cc
-    )
+    add_library(device_mgr device_mgr.cc android_application.cc)
     target_include_directories(
         device_mgr
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
     target_link_libraries(
         device_mgr
+        dive_legacy_includes
         absl::cleanup
         absl::flags
         absl::flags_parse
@@ -73,6 +71,8 @@ else()
         absl::strings
         absl::statusor
         component_files
+        version_info
+        command_utils
     )
 
     add_executable(dive_client_cli dive_client_cli.cc)
@@ -118,3 +118,6 @@ else()
     target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)
     gtest_discover_tests(android_trace_mgr_test)
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

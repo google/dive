@@ -20,6 +20,7 @@
 #include <QVBoxLayout>
 #include <map>
 #include <string>
+#include "color_utils.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
@@ -41,8 +42,18 @@
         _item->setText(1, _string);                                                   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set ||                    \
             QString::compare(_prev_string, _string) != 0)                             \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
+            _item->setForeground(1, QBrush(m_accent_color));                          \
         _items.append(_item);                                                         \
+    }
+
+#define ADD_FIELD_TYPE_ENUM(_field, _to_string, _num, _prev_field_set, _prev_num, _items) \
+    {                                                                                     \
+        QTreeWidgetItem *_item = new QTreeWidgetItem;                                     \
+        _item->setText(0, QString(_field));                                               \
+        _item->setText(1, QString(_to_string(_num)));                                     \
+        if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num)     \
+            _item->setForeground(1, QBrush(m_accent_color));                              \
+        _items.append(_item);                                                             \
     }
 
 #define ADD_FIELD_TYPE_NUMBER(_field, _num, _prev_field_set, _prev_num, _items)       \
@@ -51,7 +62,7 @@
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, QString::number(_num));                                     \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
+            _item->setForeground(1, QBrush(m_accent_color));                          \
         _items.append(_item);                                                         \
     }
 
@@ -60,6 +71,16 @@
         QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, "0x" + QString::number(static_cast<uint32_t>(_num), 16));   \
+        if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
+            _item->setForeground(1, QBrush(m_accent_color));                          \
+        _items.append(_item);                                                         \
+    }
+
+#define ADD_FIELD_TYPE_NUMBER_HEX64(_field, _num, _prev_field_set, _prev_num, _items) \
+    {                                                                                 \
+        QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
+        _item->setText(0, QString(_field));                                           \
+        _item->setText(1, "0x" + QString::number(static_cast<uint64_t>(_num), 16));   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
             _item->setForeground(1, QBrush(QColor(Qt::cyan)));                        \
         _items.append(_item);                                                         \
@@ -71,7 +92,7 @@
         _item->setText(0, QString(_field));                                             \
         _item->setText(1, (_bool ? "true" : "false"));                                  \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_bool != _bool) \
-            _item->setForeground(1, QBrush(QColor(Qt::cyan)));                          \
+            _item->setForeground(1, QBrush(m_accent_color));                            \
         _items.append(_item);                                                           \
     }
 
@@ -154,11 +175,13 @@ void EventStateView::OnEventSelected(uint64_t node_index)
     if (node_index == UINT64_MAX)
         return;
 
+    m_accent_color = GetTextAccentColor();
+
     auto &metadata = m_data_core.GetCaptureMetadata();
     auto &command_hierarchy = m_data_core.GetCommandHierarchy();
     auto &event_state = metadata.m_event_state;
 
-    auto previous_event_state = [&](auto it) {
+    auto previous_event_state = [&](auto it, auto IsType) {
         auto prev_it = std::prev(it);
         while (prev_it->IsValid())
         {
@@ -166,8 +189,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
             // Check if it's draw or dispatch events
             const Dive::EventInfo &prev_event_info = metadata
                                                      .m_event_info[static_cast<uint32_t>(id)];
-            if (prev_event_info.m_type == Dive::EventInfo::EventType::kDraw ||
-                prev_event_info.m_type == Dive::EventInfo::EventType::kDispatch)
+            if (IsType(prev_event_info.m_type))
                 break;
             else
                 prev_it = std::prev(prev_it);
@@ -175,44 +197,47 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         return prev_it;
     };
 
-    auto display_event_state_info = [&](uint64_t event_node_index) {
-        auto event_id = m_data_core.GetCommandHierarchy().GetEventNodeId(event_node_index);
+    Dive::NodeType node_type = command_hierarchy.GetNodeType(node_index);
+    if (node_type == Dive::NodeType::kEventNode)
+    {
+        auto event_id = m_data_core.GetCommandHierarchy().GetEventNodeId(node_index);
         // Check if it's draw or dispatch events
         if (!(event_id < metadata.m_event_info.size()))
             return;
         const Dive::EventInfo &event_info = metadata.m_event_info[event_id];
-        if (event_info.m_type == Dive::EventInfo::EventType::kDraw ||
-            event_info.m_type == Dive::EventInfo::EventType::kDispatch)
+        if (event_info.m_type == Dive::Util::EventType::kDraw)
         {
             auto event_state_it = GetStateInfoForEvent(event_state, event_id);
-            auto prev_event_state_it = previous_event_state(event_state_it);
-            DisplayEventStateInfo(event_state_it, prev_event_state_it);
+            auto prev_event_state_it = previous_event_state(event_state_it,
+                                                            [](Dive::Util::EventType type) {
+                                                                return type ==
+                                                                       Dive::Util::EventType::kDraw;
+                                                            });
+            DisplayDrawEventStateInfo(event_state_it, prev_event_state_it);
         }
-    };
-
-    Dive::NodeType node_type = command_hierarchy.GetNodeType(node_index);
-    if (Dive::IsDrawDispatchBlitNode(node_type))
-    {
-        display_event_state_info(node_index);
-    }
-    else if (node_type == Dive::NodeType::kMarkerNode &&
-             command_hierarchy.GetMarkerNodeType(node_index) ==
-             Dive::CommandHierarchy::MarkerType::kDiveMetadata)
-    {
-        uint64_t event_node_index = UINT64_MAX;
-        auto     topology = m_data_core.GetCommandHierarchy().GetAllEventHierarchyTopology();
-        auto     num_children = topology.GetNumChildren(node_index);
-        for (uint64_t i = 0; i < num_children; i++)
+        else if (Dive::EventInfo::IsResolve(event_info.m_type))
         {
-            auto           child_node_index = topology.GetChildNodeIndex(node_index, i);
-            Dive::NodeType child_node_type = command_hierarchy.GetNodeType(child_node_index);
-            if (Dive::IsDrawDispatchBlitNode(child_node_type))
-            {
-                event_node_index = child_node_index;
-            }
+            auto event_state_it = GetStateInfoForEvent(event_state, event_id);
+            auto prev_event_state_it = previous_event_state(event_state_it,
+                                                            [](Dive::Util::EventType type) {
+                                                                return Dive::EventInfo::IsResolve(
+                                                                type);
+                                                            });
+            DisplayResolveState(event_state_it, prev_event_state_it);
+            DisplayResolveGmemInfo(event_state_it, prev_event_state_it);
+            DisplayResolveSysmemInfo(event_state_it, prev_event_state_it);
         }
-        if (event_node_index != UINT64_MAX)
-            display_event_state_info(event_node_index);
+        else if (Dive::EventInfo::IsGmemClear(event_info.m_type))
+        {
+            auto event_state_it = GetStateInfoForEvent(event_state, event_id);
+            auto prev_event_state_it = previous_event_state(event_state_it,
+                                                            [](Dive::Util::EventType type) {
+                                                                return Dive::EventInfo::IsGmemClear(
+                                                                type);
+                                                            });
+            DisplayResolveState(event_state_it, prev_event_state_it);
+            DisplayResolveGmemInfo(event_state_it, prev_event_state_it);
+        }
     }
 
     // Resize columns to fit
@@ -230,11 +255,12 @@ uint32_t                    event_id)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::DisplayEventStateInfo(Dive::EventStateInfo::ConstIterator event_state_it,
-                                           Dive::EventStateInfo::ConstIterator prev_event_state_it)
+void EventStateView::DisplayDrawEventStateInfo(
+Dive::EventStateInfo::ConstIterator event_state_it,
+Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
     // Build up map to lookup description
-    BuildDescriptionMap(event_state_it);
+    BuildDrawDescriptionMap(event_state_it);
 
     // Vulkan states
     DisplayInputAssemblyState(event_state_it, prev_event_state_it);
@@ -251,7 +277,7 @@ void EventStateView::DisplayEventStateInfo(Dive::EventStateInfo::ConstIterator e
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::BuildDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it)
+void EventStateView::BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it)
 {
     if (m_field_desc.size())
         return;
@@ -330,6 +356,120 @@ void EventStateView::BuildDescriptionMap(Dive::EventStateInfo::ConstIterator eve
                    event_state_it->GetEnableAllHelperLanesDescription());
     ADD_FIELD_DESC(event_state_it->GetEnablePartialHelperLanesName(),
                    event_state_it->GetEnablePartialHelperLanesDescription());
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::DisplayResolveState(Dive::EventStateInfo::ConstIterator event_state_it,
+                                         Dive::EventStateInfo::ConstIterator prev_event_state_it)
+{
+    BuildResolveDescriptionMap(event_state_it);
+
+    QList<QTreeWidgetItem *> items;
+
+    // ResolveScissor
+    if (event_state_it->IsResolveScissorSet())
+    {
+        QString  scissor_child;
+        VkRect2D rect = event_state_it->ResolveScissor();
+        scissor_child = "x: " + QString::number(rect.offset.x) +
+                        ", y: " + QString::number(rect.offset.y) +
+                        ", width: " + QString::number(rect.extent.width) +
+                        ", height: " + QString::number(rect.extent.height);
+
+        QString  prev_scissor_child;
+        VkRect2D prev_rect;
+        if (prev_event_state_it->IsValid())
+        {
+            prev_rect = prev_event_state_it->ResolveScissor();
+            prev_scissor_child = "x: " + QString::number(prev_rect.offset.x) +
+                                 ", y: " + QString::number(prev_rect.offset.y) +
+                                 ", width: " + QString::number(prev_rect.extent.width) +
+                                 ", height: " + QString::number(prev_rect.extent.height);
+        }
+
+        ADD_FIELD_TYPE_STRING(event_state_it->GetResolveScissorName(),
+                              scissor_child,
+                              prev_event_state_it->IsResolveScissorSet(),
+                              prev_scissor_child,
+                              items);
+    }
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetResolveScissorName(), items);
+
+    ADD_TREE_BRANCH("Resolve Properties")
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::BuildResolveDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it)
+{
+    if (m_field_desc.size())
+        return;
+
+    ADD_FIELD_DESC(event_state_it->GetResolveScissorName(),
+                   event_state_it->GetResolveScissorDescription());
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator event_state_it,
+                                            Dive::EventStateInfo::ConstIterator prev_event_state_it)
+{
+    BuildResolveGmemDescriptionMap(event_state_it);
+
+    QList<QTreeWidgetItem *> items;
+
+    // ResolveBaseGmem
+    if (event_state_it->IsResolveBaseGmemSet())
+    {
+        ADD_FIELD_TYPE_NUMBER_HEX(event_state_it->GetResolveBaseGmemName(),
+                                  event_state_it->ResolveBaseGmem(),
+                                  prev_event_state_it->IsResolveBaseGmemSet(),
+                                  prev_event_state_it->ResolveBaseGmem(),
+                                  items);
+    }
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetResolveBaseGmemName(), items);
+
+    ADD_TREE_BRANCH("Gmem")
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::BuildResolveGmemDescriptionMap(
+Dive::EventStateInfo::ConstIterator event_state_it)
+{
+    ADD_FIELD_DESC(event_state_it->GetResolveBaseGmemName(),
+                   event_state_it->GetResolveBaseGmemDescription());
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::DisplayResolveSysmemInfo(
+Dive::EventStateInfo::ConstIterator event_state_it,
+Dive::EventStateInfo::ConstIterator prev_event_state_it)
+{
+    BuildResolveSysmemDescriptionMap(event_state_it);
+
+    QList<QTreeWidgetItem *> items;
+
+    // ResolveBaseSysmem
+    if (event_state_it->IsResolveBaseSysmemSet())
+    {
+        ADD_FIELD_TYPE_NUMBER_HEX64(event_state_it->GetResolveBaseSysmemName(),
+                                    event_state_it->ResolveBaseSysmem(),
+                                    prev_event_state_it->IsResolveBaseSysmemSet(),
+                                    prev_event_state_it->ResolveBaseSysmem(),
+                                    items);
+    }
+    else
+        ADD_FIELD_NOT_SET(event_state_it->GetResolveBaseSysmemName(), items);
+
+    ADD_TREE_BRANCH("Sysmem")
+}
+
+//--------------------------------------------------------------------------------------------------
+void EventStateView::BuildResolveSysmemDescriptionMap(
+Dive::EventStateInfo::ConstIterator event_state_it)
+{
+    ADD_FIELD_DESC(event_state_it->GetResolveBaseSysmemName(),
+                   event_state_it->GetResolveBaseSysmemDescription());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -774,74 +914,92 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
         {
             if (event_state_it->IsAttachmentSet(i))
             {
+                QList<QTreeWidgetItem *> attachment_items;
                 // LogicOpEnabled
                 if (event_state_it->IsLogicOpEnabledSet(i))
-                    ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName() +
-                                        QString::number(i),
+                    ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName(),
                                         event_state_it->LogicOpEnabled(i),
                                         prev_event_state_it->IsLogicOpEnabledSet(i),
                                         prev_event_state_it->LogicOpEnabled(i),
-                                        child_items)
+                                        attachment_items)
                 else
-                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpEnabledName() + QString::number(i),
-                                      child_items)
+                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpEnabledName(), attachment_items)
 
                 // LogicOp
                 if (event_state_it->IsLogicOpSet(i))
                 {
-                    ADD_FIELD_TYPE_STRING(event_state_it->GetLogicOpName() + QString::number(i),
+                    ADD_FIELD_TYPE_STRING(event_state_it->GetLogicOpName(),
                                           GetVkLogicOp(event_state_it->LogicOp(i)),
                                           prev_event_state_it->IsLogicOpSet(i),
                                           GetVkLogicOp(prev_event_state_it->LogicOp(i)),
-                                          child_items)
+                                          attachment_items)
                 }
                 else
                 {
-                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpName() + QString::number(i),
-                                      child_items)
+                    ADD_FIELD_NOT_SET(event_state_it->GetLogicOpName(), attachment_items)
                 }
 
-                QString                             value;
-                VkPipelineColorBlendAttachmentState attach = event_state_it->Attachment(i);
-
-                value = "blendEnabled: " + QString::number(attach.blendEnable) +
-                        ", srcColorBlendFactor: " +
-                        QString(GetVkBlendFactor(attach.srcColorBlendFactor)) +
-                        ", dstColorBlendFactor: " +
-                        QString(GetVkBlendFactor(attach.dstColorBlendFactor)) +
-                        ", colorBlendOp: " + QString(GetVkBlendOp(attach.colorBlendOp)) +
-                        ", srcAlphaBlendFactor: " +
-                        QString(GetVkBlendFactor(attach.srcAlphaBlendFactor)) +
-                        ", dstAlphaBlendFactor: " +
-                        QString(GetVkBlendFactor(attach.dstAlphaBlendFactor)) +
-                        ", alphaBlendOp: " + QString(GetVkBlendOp(attach.alphaBlendOp)) +
-                        ", colorWriteMask: 0x" + QString::number(attach.colorWriteMask, 16);
-
-                QString                             prev_value;
-                VkPipelineColorBlendAttachmentState prev_attach;
-
+                const VkPipelineColorBlendAttachmentState curr_attach = event_state_it->Attachment(
+                i);
+                const bool prev_set = prev_event_state_it->IsValid() &&
+                                      prev_event_state_it->IsAttachmentSet(i);
+                VkPipelineColorBlendAttachmentState prev_attach = {};
                 if (prev_event_state_it->IsValid())
                 {
                     prev_attach = prev_event_state_it->Attachment(i);
-                    prev_value = "srcColorBlendFactor: " +
-                                 QString(GetVkBlendFactor(prev_attach.srcColorBlendFactor)) +
-                                 ", dstColorBlendFactor: " +
-                                 QString(GetVkBlendFactor(prev_attach.dstColorBlendFactor)) +
-                                 ", colorBlendOp: " +
-                                 QString(GetVkBlendOp(prev_attach.colorBlendOp)) +
-                                 ", srcAlphaBlendFactor: " +
-                                 QString(GetVkBlendFactor(prev_attach.srcAlphaBlendFactor)) +
-                                 ", dstAlphaBlendFactor: " +
-                                 QString(GetVkBlendFactor(prev_attach.dstAlphaBlendFactor)) +
-                                 ", alphaBlendOp: " +
-                                 QString(GetVkBlendOp(prev_attach.alphaBlendOp));
                 }
+                ADD_FIELD_TYPE_BOOL("BlendEnabled",
+                                    curr_attach.blendEnable,
+                                    prev_set,
+                                    prev_attach.blendEnable,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("SrcColorBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.srcColorBlendFactor,
+                                    prev_set,
+                                    prev_attach.srcColorBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("DstColorBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.dstColorBlendFactor,
+                                    prev_set,
+                                    prev_attach.dstColorBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("ColorBlendOp",
+                                    GetVkBlendOp,
+                                    curr_attach.colorBlendOp,
+                                    prev_set,
+                                    prev_attach.colorBlendOp,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("SrcAlphaBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.srcAlphaBlendFactor,
+                                    prev_set,
+                                    prev_attach.srcAlphaBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("DstAlphaBlendFactor",
+                                    GetVkBlendFactor,
+                                    curr_attach.dstAlphaBlendFactor,
+                                    prev_set,
+                                    prev_attach.dstAlphaBlendFactor,
+                                    attachment_items);
+                ADD_FIELD_TYPE_ENUM("AlphaBlendOp",
+                                    GetVkBlendOp,
+                                    curr_attach.alphaBlendOp,
+                                    prev_set,
+                                    prev_attach.alphaBlendOp,
+                                    attachment_items);
+                ADD_FIELD_TYPE_NUMBER_HEX("ColorWriteMask",
+                                          curr_attach.colorWriteMask,
+                                          prev_set,
+                                          prev_attach.colorWriteMask,
+                                          attachment_items);
 
-                ADD_FIELD_TYPE_STRING(QString::number(i),
-                                      value,
-                                      prev_event_state_it->IsAttachmentSet(i),
-                                      prev_value,
-                                      child_items);
+                QTreeWidgetItem *attachment_item = new QTreeWidgetItem((QTreeWidget *)0,
+                                                                       QStringList(
+                                                                       QString::number(i)));
+                attachment_item->insertChildren(0, attachment_items);
+                child_items.append(attachment_item);
             }
             else
                 ADD_FIELD_NOT_SET(QString::number(i), child_items);

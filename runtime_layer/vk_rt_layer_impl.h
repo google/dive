@@ -165,7 +165,15 @@ public:
 
 private:
     Dive::GPUTime           m_gpu_time;
-    PFN_vkGetDeviceProcAddr m_device_proc_addr;
+    PFN_vkGetDeviceProcAddr m_device_proc_addr = nullptr;
+
+    // Cache all vk function pointers
+    PFN_vkResetQueryPool      m_pfn_vkResetQueryPool = nullptr;
+    PFN_vkQueueWaitIdle       m_pfn_vkQueueWaitIdle = nullptr;
+    PFN_vkDestroyQueryPool    m_pfn_vkDestroyQueryPool = nullptr;
+    PFN_vkDeviceWaitIdle      m_pfn_vkDeviceWaitIdle = nullptr;
+    PFN_vkGetQueryPoolResults m_pfn_vkGetQueryPoolResults = nullptr;
+    PFN_vkCmdWriteTimestamp   m_pfn_vkCmdWriteTimestamp = nullptr;
 };
 
 }  // namespace DiveLayer

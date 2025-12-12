@@ -192,13 +192,13 @@ void ShaderView::paintEvent(QPaintEvent *event)
             {
                 auto shader_stage = (uint32_t)reference.m_stage;
                 // Do not add shaders that are not used by the event
-                if (event.m_type != Dive::EventInfo::EventType::kDraw &&
-                    event.m_type != Dive::EventInfo::EventType::kDispatch)
+                if (event.m_type != Dive::Util::EventType::kDraw &&
+                    event.m_type != Dive::Util::EventType::kDispatch)
                     continue;
-                if ((event.m_type == Dive::EventInfo::EventType::kDraw) &&
+                if ((event.m_type == Dive::Util::EventType::kDraw) &&
                     (shader_stage == (uint32_t)Dive::ShaderStage::kShaderStageCs))
                     continue;
-                if ((event.m_type == Dive::EventInfo::EventType::kDispatch) &&
+                if ((event.m_type == Dive::Util::EventType::kDispatch) &&
                     (shader_stage != (uint32_t)Dive::ShaderStage::kShaderStageCs))
                     continue;
 
@@ -253,27 +253,28 @@ void ShaderView::paintEvent(QPaintEvent *event)
                     }
 
                     // Column 2: Address
-                    const uint32_t buffer_size = 256;
-                    char           buffer[buffer_size];
-                    snprintf(buffer, buffer_size, "%p", (void *)shader_info.GetShaderAddr());
+                    constexpr uint32_t kBufferSize = 256;
+                    char               buffer[kBufferSize];
+                    snprintf(buffer, kBufferSize, "%p", (void *)shader_info.GetShaderAddr());
                     treeItem->setText(2, tr(buffer));
 
                     // Column 3: size
-                    static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "%llu failure!");
-                    snprintf(buffer, 256, "%llu", (unsigned long long)shader_info.GetShaderSize());
+                    snprintf(buffer, kBufferSize, "%" PRIu64, shader_info.GetShaderSize());
                     treeItem->setText(3, tr(buffer));
 
                     // Column 4: GPRs
-                    snprintf(buffer, 256, "%u", shader_info.GetGPRCount());
+                    snprintf(buffer, kBufferSize, "%u", shader_info.GetGPRCount());
                     treeItem->setText(4, tr(buffer));
                 }
             }
         };
 
         Dive::NodeType node_type = command_hierarchy.GetNodeType(m_node_index);
-        if (Dive::IsDrawDispatchBlitNode(node_type))
+        if (node_type == Dive::NodeType::kEventNode)
         {
-            update_shader_list(m_node_index);
+            Dive::Util::EventType type = command_hierarchy.GetEventNodeType(m_node_index);
+            if (type == Dive::Util::EventType::kDraw || type == Dive::Util::EventType::kDispatch)
+                update_shader_list(m_node_index);
         }
         else if (node_type == Dive::NodeType::kMarkerNode)
         {
@@ -282,8 +283,9 @@ void ShaderView::paintEvent(QPaintEvent *event)
             for (uint64_t i = 0; i < num_children; i++)
             {
                 auto           child_node_index = topology.GetChildNodeIndex(m_node_index, i);
-                Dive::NodeType child_node_type = command_hierarchy.GetNodeType(child_node_index);
-                if (Dive::IsDrawDispatchBlitNode(child_node_type))
+                Dive::NodeType child_node_type = m_data_core.GetCommandHierarchy().GetNodeType(
+                child_node_index);
+                if (child_node_type == Dive::NodeType::kEventNode)
                 {
                     update_shader_list(child_node_index);
                 }

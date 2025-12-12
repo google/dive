@@ -235,7 +235,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController        &controller,
     m_main_layout->addLayout(m_left_panel_layout);
     m_main_layout->addLayout(m_right_panel_layout);
 
-    m_overlay->Initialize(m_main_layout);
+    m_overlay->Initialize(m_main_layout, this);
     setLayout(m_overlay->GetLayout());
 
     // Connect the name list's selection change to a lambda
@@ -460,13 +460,13 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
     }
 
     m_cur_device = m_devices[device_index].m_serial;
-    auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_device);
-    if (!dev_ret.ok())
+    if (absl::StatusOr<Dive::AndroidDevice *> ret = Dive::GetDeviceManager().SelectDevice(
+        m_cur_device);
+        !ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to select device ",
-                                           m_cur_device.c_str(),
-                                           ", error: ",
-                                           dev_ret.status().message());
+        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s",
+                                              m_cur_device.c_str(),
+                                              ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(err_msg);
         OnDeviceListRefresh();
@@ -540,7 +540,7 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
     Settings::Get()->WriteLastFilePath(last_file_path);
 
     // Open the dialog for users to initiate analysis
-    open();
+    show();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -676,8 +676,7 @@ void AnalyzeDialog::OnReplay()
         .replay_dump_pm4 = m_dump_pm4_box->isChecked(),
         .replay_gpu_time = m_gpu_time_replay_box->isChecked(),
         .replay_renderdoc = m_renderdoc_capture_box->isChecked(),
-        .replay_perf_counter = m_perf_counter_box->isChecked() &&
-                               !m_enabled_metrics_vector->empty(),
+        .replay_perf_counter = m_perf_counter_box->isChecked(),
         .replay_custom = m_custom_replay_box->isVisible() && m_custom_replay_box->isChecked(),
     };
     bool any_selected = config.replay_dump_pm4 || config.replay_gpu_time ||
@@ -685,11 +684,12 @@ void AnalyzeDialog::OnReplay()
                         config.replay_custom;
     if (!any_selected)
     {
-        if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
-        {
-            return ShowMessage("Select at least one metrics.");
-        }
-        return ShowMessage("Select at least one option.");
+        return ShowMessage("No replay setting enabled. Please enable at least one setting.");
+    }
+
+    if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
+    {
+        return ShowMessage("Perf counter setting is enabled. Please enable at least one metric.");
     }
     OverlayMessage("Replaying...");
 

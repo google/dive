@@ -16,102 +16,17 @@
 
 #pragma once
 
-#include <array>
-#include <memory>
-#include <vector>
-#include <future>
-#include <functional>
 #include <QMainWindow>
-#include <QReadWriteLock>
+#include <array>
+#include <functional>
+#include <memory>
 #include <optional>
-#include <qabstractitemmodel.h>
-#include <qshortcut.h>
-#include "dive_core/context.h"
+#include <vector>
+
+#include "dive/ui/forward.h"
 #include "dive_core/cross_ref.h"
-#include "dive_core/command_hierarchy.h"
-#include "dive_core/progress_tracker.h"
-#include "progress_tracker_callback.h"
 #include "dive_core/log.h"
-
-// Forward declarations
-class BufferView;
-class CommandModel;
-class CommandTabView;
-class DiveFilterModel;
-class DiveTreeView;
-class EventSelection;
-class EventStateView;
-#ifndef NDEBUG
-class EventTimingView;
-#endif
-class PerfCounterTabView;
-class PerfCounterModel;
-class GfxrVulkanCommandArgumentsTabView;
-class GfxrVulkanCommandArgumentsFilterProxyModel;
-class GfxrVulkanCommandFilterProxyModel;
-class GfxrVulkanCommandModel;
-class GpuTimingModel;
-class GpuTimingTabView;
-class HoverHelp;
-class OverlayHelper;
-class OverviewTabView;
-class PropertyPanel;
-class QCheckBox;
-class QComboBox;
-class QLabel;
-class QPushButton;
-class QTabWidget;
-class SearchBar;
-class ShaderView;
-class SqttView;
-class TextFileView;
-class TraceDialog;
-class TreeViewComboBox;
-class AnalyzeDialog;
-class GfxrVulkanCommandFilter;
-class QGroupBox;
-class QSortFilterProxyModel;
-class QAbstractProxyModel;
-class FrameTabView;
-class QScrollArea;
-class ApplicationController;
-
-struct LoadFileResult;
-class ErrorDialog;
-class CaptureFileManager;
-
-enum class EventMode;
-
-namespace Dive
-{
-class DataCore;
-class PluginLoader;
-class AvailableMetrics;
-class TraceStats;
-struct CaptureStats;
-struct ComponentFilePaths;
-
-enum DrawCallContextMenuOption : uint32_t
-{
-    kArguments,
-    kBinningPassOnly,
-    kFirstTilePassOnly,
-    kPerfCounterData,
-    kGpuTimeData,
-    kDrawCallContextMenuOptionCount
-};
-
-inline static constexpr const char
-*kDrawCallContextMenuOptionStrings[kDrawCallContextMenuOptionCount] = {
-    "Arguments",
-    "PM4 Events with BinningPassOnly Filter",
-    "PM4 Events with FirstTilePassOnly Filter",
-    "Perf Counter Data",
-    "Gpu Time Data"
-};
-}  // namespace Dive
-
-#define MESSAGE_TIMEOUT 2500
+#include "ui/progress_tracker_callback.h"
 
 class MainWindow : public QMainWindow
 {
@@ -120,15 +35,18 @@ class MainWindow : public QMainWindow
     friend class ApplicationController;
 
 public:
-    class Worker;
-
     explicit MainWindow(ApplicationController &controller);
-    ~MainWindow();
+    ~MainWindow() override;
+
+    MainWindow(const MainWindow &) = delete;
+    MainWindow(MainWindow &&) = delete;
+    MainWindow &operator=(const MainWindow &) = delete;
+    MainWindow &operator=(MainWindow &&) = delete;
+
     bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
-    bool InitializePlugins();
 
 protected:
-    virtual void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
+    void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
 
 signals:
     void HideOverlay();
@@ -152,7 +70,7 @@ public slots:
     void OnCorrelatePm4DrawCall(const QModelIndex &);
     void OnCounterSelected(uint64_t);
     void OnGpuTimingDataSelected(uint64_t);
-    void OnCorrelationFilterApplied(uint64_t, int, const QModelIndex &);
+    void OnCorrelationFilterApplied(uint64_t, const QModelIndex &);
     void OnPendingPerfCounterResults(const QString &file_name);
     void OnPendingGpuTimingResults(const QString &file_name);
     void OnPendingScreenshot(const QString &file_name);
@@ -224,15 +142,18 @@ private:
     using TabMask = uint32_t;
     void UpdateTabAvailability(TabMask mask);
 
-    QModelIndex             FindSourceIndexFromNode(QAbstractItemModel *model,
-                                                    uint64_t            target_node_index,
-                                                    const QModelIndex  &parent = QModelIndex());
-    void                    ResetEventSearchBar();
-    void                    ResetPm4EventSearchBar();
-    void                    ResetHorizontalScroll(const DiveTreeView &tree_view);
-    void                    ResetVerticalScroll(const DiveTreeView &tree_view);
-    void                    ClearViewModelSelection(DiveTreeView &tree_view, bool should_clear_tab);
-    void                    CorrelateCounter(const QModelIndex &index, bool called_from_gfxr_view);
+    QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model, uint64_t target_node_index);
+    QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model,
+                                        uint64_t            target_node_index,
+                                        const QModelIndex  &parent);
+
+    void ResetEventSearchBar();
+    void ResetPm4EventSearchBar();
+    void ResetHorizontalScroll(const DiveTreeView &tree_view);
+    void ResetVerticalScroll(const DiveTreeView &tree_view);
+    void ClearViewModelSelection(DiveTreeView &tree_view, bool should_clear_tab);
+    void CorrelateCounter(const QModelIndex &index, bool called_from_gfxr_view);
+
     std::optional<uint64_t> GetDrawCallIndexFromProxyIndex(
     const QModelIndex           &proxy_index,
     const QAbstractProxyModel   &proxy_model,
@@ -319,11 +240,10 @@ private:
             kGpuTiming = 1u << 6,
             kFrame = 1u << 7,
             kBuffer = 1u << 8,
-            kEventTiming = 1u << 9,
-            kTextFile = 1u << 10,
+            kTextFile = 1u << 9,
             kNone = 0u,
             kAll = kOverview | kCommand | kShader | kEventState | kGfxrVulkanCommandArguments |
-                   kPerfCounters | kGpuTiming | kFrame | kEventTiming | kTextFile,
+                   kPerfCounters | kGpuTiming | kFrame | kTextFile,
             kViewsForCorrelated = kOverview | kCommand | kShader | kEventState |
                                   kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
             kViewsForRdFile = kOverview | kCommand | kShader | kEventState | kBuffer,
@@ -341,7 +261,6 @@ private:
         int gpu_timing = -1;
         int frame = -1;
         int buffer = -1;
-        int event_timing = -1;
         int text_file = -1;
     };
     // Right pane
@@ -371,15 +290,6 @@ private:
     PropertyPanel *m_property_panel;
     HoverHelp     *m_hover_help;
 
-    // Shortcuts
-    QShortcut *m_search_shortcut = nullptr;
-    QShortcut *m_search_tab_view_shortcut = nullptr;
-    QShortcut *m_overview_tab_shortcut = nullptr;
-    QShortcut *m_command_tab_shortcut = nullptr;
-    QShortcut *m_shader_tab_shortcut = nullptr;
-    QShortcut *m_event_state_tab_shortcut = nullptr;
-    QShortcut *m_gfxr_vulkan_command_arguments_tab_shortcut = nullptr;
-
     std::string m_unsaved_capture_path;
     bool        m_capture_saved = false;
     int         m_capture_num = 0;
@@ -392,7 +302,6 @@ private:
     // Overlay to be displayed while capture
     OverlayHelper *m_overlay;
 
-    std::unique_ptr<Dive::PluginLoader>         m_plugin_manager;
     GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics>     m_available_metrics;
     std::unique_ptr<Dive::CaptureStats>         m_capture_stats;

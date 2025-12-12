@@ -70,7 +70,7 @@ QVariant CommandModel::data(const QModelIndex &index, int role) const
     if (!index.isValid())
         return QVariant();
 
-    uint64_t node_index = (uint64_t)(index.internalPointer());
+    uint64_t node_index = index.internalId();
 
     if (role == Qt::ForegroundRole)
     {
@@ -143,7 +143,7 @@ QModelIndex CommandModel::index(int row, int column, const QModelIndex &parent) 
     }
     else
     {
-        uint64_t parent_node_index = (uint64_t)(parent.internalPointer());
+        uint64_t parent_node_index = parent.internalId();
         node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, row);
     }
     return createIndex(row, column, node_index);
@@ -155,7 +155,7 @@ QModelIndex CommandModel::parent(const QModelIndex &index) const
     if (!index.isValid())
         return QModelIndex();
 
-    uint64_t child_node_index = (uint64_t)(index.internalPointer());
+    uint64_t child_node_index = index.internalId();
     uint64_t parent_node_index = m_topology_ptr->GetParentNodeIndex(child_node_index);
 
     // Root item. No parent.
@@ -178,7 +178,7 @@ int CommandModel::rowCount(const QModelIndex &parent) const
     if (!parent.isValid())  // Root level
         parent_node_index = Dive::Topology::kRootNodeIndex;
     else
-        parent_node_index = (uint64_t)(parent.internalPointer());
+        parent_node_index = parent.internalId();
 
     return m_topology_ptr->GetNumChildren(parent_node_index);
 }
@@ -239,7 +239,7 @@ void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
     for (int r = 0; r < n; ++r)
     {
         auto     idx = index(r, 0, parent);
-        uint64_t node_index = (uint64_t)idx.internalPointer();
+        uint64_t node_index = idx.internalId();
         if (node_index < m_node_lookup.size())
             m_node_lookup[node_index] = QPersistentModelIndex(idx);
         BuildNodeLookup(idx);

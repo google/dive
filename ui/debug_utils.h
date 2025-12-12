@@ -26,7 +26,7 @@ template<typename FuncT> class DebugScoped
 {
 public:
     explicit DebugScoped(FuncT&&) {};
-    ~DebugScoped() { std::ignore = this; }
+    ~DebugScoped() { (void)this; }
 
     DebugScoped(const DebugScoped&) = delete;
     DebugScoped(DebugScoped&&) = default;

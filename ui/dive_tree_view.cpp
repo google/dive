@@ -14,27 +14,24 @@
  limitations under the License.
 */
 #include "dive_tree_view.h"
+
+#include <QAbstractItemModel>
 #include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QHeaderView>
 #include <QPainter>
 #include <QScrollBar>
 #include <QTextDocument>
-#include <algorithm>
 #include <cstdint>
-#include <qabstractitemmodel.h>
-#ifndef NDEBUG
-#    include <iostream>
-#endif
+
+#include "color_utils.h"
 #include "command_model.h"
 #include "dive_core/command_hierarchy.h"
-#include "dive_core/common.h"
 #include "dive_core/common/common.h"
-#include "dive_core/data_core.h"
-#include "hover_help_model.h"
-#include "gfxr_vulkan_command_model.h"
-#include "gfxr_vulkan_command_filter_proxy_model.h"
 #include "gfxr_vulkan_command_arguments_filter_proxy_model.h"
+#include "gfxr_vulkan_command_filter_proxy_model.h"
+#include "gfxr_vulkan_command_model.h"
+#include "hover_help_model.h"
 
 static constexpr uint64_t kInvalidNodeIndex = static_cast<uint64_t>(-1);
 
@@ -113,7 +110,7 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
     else
     {
         // Check if the current parent node is filtered out.
-        uint64_t parent_node_index = (uint64_t)parent_index.internalPointer();
+        uint64_t parent_node_index = parent_index.internalId();
 
         if (!IncludeIndex(parent_node_index))
         {
@@ -127,11 +124,15 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
         QModelIndex index = sourceModel()->index(row, 0, parent_index);
         if (index.isValid())
         {
-            uint64_t       node_index = (uint64_t)index.internalPointer();
+            uint64_t       node_index = index.internalId();
             Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
-            if (Dive::IsDrawDispatchNode(node_type))
+
+            if (node_type == Dive::NodeType::kEventNode)
             {
-                m_pm4_draw_call_indices.push_back(node_index);
+                Dive::Util::EventType type = m_command_hierarchy.GetEventNodeType(node_index);
+                if (type == Dive::Util::EventType::kDraw ||
+                    type == Dive::Util::EventType::kDispatch)
+                    m_pm4_draw_call_indices.push_back(node_index);
             }
 
             // Only recurse into children if the current node is not a Vulkan submit node.
@@ -151,7 +152,7 @@ void DiveFilterModel::ClearDrawCallIndices()
 bool DiveFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-    uint64_t    node_index = (uint64_t)index.internalPointer();
+    uint64_t    node_index = index.internalId();
 
     Dive::NodeType current_node_type = m_command_hierarchy.GetNodeType(node_index);
 
@@ -184,6 +185,73 @@ DiveTreeViewDelegate::DiveTreeViewDelegate(const DiveTreeView *dive_tree_view_pt
 }
 
 //--------------------------------------------------------------------------------------------------
+void DiveTreeViewDelegate::PaintImpl(QPainter *painter, QStyleOptionViewItem &&option) const
+{
+    QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+
+    // Clear the text here so the base implementation doesn't draw it
+    QString text = option.text;
+    option.text.clear();
+    style->drawControl(QStyle::CE_ItemViewItem, &option, painter);
+
+    painter->save();
+
+    // Matching qt implementation:
+    const int   text_margin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr) + 1;
+    const QRect text_rect = style->subElementRect(QStyle::SE_ItemViewItemText, &option)
+                            .adjusted(text_margin, 0, -text_margin, 0);
+    const bool  wrap_text = option.features & QStyleOptionViewItem::WrapText;
+    QTextOption text_option;
+    text_option.setWrapMode(wrap_text ? QTextOption::WordWrap : QTextOption::ManualWrap);
+    text_option.setTextDirection(option.direction);
+    text_option.setAlignment(QStyle::visualAlignment(option.direction, option.displayAlignment));
+
+    QTextLayout text_layout(text, option.font);
+    text_layout.setTextOption(text_option);
+
+    // Apply color if applicable:
+    {
+        int first_pos = text.indexOf('(');
+        int last_pos = text.lastIndexOf(')');
+        if (first_pos != -1 && last_pos != -1 && first_pos < last_pos)
+        {
+            QTextCharFormat param_format;
+            param_format.setForeground(GetTextAccentColor(option.palette));
+            text_layout.setFormats({ QTextLayout::FormatRange{
+            .start = first_pos + 1,
+            .length = last_pos - first_pos - 1,
+            .format = param_format,
+            } });
+        }
+    }
+    // Matching qt implementation:
+    {
+        text_layout.beginLayout();
+        {
+            QTextLine line = text_layout.createLine();
+            if (line.isValid())
+            {
+                line.setLineWidth(text_rect.width());
+                line.setPosition(QPointF(0, 0));
+            }
+        }
+        text_layout.endLayout();
+    }
+
+    const QRect layout_rect = QStyle::alignedRect(Qt::LayoutDirectionAuto,
+                                                  option.displayAlignment,
+                                                  text_layout.boundingRect().size().toSize(),
+                                                  text_rect);
+
+    QPointF pos;
+    pos.rx() = text_rect.left();
+    pos.ry() = layout_rect.top();
+    text_layout.draw(painter, pos);
+
+    painter->restore();
+}
+
+//--------------------------------------------------------------------------------------------------
 void DiveTreeViewDelegate::paint(QPainter                   *painter,
                                  const QStyleOptionViewItem &option,
                                  const QModelIndex          &index) const
@@ -204,50 +272,18 @@ void DiveTreeViewDelegate::paint(QPainter                   *painter,
         QStyleOptionViewItem options = option;
         initStyleOption(&options, index);
 
-        QStyle *style = options.widget ? options.widget->style() : QApplication::style();
-
         options.text = QString(
         m_dive_tree_view_ptr->GetCommandHierarchy().GetNodeDesc(source_node_index));
 
-        QTextDocument doc;
-        int           first_pos = options.text.indexOf('(');
-        int           last_pos = options.text.lastIndexOf(')');
-        bool          is_parameterized = first_pos != -1 && last_pos != -1 &&
-                                last_pos == options.text.length() - 1;
-
         // Call to the base class function is needed to handle hover effects correctly
-        if (options.state & QStyle::State_MouseOver || options.state & QStyle::State_Selected ||
-            !is_parameterized)
+        if (options.state & QStyle::State_MouseOver || options.state & QStyle::State_Selected)
         {
             QStyledItemDelegate::paint(painter, options, index);
             return;
         }
         else
         {
-            doc.setHtml(options.text.left(first_pos) + "<span style=\"color:#ccffff;\">" +
-                        options.text.right(last_pos - first_pos + 1) + "<span>");
-
-            /// Painting item without text
-            options.text = QString();
-            style->drawControl(QStyle::CE_ItemViewItem, &options, painter);
-
-            QAbstractTextDocumentLayout::PaintContext ctx;
-
-            // Highlighting text if item is selected
-            if (options.state & QStyle::State_Selected)
-            {
-                ctx.palette.setColor(QPalette::Text,
-                                     options.palette.color(QPalette::Active,
-                                                           QPalette::HighlightedText));
-            }
-
-            QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &options);
-            painter->save();
-            painter->translate(textRect.topLeft());
-            painter->setClipRect(textRect.translated(-textRect.topLeft()));
-            doc.documentLayout()->draw(painter, ctx);
-            painter->restore();
-            return;
+            return PaintImpl(painter, std::move(options));
         }
     }
 
@@ -323,7 +359,7 @@ uint64_t DiveTreeView::GetNodeSourceIndex(const QModelIndex &proxy_model_index) 
         return kInvalidNodeIndex;
     }
 
-    return (uint64_t)(source_model_index.internalPointer());
+    return source_model_index.internalId();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -512,11 +548,11 @@ void DiveTreeView::GotoEvent(bool is_above)
             break;
         }
 
-        uint64_t node_idx = (uint64_t)(source_node_idx.internalPointer());
+        uint64_t node_idx = source_node_idx.internalId();
         auto     node_type = m_command_hierarchy.GetNodeType(node_idx);
 
         // Check for Draw/Dispatch/Blit or relevant Marker
-        if (Dive::IsDrawDispatchBlitNode(node_type) ||
+        if (node_type == Dive::NodeType::kEventNode ||
             (node_type == Dive::NodeType::kMarkerNode &&
              m_command_hierarchy.GetMarkerNodeType(node_idx) !=
              Dive::CommandHierarchy::MarkerType::kBeginEnd) ||

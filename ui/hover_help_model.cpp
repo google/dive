@@ -70,7 +70,7 @@ void HoverHelp::SetCurItem(Item        item,
     {
 #define END_SWITCH() \
     }                \
-    ;
+    ;  // NOLINT
 #define CASE(index, ...)                                        \
     case Item::index:                                           \
         cur_string_size = snprintf(NULL, 0, __VA_ARGS__) + 1;   \
@@ -426,13 +426,6 @@ void HoverHelp::SetCommandHierarchyNodeItem(const Dive::CommandHierarchy& comman
                 SetCurItem(Item::kIbNode);
             }
         }
-    }
-    else if (node_type == Dive::NodeType::kSyncNode)
-    {
-        hover_msg_sent = true;
-        Dive::SyncType sync_type = command_hierarchy.GetSyncNodeSyncType(node_index);
-        Dive::SyncInfo sync_info = command_hierarchy.GetSyncNodeSyncInfo(node_index);
-        SetCurItem(Item::kSyncNode, (uint32_t)sync_type, sync_info.m_u32All);
     }
 
     if (!hover_msg_sent)

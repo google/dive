@@ -20,6 +20,13 @@
 #   set CMAKE_PREFIX_PATH=%QTDIR%;%CMAKE_PREFIX_PATH%
 #   set PATH=%QTDIR%\\bin;%PATH%                        # (Windows) To allow DLLS to be found
 
+message(CHECK_START "Generate build files for ui")
+if(ANDROID)
+    message(CHECK_FAIL "detected Android platform, skipping")
+    return()
+endif()
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(dive_ui)
 
 # Find includes in corresponding build directories
@@ -29,6 +36,11 @@ set(CMAKE_AUTOMOC ON)
 # Create code from a list of Qt designer ui files
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
+option(
+    DIVE_ENABLE_SIGNING
+    "Enable ad-hoc signing of the application bundle"
+    OFF
+)
 set(CMAKE_CXX_STANDARD 20)
 
 # Find the QtWidgets library
@@ -40,6 +52,15 @@ if(MSVC)
     # Add resource files for Windows build (for version information)
     file(GLOB_RECURSE RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.rc")
     set(SRC_FILES ${SRC_FILES} ${RC_FILES})
+endif()
+
+if(APPLE)
+    set(MACOSX_ICON_FILE "dive.icns")
+    set_source_files_properties(
+        ${MACOSX_ICON_FILE}
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    set(SRC_FILES ${SRC_FILES} ${MACOSX_ICON_FILE})
 endif()
 
 include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
@@ -58,10 +79,25 @@ add_executable(
     resources.qrc
 )
 
+# Enable asan and ubsan
+if(DIVE_BUILD_WITH_SANITIZER AND NOT MSVC)
+    target_compile_options(
+        ${PROJECT_NAME}
+        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+    )
+    target_link_options(
+        ${PROJECT_NAME}
+        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+    )
+endif()
+
 # For release builds, build Dive UI as WIN32 GUI application instead of a console application.
-# This will supress logging to stdout.
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+if(MSVC)
+    set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES
+            WIN32_EXECUTABLE $<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>
+    )
 endif()
 
 # Use the Widgets module from Qt 5
@@ -69,12 +105,19 @@ target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
 
 target_link_libraries(
     ${PROJECT_NAME}
+    absl::flags
+    absl::flags_parse
+    absl::failure_signal_handler
+    absl::span
+    absl::symbolize
     network
     dive_core
+    dive_lib_os
     device_mgr
     dive_plugin_loader
     component_files
     version_info
+    dive_build_defs
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
@@ -87,7 +130,6 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "dive")
 
 # Required for some PAL files
 add_definitions(-DLITTLEENDIAN_CPU)
-add_definitions(-DDIVE_GUI_TOOL)
 
 # Set working directory for visual studio, so it can properly load resources
 set_target_properties(
@@ -100,9 +142,10 @@ if(MSVC)
     # 4100: unreferenced formal parameter
     # 4201: prevent nameless struct/union
     # 4127: "conditional expression is constant" warnings
+    # 4324: structure was padded due to alignment specifier
     target_compile_options(
         ${PROJECT_NAME}
-        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127
+        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324
     )
 else()
     target_compile_options(
@@ -128,10 +171,6 @@ endif()
 file(
     COPY ${CMAKE_SOURCE_DIR}/third_party/Qt/LICENSE.LGPLv3
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/Qt/
-)
-file(
-    COPY ${CMAKE_SOURCE_DIR}/third_party/pybind11/LICENSE
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/licenses/pybind11/
 )
 file(
     COPY ${CMAKE_SOURCE_DIR}/third_party/renderdoc/LICENSE
@@ -161,7 +200,12 @@ if(MSVC)
 endif()
 
 if(APPLE)
-    set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE TRUE)
+    set_target_properties(
+        ${PROJECT_NAME}
+        PROPERTIES
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
+    )
 endif()
 
 if(APPLE)
@@ -182,10 +226,22 @@ if(APPLE)
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/XrApiLayer_dive.json\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_rt_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libwrap.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/dive_profiling_plugin\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/gfxr_layer/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/gfxr_layer\")
-        message(STATUS \"Ad-hoc signing the application bundle\")
-        execute_process(COMMAND \"codesign\" --force --deep --sign - \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
+        message(STATUS \"Copying dive_client_cli to app bundle\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_client_cli\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
+
+        if(IS_DIRECTORY \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin\")
+            message(STATUS \"Copying dive_profiling_plugin to app bundle\")
+                execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/dive_profiling_plugin\")
+        endif()
+        if(EXISTS \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\")
+            message(STATUS \"Copying dive_compositor_capture.sh to app bundle\")
+            execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
+        endif()
+        if(${DIVE_ENABLE_SIGNING})
+            message(STATUS \"Ad-hoc signing the application bundle\")
+            execute_process(COMMAND \"codesign\" --force --deep --sign - \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        endif()
     "
     )
 else()
@@ -197,3 +253,6 @@ install(
     DESTINATION "${CMAKE_INSTALL_PREFIX}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

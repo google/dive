@@ -16,18 +16,19 @@ limitations under the License.
 
 #pragma once
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "android_application.h"
-#include "command_utils.h"
-#include "constants.h"
-
 #include <cassert>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+
+#include "android_application.h"
+#include "dive/os/command_utils.h"
+#include "constants.h"
 
 namespace Dive
 {
@@ -81,6 +82,8 @@ struct GfxrReplaySettings
     // Flags intended to be passed down to GFXR replay binary
     // Flags must be provided with a space (not '=') between flag and value
     std::string replay_flags_str = "";
+    // Wait for debugger to attach before continuing to replay.
+    bool wait_for_debugger = false;
 
     // ----------------------------------------------------------------------
     // Additional runtype-specific settings
@@ -148,12 +151,10 @@ public:
     absl::Status SetupApp(const std::string    &package,
                           const ApplicationType type,
                           const std::string    &command_args,
-                          const std::string    &device_architecture,
                           const std::string    &gfxr_capture_directory);
     absl::Status SetupApp(const std::string    &binary,
                           const std::string    &args,
                           const ApplicationType type,
-                          const std::string    &device_architecture,
                           const std::string    &gfxr_capture_directory);
 
     absl::Status      CleanupApp();
@@ -185,6 +186,9 @@ public:
     absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
 
 private:
+    // The ABI must be consistent between the connected device and the Dive device libraries
+    absl::Status CheckAbi();
+
     const std::string                   m_serial;
     DeviceInfo                          m_dev_info;
     AdbSession                          m_adb;
@@ -221,8 +225,7 @@ private:
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name,
-                                            const std::string &device_architecture = "");
+std::filesystem::path ResolveAndroidLibPath(const std::string &name);
 
 DeviceManager &GetDeviceManager();
 }  // namespace Dive

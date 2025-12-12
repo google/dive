@@ -267,7 +267,7 @@ uint64_t EmulateStateTracker::GetReg64Value(uint32_t        offset,
 uint64_t EmulateStateTracker::GetReg64Value(uint32_t offset) const
 {
     DIVE_ASSERT(m_shader_enable_bit.has_value());
-    return GetRegValue(offset, *m_shader_enable_bit);
+    return GetReg64Value(offset, *m_shader_enable_bit);
 }
 
 //--------------------------------------------------------------------------------------------------

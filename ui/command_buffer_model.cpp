@@ -90,7 +90,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
             return int(Qt::AlignLeft | Qt::AlignVCenter);
     }
 
-    uint64_t node_index = (uint64_t)(index.internalPointer());
+    uint64_t node_index = index.internalId();
     if (role == Qt::ForegroundRole && IsSelected(node_index))
         return QColor(255, 128, 128);
 
@@ -191,7 +191,7 @@ QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &pa
         return createIndex(row, column, (void *)node_index);
     }
 
-    uint64_t parent_node_index = (uint64_t)(parent.internalPointer());
+    uint64_t parent_node_index = parent.internalId();
 
     // Children order is the "normal" children followed by the "shared" children
     uint64_t child_node_index = UINT64_MAX;
@@ -216,7 +216,7 @@ QModelIndex CommandBufferModel::parent(const QModelIndex &index) const
     if (!index.isValid())
         return QModelIndex();
 
-    uint64_t child_node_index = (uint64_t)(index.internalPointer());
+    uint64_t child_node_index = index.internalId();
     return m_node_parent_list[child_node_index];
 }
 
@@ -240,7 +240,7 @@ int CommandBufferModel::rowCount(const QModelIndex &parent) const
     // Return sum of shared children + normal children
     //  Normal Children: The packet fields
     //  Shared Children: Additional packets (e.g. for packets from INDIRECT_BUFFERS packet)
-    uint64_t parent_node_index = (uint64_t)(parent.internalPointer());
+    uint64_t parent_node_index = parent.internalId();
     uint64_t num_children = m_topology_ptr->GetNumChildren(parent_node_index) +
                             m_topology_ptr->GetNumSharedChildren(parent_node_index);
     return num_children;
@@ -249,7 +249,7 @@ int CommandBufferModel::rowCount(const QModelIndex &parent) const
 //--------------------------------------------------------------------------------------------------
 void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 {
-    uint64_t selected_node_index = (uint64_t)(index.internalPointer());
+    uint64_t selected_node_index = index.internalId();
     if (m_selected_node_index == selected_node_index)  // Selected same item
         return;
 
@@ -259,7 +259,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
     if (dive_filter_model)
     {
         const QModelIndex &new_index = dive_filter_model->mapToSource(index);
-        selected_node_index = (uint64_t)(new_index.internalPointer());
+        selected_node_index = new_index.internalId();
     }
 
     emit beginResetModel();
@@ -279,8 +279,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
     {
         m_scroll_to_index = QModelIndex();
         uint64_t end_node_index = m_topology_ptr->GetEndSharedChildNodeIndex(m_selected_node_index);
-        uint64_t parent_node_index = (uint64_t)(m_node_parent_list[end_node_index]
-                                                .internalPointer());
+        uint64_t parent_node_index = m_node_parent_list[end_node_index].internalId();
         uint64_t num_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
         for (uint64_t child = 0; child < num_children; ++child)
         {

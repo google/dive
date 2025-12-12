@@ -16,12 +16,14 @@ limitations under the License.
 
 #include "trace_mgr.h"
 
-#include <stdio.h>
-
 #include <string>
-#include <thread>
+#include <string_view>
 
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "common/log.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 
 extern "C"
 {
@@ -31,21 +33,26 @@ extern "C"
 
 namespace
 {
-const static std::string kTraceFilePath{ "/sdcard/Download/" };
+constexpr std::string_view kTraceFilePath = "/sdcard/Download/";
 }
 
 namespace Dive
 {
 
+AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration) :
+    m_trace_duration(trace_duration)
+{
+}
+
 void AndroidTraceManager::TraceByFrame()
 {
-    std::string path = kTraceFilePath + "trace-frame";
-    std::string num = std::to_string(m_frame_num);
-    char        full_path[256];
-    snprintf(full_path, sizeof(full_path), "%s-%04u.rd", path.c_str(), m_frame_num);
+    std::string num = absl::StrCat(m_frame_num);
+    std::string path = absl::StrCat(kTraceFilePath, "trace-frame");
+    std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_frame_num);
 
-    SetTraceFilePath(std::string(full_path));
+    SetTraceFilePath(full_path);
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+    // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
     SetCaptureName(path.c_str(), num.c_str());
     {
         absl::MutexLock lock(&m_state_lock);
@@ -56,10 +63,10 @@ void AndroidTraceManager::TraceByFrame()
 void AndroidTraceManager::TraceByDuration()
 {
     m_trace_num++;
-    std::string path = kTraceFilePath + "trace";
-    std::string num = std::to_string(m_trace_num);
-    char        full_path[256];
-    snprintf(full_path, sizeof(full_path), "%s-%04u.rd", path.c_str(), m_trace_num);
+    std::string num = absl::StrCat(m_trace_num);
+    std::string path = absl::StrCat(kTraceFilePath, "trace");
+    std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_trace_num);
+    // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
     SetCaptureName(path.c_str(), num.c_str());
     {
         absl::MutexLock lock(&m_state_lock);
@@ -74,8 +81,7 @@ void AndroidTraceManager::TraceByDuration()
     }
     LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
 
-    // TODO: pass in this duration in stead of hard code a number.
-    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+    absl::SleepFor(m_trace_duration);
     {
         absl::MutexLock lock(&m_state_lock);
         SetCaptureState(0);
@@ -85,6 +91,10 @@ void AndroidTraceManager::TraceByDuration()
 
 void AndroidTraceManager::TriggerTrace()
 {
+    // There are two kinds of traces: by duration, and by frame. If OnNewFrame is called then trace
+    // by frame for GetNumFrameToTrace() frames; this function immediately returns and the trace
+    // will be collected the next time OnFewFrame is called. Otherwise, trace by duration for
+    // `m_trace_duration` time; this function will block until the trace is done.
     if (m_frame_num > 0)
     {
         TraceByFrame();

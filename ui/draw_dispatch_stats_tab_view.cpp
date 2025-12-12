@@ -15,6 +15,7 @@
 #include "draw_dispatch_stats_model.h"
 #include "search_bar.h"
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
@@ -29,6 +30,7 @@ DrawDispatchStatsTabView::DrawDispatchStatsTabView(const Dive::CaptureStats &sta
 {
     m_draw_dispatch_stats_model = new DrawDispatchStatsModel();
     m_draw_dispatch_stats_view = new QTableView();
+    m_draw_dispatch_stats_view->verticalHeader()->hide();
     m_draw_dispatch_stats_view->setModel(m_draw_dispatch_stats_model);
     ResizeColumns(m_draw_dispatch_stats_model, m_draw_dispatch_stats_view);
 

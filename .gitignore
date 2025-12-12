@@ -16,15 +16,11 @@ build/
 build_android/
 third_party/freedreno/libs/
 third_party/freedreno/obj
-build_android/
 .gradle/
 # Amdvlk auto-generated files
 *.pyc
 g_*.h
 g_*.cpp
-
-.ipynb_checkpoints/
-local_notebooks/*.ipynb
 
 .env
 

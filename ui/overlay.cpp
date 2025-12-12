@@ -50,9 +50,9 @@ QLayout* OverlayHelper::GetLayout() const
 }
 
 //--------------------------------------------------------------------------------------------------
-void OverlayHelper::Initialize(QLayout* layout)
+void OverlayHelper::Initialize(QLayout* layout, QWidget* parent)
 {
-    auto container = new QWidget;
+    auto container = new QWidget(parent);
     container->setLayout(layout);
     Initialize(container);
 }
@@ -67,7 +67,7 @@ void OverlayHelper::Initialize(QWidget* widget)
     m_layout = new QStackedLayout;
     m_layout->addWidget(m_container);
 
-    m_overlay = new QWidget;
+    m_overlay = new QWidget();
     {
         // It does not seems translucent background is required?
         // m_overlay->setAttribute(Qt::WA_TranslucentBackground);

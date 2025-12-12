@@ -98,6 +98,10 @@ public:
                                PFN_vkResetQueryPool      pfn_reset_query_pool,
                                PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
 
+    GpuTimeStatus OnQueuePresent(PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
+                                 PFN_vkResetQueryPool      pfn_reset_query_pool,
+                                 PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
+
     GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue);
     GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue);
 
@@ -200,7 +204,7 @@ private:
             usage_one_submit = false;
             reusable = false;
         }
-        const static uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
+        static constexpr uint32_t kInvalidTimeStampOffset = static_cast<uint32_t>(-1);
 
         std::vector<uint32_t> renderpass_slots;
         VkCommandPool         pool = VK_NULL_HANDLE;
@@ -211,6 +215,9 @@ private:
         bool                  reusable = false;
     };
 
+    GpuTimeStatus OnFrameBoundary(PFN_vkDeviceWaitIdle      pfn_device_wait_idle,
+                                  PFN_vkResetQueryPool      pfn_reset_query_pool,
+                                  PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
     void          RemoveCmdFromFrameCache(VkCommandBuffer cmd);
 

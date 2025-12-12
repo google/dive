@@ -52,7 +52,7 @@ void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelI
         if (index.isValid())
 
         {
-            uint64_t       node_index = (uint64_t)index.internalPointer();
+            uint64_t       node_index = index.internalId();
             Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
             // If a node is a gfxr draw call, add its index to the list.
@@ -81,7 +81,7 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         return true;
     }
 
-    uint64_t                      node_index = (uint64_t)indexInSource.internalPointer();
+    uint64_t                      node_index = indexInSource.internalId();
     const GfxrVulkanCommandModel *sourceMyModel = qobject_cast<const GfxrVulkanCommandModel *>(
     sourceModel());
     const Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);

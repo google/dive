@@ -15,11 +15,17 @@
 */
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
+#include <cstdio>
+#include <fcntl.h>
+#include <filesystem>
 #include <iostream>
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
@@ -27,12 +33,150 @@
 #include "main_window.h"
 #include "utils/version_info.h"
 #include "custom_metatypes.h"
+#include "absl/debugging/failure_signal_handler.h"
+#include "absl/debugging/symbolize.h"
+#include "absl/flags/flag.h"
+#include "absl/flags/parse.h"
+#include "absl/flags/usage.h"
+#include "absl/flags/usage_config.h"
+#include "dive/os/terminal.h"
 #ifdef __linux__
 #    include <dlfcn.h>
 #endif
 
+#if defined(_WIN32)
+#    include <io.h>
+#else
+#    include <unistd.h>
+#endif
+
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
+constexpr int kScreenshotDelay = 5000;       // 5s
+
+ABSL_FLAG(std::string, test_output, "", "Output directory for tests.");
+ABSL_FLAG(std::string, test_prefix, "", "Filename prefix for tests.");
+ABSL_FLAG(std::string, test_scenario, "", "Execute test scenario.");
+
+ABSL_FLAG(bool, native_style, false, "Use system provided style");
+ABSL_FLAG(bool, maximize, false, "Launch application maximized");
+
+// QApplication flags:
+ABSL_RETIRED_FLAG(std::string, style, "", "Set the application GUI style");
+ABSL_RETIRED_FLAG(std::string, stylesheet, "", "Set the application stylesheet");
+ABSL_RETIRED_FLAG(bool, widgetcount, false, "Qt flag widgetcount");
+ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
+ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
+
+//--------------------------------------------------------------------------------------------------
+class CrashHandler
+{
+public:
+    static void Initialize(const char *argv0)
+    {
+        QString filename = "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") +
+                           ".log.txt";
+
+        // Try to open in the executable directory
+        // This might fail if the executable folder is not writable
+        QString exe_dir = QFileInfo(argv0).absolutePath();
+        QString exe_full_path = QDir(exe_dir).filePath(filename);
+
+        // If we couldn't write next to the exe (permission denied), use temp folder.
+        // Windows: %TEMP%
+        // Linux: /tmp
+        QString temp_dir = QDir::tempPath();
+        QString temp_full_path = QDir(temp_dir).filePath(filename);
+
+        SafeStrCopy(m_primary_path, exe_full_path.toLocal8Bit().constData());
+        SafeStrCopy(m_fallback_path, temp_full_path.toLocal8Bit().constData());
+
+        std::cout << "Crash handler initialized" << std::endl;
+        std::cout << "  1. Primary Log Path:  " << exe_full_path.toStdString() << std::endl;
+        std::cout << "  2. Fallback Log Path: " << temp_full_path.toStdString() << std::endl;
+    }
+
+    static void Writer(const char *data)
+    {
+        if (data == nullptr)
+        {
+            return;
+        }
+
+        // Avoid strlen for crash handler to be safe
+        uint32_t len = 0;
+        while (data[len] != '\0')
+        {
+            len++;
+        }
+
+        if (m_fd == kInvalidFd)
+        {
+            m_fd = SysOpen(m_primary_path);
+
+            if (m_fd == kInvalidFd)
+            {
+                m_fd = SysOpen(m_fallback_path);
+            }
+        }
+
+        if (m_fd != kInvalidFd)
+        {
+            SysWrite(m_fd, data, len);
+        }
+    }
+
+private:
+    static constexpr int kInvalidFd = -1;
+    static constexpr int kMaxPath = 2048;
+
+    inline static int m_fd = kInvalidFd;
+
+    // Use char array to avoid potential allocation within the crash handler
+    inline static char m_primary_path[kMaxPath] = { 0 };
+    inline static char m_fallback_path[kMaxPath] = { 0 };
+
+    template<size_t N> static void SafeStrCopy(char (&dest)[N], const char *src)
+    {
+        if (!src)
+        {
+            return;
+        }
+
+        size_t i = 0;
+        for (; i < N - 1 && src[i] != '\0'; ++i)
+        {
+            dest[i] = src[i];
+        }
+        dest[i] = '\0';
+    }
+
+    static int SysOpen(const char *path)
+    {
+#if defined(_WIN32)
+        constexpr int flags = _O_CREAT | _O_TRUNC | _O_WRONLY | _O_TEXT;
+        constexpr int mode = _S_IREAD | _S_IWRITE;
+        return _open(path, flags, mode);
+#else
+        constexpr int flags = O_CREAT | O_TRUNC | O_WRONLY;
+        // 0: Indicates this is an octal number
+        // 6: (Owner):  Read (4) + Write (2) = Read/Write
+        // 6: (Group):  Read (4) + Write (2) = Read/Write
+        // 4: (Others): Read (4) = Read Only
+        constexpr int mode = 0664;
+        return open(path, flags, mode);
+#endif
+    }
+
+    static void SysWrite(int fd, const char *data, uint32_t len)
+    {
+#if defined(_WIN32)
+        _write(fd, data, len);
+#else
+        [[maybe_unused]] ssize_t res = write(fd, data, len);
+#endif
+    }
+};
 
 //--------------------------------------------------------------------------------------------------
 bool SetApplicationStyle(QString style_key)
@@ -50,7 +194,7 @@ bool SetApplicationStyle(QString style_key)
 }
 
 //--------------------------------------------------------------------------------------------------
-void setDarkMode(QApplication &app)
+void SetDarkMode(QApplication &app)
 {
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, QColor(40, 40, 40));
@@ -85,41 +229,100 @@ void setDarkMode(QApplication &app)
 }
 
 //--------------------------------------------------------------------------------------------------
+auto SetupFlags(int argc, char **argv)
+{
+    absl::FlagsUsageConfig flags_usage_config;
+    flags_usage_config.version_string = Dive::GetCompleteVersionString;
+    absl::SetFlagsUsageConfig(flags_usage_config);
+    absl::SetProgramUsageMessage("Dive GPU Profiler GUI");
+    return absl::ParseCommandLine(argc, argv);
+}
+
+//--------------------------------------------------------------------------------------------------
+std::optional<std::filesystem::path> GetTestSavePath(std::string_view filename)
+{
+    if (absl::GetFlag(FLAGS_test_output).empty())
+    {
+        return std::nullopt;
+    }
+    std::filesystem::path output_dir(absl::GetFlag(FLAGS_test_output));
+    std::filesystem::create_directories(output_dir);
+    if (!std::filesystem::is_directory(output_dir))
+    {
+        return std::nullopt;
+    }
+    std::string full_filename = absl::GetFlag(FLAGS_test_prefix);
+    full_filename += filename;
+    return output_dir / full_filename;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool ExecuteScenario(std::string_view scenario, MainWindow *main_window)
+{
+    if (scenario == "exit-after-load")
+    {
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+        return true;
+    }
+
+    if (scenario == "screenshot")
+    {
+        auto savepath = GetTestSavePath("MainWindow.png");
+        if (!savepath)
+        {
+            qDebug() << "Invalid screenshot path";
+            return false;
+        }
+        auto take_screenshot = [main_window, savepath]() {
+            QPixmap pixmap(main_window->size());
+            main_window->render(&pixmap);
+            pixmap.save(QString::fromStdString(savepath->string()));
+            main_window->close();
+        };
+        QObject::connect(main_window,
+                         &MainWindow::FileLoaded,
+                         main_window,
+                         [take_screenshot, main_window]() {
+                             QTimer::singleShot(kScreenshotDelay, main_window, take_screenshot);
+                         });
+        return true;
+    }
+
+    qDebug() << "Test scenario " << QString::fromStdString(std::string(scenario)) << " not found";
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    // Check number of arguments
-    bool exit_after_load = false;
-    if (argc > 1 && strcmp(argv[1], "--exit-after-load") == 0)
-    {
-        exit_after_load = true;
-        argc--;
-        argv++;
-    }
-    if (argc != 1 && argc != 2)
-        return 0;
+    Dive::AttachToTerminalOutputIfAvailable();
+    std::vector<char *> positional_args = SetupFlags(argc, argv);
 
-    // Print version info if asked to on the command line.
-    // This will only work on linux as we are a UI app on Windows.
-    // On Windows, users can right-click the .exe and look at Properties/Details.
-    if (argc > 1 && strcasecmp(argv[1], "--version") == 0)
-    {
-        std::cout << Dive::GetDiveDescription() << std::endl;
-        return 0;
-    }
+    absl::InitializeSymbolizer(argv[0]);
 
-    // Optional command arg loading method for fast iteration
-    // Note: Set the style *before* QApplication constructor. This allows commandline
-    // "-style <style>" style override to still work properly.
+    CrashHandler::Initialize(argv[0]);
 
-    // Try setting "Fusion" style. If not found, set "Windows".
-    // And if that's not found, default to whatever style the factory provides.
-    if (!SetApplicationStyle("Fusion"))
+    absl::FailureSignalHandlerOptions options;
+    options.writerfn = CrashHandler::Writer;
+    absl::InstallFailureSignalHandler(options);
+
+    const bool native_style = absl::GetFlag(FLAGS_native_style);
+    if (!native_style)
     {
-        if (!SetApplicationStyle("Windows"))
+        // Optional command arg loading method for fast iteration
+        // Note: Set the style *before* QApplication constructor. This allows commandline
+        // "-style <style>" style override to still work properly.
+
+        // Try setting "Fusion" style. If not found, set "Windows".
+        // And if that's not found, default to whatever style the factory provides.
+        if (!SetApplicationStyle("Fusion"))
         {
-            if (!QStyleFactory::keys().empty())
+            if (!SetApplicationStyle("Windows"))
             {
-                SetApplicationStyle(QStyleFactory::keys()[0]);
+                if (!QStyleFactory::keys().empty())
+                {
+                    SetApplicationStyle(QStyleFactory::keys()[0]);
+                }
             }
         }
     }
@@ -129,13 +332,17 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/images/dive.ico"));
-    setDarkMode(app);
 
-    // Load and apply the style sheet
-    QFile style_sheet(":/stylesheet.qss");
-    style_sheet.open(QFile::ReadOnly);
-    QString style(style_sheet.readAll());
-    app.setStyleSheet(style);
+    if (!native_style)
+    {
+        SetDarkMode(app);
+
+        // Load and apply the style sheet
+        QFile style_sheet(":/stylesheet.qss");
+        style_sheet.open(QFile::ReadOnly);
+        QString style(style_sheet.readAll());
+        app.setStyleSheet(style);
+    }
 
     // Display splash screen
     QSplashScreen *splash_screen = new QSplashScreen();
@@ -147,25 +354,37 @@ int main(int argc, char *argv[])
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);
-    if (exit_after_load)
+
+    if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {
-        QObject::connect(main_window, &MainWindow::FileLoaded, main_window, &MainWindow::close);
+        if (!ExecuteScenario(scenario, main_window))
+        {
+            return EXIT_FAILURE;
+        }
     }
 
-    if (!main_window->InitializePlugins())
+    if (!controller.InitializePlugins())
     {
         qDebug()
         << "Application: Plugin initialization failed. Application may proceed without plugins.";
     }
 
-    if (argc == 2)
+    if (positional_args.size() == 2)
     {
         // This is executed async.
-        main_window->LoadFile(argv[1], false, true);
+        main_window->LoadFile(positional_args.back(), false, true);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));
-    QTimer::singleShot(kStartDelay, main_window, SLOT(show()));
+
+    if (absl::GetFlag(FLAGS_maximize))
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::showMaximized);
+    }
+    else
+    {
+        QTimer::singleShot(kStartDelay, main_window, &MainWindow::show);
+    }
 
     return app.exec();
 }

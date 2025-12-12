@@ -20,6 +20,8 @@
 #include <QMenu>
 #include <QMenuBar>
 
+#include "dive/plugin/abi/idive_plugin.h"
+
 namespace Dive
 {
 PluginSample::PluginSample(QObject* parent) :

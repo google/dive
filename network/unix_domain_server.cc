@@ -16,8 +16,10 @@ limitations under the License.
 
 #include "unix_domain_server.h"
 
-#include "common/log.h"
 #include "absl/strings/str_cat.h"
+
+#include "dive/common/log.h"
+#include "dive/common/status.h"
 
 namespace Network
 {
@@ -115,28 +117,24 @@ absl::Status UnixDomainServer::Start(const std::string& server_address)
 {
     if (m_is_running.load())
     {
-        return absl::AlreadyExistsError("Start: Server is already running.");
+        return Dive::AlreadyExistsError("Start: Server is already running.");
     }
 
     auto connection = SocketConnection::Create();
     if (!connection.ok())
     {
-        return absl::Status(connection.status().code(),
-                            absl::StrCat("Start: Failed to create socket: ",
-                                         connection.status().message()));
+        return Dive::StatusWithContext(connection.status(), "Start: Failed to create socket");
     }
     auto conn_status = (*connection)->BindAndListenOnUnixDomain(server_address);
     if (!conn_status.ok())
     {
-        return absl::Status(conn_status.code(),
-                            absl::StrCat("Start: Failed to bind and listen socket: ",
-                                         conn_status.message()));
+        return Dive::StatusWithContext(conn_status, "Start: Failed to bind and listen socket");
     }
 
     m_listen_connection = *std::move(connection);
     m_is_running.store(true);
     m_server_thread = std::thread(&UnixDomainServer::AcceptAndHandleClientLoop, this);
-    return absl::OkStatus();
+    return Dive::OkStatus();
 }
 
 void UnixDomainServer::Wait()

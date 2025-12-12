@@ -56,9 +56,7 @@ enum class NodeType
     kSubmitNode,
     kIbNode,
     kMarkerNode,
-    kDrawDispatchNode,
-    kBlitNode,
-    kSyncNode,
+    kEventNode,
     kPostambleStateNode,
     kPacketNode,
     kRegNode,
@@ -77,22 +75,12 @@ enum class NodeType
     kGfxrRootFrameNode,
 };
 
-constexpr bool IsDrawDispatchNode(NodeType node_type)
-{
-    return node_type == NodeType::kDrawDispatchNode;
-}
-
-constexpr bool IsDrawDispatchBlitNode(NodeType node_type)
-{
-    return node_type == NodeType::kDrawDispatchNode || node_type == NodeType::kBlitNode;
-}
-
 //--------------------------------------------------------------------------------------------------
 // This is per-node graph topology info.
 class Topology
 {
 public:
-    const static uint64_t kRootNodeIndex = 0;
+    static const uint64_t kRootNodeIndex = 0;
 
     virtual uint64_t GetNumNodes() const;
 
@@ -201,58 +189,6 @@ private:
 };
 
 //--------------------------------------------------------------------------------------------------
-union SyncInfo
-{
-    struct
-    {
-        uint32_t m_flush_inv_cb_meta : 1;     // fmask/cmask, but not dcc
-        uint32_t m_flush_inv_pixel_data : 1;  // dcc and cb data
-        uint32_t m_wb_inv_cbdb : 1;
-        uint32_t m_vs_partial_flush : 1;
-        uint32_t m_ps_partial_flush : 1;
-        uint32_t m_cs_partial_flush : 1;
-        uint32_t m_wb_inv_db : 1;
-        uint32_t m_vgt_flush : 1;
-    } eventwrite;
-
-    struct
-    {
-        uint32_t m_bottom_of_pipe : 1;
-        uint32_t m_cs_done : 1;
-        uint32_t m_ps_done : 1;
-        uint32_t m_wb_inv_cbdb : 1;
-        uint32_t m_write_data_sel : 3;  // ME_RELEASE_MEM_data_sel_enum
-    } releasemem;
-
-    struct
-    {
-        uint32_t m_wb_inv_db : 1;
-        uint32_t m_inv_sq_k : 1;
-        uint32_t m_inv_sq_i : 1;
-        uint32_t m_flush_sq_k : 1;
-        uint32_t m_coher_base_set : 1;
-        uint32_t m_engine_sel : 1;
-    } acquiremem;
-
-    struct
-    {
-        // For the release/acquire-mem-specific bits
-        uint32_t m_releasemem_acquiremem_common : 7;
-
-        // common to releasemem and acquiremem
-        uint32_t m_wb_inv_l1l2 : 1;
-        uint32_t m_wb_inv_l2 : 1;
-        uint32_t m_wb_l2 : 1;
-        uint32_t m_inv_l2 : 1;
-        uint32_t m_inv_l2_md : 1;
-        uint32_t m_inv_l1 : 1;
-        uint32_t m_wb_inv_cbdata : 1;
-    } common;
-    uint32_t m_u32All;
-};
-static_assert(sizeof(SyncInfo) == sizeof(uint32_t), "Unexpected size!");
-
-//--------------------------------------------------------------------------------------------------
 class CommandHierarchy
 {
 public:
@@ -265,7 +201,6 @@ public:
         kBarrier,       // Barrier node
         kCount
     };
-
     CommandHierarchy();
     ~CommandHierarchy();
 
@@ -283,6 +218,7 @@ public:
 
     NodeType    GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
+    void        SetNodeDesc(uint64_t node_index, const std::string &desc);
 
     Dive::EngineType GetSubmitNodeEngineType(uint64_t node_index) const;
     uint32_t         GetSubmitNodeIndex(uint64_t node_index) const;
@@ -292,13 +228,12 @@ public:
     bool             GetIbNodeIsFullyCaptured(uint64_t node_index) const;
     MarkerType       GetMarkerNodeType(uint64_t node_index) const;
     uint32_t         GetMarkerNodeId(uint64_t node_index) const;
+    Util::EventType  GetEventNodeType(uint64_t node_index) const;
     uint32_t         GetEventNodeId(uint64_t node_index) const;
     uint64_t         GetPacketNodeAddr(uint64_t node_index) const;
     uint8_t          GetPacketNodeOpcode(uint64_t node_index) const;
     uint8_t          GetPacketNodeIbLevel(uint64_t node_index) const;
     bool             GetRegFieldNodeIsCe(uint64_t node_index) const;
-    SyncType         GetSyncNodeSyncType(uint64_t node_index) const;
-    SyncInfo         GetSyncNodeSyncInfo(uint64_t node_index) const;
 
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
@@ -368,7 +303,8 @@ private:
 
         struct
         {
-            uint32_t m_event_id;
+            uint32_t        m_event_id;
+            Util::EventType m_type;
         } event_node;
 
         struct
@@ -384,12 +320,6 @@ private:
             bool m_is_ce_packet;
         } reg_field_node;
 
-        struct
-        {
-            uint32_t m_sync_type : 4;  // SyncType
-            SyncInfo m_sync_info;
-        } sync_node;
-
         uint64_t m_u64All;
 
         AuxInfo(uint64_t val);
@@ -400,9 +330,8 @@ private:
                               bool     fully_captured);
         static AuxInfo PacketNode(uint64_t addr, uint8_t opcode, uint8_t ib_level);
         static AuxInfo RegFieldNode(bool is_ce_packet);
-        static AuxInfo EventNode(uint32_t event_id);
+        static AuxInfo EventNode(uint32_t event_id, Util::EventType type);
         static AuxInfo MarkerNode(MarkerType type, uint32_t id = 0);
-        static AuxInfo SyncNode(SyncType type, SyncInfo sync_info);
     };
     static_assert(sizeof(AuxInfo) == sizeof(uint64_t), "Unexpected size!");
 

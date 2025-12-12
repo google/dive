@@ -17,6 +17,7 @@
 #include <qspinbox.h>
 #include <QDialog>
 #include <QThread>
+#include <QSortFilterProxyModel>
 #include <cstdint>
 
 #include "capture_service/device_mgr.h"
@@ -39,89 +40,25 @@ class QCheckBox;
 class QRadioButton;
 class QButtonGroup;
 
-class TraceWorker : public QThread
+class ApplicationController;
+
+class AppTypeFilterModel : public QSortFilterProxyModel
 {
     Q_OBJECT
-    void run() override;
 
 public:
-    TraceWorker(QProgressDialog *pd) :
-        m_progress_bar(pd)
-    {
-    }
-signals:
-    void TraceAvailable(const QString &);
-    void DownloadedSize(uint64_t size);
-    void ErrorMessage(const QString &err_msg);
-
-private:
-    QProgressDialog *m_progress_bar;
-};
-
-class GfxrCaptureWorker : public QThread
-{
-    Q_OBJECT
-    void run() override;
-
-public:
-    GfxrCaptureWorker(QProgressDialog *pd) :
-        m_progress_bar(pd)
-    {
-    }
-    void SetGfxrSourceCaptureDir(const std::string &source_capture_dir);
-
-    // Appends/increments the numerical suffix "_#" to target_capture_path for a fresh directory, if
-    // the directory already exists
-    void SetGfxrTargetCaptureDir(const std::string &target_capture_dir);
-    bool AreTimestampsCurrent(Dive::AndroidDevice                      *device,
-                              const std::map<std::string, std::string> &previous_timestamps);
-
-    absl::StatusOr<int64_t> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
-signals:
-    void DownloadedSize(uint64_t size);
-    void GfxrCaptureAvailable(const QString &);
-    void ErrorMessage(const QString &err_msg);
-
-private:
-    QProgressDialog *m_progress_bar;
-    std::string      m_source_capture_dir;  // On Android, better to keep as std::string since the
-                                            // host platform delimiter may be inconsistent
-    std::filesystem::path    m_target_capture_dir;
-    std::vector<std::string> m_file_list;
-};
-
-class ProgressBarWorker : public QThread
-{
-    Q_OBJECT
-    void run() override;
-
-public:
-    ProgressBarWorker(QProgressDialog   *pd,
-                      const std::string &path,
-                      int64_t            size,
-                      const bool         is_gfxr_capture) :
-        m_progress_bar(pd),
-        m_capture_name(path),
-        m_capture_size(size),
-        m_gfxr_capture(is_gfxr_capture),
-        m_downloaded_size(0)
+    explicit AppTypeFilterModel(QObject *parent = nullptr) :
+        QSortFilterProxyModel(parent)
     {
     }
 
-    int64_t GetDownloadedSize() const { return m_downloaded_size; }
+    void setFilterActive(bool active);
 
-public slots:
-    void SetDownloadedSize(uint64_t size) { m_downloaded_size = size; }
-
-signals:
-    void SetProgressBarValue(int percentage);
+protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 
 private:
-    QProgressDialog *m_progress_bar;
-    std::string      m_capture_name;
-    int64_t          m_capture_size;
-    bool             m_gfxr_capture;
-    int64_t          m_downloaded_size;
+    bool m_filter_active = false;
 };
 
 class TraceDialog : public QDialog
@@ -129,7 +66,7 @@ class TraceDialog : public QDialog
     Q_OBJECT
 
 public:
-    TraceDialog(QWidget *parent = 0);
+    TraceDialog(ApplicationController &controller, QWidget *parent = 0);
     ~TraceDialog();
     void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
@@ -156,9 +93,10 @@ private slots:
     void         OnPackageListFilter();
     void         OnPackageListFilterApplied(const QString &filter);
     void         OnGfxrCaptureClicked();
-    void         ShowErrorMessage(const QString &err_msg);
+    void         ShowMessage(const QString &message);
     absl::Status StopPackageAndCleanup();
     void         OnCaptureTypeChanged(int id);
+    void         OnShowAdvancedOptions(bool show);
 
 signals:
     void TraceAvailable(const QString &);
@@ -166,6 +104,8 @@ signals:
 private:
     bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice *device, const std::string &capture_directory);
+
+    ApplicationController &m_controller;
 
     const QString kStart_Application = "&Start Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
@@ -183,6 +123,9 @@ private:
     QRadioButton *m_gfxr_capture_type_button;
     QRadioButton *m_pm4_capture_type_button;
 
+    QHBoxLayout *m_capture_warning_layout;
+    QLabel      *m_capture_warning_label;
+
     QHBoxLayout                            *m_pkg_filter_layout;
     QLabel                                 *m_pkg_filter_label;
     PackageFilter                          *m_pkg_filter;
@@ -197,6 +140,7 @@ private:
     QHBoxLayout        *m_type_layout;
     QLabel             *m_app_type_label;
     QStandardItemModel *m_app_type_model;
+    AppTypeFilterModel *m_app_type_filter_model;
     QComboBox          *m_app_type_box;
 
     QPushButton *m_capture_button;
@@ -218,9 +162,7 @@ private:
     QLabel      *m_gfxr_capture_file_on_device_directory_label;
     QLineEdit   *m_gfxr_capture_file_directory_input_box;
 
-    QHBoxLayout *m_gfxr_capture_file_local_directory_layout;
-    QLabel      *m_gfxr_capture_file_local_directory_label;
-    QLineEdit   *m_gfxr_capture_file_local_directory_input_box;
+    QLineEdit *m_capture_file_local_directory_input_box;
 
     QVBoxLayout                  *m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;

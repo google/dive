@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 #define SHORTCUT_EVENTS_SEARCH "Ctrl+F"
 #define SHORTCUT_TAB_VIEW_SEARCH "Ctrl+Shift+F"
 #define SHORTCUT_NEXT_SEARCH_RESULT "Ctrl+Shift+N"

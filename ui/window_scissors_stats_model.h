@@ -11,6 +11,8 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QAbstractItemModel>
 #include <QVector>
 #include <QStringList>

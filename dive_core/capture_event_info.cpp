@@ -23,34 +23,35 @@
 
 namespace Dive
 {
-// =================================================================================================
-// Util
-// =================================================================================================
-bool Util::IsEvent(const IMemoryManager &mem_manager,
-                   uint32_t              submit_index,
-                   uint64_t              addr,
-                   uint32_t              opcode,
-                   EmulateStateTracker  &state_tracker)
+enum class SyncType
 {
-    if (IsDrawDispatchEventOpcode(opcode))
-        return true;
+    // Map to EVENT_WRITEs (vgt_event_type)
+    kEventWriteStart = vgt_event_type::VS_DEALLOC,
+    kEventWriteEnd = vgt_event_type::CACHE_INVALIDATE7,
 
-    if (opcode == CP_BLIT)
-        return true;
+    // Various configurations of a resolve/clear
+    kColorSysMemToGmemResolve,
+    kColorGmemToSysMemResolve,
+    kColorGmemToSysMemResolveAndClear,
+    kColorClearGmem,
+    kDepthSysMemToGmemResolve,
+    kDepthGmemToSysMemResolve,
+    kDepthGmemToSysMemResolveAndClear,
+    kDepthClearGmem,
 
-    SyncType sync_type = Util::GetSyncType(mem_manager, submit_index, addr, opcode, state_tracker);
-    if (sync_type != SyncType::kNone)
-        return true;
+    kWaitMemWrites,
+    kWaitForIdle,
+    kWaitForMe,
 
-    return false;
-}
+    kNone
+};
 
 //--------------------------------------------------------------------------------------------------
-SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
-                           uint32_t              submit_index,
-                           uint64_t              addr,
-                           uint32_t              opcode,
-                           EmulateStateTracker  &state_tracker)
+SyncType GetSyncType(const IMemoryManager      &mem_manager,
+                     uint32_t                   submit_index,
+                     uint64_t                   addr,
+                     uint32_t                   opcode,
+                     const EmulateStateTracker &state_tracker)
 {
     // 6xx uses CP_EVENT_WRITE packet, which maps to same opcode as CP_EVENT_WRITE7
     // The event field is in the same location with either packet type
@@ -114,12 +115,97 @@ SyncType Util::GetSyncType(const IMemoryManager &mem_manager,
     return SyncType::kNone;
 }
 
+// =================================================================================================
+// Util
+// =================================================================================================
+bool Util::IsEvent(const IMemoryManager      &mem_manager,
+                   uint32_t                   submit_index,
+                   uint64_t                   addr,
+                   uint32_t                   opcode,
+                   const EmulateStateTracker &state_tracker)
+{
+    if (IsDrawDispatchEventOpcode(opcode))
+        return true;
+
+    if (opcode == CP_BLIT)
+        return true;
+
+    SyncType sync_type = GetSyncType(mem_manager, submit_index, addr, opcode, state_tracker);
+    if (sync_type != SyncType::kNone)
+        return true;
+
+    return false;
+}
+
 //--------------------------------------------------------------------------------------------------
-std::string Util::GetEventString(const IMemoryManager &mem_manager,
-                                 uint32_t              submit_index,
-                                 uint64_t              va_addr,
-                                 Pm4Type7Header        header,
-                                 EmulateStateTracker  &state_tracker)
+Util::EventType Util::GetEventType(const IMemoryManager      &mem_manager,
+                                   uint32_t                   submit_index,
+                                   uint64_t                   va_addr,
+                                   uint32_t                   opcode,
+                                   const EmulateStateTracker &state_tracker)
+{
+    EventType type = EventType::kUnknown;
+    if (IsDrawEventOpcode(opcode))
+    {
+        type = EventType::kDraw;
+    }
+    else if (IsDispatchEventOpcode(opcode))
+        type = EventType::kDispatch;
+    else if (opcode == CP_BLIT)
+        type = EventType::kBlit;
+    else
+    {
+        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode, state_tracker);
+
+        switch (sync_type)
+        {
+        case SyncType::kColorSysMemToGmemResolve:
+            type = EventType::kColorSysMemToGmemResolve;
+            break;
+        case SyncType::kColorGmemToSysMemResolve:
+            type = EventType::kColorGmemToSysMemResolve;
+            break;
+        case SyncType::kColorGmemToSysMemResolveAndClear:
+            type = EventType::kColorGmemToSysMemResolveAndClear;
+            break;
+        case SyncType::kColorClearGmem:
+            type = EventType::kColorClearGmem;
+            break;
+        case SyncType::kDepthSysMemToGmemResolve:
+            type = EventType::kDepthSysMemToGmemResolve;
+            break;
+        case SyncType::kDepthGmemToSysMemResolve:
+            type = EventType::kDepthGmemToSysMemResolve;
+            break;
+        case SyncType::kDepthGmemToSysMemResolveAndClear:
+            type = EventType::kDepthGmemToSysMemResolveAndClear;
+            break;
+        case SyncType::kDepthClearGmem:
+            type = EventType::kDepthClearGmem;
+            break;
+        case SyncType::kWaitMemWrites:
+            type = EventType::kWaitMemWrites;
+            break;
+        case SyncType::kWaitForIdle:
+            type = EventType::kWaitForIdle;
+            break;
+        case SyncType::kWaitForMe:
+            type = EventType::kWaitForMe;
+            break;
+        default:
+            DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
+            break;
+        }
+    }
+    return type;
+}
+
+//--------------------------------------------------------------------------------------------------
+std::string Util::GetEventString(const IMemoryManager      &mem_manager,
+                                 uint32_t                   submit_index,
+                                 uint64_t                   va_addr,
+                                 Pm4Type7Header             header,
+                                 const EmulateStateTracker &state_tracker)
 {
     uint32_t opcode = header.opcode;
 
@@ -310,11 +396,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager,
     }
     else if (opcode == CP_EVENT_WRITE7)
     {
-        SyncType sync_type = Util::GetSyncType(mem_manager,
-                                               submit_index,
-                                               va_addr,
-                                               opcode,
-                                               state_tracker);
+        SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode, state_tracker);
         switch (sync_type)
         {
         case SyncType::kColorSysMemToGmemResolve:
@@ -407,6 +489,53 @@ uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
         index_count = packet.bitfields2.NUM_INDICES;
     }
     return index_count;
+}
+
+//--------------------------------------------------------------------------------------------------
+std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager &mem_manager,
+                                                     uint32_t              submit_index,
+                                                     uint64_t              va_addr,
+                                                     Pm4Type7Header        header)
+{
+    // Get primitive-type. The primitive-type is always the least-significant 6-bits of the
+    // given word
+
+    // For all draw call PM4 packets other than the INDX variety, the relevant DWORD is
+    // the first dword after the header
+    uint64_t prim_dword_addr = va_addr + sizeof(header);
+    if (header.opcode == CP_DRAW_INDX)
+        prim_dword_addr += sizeof(uint32_t);  // 2nd dword
+
+    uint32_t prim_dword;
+    DIVE_VERIFY(
+    mem_manager.RetrieveMemoryData(&prim_dword, submit_index, prim_dword_addr, sizeof(prim_dword)));
+    pc_di_primtype gpu_type = static_cast<pc_di_primtype>(prim_dword & 0x3f);
+    switch (gpu_type)
+    {
+    case DI_PT_LINELIST:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    case DI_PT_LINESTRIP:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+    case DI_PT_TRILIST:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    case DI_PT_TRIFAN:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    case DI_PT_TRISTRIP:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    case DI_PT_POINTLIST:
+        return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    case DI_PT_LINE_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY;
+    case DI_PT_LINESTRIP_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
+    case DI_PT_TRI_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
+    case DI_PT_TRISTRIP_ADJ:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
+    default:
+        // These hardware options to not map to Vulkan!
+        return std::nullopt;
+    };
 }
 
 }  // namespace Dive

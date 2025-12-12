@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+message(CHECK_START "Generate build files for network")
+list(APPEND CMAKE_MESSAGE_INDENT "  ")
+
 project(network)
 
 set(NETWORK_SRCS
@@ -41,9 +44,7 @@ if(ANDROID)
     list(APPEND NETWORK_LINK_LIBS log)
 endif()
 
-target_link_libraries(network PRIVATE ${NETWORK_LINK_LIBS})
-
-target_include_directories(network PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(network PUBLIC dive_status PRIVATE ${NETWORK_LINK_LIBS})
 
 if(NOT ANDROID)
     enable_testing()
@@ -80,3 +81,6 @@ if(NOT ANDROID)
         gtest_discover_tests(unix_domain_server_test PROPERTIES TIMEOUT 5)
     endif()
 endif()
+
+list(POP_BACK CMAKE_MESSAGE_INDENT)
+message(CHECK_PASS "done")

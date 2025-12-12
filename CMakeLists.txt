@@ -139,6 +139,19 @@ if(NOT ANDROID)
     add_subdirectory(third_party/gfxreconstruct)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
+
+    message(CHECK_START "Generate build files for third_party/crashpad")
+    list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    # Disable Crashpad tests/examples to speed up build
+    set(CRASHPAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(CRASHPAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    if(UNIX AND NOT APPLE AND NOT ANDROID)
+        find_package(CURL REQUIRED)
+    endif()
+    add_subdirectory(third_party/crashpad)
+    list(POP_BACK CMAKE_MESSAGE_INDENT)
+    message(CHECK_PASS "done")
+    add_library(crashpad::client ALIAS client)
 else()
     message(
         CHECK_START

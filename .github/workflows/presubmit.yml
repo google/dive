@@ -101,7 +101,8 @@ jobs:
             libbsd-dev \
             ninja-build \
             python3-mako \
-            libxcb-glx0-dev
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
           which gcc-14
       - name: Generate build files with cmake
         run: |
@@ -153,7 +154,8 @@ jobs:
             libbsd-dev \
             ninja-build \
             python3-mako \
-            libxcb-glx0-dev
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
           which gcc-14
       - name: Generate build files with cmake
         run: |
@@ -205,7 +207,8 @@ jobs:
           libbsd-dev \
           ninja-build \
           python3-mako \
-          libxcb-glx0-dev
+          libxcb-glx0-dev \
+          libcurl4-openssl-dev
           which clang-19
       - name: Generate build files with cmake
         run: |
@@ -257,7 +260,8 @@ jobs:
           libbsd-dev \
           ninja-build \
           python3-mako \
-          libxcb-glx0-dev
+          libxcb-glx0-dev \
+          libcurl4-openssl-dev
           which clang-19
       - name: Generate build files with cmake
         run: |
@@ -320,6 +324,13 @@ jobs:
           python3 -m pip install --break-system-packages mako
       - name: Zero ccache stats
         run: ccache -z
+      - name: Patch Crashpad (fix macOS exc.defs path)
+        run: |
+          # Use xcrun to dynamically find the SDK path. 
+          # The sed command uses this path to update CMakeLists.txt.
+          SDK_PATH=$(xcrun --show-sdk-path)
+          echo "Detected SDK Path: $SDK_PATH"
+          sed -i '' "s|/usr/include/mach/exc.defs|$SDK_PATH/usr/include/mach/exc.defs|g" third_party/crashpad/util/CMakeLists.txt
       - name: Generate build files with cmake
         run: |
           time cmake -DCMAKE_BUILD_TYPE=Debug \
@@ -373,6 +384,39 @@ jobs:
           python3 -m pip install --break-system-packages mako
       - name: Zero ccache stats
         run: ccache -z
+      - name: Patch Crashpad and Verify (Python)
+        run: |
+          python3 -c '
+          import os, subprocess, sys
+          cmake_file = "third_party/crashpad/util/CMakeLists.txt"
+          
+          # 1. Get SDK Path
+          sdk = subprocess.check_output(["xcrun", "--show-sdk-path"]).decode("utf-8").strip()
+          print(f"Debug: SDK found at: {sdk}")
+          
+          # 2. Read File
+          if not os.path.exists(cmake_file):
+              print(f"::error::File not found: {cmake_file}")
+              sys.exit(1)
+              
+          with open(cmake_file, "r") as f: content = f.read()
+          
+          # 3. Patch
+          target = "/usr/include/mach/exc.defs"
+          replacement = f"{sdk}/usr/include/mach/exc.defs"
+          
+          if target in content:
+             new_content = content.replace(target, replacement)
+             with open(cmake_file, "w") as f: f.write(new_content)
+             print(f"SUCCESS: Replaced {target} with {replacement}")
+          elif replacement in content:
+             print("SUCCESS: File was already patched.")
+          else:
+             print(f"::warning::Target string {target} NOT FOUND in file. Build might fail if not patched elsewhere.")
+             # Print a snippet to help verify
+             print("File content snippet:")
+             print(content[:500])
+          '
       - name: Generate build files with cmake
         run: |
           time cmake -DCMAKE_BUILD_TYPE=Release \

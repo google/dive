@@ -54,6 +54,7 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "capture_service/constants.h"
+#include "dive/utils/resolve_device_path.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "dive_core/data_core.h"
@@ -166,41 +167,6 @@ QString ToQString(DrawCallContextMenuOption opt)
         return "Gpu Time Data";
     }
     return "Unknown";
-}
-
-std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
-{
-    std::vector<std::filesystem::path>    search_paths;
-    absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
-    if (ret.ok())
-    {
-        const auto &exe_dir = *ret;
-        search_paths.push_back(exe_dir / "install");
-        search_paths.push_back(exe_dir);
-#if defined(__APPLE__)
-        search_paths.push_back(exe_dir / "../Resources/");
-#endif
-    }
-    else
-    {
-        qDebug() << "Could not determine executable directory: " << ret.status().message().data()
-                 << ". Search will not include executable-relative paths.";
-    }
-
-    search_paths.push_back(std::filesystem::path{ "./install" });
-    search_paths.push_back(std::filesystem::path{ "../../build_android/Release/bin" });
-    search_paths.push_back(std::filesystem::path{ "../../install" });
-    search_paths.push_back(std::filesystem::path{ "./" });
-
-    for (const auto &p : search_paths)
-    {
-        auto result_path = p / name;
-        if (std::filesystem::exists(result_path))
-        {
-            return std::filesystem::canonical(result_path);
-        }
-    }
-    return std::nullopt;
 }
 
 }  // namespace
@@ -1619,9 +1585,11 @@ void MainWindow::OnSearchTrigger()
 void MainWindow::LoadAvailableMetrics()
 {
     std::optional<std::filesystem::path> metrics_description_file_path = std::nullopt;
-    if (auto profile_plugin_folder = ResolveAssetPath(Dive::kProfilingPluginFolderName))
+    if (absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(
+        Dive::kProfilingPluginFolderName);
+        ret.ok())
     {
-        auto file_path = *profile_plugin_folder / kMetricsFileName;
+        auto file_path = *ret / kMetricsFileName;
         if (std::filesystem::exists(file_path))
         {
             metrics_description_file_path = file_path;

@@ -24,7 +24,7 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "dive/build_defs/version_defs.h"
-#include "dive/os/command_utils.h"
+#include "dive/utils/resolve_device_path.h"
 
 namespace
 {
@@ -32,7 +32,7 @@ namespace
 constexpr size_t kShortSha = 7;
 constexpr size_t kLongSha = 40;
 
-// This is relative to install/
+// This is relative to the device library dir
 constexpr std::string_view kProfilingPluginShaPath = "dive_profiling_plugin/SHA";
 
 // Upper bound of file size to avoid reading long files
@@ -41,12 +41,6 @@ constexpr size_t kMaxCharactersDeviceLibraryFile = 200;
 absl::StatusOr<std::string> ReadFileCapped(const std::filesystem::path& file_path,
                                            size_t                       max_characters)
 {
-    if (!std::filesystem::exists(file_path))
-    {
-        return absl::FailedPreconditionError(
-        absl::StrFormat("File does not exist: %s", file_path.generic_string()));
-    }
-
     std::ifstream file(file_path);
     if (!file.is_open())
     {
@@ -195,57 +189,40 @@ std::string GetDeviceLibrariesVersionInfo(const std::string& csv_content)
                            GetSHAString(device_info_map[VersionInfoConstants::kNameSha], kLongSha));
 }
 
-std::filesystem::path ResolvePath(std::string_view file_name)
-{
-    std::vector<std::filesystem::path> search_paths;
-    if (auto exe_dir = Dive::GetExecutableDirectory(); exe_dir.ok())
-    {
-        search_paths.push_back(*exe_dir);
-        search_paths.push_back(*exe_dir / "install");
-    }
-    else
-    {
-        std::cerr << exe_dir.status().message() << std::endl;
-    }
-    search_paths.push_back(DIVE_INSTALL_DIR_PATH);
-
-    for (const auto& p : search_paths)
-    {
-        const auto potential_path = p / file_name;
-        if (std::filesystem::exists(potential_path))
-        {
-            auto canonical_path = std::filesystem::canonical(potential_path);
-            std::cout << "Found " << file_name << " at " << canonical_path << "\n";
-            return canonical_path;
-        }
-    }
-    std::cerr << "Could not find '" << file_name << "' in any of the search paths.\n";
-    return {};
-}
-
 std::string GetLongVersionString()
 {
     std::string summary = GetHostToolsVersionInfo();
 
-    std::filesystem::path device_libraries_version_path = ResolvePath(
-    DIVE_DEVICE_LIBRARIES_VERSION_FILENAME);
-    if (absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,
-                                                         kMaxCharactersDeviceLibraryFile);
-        ret.ok())
+    if (auto ret = Dive::ResolveDevicePath(DIVE_DEVICE_LIBRARIES_VERSION_FILENAME); ret.ok())
     {
-        summary += "\n" + GetDeviceLibrariesVersionInfo(*ret);
+        std::filesystem::path device_libraries_version_path = *ret;
+        if (absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,
+                                                             kMaxCharactersDeviceLibraryFile);
+            ret.ok())
+        {
+            summary += "\n" + GetDeviceLibrariesVersionInfo(*ret);
+        }
+        else
+        {
+            std::cerr << ret.status().message() << std::endl;
+        }
     }
     else
     {
         std::cerr << ret.status().message() << std::endl;
     }
 
-    std::filesystem::path profiling_plugin_version_path = ResolvePath(kProfilingPluginShaPath);
-    if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path, kLongSha);
-        ret.ok())
+    if (auto ret = Dive::ResolveDevicePath(kProfilingPluginShaPath); ret.ok())
     {
-        std::string profiling_plugin_section = absl::StrFormat("Profiling Plugin SHA: %s\n", *ret);
-        summary += "\n" + profiling_plugin_section;
+        std::filesystem::path profiling_plugin_version_path = *ret;
+        if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path,
+                                                             kLongSha);
+            ret.ok())
+        {
+            std::string profiling_plugin_section = absl::StrFormat("Profiling Plugin SHA: %s\n",
+                                                                   *ret);
+            summary += "\n" + profiling_plugin_section;
+        }
     }
     // Want silent failure for profiling plugin or else the CLI stdout can confuse users
 
@@ -259,8 +236,16 @@ std::string GetCompleteVersionString()
 
 absl::StatusOr<std::string> GetDeviceLibraryInfo(std::string_view key)
 {
-    std::filesystem::path device_libraries_version_path = ResolvePath(
-    DIVE_DEVICE_LIBRARIES_VERSION_FILENAME);
+    std::filesystem::path device_libraries_version_path;
+    {
+        auto ret = Dive::ResolveDevicePath(DIVE_DEVICE_LIBRARIES_VERSION_FILENAME);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        device_libraries_version_path = *ret;
+    }
+
     std::string csv_content;
     {
         absl::StatusOr<std::string> ret = ReadFileCapped(device_libraries_version_path,

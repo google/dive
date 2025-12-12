@@ -29,7 +29,6 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
 # Add an option to allow users to easily toggle the runtime layer build
 option(
@@ -39,6 +38,15 @@ option(
 )
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
+
+set(DIVE_INSTALL_DESTINATION
+    "." # Replace this with "dive-profiler"
+    CACHE STRING
+    "Dive install location"
+)
+
+# Disable gtest for install
+set(INSTALL_GTEST OFF)
 
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
@@ -81,21 +89,15 @@ if(ANDROID)
     message(CHECK_START "Make version file for Dive device libraries")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     file(
-        WRITE ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
-        "sha,"
-        ${DIVE_VERSION_SHA1}
-        "\nversion,"
-        ${CMAKE_PROJECT_VERSION}
-        "\nbuild_type,"
-        ${CMAKE_BUILD_TYPE}
-        "\nrelease_type,"
-        ${DIVE_RELEASE_TYPE}
-        "\nabi,"
-        ${ANDROID_ABI}
+        GENERATE OUTPUT
+            "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/${DEVICE_LIBRARIES_VERSION_FILENAME}"
+        CONTENT
+            "sha,${DIVE_VERSION_SHA1}\nversion,${CMAKE_PROJECT_VERSION}\nbuild_type,$<CONFIG>\nrelease_type,${DIVE_RELEASE_TYPE}\nabi,${ANDROID_ABI}"
     )
     install(
-        FILES ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        DESTINATION ${DIVE_INSTALL_DESTINATION}
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -136,7 +138,7 @@ if(NOT ANDROID)
 
     message(CHECK_START "Generate build files for third_party/gfxreconstruct")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/gfxreconstruct)
+    add_subdirectory(third_party/gfxreconstruct EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 else()
@@ -145,7 +147,8 @@ else()
         "Generate build files for third_party/freedreno (libwrap)"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/freedreno)
+    add_subdirectory(third_party/freedreno EXCLUDE_FROM_ALL)
+    install(TARGETS wrap DESTINATION ${DIVE_INSTALL_DESTINATION})
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
@@ -154,14 +157,14 @@ else()
         "Generate build files for third_party/Vulkan-ValidationLayers"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/Vulkan-ValidationLayers)
+    add_subdirectory(third_party/Vulkan-ValidationLayers) # This is a prebuilt
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 endif()
 
 message(CHECK_START "Generate build files for third_party/abseil-cpp")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
-add_subdirectory(third_party/abseil-cpp)
+add_subdirectory(third_party/abseil-cpp EXCLUDE_FROM_ALL)
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
 
@@ -209,20 +212,6 @@ if(ANDROID)
         "Value of --console to use when building GFXR with Gradle"
     )
 
-    # TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(CMAKE_BUILD_TYPE_LOWERCASE "release")
-        set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
-        set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
-    else()
-        message(
-            FATAL_ERROR
-            "Must set -DCMAKE_BUILD_TYPE when targetting Android"
-        )
-    endif()
-
     if(CMAKE_HOST_WIN32)
         set(GRADLE_EXEC "gradlew.bat")
     else()
@@ -231,8 +220,7 @@ if(ANDROID)
 
     execute_process(
         COMMAND
-            ${GRADLE_EXEC} layer:assemble${CMAKE_BUILD_TYPE}
-            replay:assemble${CMAKE_BUILD_TYPE}
+            ${GRADLE_EXEC} layer:assembleDebug replay:assembleDebug
             --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
         WORKING_DIRECTORY
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
@@ -241,33 +229,35 @@ if(ANDROID)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
-    message(CHECK_START "Extract GFXR files and prepare install")
+    message(CHECK_START "Extract GFXR files")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    # Force usage of debug build of GFXR layer and replay apk
     file(
         ARCHIVE_EXTRACT
         INPUT
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
-        DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
+        DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/gfxr_layer"
     )
-    install(
-        CODE
-            "file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\")"
-    )
-    install(
-        FILES
-            ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+    # Indicates expected location of extracted libVkLayer_gfxreconstruct.so during the cmake configuration phase
+    file(
+        TOUCH_NOCREATE
+        "${CMAKE_CURRENT_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so"
     )
     install(
         FILES
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+            ${CMAKE_CURRENT_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
+        DESTINATION ${DIVE_INSTALL_DESTINATION}
+    )
+    install(
+        FILES
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug/replay-debug.apk
+        DESTINATION ${DIVE_INSTALL_DESTINATION}
         RENAME "gfxr-replay.apk"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION ${DIVE_INSTALL_DESTINATION}
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")

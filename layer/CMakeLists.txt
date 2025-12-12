@@ -71,7 +71,7 @@ target_link_directories(
     PRIVATE ${CMAKE_SOURCE_DIR}/capture_service
 )
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
@@ -95,10 +95,10 @@ configure_file(
     "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json"
     COPYONLY
 )
-install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(TARGETS ${target_name} DESTINATION ${DIVE_INSTALL_DESTINATION})
 install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION ${DIVE_INSTALL_DESTINATION}
 )
 
 set(target_name XrApiLayer_dive)
@@ -120,15 +120,16 @@ target_include_directories(
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
 )
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+
+if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 target_link_libraries(${target_name} ${TARGET_LINK_LIBS})
 
-install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(TARGETS ${target_name} DESTINATION ${DIVE_INSTALL_DESTINATION})
 install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION ${DIVE_INSTALL_DESTINATION}
 )
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

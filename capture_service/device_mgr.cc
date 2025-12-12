@@ -34,9 +34,10 @@ limitations under the License.
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
+#include "dive/utils/component_files.h"
+#include "dive/utils/version_info.h"
+#include "dive/utils/resolve_device_path.h"
 #include "remote_files.h"
-#include "utils/component_files.h"
-#include "utils/version_info.h"
 
 namespace Dive
 {
@@ -176,10 +177,18 @@ absl::Status InstallVulkanLayer(const AdbSession &adb,
                                 std::string_view  package,
                                 std::string_view  layer_filename)
 {
+    std::filesystem::path local_layer_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(
+        std::string(layer_filename));
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_layer_path = *ret;
+    }
     RETURN_IF_ERROR(
-    adb.Run(absl::StrFormat(R"(push "%s" "%s")",
-                            ResolveAndroidLibPath(std::string(layer_filename)).generic_string(),
-                            kTargetPath)));
+    adb.Run(absl::StrFormat(R"(push "%s" "%s")", local_layer_path.generic_string(), kTargetPath)));
     RETURN_IF_ERROR(adb.Run(
     absl::StrFormat(R"(shell run-as %s cp "%s/%s" .)", package, kTargetPath, layer_filename)));
     return absl::OkStatus();
@@ -552,41 +561,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     return package_list;
 }
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name)
-{
-    std::filesystem::path                 exe_dir;
-    absl::StatusOr<std::filesystem::path> ret = GetExecutableDirectory();
-    if (ret.ok())
-    {
-        exe_dir = *ret;
-    }
-    else
-    {
-        LOGW("Could not determine executable directory: %s. Search will not include "
-             "executable-relative paths.",
-             ret.status().message().data());
-    }
-
-    std::vector<std::filesystem::path> search_paths{
-        exe_dir / "install", exe_dir / "../Resources",
-        "./install",         "../../build_android/Release/bin",
-        "../../install",     "./"
-    };
-
-    for (const auto &p : search_paths)
-    {
-        const auto potential_path = p / name;
-        if (std::filesystem::exists(potential_path))
-        {
-            auto canonical_path = std::filesystem::canonical(potential_path);
-            LOGD("Found %s at %s \n", name.c_str(), canonical_path.generic_string().c_str());
-            return canonical_path;
-        }
-    }
-    LOGE("Could not find '%s' in any of the search paths. \n", name.c_str());
-    return {};
-}
-
 absl::Status AndroidDevice::ForwardFirstAvailablePort()
 {
     for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
@@ -607,20 +581,44 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
 
 absl::Status AndroidDevice::SetupDevice()
 {
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
-                                              kTargetPath)));
+    std::filesystem::path local_wrap_lib_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kWrapLibName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_wrap_lib_path = *ret;
+    }
+    RETURN_IF_ERROR(Adb().Run(
+    absl::StrFormat(R"(push "%s" "%s")", local_wrap_lib_path.generic_string(), kTargetPath)));
     if (!m_gfxr_enabled)
     {
         RETURN_IF_ERROR(RequestRootAccess());
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                  ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
-                                  kTargetPath)));
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                  ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
-                                  kTargetPath)));
+        std::filesystem::path local_vulkan_layer_path;
+        {
+            absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kVkLayerLibName);
+            if (!ret.ok())
+            {
+                return ret.status();
+            }
+            local_vulkan_layer_path = *ret;
+        }
+        RETURN_IF_ERROR(Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
+                                                  local_vulkan_layer_path.generic_string(),
+                                                  kTargetPath)));
+
+        std::filesystem::path local_xr_layer_path;
+        {
+            absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kXrLayerLibName);
+            if (!ret.ok())
+            {
+                return ret.status();
+            }
+            local_xr_layer_path = *ret;
+        }
+        RETURN_IF_ERROR(Adb().Run(
+        absl::StrFormat(R"(push "%s" "%s")", local_xr_layer_path.generic_string(), kTargetPath)));
         RETURN_IF_ERROR(ForwardFirstAvailablePort());
     }
 
@@ -931,17 +929,33 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
         }
     };
 
-    std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName).generic_string();
-    std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath).generic_string();
-    std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
+    std::filesystem::path local_replay_apk_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kGfxrReplayApkName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_replay_apk_path = *ret;
+    }
+    std::filesystem::path local_recon_py_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kGfxrReconPyPath);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_recon_py_path = *ret;
+    }
+    std::string                 cmd = absl::StrFormat("%s %s install-apk %s -s %s",
                                       python_path,
-                                      recon_py_path,
-                                      replay_apk_path,
+                                      local_recon_py_path.generic_string(),
+                                      local_replay_apk_path.generic_string(),
                                       serial);
     absl::StatusOr<std::string> res = RunCommand(cmd);
     if (!res.ok())
     {
-        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", replay_apk_path.c_str());
+        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", local_replay_apk_path.c_str());
         return res.status();
     }
 
@@ -1039,10 +1053,19 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     LOGD("RunReplayGfxrScript(): RUN\n");
     std::string python_path = GetPythonPath();
     RETURN_IF_ERROR(ValidatePythonPath(python_path));
-    std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath).generic_string();
+
+    std::filesystem::path local_recon_py_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kGfxrReconPyPath);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_recon_py_path = *ret;
+    }
     std::string cmd = absl::StrFormat("%s %s replay %s %s",
                                       python_path,
-                                      local_recon_py_path,
+                                      local_recon_py_path.generic_string(),
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);
     if (absl::StatusOr<std::string> res = RunCommand(cmd); !res.ok())
@@ -1136,8 +1159,19 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
+
+    std::filesystem::path local_plugin_folder_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(
+        kProfilingPluginFolderName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_plugin_folder_path = *ret;
+    }
     std::string copy_cmd = absl::StrFormat(R"(push "%s" "%s")",
-                                           ResolveAndroidLibPath(kProfilingPluginFolderName),
+                                           local_plugin_folder_path.generic_string(),
                                            kTargetPath);
     RETURN_IF_ERROR(adb.Run(copy_cmd));
     std::string remote_profiling_dir = absl::StrFormat("%s/%s",

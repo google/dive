@@ -70,7 +70,6 @@ std::string GetDiveDescription();
 // -----
 // clang-format on
 //
-// NOTE: Other than host tools info, info is retrieved from within DIVE_INSTALL_DIR_PATH
 std::string GetLongVersionString();
 
 // Returns both the host short version string and long version string

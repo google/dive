@@ -26,6 +26,7 @@ limitations under the License.
 #include "device_mgr.h"
 #include "common/log.h"
 #include "common/macros.h"
+#include "dive/utils/resolve_device_path.h"
 
 namespace Dive
 {
@@ -393,10 +394,17 @@ absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory
 
 absl::Status AndroidApplication::GfxrSetup()
 {
-    RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                    ResolveAndroidLibPath(kVkGfxrLayerLibName).generic_string(),
-                                    kTargetPath)));
+    std::filesystem::path local_gfxr_layer_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kVkGfxrLayerLibName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_gfxr_layer_path = *ret;
+    }
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+    absl::StrFormat(R"(push "%s" "%s")", local_gfxr_layer_path.generic_string(), kTargetPath)));
 
     RETURN_IF_ERROR(m_dev.Adb().Run(
     absl::StrFormat("shell run-as %s cp %s/%s .", m_package, kTargetPath, kVkGfxrLayerLibName)));
@@ -510,10 +518,18 @@ absl::Status OpenXRApplication::Pm4CaptureSetup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kManifestFilePath)));
+
+    std::filesystem::path local_manifest_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kManifestFileName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_manifest_path = *ret;
+    }
     RETURN_IF_ERROR(m_dev.Adb().Run(
-    absl::StrFormat(R"(push "%s" "%s")",
-                    ResolveAndroidLibPath(kManifestFileName).generic_string().c_str(),
-                    kManifestFilePath)));
+    absl::StrFormat(R"(push "%s" "%s")", local_manifest_path.generic_string(), kManifestFilePath)));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s",
                                                     m_package,
                                                     kTargetPath,
@@ -609,10 +625,19 @@ absl::Status VulkanCliApplication::Setup()
 absl::Status VulkanCliApplication::Pm4CaptureSetup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));
-    RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                    ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
-                                    kVulkanGlobalPath)));
+
+    std::filesystem::path local_vulkan_layer_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kVkLayerLibName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_vulkan_layer_path = *ret;
+    }
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
+                                                    local_vulkan_layer_path.generic_string(),
+                                                    kVulkanGlobalPath)));
     RETURN_IF_ERROR(
     m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName)));
     return absl::OkStatus();
@@ -671,10 +696,19 @@ absl::Status VulkanCliApplication::Stop()
 absl::Status VulkanCliApplication::GfxrSetup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", kVulkanGlobalPath)));
-    RETURN_IF_ERROR(
-    m_dev.Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                    ResolveAndroidLibPath(kVkGfxrLayerLibName).generic_string(),
-                                    kVulkanGlobalPath)));
+
+    std::filesystem::path local_gfxr_layer_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDevicePath(kVkGfxrLayerLibName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_gfxr_layer_path = *ret;
+    }
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
+                                                    local_gfxr_layer_path.generic_string(),
+                                                    kVulkanGlobalPath)));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop cpm.gfxr_layer 1"));
     RETURN_IF_ERROR(
     m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkGfxrLayerName)));

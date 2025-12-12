@@ -116,6 +116,7 @@ target_link_libraries(
     device_mgr
     dive_plugin_loader
     component_files
+    resolve_device_path
     version_info
     dive_build_defs
 )
@@ -214,43 +215,43 @@ if(APPLE)
         CODE
             "
         message(STATUS \"Running macdeployqt...\")
-        execute_process(COMMAND \"macdeployqt\" \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        execute_process(COMMAND \"macdeployqt\" \"${DIVE_INSTALL_DESTINATION}/dive.app\")
         message(STATUS \"Creating install directory in app bundle\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
         message(STATUS \"Copying Android files to app bundle\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/gfxr-replay.apk\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/gfxrecon.py\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_khronos_validation.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libXrApiLayer_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/XrApiLayer_dive.json\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_rt_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libwrap.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/gfxr-replay.apk\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/gfxrecon.py\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/libVkLayer_dive.so\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/libVkLayer_khronos_validation.so\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/libXrApiLayer_dive.so\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/XrApiLayer_dive.json\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/libVkLayer_rt_dive.so\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/libwrap.so\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/libVkLayer_gfxreconstruct.so\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/\")
         message(STATUS \"Copying dive_client_cli to app bundle\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_client_cli\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/dive_client_cli\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/MacOS/\")
 
-        if(IS_DIRECTORY \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin\")
+        if(IS_DIRECTORY \"${DIVE_INSTALL_DESTINATION}/dive_profiling_plugin\")
             message(STATUS \"Copying dive_profiling_plugin to app bundle\")
-                execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/dive_profiling_plugin\")
+                execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${DIVE_INSTALL_DESTINATION}/dive_profiling_plugin/\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/Resources/dive_profiling_plugin\")
         endif()
-        if(EXISTS \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\")
+        if(EXISTS \"${DIVE_INSTALL_DESTINATION}/dive_compositor_capture.sh\")
             message(STATUS \"Copying dive_compositor_capture.sh to app bundle\")
-            execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
+            execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${DIVE_INSTALL_DESTINATION}/dive_compositor_capture.sh\" \"${DIVE_INSTALL_DESTINATION}/dive.app/Contents/MacOS/\")
         endif()
         if(${DIVE_ENABLE_SIGNING})
             message(STATUS \"Ad-hoc signing the application bundle\")
-            execute_process(COMMAND \"codesign\" --force --deep --sign - \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+            execute_process(COMMAND \"codesign\" --force --deep --sign - \"${DIVE_INSTALL_DESTINATION}/dive.app\")
         endif()
     "
     )
 else()
-    install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS ${PROJECT_NAME} DESTINATION ${DIVE_INSTALL_DESTINATION})
 endif()
 
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
-    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    DESTINATION "${DIVE_INSTALL_DESTINATION}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
 

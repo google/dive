@@ -18,6 +18,39 @@
 
 set -eux
 
+# Include common.h for constants and functions
+THIS_DIR=$(dirname "$0")
+. "${THIS_DIR}/test_automation/common.sh"
+
+cleanup() {
+    echo "Starting cleanup"
+    adb shell setprop debug.openxr.enable_frame_delimiter '""'
+    unset_gfxr_props
+    unset_vulkan_debug_settings
+    # DUMP_DIR is from common.h, so should be defined by the time this is called.
+    adb shell rm -rf "${DUMP_DIR}"
+    adb shell am force-stop "${REPLAY_PACKAGE}"
+    # These vars are set by this script so need to check if defined.
+    # TODO does this interfere with set -u? set -e?
+    [ -n "${PACKAGE+x}" ] && adb shell am clear-debug-app -w "${PACKAGE}"
+    [ -n "${PACKAGE+x}" ] && uninstall_layer "${PACKAGE}" "${VALIDATION_LAYER_BASENAME}"
+    [ -n "${PACKAGE+x}" ] && adb shell am force-stop "${PACKAGE}"
+    [ -n "${JSON_BASENAME+x}" ] && adb shell rm -rf "${REMOTE_TEMP_DIR}/${JSON_BASENAME}"
+    # TODO use timestamps like Dive
+    [ -n "${GFXR_BASENAME+x}" ] && adb shell rm -rf "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}"
+    [ -n "${GFXA_BASENAME+x}" ] && adb shell rm -rf "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}"
+    # Turn the screen off to save on battery and prevent burn in
+    adb shell input keyevent KEYCODE_SLEEP
+    adb unroot
+    # Cleanup should never cause the script to halt. Ensure this is the last command.
+    return 0
+}
+
+trap_cleanup() {
+    echo "Running cleanup from EXIT trap"
+    cleanup
+}
+
 print_usage() {
     set +x
     echo "End-to-end capture-replay test for package"
@@ -40,6 +73,10 @@ print_usage() {
     set -x
 }
 
+#
+# Process cmdline args
+#
+
 CAPTURE_DEBUG=0
 REPLAY_DEBUG=0
 REPLAY_VALIDATION=0
@@ -61,9 +98,11 @@ do
     esac
 done
 
-THIS_DIR=$(dirname "$0")
-. "${THIS_DIR}/test_automation/common.sh"
+#
+# Additional setup
+#
 
+# Can't launch an app just with the package name, Try to find the default main activity
 ACTIVITY="$(find_default_activity "${PACKAGE}")"
 if [ -z "$ACTIVITY" -a ${SYSTEM_PACKAGE} -eq 0 ]
 then
@@ -71,100 +110,30 @@ then
     exit 1
 fi
 
-# Fairly reliable directory on remote device, as long as app has MANAGE_EXTERNAL_STORAGE permissions.
-# /data/local/tmp doesn't work on all devices tested.
-REMOTE_TEMP_DIR=/sdcard/Download
-GFXR_CAPTURE_DIR_BASENAME=gfxr_capture
-REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
-GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
-BUILD_DIR=./build
-GFXR_DUMP_RESOURCES="${BUILD_DIR}/gfxr_dump_resources/gfxr_dump_resources"
-JSON_BASENAME=dump.json
-DUMP_DIR="${REMOTE_TEMP_DIR}/dump"
-GFXR_BASENAME="${PACKAGE}_trim_trigger.gfxr"
-GFXA_BASENAME="${PACKAGE}_asset_file.gfxa"
-GFXR_REPLAY_APK=./install/gfxr-replay.apk
-RESULTS_DIR="${PACKAGE}-$(date +%Y%m%d_%H%M%S)"
-JSON="${RESULTS_DIR}/${JSON_BASENAME}"
-LOCAL_TEMP_DIR=/tmp
-ARCHIVE_BASENAME=android-binaries-1.4.313.0
-ARCHIVE_FILE=android-binaries-1.4.313.0.tar.gz
-VALIDATION_LAYER_DIR=${LOCAL_TEMP_DIR}/${ARCHIVE_BASENAME}
-VALIDATION_LAYER_LIB=libVkLayer_khronos_validation.so
-REMOTE_TEMP_FILEPATH="/data/local/tmp/${VALIDATION_LAYER_LIB}"
-ARCH=$(adb shell getprop ro.product.cpu.abi)
-LOCAL_VALIDATION_LAYER_FILEPATH="${VALIDATION_LAYER_DIR}/${ARCH}/${VALIDATION_LAYER_LIB}"
-
-#
 # Clear anything previously set (in case the script exited prematurely)
-#
+cleanup
 
-unset_gfxr_props
-unset_vulkan_debug_settings
-
-#
-# Ask OpenXR runtime to emit frame debug marker
-#
-
-adb shell setprop debug.openxr.enable_frame_delimiter true
-
-#
-# Download validation layers
-#
-
-if [ ${REPLAY_VALIDATION} -eq 1 -o ${CAPTURE_VALIDATION} -eq 1 ]
-then
-    # Download the archive and cache the result
-    if [ ! -f "${LOCAL_TEMP_DIR}/${ARCHIVE_FILE}" ]; then
-        $(cd "${LOCAL_TEMP_DIR}" && wget https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases/download/vulkan-sdk-1.4.313.0/android-binaries-1.4.313.0.tar.gz)
-    fi
-    # Extract the archive and cache the result
-    if [ ! -e "${LOCAL_VALIDATION_LAYER_FILEPATH}" ]; then
-        $(cd "${LOCAL_TEMP_DIR}" && tar xf "${ARCHIVE_FILE}")
-    fi
-fi
-
+# Make directory to store results
+RESULTS_DIR="${PACKAGE}-$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${RESULTS_DIR}"
+
+# Cleanup on EXIT. Register right before device state modification
+trap trap_cleanup EXIT
 
 #
 # 1. Install replay package for both capture layer and replay activity
 #
 
-# Check if we need to reinstall the replay APK. First, is it installed.
-# TODO would be nice if we could isolate this into a function
-install_replay_apk=0
-if is_app_installed "${REPLAY_PACKAGE}"
+# Save on time by only reinstalling replay if absolutely necessary. This does a SHA match so works even if an app by the same name is installed.
+if ! is_apk_installed "${REPLAY_PACKAGE}" "${GFXR_REPLAY_APK}"
 then
-    REMOTE_REPLAY_APK_FILEPATH="$(get_app_path "${REPLAY_PACKAGE}")"
-    # Second, do the files match.
-    REMOTE_APK_SHA=$(adb shell sha256sum -b "${REMOTE_REPLAY_APK_FILEPATH}")
-    LOCAL_APK_SHA=$(sha256sum "${GFXR_REPLAY_APK}" | awk '{ print $1 }')
-    if [ "${REMOTE_APK_SHA}" != "${LOCAL_APK_SHA}" ]
+    # Try incremental install. IF that fails (e.g. different cert) then explicitly uninstall and try again.
+    if ! python "${GFXRECON}" install-apk "${GFXR_REPLAY_APK}"
     then
         adb uninstall "${REPLAY_PACKAGE}"
-        install_replay_apk=1
+        # If this fails then halt because something is wrong.
+        python "${GFXRECON}" install-apk "${GFXR_REPLAY_APK}"
     fi
-else
-    install_replay_apk=1
-fi
-
-if [ $install_replay_apk -eq 1 ]
-then
-    python "${GFXRECON}" install-apk "${GFXR_REPLAY_APK}"
-fi
-
-# Replay with --dump-resources needs permissions to store generated BMPs
-# Always do this since this permission resets on reboot or stop/start if not explicitly granted
-adb shell appops set "${REPLAY_PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
-
-# Install the validation layer into the replay app so we can easily find it in both capture and replay
-if [ ${REPLAY_VALIDATION} -eq 1 -o ${CAPTURE_VALIDATION} -eq 1 ]
-then
-    # run-as is probably fine since we control the replay app is built
-    adb push "${LOCAL_VALIDATION_LAYER_FILEPATH}" "${REMOTE_TEMP_FILEPATH}"
-    # Can't mv since REMOTE_TEMP_FILEPATH is owned by shell or root
-    adb shell run-as "${REPLAY_PACKAGE}" cp "${REMOTE_TEMP_FILEPATH}" .
-    adb shell rm -rf "${REMOTE_TEMP_FILEPATH}"
 fi
 
 # TODO copy replay APK into RESULTS_DIR?
@@ -177,23 +146,13 @@ CAPTURE_LAYERS="VK_LAYER_LUNARG_gfxreconstruct"
 CAPTURE_DEBUG_LAYER_APPS="${REPLAY_PACKAGE}"
 if [ ${CAPTURE_VALIDATION} -eq 1 ]
 then
-    # Put validation layer last otherwise we try to capture bogus objects. Also replay fails otherwise.
+    # Put validation layer first in dispatch otherwise we try to capture bogus objects. Also replay fails otherwise.
     CAPTURE_LAYERS="${CAPTURE_LAYERS}:VK_LAYER_KHRONOS_validation"
     CAPTURE_DEBUG_LAYER_APPS="${PACKAGE}:${CAPTURE_DEBUG_LAYER_APPS}"
-
-    # TODO need to use run-as until the validation layers are packed into the replay APK
-    adb push "${LOCAL_VALIDATION_LAYER_FILEPATH}" "${REMOTE_TEMP_FILEPATH}"
-    # Can't mv since REMOTE_TEMP_FILEPATH is owned by shell or root
-    adb shell run-as "${PACKAGE}" cp "${REMOTE_TEMP_FILEPATH}" .
-    adb shell rm -rf "${REMOTE_TEMP_FILEPATH}"
+    inject_layer "${PACKAGE}" "${LOCAL_VALIDATION_LAYER_FILEPATH}"
 fi
 
-# Adapted from https://developer.android.com/ndk/guides/graphics/validation-layer.
-adb shell settings put global enable_gpu_debug_layers 1
-adb shell settings put global gpu_debug_app "${PACKAGE}"
-adb shell settings put global gpu_debug_layers "${CAPTURE_LAYERS}"
-# Both the capture and validation layers are in the replay APK since it's an easy place to put them.
-adb shell settings put global gpu_debug_layer_app "${CAPTURE_DEBUG_LAYER_APPS}"
+enable_layer "${PACKAGE}" "${CAPTURE_LAYERS}" "${CAPTURE_DEBUG_LAYER_APPS}"
 
 #
 # 3. Configure GFXR behavior
@@ -218,13 +177,20 @@ adb shell appops set "${PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
 # 4. Capture
 #
 
-# Clear logcat so that we can use it to determine when capture is done based on logging.
+# Ask OpenXR runtime to emit frame debug marker
+adb shell setprop debug.openxr.enable_frame_delimiter true
+
+# Clear logcat so that we can use logcat to determine when capture is done.
 adb logcat -c
 
 if [ ${CAPTURE_DEBUG} -eq 1 ]
 then
     adb shell am set-debug-app -w "${PACKAGE}"
 fi
+
+# Wake up the screen, otherwise capture will crash and replay won't replay.
+# TODO does this work for system apps?
+adb shell input keyevent KEYCODE_WAKEUP
 
 # Start app, wait for it to start
 if [ ${SYSTEM_PACKAGE} -eq 1 ]
@@ -235,6 +201,8 @@ then
 else
     adb shell am start -S -W -n "${PACKAGE}/${ACTIVITY}"
 fi
+
+# TODO assert that screen is on
 
 # Given how long it takes to attach the debugger, etc, it is unlikely that you'll want the script to proceed.
 if [ ${CAPTURE_DEBUG} -eq 1 ]
@@ -252,6 +220,7 @@ fi
 # Use this over the capture_frame setting since Dive doesn't use capture_frame.
 # Unfortunately "the app is loaded" is not something we can determine so we need to sleep... This is where capture_frame could really help.
 # 20s is too short for some large Unity apps.
+# TODO 30s is a long time to wait for, e.g. cube_xr. Consider adding a debug print on first frame rendered
 sleep 30
 adb shell setprop debug.gfxrecon.capture_android_trigger true
 
@@ -265,6 +234,8 @@ fi
 adb shell am force-stop "${PACKAGE}"
 
 # Pull the GFXR/GFXA for gfxr_dump_resources
+readonly GFXR_BASENAME="${PACKAGE}_trim_trigger.gfxr"
+readonly GFXA_BASENAME="${PACKAGE}_asset_file.gfxa"
 adb pull "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}" "${RESULTS_DIR}"
 adb pull "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}" "${RESULTS_DIR}"
 
@@ -277,37 +248,43 @@ adb pull "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}" "${RESULTS_DIR}"
 # Next launch of PACKAGE/ACTIVITY should not use GFXR
 unset_gfxr_props
 unset_vulkan_debug_settings
+uninstall_layer "${PACKAGE}" ""
 
 #
 # 6. Replay with dump-resources
 #
 
 # --last-draw-only saves time by only dumping the final draw call. This should represent what the user sees.
+# Name of the JSON file produced by gfxr_dump_resources
+readonly JSON_BASENAME=dump.json
+readonly JSON="${RESULTS_DIR}/${JSON_BASENAME}"
 "${GFXR_DUMP_RESOURCES}" --last_draw_only "${RESULTS_DIR}/${GFXR_BASENAME}" "${JSON}"
 adb shell mkdir -p "${DUMP_DIR}"
 adb push "${JSON}" "${REMOTE_TEMP_DIR}"
 
 if [ ${REPLAY_VALIDATION} -eq 1 ]
 then
-    adb shell settings put global enable_gpu_debug_layers 1
-    adb shell settings put global gpu_debug_app "${REPLAY_PACKAGE}"
-    adb shell settings put global gpu_debug_layers VK_LAYER_KHRONOS_validation
-    adb shell settings put global gpu_debug_layer_app "${REPLAY_PACKAGE}"
+    inject_layer "${REPLAY_PACKAGE}" "${LOCAL_VALIDATION_LAYER_FILEPATH}"
+    enable_layer "${REPLAY_PACKAGE}" "${VALIDATION_LAYER_NAME}" "${REPLAY_PACKAGE}"
 fi
+
+# Replay needs permissions to read the capture. With --dump-resources it needs to store generated BMPs.
+# Always do this since this permission resets on reboot or stop/start if not explicitly granted.
+adb shell appops set "${REPLAY_PACKAGE}" MANAGE_EXTERNAL_STORAGE allow
 
 if [ ${REPLAY_DEBUG} -eq 1 ]
 then
     adb shell am set-debug-app -w "${REPLAY_PACKAGE}"
 fi
 
+# TODO --dump-resources-dump-all-image-subresources has moved into the json file
 python "${GFXRECON}" replay \
     --dump-resources "${REMOTE_TEMP_DIR}/${JSON_BASENAME}" \
     --dump-resources-dir "${DUMP_DIR}" \
-    --dump-resources-dump-all-image-subresources \
     --log-level debug \
     "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}"
 
-# `gfxrecon.py replay` does not wait for the app to start so. However, if it starts logging then we can assume that it has started.
+# `gfxrecon.py replay` does not wait for the app to start. However, if it starts logging then we can assume that it has started.
 # This only works since we clear the logcat at the start of the test.
 if ! wait_for_logcat_line gfxrecon "Loading state for captured frame"
 then
@@ -330,14 +307,7 @@ adb pull "${DUMP_DIR}" "${RESULTS_DIR}"
 # 7. Post-replay cleanup
 #
 
-adb shell rm -rf "${DUMP_DIR}"
-adb shell rm -rf "${REMOTE_TEMP_DIR}/${GFXR_BASENAME}"
-adb shell rm -rf "${REMOTE_TEMP_DIR}/${GFXA_BASENAME}"
-adb shell rm -rf "${REMOTE_TEMP_DIR}/${JSON_BASENAME}"
-
-# Next launch should not use GFXR. Likely redudant but doesn't hurt.
-unset_gfxr_props
-unset_vulkan_debug_settings
+cleanup
 
 #
 # 8. Collect results

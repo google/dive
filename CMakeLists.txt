@@ -339,6 +339,12 @@ if(NOT ANDROID)
             --test_scenario=screenshot --test_output=${DIVE_TEST_OUTPUT_PATH}
             --test_prefix=screenshot-native_style-
     )
+    set_tests_properties(
+        Regression_StackOverflow_MacOS
+        DiveUI_Screenshot
+        DiveUI_Screenshot_NativeStyle
+        PROPERTIES TIMEOUT 60
+    )
     if(DIVE_BUILD_WITH_SANITIZER)
         set_tests_properties(
             Regression_StackOverflow_MacOS

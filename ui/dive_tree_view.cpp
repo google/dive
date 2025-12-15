@@ -62,6 +62,7 @@ void DiveFilterModel::applyNewFilterMode(FilterMode new_mode)
     // begin/endResetModel() will cause a full re-evaluation and rebuild of the proxy's internal
     // mapping.
     endResetModel();
+    emit FilterModeChanged();
 }
 
 bool DiveFilterModel::IncludeIndex(uint64_t node_index) const
@@ -966,4 +967,10 @@ int DiveTreeView::GetNearestSearchNode(uint64_t source_node_idx)
         }
     }
     return mid;
+}
+
+//--------------------------------------------------------------------------------------------------
+void DiveTreeView::OnFilterModeChanged()
+{
+    m_curr_node_selected = QModelIndex();
 }

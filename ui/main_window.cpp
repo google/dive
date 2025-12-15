@@ -628,6 +628,16 @@ MainWindow::MainWindow(ApplicationController &controller) :
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(this, &MainWindow::PendingScreenshot, this, &MainWindow::OnPendingScreenshot);
 
+    // Filter mode change connections
+    QObject::connect(m_filter_model,
+                     &DiveFilterModel::FilterModeChanged,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::OnFilterModeChanged);
+    QObject::connect(m_filter_model,
+                     &DiveFilterModel::FilterModeChanged,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::OnFilterModeChanged);
+
     CreateActions();
     CreateMenus();
     CreateStatusBar();
@@ -2344,16 +2354,6 @@ void MainWindow::DisconnectAllTabs()
                         this,
                         SLOT(OnGfxrFilterModeChange()));
 
-    QObject::disconnect(m_filter_model,
-                        &DiveFilterModel::FilterModeChanged,
-                        m_pm4_command_hierarchy_view,
-                        &DiveTreeView::OnFilterModeChanged);
-
-    QObject::disconnect(m_filter_model,
-                        &DiveFilterModel::FilterModeChanged,
-                        m_command_hierarchy_view,
-                        &DiveTreeView::OnFilterModeChanged);
-
     // Temporarily set the model to nullptr and clear selection/current index
     // before loading new data. This forces a clean break.
     m_command_hierarchy_view->setModel(nullptr);
@@ -2458,11 +2458,6 @@ void MainWindow::ConnectDiveFileTabs()
                      &EventSelection::currentNodeChanged,
                      m_pm4_command_hierarchy_view,
                      &DiveTreeView::setCurrentNode);
-
-    QObject::connect(m_filter_model,
-                     &DiveFilterModel::FilterModeChanged,
-                     m_pm4_command_hierarchy_view,
-                     &DiveTreeView::OnFilterModeChanged);
 
     // Combo Boxes
     QObject::connect(m_pm4_view_mode_combo_box,
@@ -2647,11 +2642,6 @@ void MainWindow::ConnectAdrenoRdFileTabs()
                      &EventSelection::crossReference,
                      this,
                      &MainWindow::OnCrossReference);
-
-    QObject::connect(m_filter_model,
-                     &DiveFilterModel::FilterModeChanged,
-                     m_command_hierarchy_view,
-                     &DiveTreeView::OnFilterModeChanged);
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
     QObject::connect(this,

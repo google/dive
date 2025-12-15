@@ -19,6 +19,7 @@
 #include <QDebug>
 #include <QFile>
 #include <QPalette>
+#include <QScopedValueRollback>
 #include <QString>
 
 #include "ui/application_controller.h"
@@ -82,7 +83,6 @@ void DiveApplication::ApplyCustomStyle()
 {
     QApplication::setPalette(GetDarkPalette());
 
-    // Load and apply the style sheet
     QFile style_sheet(":/stylesheet.qss");
     style_sheet.open(QFile::ReadOnly);
     m_impl->m_style_sheet = style_sheet.readAll();
@@ -98,11 +98,10 @@ bool DiveApplication::event(QEvent* e)
         static bool guard = false;
         if (!guard && m_impl->m_style_sheet)
         {
-            guard = true;
+            QScopedValueRollback guard_scope(guard, true);
             // Re-apply custom style.
             QApplication::setPalette(GetDarkPalette());
             setStyleSheet(*m_impl->m_style_sheet);
-            guard = false;
         }
     }
     return QApplication::event(e);

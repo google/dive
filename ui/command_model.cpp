@@ -75,7 +75,6 @@ QVariant CommandModel::data(const QModelIndex& index, int role) const
 
             if (node_type == Dive::NodeType::kMarkerNode)
             {
-                // Color debug markers in green
                 Dive::CommandHierarchy::MarkerType marker_type =
                     m_command_hierarchy.GetMarkerNodeType(node_index);
                 if (marker_type == Dive::CommandHierarchy::MarkerType::kInsert ||

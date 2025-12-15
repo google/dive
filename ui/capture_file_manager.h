@@ -75,6 +75,8 @@ class CaptureFileManager : public QObject
     CaptureFileManager& operator=(const CaptureFileManager&) = delete;
     CaptureFileManager& operator=(CaptureFileManager&&) = delete;
 
+    // Note: CaptureFileManager's worker thread requires a valid DataCore,
+    // so keep a reference to it in case we close window before loading finishes.
     void Start(const std::shared_ptr<Dive::DataCore>& data_core);
 
     // Locking:

@@ -210,6 +210,7 @@ endif()
 
 if(APPLE)
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    # TODO: b/462767957 - fix mac installation directory.
     install(
         CODE
             "
@@ -245,12 +246,14 @@ if(APPLE)
     "
     )
 else()
-    install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DESTINATION}")
+    # Add a [maybe empty] plugins directory.
+    install(DIRECTORY DESTINATION "${DIVE_PLUGINS_INSTALL_DESTINATION}")
 endif()
 
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/NOTICE"
-    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    DESTINATION "${DIVE_INSTALL_DESTINATION}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
 

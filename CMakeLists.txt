@@ -29,6 +29,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
+# TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
 # Add an option to allow users to easily toggle the runtime layer build
@@ -39,6 +40,14 @@ option(
 )
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
+
+# Placeholder value for DESTINATION to override cmake default.
+# e.g. install(TARGETS target_name DESTINATION "${DIVE_INSTALL_DESTINATION}")
+set(DIVE_INSTALL_DESTINATION ".")
+set(DIVE_PLUGINS_INSTALL_DESTINATION "plugins")
+
+# Disable gtest for install
+set(INSTALL_GTEST OFF)
 
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
@@ -95,7 +104,7 @@ if(ANDROID)
     )
     install(
         FILES ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -136,7 +145,7 @@ if(NOT ANDROID)
 
     message(CHECK_START "Generate build files for third_party/gfxreconstruct")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/gfxreconstruct)
+    add_subdirectory(third_party/gfxreconstruct EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 else()
@@ -145,7 +154,8 @@ else()
         "Generate build files for third_party/freedreno (libwrap)"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/freedreno)
+    add_subdirectory(third_party/freedreno EXCLUDE_FROM_ALL)
+    install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DESTINATION}")
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
@@ -154,7 +164,7 @@ else()
         "Generate build files for third_party/Vulkan-ValidationLayers"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    add_subdirectory(third_party/Vulkan-ValidationLayers)
+    add_subdirectory(third_party/Vulkan-ValidationLayers) # This is a prebuilt
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 endif()
@@ -248,26 +258,29 @@ if(ANDROID)
         INPUT
             "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
+        # TOUCH # Note: CMake 3.24 feature
     )
-    install(
-        CODE
-            "file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\")"
+    # Update the file modification time so CMake process dependency properly.
+    # Note: GFXR archive uses a fixed timestamp for their content.
+    file(
+        TOUCH_NOCREATE
+        "${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so"
     )
     install(
         FILES
             ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
         RENAME "gfxr-replay.apk"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
+        DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")

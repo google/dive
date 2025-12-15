@@ -91,7 +91,7 @@ else()
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
 
-    install(TARGETS dive_client_cli DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS dive_client_cli DESTINATION "${DIVE_INSTALL_DESTINATION}")
 
     enable_testing()
     include(GoogleTest)

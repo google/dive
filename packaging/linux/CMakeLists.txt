@@ -1,5 +1,4 @@
-#!/bin/bash
-
+#
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,26 +12,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
-echo "Format in-place using gersemi tool"
-
-SRC_DIRS=(
-    "capture_service"
-    "cli"
-    "dive_core"
-    "gfxr_dump_resources"
-    "gfxr_ext"
-    "gpu_time"
-    "host_cli"
-    "layer"
-    "lrz_validator"
-    "network"
-    "packaging"
-    "plugins"
-    "runtime_layer"
-    "trace_stats"
-    "ui"
-    "src"
+set(CPACK_DEBIAN_PACKAGE_NAME "dive-profiler")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER
+    "Dive Profiler Developers <dive-dev-team@google.com>"
 )
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Dive is a GPU Profiler.")
+set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/dive-profiler")
 
-gersemi -i --definitions "${SRC_DIRS[@]}" --indent 4 CMakeLists.txt "${SRC_DIRS[@]}"
+include(CPack)

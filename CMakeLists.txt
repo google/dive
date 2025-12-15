@@ -46,6 +46,13 @@ option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 set(DIVE_INSTALL_DESTINATION ".")
 set(DIVE_PLUGINS_INSTALL_DESTINATION "plugins")
 
+set(DIVE_ANDROID_PREBUILT "" CACHE STRING "Prebuilt Dive Android binaries")
+set(DIVE_INSTALL_EXTRAS
+    ""
+    CACHE STRING
+    "Extra files to include with dive build"
+)
+
 # Disable gtest for install
 set(INSTALL_GTEST OFF)
 
@@ -354,3 +361,5 @@ if(NOT ANDROID)
         )
     endif()
 endif()
+
+add_subdirectory(packaging)

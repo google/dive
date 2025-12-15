@@ -210,7 +210,7 @@ endif()
 
 if(APPLE)
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
-    # TODO: fix mac installation directory.
+    # TODO: b/462767957 - fix mac installation directory.
     install(
         CODE
             "

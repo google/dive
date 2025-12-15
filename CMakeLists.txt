@@ -29,7 +29,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-# TODO: remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
+# TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 
 # Add an option to allow users to easily toggle the runtime layer build
@@ -258,7 +258,10 @@ if(ANDROID)
         INPUT
             "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
+        # TOUCH # Note: CMake 3.24 feature
     )
+    # Update the file modification time so CMake process dependency properly.
+    # Note: GFXR archive uses a fixed timestamp for their content.
     file(
         TOUCH_NOCREATE
         "${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so"

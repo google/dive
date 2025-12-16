@@ -17,12 +17,12 @@
 set -ex
 
 readonly DIVE_ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+readonly DIVE_BUILD_ROOT="${DIVE_BUILD_ROOT:-build}"
+mkdir -p "${DIVE_BUILD_ROOT}/package_linux/device"
+mkdir -p "${DIVE_BUILD_ROOT}/package_linux/host"
 
-mkdir -p build/package_linux/device
-mkdir -p build/package_linux/host
-
-if [ ! -e "build/package_linux/dive_android_is_prebuilt" ]; then
-    pushd build/package_linux/device
+if [ ! -e "${DIVE_BUILD_ROOT}/package_linux/dive_android_is_prebuilt" ]; then
+    pushd "${DIVE_BUILD_ROOT}/package_linux/device"
         cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
             -G "Ninja" \
             -DCMAKE_MAKE_PROGRAM="ninja" \
@@ -33,26 +33,26 @@ if [ ! -e "build/package_linux/dive_android_is_prebuilt" ]; then
             -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
             -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
             -DDIVE_GFXR_GRADLE_CONSOLE=plain \
-            ${DIVE_ROOT} || exit 1
-        cmake --build . --config=Debug -j || exit 1
-        cmake --install . --prefix ../dive_android || exit 1
+            ${DIVE_ROOT}
+        cmake --build . --config=Debug -j
+        cmake --install . --prefix ../dive_android
     popd
 fi
 
-pushd build/package_linux/host
+pushd "${DIVE_BUILD_ROOT}/package_linux/host"
     cmake -G "Ninja" \
         -DCMAKE_BUILD_TYPE=Release \
         -DDIVE_ANDROID_PREBUILT="`pwd`/../dive_android" \
         -DDIVE_INSTALL_EXTRAS="${DIVE_ROOT}/packaging/extras-example" \
         -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang-19 \
         -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++-19 \
-        ${DIVE_ROOT} || exit 1
-    cmake --build . --config Release || exit 1
+        ${DIVE_ROOT}
+    cmake --build . --config Release
     cmake --install . --prefix ../dive_linux --config Release
     cpack -G DEB
 popd
 
-pushd build/package_linux
+pushd "${DIVE_BUILD_ROOT}/package_linux"
   cp host/*.deb .
   dpkg -I *.deb
   dpkg -c *.deb

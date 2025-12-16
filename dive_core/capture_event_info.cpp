@@ -457,6 +457,26 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
+bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
+                                              uint32_t              submit_index,
+                                              uint64_t              va_addr,
+                                              Pm4Type7Header        header)
+{
+    // We want to ignore indexed drawcalls that use DI_PT_RECTLIST with 2 indices
+    if (header.opcode != CP_DRAW_INDX_OFFSET)
+        return false;
+
+    PM4_CP_DRAW_INDX_OFFSET packet;
+    uint32_t                header_and_body_dword_count = header.count + 1;
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                               submit_index,
+                                               va_addr,
+                                               header_and_body_dword_count * sizeof(uint32_t)));
+
+    return (packet.bitfields2.NUM_INDICES == 2 && packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST);
+}
+
+//--------------------------------------------------------------------------------------------------
 uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
                              uint32_t              submit_index,
                              uint64_t              va_addr,

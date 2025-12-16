@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt
@@ -40,7 +40,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt dependencies (including xcb)
@@ -122,7 +122,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt dependencies (including xcb)
@@ -174,7 +174,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt dependencies (including xcb)
@@ -226,7 +226,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt dependencies (including xcb)
@@ -280,7 +280,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt 5.15 via Homebrew
@@ -331,7 +331,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt 5.15 via Homebrew
@@ -380,13 +380,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Set up Java 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         id: setup-java
         with:
           java-version: '17'
           distribution: 'temurin'
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install dependency

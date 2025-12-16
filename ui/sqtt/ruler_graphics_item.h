@@ -22,8 +22,6 @@
 #pragma once
 #include <QGraphicsItem>
 
-#include "settings.h"
-
 #define RULER_FONT_HEIGHT 9
 
 class RulerGraphicsItem : public QGraphicsItem

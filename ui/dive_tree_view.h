@@ -60,6 +60,9 @@ public:
 public slots:
     void applyNewFilterMode(FilterMode new_mode);
 
+signals:
+    void FilterModeChanged();
+
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 
@@ -124,6 +127,9 @@ public slots:
     void nextNodeInSearch();
     // Navigate to the previous node in search
     void prevNodeInSearch();
+
+    // Ensure the stored current node is reset when the filter mode changes
+    void OnFilterModeChanged();
 
 protected:
     void currentChanged(const QModelIndex &current, const QModelIndex &previous) override;

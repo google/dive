@@ -452,10 +452,20 @@ jobs:
       - name: Ninja log
         run: |
           cat build/.ninja_log
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix build/install_artifact --config Release
+      - name: Upload test output
+        uses: actions/upload-artifact@v6
+        with:
+          name: install_artifact_android
+          path: |
+            build/install_artifact
 
   build_dpkg:
     name: "Build Debian Package"
     runs-on: ubuntu-24.04
+    needs: build_Android_from_Linux_Debug
     steps:
       - name: Set up Java 17
         uses: actions/setup-java@v3
@@ -479,8 +489,17 @@ jobs:
         with:
           ndk-version: r25
           add-to-path: true
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: install_artifact_android
+          path: build/package_linux/dive_android
+      - name: Android Artifacts
+        run: ls -R build/package_linux/dive_android
       - name: Build
         run: |
+          mkdir -p build/package_linux/
+          touch build/package_linux/dive_android_is_prebuilt
           bash scripts/package_linux.sh
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}

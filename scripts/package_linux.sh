@@ -21,21 +21,23 @@ readonly DIVE_ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/nu
 mkdir -p build/package_linux/device
 mkdir -p build/package_linux/host
 
-pushd build/package_linux/device
-    cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-        -G "Ninja" \
-        -DCMAKE_MAKE_PROGRAM="ninja" \
-        -DCMAKE_BUILD_TYPE=Debug \
-        -DCMAKE_SYSTEM_NAME=Android \
-        -DANDROID_ABI=arm64-v8a \
-        -DANDROID_PLATFORM=android-26 \
-        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
-        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
-        -DDIVE_GFXR_GRADLE_CONSOLE=plain \
-        ${DIVE_ROOT} || exit 1
-    cmake --build . --config=Debug -j || exit 1
-    cmake --install . --prefix ../dive_android || exit 1
-popd
+if [ ! -e "build/package_linux/dive_android_is_prebuilt" ]; then
+    pushd build/package_linux/device
+        cmake -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+            -G "Ninja" \
+            -DCMAKE_MAKE_PROGRAM="ninja" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-26 \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
+            -DDIVE_GFXR_GRADLE_CONSOLE=plain \
+            ${DIVE_ROOT} || exit 1
+        cmake --build . --config=Debug -j || exit 1
+        cmake --install . --prefix ../dive_android || exit 1
+    popd
+fi
 
 pushd build/package_linux/host
     cmake -G "Ninja" \

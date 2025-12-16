@@ -33,12 +33,15 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(${PROJECT_NAME} "main.cpp" "trace_stats.cpp")
-target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)
+add_library(dive_lib_trace_stats "trace_stats.cpp" "trace_stats.h")
+target_link_libraries(dive_lib_trace_stats PUBLIC dive_core)
 target_include_directories(
-    ${PROJECT_NAME}
-    PRIVATE ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR}
+    dive_lib_trace_stats
+    PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR}
 )
+
+add_executable(${PROJECT_NAME} "main.cpp")
+target_link_libraries(${PROJECT_NAME} PRIVATE dive_lib_trace_stats)
 
 if(MSVC)
     # 4100: unreferenced formal parameter

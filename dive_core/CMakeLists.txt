@@ -287,10 +287,7 @@ if(WIN32)
     # Supress warning about deprecation of std::iterator when compile with c++17
     add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
 endif() # WIN32
-target_link_libraries(
-    ${PROJECT_NAME}
-    PRIVATE ${LibArchive_LIBRARIES} ${PEFFETTO_TRACE_READER_LIB}
-)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LibArchive_LIBRARIES})
 
 # This is needed in u_debug.h in mesa, which is included by shader_disassembly.cpp
 check_function_exists(secure_getenv HAVE_SECURE_GETENV)

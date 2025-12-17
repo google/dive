@@ -61,10 +61,7 @@ target_link_libraries(
 )
 
 add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
-target_link_libraries(
-    ${PROJECT_NAME}
-    PRIVATE ${PROJECT_NAME}_lib ${PEFFETTO_TRACE_READER_LIB}
-)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 if(MSVC)
     # 4100: unreferenced formal parameter
@@ -103,10 +100,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     target_link_libraries(
         capture_fuzzer
-        PRIVATE
-            $<$<C_COMPILER_ID:Clang>:-fsanitize=fuzzer,address>
-            dive_core
-            ${PEFFETTO_TRACE_READER_LIB}
+        PRIVATE $<$<C_COMPILER_ID:Clang>:-fsanitize=fuzzer,address> dive_core
     )
 
     add_executable(capture_fuzzer_loader fuzz_main.cpp)
@@ -123,10 +117,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     target_link_libraries(
         capture_fuzzer_loader
-        PRIVATE
-            $<$<C_COMPILER_ID:Clang>:-fsanitize=address>
-            dive_core
-            ${PEFFETTO_TRACE_READER_LIB}
+        PRIVATE $<$<C_COMPILER_ID:Clang>:-fsanitize=address> dive_core
     )
 endif()
 

@@ -131,9 +131,14 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
             if (node_type == Dive::NodeType::kEventNode)
             {
                 Dive::Util::EventType type = m_command_hierarchy.GetEventNodeType(node_index);
-                if (type == Dive::Util::EventType::kDraw ||
-                    type == Dive::Util::EventType::kDispatch)
+                bool                  is_correlation_ignored = m_command_hierarchy
+                                              .IsEventNodeIgnoredDuringCorrelation(node_index);
+                bool is_draw_or_dispatch = (type == Dive::Util::EventType::kDraw ||
+                                            type == Dive::Util::EventType::kDispatch);
+                if (is_draw_or_dispatch && !is_correlation_ignored)
+                {
                     m_pm4_draw_call_indices.push_back(node_index);
+                }
             }
 
             // Only recurse into children if the current node is not a Vulkan submit node.

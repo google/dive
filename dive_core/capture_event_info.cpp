@@ -457,6 +457,34 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
+bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
+                                              uint32_t              submit_index,
+                                              uint64_t              va_addr,
+                                              Pm4Type7Header        header)
+{
+    // We want to ignore indexed drawcalls that use DI_PT_RECTLIST. DI_PT_RECTLIST is only used for
+    // driver inserted events (there is no corresponding VkPrimitiveTopology) for operations like
+    // blit.
+    if (header.opcode != CP_DRAW_INDX_OFFSET)
+        return false;
+
+    PM4_CP_DRAW_INDX_OFFSET packet;
+    uint32_t                header_and_body_dword_count = header.count + 1;
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
+                                               submit_index,
+                                               va_addr,
+                                               header_and_body_dword_count * sizeof(uint32_t)));
+
+    if (packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST)
+    {
+        DIVE_ASSERT(packet.bitfields2.NUM_INDICES == 2);
+        return true;
+    }
+
+    return false;
+}
+
+//--------------------------------------------------------------------------------------------------
 uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
                              uint32_t              submit_index,
                              uint64_t              va_addr,

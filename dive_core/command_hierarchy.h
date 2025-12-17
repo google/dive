@@ -234,6 +234,7 @@ public:
     uint8_t          GetPacketNodeOpcode(uint64_t node_index) const;
     uint8_t          GetPacketNodeIbLevel(uint64_t node_index) const;
     bool             GetRegFieldNodeIsCe(uint64_t node_index) const;
+    bool             IsEventNodeIgnoredDuringCorrelation(uint64_t node_index) const;
 
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
@@ -305,6 +306,7 @@ private:
         {
             uint32_t        m_event_id;
             Util::EventType m_type;
+            bool m_ignore_during_correlation;  // Whether or not the event should be correlated
         } event_node;
 
         struct
@@ -330,7 +332,9 @@ private:
                               bool     fully_captured);
         static AuxInfo PacketNode(uint64_t addr, uint8_t opcode, uint8_t ib_level);
         static AuxInfo RegFieldNode(bool is_ce_packet);
-        static AuxInfo EventNode(uint32_t event_id, Util::EventType type);
+        static AuxInfo EventNode(uint32_t        event_id,
+                                 Util::EventType type,
+                                 bool            ignore_during_correlation);
         static AuxInfo MarkerNode(MarkerType type, uint32_t id = 0);
     };
     static_assert(sizeof(AuxInfo) == sizeof(uint64_t), "Unexpected size!");

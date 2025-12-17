@@ -70,11 +70,14 @@ adb shell pm path "%REPLAY_PACKAGE%" >nul
 if %ERRORLEVEL% EQU 0 (
     adb uninstall "%REPLAY_PACKAGE%"
 )
+adb shell settings put global verifier_verify_adb_installs 0
 python "%GFXRECON%" install-apk ../install/gfxr-replay.apk
 IF %ERRORLEVEL% NEQ 0 (
     echo Could not install replay APK.
+    adb shell settings put global verifier_verify_adb_installs 1
     exit /b %ERRORLEVEL%
 )
+adb shell settings put global verifier_verify_adb_installs 1
 
 :: Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
 :: was not required on all devices tested but doesn't hurt.

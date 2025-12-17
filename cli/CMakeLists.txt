@@ -33,9 +33,6 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-file(GLOB HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-
 include_directories(
     ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
     ${CMAKE_SOURCE_DIR}
@@ -45,22 +42,22 @@ include_directories(
 
 add_definitions(-DLITTLEENDIAN_CPU)
 
-set(LIB_SRC_FILES ${SRC_FILES})
-list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
-
 add_library(
     ${PROJECT_NAME}_lib
-    ${HDR_FILES}
-    ${LIB_SRC_FILES}
-    ${PM4_GENERATED_SRC_FILE}
-    ${PM4_GENERATED_HDR_FILE}
+    cli.cpp
+    cli.h
+    commands.cpp
+    commands.h
+    format_output.cpp
+    format_output.h
 )
+
 target_link_libraries(
     ${PROJECT_NAME}_lib
     PRIVATE dive_core version_info dive_legacy_includes
 )
 
-add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
+add_executable(${PROJECT_NAME} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 if(MSVC)

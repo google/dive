@@ -26,7 +26,7 @@ namespace Dive
 
 struct VersionInfoConstants
 {
-    // Expected fields in DIVE_DEVICE_LIBRARIES_VERSION_FILENAME
+    // Expected fields in DIVE_DEVICE_RESOURCES_VERSION_FILENAME
     static constexpr size_t           kKeyCount = 5;
     static constexpr std::string_view kNameSha = "sha";
     static constexpr std::string_view kNameVersion = "version";
@@ -44,12 +44,12 @@ std::string GetHostShortVersionString();
 //
 // clang-format off
 // -----
-// Device Libraries Build: (major).(minor).(revision)-(dev|release|canary)-(arm64-v8a|armeabi-v7a|x86|x86_64)
-// Device Libraries Build Type: (Debug | Release)
-// Device Libraries SHA: (40 digit SHA)
+// Device Resources Build: (major).(minor).(revision)-(dev|release|canary)-(arm64-v8a|armeabi-v7a|x86|x86_64)
+// Device Resources Build Type: (Debug | Release)
+// Device Resources SHA: (40 digit SHA)
 // -----
 // clang-format on
-std::string GetDeviceLibrariesVersionInfo();
+std::string GetDeviceResourcesVersionInfo();
 
 // Returns a short blurb about Dive with product description and copyright info
 std::string GetDiveDescription();
@@ -62,26 +62,24 @@ std::string GetDiveDescription();
 // Host Tools Build Type: (Debug | Release)
 // Host Tools SHA: (40 digit SHA)
 //
-// Device Libraries Build: (major).(minor).(revision)-(dev|release|canary)-(arm64-v8a|armeabi-v7a|x86|x86_64)
-// Device Libraries Build Type: (Debug | Release)
-// Device Libraries SHA: (40 digit SHA)
+// Device Resources Build: (major).(minor).(revision)-(dev|release|canary)-(arm64-v8a|armeabi-v7a|x86|x86_64)
+// Device Resources Build Type: (Debug | Release)
+// Device Resources SHA: (40 digit SHA)
 //
 // Profiling Plugin SHA: (40 digit SHA)
 // -----
 // clang-format on
-//
-// NOTE: Other than host tools info, info is retrieved from within DIVE_INSTALL_DIR_PATH
 std::string GetLongVersionString();
 
 // Returns both the host short version string and long version string
 std::string GetCompleteVersionString();
 
 // Returns a validated key-value map representing all the info within
-// DIVE_DEVICE_LIBRARIES_VERSION_FILENAME
-absl::StatusOr<std::map<std::string_view, std::string_view>> GetDeviceLibraryVersionMap(
+// DIVE_DEVICE_RESOURCES_VERSION_FILENAME
+absl::StatusOr<std::map<std::string_view, std::string_view>> GetDeviceResourcesVersionMap(
 const std::string& csv_content);
 
-// Returns the value of the field represented by a key in DIVE_DEVICE_LIBRARIES_VERSION_FILENAME
-absl::StatusOr<std::string> GetDeviceLibraryInfo(std::string_view key);
+// Returns the value of the field represented by a key in DIVE_DEVICE_RESOURCES_VERSION_FILENAME
+absl::StatusOr<std::string> GetDeviceResourceInfo(std::string_view key);
 
 }  // namespace Dive

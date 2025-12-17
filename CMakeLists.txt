@@ -84,13 +84,13 @@ if(NOT ANDROID)
     endif()
 endif()
 
-# For device libraries version info
-set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")
+# For device resources version info
+set(DEVICE_RESOURCES_VERSION_FILENAME "DEVICE_RESOURCES_VERSION.csv")
 if(ANDROID)
-    message(CHECK_START "Make version file for Dive device libraries")
+    message(CHECK_START "Make version file for Dive device resources")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     file(
-        WRITE ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        WRITE ${CMAKE_BINARY_DIR}/${DEVICE_RESOURCES_VERSION_FILENAME}
         "sha,"
         ${DIVE_VERSION_SHA1}
         "\nversion,"
@@ -103,7 +103,7 @@ if(ANDROID)
         ${ANDROID_ABI}
     )
     install(
-        FILES ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
+        FILES ${CMAKE_BINARY_DIR}/${DEVICE_RESOURCES_VERSION_FILENAME}
         DESTINATION "${DIVE_INSTALL_DESTINATION}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)

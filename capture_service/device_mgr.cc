@@ -34,9 +34,12 @@ limitations under the License.
 #include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
+#include "dive/utils/component_files.h"
+#include "dive/utils/component_files_constants.h"
+#include "dive/utils/device_resources.h"
+#include "dive/utils/device_resources_constants.h"
+#include "dive/utils/version_info.h"
 #include "remote_files.h"
-#include "utils/component_files.h"
-#include "utils/version_info.h"
 
 namespace Dive
 {
@@ -170,31 +173,6 @@ absl::Status EnableVulkanLayer(const AdbSession &adb,
 absl::Status IsAppInstalled(const AdbSession &adb, std::string_view package)
 {
     return adb.Run(absl::StrFormat("shell pm path %s", package));
-}
-
-absl::Status InstallVulkanLayer(const AdbSession &adb,
-                                std::string_view  package,
-                                std::string_view  layer_filename)
-{
-    RETURN_IF_ERROR(
-    adb.Run(absl::StrFormat(R"(push "%s" "%s")",
-                            ResolveAndroidLibPath(std::string(layer_filename)).generic_string(),
-                            kTargetPath)));
-    RETURN_IF_ERROR(adb.Run(
-    absl::StrFormat(R"(shell run-as %s cp "%s/%s" .)", package, kTargetPath, layer_filename)));
-    return absl::OkStatus();
-}
-
-absl::Status UninstallVulkanLayer(const AdbSession &adb,
-                                  std::string_view  package,
-                                  std::string_view  layer_filename)
-{
-    absl::Status status;
-    status.Update(
-    adb.Run(absl::StrFormat(R"(shell rm -rf -- "%s/%s")", kTargetPath, layer_filename)));
-    status.Update(
-    adb.Run(absl::StrFormat(R"(shell run-as %s rm -rf -- "%s")", package, layer_filename)));
-    return status;
 }
 
 }  // namespace
@@ -436,10 +414,10 @@ absl::Status AndroidDevice::Init()
 
 absl::Status AndroidDevice::CheckAbi()
 {
-    // Determine if the device's ABI matches the Dive installed device libraries ABI
+    // Determine if the device's ABI matches the Dive installed device resources ABI
     std::string installed_abi = "";
     {
-        absl::StatusOr<std::string> ret = Dive::GetDeviceLibraryInfo(
+        absl::StatusOr<std::string> ret = Dive::GetDeviceResourceInfo(
         Dive::VersionInfoConstants::kNameAbi);
         if (!ret.ok())
         {
@@ -453,7 +431,7 @@ absl::Status AndroidDevice::CheckAbi()
     {
         std::string
         err_msg = absl::StrFormat("Mismatched device abi (%s) vs the target for which device "
-                                  "libraries were built (%s)",
+                                  "resources were built (%s)",
                                   device_abi,
                                   installed_abi);
         return absl::FailedPreconditionError(err_msg);
@@ -552,41 +530,6 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     return package_list;
 }
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name)
-{
-    std::filesystem::path                 exe_dir;
-    absl::StatusOr<std::filesystem::path> ret = GetExecutableDirectory();
-    if (ret.ok())
-    {
-        exe_dir = *ret;
-    }
-    else
-    {
-        LOGW("Could not determine executable directory: %s. Search will not include "
-             "executable-relative paths.",
-             ret.status().message().data());
-    }
-
-    std::vector<std::filesystem::path> search_paths{
-        exe_dir / "install", exe_dir / "../Resources",
-        "./install",         "../../build_android/Release/bin",
-        "../../install",     "./"
-    };
-
-    for (const auto &p : search_paths)
-    {
-        const auto potential_path = p / name;
-        if (std::filesystem::exists(potential_path))
-        {
-            auto canonical_path = std::filesystem::canonical(potential_path);
-            LOGD("Found %s at %s \n", name.c_str(), canonical_path.generic_string().c_str());
-            return canonical_path;
-        }
-    }
-    LOGE("Could not find '%s' in any of the search paths. \n", name.c_str());
-    return {};
-}
-
 absl::Status AndroidDevice::ForwardFirstAvailablePort()
 {
     for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
@@ -607,20 +550,12 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
 
 absl::Status AndroidDevice::SetupDevice()
 {
-    RETURN_IF_ERROR(Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                              ResolveAndroidLibPath(kWrapLibName).generic_string(),
-                                              kTargetPath)));
+    RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kWrapLibName));
     if (!m_gfxr_enabled)
     {
         RETURN_IF_ERROR(RequestRootAccess());
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                  ResolveAndroidLibPath(kVkLayerLibName).generic_string(),
-                                  kTargetPath)));
-        RETURN_IF_ERROR(
-        Adb().Run(absl::StrFormat(R"(push "%s" "%s")",
-                                  ResolveAndroidLibPath(kXrLayerLibName).generic_string(),
-                                  kTargetPath)));
+        RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kVkLayerLibName));
+        RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kXrLayerLibName));
         RETURN_IF_ERROR(ForwardFirstAvailablePort());
     }
 
@@ -660,13 +595,10 @@ absl::Status AndroidDevice::CleanupDevice()
         }
     }
 
-    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kWrapLibName)).IgnoreError();
-    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kVkLayerLibName)).IgnoreError();
-    Adb().Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kXrLayerLibName)).IgnoreError();
     Adb()
-    .Run(absl::StrFormat("shell rm -f -- %s/%s", kTargetPath, kVkGfxrLayerLibName))
+    .Run(absl::StrFormat("shell rm -rf -- %s",
+                         Dive::DeviceResourcesConstants::kDeployManifestFolderPath))
     .IgnoreError();
-    Adb().Run(absl::StrFormat("shell rm -rf -- %s", kManifestFilePath)).IgnoreError();
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
     if (output.ok())
@@ -687,9 +619,9 @@ absl::Status AndroidDevice::CleanupDevice()
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
 
     // cleanup for gfxr replay with validation layer
-    UninstallVulkanLayer(Adb(),
-                         /*app=*/kGfxrReplayAppName,
-                         /*layer_filename=*/kVkValidationLayerLibName)
+    CleanupFileWithPermissions(/*package=*/kGfxrReplayAppName,
+                               /*file_name=*/
+                               Dive::DeviceResourcesConstants::kVkValidationLayerLibName)
     .IgnoreError();
 
     // clean up for gfxr replay app
@@ -708,9 +640,9 @@ absl::Status AndroidDevice::CleanupDevice()
     .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
     .IgnoreError();
 
-    // cleanup for profiling plugin
+    // clean up entire deployment folder (kDeployFolderPath)
     Adb()
-    .Run(absl::StrFormat("shell rm -rf -- %s/%s", kTargetPath, kProfilingPluginFolderName))
+    .Run(absl::StrFormat("shell rm -rf -- %s", Dive::DeviceResourcesConstants::kDeployFolderPath))
     .IgnoreError();
 
     LOGI("%s AndroidDevice::CleanupDevice(): package %s done\n",
@@ -931,17 +863,35 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
         }
     };
 
-    std::string replay_apk_path = ResolveAndroidLibPath(kGfxrReplayApkName).generic_string();
-    std::string recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath).generic_string();
-    std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s",
+    std::filesystem::path local_replay_apk_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
+        Dive::DeviceResourcesConstants::kGfxrReplayApkName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_replay_apk_path = *ret;
+    }
+    std::filesystem::path local_recon_py_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
+        Dive::DeviceResourcesConstants::kGfxrReconPyName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_recon_py_path = *ret;
+    }
+    std::string                 cmd = absl::StrFormat("%s %s install-apk %s -s %s",
                                       python_path,
-                                      recon_py_path,
-                                      replay_apk_path,
+                                      local_recon_py_path.generic_string(),
+                                      local_replay_apk_path.generic_string(),
                                       serial);
     absl::StatusOr<std::string> res = RunCommand(cmd);
     if (!res.ok())
     {
-        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", replay_apk_path.c_str());
+        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", local_replay_apk_path.c_str());
         return res.status();
     }
 
@@ -981,9 +931,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         if (settings.use_validation_layer)
         {
             DisableVulkanLayer(adb).IgnoreError();
-            UninstallVulkanLayer(adb,
-                                 /*app=*/kGfxrReplayAppName,
-                                 /*layer_filename=*/kVkValidationLayerLibName)
+            m_device
+            ->CleanupFileWithPermissions(/*package=*/kGfxrReplayAppName,
+                                         /*file_name=*/
+                                         Dive::DeviceResourcesConstants::kVkValidationLayerLibName)
             .IgnoreError();
         }
     });
@@ -1028,9 +979,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
     if (settings.use_validation_layer)
     {
-        RETURN_IF_ERROR(InstallVulkanLayer(adb,
-                                           /*app=*/kGfxrReplayAppName,
-                                           /*layer_filename=*/kVkValidationLayerLibName));
+        RETURN_IF_ERROR(
+        m_device->CopyWithPermissions(/*package=*/kGfxrReplayAppName,
+                                      /*file_name=*/
+                                      Dive::DeviceResourcesConstants::kVkValidationLayerLibName));
         RETURN_IF_ERROR(EnableVulkanLayer(adb,
                                           /*app=*/kGfxrReplayAppName,
                                           /*layer=*/kVkValidationLayerName));
@@ -1039,10 +991,20 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     LOGD("RunReplayGfxrScript(): RUN\n");
     std::string python_path = GetPythonPath();
     RETURN_IF_ERROR(ValidatePythonPath(python_path));
-    std::string local_recon_py_path = ResolveAndroidLibPath(kGfxrReconPyPath).generic_string();
+
+    std::filesystem::path local_recon_py_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
+        Dive::DeviceResourcesConstants::kGfxrReconPyName);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        local_recon_py_path = *ret;
+    }
     std::string cmd = absl::StrFormat("%s %s replay %s %s",
                                       python_path,
-                                      local_recon_py_path,
+                                      local_recon_py_path.generic_string(),
                                       settings.remote_capture_path,
                                       settings.replay_flags_str);
     if (absl::StatusOr<std::string> res = RunCommand(cmd); !res.ok())
@@ -1136,13 +1098,13 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
 
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
-    std::string copy_cmd = absl::StrFormat(R"(push "%s" "%s")",
-                                           ResolveAndroidLibPath(kProfilingPluginFolderName),
-                                           kTargetPath);
-    RETURN_IF_ERROR(adb.Run(copy_cmd));
-    std::string remote_profiling_dir = absl::StrFormat("%s/%s",
-                                                       kTargetPath,
-                                                       kProfilingPluginFolderName);
+
+    RETURN_IF_ERROR(
+    m_device->DeployDeviceResource(Dive::DeviceResourcesConstants::kProfilingPluginFolderName));
+    std::string remote_profiling_dir = absl::
+    StrFormat("%s/%s",
+              Dive::DeviceResourcesConstants::kDeployFolderPath,
+              Dive::DeviceResourcesConstants::kProfilingPluginFolderName);
 
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
@@ -1459,6 +1421,40 @@ const std::filesystem::path &on_device_screenshot_dir)
     absl::Status ret = m_adb.Run(
     absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
     return ret;
+}
+
+absl::Status AndroidDevice::DeployDeviceResource(const std::string_view      &file_name,
+                                                 const std::filesystem::path &target_dir)
+{
+    std::filesystem::path host_full_lib_path;
+    {
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(file_name);
+        if (!ret.ok())
+        {
+            return ret.status();
+        }
+        host_full_lib_path = *ret;
+    }
+
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat("shell mkdir -p %s", target_dir)));
+
+    return m_adb.Run(
+    absl::StrFormat(R"(push "%s" "%s")", host_full_lib_path.generic_string(), target_dir));
+}
+
+absl::Status AndroidDevice::CopyWithPermissions(std::string_view package,
+                                                std::string_view file_name)
+{
+    return m_adb.Run(absl::StrFormat(R"(shell run-as %s cp "%s/%s" .)",
+                                     package,
+                                     Dive::DeviceResourcesConstants::kDeployFolderPath,
+                                     file_name));
+}
+
+absl::Status AndroidDevice::CleanupFileWithPermissions(std::string_view package,
+                                                       std::string_view file_name)
+{
+    return m_adb.Run(absl::StrFormat(R"(shell run-as %s rm -rf -- "./%s")", package, file_name));
 }
 
 }  // namespace Dive

@@ -462,7 +462,9 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
                                               uint64_t              va_addr,
                                               Pm4Type7Header        header)
 {
-    // We want to ignore indexed drawcalls that use DI_PT_RECTLIST with 2 indices
+    // We want to ignore indexed drawcalls that use DI_PT_RECTLIST. DI_PT_RECTLIST is only used for
+    // driver inserted events (there is no corresponding VkPrimitiveTopology) for operations like
+    // blit.
     if (header.opcode != CP_DRAW_INDX_OFFSET)
         return false;
 
@@ -473,7 +475,7 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
                                                va_addr,
                                                header_and_body_dword_count * sizeof(uint32_t)));
 
-    return (packet.bitfields2.NUM_INDICES == 2 && packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST);
+    return packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST;
 }
 
 //--------------------------------------------------------------------------------------------------

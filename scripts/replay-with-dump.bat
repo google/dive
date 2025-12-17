@@ -121,6 +121,7 @@ timeout /t 10 /nobreak >nul
 python "%GFXRECON%" replay ^
     --dump-resources "%PUSH_DIR%/%JSON_BASENAME%" ^
     --dump-resources-dir "%DUMP_DIR%" ^
+    --dump-resources-dump-all-image-subresources ^
     "%PUSH_DIR%/%GFXR_BASENAME%"
 IF %ERRORLEVEL% NEQ 0 (
     echo Error running gfxrecon replay.

@@ -1436,7 +1436,7 @@ absl::Status AndroidDevice::DeployDeviceResource(const std::string_view      &fi
         host_full_lib_path = *ret;
     }
 
-    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat("shell mkdir -p %s", target_dir)));
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell mkdir -p '%s')", target_dir)));
 
     return m_adb.Run(
     absl::StrFormat(R"(push "%s" "%s")", host_full_lib_path.generic_string(), target_dir));
@@ -1445,7 +1445,7 @@ absl::Status AndroidDevice::DeployDeviceResource(const std::string_view      &fi
 absl::Status AndroidDevice::CopyWithPermissions(std::string_view package,
                                                 std::string_view file_name)
 {
-    return m_adb.Run(absl::StrFormat(R"(shell run-as %s cp "%s/%s" .)",
+    return m_adb.Run(absl::StrFormat(R"(shell run-as %s cp '%s/%s' .)",
                                      package,
                                      Dive::DeviceResourcesConstants::kDeployFolderPath,
                                      file_name));
@@ -1454,7 +1454,7 @@ absl::Status AndroidDevice::CopyWithPermissions(std::string_view package,
 absl::Status AndroidDevice::CleanupFileWithPermissions(std::string_view package,
                                                        std::string_view file_name)
 {
-    return m_adb.Run(absl::StrFormat(R"(shell run-as %s rm -rf -- "./%s")", package, file_name));
+    return m_adb.Run(absl::StrFormat(R"(shell run-as %s rm -rf -- './%s')", package, file_name));
 }
 
 }  // namespace Dive

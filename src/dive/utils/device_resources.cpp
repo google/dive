@@ -49,6 +49,9 @@ absl::StatusOr<std::vector<std::filesystem::path>> GetPotentialDeviceResourcesDi
     // Predict location for release builds
     search_paths.push_back(exe_dir / "install");
 
+    // Apple
+    search_paths.push_back(exe_dir / ".." / "Resources");
+
     return search_paths;
 }
 

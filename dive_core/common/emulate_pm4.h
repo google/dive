@@ -28,9 +28,9 @@
 #pragma once
 #include <stdint.h>
 #include <optional>
-#include "adreno.h"
+#include "dive/isa/adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
-#include "dive_core/stl_replacement.h"
+#include "dive/container/stl_replacement.h"
 #include "gpudefs.h"
 
 namespace Dive

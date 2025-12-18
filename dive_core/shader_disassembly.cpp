@@ -20,7 +20,7 @@
 #include <string_view>
 
 #include "dive_core/common/memory_manager_base.h"
-#include "pm4_info.h"
+#include "dive/isa/pm4_info.h"
 
 #ifdef _MSC_VER
 #    include <stdio.h>

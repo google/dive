@@ -29,7 +29,7 @@
 #include "pm4_capture_data.h"
 
 #include "dive_strings.h"
-#include "pm4_info.h"
+#include "dive/isa/pm4_info.h"
 
 namespace Dive
 {

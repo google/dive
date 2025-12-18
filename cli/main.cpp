@@ -16,14 +16,14 @@
 #include <vector>
 
 #include "commands.h"
-#include "pm4_info.h"
+#include "dive/isa/isa.h"
 
 using namespace Dive::cli;  // NOLINT
 
 int main(int argc, char** argv)
 {
     Dive::cli::Init();
-    Pm4InfoInit();
+    Dive::InitPm4();
 
     std::map<std::string, const Command*> commands;
     std::vector<const Command*>           commandlist = {

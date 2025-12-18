@@ -28,6 +28,7 @@ if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
+set(DIVE_REPO_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 # TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
@@ -109,10 +110,6 @@ if(ANDROID)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 endif()
-
-# ------------------------------------------------------------------------------
-# For generated headers
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 
 # ------------------------------------------------------------------------------
 # Determine if third-party libraries should be built for the current target

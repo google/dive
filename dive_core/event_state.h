@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "adreno.h"
+#include "dive/isa/adreno.h"
 #include "common.h"
 #include "dive_core/common/gpudefs.h"
 #include "info_id.h"

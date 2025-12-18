@@ -41,7 +41,7 @@ include_directories(
 )
 
 add_executable(${PROJECT_NAME} "main.cpp")
-target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)
+target_link_libraries(${PROJECT_NAME} PRIVATE dive_core dive_src_includes)
 target_include_directories(
     ${PROJECT_NAME}
     PRIVATE ${THIRDPARTY_DIRECTORY}/gfxreconstruct/framework

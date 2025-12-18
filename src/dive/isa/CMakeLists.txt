@@ -14,9 +14,7 @@
 # limitations under the License.
 #
 
-add_subdirectory(build_defs)
-add_subdirectory(os)
-add_subdirectory(plugin)
-add_subdirectory(utils)
-add_subdirectory(common)
-add_subdirectory(isa)
+add_subdirectory(freedreno)
+
+add_library(dive_lib_isa isa.cpp isa.h pm4_info.h)
+target_link_libraries(dive_lib_isa PUBLIC dive_src_includes)

@@ -13,8 +13,13 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
+#pragma once
+
 #include <algorithm>
-#include "common/common.h"
+#include <cassert>
+
+#include "dive/container/stl_replacement.h"
 
 namespace Dive
 {
@@ -89,7 +94,7 @@ template<class Type> Vector<Type>::~Vector()
 //--------------------------------------------------------------------------------------------------
 template<class Type> Type &Vector<Type>::operator[](uint64_t i) const
 {
-    DIVE_ASSERT(i < m_size);
+    assert(i < m_size);
     return m_buffer[i];
 }
 

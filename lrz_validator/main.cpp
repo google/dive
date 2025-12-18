@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "dive_core/data_core.h"
-#include "pm4_info.h"
+#include "dive/isa/isa.h"
 
 bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
 {
@@ -143,7 +143,7 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
 
 int main(int argc, char **argv)
 {
-    Pm4InfoInit();
+    Dive::InitPm4();
 
     // Handle args
     if ((argc != 2) && (argc != 3))

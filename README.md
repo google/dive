@@ -13,7 +13,7 @@ Follow the instructions in [BUILD.md](BUILD.md) to build
 
 # UI
 
-The recommended way of using Dive. Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device libraries.
+The recommended way of using Dive. Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device resources.
 
 ```sh
 # On Linux
@@ -29,7 +29,7 @@ TODO(b/462767957): Figure out where these binaries are expected with the install
 
 # CLI Tools
 
-Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device libraries.
+Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device resources.
 
 ```sh
 # On Linux
@@ -91,7 +91,7 @@ GFXR capturing can be triggered in the ui or within the cli.
 
 To begin a GFXR capture in the ui, either press key `F6` or click `Capture` at the top left corner and select `GFXR Capture` from the dropdown menu.
 
-To begin a GFXR capture with the cli, first ensure that you built the device libraries targetting the correct ABI for the device you are attempting to capture on.
+To begin a GFXR capture with the cli, first ensure that you built the device resources targetting the correct ABI for the device you are attempting to capture on.
 
 Examples:
 - Install the dependencies on device, start the package, and initiate a GFXR capture.

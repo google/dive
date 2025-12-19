@@ -27,6 +27,17 @@ if(NOT ANDROID)
     )
 endif()
 
+# === dive_device_resources ====================================================
+
+if(NOT ANDROID)
+    add_library(dive_device_resources device_resources.h device_resources.cpp)
+    target_link_libraries(
+        dive_device_resources
+        PUBLIC absl::statusor
+        PRIVATE absl::strings dive_build_defs dive_src_includes command_utils
+    )
+endif()
+
 # === version_info =============================================================
 
 if(NOT ANDROID)
@@ -35,7 +46,7 @@ if(NOT ANDROID)
         version_info
         PUBLIC absl::statusor absl::strings
         PRIVATE dive_build_defs dive_src_includes
-        PRIVATE command_utils
+        PRIVATE dive_device_resources
     )
 endif()
 

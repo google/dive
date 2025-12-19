@@ -102,7 +102,7 @@ cmake --build build
 
 TODO(b/462767957): Fix Windows build host tools install
 
-## Dive Device Libraries
+## Dive Device Resources
 
 ### Linux
 

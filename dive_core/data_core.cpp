@@ -390,8 +390,6 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
                                                 *type7_header,
                                                 m_state_tracker);
 
-        m_capture_metadata.m_event_info.push_back(event_info);
-
         if (event_info.m_type == Util::EventType::kDraw)
         {
             event_info.m_num_indices = Util::GetIndexCount(mem_manager,
@@ -428,6 +426,8 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager,
         {
             FillResolveOrClearEventStateInfo(it);
         }
+
+        m_capture_metadata.m_event_info.push_back(event_info);
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
         // Parse descriptor tables, descriptors, and descriptor contents (ie: textures,

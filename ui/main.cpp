@@ -96,6 +96,42 @@ ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
 //--------------------------------------------------------------------------------------------------
+absl::StatusOr<std::filesystem::path> GetWritableRoot()
+{
+    std::filesystem::path writable_root;
+#ifdef _WIN32
+    if (const char *local_app_data = std::getenv("LOCALAPPDATA"))
+    {
+        writable_root = std::filesystem::path(local_app_data) / kProductName;
+    }
+    else
+    {
+        return absl::NotFoundError("LOCALAPPDATA environment variable not set.");
+    }
+#elif defined(__APPLE__)
+    if (const char *home = std::getenv("HOME"))
+    {
+        writable_root = std::filesystem::path(home) / "Library" / "Application Support" /
+                        kProductName;
+    }
+    else
+    {
+        return absl::NotFoundError("HOME environment variable not set.");
+    }
+#else
+    if (const char *home = std::getenv("HOME"))
+    {
+        writable_root = std::filesystem::path(home) / ".local" / "share" / kProductName;
+    }
+    else
+    {
+        return absl::NotFoundError("HOME environment variable not set.");
+    }
+#endif
+
+    return writable_root;
+}
+
 absl::Status InitializeCrashpad()
 {
     absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
@@ -109,8 +145,26 @@ absl::Status InitializeCrashpad()
     handler_path.replace_extension(".exe");
 #endif
 
-    std::filesystem::path database_path = *exe_dir / kDbDirectory;
-    std::filesystem::path metrics_path = *exe_dir / kMetricsDirectory;
+    auto writable_root = GetWritableRoot();
+    if (!writable_root.ok())
+    {
+        return writable_root.status();
+    }
+
+    std::filesystem::path database_path = *writable_root / kDbDirectory;
+    std::filesystem::path metrics_path = *writable_root / kMetricsDirectory;
+
+    std::error_code ec;
+    std::filesystem::create_directories(database_path, ec);
+    if (ec)
+    {
+        return absl::InternalError("Could not create DataBase directory: " + ec.message());
+    }
+    std::filesystem::create_directories(metrics_path, ec);
+    if (ec)
+    {
+        return absl::InternalError("Could not create Metrics directory: " + ec.message());
+    }
 
     // Crashpad requires explicit user consent or a programmatic override to upload
     // reports. We enable uploads here to ensure the client can transmit crash

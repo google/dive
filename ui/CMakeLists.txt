@@ -335,6 +335,8 @@ if(APPLE)
             "
         message(STATUS \"Running macdeployqt...\")
         execute_process(COMMAND \"macdeployqt\" \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        message(STATUS \"Copying Crashpad handler to app bundle\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/$<TARGET_FILE_NAME:handler>\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
         message(STATUS \"Creating install directory in app bundle\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         message(STATUS \"Copying Android files to app bundle\")
@@ -366,6 +368,8 @@ if(APPLE)
     )
 else()
     install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DESTINATION}")
+    # Install the Crashpad handler.
+    install(TARGETS handler DESTINATION "${DIVE_INSTALL_DESTINATION}")
     # Add a [maybe empty] plugins directory.
     install(DIRECTORY DESTINATION "${DIVE_PLUGINS_INSTALL_DESTINATION}")
 endif()
@@ -387,13 +391,3 @@ add_custom_command(
         $<TARGET_FILE_DIR:${PROJECT_NAME}>
     COMMENT "Copying Crashpad handler to output directory"
 )
-
-set(APP_BUNDLE_NAME "Dive.app")
-if(APPLE)
-    install(
-        PROGRAMS $<TARGET_FILE:handler>
-        DESTINATION "${APP_BUNDLE_NAME}/Contents/Helpers"
-    )
-else()
-    install(PROGRAMS $<TARGET_FILE:handler> DESTINATION ${CMAKE_INSTALL_PREFIX})
-endif()

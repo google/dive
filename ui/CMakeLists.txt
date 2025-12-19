@@ -235,6 +235,7 @@ target_link_libraries(
     version_info
     dive_build_defs
     dive_lib_trace_stats
+    crashpad_client
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
@@ -377,3 +378,22 @@ add_dependencies(${PROJECT_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+add_custom_command(
+    TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:handler>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying Crashpad handler to output directory"
+)
+
+set(APP_BUNDLE_NAME "Dive.app")
+if(APPLE)
+    install(
+        PROGRAMS $<TARGET_FILE:handler>
+        DESTINATION "${APP_BUNDLE_NAME}/Contents/Helpers"
+    )
+else()
+    install(PROGRAMS $<TARGET_FILE:handler> DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()

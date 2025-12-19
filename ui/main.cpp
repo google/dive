@@ -16,6 +16,16 @@
 
 #include <fcntl.h>
 
+#include <cstdio>
+#ifdef __linux__
+#include <dlfcn.h>
+#endif
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -26,7 +36,6 @@
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
-#include <cstdio>
 #include <filesystem>
 #include <iostream>
 
@@ -36,9 +45,18 @@
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "application_controller.h"
+#include "base/files/file_path.h"
+#include "client/crash_report_database.h"
+#include "client/crashpad_client.h"
+#include "client/settings.h"
 #include "custom_metatypes.h"
+#include "dive/os/command_utils.h"
 #include "dive/os/terminal.h"
+#include "dive/utils/string_utils.h"
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
@@ -48,19 +66,20 @@
 #include "ui/dive_application.h"
 #include "ui/main_window.h"
 #include "utils/version_info.h"
-#ifdef __linux__
-#include <dlfcn.h>
-#endif
-
-#if defined(_WIN32)
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
 constexpr int kScreenshotDelay = 5000;       // 5s
+
+// Constants for Crashpad
+constexpr char kHandlerBinary[] = "crashpad_handler";
+constexpr char kDbDirectory[] = "crash_database";
+constexpr char kMetricsDirectory[] = "crash_metrics";
+constexpr char kCrashReportUrl[] = "https://clients2.google.com/cr/report";
+constexpr char kProductName[] = "Dive";
+constexpr char kFormat[] = "minidump";
+constexpr char kNoRateLimitFlag[] = "--no-rate-limit";
+constexpr int kMaxCrashpadVersionLength = 30;
 
 ABSL_FLAG(std::string, test_output, "", "Output directory for tests.");
 ABSL_FLAG(std::string, test_prefix, "", "Filename prefix for tests.");
@@ -77,6 +96,64 @@ ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
 //--------------------------------------------------------------------------------------------------
+absl::Status InitializeCrashpad()
+{
+    absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
+    if (!exe_dir.ok())
+    {
+        return exe_dir.status();
+    }
+
+    std::filesystem::path handler_path = *exe_dir / kHandlerBinary;
+#ifdef _WIN32
+    handler_path.replace_extension(".exe");
+#endif
+
+    std::filesystem::path database_path = *exe_dir / kDbDirectory;
+    std::filesystem::path metrics_path = *exe_dir / kMetricsDirectory;
+
+    // Crashpad requires explicit user consent or a programmatic override to upload
+    // reports. We enable uploads here to ensure the client can transmit crash
+    // data to the remote collection server.
+    std::unique_ptr<crashpad::CrashReportDatabase> database =
+        crashpad::CrashReportDatabase::Initialize(base::FilePath(database_path.native()));
+    if (database && database->GetSettings())
+    {
+        database->GetSettings()->SetUploadsEnabled(true);
+    }
+    else
+    {
+        return absl::InternalError("Failed to initialize Crashpad database.");
+    }
+
+    std::string version = Dive::GetHostShortVersionString();
+    if (version.size() > kMaxCrashpadVersionLength)
+    {
+        return absl::InternalError(absl::StrCat("Crashpad version string '", version, "' (",
+                                                version.size(), ") is too long, max is ",
+                                                kMaxCrashpadVersionLength));
+    }
+
+    std::map<std::string, std::string> annotations = {
+        {"product", kProductName}, {"format", kFormat}, {"version", version}};
+
+    std::vector<std::string> arguments = {kNoRateLimitFlag};
+
+    static crashpad::CrashpadClient* client = new crashpad::CrashpadClient();
+
+    bool success = client->StartHandler(
+        base::FilePath(handler_path.native()), base::FilePath(database_path.native()),
+        base::FilePath(metrics_path.native()), kCrashReportUrl, annotations, arguments,
+        /*restartable=*/true,
+        /*asynchronous_start=*/false);
+
+    if (!success)
+    {
+        return absl::InternalError("Failed to start Crashpad handler.");
+    }
+    return absl::OkStatus();
+}
+
 class CrashHandler
 {
  public:

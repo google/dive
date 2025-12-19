@@ -121,6 +121,16 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/dive_core)
 # Determine if third-party libraries should be built for the current target
 
 if(NOT ANDROID)
+    # Explicitly set CMAKE_OSX_SYSROOT to prevent build failures in environments
+    # (like Crashpad) where the SDK path is not automatically resolved.
+    if(APPLE)
+        execute_process(
+            COMMAND xcrun --show-sdk-path
+            OUTPUT_VARIABLE CMAKE_OSX_SYSROOT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    endif()
+
     # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
     # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
@@ -151,6 +161,16 @@ if(NOT ANDROID)
     add_subdirectory(third_party/gfxreconstruct EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
+
+    message(CHECK_START "Generate build files for third_party/crashpad")
+    list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    set(CRASHPAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(CRASHPAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/crashpad)
+    list(POP_BACK CMAKE_MESSAGE_INDENT)
+    message(CHECK_PASS "done")
+    add_library(crashpad_client ALIAS client)
+    set_target_properties(handler PROPERTIES OUTPUT_NAME "crashpad_handler")
 else()
     message(
         CHECK_START

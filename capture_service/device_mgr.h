@@ -183,7 +183,7 @@ public:
     absl::Status IsGpuClockPinned(uint32_t expected_freq_mhz) const;
 
     // Triggers a screenshot and saves it to the specified path.
-    absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
+    absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir) const;
 
 private:
     // The ABI must be consistent between the connected device and the Dive device libraries

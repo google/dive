@@ -80,10 +80,11 @@ else()
         dive_client_cli
         network
         device_mgr
+        absl::cleanup
         absl::flags
         absl::flags_parse
-        absl::algorithm
         absl::strings
+        absl::time
         version_info
     )
     target_include_directories(

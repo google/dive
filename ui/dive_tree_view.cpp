@@ -62,6 +62,7 @@ void DiveFilterModel::applyNewFilterMode(FilterMode new_mode)
     // begin/endResetModel() will cause a full re-evaluation and rebuild of the proxy's internal
     // mapping.
     endResetModel();
+    emit FilterModeChanged();
 }
 
 bool DiveFilterModel::IncludeIndex(uint64_t node_index) const
@@ -130,9 +131,14 @@ void DiveFilterModel::CollectPm4DrawCallIndices(const QModelIndex &parent_index)
             if (node_type == Dive::NodeType::kEventNode)
             {
                 Dive::Util::EventType type = m_command_hierarchy.GetEventNodeType(node_index);
-                if (type == Dive::Util::EventType::kDraw ||
-                    type == Dive::Util::EventType::kDispatch)
+                bool                  is_correlation_ignored = m_command_hierarchy
+                                              .IsEventNodeIgnoredDuringCorrelation(node_index);
+                bool is_draw_or_dispatch = (type == Dive::Util::EventType::kDraw ||
+                                            type == Dive::Util::EventType::kDispatch);
+                if (is_draw_or_dispatch && !is_correlation_ignored)
+                {
                     m_pm4_draw_call_indices.push_back(node_index);
+                }
             }
 
             // Only recurse into children if the current node is not a Vulkan submit node.
@@ -966,4 +972,10 @@ int DiveTreeView::GetNearestSearchNode(uint64_t source_node_idx)
         }
     }
     return mid;
+}
+
+//--------------------------------------------------------------------------------------------------
+void DiveTreeView::OnFilterModeChanged()
+{
+    m_curr_node_selected = QModelIndex();
 }

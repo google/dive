@@ -21,6 +21,13 @@
 
 set -eux
 
+cleanup() {
+    adb shell settings put global verifier_verify_adb_installs 1
+}
+
+# Ensure device is in a safe, usable state when the script terminates
+trap cleanup EXIT
+
 if [ $# -lt 1 ]; then
     echo "Usage: replay-with-dump.sh GFXR [GFXA]"
     exit 1
@@ -42,6 +49,7 @@ REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
 
 # Uninstall first since install can fail if the APK has a different cert from the one installed (i.e. it was built on another machine)
 adb shell pm path "$REPLAY_PACKAGE" && adb uninstall "$REPLAY_PACKAGE"
+adb shell settings put global verifier_verify_adb_installs 0
 python "$GFXRECON" install-apk ./install/gfxr-replay.apk
 # Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
 # was not required on all devices tested but doesn't hurt.
@@ -60,6 +68,7 @@ fi
 python "$GFXRECON" replay \
     --dump-resources "$PUSH_DIR/$JSON_BASENAME" \
     --dump-resources-dir "$DUMP_DIR" \
+    --dump-resources-dump-all-image-subresources \
     "$PUSH_DIR/$GFXR_BASENAME"
 
 # gfxrecon.py replay does not wait for the app to start so.

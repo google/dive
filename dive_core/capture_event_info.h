@@ -76,6 +76,13 @@ std::optional<VkPrimitiveTopology> GetTopology(const IMemoryManager &mem_manager
                                                uint32_t              submit_index,
                                                uint64_t              va_addr,
                                                Pm4Type7Header        header);
+
+// Used to ensure drawcalls with DI_PT_RECTLIST are not correlated since there is no corresponding
+// VkPrimitiveTopology
+bool ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
+                                        uint32_t              submit_index,
+                                        uint64_t              va_addr,
+                                        Pm4Type7Header        header);
 };  // namespace Util
 
 //--------------------------------------------------------------------------------------------------

@@ -375,6 +375,14 @@ bool CommandHierarchy::GetRegFieldNodeIsCe(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
+bool CommandHierarchy::IsEventNodeIgnoredDuringCorrelation(uint64_t node_index) const
+{
+    DIVE_ASSERT(node_index < m_nodes.m_aux_info.size());
+    const AuxInfo &info = m_nodes.m_aux_info[node_index];
+    return info.event_node.m_ignore_during_correlation;
+}
+
+//--------------------------------------------------------------------------------------------------
 uint64_t CommandHierarchy::AddNode(NodeType type, std::string &&desc, AuxInfo aux_info)
 {
     return m_nodes.AddNode(type, std::move(desc), aux_info);
@@ -483,11 +491,13 @@ CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::RegFieldNode(bool is_ce_pac
 
 //--------------------------------------------------------------------------------------------------
 CommandHierarchy::AuxInfo CommandHierarchy::AuxInfo::EventNode(uint32_t        event_id,
-                                                               Util::EventType type)
+                                                               Util::EventType type,
+                                                               bool ignore_during_correlation)
 {
     AuxInfo info(0);
     info.event_node.m_event_id = event_id;
     info.event_node.m_type = type;
+    info.event_node.m_ignore_during_correlation = ignore_during_correlation;
     return info;
 }
 
@@ -998,13 +1008,19 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager &mem_manager,
 
             uint32_t event_id = m_num_events++;
 
-            Util::EventType           type = Util::GetEventType(mem_manager,
+            Util::EventType type = Util::GetEventType(mem_manager,
                                                       submit_index,
                                                       va_addr,
                                                       opcode,
                                                       m_state_tracker);
-            CommandHierarchy::AuxInfo aux_info = CommandHierarchy::AuxInfo::EventNode(event_id,
-                                                                                      type);
+
+            bool should_ignore_during_correlation = Util::
+            ShouldIgnoreEventDuringCorrelation(mem_manager, submit_index, va_addr, *type7_header);
+
+            CommandHierarchy::AuxInfo
+                     aux_info = CommandHierarchy::AuxInfo::EventNode(event_id,
+                                                            type,
+                                                            should_ignore_during_correlation);
             uint64_t node_index = AddNode(NodeType::kEventNode, std::move(event_string), aux_info);
             AppendEventNodeIndex(node_index);
             event_node_index = node_index;

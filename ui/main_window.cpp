@@ -628,6 +628,16 @@ MainWindow::MainWindow(ApplicationController &controller) :
                      &MainWindow::OnPendingPerfCounterResults);
     QObject::connect(this, &MainWindow::PendingScreenshot, this, &MainWindow::OnPendingScreenshot);
 
+    // Filter mode change connections
+    QObject::connect(m_filter_model,
+                     &DiveFilterModel::FilterModeChanged,
+                     m_pm4_command_hierarchy_view,
+                     &DiveTreeView::OnFilterModeChanged);
+    QObject::connect(m_filter_model,
+                     &DiveFilterModel::FilterModeChanged,
+                     m_command_hierarchy_view,
+                     &DiveTreeView::OnFilterModeChanged);
+
     CreateActions();
     CreateMenus();
     CreateStatusBar();

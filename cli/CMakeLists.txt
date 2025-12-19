@@ -33,9 +33,6 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-file(GLOB HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-
 include_directories(
     ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
     ${CMAKE_SOURCE_DIR}
@@ -45,26 +42,23 @@ include_directories(
 
 add_definitions(-DLITTLEENDIAN_CPU)
 
-set(LIB_SRC_FILES ${SRC_FILES})
-list(FILTER LIB_SRC_FILES EXCLUDE REGEX "main.cpp")
-
 add_library(
     ${PROJECT_NAME}_lib
-    ${HDR_FILES}
-    ${LIB_SRC_FILES}
-    ${PM4_GENERATED_SRC_FILE}
-    ${PM4_GENERATED_HDR_FILE}
+    cli.cpp
+    cli.h
+    commands.cpp
+    commands.h
+    format_output.cpp
+    format_output.h
 )
+
 target_link_libraries(
     ${PROJECT_NAME}_lib
     PRIVATE dive_core version_info dive_legacy_includes
 )
 
-add_executable(${PROJECT_NAME} ${HDR_FILES} "main.cpp")
-target_link_libraries(
-    ${PROJECT_NAME}
-    PRIVATE ${PROJECT_NAME}_lib ${PEFFETTO_TRACE_READER_LIB}
-)
+add_executable(${PROJECT_NAME} "main.cpp")
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 if(MSVC)
     # 4100: unreferenced formal parameter
@@ -103,10 +97,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     target_link_libraries(
         capture_fuzzer
-        PRIVATE
-            $<$<C_COMPILER_ID:Clang>:-fsanitize=fuzzer,address>
-            dive_core
-            ${PEFFETTO_TRACE_READER_LIB}
+        PRIVATE $<$<C_COMPILER_ID:Clang>:-fsanitize=fuzzer,address> dive_core
     )
 
     add_executable(capture_fuzzer_loader fuzz_main.cpp)
@@ -123,10 +114,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
     target_link_libraries(
         capture_fuzzer_loader
-        PRIVATE
-            $<$<C_COMPILER_ID:Clang>:-fsanitize=address>
-            dive_core
-            ${PEFFETTO_TRACE_READER_LIB}
+        PRIVATE $<$<C_COMPILER_ID:Clang>:-fsanitize=address> dive_core
     )
 endif()
 

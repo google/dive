@@ -52,15 +52,16 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainKHR(VkResult                    
                                                     HandlePointerDecoder<VkSwapchainKHR>* swapchain,
                                                     const graphics::VulkanDeviceTable*    device_table)
 {
-    VkDevice                 device = VK_NULL_HANDLE;
+    VkDevice                 device          = VK_NULL_HANDLE;
+    VkPhysicalDevice         physical_device = VK_NULL_HANDLE;
     VkSurfaceCapabilitiesKHR surfCapabilities{};
 
     if (device_info != nullptr)
     {
         device = device_info->handle;
+        physical_device = device_info->parent;
     }
-    device_table_                    = device_table;
-    VkPhysicalDevice physical_device = device_info->parent;
+    device_table_ = device_table;
 
     VkSwapchainCreateInfoKHR modified_create_info = *create_info;
     modified_create_info.imageUsage =
@@ -217,12 +218,13 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainResourceData(const VulkanDeviceI
     {
         // If we're past the point of enabled queues, then stop looking because we really can't enable
         // a queue that isn't flagged during device creation.
-        if (queue_family_index >= static_cast<uint32_t>(device_info->queue_family_index_enabled.size()))
+        if (queue_family_index >=
+            static_cast<uint32_t>(device_info->enabled_queue_family_flags.queue_family_index_enabled.size()))
         {
             break;
         }
 
-        if (!device_info->queue_family_index_enabled[queue_family_index])
+        if (!device_info->enabled_queue_family_flags.queue_family_index_enabled[queue_family_index])
         {
             continue;
         }
@@ -278,8 +280,8 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainResourceData(const VulkanDeviceI
                 // We only want to look at a given queue if it was enabled during device creation time
                 // and if it supports present.  Otherwise, we don't need to create a command pool,
                 // command buffers, and semaphores for performing the swapchain copy.
-                if (device_info->queue_family_index_enabled.size() <= queue_family_index ||
-                    !device_info->queue_family_index_enabled[queue_family_index])
+                if (device_info->enabled_queue_family_flags.queue_family_index_enabled.size() <= queue_family_index ||
+                    !device_info->enabled_queue_family_flags.queue_family_index_enabled[queue_family_index])
                 {
                     GFXRECON_LOG_DEBUG("Virtual swapchain skipping creating blit info for queue family %d because it "
                                        "was not enabled by the device",
@@ -521,7 +523,7 @@ VkResult VulkanVirtualSwapchain::CreateSwapchainResourceData(const VulkanDeviceI
                 VK_QUEUE_FAMILY_IGNORED,                // dstQueueFamilyIndex
                 VK_NULL_HANDLE,                         // image
                 VkImageSubresourceRange{
-                    graphics::GetFormatAspectMask(swapchain_info->format),
+                    graphics::GetFormatAspects(swapchain_info->format),
                     0,
                     image_create_info.mipLevels,
                     0,
@@ -809,7 +811,7 @@ VkResult VulkanVirtualSwapchain::QueuePresentKHR(VkResult                       
         uint32_t    capture_image_index = capture_image_indices[i];
         uint32_t    replay_image_index  = present_info->pImageIndices[i];
 
-        auto aspect_mask       = graphics::GetFormatAspectMask(swapchain_info->format);
+        auto aspect_mask       = graphics::GetFormatAspects(swapchain_info->format);
         subresource.aspectMask = aspect_mask;
         initial_barrier_virtual_image.subresourceRange.aspectMask   = aspect_mask;
         final_barrier_virtual_image.subresourceRange.aspectMask     = aspect_mask;

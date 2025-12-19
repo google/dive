@@ -566,8 +566,19 @@ absl::Status RetrieveGfxrCapture(const AdbSession& adb, const GlobalOptions& opt
     return absl::OkStatus();
 }
 
+// Requests from TriggerGfxrCapture that the calling code should honor when determining if multiple
+// captures should be taken.
+enum class GfxrCaptureControlFlow
+{
+    // Don't take any more GFXR captures.
+    kStop,
+    // Proceed to take another GFXR capture.
+    kContinue,
+};
+
 // Triggers a GFXR capture and screenshot on the device.
-absl::StatusOr<bool> TriggerGfxrCapture(const AndroidDevice& device, const GlobalOptions& options)
+absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& device,
+                                                          const GlobalOptions& options)
 {
     const AdbSession&  adb = device.Adb();
     const std::string& gfxr_capture_file_dir = options.gfxr_capture_file_dir;
@@ -593,11 +604,11 @@ absl::StatusOr<bool> TriggerGfxrCapture(const AndroidDevice& device, const Globa
         }
 
         std::cout << "Exiting...\n";
-        return false;
+        return GfxrCaptureControlFlow::kStop;
     }
     if (!std::cin.good())
     {
-        return false;
+        return GfxrCaptureControlFlow::kStop;
     }
 
     // Trigger capture
@@ -627,7 +638,7 @@ absl::StatusOr<bool> TriggerGfxrCapture(const AndroidDevice& device, const Globa
     }
     if (!std::cin.good())
     {
-        return false;
+        return GfxrCaptureControlFlow::kStop;
     }
 
     // Wait for capture to finish.
@@ -648,7 +659,7 @@ absl::StatusOr<bool> TriggerGfxrCapture(const AndroidDevice& device, const Globa
         std::cout << "Capture complete.\n";
     }
 
-    return true;
+    return GfxrCaptureControlFlow::kContinue;
 }
 
 absl::Status CmdListDevice(const CommandContext& ctx)
@@ -731,15 +742,19 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
 
     while (true)
     {
-        absl::StatusOr<bool> continue_capturing = TriggerGfxrCapture(*context.mgr.GetDevice(),
-                                                                     context.options);
-        if (!continue_capturing.status().ok())
+        absl::StatusOr<GfxrCaptureControlFlow>
+        control_flow = TriggerGfxrCapture(*context.mgr.GetDevice(), context.options);
+        if (!control_flow.status().ok())
         {
-            return continue_capturing.status();
+            return control_flow.status();
         }
 
-        if (!(*continue_capturing))
+        switch (*control_flow)
         {
+        case GfxrCaptureControlFlow::kStop:
+            return absl::OkStatus();
+        case GfxrCaptureControlFlow::kContinue:
+            // Nothing to do
             break;
         }
     }

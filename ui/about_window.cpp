@@ -85,13 +85,28 @@ QVBoxLayout* AboutDialog::CreateVersionLayout()
 QVBoxLayout* AboutDialog::CreateLicenseLayout()
 {
     auto third_party_licenses = new QLabel("Third Party Licenses:");
+    auto license_notice = new QPlainTextEdit();
 
-    auto  license_notice = new QPlainTextEdit();
-    QFile licenseFile{ QDir{ QCoreApplication::applicationDirPath() }.filePath("NOTICE") };
+    QString executionPath = QCoreApplication::applicationDirPath();
+    QString fileName = "NOTICE";
+    QString fullPath;
+
+#ifdef Q_OS_MAC
+    fullPath = executionPath + "/../Resources/" + fileName;
+#else
+    fullPath = QDir(executionPath).filePath(fileName);
+#endif
+
+    QFile licenseFile(fullPath);
     if (licenseFile.open(QIODevice::ReadOnly))
     {
         license_notice->setPlainText(licenseFile.readAll());
     }
+    else
+    {
+        license_notice->setPlainText("License file not found at: " + fullPath);
+    }
+
     license_notice->setReadOnly(true);
 
     QVBoxLayout* license_layout = new QVBoxLayout;

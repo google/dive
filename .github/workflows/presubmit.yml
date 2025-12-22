@@ -452,3 +452,62 @@ jobs:
       - name: Ninja log
         run: |
           cat build/.ninja_log
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix build/install_artifact --config Release
+      - name: Upload test output
+        uses: actions/upload-artifact@v6
+        with:
+          name: install_artifact_android
+          path: |
+            build/install_artifact
+
+  build_dpkg:
+    name: "Build Debian Package"
+    runs-on: ubuntu-24.04
+    needs: build_Android_from_Linux_Debug
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v3
+        id: setup-java
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update --yes
+          # Build Dependencies
+          sudo apt-get install --yes cmake ninja-build clang-19 python3-mako
+          # Dive Dependencies
+          sudo apt-get install --yes qtbase5-dev libarchive-dev libtinfo-dev
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25
+          add-to-path: true
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: install_artifact_android
+          path: build/package_linux/dive_android
+      - name: Android Artifacts
+        run: ls -R build/package_linux/dive_android
+      - name: Build
+        run: |
+          mkdir -p build/package_linux/
+          touch build/package_linux/dive_android_is_prebuilt
+          bash scripts/package_linux.sh
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Upload debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: package_linux
+          path: |
+            build/package_linux/dive_linux/
+            build/package_linux/*.deb

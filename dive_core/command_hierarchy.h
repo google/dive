@@ -72,6 +72,11 @@ enum class NodeType
     kGfxrVulkanBeginRenderPassCommandNode,
     kGfxrVulkanEndRenderPassCommandNode,
     kGfxrBeginDebugUtilsLabelCommandNode,
+    kGfxrVulkanCopyBufferCommandNode,
+    kGfxrVulkanClearAttachmentsCommandNode,
+    kGfxrVulkanClearColorImageCommandNode,
+    kGfxrVulkanClearDepthStencilImageCommandNode,
+    kGfxrVulkanResolveImageCommandNode,
     kGfxrRootFrameNode,
 };
 

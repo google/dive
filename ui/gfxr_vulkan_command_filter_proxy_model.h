@@ -31,7 +31,7 @@ public:
     enum FilterMode : uint32_t
     {
         kNone,
-        kDrawDispatchOnly,
+        kActionOnly,
         kFilterModeCount
     };
 

@@ -71,7 +71,7 @@ target_link_directories(
     PRIVATE ${CMAKE_SOURCE_DIR}/capture_service
 )
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
@@ -120,7 +120,7 @@ target_include_directories(
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
 )
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 target_link_libraries(${target_name} ${TARGET_LINK_LIBS})

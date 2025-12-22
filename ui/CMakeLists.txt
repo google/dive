@@ -332,6 +332,8 @@ endif()
 
 if(APPLE)
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    # Install the Crashpad handler.
+    install(TARGETS handler DESTINATION .)
     # TODO: b/462767957 - fix mac installation directory.
     install(
         CODE

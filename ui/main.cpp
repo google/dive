@@ -100,7 +100,7 @@ absl::StatusOr<std::filesystem::path> GetWritableRoot()
 {
     std::filesystem::path writable_root;
 #ifdef _WIN32
-    if (const char *local_app_data = std::getenv("LOCALAPPDATA"))
+    if (const char* local_app_data = std::getenv("LOCALAPPDATA"))
     {
         writable_root = std::filesystem::path(local_app_data) / kProductName;
     }
@@ -109,17 +109,17 @@ absl::StatusOr<std::filesystem::path> GetWritableRoot()
         return absl::NotFoundError("LOCALAPPDATA environment variable not set.");
     }
 #elif defined(__APPLE__)
-    if (const char *home = std::getenv("HOME"))
+    if (const char* home = std::getenv("HOME"))
     {
-        writable_root = std::filesystem::path(home) / "Library" / "Application Support" /
-                        kProductName;
+        writable_root =
+            std::filesystem::path(home) / "Library" / "Application Support" / kProductName;
     }
     else
     {
         return absl::NotFoundError("HOME environment variable not set.");
     }
 #else
-    if (const char *home = std::getenv("HOME"))
+    if (const char* home = std::getenv("HOME"))
     {
         writable_root = std::filesystem::path(home) / ".local" / "share" / kProductName;
     }

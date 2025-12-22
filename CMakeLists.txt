@@ -298,7 +298,7 @@ if(NOT ANDROID)
     # This has been fixed in https://github.com/google/dive/pull/541
     if(APPLE)
         set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive
+            ${CMAKE_BINARY_DIR}/ui/$<CONFIG>/dive.app/Contents/MacOS/dive
         )
     else()
         set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
@@ -309,7 +309,7 @@ if(NOT ANDROID)
     )
     make_directory(${DIVE_TEST_OUTPUT_PATH})
     add_test(
-        NAME Regression_StackOverflow_MacOS
+        NAME Regression_StackOverflow
         COMMAND
             ${DIVE_EXECUTABLE_PATH} --test_scenario=exit-after-load
             ${DIVE_TEST_TRACE}
@@ -329,14 +329,14 @@ if(NOT ANDROID)
             --test_prefix=screenshot-native_style-
     )
     set_tests_properties(
-        Regression_StackOverflow_MacOS
+        Regression_StackOverflow
         DiveUI_Screenshot
         DiveUI_Screenshot_NativeStyle
         PROPERTIES TIMEOUT 60
     )
     if(DIVE_BUILD_WITH_SANITIZER)
         set_tests_properties(
-            Regression_StackOverflow_MacOS
+            Regression_StackOverflow
             DiveUI_Screenshot
             DiveUI_Screenshot_NativeStyle
             PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_container_overflow=0"

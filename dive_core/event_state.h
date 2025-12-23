@@ -38,26 +38,22 @@ namespace Dive
 class EventStateInfo;
 using EventStateId = InfoIdT<EventStateInfo>;
 
-template<typename CONFIG> class EventStateInfoViewportArray
+template <typename CONFIG>
+class EventStateInfoViewportArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using ViewportArray = typename CONFIG::ViewportArray;
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     EventStateInfoViewportArray() = default;
-    EventStateInfoViewportArray(const EventStateInfoViewportArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoViewportArray(const EventStateInfoViewportArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoViewportArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoViewportArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -97,38 +93,33 @@ public:
         return m_obj_ptr->GetViewportDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoViewportConstArray
+template <typename CONFIG>
+class EventStateInfoViewportConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using ViewportArray = typename CONFIG::ViewportArray;
     using ViewportConstArray = typename CONFIG::ViewportConstArray;
     EventStateInfoViewportConstArray() = default;
-    EventStateInfoViewportConstArray(const EventStateInfoViewportArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoViewportConstArray(const EventStateInfoViewportArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoViewportConstArray(const EventStateInfoViewportConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoViewportConstArray(const EventStateInfoViewportConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoViewportConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
+    EventStateInfoViewportConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD Viewport: Defines the viewport transforms
@@ -158,31 +149,27 @@ public:
         return m_obj_ptr->GetViewportDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoScissorArray
+template <typename CONFIG>
+class EventStateInfoScissorArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using ScissorArray = typename CONFIG::ScissorArray;
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
     EventStateInfoScissorArray() = default;
-    EventStateInfoScissorArray(const EventStateInfoScissorArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoScissorArray(const EventStateInfoScissorArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoScissorArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoScissorArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -223,38 +210,33 @@ public:
         return m_obj_ptr->GetScissorDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoScissorConstArray
+template <typename CONFIG>
+class EventStateInfoScissorConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using ScissorArray = typename CONFIG::ScissorArray;
     using ScissorConstArray = typename CONFIG::ScissorConstArray;
     EventStateInfoScissorConstArray() = default;
-    EventStateInfoScissorConstArray(const EventStateInfoScissorArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoScissorConstArray(const EventStateInfoScissorArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoScissorConstArray(const EventStateInfoScissorConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoScissorConstArray(const EventStateInfoScissorConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoScissorConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
+    EventStateInfoScissorConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD Scissor: Defines the rectangular bounds of the scissor for the corresponding
@@ -285,31 +267,27 @@ public:
         return m_obj_ptr->GetScissorDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoLogicOpEnabledArray
+template <typename CONFIG>
+class EventStateInfoLogicOpEnabledArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
     using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
     EventStateInfoLogicOpEnabledArray() = default;
-    EventStateInfoLogicOpEnabledArray(const EventStateInfoLogicOpEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoLogicOpEnabledArray(const EventStateInfoLogicOpEnabledArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoLogicOpEnabledArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -350,38 +328,35 @@ public:
         return m_obj_ptr->GetLogicOpEnabledDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoLogicOpEnabledConstArray
+template <typename CONFIG>
+class EventStateInfoLogicOpEnabledConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using LogicOpEnabledArray = typename CONFIG::LogicOpEnabledArray;
     using LogicOpEnabledConstArray = typename CONFIG::LogicOpEnabledConstArray;
     EventStateInfoLogicOpEnabledConstArray() = default;
-    EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoLogicOpEnabledConstArray(const EventStateInfoLogicOpEnabledConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
+    EventStateInfoLogicOpEnabledConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id)
     {
     }
-    Id         id() const { return m_id; }
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD LogicOpEnabled: Whether to apply Logical Operations
@@ -412,31 +387,27 @@ public:
         return m_obj_ptr->GetLogicOpEnabledDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoLogicOpArray
+template <typename CONFIG>
+class EventStateInfoLogicOpArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using LogicOpArray = typename CONFIG::LogicOpArray;
     using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     EventStateInfoLogicOpArray() = default;
-    EventStateInfoLogicOpArray(const EventStateInfoLogicOpArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoLogicOpArray(const EventStateInfoLogicOpArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoLogicOpArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -476,38 +447,33 @@ public:
         return m_obj_ptr->GetLogicOpDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoLogicOpConstArray
+template <typename CONFIG>
+class EventStateInfoLogicOpConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using LogicOpArray = typename CONFIG::LogicOpArray;
     using LogicOpConstArray = typename CONFIG::LogicOpConstArray;
     EventStateInfoLogicOpConstArray() = default;
-    EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoLogicOpConstArray(const EventStateInfoLogicOpConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoLogicOpConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
+    EventStateInfoLogicOpConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD LogicOp: Which logical operation to apply
@@ -537,31 +503,27 @@ public:
         return m_obj_ptr->GetLogicOpDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoAttachmentArray
+template <typename CONFIG>
+class EventStateInfoAttachmentArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using AttachmentArray = typename CONFIG::AttachmentArray;
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     EventStateInfoAttachmentArray() = default;
-    EventStateInfoAttachmentArray(const EventStateInfoAttachmentArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoAttachmentArray(const EventStateInfoAttachmentArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoAttachmentArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoAttachmentArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -576,7 +538,7 @@ public:
     }
 
     // `Set(value)` sets the Attachment field of the referenced object
-    inline const AttachmentArray& Set(uint32_t                            attachment,
+    inline const AttachmentArray& Set(uint32_t attachment,
                                       VkPipelineColorBlendAttachmentState value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
@@ -602,38 +564,33 @@ public:
         return m_obj_ptr->GetAttachmentDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoAttachmentConstArray
+template <typename CONFIG>
+class EventStateInfoAttachmentConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using AttachmentArray = typename CONFIG::AttachmentArray;
     using AttachmentConstArray = typename CONFIG::AttachmentConstArray;
     EventStateInfoAttachmentConstArray() = default;
-    EventStateInfoAttachmentConstArray(const EventStateInfoAttachmentArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoAttachmentConstArray(const EventStateInfoAttachmentArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoAttachmentConstArray(const EventStateInfoAttachmentConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoAttachmentConstArray(const EventStateInfoAttachmentConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoAttachmentConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
+    EventStateInfoAttachmentConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD Attachment: Per target attachment color blend states
@@ -663,31 +620,27 @@ public:
         return m_obj_ptr->GetAttachmentDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoBlendConstantArray
+template <typename CONFIG>
+class EventStateInfoBlendConstantArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
     EventStateInfoBlendConstantArray() = default;
-    EventStateInfoBlendConstantArray(const EventStateInfoBlendConstantArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoBlendConstantArray(const EventStateInfoBlendConstantArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoBlendConstantArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoBlendConstantArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -727,38 +680,35 @@ public:
         return m_obj_ptr->GetBlendConstantDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoBlendConstantConstArray
+template <typename CONFIG>
+class EventStateInfoBlendConstantConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using BlendConstantArray = typename CONFIG::BlendConstantArray;
     using BlendConstantConstArray = typename CONFIG::BlendConstantConstArray;
     EventStateInfoBlendConstantConstArray() = default;
-    EventStateInfoBlendConstantConstArray(const EventStateInfoBlendConstantArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoBlendConstantConstArray(const EventStateInfoBlendConstantArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoBlendConstantConstArray(const EventStateInfoBlendConstantConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoBlendConstantConstArray(const EventStateInfoBlendConstantConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoBlendConstantConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
+    EventStateInfoBlendConstantConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id)
     {
     }
-    Id         id() const { return m_id; }
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD BlendConstant: A color constant used for blending
@@ -788,31 +738,27 @@ public:
         return m_obj_ptr->GetBlendConstantDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoUBWCEnabledArray
+template <typename CONFIG>
+class EventStateInfoUBWCEnabledArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
     using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
     EventStateInfoUBWCEnabledArray() = default;
-    EventStateInfoUBWCEnabledArray(const EventStateInfoUBWCEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoUBWCEnabledArray(const EventStateInfoUBWCEnabledArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoUBWCEnabledArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -853,38 +799,33 @@ public:
         return m_obj_ptr->GetUBWCEnabledDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoUBWCEnabledConstArray
+template <typename CONFIG>
+class EventStateInfoUBWCEnabledConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using UBWCEnabledArray = typename CONFIG::UBWCEnabledArray;
     using UBWCEnabledConstArray = typename CONFIG::UBWCEnabledConstArray;
     EventStateInfoUBWCEnabledConstArray() = default;
-    EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
-    EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoUBWCEnabledConstArray(const EventStateInfoUBWCEnabledConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
+    EventStateInfoUBWCEnabledConstArray(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD UBWCEnabled: Whether UBWC is enabled for this attachment
@@ -915,31 +856,27 @@ public:
         return m_obj_ptr->GetUBWCEnabledDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoUBWCLosslessEnabledArray
+template <typename CONFIG>
+class EventStateInfoUBWCLosslessEnabledArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
     using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoUBWCLosslessEnabledArray() = default;
-    EventStateInfoUBWCLosslessEnabledArray(const EventStateInfoUBWCLosslessEnabledArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoUBWCLosslessEnabledArray(const EventStateInfoUBWCLosslessEnabledArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCLosslessEnabledArray(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoUBWCLosslessEnabledArray(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -981,14 +918,15 @@ public:
         return m_obj_ptr->GetUBWCLosslessEnabledDescription();
     }
 
-protected:
+ protected:
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
-template<typename CONFIG> class EventStateInfoUBWCLosslessEnabledConstArray
+template <typename CONFIG>
+class EventStateInfoUBWCLosslessEnabledConstArray
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
@@ -996,25 +934,22 @@ public:
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoUBWCLosslessEnabledConstArray() = default;
     EventStateInfoUBWCLosslessEnabledConstArray(
-    const EventStateInfoUBWCLosslessEnabledArray<CONFIG>& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+        const EventStateInfoUBWCLosslessEnabledArray<CONFIG>& other)
+        : m_obj_ptr(&other.obj()), m_id(other.id())
     {
     }
     EventStateInfoUBWCLosslessEnabledConstArray(
-    const EventStateInfoUBWCLosslessEnabledConstArray& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+        const EventStateInfoUBWCLosslessEnabledConstArray& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoUBWCLosslessEnabledConstArray(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
+    EventStateInfoUBWCLosslessEnabledConstArray(const SOA* obj_ptr, Id id)
+        : m_obj_ptr(obj_ptr), m_id(id)
     {
     }
-    Id         id() const { return m_id; }
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD UBWCLosslessEnabled: Whether UBWC Lossless compression (A7XX+) is enabled for this
@@ -1046,17 +981,18 @@ public:
         return m_obj_ptr->GetUBWCLosslessEnabledDescription();
     }
 
-protected:
+ protected:
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
 //--------------------------------------------------------------------------------------------------
 // Ref represents a reference to a single element.
 // Fields can be accessed using e.g. `ref.MyField()` or `ref.SetMyField(42)`.
-template<typename CONFIG> class EventStateInfoRefT
+template <typename CONFIG>
+class EventStateInfoRefT
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
@@ -1078,17 +1014,12 @@ public:
     using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoRefT() = default;
-    EventStateInfoRefT(const EventStateInfoRefT& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
+    EventStateInfoRefT(const EventStateInfoRefT& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoRefT(SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id   id() const { return m_id; }
+    EventStateInfoRefT(SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     SOA& obj() const { return *m_obj_ptr; }
     bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
@@ -2271,7 +2202,7 @@ public:
     inline AttachmentArray Attachment() const { return AttachmentArray(m_obj_ptr, m_id); }
 
     // `SetAttachment(value)` sets the Attachment field of the referenced object
-    inline const Ref& SetAttachment(uint32_t                            attachment,
+    inline const Ref& SetAttachment(uint32_t attachment,
                                     VkPipelineColorBlendAttachmentState value) const
     {
         DIVE_ASSERT(m_obj_ptr != nullptr);
@@ -3261,23 +3192,26 @@ public:
     }
 
     EventStateInfoRefT& operator=(const EventStateInfoRefT& other) = delete;
-    void                assign(const SOA& other_obj, Id other_id) const;
-    void                swap(const Ref& other) const;
-    friend void         swap(const Ref& x, const Ref& y) { x.swap(y); }
+    void assign(const SOA& other_obj, Id other_id) const;
+    void swap(const Ref& other) const;
+    friend void swap(const Ref& x, const Ref& y) { x.swap(y); }
 
-protected:
-    template<typename CONFIG_> friend class EventStateInfoT;
-    template<typename Class, typename Id, typename RefT> friend class StructOfArraysIterator;
+ protected:
+    template <typename CONFIG_>
+    friend class EventStateInfoT;
+    template <typename Class, typename Id, typename RefT>
+    friend class StructOfArraysIterator;
     SOA* m_obj_ptr = nullptr;
-    Id   m_id;
+    Id m_id;
 };
 
 //--------------------------------------------------------------------------------------------------
 // ConstRef represents a const reference to a single element.
 // Fields can be accessed using e.g. `ref.MyField()`.
-template<typename CONFIG> class EventStateInfoConstRefT
+template <typename CONFIG>
+class EventStateInfoConstRefT
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
@@ -3299,24 +3233,15 @@ public:
     using UBWCLosslessEnabledArray = typename CONFIG::UBWCLosslessEnabledArray;
     using UBWCLosslessEnabledConstArray = typename CONFIG::UBWCLosslessEnabledConstArray;
     EventStateInfoConstRefT() = default;
-    EventStateInfoConstRefT(const Ref& other) :
-        m_obj_ptr(&other.obj()),
-        m_id(other.id())
+    EventStateInfoConstRefT(const Ref& other) : m_obj_ptr(&other.obj()), m_id(other.id()) {}
+    EventStateInfoConstRefT(const EventStateInfoConstRefT& other)
+        : m_obj_ptr(other.m_obj_ptr), m_id(other.m_id)
     {
     }
-    EventStateInfoConstRefT(const EventStateInfoConstRefT& other) :
-        m_obj_ptr(other.m_obj_ptr),
-        m_id(other.m_id)
-    {
-    }
-    EventStateInfoConstRefT(const SOA* obj_ptr, Id id) :
-        m_obj_ptr(obj_ptr),
-        m_id(id)
-    {
-    }
-    Id         id() const { return m_id; }
+    EventStateInfoConstRefT(const SOA* obj_ptr, Id id) : m_obj_ptr(obj_ptr), m_id(id) {}
+    Id id() const { return m_id; }
     const SOA& obj() const { return *m_obj_ptr; }
-    bool       IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
+    bool IsValid() const { return m_obj_ptr != nullptr && m_obj_ptr->IsValidId(m_id); }
 
     //-----------------------------------------------
     // REF FIELD Topology: The primitive topology for this event
@@ -5023,18 +4948,21 @@ public:
 
     EventStateInfoConstRefT& operator=(const EventStateInfoConstRefT& other) = delete;
 
-protected:
-    template<typename CONFIG_> friend class EventStateInfoT;
-    template<typename Class, typename Id, typename RefT> friend class StructOfArraysIterator;
+ protected:
+    template <typename CONFIG_>
+    friend class EventStateInfoT;
+    template <typename Class, typename Id, typename RefT>
+    friend class StructOfArraysIterator;
     const SOA* m_obj_ptr = nullptr;
-    Id         m_id;
+    Id m_id;
 };
 
 //--------------------------------------------------------------------------------------------------
 // State info for events (draw/dispatch/sync/dma)
-template<typename CONFIG> class EventStateInfoT
+template <typename CONFIG>
+class EventStateInfoT
 {
-public:
+ public:
     using Id = typename CONFIG::Id;
     using SOA = typename CONFIG::SOA;
     using Ref = typename CONFIG::Ref;
@@ -5104,7 +5032,7 @@ public:
                                            kTopologyOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint32_t* TopologyPtr(Id id)
     {
@@ -5112,7 +5040,7 @@ public:
                                            kTopologyOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `Topology(id)` retuns the `Topology` element of the object identified by `id`
     inline VkPrimitiveTopology Topology(Id id) const
@@ -5165,7 +5093,7 @@ public:
                                        kPrimRestartEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* PrimRestartEnabledPtr(Id id)
     {
@@ -5173,7 +5101,7 @@ public:
                                        kPrimRestartEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `PrimRestartEnabled(id)` retuns the `PrimRestartEnabled` element of the object identified by
     // `id`
@@ -5228,7 +5156,7 @@ public:
                                            kPatchControlPointsOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint32_t* PatchControlPointsPtr(Id id)
     {
@@ -5236,7 +5164,7 @@ public:
                                            kPatchControlPointsOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `PatchControlPoints(id)` retuns the `PatchControlPoints` element of the object identified by
     // `id`
@@ -5290,7 +5218,7 @@ public:
                                              kViewportOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 16 + viewport
 
-        ;
+            ;
     }
     inline VkViewport* ViewportPtr(Id id, uint32_t viewport = 0)
     {
@@ -5298,7 +5226,7 @@ public:
                                              kViewportOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 16 + viewport
 
-        ;
+            ;
     }
     // `Viewport(id)` retuns the `Viewport` element of the object identified by `id`
     inline VkViewport Viewport(Id id, uint32_t viewport) const
@@ -5309,7 +5237,7 @@ public:
 
     // `Viewport(id)` returns the array of values of the Viewport field of the object identified by
     // `id`
-    inline ViewportArray      Viewport(Id id) { return ViewportArray(static_cast<SOA*>(this), id); }
+    inline ViewportArray Viewport(Id id) { return ViewportArray(static_cast<SOA*>(this), id); }
     inline ViewportConstArray Viewport(Id id) const
     {
         return ViewportConstArray(static_cast<const SOA*>(this), id);
@@ -5355,7 +5283,7 @@ public:
                                            kScissorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 16 + scissor
 
-        ;
+            ;
     }
     inline VkRect2D* ScissorPtr(Id id, uint32_t scissor = 0)
     {
@@ -5363,7 +5291,7 @@ public:
                                            kScissorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 16 + scissor
 
-        ;
+            ;
     }
     // `Scissor(id)` retuns the `Scissor` element of the object identified by `id`
     inline VkRect2D Scissor(Id id, uint32_t scissor) const
@@ -5374,7 +5302,7 @@ public:
 
     // `Scissor(id)` returns the array of values of the Scissor field of the object identified by
     // `id`
-    inline ScissorArray      Scissor(Id id) { return ScissorArray(static_cast<SOA*>(this), id); }
+    inline ScissorArray Scissor(Id id) { return ScissorArray(static_cast<SOA*>(this), id); }
     inline ScissorConstArray Scissor(Id id) const
     {
         return ScissorConstArray(static_cast<const SOA*>(this), id);
@@ -5423,7 +5351,7 @@ public:
                                        kDepthClampEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* DepthClampEnabledPtr(Id id)
     {
@@ -5431,7 +5359,7 @@ public:
                                        kDepthClampEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthClampEnabled(id)` retuns the `DepthClampEnabled` element of the object identified by
     // `id`
@@ -5486,7 +5414,7 @@ public:
                                        kRasterizerDiscardEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* RasterizerDiscardEnabledPtr(Id id)
     {
@@ -5494,7 +5422,7 @@ public:
                                        kRasterizerDiscardEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `RasterizerDiscardEnabled(id)` retuns the `RasterizerDiscardEnabled` element of the object
     // identified by `id`
@@ -5552,7 +5480,7 @@ public:
                                                 kPolygonModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkPolygonMode* PolygonModePtr(Id id)
     {
@@ -5560,7 +5488,7 @@ public:
                                                 kPolygonModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `PolygonMode(id)` retuns the `PolygonMode` element of the object identified by `id`
     inline VkPolygonMode PolygonMode(Id id) const
@@ -5609,7 +5537,7 @@ public:
                                                   kCullModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkCullModeFlags* CullModePtr(Id id)
     {
@@ -5617,7 +5545,7 @@ public:
                                                   kCullModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `CullMode(id)` retuns the `CullMode` element of the object identified by `id`
     inline VkCullModeFlags CullMode(Id id) const
@@ -5670,7 +5598,7 @@ public:
                                               kFrontFaceOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkFrontFace* FrontFacePtr(Id id)
     {
@@ -5678,7 +5606,7 @@ public:
                                               kFrontFaceOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `FrontFace(id)` retuns the `FrontFace` element of the object identified by `id`
     inline VkFrontFace FrontFace(Id id) const
@@ -5731,7 +5659,7 @@ public:
                                        kDepthBiasEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* DepthBiasEnabledPtr(Id id)
     {
@@ -5739,7 +5667,7 @@ public:
                                        kDepthBiasEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthBiasEnabled(id)` retuns the `DepthBiasEnabled` element of the object identified by `id`
     inline bool DepthBiasEnabled(Id id) const
@@ -5793,7 +5721,7 @@ public:
                                         kDepthBiasConstantFactorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* DepthBiasConstantFactorPtr(Id id)
     {
@@ -5801,7 +5729,7 @@ public:
                                         kDepthBiasConstantFactorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthBiasConstantFactor(id)` retuns the `DepthBiasConstantFactor` element of the object
     // identified by `id`
@@ -5855,7 +5783,7 @@ public:
                                         kDepthBiasClampOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* DepthBiasClampPtr(Id id)
     {
@@ -5863,7 +5791,7 @@ public:
                                         kDepthBiasClampOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthBiasClamp(id)` retuns the `DepthBiasClamp` element of the object identified by `id`
     inline float DepthBiasClamp(Id id) const
@@ -5917,7 +5845,7 @@ public:
                                         kDepthBiasSlopeFactorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* DepthBiasSlopeFactorPtr(Id id)
     {
@@ -5925,7 +5853,7 @@ public:
                                         kDepthBiasSlopeFactorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthBiasSlopeFactor(id)` retuns the `DepthBiasSlopeFactor` element of the object identified
     // by `id`
@@ -5979,7 +5907,7 @@ public:
                                         kLineWidthOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* LineWidthPtr(Id id)
     {
@@ -5987,7 +5915,7 @@ public:
                                         kLineWidthOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `LineWidth(id)` retuns the `LineWidth` element of the object identified by `id`
     inline float LineWidth(Id id) const
@@ -6040,7 +5968,7 @@ public:
                                                         kRasterizationSamplesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkSampleCountFlagBits* RasterizationSamplesPtr(Id id)
     {
@@ -6048,7 +5976,7 @@ public:
                                                         kRasterizationSamplesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `RasterizationSamples(id)` retuns the `RasterizationSamples` element of the object identified
     // by `id`
@@ -6103,7 +6031,7 @@ public:
                                        kSampleShadingEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* SampleShadingEnabledPtr(Id id)
     {
@@ -6111,7 +6039,7 @@ public:
                                        kSampleShadingEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `SampleShadingEnabled(id)` retuns the `SampleShadingEnabled` element of the object identified
     // by `id`
@@ -6166,7 +6094,7 @@ public:
                                         kMinSampleShadingOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* MinSampleShadingPtr(Id id)
     {
@@ -6174,7 +6102,7 @@ public:
                                         kMinSampleShadingOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `MinSampleShading(id)` retuns the `MinSampleShading` element of the object identified by `id`
     inline float MinSampleShading(Id id) const
@@ -6229,7 +6157,7 @@ public:
                                                kSampleMaskOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkSampleMask* SampleMaskPtr(Id id)
     {
@@ -6237,7 +6165,7 @@ public:
                                                kSampleMaskOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `SampleMask(id)` retuns the `SampleMask` element of the object identified by `id`
     inline VkSampleMask SampleMask(Id id) const
@@ -6291,7 +6219,7 @@ public:
                                        kAlphaToCoverageEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* AlphaToCoverageEnabledPtr(Id id)
     {
@@ -6299,7 +6227,7 @@ public:
                                        kAlphaToCoverageEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `AlphaToCoverageEnabled(id)` retuns the `AlphaToCoverageEnabled` element of the object
     // identified by `id`
@@ -6354,7 +6282,7 @@ public:
                                        kDepthTestEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* DepthTestEnabledPtr(Id id)
     {
@@ -6362,7 +6290,7 @@ public:
                                        kDepthTestEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthTestEnabled(id)` retuns the `DepthTestEnabled` element of the object identified by `id`
     inline bool DepthTestEnabled(Id id) const
@@ -6416,7 +6344,7 @@ public:
                                        kDepthWriteEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* DepthWriteEnabledPtr(Id id)
     {
@@ -6424,7 +6352,7 @@ public:
                                        kDepthWriteEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthWriteEnabled(id)` retuns the `DepthWriteEnabled` element of the object identified by
     // `id`
@@ -6479,7 +6407,7 @@ public:
                                               kDepthCompareOpOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkCompareOp* DepthCompareOpPtr(Id id)
     {
@@ -6487,7 +6415,7 @@ public:
                                               kDepthCompareOpOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthCompareOp(id)` retuns the `DepthCompareOp` element of the object identified by `id`
     inline VkCompareOp DepthCompareOp(Id id) const
@@ -6540,7 +6468,7 @@ public:
                                        kDepthBoundsTestEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* DepthBoundsTestEnabledPtr(Id id)
     {
@@ -6548,7 +6476,7 @@ public:
                                        kDepthBoundsTestEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `DepthBoundsTestEnabled(id)` retuns the `DepthBoundsTestEnabled` element of the object
     // identified by `id`
@@ -6602,7 +6530,7 @@ public:
                                         kMinDepthBoundsOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* MinDepthBoundsPtr(Id id)
     {
@@ -6610,7 +6538,7 @@ public:
                                         kMinDepthBoundsOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `MinDepthBounds(id)` retuns the `MinDepthBounds` element of the object identified by `id`
     inline float MinDepthBounds(Id id) const
@@ -6663,7 +6591,7 @@ public:
                                         kMaxDepthBoundsOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline float* MaxDepthBoundsPtr(Id id)
     {
@@ -6671,7 +6599,7 @@ public:
                                         kMaxDepthBoundsOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `MaxDepthBounds(id)` retuns the `MaxDepthBounds` element of the object identified by `id`
     inline float MaxDepthBounds(Id id) const
@@ -6724,7 +6652,7 @@ public:
                                        kStencilTestEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* StencilTestEnabledPtr(Id id)
     {
@@ -6732,7 +6660,7 @@ public:
                                        kStencilTestEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `StencilTestEnabled(id)` retuns the `StencilTestEnabled` element of the object identified by
     // `id`
@@ -6786,7 +6714,7 @@ public:
                                                    kStencilOpStateFrontOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkStencilOpState* StencilOpStateFrontPtr(Id id)
     {
@@ -6794,7 +6722,7 @@ public:
                                                    kStencilOpStateFrontOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `StencilOpStateFront(id)` retuns the `StencilOpStateFront` element of the object identified
     // by `id`
@@ -6848,7 +6776,7 @@ public:
                                                    kStencilOpStateBackOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkStencilOpState* StencilOpStateBackPtr(Id id)
     {
@@ -6856,7 +6784,7 @@ public:
                                                    kStencilOpStateBackOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `StencilOpStateBack(id)` retuns the `StencilOpStateBack` element of the object identified by
     // `id`
@@ -6910,7 +6838,7 @@ public:
                                        kLogicOpEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     inline bool* LogicOpEnabledPtr(Id id, uint32_t attachment = 0)
     {
@@ -6918,7 +6846,7 @@ public:
                                        kLogicOpEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     // `LogicOpEnabled(id)` retuns the `LogicOpEnabled` element of the object identified by `id`
     inline bool LogicOpEnabled(Id id, uint32_t attachment) const
@@ -6982,7 +6910,7 @@ public:
                                             kLogicOpOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     inline VkLogicOp* LogicOpPtr(Id id, uint32_t attachment = 0)
     {
@@ -6990,7 +6918,7 @@ public:
                                             kLogicOpOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     // `LogicOp(id)` retuns the `LogicOp` element of the object identified by `id`
     inline VkLogicOp LogicOp(Id id, uint32_t attachment) const
@@ -7001,7 +6929,7 @@ public:
 
     // `LogicOp(id)` returns the array of values of the LogicOp field of the object identified by
     // `id`
-    inline LogicOpArray      LogicOp(Id id) { return LogicOpArray(static_cast<SOA*>(this), id); }
+    inline LogicOpArray LogicOp(Id id) { return LogicOpArray(static_cast<SOA*>(this), id); }
     inline LogicOpConstArray LogicOp(Id id) const
     {
         return LogicOpConstArray(static_cast<const SOA*>(this), id);
@@ -7033,30 +6961,30 @@ public:
     inline const VkPipelineColorBlendAttachmentState* AttachmentPtr() const
     {
         return reinterpret_cast<VkPipelineColorBlendAttachmentState*>(
-        reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap);
+            reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap);
     }
     inline VkPipelineColorBlendAttachmentState* AttachmentPtr()
     {
         return reinterpret_cast<VkPipelineColorBlendAttachmentState*>(
-        reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap);
+            reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap);
     }
     // `AttachmentPtr()` returns a shared pointer to an array of `size()` elements
-    inline const VkPipelineColorBlendAttachmentState* AttachmentPtr(Id       id,
+    inline const VkPipelineColorBlendAttachmentState* AttachmentPtr(Id id,
                                                                     uint32_t attachment = 0) const
     {
         return reinterpret_cast<VkPipelineColorBlendAttachmentState*>(
-               reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap) +
+                   reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     inline VkPipelineColorBlendAttachmentState* AttachmentPtr(Id id, uint32_t attachment = 0)
     {
         return reinterpret_cast<VkPipelineColorBlendAttachmentState*>(
-               reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap) +
+                   reinterpret_cast<uint8_t*>(m_buffer.get()) + kAttachmentOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     // `Attachment(id)` retuns the `Attachment` element of the object identified by `id`
     inline VkPipelineColorBlendAttachmentState Attachment(Id id, uint32_t attachment) const
@@ -7119,7 +7047,7 @@ public:
                                         kBlendConstantOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 4 + channel
 
-        ;
+            ;
     }
     inline float* BlendConstantPtr(Id id, uint32_t channel = 0)
     {
@@ -7127,7 +7055,7 @@ public:
                                         kBlendConstantOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 4 + channel
 
-        ;
+            ;
     }
     // `BlendConstant(id)` retuns the `BlendConstant` element of the object identified by `id`
     inline float BlendConstant(Id id, uint32_t channel) const
@@ -7191,7 +7119,7 @@ public:
                                        kLRZEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* LRZEnabledPtr(Id id)
     {
@@ -7199,7 +7127,7 @@ public:
                                        kLRZEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `LRZEnabled(id)` retuns the `LRZEnabled` element of the object identified by `id`
     inline bool LRZEnabled(Id id) const
@@ -7251,7 +7179,7 @@ public:
                                        kLRZWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* LRZWritePtr(Id id)
     {
@@ -7259,7 +7187,7 @@ public:
                                        kLRZWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `LRZWrite(id)` retuns the `LRZWrite` element of the object identified by `id`
     inline bool LRZWrite(Id id) const
@@ -7308,7 +7236,7 @@ public:
                                                       kLRZDirStatusOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_lrz_dir_status* LRZDirStatusPtr(Id id)
     {
@@ -7316,7 +7244,7 @@ public:
                                                       kLRZDirStatusOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `LRZDirStatus(id)` retuns the `LRZDirStatus` element of the object identified by `id`
     inline a6xx_lrz_dir_status LRZDirStatus(Id id) const
@@ -7365,7 +7293,7 @@ public:
                                        kLRZDirWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* LRZDirWritePtr(Id id)
     {
@@ -7373,7 +7301,7 @@ public:
                                        kLRZDirWriteOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `LRZDirWrite(id)` retuns the `LRZDirWrite` element of the object identified by `id`
     inline bool LRZDirWrite(Id id) const
@@ -7425,7 +7353,7 @@ public:
                                                   kZTestModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_ztest_mode* ZTestModePtr(Id id)
     {
@@ -7433,7 +7361,7 @@ public:
                                                   kZTestModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ZTestMode(id)` retuns the `ZTestMode` element of the object identified by `id`
     inline a6xx_ztest_mode ZTestMode(Id id) const
@@ -7482,7 +7410,7 @@ public:
                                            kBinWOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint32_t* BinWPtr(Id id)
     {
@@ -7490,7 +7418,7 @@ public:
                                            kBinWOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `BinW(id)` retuns the `BinW` element of the object identified by `id`
     inline uint32_t BinW(Id id) const
@@ -7539,7 +7467,7 @@ public:
                                            kBinHOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint32_t* BinHPtr(Id id)
     {
@@ -7547,7 +7475,7 @@ public:
                                            kBinHOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `BinH(id)` retuns the `BinH` element of the object identified by `id`
     inline uint32_t BinH(Id id) const
@@ -7596,7 +7524,7 @@ public:
                                            kWindowScissorTLXOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint16_t* WindowScissorTLXPtr(Id id)
     {
@@ -7604,7 +7532,7 @@ public:
                                            kWindowScissorTLXOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `WindowScissorTLX(id)` retuns the `WindowScissorTLX` element of the object identified by `id`
     inline uint16_t WindowScissorTLX(Id id) const
@@ -7657,7 +7585,7 @@ public:
                                            kWindowScissorTLYOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint16_t* WindowScissorTLYPtr(Id id)
     {
@@ -7665,7 +7593,7 @@ public:
                                            kWindowScissorTLYOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `WindowScissorTLY(id)` retuns the `WindowScissorTLY` element of the object identified by `id`
     inline uint16_t WindowScissorTLY(Id id) const
@@ -7718,7 +7646,7 @@ public:
                                            kWindowScissorBRXOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint16_t* WindowScissorBRXPtr(Id id)
     {
@@ -7726,7 +7654,7 @@ public:
                                            kWindowScissorBRXOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `WindowScissorBRX(id)` retuns the `WindowScissorBRX` element of the object identified by `id`
     inline uint16_t WindowScissorBRX(Id id) const
@@ -7779,7 +7707,7 @@ public:
                                            kWindowScissorBRYOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint16_t* WindowScissorBRYPtr(Id id)
     {
@@ -7787,7 +7715,7 @@ public:
                                            kWindowScissorBRYOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `WindowScissorBRY(id)` retuns the `WindowScissorBRY` element of the object identified by `id`
     inline uint16_t WindowScissorBRY(Id id) const
@@ -7840,7 +7768,7 @@ public:
                                                    kRenderModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_render_mode* RenderModePtr(Id id)
     {
@@ -7848,7 +7776,7 @@ public:
                                                    kRenderModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `RenderMode(id)` retuns the `RenderMode` element of the object identified by `id`
     inline a6xx_render_mode RenderMode(Id id) const
@@ -7900,7 +7828,7 @@ public:
                                                         kBuffersLocationOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_buffers_location* BuffersLocationPtr(Id id)
     {
@@ -7908,7 +7836,7 @@ public:
                                                         kBuffersLocationOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `BuffersLocation(id)` retuns the `BuffersLocation` element of the object identified by `id`
     inline a6xx_buffers_location BuffersLocation(Id id) const
@@ -7961,7 +7889,7 @@ public:
                                                   kThreadSizeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_threadsize* ThreadSizePtr(Id id)
     {
@@ -7969,7 +7897,7 @@ public:
                                                   kThreadSizeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ThreadSize(id)` retuns the `ThreadSize` element of the object identified by `id`
     inline a6xx_threadsize ThreadSize(Id id) const
@@ -8022,7 +7950,7 @@ public:
                                        kEnableAllHelperLanesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* EnableAllHelperLanesPtr(Id id)
     {
@@ -8030,7 +7958,7 @@ public:
                                        kEnableAllHelperLanesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `EnableAllHelperLanes(id)` retuns the `EnableAllHelperLanes` element of the object identified
     // by `id`
@@ -8085,7 +8013,7 @@ public:
                                        kEnablePartialHelperLanesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* EnablePartialHelperLanesPtr(Id id)
     {
@@ -8093,7 +8021,7 @@ public:
                                        kEnablePartialHelperLanesOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `EnablePartialHelperLanes(id)` retuns the `EnablePartialHelperLanes` element of the object
     // identified by `id`
@@ -8150,7 +8078,7 @@ public:
                                        kUBWCEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     inline bool* UBWCEnabledPtr(Id id, uint32_t attachment = 0)
     {
@@ -8158,7 +8086,7 @@ public:
                                        kUBWCEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     // `UBWCEnabled(id)` retuns the `UBWCEnabled` element of the object identified by `id`
     inline bool UBWCEnabled(Id id, uint32_t attachment) const
@@ -8222,7 +8150,7 @@ public:
                                        kUBWCLosslessEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     inline bool* UBWCLosslessEnabledPtr(Id id, uint32_t attachment = 0)
     {
@@ -8230,7 +8158,7 @@ public:
                                        kUBWCLosslessEnabledOffset * m_cap) +
                static_cast<typename Id::basic_type>(id) * 8 + attachment
 
-        ;
+            ;
     }
     // `UBWCLosslessEnabled(id)` retuns the `UBWCLosslessEnabled` element of the object identified
     // by `id`
@@ -8295,7 +8223,7 @@ public:
                                        kUBWCEnabledOnDSOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* UBWCEnabledOnDSPtr(Id id)
     {
@@ -8303,7 +8231,7 @@ public:
                                        kUBWCEnabledOnDSOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `UBWCEnabledOnDS(id)` retuns the `UBWCEnabledOnDS` element of the object identified by `id`
     inline bool UBWCEnabledOnDS(Id id) const
@@ -8357,7 +8285,7 @@ public:
                                        kUBWCLosslessEnabledOnDSOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline bool* UBWCLosslessEnabledOnDSPtr(Id id)
     {
@@ -8365,7 +8293,7 @@ public:
                                        kUBWCLosslessEnabledOnDSOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `UBWCLosslessEnabledOnDS(id)` retuns the `UBWCLosslessEnabledOnDS` element of the object
     // identified by `id`
@@ -8420,7 +8348,7 @@ public:
                                            kResolveScissorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline VkRect2D* ResolveScissorPtr(Id id)
     {
@@ -8428,7 +8356,7 @@ public:
                                            kResolveScissorOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ResolveScissor(id)` retuns the `ResolveScissor` element of the object identified by `id`
     inline VkRect2D ResolveScissor(Id id) const
@@ -8481,7 +8409,7 @@ public:
                                            kResolveBaseGmemOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint32_t* ResolveBaseGmemPtr(Id id)
     {
@@ -8489,7 +8417,7 @@ public:
                                            kResolveBaseGmemOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ResolveBaseGmem(id)` retuns the `ResolveBaseGmem` element of the object identified by `id`
     inline uint32_t ResolveBaseGmem(Id id) const
@@ -8542,7 +8470,7 @@ public:
                                            kResolveBaseSysmemOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline uint64_t* ResolveBaseSysmemPtr(Id id)
     {
@@ -8550,7 +8478,7 @@ public:
                                            kResolveBaseSysmemOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ResolveBaseSysmem(id)` retuns the `ResolveBaseSysmem` element of the object identified by
     // `id`
@@ -8604,7 +8532,7 @@ public:
                                               kResolveFormatOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_format* ResolveFormatPtr(Id id)
     {
@@ -8612,7 +8540,7 @@ public:
                                               kResolveFormatOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ResolveFormat(id)` retuns the `ResolveFormat` element of the object identified by `id`
     inline a6xx_format ResolveFormat(Id id) const
@@ -8665,7 +8593,7 @@ public:
                                                  kResolveTileModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     inline a6xx_tile_mode* ResolveTileModePtr(Id id)
     {
@@ -8673,7 +8601,7 @@ public:
                                                  kResolveTileModeOffset * m_cap) +
                static_cast<typename Id::basic_type>(id)
 
-        ;
+            ;
     }
     // `ResolveTileMode(id)` retuns the `ResolveTileMode` element of the object identified by `id`
     inline a6xx_tile_mode ResolveTileMode(Id id) const
@@ -8707,11 +8635,11 @@ public:
 
     // `operator[]` returns a reference to an element identified by `id`. E.g.:
     //   `my_soa[some_id].MyField()`
-    inline Ref      operator[](Id id) { return Ref(static_cast<SOA*>(this), id); }
+    inline Ref operator[](Id id) { return Ref(static_cast<SOA*>(this), id); }
     inline ConstRef operator[](Id id) const { return ConstRef(static_cast<const SOA*>(this), id); }
 
-    inline Iterator      begin() { return Iterator(static_cast<SOA*>(this), Id(0)); }
-    inline Iterator      end() { return Iterator(static_cast<SOA*>(this), Id(m_size)); }
+    inline Iterator begin() { return Iterator(static_cast<SOA*>(this), Id(0)); }
+    inline Iterator end() { return Iterator(static_cast<SOA*>(this), Id(m_size)); }
     inline ConstIterator begin() const
     {
         return ConstIterator(static_cast<const SOA*>(this), Id(0));
@@ -8720,15 +8648,15 @@ public:
     {
         return ConstIterator(static_cast<const SOA*>(this), Id(m_size));
     }
-    inline Ref      front() { return Ref(static_cast<SOA*>(this), Id(0)); }
+    inline Ref front() { return Ref(static_cast<SOA*>(this), Id(0)); }
     inline ConstRef front() const { return ConstRef(static_cast<const SOA*>(this), Id(0)); }
-    inline Ref      back() { return Ref(static_cast<SOA*>(this), Id(m_size - 1)); }
+    inline Ref back() { return Ref(static_cast<SOA*>(this), Id(m_size - 1)); }
     inline ConstRef back() const { return ConstRef(static_cast<const SOA*>(this), Id(m_size - 1)); }
 
     // `find(id)` returns an iterator referring to the element identified by `id`.
     // If `id` does not identify a valid element, then `find(id) == end()` and
     // `find(id)->IsValid() == false`.
-    inline Iterator      find(Id id) { return Iterator(static_cast<SOA*>(this), id); }
+    inline Iterator find(Id id) { return Iterator(static_cast<SOA*>(this), id); }
     inline ConstIterator find(Id id) const
     {
         return ConstIterator(static_cast<const SOA*>(this), id);
@@ -8745,9 +8673,11 @@ public:
     // `Clear` resets size to 0, but keeps the allocated memory.
     inline void Clear() { m_size = 0; }
 
-protected:
-    template<typename CONFIG_> friend class EventStateInfoRefT;
-    template<typename CONFIG_> friend class EventStateInfoConstRefT;
+ protected:
+    template <typename CONFIG_>
+    friend class EventStateInfoRefT;
+    template <typename CONFIG_>
+    friend class EventStateInfoConstRefT;
 
     // The start of the array for each field will be aligned to `kAlignment`
     static constexpr size_t kAlignment = alignof(std::max_align_t);
@@ -8757,8 +8687,8 @@ protected:
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kTopologyIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kTopologyOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kTopologySize = sizeof(uint32_t);
+    static constexpr size_t kTopologyOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kTopologySize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kTopologyOffset + kTopologySize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8766,8 +8696,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kPrimRestartEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kPrimRestartEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kPrimRestartEnabledSize = sizeof(bool);
+    static constexpr size_t kPrimRestartEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kPrimRestartEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kPrimRestartEnabledOffset + kPrimRestartEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8775,8 +8705,8 @@ protected:
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kPatchControlPointsIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kPatchControlPointsOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kPatchControlPointsSize = sizeof(uint32_t);
+    static constexpr size_t kPatchControlPointsOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kPatchControlPointsSize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kPatchControlPointsOffset + kPatchControlPointsSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8784,9 +8714,9 @@ protected:
     static_assert(alignof(VkViewport) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kViewportIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kViewportOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kViewportArrayCount = 16;
-    static constexpr size_t   kViewportSize = sizeof(VkViewport) * kViewportArrayCount;
+    static constexpr size_t kViewportOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kViewportArrayCount = 16;
+    static constexpr size_t kViewportSize = sizeof(VkViewport) * kViewportArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kViewportOffset + kViewportSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8794,9 +8724,9 @@ protected:
     static_assert(alignof(VkRect2D) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kScissorIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kScissorOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kScissorArrayCount = 16;
-    static constexpr size_t   kScissorSize = sizeof(VkRect2D) * kScissorArrayCount;
+    static constexpr size_t kScissorOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kScissorArrayCount = 16;
+    static constexpr size_t kScissorSize = sizeof(VkRect2D) * kScissorArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kScissorOffset + kScissorSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8804,8 +8734,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthClampEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthClampEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthClampEnabledSize = sizeof(bool);
+    static constexpr size_t kDepthClampEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthClampEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthClampEnabledOffset + kDepthClampEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8813,8 +8743,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kRasterizerDiscardEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kRasterizerDiscardEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kRasterizerDiscardEnabledSize = sizeof(bool);
+    static constexpr size_t kRasterizerDiscardEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kRasterizerDiscardEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kRasterizerDiscardEnabledOffset + kRasterizerDiscardEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8822,8 +8752,8 @@ protected:
     static_assert(alignof(VkPolygonMode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kPolygonModeIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kPolygonModeOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kPolygonModeSize = sizeof(VkPolygonMode);
+    static constexpr size_t kPolygonModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kPolygonModeSize = sizeof(VkPolygonMode);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kPolygonModeOffset + kPolygonModeSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8831,8 +8761,8 @@ protected:
     static_assert(alignof(VkCullModeFlags) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kCullModeIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kCullModeOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kCullModeSize = sizeof(VkCullModeFlags);
+    static constexpr size_t kCullModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kCullModeSize = sizeof(VkCullModeFlags);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kCullModeOffset + kCullModeSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8840,8 +8770,8 @@ protected:
     static_assert(alignof(VkFrontFace) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kFrontFaceIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kFrontFaceOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kFrontFaceSize = sizeof(VkFrontFace);
+    static constexpr size_t kFrontFaceOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kFrontFaceSize = sizeof(VkFrontFace);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kFrontFaceOffset + kFrontFaceSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8849,8 +8779,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthBiasEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthBiasEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthBiasEnabledSize = sizeof(bool);
+    static constexpr size_t kDepthBiasEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthBiasEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthBiasEnabledOffset + kDepthBiasEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8858,8 +8788,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthBiasConstantFactorIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthBiasConstantFactorOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthBiasConstantFactorSize = sizeof(float);
+    static constexpr size_t kDepthBiasConstantFactorOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthBiasConstantFactorSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthBiasConstantFactorOffset + kDepthBiasConstantFactorSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8867,8 +8797,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthBiasClampIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthBiasClampOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthBiasClampSize = sizeof(float);
+    static constexpr size_t kDepthBiasClampOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthBiasClampSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthBiasClampOffset + kDepthBiasClampSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8876,8 +8806,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthBiasSlopeFactorIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthBiasSlopeFactorOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthBiasSlopeFactorSize = sizeof(float);
+    static constexpr size_t kDepthBiasSlopeFactorOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthBiasSlopeFactorSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthBiasSlopeFactorOffset + kDepthBiasSlopeFactorSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8885,8 +8815,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLineWidthIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLineWidthOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLineWidthSize = sizeof(float);
+    static constexpr size_t kLineWidthOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLineWidthSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLineWidthOffset + kLineWidthSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8894,8 +8824,8 @@ protected:
     static_assert(alignof(VkSampleCountFlagBits) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kRasterizationSamplesIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kRasterizationSamplesOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kRasterizationSamplesSize = sizeof(VkSampleCountFlagBits);
+    static constexpr size_t kRasterizationSamplesOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kRasterizationSamplesSize = sizeof(VkSampleCountFlagBits);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kRasterizationSamplesOffset + kRasterizationSamplesSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8903,8 +8833,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kSampleShadingEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kSampleShadingEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kSampleShadingEnabledSize = sizeof(bool);
+    static constexpr size_t kSampleShadingEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kSampleShadingEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kSampleShadingEnabledOffset + kSampleShadingEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8912,8 +8842,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kMinSampleShadingIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMinSampleShadingOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMinSampleShadingSize = sizeof(float);
+    static constexpr size_t kMinSampleShadingOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kMinSampleShadingSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kMinSampleShadingOffset + kMinSampleShadingSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8921,8 +8851,8 @@ protected:
     static_assert(alignof(VkSampleMask) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kSampleMaskIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kSampleMaskOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kSampleMaskSize = sizeof(VkSampleMask);
+    static constexpr size_t kSampleMaskOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kSampleMaskSize = sizeof(VkSampleMask);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kSampleMaskOffset + kSampleMaskSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8930,8 +8860,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kAlphaToCoverageEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kAlphaToCoverageEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kAlphaToCoverageEnabledSize = sizeof(bool);
+    static constexpr size_t kAlphaToCoverageEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kAlphaToCoverageEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kAlphaToCoverageEnabledOffset + kAlphaToCoverageEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8939,8 +8869,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthTestEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthTestEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthTestEnabledSize = sizeof(bool);
+    static constexpr size_t kDepthTestEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthTestEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthTestEnabledOffset + kDepthTestEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8948,8 +8878,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthWriteEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthWriteEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthWriteEnabledSize = sizeof(bool);
+    static constexpr size_t kDepthWriteEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthWriteEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthWriteEnabledOffset + kDepthWriteEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8957,8 +8887,8 @@ protected:
     static_assert(alignof(VkCompareOp) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthCompareOpIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthCompareOpOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthCompareOpSize = sizeof(VkCompareOp);
+    static constexpr size_t kDepthCompareOpOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthCompareOpSize = sizeof(VkCompareOp);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthCompareOpOffset + kDepthCompareOpSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8966,8 +8896,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kDepthBoundsTestEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kDepthBoundsTestEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kDepthBoundsTestEnabledSize = sizeof(bool);
+    static constexpr size_t kDepthBoundsTestEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kDepthBoundsTestEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kDepthBoundsTestEnabledOffset + kDepthBoundsTestEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8975,8 +8905,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kMinDepthBoundsIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMinDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMinDepthBoundsSize = sizeof(float);
+    static constexpr size_t kMinDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kMinDepthBoundsSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kMinDepthBoundsOffset + kMinDepthBoundsSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8984,8 +8914,8 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kMaxDepthBoundsIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kMaxDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kMaxDepthBoundsSize = sizeof(float);
+    static constexpr size_t kMaxDepthBoundsOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kMaxDepthBoundsSize = sizeof(float);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kMaxDepthBoundsOffset + kMaxDepthBoundsSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -8993,8 +8923,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kStencilTestEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kStencilTestEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kStencilTestEnabledSize = sizeof(bool);
+    static constexpr size_t kStencilTestEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kStencilTestEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kStencilTestEnabledOffset + kStencilTestEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9002,8 +8932,8 @@ protected:
     static_assert(alignof(VkStencilOpState) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kStencilOpStateFrontIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kStencilOpStateFrontOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kStencilOpStateFrontSize = sizeof(VkStencilOpState);
+    static constexpr size_t kStencilOpStateFrontOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kStencilOpStateFrontSize = sizeof(VkStencilOpState);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kStencilOpStateFrontOffset + kStencilOpStateFrontSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9011,8 +8941,8 @@ protected:
     static_assert(alignof(VkStencilOpState) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kStencilOpStateBackIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kStencilOpStateBackOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kStencilOpStateBackSize = sizeof(VkStencilOpState);
+    static constexpr size_t kStencilOpStateBackOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kStencilOpStateBackSize = sizeof(VkStencilOpState);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kStencilOpStateBackOffset + kStencilOpStateBackSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9020,9 +8950,9 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLogicOpEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLogicOpEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLogicOpEnabledArrayCount = 8;
-    static constexpr size_t   kLogicOpEnabledSize = sizeof(bool) * kLogicOpEnabledArrayCount;
+    static constexpr size_t kLogicOpEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLogicOpEnabledArrayCount = 8;
+    static constexpr size_t kLogicOpEnabledSize = sizeof(bool) * kLogicOpEnabledArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLogicOpEnabledOffset + kLogicOpEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9030,9 +8960,9 @@ protected:
     static_assert(alignof(VkLogicOp) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLogicOpIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLogicOpOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLogicOpArrayCount = 8;
-    static constexpr size_t   kLogicOpSize = sizeof(VkLogicOp) * kLogicOpArrayCount;
+    static constexpr size_t kLogicOpOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLogicOpArrayCount = 8;
+    static constexpr size_t kLogicOpSize = sizeof(VkLogicOp) * kLogicOpArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLogicOpOffset + kLogicOpSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9040,10 +8970,10 @@ protected:
     static_assert(alignof(VkPipelineColorBlendAttachmentState) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kAttachmentIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kAttachmentOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kAttachmentArrayCount = 8;
-    static constexpr size_t   kAttachmentSize = sizeof(VkPipelineColorBlendAttachmentState) *
-                                              kAttachmentArrayCount;
+    static constexpr size_t kAttachmentOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kAttachmentArrayCount = 8;
+    static constexpr size_t kAttachmentSize =
+        sizeof(VkPipelineColorBlendAttachmentState) * kAttachmentArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kAttachmentOffset + kAttachmentSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9051,9 +8981,9 @@ protected:
     static_assert(alignof(float) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kBlendConstantIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kBlendConstantOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kBlendConstantArrayCount = 4;
-    static constexpr size_t   kBlendConstantSize = sizeof(float) * kBlendConstantArrayCount;
+    static constexpr size_t kBlendConstantOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kBlendConstantArrayCount = 4;
+    static constexpr size_t kBlendConstantSize = sizeof(float) * kBlendConstantArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kBlendConstantOffset + kBlendConstantSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9061,8 +8991,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLRZEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLRZEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLRZEnabledSize = sizeof(bool);
+    static constexpr size_t kLRZEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLRZEnabledSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLRZEnabledOffset + kLRZEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9070,8 +9000,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLRZWriteIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLRZWriteOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLRZWriteSize = sizeof(bool);
+    static constexpr size_t kLRZWriteOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLRZWriteSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLRZWriteOffset + kLRZWriteSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9079,8 +9009,8 @@ protected:
     static_assert(alignof(a6xx_lrz_dir_status) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLRZDirStatusIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLRZDirStatusOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLRZDirStatusSize = sizeof(a6xx_lrz_dir_status);
+    static constexpr size_t kLRZDirStatusOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLRZDirStatusSize = sizeof(a6xx_lrz_dir_status);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLRZDirStatusOffset + kLRZDirStatusSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9088,8 +9018,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kLRZDirWriteIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kLRZDirWriteOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kLRZDirWriteSize = sizeof(bool);
+    static constexpr size_t kLRZDirWriteOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kLRZDirWriteSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kLRZDirWriteOffset + kLRZDirWriteSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9097,8 +9027,8 @@ protected:
     static_assert(alignof(a6xx_ztest_mode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kZTestModeIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kZTestModeOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kZTestModeSize = sizeof(a6xx_ztest_mode);
+    static constexpr size_t kZTestModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kZTestModeSize = sizeof(a6xx_ztest_mode);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kZTestModeOffset + kZTestModeSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9106,8 +9036,8 @@ protected:
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kBinWIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kBinWOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kBinWSize = sizeof(uint32_t);
+    static constexpr size_t kBinWOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kBinWSize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kBinWOffset + kBinWSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9115,8 +9045,8 @@ protected:
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kBinHIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kBinHOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kBinHSize = sizeof(uint32_t);
+    static constexpr size_t kBinHOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kBinHSize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kBinHOffset + kBinHSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9124,8 +9054,8 @@ protected:
     static_assert(alignof(uint16_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kWindowScissorTLXIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kWindowScissorTLXOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kWindowScissorTLXSize = sizeof(uint16_t);
+    static constexpr size_t kWindowScissorTLXOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kWindowScissorTLXSize = sizeof(uint16_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kWindowScissorTLXOffset + kWindowScissorTLXSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9133,8 +9063,8 @@ protected:
     static_assert(alignof(uint16_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kWindowScissorTLYIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kWindowScissorTLYOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kWindowScissorTLYSize = sizeof(uint16_t);
+    static constexpr size_t kWindowScissorTLYOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kWindowScissorTLYSize = sizeof(uint16_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kWindowScissorTLYOffset + kWindowScissorTLYSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9142,8 +9072,8 @@ protected:
     static_assert(alignof(uint16_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kWindowScissorBRXIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kWindowScissorBRXOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kWindowScissorBRXSize = sizeof(uint16_t);
+    static constexpr size_t kWindowScissorBRXOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kWindowScissorBRXSize = sizeof(uint16_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kWindowScissorBRXOffset + kWindowScissorBRXSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9151,8 +9081,8 @@ protected:
     static_assert(alignof(uint16_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kWindowScissorBRYIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kWindowScissorBRYOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kWindowScissorBRYSize = sizeof(uint16_t);
+    static constexpr size_t kWindowScissorBRYOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kWindowScissorBRYSize = sizeof(uint16_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kWindowScissorBRYOffset + kWindowScissorBRYSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9160,8 +9090,8 @@ protected:
     static_assert(alignof(a6xx_render_mode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kRenderModeIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kRenderModeOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kRenderModeSize = sizeof(a6xx_render_mode);
+    static constexpr size_t kRenderModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kRenderModeSize = sizeof(a6xx_render_mode);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kRenderModeOffset + kRenderModeSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9169,8 +9099,8 @@ protected:
     static_assert(alignof(a6xx_buffers_location) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kBuffersLocationIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kBuffersLocationOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kBuffersLocationSize = sizeof(a6xx_buffers_location);
+    static constexpr size_t kBuffersLocationOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kBuffersLocationSize = sizeof(a6xx_buffers_location);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kBuffersLocationOffset + kBuffersLocationSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9178,8 +9108,8 @@ protected:
     static_assert(alignof(a6xx_threadsize) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kThreadSizeIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kThreadSizeOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kThreadSizeSize = sizeof(a6xx_threadsize);
+    static constexpr size_t kThreadSizeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kThreadSizeSize = sizeof(a6xx_threadsize);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kThreadSizeOffset + kThreadSizeSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9187,8 +9117,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kEnableAllHelperLanesIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kEnableAllHelperLanesOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kEnableAllHelperLanesSize = sizeof(bool);
+    static constexpr size_t kEnableAllHelperLanesOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kEnableAllHelperLanesSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kEnableAllHelperLanesOffset + kEnableAllHelperLanesSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9196,8 +9126,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kEnablePartialHelperLanesIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kEnablePartialHelperLanesOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kEnablePartialHelperLanesSize = sizeof(bool);
+    static constexpr size_t kEnablePartialHelperLanesOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kEnablePartialHelperLanesSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kEnablePartialHelperLanesOffset + kEnablePartialHelperLanesSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9205,9 +9135,9 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kUBWCEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kUBWCEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kUBWCEnabledArrayCount = 8;
-    static constexpr size_t   kUBWCEnabledSize = sizeof(bool) * kUBWCEnabledArrayCount;
+    static constexpr size_t kUBWCEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kUBWCEnabledArrayCount = 8;
+    static constexpr size_t kUBWCEnabledSize = sizeof(bool) * kUBWCEnabledArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kUBWCEnabledOffset + kUBWCEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9215,10 +9145,10 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kUBWCLosslessEnabledIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kUBWCLosslessEnabledOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kUBWCLosslessEnabledArrayCount = 8;
-    static constexpr size_t   kUBWCLosslessEnabledSize = sizeof(bool) *
-                                                       kUBWCLosslessEnabledArrayCount;
+    static constexpr size_t kUBWCLosslessEnabledOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kUBWCLosslessEnabledArrayCount = 8;
+    static constexpr size_t kUBWCLosslessEnabledSize =
+        sizeof(bool) * kUBWCLosslessEnabledArrayCount;
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kUBWCLosslessEnabledOffset + kUBWCLosslessEnabledSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9226,8 +9156,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kUBWCEnabledOnDSIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kUBWCEnabledOnDSOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kUBWCEnabledOnDSSize = sizeof(bool);
+    static constexpr size_t kUBWCEnabledOnDSOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kUBWCEnabledOnDSSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kUBWCEnabledOnDSOffset + kUBWCEnabledOnDSSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9235,8 +9165,8 @@ protected:
     static_assert(alignof(bool) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kUBWCLosslessEnabledOnDSIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kUBWCLosslessEnabledOnDSOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kUBWCLosslessEnabledOnDSSize = sizeof(bool);
+    static constexpr size_t kUBWCLosslessEnabledOnDSOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kUBWCLosslessEnabledOnDSSize = sizeof(bool);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kUBWCLosslessEnabledOnDSOffset + kUBWCLosslessEnabledOnDSSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9244,8 +9174,8 @@ protected:
     static_assert(alignof(VkRect2D) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kResolveScissorIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kResolveScissorOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kResolveScissorSize = sizeof(VkRect2D);
+    static constexpr size_t kResolveScissorOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kResolveScissorSize = sizeof(VkRect2D);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kResolveScissorOffset + kResolveScissorSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9253,8 +9183,8 @@ protected:
     static_assert(alignof(uint32_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kResolveBaseGmemIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kResolveBaseGmemOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kResolveBaseGmemSize = sizeof(uint32_t);
+    static constexpr size_t kResolveBaseGmemOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kResolveBaseGmemSize = sizeof(uint32_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kResolveBaseGmemOffset + kResolveBaseGmemSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9262,8 +9192,8 @@ protected:
     static_assert(alignof(uint64_t) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kResolveBaseSysmemIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kResolveBaseSysmemOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kResolveBaseSysmemSize = sizeof(uint64_t);
+    static constexpr size_t kResolveBaseSysmemOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kResolveBaseSysmemSize = sizeof(uint64_t);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kResolveBaseSysmemOffset + kResolveBaseSysmemSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9271,8 +9201,8 @@ protected:
     static_assert(alignof(a6xx_format) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kResolveFormatIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kResolveFormatOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kResolveFormatSize = sizeof(a6xx_format);
+    static constexpr size_t kResolveFormatOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kResolveFormatSize = sizeof(a6xx_format);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kResolveFormatOffset + kResolveFormatSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9280,8 +9210,8 @@ protected:
     static_assert(alignof(a6xx_tile_mode) <= kAlignment,
                   "Field type aligment requirement cannot exceed kAlignment");
     static constexpr uint32_t kResolveTileModeIndex = PARTIAL_INDEX_EventStateInfo;
-    static constexpr size_t   kResolveTileModeOffset = PARTIAL_SIZE_EventStateInfo;
-    static constexpr size_t   kResolveTileModeSize = sizeof(a6xx_tile_mode);
+    static constexpr size_t kResolveTileModeOffset = PARTIAL_SIZE_EventStateInfo;
+    static constexpr size_t kResolveTileModeSize = sizeof(a6xx_tile_mode);
 #undef PARTIAL_SIZE_EventStateInfo
 #define PARTIAL_SIZE_EventStateInfo kResolveTileModeOffset + kResolveTileModeSize
 #undef PARTIAL_INDEX_EventStateInfo
@@ -9324,64 +9254,64 @@ protected:
     // ".natvis" file into the Visual Studio project to get an even nicer
     // debug view.
 #ifndef NDEBUG
-    uint32_t*                            DBG_topology;
-    bool*                                DBG_prim_restart_enabled;
-    uint32_t*                            DBG_patch_control_points;
-    VkViewport*                          DBG_viewport;
-    VkRect2D*                            DBG_scissor;
-    bool*                                DBG_depth_clamp_enabled;
-    bool*                                DBG_rasterizer_discard_enabled;
-    VkPolygonMode*                       DBG_polygon_mode;
-    VkCullModeFlags*                     DBG_cull_mode;
-    VkFrontFace*                         DBG_front_face;
-    bool*                                DBG_depth_bias_enabled;
-    float*                               DBG_depth_bias_constant_factor;
-    float*                               DBG_depth_bias_clamp;
-    float*                               DBG_depth_bias_slope_factor;
-    float*                               DBG_line_width;
-    VkSampleCountFlagBits*               DBG_rasterization_samples;
-    bool*                                DBG_sample_shading_enabled;
-    float*                               DBG_min_sample_shading;
-    VkSampleMask*                        DBG_sample_mask;
-    bool*                                DBG_alpha_to_coverage_enabled;
-    bool*                                DBG_depth_test_enabled;
-    bool*                                DBG_depth_write_enabled;
-    VkCompareOp*                         DBG_depth_compare_op;
-    bool*                                DBG_depth_bounds_test_enabled;
-    float*                               DBG_min_depth_bounds;
-    float*                               DBG_max_depth_bounds;
-    bool*                                DBG_stencil_test_enabled;
-    VkStencilOpState*                    DBG_stencil_op_state_front;
-    VkStencilOpState*                    DBG_stencil_op_state_back;
-    bool*                                DBG_logic_op_enabled;
-    VkLogicOp*                           DBG_logic_op;
+    uint32_t* DBG_topology;
+    bool* DBG_prim_restart_enabled;
+    uint32_t* DBG_patch_control_points;
+    VkViewport* DBG_viewport;
+    VkRect2D* DBG_scissor;
+    bool* DBG_depth_clamp_enabled;
+    bool* DBG_rasterizer_discard_enabled;
+    VkPolygonMode* DBG_polygon_mode;
+    VkCullModeFlags* DBG_cull_mode;
+    VkFrontFace* DBG_front_face;
+    bool* DBG_depth_bias_enabled;
+    float* DBG_depth_bias_constant_factor;
+    float* DBG_depth_bias_clamp;
+    float* DBG_depth_bias_slope_factor;
+    float* DBG_line_width;
+    VkSampleCountFlagBits* DBG_rasterization_samples;
+    bool* DBG_sample_shading_enabled;
+    float* DBG_min_sample_shading;
+    VkSampleMask* DBG_sample_mask;
+    bool* DBG_alpha_to_coverage_enabled;
+    bool* DBG_depth_test_enabled;
+    bool* DBG_depth_write_enabled;
+    VkCompareOp* DBG_depth_compare_op;
+    bool* DBG_depth_bounds_test_enabled;
+    float* DBG_min_depth_bounds;
+    float* DBG_max_depth_bounds;
+    bool* DBG_stencil_test_enabled;
+    VkStencilOpState* DBG_stencil_op_state_front;
+    VkStencilOpState* DBG_stencil_op_state_back;
+    bool* DBG_logic_op_enabled;
+    VkLogicOp* DBG_logic_op;
     VkPipelineColorBlendAttachmentState* DBG_attachment;
-    float*                               DBG_blend_constant;
-    bool*                                DBG_lrz_enabled;
-    bool*                                DBG_lrz_write;
-    a6xx_lrz_dir_status*                 DBG_lrz_dir_status;
-    bool*                                DBG_lrz_dir_write;
-    a6xx_ztest_mode*                     DBG_z_test_mode;
-    uint32_t*                            DBG_bin_w;
-    uint32_t*                            DBG_bin_h;
-    uint16_t*                            DBG_window_scissor_tlx;
-    uint16_t*                            DBG_window_scissor_tly;
-    uint16_t*                            DBG_window_scissor_brx;
-    uint16_t*                            DBG_window_scissor_bry;
-    a6xx_render_mode*                    DBG_render_mode;
-    a6xx_buffers_location*               DBG_buffers_location;
-    a6xx_threadsize*                     DBG_thread_size;
-    bool*                                DBG_enable_all_helper_lanes;
-    bool*                                DBG_enable_partial_helper_lanes;
-    bool*                                DBG_ubwc_enabled;
-    bool*                                DBG_ubwc_lossless_enabled;
-    bool*                                DBG_ubwc_enabled_on_ds;
-    bool*                                DBG_ubwc_lossless_enabled_on_ds;
-    VkRect2D*                            DBG_resolve_scissor;
-    uint32_t*                            DBG_resolve_base_gmem;
-    uint64_t*                            DBG_resolve_base_sysmem;
-    a6xx_format*                         DBG_resolve_format;
-    a6xx_tile_mode*                      DBG_resolve_tile_mode;
+    float* DBG_blend_constant;
+    bool* DBG_lrz_enabled;
+    bool* DBG_lrz_write;
+    a6xx_lrz_dir_status* DBG_lrz_dir_status;
+    bool* DBG_lrz_dir_write;
+    a6xx_ztest_mode* DBG_z_test_mode;
+    uint32_t* DBG_bin_w;
+    uint32_t* DBG_bin_h;
+    uint16_t* DBG_window_scissor_tlx;
+    uint16_t* DBG_window_scissor_tly;
+    uint16_t* DBG_window_scissor_brx;
+    uint16_t* DBG_window_scissor_bry;
+    a6xx_render_mode* DBG_render_mode;
+    a6xx_buffers_location* DBG_buffers_location;
+    a6xx_threadsize* DBG_thread_size;
+    bool* DBG_enable_all_helper_lanes;
+    bool* DBG_enable_partial_helper_lanes;
+    bool* DBG_ubwc_enabled;
+    bool* DBG_ubwc_lossless_enabled;
+    bool* DBG_ubwc_enabled_on_ds;
+    bool* DBG_ubwc_lossless_enabled_on_ds;
+    VkRect2D* DBG_resolve_scissor;
+    uint32_t* DBG_resolve_base_gmem;
+    uint64_t* DBG_resolve_base_sysmem;
+    a6xx_format* DBG_resolve_format;
+    a6xx_tile_mode* DBG_resolve_tile_mode;
 #endif
 };
 class EventStateInfoRef;
@@ -9410,34 +9340,33 @@ struct EventStateInfo_CONFIG
     using UBWCEnabledArray = EventStateInfoUBWCEnabledArray<EventStateInfo_CONFIG>;
     using UBWCEnabledConstArray = EventStateInfoUBWCEnabledConstArray<EventStateInfo_CONFIG>;
     using UBWCLosslessEnabledArray = EventStateInfoUBWCLosslessEnabledArray<EventStateInfo_CONFIG>;
-    using UBWCLosslessEnabledConstArray = EventStateInfoUBWCLosslessEnabledConstArray<
-    EventStateInfo_CONFIG>;
+    using UBWCLosslessEnabledConstArray =
+        EventStateInfoUBWCLosslessEnabledConstArray<EventStateInfo_CONFIG>;
 };
-template<>
+template <>
 void EventStateInfoRefT<EventStateInfo_CONFIG>::assign(
-const EventStateInfo&                         other_obj,
-EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const;
+    const EventStateInfo& other_obj, EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const;
 class EventStateInfoConstRef : public EventStateInfoConstRefT<EventStateInfo_CONFIG>
 {
-public:
+ public:
     EventStateInfoConstRef() = default;
     EventStateInfoConstRef(const EventStateInfoConstRef& other) = default;
-    EventStateInfoConstRef(const EventStateInfoRef& other) :
-        EventStateInfoConstRefT<EventStateInfo_CONFIG>(other)
+    EventStateInfoConstRef(const EventStateInfoRef& other)
+        : EventStateInfoConstRefT<EventStateInfo_CONFIG>(other)
     {
     }
-    EventStateInfoConstRef(const EventStateInfo* obj_ptr, Id id) :
-        EventStateInfoConstRefT<EventStateInfo_CONFIG>(obj_ptr, id)
+    EventStateInfoConstRef(const EventStateInfo* obj_ptr, Id id)
+        : EventStateInfoConstRefT<EventStateInfo_CONFIG>(obj_ptr, id)
     {
     }
 };
 class EventStateInfoRef : public EventStateInfoRefT<EventStateInfo_CONFIG>
 {
-public:
+ public:
     EventStateInfoRef() = default;
     EventStateInfoRef(const EventStateInfoRef& other) = default;
-    EventStateInfoRef(EventStateInfo* obj_ptr, Id id) :
-        EventStateInfoRefT<EventStateInfo_CONFIG>(obj_ptr, id)
+    EventStateInfoRef(EventStateInfo* obj_ptr, Id id)
+        : EventStateInfoRefT<EventStateInfo_CONFIG>(obj_ptr, id)
     {
     }
     const EventStateInfoRef& operator=(const EventStateInfoRef& other) const

@@ -14,11 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "absl/status/status_matchers.h"
-#include <gtest/gtest.h>
-#include <limits>
-#include <iostream>
 #include "messages.h"
+
+#include <gtest/gtest.h>
+
+#include <iostream>
+#include <limits>
+
+#include "absl/status/status_matchers.h"
 
 namespace
 {
@@ -28,7 +31,7 @@ using ::absl_testing::IsOkAndHolds;
 TEST(MessagesTest, WriteAndReadUint32)
 {
     Network::Buffer buf;
-    uint32_t        write_value = 123456703;
+    uint32_t write_value = 123456703;
     Network::WriteUint32ToBuffer(write_value, buf);
     size_t offset = 0;
     ASSERT_THAT(Network::ReadUint32FromBuffer(buf, offset), IsOkAndHolds(write_value));
@@ -53,10 +56,10 @@ TEST(MessagesTest, WriteAndReadUint32)
 TEST(MessagesTest, WriteAndReadString)
 {
     Network::Buffer buf;
-    std::string     write_str = "Hello Dive!";
+    std::string write_str = "Hello Dive!";
     Network::WriteStringToBuffer(write_str, buf);
     size_t offset = 0;
-    auto   read_str = Network::ReadStringFromBuffer(buf, offset);
+    auto read_str = Network::ReadStringFromBuffer(buf, offset);
     ASSERT_TRUE(read_str.ok());
     ASSERT_EQ(write_str, *read_str);
 
@@ -75,7 +78,7 @@ TEST(MessagesTest, HandShakeMessage)
     request.SetMajorVersion(345612);
     request.SetMinorVersion(567348);
     Network::Buffer buf;
-    auto            status = request.Serialize(buf);
+    auto status = request.Serialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(request.GetMessageType(), Network::MessageType::HANDSHAKE_REQUEST);
 
@@ -91,8 +94,8 @@ TEST(MessagesTest, HandShakeMessage)
 TEST(MessagesTest, PingPongMessage)
 {
     Network::PingMessage ping;
-    Network::Buffer      buf;
-    auto                 status = ping.Serialize(buf);
+    Network::Buffer buf;
+    auto status = ping.Serialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(ping.GetMessageType(), Network::MessageType::PING_MESSAGE);
 
@@ -105,8 +108,8 @@ TEST(MessagesTest, PingPongMessage)
 TEST(MessagesTest, Pm4CaptureMessage)
 {
     Network::Pm4CaptureRequest request;
-    Network::Buffer            buf;
-    auto                       status = request.Serialize(buf);
+    Network::Buffer buf;
+    auto status = request.Serialize(buf);
     ASSERT_TRUE(status.ok());
     status = request.Deserialize(buf);
     ASSERT_TRUE(status.ok());
@@ -130,7 +133,7 @@ TEST(MessagesTest, DownloadFileMessage)
     Network::DownloadFileRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/dive_capture_0456.rd");
     Network::Buffer buf;
-    auto            status = req_serialize.Serialize(buf);
+    auto status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::DOWNLOAD_FILE_REQUEST);
     Network::DownloadFileRequest req_deserialize;
@@ -163,7 +166,7 @@ TEST(MessagesTest, FileSizeMessage)
     Network::FileSizeRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/dive_capture_0222.rd");
     Network::Buffer buf;
-    auto            status = req_serialize.Serialize(buf);
+    auto status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::FILE_SIZE_REQUEST);
     Network::FileSizeRequest req_deserialize;

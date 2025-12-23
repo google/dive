@@ -31,18 +31,18 @@ class BufferView : public QFrame
 {
     Q_OBJECT
 
-public:
+ public:
     BufferView(const Dive::DataCore &data_core);
 
-private slots:
+ private slots:
     void OnEventSelected(uint32_t event_index);
     void OnBufferSelectionChanged();
 
-private:
+ private:
     const Dive::DataCore &m_data_core;
-    QTableWidget         *m_memory_view;
-    QTreeWidget          *m_buffer_list;
-    uint32_t              m_event_index;
+    QTableWidget *m_memory_view;
+    QTreeWidget *m_buffer_list;
+    uint32_t m_event_index;
 
     const uint32_t kNumDwordsPerRow = 4;
 

@@ -32,10 +32,10 @@ absl::StatusOr<std::vector<std::filesystem::path>> GetPotentialDeviceResourcesDi
     absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
     if (!ret.ok())
     {
-        std::string warn_msg = absl::
-        StrFormat("Could not determine executable directory: %s. Search will not include "
-                  "executable-relative paths.",
-                  ret.status().message().data());
+        std::string warn_msg = absl::StrFormat(
+            "Could not determine executable directory: %s. Search will not include "
+            "executable-relative paths.",
+            ret.status().message().data());
         return absl::NotFoundError(warn_msg);
     }
 
@@ -82,10 +82,9 @@ absl::StatusOr<std::filesystem::path> ResolveResourcesLocalPath(std::filesystem:
         searched_paths_strings.push_back(potential_path.generic_string());
     }
 
-    std::string
-    err_msg = absl::StrFormat("Cannot find file in deployment dir: %s, searched here: \n%s",
-                              file_name,
-                              absl::StrJoin(searched_paths_strings, ", \n"));
+    std::string err_msg =
+        absl::StrFormat("Cannot find file in deployment dir: %s, searched here: \n%s", file_name,
+                        absl::StrJoin(searched_paths_strings, ", \n"));
     return absl::NotFoundError(err_msg);
 }
 

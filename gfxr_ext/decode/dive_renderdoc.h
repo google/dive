@@ -18,8 +18,8 @@ limitations under the License.
 #ifndef GFXRECON_DECODE_DIVE_RENDERDOC_H
 #define GFXRECON_DECODE_DIVE_RENDERDOC_H
 
-#include "util/defines.h"
 #include "third_party/renderdoc/renderdoc_app.h"
+#include "util/defines.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)

@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#include <fcntl.h>
+
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -24,30 +26,30 @@
 #include <QStyleFactory>
 #include <QTimer>
 #include <cstdio>
-#include <fcntl.h>
 #include <filesystem>
 #include <iostream>
-#include "dive_core/common.h"
-#include "dive_core/pm4_info.h"
-#include "application_controller.h"
-#include "main_window.h"
-#include "utils/version_info.h"
-#include "custom_metatypes.h"
+
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
+#include "application_controller.h"
+#include "custom_metatypes.h"
 #include "dive/os/terminal.h"
+#include "dive_core/common.h"
+#include "dive_core/pm4_info.h"
+#include "main_window.h"
+#include "utils/version_info.h"
 #ifdef __linux__
-#    include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
 #if defined(_WIN32)
-#    include <io.h>
+#include <io.h>
 #else
-#    include <unistd.h>
+#include <unistd.h>
 #endif
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
@@ -71,11 +73,11 @@ ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 //--------------------------------------------------------------------------------------------------
 class CrashHandler
 {
-public:
+ public:
     static void Initialize(const char *argv0)
     {
-        QString filename = "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") +
-                           ".log.txt";
+        QString filename =
+            "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ".log.txt";
 
         // Try to open in the executable directory
         // This might fail if the executable folder is not writable
@@ -126,17 +128,18 @@ public:
         }
     }
 
-private:
+ private:
     static constexpr int kInvalidFd = -1;
     static constexpr int kMaxPath = 2048;
 
     inline static int m_fd = kInvalidFd;
 
     // Use char array to avoid potential allocation within the crash handler
-    inline static char m_primary_path[kMaxPath] = { 0 };
-    inline static char m_fallback_path[kMaxPath] = { 0 };
+    inline static char m_primary_path[kMaxPath] = {0};
+    inline static char m_fallback_path[kMaxPath] = {0};
 
-    template<size_t N> static void SafeStrCopy(char (&dest)[N], const char *src)
+    template <size_t N>
+    static void SafeStrCopy(char (&dest)[N], const char *src)
     {
         if (!src)
         {
@@ -279,9 +282,7 @@ bool ExecuteScenario(std::string_view scenario, MainWindow *main_window)
             pixmap.save(QString::fromStdString(savepath->string()));
             main_window->close();
         };
-        QObject::connect(main_window,
-                         &MainWindow::FileLoaded,
-                         main_window,
+        QObject::connect(main_window, &MainWindow::FileLoaded, main_window,
                          [take_screenshot, main_window]() {
                              QTimer::singleShot(kScreenshotDelay, main_window, take_screenshot);
                          });
@@ -353,7 +354,7 @@ int main(int argc, char *argv[])
     Pm4InfoInit();
 
     ApplicationController controller;
-    MainWindow           *main_window = new MainWindow(controller);
+    MainWindow *main_window = new MainWindow(controller);
 
     if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {
@@ -365,8 +366,8 @@ int main(int argc, char *argv[])
 
     if (!controller.InitializePlugins())
     {
-        qDebug()
-        << "Application: Plugin initialization failed. Application may proceed without plugins.";
+        qDebug() << "Application: Plugin initialization failed. Application may proceed without "
+                    "plugins.";
     }
 
     if (positional_args.size() == 2)

@@ -12,13 +12,13 @@
 */
 
 #include "viewport_stats_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
-#include <QDebug>
 
-ViewportStatsModel::ViewportStatsModel(QObject *parent) :
-    QAbstractItemModel(parent)
+#include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
+
+ViewportStatsModel::ViewportStatsModel(QObject *parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
     for (const auto &header_str : Dive::viewport_stats_desc)
@@ -59,10 +59,7 @@ QModelIndex ViewportStatsModel::index(int row, int column, const QModelIndex &pa
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex ViewportStatsModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex ViewportStatsModel::parent(const QModelIndex &index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int ViewportStatsModel::rowCount(const QModelIndex &parent) const
@@ -75,10 +72,7 @@ int ViewportStatsModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int ViewportStatsModel::columnCount(const QModelIndex &parent) const
-{
-    return m_headers.size();
-}
+int ViewportStatsModel::columnCount(const QModelIndex &parent) const { return m_headers.size(); }
 
 //--------------------------------------------------------------------------------------------------
 QVariant ViewportStatsModel::data(const QModelIndex &index, int role) const
@@ -105,20 +99,20 @@ QVariant ViewportStatsModel::data(const QModelIndex &index, int role) const
 
     switch (col)
     {
-    case Dive::kViewport_x:
-        return QString::number(record.m_vk_viewport.x);
-    case Dive::kViewport_y:
-        return QString::number(record.m_vk_viewport.y);
-    case Dive::kViewport_width:
-        return QString::number(record.m_vk_viewport.width);
-    case Dive::kViewport_height:
-        return QString::number(record.m_vk_viewport.height);
-    case Dive::kViewport_minDepth:
-        return QString::number(record.m_vk_viewport.minDepth);
-    case Dive::kViewport_maxDepth:
-        return QString::number(record.m_vk_viewport.maxDepth);
-    default:
-        return QVariant();
+        case Dive::kViewport_x:
+            return QString::number(record.m_vk_viewport.x);
+        case Dive::kViewport_y:
+            return QString::number(record.m_vk_viewport.y);
+        case Dive::kViewport_width:
+            return QString::number(record.m_vk_viewport.width);
+        case Dive::kViewport_height:
+            return QString::number(record.m_vk_viewport.height);
+        case Dive::kViewport_minDepth:
+            return QString::number(record.m_vk_viewport.minDepth);
+        case Dive::kViewport_maxDepth:
+            return QString::number(record.m_vk_viewport.maxDepth);
+        default:
+            return QVariant();
     }
 }
 

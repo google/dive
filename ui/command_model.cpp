@@ -14,6 +14,7 @@
  limitations under the License.
 */
 #include "command_model.h"
+
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
@@ -26,8 +27,8 @@ static_assert(sizeof(void *) == sizeof(uint64_t),
 // =================================================================================================
 // CommandModel
 // =================================================================================================
-CommandModel::CommandModel(const Dive::CommandHierarchy &command_hierarchy) :
-    m_command_hierarchy(command_hierarchy)
+CommandModel::CommandModel(const Dive::CommandHierarchy &command_hierarchy)
+    : m_command_hierarchy(command_hierarchy)
 {
     m_topology_ptr = nullptr;
 }
@@ -44,16 +45,10 @@ void CommandModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::BeginResetModel()
-{
-    emit beginResetModel();
-}
+void CommandModel::BeginResetModel() { emit beginResetModel(); }
 
 //--------------------------------------------------------------------------------------------------
-void CommandModel::EndResetModel()
-{
-    emit endResetModel();
-}
+void CommandModel::EndResetModel() { emit endResetModel(); }
 
 //--------------------------------------------------------------------------------------------------
 void CommandModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
@@ -67,8 +62,7 @@ void CommandModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_pt
 //--------------------------------------------------------------------------------------------------
 QVariant CommandModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid())
-        return QVariant();
+    if (!index.isValid()) return QVariant();
 
     uint64_t node_index = index.internalId();
 
@@ -81,8 +75,8 @@ QVariant CommandModel::data(const QModelIndex &index, int role) const
             if (node_type == Dive::NodeType::kMarkerNode)
             {
                 // Color debug markers in green
-                Dive::CommandHierarchy::MarkerType marker_type = m_command_hierarchy
-                                                                 .GetMarkerNodeType(node_index);
+                Dive::CommandHierarchy::MarkerType marker_type =
+                    m_command_hierarchy.GetMarkerNodeType(node_index);
                 if (marker_type == Dive::CommandHierarchy::MarkerType::kInsert ||
                     marker_type == Dive::CommandHierarchy::MarkerType::kBeginEnd)
                 {
@@ -108,8 +102,7 @@ QVariant CommandModel::data(const QModelIndex &index, int role) const
 //--------------------------------------------------------------------------------------------------
 Qt::ItemFlags CommandModel::flags(const QModelIndex &index) const
 {
-    if (!index.isValid())
-        return Qt::ItemFlags();
+    if (!index.isValid()) return Qt::ItemFlags();
 
     return QAbstractItemModel::flags(index);
 }
@@ -131,8 +124,7 @@ QVariant CommandModel::headerData(int section, Qt::Orientation orientation, int 
 //--------------------------------------------------------------------------------------------------
 QModelIndex CommandModel::index(int row, int column, const QModelIndex &parent) const
 {
-    if (!hasIndex(row, column, parent))
-        return QModelIndex();
+    if (!hasIndex(row, column, parent)) return QModelIndex();
 
     uint64_t node_index;
     if (!parent.isValid())
@@ -152,15 +144,13 @@ QModelIndex CommandModel::index(int row, int column, const QModelIndex &parent) 
 //--------------------------------------------------------------------------------------------------
 QModelIndex CommandModel::parent(const QModelIndex &index) const
 {
-    if (!index.isValid())
-        return QModelIndex();
+    if (!index.isValid()) return QModelIndex();
 
     uint64_t child_node_index = index.internalId();
     uint64_t parent_node_index = m_topology_ptr->GetParentNodeIndex(child_node_index);
 
     // Root item. No parent.
-    if (parent_node_index == UINT64_MAX)
-        return QModelIndex();
+    if (parent_node_index == UINT64_MAX) return QModelIndex();
 
     uint64_t row = m_topology_ptr->GetChildIndex(parent_node_index);
     return createIndex(row, 0, (void *)parent_node_index);
@@ -169,10 +159,8 @@ QModelIndex CommandModel::parent(const QModelIndex &index) const
 //--------------------------------------------------------------------------------------------------
 int CommandModel::rowCount(const QModelIndex &parent) const
 {
-    if (parent.column() > 0)
-        return 0;
-    if (m_topology_ptr == nullptr || m_topology_ptr->GetNumNodes() == 0)
-        return 0;
+    if (parent.column() > 0) return 0;
+    if (m_topology_ptr == nullptr || m_topology_ptr->GetNumNodes() == 0) return 0;
 
     uint64_t parent_node_index;
     if (!parent.isValid())  // Root level
@@ -186,46 +174,35 @@ int CommandModel::rowCount(const QModelIndex &parent) const
 //--------------------------------------------------------------------------------------------------
 int CommandModel::columnCount(const QModelIndex &parent) const
 {
-    if (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology())
-        return 2;
+    if (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology()) return 2;
     return 1;
 }
 
 //--------------------------------------------------------------------------------------------------
 QModelIndex CommandModel::findNode(uint64_t node_index) const
 {
-    if (m_node_lookup.size() != m_command_hierarchy.size())
-        BuildNodeLookup();
+    if (m_node_lookup.size() != m_command_hierarchy.size()) BuildNodeLookup();
     if (node_index < m_command_hierarchy.size() && m_node_lookup[node_index].isValid())
         return m_node_lookup[node_index];
     return QModelIndex();
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandModel::GetNodeUIId(uint64_t                        node_index,
-                                   const Dive::CommandHierarchy   &command_hierarchy,
+QVariant CommandModel::GetNodeUIId(uint64_t node_index,
+                                   const Dive::CommandHierarchy &command_hierarchy,
                                    const Dive::SharedNodeTopology *topology_ptr)
 {
     return QVariant();
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandModel::EventNodeHasMarker(uint64_t node_index) const
-{
-    return false;
-}
+bool CommandModel::EventNodeHasMarker(uint64_t node_index) const { return false; }
 
 //--------------------------------------------------------------------------------------------------
-char CommandModel::GetEventNodeStream(uint64_t node_index) const
-{
-    return '\0';
-}
+char CommandModel::GetEventNodeStream(uint64_t node_index) const { return '\0'; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t node_index) const
-{
-    return UINT32_MAX;
-}
+uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t node_index) const { return UINT32_MAX; }
 
 //--------------------------------------------------------------------------------------------------
 void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
@@ -238,7 +215,7 @@ void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
     int n = rowCount(parent);
     for (int r = 0; r < n; ++r)
     {
-        auto     idx = index(r, 0, parent);
+        auto idx = index(r, 0, parent);
         uint64_t node_index = idx.internalId();
         if (node_index < m_node_lookup.size())
             m_node_lookup[node_index] = QPersistentModelIndex(idx);
@@ -249,26 +226,23 @@ void CommandModel::BuildNodeLookup(const QModelIndex &parent) const
 //--------------------------------------------------------------------------------------------------
 QList<QModelIndex> CommandModel::search(const QModelIndex &start, const QVariant &value) const
 {
-    QList<QModelIndex>  result;
+    QList<QModelIndex> result;
     Qt::CaseSensitivity cs = Qt::CaseInsensitive;
 
-    QString     text;
+    QString text;
     QModelIndex p = parent(start);
-    int         from = start.row();
-    int         to = rowCount(p);
+    int from = start.row();
+    int to = rowCount(p);
 
     for (int r = from; r < to; ++r)
     {
         QModelIndex idx = index(r, start.column(), p);
-        if (!idx.isValid())
-            continue;
+        if (!idx.isValid()) continue;
         QVariant v = data(idx, Qt::DisplayRole);
 
-        if (text.isEmpty())
-            text = value.toString();
+        if (text.isEmpty()) text = value.toString();
         QString t = v.toString();
-        if (t.contains(text, cs))
-            result.append(idx);
+        if (t.contains(text, cs)) result.append(idx);
 
         // Search the hierarchy
         if (hasChildren(idx))

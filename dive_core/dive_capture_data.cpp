@@ -22,11 +22,7 @@ namespace Dive
 // =================================================================================================
 // DiveCaptureData
 // =================================================================================================
-DiveCaptureData::DiveCaptureData() :
-    m_pm4_capture_data(),
-    m_gfxr_capture_data()
-{
-}
+DiveCaptureData::DiveCaptureData() : m_pm4_capture_data(), m_gfxr_capture_data() {}
 
 //--------------------------------------------------------------------------------------------------
 DiveCaptureData::~DiveCaptureData() {}
@@ -73,15 +69,9 @@ CaptureData::LoadResult DiveCaptureData::LoadFiles(const std::string& pm4_file_n
 }
 
 //--------------------------------------------------------------------------------------------------
-const Pm4CaptureData& DiveCaptureData::GetPm4CaptureData() const
-{
-    return m_pm4_capture_data;
-}
+const Pm4CaptureData& DiveCaptureData::GetPm4CaptureData() const { return m_pm4_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-const GfxrCaptureData& DiveCaptureData::GetGfxrCaptureData() const
-{
-    return m_gfxr_capture_data;
-}
+const GfxrCaptureData& DiveCaptureData::GetGfxrCaptureData() const { return m_gfxr_capture_data; }
 
 }  // namespace Dive

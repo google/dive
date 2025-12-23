@@ -31,7 +31,7 @@ namespace Dive
 // actual filename, use GetRenderDocCaptureFilePath. The returned path is designed to be used in
 // portable generic format since that's the native format of the target device.
 inline std::filesystem::path GetRenderDocCaptureFilePathTemplate(
-const std::filesystem::path& gfxr_filepath)
+    const std::filesystem::path& gfxr_filepath)
 {
     return std::filesystem::path(kDeviceCapturePath) / gfxr_filepath.stem();
 }
@@ -45,8 +45,8 @@ inline std::filesystem::path GetRenderDocCaptureFilePath(const std::filesystem::
     // just tell us where the file is instead of us having to guess.
     ComponentFileConstants consts;
     return GetRenderDocCaptureFilePathTemplate(gfxr_filepath)
-    .concat(consts.kRenderDocHostSuffix)
-    .concat(consts.kRdcExt);
+        .concat(consts.kRenderDocHostSuffix)
+        .concat(consts.kRdcExt);
 }
 
 }  // namespace Dive

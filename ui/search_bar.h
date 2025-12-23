@@ -12,6 +12,7 @@
 */
 
 #include <QWidget>
+
 #include "dive_tree_view.h"
 
 #pragma once
@@ -25,10 +26,10 @@ class SearchBar : public QWidget
 {
     Q_OBJECT
 
-public:
+ public:
     SearchBar(QWidget* parent = nullptr);
 
-public slots:
+ public slots:
     void searchBarFocusOut();
     void positionCurser();
     void clearSearch();
@@ -40,18 +41,18 @@ public slots:
     void cancelSearch();
     void setView(QAbstractItemView* view);
 
-signals:
+ signals:
     void new_search(const QString& search_string);
     void prev_search();
     void next_search();
     void hide_search_bar(bool isHidden);
 
-private:
-    bool               m_searched = false;
-    QLineEdit*         m_input = nullptr;
-    QPushButton*       m_prev = nullptr;
-    QPushButton*       m_next = nullptr;
-    QPushButton*       m_cancel = nullptr;
-    QLabel*            m_search_results = nullptr;
+ private:
+    bool m_searched = false;
+    QLineEdit* m_input = nullptr;
+    QPushButton* m_prev = nullptr;
+    QPushButton* m_next = nullptr;
+    QPushButton* m_cancel = nullptr;
+    QLabel* m_search_results = nullptr;
     QAbstractItemView* m_view = nullptr;
 };

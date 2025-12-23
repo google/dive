@@ -23,7 +23,6 @@
 
 #include "dump_entry.h"
 #include "dump_resources_builder_consumer.h"
-
 #include "third_party/gfxreconstruct/framework/decode/file_processor.h"
 #include "third_party/gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
 
@@ -42,7 +41,7 @@ std::optional<std::vector<DumpEntry>> FindDumpableResources(const char* filename
     std::vector<DumpEntry> complete_dump_entries;
 
     gfxrecon::decode::VulkanDecoder vulkan_decoder;
-    DumpResourcesBuilderConsumer    consumer([&complete_dump_entries](DumpEntry dump_entry) {
+    DumpResourcesBuilderConsumer consumer([&complete_dump_entries](DumpEntry dump_entry) {
         complete_dump_entries.push_back(std::move(dump_entry));
     });
     vulkan_decoder.AddConsumer(&consumer);

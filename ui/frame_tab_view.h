@@ -23,29 +23,29 @@ class QScrollArea;
 class FrameTabView : public QWidget
 {
     Q_OBJECT
-public:
+ public:
     explicit FrameTabView(QWidget *parent = nullptr);
 
-public slots:
+ public slots:
     void OnCaptureScreenshotLoaded(const QString &file_path);
 
-private slots:
+ private slots:
     void OnActualSize();
     void OnFitToView();
     void OnZoomIn();
     void OnZoomOut();
 
-private:
+ private:
     void ScaleAndDisplayImage();
 
-    QLabel      *m_image_label;
+    QLabel *m_image_label;
     QScrollArea *m_scroll_area;
     QPushButton *m_actual_size_button;
     QPushButton *m_fit_to_fill_button;
     QPushButton *m_zoom_in_button;
     QPushButton *m_zoom_out_button;
-    QPixmap      m_image;
-    qreal        m_scale_factor = 1.0;
-    qreal        m_initial_scale_factor = 1.0;
-    qreal        m_max_scale_factor = 5.0;
+    QPixmap m_image;
+    qreal m_scale_factor = 1.0;
+    qreal m_initial_scale_factor = 1.0;
+    qreal m_max_scale_factor = 5.0;
 };

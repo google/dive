@@ -16,12 +16,14 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <QColor>
+
 #include "dive_core/common/gpudefs.h"
 
 #ifndef _MSC_VER
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 #endif
 
 namespace Dive
@@ -46,5 +48,5 @@ static QColor kShaderStageBorderColor[Dive::kShaderStageCount] = {
 }  // namespace Dive
 
 #ifndef _MSC_VER
-#    pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif

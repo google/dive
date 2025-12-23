@@ -17,27 +17,25 @@
 #include <iostream>
 #include <memory>
 
-#include "dive_core/pm4_capture_data.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/pm4_capture_data.h"
 
 //--------------------------------------------------------------------------------------------------
 class membuf : public std::basic_streambuf<char>
 {
-public:
+ public:
     membuf(const uint8_t *p, size_t l) { setg((char *)p, (char *)p, (char *)p + l); }
 };
 
 class memstream : public std::istream
 {
-public:
-    memstream(const uint8_t *p, size_t l) :
-        std::istream(&m_buffer),
-        m_buffer(p, l)
+ public:
+    memstream(const uint8_t *p, size_t l) : std::istream(&m_buffer), m_buffer(p, l)
     {
         rdbuf(&m_buffer);
     }
 
-private:
+ private:
     membuf m_buffer;
 };
 
@@ -45,8 +43,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     memstream capture_file(data, size);
 
-    std::unique_ptr<Dive::Pm4CaptureData>
-                                  capture_data_ptr = std::make_unique<Dive::Pm4CaptureData>();
+    std::unique_ptr<Dive::Pm4CaptureData> capture_data_ptr =
+        std::make_unique<Dive::Pm4CaptureData>();
     Dive::CaptureData::LoadResult result = capture_data_ptr->LoadCaptureFileStream(capture_file);
 
     if (result != Dive::CaptureData::LoadResult::kSuccess)

@@ -57,9 +57,8 @@ struct SqttErrorPayload
     // The index of the message that triggered the error
     uint32_t m_msg_index = UINT32_MAX;
 
-    SqttErrorPayload(uint32_t shader_engine, uint32_t msg_index) :
-        m_shader_engine(shader_engine),
-        m_msg_index(msg_index)
+    SqttErrorPayload(uint32_t shader_engine, uint32_t msg_index)
+        : m_shader_engine(shader_engine), m_msg_index(msg_index)
     {
     }
 };
@@ -80,10 +79,8 @@ struct RgpMarkerErrorPayload
     // error from the SQTT data
     uint64_t m_pm4_addr = UINT64_MAX;
 
-    RgpMarkerErrorPayload(uint32_t shader_engine, uint32_t msg_index, uint64_t pm4_addr) :
-        m_shader_engine(shader_engine),
-        m_msg_index(msg_index),
-        m_pm4_addr(pm4_addr)
+    RgpMarkerErrorPayload(uint32_t shader_engine, uint32_t msg_index, uint64_t pm4_addr)
+        : m_shader_engine(shader_engine), m_msg_index(msg_index), m_pm4_addr(pm4_addr)
     {
     }
 };
@@ -92,35 +89,43 @@ struct RgpMarkerErrorPayload
 // ErrorPayloadT is a template that associates ErrorCode values with payload types.
 // This template definition associates every error code with EmptyErrorPayload by default, and the
 // subsequent template specializations override the payload type for different error codes.
-template<ErrorCode> struct ErrorPayloadT
+template <ErrorCode>
+struct ErrorPayloadT
 {
     using PayloadT = EmptyErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::SqttCorrupt>
+template <>
+struct ErrorPayloadT<ErrorCode::SqttCorrupt>
 {
     using PayloadT = SqttErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::SqttUnexpectedMsg>
+template <>
+struct ErrorPayloadT<ErrorCode::SqttUnexpectedMsg>
 {
     using PayloadT = SqttErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::SqttMismatch>
+template <>
+struct ErrorPayloadT<ErrorCode::SqttMismatch>
 {
     using PayloadT = SqttErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::SqttBadTimestamp>
+template <>
+struct ErrorPayloadT<ErrorCode::SqttBadTimestamp>
 {
     using PayloadT = SqttErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::RgpMarkerCorrupt>
+template <>
+struct ErrorPayloadT<ErrorCode::RgpMarkerCorrupt>
 {
     using PayloadT = RgpMarkerErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::RgpMarkerUnexpected>
+template <>
+struct ErrorPayloadT<ErrorCode::RgpMarkerUnexpected>
 {
     using PayloadT = RgpMarkerErrorPayload;
 };
-template<> struct ErrorPayloadT<ErrorCode::RgpMarkerMismatch>
+template <>
+struct ErrorPayloadT<ErrorCode::RgpMarkerMismatch>
 {
     using PayloadT = RgpMarkerErrorPayload;
 };
@@ -131,24 +136,21 @@ template<> struct ErrorPayloadT<ErrorCode::RgpMarkerMismatch>
 // code.
 struct ErrorInfo
 {
-    ErrorCode   m_code;
+    ErrorCode m_code;
     std::string m_desc;
 
-protected:
-    inline ErrorInfo(ErrorCode code) :
-        m_code(code)
-    {
-    }
+ protected:
+    inline ErrorInfo(ErrorCode code) : m_code(code) {}
 };
 
 //--------------------------------------------------------------------------------------------------
 // ErrorInfoT contains the data for an Error, including the payload.
-template<ErrorCode C> struct ErrorInfoT : public ErrorInfo
+template <ErrorCode C>
+struct ErrorInfoT : public ErrorInfo
 {
     typename ErrorPayloadT<C>::PayloadT m_payload;
-    inline ErrorInfoT(const typename ErrorPayloadT<C>::PayloadT &payload) :
-        ErrorInfo(C),
-        m_payload(payload)
+    inline ErrorInfoT(const typename ErrorPayloadT<C>::PayloadT &payload)
+        : ErrorInfo(C), m_payload(payload)
     {
     }
 };
@@ -163,16 +165,17 @@ template<ErrorCode C> struct ErrorInfoT : public ErrorInfo
 //    - Payload data (type depends on error code)
 class Error
 {
-public:
+ public:
     // Builder allows << operators to be used to construct an Error value
     // Typical usage looks something like: `MyError() << "Helpful description of my error";`
     // Where `MyError()` is a function that sets up the error code and payload for some type of
     // error, and the description gives more specific information.
     class Builder
     {
-    public:
+     public:
         operator Error();
-        template<typename T> Builder &operator<<(const T &val)
+        template <typename T>
+        Builder &operator<<(const T &val)
         {
             m_buf << val;
             return *this;
@@ -183,27 +186,30 @@ public:
             return *this;
         }
 
-    protected:
+     protected:
         friend class Error;
         Builder() = default;
-        template<ErrorCode C> void Init(const typename ErrorPayloadT<C>::PayloadT &payload)
+        template <ErrorCode C>
+        void Init(const typename ErrorPayloadT<C>::PayloadT &payload)
         {
             m_info = std::make_shared<ErrorInfoT<C>>(payload);
         }
         std::shared_ptr<ErrorInfo> m_info;
-        std::ostringstream         m_buf;
+        std::ostringstream m_buf;
     };
     friend class Builder;
 
     // MakeBuilder creates a Builder and initializes the error code and payload
-    template<ErrorCode C> static Builder New(const typename ErrorPayloadT<C>::PayloadT &payload)
+    template <ErrorCode C>
+    static Builder New(const typename ErrorPayloadT<C>::PayloadT &payload)
     {
         Builder b;
         b.Init<C>(payload);
         return b;
     }
 
-    template<ErrorCode C> static Builder New()
+    template <ErrorCode C>
+    static Builder New()
     {
         typename ErrorPayloadT<C>::PayloadT payload;
         return New<C>(payload);
@@ -228,17 +234,19 @@ public:
     const char *Description() const;
 
     // Payload returns the error-code specific payload
-    template<ErrorCode C> const typename ErrorPayloadT<C>::PayloadT &Payload() const;
+    template <ErrorCode C>
+    const typename ErrorPayloadT<C>::PayloadT &Payload() const;
 
-protected:
+ protected:
     std::shared_ptr<ErrorInfo> m_info;
 };
 
-template<ErrorCode C> const typename ErrorPayloadT<C>::PayloadT &Error::Payload() const
+template <ErrorCode C>
+const typename ErrorPayloadT<C>::PayloadT &Error::Payload() const
 {
-    if (Code() != C)
-        abort();
+    if (Code() != C) abort();
     return static_cast<const ErrorInfoT<C> *>(m_info.get())->m_data;
 }
-template<> const EmptyErrorPayload &Error::Payload<ErrorCode::Ok>() const;
+template <>
+const EmptyErrorPayload &Error::Payload<ErrorCode::Ok>() const;
 }  // namespace Dive

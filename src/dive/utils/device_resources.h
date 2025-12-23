@@ -22,6 +22,6 @@ namespace Dive
 // Returns the full local path of relative_file_path, which represents a resource file that may be
 // deployed to the device
 absl::StatusOr<std::filesystem::path> ResolveResourcesLocalPath(
-std::filesystem::path relative_file_path);
+    std::filesystem::path relative_file_path);
 
 }  // namespace Dive

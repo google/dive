@@ -15,9 +15,9 @@
 */
 #pragma once
 
-#include <functional>
 #include <QObject>
 #include <QScopedPointer>
+#include <functional>
 
 class QElapsedTimer;
 class QLabel;
@@ -31,7 +31,7 @@ class QWidget;
 class OverlayHelper : public QObject
 {
     Q_OBJECT
-public:
+ public:
     using CancelFunc = std::function<void()>;
     explicit OverlayHelper(QObject* parent);
     ~OverlayHelper();
@@ -47,11 +47,11 @@ public:
     void SetMessageCancelFunc(CancelFunc func);
     void Clear();
 
-private slots:
+ private slots:
     void OnUpdate();
     void OnCancel();
 
-private:
+ private:
     // Timer for UI refreshing.
     QTimer* m_timer = nullptr;
     // Elapsed time since last timed message / event.
@@ -60,11 +60,11 @@ private:
     CancelFunc m_cancel_func;
 
     QStackedLayout* m_layout = nullptr;
-    QWidget*        m_overlay = nullptr;
-    QWidget*        m_container = nullptr;
+    QWidget* m_overlay = nullptr;
+    QWidget* m_container = nullptr;
 
     QVBoxLayout* m_overlay_layout = nullptr;
-    QLabel*      m_text = nullptr;
+    QLabel* m_text = nullptr;
     QPushButton* m_cancel_button = nullptr;
 
     QString m_message;

@@ -25,7 +25,7 @@ class MainWindow;
 class ApplicationController : public QObject
 {
     Q_OBJECT
-public:
+ public:
     struct Impl;
 
     ApplicationController();
@@ -39,9 +39,9 @@ public:
     bool InitializePlugins();
 
     bool AdvancedOptionEnabled() const;
-signals:
+ signals:
     void AdvancedOptionToggled(bool enabled);
 
-private:
+ private:
     ImplPointer<Impl> m_impl;
 };

@@ -23,10 +23,10 @@
 #include "dive_core/common/common.h"
 
 #ifdef _MSC_VER
-#    define strncasecmp _strnicmp
-#    define strcasecmp _stricmp
-#    define strtok_r strtok_s
-#    pragma warning(disable : 4996)
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#define strtok_r strtok_s
+#pragma warning(disable : 4996)
 #endif
 
 namespace Dive

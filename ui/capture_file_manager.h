@@ -16,11 +16,10 @@
 
 #pragma once
 
-#include <memory>
-
 #include <QMetaType>
 #include <QObject>
 #include <QReadWriteLock>
+#include <memory>
 
 #include "context.h"
 #include "file_path.h"
@@ -35,7 +34,6 @@ struct ComponentFilePaths;
 
 struct LoadFileResult
 {
-
     enum class Status
     {
         kSuccess,
@@ -58,15 +56,15 @@ struct LoadFileResult
 
     Status status = Status::kUnknown;
 
-    FileType                 file_type = FileType::kUnknown;
-    Dive::FilePath           reference = {};
+    FileType file_type = FileType::kUnknown;
+    Dive::FilePath reference = {};
     Dive::ComponentFilePaths components = {};
 };
 
 class CaptureFileManager : public QObject
 {
     Q_OBJECT
-public:
+ public:
     static void RegisterCustomMetaType();
 
     explicit CaptureFileManager(QObject *parent);
@@ -88,7 +86,7 @@ public:
     void GatherTraceStats();
     void FillCaptureStatsResult(Dive::CaptureStats &out);
 
-signals:
+ signals:
     void FileLoadingFinished(const LoadFileResult &);
     void TraceStatsUpdated();
 
@@ -96,18 +94,18 @@ signals:
     void GatherTraceStatsDone();
     void LoadFileDone(const LoadFileResult &);
 
-private slots:
+ private slots:
     void OnGatherTraceStatsDone();
     void OnLoadFileDone(const LoadFileResult &);
 
-private:
+ private:
     struct LoadFileRequest
     {
-        Dive::FilePath           reference;
+        Dive::FilePath reference;
         Dive::ComponentFilePaths components;
     };
     Dive::DataCore *m_data_core = nullptr;
-    QReadWriteLock  m_data_core_lock;
+    QReadWriteLock m_data_core_lock;
 
     bool m_loading_in_progress = false;
     bool m_working = false;
@@ -121,7 +119,7 @@ private:
     QThread *m_thread = nullptr;
     QObject *m_worker = nullptr;
 
-    static LoadFileResult LoadFileFailed(LoadFileResult::Status                     status,
+    static LoadFileResult LoadFileFailed(LoadFileResult::Status status,
                                          const CaptureFileManager::LoadFileRequest &request);
 
     void GatherTraceStatsImpl(const Dive::Context &context);

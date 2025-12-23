@@ -16,10 +16,9 @@
 
 #pragma once
 
-#include <filesystem>
-
 #include <QMetaType>
 #include <QString>
+#include <filesystem>
 
 #include "utils/component_files.h"
 
@@ -32,7 +31,7 @@ struct FilePath
     std::filesystem::path value;
 
     std::string ToString() const { return value.string(); }
-    QString     ToQString() const { return QString::fromStdString(value.string()); }
+    QString ToQString() const { return QString::fromStdString(value.string()); }
 };
 
 }  // namespace Dive

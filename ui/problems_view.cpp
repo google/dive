@@ -14,11 +14,13 @@
  limitations under the License.
 */
 #include "problems_view.h"
+
 #include <QLabel>
 #include <QStyledItemDelegate>
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
 #include "command_model.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/data_core.h"
@@ -34,45 +36,40 @@ const uint32_t kDescTextColumn = 3;
 // =================================================================================================
 class ProblemWidgetItem : public QTreeWidgetItem
 {
-public:
-    ProblemWidgetItem(Dive::CrossRef ref,
-                      std::string    short_desc,
-                      std::string    long_desc,
-                      QTreeWidget   *view) :
-        QTreeWidgetItem(view),
-        m_ref(ref),
-        m_short_desc(short_desc),
-        m_long_desc(long_desc)
+ public:
+    ProblemWidgetItem(Dive::CrossRef ref, std::string short_desc, std::string long_desc,
+                      QTreeWidget *view)
+        : QTreeWidgetItem(view), m_ref(ref), m_short_desc(short_desc), m_long_desc(long_desc)
     {
     }
-    Dive::CrossRef       GetRef() const { return m_ref; }
+    Dive::CrossRef GetRef() const { return m_ref; }
     Dive::LogAssociation GetAssociation() const { return m_ref.Type(); }
-    uint64_t             GetId() const { return m_ref.Id(); }
-    std::string          GetShortDesc() const { return m_short_desc; }
-    std::string          GetLongDesc() const { return m_long_desc; }
+    uint64_t GetId() const { return m_ref.Id(); }
+    std::string GetShortDesc() const { return m_short_desc; }
+    std::string GetLongDesc() const { return m_long_desc; }
 
-private:
+ private:
     Dive::CrossRef m_ref;
-    std::string    m_short_desc;
-    std::string    m_long_desc;
+    std::string m_short_desc;
+    std::string m_long_desc;
 };
 
 // =================================================================================================
 // ProblemsViewDelegate
 // =================================================================================================
 QSize ProblemsViewDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                     const QModelIndex          &index) const
+                                     const QModelIndex &index) const
 {
     const int kMargin = 5;
-    QSize     size_hint = QStyledItemDelegate::sizeHint(option, index);
+    QSize size_hint = QStyledItemDelegate::sizeHint(option, index);
     return QSize(size_hint.width(), size_hint.height() + kMargin);
 }
 
 // =================================================================================================
 // ProblemsView
 // =================================================================================================
-ProblemsView::ProblemsView(const Dive::CommandHierarchy &command_hierarchy) :
-    m_command_hierarchy(command_hierarchy)
+ProblemsView::ProblemsView(const Dive::CommandHierarchy &command_hierarchy)
+    : m_command_hierarchy(command_hierarchy)
 {
     m_log_list = new QTreeWidget();
     m_log_list->setColumnCount(4);
@@ -91,13 +88,9 @@ ProblemsView::ProblemsView(const Dive::CommandHierarchy &command_hierarchy) :
     layout->addWidget(m_log_list);
     setLayout(layout);
 
-    QObject::connect(m_log_list,
-                     SIGNAL(itemSelectionChanged()),
-                     this,
+    QObject::connect(m_log_list, SIGNAL(itemSelectionChanged()), this,
                      SLOT(OnProblemSelectionChanged()));
-    QObject::connect(m_log_list,
-                     SIGNAL(itemEntered(QTreeWidgetItem *, int)),
-                     this,
+    QObject::connect(m_log_list, SIGNAL(itemEntered(QTreeWidgetItem *, int)), this,
                      SLOT(OnProblemItemHover(QTreeWidgetItem *, int)));
 }
 
@@ -109,21 +102,19 @@ void ProblemsView::Update(const Dive::LogRecord *log_ptr)
     {
         const Dive::LogRecord::LogEntry &entry = log_ptr->GetEntry(i);
 
-        ProblemWidgetItem *item = new ProblemWidgetItem(entry.m_ref,
-                                                        entry.m_short_desc,
-                                                        entry.m_long_desc,
-                                                        m_log_list);
+        ProblemWidgetItem *item =
+            new ProblemWidgetItem(entry.m_ref, entry.m_short_desc, entry.m_long_desc, m_log_list);
         // Column 0
         switch (entry.m_type)
         {
-        case Dive::LogType::kInfo:
-            break;
-        case Dive::LogType::kWarning:
-            item->setIcon(0, m_log_list->style()->standardIcon(QStyle::SP_MessageBoxWarning));
-            break;
-        case Dive::LogType::kError:
-            item->setIcon(0, m_log_list->style()->standardIcon(QStyle::SP_MessageBoxCritical));
-            break;
+            case Dive::LogType::kInfo:
+                break;
+            case Dive::LogType::kWarning:
+                item->setIcon(0, m_log_list->style()->standardIcon(QStyle::SP_MessageBoxWarning));
+                break;
+            case Dive::LogType::kError:
+                item->setIcon(0, m_log_list->style()->standardIcon(QStyle::SP_MessageBoxCritical));
+                break;
         };
 
         // Column 1
@@ -176,7 +167,7 @@ void ProblemsView::OnProblemSelectionChanged()
 void ProblemsView::OnProblemItemHover(QTreeWidgetItem *item_ptr, int column)
 {
     ProblemWidgetItem *problem_item_ptr = (ProblemWidgetItem *)item_ptr;
-    HoverHelp         *hover_help_ptr = HoverHelp::Get();
+    HoverHelp *hover_help_ptr = HoverHelp::Get();
     std::string desc = problem_item_ptr->GetShortDesc() + "<br>" + problem_item_ptr->GetLongDesc();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone, 0, 0, 0, desc.c_str());
 }

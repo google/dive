@@ -16,6 +16,7 @@
 
 #pragma once
 #include <QFrame>
+
 #include "dive_core/cross_ref.h"
 
 // Forward declaration
@@ -33,26 +34,26 @@ class ShaderView : public QFrame
 {
     Q_OBJECT
 
-public:
+ public:
     ShaderView(const Dive::DataCore &data_core);
     void Reset();
     void SetupHoverHelp(HoverHelp &);
 
     bool OnCrossReference(Dive::CrossRef);
 
-signals:
+ signals:
     // void ShaderSelected();
 
-protected:
+ protected:
     virtual void paintEvent(QPaintEvent *) override;
 
-private slots:
+ private slots:
     void OnEventSelected(uint64_t node_index);
     void OnShaderSelectionChanged();
 
-private:
+ private:
     const Dive::DataCore &m_data_core;
-    uint64_t              m_node_index;
-    ShaderTextView       *m_shader_code_text;
-    QTreeWidget          *m_shader_list;
+    uint64_t m_node_index;
+    ShaderTextView *m_shader_code_text;
+    QTreeWidget *m_shader_list;
 };

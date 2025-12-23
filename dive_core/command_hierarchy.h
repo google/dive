@@ -27,12 +27,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "pm4_capture_data.h"
 #include "capture_event_info.h"
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "dive_core/stl_replacement.h"
+#include "pm4_capture_data.h"
 
 // Forward declarations
 struct PacketInfo;
@@ -84,7 +84,7 @@ enum class NodeType
 // This is per-node graph topology info.
 class Topology
 {
-public:
+ public:
     static const uint64_t kRootNodeIndex = 0;
 
     virtual uint64_t GetNumNodes() const;
@@ -100,7 +100,7 @@ public:
     uint64_t GetChildNodeIndex(uint64_t node_index, uint64_t child_index) const;
     uint64_t GetNextNodeIndex(uint64_t node_index) const;
 
-protected:
+ protected:
     struct ChildrenInfo
     {
         uint64_t m_start_index = UINT64_MAX;
@@ -132,9 +132,9 @@ protected:
     DiveVector<uint64_t> m_node_child_index;
 
     virtual void SetNumNodes(uint64_t num_nodes);
-    void         AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
+    void AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
 
-private:
+ private:
     friend class CommandHierarchy;
     friend class GfxrVulkanCommandHierarchyCreator;
     friend class DiveCommandHierarchyCreator;
@@ -146,7 +146,7 @@ private:
 // can simultaneously be children of kSubmitNodes, kMarkerNodes, kDrawDispatchDmaNode nodes, etc.)
 class SharedNodeTopology : public Topology
 {
-public:
+ public:
     uint64_t GetNumNodes() const override;
 
     // Used to get list of shared children for a top level root node
@@ -164,7 +164,7 @@ public:
     // This returns that common root top level node
     uint64_t GetSharedChildRootNodeIndex(uint64_t node_index) const;
 
-private:
+ private:
     friend class CommandHierarchy;
     friend class CommandHierarchyCreator;
     friend class DiveCommandHierarchyCreator;
@@ -196,7 +196,7 @@ private:
 //--------------------------------------------------------------------------------------------------
 class CommandHierarchy
 {
-public:
+ public:
     enum class MarkerType
     {
         kBeginEnd,      // vkCmdDebugMarkerBegin / vkCmdDebugMarkerEnd
@@ -221,25 +221,25 @@ public:
     const SharedNodeTopology &GetSubmitHierarchyTopology() const;
     const SharedNodeTopology &GetAllEventHierarchyTopology() const;
 
-    NodeType    GetNodeType(uint64_t node_index) const;
+    NodeType GetNodeType(uint64_t node_index) const;
     const char *GetNodeDesc(uint64_t node_index) const;
-    void        SetNodeDesc(uint64_t node_index, const std::string &desc);
+    void SetNodeDesc(uint64_t node_index, const std::string &desc);
 
     Dive::EngineType GetSubmitNodeEngineType(uint64_t node_index) const;
-    uint32_t         GetSubmitNodeIndex(uint64_t node_index) const;
-    uint8_t          GetIbNodeIndex(uint64_t node_index) const;
-    Dive::IbType     GetIbNodeType(uint64_t node_index) const;
-    uint32_t         GetIbNodeSizeInDwords(uint64_t node_index) const;
-    bool             GetIbNodeIsFullyCaptured(uint64_t node_index) const;
-    MarkerType       GetMarkerNodeType(uint64_t node_index) const;
-    uint32_t         GetMarkerNodeId(uint64_t node_index) const;
-    Util::EventType  GetEventNodeType(uint64_t node_index) const;
-    uint32_t         GetEventNodeId(uint64_t node_index) const;
-    uint64_t         GetPacketNodeAddr(uint64_t node_index) const;
-    uint8_t          GetPacketNodeOpcode(uint64_t node_index) const;
-    uint8_t          GetPacketNodeIbLevel(uint64_t node_index) const;
-    bool             GetRegFieldNodeIsCe(uint64_t node_index) const;
-    bool             IsEventNodeIgnoredDuringCorrelation(uint64_t node_index) const;
+    uint32_t GetSubmitNodeIndex(uint64_t node_index) const;
+    uint8_t GetIbNodeIndex(uint64_t node_index) const;
+    Dive::IbType GetIbNodeType(uint64_t node_index) const;
+    uint32_t GetIbNodeSizeInDwords(uint64_t node_index) const;
+    bool GetIbNodeIsFullyCaptured(uint64_t node_index) const;
+    MarkerType GetMarkerNodeType(uint64_t node_index) const;
+    uint32_t GetMarkerNodeId(uint64_t node_index) const;
+    Util::EventType GetEventNodeType(uint64_t node_index) const;
+    uint32_t GetEventNodeId(uint64_t node_index) const;
+    uint64_t GetPacketNodeAddr(uint64_t node_index) const;
+    uint8_t GetPacketNodeOpcode(uint64_t node_index) const;
+    uint8_t GetPacketNodeIbLevel(uint64_t node_index) const;
+    bool GetRegFieldNodeIsCe(uint64_t node_index) const;
+    bool IsEventNodeIgnoredDuringCorrelation(uint64_t node_index) const;
 
     // GetEventIndex returns sequence number for Event/Sync Nodes, 0 if not exist.
     size_t GetEventIndex(uint64_t node_index) const;
@@ -268,7 +268,7 @@ public:
         return m_filter_exclude_indices_list[filter_type];
     }
 
-private:
+ private:
     friend class CommandHierarchyCreator;
     friend class GfxrVulkanCommandHierarchyCreator;
     friend class DiveCommandHierarchyCreator;
@@ -288,7 +288,7 @@ private:
         struct
         {
             Dive::EngineType m_engine_type;
-            uint32_t         m_submit_index;
+            uint32_t m_submit_index;
         } submit_node;
 
         struct
@@ -303,13 +303,13 @@ private:
         struct
         {
             MarkerType m_type;
-            uint32_t   m_id;  // VkCmdID, for kDiveMetadata, or VkBarrierMarkerId for kBarrier
+            uint32_t m_id;  // VkCmdID, for kDiveMetadata, or VkBarrierMarkerId for kBarrier
 
         } marker_node;
 
         struct
         {
-            uint32_t        m_event_id;
+            uint32_t m_event_id;
             Util::EventType m_type;
             bool m_ignore_during_correlation;  // Whether or not the event should be correlated
         } event_node;
@@ -331,15 +331,12 @@ private:
 
         AuxInfo(uint64_t val);
         static AuxInfo SubmitNode(Dive::EngineType engine_type, uint32_t submit_index);
-        static AuxInfo IbNode(uint32_t ib_index,
-                              IbType   ib_type,
-                              uint32_t size_in_dwords,
-                              bool     fully_captured);
+        static AuxInfo IbNode(uint32_t ib_index, IbType ib_type, uint32_t size_in_dwords,
+                              bool fully_captured);
         static AuxInfo PacketNode(uint64_t addr, uint8_t opcode, uint8_t ib_level);
         static AuxInfo RegFieldNode(bool is_ce_packet);
-        static AuxInfo EventNode(uint32_t        event_id,
-                                 Util::EventType type,
-                                 bool            ignore_during_correlation);
+        static AuxInfo EventNode(uint32_t event_id, Util::EventType type,
+                                 bool ignore_during_correlation);
         static AuxInfo MarkerNode(MarkerType type, uint32_t id = 0);
     };
     static_assert(sizeof(AuxInfo) == sizeof(uint64_t), "Unexpected size!");
@@ -348,10 +345,10 @@ private:
     // Arranged in structure-of-arrays for better locality
     struct Nodes
     {
-        DiveVector<NodeType>    m_node_type;
+        DiveVector<NodeType> m_node_type;
         DiveVector<std::string> m_description;
-        DiveVector<AuxInfo>     m_aux_info;
-        DiveVector<uint64_t>    m_event_node_indices;
+        DiveVector<AuxInfo> m_aux_info;
+        DiveVector<uint64_t> m_event_node_indices;
 
         uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
         uint64_t AddGfxrNode(NodeType type, std::string &&desc);
@@ -361,21 +358,21 @@ private:
     uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
     // Add a gfxr node and returns index of the added node
     uint64_t AddGfxrNode(NodeType type, std::string &&desc);
-    void     AddToFilterExcludeIndexList(uint64_t index, FilterListType filter_mode)
+    void AddToFilterExcludeIndexList(uint64_t index, FilterListType filter_mode)
     {
         m_filter_exclude_indices_list[filter_mode].insert(index);
     }
 
-    Nodes                        m_nodes;
+    Nodes m_nodes;
     std::unordered_set<uint64_t> m_filter_exclude_indices_list[kFilterListTypeCount];
-    SharedNodeTopology           m_topology[kTopologyTypeCount];
+    SharedNodeTopology m_topology[kTopologyTypeCount];
 };
 
 //--------------------------------------------------------------------------------------------------
 class CommandHierarchyCreator : public EmulateCallbacksBase
 {
-public:
-    static std::unique_ptr<CommandHierarchyCreator> Create(CommandHierarchy     &command_hierarchy,
+ public:
+    static std::unique_ptr<CommandHierarchyCreator> Create(CommandHierarchy &command_hierarchy,
                                                            const Pm4CaptureData &capture_data);
     ~CommandHierarchyCreator() override;
 
@@ -386,34 +383,24 @@ public:
     // potentially speed up the creation
     bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
 
-    bool CreateTrees(const Pm4CaptureData   &capture_data,
-                     bool                    flatten_chain_nodes,
+    bool CreateTrees(const Pm4CaptureData &capture_data, bool flatten_chain_nodes,
                      std::optional<uint64_t> reserve_size);
 
-    bool CreateTrees(bool                    flatten_chain_nodes,
-                     bool                    createTopologies,
+    bool CreateTrees(bool flatten_chain_nodes, bool createTopologies,
                      std::optional<uint64_t> reserve_size);
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
-    bool CreateTrees(EngineType             engine_type,
-                     QueueType              queue_type,
-                     std::vector<uint32_t> &command_dwords,
-                     uint32_t               size_in_dwords);
+    bool CreateTrees(EngineType engine_type, QueueType queue_type,
+                     std::vector<uint32_t> &command_dwords, uint32_t size_in_dwords);
 
-    bool OnIbStart(uint32_t                  submit_index,
-                   uint32_t                  ib_index,
-                   const IndirectBufferInfo &ib_info,
-                   IbType                    type) override;
+    bool OnIbStart(uint32_t submit_index, uint32_t ib_index, const IndirectBufferInfo &ib_info,
+                   IbType type) override;
 
-    bool OnIbEnd(uint32_t                  submit_index,
-                 uint32_t                  ib_index,
+    bool OnIbEnd(uint32_t submit_index, uint32_t ib_index,
                  const IndirectBufferInfo &ib_info) override;
 
-    bool OnPacket(const IMemoryManager &mem_manager,
-                  uint32_t              submit_index,
-                  uint32_t              ib_index,
-                  uint64_t              va_addr,
-                  Pm4Header             header) override;
+    bool OnPacket(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t ib_index,
+                  uint64_t va_addr, Pm4Header header) override;
 
     void CreateTopologies();
 
@@ -440,11 +427,11 @@ public:
         return m_node_root_node_indices[type];
     }
 
-protected:
-    CommandHierarchyCreator(CommandHierarchy     &command_hierarchy,
+ protected:
+    CommandHierarchyCreator(CommandHierarchy &command_hierarchy,
                             const Pm4CaptureData &capture_data);
 
-private:
+ private:
     union Type3Ordinal2
     {
         struct
@@ -464,112 +451,69 @@ private:
         kChildrenNodeTypeCount
     };
 
-    uint64_t AddPacketNode(const IMemoryManager &mem_manager,
-                           uint32_t              submit_index,
-                           uint64_t              va_addr,
-                           bool                  is_ce_packet,
-                           Pm4Header             header);
+    uint64_t AddPacketNode(const IMemoryManager &mem_manager, uint32_t submit_index,
+                           uint64_t va_addr, bool is_ce_packet, Pm4Header header);
     uint64_t AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
 
     bool IsBeginDebugMarkerNode(uint64_t node_index);
 
     uint32_t GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords);
 
-    void     AppendRegNodes(const IMemoryManager &mem_manager,
-                            uint32_t              submit_index,
-                            uint64_t              va_addr,
-                            Pm4Header             header,
-                            uint64_t              packet_node_index);
-    void     AppendRegNodes(const IMemoryManager &mem_manager,
-                            uint32_t              submit_index,
-                            uint64_t              va_addr,
-                            uint32_t              dword_count,
-                            uint64_t              packet_node_index);
-    void     AppendContextRegRmwNodes(const IMemoryManager        &mem_manager,
-                                      uint32_t                     submit_index,
-                                      uint64_t                     va_addr,
-                                      const PM4_PFP_TYPE_3_HEADER &header,
-                                      uint64_t                     packet_node_index);
-    void     AppendIBFieldNodes(const char                  *suffix,
-                                const IMemoryManager        &mem_manager,
-                                uint32_t                     submit_index,
-                                uint64_t                     va_addr,
-                                bool                         is_ce_packet,
-                                const PM4_PFP_TYPE_3_HEADER &header,
-                                uint64_t                     packet_node_index);
-    void     AppendLoadRegNodes(const IMemoryManager        &mem_manager,
-                                uint32_t                     submit_index,
-                                uint64_t                     va_addr,
-                                uint32_t                     reg_space_start,
-                                const PM4_PFP_TYPE_3_HEADER &header,
-                                uint64_t                     packet_node_index);
-    void     AppendLoadRegIndexNodes(const IMemoryManager        &mem_manager,
-                                     uint32_t                     submit_index,
-                                     uint64_t                     va_addr,
-                                     uint32_t                     reg_space_start,
-                                     const PM4_PFP_TYPE_3_HEADER &header,
-                                     uint64_t                     packet_node_index);
-    void     AppendEventWriteFieldNodes(const IMemoryManager        &mem_manager,
-                                        uint32_t                     submit_index,
-                                        uint64_t                     va_addr,
-                                        const PM4_PFP_TYPE_3_HEADER &header,
-                                        const PacketInfo            *packet_info_ptr,
-                                        uint64_t                     packet_node_index);
-    void     AppendPacketFieldNodes(const IMemoryManager &mem_manager,
-                                    uint32_t              submit_index,
-                                    uint64_t              va_addr,
-                                    uint32_t              dword_count,
-                                    bool                  append_extra_dwords,
-                                    const PacketInfo     *packet_info_ptr,
-                                    uint64_t              packet_node_index,
-                                    const char           *prefix = "");
-    void     AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager,
-                                          uint32_t              submit_index,
-                                          uint64_t              va_addr,
-                                          uint64_t              packet_node_index);
-    void     AppendMemRegNodes(const IMemoryManager &mem_manager,
-                               uint32_t              submit_index,
-                               uint64_t              va_addr,
-                               uint64_t              packet_node_index);
-    void     CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager,
-                                        uint32_t              submit_index,
-                                        uint64_t              va_addr,
-                                        uint64_t              set_draw_state_node_index,
-                                        Pm4Header             header);
+    void AppendRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+                        Pm4Header header, uint64_t packet_node_index);
+    void AppendRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+                        uint32_t dword_count, uint64_t packet_node_index);
+    void AppendContextRegRmwNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                  uint64_t va_addr, const PM4_PFP_TYPE_3_HEADER &header,
+                                  uint64_t packet_node_index);
+    void AppendIBFieldNodes(const char *suffix, const IMemoryManager &mem_manager,
+                            uint32_t submit_index, uint64_t va_addr, bool is_ce_packet,
+                            const PM4_PFP_TYPE_3_HEADER &header, uint64_t packet_node_index);
+    void AppendLoadRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                            uint64_t va_addr, uint32_t reg_space_start,
+                            const PM4_PFP_TYPE_3_HEADER &header, uint64_t packet_node_index);
+    void AppendLoadRegIndexNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                 uint64_t va_addr, uint32_t reg_space_start,
+                                 const PM4_PFP_TYPE_3_HEADER &header, uint64_t packet_node_index);
+    void AppendEventWriteFieldNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                    uint64_t va_addr, const PM4_PFP_TYPE_3_HEADER &header,
+                                    const PacketInfo *packet_info_ptr, uint64_t packet_node_index);
+    void AppendPacketFieldNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                uint64_t va_addr, uint32_t dword_count, bool append_extra_dwords,
+                                const PacketInfo *packet_info_ptr, uint64_t packet_node_index,
+                                const char *prefix = "");
+    void AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                      uint64_t va_addr, uint64_t packet_node_index);
+    void AppendMemRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                           uint64_t va_addr, uint64_t packet_node_index);
+    void CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                    uint64_t va_addr, uint64_t set_draw_state_node_index,
+                                    Pm4Header header);
     uint64_t AddNode(NodeType type, std::string &&desc, CommandHierarchy::AuxInfo aux_info = 0);
 
     void AppendEventNodeIndex(uint64_t node_index);
 
-    void AddChild(CommandHierarchy::TopologyType type,
-                  uint64_t                       node_index,
-                  uint64_t                       child_node_index);
-    void AddSharedChild(CommandHierarchy::TopologyType type,
-                        uint64_t                       node_index,
-                        uint64_t                       child_node_index);
-    void SetStartSharedChildrenNodeIndex(CommandHierarchy::TopologyType type,
-                                         uint64_t                       node_index,
-                                         uint64_t                       shared_child_node_index);
-    void SetEndSharedChildrenNodeIndex(CommandHierarchy::TopologyType type,
-                                       uint64_t                       node_index,
-                                       uint64_t                       shared_child_node_index);
-    void SetSharedChildRootNodeIndex(CommandHierarchy::TopologyType type,
-                                     uint64_t                       node_index,
-                                     uint64_t                       root_node_index);
+    void AddChild(CommandHierarchy::TopologyType type, uint64_t node_index,
+                  uint64_t child_node_index);
+    void AddSharedChild(CommandHierarchy::TopologyType type, uint64_t node_index,
+                        uint64_t child_node_index);
+    void SetStartSharedChildrenNodeIndex(CommandHierarchy::TopologyType type, uint64_t node_index,
+                                         uint64_t shared_child_node_index);
+    void SetEndSharedChildrenNodeIndex(CommandHierarchy::TopologyType type, uint64_t node_index,
+                                       uint64_t shared_child_node_index);
+    void SetSharedChildRootNodeIndex(CommandHierarchy::TopologyType type, uint64_t node_index,
+                                     uint64_t root_node_index);
 
-    uint64_t GetChildNodeIndex(CommandHierarchy::TopologyType type,
-                               uint64_t                       node_index,
-                               uint64_t                       child_index) const;
+    uint64_t GetChildNodeIndex(CommandHierarchy::TopologyType type, uint64_t node_index,
+                               uint64_t child_index) const;
     uint64_t GetChildCount(CommandHierarchy::TopologyType type, uint64_t node_index) const;
 
     bool EventNodeHelper(uint64_t node_index, std::function<bool(uint32_t)> callback) const;
 
-    template<typename T>
-    void AddConstantsToPacketNode(const IMemoryManager &mem_manager,
-                                  uint64_t              ext_src_addr,
-                                  uint64_t              packet_node_index,
-                                  uint32_t              num_dwords,
-                                  uint32_t              submit_index,
-                                  uint32_t              value_count_per_row);
+    template <typename T>
+    void AddConstantsToPacketNode(const IMemoryManager &mem_manager, uint64_t ext_src_addr,
+                                  uint64_t packet_node_index, uint32_t num_dwords,
+                                  uint32_t submit_index, uint32_t value_count_per_row);
 
     struct SetDrawStateGroupInfo
     {
@@ -577,14 +521,14 @@ private:
         uint64_t m_group_addr;
     };
 
-    CommandHierarchy     &m_command_hierarchy;  // Reference to class being created
+    CommandHierarchy &m_command_hierarchy;  // Reference to class being created
     const Pm4CaptureData &m_capture_data;
 
     // Parsing State
     DiveVector<uint64_t>
-    m_cmd_begin_packet_node_indices;  // Potential packets node for vkBeginCommandBuffer
+        m_cmd_begin_packet_node_indices;  // Potential packets node for vkBeginCommandBuffer
     DiveVector<uint64_t>
-    m_cmd_begin_event_node_indices;  // Potential event node for vkBeginCommandBuffer
+        m_cmd_begin_event_node_indices;  // Potential event node for vkBeginCommandBuffer
     static constexpr uint64_t kInvalidRenderMarkerIndex = UINT64_MAX;
     uint64_t m_render_marker_index = kInvalidRenderMarkerIndex;  // Current render marker index,
                                                                  // there is no nested render
@@ -592,15 +536,15 @@ private:
     uint64_t m_last_user_push_parent_node = UINT64_MAX;
     // second level secondary command buffer
     std::unordered_map<int, std::unordered_map<uint64_t, uint64_t>>
-    m_node_parent_info;  // Node parent index table, used to find which events need to be moved for
-                         // VkBeginCommandBuffer.
+        m_node_parent_info;  // Node parent index table, used to find which events need to be moved
+                             // for VkBeginCommandBuffer.
 
     DiveVector<uint64_t> m_ib_stack;          // Tracks current IB stack
     DiveVector<uint64_t> m_renderpass_stack;  // render pass marker begin/end stack
 
     // Cache the most recent cp_set_draw_state node, to append IBs to later
     SetDrawStateGroupInfo m_group_info[EmulatePM4::kMaxPendingIbs] = {};
-    uint32_t              m_group_info_size = 0;
+    uint32_t m_group_info_size = 0;
 
     // Cache the most recent cp_start_bin, to be appended to later with prefix and common packets
     uint64_t m_start_bin_node_index = UINT64_MAX;
@@ -622,7 +566,7 @@ private:
 
     uint64_t m_cur_submit_node_index = 0;     // Current submit node being processed
     uint64_t m_cur_ib_packet_node_index = 0;  // Current ib packet node being processed
-    uint8_t  m_cur_ib_level = 0;
+    uint8_t m_cur_ib_level = 0;
     uint64_t m_shared_node_ib_parent_stack[EmulatePM4::kTotalIbLevels] = {};
 
     // Flattening is the process of forcing chain ib nodes to only ever be child to non-chain ib

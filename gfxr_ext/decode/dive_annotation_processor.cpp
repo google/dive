@@ -15,8 +15,10 @@
 */
 
 #include "dive_annotation_processor.h"
+
 #include <cstdint>
 #include <ostream>
+
 #include "decode/api_decoder.h"
 #include "util/logging.h"
 #include "util/output_stream.h"

@@ -17,6 +17,7 @@
 #include "gfxr_capture_data.h"
 
 #include <iostream>
+
 #include "dive_core/common/common.h"
 #include "generated/generated_vulkan_dive_consumer.h"
 #include "gfxr_ext/decode/dive_file_processor.h"
@@ -50,7 +51,7 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
     file_processor.SetDiveBlockData(m_gfxr_capture_block_data);
 
     gfxrecon::decode::VulkanExportDiveConsumer dive_consumer;
-    gfxrecon::decode::VulkanDecoder            decoder;
+    gfxrecon::decode::VulkanDecoder decoder;
     decoder.AddConsumer(&dive_consumer);
     file_processor.AddDecoder(&decoder);
 
@@ -117,7 +118,7 @@ GfxrCaptureData::GetGfxrCommandBuffers(uint64_t cmd_handle) const
 
 //--------------------------------------------------------------------------------------------------
 const DiveAnnotationProcessor::DrawCallCounts& GfxrCaptureData::GetDrawCallCounts(
-uint64_t cmd_handle) const
+    uint64_t cmd_handle) const
 {
     return m_gfxr_draw_call_counts.at(cmd_handle);
 }

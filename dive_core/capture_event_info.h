@@ -16,6 +16,7 @@
 
 #pragma once
 #include <vector>
+
 #include "capture_data.h"
 #include "common.h"
 #include "dive_core/common/emulate_pm4.h"
@@ -51,66 +52,51 @@ enum class EventType : uint8_t
     kEventWriteEnd
 };
 
-bool IsEvent(const IMemoryManager      &mem_manager,
-             uint32_t                   submit_index,
-             uint64_t                   addr,
-             uint32_t                   opcode,
-             const EmulateStateTracker &state_tracker);
+bool IsEvent(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t addr,
+             uint32_t opcode, const EmulateStateTracker &state_tracker);
 
-EventType GetEventType(const IMemoryManager      &mem_manager,
-                       uint32_t                   submit_index,
-                       uint64_t                   va_addr,
-                       uint32_t                   opcode,
-                       const EmulateStateTracker &state_tracker);
+EventType GetEventType(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+                       uint32_t opcode, const EmulateStateTracker &state_tracker);
 
-std::string                        GetEventString(const IMemoryManager      &mem_manager,
-                                                  uint32_t                   submit_index,
-                                                  uint64_t                   va_addr,
-                                                  Pm4Type7Header             header,
-                                                  const EmulateStateTracker &state_tracker);
-uint32_t                           GetIndexCount(const IMemoryManager &mem_manager,
-                                                 uint32_t              submit_index,
-                                                 uint64_t              va_addr,
-                                                 Pm4Type7Header        header);
+std::string GetEventString(const IMemoryManager &mem_manager, uint32_t submit_index,
+                           uint64_t va_addr, Pm4Type7Header header,
+                           const EmulateStateTracker &state_tracker);
+uint32_t GetIndexCount(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+                       Pm4Type7Header header);
 std::optional<VkPrimitiveTopology> GetTopology(const IMemoryManager &mem_manager,
-                                               uint32_t              submit_index,
-                                               uint64_t              va_addr,
-                                               Pm4Type7Header        header);
+                                               uint32_t submit_index, uint64_t va_addr,
+                                               Pm4Type7Header header);
 
 // Used to ensure drawcalls with DI_PT_RECTLIST are not correlated since there is no corresponding
 // VkPrimitiveTopology
-bool ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
-                                        uint32_t              submit_index,
-                                        uint64_t              va_addr,
-                                        Pm4Type7Header        header);
+bool ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                        uint64_t va_addr, Pm4Type7Header header);
 };  // namespace Util
 
 //--------------------------------------------------------------------------------------------------
 struct BufferInfo
 {
-    uint64_t                      m_addr;
-    uint64_t                      m_size;
+    uint64_t m_addr;
+    uint64_t m_size;
     Dive::Legacy::BUF_DATA_FORMAT m_data_format;
-    Dive::Legacy::BUF_NUM_FORMAT  m_num_format;
-    Dive::Legacy::SQ_SEL_XYZW01   m_dst_sel_x;
-    Dive::Legacy::SQ_SEL_XYZW01   m_dst_sel_y;
-    Dive::Legacy::SQ_SEL_XYZW01   m_dst_sel_z;
-    Dive::Legacy::SQ_SEL_XYZW01   m_dst_sel_w;
+    Dive::Legacy::BUF_NUM_FORMAT m_num_format;
+    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_x;
+    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_y;
+    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_z;
+    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_w;
 };
 
 struct ShaderReference
 {
-    uint32_t    m_shader_index = UINT32_MAX;
+    uint32_t m_shader_index = UINT32_MAX;
     ShaderStage m_stage;
-    uint32_t    m_enable_mask;
+    uint32_t m_enable_mask;
 
     // To support std::set, if needed
     bool operator<(const ShaderReference &other) const
     {
-        if (m_shader_index != other.m_shader_index)
-            return m_shader_index < other.m_shader_index;
-        if (m_stage != other.m_stage)
-            return m_stage < other.m_stage;
+        if (m_shader_index != other.m_shader_index) return m_shader_index < other.m_shader_index;
+        if (m_stage != other.m_stage) return m_stage < other.m_stage;
         return m_enable_mask < other.m_enable_mask;
     }
 };
@@ -149,22 +135,22 @@ struct EventInfo
     Util::EventType m_type;
 
     RenderModeType m_render_mode = RenderModeType::kUnknown;
-    std::string    m_str;
+    std::string m_str;
 
     static constexpr bool IsResolve(Util::EventType type)
     {
         switch (type)
         {
-        case Util::EventType::kColorSysMemToGmemResolve:
-        case Util::EventType::kColorGmemToSysMemResolve:
-        case Util::EventType::kColorGmemToSysMemResolveAndClear:
-        case Util::EventType::kDepthSysMemToGmemResolve:
-        case Util::EventType::kDepthGmemToSysMemResolve:
-        case Util::EventType::kDepthGmemToSysMemResolveAndClear:
-        case Util::EventType::kSysmemToGmemResolve:
-            return true;
-        default:
-            break;
+            case Util::EventType::kColorSysMemToGmemResolve:
+            case Util::EventType::kColorGmemToSysMemResolve:
+            case Util::EventType::kColorGmemToSysMemResolveAndClear:
+            case Util::EventType::kDepthSysMemToGmemResolve:
+            case Util::EventType::kDepthGmemToSysMemResolve:
+            case Util::EventType::kDepthGmemToSysMemResolveAndClear:
+            case Util::EventType::kSysmemToGmemResolve:
+                return true;
+            default:
+                break;
         }
         return false;
     }
@@ -172,13 +158,13 @@ struct EventInfo
     {
         switch (type)
         {
-        case Util::EventType::kColorGmemToSysMemResolveAndClear:
-        case Util::EventType::kColorClearGmem:
-        case Util::EventType::kDepthGmemToSysMemResolveAndClear:
-        case Util::EventType::kDepthClearGmem:
-            return true;
-        default:
-            break;
+            case Util::EventType::kColorGmemToSysMemResolveAndClear:
+            case Util::EventType::kColorClearGmem:
+            case Util::EventType::kDepthGmemToSysMemResolveAndClear:
+            case Util::EventType::kDepthClearGmem:
+                return true;
+            default:
+                break;
         }
         return false;
     }

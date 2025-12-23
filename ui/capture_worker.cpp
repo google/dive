@@ -17,6 +17,7 @@
 #include "capture_worker.h"
 
 #include <QDebug>
+
 #include "absl/strings/str_cat.h"
 #include "capture_service/device_mgr.h"
 #include "network/tcp_client.h"
@@ -26,7 +27,6 @@ void CaptureWorker::SetTargetCaptureDir(const std::string &target_capture_dir)
 {
     if (!std::filesystem::exists(target_capture_dir))
     {
-
         std::error_code ec;
         if (!std::filesystem::create_directories(target_capture_dir, ec))
         {
@@ -42,7 +42,7 @@ void CaptureWorker::SetTargetCaptureDir(const std::string &target_capture_dir)
     {
         // If the target directory already exists on the local machine, append a number to it to
         // differentiate.
-        int                   counter = 1;
+        int counter = 1;
         std::filesystem::path newDirPath;
         while (true)
         {
@@ -85,9 +85,9 @@ void CaptureWorker::run()
     }
 
     Network::TcpClient client;
-    const std::string  host = "127.0.0.1";
-    int                port = device->Port();
-    auto               status = client.Connect(host, port);
+    const std::string host = "127.0.0.1";
+    int port = device->Port();
+    auto status = client.Connect(host, port);
     if (!status.ok())
     {
         std::string err_msg(status.message());
@@ -103,8 +103,8 @@ void CaptureWorker::run()
     }
     else
     {
-        std::string err_msg = absl::StrCat("Trigger capture failed: ",
-                                           capture_file_path.status().message());
+        std::string err_msg =
+            absl::StrCat("Trigger capture failed: ", capture_file_path.status().message());
         qDebug() << err_msg.c_str();
         emit ShowMessage(QString::fromStdString(err_msg));
         return;
@@ -140,8 +140,7 @@ void CaptureWorker::run()
         emit DownloadedSize(static_cast<qlonglong>(size), total_size);
     };
     status = client.DownloadFileFromServer(*capture_file_path,
-                                           target_download_path.generic_string(),
-                                           progress);
+                                           target_download_path.generic_string(), progress);
     if (status.ok())
     {
         qDebug() << "Capture saved at "
@@ -149,21 +148,21 @@ void CaptureWorker::run()
     }
     else
     {
-        std::string err_msg = absl::StrCat("Failed to download capture file, error: ",
-                                           status.message());
+        std::string err_msg =
+            absl::StrCat("Failed to download capture file, error: ", status.message());
         qDebug() << err_msg.c_str();
         emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - begin)
-                                   .count();
+                                       std::chrono::steady_clock::now() - begin)
+                                       .count();
     QString download_msg = QString("Capture downloaded to %1 in %2 seconds)")
-                           .arg(target_download_path.generic_string().c_str())
-                           .arg(time_used_to_load_ms / 1000.0);
+                               .arg(target_download_path.generic_string().c_str())
+                               .arg(time_used_to_load_ms / 1000.0);
     qDebug() << download_msg;
 
     QString capture_saved_path(target_download_path.generic_string().c_str());
-    emit    ShowMessage(download_msg);
-    emit    CaptureAvailable(capture_saved_path);
+    emit ShowMessage(download_msg);
+    emit CaptureAvailable(capture_saved_path);
 }

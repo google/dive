@@ -23,9 +23,9 @@
 #include <QPushButton>
 #include <QStackedLayout>
 #include <QTimer>
-#include <QtWidgets>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtWidgets>
 
 namespace
 {
@@ -36,18 +36,12 @@ constexpr int kOverlayUpdateIntervalMs = 1000;
 }  // namespace
 
 //--------------------------------------------------------------------------------------------------
-OverlayHelper::OverlayHelper(QObject* parent) :
-    QObject(parent)
-{
-}
+OverlayHelper::OverlayHelper(QObject* parent) : QObject(parent) {}
 
 OverlayHelper::~OverlayHelper() = default;
 
 //--------------------------------------------------------------------------------------------------
-QLayout* OverlayHelper::GetLayout() const
-{
-    return m_layout;
-}
+QLayout* OverlayHelper::GetLayout() const { return m_layout; }
 
 //--------------------------------------------------------------------------------------------------
 void OverlayHelper::Initialize(QLayout* layout, QWidget* parent)
@@ -73,7 +67,7 @@ void OverlayHelper::Initialize(QWidget* widget)
         // m_overlay->setAttribute(Qt::WA_TranslucentBackground);
         auto palette = m_overlay->palette();
         m_overlay->setAutoFillBackground(true);
-        palette.setColor(QPalette::All, QPalette::Window, { 100, 100, 100, 128 });
+        palette.setColor(QPalette::All, QPalette::Window, {100, 100, 100, 128});
         m_overlay->setPalette(palette);
     }
     m_layout->addWidget(m_overlay);
@@ -88,7 +82,7 @@ void OverlayHelper::Initialize(QWidget* widget)
         font.setPixelSize(20);
         m_text->setFont(font);
         auto palette = m_text->palette();
-        palette.setColor(QPalette::All, QPalette::WindowText, { 200, 200, 255 });
+        palette.setColor(QPalette::All, QPalette::WindowText, {200, 200, 255});
         m_text->setPalette(palette);
     }
     m_overlay_layout->addWidget(m_text);
@@ -152,8 +146,7 @@ void OverlayHelper::SetMessage(const QString& message)
     m_text->setText(message);
     m_layout->setStackingMode(QStackedLayout::StackAll);
     m_layout->setCurrentWidget(m_overlay);
-    if (m_overlay->isHidden())
-        m_overlay->show();
+    if (m_overlay->isHidden()) m_overlay->show();
 }
 
 void OverlayHelper::SetMessageIsTimed()

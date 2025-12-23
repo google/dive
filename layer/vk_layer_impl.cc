@@ -19,7 +19,7 @@ limitations under the License.
 #include <cstdio>
 #include <cstdlib>
 #if defined(__ANDROID__)
-#    include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
 #include <vulkan/vulkan_core.h>
@@ -30,8 +30,7 @@ limitations under the License.
 namespace DiveLayer
 {
 
-VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
-                         VkQueue                 queue,
+VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                          const VkPresentInfoKHR *pPresentInfo)
 {
     VkResult ret = pfn(queue, pPresentInfo);

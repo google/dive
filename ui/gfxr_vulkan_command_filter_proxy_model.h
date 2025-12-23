@@ -14,6 +14,7 @@
 #pragma once
 
 #include <QSortFilterProxyModel>
+
 #include "dive_core/command_hierarchy.h"
 #include "gfxr_vulkan_command_model.h"
 
@@ -27,7 +28,7 @@ class GfxrVulkanCommandFilterProxyModel : public QSortFilterProxyModel
 {
     Q_OBJECT
 
-public:
+ public:
     enum FilterMode : uint32_t
     {
         kNone,
@@ -36,7 +37,7 @@ public:
     };
 
     GfxrVulkanCommandFilterProxyModel(const Dive::CommandHierarchy &command_hierarchy,
-                                      QObject                      *parent = nullptr);
+                                      QObject *parent = nullptr);
     void SetFilter(FilterMode filter_mode);
 
     // The default parent index is QModelIndex() so that the top-level items (submits) are recursed
@@ -46,13 +47,13 @@ public:
     void CollectGfxrDrawCallIndices(const QModelIndex &parent_index = QModelIndex());
     const std::vector<uint64_t> &GetGfxrDrawCallIndices() { return m_gfxr_draw_call_indices; }
 
-protected:
+ protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
 
-private:
+ private:
     void ApplyNewFilterMode(FilterMode new_mode);
 
     const Dive::CommandHierarchy &m_command_hierarchy;
-    FilterMode                    m_filter_mode;
-    std::vector<uint64_t>         m_gfxr_draw_call_indices;
+    FilterMode m_filter_mode;
+    std::vector<uint64_t> m_gfxr_draw_call_indices;
 };

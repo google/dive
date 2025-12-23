@@ -24,11 +24,11 @@ inline constexpr char kVkLayerName[] = "VK_LAYER_Dive";
 inline constexpr char kXrLayerName[] = "XR_APILAYER_dive";
 inline constexpr char kVkValidationLayerName[] = "VK_LAYER_KHRONOS_validation";
 inline constexpr char kDeviceCapturePath[] = "/sdcard/Download";
-inline constexpr int  kDownLoadFileChunkSize = 4096;
+inline constexpr int kDownLoadFileChunkSize = 4096;
 inline constexpr char kUnixAbstractPath[] = "dive_abstract";
 inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
-inline constexpr char
-kReplayPm4DumpFileNamePropertyName[] = "debug.dive.replay.capture_pm4_file_name";
+inline constexpr char kReplayPm4DumpFileNamePropertyName[] =
+    "debug.dive.replay.capture_pm4_file_name";
 inline constexpr char kDefaultCaptureFolderName[] = "dive_capture_folder";
 inline constexpr char kDefaultReplayFolderName[] = "gfxr_replay_downloads";
 inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
@@ -36,19 +36,19 @@ inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 // is the base path since GFXR can reliably write there.
 inline constexpr char kReplayStateLoadedSignalFile[] = "/sdcard/Download/replay_state_loaded";
 inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR replay
-inline constexpr char
-kCaptureScreenshotFile[] = "capture_screenshot.png";  // produced during GFXR capture
+inline constexpr char kCaptureScreenshotFile[] =
+    "capture_screenshot.png";  // produced during GFXR capture
 
-inline constexpr int
-kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)
-inline constexpr int
-kPortRange = 7;  // A small range of ports should be enough to find an available one
+inline constexpr int kFirstPort =
+    49391;  // A port number within the dynamic port range (49152 to 65535)
+inline constexpr int kPortRange =
+    7;  // A small range of ports should be enough to find an available one
 
 // GPU clock
 inline constexpr uint32_t kPinGpuClockMHz = 545;
-inline constexpr char     kDeviceGpuMinClockPath[] = "/sys/kernel/gpu/gpu_min_clock";
-inline constexpr char     kDeviceGpuMaxClockPath[] = "/sys/kernel/gpu/gpu_max_clock";
-inline constexpr char     kDeviceCurFreqPath[] = "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq";
+inline constexpr char kDeviceGpuMinClockPath[] = "/sys/kernel/gpu/gpu_min_clock";
+inline constexpr char kDeviceGpuMaxClockPath[] = "/sys/kernel/gpu/gpu_max_clock";
+inline constexpr char kDeviceCurFreqPath[] = "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq";
 
 // If set then try to use the In-Application API to create a RenderDoc capture of all loops of
 // replay. Assume that only 1 capture is made: it starts after state end marker, and ends after all

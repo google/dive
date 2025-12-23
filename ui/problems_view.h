@@ -38,7 +38,7 @@ class ProblemsViewDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
 
-public:
+ public:
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 };
 
@@ -47,21 +47,21 @@ class ProblemsView : public QFrame
 {
     Q_OBJECT
 
-public:
+ public:
     ProblemsView(const Dive::CommandHierarchy &command_hierarchy);
     void Update(const Dive::LogRecord *log_ptr);
 
-signals:
+ signals:
     void crossReferece(Dive::CrossRef);
 
-private slots:
+ private slots:
     void OnProblemSelectionChanged();
     void OnProblemItemHover(QTreeWidgetItem *item, int column);
 
-protected:
+ protected:
     virtual void leaveEvent(QEvent *event);
 
-private:
-    QTreeWidget                  *m_log_list;
+ private:
+    QTreeWidget *m_log_list;
     const Dive::CommandHierarchy &m_command_hierarchy;
 };

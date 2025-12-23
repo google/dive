@@ -11,12 +11,6 @@
  limitations under the License.
 */
 #include "event_timing_view.h"
-#include "dive_core/common.h"
-#include "dive_core/common/gpudefs.h"
-#include "event_graphics_item.h"
-#include "event_timing_graphics_scene.h"
-#include "event_timing_graphics_view.h"
-#include "ui/sqtt/ruler_graphics_item.h"
 
 #include <QComboBox>
 #include <QGraphicsScene>
@@ -25,6 +19,13 @@
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QVBoxLayout>
+
+#include "dive_core/common.h"
+#include "dive_core/common/gpudefs.h"
+#include "event_graphics_item.h"
+#include "event_timing_graphics_scene.h"
+#include "event_timing_graphics_view.h"
+#include "ui/sqtt/ruler_graphics_item.h"
 
 // =================================================================================================
 // EventTimingView
@@ -66,20 +67,18 @@ EventTimingView::EventTimingView()
     QHBoxLayout *shader_legend_layout = new QHBoxLayout();
 
     const uint32_t kStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
-    QString        shader_names[kStageCount] = {
-        "Vertex Shader", "Pixel Shader", "Compute Shader", "Geometry Shader", "Hull Shader"
-    };
-    Dive::ShaderStage shader_stage_order[kStageCount] = { Dive::ShaderStage::kShaderStageVs,
-                                                          Dive::ShaderStage::kShaderStagePs,
-                                                          Dive::ShaderStage::kShaderStageCs,
-                                                          Dive::ShaderStage::kShaderStageGs,
-                                                          Dive::ShaderStage::kShaderStageHs };
+    QString shader_names[kStageCount] = {"Vertex Shader", "Pixel Shader", "Compute Shader",
+                                         "Geometry Shader", "Hull Shader"};
+    Dive::ShaderStage shader_stage_order[kStageCount] = {
+        Dive::ShaderStage::kShaderStageVs, Dive::ShaderStage::kShaderStagePs,
+        Dive::ShaderStage::kShaderStageCs, Dive::ShaderStage::kShaderStageGs,
+        Dive::ShaderStage::kShaderStageHs};
     for (uint32_t i = 0; i < kStageCount; i++)
     {
         // Add color for the shader
         QLabel *color_label = new QLabel(this);
         color_label->setAutoFillBackground(true);
-        QPalette          palette = color_label->palette();
+        QPalette palette = color_label->palette();
         Dive::ShaderStage shader_stage = shader_stage_order[i];
         palette.setColor(QPalette::Window,
                          m_event_graphics_item_ptr->GetShaderStageColor(shader_stage));
@@ -97,10 +96,10 @@ EventTimingView::EventTimingView()
 
     // Add hardware context color legend
     m_hardware_legend = new QWidget(this);
-    QHBoxLayout   *hardware_legend_layout = new QHBoxLayout();
+    QHBoxLayout *hardware_legend_layout = new QHBoxLayout();
     const uint32_t kCtxCount = 7;
-    QString        hardware_context_names[kCtxCount] = { "Ctx 1", "Ctx 2", "Ctx 3", "Ctx 4",
-                                                         "Ctx 5", "Ctx 6", "Ctx 7" };
+    QString hardware_context_names[kCtxCount] = {"Ctx 1", "Ctx 2", "Ctx 3", "Ctx 4",
+                                                 "Ctx 5", "Ctx 6", "Ctx 7"};
     for (uint32_t i = 0; i < kCtxCount; i++)
     {
         // Add color for the shader
@@ -129,26 +128,16 @@ EventTimingView::EventTimingView()
 
     Reset();
 
-    QObject::connect(m_color_combo_box_ptr,
-                     SIGNAL(currentIndexChanged(int)),
-                     this,
+    QObject::connect(m_color_combo_box_ptr, SIGNAL(currentIndexChanged(int)), this,
                      SLOT(OnColorByIndexChange(int)));
-    QObject::connect(m_event_timing_view_ptr->horizontalScrollBar(),
-                     SIGNAL(valueChanged(int)),
-                     this,
+    QObject::connect(m_event_timing_view_ptr->horizontalScrollBar(), SIGNAL(valueChanged(int)),
+                     this, SLOT(Update()));
+    QObject::connect(m_event_timing_view_ptr->verticalScrollBar(), SIGNAL(valueChanged(int)), this,
                      SLOT(Update()));
-    QObject::connect(m_event_timing_view_ptr->verticalScrollBar(),
-                     SIGNAL(valueChanged(int)),
-                     this,
-                     SLOT(Update()));
-    QObject::connect(m_event_timing_view_ptr,
-                     SIGNAL(OnMouseWheel(QPoint, int)),
-                     this,
+    QObject::connect(m_event_timing_view_ptr, SIGNAL(OnMouseWheel(QPoint, int)), this,
                      SLOT(OnMouseWheel(QPoint, int)));
-    QObject::connect(m_event_timing_view_ptr,
-                     SIGNAL(OnMouseCursor(QPointF)),
-                     m_event_timing_scene_ptr,
-                     SLOT(onMouseCursorChanged(QPointF)));
+    QObject::connect(m_event_timing_view_ptr, SIGNAL(OnMouseCursor(QPointF)),
+                     m_event_timing_scene_ptr, SLOT(onMouseCursorChanged(QPointF)));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -181,9 +170,7 @@ void EventTimingView::Update()
     int32_t scene_left_x = m_event_timing_view_ptr->mapToScene(QPoint(0, 0)).x();
     int32_t scene_left_y = m_event_timing_view_ptr->mapToScene(QPoint(0, 0)).y();
     m_ruler_item_ptr->SetVisibleRange(scene_left_x, visible_width);
-    m_event_graphics_item_ptr->SetVisibleRange(scene_left_x,
-                                               scene_left_y,
-                                               visible_width,
+    m_event_graphics_item_ptr->SetVisibleRange(scene_left_x, scene_left_y, visible_width,
                                                visible_height);
 
     // Update viewport (or else paint() of new region might not take into effect)
@@ -201,17 +188,17 @@ void EventTimingView::OnMouseWheel(QPoint mouse_pos, int angle_delta)
     // 120 units
 
     // Determine what cycle is pointed to by mouse
-    double prev_scene_mouse_pt_x = m_event_timing_view_ptr->mapToScene(QPoint(mouse_pos.x(), 0))
-                                   .x();
+    double prev_scene_mouse_pt_x =
+        m_event_timing_view_ptr->mapToScene(QPoint(mouse_pos.x(), 0)).x();
     int64_t prev_cycle_mouse_pt = m_ruler_item_ptr->MapToCycle(prev_scene_mouse_pt_x);
 
     // Determine how off-center, in scene-coordinates, mouse position is
     uint64_t visible_width = m_event_timing_view_ptr->contentsRect().width();
     uint64_t visible_height = m_event_timing_view_ptr->contentsRect().height();
-    double   prev_scene_center = m_event_timing_view_ptr->mapToScene(QPoint(visible_width / 2, 0))
-                               .x();
-    double
-    prev_scene_center_y = m_event_timing_view_ptr->mapToScene(QPoint(0, visible_height / 2.0)).y();
+    double prev_scene_center =
+        m_event_timing_view_ptr->mapToScene(QPoint(visible_width / 2, 0)).x();
+    double prev_scene_center_y =
+        m_event_timing_view_ptr->mapToScene(QPoint(0, visible_height / 2.0)).y();
     double scene_distance = prev_scene_mouse_pt_x - prev_scene_center;
 
     // If both start/end cycles are visible already, do not allow a zoom-out
@@ -223,22 +210,19 @@ void EventTimingView::OnMouseWheel(QPoint mouse_pos, int angle_delta)
         // DIVE_ASSERT(m_sqtt_data.GetMaxCycles() <= INT64_MAX);  // To account for using int64
         // if (cycle_right >= (int64_t)m_sqtt_data.GetMaxCycles())
         {
-            double  scene_left = m_event_timing_view_ptr->mapToScene(QPoint(0, 0)).x();
+            double scene_left = m_event_timing_view_ptr->mapToScene(QPoint(0, 0)).x();
             int64_t cycle_left = m_ruler_item_ptr->MapToCycle(scene_left);
-            if (cycle_left <= 0)
-                return;
+            if (cycle_left <= 0) return;
         }
     }
 
     double new_width = std::max(1.0, SCALE_FACTOR * m_ruler_item_ptr->GetWidth());
-    if (angle_delta < 0)
-        new_width = std::max(1.0, m_ruler_item_ptr->GetWidth() / SCALE_FACTOR);
+    if (angle_delta < 0) new_width = std::max(1.0, m_ruler_item_ptr->GetWidth() / SCALE_FACTOR);
 
     // Maximum width is bounded by INT32_MAX (assuming position of (0,0)), since the Qt code
     // uses code like this:
     //      viewBoundingRect.adjust(-int(rectAdjust), -int(rectAdjust), rectAdjust, rectAdjust);
-    if ((m_ruler_item_ptr->pos().x() + new_width) > INT32_MAX)
-        return;
+    if ((m_ruler_item_ptr->pos().x() + new_width) > INT32_MAX) return;
 
     // If number of cycles visible would get below a certain threshold, then do not allow a zoom-in
     const uint64_t kMinCyclesVisible = 50;
@@ -263,10 +247,7 @@ void EventTimingView::OnMouseWheel(QPoint mouse_pos, int angle_delta)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventTimingView::resizeEvent(QResizeEvent *event)
-{
-    Update();
-}
+void EventTimingView::resizeEvent(QResizeEvent *event) { Update(); }
 
 void EventTimingView::OnColorByIndexChange(int index)
 {

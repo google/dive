@@ -19,10 +19,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <optional>
 
 namespace Dive
 {
@@ -37,33 +37,33 @@ std::string AvailableGpuTiming::GetObjectTypeString(ObjectType object_type) cons
     std::stringstream ss;
     switch (object_type)
     {
-    case ObjectType::kFrame:
-    {
-        ss << "Frame";
-        break;
-    }
-    case ObjectType::kCommandBuffer:
-    {
-        ss << "CommandBuffer";
-        break;
-    }
-    case ObjectType::kRenderPass:
-    {
-        ss << "RenderPass";
-        break;
-    }
-    default:
-    {
-        std::cerr << "GetObjectTypeString() failed, object_type OOB: "
-                  << static_cast<int>(object_type) << std::endl;
-        return "";
-    }
+        case ObjectType::kFrame:
+        {
+            ss << "Frame";
+            break;
+        }
+        case ObjectType::kCommandBuffer:
+        {
+            ss << "CommandBuffer";
+            break;
+        }
+        case ObjectType::kRenderPass:
+        {
+            ss << "RenderPass";
+            break;
+        }
+        default:
+        {
+            std::cerr << "GetObjectTypeString() failed, object_type OOB: "
+                      << static_cast<int>(object_type) << std::endl;
+            return "";
+        }
     }
     return ss.str();
 }
 
 AvailableGpuTiming::ObjectType AvailableGpuTiming::GetObjectType(
-const std::string& object_type_str) const
+    const std::string& object_type_str) const
 {
     if (object_type_str == "Frame")
     {
@@ -87,32 +87,32 @@ std::string AvailableGpuTiming::GetColumnTypeString(ColumnType column_type) cons
     std::stringstream ss;
     switch (column_type)
     {
-    case ColumnType::kObjectType:
-    {
-        ss << "Type";
-        break;
-    }
-    case ColumnType::kId:
-    {
-        ss << "Id";
-        break;
-    }
-    case ColumnType::kMeanMs:
-    {
-        ss << "Mean [ms]";
-        break;
-    }
-    case ColumnType::kMedianMs:
-    {
-        ss << "Median [ms]";
-        break;
-    }
-    default:
-    {
-        std::cerr << "GetColumnTypeString() failed, object_type OOB: "
-                  << static_cast<int>(column_type) << std::endl;
-        return "";
-    }
+        case ColumnType::kObjectType:
+        {
+            ss << "Type";
+            break;
+        }
+        case ColumnType::kId:
+        {
+            ss << "Id";
+            break;
+        }
+        case ColumnType::kMeanMs:
+        {
+            ss << "Mean [ms]";
+            break;
+        }
+        case ColumnType::kMedianMs:
+        {
+            ss << "Median [ms]";
+            break;
+        }
+        default:
+        {
+            std::cerr << "GetColumnTypeString() failed, object_type OOB: "
+                      << static_cast<int>(column_type) << std::endl;
+            return "";
+        }
     }
     return ss.str();
 }
@@ -171,7 +171,7 @@ bool AvailableGpuTiming::LoadFromString(const std::string& full_text)
 bool AvailableGpuTiming::LoadFromStream(std::istream& stream)
 {
     std::string line;
-    uint32_t    row = 0;
+    uint32_t row = 0;
     while (std::getline(stream, line))
     {
         if (line.empty())
@@ -190,8 +190,8 @@ bool AvailableGpuTiming::LoadFromStream(std::istream& stream)
 
 bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
 {
-    std::stringstream        ss(line);
-    std::string              field;
+    std::stringstream ss(line);
+    std::string field;
     std::vector<std::string> fields;
     while (std::getline(ss, field, ','))
     {
@@ -226,7 +226,7 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
     // TODO(b/443122531): Improve integer and float parsing here, this has edge cases that aren't
     // covered
     uint32_t id;
-    Stats    stats;
+    Stats stats;
     try
     {
         id = static_cast<uint32_t>(std::stoi(fields[1]));
@@ -260,7 +260,7 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
         return false;
     }
 
-    Entry      entry;
+    Entry entry;
     ObjectType object_type = GetObjectType(fields[0]);
     if (object_type == ObjectType::nObjectTypes)
     {
@@ -324,8 +324,7 @@ void AvailableGpuTiming::Validate()
 }
 
 std::optional<AvailableGpuTiming::Stats> AvailableGpuTiming::GetStatsByType(
-ObjectType object_type,
-uint32_t   object_id) const
+    ObjectType object_type, uint32_t object_id) const
 {
     if (!m_valid)
     {
@@ -428,22 +427,22 @@ std::string AvailableGpuTiming::GetCell(int row, int col) const
 
     switch (col)
     {
-    case 2:
-    {
-        ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.mean_ms;
-        return ss.str();
-    }
-    case 3:
-    {
-        ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.median_ms;
-        return ss.str();
-    }
-    default:
-    {
-        std::cerr << "GetCell() OOB error, col: " << col << " expected: [2-" << (GetColumns() - 1)
-                  << "]" << std::endl;
-        return "";
-    }
+        case 2:
+        {
+            ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.mean_ms;
+            return ss.str();
+        }
+        case 3:
+        {
+            ss << std::setprecision(kDisplayFloatPrecision) << std::fixed << stats.median_ms;
+            return ss.str();
+        }
+        default:
+        {
+            std::cerr << "GetCell() OOB error, col: " << col << " expected: [2-"
+                      << (GetColumns() - 1) << "]" << std::endl;
+            return "";
+        }
     }
 }
 

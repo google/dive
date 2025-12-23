@@ -30,21 +30,14 @@ typedef Dive::CaptureData::LoadResult LoadResult;
 
 LoadResult PrintCaptureFileBlocks(std::ostream &out, const char *file_name);
 
-void PrintNodes(std::ostream                   &out,
-                const Dive::CommandHierarchy   *command_hierarchy_ptr,
-                const Dive::SharedNodeTopology &topology,
-                uint64_t                        node_index,
-                bool                            verbose);
+void PrintNodes(std::ostream &out, const Dive::CommandHierarchy *command_hierarchy_ptr,
+                const Dive::SharedNodeTopology &topology, uint64_t node_index, bool verbose);
 
-bool ParseCapture(const char                              *filename,
-                  std::unique_ptr<Dive::CaptureData>      *out_capture_data,
+bool ParseCapture(const char *filename, std::unique_ptr<Dive::CaptureData> *out_capture_data,
                   std::unique_ptr<Dive::CommandHierarchy> *out_command_hierarchy);
 
-void PrintHang(std::ostream         &out,
-               const char           *dir,
-               const Dive::DataCore &data,
-               bool                  color,
-               bool                  summary);
+void PrintHang(std::ostream &out, const char *dir, const Dive::DataCore &data, bool color,
+               bool summary);
 
 enum class TopologyName
 {
@@ -61,7 +54,7 @@ const char *GetOpCodeStringSafe(uint32_t op_code);
 
 //--------------------------------------------------------------------------------------------------
 
-LoadResult  ReadCaptureDataHeader(const char *file_name, Dive::CaptureDataHeader *header);
+LoadResult ReadCaptureDataHeader(const char *file_name, Dive::CaptureDataHeader *header);
 const char *CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type);
 
 }  // namespace cli

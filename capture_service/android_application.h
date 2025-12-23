@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include <string>
+
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 
@@ -49,11 +50,9 @@ class AndroidDevice;
 
 class AndroidApplication
 {
-public:
-    AndroidApplication(AndroidDevice  &dev,
-                       std::string     package,
-                       ApplicationType type,
-                       std::string     command_args);
+ public:
+    AndroidApplication(AndroidDevice &dev, std::string package, ApplicationType type,
+                       std::string command_args);
     virtual ~AndroidApplication() = default;
 
     virtual absl::Status Setup() = 0;
@@ -64,42 +63,42 @@ public:
 
     virtual absl::Status Start();
     virtual absl::Status Stop();
-    const std::string   &GetMainActivity() const { return m_main_activity; };
-    bool                 IsDebuggable() const { return m_is_debuggable; }
-    bool                 IsStarted() const { return m_started; }
-    virtual bool         IsRunning() const;
-    void                 SetGfxrEnabled(bool enable);
+    const std::string &GetMainActivity() const { return m_main_activity; };
+    bool IsDebuggable() const { return m_is_debuggable; }
+    bool IsStarted() const { return m_started; }
+    virtual bool IsRunning() const;
+    void SetGfxrEnabled(bool enable);
 
     void SetGfxrCaptureFileDirectory(const std::string &capture_file_directory)
     {
         m_gfxr_capture_file_directory = capture_file_directory;
     };
-    absl::Status         CreateGfxrDirectory(const std::string command_args);
+    absl::Status CreateGfxrDirectory(const std::string command_args);
     virtual absl::Status GfxrSetup();
     virtual absl::Status Pm4CaptureSetup();
     virtual absl::Status Pm4CaptureCleanup();
-    absl::Status         HasInternetPermission();
-    absl::Status         GrantAllFilesAccess();
+    absl::Status HasInternetPermission();
+    absl::Status GrantAllFilesAccess();
 
-protected:
+ protected:
     absl::Status ParsePackage();
 
-    AndroidDevice  &m_dev;
-    std::string     m_package;
+    AndroidDevice &m_dev;
+    std::string m_package;
     ApplicationType m_type;
-    std::string     m_main_activity;
-    std::string     m_command_args;
+    std::string m_main_activity;
+    std::string m_command_args;
 
     std::string m_gfxr_capture_file_directory;
-    bool        m_is_debuggable;
-    bool        m_started;
+    bool m_is_debuggable;
+    bool m_started;
 
     bool m_gfxr_enabled;
 };
 
 class VulkanApplication : public AndroidApplication
 {
-public:
+ public:
     VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args);
     ~VulkanApplication() override;
     absl::Status Setup() override;
@@ -107,14 +106,14 @@ public:
     // Cleanup for device properties and settings related to a Vulkan APK
     absl::Status Cleanup() override;
 
-private:
+ private:
     absl::Status Pm4CaptureSetup() override;
     absl::Status Pm4CaptureCleanup() override;
 };
 
 class GLESApplication : public AndroidApplication
 {
-public:
+ public:
     GLESApplication(AndroidDevice &dev, std::string package, std::string command_args);
     ~GLESApplication() override;
     absl::Status Setup() override;
@@ -122,14 +121,14 @@ public:
     // Cleanup for device properties and settings related to a GLES APK
     absl::Status Cleanup() override;
 
-private:
+ private:
     absl::Status Pm4CaptureSetup() override;
     absl::Status Pm4CaptureCleanup() override;
 };
 
 class OpenXRApplication : public AndroidApplication
 {
-public:
+ public:
     OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args);
     ~OpenXRApplication() override;
     absl::Status Setup() override;
@@ -137,14 +136,14 @@ public:
     // Cleanup for device properties and settings related to an OpenXR APK
     absl::Status Cleanup() override;
 
-private:
+ private:
     absl::Status Pm4CaptureSetup() override;
     absl::Status Pm4CaptureCleanup() override;
 };
 
 class VulkanCliApplication : public AndroidApplication
 {
-public:
+ public:
     VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args);
     ~VulkanCliApplication() override;
     absl::Status Setup() override;
@@ -154,14 +153,14 @@ public:
 
     absl::Status Start() override;
     absl::Status Stop() override;
-    bool         IsRunning() const override;
+    bool IsRunning() const override;
     absl::Status GfxrSetup() override;
 
-private:
+ private:
     absl::Status Pm4CaptureSetup() override;
     absl::Status Pm4CaptureCleanup() override;
-    std::string  m_command;
-    std::string  m_pid;
+    std::string m_command;
+    std::string m_pid;
 };
 
 }  // namespace Dive

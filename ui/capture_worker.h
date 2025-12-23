@@ -25,22 +25,19 @@ class CaptureWorker : public QThread
 {
     Q_OBJECT
 
-public:
-    CaptureWorker(QObject *parent = nullptr) :
-        QThread(parent)
-    {
-    }
+ public:
+    CaptureWorker(QObject *parent = nullptr) : QThread(parent) {}
 
     void run() override;
     // Appends/increments the numerical suffix "_#" to target_capture_path for a fresh directory, if
     // the directory already exists
     void SetTargetCaptureDir(const std::string &target_capture_dir);
-signals:
+ signals:
     void CaptureAvailable(const QString &);
     void DownloadedSize(qlonglong size, qlonglong total_size);
     void ShowMessage(const QString &msg);
     void UpdateProgressDialog(const QString &msg);
 
-protected:
+ protected:
     std::filesystem::path m_target_capture_dir;
 };

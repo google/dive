@@ -38,8 +38,8 @@ struct DeviceResourcesConstants
     // third_party/freedreno
     static constexpr std::string_view kWrapLibName = "libwrap.so";
     // third_party/Vulkan-ValidationLayers
-    static constexpr std::string_view
-    kVkValidationLayerLibName = "libVkLayer_khronos_validation.so";
+    static constexpr std::string_view kVkValidationLayerLibName =
+        "libVkLayer_khronos_validation.so";
     // third_party/gfxreconstruct
     static constexpr std::string_view kVkGfxrLayerLibName = "libVkLayer_gfxreconstruct.so";
     static constexpr std::string_view kGfxrReplayApkName = "gfxr-replay.apk";
@@ -54,8 +54,8 @@ struct DeviceResourcesConstants
     // On the device, device resources are deployed into these locations
     static constexpr std::string_view kDeployFolderPath = "/data/local/tmp/dive";
     static constexpr std::string_view kDeployVulkanGlobalFolderPath = "/data/local/debug/vulkan";
-    static constexpr std::string_view
-    kDeployManifestFolderPath = "/system/etc/openxr/1/api_layers/implicit.d/";
+    static constexpr std::string_view kDeployManifestFolderPath =
+        "/system/etc/openxr/1/api_layers/implicit.d/";
 };
 
 }  // namespace Dive

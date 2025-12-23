@@ -18,16 +18,17 @@
 #pragma once
 #include <deque>
 #include <map>
-#include <vector>
 #include <memory>
-#include "pm4_capture_data.h"
-#include "gfxr_capture_data.h"
-#include "dive_capture_data.h"
+#include <vector>
+
 #include "capture_event_info.h"
 #include "command_hierarchy.h"
-#include "event_state.h"
-#include "progress_tracker.h"
+#include "dive_capture_data.h"
 #include "dive_command_hierarchy.h"
+#include "event_state.h"
+#include "gfxr_capture_data.h"
+#include "pm4_capture_data.h"
+#include "progress_tracker.h"
 
 namespace Dive
 {
@@ -61,10 +62,10 @@ struct CaptureMetadata
 // Main container for the capture data as well as associated metadata
 class DataCore
 {
-protected:
+ protected:
     ProgressTracker *m_progress_tracker;
 
-public:
+ public:
     DataCore() = default;
 
     DataCore(ProgressTracker *progress_tracker);
@@ -88,11 +89,11 @@ public:
 
     // Get the pm4 capture data (includes access to raw command buffers and memory blocks)
     const Pm4CaptureData &GetPm4CaptureData() const;
-    Pm4CaptureData       &GetMutablePm4CaptureData();
+    Pm4CaptureData &GetMutablePm4CaptureData();
 
     // Get the gfxr capture data
     const GfxrCaptureData &GetGfxrCaptureData() const;
-    GfxrCaptureData       &GetMutableGfxrCaptureData();
+    GfxrCaptureData &GetMutableGfxrCaptureData();
 
     // Get the command-hierarchy, which is a tree view interpretation of the command buffer
     const CommandHierarchy &GetCommandHierarchy() const;
@@ -100,7 +101,7 @@ public:
     // Get metadata describing the capture (info obtained by parsing the capture)
     const CaptureMetadata &GetCaptureMetadata() const;
 
-private:
+ private:
     // Create command hierarchy from the captured data
     bool CreateDiveCommandHierarchy();
     bool CreatePm4CommandHierarchy();
@@ -121,22 +122,17 @@ private:
 // Shader reflector callback class, for use by the CaptureMetadataCreator
 class SRDCallbacks : public IShaderReflectorCallbacks
 {
-public:
+ public:
     // Callbacks on each SRD table used by the shader. The SRD table is a buffer that contains 1 or
     // more SRDs, each of which might be a different type
-    virtual bool OnSRDTable(ShaderStage shader_stage,
-                            uint64_t    va_addr,
-                            uint64_t    size,
-                            void       *user_ptr)
+    virtual bool OnSRDTable(ShaderStage shader_stage, uint64_t va_addr, uint64_t size,
+                            void *user_ptr)
     {
         return true;
     }
 
-    virtual bool OnSRDTable(ShaderStage shader_stage,
-                            void       *data_ptr,
-                            uint64_t    va_addr,
-                            uint64_t    size,
-                            void       *user_ptr)
+    virtual bool OnSRDTable(ShaderStage shader_stage, void *data_ptr, uint64_t va_addr,
+                            uint64_t size, void *user_ptr)
     {
         return true;
     }
@@ -147,7 +143,7 @@ public:
 // Handles creation of much of the metadata "info" from the capture
 class CaptureMetadataCreator : public EmulateCallbacksBase
 {
-public:
+ public:
     static std::unique_ptr<CaptureMetadataCreator> Create(CaptureMetadata &capture_metadata);
     ~CaptureMetadataCreator() override;
 
@@ -157,25 +153,19 @@ public:
     const EmulateStateTracker &GetStateTracker() const { return m_state_tracker; }
 
     // Callbacks
-    bool OnIbStart(uint32_t                  submit_index,
-                   uint32_t                  ib_index,
-                   const IndirectBufferInfo &ib_info,
-                   IbType                    type) override;
+    bool OnIbStart(uint32_t submit_index, uint32_t ib_index, const IndirectBufferInfo &ib_info,
+                   IbType type) override;
 
-    bool OnIbEnd(uint32_t                  submit_index,
-                 uint32_t                  ib_index,
+    bool OnIbEnd(uint32_t submit_index, uint32_t ib_index,
                  const IndirectBufferInfo &ib_info) override;
 
-    bool OnPacket(const IMemoryManager &mem_manager,
-                  uint32_t              submit_index,
-                  uint32_t              ib_index,
-                  uint64_t              va_addr,
-                  Pm4Header             header) override;
+    bool OnPacket(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t ib_index,
+                  uint64_t va_addr, Pm4Header header) override;
 
-protected:
+ protected:
     CaptureMetadataCreator(CaptureMetadata &capture_metadata);
 
-private:
+ private:
     bool HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t opcode);
     void FillDrawEventStateInfo(EventStateInfo::Iterator event_state_it);
     void FillResolveOrClearEventStateInfo(EventStateInfo::Iterator event_state_it);
@@ -197,7 +187,7 @@ private:
     std::map<uint64_t, uint32_t> m_buffer_addrs;
 
     CaptureMetadata &m_capture_metadata;
-    RenderModeType   m_current_render_mode = RenderModeType::kUnknown;
+    RenderModeType m_current_render_mode = RenderModeType::kUnknown;
 
 #if defined(ENABLE_CAPTURE_BUFFERS)
     // SRDCallbacks is a friend class, since it is essentially doing part of

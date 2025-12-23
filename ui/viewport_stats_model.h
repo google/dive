@@ -14,34 +14,32 @@
 #pragma once
 
 #include <QAbstractItemModel>
-#include <QVector>
 #include <QStringList>
+#include <QVector>
 
 #include "trace_stats/trace_stats.h"
 
 class ViewportStatsModel : public QAbstractItemModel
 {
     Q_OBJECT
-public:
+ public:
     explicit ViewportStatsModel(QObject *parent = nullptr);
 
     void LoadData(const std::set<Dive::Viewport> &viewports);
 
     // QAbstractItemModel interface
-    QModelIndex index(int                row,
-                      int                column,
+    QModelIndex index(int row, int column,
                       const QModelIndex &parent = QModelIndex()) const override;
     QModelIndex parent(const QModelIndex &index) const override;
-    int         rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int         columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant    data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    QVariant    headerData(int             section,
-                           Qt::Orientation orientation,
-                           int             role = Qt::DisplayRole) const override;
-public slots:
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    QVariant headerData(int section, Qt::Orientation orientation,
+                        int role = Qt::DisplayRole) const override;
+ public slots:
 
-private:
-    QStringList                 m_headers;
-    int                         m_column_count = 0;
+ private:
+    QStringList m_headers;
+    int m_column_count = 0;
     std::vector<Dive::Viewport> m_viewports;
 };

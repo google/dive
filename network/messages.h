@@ -16,9 +16,9 @@ limitations under the License.
 
 #pragma once
 
+#include "dive/common/status.h"
 #include "serializable.h"
 #include "socket_connection.h"
-#include "dive/common/status.h"
 
 namespace Network
 {
@@ -51,81 +51,81 @@ enum class MessageType : uint32_t
 
 class HandshakeMessage : public ISerializable
 {
-public:
+ public:
     absl::Status Serialize(Buffer& dest) const override;
     absl::Status Deserialize(const Buffer& src) override;
 
     uint32_t GetMajorVersion() const { return m_major_version; }
     uint32_t GetMinorVersion() const { return m_minor_version; }
-    void     SetMajorVersion(uint32_t major) { m_major_version = major; }
-    void     SetMinorVersion(uint32_t minor) { m_minor_version = minor; }
+    void SetMajorVersion(uint32_t major) { m_major_version = major; }
+    void SetMinorVersion(uint32_t minor) { m_minor_version = minor; }
 
-private:
+ private:
     uint32_t m_major_version;
     uint32_t m_minor_version;
 };
 
 class EmptyMessage : public ISerializable
 {
-public:
+ public:
     absl::Status Serialize(Buffer& dest) const override { return Dive::OkStatus(); }
     absl::Status Deserialize(const Buffer& src) override { return Dive::OkStatus(); }
 };
 
 class StringMessage : public ISerializable
 {
-public:
+ public:
     absl::Status Serialize(Buffer& dest) const override;
     absl::Status Deserialize(const Buffer& src) override;
 
     const std::string& GetString() const { return m_str; }
-    void               SetString(std::string str) { m_str = std::move(str); }
+    void SetString(std::string str) { m_str = std::move(str); }
 
-private:
+ private:
     std::string m_str;
 };
 
 class HandshakeRequest : public HandshakeMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::HANDSHAKE_REQUEST; }
 };
 
 class HandshakeResponse : public HandshakeMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::HANDSHAKE_RESPONSE; }
 };
 
 class Pm4CaptureRequest : public EmptyMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_REQUEST; }
 };
 
 // Pm4CaptureResponse uses the string message as the capture file path.
 class Pm4CaptureResponse : public StringMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_RESPONSE; }
 };
 
 class PingMessage : public EmptyMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::PING_MESSAGE; }
 };
 
 class PongMessage : public EmptyMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::PONG_MESSAGE; }
 };
 
 // DownloadFileRequest uses the string message as the file path to download.
 class DownloadFileRequest : public StringMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::DOWNLOAD_FILE_REQUEST; }
 };
 
@@ -133,8 +133,8 @@ public:
 // otherwise, it returns an error.
 class DownloadFileResponse : public ISerializable
 {
-public:
-    MessageType  GetMessageType() const override { return MessageType::DOWNLOAD_FILE_RESPONSE; }
+ public:
+    MessageType GetMessageType() const override { return MessageType::DOWNLOAD_FILE_RESPONSE; }
     absl::Status Serialize(Buffer& dest) const override;
     absl::Status Deserialize(const Buffer& src) override;
 
@@ -145,12 +145,12 @@ public:
     void SetErrorReason(std::string error_reason) { m_error_reason = std::move(error_reason); }
 
     const std::string& GetFilePath() const { return m_file_path; }
-    void               SetFilePath(std::string file_path) { m_file_path = std::move(file_path); }
+    void SetFilePath(std::string file_path) { m_file_path = std::move(file_path); }
 
     const std::string& GetFileSizeStr() const { return m_file_size_str; }
     void SetFileSizeStr(std::string file_size_str) { m_file_size_str = std::move(file_size_str); }
 
-private:
+ private:
     // Flag indicating whether the requested file was found on the server.
     bool m_found = false;
     // A description of the error if the download failed. Empty if successful.
@@ -166,7 +166,7 @@ private:
 // FileSizeRequest uses the string message as the file path for which we want to determine the size.
 class FileSizeRequest : public StringMessage
 {
-public:
+ public:
     MessageType GetMessageType() const override { return MessageType::FILE_SIZE_REQUEST; }
 };
 
@@ -174,8 +174,8 @@ public:
 // returns an error.
 class FileSizeResponse : public ISerializable
 {
-public:
-    MessageType  GetMessageType() const override { return MessageType::FILE_SIZE_RESPONSE; }
+ public:
+    MessageType GetMessageType() const override { return MessageType::FILE_SIZE_RESPONSE; }
     absl::Status Serialize(Buffer& dest) const override;
     absl::Status Deserialize(const Buffer& src) override;
 
@@ -188,7 +188,7 @@ public:
     const std::string& GetFileSizeStr() const { return m_file_size_str; }
     void SetFileSizeStr(std::string file_size_str) { m_file_size_str = std::move(file_size_str); }
 
-private:
+ private:
     // Flag indicating whether the file was found on the server.
     bool m_found = false;
     // A description of the error. Empty if successful.
@@ -201,10 +201,8 @@ private:
 // Message Helper Functions (TLV Framing).
 
 // Helper to receive an exact number of bytes.
-absl::Status ReceiveBuffer(SocketConnection* conn,
-                           uint8_t*          buffer,
-                           size_t            size,
-                           int               timeout_ms = kNoTimeout);
+absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size,
+                           int timeout_ms = kNoTimeout);
 
 // Helper to send an exact number of bytes.
 absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t size);

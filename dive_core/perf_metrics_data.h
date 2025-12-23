@@ -13,19 +13,19 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
-#include <string_view>
-#include <string>
-#include <variant>
-#include <vector>
 #include <filesystem>
-#include <unordered_map>
+#include <functional>
 #include <memory>
 #include <optional>
-#include <functional>
-#include <utility>
+#include <string>
+#include <string_view>
 #include <tuple>
-#include <array>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace Dive
 {
@@ -49,8 +49,7 @@ constexpr std::array kHeaderMap = {
     std::pair(kFrameID, "FrameID"),     std::pair(kCmdBufferID, "CmdBufferID"),
     std::pair(kDrawID, "DrawID"),       std::pair(kDrawType, "DrawType"),
     std::pair(kDrawLabel, "DrawLabel"), std::pair(kProgramID, "ProgramID"),
-    std::pair(kLRZState, "LRZState")
-};
+    std::pair(kLRZState, "LRZState")};
 
 static_assert(kHeaderMap.size() == kFixedPerfMetricsDataHeaderCount,
               "ERROR: FixedPerfMetricsDataHeaders and kHeaderMap are out of sync!");
@@ -101,25 +100,24 @@ struct PerfMetricsKeyHash
 // ... "
 struct PerfMetricsRecord
 {
-    uint64_t            m_context_id;
-    uint64_t            m_process_id;
-    uint64_t            m_frame_id;
-    uint64_t            m_cmd_buffer_id;
-    uint32_t            m_draw_id;
-    uint32_t            m_draw_label;
-    uint64_t            m_program_id;
-    uint8_t             m_draw_type;
-    uint8_t             m_lrz_state;
+    uint64_t m_context_id;
+    uint64_t m_process_id;
+    uint64_t m_frame_id;
+    uint64_t m_cmd_buffer_id;
+    uint32_t m_draw_id;
+    uint32_t m_draw_label;
+    uint64_t m_program_id;
+    uint8_t m_draw_type;
+    uint8_t m_lrz_state;
     std::vector<double> m_metric_values;
 };
 
 class PerfMetricsData
 {
-public:
+ public:
     // Load performance metrics data from a CSV file
     [[nodiscard]] static std::unique_ptr<PerfMetricsData> LoadFromCsv(
-    const std::filesystem::path& file_path,
-    const AvailableMetrics&      available_metrics);
+        const std::filesystem::path& file_path, const AvailableMetrics& available_metrics);
     // Get all performance metrics records
     const std::vector<PerfMetricsRecord>& GetRecords() const { return m_records; }
 
@@ -129,24 +127,23 @@ public:
     // Get the information of the performance metrics
     const std::vector<const MetricInfo*>& GetMetricInfos() const { return m_metric_infos; }
 
-    PerfMetricsData(std::vector<std::string>       metric_names,
+    PerfMetricsData(std::vector<std::string> metric_names,
                     std::vector<const MetricInfo*> metric_infos,
                     std::vector<PerfMetricsRecord> records);
 
-private:
-    std::vector<std::string>       m_metric_names;
+ private:
+    std::vector<std::string> m_metric_names;
     std::vector<const MetricInfo*> m_metric_infos;
     std::vector<PerfMetricsRecord> m_records;
 };
 
 class PerfMetricsDataProvider
 {
-public:
+ public:
     [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> Create(
-    std::unique_ptr<PerfMetricsData> = nullptr);
+        std::unique_ptr<PerfMetricsData> = nullptr);
     [[nodiscard]] static std::unique_ptr<PerfMetricsDataProvider> CreateForTest(
-    std::unique_ptr<PerfMetricsData>,
-    std::unique_ptr<AvailableMetrics>);
+        std::unique_ptr<PerfMetricsData>, std::unique_ptr<AvailableMetrics>);
 
     ~PerfMetricsDataProvider();
     PerfMetricsDataProvider(const PerfMetricsDataProvider&) = delete;
@@ -178,7 +175,7 @@ public:
     // Given the index of the metric, returns the description for that metric.
     std::string_view GetMetricsDescription(size_t metric_index) const;
 
-private:
+ private:
     class Correlator;
 
     PerfMetricsDataProvider();
@@ -186,7 +183,7 @@ private:
     std::unique_ptr<Correlator> m_correlator;
 
     std::unique_ptr<PerfMetricsData> m_raw_data;
-    std::vector<PerfMetricsRecord>   m_computed_records;  // calculated based on the |m_raw_data|
+    std::vector<PerfMetricsRecord> m_computed_records;  // calculated based on the |m_raw_data|
 
     std::unique_ptr<AvailableMetrics> m_owned_desc;
 };

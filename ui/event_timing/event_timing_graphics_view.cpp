@@ -11,6 +11,7 @@
  limitations under the License.
 */
 #include "event_timing_graphics_view.h"
+
 #include <QApplication>
 #include <QEasingCurve>
 #include <QMouseEvent>
@@ -61,7 +62,6 @@ void EventTimingGraphicsView::wheelEvent(QWheelEvent *event)
 {
     // It's possible to get a x-axis-only wheel event on trackpads!
     // Only deal with y-axis ones (ie. mouse wheels)
-    if (event->angleDelta().y() == 0)
-        return;
+    if (event->angleDelta().y() == 0) return;
     emit OnMouseWheel(event->pos(), event->angleDelta().y());
 }

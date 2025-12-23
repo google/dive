@@ -30,28 +30,25 @@ namespace Dive
 
 class DiveCommandHierarchyCreator
 {
-public:
+ public:
     DiveCommandHierarchyCreator(CommandHierarchy &command_hierarchy);
 
     bool ProcessDiveSubmits(
-    const DiveVector<SubmitInfo>                                            &submits,
-    const IMemoryManager                                                    &mem_manager,
-    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &gfxr_submits);
+        const DiveVector<SubmitInfo> &submits, const IMemoryManager &mem_manager,
+        const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &gfxr_submits);
 
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
     // root ib or call ib node, and never a child of another chain node. This prevents a
     // deep tree of chain nodes when a capture chains together tons of IBs.
     // Optional: Passing a reserve_size will allow the creator to pre-reserve the memory needed and
     // potentially speed up the creation
-    bool CreateTrees(Dive::CommandHierarchy &command_hierarchy,
-                     DiveCaptureData        &dive_capture_data,
-                     bool                    flatten_chain_nodes,
-                     std::optional<uint64_t> reserve_size);
+    bool CreateTrees(Dive::CommandHierarchy &command_hierarchy, DiveCaptureData &dive_capture_data,
+                     bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
 
-    void CreateTopologies(CommandHierarchyCreator           &pm4_command_hierarchy_creator,
+    void CreateTopologies(CommandHierarchyCreator &pm4_command_hierarchy_creator,
                           GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator);
 
-private:
+ private:
     friend class CommandHierarchyCreator;
     friend class GfxrVulkanCommandHierarchyCreator;
 

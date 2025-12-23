@@ -16,13 +16,14 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <QString>
 #include <QStringList>
 
 //--------------------------------------------------------------------------------------------------
 class Settings
 {
-public:
+ public:
     enum DisplayUnit : uint32_t
     {
         kCycle,
@@ -32,23 +33,23 @@ public:
     };
 
     QStringList ReadRecentFiles();
-    void        WriteRecentFiles(QStringList recent_files);
+    void WriteRecentFiles(QStringList recent_files);
 
     QString ReadLastFilePath();
-    void    WriteLastFilePath(QString last_file_path);
+    void WriteLastFilePath(QString last_file_path);
 
     uint32_t ReadCaptureDelay();
-    void     WriteCaptureDelay(uint32_t capture_delay);
+    void WriteCaptureDelay(uint32_t capture_delay);
 
     DisplayUnit ReadRulerDisplayUnit();
-    void        WriteRulerDisplayUnit(DisplayUnit display_unit);
+    void WriteRulerDisplayUnit(DisplayUnit display_unit);
 
     DisplayUnit ReadEventListDisplayUnit();
-    void        WriteEventListDisplayUnit(DisplayUnit display_unit);
+    void WriteEventListDisplayUnit(DisplayUnit display_unit);
 
     // Singleton
     static Settings* Get();
 
-private:
+ private:
     Settings();
 };

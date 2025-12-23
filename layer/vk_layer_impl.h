@@ -22,8 +22,7 @@ limitations under the License.
 namespace DiveLayer
 {
 
-VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
-                         VkQueue                 queue,
+VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                          const VkPresentInfoKHR *pPresentInfo);
 
 }  // namespace DiveLayer

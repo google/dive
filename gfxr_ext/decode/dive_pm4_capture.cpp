@@ -16,13 +16,12 @@ limitations under the License.
 
 #include "dive_pm4_capture.h"
 
-#include "util/logging.h"
-
 #include "capture_service/constants.h"
+#include "util/logging.h"
 
 #if defined(__ANDROID__)
 
-#    include <dlfcn.h>
+#include <dlfcn.h>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)

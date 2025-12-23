@@ -12,21 +12,22 @@
 */
 
 #include "tile_stats_tab_view.h"
-#include "viewport_stats_model.h"
-#include "window_scissors_stats_model.h"
-#include "search_bar.h"
+
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
 #include <QPoint>
 #include <QVBoxLayout>
 #include <iostream>
-#include "object_names.h"
-#include "trace_stats/trace_stats.h"
 
-TileStatsTabView::TileStatsTabView(const Dive::CaptureStats &stats, QWidget *parent) :
-    QWidget(parent),
-    m_stats(stats)
+#include "object_names.h"
+#include "search_bar.h"
+#include "trace_stats/trace_stats.h"
+#include "viewport_stats_model.h"
+#include "window_scissors_stats_model.h"
+
+TileStatsTabView::TileStatsTabView(const Dive::CaptureStats &stats, QWidget *parent)
+    : QWidget(parent), m_stats(stats)
 {
     m_viewport_stats_model = new ViewportStatsModel();
     m_viewport_stats_view = new QTableView();

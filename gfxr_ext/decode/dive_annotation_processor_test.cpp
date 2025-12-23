@@ -16,8 +16,8 @@
 
 #include "dive_annotation_processor.h"
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 using ::testing::IsEmpty;
 using ::testing::SizeIs;
@@ -42,11 +42,10 @@ MATCHER_P2(SubmitInfoEq, expected_name, expected_command_buffer_count, "")
 }
 
 gfxrecon::util::DiveFunctionData CreateCommandData(const std::string& name,
-                                                   uint64_t           command_buffer_handle,
-                                                   uint32_t           cmd_buffer_index,
-                                                   uint32_t           block_index)
+                                                   uint64_t command_buffer_handle,
+                                                   uint32_t cmd_buffer_index, uint32_t block_index)
 {
-    nlohmann::ordered_json args = { { "commandBuffer", command_buffer_handle } };
+    nlohmann::ordered_json args = {{"commandBuffer", command_buffer_handle}};
     return gfxrecon::util::DiveFunctionData(name, cmd_buffer_index, block_index, args);
 }
 
@@ -55,8 +54,7 @@ TEST(WriteBlockEndTest, SingleSubmitCreatesOneSubmitWithNoCommands)
     DiveAnnotationProcessor processor;
     processor.WriteBlockEnd(gfxrecon::util::DiveFunctionData("vkQueueSubmit",
                                                              /*cmd_buffer_index=*/0,
-                                                             /*block_index=*/1,
-                                                             {}));
+                                                             /*block_index=*/1, {}));
 
     auto submits = processor.TakeSubmits();
     ASSERT_THAT(submits, SizeIs(1));
@@ -69,63 +67,52 @@ TEST(WriteBlockEndTest, MultipleSubmitsWithCommandsCreatesSubmitsWithCorrectComm
     DiveAnnotationProcessor processor;
 
     // Command Buffer 1 (handle 1001)
-    nlohmann::ordered_json           args_cmd_1 = { { "commandBuffer", 1001 } };
+    nlohmann::ordered_json args_cmd_1 = {{"commandBuffer", 1001}};
     gfxrecon::util::DiveFunctionData cmd_data_1("vkBeginCommandBuffer",
                                                 /*cmd_buffer_index=*/0,
-                                                /*block_index=*/6,
-                                                args_cmd_1);
-    nlohmann::ordered_json           args_cmd_2 = { { "commandBuffer", 1001 } };
+                                                /*block_index=*/6, args_cmd_1);
+    nlohmann::ordered_json args_cmd_2 = {{"commandBuffer", 1001}};
     gfxrecon::util::DiveFunctionData cmd_data_2("vkCmdDraw",
                                                 /*cmd_buffer_index=*/1,
-                                                /*block_index=*/7,
-                                                args_cmd_2);
-    nlohmann::ordered_json           args_cmd_3 = { { "commandBuffer", 1001 } };
+                                                /*block_index=*/7, args_cmd_2);
+    nlohmann::ordered_json args_cmd_3 = {{"commandBuffer", 1001}};
     gfxrecon::util::DiveFunctionData cmd_data_3("vkCmdDispatch",
                                                 /*cmd_buffer_index=*/2,
-                                                /*block_index=*/9,
-                                                args_cmd_3);
-    nlohmann::ordered_json           args_cmd_4 = { { "commandBuffer", 1001 } };
+                                                /*block_index=*/9, args_cmd_3);
+    nlohmann::ordered_json args_cmd_4 = {{"commandBuffer", 1001}};
     gfxrecon::util::DiveFunctionData cmd_data_4("vkEndCommandBuffer",
                                                 /*cmd_buffer_index=*/0,
-                                                /*block_index=*/8,
-                                                args_cmd_4);
+                                                /*block_index=*/8, args_cmd_4);
 
     // Submit 1 (submitting command buffer 1001)
     nlohmann::ordered_json args_submit_1 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 1}, {"pCommandBuffers", {1001}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit",
                                                    /*cmd_buffer_index=*/0,
-                                                   /*block_index=*/8,
-                                                   args_submit_1);
+                                                   /*block_index=*/8, args_submit_1);
 
     // Command Buffer 2 (handle 1002)
-    nlohmann::ordered_json           args_cmd_5 = { { "commandBuffer", 1002 } };
+    nlohmann::ordered_json args_cmd_5 = {{"commandBuffer", 1002}};
     gfxrecon::util::DiveFunctionData cmd_data_5("vkBeginCommandBuffer",
                                                 /*cmd_buffer_index=*/0,
-                                                /*block_index=*/6,
-                                                args_cmd_5);
-    nlohmann::ordered_json           args_cmd_6 = { { "commandBuffer", 1002 } };
+                                                /*block_index=*/6, args_cmd_5);
+    nlohmann::ordered_json args_cmd_6 = {{"commandBuffer", 1002}};
     gfxrecon::util::DiveFunctionData cmd_data_6("vkCmdCopyBuffer",
                                                 /*cmd_buffer_index=*/1,
-                                                /*block_index=*/9,
-                                                args_cmd_6);
-    nlohmann::ordered_json           args_cmd_7 = { { "commandBuffer", 1002 } };
+                                                /*block_index=*/9, args_cmd_6);
+    nlohmann::ordered_json args_cmd_7 = {{"commandBuffer", 1002}};
     gfxrecon::util::DiveFunctionData cmd_data_7("vkEndCommandBuffer",
                                                 /*cmd_buffer_index=*/0,
-                                                /*block_index=*/6,
-                                                args_cmd_7);
+                                                /*block_index=*/6, args_cmd_7);
 
     // Submit 2 (submitting command buffer 1002)
     nlohmann::ordered_json args_submit_2 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1002 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 1}, {"pCommandBuffers", {1002}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_2("vkQueueSubmit",
                                                    /*cmd_buffer_index=*/0,
-                                                   /*block_index=*/10,
-                                                   args_submit_2);
+                                                   /*block_index=*/10, args_submit_2);
 
     processor.WriteBlockEnd(cmd_data_1);
     processor.WriteBlockEnd(cmd_data_2);
@@ -183,7 +170,7 @@ TEST(WriteBlockEndTest,
      SingleSubmitWithSingleCommandBufferHasCorrectNumberOfDrawCallsPerCommandBufferRecord)
 {
     DiveAnnotationProcessor processor;
-    uint64_t                handle = 1001;
+    uint64_t handle = 1001;
 
     processor.WriteBlockEnd(CreateCommandData("vkBeginCommandBuffer", handle, 0, 6));
 
@@ -204,9 +191,8 @@ TEST(WriteBlockEndTest,
 
     // Submit 1 (submitting command buffer 1001)
     nlohmann::ordered_json args_submit_1 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 1}, {"pCommandBuffers", {1001}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 16, args_submit_1);
     processor.WriteBlockEnd(submit_data_1);
 
@@ -224,8 +210,8 @@ TEST(WriteBlockEndTest,
 TEST(WriteBlockEndTest, MultipleCommandBuffersHaveCorrectDrawCallCounts)
 {
     DiveAnnotationProcessor processor;
-    uint64_t                handle_1 = 1001;
-    uint64_t                handle_2 = 1002;
+    uint64_t handle_1 = 1001;
+    uint64_t handle_2 = 1002;
 
     // Command Buffer 1 (handle 1001)
     processor.WriteBlockEnd(CreateCommandData("vkBeginCommandBuffer", handle_1, 0, 1));
@@ -244,9 +230,8 @@ TEST(WriteBlockEndTest, MultipleCommandBuffersHaveCorrectDrawCallCounts)
 
     // Single submit of both command buffers
     nlohmann::ordered_json args_submit_1 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 2 }, { "pCommandBuffers", { 1001, 1002 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 2}, {"pCommandBuffers", {1001, 1002}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 12, args_submit_1);
     processor.WriteBlockEnd(submit_data_1);
 
@@ -264,7 +249,7 @@ TEST(WriteBlockEndTest, MultipleCommandBuffersHaveCorrectDrawCallCounts)
 TEST(WriteBlockEndTest, CommandBufferWithNoDrawCallsHasZeroCount)
 {
     DiveAnnotationProcessor processor;
-    uint64_t                handle = 1001;
+    uint64_t handle = 1001;
 
     // Command Buffer 1 (handle 1001) with no draw calls
     processor.WriteBlockEnd(CreateCommandData("vkBeginCommandBuffer", handle, 0, 1));
@@ -275,9 +260,8 @@ TEST(WriteBlockEndTest, CommandBufferWithNoDrawCallsHasZeroCount)
 
     // Single submit
     nlohmann::ordered_json args_submit_1 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 1}, {"pCommandBuffers", {1001}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 6, args_submit_1);
     processor.WriteBlockEnd(submit_data_1);
 
@@ -292,7 +276,7 @@ TEST(WriteBlockEndTest, CommandBufferWithNoDrawCallsHasZeroCount)
 TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
 {
     DiveAnnotationProcessor processor;
-    uint64_t                handle = 1001;
+    uint64_t handle = 1001;
 
     // Command Buffer 1 (handle 1001) with mixed commands
     processor.WriteBlockEnd(CreateCommandData("vkBeginCommandBuffer", handle, 0, 1));
@@ -306,9 +290,8 @@ TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
 
     // Single submit
     nlohmann::ordered_json args_submit_1 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 1}, {"pCommandBuffers", {1001}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 9, args_submit_1);
     processor.WriteBlockEnd(submit_data_1);
 
@@ -324,7 +307,7 @@ TEST(WriteBlockEndTest, MixedCommandsOnlyCountDrawCalls)
 TEST(WriteBlockEndTest, DrawCallsAreCorrectlyCountedInMultipleRenderPasses)
 {
     DiveAnnotationProcessor processor;
-    uint64_t                handle = 1001;
+    uint64_t handle = 1001;
 
     // Command Buffer (handle 1001)
     processor.WriteBlockEnd(CreateCommandData("vkBeginCommandBuffer", handle, 0, 1));
@@ -354,9 +337,8 @@ TEST(WriteBlockEndTest, DrawCallsAreCorrectlyCountedInMultipleRenderPasses)
 
     // Single submit
     nlohmann::ordered_json args_submit_1 = {
-        { "submitCount", 1 },
-        { "pSubmits", { { { "commandBufferCount", 1 }, { "pCommandBuffers", { 1001 } } } } }
-    };
+        {"submitCount", 1},
+        {"pSubmits", {{{"commandBufferCount", 1}, {"pCommandBuffers", {1001}}}}}};
     gfxrecon::util::DiveFunctionData submit_data_1("vkQueueSubmit", 0, 12, args_submit_1);
     processor.WriteBlockEnd(submit_data_1);
 

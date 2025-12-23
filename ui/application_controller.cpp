@@ -27,7 +27,7 @@
 struct ApplicationController::Impl
 {
     MainWindow* m_main_window = nullptr;
-    QAction*    m_advanced_option = nullptr;
+    QAction* m_advanced_option = nullptr;
 
     Dive::PluginLoader m_plugin_manager;
 };
@@ -57,16 +57,11 @@ void ApplicationController::MainWindowInitialized()
     m_impl->m_main_window->m_file_menu->insertAction(m_impl->m_main_window->m_exit_action,
                                                      m_impl->m_advanced_option);
 
-    QObject::connect(m_impl->m_advanced_option,
-                     &QAction::toggled,
-                     this,
+    QObject::connect(m_impl->m_advanced_option, &QAction::toggled, this,
                      &ApplicationController::AdvancedOptionToggled);
 }
 
-void ApplicationController::MainWindowClosed()
-{
-    m_impl->m_plugin_manager.UnloadPlugins();
-}
+void ApplicationController::MainWindowClosed() { m_impl->m_plugin_manager.UnloadPlugins(); }
 
 bool ApplicationController::InitializePlugins()
 {
@@ -82,11 +77,10 @@ bool ApplicationController::InitializePlugins()
     if (absl::Status load_status = m_impl->m_plugin_manager.LoadPlugins(plugins_dir_path);
         !load_status.ok())
     {
-        QMessageBox::warning(m_impl->m_main_window,
-                             tr("Plugin Loading Failed"),
+        QMessageBox::warning(m_impl->m_main_window, tr("Plugin Loading Failed"),
                              tr("Failed to load plugins from '%1'. \nError: %2")
-                             .arg(QString::fromStdString(plugin_path))
-                             .arg(QString::fromStdString(std::string(load_status.message()))));
+                                 .arg(QString::fromStdString(plugin_path))
+                                 .arg(QString::fromStdString(std::string(load_status.message()))));
         return false;
     }
     return true;

@@ -71,15 +71,9 @@ void DivePluginBridge::SetConst(const char *name, const void *object)
     m_const_objects[name] = object;
 }
 
-PluginLoader::PluginLoader() :
-    m_library_loader(CreateDynamicLibraryLoader())
-{
-}
+PluginLoader::PluginLoader() : m_library_loader(CreateDynamicLibraryLoader()) {}
 
-PluginLoader::~PluginLoader()
-{
-    UnloadPlugins();
-}
+PluginLoader::~PluginLoader() { UnloadPlugins(); }
 
 absl::Status PluginLoader::LoadPlugins(const std::filesystem::path &plugins_dir_path)
 {
@@ -117,26 +111,24 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path &plugins_dir_
             continue;
         }
 
-        LibraryHandleUniquePtr library_handle_ptr(handle.value(),
-                                                  NativeLibraryHandleDeleter(
-                                                  m_library_loader.get()));
+        LibraryHandleUniquePtr library_handle_ptr(
+            handle.value(), NativeLibraryHandleDeleter(m_library_loader.get()));
 
-        absl::StatusOr<void *> create_func_symbol = m_library_loader
-                                                    ->GetSymbol(handle.value(),
-                                                                "CreateDivePluginInstance");
+        absl::StatusOr<void *> create_func_symbol =
+            m_library_loader->GetSymbol(handle.value(), "CreateDivePluginInstance");
 
         if (!create_func_symbol.ok())
         {
             append_error_message(std::string(create_func_symbol.status().message()));
             continue;
         }
-        CreatePluginFunc create_func = reinterpret_cast<CreatePluginFunc>(
-        create_func_symbol.value());
+        CreatePluginFunc create_func =
+            reinterpret_cast<CreatePluginFunc>(create_func_symbol.value());
 
         if (!create_func)
         {
             append_error_message(
-            "Function pointer for 'CreateDivePluginInstance' is null for plugin: " + file_path);
+                "Function pointer for 'CreateDivePluginInstance' is null for plugin: " + file_path);
             continue;
         }
 
@@ -167,7 +159,7 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path &plugins_dir_
     if (!error_message.empty())
     {
         return absl::InternalError(
-        "Some plugins encountered errors during loading/initialization: \n" + error_message);
+            "Some plugins encountered errors during loading/initialization: \n" + error_message);
     }
 
     return absl::OkStatus();

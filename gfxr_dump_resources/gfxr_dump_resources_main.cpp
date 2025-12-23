@@ -18,17 +18,14 @@
 #include <optional>
 #include <vector>
 
-#include "dump_entry.h"
-#include "gfxr_dump_resources.h"
-
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
+#include "dump_entry.h"
+#include "gfxr_dump_resources.h"
 #include "third_party/gfxreconstruct/framework/util/logging.h"
 
-ABSL_FLAG(bool,
-          last_draw_only,
-          false,
+ABSL_FLAG(bool, last_draw_only, false,
           "If specified, only dump the final draw call for a render pass. This should speed up "
           "dumping while still providing a useful result.");
 

@@ -20,12 +20,12 @@
 #include <utility>
 
 // Pointer to implementation wrapper
-template<typename T> class ImplPointer
+template <typename T>
+class ImplPointer
 {
-public:
-    template<typename... Args>
-    explicit ImplPointer(Args&&... args) :
-        m_ptr(std::make_unique<T>(std::forward<Args>(args)...))
+ public:
+    template <typename... Args>
+    explicit ImplPointer(Args&&... args) : m_ptr(std::make_unique<T>(std::forward<Args>(args)...))
     {
     }
     ~ImplPointer() = default;
@@ -44,6 +44,6 @@ public:
     // std::unique_ptr::get()
     T* get() const { return m_ptr.get(); }
 
-private:
+ private:
     std::unique_ptr<T> m_ptr;
 };

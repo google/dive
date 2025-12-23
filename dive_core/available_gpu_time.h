@@ -38,7 +38,7 @@ constexpr int kDisplayFloatPrecision = 3;
 
 class AvailableGpuTiming
 {
-public:
+ public:
     // TODO(b/444500681): Consider moving enums (ObjectType, ColumnType) and kDisplayFloatPrecision
     // to gpu_time/ where the statistics are produced and refactoring so that it is no longer
     // hard-coded
@@ -65,7 +65,7 @@ public:
     struct Entry
     {
         ObjectType object_type;
-        uint32_t   per_frame_id;
+        uint32_t per_frame_id;
     };
 
     // Corresponds to information received designated by ColumnType, except that the first two
@@ -101,7 +101,7 @@ public:
     // Methods for converting between enums and strings
 
     std::string GetObjectTypeString(ObjectType object_type) const;
-    ObjectType  GetObjectType(const std::string& object_type_str) const;
+    ObjectType GetObjectType(const std::string& object_type_str) const;
     std::string GetColumnTypeString(ColumnType column_type) const;
 
     // -------------------------------------------------------------
@@ -119,7 +119,7 @@ public:
     // Get the number of columns expected for the table
     int GetColumns() const { return static_cast<int>(ColumnType::nColumnTypes); }
 
-private:
+ private:
     // Load statistics from stream
     bool LoadFromStream(std::istream& stream);
 
@@ -136,8 +136,8 @@ private:
     std::vector<std::vector<Stats>> m_stats = {};
 
     uint32_t m_total_frames = 0;  // The number of frames the statistics were collected from
-    bool     m_loaded = false;    // If true, prevent further loading
-    bool     m_valid = false;     // Validated at loading time
+    bool m_loaded = false;        // If true, prevent further loading
+    bool m_valid = false;         // Validated at loading time
 };
 
 }  // namespace Dive

@@ -18,7 +18,6 @@ limitations under the License.
 #include <chrono>
 
 #include "absl/strings/str_cat.h"
-
 #include "dive/common/status.h"
 
 namespace
@@ -32,17 +31,13 @@ constexpr uint32_t kHandshakeMinorVersion = 0;
 namespace Network
 {
 
-TcpClient::TcpClient() :
-    m_status(ClientStatus::DISCONNECTED)
+TcpClient::TcpClient() : m_status(ClientStatus::DISCONNECTED)
 {
     m_keep_alive.running = false;
     m_keep_alive.interval_sec = kKeepAliveIntervalSec;
 }
 
-TcpClient::~TcpClient()
-{
-    Disconnect();
-}
+TcpClient::~TcpClient() { Disconnect(); }
 
 absl::Status TcpClient::Connect(const std::string& host, int port)
 {
@@ -50,7 +45,7 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
         GetClientStatus() == ClientStatus::CONNECTING)
     {
         return Dive::AlreadyExistsError(
-        "Connect: Client is already connected or in the process of connecting.");
+            "Connect: Client is already connected or in the process of connecting.");
     }
 
     StopKeepAlive();
@@ -68,9 +63,9 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
     if (!conn_status.ok())
     {
         m_connection.reset();
-        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       Dive::StatusWithContext(conn_status,
-                                                               "Connect: Connect fail"));
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(conn_status, "Connect: Connect fail"));
     }
     SetClientStatus(ClientStatus::CONNECTED);
 
@@ -79,9 +74,9 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
     if (!handshake_status.ok())
     {
         m_connection.reset();
-        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                       Dive::StatusWithContext(handshake_status,
-                                                               "Connect: Handshake failed"));
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(handshake_status, "Connect: Handshake failed"));
     }
 
     std::cout << "Client: Connected & StartKeepAlive." << std::endl;
@@ -95,9 +90,9 @@ absl::Status TcpClient::Connect(const std::string& host, int port)
         else
         {
             m_connection.reset();
-            return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
-                                           Dive::StatusWithContext(keep_alive_status,
-                                                                   "Connect: KeepAlive fail"));
+            return SetStatusAndReturnError(
+                ClientStatus::CONNECTION_FAILED,
+                Dive::StatusWithContext(keep_alive_status, "Connect: KeepAlive fail"));
         }
     }
     std::cout << "Client: Succesfully connected." << std::endl;
@@ -148,20 +143,17 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
     auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::PM4_CAPTURE_RESPONSE)
     {
-        return Dive::FailedPreconditionError(
-        absl::StrCat("StartPm4Capture: Unexpected message type in Capture response "
-                     "(Expected: ",
-                     MessageType::PM4_CAPTURE_RESPONSE,
-                     ", Got: ",
-                     response->GetMessageType(),
-                     ")."));
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "StartPm4Capture: Unexpected message type in Capture response "
+            "(Expected: ",
+            MessageType::PM4_CAPTURE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
     auto* pm4_response = dynamic_cast<Pm4CaptureResponse*>(response.get());
     if (!pm4_response)
     {
         return Dive::InternalError(
-        "StartPm4Capture: Failed to cast received message to Pm4CaptureResponse.");
+            "StartPm4Capture: Failed to cast received message to Pm4CaptureResponse.");
     }
 
     std::cout << "Client: StartPm4Capture response OK (remote_file_path: "
@@ -169,8 +161,8 @@ absl::StatusOr<std::string> TcpClient::StartPm4Capture()
     return pm4_response->GetString();
 }
 
-absl::Status TcpClient::DownloadFileFromServer(const std::string&          remote_file_path,
-                                               const std::string&          local_save_path,
+absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_path,
+                                               const std::string& local_save_path,
                                                std::function<void(size_t)> progress_callback)
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);
@@ -205,27 +197,24 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string&          remot
     auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::DOWNLOAD_FILE_RESPONSE)
     {
-        return Dive::FailedPreconditionError(
-        absl::StrCat("DownloadFileFromServer: Unexpected message type in Download response "
-                     "(Expected: ",
-                     MessageType::DOWNLOAD_FILE_RESPONSE,
-                     ", Got: ",
-                     response->GetMessageType(),
-                     ")."));
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "DownloadFileFromServer: Unexpected message type in Download response "
+            "(Expected: ",
+            MessageType::DOWNLOAD_FILE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
     auto* download_response = dynamic_cast<DownloadFileResponse*>(response.get());
     if (!download_response)
     {
         return Dive::InternalError(
-        "DownloadFileFromServer: Failed to cast received message to DownloadFileResponse.");
+            "DownloadFileFromServer: Failed to cast received message to DownloadFileResponse.");
     }
 
     if (!download_response->GetFound())
     {
         return Dive::NotFoundError(
-        absl::StrCat("DownloadFileFromServer: Server could not provide file. Reason: ",
-                     download_response->GetErrorReason()));
+            absl::StrCat("DownloadFileFromServer: Server could not provide file. Reason: ",
+                         download_response->GetErrorReason()));
     }
 
     std::cout << "Client: Server offering file (size = " << download_response->GetFileSizeStr()
@@ -238,10 +227,8 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string&          remot
     catch (const std::exception& e)
     {
         return Dive::InvalidArgumentError(
-        absl::StrCat("DownloadFileFromServer: Invalid file size from server: '",
-                     download_response->GetFileSizeStr(),
-                     "'. Message error: ",
-                     e.what()));
+            absl::StrCat("DownloadFileFromServer: Invalid file size from server: '",
+                         download_response->GetFileSizeStr(), "'. Message error: ", e.what()));
     }
 
     auto recv_status = m_connection->ReceiveFile(local_save_path, file_size, progress_callback);
@@ -290,26 +277,23 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
     auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::FILE_SIZE_RESPONSE)
     {
-        return Dive::FailedPreconditionError(
-        absl::StrCat("GetCaptureFileSize: Unexpected message type in response "
-                     "(Expected: ",
-                     MessageType::FILE_SIZE_RESPONSE,
-                     ", Got: ",
-                     response->GetMessageType(),
-                     ")."));
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "GetCaptureFileSize: Unexpected message type in response "
+            "(Expected: ",
+            MessageType::FILE_SIZE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
     auto* file_size_response = dynamic_cast<FileSizeResponse*>(response.get());
     if (!file_size_response)
     {
         return Dive::InternalError(
-        "GetCaptureFileSize: Failed to cast received message to FileSizeResponse.");
+            "GetCaptureFileSize: Failed to cast received message to FileSizeResponse.");
     }
     if (!file_size_response->GetFound())
     {
         return Dive::NotFoundError(
-        absl::StrCat("GetCaptureFileSize: Server could not find file. Reason: ",
-                     file_size_response->GetErrorReason()));
+            absl::StrCat("GetCaptureFileSize: Server could not find file. Reason: ",
+                         file_size_response->GetErrorReason()));
     }
 
     size_t file_size = 0;
@@ -320,10 +304,8 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
     catch (const std::exception& e)
     {
         return Dive::InvalidArgumentError(
-        absl::StrCat("GetCaptureFileSize: Invalid file size from server: '",
-                     file_size_response->GetFileSizeStr(),
-                     "'. Message error: ",
-                     e.what()));
+            absl::StrCat("GetCaptureFileSize: Invalid file size from server: '",
+                         file_size_response->GetFileSizeStr(), "'. Message error: ", e.what()));
     }
     return file_size;
 }
@@ -360,12 +342,9 @@ absl::Status TcpClient::PingServer()
     if (response->GetMessageType() != MessageType::PONG_MESSAGE)
     {
         return Dive::FailedPreconditionError(
-        absl::StrCat("PingServer: Unexpected message type in Ping response "
-                     "(Expected: ",
-                     MessageType::PONG_MESSAGE,
-                     ", Got: ",
-                     response->GetMessageType(),
-                     ")."));
+            absl::StrCat("PingServer: Unexpected message type in Ping response "
+                         "(Expected: ",
+                         MessageType::PONG_MESSAGE, ", Got: ", response->GetMessageType(), ")."));
     }
 
     auto* pong_response = dynamic_cast<PongMessage*>(response.get());
@@ -383,7 +362,7 @@ absl::Status TcpClient::PerformHandshake()
     if (!IsConnected())
     {
         return Dive::FailedPreconditionError(
-        absl::StrCat("PerformHandshake: Client is not connected."));
+            absl::StrCat("PerformHandshake: Client is not connected."));
     }
 
     HandshakeRequest hs_request;
@@ -413,20 +392,17 @@ absl::Status TcpClient::PerformHandshake()
     auto response = *std::move(receive);
     if (response->GetMessageType() != MessageType::HANDSHAKE_RESPONSE)
     {
-        return Dive::FailedPreconditionError(
-        absl::StrCat("PerformHandshake: Unexpected message type in Handshake response "
-                     "(Expected: ",
-                     MessageType::HANDSHAKE_RESPONSE,
-                     ", Got: ",
-                     response->GetMessageType(),
-                     ")."));
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "PerformHandshake: Unexpected message type in Handshake response "
+            "(Expected: ",
+            MessageType::HANDSHAKE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
     auto* hs_response = dynamic_cast<HandshakeResponse*>(response.get());
     if (!hs_response)
     {
         return Dive::InternalError(
-        "PerformHandshake: Failed to cast received message to HandShakeResponse.");
+            "PerformHandshake: Failed to cast received message to HandShakeResponse.");
     }
 
     std::cout << "Client: Server Handshake (Server v" << hs_response->GetMajorVersion() << "."
@@ -435,15 +411,10 @@ absl::Status TcpClient::PerformHandshake()
     if (hs_response->GetMajorVersion() != hs_request.GetMajorVersion() ||
         hs_response->GetMinorVersion() != hs_request.GetMinorVersion())
     {
-        return Dive::FailedPreconditionError(
-        absl::StrCat("PerformHandshake: Handshake version mismatch. Server is v",
-                     hs_response->GetMajorVersion(),
-                     ".",
-                     hs_response->GetMinorVersion(),
-                     " Client requires v",
-                     hs_request.GetMajorVersion(),
-                     ".",
-                     hs_request.GetMinorVersion()));
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "PerformHandshake: Handshake version mismatch. Server is v",
+            hs_response->GetMajorVersion(), ".", hs_response->GetMinorVersion(),
+            " Client requires v", hs_request.GetMajorVersion(), ".", hs_request.GetMinorVersion()));
     }
     std::cout << "Client: Handshake versions compatible." << std::endl;
     return Dive::OkStatus();
@@ -473,9 +444,8 @@ void TcpClient::KeepAliveLoop()
     while (m_keep_alive.running.load())
     {
         std::unique_lock<std::mutex> lk(m_keep_alive.mutex);
-        if (m_keep_alive.cv.wait_for(lk, std::chrono::seconds(m_keep_alive.interval_sec), [this] {
-                return !m_keep_alive.running.load();
-            }))
+        if (m_keep_alive.cv.wait_for(lk, std::chrono::seconds(m_keep_alive.interval_sec),
+                                     [this] { return !m_keep_alive.running.load(); }))
         {
             std::cout << "KeepAliveLoop: Client Keep-Alive Thread: Stop signaled via CV."
                       << std::endl;
@@ -524,7 +494,7 @@ void TcpClient::SetClientStatus(ClientStatus status)
     m_status = status;
 }
 
-absl::Status TcpClient::SetStatusAndReturnError(ClientStatus        status,
+absl::Status TcpClient::SetStatusAndReturnError(ClientStatus status,
                                                 const absl::Status& error_status)
 {
     SetClientStatus(status);

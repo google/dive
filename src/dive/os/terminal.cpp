@@ -20,9 +20,9 @@
 #include <ios>
 
 #ifdef _WIN32
-#    include <Windows.h>
-#    include <fcntl.h>
-#    include <io.h>
+#include <Windows.h>
+#include <fcntl.h>
+#include <io.h>
 #endif
 
 namespace Dive

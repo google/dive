@@ -25,7 +25,7 @@ namespace Dive
 
 class Task
 {
-public:
+ public:
     using Function = std::function<void()>;
 
     Task() = default;
@@ -36,14 +36,8 @@ public:
     Task& operator=(const Task& other) = delete;
     Task& operator=(const Function& f) = delete;
 
-    Task(Task&& other) :
-        m_func(std::move(other.m_func))
-    {
-    }
-    Task(Function&& f) :
-        m_func(std::move(f))
-    {
-    }
+    Task(Task&& other) : m_func(std::move(other.m_func)) {}
+    Task(Function&& f) : m_func(std::move(f)) {}
 
     Task& operator=(Task&& other)
     {
@@ -60,13 +54,13 @@ public:
     // operator()() runs the task.
     void operator()() const { m_func(); }
 
-private:
+ private:
     Function m_func;
 };
 
 class TaskRunner
 {
-public:
+ public:
     TaskRunner()
     {
         m_worker_thread = std::thread([this]() {
@@ -86,12 +80,13 @@ public:
         }
     }
 
-    template<typename Function> inline void Schedule(Function&& f)
+    template <typename Function>
+    inline void Schedule(Function&& f)
     {
         Enqueue(Task(std::forward<Function>(f)));
     }
 
-private:
+ private:
     void Enqueue(Task&& task)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -121,10 +116,10 @@ private:
         work();
     }
 
-    std::mutex              m_mutex;
+    std::mutex m_mutex;
     std::condition_variable m_cond;
-    std::deque<Task>        m_task_queue;
-    bool                    m_shutdown = false;
-    std::thread             m_worker_thread;
+    std::deque<Task> m_task_queue;
+    bool m_shutdown = false;
+    std::thread m_worker_thread;
 };
 }  // namespace Dive

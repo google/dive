@@ -20,6 +20,7 @@ limitations under the License.
 #include <future>
 #include <memory>
 
+#include "../dive_core/common/common.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -27,13 +28,11 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-
-#include "../dive_core/common/common.h"
 #include "android_application.h"
-#include "dive/os/command_utils.h"
-#include "constants.h"
 #include "common/log.h"
 #include "common/macros.h"
+#include "constants.h"
+#include "dive/os/command_utils.h"
 #include "dive/utils/component_files.h"
 #include "dive/utils/component_files_constants.h"
 #include "dive/utils/device_resources.h"
@@ -98,28 +97,24 @@ absl::Status ValidatePythonPath(const std::string &python_path)
     {
         return absl::InvalidArgumentError("Python path is empty.");
     }
-    absl::StatusOr<std::string> result = Dive::RunCommand(
-    absl::StrFormat("%s --version", python_path));
+    absl::StatusOr<std::string> result =
+        Dive::RunCommand(absl::StrFormat("%s --version", python_path));
     if (!result.ok())
     {
         return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
-                                                      python_path,
-                                                      result.status().message()));
+                                                      python_path, result.status().message()));
     }
     if (!absl::StrContains(*result, "Python 3"))
     {
-        return absl::FailedPreconditionError(
-        absl::StrFormat("'%s' is not a Python 3 executable. Version output: %s",
-                        python_path,
-                        *result));
+        return absl::FailedPreconditionError(absl::StrFormat(
+            "'%s' is not a Python 3 executable. Version output: %s", python_path, *result));
     }
     LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
     return absl::OkStatus();
 }
 
-absl::Status SetSystemProperty(const AdbSession &adb,
-                               std::string_view  property,
-                               std::string_view  value)
+absl::Status SetSystemProperty(const AdbSession &adb, std::string_view property,
+                               std::string_view value)
 {
     return adb.Run(absl::StrFormat("shell setprop %s %s", property, value));
 }
@@ -150,10 +145,8 @@ absl::Status DisableVulkanLayer(const AdbSession &adb)
 
 // Set the required Android settings in order to implicitly load a `layer` when `app` is run.
 // `layer_app` is the package that Android will search to find `layer`.
-absl::Status EnableVulkanLayer(const AdbSession &adb,
-                               std::string_view  app,
-                               std::string_view  layer,
-                               std::string_view  layer_app = "")
+absl::Status EnableVulkanLayer(const AdbSession &adb, std::string_view app, std::string_view layer,
+                               std::string_view layer_app = "")
 {
     // Start with a clean slate
     RETURN_IF_ERROR(DisableVulkanLayer(adb));
@@ -161,11 +154,11 @@ absl::Status EnableVulkanLayer(const AdbSession &adb,
     RETURN_IF_ERROR(adb.Run("shell settings put global enable_gpu_debug_layers 1"));
     RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell settings put global gpu_debug_app %s", app)));
     RETURN_IF_ERROR(
-    adb.Run(absl::StrFormat("shell settings put global gpu_debug_layers %s", layer)));
+        adb.Run(absl::StrFormat("shell settings put global gpu_debug_layers %s", layer)));
     if (!layer_app.empty())
     {
-        RETURN_IF_ERROR(
-        adb.Run(absl::StrFormat("shell settings put global gpu_debug_layer_app %s", layer_app)));
+        RETURN_IF_ERROR(adb.Run(
+            absl::StrFormat("shell settings put global gpu_debug_layer_app %s", layer_app)));
     }
     return absl::OkStatus();
 }
@@ -211,17 +204,16 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     validated_settings.replay_flags_str = "";
 
     // Parse relevant GFXR replay flags
-    std::vector<std::string> split_args = absl::StrSplit(settings.replay_flags_str,
-                                                         " ",
-                                                         absl::SkipWhitespace());
+    std::vector<std::string> split_args =
+        absl::StrSplit(settings.replay_flags_str, " ", absl::SkipWhitespace());
     if (auto it = std::find(split_args.begin(), split_args.end(), "--loop-single-frame-count");
         it != split_args.end())
     {
         if (settings.loop_single_frame_count.has_value())
         {
             return absl::InvalidArgumentError(
-            "Do not specify loop_single_frame_count in GfxrReplaySettings and also as flag "
-            "--loop-single-frame-count");
+                "Do not specify loop_single_frame_count in GfxrReplaySettings and also as flag "
+                "--loop-single-frame-count");
         }
         try
         {
@@ -231,9 +223,9 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         {
             LOGD("Exception: %s", e.what());
             return absl::InvalidArgumentError(
-            absl::StrFormat("Value specified for --loop-single-frame-count can't be parsed as "
-                            "integer: %s",
-                            *(it + 1)));
+                absl::StrFormat("Value specified for --loop-single-frame-count can't be parsed as "
+                                "integer: %s",
+                                *(it + 1)));
         }
         split_args.erase(it, it + 2);
     }
@@ -243,8 +235,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         if (settings.run_type != GfxrReplayOptions::kNormal)
         {
             return absl::InvalidArgumentError(
-            "Do not specify run_type = kGpuTiming in GfxrReplaySettings and also as flag "
-            "--enable-gpu-time");
+                "Do not specify run_type = kGpuTiming in GfxrReplaySettings and also as flag "
+                "--enable-gpu-time");
         }
         validated_settings.run_type = GfxrReplayOptions::kGpuTiming;
         split_args.erase(it);
@@ -253,89 +245,91 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     // Check for run_type-specific settings
     switch (validated_settings.run_type)
     {
-    case GfxrReplayOptions::kPm4Dump:
-    {
-        if (!is_adreno_gpu)
+        case GfxrReplayOptions::kPm4Dump:
         {
-            return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
+            if (!is_adreno_gpu)
+            {
+                return absl::UnimplementedError("Dump PM4 is only implemented for Adreno GPU");
+            }
+            if (validated_settings.loop_single_frame_count.has_value())
+            {
+                return absl::InvalidArgumentError(
+                    "loop_single_frame_count is hardcoded for kPm4Dump, do not specify");
+            }
+            validated_settings.loop_single_frame_count = 2;
+            if (!validated_settings.metrics.empty())
+            {
+                return absl::InvalidArgumentError(
+                    "Cannot use metrics except for kPerfCounters type run");
+            }
+            break;
         }
-        if (validated_settings.loop_single_frame_count.has_value())
+        case GfxrReplayOptions::kPerfCounters:
         {
-            return absl::InvalidArgumentError(
-            "loop_single_frame_count is hardcoded for kPm4Dump, do not specify");
+            if (!is_adreno_gpu)
+            {
+                return absl::UnimplementedError(
+                    "Perf counters feature is only implemented for Adreno GPU");
+            }
+            if (validated_settings.loop_single_frame_count.has_value())
+            {
+                return absl::InvalidArgumentError(
+                    "loop_single_frame_count is hardcoded for kPerfCounters, do not specify");
+            }
+            validated_settings.loop_single_frame_count = 0;
+            if (validated_settings.metrics.size() == 0)
+            {
+                // Profiling binary will provide its own set of default metrics for debugging
+                // purposes, but when initiating profiling replay through Dive, user-specified
+                // metrics are required.
+                return absl::InvalidArgumentError(
+                    "Must provide metrics for kPerfCounters type run");
+            }
+            if (validated_settings.use_validation_layer)
+            {
+                return absl::InvalidArgumentError(
+                    "use_validation_layer is not allowed for kPerfCounters");
+            }
+            break;
         }
-        validated_settings.loop_single_frame_count = 2;
-        if (!validated_settings.metrics.empty())
+        case GfxrReplayOptions::kRenderDoc:
         {
-            return absl::InvalidArgumentError(
-            "Cannot use metrics except for kPerfCounters type run");
+            if (validated_settings.loop_single_frame_count.has_value())
+            {
+                return absl::InvalidArgumentError(
+                    "loop_single_frame_count is hardcoded for kRenderDoc, do not specify");
+            }
+            // Since RenderDoc is a debugging tool, not a profiling tool, we only need one copy of
+            // all draw calls. Having multiple copies just bloats the file size.
+            validated_settings.loop_single_frame_count = 1;
+            if (!validated_settings.metrics.empty())
+            {
+                return absl::InvalidArgumentError(
+                    "Cannot use metrics except for kPerfCounters type run");
+            }
+            if (validated_settings.use_validation_layer)
+            {
+                return absl::InvalidArgumentError(
+                    "use_validation_layer is not allowed for kRenderDoc");
+            }
+            break;
         }
-        break;
-    }
-    case GfxrReplayOptions::kPerfCounters:
-    {
-        if (!is_adreno_gpu)
+        case GfxrReplayOptions::kNormal:
+        default:
         {
-            return absl::UnimplementedError(
-            "Perf counters feature is only implemented for Adreno GPU");
+            if (!validated_settings.metrics.empty())
+            {
+                return absl::InvalidArgumentError(
+                    "Cannot use metrics except for kPerfCounters type run");
+            }
+            // value_or(1) since the default used by DiveFileProcessor is 1
+            if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
+            {
+                return absl::InvalidArgumentError(
+                    "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
+            }
+            break;
         }
-        if (validated_settings.loop_single_frame_count.has_value())
-        {
-            return absl::InvalidArgumentError(
-            "loop_single_frame_count is hardcoded for kPerfCounters, do not specify");
-        }
-        validated_settings.loop_single_frame_count = 0;
-        if (validated_settings.metrics.size() == 0)
-        {
-            // Profiling binary will provide its own set of default metrics for debugging purposes,
-            // but when initiating profiling replay through Dive, user-specified metrics are
-            // required.
-            return absl::InvalidArgumentError("Must provide metrics for kPerfCounters type run");
-        }
-        if (validated_settings.use_validation_layer)
-        {
-            return absl::InvalidArgumentError(
-            "use_validation_layer is not allowed for kPerfCounters");
-        }
-        break;
-    }
-    case GfxrReplayOptions::kRenderDoc:
-    {
-        if (validated_settings.loop_single_frame_count.has_value())
-        {
-            return absl::InvalidArgumentError(
-            "loop_single_frame_count is hardcoded for kRenderDoc, do not specify");
-        }
-        // Since RenderDoc is a debugging tool, not a profiling tool, we only need one copy of all
-        // draw calls. Having multiple copies just bloats the file size.
-        validated_settings.loop_single_frame_count = 1;
-        if (!validated_settings.metrics.empty())
-        {
-            return absl::InvalidArgumentError(
-            "Cannot use metrics except for kPerfCounters type run");
-        }
-        if (validated_settings.use_validation_layer)
-        {
-            return absl::InvalidArgumentError("use_validation_layer is not allowed for kRenderDoc");
-        }
-        break;
-    }
-    case GfxrReplayOptions::kNormal:
-    default:
-    {
-        if (!validated_settings.metrics.empty())
-        {
-            return absl::InvalidArgumentError(
-            "Cannot use metrics except for kPerfCounters type run");
-        }
-        // value_or(1) since the default used by DiveFileProcessor is 1
-        if (validated_settings.loop_single_frame_count.value_or(1) <= 0)
-        {
-            return absl::InvalidArgumentError(
-            "loop_single_frame_count must be >0 for kGpuTiming and kNormal runs");
-        }
-        break;
-    }
     }
 
     // Re-concatenate flags to form a validated replay_flags_str
@@ -363,11 +357,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     return validated_settings;
 }
 
-AndroidDevice::AndroidDevice(const std::string &serial) :
-    m_serial(serial),
-    m_adb(serial),
-    m_gfxr_enabled(false),
-    m_port(kFirstPort)
+AndroidDevice::AndroidDevice(const std::string &serial)
+    : m_serial(serial), m_adb(serial), m_gfxr_enabled(false), m_port(kFirstPort)
 {
     CleanupDevice().IgnoreError();
 }
@@ -417,8 +408,8 @@ absl::Status AndroidDevice::CheckAbi()
     // Determine if the device's ABI matches the Dive installed device resources ABI
     std::string installed_abi = "";
     {
-        absl::StatusOr<std::string> ret = Dive::GetDeviceResourceInfo(
-        Dive::VersionInfoConstants::kNameAbi);
+        absl::StatusOr<std::string> ret =
+            Dive::GetDeviceResourceInfo(Dive::VersionInfoConstants::kNameAbi);
         if (!ret.ok())
         {
             return ret.status();
@@ -429,11 +420,10 @@ absl::Status AndroidDevice::CheckAbi()
     ASSIGN_OR_RETURN(device_abi, Adb().RunAndGetResult("shell getprop ro.product.cpu.abi"));
     if (device_abi != installed_abi)
     {
-        std::string
-        err_msg = absl::StrFormat("Mismatched device abi (%s) vs the target for which device "
-                                  "resources were built (%s)",
-                                  device_abi,
-                                  installed_abi);
+        std::string err_msg = absl::StrFormat(
+            "Mismatched device abi (%s) vs the target for which device "
+            "resources were built (%s)",
+            device_abi, installed_abi);
         return absl::FailedPreconditionError(err_msg);
     }
 
@@ -453,15 +443,12 @@ absl::Status AndroidDevice::RequestRootAccess()
     return absl::OkStatus();
 }
 
-std::string AndroidDevice::GetDeviceDisplayName() const
-{
-    return m_dev_info.GetDisplayName();
-}
+std::string AndroidDevice::GetDeviceDisplayName() const { return m_dev_info.GetDisplayName(); }
 
 absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListOptions option) const
 {
     std::vector<std::string> package_list;
-    std::string              cmd = "shell pm list packages";
+    std::string cmd = "shell pm list packages";
 
     if (option != PackageListOptions::kAll && option != PackageListOptions::kNonDebuggableOnly)
     {
@@ -535,7 +522,7 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
     for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
     {
         auto res = Adb().RunAndGetResult(
-        absl::StrFormat("forward tcp:%d localabstract:%s", p, kUnixAbstractPath));
+            absl::StrFormat("forward tcp:%d localabstract:%s", p, kUnixAbstractPath));
         if (res.ok())
         {
             m_port = p;
@@ -544,8 +531,7 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
     }
     return absl::Status(absl::StatusCode::kUnknown,
                         absl::StrFormat("Failed to forward available port between %d and %d",
-                                        kFirstPort,
-                                        kFirstPort + kPortRange));
+                                        kFirstPort, kFirstPort + kPortRange));
 }
 
 absl::Status AndroidDevice::SetupDevice()
@@ -564,8 +550,7 @@ absl::Status AndroidDevice::SetupDevice()
 
 absl::Status AndroidDevice::CleanupDevice()
 {
-    LOGI("%s AndroidDevice::CleanupDevice(): package %s\n",
-         Dive::kLogPrefixCleanup,
+    LOGI("%s AndroidDevice::CleanupDevice(): package %s\n", Dive::kLogPrefixCleanup,
          m_serial.c_str());
 
     UnpinGpuClock().IgnoreError();
@@ -596,9 +581,9 @@ absl::Status AndroidDevice::CleanupDevice()
     }
 
     Adb()
-    .Run(absl::StrFormat("shell rm -rf -- %s",
-                         Dive::DeviceResourcesConstants::kDeployManifestFolderPath))
-    .IgnoreError();
+        .Run(absl::StrFormat("shell rm -rf -- %s",
+                             Dive::DeviceResourcesConstants::kDeployManifestFolderPath))
+        .IgnoreError();
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
     if (output.ok())
@@ -622,51 +607,49 @@ absl::Status AndroidDevice::CleanupDevice()
     CleanupFileWithPermissions(/*package=*/kGfxrReplayAppName,
                                /*file_name=*/
                                Dive::DeviceResourcesConstants::kVkValidationLayerLibName)
-    .IgnoreError();
+        .IgnoreError();
 
     // clean up for gfxr replay app
     Adb()
-    .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default", kGfxrReplayAppName))
-    .IgnoreError();
+        .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default",
+                             kGfxrReplayAppName))
+        .IgnoreError();
     Adb().Run(absl::StrFormat("uninstall %s", kGfxrReplayAppName)).IgnoreError();
     Adb().Run("shell settings delete global verifier_verify_adb_installs").IgnoreError();
     Adb().Run("shell am clear-debug-app").IgnoreError();
 
     // cleanup for gfxr PM4 capture
     Adb()
-    .Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
-    .IgnoreError();
+        .Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
+        .IgnoreError();
     Adb()
-    .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
-    .IgnoreError();
+        .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
+        .IgnoreError();
 
     // clean up entire deployment folder (kDeployFolderPath)
     Adb()
-    .Run(absl::StrFormat("shell rm -rf -- %s", Dive::DeviceResourcesConstants::kDeployFolderPath))
-    .IgnoreError();
+        .Run(absl::StrFormat("shell rm -rf -- %s",
+                             Dive::DeviceResourcesConstants::kDeployFolderPath))
+        .IgnoreError();
 
-    LOGI("%s AndroidDevice::CleanupDevice(): package %s done\n",
-         Dive::kLogPrefixCleanup,
+    LOGI("%s AndroidDevice::CleanupDevice(): package %s done\n", Dive::kLogPrefixCleanup,
          m_serial.c_str());
     return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::CleanupPackageProperties(const std::string &package)
 {
-    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s\n",
-         Dive::kLogPrefixCleanup,
+    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s\n", Dive::kLogPrefixCleanup,
          package.c_str());
     Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)).IgnoreError();
-    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s done\n",
-         Dive::kLogPrefixCleanup,
+    LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s done\n", Dive::kLogPrefixCleanup,
          package.c_str());
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::SetupApp(const std::string    &package,
-                                     const ApplicationType type,
-                                     const std::string    &command_args,
-                                     const std::string    &gfxr_capture_directory)
+absl::Status AndroidDevice::SetupApp(const std::string &package, const ApplicationType type,
+                                     const std::string &command_args,
+                                     const std::string &gfxr_capture_directory)
 {
     if (type == ApplicationType::VULKAN_APK)
     {
@@ -706,10 +689,9 @@ absl::Status AndroidDevice::SetupApp(const std::string    &package,
     return m_app->Setup();
 }
 
-absl::Status AndroidDevice::SetupApp(const std::string    &command,
-                                     const std::string    &command_args,
+absl::Status AndroidDevice::SetupApp(const std::string &command, const std::string &command_args,
                                      const ApplicationType type,
-                                     const std::string    &gfxr_capture_directory)
+                                     const std::string &gfxr_capture_directory)
 {
     assert(type == ApplicationType::VULKAN_CLI);
     m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
@@ -760,9 +742,9 @@ absl::Status AndroidDevice::StopApp()
 std::vector<DeviceInfo> DeviceManager::ListDevice() const
 {
     std::vector<std::string> serial_list;
-    std::vector<DeviceInfo>  dev_list;
+    std::vector<DeviceInfo> dev_list;
 
-    std::string                 output;
+    std::string output;
     absl::StatusOr<std::string> result = RunCommand("adb devices");
     if (result.ok())
     {
@@ -778,8 +760,7 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
     for (const auto &line : lines)
     {
         std::vector<std::string> fields = absl::StrSplit(line, '\t');
-        if (fields.size() == 2 && fields[1] == "device")
-            serial_list.push_back(fields[0]);
+        if (fields.size() == 2 && fields[1] == "device") serial_list.push_back(fields[0]);
     }
 
     for (auto &serial : serial_list)
@@ -847,26 +828,28 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     if (absl::Status status = adb.Run("shell settings put global verifier_verify_adb_installs 0");
         !status.ok())
     {
-        LOGI("Couldn't set verifier_verify_adb_installs to 0. If replay doesn't install, look "
-             "at the device for popups or logcat for the reason. This can also be set manually "
-             "by turning off 'Verify apps over USB' in Developer Options. Reason: %s\n",
-             std::string(status.message()).c_str());
+        LOGI(
+            "Couldn't set verifier_verify_adb_installs to 0. If replay doesn't install, look "
+            "at the device for popups or logcat for the reason. This can also be set manually "
+            "by turning off 'Verify apps over USB' in Developer Options. Reason: %s\n",
+            std::string(status.message()).c_str());
     }
     absl::Cleanup enable_verify_adb_installs = [&adb] {
-        if (absl::Status status = adb.Run(
-            "shell settings delete global verifier_verify_adb_installs");
+        if (absl::Status status =
+                adb.Run("shell settings delete global verifier_verify_adb_installs");
             !status.ok())
         {
-            LOGI("Couldn't set verifier_verify_adb_installs to 1. Manually turn on 'Verify "
-                 "apps over USB' in Developer Options as soon as possible! Reason: %s\n",
-                 std::string(status.message()).c_str());
+            LOGI(
+                "Couldn't set verifier_verify_adb_installs to 1. Manually turn on 'Verify "
+                "apps over USB' in Developer Options as soon as possible! Reason: %s\n",
+                std::string(status.message()).c_str());
         }
     };
 
     std::filesystem::path local_replay_apk_path;
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
-        Dive::DeviceResourcesConstants::kGfxrReplayApkName);
+        absl::StatusOr<std::filesystem::path> ret =
+            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReplayApkName);
         if (!ret.ok())
         {
             return ret.status();
@@ -875,19 +858,17 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     }
     std::filesystem::path local_recon_py_path;
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
-        Dive::DeviceResourcesConstants::kGfxrReconPyName);
+        absl::StatusOr<std::filesystem::path> ret =
+            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
         if (!ret.ok())
         {
             return ret.status();
         }
         local_recon_py_path = *ret;
     }
-    std::string                 cmd = absl::StrFormat("%s %s install-apk %s -s %s",
-                                      python_path,
+    std::string cmd = absl::StrFormat("%s %s install-apk %s -s %s", python_path,
                                       local_recon_py_path.generic_string(),
-                                      local_replay_apk_path.generic_string(),
-                                      serial);
+                                      local_replay_apk_path.generic_string(), serial);
     absl::StatusOr<std::string> res = RunCommand(cmd);
     if (!res.ok())
     {
@@ -917,10 +898,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         if (settings.run_type == GfxrReplayOptions::kPm4Dump)
         {
             adb.Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
-            .IgnoreError();
-            adb
-            .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
-            .IgnoreError();
+                .IgnoreError();
+            adb.Run(
+                   absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
+                .IgnoreError();
         }
         else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
         {
@@ -932,10 +913,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         {
             DisableVulkanLayer(adb).IgnoreError();
             m_device
-            ->CleanupFileWithPermissions(/*package=*/kGfxrReplayAppName,
-                                         /*file_name=*/
-                                         Dive::DeviceResourcesConstants::kVkValidationLayerLibName)
-            .IgnoreError();
+                ->CleanupFileWithPermissions(
+                    /*package=*/kGfxrReplayAppName,
+                    /*file_name=*/
+                    Dive::DeviceResourcesConstants::kVkValidationLayerLibName)
+                .IgnoreError();
         }
     });
     LOGD("RunReplayGfxrScript(): SETUP\n");
@@ -943,19 +925,17 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
     // These are only used if kPm4Dump
     std::string dump_pm4_file_name = parse_remote_capture.stem().string() + ".rd";
-    std::string remote_pm4_path = absl::StrFormat("%s/%s",
-                                                  kDeviceCapturePath,
-                                                  dump_pm4_file_name.c_str());
-    std::string remote_pm4_inprogress_path = absl::StrFormat("%s.inprogress",
-                                                             remote_pm4_path.c_str());
+    std::string remote_pm4_path =
+        absl::StrFormat("%s/%s", kDeviceCapturePath, dump_pm4_file_name.c_str());
+    std::string remote_pm4_inprogress_path =
+        absl::StrFormat("%s.inprogress", remote_pm4_path.c_str());
 
     if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
         LOGD("RunReplayGfxrScript(): PM4 capture file name is %s\n", dump_pm4_file_name.c_str());
         std::string cmd = absl::StrFormat("shell setprop %s 1", kEnableReplayPm4DumpPropertyName);
         RETURN_IF_ERROR(adb.Run(cmd));
-        cmd = absl::StrFormat("shell setprop %s \"%s\"",
-                              kReplayPm4DumpFileNamePropertyName,
+        cmd = absl::StrFormat("shell setprop %s \"%s\"", kReplayPm4DumpFileNamePropertyName,
                               dump_pm4_file_name);
         RETURN_IF_ERROR(adb.Run(cmd));
     }
@@ -964,11 +944,11 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
         if (absl::Status status = IsAppInstalled(adb, kRenderDocAppName); !status.ok())
         {
             return absl::FailedPreconditionError(
-            absl::StrFormat("Can't perform a RenderDoc capture since the RenderDoc app is not "
-                            "installed on the target device. Either install the RenderDoc app "
-                            "using the UI or by manually running adb install --force-queryable "
-                            "%s.apk. The APK is provided in every RenderDoc release.",
-                            kRenderDocAppName));
+                absl::StrFormat("Can't perform a RenderDoc capture since the RenderDoc app is not "
+                                "installed on the target device. Either install the RenderDoc app "
+                                "using the UI or by manually running adb install --force-queryable "
+                                "%s.apk. The APK is provided in every RenderDoc release.",
+                                kRenderDocAppName));
         }
         RETURN_IF_ERROR(SetSystemProperty(adb, kReplayCreateRenderDocCapture, "1"));
         RETURN_IF_ERROR(EnableVulkanLayer(adb,
@@ -979,10 +959,10 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
     if (settings.use_validation_layer)
     {
-        RETURN_IF_ERROR(
-        m_device->CopyWithPermissions(/*package=*/kGfxrReplayAppName,
-                                      /*file_name=*/
-                                      Dive::DeviceResourcesConstants::kVkValidationLayerLibName));
+        RETURN_IF_ERROR(m_device->CopyWithPermissions(
+            /*package=*/kGfxrReplayAppName,
+            /*file_name=*/
+            Dive::DeviceResourcesConstants::kVkValidationLayerLibName));
         RETURN_IF_ERROR(EnableVulkanLayer(adb,
                                           /*app=*/kGfxrReplayAppName,
                                           /*layer=*/kVkValidationLayerName));
@@ -994,19 +974,17 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
 
     std::filesystem::path local_recon_py_path;
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
-        Dive::DeviceResourcesConstants::kGfxrReconPyName);
+        absl::StatusOr<std::filesystem::path> ret =
+            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
         if (!ret.ok())
         {
             return ret.status();
         }
         local_recon_py_path = *ret;
     }
-    std::string cmd = absl::StrFormat("%s %s replay %s %s",
-                                      python_path,
-                                      local_recon_py_path.generic_string(),
-                                      settings.remote_capture_path,
-                                      settings.replay_flags_str);
+    std::string cmd =
+        absl::StrFormat("%s %s replay %s %s", python_path, local_recon_py_path.generic_string(),
+                        settings.remote_capture_path, settings.replay_flags_str);
     if (absl::StatusOr<std::string> res = RunCommand(cmd); !res.ok())
     {
         return res.status();
@@ -1031,61 +1009,51 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
             !s.ok())
         {
             return absl::InternalError(
-            absl::StrFormat("Failed to download the trace file (%s), error:%s\n",
-                            remote_pm4_path,
-                            s.message()));
+                absl::StrFormat("Failed to download the trace file (%s), error:%s\n",
+                                remote_pm4_path, s.message()));
         }
-        LOGI("Trace file %s downloaded to %s\n",
-             remote_pm4_path.c_str(),
+        LOGI("Trace file %s downloaded to %s\n", remote_pm4_path.c_str(),
              settings.local_download_dir.c_str());
     }
     else if (settings.run_type == GfxrReplayOptions::kGpuTiming)
     {
         // TODO: Refactor for remote component file paths
-        std::string
-        remote_gpu_time_path = absl::StrFormat("%s/%s",
-                                               parse_remote_capture.parent_path().string().c_str(),
-                                               kGpuTimingFile);
+        std::string remote_gpu_time_path = absl::StrFormat(
+            "%s/%s", parse_remote_capture.parent_path().string().c_str(), kGpuTimingFile);
 
         std::string gpu_time_csv_local_name = "";
         {
-            absl::StatusOr<Dive::ComponentFilePaths>
-            ret = GetComponentFilesHostPaths(settings.local_download_dir,
-                                             parse_remote_capture.stem().string());
+            absl::StatusOr<Dive::ComponentFilePaths> ret = GetComponentFilesHostPaths(
+                settings.local_download_dir, parse_remote_capture.stem().string());
             if (!ret.ok())
             {
                 return ret.status();
             }
             gpu_time_csv_local_name = ret->gpu_timing_csv.filename().string();
         }
-        if (absl::Status s = m_device->RetrieveFile(remote_gpu_time_path,
-                                                    settings.local_download_dir,
-                                                    /*delete_after_retrieve=*/true,
-                                                    gpu_time_csv_local_name);
+        if (absl::Status s =
+                m_device->RetrieveFile(remote_gpu_time_path, settings.local_download_dir,
+                                       /*delete_after_retrieve=*/true, gpu_time_csv_local_name);
             !s.ok())
         {
-            return absl::InternalError(
-            absl::StrFormat("Failed to download the gpu time csv file: %s\n",
-                            remote_gpu_time_path.c_str()));
+            return absl::InternalError(absl::StrFormat(
+                "Failed to download the gpu time csv file: %s\n", remote_gpu_time_path.c_str()));
         }
-        LOGI("Gpu time file %s downloaded to %s\n",
-             remote_gpu_time_path.c_str(),
+        LOGI("Gpu time file %s downloaded to %s\n", remote_gpu_time_path.c_str(),
              settings.local_download_dir.c_str());
     }
     else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
     {
-        std::string remote_renderdoc_capture = GetRenderDocCaptureFilePath(
-                                               settings.remote_capture_path)
-                                               .generic_string();
-        if (absl::Status status = m_device->RetrieveFile(remote_renderdoc_capture,
-                                                         settings.local_download_dir,
-                                                         /*delete_after_retrieve=*/true);
+        std::string remote_renderdoc_capture =
+            GetRenderDocCaptureFilePath(settings.remote_capture_path).generic_string();
+        if (absl::Status status =
+                m_device->RetrieveFile(remote_renderdoc_capture, settings.local_download_dir,
+                                       /*delete_after_retrieve=*/true);
             !status.ok())
         {
             return absl::InternalError(
-            absl::StrFormat("Failed to download the RenderDoc time rdc file (%s) error: %s",
-                            remote_renderdoc_capture,
-                            status.message()));
+                absl::StrFormat("Failed to download the RenderDoc time rdc file (%s) error: %s",
+                                remote_renderdoc_capture, status.message()));
         }
     }
 
@@ -1100,11 +1068,10 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
 
     RETURN_IF_ERROR(
-    m_device->DeployDeviceResource(Dive::DeviceResourcesConstants::kProfilingPluginFolderName));
-    std::string remote_profiling_dir = absl::
-    StrFormat("%s/%s",
-              Dive::DeviceResourcesConstants::kDeployFolderPath,
-              Dive::DeviceResourcesConstants::kProfilingPluginFolderName);
+        m_device->DeployDeviceResource(Dive::DeviceResourcesConstants::kProfilingPluginFolderName));
+    std::string remote_profiling_dir =
+        absl::StrFormat("%s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath,
+                        Dive::DeviceResourcesConstants::kProfilingPluginFolderName);
 
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
@@ -1112,33 +1079,28 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
         adb.Run(clean_cmd).IgnoreError();
     });
 
-    std::string binary_path_on_device = absl::StrFormat("%s/%s",
-                                                        remote_profiling_dir,
-                                                        kProfilingPluginName);
+    std::string binary_path_on_device =
+        absl::StrFormat("%s/%s", remote_profiling_dir, kProfilingPluginName);
     RETURN_IF_ERROR(adb.Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
 
     LOGD("RunReplayProfilingBinary(): RUN\n");
     std::string metrics_str = absl::StrJoin(settings.metrics, " ");
-    std::string gfxr_replay_flag = settings.replay_flags_str.empty() ?
-                                   "" :
-                                   absl::StrFormat("--gfxr_replay_flags \\\"%s\\\"",
-                                                   settings.replay_flags_str);
-    std::string cmd = absl::StrFormat("shell %s %s %s %s",
-                                      binary_path_on_device,
-                                      settings.remote_capture_path,
-                                      gfxr_replay_flag,
-                                      metrics_str);
+    std::string gfxr_replay_flag =
+        settings.replay_flags_str.empty()
+            ? ""
+            : absl::StrFormat("--gfxr_replay_flags \\\"%s\\\"", settings.replay_flags_str);
+    std::string cmd = absl::StrFormat("shell %s %s %s %s", binary_path_on_device,
+                                      settings.remote_capture_path, gfxr_replay_flag, metrics_str);
     // TODO(b/449174476): Remove this redundant statement when the command is logged before it hangs
     LOGD("Profiling binary cmd: %s\n", cmd.c_str());
     RETURN_IF_ERROR(adb.Run(cmd));
 
     LOGD("RunReplayProfilingBinary(): RETRIEVE ARTIFACTS\n");
     std::filesystem::path parse_remote_path = settings.remote_capture_path;
-    std::string           perf_counter_csv_local_name = "";
+    std::string perf_counter_csv_local_name = "";
     {
-        absl::StatusOr<Dive::ComponentFilePaths>
-        ret = GetComponentFilesHostPaths(settings.local_download_dir,
-                                         parse_remote_path.stem().string());
+        absl::StatusOr<Dive::ComponentFilePaths> ret = GetComponentFilesHostPaths(
+            settings.local_download_dir, parse_remote_path.stem().string());
         if (!ret.ok())
         {
             return ret.status();
@@ -1148,20 +1110,17 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     // TODO: Refactor for remote component file paths
     std::string csv_remote_file_path = parse_remote_path.replace_extension(".csv").string();
 
-    if (absl::Status s = m_device->RetrieveFile(csv_remote_file_path,
-                                                settings.local_download_dir,
-                                                /*delete_after_retrieve=*/true,
-                                                perf_counter_csv_local_name);
+    if (absl::Status s =
+            m_device->RetrieveFile(csv_remote_file_path, settings.local_download_dir,
+                                   /*delete_after_retrieve=*/true, perf_counter_csv_local_name);
         !s.ok())
     {
         return absl::InternalError(
-        absl::StrFormat("Failed to download the .csv file (%s), error:%s\n",
-                        csv_remote_file_path,
-                        s.message()));
+            absl::StrFormat("Failed to download the .csv file (%s), error:%s\n",
+                            csv_remote_file_path, s.message()));
     }
     LOGI("RunReplayProfilingBinary(): .csv file %s downloaded to %s\n",
-         csv_remote_file_path.c_str(),
-         settings.local_download_dir.c_str());
+         csv_remote_file_path.c_str(), settings.local_download_dir.c_str());
 
     return absl::OkStatus();
 }
@@ -1171,8 +1130,8 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     const AdbSession &adb = m_device->Adb();
 
     LOGD("RunReplayApk(): Check settings before run\n");
-    absl::StatusOr<Dive::GfxrReplaySettings>
-    validated_settings = ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
+    absl::StatusOr<Dive::GfxrReplaySettings> validated_settings =
+        ValidateGfxrReplaySettings(settings, m_device->IsAdrenoGpu());
     if (!validated_settings.ok())
     {
         return validated_settings.status();
@@ -1228,7 +1187,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     if (validated_settings->wait_for_debugger)
     {
         RETURN_IF_ERROR(
-        adb.Run(absl::StrFormat("shell am set-debug-app -w %s", kGfxrReplayAppName)));
+            adb.Run(absl::StrFormat("shell am set-debug-app -w %s", kGfxrReplayAppName)));
     }
     absl::Cleanup clear_debug_app = [&validated_settings, &adb]() {
         if (validated_settings->wait_for_debugger)
@@ -1264,7 +1223,7 @@ absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
     if (package.empty())
     {
         return absl::FailedPreconditionError(
-        "Cannot clean package properties of unspecified package");
+            "Cannot clean package properties of unspecified package");
     }
     if (absl::Status ret = GetDevice()->CleanupPackageProperties(package); !ret.ok())
     {
@@ -1275,7 +1234,7 @@ absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
 
 absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
                                          const std::string &local_save_dir,
-                                         bool               delete_after_retrieve,
+                                         bool delete_after_retrieve,
                                          const std::string &new_file_name)
 {
     if (!std::filesystem::is_directory(local_save_dir))
@@ -1291,10 +1250,10 @@ absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
         auto new_ext = std::filesystem::path(new_file_name).extension();
         if (original_ext.string() != new_ext.string())
         {
-            std::string error_msg = absl::StrFormat("Invalid new_file_name extension (%s), needs "
-                                                    "to be consistent with original extension (%s)",
-                                                    remote_file_path,
-                                                    new_file_name);
+            std::string error_msg = absl::StrFormat(
+                "Invalid new_file_name extension (%s), needs "
+                "to be consistent with original extension (%s)",
+                remote_file_path, new_file_name);
             return absl::FailedPreconditionError(error_msg);
         }
         local_save_path /= new_file_name;
@@ -1302,7 +1261,7 @@ absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
 
     // "adb pull" can handle a destination directory or file path
     RETURN_IF_ERROR(
-    Adb().Run(absl::StrFormat(R"(pull "%s" "%s")", remote_file_path, local_save_path)));
+        Adb().Run(absl::StrFormat(R"(pull "%s" "%s")", remote_file_path, local_save_path)));
 
     if (!delete_after_retrieve)
     {
@@ -1312,19 +1271,14 @@ absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
     return Adb().Run(absl::StrFormat("shell rm -rf %s", remote_file_path));
 }
 
-void AndroidDevice::EnableGfxr(bool enable_gfxr)
-{
-    m_gfxr_enabled = enable_gfxr;
-}
+void AndroidDevice::EnableGfxr(bool enable_gfxr) { m_gfxr_enabled = enable_gfxr; }
 
 bool AndroidDevice::IsProcessRunning(absl::string_view process_name) const
 {
     auto res = Adb().RunAndGetResult(absl::StrCat("shell pidof ", process_name));
-    if (!res.ok())
-        return false;
+    if (!res.ok()) return false;
     std::string pid = *res;
-    if (pid.empty())
-        return false;
+    if (pid.empty()) return false;
     return true;
 }
 
@@ -1364,7 +1318,7 @@ absl::Status AndroidDevice::UnpinGpuClock() const
 absl::StatusOr<uint32_t> AndroidDevice::GetGpuFrequency() const
 {
     std::string cmd = absl::StrFormat("shell cat %s", kDeviceCurFreqPath);
-    auto        res = m_adb.RunAndGetResult(cmd);
+    auto res = m_adb.RunAndGetResult(cmd);
     if (!res.ok())
     {
         return res.status();
@@ -1382,17 +1336,16 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
     auto res = GetGpuFrequency();
     if (!res.ok())
     {
-        std::string err_str = absl::StrFormat("Could not check GPU clock frequency: %s\n",
-                                              res.status().message());
+        std::string err_str =
+            absl::StrFormat("Could not check GPU clock frequency: %s\n", res.status().message());
         return absl::InternalError(err_str);
     }
 
     uint32_t expected_freq_hz = expected_freq_mhz * 1000000;
     if (*res != expected_freq_hz)
     {
-        std::string err_str = absl::StrFormat("Expecting GPU clock frequency %d, got %d\n",
-                                              expected_freq_hz,
-                                              *res);
+        std::string err_str =
+            absl::StrFormat("Expecting GPU clock frequency %d, got %d\n", expected_freq_hz, *res);
         return absl::InternalError(err_str);
     }
 
@@ -1400,16 +1353,15 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
 }
 
 absl::Status AndroidDevice::TriggerScreenCapture(
-const std::filesystem::path &on_device_screenshot_dir)
+    const std::filesystem::path &on_device_screenshot_dir)
 {
     // If the path segment has an extension, it is invalid for a directory name.
     if (on_device_screenshot_dir.has_extension())
     {
-        return absl::InvalidArgumentError(
-        absl::
-        StrFormat("Invalid screenshot directory '%s'. Path appears to contain a file extension "
-                  "and must be a directory.",
-                  on_device_screenshot_dir.string()));
+        return absl::InvalidArgumentError(absl::StrFormat(
+            "Invalid screenshot directory '%s'. Path appears to contain a file extension "
+            "and must be a directory.",
+            on_device_screenshot_dir.string()));
     }
 
     std::filesystem::path full_capture_path = std::filesystem::path(Dive::kDeviceCapturePath) /
@@ -1418,12 +1370,12 @@ const std::filesystem::path &on_device_screenshot_dir)
 
     std::string on_device_capture_screen_shot = full_capture_path.generic_string();
 
-    absl::Status ret = m_adb.Run(
-    absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+    absl::Status ret =
+        m_adb.Run(absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
     return ret;
 }
 
-absl::Status AndroidDevice::DeployDeviceResource(const std::string_view      &file_name,
+absl::Status AndroidDevice::DeployDeviceResource(const std::string_view &file_name,
                                                  const std::filesystem::path &target_dir)
 {
     std::filesystem::path host_full_lib_path;
@@ -1439,16 +1391,14 @@ absl::Status AndroidDevice::DeployDeviceResource(const std::string_view      &fi
     RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell mkdir -p '%s')", target_dir)));
 
     return m_adb.Run(
-    absl::StrFormat(R"(push "%s" "%s")", host_full_lib_path.generic_string(), target_dir));
+        absl::StrFormat(R"(push "%s" "%s")", host_full_lib_path.generic_string(), target_dir));
 }
 
 absl::Status AndroidDevice::CopyWithPermissions(std::string_view package,
                                                 std::string_view file_name)
 {
-    return m_adb.Run(absl::StrFormat(R"(shell run-as %s cp '%s/%s' .)",
-                                     package,
-                                     Dive::DeviceResourcesConstants::kDeployFolderPath,
-                                     file_name));
+    return m_adb.Run(absl::StrFormat(R"(shell run-as %s cp '%s/%s' .)", package,
+                                     Dive::DeviceResourcesConstants::kDeployFolderPath, file_name));
 }
 
 absl::Status AndroidDevice::CleanupFileWithPermissions(std::string_view package,

@@ -17,13 +17,14 @@
 
 #pragma once
 
-#include "vulkan/vulkan_core.h"
 #include <array>
 #include <set>
 #include <vector>
-#include "dive_core/context.h"
+
 #include "dive_core/capture_event_info.h"
+#include "dive_core/context.h"
 #include "dive_core/data_core.h"
+#include "vulkan/vulkan_core.h"
 
 namespace Dive
 {
@@ -167,13 +168,12 @@ enum WindowScissorStats
 };
 
 inline const char *window_scissor_stats_desc[kNumWindowScissorStats] = {
-    "Window scissors", "tl_x", "br_x", "tl_y", "br_y", "Width", "Height"
-};
+    "Window scissors", "tl_x", "br_x", "tl_y", "br_y", "Width", "Height"};
 
 struct Viewport
 {
     VkViewport m_vk_viewport;
-    bool       operator<(const Viewport &other) const
+    bool operator<(const Viewport &other) const
     {
         if (m_vk_viewport.x != other.m_vk_viewport.x)
             return m_vk_viewport.x < other.m_vk_viewport.x;
@@ -195,18 +195,14 @@ struct WindowScissor
     uint32_t m_tl_y;
     uint32_t m_br_x;
     uint32_t m_br_y;
-    bool     operator<(const WindowScissor &other) const
+    bool operator<(const WindowScissor &other) const
     {
         uint32_t area = (m_br_x - m_tl_x) * (m_br_y - m_tl_y);
         uint32_t other_area = (other.m_br_x - other.m_tl_x) * (other.m_br_y - other.m_tl_y);
-        if (area != other_area)
-            return area < other_area;
-        if (m_tl_y != other.m_tl_y)
-            return m_tl_y < other.m_tl_y;
-        if (m_tl_x != other.m_tl_x)
-            return m_tl_x < other.m_tl_x;
-        if (m_br_y != other.m_br_y)
-            return m_br_y < other.m_br_y;
+        if (area != other_area) return area < other_area;
+        if (m_tl_y != other.m_tl_y) return m_tl_y < other.m_tl_y;
+        if (m_tl_x != other.m_tl_x) return m_tl_x < other.m_tl_x;
+        if (m_br_y != other.m_br_y) return m_br_y < other.m_br_y;
         return m_br_x < other.m_br_x;
     }
 };
@@ -222,8 +218,8 @@ struct CaptureStats
     std::vector<uint32_t> m_event_num_indices;
 
     std::set<Dive::ShaderReference> m_shader_ref_set;
-    std::set<Viewport>              m_viewports;
-    std::set<WindowScissor>         m_window_scissors;
+    std::set<Viewport> m_viewports;
+    std::set<WindowScissor> m_window_scissors;
 
     uint32_t m_num_binning_passes = 0;
     uint32_t m_num_tiling_passes = 0;
@@ -231,14 +227,13 @@ struct CaptureStats
 
 class TraceStats
 {
-public:
+ public:
     TraceStats() = default;
     ~TraceStats() = default;
 
     // Gather the trace statistics from the metadata
-    void GatherTraceStats(const Dive::Context         &context,
-                          const Dive::CaptureMetadata &meta_data,
-                          CaptureStats                &capture_stats);
+    void GatherTraceStats(const Dive::Context &context, const Dive::CaptureMetadata &meta_data,
+                          CaptureStats &capture_stats);
 
     // Print the capture statistics to the output stream
     void PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream);

@@ -18,10 +18,9 @@
 
 #include <memory>
 
+#include "absl/status/status.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/data_core.h"
-
-#include "absl/status/status.h"
 
 namespace Dive::HostCli
 {
@@ -29,14 +28,14 @@ namespace Dive::HostCli
 // Initializes DataCore and provides access to it, also stores relevant info for operations
 class DataCoreWrapper
 {
-public:
+ public:
     DataCoreWrapper();
-    bool         IsGfxrLoaded() const;
-    bool         IsDataCoreInitialized() const { return m_data_core != nullptr; }
+    bool IsGfxrLoaded() const;
+    bool IsDataCoreInitialized() const { return m_data_core != nullptr; }
     absl::Status LoadGfxrFile(const std::string& original_gfxr_file_path);
     absl::Status WriteNewGfxrFile(const std::string& new_gfxr_file_path);
 
-private:
+ private:
     std::unique_ptr<Dive::DataCore> m_data_core = nullptr;
 };
 

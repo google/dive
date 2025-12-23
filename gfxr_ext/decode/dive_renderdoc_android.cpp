@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "dive_renderdoc.h"
-
 #include <dlfcn.h>
 
+#include "dive_renderdoc.h"
+#include "third_party/renderdoc/renderdoc_app.h"
 #include "util/defines.h"
 #include "util/logging.h"
-#include "third_party/renderdoc/renderdoc_app.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -35,15 +34,16 @@ RENDERDOC_API_1_0_0* LoadRenderDocApi()
     void* renderdoc_so = dlopen("libVkLayer_GLES_RenderDoc.so", RTLD_NOW | RTLD_NOLOAD);
     if (renderdoc_so == nullptr)
     {
-        GFXRECON_LOG_INFO("Couldn't dlopen libVkLayer_GLES_RenderDoc.so. If you didn't request a "
-                          "RenderDoc capture, this is expected. Error: %s",
-                          dlerror());
+        GFXRECON_LOG_INFO(
+            "Couldn't dlopen libVkLayer_GLES_RenderDoc.so. If you didn't request a "
+            "RenderDoc capture, this is expected. Error: %s",
+            dlerror());
         return nullptr;
     }
 
     (void)dlerror();  // Clear previous error, suggested by docs
-    pRENDERDOC_GetAPI RENDERDOC_GetAPI = reinterpret_cast<pRENDERDOC_GetAPI>(
-    dlsym(renderdoc_so, "RENDERDOC_GetAPI"));
+    pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+        reinterpret_cast<pRENDERDOC_GetAPI>(dlsym(renderdoc_so, "RENDERDOC_GetAPI"));
     if (RENDERDOC_GetAPI == nullptr)
     {
         GFXRECON_LOG_INFO("Failed to dlsym RENDERDOC_GetAPI: %s", dlerror());

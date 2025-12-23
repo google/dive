@@ -240,6 +240,7 @@ target_link_libraries(
     version_info
     dive_build_defs
     dive_lib_trace_stats
+    crashpad_client
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
@@ -332,12 +333,16 @@ endif()
 
 if(APPLE)
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    # Install the Crashpad handler.
+    install(TARGETS handler DESTINATION .)
     # TODO: b/462767957 - fix mac installation directory.
     install(
         CODE
             "
         message(STATUS \"Running macdeployqt...\")
         execute_process(COMMAND \"macdeployqt\" \"${CMAKE_INSTALL_PREFIX}/dive.app\")
+        message(STATUS \"Copying Crashpad handler to app bundle\")
+        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/$<TARGET_FILE_NAME:handler>\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
         message(STATUS \"Creating install directory in app bundle\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
         message(STATUS \"Copying Android files to app bundle\")
@@ -369,6 +374,8 @@ if(APPLE)
     )
 else()
     install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DESTINATION}")
+    # Install the Crashpad handler.
+    install(TARGETS handler DESTINATION "${DIVE_INSTALL_DESTINATION}")
     # Add a [maybe empty] plugins directory.
     install(DIRECTORY DESTINATION "${DIVE_PLUGINS_INSTALL_DESTINATION}")
 endif()
@@ -381,3 +388,12 @@ add_dependencies(${PROJECT_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+add_custom_command(
+    TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:handler>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying Crashpad handler to output directory"
+)

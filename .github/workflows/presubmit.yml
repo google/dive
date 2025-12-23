@@ -101,7 +101,8 @@ jobs:
             libbsd-dev \
             ninja-build \
             python3-mako \
-            libxcb-glx0-dev
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
           which gcc-14
       - name: Generate build files with cmake
         run: |
@@ -155,7 +156,8 @@ jobs:
             libbsd-dev \
             ninja-build \
             python3-mako \
-            libxcb-glx0-dev
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
           which gcc-14
       - name: Generate build files with cmake
         run: |
@@ -209,7 +211,8 @@ jobs:
           libbsd-dev \
           ninja-build \
           python3-mako \
-          libxcb-glx0-dev
+          libxcb-glx0-dev \
+          libcurl4-openssl-dev
           which clang-19
       - name: Generate build files with cmake
         run: |
@@ -263,7 +266,8 @@ jobs:
           libbsd-dev \
           ninja-build \
           python3-mako \
-          libxcb-glx0-dev
+          libxcb-glx0-dev \
+          libcurl4-openssl-dev
           which clang-19
       - name: Generate build files with cmake
         run: |

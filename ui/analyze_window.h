@@ -214,7 +214,7 @@ private:
     const Dive::AvailableMetrics *m_available_metrics = nullptr;
     // Used to store a csv item's key in the enabled metrics vector.
     const int         kDataRole = Qt::UserRole + 1;
-    const int         kDefaultFrameCount = 3;
+    const int         kDefaultFrameCount = 300;
     const std::string kDefaultReplayButtonText = "Replay";
     std::future<void> m_replay_active;
     OverlayHelper    *m_overlay;

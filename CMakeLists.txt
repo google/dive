@@ -20,6 +20,14 @@ project(dive VERSION 1.1.2)
 
 # ------------------------------------------------------------------------------
 # Global properties
+
+if(CMAKE_BUILD_TYPE)
+    message(
+        FATAL_ERROR
+        "Due to using Multi-Config generators, the flag CMAKE_BUILD_TYPE is not supported. Try -DCMAKE_BUILD_TYPE=\"\" or a clean build."
+    )
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 
 set(CMAKE_CXX_STANDARD 20)
@@ -84,27 +92,21 @@ if(NOT ANDROID)
     endif()
 endif()
 
-# For device libraries version info
-set(DEVICE_LIBRARIES_VERSION_FILENAME "DEVICE_LIBRARIES_VERSION.csv")
+# For device resources version info
+set(DEVICE_RESOURCES_VERSION_FILENAME "DEVICE_RESOURCES_VERSION.csv")
 if(ANDROID)
-    message(CHECK_START "Make version file for Dive device libraries")
+    message(CHECK_START "Make version file for Dive device resources")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     file(
-        WRITE ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
-        "sha,"
-        ${DIVE_VERSION_SHA1}
-        "\nversion,"
-        ${CMAKE_PROJECT_VERSION}
-        "\nbuild_type,"
-        ${CMAKE_BUILD_TYPE}
-        "\nrelease_type,"
-        ${DIVE_RELEASE_TYPE}
-        "\nabi,"
-        ${ANDROID_ABI}
+        GENERATE OUTPUT
+            "${CMAKE_CURRENT_BINARY_DIR}/bin/$<CONFIG>/${DEVICE_RESOURCES_VERSION_FILENAME}"
+        CONTENT
+            "sha,${DIVE_VERSION_SHA1}\nversion,${CMAKE_PROJECT_VERSION}\nbuild_type,$<CONFIG>\nrelease_type,${DIVE_RELEASE_TYPE}\nabi,${ANDROID_ABI}"
     )
     install(
-        FILES ${CMAKE_BINARY_DIR}/${DEVICE_LIBRARIES_VERSION_FILENAME}
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
+        FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/bin/$<CONFIG>/${DEVICE_RESOURCES_VERSION_FILENAME}
+        DESTINATION ${DIVE_INSTALL_DESTINATION}
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -154,6 +156,7 @@ else()
         "Generate build files for third_party/freedreno (libwrap)"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    # Currently hardcoding debug build, unknown reason
     add_subdirectory(third_party/freedreno EXCLUDE_FROM_ALL)
     install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DESTINATION}")
     list(POP_BACK CMAKE_MESSAGE_INDENT)
@@ -208,6 +211,7 @@ endif()
 
 # ------------------------------------------------------------------------------
 # GFXR Gradle build (that depends on Dive libraries)
+# Hardcode debug build since release build is incompatible with PM4 capture
 
 if(ANDROID)
     message(CHECK_START "Build GFXR layer and replay tool")
@@ -219,20 +223,6 @@ if(ANDROID)
         "Value of --console to use when building GFXR with Gradle"
     )
 
-    # TODO(b/460765024): Prefer $<CONFIG> to CMAKE_BUILD_TYPE to support multi-config generators
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(CMAKE_BUILD_TYPE_LOWERCASE "release")
-        set(GFXR_REPLAY_APK_NAME "replay-release-unsigned.apk")
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(CMAKE_BUILD_TYPE_LOWERCASE "debug")
-        set(GFXR_REPLAY_APK_NAME "replay-debug.apk")
-    else()
-        message(
-            FATAL_ERROR
-            "Must set -DCMAKE_BUILD_TYPE when targetting Android"
-        )
-    endif()
-
     if(CMAKE_HOST_WIN32)
         set(GRADLE_EXEC "gradlew.bat")
     else()
@@ -241,8 +231,7 @@ if(ANDROID)
 
     execute_process(
         COMMAND
-            ${GRADLE_EXEC} layer:assemble${CMAKE_BUILD_TYPE}
-            replay:assemble${CMAKE_BUILD_TYPE}
+            ${GRADLE_EXEC} layer:assembleDebug replay:assembleDebug
             --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
         WORKING_DIRECTORY
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
@@ -256,7 +245,7 @@ if(ANDROID)
     file(
         ARCHIVE_EXTRACT
         INPUT
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-${CMAKE_BUILD_TYPE_LOWERCASE}.aar"
+            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
         DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
         # TOUCH # Note: CMake 3.24 feature
     )
@@ -273,7 +262,7 @@ if(ANDROID)
     )
     install(
         FILES
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/${CMAKE_BUILD_TYPE_LOWERCASE}/${GFXR_REPLAY_APK_NAME}
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug/replay-debug.apk
         DESTINATION "${DIVE_INSTALL_DESTINATION}"
         RENAME "gfxr-replay.apk"
     )
@@ -309,7 +298,7 @@ if(NOT ANDROID)
     # This has been fixed in https://github.com/google/dive/pull/541
     if(APPLE)
         set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_BINARY_DIR}/ui/dive.app/Contents/MacOS/dive
+            ${CMAKE_BINARY_DIR}/ui/$<CONFIG>/dive.app/Contents/MacOS/dive
         )
     else()
         set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
@@ -320,7 +309,7 @@ if(NOT ANDROID)
     )
     make_directory(${DIVE_TEST_OUTPUT_PATH})
     add_test(
-        NAME Regression_StackOverflow_MacOS
+        NAME Regression_StackOverflow
         COMMAND
             ${DIVE_EXECUTABLE_PATH} --test_scenario=exit-after-load
             ${DIVE_TEST_TRACE}
@@ -340,14 +329,14 @@ if(NOT ANDROID)
             --test_prefix=screenshot-native_style-
     )
     set_tests_properties(
-        Regression_StackOverflow_MacOS
+        Regression_StackOverflow
         DiveUI_Screenshot
         DiveUI_Screenshot_NativeStyle
         PROPERTIES TIMEOUT 60
     )
     if(DIVE_BUILD_WITH_SANITIZER)
         set_tests_properties(
-            Regression_StackOverflow_MacOS
+            Regression_StackOverflow
             DiveUI_Screenshot
             DiveUI_Screenshot_NativeStyle
             PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_container_overflow=0"

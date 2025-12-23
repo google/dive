@@ -18,24 +18,12 @@ limitations under the License.
 
 namespace Dive
 {
-inline constexpr char kWrapLibName[] = "libwrap.so";
-inline constexpr char kVkLayerLibName[] = "libVkLayer_dive.so";
-inline constexpr char kXrLayerLibName[] = "libXrApiLayer_dive.so";
-inline constexpr char kVkGfxrLayerLibName[] = "libVkLayer_gfxreconstruct.so";
-inline constexpr char kVkValidationLayerLibName[] = "libVkLayer_khronos_validation.so";
-inline constexpr char kGfxrReplayApkName[] = "gfxr-replay.apk";
 inline constexpr char kGfxrReplayAppName[] = "com.lunarg.gfxreconstruct.replay";
 inline constexpr char kVkGfxrLayerName[] = "VK_LAYER_LUNARG_gfxreconstruct";
 inline constexpr char kVkLayerName[] = "VK_LAYER_Dive";
 inline constexpr char kXrLayerName[] = "XR_APILAYER_dive";
 inline constexpr char kVkValidationLayerName[] = "VK_LAYER_KHRONOS_validation";
-inline constexpr char kTargetPath[] = "/data/local/tmp";
-inline constexpr char kGfxrTargetPath[] = "/data/data/";
-inline constexpr char kGfxrReconPyPath[] = "gfxrecon.py";
 inline constexpr char kDeviceCapturePath[] = "/sdcard/Download";
-inline constexpr char kManifestFileName[] = "XrApiLayer_dive.json";
-inline constexpr char kManifestFilePath[] = "/system/etc/openxr/1/api_layers/implicit.d/";
-inline constexpr char kVulkanGlobalPath[] = "/data/local/debug/vulkan";
 inline constexpr int  kDownLoadFileChunkSize = 4096;
 inline constexpr char kUnixAbstractPath[] = "dive_abstract";
 inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
@@ -43,7 +31,6 @@ inline constexpr char
 kReplayPm4DumpFileNamePropertyName[] = "debug.dive.replay.capture_pm4_file_name";
 inline constexpr char kDefaultCaptureFolderName[] = "dive_capture_folder";
 inline constexpr char kDefaultReplayFolderName[] = "gfxr_replay_downloads";
-inline constexpr char kProfilingPluginFolderName[] = "dive_profiling_plugin";
 inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 // This file will be created by replay when it has completed trim state loading. /sdcard/Download/
 // is the base path since GFXR can reliably write there.
@@ -51,8 +38,6 @@ inline constexpr char kReplayStateLoadedSignalFile[] = "/sdcard/Download/replay_
 inline constexpr char kGpuTimingFile[] = "gpu_time.csv";  // produced by GFXR replay
 inline constexpr char
 kCaptureScreenshotFile[] = "capture_screenshot.png";  // produced during GFXR capture
-
-// TODO: Refactor also for remote component file paths
 
 inline constexpr int
 kFirstPort = 49391;  // A port number within the dynamic port range (49152 to 65535)

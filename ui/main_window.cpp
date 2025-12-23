@@ -54,6 +54,8 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "capture_service/constants.h"
+#include "dive/utils/device_resources.h"
+#include "dive/utils/device_resources_constants.h"
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common/common.h"
 #include "dive_core/data_core.h"
@@ -117,8 +119,6 @@ constexpr const char *kFilterStrings[DiveFilterModel::kFilterModeCount] = {
 };
 constexpr DiveFilterModel::FilterMode kDefaultFilterMode = DiveFilterModel::kFirstTilePassOnly;
 
-constexpr const char *kMetricsFileName = "available_metrics.csv";
-
 enum class DrawCallContextMenuOption : int
 {
     kUnknown,
@@ -166,41 +166,6 @@ QString ToQString(DrawCallContextMenuOption opt)
         return "Gpu Time Data";
     }
     return "Unknown";
-}
-
-std::optional<std::filesystem::path> ResolveAssetPath(const std::string &name)
-{
-    std::vector<std::filesystem::path>    search_paths;
-    absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
-    if (ret.ok())
-    {
-        const auto &exe_dir = *ret;
-        search_paths.push_back(exe_dir / "install");
-        search_paths.push_back(exe_dir);
-#if defined(__APPLE__)
-        search_paths.push_back(exe_dir / "../Resources/");
-#endif
-    }
-    else
-    {
-        qDebug() << "Could not determine executable directory: " << ret.status().message().data()
-                 << ". Search will not include executable-relative paths.";
-    }
-
-    search_paths.push_back(std::filesystem::path{ "./install" });
-    search_paths.push_back(std::filesystem::path{ "../../build_android/Release/bin" });
-    search_paths.push_back(std::filesystem::path{ "../../install" });
-    search_paths.push_back(std::filesystem::path{ "./" });
-
-    for (const auto &p : search_paths)
-    {
-        auto result_path = p / name;
-        if (std::filesystem::exists(result_path))
-        {
-            return std::filesystem::canonical(result_path);
-        }
-    }
-    return std::nullopt;
 }
 
 }  // namespace
@@ -1628,22 +1593,25 @@ void MainWindow::OnSearchTrigger()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::LoadAvailableMetrics()
 {
-    std::optional<std::filesystem::path> metrics_description_file_path = std::nullopt;
-    if (auto profile_plugin_folder = ResolveAssetPath(Dive::kProfilingPluginFolderName))
+
+    std::filesystem::path
+    metrics_file_path = Dive::DeviceResourcesConstants::kProfilingPluginFolderName;
+    metrics_file_path /= Dive::DeviceResourcesConstants::kProfilingPluginMetricsFileName;
     {
-        auto file_path = *profile_plugin_folder / kMetricsFileName;
-        if (std::filesystem::exists(file_path))
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(
+        metrics_file_path);
+        if (!ret.ok())
         {
-            metrics_description_file_path = file_path;
+            std::string
+            err_msg = absl::StrFormat("No available metrics CSV file to load, checked: %s",
+                                      ret.status().message());
+            qDebug() << err_msg.c_str();
+            return;
         }
+        metrics_file_path = *ret;
     }
 
-    if (!metrics_description_file_path)
-    {
-        return;
-    }
-
-    m_available_metrics = Dive::AvailableMetrics::LoadFromCsv(*metrics_description_file_path);
+    m_available_metrics = Dive::AvailableMetrics::LoadFromCsv(metrics_file_path);
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -28,6 +28,7 @@ limitations under the License.
 
 #include "android_application.h"
 #include "dive/os/command_utils.h"
+#include "dive/utils/device_resources_constants.h"
 #include "constants.h"
 
 namespace Dive
@@ -127,7 +128,7 @@ public:
     // - Removing vulkan layers and related global settings
     // - GFXR-related cleanup
     // - Unset properties for PM4 capture
-    // - Remove files for profiling plugin
+    // - Clear deployment folder kDeployFolderPath
     // - ...
     absl::Status CleanupDevice();
 
@@ -185,8 +186,21 @@ public:
     // Triggers a screenshot and saves it to the specified path.
     absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
 
+    // Verifies that file_name exists locally inside the device resources folder before deploying to
+    // target_dir
+    absl::Status DeployDeviceResource(
+    const std::string_view      &file_name,
+    const std::filesystem::path &target_dir = Dive::DeviceResourcesConstants::kDeployFolderPath);
+
+    // Uses run-as with app permissions to copy the file from kDeployFolderPath to the app's own
+    // storage
+    absl::Status CopyWithPermissions(std::string_view package, std::string_view file_name);
+
+    // Uses run-as with app permissions to delete file_name from the app's own storage
+    absl::Status CleanupFileWithPermissions(std::string_view package, std::string_view file_name);
+
 private:
-    // The ABI must be consistent between the connected device and the Dive device libraries
+    // The ABI must be consistent between the connected device and the Dive device resources
     absl::Status CheckAbi();
 
     const std::string                   m_serial;
@@ -224,8 +238,6 @@ private:
 
     std::unique_ptr<AndroidDevice> m_device{ nullptr };
 };
-
-std::filesystem::path ResolveAndroidLibPath(const std::string &name);
 
 DeviceManager &GetDeviceManager();
 }  // namespace Dive

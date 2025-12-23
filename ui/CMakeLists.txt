@@ -236,6 +236,7 @@ target_link_libraries(
     device_mgr
     dive_plugin_loader
     component_files
+    dive_device_resources
     version_info
     dive_build_defs
     dive_lib_trace_stats

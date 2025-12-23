@@ -16,8 +16,8 @@ limitations under the License.
 
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
-
 #include <vulkan/vulkan_core.h>
+
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -39,13 +39,13 @@ DiveRuntimeLayer sDiveRuntimeLayer;
 // These are created and initialized in vkCreateInstance and vkCreateDevice.
 struct InstanceData
 {
-    VkInstance            instance;
+    VkInstance instance;
     InstanceDispatchTable dispatch_table;
 };
 
 struct DeviceData
 {
-    VkDevice            device;
+    VkDevice device;
     DeviceDispatchTable dispatch_table;
 };
 
@@ -55,37 +55,32 @@ struct DeviceData
 // according to the vulkan loader, vkdevice, vkcmd, vkqueue share the same table
 // search `loader_set_dispatch` in
 // https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/trampoline.c#L1067
-inline uintptr_t DataKey(const void *object)
-{
-    return (uintptr_t)(*(void **)object);
-}
+inline uintptr_t DataKey(const void *object) { return (uintptr_t)(*(void **)object); }
 
 namespace
 {
 // Generally we expect to get the same device and instance, so we keep them
 // handy
 static thread_local InstanceData *last_used_instance_data = nullptr;
-static thread_local DeviceData   *last_used_device_data = nullptr;
+static thread_local DeviceData *last_used_device_data = nullptr;
 
-std::mutex                                                   g_instance_mutex;
+std::mutex g_instance_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<InstanceData>> g_instance_data;
 
-std::mutex                                                 g_device_mutex;
+std::mutex g_device_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<DeviceData>> g_device_data;
 
-constexpr VkLayerProperties layer_properties = { "VK_LAYER_Dive",
-                                                 VK_MAKE_VERSION(1, 0, VK_HEADER_VERSION),
-                                                 1,
-                                                 "Dive capture layer for xr." };
+constexpr VkLayerProperties layer_properties = {
+    "VK_LAYER_Dive", VK_MAKE_VERSION(1, 0, VK_HEADER_VERSION), 1, "Dive capture layer for xr."};
 
-static constexpr std::array<VkExtensionProperties, 2> instance_extensions{ {
-{ VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_SPEC_VERSION },
-{ VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_SPEC_VERSION },
-} };
+static constexpr std::array<VkExtensionProperties, 2> instance_extensions{{
+    {VK_EXT_DEBUG_REPORT_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_SPEC_VERSION},
+    {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, VK_EXT_DEBUG_UTILS_SPEC_VERSION},
+}};
 
-static constexpr std::array<VkExtensionProperties, 1> device_extensions{ {
-{ VK_EXT_DEBUG_MARKER_EXTENSION_NAME, VK_EXT_DEBUG_MARKER_SPEC_VERSION },
-} };
+static constexpr std::array<VkExtensionProperties, 1> device_extensions{{
+    {VK_EXT_DEBUG_MARKER_EXTENSION_NAME, VK_EXT_DEBUG_MARKER_SPEC_VERSION},
+}};
 
 }  // namespace
 
@@ -116,7 +111,7 @@ DeviceData *GetDeviceLayerData(uintptr_t key)
 struct VkStruct
 {
     VkStructureType sType;
-    const void     *pNext;
+    const void *pNext;
 };
 
 VkStruct *FindOnChain(VkStruct *s, VkStructureType type)
@@ -130,7 +125,7 @@ VkStruct *FindOnChain(VkStruct *s, VkStructureType type)
 }
 
 VkLayerInstanceCreateInfo *GetLoaderInstanceInfo(const VkInstanceCreateInfo *create_info,
-                                                 VkLayerFunction             func_type)
+                                                 VkLayerFunction func_type)
 {
     VkStruct *n = (VkStruct *)create_info;
     while ((n = FindOnChain(n, VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO)) != nullptr)
@@ -145,7 +140,7 @@ VkLayerInstanceCreateInfo *GetLoaderInstanceInfo(const VkInstanceCreateInfo *cre
 }
 
 VkLayerDeviceCreateInfo *GetLoaderDeviceInfo(const VkDeviceCreateInfo *create_info,
-                                             VkLayerFunction           func_type)
+                                             VkLayerFunction func_type)
 {
     VkStruct *n = (VkStruct *)create_info;
     while ((n = FindOnChain(n, VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO)) != nullptr)
@@ -170,10 +165,8 @@ VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPr
     return sDiveRuntimeLayer.QueuePresentKHR(pfn, queue, pPresentInfo);
 }
 
-VkResult DiveInterceptCreateImage(VkDevice                     device,
-                                  const VkImageCreateInfo     *pCreateInfo,
-                                  const VkAllocationCallbacks *pAllocator,
-                                  VkImage                     *pImage)
+VkResult DiveInterceptCreateImage(VkDevice device, const VkImageCreateInfo *pCreateInfo,
+                                  const VkAllocationCallbacks *pAllocator, VkImage *pImage)
 {
     PFN_vkCreateImage pfn = nullptr;
 
@@ -183,31 +176,21 @@ VkResult DiveInterceptCreateImage(VkDevice                     device,
     return sDiveRuntimeLayer.CreateImage(pfn, device, pCreateInfo, pAllocator, pImage);
 }
 
-void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer,
-                                 uint32_t        indexCount,
-                                 uint32_t        instanceCount,
-                                 uint32_t        firstIndex,
-                                 int32_t         vertexOffset,
-                                 uint32_t        firstInstance)
+void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCount,
+                                 uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset,
+                                 uint32_t firstInstance)
 {
     PFN_vkCmdDrawIndexed pfn = nullptr;
 
     auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
 
     pfn = layer_data->dispatch_table.CmdDrawIndexed;
-    return sDiveRuntimeLayer.CmdDrawIndexed(pfn,
-                                            commandBuffer,
-                                            indexCount,
-                                            instanceCount,
-                                            firstIndex,
-                                            vertexOffset,
-                                            firstInstance);
+    return sDiveRuntimeLayer.CmdDrawIndexed(pfn, commandBuffer, indexCount, instanceCount,
+                                            firstIndex, vertexOffset, firstInstance);
 }
 
-void DiveInterceptCmdResetQueryPool(VkCommandBuffer commandBuffer,
-                                    VkQueryPool     queryPool,
-                                    uint32_t        firstQuery,
-                                    uint32_t        queryCount)
+void DiveInterceptCmdResetQueryPool(VkCommandBuffer commandBuffer, VkQueryPool queryPool,
+                                    uint32_t firstQuery, uint32_t queryCount)
 {
     PFN_vkCmdResetQueryPool pfn = nullptr;
 
@@ -217,10 +200,9 @@ void DiveInterceptCmdResetQueryPool(VkCommandBuffer commandBuffer,
     sDiveRuntimeLayer.CmdResetQueryPool(pfn, commandBuffer, queryPool, firstQuery, queryCount);
 }
 
-void DiveInterceptCmdWriteTimestamp(VkCommandBuffer         commandBuffer,
-                                    VkPipelineStageFlagBits pipelineStage,
-                                    VkQueryPool             queryPool,
-                                    uint32_t                query)
+void DiveInterceptCmdWriteTimestamp(VkCommandBuffer commandBuffer,
+                                    VkPipelineStageFlagBits pipelineStage, VkQueryPool queryPool,
+                                    uint32_t query)
 {
     PFN_vkCmdWriteTimestamp pfn = nullptr;
 
@@ -230,13 +212,9 @@ void DiveInterceptCmdWriteTimestamp(VkCommandBuffer         commandBuffer,
     sDiveRuntimeLayer.CmdWriteTimestamp(pfn, commandBuffer, pipelineStage, queryPool, query);
 }
 
-VkResult DiveInterceptGetQueryPoolResults(VkDevice           device,
-                                          VkQueryPool        queryPool,
-                                          uint32_t           firstQuery,
-                                          uint32_t           queryCount,
-                                          size_t             dataSize,
-                                          void              *pData,
-                                          VkDeviceSize       stride,
+VkResult DiveInterceptGetQueryPoolResults(VkDevice device, VkQueryPool queryPool,
+                                          uint32_t firstQuery, uint32_t queryCount, size_t dataSize,
+                                          void *pData, VkDeviceSize stride,
                                           VkQueryResultFlags flags)
 {
     PFN_vkGetQueryPoolResults pfn = nullptr;
@@ -244,19 +222,11 @@ VkResult DiveInterceptGetQueryPoolResults(VkDevice           device,
     auto layer_data = GetDeviceLayerData(DataKey(device));
 
     pfn = layer_data->dispatch_table.GetQueryPoolResults;
-    return sDiveRuntimeLayer.GetQueryPoolResults(pfn,
-                                                 device,
-                                                 queryPool,
-                                                 firstQuery,
-                                                 queryCount,
-                                                 dataSize,
-                                                 pData,
-                                                 stride,
-                                                 flags);
+    return sDiveRuntimeLayer.GetQueryPoolResults(pfn, device, queryPool, firstQuery, queryCount,
+                                                 dataSize, pData, stride, flags);
 }
 
-void DiveInterceptDestroyCommandPool(VkDevice                     device,
-                                     VkCommandPool                commandPool,
+void DiveInterceptDestroyCommandPool(VkDevice device, VkCommandPool commandPool,
                                      const VkAllocationCallbacks *pAllocator)
 {
     PFN_vkDestroyCommandPool pfn = nullptr;
@@ -267,9 +237,9 @@ void DiveInterceptDestroyCommandPool(VkDevice                     device,
     return sDiveRuntimeLayer.DestroyCommandPool(pfn, device, commandPool, pAllocator);
 }
 
-VkResult DiveInterceptAllocateCommandBuffers(VkDevice                           device,
+VkResult DiveInterceptAllocateCommandBuffers(VkDevice device,
                                              const VkCommandBufferAllocateInfo *pAllocateInfo,
-                                             VkCommandBuffer                   *pCommandBuffers)
+                                             VkCommandBuffer *pCommandBuffers)
 {
     PFN_vkAllocateCommandBuffers pfn = nullptr;
 
@@ -279,9 +249,8 @@ VkResult DiveInterceptAllocateCommandBuffers(VkDevice                           
     return sDiveRuntimeLayer.AllocateCommandBuffers(pfn, device, pAllocateInfo, pCommandBuffers);
 }
 
-void DiveInterceptFreeCommandBuffers(VkDevice               device,
-                                     VkCommandPool          commandPool,
-                                     uint32_t               commandBufferCount,
+void DiveInterceptFreeCommandBuffers(VkDevice device, VkCommandPool commandPool,
+                                     uint32_t commandBufferCount,
                                      const VkCommandBuffer *pCommandBuffers)
 {
     PFN_vkFreeCommandBuffers pfn = nullptr;
@@ -289,14 +258,11 @@ void DiveInterceptFreeCommandBuffers(VkDevice               device,
     auto layer_data = GetDeviceLayerData(DataKey(device));
 
     pfn = layer_data->dispatch_table.FreeCommandBuffers;
-    return sDiveRuntimeLayer.FreeCommandBuffers(pfn,
-                                                device,
-                                                commandPool,
-                                                commandBufferCount,
+    return sDiveRuntimeLayer.FreeCommandBuffers(pfn, device, commandPool, commandBufferCount,
                                                 pCommandBuffers);
 }
 
-VkResult DiveInterceptResetCommandBuffer(VkCommandBuffer           commandBuffer,
+VkResult DiveInterceptResetCommandBuffer(VkCommandBuffer commandBuffer,
                                          VkCommandBufferResetFlags flags)
 {
     PFN_vkResetCommandBuffer pfn = nullptr;
@@ -307,7 +273,7 @@ VkResult DiveInterceptResetCommandBuffer(VkCommandBuffer           commandBuffer
     return sDiveRuntimeLayer.ResetCommandBuffer(pfn, commandBuffer, flags);
 }
 
-VkResult DiveInterceptBeginCommandBuffer(VkCommandBuffer                 commandBuffer,
+VkResult DiveInterceptBeginCommandBuffer(VkCommandBuffer commandBuffer,
                                          const VkCommandBufferBeginInfo *pBeginInfo)
 {
     PFN_vkBeginCommandBuffer pfn = nullptr;
@@ -328,9 +294,8 @@ VkResult DiveInterceptEndCommandBuffer(VkCommandBuffer commandBuffer)
     return sDiveRuntimeLayer.EndCommandBuffer(pfn, commandBuffer);
 }
 
-void DiveInterceptGetDeviceQueue2(VkDevice                  device,
-                                  const VkDeviceQueueInfo2 *pQueueInfo,
-                                  VkQueue                  *pQueue)
+void DiveInterceptGetDeviceQueue2(VkDevice device, const VkDeviceQueueInfo2 *pQueueInfo,
+                                  VkQueue *pQueue)
 {
     PFN_vkGetDeviceQueue2 pfn = nullptr;
 
@@ -339,9 +304,7 @@ void DiveInterceptGetDeviceQueue2(VkDevice                  device,
     return sDiveRuntimeLayer.GetDeviceQueue2(pfn, device, pQueueInfo, pQueue);
 }
 
-void DiveInterceptGetDeviceQueue(VkDevice device,
-                                 uint32_t queueFamilyIndex,
-                                 uint32_t queueIndex,
+void DiveInterceptGetDeviceQueue(VkDevice device, uint32_t queueFamilyIndex, uint32_t queueIndex,
                                  VkQueue *pQueue)
 {
     PFN_vkGetDeviceQueue pfn = nullptr;
@@ -351,25 +314,20 @@ void DiveInterceptGetDeviceQueue(VkDevice device,
     return sDiveRuntimeLayer.GetDeviceQueue(pfn, device, queueFamilyIndex, queueIndex, pQueue);
 }
 
-VkResult DiveInterceptAcquireNextImageKHR(VkDevice       device,
-                                          VkSwapchainKHR swapchain,
-                                          uint64_t       timeout,
-                                          VkSemaphore    semaphore,
-                                          VkFence        fence,
-                                          uint32_t      *pImageIndex)
+VkResult DiveInterceptAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain,
+                                          uint64_t timeout, VkSemaphore semaphore, VkFence fence,
+                                          uint32_t *pImageIndex)
 {
     PFN_vkAcquireNextImageKHR pfn = nullptr;
 
     auto layer_data = GetDeviceLayerData(DataKey(device));
     pfn = layer_data->dispatch_table.AcquireNextImageKHR;
-    return sDiveRuntimeLayer
-    .AcquireNextImageKHR(pfn, device, swapchain, timeout, semaphore, fence, pImageIndex);
+    return sDiveRuntimeLayer.AcquireNextImageKHR(pfn, device, swapchain, timeout, semaphore, fence,
+                                                 pImageIndex);
 }
 
-VkResult DiveInterceptQueueSubmit(VkQueue             queue,
-                                  uint32_t            submitCount,
-                                  const VkSubmitInfo *pSubmits,
-                                  VkFence             fence)
+VkResult DiveInterceptQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo *pSubmits,
+                                  VkFence fence)
 {
     PFN_vkQueueSubmit pfn = nullptr;
 
@@ -380,14 +338,13 @@ VkResult DiveInterceptQueueSubmit(VkQueue             queue,
 
 // Instance functions
 // Create instance needs a special implementation for layer
-VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
-                                     const VkAllocationCallbacks *pAllocator,
-                                     VkInstance                  *pInstance)
+VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo *pCreateInfo,
+                                     const VkAllocationCallbacks *pAllocator, VkInstance *pInstance)
 {
     LOGI("DiveInterceptCreateInstance");
     // Find the create info
-    VkLayerInstanceCreateInfo *layer_create_info = GetLoaderInstanceInfo(pCreateInfo,
-                                                                         VK_LAYER_LINK_INFO);
+    VkLayerInstanceCreateInfo *layer_create_info =
+        GetLoaderInstanceInfo(pCreateInfo, VK_LAYER_LINK_INFO);
 
     if (layer_create_info == NULL)
     {
@@ -395,13 +352,13 @@ VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
-    PFN_vkGetInstanceProcAddr pfn_get_instance_proc_addr = layer_create_info->u.pLayerInfo
-                                                           ->pfnNextGetInstanceProcAddr;
+    PFN_vkGetInstanceProcAddr pfn_get_instance_proc_addr =
+        layer_create_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
     // Move chain on for the next layer.
     layer_create_info->u.pLayerInfo = layer_create_info->u.pLayerInfo->pNext;
 
-    PFN_vkCreateInstance pfn_create_instance = (PFN_vkCreateInstance)
-    pfn_get_instance_proc_addr(NULL, "vkCreateInstance");
+    PFN_vkCreateInstance pfn_create_instance =
+        (PFN_vkCreateInstance)pfn_get_instance_proc_addr(NULL, "vkCreateInstance");
 
     auto result = pfn_create_instance(pCreateInfo, pAllocator, pInstance);
     if (VK_SUCCESS != result)
@@ -416,20 +373,18 @@ VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo  *pCreateInfo,
 
     {
         std::lock_guard<std::mutex> lock(g_instance_mutex);
-        auto                        key = (uintptr_t)(*(void **)(*pInstance));
+        auto key = (uintptr_t)(*(void **)(*pInstance));
         g_instance_data[key] = std::move(id);
     }
 
     return result;
 }
 
-VkResult DiveInterceptCreateDevice(VkPhysicalDevice             gpu,
-                                   const VkDeviceCreateInfo    *pCreateInfo,
-                                   const VkAllocationCallbacks *pAllocator,
-                                   VkDevice                    *pDevice)
+VkResult DiveInterceptCreateDevice(VkPhysicalDevice gpu, const VkDeviceCreateInfo *pCreateInfo,
+                                   const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)
 {
-    VkLayerDeviceCreateInfo *layer_create_info = GetLoaderDeviceInfo(pCreateInfo,
-                                                                     VK_LAYER_LINK_INFO);
+    VkLayerDeviceCreateInfo *layer_create_info =
+        GetLoaderDeviceInfo(pCreateInfo, VK_LAYER_LINK_INFO);
     LOGI("DCI %p\n", layer_create_info);
 
     // Get the instance data.
@@ -437,39 +392,34 @@ VkResult DiveInterceptCreateDevice(VkPhysicalDevice             gpu,
 
     // Get the proc addr pointers for this layer and update the chain for the next
     // layer.
-    PFN_vkGetInstanceProcAddr pfn_next_instance_proc_addr = layer_create_info->u.pLayerInfo
-                                                            ->pfnNextGetInstanceProcAddr;
-    PFN_vkGetDeviceProcAddr pfn_next_device_proc_addr = layer_create_info->u.pLayerInfo
-                                                        ->pfnNextGetDeviceProcAddr;
-    PFN_vkCreateDevice pfn_create_device = (PFN_vkCreateDevice)
-    pfn_next_instance_proc_addr(instance_data->instance, "vkCreateDevice");
+    PFN_vkGetInstanceProcAddr pfn_next_instance_proc_addr =
+        layer_create_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
+    PFN_vkGetDeviceProcAddr pfn_next_device_proc_addr =
+        layer_create_info->u.pLayerInfo->pfnNextGetDeviceProcAddr;
+    PFN_vkCreateDevice pfn_create_device =
+        (PFN_vkCreateDevice)pfn_next_instance_proc_addr(instance_data->instance, "vkCreateDevice");
     layer_create_info->u.pLayerInfo = layer_create_info->u.pLayerInfo->pNext;
 
-    PFN_vkGetPhysicalDeviceProperties
-    GetPhysicalDeviceProperties = (PFN_vkGetPhysicalDeviceProperties)
-    pfn_next_instance_proc_addr(instance_data->instance, "vkGetPhysicalDeviceProperties");
+    PFN_vkGetPhysicalDeviceProperties GetPhysicalDeviceProperties =
+        (PFN_vkGetPhysicalDeviceProperties)pfn_next_instance_proc_addr(
+            instance_data->instance, "vkGetPhysicalDeviceProperties");
 
     VkPhysicalDeviceProperties deviceProperties;
     GetPhysicalDeviceProperties(gpu, &deviceProperties);
     LOGI("Device Name: %s\n", deviceProperties.deviceName);
     LOGI("Device Type: %s\n",
-         (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU   ? "Discrete GPU" :
-          deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated GPU" :
-          deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU    ? "Virtual GPU" :
-          deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU            ? "CPU" :
-                                                                                  "Other"));
-    LOGI("API Version: %d.%d.%d",
-         VK_VERSION_MAJOR(deviceProperties.apiVersion),
+         (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU     ? "Discrete GPU"
+          : deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated GPU"
+          : deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU    ? "Virtual GPU"
+          : deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU            ? "CPU"
+                                                                                  : "Other"));
+    LOGI("API Version: %d.%d.%d", VK_VERSION_MAJOR(deviceProperties.apiVersion),
          VK_VERSION_MINOR(deviceProperties.apiVersion),
          VK_VERSION_PATCH(deviceProperties.apiVersion));
 
-    VkResult result = sDiveRuntimeLayer.CreateDevice(pfn_next_device_proc_addr,
-                                                     pfn_create_device,
-                                                     deviceProperties.limits.timestampPeriod,
-                                                     gpu,
-                                                     pCreateInfo,
-                                                     pAllocator,
-                                                     pDevice);
+    VkResult result = sDiveRuntimeLayer.CreateDevice(pfn_next_device_proc_addr, pfn_create_device,
+                                                     deviceProperties.limits.timestampPeriod, gpu,
+                                                     pCreateInfo, pAllocator, pDevice);
 
     if (VK_SUCCESS != result)
     {
@@ -483,7 +433,7 @@ VkResult DiveInterceptCreateDevice(VkPhysicalDevice             gpu,
 
     {
         std::lock_guard<std::mutex> lock(g_device_mutex);
-        auto                        key = (uintptr_t)(*(void **)(*pDevice));
+        auto key = (uintptr_t)(*(void **)(*pDevice));
         g_device_data[key] = std::move(dd);
     }
 
@@ -499,7 +449,7 @@ void DiveInterceptDestroyDevice(VkDevice device, const VkAllocationCallbacks *pA
     return sDiveRuntimeLayer.DestroyDevice(pfn, device, pAllocator);
 }
 
-void DiveInterceptCmdInsertDebugUtilsLabel(VkCommandBuffer             commandBuffer,
+void DiveInterceptCmdInsertDebugUtilsLabel(VkCommandBuffer commandBuffer,
                                            const VkDebugUtilsLabelEXT *pLabelInfo)
 {
     PFN_vkCmdInsertDebugUtilsLabelEXT pfn = nullptr;
@@ -509,9 +459,9 @@ void DiveInterceptCmdInsertDebugUtilsLabel(VkCommandBuffer             commandBu
     return sDiveRuntimeLayer.CmdInsertDebugUtilsLabel(pfn, commandBuffer, pLabelInfo);
 }
 
-void DiveInterceptCmdBeginRenderPass(VkCommandBuffer              commandBuffer,
+void DiveInterceptCmdBeginRenderPass(VkCommandBuffer commandBuffer,
                                      const VkRenderPassBeginInfo *pRenderPassBegin,
-                                     VkSubpassContents            contents)
+                                     VkSubpassContents contents)
 {
     PFN_vkCmdBeginRenderPass pfn = nullptr;
 
@@ -531,9 +481,9 @@ void DiveInterceptCmdEndRenderPass(VkCommandBuffer commandBuffer)
     sDiveRuntimeLayer.CmdEndRenderPass(pfn, commandBuffer);
 }
 
-void DiveInterceptCmdBeginRenderPass2(VkCommandBuffer              commandBuffer,
+void DiveInterceptCmdBeginRenderPass2(VkCommandBuffer commandBuffer,
                                       const VkRenderPassBeginInfo *pRenderPassBegin,
-                                      const VkSubpassBeginInfo    *pSubpassBeginInfo)
+                                      const VkSubpassBeginInfo *pSubpassBeginInfo)
 {
     PFN_vkCmdBeginRenderPass2 pfn = nullptr;
 
@@ -543,7 +493,7 @@ void DiveInterceptCmdBeginRenderPass2(VkCommandBuffer              commandBuffer
     sDiveRuntimeLayer.CmdBeginRenderPass2(pfn, commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
 }
 
-void DiveInterceptCmdEndRenderPass2(VkCommandBuffer         commandBuffer,
+void DiveInterceptCmdEndRenderPass2(VkCommandBuffer commandBuffer,
                                     const VkSubpassEndInfo *pSubpassEndInfo)
 {
     PFN_vkCmdEndRenderPass2 pfn = nullptr;
@@ -556,10 +506,8 @@ void DiveInterceptCmdEndRenderPass2(VkCommandBuffer         commandBuffer,
 
 extern "C"
 {
-
-    VKAPI_ATTR VkResult VKAPI_CALL
-    DiveInterceptEnumerateInstanceLayerProperties(uint32_t          *pPropertyCount,
-                                                  VkLayerProperties *pProperties)
+    VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceLayerProperties(
+        uint32_t *pPropertyCount, VkLayerProperties *pProperties)
     {
         LOGI("DiveInterceptEnumerateInstanceLayerProperties");
 
@@ -589,12 +537,9 @@ extern "C"
     }
 
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceExtensionProperties(
-    const VkEnumerateInstanceExtensionPropertiesChain *pChain,
-    char                                              *pLayerName,
-    uint32_t                                          *pPropertyCount,
-    VkExtensionProperties                             *pProperties)
+        const VkEnumerateInstanceExtensionPropertiesChain *pChain, char *pLayerName,
+        uint32_t *pPropertyCount, VkExtensionProperties *pProperties)
     {
-
         LOGI("DiveInterceptEnumerateInstanceExtensionProperties");
         VkResult result = VK_SUCCESS;
         if (pLayerName && !strcmp(pLayerName, layer_properties.layerName))
@@ -633,14 +578,12 @@ extern "C"
         uint32_t downstream_ext_count = 0;
 
         result = pChain->CallDown(pLayerName, &downstream_ext_count, NULL);
-        if (result != VK_SUCCESS)
-            return result;
+        if (result != VK_SUCCESS) return result;
         std::vector<VkExtensionProperties> exts;
         exts.resize(downstream_ext_count);
         result = pChain->CallDown(pLayerName, &downstream_ext_count, &exts[0]);
 
-        if (result != VK_SUCCESS)
-            return result;
+        if (result != VK_SUCCESS) return result;
 
         exts.insert(exts.end(), instance_extensions.begin(), instance_extensions.end());
         if (nullptr == pProperties)
@@ -657,22 +600,17 @@ extern "C"
         return result;
     }
 
-    VKAPI_ATTR VkResult VKAPI_CALL
-    DiveInterceptEnumerateDeviceLayerProperties(VkPhysicalDevice   physicalDevice,
-                                                uint32_t          *pPropertyCount,
-                                                VkLayerProperties *pProperties)
+    VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(
+        VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount, VkLayerProperties *pProperties)
     {
         LOGI("DiveInterceptEnumerateDeviceLayerProperties");
         return DiveInterceptEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
     }
 
-    VKAPI_ATTR VkResult VKAPI_CALL
-    DiveInterceptEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
-                                                    char                  *pLayerName,
-                                                    uint32_t              *pPropertyCount,
-                                                    VkExtensionProperties *pProperties)
+    VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceExtensionProperties(
+        VkPhysicalDevice physicalDevice, char *pLayerName, uint32_t *pPropertyCount,
+        VkExtensionProperties *pProperties)
     {
-
         VkResult result = VK_SUCCESS;
 
         if (nullptr != pLayerName && strcmp(pLayerName, layer_properties.layerName) == 0)
@@ -711,22 +649,16 @@ extern "C"
         InstanceData *instance_data = GetInstanceLayerData(DataKey(physicalDevice));
 
         uint32_t num_other_extensions = 0;
-        result = instance_data->dispatch_table
-                 .EnumerateDeviceExtensionProperties(physicalDevice,
-                                                     nullptr,
-                                                     &num_other_extensions,
-                                                     nullptr);
+        result = instance_data->dispatch_table.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &num_other_extensions, nullptr);
         if (result != VK_SUCCESS)
         {
             return result;
         }
         // call down to get other device properties
         std::vector<VkExtensionProperties> extensions(num_other_extensions);
-        result = instance_data->dispatch_table
-                 .EnumerateDeviceExtensionProperties(physicalDevice,
-                                                     pLayerName,
-                                                     &num_other_extensions,
-                                                     &extensions[0]);
+        result = instance_data->dispatch_table.EnumerateDeviceExtensionProperties(
+            physicalDevice, pLayerName, &num_other_extensions, &extensions[0]);
 
         // add our extensions if we have any and requested
         if (result != VK_SUCCESS)
@@ -741,8 +673,8 @@ extern "C"
         *pPropertyCount = num_other_extensions;
 
         // find our unique extensions that need to be added
-        uint32_t                                   num_additional_extensions = 0;
-        auto                                       num_device_extensions = device_extensions.size();
+        uint32_t num_additional_extensions = 0;
+        auto num_device_extensions = device_extensions.size();
         std::vector<const VkExtensionProperties *> additional_extensions(num_device_extensions);
 
         for (size_t i = 0; i < num_device_extensions; ++i)
@@ -791,15 +723,14 @@ extern "C"
         return result;
     }
 
-    VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL VK_LAYER_DiveGetDeviceProcAddr(VkDevice    dev,
+    VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL VK_LAYER_DiveGetDeviceProcAddr(VkDevice dev,
                                                                             const char *func)
     {
         if (!strcmp(func, "vkGetDeviceProcAddr"))
             return (PFN_vkVoidFunction)&VK_LAYER_DiveGetDeviceProcAddr;
         if (0 == strcmp(func, "vkQueuePresentKHR"))
             return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
-        if (0 == strcmp(func, "vkCreateImage"))
-            return (PFN_vkVoidFunction)DiveInterceptCreateImage;
+        if (0 == strcmp(func, "vkCreateImage")) return (PFN_vkVoidFunction)DiveInterceptCreateImage;
         if (0 == strcmp(func, "vkCmdDrawIndexed"))
             return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
         if (0 == strcmp(func, "vkCmdResetQueryPool"))
@@ -822,8 +753,7 @@ extern "C"
             return (PFN_vkVoidFunction)DiveInterceptEndCommandBuffer;
         if (0 == strcmp(func, "vkAcquireNextImageKHR"))
             return (PFN_vkVoidFunction)DiveInterceptAcquireNextImageKHR;
-        if (0 == strcmp(func, "vkQueueSubmit"))
-            return (PFN_vkVoidFunction)DiveInterceptQueueSubmit;
+        if (0 == strcmp(func, "vkQueueSubmit")) return (PFN_vkVoidFunction)DiveInterceptQueueSubmit;
         if (0 == strcmp(func, "vkGetDeviceQueue2"))
             return (PFN_vkVoidFunction)DiveInterceptGetDeviceQueue2;
         if (0 == strcmp(func, "vkEndGetDeviceQueue"))
@@ -844,7 +774,7 @@ extern "C"
         return layer_data->dispatch_table.pfn_get_device_proc_addr(dev, func);
     }
 
-    VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL VK_LAYER_DiveGetInstanceProcAddr(VkInstance  inst,
+    VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL VK_LAYER_DiveGetInstanceProcAddr(VkInstance inst,
                                                                               const char *func)
     {
         if (0 == strcmp(func, "vkGetInstanceProcAddr"))
@@ -853,8 +783,7 @@ extern "C"
             return (PFN_vkVoidFunction)&DiveInterceptEnumerateInstanceExtensionProperties;
         if (0 == strcmp(func, "vkCreateInstance"))
             return (PFN_vkVoidFunction)&DiveInterceptCreateInstance;
-        if (inst == VK_NULL_HANDLE)
-            return NULL;
+        if (inst == VK_NULL_HANDLE) return NULL;
 
         // This is required since sometimes vkGetInstanceProcAddr is called for
         // vkCmdInsertDebugUtilsLabelEXT even it is a device func

@@ -12,23 +12,24 @@
 */
 
 #include "misc_stats_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
-#include <QDebug>
 
-constexpr std::array<Dive::Stats::Type, 12> kMiscStats = { Dive::Stats::kNumBinningPasses,
-                                                           Dive::Stats::kNumTilingPasses,
-                                                           Dive::Stats::kWaitMemWrites,
-                                                           Dive::Stats::kWaitForIdle,
-                                                           Dive::Stats::kWaitForMe,
-                                                           Dive::Stats::kTotalResolves,
-                                                           Dive::Stats::kColorSysMemToGmemResolves,
-                                                           Dive::Stats::kColorGmemToSysMemResolves,
-                                                           Dive::Stats::kDepthSysMemToGmemResolves,
-                                                           Dive::Stats::kDepthGmemToSysMemResolves,
-                                                           Dive::Stats::kColorClearGmemResolves,
-                                                           Dive::Stats::kDepthClearGmemResolves };
+#include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
+
+constexpr std::array<Dive::Stats::Type, 12> kMiscStats = {Dive::Stats::kNumBinningPasses,
+                                                          Dive::Stats::kNumTilingPasses,
+                                                          Dive::Stats::kWaitMemWrites,
+                                                          Dive::Stats::kWaitForIdle,
+                                                          Dive::Stats::kWaitForMe,
+                                                          Dive::Stats::kTotalResolves,
+                                                          Dive::Stats::kColorSysMemToGmemResolves,
+                                                          Dive::Stats::kColorGmemToSysMemResolves,
+                                                          Dive::Stats::kDepthSysMemToGmemResolves,
+                                                          Dive::Stats::kDepthGmemToSysMemResolves,
+                                                          Dive::Stats::kColorClearGmemResolves,
+                                                          Dive::Stats::kDepthClearGmemResolves};
 
 constexpr std::array<const char *, Dive::Stats::kNumStats> kStatDescriptions = [] {
     std::array<const char *, Dive::Stats::kNumStats> arr{};
@@ -39,8 +40,7 @@ constexpr std::array<const char *, Dive::Stats::kNumStats> kStatDescriptions = [
     return arr;
 }();
 
-MiscStatsModel::MiscStatsModel(QObject *parent) :
-    QAbstractItemModel(parent)
+MiscStatsModel::MiscStatsModel(QObject *parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
     headers.append(QString::fromStdString("Statistic"));
@@ -78,10 +78,7 @@ QModelIndex MiscStatsModel::index(int row, int column, const QModelIndex &parent
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex MiscStatsModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex MiscStatsModel::parent(const QModelIndex &index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int MiscStatsModel::rowCount(const QModelIndex &parent) const
@@ -94,10 +91,7 @@ int MiscStatsModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int MiscStatsModel::columnCount(const QModelIndex &parent) const
-{
-    return m_headers.size();
-}
+int MiscStatsModel::columnCount(const QModelIndex &parent) const { return m_headers.size(); }
 
 //--------------------------------------------------------------------------------------------------
 QVariant MiscStatsModel::data(const QModelIndex &index, int role) const

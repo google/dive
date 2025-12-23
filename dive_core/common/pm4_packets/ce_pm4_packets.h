@@ -44,7 +44,7 @@ typedef struct PM4_CE_COND_EXEC
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -108,7 +108,7 @@ typedef struct PM4_CE_COND_INDIRECT_BUFFER_CONST
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -199,7 +199,7 @@ typedef struct PM4_CE_CONTEXT_CONTROL
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -268,7 +268,7 @@ typedef struct PM4_CE_COPY_DATA
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -356,7 +356,7 @@ typedef struct PM4_CE_DUMP_CONST_RAM
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -401,7 +401,7 @@ typedef struct PM4_CE_DUMP_CONST_RAM_OFFSET
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -450,7 +450,7 @@ typedef struct PM4_CE_FRAME_CONTROL
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -480,7 +480,7 @@ typedef struct PM4_CE_INCREMENT_CE_COUNTER
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -501,7 +501,7 @@ typedef struct PM4_CE_INDIRECT_BUFFER_CONST
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -546,7 +546,7 @@ typedef struct PM4_CE_LOAD_CONST_RAM
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t addr_lo;
@@ -583,7 +583,7 @@ typedef struct PM4_CE_NOP
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
 } PM4CE_NOP, *PPM4CE_NOP;
@@ -612,7 +612,7 @@ typedef struct PM4_CE_PRIME_UTCL2
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -655,7 +655,7 @@ typedef struct PM4_CE_SET_BASE
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -702,7 +702,7 @@ typedef struct PM4_CE_SWITCH_BUFFER
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -718,7 +718,7 @@ typedef struct PM4_CE_WAIT_ON_DE_COUNTER_DIFF
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t diff;
@@ -731,7 +731,7 @@ typedef struct PM4_CE_WRITE_CONST_RAM
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -782,7 +782,7 @@ typedef struct PM4_CE_WRITE_DATA
     union
     {
         PM4_CE_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union

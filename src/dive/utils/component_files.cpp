@@ -23,8 +23,7 @@ namespace Dive
 {
 
 absl::StatusOr<Dive::ComponentFilePaths> GetComponentFilesHostPaths(
-const std::filesystem::path &parent_dir,
-const std::string           &gfxr_stem)
+    const std::filesystem::path &parent_dir, const std::string &gfxr_stem)
 {
     if (gfxr_stem.empty())
     {
@@ -37,7 +36,7 @@ const std::string           &gfxr_stem)
     }
 
     Dive::ComponentFileConstants constants;
-    Dive::ComponentFilePaths     artifacts = {};
+    Dive::ComponentFilePaths artifacts = {};
 
     // check format of gfxr_stem
     // dots in filename are allowed
@@ -46,37 +45,33 @@ const std::string           &gfxr_stem)
     if ((slash_pos != std::string::npos) || (backslash_pos != std::string::npos))
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("unexpected name for gfxr file: %s, not a stem", gfxr_stem));
+            absl::StrFormat("unexpected name for gfxr file: %s, not a stem", gfxr_stem));
     }
 
     // .gfxa files have a different stem from the .gfxr file
     std::string gfxa_stem = gfxr_stem;
-    size_t      pos = gfxa_stem.find(constants.kGfxrFileNameSubstr);
+    size_t pos = gfxa_stem.find(constants.kGfxrFileNameSubstr);
     if (pos == std::string::npos)
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("unexpected name for gfxr file: %s, expecting name containing: %s",
-                        gfxr_stem,
-                        constants.kGfxrFileNameSubstr));
+            absl::StrFormat("unexpected name for gfxr file: %s, expecting name containing: %s",
+                            gfxr_stem, constants.kGfxrFileNameSubstr));
     }
     gfxa_stem.replace(pos, constants.kGfxrFileNameSubstr.size(), constants.kGfxaFileNameSubstr);
 
     artifacts.gfxr = parent_dir / absl::StrFormat("%s%s", gfxr_stem, constants.kGfxrExt);
     artifacts.gfxa = parent_dir / absl::StrFormat("%s%s", gfxa_stem, constants.kGfxaExt);
-    artifacts.perf_counter_csv = parent_dir / absl::StrFormat("%s%s%s",
-                                                              gfxr_stem,
-                                                              constants.kProfilingMetricsHostSuffix,
-                                                              constants.kCsvExt);
-    artifacts.gpu_timing_csv = parent_dir / absl::StrFormat("%s%s%s",
-                                                            gfxr_stem,
-                                                            constants.kGpuTimingHostSuffix,
-                                                            constants.kCsvExt);
+    artifacts.perf_counter_csv =
+        parent_dir / absl::StrFormat("%s%s%s", gfxr_stem, constants.kProfilingMetricsHostSuffix,
+                                     constants.kCsvExt);
+    artifacts.gpu_timing_csv =
+        parent_dir /
+        absl::StrFormat("%s%s%s", gfxr_stem, constants.kGpuTimingHostSuffix, constants.kCsvExt);
     artifacts.pm4_rd = parent_dir / absl::StrFormat("%s%s", gfxr_stem, constants.kRdExt);
     artifacts.screenshot_png = parent_dir / absl::StrFormat("%s%s", gfxr_stem, constants.kPngExt);
-    artifacts.renderdoc_rdc = parent_dir / absl::StrFormat("%s%s%s",
-                                                           gfxr_stem,
-                                                           constants.kRenderDocHostSuffix,
-                                                           constants.kRdcExt);
+    artifacts.renderdoc_rdc =
+        parent_dir /
+        absl::StrFormat("%s%s%s", gfxr_stem, constants.kRenderDocHostSuffix, constants.kRdcExt);
     return artifacts;
 }
 

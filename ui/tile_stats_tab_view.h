@@ -11,10 +11,10 @@
  limitations under the License.
 */
 
-#include <QWidget>
-#include <QTableView>
-#include <QPushButton>
 #include <QMenu>
+#include <QPushButton>
+#include <QTableView>
+#include <QWidget>
 #pragma once
 
 // Forward declaration
@@ -30,18 +30,18 @@ struct CaptureStats;
 class TileStatsTabView : public QWidget
 {
     Q_OBJECT
-public:
+ public:
     explicit TileStatsTabView(const Dive::CaptureStats &stats, QWidget *parent = nullptr);
     void LoadStatistics();
-public slots:
-signals:
+ public slots:
+ signals:
 
-private:
+ private:
     void ResizeColumns(QAbstractItemModel *model, QTableView *view);
 
     const Dive::CaptureStats &m_stats;
-    ViewportStatsModel       *m_viewport_stats_model;
+    ViewportStatsModel *m_viewport_stats_model;
     WindowScissorsStatsModel *m_window_scissors_stats_model;
-    QTableView               *m_viewport_stats_view;
-    QTableView               *m_window_scissors_stats_view;
+    QTableView *m_viewport_stats_view;
+    QTableView *m_window_scissors_stats_view;
 };

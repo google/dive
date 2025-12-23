@@ -24,22 +24,19 @@
 
 namespace Dive
 {
-PluginSample::PluginSample(QObject* parent) :
-    QObject(parent)
-{
-}
+PluginSample::PluginSample(QObject* parent) : QObject(parent) {}
 
 PluginSample::~PluginSample() {}
 
 bool PluginSample::Initialize(IDivePluginBridge& bridge)
 {
-    QMainWindow* main_window = qobject_cast<QMainWindow*>(
-    bridge.GetQObject(DiveUIObjectNames::kMainWindow));
+    QMainWindow* main_window =
+        qobject_cast<QMainWindow*>(bridge.GetQObject(DiveUIObjectNames::kMainWindow));
     if (!main_window)
     {
         return false;
     }
-    QMenu*          help_menu = nullptr;
+    QMenu* help_menu = nullptr;
     QList<QAction*> menu_bar_actions = main_window->menuBar()->actions();
     for (QAction* action : menu_bar_actions)
     {
@@ -68,16 +65,13 @@ void PluginSample::Shutdown() {}
 
 void PluginSample::OnPluginSampleActionTriggered()
 {
-    QMessageBox::information(nullptr,
-                             QString::fromStdString("Plugin Info"),
-                             QString::fromStdString(
-                             "All plugin .dll(s)/.so(s) need to be put into 'plugins' subdirectory "
-                             "alongside the dive_ui executable."));
+    QMessageBox::information(
+        nullptr, QString::fromStdString("Plugin Info"),
+        QString::fromStdString(
+            "All plugin .dll(s)/.so(s) need to be put into 'plugins' subdirectory "
+            "alongside the dive_ui executable."));
 }
 
 // This function must be exported from the shared library.
-extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance()
-{
-    return new PluginSample();
-}
+extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance() { return new PluginSample(); }
 }  // namespace Dive

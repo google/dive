@@ -14,16 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "trace_mgr.h"
-
 #include <string>
 #include <string_view>
 
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "common/log.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
+#include "trace_mgr.h"
 
 extern "C"
 {
@@ -39,8 +38,8 @@ constexpr std::string_view kTraceFilePath = "/sdcard/Download/";
 namespace Dive
 {
 
-AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration) :
-    m_trace_duration(trace_duration)
+AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration)
+    : m_trace_duration(trace_duration)
 {
 }
 

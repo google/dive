@@ -24,11 +24,11 @@ void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...);
 #define DIVE_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
 
 #ifndef NDEBUG  // DEBUG
-#    define DIVE_ASSERT(p) assert(p)
-#    define DIVE_DEBUG_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
+#define DIVE_ASSERT(p) assert(p)
+#define DIVE_DEBUG_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
 #else
-#    define DIVE_ASSERT(...) ((void)0)
-#    define DIVE_DEBUG_LOG(...) ((void)0)
+#define DIVE_ASSERT(...) ((void)0)
+#define DIVE_DEBUG_LOG(...) ((void)0)
 #endif
 
 // This does not get compiled out, so safe to call it in RELEASE

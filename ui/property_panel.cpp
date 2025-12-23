@@ -12,14 +12,14 @@
 */
 
 #include "property_panel.h"
+
 #include <QGridLayout>
 #include <QLabel>
 #include <QResizeEvent>
 #include <QVBoxLayout>
 
 //--------------------------------------------------------------------------------------------------
-PropertyPanel::PropertyPanel(QFrame* m_parent) :
-    QFrame(m_parent)
+PropertyPanel::PropertyPanel(QFrame* m_parent) : QFrame(m_parent)
 {
     setMinimumWidth(250);
 
@@ -50,9 +50,7 @@ PropertyPanel::PropertyPanel(QFrame* m_parent) :
     layout->addWidget(m_hover_help_str);
     layout->setAlignment(m_hover_help_str, Qt::AlignBottom);
 
-    QObject::connect(m_selection_info_str,
-                     &QLabel::linkActivated,
-                     this,
+    QObject::connect(m_selection_info_str, &QLabel::linkActivated, this,
                      &PropertyPanel::OnLinkActivated);
 
     setLayout(layout);
@@ -94,8 +92,7 @@ void PropertyPanel::OnSelectionInfoChange(const QString& string)
 //--------------------------------------------------------------------------------------------------
 void PropertyPanel::OnVulkanParams(const QString& string)
 {
-    if (string.isEmpty())
-        return;
+    if (string.isEmpty()) return;
 
     m_selection_info_str->setText(string);
     m_selection_info_str->show();
@@ -114,11 +111,10 @@ void PropertyPanel::OnLinkActivated(const QString& link)
 {
     if (link.startsWith("#shader-"))
     {
-        QStringRef addr_str(&link,
-                            (sizeof("#shader-") - 1),
+        QStringRef addr_str(&link, (sizeof("#shader-") - 1),
                             link.size() - (sizeof("#shader-") - 1));
-        bool       ok = false;
-        uint64_t   addr = addr_str.toULongLong(&ok, 16);
+        bool ok = false;
+        uint64_t addr = addr_str.toULongLong(&ok, 16);
         if (ok)
         {
             emit crossReference(Dive::CrossRef(Dive::CrossRefType::kShaderAddress, addr));

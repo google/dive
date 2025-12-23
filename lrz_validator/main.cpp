@@ -22,9 +22,9 @@
 
 bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
 {
-    size_t                       event_count = meta_data.m_event_info.size();
-    const Dive::EventStateInfo  &event_state = meta_data.m_event_state;
-    bool                         lrz_test_passed = true;
+    size_t event_count = meta_data.m_event_info.size();
+    const Dive::EventStateInfo &event_state = meta_data.m_event_state;
+    bool lrz_test_passed = true;
     std::optional<std::ofstream> output_file = std::nullopt;
     if (!output_file_name.empty())
     {
@@ -65,12 +65,12 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
             auto event_state_it = event_state.find(static_cast<Dive::EventStateId>(event_id));
 
             const uint32_t desired_draw_string_len = 64;
-            std::string    draw_string = info.m_str;
+            std::string draw_string = info.m_str;
             AppendSpace(draw_string, desired_draw_string_len);
             OutputDetails(draw_string + "\t");
 
-            const bool  is_depth_test_enabled = event_state_it->DepthTestEnabled();
-            const bool  is_depth_write_enabled = event_state_it->DepthWriteEnabled();
+            const bool is_depth_test_enabled = event_state_it->DepthTestEnabled();
+            const bool is_depth_write_enabled = event_state_it->DepthWriteEnabled();
             VkCompareOp zfunc = event_state_it->DepthCompareOp();
 
             OutputDetails("DepthTest:" +
@@ -81,33 +81,33 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
             std::string zfunc_str = "Invalid";
             switch (zfunc)
             {
-            case VK_COMPARE_OP_NEVER:
-                zfunc_str = "Never";
-                break;
-            case VK_COMPARE_OP_LESS:
-                zfunc_str = "Less";
-                break;
-            case VK_COMPARE_OP_EQUAL:
-                zfunc_str = "Equal";
-                break;
-            case VK_COMPARE_OP_LESS_OR_EQUAL:
-                zfunc_str = "Less or Equal";
-                break;
-            case VK_COMPARE_OP_GREATER:
-                zfunc_str = "Greater";
-                break;
-            case VK_COMPARE_OP_NOT_EQUAL:
-                zfunc_str = "Not Equal";
-                break;
-            case VK_COMPARE_OP_GREATER_OR_EQUAL:
-                zfunc_str = "Greater or Equal";
-                break;
-            case VK_COMPARE_OP_ALWAYS:
-                zfunc_str = "Always";
-                break;
-            default:
-                DIVE_ASSERT(false);
-                break;
+                case VK_COMPARE_OP_NEVER:
+                    zfunc_str = "Never";
+                    break;
+                case VK_COMPARE_OP_LESS:
+                    zfunc_str = "Less";
+                    break;
+                case VK_COMPARE_OP_EQUAL:
+                    zfunc_str = "Equal";
+                    break;
+                case VK_COMPARE_OP_LESS_OR_EQUAL:
+                    zfunc_str = "Less or Equal";
+                    break;
+                case VK_COMPARE_OP_GREATER:
+                    zfunc_str = "Greater";
+                    break;
+                case VK_COMPARE_OP_NOT_EQUAL:
+                    zfunc_str = "Not Equal";
+                    break;
+                case VK_COMPARE_OP_GREATER_OR_EQUAL:
+                    zfunc_str = "Greater or Equal";
+                    break;
+                case VK_COMPARE_OP_ALWAYS:
+                    zfunc_str = "Always";
+                    break;
+                default:
+                    DIVE_ASSERT(false);
+                    break;
             }
             const uint32_t desired_zfunc_str_len = 16;
             AppendSpace(zfunc_str, desired_zfunc_str_len);
@@ -162,7 +162,7 @@ int main(int argc, char **argv)
 
     // Load capture
     std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
-    Dive::CaptureData::LoadResult   load_res = data_core->LoadPm4CaptureData(input_file_name);
+    Dive::CaptureData::LoadResult load_res = data_core->LoadPm4CaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cout << "Loading capture \"" << input_file_name << "\" failed!";
@@ -180,7 +180,7 @@ int main(int argc, char **argv)
 
     // LRZ Validation
     const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
-    const bool                   lrz_test_passed = ValidateLRZ(meta_data, output_file_name);
+    const bool lrz_test_passed = ValidateLRZ(meta_data, output_file_name);
     if (lrz_test_passed)
     {
         std::cout << "[LRZ Pass] LRZ is correctly set for all drawcalls!\n";

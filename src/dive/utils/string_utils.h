@@ -36,9 +36,10 @@ void Trim(std::string &s);
 void RemoveQuotes(std::string &s);
 
 // Helper functions for safe string to number conversion
-template<typename T> bool SafeConvertFromString(const std::string &s, T &out)
+template <typename T>
+bool SafeConvertFromString(const std::string &s, T &out)
 {
-    char       *end = nullptr;
+    char *end = nullptr;
     const char *start = s.c_str();
     errno = 0;
 

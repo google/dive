@@ -23,10 +23,7 @@ namespace gfxrecon::decode
 namespace
 {
 
-TEST(DiveFileProcessorTest, CheckInitialization)
-{
-    DiveFileProcessor dive_file_processor;
-}
+TEST(DiveFileProcessorTest, CheckInitialization) { DiveFileProcessor dive_file_processor; }
 
 // TODO : Write more tests
 

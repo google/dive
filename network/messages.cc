@@ -17,7 +17,6 @@ limitations under the License.
 #include "messages.h"
 
 #include "absl/strings/str_cat.h"
-
 #include "dive/common/macros.h"
 #include "dive/common/status.h"
 
@@ -28,7 +27,7 @@ namespace Network
 
 void WriteUint32ToBuffer(uint32_t value, Buffer& dest)
 {
-    uint32_t       net_val = htonl(value);
+    uint32_t net_val = htonl(value);
     const uint8_t* p_val = reinterpret_cast<const uint8_t*>(&net_val);
     dest.insert(dest.end(), p_val, p_val + sizeof(uint32_t));
 }
@@ -171,9 +170,8 @@ absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size,
     size_t total_received = 0;
     while (total_received < size)
     {
-        absl::StatusOr<size_t> received = conn->Recv(buffer + total_received,
-                                                     size - total_received,
-                                                     timeout_ms);
+        absl::StatusOr<size_t> received =
+            conn->Recv(buffer + total_received, size - total_received, timeout_ms);
         if (!received.ok())
         {
             return received.status();
@@ -193,7 +191,7 @@ absl::Status SendBuffer(SocketConnection* conn, const uint8_t* buffer, size_t si
 }
 
 absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnection* conn,
-                                                                    int               timeout_ms)
+                                                                    int timeout_ms)
 {
     if (!conn)
     {
@@ -201,7 +199,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     }
 
     constexpr size_t kHeaderSize = sizeof(uint32_t) * 2;
-    uint8_t          header_buffer[kHeaderSize];
+    uint8_t header_buffer[kHeaderSize];
 
     // Receive the message header.
     absl::Status status = ReceiveBuffer(conn, header_buffer, kHeaderSize, timeout_ms);
@@ -221,7 +219,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     {
         conn->Close();
         return Dive::InvalidArgumentError(
-        absl::StrCat("Payload size ", payload_length, " exceeds limit."));
+            absl::StrCat("Payload size ", payload_length, " exceeds limit."));
     }
 
     // Receive the message payload.
@@ -236,39 +234,39 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     std::unique_ptr<ISerializable> message;
     switch (static_cast<MessageType>(type))
     {
-    case MessageType::HANDSHAKE_REQUEST:
-        message = std::make_unique<HandshakeRequest>();
-        break;
-    case MessageType::HANDSHAKE_RESPONSE:
-        message = std::make_unique<HandshakeResponse>();
-        break;
-    case MessageType::PING_MESSAGE:
-        message = std::make_unique<PingMessage>();
-        break;
-    case MessageType::PONG_MESSAGE:
-        message = std::make_unique<PongMessage>();
-        break;
-    case MessageType::PM4_CAPTURE_REQUEST:
-        message = std::make_unique<Pm4CaptureRequest>();
-        break;
-    case MessageType::PM4_CAPTURE_RESPONSE:
-        message = std::make_unique<Pm4CaptureResponse>();
-        break;
-    case MessageType::DOWNLOAD_FILE_REQUEST:
-        message = std::make_unique<DownloadFileRequest>();
-        break;
-    case MessageType::DOWNLOAD_FILE_RESPONSE:
-        message = std::make_unique<DownloadFileResponse>();
-        break;
-    case MessageType::FILE_SIZE_REQUEST:
-        message = std::make_unique<FileSizeRequest>();
-        break;
-    case MessageType::FILE_SIZE_RESPONSE:
-        message = std::make_unique<FileSizeResponse>();
-        break;
-    default:
-        conn->Close();
-        return Dive::InvalidArgumentError(absl::StrCat("Unknown message type: ", type));
+        case MessageType::HANDSHAKE_REQUEST:
+            message = std::make_unique<HandshakeRequest>();
+            break;
+        case MessageType::HANDSHAKE_RESPONSE:
+            message = std::make_unique<HandshakeResponse>();
+            break;
+        case MessageType::PING_MESSAGE:
+            message = std::make_unique<PingMessage>();
+            break;
+        case MessageType::PONG_MESSAGE:
+            message = std::make_unique<PongMessage>();
+            break;
+        case MessageType::PM4_CAPTURE_REQUEST:
+            message = std::make_unique<Pm4CaptureRequest>();
+            break;
+        case MessageType::PM4_CAPTURE_RESPONSE:
+            message = std::make_unique<Pm4CaptureResponse>();
+            break;
+        case MessageType::DOWNLOAD_FILE_REQUEST:
+            message = std::make_unique<DownloadFileRequest>();
+            break;
+        case MessageType::DOWNLOAD_FILE_RESPONSE:
+            message = std::make_unique<DownloadFileResponse>();
+            break;
+        case MessageType::FILE_SIZE_REQUEST:
+            message = std::make_unique<FileSizeRequest>();
+            break;
+        case MessageType::FILE_SIZE_RESPONSE:
+            message = std::make_unique<FileSizeResponse>();
+            break;
+        default:
+            conn->Close();
+            return Dive::InvalidArgumentError(absl::StrCat("Unknown message type: ", type));
     }
 
     status = message->Deserialize(payload_buffer);
@@ -289,7 +287,7 @@ absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& mess
     }
 
     // Serialize the message payload.
-    Buffer       payload_buffer;
+    Buffer payload_buffer;
     absl::Status status = message.Serialize(payload_buffer);
     if (!status.ok())
     {
@@ -301,10 +299,10 @@ absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& mess
     }
 
     // Construct and send the header.
-    uint32_t         net_type = htonl(static_cast<uint32_t>(message.GetMessageType()));
-    uint32_t         net_payload_length = htonl(static_cast<uint32_t>(payload_buffer.size()));
+    uint32_t net_type = htonl(static_cast<uint32_t>(message.GetMessageType()));
+    uint32_t net_payload_length = htonl(static_cast<uint32_t>(payload_buffer.size()));
     constexpr size_t kHeaderSize = sizeof(net_type) + sizeof(net_payload_length);
-    uint8_t          header_buffer[kHeaderSize];
+    uint8_t header_buffer[kHeaderSize];
     std::memcpy(header_buffer, &net_type, sizeof(uint32_t));
     std::memcpy(header_buffer + sizeof(uint32_t), &net_payload_length, sizeof(uint32_t));
 

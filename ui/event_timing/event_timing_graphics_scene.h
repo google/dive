@@ -17,15 +17,15 @@
 class EventTimingGraphicsScene : public QGraphicsScene
 {
     Q_OBJECT
-public:
+ public:
     EventTimingGraphicsScene();
 
-public slots:
+ public slots:
     void onMouseCursorChanged(QPointF new_mouse_pos);
 
-protected:
+ protected:
     void drawForeground(QPainter* painter, const QRectF& rect) Q_DECL_OVERRIDE;
 
-private:
+ private:
     QPointF m_mouse_pos;
 };

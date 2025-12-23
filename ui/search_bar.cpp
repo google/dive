@@ -12,9 +12,12 @@
 */
 
 #include "search_bar.h"
+
 #include <qwidget.h>
+
 #include <QDebug>
 #include <iostream>
+
 #include "QHBoxLayout"
 #include "QLabel"
 #include "QLineEdit"
@@ -25,8 +28,7 @@
 #include "shortcuts.h"
 
 //--------------------------------------------------------------------------------------------------
-SearchBar::SearchBar(QWidget* parent) :
-    QWidget(parent)
+SearchBar::SearchBar(QWidget* parent) : QWidget(parent)
 {
     QLabel* searchlabel = new QLabel(this);
     QPixmap pixmap(":/images/search.png");
@@ -72,9 +74,8 @@ SearchBar::SearchBar(QWidget* parent) :
     connect(m_next, SIGNAL(clicked()), this, SLOT(nextSearchedItem()));
     connect(m_cancel, SIGNAL(clicked()), this, SLOT(cancelSearch()));
 
-    QShortcut* previousSearchItemShortcut = new QShortcut(QKeySequence(
-                                                          SHORTCUT_PREVIOUS_SEARCH_RESULT),
-                                                          this);
+    QShortcut* previousSearchItemShortcut =
+        new QShortcut(QKeySequence(SHORTCUT_PREVIOUS_SEARCH_RESULT), this);
     connect(previousSearchItemShortcut, &QShortcut::activated, this, &SearchBar::prevSearchedItem);
 
     QShortcut* nextSearchShortcut = new QShortcut(QKeySequence(SHORTCUT_NEXT_SEARCH_RESULT), this);
@@ -113,7 +114,7 @@ void SearchBar::newSearchResults()
     if (!m_input->text().isEmpty())
     {
         QString searchString = m_input->text();
-        emit    new_search(searchString);
+        emit new_search(searchString);
         m_searched = true;
     }
 }
@@ -167,7 +168,4 @@ void SearchBar::cancelSearch()
 }
 
 //--------------------------------------------------------------------------------------------------
-void SearchBar::setView(QAbstractItemView* view)
-{
-    m_view = view;
-}
+void SearchBar::setView(QAbstractItemView* view) { m_view = view; }

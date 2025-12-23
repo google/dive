@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+
 #include "decode/annotation_handler.h"
 #include "util/defines.h"
 #include "util/platform.h"
@@ -29,34 +30,29 @@ struct ApiCallInfo;
 // used to construct the command hierarchy displayed in the Dive UI.
 class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 {
-public:
+ public:
     struct VulkanCommandInfo
     {
-        explicit VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data) :
-            args(data.GetArgs()),
-            name(data.GetFunctionName()),
-            index(data.GetCmdBufferIndex())
+        explicit VulkanCommandInfo(const gfxrecon::util::DiveFunctionData& data)
+            : args(data.GetArgs()), name(data.GetFunctionName()), index(data.GetCmdBufferIndex())
         {
         }
 
         nlohmann::ordered_json args = {};
-        std::string            name = "";
-        uint32_t               index = 0;
+        std::string name = "";
+        uint32_t index = 0;
     };
 
     struct SubmitInfo
     {
-        explicit SubmitInfo(const std::string& function_name) :
-            name(function_name)
-        {
-        }
+        explicit SubmitInfo(const std::string& function_name) : name(function_name) {}
 
         // Keeps all the vk commands that come before this submit and that are not associated with
         // any command buffer
         std::vector<VulkanCommandInfo> none_cmd_vk_commands = {};
         // Keep handles of all command buffers that is submitted by this submission
         std::vector<uint64_t> vk_command_buffer_handles = {};
-        std::string           name = "";
+        std::string name = "";
     };
 
     struct DrawCallCounts
@@ -74,10 +70,8 @@ public:
     void WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data) override;
 
     // @brief Convert annotations, which are simple {type:enum, key:string, value:string} objects.
-    virtual void ProcessAnnotation(uint64_t                         block_index,
-                                   gfxrecon::format::AnnotationType type,
-                                   const std::string&               label,
-                                   const std::string&               data) override
+    virtual void ProcessAnnotation(uint64_t block_index, gfxrecon::format::AnnotationType type,
+                                   const std::string& label, const std::string& data) override
     {
     }
 
@@ -91,11 +85,11 @@ public:
         return std::move(m_draw_call_counts_map);
     }
 
-private:
+ private:
     // This is a per submit cache that keeps all vk commands that are not in any command buffer
     std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
     // Use command buffer handle as the key to accociate with vk commands
     std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
-    std::unordered_map<uint64_t, DrawCallCounts>                 m_draw_call_counts_map = {};
-    std::vector<std::unique_ptr<SubmitInfo>>                     m_submits = {};
+    std::unordered_map<uint64_t, DrawCallCounts> m_draw_call_counts_map = {};
+    std::vector<std::unique_ptr<SubmitInfo>> m_submits = {};
 };

@@ -31,7 +31,7 @@ class GfxrVulkanCommandModel : public QAbstractItemModel
 {
     Q_OBJECT
 
-public:
+ public:
     explicit GfxrVulkanCommandModel(const Dive::CommandHierarchy &command_hierarchy);
     ~GfxrVulkanCommandModel();
 
@@ -40,28 +40,26 @@ public:
     void EndResetModel();
     void SetTopologyToView(const Dive::Topology *topology_ptr);
 
-    QVariant      data(const QModelIndex &index, int role) const override;
+    QVariant data(const QModelIndex &index, int role) const override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
-    QVariant      headerData(int             section,
-                             Qt::Orientation orientation,
-                             int             role = Qt::DisplayRole) const override;
-    QModelIndex   index(int                row,
-                        int                column,
-                        const QModelIndex &parent = QModelIndex()) const override;
-    QModelIndex   parent(const QModelIndex &index) const override;
-    int           rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int           columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    QModelIndex   findNode(uint64_t node_index) const;
+    QVariant headerData(int section, Qt::Orientation orientation,
+                        int role = Qt::DisplayRole) const override;
+    QModelIndex index(int row, int column,
+                      const QModelIndex &parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex &index) const override;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    QModelIndex findNode(uint64_t node_index) const;
 
     QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
 
     uint64_t getNumNodes() const;
 
-private:
+ private:
     void BuildNodeLookup(const QModelIndex &parent = QModelIndex()) const;
 
-    const Dive::CommandHierarchy                        &m_command_hierarchy;
-    const Dive::Topology                                *m_topology_ptr;
+    const Dive::CommandHierarchy &m_command_hierarchy;
+    const Dive::Topology *m_topology_ptr;
     const std::unordered_map<std::string, const char *> &m_vulkan_command_tool_tip_summaries;
-    mutable std::vector<QPersistentModelIndex>           m_node_lookup;
+    mutable std::vector<QPersistentModelIndex> m_node_lookup;
 };

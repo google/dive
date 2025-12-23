@@ -15,27 +15,28 @@
 */
 
 #include "command_tab_view.h"
+
+#include <QApplication>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QVBoxLayout>
-#include <QApplication>
 #include <QScrollBar>
+#include <QVBoxLayout>
+
 #include "command_buffer_model.h"
 #include "command_buffer_view.h"
-#include "search_bar.h"
-#include "shortcuts.h"
-
 #include "dive_core/command_hierarchy.h"
 #include "object_names.h"
+#include "search_bar.h"
+#include "shortcuts.h"
 
 // =================================================================================================
 // CommandTabView
 // =================================================================================================
-CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent) :
-    m_command_hierarchy(command_hierarchy)
+CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent)
+    : m_command_hierarchy(command_hierarchy)
 {
     m_command_buffer_model = new CommandBufferModel(command_hierarchy);
     m_command_buffer_view = new CommandBufferView(command_hierarchy);
@@ -66,14 +67,10 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     setLayout(main_layout);
     m_search_bar->setView(m_command_buffer_view);
 
-    QObject::connect(m_search_trigger_button,
-                     SIGNAL(clicked()),
-                     this,
+    QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this,
                      SLOT(OnSearchCommandBuffer()));
 
-    QObject::connect(m_search_bar,
-                     SIGNAL(hide_search_bar(bool)),
-                     this,
+    QObject::connect(m_search_bar, SIGNAL(hide_search_bar(bool)), this,
                      SLOT(OnSearchBarVisibilityChange(bool)));
 }
 
@@ -109,8 +106,7 @@ void CommandTabView::ResetModel()
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::OnSelectionChanged(const QModelIndex &index)
 {
-    if (!index.isValid())
-        return;
+    if (!index.isValid()) return;
 
     m_command_buffer_model->OnSelectionChanged(index);
 
@@ -172,42 +168,26 @@ void CommandTabView::OnSearchBarVisibilityChange(bool isHidden)
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::ConnectSearchBar()
 {
-    QObject::connect(m_search_bar,
-                     SIGNAL(new_search(const QString &)),
-                     m_command_buffer_view,
+    QObject::connect(m_search_bar, SIGNAL(new_search(const QString &)), m_command_buffer_view,
                      SLOT(searchCommandBufferByText(const QString &)));
-    QObject::connect(m_search_bar,
-                     &SearchBar::next_search,
-                     m_command_buffer_view,
+    QObject::connect(m_search_bar, &SearchBar::next_search, m_command_buffer_view,
                      &CommandBufferView::nextCommandInSearch);
-    QObject::connect(m_search_bar,
-                     &SearchBar::prev_search,
-                     m_command_buffer_view,
+    QObject::connect(m_search_bar, &SearchBar::prev_search, m_command_buffer_view,
                      &CommandBufferView::prevCommandInSearch);
-    QObject::connect(m_command_buffer_view,
-                     &CommandBufferView::updateSearch,
-                     m_search_bar,
+    QObject::connect(m_command_buffer_view, &CommandBufferView::updateSearch, m_search_bar,
                      &SearchBar::updateSearchResults);
 }
 
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::DisconnectSearchBar()
 {
-    QObject::disconnect(m_search_bar,
-                        SIGNAL(new_search(const QString &)),
-                        m_command_buffer_view,
+    QObject::disconnect(m_search_bar, SIGNAL(new_search(const QString &)), m_command_buffer_view,
                         SLOT(searchCommandBufferByText(const QString &)));
-    QObject::disconnect(m_search_bar,
-                        &SearchBar::next_search,
-                        m_command_buffer_view,
+    QObject::disconnect(m_search_bar, &SearchBar::next_search, m_command_buffer_view,
                         &CommandBufferView::nextCommandInSearch);
-    QObject::disconnect(m_search_bar,
-                        &SearchBar::prev_search,
-                        m_command_buffer_view,
+    QObject::disconnect(m_search_bar, &SearchBar::prev_search, m_command_buffer_view,
                         &CommandBufferView::prevCommandInSearch);
-    QObject::disconnect(m_command_buffer_view,
-                        &CommandBufferView::updateSearch,
-                        m_search_bar,
+    QObject::disconnect(m_command_buffer_view, &CommandBufferView::updateSearch, m_search_bar,
                         &SearchBar::updateSearchResults);
 }
 

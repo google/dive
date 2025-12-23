@@ -28,7 +28,7 @@ namespace
 {
 class LinuxLibraryLoader : public IDynamicLibraryLoader
 {
-public:
+ public:
     absl::StatusOr<NativeLibraryHandle> Load(const std::string& path) override
     {
         // Clear any existing error state from dlopen.
@@ -37,25 +37,23 @@ public:
         if (handle == nullptr)
         {
             const char* error_msg = dlerror();
-            return absl::UnknownError(absl::StrCat("Failed to load library '",
-                                                   path,
-                                                   "': ",
-                                                   error_msg ? error_msg : "Unknown error"));
+            return absl::UnknownError(absl::StrCat("Failed to load library '", path,
+                                                   "': ", error_msg ? error_msg : "Unknown error"));
         }
         return handle;
     }
 
     absl::StatusOr<void*> GetSymbol(NativeLibraryHandle handle,
-                                    const std::string&  symbolName) override
+                                    const std::string& symbolName) override
     {
         // Clear any existing error state from dlsym.
         dlerror();
-        void*       symbol = dlsym(handle, symbolName.c_str());
+        void* symbol = dlsym(handle, symbolName.c_str());
         const char* error_msg = dlerror();
         if (error_msg != nullptr)
         {
             return absl::UnknownError(
-            absl::StrCat("Failed to find symbol '", symbolName, "': ", error_msg));
+                absl::StrCat("Failed to find symbol '", symbolName, "': ", error_msg));
         }
         return symbol;
     }

@@ -17,7 +17,6 @@ limitations under the License.
 #include "unix_domain_server.h"
 
 #include "absl/strings/str_cat.h"
-
 #include "dive/common/log.h"
 #include "dive/common/status.h"
 
@@ -26,13 +25,10 @@ namespace Network
 
 DefaultMessageHandler::DefaultMessageHandler() {}
 
-void DefaultMessageHandler::OnConnect()
-{
-    LOGI("DefaultMessageHandler::OnConnect()");
-}
+void DefaultMessageHandler::OnConnect() { LOGI("DefaultMessageHandler::OnConnect()"); }
 
 void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message,
-                                          SocketConnection*              client_conn)
+                                          SocketConnection* client_conn)
 {
     if (!message)
     {
@@ -47,71 +43,62 @@ void DefaultMessageHandler::HandleMessage(std::unique_ptr<ISerializable> message
 
     switch (message->GetMessageType())
     {
-    case MessageType::HANDSHAKE_REQUEST:
-    {
-        auto* request = dynamic_cast<HandshakeRequest*>(message.get());
-        if (request)
+        case MessageType::HANDSHAKE_REQUEST:
         {
-            HandshakeResponse response;
-            response.SetMajorVersion(request->GetMajorVersion());
-            response.SetMinorVersion(request->GetMinorVersion());
-            auto status = SendSocketMessage(client_conn, response);
-            if (!status.ok())
+            auto* request = dynamic_cast<HandshakeRequest*>(message.get());
+            if (request)
             {
-                LOGW("DefaultMessageHandler::HandleMessage: SendSocketMessage fail: %.*s",
-                     static_cast<int>(status.message().length()),
-                     status.message().data());
+                HandshakeResponse response;
+                response.SetMajorVersion(request->GetMajorVersion());
+                response.SetMinorVersion(request->GetMinorVersion());
+                auto status = SendSocketMessage(client_conn, response);
+                if (!status.ok())
+                {
+                    LOGW("DefaultMessageHandler::HandleMessage: SendSocketMessage fail: %.*s",
+                         static_cast<int>(status.message().length()), status.message().data());
+                }
             }
-        }
-        else
-        {
-            LOGW("DefaultMessageHandler::HandleMessage: Handshake request is null");
-        }
-        break;
-    }
-    case MessageType::PING_MESSAGE:
-    {
-        auto* request = dynamic_cast<PingMessage*>(message.get());
-        if (request)
-        {
-            PongMessage response;
-            auto        status = SendSocketMessage(client_conn, response);
-            if (!status.ok())
+            else
             {
-                LOGW("DefaultMessageHandler::HandleMessage: SendSocketMessage fail: %.*s",
-                     static_cast<int>(status.message().length()),
-                     status.message().data());
+                LOGW("DefaultMessageHandler::HandleMessage: Handshake request is null");
             }
+            break;
         }
-        else
+        case MessageType::PING_MESSAGE:
         {
-            LOGW("DefaultMessageHandler::HandleMessage: Ping request is null");
+            auto* request = dynamic_cast<PingMessage*>(message.get());
+            if (request)
+            {
+                PongMessage response;
+                auto status = SendSocketMessage(client_conn, response);
+                if (!status.ok())
+                {
+                    LOGW("DefaultMessageHandler::HandleMessage: SendSocketMessage fail: %.*s",
+                         static_cast<int>(status.message().length()), status.message().data());
+                }
+            }
+            else
+            {
+                LOGW("DefaultMessageHandler::HandleMessage: Ping request is null");
+            }
+            break;
         }
-        break;
-    }
-    default:
-    {
-        LOGW("DefaultMessageHandler::HandleMessage: Unknown message type = %d",
-             static_cast<uint32_t>(message->GetMessageType()));
-    }
+        default:
+        {
+            LOGW("DefaultMessageHandler::HandleMessage: Unknown message type = %d",
+                 static_cast<uint32_t>(message->GetMessageType()));
+        }
     }
 }
 
-void DefaultMessageHandler::OnDisconnect()
-{
-    LOGI("DefaultMessageHandler::OnDisconnect()");
-}
+void DefaultMessageHandler::OnDisconnect() { LOGI("DefaultMessageHandler::OnDisconnect()"); }
 
-UnixDomainServer::UnixDomainServer(std::unique_ptr<IMessageHandler> handler) :
-    m_handler(std::move(handler)),
-    m_is_running(false)
+UnixDomainServer::UnixDomainServer(std::unique_ptr<IMessageHandler> handler)
+    : m_handler(std::move(handler)), m_is_running(false)
 {
 }
 
-UnixDomainServer::~UnixDomainServer()
-{
-    Stop();
-}
+UnixDomainServer::~UnixDomainServer() { Stop(); }
 
 absl::Status UnixDomainServer::Start(const std::string& server_address)
 {
@@ -166,9 +153,9 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
         {
             if (!m_listen_connection || !m_listen_connection->IsOpen())
             {
-                LOGI(m_is_running.load() ?
-                     "AcceptAndHandleClientLoop: Listen socket closed unexpectedly. Stopping." :
-                     "AcceptAndHandleClientLoop: Listen socket closed for shutdown.");
+                LOGI(m_is_running.load()
+                         ? "AcceptAndHandleClientLoop: Listen socket closed unexpectedly. Stopping."
+                         : "AcceptAndHandleClientLoop: Listen socket closed for shutdown.");
                 break;
             }
 
@@ -210,8 +197,9 @@ void UnixDomainServer::AcceptAndHandleClientLoop()
             {
                 if (!m_is_running.load())
                 {
-                    LOGI("AcceptAndHandleClientLoop: ReceiveSocketMessage: Exiting loop due to "
-                         "shutdown.");
+                    LOGI(
+                        "AcceptAndHandleClientLoop: ReceiveSocketMessage: Exiting loop due to "
+                        "shutdown.");
                     m_handler->OnDisconnect();
                     break;
                 }

@@ -37,39 +37,33 @@ class StateMachine;
 // Looking for vkCmdDraw or vkCmdEndRenderPass.
 class LookingForDraw : public gfxrecon::decode::VulkanConsumer
 {
-public:
+ public:
     // `found_end` is the state to transition to when vkCmdEndRenderPass is found.
     LookingForDraw(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_end);
 
     void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
-                           gfxrecon::format::HandleId           commandBuffer,
-                           uint32_t                             vertexCount,
-                           uint32_t                             instanceCount,
-                           uint32_t                             firstVertex,
-                           uint32_t                             firstInstance) override;
+                           gfxrecon::format::HandleId commandBuffer, uint32_t vertexCount,
+                           uint32_t instanceCount, uint32_t firstVertex,
+                           uint32_t firstInstance) override;
 
     void Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
-                                  gfxrecon::format::HandleId           commandBuffer,
-                                  uint32_t                             indexCount,
-                                  uint32_t                             instanceCount,
-                                  uint32_t                             firstIndex,
-                                  int32_t                              vertexOffset,
-                                  uint32_t                             firstInstance) override;
+                                  gfxrecon::format::HandleId commandBuffer, uint32_t indexCount,
+                                  uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset,
+                                  uint32_t firstInstance) override;
 
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
-                                    gfxrecon::format::HandleId           commandBuffer) override;
+                                    gfxrecon::format::HandleId commandBuffer) override;
 
     void Process_vkCmdEndRenderPass2KHR(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>*
-    pSubpassEndInfo) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>*
+            pSubpassEndInfo) override;
 
     // TODO: Subpass
     // TODO: Other draws
 
-private:
-    StateMachine&                     parent_;
+ private:
+    StateMachine& parent_;
     gfxrecon::decode::VulkanConsumer& found_end_;
 };
 
@@ -77,56 +71,51 @@ private:
 // Looking for vkCmdBeginRenderPass or vkQueueSubmit.
 class LookingForBeginRenderPass : public gfxrecon::decode::VulkanConsumer
 {
-public:
+ public:
     // `found_begin` is the state to transition to when vkCmdBeginRenderPass is found.
     LookingForBeginRenderPass(StateMachine& parent, gfxrecon::decode::VulkanConsumer& found_begin);
 
     // Accept or reject depending on if the dumpable is complete.
     void Process_vkQueueSubmit(
-    const gfxrecon::decode::ApiCallInfo&                                            call_info,
-    VkResult                                                                        returnValue,
-    gfxrecon::format::HandleId                                                      queue,
-    uint32_t                                                                        submitCount,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-    gfxrecon::format::HandleId                                                      fence) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, VkResult returnValue,
+        gfxrecon::format::HandleId queue, uint32_t submitCount,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
+        gfxrecon::format::HandleId fence) override;
 
     void Process_vkCmdBeginRenderPass(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-                      pRenderPassBegin,
-    VkSubpassContents contents) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+            pRenderPassBegin,
+        VkSubpassContents contents) override;
 
     void Process_vkCmdBeginRenderPass2KHR(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-    pRenderPassBegin,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
-    pSubpassBeginInfo) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+            pRenderPassBegin,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+            pSubpassBeginInfo) override;
 
-private:
-    StateMachine&                     parent_;
+ private:
+    StateMachine& parent_;
     gfxrecon::decode::VulkanConsumer& found_begin_;
 };
 
 // Looking for vkBeginCommandBuffer. This is the first state in the state machine.
 class LookingForBeginCommandBuffer : public gfxrecon::decode::VulkanConsumer
 {
-public:
+ public:
     // `found_begin` is the state to transition to when vkBeginCommandBuffer is found.
-    LookingForBeginCommandBuffer(StateMachine&                     parent,
+    LookingForBeginCommandBuffer(StateMachine& parent,
                                  gfxrecon::decode::VulkanConsumer& found_begin);
 
     void Process_vkBeginCommandBuffer(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    VkResult                             returnValue,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
-    pBeginInfo) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, VkResult returnValue,
+        gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
+            pBeginInfo) override;
 
-private:
-    StateMachine&                     parent_;
+ private:
+    StateMachine& parent_;
     gfxrecon::decode::VulkanConsumer& found_begin_;
 };
 

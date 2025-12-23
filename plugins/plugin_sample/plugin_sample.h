@@ -36,7 +36,7 @@ namespace Dive
 class PluginSample : public QObject, public IDivePlugin
 {
     Q_OBJECT
-public:
+ public:
     explicit PluginSample(QObject* parent = nullptr);
     ~PluginSample() override;
 
@@ -46,7 +46,7 @@ public:
     bool Initialize(IDivePluginBridge& bridge) override;
     void Shutdown() override;
 
-private slots:
+ private slots:
     void OnPluginSampleActionTriggered();
 };
 

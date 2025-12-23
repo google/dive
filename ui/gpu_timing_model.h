@@ -14,33 +14,31 @@
 #pragma once
 
 #include <QAbstractItemModel>
-#include <QVector>
 #include <QStringList>
+#include <QVector>
 
 #include "dive_core/available_gpu_time.h"
 
 class GpuTimingModel : public QAbstractItemModel
 {
     Q_OBJECT
-public:
+ public:
     explicit GpuTimingModel(QObject *parent = nullptr);
 
     // QAbstractItemModel interface
-    QModelIndex index(int                row,
-                      int                column,
+    QModelIndex index(int row, int column,
                       const QModelIndex &parent = QModelIndex()) const override;
     QModelIndex parent(const QModelIndex &index) const override;
-    int         rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int         columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant    data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    QVariant    headerData(int             section,
-                           Qt::Orientation orientation,
-                           int             role = Qt::DisplayRole) const override;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    QVariant headerData(int section, Qt::Orientation orientation,
+                        int role = Qt::DisplayRole) const override;
 
-public slots:
+ public slots:
     void OnGpuTimingResultsGenerated(const QString &file_path);
 
-private:
-    void                     ParseCsv(const QString &file_path);
+ private:
+    void ParseCsv(const QString &file_path);
     Dive::AvailableGpuTiming m_available_gpu_timing_data;
 };

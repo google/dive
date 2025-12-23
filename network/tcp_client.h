@@ -18,10 +18,10 @@ limitations under the License.
 
 #include <atomic>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <memory>
 
 #include "messages.h"
 
@@ -38,7 +38,7 @@ enum class ClientStatus
 
 class TcpClient
 {
-public:
+ public:
     TcpClient();
     ~TcpClient();
 
@@ -58,14 +58,14 @@ public:
     absl::StatusOr<std::string> StartPm4Capture();
 
     // Downloads a file from the server to a local path.
-    absl::Status DownloadFileFromServer(const std::string&          remote_file_path,
-                                        const std::string&          local_save_path,
+    absl::Status DownloadFileFromServer(const std::string& remote_file_path,
+                                        const std::string& local_save_path,
                                         std::function<void(size_t)> progress_callback = nullptr);
 
     // Gets the capture file size from the server.
     absl::StatusOr<size_t> GetCaptureFileSize(const std::string& remote_file_path);
 
-private:
+ private:
     // Performs a ping-pong check with the server.
     absl::Status PingServer();
 
@@ -82,23 +82,23 @@ private:
     void StopKeepAlive();
 
     ClientStatus GetClientStatus() const;
-    void         SetClientStatus(ClientStatus status);
+    void SetClientStatus(ClientStatus status);
     absl::Status SetStatusAndReturnError(ClientStatus status, const absl::Status& error_status);
 
     std::unique_ptr<SocketConnection> m_connection;
-    std::mutex                        m_connection_mutex;
-    ClientStatus                      m_status;
-    mutable std::mutex                m_status_mutex;
+    std::mutex m_connection_mutex;
+    ClientStatus m_status;
+    mutable std::mutex m_status_mutex;
 
     // KeepAlive is used to check the connection with the server periodically via a ping-pong
     // mechanism.
     struct KeepAlive
     {
-        std::thread             thread;
-        std::atomic<bool>       running;
-        std::mutex              mutex;
+        std::thread thread;
+        std::atomic<bool> running;
+        std::mutex mutex;
         std::condition_variable cv;
-        uint32_t                interval_sec;
+        uint32_t interval_sec;
     } m_keep_alive;
 };
 

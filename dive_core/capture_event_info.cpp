@@ -14,9 +14,10 @@
  limitations under the License.
 */
 
+#include "capture_event_info.h"
+
 #include <assert.h>
 
-#include "capture_event_info.h"
 #include "dive_core/common/memory_manager_base.h"
 #include "dive_core/common/pm4_packets/me_pm4_packets.h"
 #include "pm4_info.h"
@@ -47,11 +48,8 @@ enum class SyncType
 };
 
 //--------------------------------------------------------------------------------------------------
-SyncType GetSyncType(const IMemoryManager      &mem_manager,
-                     uint32_t                   submit_index,
-                     uint64_t                   addr,
-                     uint32_t                   opcode,
-                     const EmulateStateTracker &state_tracker)
+SyncType GetSyncType(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t addr,
+                     uint32_t opcode, const EmulateStateTracker &state_tracker)
 {
     // 6xx uses CP_EVENT_WRITE packet, which maps to same opcode as CP_EVENT_WRITE7
     // The event field is in the same location with either packet type
@@ -67,34 +65,34 @@ SyncType GetSyncType(const IMemoryManager      &mem_manager,
             if (state_tracker.IsRegSet(rb_resolve_operation_offset))
             {
                 RB_RESOLVE_OPERATION rb_resolve_operation;
-                rb_resolve_operation.u32All = state_tracker.GetRegValue(
-                rb_resolve_operation_offset);
+                rb_resolve_operation.u32All =
+                    state_tracker.GetRegValue(rb_resolve_operation_offset);
                 switch (rb_resolve_operation.bitfields.TYPE)
                 {
-                case BLIT_EVENT_STORE:
-                    if (rb_resolve_operation.bitfields.DEPTH)
-                        type = SyncType::kDepthGmemToSysMemResolve;
-                    else
-                        type = SyncType::kColorGmemToSysMemResolve;
-                    break;
-                case BLIT_EVENT_STORE_AND_CLEAR:
-                    if (rb_resolve_operation.bitfields.DEPTH)
-                        type = SyncType::kDepthGmemToSysMemResolveAndClear;
-                    else
-                        type = SyncType::kColorGmemToSysMemResolveAndClear;
-                    break;
-                case BLIT_EVENT_CLEAR:
-                    if (rb_resolve_operation.bitfields.DEPTH)
-                        type = SyncType::kDepthClearGmem;
-                    else
-                        type = SyncType::kColorClearGmem;
-                    break;
-                case BLIT_EVENT_LOAD:
-                    if (rb_resolve_operation.bitfields.DEPTH)
-                        type = SyncType::kDepthSysMemToGmemResolve;
-                    else
-                        type = SyncType::kColorSysMemToGmemResolve;
-                    break;
+                    case BLIT_EVENT_STORE:
+                        if (rb_resolve_operation.bitfields.DEPTH)
+                            type = SyncType::kDepthGmemToSysMemResolve;
+                        else
+                            type = SyncType::kColorGmemToSysMemResolve;
+                        break;
+                    case BLIT_EVENT_STORE_AND_CLEAR:
+                        if (rb_resolve_operation.bitfields.DEPTH)
+                            type = SyncType::kDepthGmemToSysMemResolveAndClear;
+                        else
+                            type = SyncType::kColorGmemToSysMemResolveAndClear;
+                        break;
+                    case BLIT_EVENT_CLEAR:
+                        if (rb_resolve_operation.bitfields.DEPTH)
+                            type = SyncType::kDepthClearGmem;
+                        else
+                            type = SyncType::kColorClearGmem;
+                        break;
+                    case BLIT_EVENT_LOAD:
+                        if (rb_resolve_operation.bitfields.DEPTH)
+                            type = SyncType::kDepthSysMemToGmemResolve;
+                        else
+                            type = SyncType::kColorSysMemToGmemResolve;
+                        break;
                 }
             }
         }
@@ -118,30 +116,22 @@ SyncType GetSyncType(const IMemoryManager      &mem_manager,
 // =================================================================================================
 // Util
 // =================================================================================================
-bool Util::IsEvent(const IMemoryManager      &mem_manager,
-                   uint32_t                   submit_index,
-                   uint64_t                   addr,
-                   uint32_t                   opcode,
-                   const EmulateStateTracker &state_tracker)
+bool Util::IsEvent(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t addr,
+                   uint32_t opcode, const EmulateStateTracker &state_tracker)
 {
-    if (IsDrawDispatchEventOpcode(opcode))
-        return true;
+    if (IsDrawDispatchEventOpcode(opcode)) return true;
 
-    if (opcode == CP_BLIT)
-        return true;
+    if (opcode == CP_BLIT) return true;
 
     SyncType sync_type = GetSyncType(mem_manager, submit_index, addr, opcode, state_tracker);
-    if (sync_type != SyncType::kNone)
-        return true;
+    if (sync_type != SyncType::kNone) return true;
 
     return false;
 }
 
 //--------------------------------------------------------------------------------------------------
-Util::EventType Util::GetEventType(const IMemoryManager      &mem_manager,
-                                   uint32_t                   submit_index,
-                                   uint64_t                   va_addr,
-                                   uint32_t                   opcode,
+Util::EventType Util::GetEventType(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                   uint64_t va_addr, uint32_t opcode,
                                    const EmulateStateTracker &state_tracker)
 {
     EventType type = EventType::kUnknown;
@@ -159,52 +149,50 @@ Util::EventType Util::GetEventType(const IMemoryManager      &mem_manager,
 
         switch (sync_type)
         {
-        case SyncType::kColorSysMemToGmemResolve:
-            type = EventType::kColorSysMemToGmemResolve;
-            break;
-        case SyncType::kColorGmemToSysMemResolve:
-            type = EventType::kColorGmemToSysMemResolve;
-            break;
-        case SyncType::kColorGmemToSysMemResolveAndClear:
-            type = EventType::kColorGmemToSysMemResolveAndClear;
-            break;
-        case SyncType::kColorClearGmem:
-            type = EventType::kColorClearGmem;
-            break;
-        case SyncType::kDepthSysMemToGmemResolve:
-            type = EventType::kDepthSysMemToGmemResolve;
-            break;
-        case SyncType::kDepthGmemToSysMemResolve:
-            type = EventType::kDepthGmemToSysMemResolve;
-            break;
-        case SyncType::kDepthGmemToSysMemResolveAndClear:
-            type = EventType::kDepthGmemToSysMemResolveAndClear;
-            break;
-        case SyncType::kDepthClearGmem:
-            type = EventType::kDepthClearGmem;
-            break;
-        case SyncType::kWaitMemWrites:
-            type = EventType::kWaitMemWrites;
-            break;
-        case SyncType::kWaitForIdle:
-            type = EventType::kWaitForIdle;
-            break;
-        case SyncType::kWaitForMe:
-            type = EventType::kWaitForMe;
-            break;
-        default:
-            DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
-            break;
+            case SyncType::kColorSysMemToGmemResolve:
+                type = EventType::kColorSysMemToGmemResolve;
+                break;
+            case SyncType::kColorGmemToSysMemResolve:
+                type = EventType::kColorGmemToSysMemResolve;
+                break;
+            case SyncType::kColorGmemToSysMemResolveAndClear:
+                type = EventType::kColorGmemToSysMemResolveAndClear;
+                break;
+            case SyncType::kColorClearGmem:
+                type = EventType::kColorClearGmem;
+                break;
+            case SyncType::kDepthSysMemToGmemResolve:
+                type = EventType::kDepthSysMemToGmemResolve;
+                break;
+            case SyncType::kDepthGmemToSysMemResolve:
+                type = EventType::kDepthGmemToSysMemResolve;
+                break;
+            case SyncType::kDepthGmemToSysMemResolveAndClear:
+                type = EventType::kDepthGmemToSysMemResolveAndClear;
+                break;
+            case SyncType::kDepthClearGmem:
+                type = EventType::kDepthClearGmem;
+                break;
+            case SyncType::kWaitMemWrites:
+                type = EventType::kWaitMemWrites;
+                break;
+            case SyncType::kWaitForIdle:
+                type = EventType::kWaitForIdle;
+                break;
+            case SyncType::kWaitForMe:
+                type = EventType::kWaitForMe;
+                break;
+            default:
+                DIVE_ASSERT(false);  // Unexpected SyncType could cause problems later
+                break;
         }
     }
     return type;
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string Util::GetEventString(const IMemoryManager      &mem_manager,
-                                 uint32_t                   submit_index,
-                                 uint64_t                   va_addr,
-                                 Pm4Type7Header             header,
+std::string Util::GetEventString(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                 uint64_t va_addr, Pm4Type7Header header,
                                  const EmulateStateTracker &state_tracker)
 {
     uint32_t opcode = header.opcode;
@@ -230,10 +218,8 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
         // Non-indexed draws do not need to fill out entire packet
         // Note: header.count only includes payload and doesn't include header, hence the + 1
         PM4_CP_DRAW_INDX_OFFSET packet;
-        uint32_t                header_and_body_dword_count = header.count + 1;
-        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
-                                                   submit_index,
-                                                   va_addr,
+        uint32_t header_and_body_dword_count = header.count + 1;
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                    header_and_body_dword_count * sizeof(uint32_t)));
         string_stream << "DrawIndexOffset(";
         if (packet.bitfields0.SOURCE_SELECT == DI_SRC_SEL_AUTO_INDEX)  // No indices provided
@@ -280,8 +266,8 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
     else if (opcode == CP_DRAW_INDIRECT_MULTI)
     {
         PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL base_packet;
-        DIVE_VERIFY(
-        mem_manager.RetrieveMemoryData(&base_packet, submit_index, va_addr, sizeof(base_packet)));
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&base_packet, submit_index, va_addr,
+                                                   sizeof(base_packet)));
         if (base_packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
         {
             string_stream << "DrawIndirectMulti("
@@ -295,7 +281,7 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
             DIVE_VERIFY(
-            mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
+                mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndexed("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
@@ -308,7 +294,7 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
             DIVE_VERIFY(
-            mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
+                mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirect("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Indirect:" << std::hex << "0x" << packet.INDIRECT << std::dec << ","
@@ -320,7 +306,7 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
         {
             PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
             DIVE_VERIFY(
-            mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
+                mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirectIndexed("
                           << "DrawCount:" << packet.DRAW_COUNT << ","
                           << "Index:" << std::hex << "0x" << packet.INDEX << std::dec << ","
@@ -360,22 +346,20 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
     else if (opcode == CP_BLIT)
     {
         PM4_CP_BLIT packet;
-        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
-                                                   submit_index,
-                                                   va_addr,
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                    (header.count + 1) * sizeof(uint32_t)));
         std::string op;
         switch (packet.bitfields0.OP)
         {
-        case BLIT_OP_FILL:
-            op = "BLIT_OP_FILL";
-            break;
-        case BLIT_OP_COPY:
-            op = "BLIT_OP_COPY";
-            break;
-        case BLIT_OP_SCALE:
-            op = "BLIT_OP_SCALE";
-            break;
+            case BLIT_OP_FILL:
+                op = "BLIT_OP_FILL";
+                break;
+            case BLIT_OP_COPY:
+                op = "BLIT_OP_COPY";
+                break;
+            case BLIT_OP_SCALE:
+                op = "BLIT_OP_SCALE";
+                break;
         }
         // Some packets (e.g. BLIT_OP_SCALE) only have header+dword total
         string_stream << "CpBlit(op:" << op;
@@ -399,42 +383,42 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
         SyncType sync_type = GetSyncType(mem_manager, submit_index, va_addr, opcode, state_tracker);
         switch (sync_type)
         {
-        case SyncType::kColorSysMemToGmemResolve:
-            string_stream << "Resolve(Color,SysMem-To-Gmem)";
+            case SyncType::kColorSysMemToGmemResolve:
+                string_stream << "Resolve(Color,SysMem-To-Gmem)";
+                break;
+            case SyncType::kColorGmemToSysMemResolve:
+                string_stream << "Resolve(Color,Gmem-To-SysMem)";
+                break;
+            case SyncType::kColorGmemToSysMemResolveAndClear:
+                string_stream << "Resolve(Color,Gmem-To-SysMem,ClearGmem)";
+                break;
+            case SyncType::kColorClearGmem:
+                string_stream << "Resolve(Color,ClearGmem)";
+                break;
+            case SyncType::kDepthSysMemToGmemResolve:
+                string_stream << "Resolve(Depth,SysMem-To-Gmem)";
+                break;
+            case SyncType::kDepthGmemToSysMemResolve:
+                string_stream << "Resolve(Depth,Gmem-To-SysMem)";
+                break;
+            case SyncType::kDepthGmemToSysMemResolveAndClear:
+                string_stream << "Resolve(Depth,Gmem-To-SysMem,ClearGmem)";
+                break;
+            case SyncType::kDepthClearGmem:
+                string_stream << "Resolve(Depth,ClearGmem)";
+                break;
+            default:
+            {
+                // Note: For CP_EVENT_WRITEs, sync_type maps to a vgt_event_type
+                const PacketInfo *packet_info_ptr = GetPacketInfo(opcode);
+                DIVE_ASSERT(packet_info_ptr != nullptr);
+                DIVE_ASSERT(packet_info_ptr->m_fields.size() > 1);
+                DIVE_ASSERT(strcmp(packet_info_ptr->m_fields[0].m_name, "EVENT") == 0);
+                const char *enum_str =
+                    GetEnumString(packet_info_ptr->m_fields[0].m_enum_handle, (uint32_t)sync_type);
+                string_stream << "CpEventWrite(type:" << enum_str << ")";
+            }
             break;
-        case SyncType::kColorGmemToSysMemResolve:
-            string_stream << "Resolve(Color,Gmem-To-SysMem)";
-            break;
-        case SyncType::kColorGmemToSysMemResolveAndClear:
-            string_stream << "Resolve(Color,Gmem-To-SysMem,ClearGmem)";
-            break;
-        case SyncType::kColorClearGmem:
-            string_stream << "Resolve(Color,ClearGmem)";
-            break;
-        case SyncType::kDepthSysMemToGmemResolve:
-            string_stream << "Resolve(Depth,SysMem-To-Gmem)";
-            break;
-        case SyncType::kDepthGmemToSysMemResolve:
-            string_stream << "Resolve(Depth,Gmem-To-SysMem)";
-            break;
-        case SyncType::kDepthGmemToSysMemResolveAndClear:
-            string_stream << "Resolve(Depth,Gmem-To-SysMem,ClearGmem)";
-            break;
-        case SyncType::kDepthClearGmem:
-            string_stream << "Resolve(Depth,ClearGmem)";
-            break;
-        default:
-        {
-            // Note: For CP_EVENT_WRITEs, sync_type maps to a vgt_event_type
-            const PacketInfo *packet_info_ptr = GetPacketInfo(opcode);
-            DIVE_ASSERT(packet_info_ptr != nullptr);
-            DIVE_ASSERT(packet_info_ptr->m_fields.size() > 1);
-            DIVE_ASSERT(strcmp(packet_info_ptr->m_fields[0].m_name, "EVENT") == 0);
-            const char *enum_str = GetEnumString(packet_info_ptr->m_fields[0].m_enum_handle,
-                                                 (uint32_t)sync_type);
-            string_stream << "CpEventWrite(type:" << enum_str << ")";
-        }
-        break;
         }
     }
     else if (opcode == CP_WAIT_MEM_WRITES)
@@ -458,21 +442,17 @@ std::string Util::GetEventString(const IMemoryManager      &mem_manager,
 
 //--------------------------------------------------------------------------------------------------
 bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
-                                              uint32_t              submit_index,
-                                              uint64_t              va_addr,
-                                              Pm4Type7Header        header)
+                                              uint32_t submit_index, uint64_t va_addr,
+                                              Pm4Type7Header header)
 {
     // We want to ignore indexed drawcalls that use DI_PT_RECTLIST. DI_PT_RECTLIST is only used for
     // driver inserted events (there is no corresponding VkPrimitiveTopology) for operations like
     // blit.
-    if (header.opcode != CP_DRAW_INDX_OFFSET)
-        return false;
+    if (header.opcode != CP_DRAW_INDX_OFFSET) return false;
 
     PM4_CP_DRAW_INDX_OFFSET packet;
-    uint32_t                header_and_body_dword_count = header.count + 1;
-    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
-                                               submit_index,
-                                               va_addr,
+    uint32_t header_and_body_dword_count = header.count + 1;
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                header_and_body_dword_count * sizeof(uint32_t)));
 
     if (packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST)
@@ -485,10 +465,8 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
-                             uint32_t              submit_index,
-                             uint64_t              va_addr,
-                             Pm4Type7Header        header)
+uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager, uint32_t submit_index,
+                             uint64_t va_addr, Pm4Type7Header header)
 {
     uint32_t index_count = 0;
 
@@ -509,10 +487,8 @@ uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
         // Non-indexed draws do not need to fill out entire packet
         // Note: header.count only includes payload and doesn't include header, hence the + 1
         PM4_CP_DRAW_INDX_OFFSET packet;
-        uint32_t                header_and_body_dword_count = header.count + 1;
-        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet,
-                                                   submit_index,
-                                                   va_addr,
+        uint32_t header_and_body_dword_count = header.count + 1;
+        DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                    header_and_body_dword_count * sizeof(uint32_t)));
         index_count = packet.bitfields2.NUM_INDICES;
     }
@@ -521,9 +497,8 @@ uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager,
 
 //--------------------------------------------------------------------------------------------------
 std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager &mem_manager,
-                                                     uint32_t              submit_index,
-                                                     uint64_t              va_addr,
-                                                     Pm4Type7Header        header)
+                                                     uint32_t submit_index, uint64_t va_addr,
+                                                     Pm4Type7Header header)
 {
     // Get primitive-type. The primitive-type is always the least-significant 6-bits of the
     // given word
@@ -531,38 +506,37 @@ std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager &mem_m
     // For all draw call PM4 packets other than the INDX variety, the relevant DWORD is
     // the first dword after the header
     uint64_t prim_dword_addr = va_addr + sizeof(header);
-    if (header.opcode == CP_DRAW_INDX)
-        prim_dword_addr += sizeof(uint32_t);  // 2nd dword
+    if (header.opcode == CP_DRAW_INDX) prim_dword_addr += sizeof(uint32_t);  // 2nd dword
 
     uint32_t prim_dword;
-    DIVE_VERIFY(
-    mem_manager.RetrieveMemoryData(&prim_dword, submit_index, prim_dword_addr, sizeof(prim_dword)));
+    DIVE_VERIFY(mem_manager.RetrieveMemoryData(&prim_dword, submit_index, prim_dword_addr,
+                                               sizeof(prim_dword)));
     pc_di_primtype gpu_type = static_cast<pc_di_primtype>(prim_dword & 0x3f);
     switch (gpu_type)
     {
-    case DI_PT_LINELIST:
-        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    case DI_PT_LINESTRIP:
-        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-    case DI_PT_TRILIST:
-        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    case DI_PT_TRIFAN:
-        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-    case DI_PT_TRISTRIP:
-        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-    case DI_PT_POINTLIST:
-        return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    case DI_PT_LINE_ADJ:
-        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY;
-    case DI_PT_LINESTRIP_ADJ:
-        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
-    case DI_PT_TRI_ADJ:
-        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
-    case DI_PT_TRISTRIP_ADJ:
-        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
-    default:
-        // These hardware options to not map to Vulkan!
-        return std::nullopt;
+        case DI_PT_LINELIST:
+            return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+        case DI_PT_LINESTRIP:
+            return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+        case DI_PT_TRILIST:
+            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        case DI_PT_TRIFAN:
+            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+        case DI_PT_TRISTRIP:
+            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+        case DI_PT_POINTLIST:
+            return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+        case DI_PT_LINE_ADJ:
+            return VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY;
+        case DI_PT_LINESTRIP_ADJ:
+            return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
+        case DI_PT_TRI_ADJ:
+            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
+        case DI_PT_TRISTRIP_ADJ:
+            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
+        default:
+            // These hardware options to not map to Vulkan!
+            return std::nullopt;
     };
 }
 

@@ -12,10 +12,11 @@
 */
 
 #include "draw_dispatch_stats_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
+
 #include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
 
 constexpr std::array<Dive::Stats::Type, 28> kDrawDispatchStats = {
     Dive::Stats::kBinningDraws,
@@ -62,8 +63,7 @@ constexpr std::array<const char *, Dive::Stats::kNumStats> kStatDescriptions = [
     return arr;
 }();
 
-DrawDispatchStatsModel::DrawDispatchStatsModel(QObject *parent) :
-    QAbstractItemModel(parent)
+DrawDispatchStatsModel::DrawDispatchStatsModel(QObject *parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
     headers.append(QString::fromStdString("Statistic"));
@@ -76,7 +76,7 @@ DrawDispatchStatsModel::DrawDispatchStatsModel(QObject *parent) :
 
 //--------------------------------------------------------------------------------------------------
 void DrawDispatchStatsModel::LoadData(
-const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list)
+    const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list)
 {
     beginResetModel();
     // Clear existing data
@@ -102,10 +102,7 @@ QModelIndex DrawDispatchStatsModel::index(int row, int column, const QModelIndex
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex DrawDispatchStatsModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex DrawDispatchStatsModel::parent(const QModelIndex &index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int DrawDispatchStatsModel::rowCount(const QModelIndex &parent) const
@@ -164,9 +161,8 @@ QVariant DrawDispatchStatsModel::data(const QModelIndex &index, int role) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant DrawDispatchStatsModel::headerData(int             section,
-                                            Qt::Orientation orientation,
-                                            int             role) const
+QVariant DrawDispatchStatsModel::headerData(int section, Qt::Orientation orientation,
+                                            int role) const
 {
     if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
     {

@@ -22,7 +22,6 @@
 
 #include "dump_entry.h"
 #include "state_machine.h"
-
 #include "third_party/gfxreconstruct/framework/decode/api_decoder.h"
 #include "third_party/gfxreconstruct/framework/decode/struct_pointer_decoder.h"
 #include "third_party/gfxreconstruct/framework/format/format.h"
@@ -37,7 +36,7 @@ namespace Dive::gfxr
 // the logic is in handled in a state of the state machine (see StateMachine).
 class DumpResourcesBuilderConsumer : public gfxrecon::decode::VulkanConsumer
 {
-public:
+ public:
     // `dump_found_callback` is run when a complete DumpEntry is found which is suitable for being
     // used with `--dump-resources`.
     DumpResourcesBuilderConsumer(std::function<void(DumpEntry)> dump_found_callback);
@@ -45,67 +44,56 @@ public:
     // Start tracking the command buffer. If the command buffer already has state (likely
     // QueueSubmit was not called), then the command buffer state is reset.
     void Process_vkBeginCommandBuffer(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    VkResult                             returnValue,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
-    pBeginInfo) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, VkResult returnValue,
+        gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
+            pBeginInfo) override;
 
     void Process_vkCmdBeginRenderPass(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-                      pRenderPassBegin,
-    VkSubpassContents contents) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+            pRenderPassBegin,
+        VkSubpassContents contents) override;
 
     void Process_vkCmdBeginRenderPass2KHR(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-    pRenderPassBegin,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
-    pSubpassBeginInfo) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+            pRenderPassBegin,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+            pSubpassBeginInfo) override;
 
     void Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
-                           gfxrecon::format::HandleId           commandBuffer,
-                           uint32_t                             vertexCount,
-                           uint32_t                             instanceCount,
-                           uint32_t                             firstVertex,
-                           uint32_t                             firstInstance) override;
+                           gfxrecon::format::HandleId commandBuffer, uint32_t vertexCount,
+                           uint32_t instanceCount, uint32_t firstVertex,
+                           uint32_t firstInstance) override;
 
     void Process_vkCmdDrawIndexed(const gfxrecon::decode::ApiCallInfo& call_info,
-                                  gfxrecon::format::HandleId           commandBuffer,
-                                  uint32_t                             indexCount,
-                                  uint32_t                             instanceCount,
-                                  uint32_t                             firstIndex,
-                                  int32_t                              vertexOffset,
-                                  uint32_t                             firstInstance) override;
+                                  gfxrecon::format::HandleId commandBuffer, uint32_t indexCount,
+                                  uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset,
+                                  uint32_t firstInstance) override;
 
     void Process_vkCmdEndRenderPass(const gfxrecon::decode::ApiCallInfo& call_info,
-                                    gfxrecon::format::HandleId           commandBuffer) override;
+                                    gfxrecon::format::HandleId commandBuffer) override;
 
     void Process_vkCmdEndRenderPass2KHR(
-    const gfxrecon::decode::ApiCallInfo& call_info,
-    gfxrecon::format::HandleId           commandBuffer,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>*
-    pSubpassEndInfo) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>*
+            pSubpassEndInfo) override;
 
     void Process_vkQueueSubmit(
-    const gfxrecon::decode::ApiCallInfo&                                            call_info,
-    VkResult                                                                        returnValue,
-    gfxrecon::format::HandleId                                                      queue,
-    uint32_t                                                                        submitCount,
-    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-    gfxrecon::format::HandleId                                                      fence) override;
+        const gfxrecon::decode::ApiCallInfo& call_info, VkResult returnValue,
+        gfxrecon::format::HandleId queue, uint32_t submitCount,
+        gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
+        gfxrecon::format::HandleId fence) override;
 
-private:
+ private:
     // Run `function` if we're processing state for `command_buffer` (i.e. vkBeginCommandBuffer has
     // been called). If we're not processing state for `command_buffer` then `function` is not
     // called.
     //
     // The argument to `function` is the current state of the state machine used for processing
     // `command_buffer`.
-    void InvokeIfFound(gfxrecon::format::HandleId                                    command_buffer,
+    void InvokeIfFound(gfxrecon::format::HandleId command_buffer,
                        const std::function<void(gfxrecon::decode::VulkanConsumer&)>& function);
 
     // Function run when a complete dump entry has been formed. This is ready to be written to disk,

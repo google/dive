@@ -57,7 +57,7 @@ constexpr uint32_t kNumCusPerSh = 16;
 constexpr uint32_t kNumSimdsPerCu = 4;
 constexpr uint32_t kNumWavefrontsPerSimd = 10;
 constexpr uint32_t kNumHardwareContext = 8;
-constexpr double   kClockMhz = 1138.0;
+constexpr double kClockMhz = 1138.0;
 constexpr uint64_t kPixelsPerWavefront = 64;
 
 //--------------------------------------------------------------------------------------------------

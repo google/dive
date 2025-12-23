@@ -20,15 +20,13 @@ limitations under the License.
 
 #include <fstream>
 
-#include "util/logging.h"
-#include "util/platform.h"
-
+#include "capture_service/constants.h"
+#include "capture_service/remote_files.h"
 #include "dive_block_data.h"
 #include "dive_pm4_capture.h"
 #include "dive_renderdoc.h"
-
-#include "capture_service/constants.h"
-#include "capture_service/remote_files.h"
+#include "util/logging.h"
+#include "util/platform.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
@@ -69,7 +67,7 @@ bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& co
     std::string new_file_path = absolute_path_ + "/" + name;
 
     FILE* fd;
-    int   result = util::platform::FileOpen(&fd, new_file_path.c_str(), "wb");
+    int result = util::platform::FileOpen(&fd, new_file_path.c_str(), "wb");
     if (result || fd == nullptr)
     {
         GFXRECON_LOG_ERROR("Failed to open file %s, exit code: %d", new_file_path.c_str(), result);
@@ -95,13 +93,12 @@ bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& co
 }
 
 bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_header,
-                                           format::MarkerType         marker_type,
-                                           bool&                      should_break)
+                                           format::MarkerType marker_type, bool& should_break)
 {
     // Read the rest of the frame marker data. Currently frame markers are not dispatched to
     // decoders.
     uint64_t frame_number = 0;
-    bool     success = ReadBytes(&frame_number, sizeof(frame_number));
+    bool success = ReadBytes(&frame_number, sizeof(frame_number));
 
     if (success)
     {
@@ -166,13 +163,13 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
                     if (renderdoc->EndFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr) != 1)
                     {
                         GFXRECON_LOG_WARNING(
-                        "EndFrameCapture failed, RenderDoc .rdc capture likely not created!");
+                            "EndFrameCapture failed, RenderDoc .rdc capture likely not created!");
                     }
                 }
                 else
                 {
                     GFXRECON_LOG_WARNING(
-                    "GetRenderDocApi failed. Could not end RenderDoc capture!");
+                        "GetRenderDocApi failed. Could not end RenderDoc capture!");
                 }
             }
 
@@ -188,7 +185,7 @@ bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_head
 }
 
 bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_header,
-                                           format::MarkerType         marker_type)
+                                           format::MarkerType marker_type)
 {
     bool success = FileProcessor::ProcessStateMarker(block_header, marker_type);
 
@@ -209,8 +206,9 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
         // TODO: b/444647876 - Implementation that doesn't use global state (filesystem)
         if (!std::ofstream(Dive::kReplayStateLoadedSignalFile))
         {
-            GFXRECON_LOG_INFO("Failed to create a file signaling that trim state loading is "
-                              "complete. This will impact our ability to gather metrics.");
+            GFXRECON_LOG_INFO(
+                "Failed to create a file signaling that trim state loading is "
+                "complete. This will impact our ability to gather metrics.");
         }
 #endif
         // Don't bother trying to start a capture for infinite replay since it will never finish!
@@ -219,7 +217,7 @@ bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_head
             if (const RENDERDOC_API_1_0_0* renderdoc = GetRenderDocApi(); renderdoc != nullptr)
             {
                 renderdoc->SetCaptureFilePathTemplate(
-                Dive::GetRenderDocCaptureFilePathTemplate(gfxr_file_name_).string().c_str());
+                    Dive::GetRenderDocCaptureFilePathTemplate(gfxr_file_name_).string().c_str());
                 // Let RenderDoc choose the Vulkan context and window handle since we typically only
                 // expect one of each.
                 renderdoc->StartFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr);

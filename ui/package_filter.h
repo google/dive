@@ -12,6 +12,7 @@
 */
 
 #include <qevent.h>
+
 #include <QDialog>
 #include <unordered_set>
 
@@ -27,24 +28,24 @@ class PackageFilter : public QWidget
 {
     Q_OBJECT
 
-public:
+ public:
     PackageFilter(QWidget *parent = nullptr);
 
-public slots:
+ public slots:
     void ApplyFilters();
 
-protected:
+ protected:
     void closeEvent(QCloseEvent *event) override;
 
-signals:
+ signals:
     void FiltersApplied(const QString &applied_filter_text);
 
-private:
+ private:
     const std::size_t kTotalFilterCount = 3;
-    QButtonGroup     *m_filter_button_group = nullptr;
-    QRadioButton     *m_all_filter = nullptr;
-    QRadioButton     *m_non_debuggable_filter = nullptr;
-    QRadioButton     *m_debuggable_filter = nullptr;
-    QPushButton      *m_apply = nullptr;
-    QString           m_active_filter_text = "";
+    QButtonGroup *m_filter_button_group = nullptr;
+    QRadioButton *m_all_filter = nullptr;
+    QRadioButton *m_non_debuggable_filter = nullptr;
+    QRadioButton *m_debuggable_filter = nullptr;
+    QPushButton *m_apply = nullptr;
+    QString m_active_filter_text = "";
 };

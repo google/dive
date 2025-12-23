@@ -22,8 +22,8 @@ limitations under the License.
 #include <memory>
 #include <string>
 
-#include "constants.h"
 #include "common/log.h"
+#include "constants.h"
 #include "trace_mgr.h"
 
 namespace Dive
@@ -55,13 +55,13 @@ absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
 }
 
 absl::Status DownloadFile(Network::DownloadFileRequest *request,
-                          Network::SocketConnection    *client_conn)
+                          Network::SocketConnection *client_conn)
 {
     Network::DownloadFileResponse response;
-    std::string                   file_path = request->GetString();
+    std::string file_path = request->GetString();
 
     std::error_code ec;
-    auto            file_size = std::filesystem::file_size(file_path, ec);
+    auto file_size = std::filesystem::file_size(file_path, ec);
     if (!ec)
     {
         response.SetFound(true);
@@ -89,10 +89,10 @@ absl::Status DownloadFile(Network::DownloadFileRequest *request,
 absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn)
 {
     Network::FileSizeResponse response;
-    std::string               file_path = request->GetString();
+    std::string file_path = request->GetString();
 
     std::error_code ec;
-    auto            file_size = std::filesystem::file_size(file_path, ec);
+    auto file_size = std::filesystem::file_size(file_path, ec);
     if (!ec)
     {
         response.SetFound(true);
@@ -106,18 +106,12 @@ absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConne
     return Network::SendSocketMessage(client_conn, response);
 }
 
-void ServerMessageHandler::OnConnect()
-{
-    LOGI("ServerMessageHandler: onConnect()");
-}
+void ServerMessageHandler::OnConnect() { LOGI("ServerMessageHandler: onConnect()"); }
 
-void ServerMessageHandler::OnDisconnect()
-{
-    LOGI("ServerMessageHandler: onDisconnect()");
-}
+void ServerMessageHandler::OnDisconnect() { LOGI("ServerMessageHandler: onDisconnect()"); }
 
 void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                                         Network::SocketConnection              *client_conn)
+                                         Network::SocketConnection *client_conn)
 {
     if (!message)
     {
@@ -132,93 +126,90 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 
     switch (message->GetMessageType())
     {
-    case Network::MessageType::PING_MESSAGE:
-    {
-        LOGI("Message received: Ping");
-        auto status = SendPong(client_conn);
-        if (!status.ok())
+        case Network::MessageType::PING_MESSAGE:
         {
-            LOGI("Send pong failed: %.*s", (int)status.message().length(), status.message().data());
-        }
-        break;
-    }
-    case Network::MessageType::HANDSHAKE_REQUEST:
-    {
-        LOGI("Message received: HandShakeRequest");
-        auto *request = dynamic_cast<Network::HandshakeRequest *>(message.get());
-        if (request)
-        {
-            auto status = Handshake(request, client_conn);
+            LOGI("Message received: Ping");
+            auto status = SendPong(client_conn);
             if (!status.ok())
             {
-                LOGI("Handshake failed: %.*s",
-                     (int)status.message().length(),
+                LOGI("Send pong failed: %.*s", (int)status.message().length(),
                      status.message().data());
             }
+            break;
         }
-        else
+        case Network::MessageType::HANDSHAKE_REQUEST:
         {
-            LOGI("HandShakeRequest message is null.");
+            LOGI("Message received: HandShakeRequest");
+            auto *request = dynamic_cast<Network::HandshakeRequest *>(message.get());
+            if (request)
+            {
+                auto status = Handshake(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("Handshake failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
+            }
+            else
+            {
+                LOGI("HandShakeRequest message is null.");
+            }
+            break;
         }
-        break;
-    }
-    case Network::MessageType::PM4_CAPTURE_REQUEST:
-    {
-        LOGI("Message received: Pm4CaptureRequest");
-        auto status = StartPm4Capture(client_conn);
-        if (!status.ok())
+        case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
-            LOGI("StartPm4Capture failed: %.*s",
-                 (int)status.message().length(),
-                 status.message().data());
-        }
-        break;
-    }
-    case Network::MessageType::DOWNLOAD_FILE_REQUEST:
-    {
-        LOGI("Message received: DownloadFileRequest");
-        auto *request = dynamic_cast<Network::DownloadFileRequest *>(message.get());
-        if (request)
-        {
-            auto status = DownloadFile(request, client_conn);
+            LOGI("Message received: Pm4CaptureRequest");
+            auto status = StartPm4Capture(client_conn);
             if (!status.ok())
             {
-                LOGI("DownloadFile failed: %.*s",
-                     (int)status.message().length(),
+                LOGI("StartPm4Capture failed: %.*s", (int)status.message().length(),
                      status.message().data());
             }
+            break;
         }
-        else
+        case Network::MessageType::DOWNLOAD_FILE_REQUEST:
         {
-            LOGI("DownloadFileRequest message is null.");
-        }
-        break;
-    }
-    case Network::MessageType::FILE_SIZE_REQUEST:
-    {
-        LOGI("Message received: FileSizeRequest");
-        auto *request = dynamic_cast<Network::FileSizeRequest *>(message.get());
-        if (request)
-        {
-            auto status = GetFileSize(request, client_conn);
-            if (!status.ok())
+            LOGI("Message received: DownloadFileRequest");
+            auto *request = dynamic_cast<Network::DownloadFileRequest *>(message.get());
+            if (request)
             {
-                LOGI("GetFileSize failed: %.*s",
-                     (int)status.message().length(),
-                     status.message().data());
+                auto status = DownloadFile(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("DownloadFile failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
             }
+            else
+            {
+                LOGI("DownloadFileRequest message is null.");
+            }
+            break;
         }
-        else
+        case Network::MessageType::FILE_SIZE_REQUEST:
         {
-            LOGI("FileSizeRequest message is null.");
+            LOGI("Message received: FileSizeRequest");
+            auto *request = dynamic_cast<Network::FileSizeRequest *>(message.get());
+            if (request)
+            {
+                auto status = GetFileSize(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("GetFileSize failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
+            }
+            else
+            {
+                LOGI("FileSizeRequest message is null.");
+            }
+            break;
         }
-        break;
-    }
-    default:
-    {
-        LOGW("Message type %d unhandled.", (int)message->GetMessageType());
-        break;
-    }
+        default:
+        {
+            LOGW("Message type %d unhandled.", (int)message->GetMessageType());
+            break;
+        }
     }
 }
 
@@ -227,15 +218,14 @@ void RunServer()
     // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
     // It avoids the need to grant INTERNET permission to the target application.
     // Also, no file-based permissions apply since it is in an abstract namespace.
-    auto server = std::make_unique<Network::UnixDomainServer>(
-    std::make_unique<ServerMessageHandler>());
+    auto server =
+        std::make_unique<Network::UnixDomainServer>(std::make_unique<ServerMessageHandler>());
 
     std::string server_address = kUnixAbstractPath;
-    auto        status = server->Start(server_address);
+    auto status = server->Start(server_address);
     if (!status.ok())
     {
-        LOGW("Error starting the server: %.*s",
-             static_cast<int>(status.message().length()),
+        LOGW("Error starting the server: %.*s", static_cast<int>(status.message().length()),
              status.message().data());
     }
     LOGI("Server listening on %s", server_address.c_str());

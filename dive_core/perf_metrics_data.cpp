@@ -13,26 +13,26 @@
 
 #include "dive_core/perf_metrics_data.h"
 
+#include <array>
 #include <cctype>
 #include <cerrno>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <iostream>
-#include <filesystem>
 #include <limits>
 #include <optional>
 #include <string>
-#include <vector>
-#include <array>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "absl/base/no_destructor.h"
-#include "dive_core/command_hierarchy.h"
 #include "dive_core/available_metrics.h"
+#include "dive_core/command_hierarchy.h"
 #include "utils/string_utils.h"
 
 namespace Dive
@@ -46,9 +46,10 @@ bool IsMetricsRecordDrawOrDispatch(const PerfMetricsRecord& record)
 }
 
 // A wrapper type for uint64_t / size_t to reduce the chance of using the wrong index.
-template<typename ValueT, typename TagT = void> class IndexWrapper
+template <typename ValueT, typename TagT = void>
+class IndexWrapper
 {
-public:
+ public:
     using ValueType = ValueT;
     using TagType = TagT;
 
@@ -62,10 +63,7 @@ public:
     static constexpr ValueType kInvalid = std::numeric_limits<ValueType>::max();
 
     IndexWrapper() = default;
-    explicit IndexWrapper(ValueType value) :
-        m_value(value)
-    {
-    }
+    explicit IndexWrapper(ValueType value) : m_value(value) {}
 
     std::optional<ValueT> AsOptional() const
     {
@@ -77,7 +75,7 @@ public:
     }
 
     // std::optional
-    bool      has_value() const { return m_value != kInvalid; }
+    bool has_value() const { return m_value != kInvalid; }
     ValueType value() const
     {
         assert(has_value());
@@ -85,9 +83,9 @@ public:
     }
 
     ValueType operator*() const { return value(); }
-    explicit  operator bool() const { return has_value(); }
+    explicit operator bool() const { return has_value(); }
 
-    template<typename T, typename Tag>
+    template <typename T, typename Tag>
     auto Into(const std::vector<IndexWrapper<T, Tag>>& v) -> IndexWrapper<T, Tag>
     {
         if (has_value() && value() < v.size())
@@ -97,9 +95,9 @@ public:
         return IndexWrapper<T, Tag>();
     }
 
-    template<typename T, typename Tag>
+    template <typename T, typename Tag>
     auto Into(const std::unordered_map<IndexWrapper, IndexWrapper<T, Tag>, Hash>& m)
-    -> IndexWrapper<T, Tag>
+        -> IndexWrapper<T, Tag>
     {
         if (!has_value())
         {
@@ -114,7 +112,7 @@ public:
 
     bool operator==(const IndexWrapper& other) const { return m_value == other.m_value; }
 
-private:
+ private:
     ValueType m_value = kInvalid;
 };
 
@@ -125,19 +123,19 @@ namespace
 
 struct ParseHeadersResult
 {
-    std::vector<std::string>       metric_names;
+    std::vector<std::string> metric_names;
     std::vector<const MetricInfo*> metric_infos;
 };
 
-std::optional<ParseHeadersResult> ParseHeaders(const std::string&      line,
+std::optional<ParseHeadersResult> ParseHeaders(const std::string& line,
                                                const AvailableMetrics& available_metrics)
 {
     std::vector<const MetricInfo*> metric_infos;
-    std::vector<std::string>       metric_names;
+    std::vector<std::string> metric_names;
 
     std::stringstream header_ss(line);
-    std::string       header_field;
-    int               column_index = 0;
+    std::string header_field;
+    int column_index = 0;
     while (StringUtils::GetTrimmedField(header_ss, header_field, ','))
     {
         if (column_index < kFixedPerfMetricsDataHeaderCount)
@@ -157,7 +155,7 @@ std::optional<ParseHeadersResult> ParseHeaders(const std::string&      line,
         return std::nullopt;  // Not enough columns
     }
 
-    return ParseHeadersResult{ std::move(metric_names), std::move(metric_infos) };
+    return ParseHeadersResult{std::move(metric_names), std::move(metric_infos)};
 }
 
 std::optional<PerfMetricsRecord> ParseRecordFixedFields(const std::vector<std::string>& fields)
@@ -183,14 +181,13 @@ std::optional<PerfMetricsRecord> ParseRecordFixedFields(const std::vector<std::s
     return record;
 }
 
-bool ParseMetrics(const std::vector<std::string>&       fields,
-                  const std::vector<const MetricInfo*>& metric_infos,
-                  PerfMetricsRecord&                    record)
+bool ParseMetrics(const std::vector<std::string>& fields,
+                  const std::vector<const MetricInfo*>& metric_infos, PerfMetricsRecord& record)
 {
     for (size_t i = 0; i < metric_infos.size(); ++i)
     {
         const std::string& value_str = fields[kFixedPerfMetricsDataHeaderCount + i];
-        const MetricInfo*  info = metric_infos[i];
+        const MetricInfo* info = metric_infos[i];
         if (info == nullptr)
         {
             // Unknown metric, this is an error. The number of metric values
@@ -211,8 +208,7 @@ bool ParseMetrics(const std::vector<std::string>&       fields,
 }  // namespace
 
 std::unique_ptr<PerfMetricsData> PerfMetricsData::LoadFromCsv(
-const std::filesystem::path& file_path,
-const AvailableMetrics&      available_metrics)
+    const std::filesystem::path& file_path, const AvailableMetrics& available_metrics)
 {
     std::vector<PerfMetricsRecord> records;
 
@@ -248,21 +244,21 @@ const AvailableMetrics&      available_metrics)
         }
         switch (info->m_metric_type)
         {
-        case MetricType::kCount:
-        case MetricType::kPercent:
-            break;
-        default:
-            std::cerr << "Unknown metric type: " << static_cast<int>(info->m_metric_type)
-                      << std::endl;
-            // kUnknown or other types are not supported.
-            return nullptr;
+            case MetricType::kCount:
+            case MetricType::kPercent:
+                break;
+            default:
+                std::cerr << "Unknown metric type: " << static_cast<int>(info->m_metric_type)
+                          << std::endl;
+                // kUnknown or other types are not supported.
+                return nullptr;
         }
     }
     // Read data lines
     while (StringUtils::GetTrimmedLine(file, line))
     {
-        std::stringstream        ss(line);
-        std::string              field;
+        std::stringstream ss(line);
+        std::string field;
         std::vector<std::string> fields;
         while (StringUtils::GetTrimmedField(ss, field, ','))
         {
@@ -287,15 +283,15 @@ const AvailableMetrics&      available_metrics)
     }
 
     return std::unique_ptr<PerfMetricsData>(
-    new PerfMetricsData(std::move(metric_names), std::move(metric_infos), std::move(records)));
+        new PerfMetricsData(std::move(metric_names), std::move(metric_infos), std::move(records)));
 }
 
-PerfMetricsData::PerfMetricsData(std::vector<std::string>       metric_names,
+PerfMetricsData::PerfMetricsData(std::vector<std::string> metric_names,
                                  std::vector<const MetricInfo*> metric_infos,
-                                 std::vector<PerfMetricsRecord> records) :
-    m_metric_names(std::move(metric_names)),
-    m_metric_infos(std::move(metric_infos)),
-    m_records(std::move(records))
+                                 std::vector<PerfMetricsRecord> records)
+    : m_metric_names(std::move(metric_names)),
+      m_metric_infos(std::move(metric_infos)),
+      m_records(std::move(records))
 {
 }
 
@@ -306,7 +302,7 @@ class PerfMetricsDataProvider::Correlator
     struct MetricTag;
     struct RecordTag;
 
-public:
+ public:
     // Mapping: NodeIndex <-> DrawIndex <-> MetricIndex
     using NodeIndex = IndexWrapper<uint64_t, NodeTag>;
     using DrawIndex = IndexWrapper<uint64_t, DrawTag>;
@@ -353,34 +349,36 @@ public:
         return GetMetricFromDraw(GetDrawFromNode(index));
     }
 
-private:
-    template<typename, typename U> using ArrayMap = std::vector<U>;
-    template<typename T, typename U> using HashMap = std::unordered_map<T, U, typename T::Hash>;
+ private:
+    template <typename, typename U>
+    using ArrayMap = std::vector<U>;
+    template <typename T, typename U>
+    using HashMap = std::unordered_map<T, U, typename T::Hash>;
 
-    static void ExtractDraws(const CommandHierarchy&         command_hierarchy,
+    static void ExtractDraws(const CommandHierarchy& command_hierarchy,
                              ArrayMap<DrawIndex, NodeIndex>& out_draw_to_node,
-                             HashMap<NodeIndex, DrawIndex>&  out_node_to_draw);
+                             HashMap<NodeIndex, DrawIndex>& out_node_to_draw);
 
     struct DrawSignatures
     {
         const PerfMetricsRecord* m_begin;
         const PerfMetricsRecord* m_end;
     };
-    static bool MatchDrawSignatures(const DrawSignatures&,
-                                    const PerfMetricsRecord* begin,
+    static bool MatchDrawSignatures(const DrawSignatures&, const PerfMetricsRecord* begin,
                                     const PerfMetricsRecord* end);
 
     bool CorrelationEnabled() const
     {
         return m_draw_to_node.empty() || m_draw_to_metric.size() == m_draw_to_node.size();
     }
-    template<typename IndexT> IndexT RequireCorrelationEnabled(IndexT index) const
+    template <typename IndexT>
+    IndexT RequireCorrelationEnabled(IndexT index) const
     {
         return (CorrelationEnabled() ? index : IndexT());
     }
 
     ArrayMap<DrawIndex, NodeIndex> m_draw_to_node;
-    HashMap<NodeIndex, DrawIndex>  m_node_to_draw;
+    HashMap<NodeIndex, DrawIndex> m_node_to_draw;
 
     ArrayMap<DrawIndex, MetricIndex> m_draw_to_metric;
     ArrayMap<MetricIndex, DrawIndex> m_metric_to_draw;
@@ -389,9 +387,8 @@ private:
 };
 
 void PerfMetricsDataProvider::Correlator::ExtractDraws(
-const CommandHierarchy&         command_hierarchy,
-ArrayMap<DrawIndex, NodeIndex>& out_draw_to_node,
-HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
+    const CommandHierarchy& command_hierarchy, ArrayMap<DrawIndex, NodeIndex>& out_draw_to_node,
+    HashMap<NodeIndex, DrawIndex>& out_node_to_draw)
 {
     // TODO: extract the command buffer pattern.
     HashMap<NodeIndex, DrawIndex> node_to_draw;
@@ -423,8 +420,8 @@ HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
         alias_draws.clear();
     };
 
-    auto& alias_marker = command_hierarchy.GetFilterExcludeIndices(
-    Dive::CommandHierarchy::kBinningPassOnly);
+    auto& alias_marker =
+        command_hierarchy.GetFilterExcludeIndices(Dive::CommandHierarchy::kBinningPassOnly);
 
     for (size_t i = 0; i < command_hierarchy.size(); ++i)
     {
@@ -447,11 +444,10 @@ HashMap<NodeIndex, DrawIndex>&  out_node_to_draw)
             continue;
         }
 
-        const bool is_draw_or_dispatch = (node_type == Dive::NodeType::kEventNode &&
-                                          (command_hierarchy.GetEventNodeType(i) ==
-                                           Util::EventType::kDraw ||
-                                           command_hierarchy.GetEventNodeType(i) ==
-                                           Util::EventType::kDispatch));
+        const bool is_draw_or_dispatch =
+            (node_type == Dive::NodeType::kEventNode &&
+             (command_hierarchy.GetEventNodeType(i) == Util::EventType::kDraw ||
+              command_hierarchy.GetEventNodeType(i) == Util::EventType::kDispatch));
         if (!is_draw_or_dispatch)
         {
             // Note: what if both pm4 node and vulkan draw command node exist?
@@ -485,7 +481,7 @@ void PerfMetricsDataProvider::Correlator::AnalyzeCommands(const CommandHierarchy
     ExtractDraws(command_hierarchy, m_draw_to_node, m_node_to_draw);
 }
 
-bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatures&    signatures,
+bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatures& signatures,
                                                               const PerfMetricsRecord* begin,
                                                               const PerfMetricsRecord* end)
 {
@@ -498,7 +494,6 @@ bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatur
     const PerfMetricsRecord* signatures_at = signatures.m_begin;
     for (; at != end; ++at, ++signatures_at)
     {
-
         if (at->m_cmd_buffer_id != signatures_at->m_cmd_buffer_id)
         {
             return false;
@@ -512,7 +507,7 @@ bool PerfMetricsDataProvider::Correlator::MatchDrawSignatures(const DrawSignatur
 }
 
 void PerfMetricsDataProvider::Correlator::AnalyzeRecords(
-const std::vector<PerfMetricsRecord>& records)
+    const std::vector<PerfMetricsRecord>& records)
 {
     m_record_to_metric.clear();
 
@@ -526,7 +521,7 @@ const std::vector<PerfMetricsRecord>& records)
     // Find the frame with the max number of draw calls, and use that as template.
     {
         size_t frame_start = 0;
-        auto   emit_frame = [&](size_t start, size_t end) {
+        auto emit_frame = [&](size_t start, size_t end) {
             if (end - start > template_frame_size)
             {
                 template_frame_start = start;
@@ -569,7 +564,7 @@ const std::vector<PerfMetricsRecord>& records)
     ArrayMap<RecordIndex, MetricIndex> record_to_metric(records.size());
     {
         size_t frame_start = 0;
-        auto   emit_frame = [&](size_t start, size_t end) {
+        auto emit_frame = [&](size_t start, size_t end) {
             if (!MatchDrawSignatures(signature, records.data() + start, records.data() + end))
             {
                 // Bad data?
@@ -598,7 +593,7 @@ const std::vector<PerfMetricsRecord>& records)
 }
 
 std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::Create(
-std::unique_ptr<PerfMetricsData> data)
+    std::unique_ptr<PerfMetricsData> data)
 {
     auto result = std::unique_ptr<PerfMetricsDataProvider>(new PerfMetricsDataProvider);
     result->Update(std::move(data));
@@ -606,8 +601,7 @@ std::unique_ptr<PerfMetricsData> data)
 }
 
 std::unique_ptr<PerfMetricsDataProvider> PerfMetricsDataProvider::CreateForTest(
-std::unique_ptr<PerfMetricsData>  data,
-std::unique_ptr<AvailableMetrics> desc)
+    std::unique_ptr<PerfMetricsData> data, std::unique_ptr<AvailableMetrics> desc)
 {
     auto result = Create(std::move(data));
     result->m_owned_desc = std::move(desc);
@@ -615,10 +609,7 @@ std::unique_ptr<AvailableMetrics> desc)
 }
 
 PerfMetricsDataProvider::~PerfMetricsDataProvider() = default;
-PerfMetricsDataProvider::PerfMetricsDataProvider() :
-    m_correlator(new Correlator)
-{
-}
+PerfMetricsDataProvider::PerfMetricsDataProvider() : m_correlator(new Correlator) {}
 
 void PerfMetricsDataProvider::Update(std::unique_ptr<PerfMetricsData> data)
 {
@@ -639,7 +630,7 @@ void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
         return;
     }
     const size_t num_metrics = m_raw_data->GetMetricNames().size();
-    const auto&  records = m_raw_data->GetRecords();
+    const auto& records = m_raw_data->GetRecords();
     m_correlator->Reset();
     if (command_hierarchy)
     {
@@ -656,7 +647,7 @@ void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
     struct MetricSumWithRecordCount
     {
         std::vector<double> m_metric_sums{};
-        uint32_t            m_record_count = 0;
+        uint32_t m_record_count = 0;
     };
 
     std::vector<MetricSumWithRecordCount> sums_and_counts;
@@ -703,7 +694,7 @@ void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
         averaged_record.m_frame_id = 0;
 
         const auto count = sums_and_counts[draw_index].m_record_count;
-        auto&      sums = sums_and_counts[draw_index].m_metric_sums;
+        auto& sums = sums_and_counts[draw_index].m_metric_sums;
         if (count == 0 || sums.empty())
         {
             continue;
@@ -733,19 +724,19 @@ const std::vector<std::string> PerfMetricsDataProvider::GetRecordHeader() const
 }
 
 std::optional<uint64_t> PerfMetricsDataProvider::GetCorrelatedComputedRecordIndex(
-uint64_t node_index) const
+    uint64_t node_index) const
 {
     return m_correlator->GetMetricFromNode(Correlator::NodeIndex(node_index)).AsOptional();
 }
 
 std::optional<uint64_t> PerfMetricsDataProvider::GetComputedRecordIndexFromDrawIndex(
-uint64_t draw_index) const
+    uint64_t draw_index) const
 {
     return m_correlator->GetMetricFromDraw(Correlator::DrawIndex(draw_index)).AsOptional();
 }
 
 std::optional<uint64_t> PerfMetricsDataProvider::GetDrawIndexFromComputedRecordIndex(
-uint64_t index) const
+    uint64_t index) const
 {
     return m_correlator->GetDrawFromMetric(Correlator::MetricIndex(index)).AsOptional();
 }

@@ -22,18 +22,18 @@ class EventSelection : public QObject
 {
     Q_OBJECT
 
-public:
+ public:
     EventSelection(const Dive::CommandHierarchy &command_hierarchy);
     void Reset();
 
-private:
+ private:
     void updateCurrentNode(uint64_t node_index);
 
     const Dive::CommandHierarchy &m_command_hierarchy;
-    uint64_t                      m_current_node = UINT64_MAX;
-    Dive::CrossRef                m_current_ref;
+    uint64_t m_current_node = UINT64_MAX;
+    Dive::CrossRef m_current_ref;
 
-signals:
+ signals:
     void currentNodeChanged(uint64_t node_index, uint64_t prev_node_index);
     void vulkanParams(const QString &);
     void crossReference(Dive::CrossRef ref);

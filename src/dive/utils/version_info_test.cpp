@@ -33,105 +33,109 @@ using testing::UnorderedElementsAre;
 
 TEST(GetDeviceResourcesVersionMapTest, BasicPass)
 {
-    std::string csv_content = "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
-                              "version,1.1.2\nbuild_type,Debug\nrelease_type,dev\nabi,arm64-v8a";
+    std::string csv_content =
+        "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
+        "version,1.1.2\nbuild_type,Debug\nrelease_type,dev\nabi,arm64-v8a";
 
-    absl::StatusOr<std::map<std::string_view, std::string_view>> got = GetDeviceResourcesVersionMap(
-    csv_content);
+    absl::StatusOr<std::map<std::string_view, std::string_view>> got =
+        GetDeviceResourcesVersionMap(csv_content);
 
-    EXPECT_THAT(got,
-                IsOkAndHolds(
-                UnorderedElementsAre(Pair(VersionInfoConstants::kNameAbi, "arm64-v8a"),
-                                     Pair(VersionInfoConstants::kNameBuildType, "Debug"),
-                                     Pair(VersionInfoConstants::kNameReleaseType, "dev"),
-                                     Pair(VersionInfoConstants::kNameSha,
-                                          "0343dcaa2d0335a46dd673d19b56963d9b045879"),
-                                     Pair(VersionInfoConstants::kNameVersion, "1.1.2"))))
-    << got.status().message();
+    EXPECT_THAT(
+        got, IsOkAndHolds(UnorderedElementsAre(
+                 Pair(VersionInfoConstants::kNameAbi, "arm64-v8a"),
+                 Pair(VersionInfoConstants::kNameBuildType, "Debug"),
+                 Pair(VersionInfoConstants::kNameReleaseType, "dev"),
+                 Pair(VersionInfoConstants::kNameSha, "0343dcaa2d0335a46dd673d19b56963d9b045879"),
+                 Pair(VersionInfoConstants::kNameVersion, "1.1.2"))))
+        << got.status().message();
 }
 
 TEST(GetDeviceResourcesVersionMapTest, RowTooManyFieldsFail)
 {
-    std::string
-    csv_content = "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
-                  "version,1.1.2\nbuild_type,Debug,PLACEHOLDER\nrelease_type,dev\nabi,arm64-v8a";
+    std::string csv_content =
+        "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
+        "version,1.1.2\nbuild_type,Debug,PLACEHOLDER\nrelease_type,dev\nabi,arm64-v8a";
 
-    std::string want_err_msg = "GetDeviceResourcesVersionMap() unexpected number of fields in row: "
-                               "build_type,Debug,PLACEHOLDER";
+    std::string want_err_msg =
+        "GetDeviceResourcesVersionMap() unexpected number of fields in row: "
+        "build_type,Debug,PLACEHOLDER";
 
-    absl::StatusOr<std::map<std::string_view, std::string_view>> got = GetDeviceResourcesVersionMap(
-    csv_content);
+    absl::StatusOr<std::map<std::string_view, std::string_view>> got =
+        GetDeviceResourcesVersionMap(csv_content);
 
     EXPECT_THAT(got, StatusIs(absl::StatusCode::kFailedPrecondition, want_err_msg))
-    << got.status().message();
+        << got.status().message();
 }
 
 TEST(GetDeviceResourcesVersionMapTest, RowTooFewFieldsFail)
 {
-    std::string csv_content = "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
-                              "version,1.1.2\nPLACEHOLDER\nrelease_type,dev\nabi,arm64-v8a";
+    std::string csv_content =
+        "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
+        "version,1.1.2\nPLACEHOLDER\nrelease_type,dev\nabi,arm64-v8a";
 
-    std::string want_err_msg = "GetDeviceResourcesVersionMap() unexpected number of fields in row: "
-                               "PLACEHOLDER";
+    std::string want_err_msg =
+        "GetDeviceResourcesVersionMap() unexpected number of fields in row: "
+        "PLACEHOLDER";
 
-    absl::StatusOr<std::map<std::string_view, std::string_view>> got = GetDeviceResourcesVersionMap(
-    csv_content);
+    absl::StatusOr<std::map<std::string_view, std::string_view>> got =
+        GetDeviceResourcesVersionMap(csv_content);
 
     EXPECT_THAT(got, StatusIs(absl::StatusCode::kFailedPrecondition, want_err_msg))
-    << got.status().message();
+        << got.status().message();
 }
 
 TEST(GetDeviceResourcesVersionMapTest, ExtraKeyFail)
 {
-    std::string csv_content = "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
-                              "version,1.1.2\nnew_key,PLACEHOLDER\nbuild_type,Debug\nrelease_type,"
-                              "dev\nabi,arm64-v8a";
+    std::string csv_content =
+        "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
+        "version,1.1.2\nnew_key,PLACEHOLDER\nbuild_type,Debug\nrelease_type,"
+        "dev\nabi,arm64-v8a";
 
-    std::string want_err_msg = absl::
-    StrFormat("GetDeviceResourcesVersionMap() invalid device map: want key count %d, got: %d",
-              VersionInfoConstants::kKeyCount,
-              VersionInfoConstants::kKeyCount + 1);
+    std::string want_err_msg = absl::StrFormat(
+        "GetDeviceResourcesVersionMap() invalid device map: want key count %d, got: %d",
+        VersionInfoConstants::kKeyCount, VersionInfoConstants::kKeyCount + 1);
 
-    absl::StatusOr<std::map<std::string_view, std::string_view>> got = GetDeviceResourcesVersionMap(
-    csv_content);
+    absl::StatusOr<std::map<std::string_view, std::string_view>> got =
+        GetDeviceResourcesVersionMap(csv_content);
 
     EXPECT_THAT(got, StatusIs(absl::StatusCode::kFailedPrecondition, want_err_msg))
-    << got.status().message();
+        << got.status().message();
 }
 
 TEST(GetDeviceResourcesVersionMapTest, MissingKeyFail)
 {
-    std::string csv_content = "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
-                              "version,1.1.2\nrelease_type,"
-                              "dev\nabi,arm64-v8a";
+    std::string csv_content =
+        "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
+        "version,1.1.2\nrelease_type,"
+        "dev\nabi,arm64-v8a";
 
-    std::string want_err_msg = absl::
-    StrFormat("GetDeviceResourcesVersionMap() invalid device map: want key count %d, got: %d",
-              VersionInfoConstants::kKeyCount,
-              VersionInfoConstants::kKeyCount - 1);
+    std::string want_err_msg = absl::StrFormat(
+        "GetDeviceResourcesVersionMap() invalid device map: want key count %d, got: %d",
+        VersionInfoConstants::kKeyCount, VersionInfoConstants::kKeyCount - 1);
 
-    absl::StatusOr<std::map<std::string_view, std::string_view>> got = GetDeviceResourcesVersionMap(
-    csv_content);
+    absl::StatusOr<std::map<std::string_view, std::string_view>> got =
+        GetDeviceResourcesVersionMap(csv_content);
 
     EXPECT_THAT(got, StatusIs(absl::StatusCode::kFailedPrecondition, want_err_msg))
-    << got.status().message();
+        << got.status().message();
 }
 
 TEST(GetDeviceResourcesVersionMapTest, WrongKeyFail)
 {
-    std::string csv_content = "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
-                              "version,1.1.2\nPLACEHOLDER_KEY,PLACEHOLDER_VALUE\nrelease_type,"
-                              "dev\nabi,arm64-v8a";
+    std::string csv_content =
+        "sha,0343dcaa2d0335a46dd673d19b56963d9b045879\n"
+        "version,1.1.2\nPLACEHOLDER_KEY,PLACEHOLDER_VALUE\nrelease_type,"
+        "dev\nabi,arm64-v8a";
 
-    std::string want_err_msg = absl::
-    StrFormat("GetDeviceResourcesVersionMap() invalid device map: key error: %s",
-              VersionInfoConstants::kNameBuildType);
+    std::string want_err_msg =
+        absl::StrFormat("GetDeviceResourcesVersionMap() invalid device map: key error: %s",
+                        VersionInfoConstants::kNameBuildType);
 
-    absl::StatusOr<std::map<std::string_view, std::string_view>> got = GetDeviceResourcesVersionMap(
-    csv_content);
+    absl::StatusOr<std::map<std::string_view, std::string_view>> got =
+        GetDeviceResourcesVersionMap(csv_content);
 
     EXPECT_THAT(got, StatusIs(absl::StatusCode::kFailedPrecondition, want_err_msg))
-    << got.status().message();
+        << got.status().message();
 }
 
 }  // namespace

@@ -15,11 +15,14 @@
 */
 
 #include "log.h"
+
 #include <stdarg.h>
+
 #include <iostream>
+
 #include "common.h"
 #if defined(WIN32)
-#    include <windows.h>
+#include <windows.h>
 #endif
 
 namespace Dive
@@ -43,33 +46,32 @@ void LogConsole::Log(const LogEntry& entry)
 
     switch (entry.m_type)
     {
-    case LogType::kInfo:
-        oss << "INFO";
-        break;
-    case LogType::kWarning:
-        oss << "WARNING";
-        break;
-    case LogType::kError:
-        oss << "ERROR";
-        break;
-    default:
-        DIVE_ASSERT(false);
+        case LogType::kInfo:
+            oss << "INFO";
+            break;
+        case LogType::kWarning:
+            oss << "WARNING";
+            break;
+        case LogType::kError:
+            oss << "ERROR";
+            break;
+        default:
+            DIVE_ASSERT(false);
     }
     switch (entry.m_cat)
     {
-    case LogCategory::kParsing:
-        oss << "(Parsing): ";
-        break;
-    case LogCategory::kPerformance:
-        oss << "(Performance): ";
-        break;
-    default:
-        DIVE_ASSERT(false);
+        case LogCategory::kParsing:
+            oss << "(Parsing): ";
+            break;
+        case LogCategory::kPerformance:
+            oss << "(Performance): ";
+            break;
+        default:
+            DIVE_ASSERT(false);
     }
 
     oss << entry.m_file << "(" << entry.m_line << "): " << entry.m_short_desc;
-    if (!entry.m_long_desc.empty())
-        oss << " - " << entry.m_long_desc;
+    if (!entry.m_long_desc.empty()) oss << " - " << entry.m_long_desc;
     oss << std::endl;
 
 #if defined(WIN32)
@@ -82,22 +84,13 @@ void LogConsole::Log(const LogEntry& entry)
 // =================================================================================================
 // LogRecord
 // =================================================================================================
-void LogRecord::Reset()
-{
-    m_log_entries.clear();
-}
+void LogRecord::Reset() { m_log_entries.clear(); }
 
 //--------------------------------------------------------------------------------------------------
-void LogRecord::Log(const LogEntry& entry)
-{
-    m_log_entries.push_back(entry);
-}
+void LogRecord::Log(const LogEntry& entry) { m_log_entries.push_back(entry); }
 
 //--------------------------------------------------------------------------------------------------
-size_t LogRecord::GetNumEntries() const
-{
-    return m_log_entries.size();
-}
+size_t LogRecord::GetNumEntries() const { return m_log_entries.size(); }
 
 //--------------------------------------------------------------------------------------------------
 const LogRecord::LogEntry& LogRecord::GetEntry(uint32_t index) const
@@ -129,10 +122,7 @@ void LogCompound::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void LogCompound::AddLog(ILog* log_ptr)
-{
-    m_logs.push_back(log_ptr);
-}
+void LogCompound::AddLog(ILog* log_ptr) { m_logs.push_back(log_ptr); }
 
 //--------------------------------------------------------------------------------------------------
 void LogCompound::Log(const LogEntry& entry)
@@ -146,22 +136,15 @@ void LogCompound::Log(const LogEntry& entry)
 // =================================================================================================
 // Stream manipulators
 // =================================================================================================
-std::ostream& detailed(std::ostream& out)
-{
-    return out;
-}
+std::ostream& detailed(std::ostream& out) { return out; }
 
 // =================================================================================================
 // LogEntryBuilder
 // =================================================================================================
 
-LogEntryBuilder::LogEntryBuilder(ILog&       log,
-                                 LogType     type,
-                                 LogCategory cat,
-                                 CrossRef    ref,
-                                 const char* file,
-                                 int         line) :
-    m_log(log)
+LogEntryBuilder::LogEntryBuilder(ILog& log, LogType type, LogCategory cat, CrossRef ref,
+                                 const char* file, int line)
+    : m_log(log)
 {
     m_entry.m_type = type;
     m_entry.m_cat = cat;
@@ -171,14 +154,10 @@ LogEntryBuilder::LogEntryBuilder(ILog&       log,
     m_entry.m_line = line;
 }
 
-LogEntryBuilder::LogEntryBuilder(ILog&          log,
-                                 LogType        type,
-                                 LogCategory    cat,
-                                 LogAssociation association,
-                                 uint32_t       id,
-                                 const char*    file,
-                                 int            line) :
-    LogEntryBuilder(log, type, cat, CrossRef(association, id), file, line)
+LogEntryBuilder::LogEntryBuilder(ILog& log, LogType type, LogCategory cat,
+                                 LogAssociation association, uint32_t id, const char* file,
+                                 int line)
+    : LogEntryBuilder(log, type, cat, CrossRef(association, id), file, line)
 {
 }
 

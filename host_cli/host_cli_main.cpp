@@ -25,25 +25,20 @@
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/str_cat.h"
-
+#include "absl/strings/str_format.h"
 #include "data_core_wrapper.h"
 #include "utils/version_info.h"
 
 namespace
 {
-constexpr std::array kAllowedInputFileExtensions = { ".gfxr" };
+constexpr std::array kAllowedInputFileExtensions = {".gfxr"};
 }  // namespace
 
-ABSL_FLAG(std::string,
-          input_file_path,
-          "",
+ABSL_FLAG(std::string, input_file_path, "",
           "If specified, this file is loaded with the type is inferred from the extension. "
           "Supported extensions: .gfxr");
-ABSL_FLAG(std::string,
-          output_gfxr_path,
-          "",
+ABSL_FLAG(std::string, output_gfxr_path, "",
           "If specified, a new .gfxr file will be generated from the original file "
           "(--input_file_path) and any specified modifications");
 
@@ -55,13 +50,13 @@ absl::Status ValidateFlags()
     if (!input_file_path.empty())
     {
         std::filesystem::path input_fp = input_file_path;
-        std::string           ext = input_fp.extension().string();
-        if ((ext.empty()) || std::find(kAllowedInputFileExtensions.begin(),
-                                       kAllowedInputFileExtensions.end(),
-                                       ext) == kAllowedInputFileExtensions.end())
+        std::string ext = input_fp.extension().string();
+        if ((ext.empty()) ||
+            std::find(kAllowedInputFileExtensions.begin(), kAllowedInputFileExtensions.end(),
+                      ext) == kAllowedInputFileExtensions.end())
         {
-            return absl::InvalidArgumentError(
-            absl::StrFormat("unrecognizable extension provided for --input_file_path: %s", ext));
+            return absl::InvalidArgumentError(absl::StrFormat(
+                "unrecognizable extension provided for --input_file_path: %s", ext));
         }
         input_file_ext = ext;
     }
@@ -72,8 +67,9 @@ absl::Status ValidateFlags()
         if (input_file_ext != ".gfxr")
         {
             return absl::InvalidArgumentError(
-            "if --output_gfxr_path is specified, then --input_file_path must also be specified for "
-            "a .gfxr file");
+                "if --output_gfxr_path is specified, then --input_file_path must also be specified "
+                "for "
+                "a .gfxr file");
         }
     }
 
@@ -86,11 +82,10 @@ int main(int argc, char **argv)
     flags_usage_config.version_string = Dive::GetCompleteVersionString;
     absl::SetFlagsUsageConfig(flags_usage_config);
     absl::SetProgramUsageMessage(
-    absl::StrCat("This CLI tool is intended to provide access to the dive_core"
-                 "\nlibrary for utility and for testing. Currently it supports"
-                 "\nmanipulation of .gfxr files. Sample usage:\n\n",
-                 argv[0],
-                 " --help"));
+        absl::StrCat("This CLI tool is intended to provide access to the dive_core"
+                     "\nlibrary for utility and for testing. Currently it supports"
+                     "\nmanipulation of .gfxr files. Sample usage:\n\n",
+                     argv[0], " --help"));
     absl::ParseCommandLine(argc, argv);
 
     absl::Status res = ValidateFlags();

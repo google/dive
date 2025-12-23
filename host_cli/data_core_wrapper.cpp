@@ -38,12 +38,12 @@ absl::Status DataCoreWrapper::LoadGfxrFile(const std::string& original_gfxr_file
 {
     assert(m_data_core != nullptr);
 
-    CaptureData::LoadResult load_result = m_data_core->GetMutableGfxrCaptureData().LoadCaptureFile(
-    original_gfxr_file_path.c_str());
+    CaptureData::LoadResult load_result =
+        m_data_core->GetMutableGfxrCaptureData().LoadCaptureFile(original_gfxr_file_path.c_str());
     if (load_result != CaptureData::LoadResult::kSuccess)
     {
         return absl::UnknownError(
-        absl::StrFormat("Could not load GFXR file: %s", original_gfxr_file_path));
+            absl::StrFormat("Could not load GFXR file: %s", original_gfxr_file_path));
     }
     return absl::OkStatus();
 }
@@ -56,8 +56,8 @@ absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::string& new_gfxr_file_
         return absl::FailedPreconditionError("Must load original GFXR first");
     }
 
-    bool write_result = m_data_core->GetMutableGfxrCaptureData().WriteModifiedGfxrFile(
-    new_gfxr_file_path.c_str());
+    bool write_result =
+        m_data_core->GetMutableGfxrCaptureData().WriteModifiedGfxrFile(new_gfxr_file_path.c_str());
     if (!write_result)
     {
         return absl::InternalError("Could not write GFXR file");

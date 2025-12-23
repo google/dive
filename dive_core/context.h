@@ -54,46 +54,45 @@ class Context;
 // Wrapper for context token.
 // It's an alias to std::shared_ptr since we need to be able to hold the underlying
 // token in multiple thread.
-template<typename ContextT> class ContextHolder
+template <typename ContextT>
+class ContextHolder
 {
-    template<typename> friend class ContextHolder;
+    template <typename>
+    friend class ContextHolder;
     using ImplType = std::shared_ptr<ContextT>;
 
-public:
+ public:
     using ContextType = ContextT;
 
     ContextHolder() = default;
-    explicit ContextHolder(ImplType impl) :
-        m_impl(impl)
-    {
-    }
+    explicit ContextHolder(ImplType impl) : m_impl(impl) {}
 
     ContextHolder(const ContextHolder&) = default;
     ContextHolder(ContextHolder&&) = default;
-    template<typename ContextT2>
-    ContextHolder(const ContextHolder<ContextT2>& other) :
-        m_impl(other.m_impl)
+    template <typename ContextT2>
+    ContextHolder(const ContextHolder<ContextT2>& other) : m_impl(other.m_impl)
     {
     }
-    template<typename ContextT2>
-    ContextHolder(ContextHolder<ContextT2>&& other) :
-        m_impl(std::move(other.m_impl))
+    template <typename ContextT2>
+    ContextHolder(ContextHolder<ContextT2>&& other) : m_impl(std::move(other.m_impl))
     {
     }
 
     ContextHolder& operator=(const ContextHolder&) = default;
     ContextHolder& operator=(ContextHolder&&) = default;
 
-    template<typename ContextT2> ContextHolder& operator=(const ContextHolder<ContextT2>& other)
+    template <typename ContextT2>
+    ContextHolder& operator=(const ContextHolder<ContextT2>& other)
     {
         m_impl = other.m_impl;
     }
-    template<typename ContextT2> ContextHolder& operator=(ContextHolder<ContextT2>&& other)
+    template <typename ContextT2>
+    ContextHolder& operator=(ContextHolder<ContextT2>&& other)
     {
         m_impl = std::move(other.m_impl);
     }
 
-    bool         IsNull() const { return m_impl == nullptr; }
+    bool IsNull() const { return m_impl == nullptr; }
     ContextType* Get() const { return m_impl.get(); }
     ContextType* operator->() const { return m_impl.get(); }
     ContextType& operator*() const { return *m_impl; }
@@ -102,19 +101,20 @@ public:
 
     bool Cancelled() const { return m_impl ? m_impl->Cancelled() : false; }
 
-    template<typename... Args> static ContextHolder Create(Args&&... args)
+    template <typename... Args>
+    static ContextHolder Create(Args&&... args)
     {
         return ContextHolder(ImplType(new ContextType(std::forward<Args>(args)...)));
     }
 
-private:
+ private:
     ImplType m_impl;
 };
 
 // ContextToken is the interface type for context implementation.
 class ContextToken
 {
-public:
+ public:
     virtual ~ContextToken() = default;
 
     ContextToken(const ContextToken&) = delete;
@@ -124,18 +124,18 @@ public:
 
     virtual bool Cancelled() const { return false; }
 
-protected:
+ protected:
     ContextToken() = default;
 };
 
 // A cancelable context implementation.
 class SimpleContextToken : public ContextToken
 {
-public:
+ public:
     bool Cancelled() const override { return m_cancelled.load(); }
     void Cancel() { m_cancelled.store(true); }
 
-private:
+ private:
     std::atomic_bool m_cancelled = false;
 };
 
@@ -143,7 +143,7 @@ private:
 // Note: Prefer const Dive::Context& since it does not copy shared_ptr.
 class Context : public ContextHolder<ContextToken>
 {
-public:
+ public:
     using ContextHolder::ContextHolder;
     static Context Background() { return Context(); }
 };

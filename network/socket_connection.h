@@ -19,8 +19,8 @@ limitations under the License.
 #include <memory>
 #include <system_error>
 
-#include "platform_net.h"
 #include "absl/status/statusor.h"
+#include "platform_net.h"
 
 constexpr int kNoTimeout = -1;
 constexpr int kAcceptTimeout = 2000;
@@ -30,23 +30,23 @@ namespace Network
 
 class NetworkInitializer
 {
-public:
+ public:
     NetworkInitializer();
     NetworkInitializer& operator=(const NetworkInitializer&) = delete;
     NetworkInitializer(const NetworkInitializer&) = delete;
 
     static const NetworkInitializer& Instance();
-    bool                             IsInitialized() const;
+    bool IsInitialized() const;
 
-private:
+ private:
     bool m_initialized;
 };
 
 class SocketConnection
 {
-public:
+ public:
     static absl::StatusOr<std::unique_ptr<SocketConnection>> Create(
-    SocketType initial_socket_value = kInvalidSocketValue);
+        SocketType initial_socket_value = kInvalidSocketValue);
 
     ~SocketConnection();
 
@@ -61,24 +61,23 @@ public:
     absl::Status Connect(const std::string& host, int port);
 
     // Data transfer methods.
-    absl::Status                Send(const uint8_t* data, size_t size);
-    absl::StatusOr<size_t>      Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout);
-    absl::Status                SendString(const std::string& s);
+    absl::Status Send(const uint8_t* data, size_t size);
+    absl::StatusOr<size_t> Recv(uint8_t* data, size_t size, int timeout_ms = kNoTimeout);
+    absl::Status SendString(const std::string& s);
     absl::StatusOr<std::string> ReceiveString();
-    absl::Status                SendFile(const std::string& file_path);
-    absl::Status                ReceiveFile(const std::string&          file_path,
-                                            size_t                      file_size,
-                                            std::function<void(size_t)> progress_callback = nullptr);
+    absl::Status SendFile(const std::string& file_path);
+    absl::Status ReceiveFile(const std::string& file_path, size_t file_size,
+                             std::function<void(size_t)> progress_callback = nullptr);
 
     void Close();
     bool IsOpen() const;
 
-private:
+ private:
     explicit SocketConnection(SocketType initial_socket_value);
 
     SocketType m_socket;
-    bool       m_is_listening;
-    int        m_accept_timout_ms;
+    bool m_is_listening;
+    int m_accept_timout_ms;
 };
 
 }  // namespace Network

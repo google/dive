@@ -15,48 +15,45 @@ limitations under the License.
 */
 
 #include "dive_vulkan_replay_consumer.h"
-#include "vulkan/vulkan_core.h"
 
-#include <iostream>
 #include <algorithm>
 #include <cmath>
-#include <numeric>
+#include <iostream>
 #include <limits>
+#include <numeric>
 
 #include "dive_renderdoc.h"
+#include "generated/generated_vulkan_struct_handle_mappers.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
-#include "generated/generated_vulkan_struct_handle_mappers.h"
 #include "util/to_string.h"
+#include "vulkan/vulkan_core.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 DiveVulkanReplayConsumer::DiveVulkanReplayConsumer(
-std::shared_ptr<application::Application> application,
-const VulkanReplayOptions&                options) :
-    VulkanReplayConsumer(application, options)
+    std::shared_ptr<application::Application> application, const VulkanReplayOptions& options)
+    : VulkanReplayConsumer(application, options)
 {
 }
 
 DiveVulkanReplayConsumer::~DiveVulkanReplayConsumer() {}
 
 void DiveVulkanReplayConsumer::Process_vkCreateInstance(
-const ApiCallInfo&                                   call_info,
-VkResult                                             returnValue,
-StructPointerDecoder<Decoded_VkInstanceCreateInfo>*  pCreateInfo,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-HandlePointerDecoder<VkInstance>*                    pInstance)
+    const ApiCallInfo& call_info, VkResult returnValue,
+    StructPointerDecoder<Decoded_VkInstanceCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkInstance>* pInstance)
 {
     // Fix VUID-vkCreateInstance-ppEnabledExtensionNames-01388. GFXR Replay adds the platform
     // surface extension but not VK_KHR_surface (which they all depend on). It's easier to fix here
     // than to patch GFXR.
-    VkInstanceCreateInfo&    create_info = *pCreateInfo->GetPointer();
-    std::vector<const char*> extensions(create_info.ppEnabledExtensionNames,
-                                        create_info.ppEnabledExtensionNames +
-                                        create_info.enabledExtensionCount);
-    if (const auto iter = std::find_if(extensions.cbegin(),
-                                       extensions.cend(),
+    VkInstanceCreateInfo& create_info = *pCreateInfo->GetPointer();
+    std::vector<const char*> extensions(
+        create_info.ppEnabledExtensionNames,
+        create_info.ppEnabledExtensionNames + create_info.enabledExtensionCount);
+    if (const auto iter = std::find_if(extensions.cbegin(), extensions.cend(),
                                        [](const char* extension) {
                                            return strcmp(extension,
                                                          VK_KHR_SURFACE_EXTENSION_NAME) == 0;
@@ -74,27 +71,18 @@ HandlePointerDecoder<VkInstance>*                    pInstance)
         // cleaned up at the appropriate time.
     }
 
-    VulkanReplayConsumer::Process_vkCreateInstance(call_info,
-                                                   returnValue,
-                                                   pCreateInfo,
-                                                   pAllocator,
+    VulkanReplayConsumer::Process_vkCreateInstance(call_info, returnValue, pCreateInfo, pAllocator,
                                                    pInstance);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCreateDevice(
-const ApiCallInfo&                                   call_info,
-VkResult                                             returnValue,
-format::HandleId                                     physicalDevice,
-StructPointerDecoder<Decoded_VkDeviceCreateInfo>*    pCreateInfo,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-HandlePointerDecoder<VkDevice>*                      pDevice)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId physicalDevice,
+    StructPointerDecoder<Decoded_VkDeviceCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkDevice>* pDevice)
 {
-    VulkanReplayConsumer::Process_vkCreateDevice(call_info,
-                                                 returnValue,
-                                                 physicalDevice,
-                                                 pCreateInfo,
-                                                 pAllocator,
-                                                 pDevice);
+    VulkanReplayConsumer::Process_vkCreateDevice(call_info, returnValue, physicalDevice,
+                                                 pCreateInfo, pAllocator, pDevice);
 
     if (returnValue != VK_SUCCESS)
     {
@@ -125,14 +113,11 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
     auto in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
     VkPhysicalDeviceProperties deviceProperties;
     GetInstanceTable(in_physicalDevice->handle)
-    ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
+        ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_
-                                          .OnCreateDevice(device,
-                                                          pAllocator->GetPointer(),
-                                                          deviceProperties.limits.timestampPeriod,
-                                                          CreateQueryPool,
-                                                          pfn_vkResetQueryPool_);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCreateDevice(
+        device, pAllocator->GetPointer(), deviceProperties.limits.timestampPeriod, CreateQueryPool,
+        pfn_vkResetQueryPool_);
 
     if (!status.success)
     {
@@ -141,16 +126,14 @@ HandlePointerDecoder<VkDevice>*                      pDevice)
 }
 
 void DiveVulkanReplayConsumer::Process_vkDestroyDevice(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     device,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+    const ApiCallInfo& call_info, format::HandleId device,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    VkDevice in_device = MapHandle<VulkanDeviceInfo>(device,
-                                                     &CommonObjectInfoTable::GetVkDeviceInfo);
+    VkDevice in_device =
+        MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnDestroyDevice(in_device,
-                                                                    pfn_vkQueueWaitIdle_,
-                                                                    pfn_vkDestroyQueryPool_);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnDestroyDevice(in_device, pfn_vkQueueWaitIdle_, pfn_vkDestroyQueryPool_);
     fence_signal_queue_ = VK_NULL_HANDLE;
     device_ = VK_NULL_HANDLE;
     if (!status.success)
@@ -173,12 +156,10 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 }
 
 void DiveVulkanReplayConsumer::Process_vkDestroyCommandPool(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     device,
-format::HandleId                                     commandPool,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId commandPool,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
-    auto          in_commandPool = GetObjectInfoTable().GetVkCommandPoolInfo(commandPool);
+    auto in_commandPool = GetObjectInfoTable().GetVkCommandPoolInfo(commandPool);
     VkCommandPool pool_handle = in_commandPool ? in_commandPool->handle : VK_NULL_HANDLE;
     if (pool_handle == VK_NULL_HANDLE)
     {
@@ -195,26 +176,20 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 }
 
 void DiveVulkanReplayConsumer::Process_vkAllocateCommandBuffers(
-const ApiCallInfo&                                         call_info,
-VkResult                                                   returnValue,
-format::HandleId                                           device,
-StructPointerDecoder<Decoded_VkCommandBufferAllocateInfo>* pAllocateInfo,
-HandlePointerDecoder<VkCommandBuffer>*                     pCommandBuffers)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkCommandBufferAllocateInfo>* pAllocateInfo,
+    HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
 {
-    VulkanReplayConsumer::Process_vkAllocateCommandBuffers(call_info,
-                                                           returnValue,
-                                                           device,
-                                                           pAllocateInfo,
-                                                           pCommandBuffers);
+    VulkanReplayConsumer::Process_vkAllocateCommandBuffers(call_info, returnValue, device,
+                                                           pAllocateInfo, pCommandBuffers);
 
     if (returnValue != VK_SUCCESS)
     {
         return;
     }
 
-    Dive::GPUTime::GpuTimeStatus
-    status = gpu_time_.OnAllocateCommandBuffers(pAllocateInfo->GetPointer(),
-                                                pCommandBuffers->GetHandlePointer());
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnAllocateCommandBuffers(
+        pAllocateInfo->GetPointer(), pCommandBuffers->GetHandlePointer());
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -222,30 +197,23 @@ HandlePointerDecoder<VkCommandBuffer>*                     pCommandBuffers)
 }
 
 void DiveVulkanReplayConsumer::Process_vkFreeCommandBuffers(
-const ApiCallInfo&                     call_info,
-format::HandleId                       device,
-format::HandleId                       commandPool,
-uint32_t                               commandBufferCount,
-HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId commandPool,
+    uint32_t commandBufferCount, HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
 {
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnFreeCommandBuffers(commandBufferCount,
-                                                                         pCommandBuffers
-                                                                         ->GetHandlePointer());
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnFreeCommandBuffers(commandBufferCount, pCommandBuffers->GetHandlePointer());
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
-    VulkanReplayConsumer::Process_vkFreeCommandBuffers(call_info,
-                                                       device,
-                                                       commandPool,
-                                                       commandBufferCount,
-                                                       pCommandBuffers);
+    VulkanReplayConsumer::Process_vkFreeCommandBuffers(call_info, device, commandPool,
+                                                       commandBufferCount, pCommandBuffers);
 }
 
-void DiveVulkanReplayConsumer::Process_vkResetCommandBuffer(const ApiCallInfo&        call_info,
-                                                            VkResult                  returnValue,
-                                                            format::HandleId          commandBuffer,
+void DiveVulkanReplayConsumer::Process_vkResetCommandBuffer(const ApiCallInfo& call_info,
+                                                            VkResult returnValue,
+                                                            format::HandleId commandBuffer,
                                                             VkCommandBufferResetFlags flags)
 {
     auto in_commandBuffer = GetObjectInfoTable().GetVkCommandBufferInfo(commandBuffer)->handle;
@@ -256,19 +224,15 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandBuffer(const ApiCallInfo&  
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
-    VulkanReplayConsumer::Process_vkResetCommandBuffer(call_info,
-                                                       returnValue,
-                                                       commandBuffer,
+    VulkanReplayConsumer::Process_vkResetCommandBuffer(call_info, returnValue, commandBuffer,
                                                        flags);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCreateCommandPool(
-const ApiCallInfo&                                     call_info,
-VkResult                                               returnValue,
-format::HandleId                                       device,
-StructPointerDecoder<Decoded_VkCommandPoolCreateInfo>* pCreateInfo,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
-HandlePointerDecoder<VkCommandPool>*                   pCommandPool)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkCommandPoolCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkCommandPool>* pCommandPool)
 {
     // Forcing all pools to use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT.
     // This is needed because without this flag, vkBeginCommandBuffer will NOT perform an implicit
@@ -279,18 +243,14 @@ HandlePointerDecoder<VkCommandPool>*                   pCommandPool)
     // (b/444976541)
     VkCommandPoolCreateInfo* create_info = pCreateInfo->GetPointer();
     create_info->flags |= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    VulkanReplayConsumer::Process_vkCreateCommandPool(call_info,
-                                                      returnValue,
-                                                      device,
-                                                      pCreateInfo,
-                                                      pAllocator,
-                                                      pCommandPool);
+    VulkanReplayConsumer::Process_vkCreateCommandPool(call_info, returnValue, device, pCreateInfo,
+                                                      pAllocator, pCommandPool);
 }
 
-void DiveVulkanReplayConsumer::Process_vkResetCommandPool(const ApiCallInfo&      call_info,
-                                                          VkResult                returnValue,
-                                                          format::HandleId        device,
-                                                          format::HandleId        commandPool,
+void DiveVulkanReplayConsumer::Process_vkResetCommandPool(const ApiCallInfo& call_info,
+                                                          VkResult returnValue,
+                                                          format::HandleId device,
+                                                          format::HandleId commandPool,
                                                           VkCommandPoolResetFlags flags)
 {
     auto in_commandPool = GetObjectInfoTable().GetVkCommandPoolInfo(commandPool)->handle;
@@ -305,30 +265,21 @@ void DiveVulkanReplayConsumer::Process_vkResetCommandPool(const ApiCallInfo&    
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
-    VulkanReplayConsumer::Process_vkResetCommandPool(call_info,
-                                                     returnValue,
-                                                     device,
-                                                     commandPool,
+    VulkanReplayConsumer::Process_vkResetCommandPool(call_info, returnValue, device, commandPool,
                                                      flags);
 }
 
 void DiveVulkanReplayConsumer::Process_vkBeginCommandBuffer(
-const ApiCallInfo&                                      call_info,
-VkResult                                                returnValue,
-format::HandleId                                        commandBuffer,
-StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
 {
-    VulkanReplayConsumer::Process_vkBeginCommandBuffer(call_info,
-                                                       returnValue,
-                                                       commandBuffer,
+    VulkanReplayConsumer::Process_vkBeginCommandBuffer(call_info, returnValue, commandBuffer,
                                                        pBeginInfo);
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_
-                                          .OnBeginCommandBuffer(in_commandBuffer,
-                                                                pBeginInfo->GetPointer()->flags,
-                                                                pfn_vkCmdWriteTimestamp_);
+    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnBeginCommandBuffer(
+        in_commandBuffer, pBeginInfo->GetPointer()->flags, pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -336,14 +287,14 @@ StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo)
 }
 
 void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& call_info,
-                                                          VkResult           returnValue,
-                                                          format::HandleId   commandBuffer)
+                                                          VkResult returnValue,
+                                                          format::HandleId commandBuffer)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnEndCommandBuffer(in_commandBuffer,
-                                                                       pfn_vkCmdWriteTimestamp_);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnEndCommandBuffer(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -353,29 +304,18 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
 }
 
 void DiveVulkanReplayConsumer::Process_vkQueueSubmit(
-const ApiCallInfo&                          call_info,
-VkResult                                    returnValue,
-format::HandleId                            queue,
-uint32_t                                    submitCount,
-StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
-format::HandleId                            fence)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId queue,
+    uint32_t submitCount, StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
+    format::HandleId fence)
 {
-    VulkanReplayConsumer::Process_vkQueueSubmit(call_info,
-                                                returnValue,
-                                                queue,
-                                                submitCount,
-                                                pSubmits,
-                                                fence);
+    VulkanReplayConsumer::Process_vkQueueSubmit(call_info, returnValue, queue, submitCount,
+                                                pSubmits, fence);
 
     const VkSubmitInfo* submit_infos = pSubmits->GetPointer();
-    auto                submit_status = gpu_time_.OnQueueSubmit(submitCount,
-                                                 submit_infos,
-                                                 pfn_vkDeviceWaitIdle_,
-                                                 pfn_vkResetQueryPool_,
-                                                 pfn_vkGetQueryPoolResults_);
+    auto submit_status = gpu_time_.OnQueueSubmit(submitCount, submit_infos, pfn_vkDeviceWaitIdle_,
+                                                 pfn_vkResetQueryPool_, pfn_vkGetQueryPoolResults_);
 
-    auto IsFrameBoundary = [](Decoded_VkSubmitInfo*  submit_info_data,
-                              uint32_t               submit_count,
+    auto IsFrameBoundary = [](Decoded_VkSubmitInfo* submit_info_data, uint32_t submit_count,
                               CommonObjectInfoTable& object_info_table) -> bool {
         if (submit_info_data == nullptr)
         {
@@ -384,13 +324,13 @@ format::HandleId                            fence)
 
         for (uint32_t i = 0; i < submit_count; ++i)
         {
-            size_t     command_buffer_count = submit_info_data[i].pCommandBuffers.GetLength();
+            size_t command_buffer_count = submit_info_data[i].pCommandBuffers.GetLength();
             const auto command_buffer_ids = submit_info_data[i].pCommandBuffers.GetPointer();
 
             for (uint32_t j = 0; j < command_buffer_count; ++j)
             {
-                auto command_buffer_info = object_info_table.GetVkCommandBufferInfo(
-                command_buffer_ids[j]);
+                auto command_buffer_info =
+                    object_info_table.GetVkCommandBufferInfo(command_buffer_ids[j]);
 
                 if (command_buffer_info->is_frame_boundary)
                 {
@@ -402,9 +342,8 @@ format::HandleId                            fence)
         return false;
     };
 
-    bool is_frame_boundary = IsFrameBoundary(pSubmits->GetMetaStructPointer(),
-                                             submitCount,
-                                             GetObjectInfoTable());
+    bool is_frame_boundary =
+        IsFrameBoundary(pSubmits->GetMetaStructPointer(), submitCount, GetObjectInfoTable());
 
     // vkDeviceWaitIdle is needed since when we loop the frame, we do not double/triple buffer cmds.
     // If the CPU is too fast, it might start to write to cmd while GPU is using it which would
@@ -434,15 +373,12 @@ format::HandleId                            fence)
 }
 
 void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
-const ApiCallInfo&                              call_info,
-VkResult                                        returnValue,
-format::HandleId                                queue,
-StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId queue,
+    StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo)
 {
     VulkanReplayConsumer::Process_vkQueuePresentKHR(call_info, returnValue, queue, pPresentInfo);
 
-    auto status = gpu_time_.OnQueuePresent(pfn_vkDeviceWaitIdle_,
-                                           pfn_vkResetQueryPool_,
+    auto status = gpu_time_.OnQueuePresent(pfn_vkDeviceWaitIdle_, pfn_vkResetQueryPool_,
                                            pfn_vkGetQueryPoolResults_);
 
     if (!status.success)
@@ -452,17 +388,15 @@ StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo)
     }
     else
     {
-
         GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
         gpu_time_stats_csv_str_ = gpu_time_.GetStatsCSVString();
     }
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue2(
-const ApiCallInfo&                                call_info,
-format::HandleId                                  device,
-StructPointerDecoder<Decoded_VkDeviceQueueInfo2>* pQueueInfo,
-HandlePointerDecoder<VkQueue>*                    pQueue)
+    const ApiCallInfo& call_info, format::HandleId device,
+    StructPointerDecoder<Decoded_VkDeviceQueueInfo2>* pQueueInfo,
+    HandlePointerDecoder<VkQueue>* pQueue)
 {
     VulkanReplayConsumer::Process_vkGetDeviceQueue2(call_info, device, pQueueInfo, pQueue);
     VkQueue* queue = pQueue->GetHandlePointer();
@@ -475,15 +409,12 @@ HandlePointerDecoder<VkQueue>*                    pQueue)
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue(const ApiCallInfo& call_info,
-                                                        format::HandleId   device,
-                                                        uint32_t           queueFamilyIndex,
-                                                        uint32_t           queueIndex,
+                                                        format::HandleId device,
+                                                        uint32_t queueFamilyIndex,
+                                                        uint32_t queueIndex,
                                                         HandlePointerDecoder<VkQueue>* pQueue)
 {
-    VulkanReplayConsumer::Process_vkGetDeviceQueue(call_info,
-                                                   device,
-                                                   queueFamilyIndex,
-                                                   queueIndex,
+    VulkanReplayConsumer::Process_vkGetDeviceQueue(call_info, device, queueFamilyIndex, queueIndex,
                                                    pQueue);
     VkQueue* queue = pQueue->GetHandlePointer();
     fence_signal_queue_ = *queue;
@@ -495,21 +426,19 @@ void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue(const ApiCallInfo& call_
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdInsertDebugUtilsLabelEXT(
-const ApiCallInfo&                                  call_info,
-format::HandleId                                    commandBuffer,
-StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo)
+    const ApiCallInfo& call_info, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo)
 {
-    VulkanReplayConsumer::Process_vkCmdInsertDebugUtilsLabelEXT(call_info,
-                                                                commandBuffer,
+    VulkanReplayConsumer::Process_vkCmdInsertDebugUtilsLabelEXT(call_info, commandBuffer,
                                                                 pLabelInfo);
 
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
     const VkDebugUtilsLabelEXT* in_pLabelInfo = pLabelInfo->GetPointer();
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdInsertDebugUtilsLabelEXT(in_commandBuffer,
-                                                                                  in_pLabelInfo);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdInsertDebugUtilsLabelEXT(in_commandBuffer, in_pLabelInfo);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -517,36 +446,33 @@ StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo)
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     commandBuffer,
-StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
-VkSubpassContents                                    contents)
+    const ApiCallInfo& call_info, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+    VkSubpassContents contents)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass(in_commandBuffer,
-                                                                         pfn_vkCmdWriteTimestamp_);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdBeginRenderPass(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
-    VulkanReplayConsumer::Process_vkCmdBeginRenderPass(call_info,
-                                                       commandBuffer,
-                                                       pRenderPassBegin,
+    VulkanReplayConsumer::Process_vkCmdBeginRenderPass(call_info, commandBuffer, pRenderPassBegin,
                                                        contents);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass(const ApiCallInfo& call_info,
-                                                          format::HandleId   commandBuffer)
+                                                          format::HandleId commandBuffer)
 {
     VulkanReplayConsumer::Process_vkCmdEndRenderPass(call_info, commandBuffer);
 
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass(in_commandBuffer,
-                                                                       pfn_vkCmdWriteTimestamp_);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdEndRenderPass(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -554,39 +480,35 @@ void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass(const ApiCallInfo& cal
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass2(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     commandBuffer,
-StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
-StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo)
+    const ApiCallInfo& call_info, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+    StructPointerDecoder<Decoded_VkSubpassBeginInfo>* pSubpassBeginInfo)
 {
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdBeginRenderPass2(in_commandBuffer,
-                                                                          pfn_vkCmdWriteTimestamp_);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdBeginRenderPass2(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
     }
 
-    VulkanReplayConsumer::Process_vkCmdBeginRenderPass2(call_info,
-                                                        commandBuffer,
-                                                        pRenderPassBegin,
+    VulkanReplayConsumer::Process_vkCmdBeginRenderPass2(call_info, commandBuffer, pRenderPassBegin,
                                                         pSubpassBeginInfo);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass2(
-const ApiCallInfo&                              call_info,
-format::HandleId                                commandBuffer,
-StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+    const ApiCallInfo& call_info, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
 {
     VulkanReplayConsumer::Process_vkCmdEndRenderPass2(call_info, commandBuffer, pSubpassEndInfo);
 
-    VkCommandBuffer in_commandBuffer = MapHandle<
-    VulkanCommandBufferInfo>(commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
-    Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCmdEndRenderPass2(in_commandBuffer,
-                                                                        pfn_vkCmdWriteTimestamp_);
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdEndRenderPass2(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
     if (!status.success)
     {
         GFXRECON_LOG_ERROR(status.message.c_str());
@@ -594,36 +516,28 @@ StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass2KHR(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     commandBuffer,
-StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
-StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo)
+    const ApiCallInfo& call_info, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+    StructPointerDecoder<Decoded_VkSubpassBeginInfo>* pSubpassBeginInfo)
 {
     Process_vkCmdBeginRenderPass2(call_info, commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass2KHR(
-const ApiCallInfo&                              call_info,
-format::HandleId                                commandBuffer,
-StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+    const ApiCallInfo& call_info, format::HandleId commandBuffer,
+    StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
 {
     Process_vkCmdEndRenderPass2(call_info, commandBuffer, pSubpassEndInfo);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCreateFence(
-const ApiCallInfo&                                   call_info,
-VkResult                                             returnValue,
-format::HandleId                                     device,
-StructPointerDecoder<Decoded_VkFenceCreateInfo>*     pCreateInfo,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-HandlePointerDecoder<VkFence>*                       pFence)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkFenceCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkFence>* pFence)
 {
-    VulkanReplayConsumer::Process_vkCreateFence(call_info,
-                                                returnValue,
-                                                device,
-                                                pCreateInfo,
-                                                pAllocator,
-                                                pFence);
+    VulkanReplayConsumer::Process_vkCreateFence(call_info, returnValue, device, pCreateInfo,
+                                                pAllocator, pFence);
 
     if (returnValue != VK_SUCCESS)
     {
@@ -638,10 +552,8 @@ HandlePointerDecoder<VkFence>*                       pFence)
 }
 
 void DiveVulkanReplayConsumer::Process_vkDestroyFence(
-const ApiCallInfo&                                   call_info,
-format::HandleId                                     device,
-format::HandleId                                     fence,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId fence,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 {
     // We only destroy the fence if it is not in the deferred release list
     auto it = std::find(deferred_release_list_.begin(), deferred_release_list_.end(), fence);
@@ -652,12 +564,10 @@ StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
 }
 
 void DiveVulkanReplayConsumer::Process_vkAllocateMemory(
-const ApiCallInfo&                                   call_info,
-VkResult                                             returnValue,
-format::HandleId                                     device,
-StructPointerDecoder<Decoded_VkMemoryAllocateInfo>*  pAllocateInfo,
-StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
-HandlePointerDecoder<VkDeviceMemory>*                pMemory)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkMemoryAllocateInfo>* pAllocateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkDeviceMemory>* pMemory)
 {
     if (GetRenderDocApi() != nullptr)
     {
@@ -673,36 +583,33 @@ HandlePointerDecoder<VkDeviceMemory>*                pMemory)
 
         if ((allocate_info->memoryTypeIndex != 0) && (allocate_info->memoryTypeIndex != 6))
         {
-            GFXRECON_LOG_WARNING("memoryTypeIndex is not 0 or 6 (%u), this may not be well "
-                                 "supported by renderdoc!",
-                                 allocate_info->memoryTypeIndex);
+            GFXRECON_LOG_WARNING(
+                "memoryTypeIndex is not 0 or 6 (%u), this may not be well "
+                "supported by renderdoc!",
+                allocate_info->memoryTypeIndex);
         }
 
-        bool is_importing_android_hardware_buffer = graphics::vulkan_struct_get_pnext<
-                                                    VkImportAndroidHardwareBufferInfoANDROID>(
-                                                    allocate_info) != nullptr;
-        bool using_unsupported_mem_type = (allocate_info->memoryTypeIndex == 8) ||
-                                          is_importing_android_hardware_buffer;
+        bool is_importing_android_hardware_buffer =
+            graphics::vulkan_struct_get_pnext<VkImportAndroidHardwareBufferInfoANDROID>(
+                allocate_info) != nullptr;
+        bool using_unsupported_mem_type =
+            (allocate_info->memoryTypeIndex == 8) || is_importing_android_hardware_buffer;
         if (using_unsupported_mem_type)
         {
             // Based on testing, imported AHardwareBuffers use memoryTypeIndex 1
             // Some other cases, the app could use mem type 8
             // but RenderDoc only supports 0 & 6. We can't call vkGetImageMemoryRequirements since
             // (apart from dedicated memory) we don't know which image this memory will be bound to.
-            GFXRECON_LOG_INFO("Unsupported detected during RenderDoc capture! Overriding "
-                              "memoryTypeIndex from %u to 0 for memory handle %lu",
-                              allocate_info->memoryTypeIndex,
-                              *pMemory->GetPointer());
+            GFXRECON_LOG_INFO(
+                "Unsupported detected during RenderDoc capture! Overriding "
+                "memoryTypeIndex from %u to 0 for memory handle %lu",
+                allocate_info->memoryTypeIndex, *pMemory->GetPointer());
             allocate_info->memoryTypeIndex = 0;
         }
     }
 
-    VulkanReplayConsumer::Process_vkAllocateMemory(call_info,
-                                                   returnValue,
-                                                   device,
-                                                   pAllocateInfo,
-                                                   pAllocator,
-                                                   pMemory);
+    VulkanReplayConsumer::Process_vkAllocateMemory(call_info, returnValue, device, pAllocateInfo,
+                                                   pAllocator, pMemory);
 }
 
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
@@ -729,8 +636,8 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
     {
         const VkResult status = pfn_vkGetFenceStatus_(device_, fence);
         GFXRECON_ASSERT((status == VK_NOT_READY) || (status == VK_SUCCESS));
-        const FenceStatus current_status = (status == VK_SUCCESS) ? FenceStatus::kSignaled :
-                                                                    FenceStatus::kUnsignaled;
+        const FenceStatus current_status =
+            (status == VK_SUCCESS) ? FenceStatus::kSignaled : FenceStatus::kUnsignaled;
         if (current_status == initial_status)
         {
             continue;
@@ -738,33 +645,29 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 
         switch (initial_status)
         {
-        case FenceStatus::kSignaled:
-            // vkQueueSubmit here is only for signaling the fence.
-            // There will be some CPU overhead, but GPU cost is negligible. It doesn't matter which
-            // type of queue it is if we submit 0 cmd
-            pfn_vkQueueSubmit_(fence_signal_queue_, 0, nullptr, fence);
-            break;
-        case FenceStatus::kUnsignaled:
-            reset_fence_list.push_back(fence);
-            break;
+            case FenceStatus::kSignaled:
+                // vkQueueSubmit here is only for signaling the fence.
+                // There will be some CPU overhead, but GPU cost is negligible. It doesn't matter
+                // which type of queue it is if we submit 0 cmd
+                pfn_vkQueueSubmit_(fence_signal_queue_, 0, nullptr, fence);
+                break;
+            case FenceStatus::kUnsignaled:
+                reset_fence_list.push_back(fence);
+                break;
         }
     }
 
     if (!reset_fence_list.empty())
     {
-        VkResult result = pfn_vkResetFences_(device_,
-                                             static_cast<uint32_t>(reset_fence_list.size()),
-                                             reset_fence_list.data());
+        VkResult result = pfn_vkResetFences_(
+            device_, static_cast<uint32_t>(reset_fence_list.size()), reset_fence_list.data());
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
-const ApiCallInfo&                                 call_info,
-VkResult                                           returnValue,
-format::HandleId                                   device,
-StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
-PointerDecoder<int>*                               pFd)
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo, PointerDecoder<int>* pFd)
 {
     // Workaround for compositor captures. A fence may not have been created with the exportable
     // flag, causing vkGetFenceFdKHR to fail on replay. Since the file descriptor is not used, we
@@ -779,49 +682,31 @@ PointerDecoder<int>*                               pFd)
 
     if (replay_result != VK_SUCCESS)
     {
-        GFXRECON_LOG_WARNING("vkGetFenceFdKHR failed with error %s. Ignoring error and continuing "
-                             "replay.",
-                             util::ToString(replay_result).c_str());
+        GFXRECON_LOG_WARNING(
+            "vkGetFenceFdKHR failed with error %s. Ignoring error and continuing "
+            "replay.",
+            util::ToString(replay_result).c_str());
         replay_result = VK_SUCCESS;
         return;
     }
 }
 
 void DiveVulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
-format::HandleId                                    device_id,
-format::HandleId                                    memory_id,
-uint64_t                                            buffer_id,
-uint32_t                                            format,
-uint32_t                                            width,
-uint32_t                                            height,
-uint32_t                                            stride,
-uint64_t                                            usage,
-uint32_t                                            layers,
-const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
+    format::HandleId device_id, format::HandleId memory_id, uint64_t buffer_id, uint32_t format,
+    uint32_t width, uint32_t height, uint32_t stride, uint64_t usage, uint32_t layers,
+    const std::vector<format::HardwareBufferPlaneInfo>& plane_info)
 {
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
     // Workaround to replay compositor capture
     if (format > AHARDWAREBUFFER_FORMAT_S8_UINT || (format == AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420))
     {
-        GFXRECON_LOG_INFO("AHB format %d, height %d, width %d, layers %d, usage %d, ",
-                          format,
-                          height,
-                          width,
-                          layers,
-                          usage);
+        GFXRECON_LOG_INFO("AHB format %d, height %d, width %d, layers %d, usage %d, ", format,
+                          height, width, layers, usage);
         format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
     }
 #endif
-    VulkanReplayConsumer::ProcessCreateHardwareBufferCommand(device_id,
-                                                             memory_id,
-                                                             buffer_id,
-                                                             format,
-                                                             width,
-                                                             height,
-                                                             stride,
-                                                             usage,
-                                                             layers,
-                                                             plane_info);
+    VulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
+        device_id, memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
 }
 
 GFXRECON_END_NAMESPACE(decode)

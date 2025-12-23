@@ -34,11 +34,11 @@ const char *Error::Description() const
     else
         return "";
 }
-template<> const EmptyErrorPayload &Error::Payload<ErrorCode::Ok>() const
+template <>
+const EmptyErrorPayload &Error::Payload<ErrorCode::Ok>() const
 {
     static const EmptyErrorPayload kEmptyPayload;
-    if (Code() != ErrorCode::Ok)
-        abort();
+    if (Code() != ErrorCode::Ok) abort();
     return kEmptyPayload;
 }
 Error::Builder::operator Error()

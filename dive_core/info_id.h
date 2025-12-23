@@ -22,7 +22,8 @@
 
 namespace Dive
 {
-template<typename I, size_t kMaxBits, typename = std::is_unsigned<I>> constexpr I FullBitMask()
+template <typename I, size_t kMaxBits, typename = std::is_unsigned<I>>
+constexpr I FullBitMask()
 {
     static_assert(kMaxBits <= sizeof(I) * 8,
                   "FullBitMask: kMaxBits cannot exceed the number of bits in the integer type");
@@ -32,16 +33,13 @@ template<typename I, size_t kMaxBits, typename = std::is_unsigned<I>> constexpr 
         return (I(1u) << kMaxBits) - 1;
 }
 
-template<typename Tag, typename I = uint32_t, size_t kMaxBits = 32> class InfoIdT
+template <typename Tag, typename I = uint32_t, size_t kMaxBits = 32>
+class InfoIdT
 {
-public:
+ public:
     using basic_type = I;
-    InfoIdT() :
-        m_id(std::numeric_limits<I>::max())
-    {
-    }
-    explicit InfoIdT(I id) :
-        m_id(id)
+    InfoIdT() : m_id(std::numeric_limits<I>::max()) {}
+    explicit InfoIdT(I id) : m_id(id)
     {
         const I mask = FullBitMask<I, kMaxBits>();
         if (m_id >= mask)
@@ -50,12 +48,12 @@ public:
             m_id = std::numeric_limits<I>::max();
         }
     }
-    template<typename Num,
-             typename = typename std::enable_if<
-             std::is_integral<Num>::value &&
-             std::numeric_limits<Num>::min() <= std::numeric_limits<I>::min() &&
-             std::numeric_limits<I>::max() <= std::numeric_limits<Num>::max(),
-             Num>::type>
+    template <typename Num,
+              typename = typename std::enable_if<
+                  std::is_integral<Num>::value &&
+                      std::numeric_limits<Num>::min() <= std::numeric_limits<I>::min() &&
+                      std::numeric_limits<I>::max() <= std::numeric_limits<Num>::max(),
+                  Num>::type>
     explicit operator Num() const
     {
         return m_id;
@@ -90,7 +88,7 @@ public:
         return old;
     }
 
-private:
+ private:
     I m_id;
 };
 }  // namespace Dive

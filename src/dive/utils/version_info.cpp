@@ -37,19 +37,19 @@ constexpr size_t kLongSha = 40;
 constexpr size_t kMaxCharsDeviceResourcesVersionFile = 200;
 
 absl::StatusOr<std::string> ReadFileCapped(const std::filesystem::path& file_path,
-                                           size_t                       max_characters)
+                                           size_t max_characters)
 {
     if (!std::filesystem::exists(file_path))
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("File does not exist: %s", file_path.generic_string()));
+            absl::StrFormat("File does not exist: %s", file_path.generic_string()));
     }
 
     std::ifstream file(file_path);
     if (!file.is_open())
     {
         return absl::InternalError(
-        absl::StrFormat("Failed to open file: %s", file_path.generic_string()));
+            absl::StrFormat("Failed to open file: %s", file_path.generic_string()));
     }
 
     assert((max_characters > 0) && (max_characters <= kMaxCharsDeviceResourcesVersionFile));
@@ -73,41 +73,34 @@ namespace Dive
 
 std::string GetHostShortVersionString()
 {
-    std::string      full_sha = DIVE_VERSION_SHA1;
+    std::string full_sha = DIVE_VERSION_SHA1;
     std::string_view short_sha = GetSHAString(full_sha, kShortSha);
     return absl::StrFormat("%s-%s-%s", DIVE_VERSION, DIVE_RELEASE_TYPE, short_sha);
 }
 
 std::string GetHostToolsVersionInfo()
 {
-    std::string      full_sha = DIVE_VERSION_SHA1;
+    std::string full_sha = DIVE_VERSION_SHA1;
     std::string_view short_sha = GetSHAString(full_sha, kShortSha);
-    std::string      host_tools_build_string = absl::StrFormat("%s-%s-%s-%s",
-                                                          DIVE_VERSION,
-                                                          DIVE_RELEASE_TYPE,
-                                                          DIVE_HOST_PLATFORM_STRING,
-                                                          short_sha);
+    std::string host_tools_build_string = absl::StrFormat(
+        "%s-%s-%s-%s", DIVE_VERSION, DIVE_RELEASE_TYPE, DIVE_HOST_PLATFORM_STRING, short_sha);
 
     return absl::StrFormat("Host Tools Build: %s\nHost Tools Build Type: %s\nHost Tools SHA: %s\n",
-                           host_tools_build_string,
-                           DIVE_BUILD_TYPE,
+                           host_tools_build_string, DIVE_BUILD_TYPE,
                            GetSHAString(DIVE_VERSION_SHA1, kLongSha));
 }
 
 std::string GetDiveDescription()
 {
-    return absl::StrFormat("%s (%s)\n\n%s\n\n%s\n",
-                           DIVE_PRODUCT_NAME,
-                           GetHostShortVersionString(),
-                           DIVE_PRODUCT_DESCRIPTION,
-                           DIVE_COPYRIGHT_DESCRIPTION);
+    return absl::StrFormat("%s (%s)\n\n%s\n\n%s\n", DIVE_PRODUCT_NAME, GetHostShortVersionString(),
+                           DIVE_PRODUCT_DESCRIPTION, DIVE_COPYRIGHT_DESCRIPTION);
 }
 
 absl::StatusOr<std::map<std::string_view, std::string_view>> GetDeviceResourcesVersionMap(
-const std::string& csv_content)
+    const std::string& csv_content)
 {
     std::map<std::string_view, std::string_view> device_info_map;
-    std::vector<std::string_view>                rows = absl::StrSplit(csv_content, '\n');
+    std::vector<std::string_view> rows = absl::StrSplit(csv_content, '\n');
     for (std::string_view row : rows)
     {
         std::vector<std::string_view> key_value = absl::StrSplit(row, ',');
@@ -123,35 +116,33 @@ const std::string& csv_content)
     if (device_info_map.size() != VersionInfoConstants::kKeyCount)
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("invalid device map: want key count %d, got: %d",
-                        VersionInfoConstants::kKeyCount,
-                        device_info_map.size()));
+            absl::StrFormat("invalid device map: want key count %d, got: %d",
+                            VersionInfoConstants::kKeyCount, device_info_map.size()));
     }
     if (device_info_map.count(VersionInfoConstants::kNameSha) != 1)
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("invalid device map: key error: %s", VersionInfoConstants::kNameSha));
+            absl::StrFormat("invalid device map: key error: %s", VersionInfoConstants::kNameSha));
     }
     if (device_info_map.count(VersionInfoConstants::kNameVersion) != 1)
     {
-        return absl::FailedPreconditionError(
-        absl::StrFormat("invalid device map: key error: %s", VersionInfoConstants::kNameVersion));
+        return absl::FailedPreconditionError(absl::StrFormat("invalid device map: key error: %s",
+                                                             VersionInfoConstants::kNameVersion));
     }
     if (device_info_map.count(VersionInfoConstants::kNameBuildType) != 1)
     {
-        return absl::FailedPreconditionError(
-        absl::StrFormat("invalid device map: key error: %s", VersionInfoConstants::kNameBuildType));
+        return absl::FailedPreconditionError(absl::StrFormat("invalid device map: key error: %s",
+                                                             VersionInfoConstants::kNameBuildType));
     }
     if (device_info_map.count(VersionInfoConstants::kNameReleaseType) != 1)
     {
-        return absl::FailedPreconditionError(
-        absl::StrFormat("invalid device map: key error: %s",
-                        VersionInfoConstants::kNameReleaseType));
+        return absl::FailedPreconditionError(absl::StrFormat(
+            "invalid device map: key error: %s", VersionInfoConstants::kNameReleaseType));
     }
     if (device_info_map.count(VersionInfoConstants::kNameAbi) != 1)
     {
         return absl::FailedPreconditionError(
-        absl::StrFormat("invalid device map: key error: %s", VersionInfoConstants::kNameAbi));
+            absl::StrFormat("invalid device map: key error: %s", VersionInfoConstants::kNameAbi));
     }
 
     return device_info_map;
@@ -171,20 +162,18 @@ std::string GetDeviceResourcesVersionInfo(const std::string& csv_content)
         device_info_map = *ret;
     }
 
-    std::string_view short_sha = GetSHAString(device_info_map[VersionInfoConstants::kNameSha],
-                                              kShortSha);
-    std::string      device_resources_build_string = absl::
-    StrFormat("%s-%s-%s-%s",
-              device_info_map[VersionInfoConstants::kNameVersion],
-              device_info_map[VersionInfoConstants::kNameReleaseType],
-              device_info_map[VersionInfoConstants::kNameAbi],
-              short_sha);
+    std::string_view short_sha =
+        GetSHAString(device_info_map[VersionInfoConstants::kNameSha], kShortSha);
+    std::string device_resources_build_string =
+        absl::StrFormat("%s-%s-%s-%s", device_info_map[VersionInfoConstants::kNameVersion],
+                        device_info_map[VersionInfoConstants::kNameReleaseType],
+                        device_info_map[VersionInfoConstants::kNameAbi], short_sha);
 
-    return absl::StrFormat("Device Resources Build: %s\nDevice Resources Build Type: %s\nDevice "
-                           "Resources SHA: %s\n",
-                           device_resources_build_string,
-                           device_info_map[VersionInfoConstants::kNameBuildType],
-                           GetSHAString(device_info_map[VersionInfoConstants::kNameSha], kLongSha));
+    return absl::StrFormat(
+        "Device Resources Build: %s\nDevice Resources Build Type: %s\nDevice "
+        "Resources SHA: %s\n",
+        device_resources_build_string, device_info_map[VersionInfoConstants::kNameBuildType],
+        GetSHAString(device_info_map[VersionInfoConstants::kNameSha], kLongSha));
 }
 
 std::string GetLongVersionString()
@@ -195,8 +184,8 @@ std::string GetLongVersionString()
         ret.ok())
     {
         std::filesystem::path device_resources_version_path = *ret;
-        if (absl::StatusOr<std::string> ret = ReadFileCapped(device_resources_version_path,
-                                                             kMaxCharsDeviceResourcesVersionFile);
+        if (absl::StatusOr<std::string> ret =
+                ReadFileCapped(device_resources_version_path, kMaxCharsDeviceResourcesVersionFile);
             ret.ok())
         {
             summary += "\n" + GetDeviceResourcesVersionInfo(*ret);
@@ -211,19 +200,19 @@ std::string GetLongVersionString()
         std::cerr << ret.status().message() << std::endl;
     }
 
-    std::filesystem::path
-    profiling_sha_path = Dive::DeviceResourcesConstants::kProfilingPluginFolderName;
+    std::filesystem::path profiling_sha_path =
+        Dive::DeviceResourcesConstants::kProfilingPluginFolderName;
     profiling_sha_path /= Dive::DeviceResourcesConstants::kProfilingPluginShaName;
 
     if (auto ret = Dive::ResolveResourcesLocalPath(profiling_sha_path); ret.ok())
     {
         std::filesystem::path profiling_plugin_version_path = *ret;
-        if (absl::StatusOr<std::string> ret = ReadFileCapped(profiling_plugin_version_path,
-                                                             kLongSha);
+        if (absl::StatusOr<std::string> ret =
+                ReadFileCapped(profiling_plugin_version_path, kLongSha);
             ret.ok())
         {
-            std::string profiling_plugin_section = absl::StrFormat("Profiling Plugin SHA: %s\n",
-                                                                   *ret);
+            std::string profiling_plugin_section =
+                absl::StrFormat("Profiling Plugin SHA: %s\n", *ret);
             summary += "\n" + profiling_plugin_section;
         }
     }
@@ -251,8 +240,8 @@ absl::StatusOr<std::string> GetDeviceResourceInfo(std::string_view key)
 
     std::string csv_content;
     {
-        absl::StatusOr<std::string> ret = ReadFileCapped(device_resources_version_path,
-                                                         kMaxCharsDeviceResourcesVersionFile);
+        absl::StatusOr<std::string> ret =
+            ReadFileCapped(device_resources_version_path, kMaxCharsDeviceResourcesVersionFile);
         if (!ret.ok())
         {
             return ret.status();

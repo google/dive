@@ -28,13 +28,13 @@ using NativeLibraryHandle = void*;
 
 class IDynamicLibraryLoader
 {
-public:
+ public:
     virtual ~IDynamicLibraryLoader() = default;
 
     virtual absl::StatusOr<NativeLibraryHandle> Load(const std::string& path) = 0;
 
     virtual absl::StatusOr<void*> GetSymbol(NativeLibraryHandle handle,
-                                            const std::string&  symbolName) = 0;
+                                            const std::string& symbolName) = 0;
 
     virtual absl::Status Free(NativeLibraryHandle handle) = 0;
 

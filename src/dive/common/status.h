@@ -41,10 +41,7 @@ inline void AddStackTrace(absl::Status& status, int skip_count = 0)
     status.SetPayload(kStackTraceKey, absl::Cord(StackTraceString(skip_count + 1)));
 }
 
-inline absl::Status OkStatus()
-{
-    return absl::OkStatus();
-}
+inline absl::Status OkStatus() { return absl::OkStatus(); }
 
 inline absl::Status InvalidArgumentError(std::string_view message)
 {
@@ -142,8 +139,8 @@ inline absl::Status PermissionDeniedError(std::string_view message)
 // all existing payloads (e.g., the stack trace) to the new Status object.
 inline absl::Status StatusWithContext(const absl::Status& status, std::string_view context)
 {
-    absl::Status new_status = absl::Status(status.code(),
-                                           absl::StrCat(context, ": ", status.message()));
+    absl::Status new_status =
+        absl::Status(status.code(), absl::StrCat(context, ": ", status.message()));
     if (auto stack_trace = status.GetPayload(kStackTraceKey); stack_trace.has_value())
     {
         new_status.SetPayload(kStackTraceKey, stack_trace.value());

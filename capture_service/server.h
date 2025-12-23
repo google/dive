@@ -18,6 +18,6 @@ limitations under the License.
 
 namespace Dive
 {
-int  ServerMain();
+int ServerMain();
 void StopServer();
 }  // namespace Dive

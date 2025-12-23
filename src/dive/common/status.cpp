@@ -37,7 +37,7 @@ std::string StackTraceString(int skip_count)
     // skip_count + 1 to ignore this function's own frame
     int depth = absl::GetStackTrace(frames.data(), frames.size(), skip_count + 1);
 
-    std::string                        stack;
+    std::string stack;
     std::array<char, kMaxSymbolLength> buf{};
     for (int i = 0; i < depth; ++i)
     {

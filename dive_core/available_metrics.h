@@ -19,9 +19,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
-#include <string>
-#include <optional>
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace Dive
@@ -41,8 +41,8 @@ Available metrics is in the format of
 
 struct MetricInfo
 {
-    uint32_t    m_metric_id;
-    MetricType  m_metric_type;
+    uint32_t m_metric_id;
+    MetricType m_metric_type;
     std::string m_key;
     std::string m_name;
     std::string m_description;
@@ -50,7 +50,7 @@ struct MetricInfo
 
 class AvailableMetrics
 {
-public:
+ public:
     // Load available metrics from a CSV file
     static std::unique_ptr<AvailableMetrics> LoadFromCsv(const std::filesystem::path& file_path);
 
@@ -63,7 +63,7 @@ public:
     // Get all available metric keys
     std::vector<std::string> GetAllMetricKeys() const;
 
-private:
+ private:
     AvailableMetrics() = default;
     std::map<std::string, MetricInfo> m_metrics;
 };

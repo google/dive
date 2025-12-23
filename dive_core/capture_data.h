@@ -17,6 +17,7 @@
 #pragma once
 
 #include <ostream>
+
 #include "dive_core/common/emulate_pm4.h"
 
 namespace Dive
@@ -24,7 +25,7 @@ namespace Dive
 
 class CaptureData
 {
-public:
+ public:
     enum class LoadResult
     {
         kSuccess,
@@ -35,7 +36,7 @@ public:
     virtual ~CaptureData() = default;
     virtual LoadResult LoadCaptureFile(const std::string& file_name) = 0;
 
-protected:
+ protected:
     std::string m_cur_capture_file;
 };
 
@@ -44,21 +45,21 @@ inline std::ostream& operator<<(std::ostream& os, const CaptureData::LoadResult&
 {
     switch (r)
     {
-    case CaptureData::LoadResult::kSuccess:
-        os << "Success";
-        break;
-    case CaptureData::LoadResult::kFileIoError:
-        os << "File IO Error";
-        break;
-    case CaptureData::LoadResult::kCorruptData:
-        os << "Corrupt Data";
-        break;
-    case CaptureData::LoadResult::kVersionError:
-        os << "Version Error";
-        break;
-    default:
-        os << "Unknown";
-        break;
+        case CaptureData::LoadResult::kSuccess:
+            os << "Success";
+            break;
+        case CaptureData::LoadResult::kFileIoError:
+            os << "File IO Error";
+            break;
+        case CaptureData::LoadResult::kCorruptData:
+            os << "Corrupt Data";
+            break;
+        case CaptureData::LoadResult::kVersionError:
+            os << "Version Error";
+            break;
+        default:
+            os << "Unknown";
+            break;
     }
     return os;
 }

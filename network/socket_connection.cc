@@ -21,18 +21,16 @@ limitations under the License.
 #include <vector>
 
 #include "absl/strings/str_cat.h"
-
 #include "dive/common/status.h"
 
 namespace Network
 {
 
-NetworkInitializer::NetworkInitializer() :
-    m_initialized(false)
+NetworkInitializer::NetworkInitializer() : m_initialized(false)
 {
 #ifdef WIN32
     WSADATA wd;
-    int     res = WSAStartup(MAKEWORD(2, 2), &wd);
+    int res = WSAStartup(MAKEWORD(2, 2), &wd);
     if (res == 0)
     {
         m_initialized = true;
@@ -54,13 +52,10 @@ const NetworkInitializer& NetworkInitializer::Instance()
     return singleton;
 }
 
-bool NetworkInitializer::IsInitialized() const
-{
-    return m_initialized;
-}
+bool NetworkInitializer::IsInitialized() const { return m_initialized; }
 
 absl::StatusOr<std::unique_ptr<SocketConnection>> SocketConnection::Create(
-SocketType initial_socket_value)
+    SocketType initial_socket_value)
 {
     if (!NetworkInitializer::Instance().IsInitialized())
     {
@@ -69,23 +64,19 @@ SocketType initial_socket_value)
     return std::unique_ptr<SocketConnection>(new SocketConnection(initial_socket_value));
 }
 
-SocketConnection::~SocketConnection()
-{
-    Close();
-}
+SocketConnection::~SocketConnection() { Close(); }
 
-SocketConnection::SocketConnection(SocketType initial_socket_value) :
-    m_socket(initial_socket_value),
-    m_is_listening(false),
-    m_accept_timout_ms(kAcceptTimeout)
+SocketConnection::SocketConnection(SocketType initial_socket_value)
+    : m_socket(initial_socket_value), m_is_listening(false), m_accept_timout_ms(kAcceptTimeout)
 {
 }
 
 absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& server_address)
 {
 #ifdef WIN32
-    return Dive::UnimplementedError("BindAndListenOnUnixDomain: This POSIX server method is "
-                                    "not supported/implemented on Windows.");
+    return Dive::UnimplementedError(
+        "BindAndListenOnUnixDomain: This POSIX server method is "
+        "not supported/implemented on Windows.");
 #else
     if (IsOpen())
     {
@@ -95,7 +86,7 @@ absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& serv
     if (m_socket == kInvalidSocketValue)
     {
         return Dive::InternalError(
-        absl::StrCat("BindAndListenOnUnixDomain: socket() creation failed: ", strerror(errno)));
+            absl::StrCat("BindAndListenOnUnixDomain: socket() creation failed: ", strerror(errno)));
     }
 
     /// Bind and listen on a Unix (Local) Domain with abstract namespace.
@@ -105,13 +96,12 @@ absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& serv
     addr.sun_path[0] = '\0';
     strncpy(addr.sun_path + 1, server_address.c_str(), server_address.size() + 1);
 
-    int ret = ::bind(m_socket,
-                     (sockaddr*)&addr,
+    int ret = ::bind(m_socket, (sockaddr*)&addr,
                      (socklen_t)(offsetof(sockaddr_un, sun_path) + 1 + server_address.size()));
     if (ret < 0)
     {
         auto status = Dive::InternalError(
-        absl::StrCat("BindAndListenOnUnixDomain: bind() failed: ", strerror(errno)));
+            absl::StrCat("BindAndListenOnUnixDomain: bind() failed: ", strerror(errno)));
         Close();
         return status;
     }
@@ -119,7 +109,7 @@ absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& serv
     if (ret < 0)
     {
         auto status = Dive::InternalError(
-        absl::StrCat("BindAndListenOnUnixDomain: listen() failed: ", strerror(errno)));
+            absl::StrCat("BindAndListenOnUnixDomain: listen() failed: ", strerror(errno)));
         Close();
         return status;
     }
@@ -132,7 +122,7 @@ absl::StatusOr<std::unique_ptr<SocketConnection>> SocketConnection::Accept()
 {
 #ifdef WIN32
     return Dive::UnimplementedError(
-    "Accept: This POSIX server method is not supported/implemented on Windows.");
+        "Accept: This POSIX server method is not supported/implemented on Windows.");
 #else
     if (!IsOpen() || !m_is_listening)
     {
@@ -164,7 +154,7 @@ absl::StatusOr<std::unique_ptr<SocketConnection>> SocketConnection::Accept()
             return Dive::UnavailableError("Accept: accept() would block.");
         }
         return Dive::InternalError(
-        absl::StrCat("Accept: accept() system call failed: ", strerror(errno)));
+            absl::StrCat("Accept: accept() system call failed: ", strerror(errno)));
     }
     return std::unique_ptr<SocketConnection>(new SocketConnection(new_socket));
 #endif
@@ -179,31 +169,31 @@ absl::Status SocketConnection::Connect(const std::string& host, int port)
     addrinfo hints = {};
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
-    addrinfo*   server_info = nullptr;
+    addrinfo* server_info = nullptr;
     std::string port_str = std::to_string(port);
 
     int ret = getaddrinfo(host.c_str(), port_str.c_str(), &hints, &server_info);
     if (ret)
     {
         return Dive::UnavailableError(
-        absl::StrCat("Connect: getaddrinfo failed: ", gai_strerror(ret)));
+            absl::StrCat("Connect: getaddrinfo failed: ", gai_strerror(ret)));
     }
 
     std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> si_guard(server_info, freeaddrinfo);
-    absl::Status                                       last_attempt_status;
+    absl::Status last_attempt_status;
     for (addrinfo* p = server_info; p != nullptr; p = p->ai_next)
     {
         m_socket = (SocketType)::socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (m_socket == kInvalidSocketValue)
         {
             last_attempt_status = Dive::InternalError(
-            absl::StrCat("Connect: socket() creation failed: ", strerror(errno)));
+                absl::StrCat("Connect: socket() creation failed: ", strerror(errno)));
             continue;
         }
         if (::connect(m_socket, p->ai_addr, (socklen_t)p->ai_addrlen) == -1)
         {
             last_attempt_status = Dive::UnavailableError(
-            absl::StrCat("Connect: connect() system call failed: ", strerror(errno)));
+                absl::StrCat("Connect: connect() system call failed: ", strerror(errno)));
             Close();
             continue;
         }
@@ -223,7 +213,7 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
     if (!IsOpen() || m_is_listening)
     {
         return Dive::FailedPreconditionError(
-        "Send: Socket is invalid or operation not supported on a listening socket.");
+            "Send: Socket is invalid or operation not supported on a listening socket.");
     }
     if (size == 0)
     {
@@ -235,10 +225,8 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
     {
         ssize_t sent;
 #ifdef WIN32
-        sent = ::send(static_cast<SOCKET>(m_socket),
-                      (const char*)data + total_sent,
-                      (int)(size - total_sent),
-                      0);
+        sent = ::send(static_cast<SOCKET>(m_socket), (const char*)data + total_sent,
+                      (int)(size - total_sent), 0);
 #else
         sent = ::send(m_socket, data + total_sent, size - total_sent, MSG_NOSIGNAL);
 #endif
@@ -259,7 +247,7 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
             else
             {
                 return Dive::InternalError(
-                absl::StrCat("Send: send() failed with WinSock error: ", e));
+                    absl::StrCat("Send: send() failed with WinSock error: ", e));
             }
 #else
             e = errno;
@@ -295,7 +283,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
     if (!IsOpen() || m_is_listening)
     {
         return Dive::FailedPreconditionError(
-        "Recv: Socket is invalid or operation not supported on a listening socket.");
+            "Recv: Socket is invalid or operation not supported on a listening socket.");
     }
     if (size == 0)
     {
@@ -308,7 +296,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
         // Wait for data to be available using poll/select with timeout.
 #ifdef WIN32
         TIMEVAL tv;
-        fd_set  read_fds;
+        fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(static_cast<SOCKET>(m_socket), &read_fds);
 
@@ -321,7 +309,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
         if (activity == SOCKET_ERROR)
         {
             return Dive::InternalError(
-            absl::StrCat("Recv: select() failed with WinSock error: ", WSAGetLastError()));
+                absl::StrCat("Recv: select() failed with WinSock error: ", WSAGetLastError()));
         }
         if (activity == 0)
         {
@@ -351,10 +339,9 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
         // Data is available to perform the actual recv.
         ssize_t received;
 #ifdef WIN32
-        received = ::recv(static_cast<SOCKET>(m_socket),
-                          reinterpret_cast<char*>(data) + total_received,
-                          static_cast<int>(size - total_received),
-                          0);
+        received =
+            ::recv(static_cast<SOCKET>(m_socket), reinterpret_cast<char*>(data) + total_received,
+                   static_cast<int>(size - total_received), 0);
 #else
         received = ::recv(m_socket, data + total_received, size - total_received, 0);
 #endif
@@ -375,7 +362,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
             else
             {
                 return Dive::InternalError(
-                absl::StrCat("Recv: recv() failed with WinSock error: ", wsa_err));
+                    absl::StrCat("Recv: recv() failed with WinSock error: ", wsa_err));
             }
 #else
             if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -390,7 +377,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
             else
             {
                 return Dive::InternalError(
-                absl::StrCat("Recv: recv() system call failed: ", strerror(errno)));
+                    absl::StrCat("Recv: recv() system call failed: ", strerror(errno)));
             }
 #endif
         }
@@ -415,7 +402,7 @@ absl::Status SocketConnection::SendString(const std::string& s)
 absl::StatusOr<std::string> SocketConnection::ReceiveString()
 {
     std::string received_string;
-    char        c = 0;
+    char c = 0;
     while (true)
     {
         absl::StatusOr<size_t> ret = Recv(reinterpret_cast<uint8_t*>(&c), 1);
@@ -424,7 +411,7 @@ absl::StatusOr<std::string> SocketConnection::ReceiveString()
             if (absl::IsOutOfRange(ret.status()))
             {
                 return Dive::DataLossError(
-                "Connection closed before a null terminator was received.");
+                    "Connection closed before a null terminator was received.");
             }
             return ret.status();
         }
@@ -448,39 +435,37 @@ absl::Status SocketConnection::SendFile(const std::string& file_path)
     {
         file_stream.close();
         return Dive::InternalError(
-        absl::StrCat("SendFile: Failed to determine size of file '", file_path, "'"));
+            absl::StrCat("SendFile: Failed to determine size of file '", file_path, "'"));
     }
 
     file_stream.seekg(0);
-    const size_t      CHUNK_SIZE = 4096;
+    const size_t CHUNK_SIZE = 4096;
     std::vector<char> buffer(CHUNK_SIZE);
-    std::streamsize   total_sent = 0;
+    std::streamsize total_sent = 0;
     while (total_sent < file_size)
     {
-        std::streamsize to_read = std::min(static_cast<std::streamsize>(CHUNK_SIZE),
-                                           file_size - total_sent);
+        std::streamsize to_read =
+            std::min(static_cast<std::streamsize>(CHUNK_SIZE), file_size - total_sent);
         if (!file_stream.read(buffer.data(), to_read))
         {
             file_stream.close();
             return Dive::InternalError(
-            absl::StrCat("SendFile: Failed to read chunk from file '", file_path, "'"));
+                absl::StrCat("SendFile: Failed to read chunk from file '", file_path, "'"));
         }
         size_t current_read = static_cast<size_t>(file_stream.gcount());
         if (current_read == 0)
         {
             file_stream.close();
-            return Dive::DataLossError(absl::StrCat("SendFile: File size mismatch. Read 0 bytes "
-                                                    "before reaching expected end of file '",
-                                                    file_path,
-                                                    "'"));
+            return Dive::DataLossError(
+                absl::StrCat("SendFile: File size mismatch. Read 0 bytes "
+                             "before reaching expected end of file '",
+                             file_path, "'"));
         }
         absl::Status ret = this->Send(reinterpret_cast<uint8_t*>(buffer.data()), current_read);
         if (!ret.ok())
         {
-            return Dive::StatusWithContext(ret,
-                                           absl::StrCat("SendFile: Failed to send chunk for file '",
-                                                        file_path,
-                                                        "'"));
+            return Dive::StatusWithContext(
+                ret, absl::StrCat("SendFile: Failed to send chunk for file '", file_path, "'"));
         }
         total_sent += static_cast<std::streamsize>(current_read);
     }
@@ -488,38 +473,35 @@ absl::Status SocketConnection::SendFile(const std::string& file_path)
     return Dive::OkStatus();
 }
 
-absl::Status SocketConnection::ReceiveFile(const std::string&          file_path,
-                                           size_t                      file_size,
+absl::Status SocketConnection::ReceiveFile(const std::string& file_path, size_t file_size,
                                            std::function<void(size_t)> progress_callback)
 {
     std::ofstream file_stream(file_path, std::ios::binary | std::ios::trunc);
     if (!file_stream)
     {
         return Dive::PermissionDeniedError(
-        absl::StrCat("ReceiveFile: Failed to open file '", file_path, "' for writing."));
+            absl::StrCat("ReceiveFile: Failed to open file '", file_path, "' for writing."));
     }
-    const size_t         CHUNK_SIZE = 4096;
+    const size_t CHUNK_SIZE = 4096;
     std::vector<uint8_t> buffer(CHUNK_SIZE);
-    size_t               total_received = 0;
+    size_t total_received = 0;
     while (total_received < file_size)
     {
         size_t to_receive = std::min(CHUNK_SIZE, file_size - total_received);
-        auto   ret = this->Recv(buffer.data(), to_receive);
+        auto ret = this->Recv(buffer.data(), to_receive);
         if (!ret.ok())
         {
             file_stream.close();
-            return Dive::
-            StatusWithContext(ret.status(),
-                              absl::StrCat("ReceiveFile: Failed to receive chunk for '",
-                                           file_path,
-                                           "'"));
+            return Dive::StatusWithContext(
+                ret.status(),
+                absl::StrCat("ReceiveFile: Failed to receive chunk for '", file_path, "'"));
         }
         size_t current_received = ret.value();
         if (!file_stream.write(reinterpret_cast<char*>(buffer.data()), current_received))
         {
             file_stream.close();
             return Dive::InternalError(
-            absl::StrCat("ReceiveFile: Failed to write to file '", file_path, "'"));
+                absl::StrCat("ReceiveFile: Failed to write to file '", file_path, "'"));
         }
         total_received += current_received;
         if (progress_callback)
@@ -547,9 +529,6 @@ void SocketConnection::Close()
     }
 }
 
-bool SocketConnection::IsOpen() const
-{
-    return m_socket != kInvalidSocketValue;
-}
+bool SocketConnection::IsOpen() const { return m_socket != kInvalidSocketValue; }
 
 }  // namespace Network

@@ -14,9 +14,11 @@
  limitations under the License.
 */
 #include "settings.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QSettings>
+
 #include "dive_core/common.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -50,8 +52,7 @@ void Settings::WriteRecentFiles(QStringList recent_files)
     QMutableStringListIterator i(recent_files);
     while (i.hasNext())
     {
-        if (!QFile::exists(i.next()))
-            i.remove();
+        if (!QFile::exists(i.next())) i.remove();
     }
 
     QSettings settings;
@@ -87,7 +88,7 @@ void Settings::WriteCaptureDelay(uint32_t capture_delay)
 //--------------------------------------------------------------------------------------------------
 Settings::DisplayUnit Settings::ReadRulerDisplayUnit()
 {
-    QSettings   settings;
+    QSettings settings;
     DisplayUnit display_unit = (DisplayUnit)settings.value("rulerDisplayUnit", 0).toInt();
     DIVE_ASSERT(display_unit == kCycle || display_unit == kMs || display_unit == kUs ||
                 display_unit == kNs);
@@ -103,7 +104,7 @@ void Settings::WriteRulerDisplayUnit(DisplayUnit display_unit)
 //--------------------------------------------------------------------------------------------------
 Settings::DisplayUnit Settings::ReadEventListDisplayUnit()
 {
-    QSettings   settings;
+    QSettings settings;
     DisplayUnit display_unit = (DisplayUnit)settings.value("eventListDisplayUnit", 0).toInt();
     DIVE_ASSERT(display_unit == kCycle || display_unit == kMs || display_unit == kUs ||
                 display_unit == kNs);

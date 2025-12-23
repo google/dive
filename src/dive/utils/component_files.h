@@ -42,8 +42,7 @@ struct ComponentFilePaths
 // Generates expected location of the host files, given the location and stem of the local GFXR
 // file
 absl::StatusOr<Dive::ComponentFilePaths> GetComponentFilesHostPaths(
-const std::filesystem::path &parent_dir,
-const std::string           &gfxr_stem);
+    const std::filesystem::path &parent_dir, const std::string &gfxr_stem);
 
 bool IsGfxrFile(std::filesystem::path file);
 bool IsPngFile(std::filesystem::path file);

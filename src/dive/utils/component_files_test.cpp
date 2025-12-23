@@ -53,7 +53,7 @@ TEST(ValidateGfxrReplaySettingsTest, EmptyGfxrStemFail)
 TEST(ValidateGfxrReplaySettingsTest, EmptyParentDirFail)
 {
     std::filesystem::path parent_dir = "";
-    std::string           gfxr_stem = "PLACEHOLDER_trim_trigger_ID";
+    std::string gfxr_stem = "PLACEHOLDER_trim_trigger_ID";
 
     EXPECT_THAT(GetComponentFilesHostPaths(parent_dir, gfxr_stem).status(),
                 StatusIs(absl::StatusCode::kFailedPrecondition, "parent_dir cannot be empty"));
@@ -68,8 +68,8 @@ TEST(ValidateGfxrReplaySettingsTest, BasicPass)
     ComponentFilePaths expected_res = {};
     expected_res.gfxr = parent_dir / "PLACEHOLDER_trim_trigger_ID.gfxr";
     expected_res.gfxa = parent_dir / "PLACEHOLDER_asset_file_ID.gfxa";
-    expected_res.perf_counter_csv = parent_dir /
-                                    "PLACEHOLDER_trim_trigger_ID_profiling_metrics.csv";
+    expected_res.perf_counter_csv =
+        parent_dir / "PLACEHOLDER_trim_trigger_ID_profiling_metrics.csv";
     expected_res.gpu_timing_csv = parent_dir / "PLACEHOLDER_trim_trigger_ID_gpu_time.csv";
     expected_res.pm4_rd = parent_dir / "PLACEHOLDER_trim_trigger_ID.rd";
     expected_res.screenshot_png = parent_dir / "PLACEHOLDER_trim_trigger_ID.png";
@@ -89,8 +89,8 @@ TEST(ValidateGfxrReplaySettingsTest, GfxrSubstringInParentPathPass)
     ComponentFilePaths expected_res = {};
     expected_res.gfxr = parent_dir / "PLACEHOLDER_trim_trigger_ID.gfxr";
     expected_res.gfxa = parent_dir / "PLACEHOLDER_asset_file_ID.gfxa";
-    expected_res.perf_counter_csv = parent_dir /
-                                    "PLACEHOLDER_trim_trigger_ID_profiling_metrics.csv";
+    expected_res.perf_counter_csv =
+        parent_dir / "PLACEHOLDER_trim_trigger_ID_profiling_metrics.csv";
     expected_res.gpu_timing_csv = parent_dir / "PLACEHOLDER_trim_trigger_ID_gpu_time.csv";
     expected_res.pm4_rd = parent_dir / "PLACEHOLDER_trim_trigger_ID.rd";
     expected_res.screenshot_png = parent_dir / "PLACEHOLDER_trim_trigger_ID.png";
@@ -109,8 +109,8 @@ TEST(ValidateGfxrReplaySettingsTest, DotinGfxrStemPass)
     ComponentFilePaths expected_res = {};
     expected_res.gfxr = parent_dir / "PLACEHOLDER._trim_trigger_ID.test.gfxr";
     expected_res.gfxa = parent_dir / "PLACEHOLDER._asset_file_ID.test.gfxa";
-    expected_res.perf_counter_csv = parent_dir /
-                                    "PLACEHOLDER._trim_trigger_ID.test_profiling_metrics.csv";
+    expected_res.perf_counter_csv =
+        parent_dir / "PLACEHOLDER._trim_trigger_ID.test_profiling_metrics.csv";
     expected_res.gpu_timing_csv = parent_dir / "PLACEHOLDER._trim_trigger_ID.test_gpu_time.csv";
     expected_res.pm4_rd = parent_dir / "PLACEHOLDER._trim_trigger_ID.test.rd";
     expected_res.screenshot_png = parent_dir / "PLACEHOLDER._trim_trigger_ID.test.png";

@@ -20,12 +20,9 @@
 
 #include "ui/gpu_timing_model.h"
 
-GpuTimingTabView::GpuTimingTabView(GpuTimingModel               &gpu_timing_model,
-                                   const Dive::CommandHierarchy &command_hierarchy,
-                                   QWidget                      *parent) :
-    QWidget(parent),
-    m_model(gpu_timing_model),
-    m_command_hierarchy(command_hierarchy)
+GpuTimingTabView::GpuTimingTabView(GpuTimingModel &gpu_timing_model,
+                                   const Dive::CommandHierarchy &command_hierarchy, QWidget *parent)
+    : QWidget(parent), m_model(gpu_timing_model), m_command_hierarchy(command_hierarchy)
 {
     m_table_view = new QTableView(this);
     m_table_view->verticalHeader()->hide();
@@ -35,26 +32,19 @@ GpuTimingTabView::GpuTimingTabView(GpuTimingModel               &gpu_timing_mode
     m_main_layout = new QVBoxLayout(this);
     m_main_layout->addWidget(m_table_view);
 
-    QObject::connect(&m_model,
-                     &QAbstractItemModel::modelReset,
-                     this,
+    QObject::connect(&m_model, &QAbstractItemModel::modelReset, this,
                      &GpuTimingTabView::OnModelReset);
 
-    QObject::connect(m_table_view->selectionModel(),
-                     &QItemSelectionModel::currentChanged,
-                     this,
+    QObject::connect(m_table_view->selectionModel(), &QItemSelectionModel::currentChanged, this,
                      &GpuTimingTabView::OnSelectionChanged);
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::OnModelReset()
-{
-    ResizeColumns();
-}
+void GpuTimingTabView::OnModelReset() { ResizeColumns(); }
 
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command_hierarchy_model,
-                                               const QModelIndex        &parent_index)
+                                               const QModelIndex &parent_index)
 {
     // Initial call clears the map, and subsequent recursed calls repopulate it
     if (!parent_index.isValid())
@@ -70,9 +60,9 @@ void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command
         {
             continue;
         }
-        uint64_t       node_index = index.internalId();
+        uint64_t node_index = index.internalId();
         Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
-        std::string    node_desc = m_command_hierarchy.GetNodeDesc(node_index);
+        std::string node_desc = m_command_hierarchy.GetNodeDesc(node_index);
         CollectTimingIndex(node_type, node_desc, index);
 
         // Recurse into valid children
@@ -81,8 +71,7 @@ void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
-                                          const std::string &node_desc,
+void GpuTimingTabView::CollectTimingIndex(Dive::NodeType node_type, const std::string &node_desc,
                                           const QModelIndex &model_index)
 {
     if (!model_index.isValid())
@@ -93,17 +82,17 @@ void GpuTimingTabView::CollectTimingIndex(Dive::NodeType     node_type,
 
     switch (node_type)
     {
-    case Dive::NodeType::kGfxrRootFrameNode:  // AvailableGpuTiming::ObjectType::kFrame
-    case Dive::NodeType::
-    kGfxrVulkanBeginCommandBufferNode:  // AvailableGpuTiming::ObjectType::kCommandBuffer
-    case Dive::NodeType::
-    kGfxrVulkanBeginRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
-    {
-        uint64_t index_address = model_index.internalId();
-        m_timed_event_indices.push_back(index_address);
-    }
-    default:
-        return;
+        case Dive::NodeType::kGfxrRootFrameNode:  // AvailableGpuTiming::ObjectType::kFrame
+        case Dive::NodeType::
+            kGfxrVulkanBeginCommandBufferNode:  // AvailableGpuTiming::ObjectType::kCommandBuffer
+        case Dive::NodeType::
+            kGfxrVulkanBeginRenderPassCommandNode:  // AvailableGpuTiming::ObjectType::kRenderPass
+        {
+            uint64_t index_address = model_index.internalId();
+            m_timed_event_indices.push_back(index_address);
+        }
+        default:
+            return;
     }
 }
 
@@ -129,9 +118,8 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 
     uint64_t index_address = model_index.internalId();
 
-    const auto it = std::find(m_timed_event_indices.cbegin(),
-                              m_timed_event_indices.cend(),
-                              index_address);
+    const auto it =
+        std::find(m_timed_event_indices.cbegin(), m_timed_event_indices.cend(), index_address);
     if (it == m_timed_event_indices.cend())
     {
         return -1;
@@ -152,15 +140,15 @@ void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
     }
 
     QItemSelectionModel *selection_model = m_table_view->selectionModel();
-    QSignalBlocker       blocker(selection_model);
+    QSignalBlocker blocker(selection_model);
     // Verify that the number of rows in the model is consistent with the rows of
     // m_timed_event_indices
     if (row_count != static_cast<int>(m_timed_event_indices.size()))
     {
         qDebug()
-        << "GpuTimingTabView::OnEventSelectionChanged() ERROR: inconsistent model row count ("
-        << row_count << ") and count of collected indices of timed Vulkan events: "
-        << m_timed_event_indices.size();
+            << "GpuTimingTabView::OnEventSelectionChanged() ERROR: inconsistent model row count ("
+            << row_count << ") and count of collected indices of timed Vulkan events: "
+            << m_timed_event_indices.size();
     }
 
     int row = EventIndexToRow(model_index);

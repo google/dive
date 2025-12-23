@@ -13,15 +13,12 @@
 
 #include "gpu_timing_model.h"
 
-#include <filesystem>
 #include <QDebug>
 #include <QString>
+#include <filesystem>
 #include <string>
 
-GpuTimingModel::GpuTimingModel(QObject *parent) :
-    QAbstractItemModel(parent)
-{
-}
+GpuTimingModel::GpuTimingModel(QObject *parent) : QAbstractItemModel(parent) {}
 
 //--------------------------------------------------------------------------------------------------
 void GpuTimingModel::OnGpuTimingResultsGenerated(const QString &file_path)
@@ -62,10 +59,7 @@ QModelIndex GpuTimingModel::index(int row, int column, const QModelIndex &parent
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex GpuTimingModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex GpuTimingModel::parent(const QModelIndex &index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int GpuTimingModel::rowCount(const QModelIndex &parent) const

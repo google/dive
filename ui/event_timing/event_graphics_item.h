@@ -17,13 +17,14 @@
 
 #pragma once
 #include <QGraphicsItem>
+
 #include "dive_core/common/gpudefs.h"
 
 #define EVENT_HEIGHT 30
 
 class EventGraphicsItem : public QGraphicsItem
 {
-public:
+ public:
     EventGraphicsItem();
 
     // Set width of item
@@ -46,11 +47,11 @@ public:
     {
         const uint32_t kStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
 
-        QColor stage_to_color[kStageCount] = { QColor(0, 150, 0),      // kShaderStageCs
-                                               QColor(0, 215, 215),    // kShaderStageGs
-                                               QColor(160, 160, 160),  // kShaderStageHs
-                                               QColor(110, 110, 255),  // kShaderStagePs
-                                               QColor(255, 70, 70) };  // kShaderStageVs
+        QColor stage_to_color[kStageCount] = {QColor(0, 150, 0),      // kShaderStageCs
+                                              QColor(0, 215, 215),    // kShaderStageGs
+                                              QColor(160, 160, 160),  // kShaderStageHs
+                                              QColor(110, 110, 255),  // kShaderStagePs
+                                              QColor(255, 70, 70)};   // kShaderStageVs
         return stage_to_color[(uint32_t)shader_stage];
     }
 
@@ -59,31 +60,28 @@ public:
     {
         const uint32_t kCtxCount = 7;
 
-        QColor hw_ctx_color[kCtxCount] = { QColor(0, 215, 215),   QColor(160, 160, 160),
-                                           QColor(110, 110, 255), QColor(255, 100, 150),
-                                           QColor(255, 0, 0),     QColor(0, 100, 100),
-                                           QColor(0, 150, 0) };
+        QColor hw_ctx_color[kCtxCount] = {QColor(0, 215, 215),   QColor(160, 160, 160),
+                                          QColor(110, 110, 255), QColor(255, 100, 150),
+                                          QColor(255, 0, 0),     QColor(0, 100, 100),
+                                          QColor(0, 150, 0)};
         return ctx_index >= kCtxCount ? QColor(255, 255, 255) : hw_ctx_color[(uint32_t)ctx_index];
     }
 
     // QGraphicsItem overrides
-    virtual QRectF       boundingRect() const Q_DECL_OVERRIDE;
+    virtual QRectF boundingRect() const Q_DECL_OVERRIDE;
     virtual QPainterPath shape() const Q_DECL_OVERRIDE;
-    virtual void         paint(QPainter                       *painter,
-                               const QStyleOptionGraphicsItem *option,
-                               QWidget                        *widget) Q_DECL_OVERRIDE;
+    virtual void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+                       QWidget *widget) Q_DECL_OVERRIDE;
 
-private:
+ private:
     void DrawEvents(QPainter *painter);
-    void CalcRectCoord(uint64_t  start_cycle,
-                       uint64_t  end_cycle,
-                       uint64_t *start_x,
+    void CalcRectCoord(uint64_t start_cycle, uint64_t end_cycle, uint64_t *start_x,
                        uint64_t *end_x);
 
-    int64_t  m_visible_start_x = 0;
-    int64_t  m_visible_start_y = 0;
-    int64_t  m_visible_width = 0;
-    int64_t  m_visible_height = 0;
+    int64_t m_visible_start_x = 0;
+    int64_t m_visible_start_y = 0;
+    int64_t m_visible_width = 0;
+    int64_t m_visible_height = 0;
     uint64_t m_width = 0;
     uint64_t m_height = 0;
     uint32_t m_color_by_index = 0;

@@ -12,10 +12,11 @@
 */
 
 #include "perf_counter_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
+
 #include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
 #include <optional>
 
 #include "dive_core/available_metrics.h"
@@ -31,16 +32,15 @@ struct FixedHeader
     };
 };
 
-PerfCounterModel::PerfCounterModel(QObject *parent) :
-    QAbstractItemModel(parent)
+PerfCounterModel::PerfCounterModel(QObject *parent) : QAbstractItemModel(parent)
 {
     m_search_iterator = m_search_results.cbegin();
 }
 
 //--------------------------------------------------------------------------------------------------
 void PerfCounterModel::OnPerfCounterResultsGenerated(
-const std::filesystem::path                                        &file_path,
-std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics)
+    const std::filesystem::path &file_path,
+    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics)
 {
     emit beginResetModel();
 
@@ -56,8 +56,8 @@ std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_me
     }
 
     auto perf_metrics_data = Dive::PerfMetricsData::LoadFromCsv(file_path, *available_metrics);
-    m_perf_metrics_data_provider = Dive::PerfMetricsDataProvider::Create(
-    std::move(perf_metrics_data));
+    m_perf_metrics_data_provider =
+        Dive::PerfMetricsDataProvider::Create(std::move(perf_metrics_data));
     m_perf_metrics_data_provider->Analyze();
     LoadData();
     emit endResetModel();
@@ -99,10 +99,7 @@ QModelIndex PerfCounterModel::index(int row, int column, const QModelIndex &pare
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex PerfCounterModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex PerfCounterModel::parent(const QModelIndex &index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int PerfCounterModel::rowCount(const QModelIndex &parent) const
@@ -156,12 +153,12 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
     {
         switch (col)
         {
-        case FixedHeader::kDrawID:
-            return record.m_draw_id;
-        case FixedHeader::kLRZState:
-            return record.m_lrz_state;
-        default:
-            return QVariant();
+            case FixedHeader::kDrawID:
+                return record.m_draw_id;
+            case FixedHeader::kLRZState:
+                return record.m_lrz_state;
+            default:
+                return QVariant();
         }
     }
 
@@ -271,10 +268,7 @@ int PerfCounterModel::GetCurrentMatchIndex() const
 }
 
 //--------------------------------------------------------------------------------------------------
-int PerfCounterModel::GetTotalMatches() const
-{
-    return m_search_results.size();
-}
+int PerfCounterModel::GetTotalMatches() const { return m_search_results.size(); }
 
 //--------------------------------------------------------------------------------------------------
 void PerfCounterModel::ClearSearchResults()
@@ -284,10 +278,7 @@ void PerfCounterModel::ClearSearchResults()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::ResetSearchIterator()
-{
-    m_search_iterator = m_search_results.cbegin();
-}
+void PerfCounterModel::ResetSearchIterator() { m_search_iterator = m_search_results.cbegin(); }
 
 //--------------------------------------------------------------------------------------------------
 void PerfCounterModel::SetIteratorToNearest(const QModelIndex &current_index)
@@ -329,7 +320,7 @@ std::optional<uint64_t> PerfCounterModel::GetDrawIndexFromRow(int row) const
         return std::nullopt;
     }
     return m_perf_metrics_data_provider->GetDrawIndexFromComputedRecordIndex(
-    static_cast<uint64_t>(row));
+        static_cast<uint64_t>(row));
 }
 
 std::optional<int> PerfCounterModel::GetRowFromDrawIndex(uint64_t draw_index) const

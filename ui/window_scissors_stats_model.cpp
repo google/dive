@@ -12,13 +12,13 @@
 */
 
 #include "window_scissors_stats_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
-#include <QDebug>
 
-WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) :
-    QAbstractItemModel(parent)
+#include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
+
+WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
 
@@ -99,29 +99,28 @@ QVariant WindowScissorsStatsModel::data(const QModelIndex &index, int role) cons
 
     switch (col)
     {
-    case Dive::kWindowScissors:
-        return QString::number(row);
-    case Dive::kWindowScissors_tl_x:
-        return QString::number(record.m_tl_x);
-    case Dive::kWindowScissors_br_x:
-        return QString::number(record.m_br_x);
-    case Dive::kWindowScissors_tl_y:
-        return QString::number(record.m_tl_y);
-    case Dive::kWindowScissors_br_y:
-        return QString::number(record.m_br_y);
-    case Dive::kWindowScissors_Width:
-        return QString::number(record.m_br_x - record.m_tl_x + 1);
-    case Dive::kWindowScissors_Height:
-        return QString::number(record.m_br_y - record.m_tl_y + 1);
-    default:
-        return QVariant();
+        case Dive::kWindowScissors:
+            return QString::number(row);
+        case Dive::kWindowScissors_tl_x:
+            return QString::number(record.m_tl_x);
+        case Dive::kWindowScissors_br_x:
+            return QString::number(record.m_br_x);
+        case Dive::kWindowScissors_tl_y:
+            return QString::number(record.m_tl_y);
+        case Dive::kWindowScissors_br_y:
+            return QString::number(record.m_br_y);
+        case Dive::kWindowScissors_Width:
+            return QString::number(record.m_br_x - record.m_tl_x + 1);
+        case Dive::kWindowScissors_Height:
+            return QString::number(record.m_br_y - record.m_tl_y + 1);
+        default:
+            return QVariant();
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant WindowScissorsStatsModel::headerData(int             section,
-                                              Qt::Orientation orientation,
-                                              int             role) const
+QVariant WindowScissorsStatsModel::headerData(int section, Qt::Orientation orientation,
+                                              int role) const
 {
     if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
     {

@@ -27,7 +27,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 class DivePM4Capture
 {
-public:
+ public:
     using CaptureFunc = void (*)();
 
     static DivePM4Capture& GetInstance()
@@ -45,11 +45,11 @@ public:
     bool TryStopCapture();
     bool IsCapturing() const { return m_is_capturing; }
 
-private:
+ private:
     DivePM4Capture();
 
-    bool        m_is_initialized = false;
-    bool        m_is_capturing = false;
+    bool m_is_initialized = false;
+    bool m_is_capturing = false;
     CaptureFunc m_pm4_start_func = nullptr;
     CaptureFunc m_pm4_stop_func = nullptr;
 };

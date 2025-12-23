@@ -15,6 +15,7 @@
 */
 #pragma once
 #include <stdint.h>
+
 #include <QObject>
 #include <functional>
 
@@ -31,7 +32,7 @@ class HoverHelp : public QObject
 {
     Q_OBJECT
 
-public:
+ public:
     enum class Item
     {
         kNone,
@@ -105,18 +106,14 @@ public:
     };
 
     // Set current item. Allows additional parameter(s) that can be used for certain items
-    void SetCurItem(Item        item,
-                    uint32_t    param1 = UINT32_MAX,
-                    uint32_t    param2 = UINT32_MAX,
-                    uint32_t    param3 = UINT32_MAX,
-                    const char* custom_string = nullptr);
+    void SetCurItem(Item item, uint32_t param1 = UINT32_MAX, uint32_t param2 = UINT32_MAX,
+                    uint32_t param3 = UINT32_MAX, const char* custom_string = nullptr);
 
     void SetCommandHierarchyNodeItem(const Dive::CommandHierarchy& command_hierarchy,
-                                     uint32_t                      param1);
+                                     uint32_t param1);
 
     // Sync nodes strings are a bit more complicated and are thus done in their own function
-    std::string GetSyncNodeString(uint32_t param1 = UINT32_MAX,
-                                  uint32_t param2 = UINT32_MAX,
+    std::string GetSyncNodeString(uint32_t param1 = UINT32_MAX, uint32_t param2 = UINT32_MAX,
                                   uint32_t param3 = UINT32_MAX);
 
     void SetEventNameFn(std::function<std::string(uint32_t)> event_name_fn)
@@ -149,13 +146,13 @@ public:
     /* Static access method. */
     static HoverHelp* Get();
 
-private:
+ private:
     HoverHelp();
 
     static HoverHelp* m_instance;
 
-    Item        m_prev_item = Item::kNone;
-    uint32_t    m_prev_param1 = UINT32_MAX, m_prev_param2 = UINT32_MAX, m_prev_param3 = UINT32_MAX;
+    Item m_prev_item = Item::kNone;
+    uint32_t m_prev_param1 = UINT32_MAX, m_prev_param2 = UINT32_MAX, m_prev_param3 = UINT32_MAX;
     std::string m_prev_custom_string;
 
     std::function<std::string(uint32_t)> m_event_name_fn;
@@ -166,17 +163,11 @@ private:
 
     Dive::DataCore* m_data_core = nullptr;
 
-signals:
+ signals:
     void CurrStringChanged(const QString&);
-public slots:
-    void OnEnter(Item        item,
-                 uint32_t    param1 = UINT32_MAX,
-                 uint32_t    param2 = UINT32_MAX,
-                 uint32_t    param3 = UINT32_MAX,
-                 const char* custom_string = nullptr);
-    void OnExit(Item        item,
-                uint32_t    param1 = UINT32_MAX,
-                uint32_t    param2 = UINT32_MAX,
-                uint32_t    param3 = UINT32_MAX,
-                const char* custom_string = nullptr);
+ public slots:
+    void OnEnter(Item item, uint32_t param1 = UINT32_MAX, uint32_t param2 = UINT32_MAX,
+                 uint32_t param3 = UINT32_MAX, const char* custom_string = nullptr);
+    void OnExit(Item item, uint32_t param1 = UINT32_MAX, uint32_t param2 = UINT32_MAX,
+                uint32_t param3 = UINT32_MAX, const char* custom_string = nullptr);
 };

@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "dive_block_data.h"
+
 #include <fstream>
 #include <memory>
-
-#include "dive_block_data.h"
 
 #include "util/logging.h"
 
@@ -44,10 +44,7 @@ bool TestBlockVisitor::Visit(const DiveModificationBlock& block)
     return true;
 }
 
-std::vector<std::string> TestBlockVisitor::GetTraversedPathString()
-{
-    return traversed_;
-}
+std::vector<std::string> TestBlockVisitor::GetTraversedPathString() { return traversed_; }
 
 bool WriterBlockVisitor::Visit(const DiveOriginalBlock& block)
 {
@@ -102,8 +99,7 @@ bool DiveBlockData::AddOriginalBlock(size_t index, uint64_t offset)
 
     if (index != original_blocks_map_.size())
     {
-        GFXRECON_LOG_ERROR("Unexpected block id mismatch with index: %d, expected index: %d",
-                           index,
+        GFXRECON_LOG_ERROR("Unexpected block id mismatch with index: %d, expected index: %d", index,
                            original_blocks_map_.size());
         return false;
     }
@@ -137,21 +133,18 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
         uint64_t current_block_end = original_blocks_map_[i + 1]->offset_;
         if (current_block_start > current_block_end)
         {
-            GFXRECON_LOG_ERROR("Original block with id (%d) has invalid offsets (%d-%d)",
-                               i,
-                               current_block_start,
-                               current_block_end);
+            GFXRECON_LOG_ERROR("Original block with id (%d) has invalid offsets (%d-%d)", i,
+                               current_block_start, current_block_end);
             return false;
         }
         uint64_t size = current_block_end - current_block_start;
         if (size > kDiveBlockBufferSize)
         {
-            GFXRECON_LOG_WARNING("Original block with id (%d) is larger than kDiveBlockBufferSize: "
-                                 "%d > %d, will cause "
-                                 "more copy operations when writing new file",
-                                 i,
-                                 size,
-                                 kDiveBlockBufferSize);
+            GFXRECON_LOG_WARNING(
+                "Original block with id (%d) is larger than kDiveBlockBufferSize: "
+                "%d > %d, will cause "
+                "more copy operations when writing new file",
+                i, size, kDiveBlockBufferSize);
         }
 
         original_blocks_map_[i]->size_ = size;
@@ -179,8 +172,7 @@ bool DiveBlockData::ModificationExists(uint32_t primary_id, int32_t secondary_id
     return true;
 }
 
-bool DiveBlockData::AddModification(uint32_t                           primary_id,
-                                    int32_t                            secondary_id,
+bool DiveBlockData::AddModification(uint32_t primary_id, int32_t secondary_id,
                                     std::shared_ptr<std::vector<char>> blob_ptr)
 {
     if (!original_blocks_map_locked_)
@@ -191,18 +183,17 @@ bool DiveBlockData::AddModification(uint32_t                           primary_i
 
     if (ModificationExists(primary_id, secondary_id))
     {
-        GFXRECON_LOG_ERROR("Already a modified block at: (%d, %d), cannot overwrite, please remove "
-                           "or clear first",
-                           primary_id,
-                           secondary_id);
+        GFXRECON_LOG_ERROR(
+            "Already a modified block at: (%d, %d), cannot overwrite, please remove "
+            "or clear first",
+            primary_id, secondary_id);
         return false;
     }
 
     if (primary_id >= original_blocks_map_.size())
     {
         GFXRECON_LOG_ERROR("Primary index (%d) is out of bounds, largest original block id: %d",
-                           primary_id,
-                           original_blocks_map_.size() - 1);
+                           primary_id, original_blocks_map_.size() - 1);
         return false;
     }
 
@@ -210,8 +201,7 @@ bool DiveBlockData::AddModification(uint32_t                           primary_i
     {
         if (secondary_id != 0)
         {
-            GFXRECON_LOG_ERROR("Invalid blob provided for modification at: (%d, %d)",
-                               primary_id,
+            GFXRECON_LOG_ERROR("Invalid blob provided for modification at: (%d, %d)", primary_id,
                                secondary_id);
             return false;
         }
@@ -232,8 +222,7 @@ bool DiveBlockData::RemoveModification(uint32_t primary_id, int32_t secondary_id
 {
     if (!ModificationExists(primary_id, secondary_id))
     {
-        GFXRECON_LOG_ERROR("No modified block at: (%d, %d), cannot remove",
-                           primary_id,
+        GFXRECON_LOG_ERROR("No modified block at: (%d, %d), cannot remove", primary_id,
                            secondary_id);
         return false;
     }
@@ -264,7 +253,7 @@ bool DiveBlockData::TraverseBlocks(BlockVisitor& visitor) const
         // For a given primary_id, go through block-by-block in order of secondary_id
         for (auto it = blocks_to_write.begin(); it != blocks_to_write.end(); ++it)
         {
-            int32_t                     secondary_id = it->first;
+            int32_t secondary_id = it->first;
             std::shared_ptr<IDiveBlock> current_modification_ptr = it->second;
 
             if (current_modification_ptr == nullptr)
@@ -275,8 +264,7 @@ bool DiveBlockData::TraverseBlocks(BlockVisitor& visitor) const
 
             if (!current_modification_ptr->Accept(visitor))
             {
-                GFXRECON_LOG_ERROR("Couldn't write block with ids (%d, %d)",
-                                   primary_id,
+                GFXRECON_LOG_ERROR("Couldn't write block with ids (%d, %d)", primary_id,
                                    secondary_id);
                 return false;
             }
@@ -295,7 +283,7 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path,
     }
 
     FILE* original_fd;
-    int   result = util::platform::FileOpen(&original_fd, original_file_path.c_str(), "rb");
+    int result = util::platform::FileOpen(&original_fd, original_file_path.c_str(), "rb");
     if (result || original_fd == nullptr)
     {
         GFXRECON_LOG_ERROR("Failed to open file %s", original_file_path.c_str());
@@ -310,7 +298,7 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path,
         return false;
     }
 
-    WriterBlockVisitor writer = { original_fd, new_fd };
+    WriterBlockVisitor writer = {original_fd, new_fd};
 
     // Copy the original header
     if (!original_header_block_.Accept(writer))

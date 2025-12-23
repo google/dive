@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include <memory>
+
 #include "serializable.h"
 #include "socket_connection.h"
 
@@ -25,7 +26,7 @@ namespace Network
 
 class IMessageHandler
 {
-public:
+ public:
     virtual ~IMessageHandler() = default;
 
     // Callback for when a new client connects.
@@ -33,7 +34,7 @@ public:
 
     // Processes a message received from the client.
     virtual void HandleMessage(std::unique_ptr<ISerializable> message,
-                               SocketConnection*              client_conn) = 0;
+                               SocketConnection* client_conn) = 0;
 
     // Callback for when a client disconnects.
     virtual void OnDisconnect() = 0;

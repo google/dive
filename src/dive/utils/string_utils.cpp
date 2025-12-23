@@ -24,7 +24,7 @@ namespace StringUtils
 void Trim(std::string& s)
 {
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); })
-            .base(),
+                .base(),
             s.end());
     s.erase(s.begin(),
             std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
@@ -41,13 +41,12 @@ void RemoveQuotes(std::string& s)
 bool GetTrimmedLine(std::istream& file, std::string& line)
 {
     // Read the first line
-    if (!std::getline(file, line))
-        return false;
+    if (!std::getline(file, line)) return false;
 
     // Keep reading new lines as long as the total number of
     // un-escaped quotes is odd, which means we are inside a
     // multi-line field.
-    int    unescaped_quotes = 0;
+    int unescaped_quotes = 0;
     size_t i = 0;
     while (true)
     {

@@ -13,6 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include "commands.h"
+
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -21,7 +23,6 @@
 #include <map>
 #include <string>
 
-#include "commands.h"
 #include "format_output.h"
 #include "utils/version_info.h"
 
@@ -31,11 +32,7 @@ namespace cli
 {
 
 //--------------------------------------------------------------------------------------------------
-Command::Command(const char* name, Visibility vis) :
-    m_name(name),
-    m_visibility(vis)
-{
-}
+Command::Command(const char* name, Visibility vis) : m_name(name), m_visibility(vis) {}
 
 Command::~Command() {}
 
@@ -51,16 +48,15 @@ struct HelpCommand : Command
     HelpCommand(const std::map<std::string, const Command*>*);
     const std::map<std::string, const Command*>& m_commands;
 
-    int         operator()(int argc, int at, char** argv) const override;
-    int         Help(int argc, int at, char** argv) const override;
+    int operator()(int argc, int at, char** argv) const override;
+    int Help(int argc, int at, char** argv) const override;
     std::string Description() const override;
 
     static bool Visible(bool allow_internal, Visibility visiblility);
 };
 
-HelpCommand::HelpCommand(const std::map<std::string, const Command*>* commands) :
-    Command("help", kNormal),
-    m_commands(*commands)
+HelpCommand::HelpCommand(const std::map<std::string, const Command*>* commands)
+    : Command("help", kNormal), m_commands(*commands)
 {
 }
 
@@ -114,24 +110,18 @@ int HelpCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string HelpCommand::Description() const
-{
-    return "print help menu";
-}
+std::string HelpCommand::Description() const { return "print help menu"; }
 
 //--------------------------------------------------------------------------------------------------
 struct VersionCommand : Command
 {
     VersionCommand();
-    int         operator()(int argc, int at, char** argv) const override;
-    int         Help(int argc, int at, char** argv) const override;
+    int operator()(int argc, int at, char** argv) const override;
+    int Help(int argc, int at, char** argv) const override;
     std::string Description() const override;
 };
 
-VersionCommand::VersionCommand() :
-    Command("version", kNormal)
-{
-}
+VersionCommand::VersionCommand() : Command("version", kNormal) {}
 
 int VersionCommand::operator()(int argc, int at, char** argv) const
 {
@@ -146,25 +136,19 @@ int VersionCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string VersionCommand::Description() const
-{
-    return "display version of DiveCLI";
-}
+std::string VersionCommand::Description() const { return "display version of DiveCLI"; }
 
 //--------------------------------------------------------------------------------------------------
 struct ExtractCommand : Command
 {
     ExtractCommand();
-    static int  Run(const char* dive_file, const char* output_dir);
-    int         operator()(int argc, int at, char** argv) const override;
-    int         Help(int argc, int at, char** argv) const override;
+    static int Run(const char* dive_file, const char* output_dir);
+    int operator()(int argc, int at, char** argv) const override;
+    int Help(int argc, int at, char** argv) const override;
     std::string Description() const override;
 };
 
-ExtractCommand::ExtractCommand() :
-    Command("extract", kNormal)
-{
-}
+ExtractCommand::ExtractCommand() : Command("extract", kNormal) {}
 
 int ExtractCommand::Run(const char* dive_file, const char* output_dir)
 {
@@ -214,25 +198,19 @@ int ExtractCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string ExtractCommand::Description() const
-{
-    return "extract the content of a dive file";
-}
+std::string ExtractCommand::Description() const { return "extract the content of a dive file"; }
 
 //--------------------------------------------------------------------------------------------------
 struct PacketCommand : Command
 {
     PacketCommand();
-    static int  PrintPacketHeader(const char* header);
-    int         operator()(int argc, int at, char** argv) const override;
-    int         Help(int argc, int at, char** argv) const override;
+    static int PrintPacketHeader(const char* header);
+    int operator()(int argc, int at, char** argv) const override;
+    int Help(int argc, int at, char** argv) const override;
     std::string Description() const override;
 };
 
-PacketCommand::PacketCommand() :
-    Command("packet", kInternal)
-{
-}
+PacketCommand::PacketCommand() : Command("packet", kInternal) {}
 
 int PacketCommand::operator()(int argc, int at, char** argv) const
 {
@@ -250,14 +228,11 @@ int PacketCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string PacketCommand::Description() const
-{
-    return "decode packet header";
-}
+std::string PacketCommand::Description() const { return "decode packet header"; }
 
 int PacketCommand::PrintPacketHeader(const char* header)
 {
-    uint32_t                    header_value = strtoul(header, nullptr, 16);
+    uint32_t header_value = strtoul(header, nullptr, 16);
     Dive::PM4_PFP_TYPE_3_HEADER pm4_header;
     pm4_header.u32All = header_value;
 
@@ -272,17 +247,14 @@ int PacketCommand::PrintPacketHeader(const char* header)
 struct InfoCommand : Command
 {
     InfoCommand();
-    static int  PrintFileMetadata(const char* filename);
-    static int  PrintCaptureFileBlocks(const char* filename);
-    int         operator()(int argc, int at, char** argv) const override;
-    int         Help(int argc, int at, char** argv) const override;
+    static int PrintFileMetadata(const char* filename);
+    static int PrintCaptureFileBlocks(const char* filename);
+    int operator()(int argc, int at, char** argv) const override;
+    int Help(int argc, int at, char** argv) const override;
     std::string Description() const override;
 };
 
-InfoCommand::InfoCommand() :
-    Command("info", kInternal)
-{
-}
+InfoCommand::InfoCommand() : Command("info", kInternal) {}
 
 int InfoCommand::operator()(int argc, int at, char** argv) const
 {
@@ -302,14 +274,11 @@ int InfoCommand::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string InfoCommand::Description() const
-{
-    return "print basic information about a dive file";
-}
+std::string InfoCommand::Description() const { return "print basic information about a dive file"; }
 
 int InfoCommand::PrintFileMetadata(const char* filename)
 {
-    Dive::CaptureDataHeader       header;
+    Dive::CaptureDataHeader header;
     Dive::CaptureData::LoadResult res = ReadCaptureDataHeader(filename, &header);
     if (res != Dive::CaptureData::LoadResult::kSuccess &&
         res != Dive::CaptureData::LoadResult::kVersionError)
@@ -364,15 +333,12 @@ struct RawPM4Command : Command
 {
     RawPM4Command();
     static bool PrintRawPm4(const char* file_name, int raw_cmd_buffer_type);
-    int         operator()(int argc, int at, char** argv) const override;
-    int         Help(int argc, int at, char** argv) const override;
+    int operator()(int argc, int at, char** argv) const override;
+    int Help(int argc, int at, char** argv) const override;
     std::string Description() const override;
 };
 
-RawPM4Command::RawPM4Command() :
-    Command("rawpm4", kInternal)
-{
-}
+RawPM4Command::RawPM4Command() : Command("rawpm4", kInternal) {}
 
 int RawPM4Command::operator()(int argc, int at, char** argv) const
 {
@@ -410,63 +376,52 @@ int RawPM4Command::Help(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-std::string RawPM4Command::Description() const
-{
-    return "opens and parses raw command stream";
-}
+std::string RawPM4Command::Description() const { return "opens and parses raw command stream"; }
 
 bool RawPM4Command::PrintRawPm4(const char* file_name, int raw_cmd_buffer_type)
 {
     std::fstream raw_file(file_name, std::ios::in | std::ios::binary);
-    if (!raw_file.is_open())
-        return false;
+    if (!raw_file.is_open()) return false;
 
     raw_file.seekg(0, std::ios::end);
     std::streamsize size = raw_file.tellg();
     raw_file.seekg(0, std::ios::beg);
 
     std::vector<char> buffer(size);
-    if (!raw_file.read(buffer.data(), size))
-        return false;
+    if (!raw_file.read(buffer.data(), size)) return false;
 
     std::vector<uint32_t> dword_buffer(size / sizeof(uint32_t));
     memcpy(dword_buffer.data(), buffer.data(), size);
 
     Dive::EngineType engine_type = Dive::EngineType::kUniversal;
-    Dive::QueueType  queue_type = Dive::QueueType::kUniversal;
+    Dive::QueueType queue_type = Dive::QueueType::kUniversal;
     switch (raw_cmd_buffer_type)
     {
-    case 0:
-        break;  // Gfx
-    case 1:     // Dma
-        engine_type = Dive::EngineType::kDma;
-        queue_type = Dive::QueueType::kDma;
-        break;
+        case 0:
+            break;  // Gfx
+        case 1:     // Dma
+            engine_type = Dive::EngineType::kDma;
+            queue_type = Dive::QueueType::kDma;
+            break;
     }
 
     Dive::CommandHierarchy command_hierarchy;
-    Pm4CaptureData         capture_data;
+    Pm4CaptureData capture_data;
     auto cmd_hier_creator = Dive::CommandHierarchyCreator::Create(command_hierarchy, capture_data);
 
     if (!cmd_hier_creator ||
-        !cmd_hier_creator->CreateTrees(engine_type,
-                                       queue_type,
-                                       dword_buffer,
+        !cmd_hier_creator->CreateTrees(engine_type, queue_type, dword_buffer,
                                        static_cast<uint32_t>(dword_buffer.size())))
         return false;
 
     const Dive::SharedNodeTopology* topology_ptr = &command_hierarchy.GetSubmitHierarchyTopology();
-    uint64_t                        root_num_children = topology_ptr->GetNumChildren(
-    Dive::SharedNodeTopology::kRootNodeIndex);
+    uint64_t root_num_children =
+        topology_ptr->GetNumChildren(Dive::SharedNodeTopology::kRootNodeIndex);
     for (uint64_t child = 0; child < root_num_children; ++child)
     {
-        uint64_t child_node_index = topology_ptr
-                                    ->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex,
-                                                        child);
-        PrintNodes(std::cout,
-                   &command_hierarchy,
-                   *topology_ptr,
-                   child_node_index,
+        uint64_t child_node_index =
+            topology_ptr->GetChildNodeIndex(Dive::SharedNodeTopology::kRootNodeIndex, child);
+        PrintNodes(std::cout, &command_hierarchy, *topology_ptr, child_node_index,
                    /*verbose=*/true);
     }
     return true;
@@ -479,7 +434,8 @@ const Command& CommandOf<HelpCommand>::Get(const std::map<std::string, const Com
     return impl;
 }
 
-template<typename T> const Command& CommandOf<T>::Get()
+template <typename T>
+const Command& CommandOf<T>::Get()
 {
     static T impl;
     return impl;

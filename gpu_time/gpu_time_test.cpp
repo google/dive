@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #include "gpu_time.h"
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 namespace Dive
 {
@@ -47,48 +48,35 @@ constexpr float kMockTimestampPeriod = 1.0f;
 // Mock implementations of the Vulkan functions that GPUTime calls.
 // These functions allow us to control the behavior and return values during tests.
 
-VkResult MockCreateQueryPool(VkDevice                     device,
-                             const VkQueryPoolCreateInfo* pCreateInfo,
-                             const VkAllocationCallbacks* pAllocator,
-                             VkQueryPool*                 pQueryPool)
+VkResult MockCreateQueryPool(VkDevice device, const VkQueryPoolCreateInfo* pCreateInfo,
+                             const VkAllocationCallbacks* pAllocator, VkQueryPool* pQueryPool)
 {
     *pQueryPool = MOCK_QUERY_POOL;
     return VK_SUCCESS;
 }
 
-void MockDestroyQueryPool(VkDevice                     device,
-                          VkQueryPool                  queryPool,
+void MockDestroyQueryPool(VkDevice device, VkQueryPool queryPool,
                           const VkAllocationCallbacks* pAllocator)
 {
     // No-op for testing
 }
 
-void MockResetQueryPool(VkDevice    device,
-                        VkQueryPool queryPool,
-                        uint32_t    firstQuery,
-                        uint32_t    queryCount)
+void MockResetQueryPool(VkDevice device, VkQueryPool queryPool, uint32_t firstQuery,
+                        uint32_t queryCount)
 {
     // No-op for testing
 }
 
-void MockCmdWriteTimestamp(VkCommandBuffer         commandBuffer,
-                           VkPipelineStageFlagBits pipelineStage,
-                           VkQueryPool             queryPool,
-                           uint32_t                query)
+void MockCmdWriteTimestamp(VkCommandBuffer commandBuffer, VkPipelineStageFlagBits pipelineStage,
+                           VkQueryPool queryPool, uint32_t query)
 {
     // No-op for testing
 }
 
-VkResult MockGetQueryPoolResults(VkDevice           device,
-                                 VkQueryPool        queryPool,
-                                 uint32_t           firstQuery,
-                                 uint32_t           queryCount,
-                                 size_t             dataSize,
-                                 void*              pData,
-                                 VkDeviceSize       stride,
-                                 VkQueryResultFlags flags)
+VkResult MockGetQueryPoolResults(VkDevice device, VkQueryPool queryPool, uint32_t firstQuery,
+                                 uint32_t queryCount, size_t dataSize, void* pData,
+                                 VkDeviceSize stride, VkQueryResultFlags flags)
 {
-
     // Simulate returning some timestamp data.
     // Each query result consists of a timestamp (uint64_t) and an availability flag (uint64_t).
     uint64_t* timestamps = static_cast<uint64_t*>(pData);
@@ -132,12 +120,10 @@ VKAPI_ATTR VkResult VKAPI_CALL MockDeviceWaitIdle(VkDevice device)
 void CreateGPUTime(GPUTime& gpu_time, float timestamp_period)
 {
     ASSERT_TRUE(gpu_time
-                .OnCreateDevice(MOCK_DEVICE,
-                                /*allocator=*/nullptr,
-                                timestamp_period,
-                                MockCreateQueryPool,
-                                MockResetQueryPool)
-                .success);
+                    .OnCreateDevice(MOCK_DEVICE,
+                                    /*allocator=*/nullptr, timestamp_period, MockCreateQueryPool,
+                                    MockResetQueryPool)
+                    .success);
 }
 
 void DestroyGPUTime(GPUTime& gpu_time)
@@ -145,7 +131,7 @@ void DestroyGPUTime(GPUTime& gpu_time)
     VkQueue queue = MOCK_QUEUE;
     gpu_time.OnGetDeviceQueue(&queue);
     ASSERT_TRUE(
-    gpu_time.OnDestroyDevice(MOCK_DEVICE, MockQueueWaitIdle, MockDestroyQueryPool).success);
+        gpu_time.OnDestroyDevice(MOCK_DEVICE, MockQueueWaitIdle, MockDestroyQueryPool).success);
 }
 
 MATCHER_P(StatsEq, expected, "")
@@ -166,7 +152,7 @@ TEST(GPUTimeTest, InitialStateReturnsDefaultStats)
     gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
-    auto           stats = gpu_time.GetFrameTimeStats();
+    auto stats = gpu_time.GetFrameTimeStats();
     GPUTime::Stats expected_stats;
     expected_stats.average = 0.0;
     expected_stats.median = 0.0;
@@ -282,15 +268,15 @@ TEST(GPUTimeTest, SingleCommandBufferFrameUpdatesMetricsCorrectly)
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &cmd;
 
-    ASSERT_TRUE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .gpu_time_status.success);
+    ASSERT_TRUE(gpu_time
+                    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool,
+                                   MockGetQueryPoolResults)
+                    .gpu_time_status.success);
 
     // After a frame boundary submit, metrics should be updated.
     // Our mock provides a 10ms duration for the first command buffer.
     // (1010000000 - 1000000000) * 1.0f (timestamp_period) * 0.000001 = 10.0
-    auto           stats = gpu_time.GetFrameTimeStats();
+    auto stats = gpu_time.GetFrameTimeStats();
     GPUTime::Stats expected_stats;
     expected_stats.average = 10.0;
     expected_stats.median = 10.0;
@@ -312,7 +298,7 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
     VkCommandBufferAllocateInfo alloc_info = {};
     alloc_info.commandPool = MOCK_COMMAND_POOL;
     alloc_info.commandBufferCount = 2;
-    VkCommandBuffer cmdBufs[] = { MOCK_COMMAND_BUFFER_1, MOCK_COMMAND_BUFFER_2 };
+    VkCommandBuffer cmdBufs[] = {MOCK_COMMAND_BUFFER_1, MOCK_COMMAND_BUFFER_2};
     gpu_time.OnAllocateCommandBuffers(&alloc_info, cmdBufs);
 
     VkDebugUtilsLabelEXT label = {};
@@ -323,13 +309,13 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
     submit_info.commandBufferCount = 2;
     submit_info.pCommandBuffers = cmdBufs;
 
-    ASSERT_TRUE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .gpu_time_status.success);
+    ASSERT_TRUE(gpu_time
+                    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool,
+                                   MockGetQueryPoolResults)
+                    .gpu_time_status.success);
 
     {
-        auto           cmd_0_stats = gpu_time.GetFrameCmdTimeStats(0);
+        auto cmd_0_stats = gpu_time.GetFrameCmdTimeStats(0);
         GPUTime::Stats expected_stats;
         expected_stats.average = 10.0;
         expected_stats.median = 10.0;
@@ -340,7 +326,7 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
     }
 
     {
-        auto           cmd_1_stats = gpu_time.GetFrameCmdTimeStats(1);
+        auto cmd_1_stats = gpu_time.GetFrameCmdTimeStats(1);
         GPUTime::Stats expected_stats;
         expected_stats.average = 20.0;
         expected_stats.median = 20.0;
@@ -353,7 +339,7 @@ TEST(GPUTimeTest, MultiCommandBufferSingleFrameAggregatesTimeCorrectly)
     {
         // The total frame time should be the sum of durations from both command buffers.
         // From our mock function: 10ms + 20ms = 30ms.
-        auto           stats = gpu_time.GetFrameTimeStats();
+        auto stats = gpu_time.GetFrameTimeStats();
         GPUTime::Stats expected_stats;
         expected_stats.average = 30.0;
         expected_stats.median = 30.0;
@@ -376,9 +362,8 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     VkCommandBufferAllocateInfo alloc_info = {};
     alloc_info.commandPool = MOCK_COMMAND_POOL;
     alloc_info.commandBufferCount = 3;
-    VkCommandBuffer cmdBufs[] = { MOCK_COMMAND_BUFFER_1,
-                                  MOCK_COMMAND_BUFFER_2,
-                                  MOCK_COMMAND_BUFFER_3 };
+    VkCommandBuffer cmdBufs[] = {MOCK_COMMAND_BUFFER_1, MOCK_COMMAND_BUFFER_2,
+                                 MOCK_COMMAND_BUFFER_3};
     gpu_time.OnAllocateCommandBuffers(&alloc_info, cmdBufs);
 
     VkDebugUtilsLabelEXT label = {};
@@ -390,26 +375,26 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     // --- Submit Frame 1 (10ms) ---
     gpu_time.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_1, &label);
     submit_info.pCommandBuffers = &MOCK_COMMAND_BUFFER_1;
-    ASSERT_TRUE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .gpu_time_status.success);
+    ASSERT_TRUE(gpu_time
+                    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool,
+                                   MockGetQueryPoolResults)
+                    .gpu_time_status.success);
 
     // --- Submit Frame 2 (20ms) ---
     gpu_time.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_2, &label);
     submit_info.pCommandBuffers = &MOCK_COMMAND_BUFFER_2;
-    ASSERT_TRUE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .gpu_time_status.success);
+    ASSERT_TRUE(gpu_time
+                    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool,
+                                   MockGetQueryPoolResults)
+                    .gpu_time_status.success);
 
     // --- Submit Frame 3 (30ms) ---
     gpu_time.OnCmdInsertDebugUtilsLabelEXT(MOCK_COMMAND_BUFFER_3, &label);
     submit_info.pCommandBuffers = &MOCK_COMMAND_BUFFER_3;
-    ASSERT_TRUE(
-    gpu_time
-    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool, MockGetQueryPoolResults)
-    .gpu_time_status.success);
+    ASSERT_TRUE(gpu_time
+                    .OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool,
+                                   MockGetQueryPoolResults)
+                    .gpu_time_status.success);
 
     // Check stats after three frames (10ms, 20ms, and 30ms)
     auto stats = gpu_time.GetFrameTimeStats();

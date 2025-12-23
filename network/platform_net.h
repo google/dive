@@ -17,13 +17,13 @@ limitations under the License.
 #pragma once
 
 #ifdef WIN32
-#    define _WINSOCK_DEPRECATED_NO_WARNINGS
-#    ifndef NOMINMAX
-#        define NOMINMAX
-#    endif
-#    include <winsock2.h>
-#    include <ws2tcpip.h>
-#    pragma comment(lib, "Ws2_32.lib")
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
 
 // On Windows, a socket is a pointer-sized handle to ensure 32/64-bit compatibility.
 using SocketType = uintptr_t;
@@ -33,11 +33,11 @@ constexpr SocketType kInvalidSocketValue = ~static_cast<SocketType>(0);
 using ssize_t = SSIZE_T;
 
 #else
-#    include <netdb.h>
-#    include <poll.h>
-#    include <sys/un.h>
-#    include <unistd.h>
-#    include <netinet/in.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 // On POSIX systems, a socket is a file descriptor (`int`).
 using SocketType = int;

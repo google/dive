@@ -12,21 +12,21 @@
 */
 
 #include "draw_dispatch_stats_tab_view.h"
-#include "draw_dispatch_stats_model.h"
-#include "search_bar.h"
+
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
+#include <QVBoxLayout>
 #include <iostream>
+
+#include "draw_dispatch_stats_model.h"
 #include "object_names.h"
+#include "search_bar.h"
 #include "trace_stats/trace_stats.h"
 
-DrawDispatchStatsTabView::DrawDispatchStatsTabView(const Dive::CaptureStats &stats,
-                                                   QWidget                  *parent) :
-    QWidget(parent),
-    m_stats(stats)
+DrawDispatchStatsTabView::DrawDispatchStatsTabView(const Dive::CaptureStats &stats, QWidget *parent)
+    : QWidget(parent), m_stats(stats)
 {
     m_draw_dispatch_stats_model = new DrawDispatchStatsModel();
     m_draw_dispatch_stats_view = new QTableView();

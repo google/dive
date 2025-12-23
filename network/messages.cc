@@ -200,11 +200,11 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
         return Dive::InvalidArgumentError("Provided SocketConnection is null.");
     }
 
-    const size_t header_size = sizeof(uint32_t) * 2;
-    uint8_t      header_buffer[header_size];
+    constexpr size_t kHeaderSize = sizeof(uint32_t) * 2;
+    uint8_t          header_buffer[kHeaderSize];
 
     // Receive the message header.
-    absl::Status status = ReceiveBuffer(conn, header_buffer, header_size, timeout_ms);
+    absl::Status status = ReceiveBuffer(conn, header_buffer, kHeaderSize, timeout_ms);
     if (!status.ok())
     {
         return status;
@@ -301,14 +301,14 @@ absl::Status SendSocketMessage(SocketConnection* conn, const ISerializable& mess
     }
 
     // Construct and send the header.
-    uint32_t     net_type = htonl(static_cast<uint32_t>(message.GetMessageType()));
-    uint32_t     net_payload_length = htonl(static_cast<uint32_t>(payload_buffer.size()));
-    const size_t header_size = sizeof(net_type) + sizeof(net_payload_length);
-    uint8_t      header_buffer[header_size];
+    uint32_t         net_type = htonl(static_cast<uint32_t>(message.GetMessageType()));
+    uint32_t         net_payload_length = htonl(static_cast<uint32_t>(payload_buffer.size()));
+    constexpr size_t kHeaderSize = sizeof(net_type) + sizeof(net_payload_length);
+    uint8_t          header_buffer[kHeaderSize];
     std::memcpy(header_buffer, &net_type, sizeof(uint32_t));
     std::memcpy(header_buffer + sizeof(uint32_t), &net_payload_length, sizeof(uint32_t));
 
-    status = SendBuffer(conn, header_buffer, header_size);
+    status = SendBuffer(conn, header_buffer, kHeaderSize);
     if (!status.ok())
     {
         return status;

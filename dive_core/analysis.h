@@ -15,6 +15,8 @@
 */
 #pragma once
 
+#include <string>
+
 #include "dive_core/common/gpudefs.h"
 #include "event_state.h"
 

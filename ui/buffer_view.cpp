@@ -105,37 +105,37 @@ void BufferView::OnEventSelected(uint32_t event_index)
             treeItem->setText(0, tr(kShaderStageStrings[shader_stage]));
 
             // Column 1
-            const uint32_t str_buffer_size = 256;
-            char           str_buffer[str_buffer_size];
-            snprintf(str_buffer, str_buffer_size, "%p", (void *)buffer_info.m_addr);
+            constexpr uint32_t kStrBufferSize = 256;
+            char               str_buffer[kStrBufferSize];
+            snprintf(str_buffer, kStrBufferSize, "%p", (void *)buffer_info.m_addr);
             treeItem->setText(1, tr(str_buffer));
 
             // Column 2
-            snprintf(str_buffer, str_buffer_size, "%" PRIu64, buffer_info.m_size);
+            snprintf(str_buffer, kStrBufferSize, "%" PRIu64, buffer_info.m_size);
             treeItem->setText(2, tr(str_buffer));
             /*
             // Column 3
             snprintf(str_buffer,
-                    str_buffer_size,
+                    kStrBufferSize,
                     "%s_%s",
                     kBufferDataFormatStrings[buffer_info.m_data_format],
                     kBufferNumFormatStrings[buffer_info.m_num_format]);
             treeItem->setText(3, tr(str_buffer));
 
             // Column 4
-            snprintf(str_buffer, str_buffer_size, "%s",
+            snprintf(str_buffer, kStrBufferSize, "%s",
             kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_x]); treeItem->setText(4, tr(str_buffer));
 
             // Column 5
-            snprintf(str_buffer, str_buffer_size, "%s",
+            snprintf(str_buffer, kStrBufferSize, "%s",
             kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_y]); treeItem->setText(5, tr(str_buffer));
 
             // Column 6
-            snprintf(str_buffer, str_buffer_size, "%s",
+            snprintf(str_buffer, kStrBufferSize, "%s",
             kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_z]); treeItem->setText(6, tr(str_buffer));
 
             // Column 7
-            snprintf(str_buffer, str_buffer_size, "%s",
+            snprintf(str_buffer, kStrBufferSize, "%s",
             kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_w]); treeItem->setText(7, tr(str_buffer));
             */
             // Column 8
@@ -150,16 +150,16 @@ void BufferView::OnEventSelected(uint32_t event_index)
             switch ((Dive::MemoryAllocationData::GpuHeap)mem_alloc_ptr->m_preferred_heap)
             {
             case Dive::MemoryAllocationData::GpuHeap::GpuHeapLocal:
-                snprintf(str_buffer, str_buffer_size, "Local");
+                snprintf(str_buffer, kStrBufferSize, "Local");
                 break;
             case Dive::MemoryAllocationData::GpuHeap::GpuHeapInvisible:
-                snprintf(str_buffer, str_buffer_size, "Invisible");
+                snprintf(str_buffer, kStrBufferSize, "Invisible");
                 break;
             case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartUswc:
-                snprintf(str_buffer, str_buffer_size, "GartUswc");
+                snprintf(str_buffer, kStrBufferSize, "GartUswc");
                 break;
             case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
-                snprintf(str_buffer, str_buffer_size, "GartCacheable");
+                snprintf(str_buffer, kStrBufferSize, "GartCacheable");
                 break;
             default:
                 DIVE_ASSERT(false);
@@ -220,18 +220,18 @@ void BufferView::OnBufferSelectionChanged()
     {
         uint64_t dword_addr = buffer_info.m_addr + dword * sizeof(uint32_t);
 
-        const uint32_t buffer_size = 256;
-        char           buffer[buffer_size];
+        constexpr uint32_t kBufferSize = 256;
+        char               buffer[kBufferSize];
         if (cur_col == 0)
         {
-            snprintf(buffer, buffer_size, "%p", (void *)dword_addr);
+            snprintf(buffer, kBufferSize, "%p", (void *)dword_addr);
             QTableWidgetItem *addr_item = new QTableWidgetItem(buffer);
             addr_item->setBackground(QColor(192, 192, 192));
             m_memory_view->setItem(cur_row, cur_col, addr_item);
         }
         else
         {
-            snprintf(buffer, buffer_size, "%f", *((float *)&buffer_memory[dword]));
+            snprintf(buffer, kBufferSize, "%f", *((float *)&buffer_memory[dword]));
             m_memory_view->setItem(cur_row, cur_col, new QTableWidgetItem(buffer));
             dword++;
         }

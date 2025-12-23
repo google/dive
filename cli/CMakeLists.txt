@@ -58,7 +58,10 @@ target_link_libraries(
 )
 
 add_executable(${PROJECT_NAME} "main.cpp")
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
+target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE ${PROJECT_NAME}_lib dive_src_includes
+)
 
 if(MSVC)
     # 4100: unreferenced formal parameter

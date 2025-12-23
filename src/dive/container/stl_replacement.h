@@ -15,6 +15,8 @@
 */
 
 #pragma once
+
+#include <cstdint>
 #include <initializer_list>
 
 // Provides a replacement of some STL containers. The reason for this is that Windows DEBUG versions
@@ -69,7 +71,7 @@ private:
 
 }  // namespace Dive
 
-#include "stl_replacement.hpp"
+#include "dive/container/stl_replacement_impl.h"  // IWYU pragma: export
 
 template<typename T>
 // using DiveVector = std::vector<T>;

@@ -28,7 +28,6 @@
 #include <filesystem>
 #include <iostream>
 #include "dive_core/common.h"
-#include "dive_core/pm4_info.h"
 #include "application_controller.h"
 #include "main_window.h"
 #include "utils/version_info.h"
@@ -39,6 +38,7 @@
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
+#include "dive/isa/isa.h"
 #include "dive/os/terminal.h"
 #ifdef __linux__
 #    include <dlfcn.h>
@@ -350,7 +350,7 @@ int main(int argc, char *argv[])
     splash_screen->show();
 
     // Initialize packet info query data structures needed for parsing
-    Pm4InfoInit();
+    Dive::InitPm4();
 
     ApplicationController controller;
     MainWindow           *main_window = new MainWindow(controller);

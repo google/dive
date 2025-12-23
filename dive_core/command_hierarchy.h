@@ -32,7 +32,7 @@
 #include "dive_core/common/dive_capture_format.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
-#include "dive_core/stl_replacement.h"
+#include "dive/container/stl_replacement.h"
 
 // Forward declarations
 struct PacketInfo;

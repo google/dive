@@ -45,7 +45,7 @@ def outputH(pm4_info_file):
 
 #include <stdint.h>
 #include <string.h>
-#include "dive_core/stl_replacement.h"
+#include "dive/container/stl_replacement.h"
 
 enum ValueType
 {
@@ -158,7 +158,6 @@ def outputHeaderCpp(pm4_info_header_file_name, pm4_info_file):
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "dive_core/common/common.h"
 
 static DiveVector<const char*> g_sOpCodeToString;
 static std::unordered_map<uint32_t, RegInfo> g_sRegInfoVariant;
@@ -170,6 +169,8 @@ static std::unordered_map<uint32_t, PacketInfo> g_sPacketInfoVariant;
 static std::multimap<uint32_t, PacketInfo> g_sPacketInfoMultiple;
 static GPUVariantType g_sGPU_variant = kGPUVariantNone;
 static uint32_t g_sGPU_id = 0;
+
+#define FREEDRENO_DIVE_ASSERT(x) assert(x)
 
 std::string GetGPUStr(GPUVariantType variant)
 {
@@ -185,7 +186,7 @@ std::string GetGPUStr(GPUVariantType variant)
     case kA8XX: s = "A8XX"; break;
     case kGPUVariantNone:
     default:
-        DIVE_ASSERT(false);
+        FREEDRENO_DIVE_ASSERT(false);
         break;
     }
     return s;
@@ -982,7 +983,7 @@ const RegField *GetRegFieldByName(const char *name, const RegInfo *info)
 
 uint32_t GetRegOffsetByName(const char *name)
 {
-    DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
+    FREEDRENO_DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
     std::string str = std::string(name);
     auto i = g_sRegNameToIndex.find(str);
     if (i == g_sRegNameToIndex.end())
@@ -1064,7 +1065,7 @@ GPUVariantType GetGPUVariantType()
 
 bool IsFieldEnabled(const RegField* field)
 {
-    DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
+    FREEDRENO_DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
     return (g_sGPU_variant & field->m_gpu_variants) != 0;
 }
 '''

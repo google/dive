@@ -19,7 +19,7 @@
 #include <optional>
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/gfxr_vulkan_command_hierarchy.h"
-#include "pm4_info.h"
+#include "dive/isa/pm4_info.h"
 
 namespace Dive
 {

@@ -62,107 +62,130 @@ set DIVE_ROOT_PATH=C:\path\to\dive
 
 ### Linux
 
-```sh
-# Assumes python is on the path
+1. Configure
+    ```sh
+    # Assumes python is on the path
 
-cd $DIVE_ROOT_PATH
-rm -rf build
+    cd $DIVE_ROOT_PATH
+    rm -rf build
 
-cmake . -GNinja -DCMAKE_BUILD_TYPE=Debug -Bbuild 
-
-ninja -C build
-
-cmake --install build
-```
-
-You can specify the build type for release as well
-with `-DCMAKE_BUILD_TYPE=Release` instead.
+    cmake . -G "Ninja Multi-Config" -Bbuild
+    ```
+1. Build with one of the following methods:
+    * Build directly with ninja
+        ```sh
+        ninja -C build -f build-Debug.ninja
+        ```
+    * Build using cmake
+        ```sh
+        cmake --build build --config=Debug
+        ```
+    You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
+1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
+    ```sh
+    cmake --install build --prefix install --config Debug
+    ```
 
 ### Windows
 
-```bat
-REM Assumes python is on the path
+1. Configure
+    ```bat
+    REM Assumes python is on the path
 
-cd %DIVE_ROOT_PATH%
-rmdir /s build
+    cd %DIVE_ROOT_PATH%
+    rmdir /s build
 
-cmake . -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Debug -Bbuild
-```
-
-You can specify other build types as well with `-DCMAKE_BUILD_TYPE=<Debug/Release/RelWithDebInfo/MinSizeRel>`. If you are opening the VS IDE to build, make sure the selected build type in the dropdown matches the type specified earlier, to ensure proper version info is reflected by the built host tools.
-
-TODO(b/460765024): Support multi-configuration generator (VS) for Windows build and disallow `-DCMAKE_BUILD_TYPE=` flag
-
-Open `dive.sln` in Visual Studio and build.
-
-Or run:
-```bat
-cmake --build build
-```
-
-TODO(b/462767957): Fix Windows build host tools install
+    cmake . -G "Visual Studio 17 2022" -Bbuild
+    ```
+1. Build with one of the following methods:
+    * Build with Visual Studio by opening `dive.sln` using IDE and selecting the appropriate build type
+    * Build using cmake:
+        ```bat
+        cmake --build build --config=Debug
+        ```
+    You can specify other build types as well
+    with `--config=<Debug/Release/RelWithDebInfo/MinSizeRel>` instead.
+1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
+    ```bat
+    cmake --install build --prefix install --config Debug
+    ```
 
 ## Dive Device Resources
 
-### Linux
-
-Warning: Release build is not supported
+Warning: We only support "Debug" for the gradle build for GFXR portion, so it will be hardcoded and not depend on the build type chosen below.
 
 Provide the appropriate `ANDROID_ABI` depending on your device.
 
-```sh
-cd $DIVE_ROOT_PATH
+### Linux
 
-rm -rf build_android
+1. Configure
+    ```sh
+    cd $DIVE_ROOT_PATH
 
-cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-    -G "Ninja" \
-    -Bbuild_android \
-    -DCMAKE_MAKE_PROGRAM="ninja" \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_SYSTEM_NAME=Android \
-    -DANDROID_ABI=arm64-v8a \
-    -DANDROID_PLATFORM=android-26 \
-    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
-    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+    rm -rf build_android
 
-cmake --build build_android --config=Debug
-
-cmake --install build_android
-```
+    cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+        -G "Ninja Multi-Config" \
+        -Bbuild_android \
+        -DCMAKE_MAKE_PROGRAM="ninja" \
+        -DCMAKE_SYSTEM_NAME=Android \
+        -DANDROID_ABI=arm64-v8a \
+        -DANDROID_PLATFORM=android-26 \
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+    ```
+1. Build with one of the following methods:
+    * Build directly with ninja
+        ```sh
+        ninja -C build_android -f build-Debug.ninja
+        ```
+    * Build using cmake
+        ```sh
+        cmake --build build_android --config=Debug
+        ```
+    You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
+1. Install (the prefix must be coordinated with that of the [host tools](#dive-host-tools))
+    ```sh
+    cmake --install build_android --prefix install --config Debug
+    ```
 
 ### Windows
 
-Warning: Release build is not supported
+Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019)
 
-Provide the appropriate `ANDROID_ABI` depending on your device.
+1. Configure
+    ```bat
+    cd %DIVE_ROOT_PATH%
 
-Note: On Windows, run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+    rmdir /s build_android
 
-```bat
-cd %DIVE_ROOT_PATH%
-
-rmdir /s build_android
-
-cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
-    -G "Ninja" ^
-    -Bbuild_android ^
-    -DCMAKE_MAKE_PROGRAM="ninja" ^
-    -DCMAKE_BUILD_TYPE=Debug  ^
-    -DCMAKE_SYSTEM_NAME=Android ^
-    -DANDROID_ABI=arm64-v8a ^
-    -DANDROID_PLATFORM=android-26 ^
-    -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
-    -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
-
-cmake --build build_android --config=Debug
-
-cmake --install build_android
-```
+    cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
+        -G "Ninja Multi-Config" ^
+        -Bbuild_android ^
+        -DCMAKE_MAKE_PROGRAM="ninja" ^
+        -DCMAKE_SYSTEM_NAME=Android ^
+        -DANDROID_ABI=arm64-v8a ^
+        -DANDROID_PLATFORM=android-26 ^
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+    ```
+1. Build with one of the following methods:
+    * Build directly with ninja
+        ```bat
+        ninja -C build_android -f build-Debug.ninja
+        ```
+    * Build using cmake
+        ```bat
+        cmake --build build_android --config=Debug
+        ```
+1. Install (the prefix must be coordinated with that of the [host tools](#dive-host-tools))
+    ```bat
+    cmake --install build_android --prefix install --config Debug
+    ```
 
 ### Troubleshooting Tips
-
-- Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
-- Delete GFXR build folders for a clean build
-    - `third_party/gfxreconstruct/android/layer/build`
-    - `third_party/gfxreconstruct/android/tools/replay/build`
+* Gradle build
+    * Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
+    * Delete GFXR build folders for a clean build
+        * `third_party/gfxreconstruct/android/layer/build`
+        * `third_party/gfxreconstruct/android/tools/replay/build`

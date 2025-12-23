@@ -19,7 +19,7 @@ QObject                      *parent) :
     QSortFilterProxyModel(parent),
     m_command_hierarchy(command_hierarchy)
 {
-    m_filter_mode = kDrawDispatchOnly;
+    m_filter_mode = kActionOnly;
 }
 
 void GfxrVulkanCommandFilterProxyModel::ApplyNewFilterMode(FilterMode new_mode)
@@ -134,13 +134,18 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
             return false;
         }
     }
-    else if (m_filter_mode == kDrawDispatchOnly)
+    else if (m_filter_mode == kActionOnly)
     {
-        // Only display Draw/Dispatch, RenderPass, and debug label commands when filter is enabled.
+        // Only display action and debug label commands when filter is enabled.
         if ((node_type != Dive::NodeType::kGfxrVulkanDrawCommandNode) &&
             (node_type != Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) &&
             (node_type != Dive::NodeType::kGfxrVulkanEndRenderPassCommandNode) &&
-            (node_type != Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode))
+            (node_type != Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanCopyBufferCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanClearAttachmentsCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanClearColorImageCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanClearDepthStencilImageCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanResolveImageCommandNode))
         {
             return false;
         }

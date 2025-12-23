@@ -21,13 +21,11 @@
 #include <qapplication.h>
 #include <qstandarditemmodel.h>
 
-static constexpr const char
-*kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kFilterModeCount] = {
-    "None",
-    "Draw/Dispatch"
-};
+static constexpr const char *
+kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kFilterModeCount] = { "None",
+                                                                                         "Action" };
 static constexpr GfxrVulkanCommandFilterProxyModel::FilterMode
-kDefaultGfxrVulkanCommandFilterMode = GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly;
+kDefaultGfxrVulkanCommandFilterMode = GfxrVulkanCommandFilterProxyModel::kActionOnly;
 // =================================================================================================
 // GfxrVulkanCommandFilter
 // =================================================================================================
@@ -69,9 +67,9 @@ void GfxrVulkanCommandFilter::OnFilterGfxrVulkanCommandChange(const QString &fil
         new_filter = GfxrVulkanCommandFilterProxyModel::kNone;
     }
     else if (filter_mode ==
-             kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly])
+             kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kActionOnly])
     {
-        new_filter = GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly;
+        new_filter = GfxrVulkanCommandFilterProxyModel::kActionOnly;
     }
     else
     {

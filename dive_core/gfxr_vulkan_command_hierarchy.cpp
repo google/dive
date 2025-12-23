@@ -181,8 +181,33 @@ std::vector<uint64_t>                            &render_pass_draw_call_counts)
     }
     else
     {
-        uint64_t vk_cmd_index = AddNode(NodeType::kGfxrVulkanCommandNode,
-                                        vk_cmd_string_stream.str());
+        NodeType node_type;
+        if (vulkan_cmd_name.find("vkCmdCopyBuffer") != std::string::npos)
+        {
+            node_type = NodeType::kGfxrVulkanCopyBufferCommandNode;
+        }
+        else if (vulkan_cmd_name.find("vkCmdClearAttachments") != std::string::npos)
+        {
+            node_type = NodeType::kGfxrVulkanClearAttachmentsCommandNode;
+        }
+        else if (vulkan_cmd_name.find("vkCmdClearColorImage") != std::string::npos)
+        {
+            node_type = NodeType::kGfxrVulkanClearColorImageCommandNode;
+        }
+        else if (vulkan_cmd_name.find("vkCmdClearDepthStencilImage") != std::string::npos)
+        {
+            node_type = NodeType::kGfxrVulkanClearDepthStencilImageCommandNode;
+        }
+        else if (vulkan_cmd_name.find("vkCmdResolveImage") != std::string::npos)
+        {
+            node_type = NodeType::kGfxrVulkanResolveImageCommandNode;
+        }
+        else
+        {
+            node_type = NodeType::kGfxrVulkanCommandNode;
+        }
+
+        uint64_t vk_cmd_index = AddNode(node_type, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
     }

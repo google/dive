@@ -29,13 +29,13 @@ limitations under the License.
 namespace Dive
 {
 
-absl::Status SendPong(Network::SocketConnection *client_conn)
+absl::Status SendPong(Network::ISocketConnection *client_conn)
 {
     Network::PongMessage response;
     return Network::SendSocketMessage(client_conn, response);
 }
 
-absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn)
+absl::Status Handshake(Network::HandshakeRequest *request, Network::ISocketConnection *client_conn)
 {
     Network::HandshakeResponse response;
     response.SetMajorVersion(request->GetMajorVersion());
@@ -43,7 +43,7 @@ absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnec
     return Network::SendSocketMessage(client_conn, response);
 }
 
-absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
+absl::Status StartPm4Capture(Network::ISocketConnection *client_conn)
 {
     GetTraceMgr().TriggerTrace();
     GetTraceMgr().WaitForTraceDone();
@@ -55,7 +55,7 @@ absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
 }
 
 absl::Status DownloadFile(Network::DownloadFileRequest *request,
-                          Network::SocketConnection    *client_conn)
+                          Network::ISocketConnection   *client_conn)
 {
     Network::DownloadFileResponse response;
     std::string                   file_path = request->GetString();
@@ -86,7 +86,7 @@ absl::Status DownloadFile(Network::DownloadFileRequest *request,
     return client_conn->SendFile(file_path);
 }
 
-absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn)
+absl::Status GetFileSize(Network::FileSizeRequest *request, Network::ISocketConnection *client_conn)
 {
     Network::FileSizeResponse response;
     std::string               file_path = request->GetString();
@@ -117,7 +117,7 @@ void ServerMessageHandler::OnDisconnect()
 }
 
 void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                                         Network::SocketConnection              *client_conn)
+                                         Network::ISocketConnection             *client_conn)
 {
     if (!message)
     {

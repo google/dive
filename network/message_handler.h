@@ -33,7 +33,7 @@ public:
 
     // Processes a message received from the client.
     virtual void HandleMessage(std::unique_ptr<ISerializable> message,
-                               SocketConnection*              client_conn) = 0;
+                               ISocketConnection*             client_conn) = 0;
 
     // Callback for when a client disconnects.
     virtual void OnDisconnect() = 0;

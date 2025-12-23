@@ -128,7 +128,7 @@ absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& serv
 #endif
 }
 
-absl::StatusOr<std::unique_ptr<SocketConnection>> SocketConnection::Accept()
+absl::StatusOr<std::unique_ptr<ISocketConnection>> SocketConnection::Accept()
 {
 #ifdef WIN32
     return Dive::UnimplementedError(
@@ -405,14 +405,14 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
     return total_received;
 }
 
-absl::Status SocketConnection::SendString(const std::string& s)
+absl::Status ISocketConnection::SendString(const std::string& s)
 {
     // Include null terminator.
     const auto len = s.length() + 1;
     return Send(reinterpret_cast<const uint8_t*>(s.c_str()), len);
 }
 
-absl::StatusOr<std::string> SocketConnection::ReceiveString()
+absl::StatusOr<std::string> ISocketConnection::ReceiveString()
 {
     std::string received_string;
     char        c = 0;
@@ -436,7 +436,7 @@ absl::StatusOr<std::string> SocketConnection::ReceiveString()
     }
 }
 
-absl::Status SocketConnection::SendFile(const std::string& file_path)
+absl::Status ISocketConnection::SendFile(const std::string& file_path)
 {
     std::ifstream file_stream(file_path, std::ios::binary | std::ios::ate);
     if (!file_stream)
@@ -488,9 +488,9 @@ absl::Status SocketConnection::SendFile(const std::string& file_path)
     return Dive::OkStatus();
 }
 
-absl::Status SocketConnection::ReceiveFile(const std::string&          file_path,
-                                           size_t                      file_size,
-                                           std::function<void(size_t)> progress_callback)
+absl::Status ISocketConnection::ReceiveFile(const std::string&          file_path,
+                                            size_t                      file_size,
+                                            std::function<void(size_t)> progress_callback)
 {
     std::ofstream file_stream(file_path, std::ios::binary | std::ios::trunc);
     if (!file_stream)

@@ -16,6 +16,7 @@
 
 #include "dive/common/status.h"
 
+#include <array>
 #include <string>
 
 #include "absl/debugging/stacktrace.h"

@@ -52,7 +52,6 @@ class DiveTreeView;
 class ErrorDialog;
 class EventSelection;
 class EventStateView;
-class EventTimingView;
 class FrameTabView;
 class GfxrVulkanCommandArgumentsFilterProxyModel;
 class GfxrVulkanCommandArgumentsTabView;

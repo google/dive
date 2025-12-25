@@ -241,7 +241,7 @@ class MainWindow : public QMainWindow
             kNone = 0u,
             kAll = kOverview | kCommand | kShader | kEventState | kGfxrVulkanCommandArguments |
                    kPerfCounters | kGpuTiming | kFrame | kTextFile,
-            kViewsForCorrelated = kOverview | kCommand | kShader | kEventState |
+            kViewsForCorrelated = kOverview | kCommand | kShader | kEventState | kBuffer |
                                   kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
             kViewsForRdFile = kOverview | kCommand | kShader | kEventState | kBuffer,
             kViewsForGfxrFile = kGfxrVulkanCommandArguments | kPerfCounters | kGpuTiming | kFrame,
@@ -271,12 +271,7 @@ class MainWindow : public QMainWindow
     PerfCounterTabView *m_perf_counter_tab_view = nullptr;
     GpuTimingTabView *m_gpu_timing_tab_view = nullptr;
     FrameTabView *m_frame_tab_view = nullptr;
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    BufferView *m_buffer_view = nullptr;
-#endif
-#ifndef NDEBUG
-    EventTimingView *m_event_timing_view = nullptr;
-#endif
+    [[maybe_unused]] BufferView *m_buffer_view = nullptr;
     TextFileView *m_text_file_view;
     TabIndices m_tabs;
     bool m_tabs_updating = false;

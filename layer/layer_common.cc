@@ -36,13 +36,13 @@ bool IsLibwrapLoaded()
 {
     bool loaded = false;
 #if defined(__ANDROID__)
-    FILE *maps = fopen("/proc/self/maps", "r");
+    FILE* maps = fopen("/proc/self/maps", "r");
     if (!maps)
     {
         return loaded;
     }
 
-    char *line = NULL;
+    char* line = NULL;
     size_t size = 0;
     while (getline(&line, &size, maps) > 0)
     {
@@ -100,7 +100,7 @@ struct InitServer
 void PreventLibraryUnload()
 {
     Dl_info info;
-    if (dladdr(reinterpret_cast<void *>(&PreventLibraryUnload), &info))
+    if (dladdr(reinterpret_cast<void*>(&PreventLibraryUnload), &info))
     {
         dlopen(info.dli_fname, RTLD_NOLOAD | RTLD_NODELETE);
     }

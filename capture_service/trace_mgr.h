@@ -43,7 +43,7 @@ class TraceManager
     virtual void OnNewFrame() {}
     virtual void WaitForTraceDone() {}
 
-    inline const std::string &GetTraceFilePath() const { return m_trace_file_path; }
+    inline const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     inline void SetTraceFilePath(std::string trace_file_path)
     {
         m_trace_file_path = std::move(trace_file_path);
@@ -91,6 +91,6 @@ class AndroidTraceManager : public TraceManager
     absl::Duration m_trace_duration;
 };
 
-TraceManager &GetTraceMgr();
+TraceManager& GetTraceMgr();
 
 }  // namespace Dive

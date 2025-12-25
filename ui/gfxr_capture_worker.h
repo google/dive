@@ -28,13 +28,13 @@ class GfxrCaptureWorker : public CaptureWorker
     Q_OBJECT
 
  public:
-    GfxrCaptureWorker(QObject *parent = nullptr) : CaptureWorker(parent) {}
+    GfxrCaptureWorker(QObject* parent = nullptr) : CaptureWorker(parent) {}
 
     void run() override;
-    void SetGfxrSourceCaptureDir(const std::string &source_capture_dir);
-    bool AreTimestampsCurrent(Dive::AndroidDevice *device,
-                              const std::map<std::string, std::string> &previous_timestamps);
-    absl::StatusOr<qlonglong> getGfxrCaptureDirectorySize(Dive::AndroidDevice *device);
+    void SetGfxrSourceCaptureDir(const std::string& source_capture_dir);
+    bool AreTimestampsCurrent(Dive::AndroidDevice* device,
+                              const std::map<std::string, std::string>& previous_timestamps);
+    absl::StatusOr<qlonglong> getGfxrCaptureDirectorySize(Dive::AndroidDevice* device);
 
  private:
     std::string m_source_capture_dir;  // On Android, better to keep as std::string since the

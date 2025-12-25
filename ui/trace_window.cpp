@@ -62,7 +62,7 @@ namespace
 
 constexpr size_t kNumGfxrCaptureAppTypes =
     std::count_if(Dive::kAppTypeInfos.begin(), Dive::kAppTypeInfos.end(),
-                  [](const Dive::AppTypeInfo &info) { return info.is_gfxr_capture_supported; });
+                  [](const Dive::AppTypeInfo& info) { return info.is_gfxr_capture_supported; });
 const int kGfxrCaptureButtonId = 1;
 const int kPm4CaptureButtonId = 2;
 }  // namespace
@@ -70,7 +70,7 @@ const int kPm4CaptureButtonId = 2;
 // =================================================================================================
 // TraceDialog
 // =================================================================================================
-TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent)
+TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     : QDialog(parent), m_controller(controller)
 {
     qDebug() << "TraceDialog created.";
@@ -80,7 +80,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent)
     m_app_type_label = new QLabel(tr("Application Type:"));
     m_gfxr_capture_file_on_device_directory_label =
         new QLabel(tr("On Device GFXR Capture File Directory Name:"));
-    QLabel *capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
+    QLabel* capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
 
     m_dev_model = new QStandardItemModel();
     m_pkg_model = new QStandardItemModel();
@@ -115,9 +115,9 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent)
 
     m_devices = Dive::GetDeviceManager().ListDevice();
     UpdateDeviceList(false);
-    for (const auto &ty : Dive::kAppTypeInfos)
+    for (const auto& ty : Dive::kAppTypeInfos)
     {
-        QStandardItem *item = new QStandardItem(ty.ui_name.data());
+        QStandardItem* item = new QStandardItem(ty.ui_name.data());
         m_app_type_model->appendRow(item);
     }
     m_app_type_filter_model = new AppTypeFilterModel(this);
@@ -134,10 +134,10 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent)
     m_pkg_box->setSizeAdjustPolicy(
         QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
     m_pkg_box->setEditable(true);
-    QSortFilterProxyModel *filterModel = new QSortFilterProxyModel(m_pkg_box);
+    QSortFilterProxyModel* filterModel = new QSortFilterProxyModel(m_pkg_box);
     filterModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     filterModel->setSourceModel(m_pkg_box->model());
-    QCompleter *completer = new QCompleter(filterModel, m_pkg_box);
+    QCompleter* completer = new QCompleter(filterModel, m_pkg_box);
     completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     m_pkg_box->setCompleter(completer);
 
@@ -207,7 +207,7 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent)
     m_gfxr_capture_file_on_device_directory_label->hide();
     m_gfxr_capture_file_directory_input_box->hide();
 
-    QHBoxLayout *capture_file_local_directory_layout = new QHBoxLayout();
+    QHBoxLayout* capture_file_local_directory_layout = new QHBoxLayout();
     m_capture_file_local_directory_input_box = new QLineEdit();
     m_capture_file_local_directory_input_box->setPlaceholderText(
         "Input the location to save the directory to");
@@ -235,10 +235,10 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent)
     setSizeGripEnabled(true);
     setLayout(m_main_layout);
 
-    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString &)), this,
-                     SLOT(OnDeviceSelected(const QString &)));
-    QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString &)), this,
-                     SLOT(OnPackageSelected(const QString &)));
+    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnDeviceSelected(const QString&)));
+    QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnPackageSelected(const QString&)));
     QObject::connect(m_pkg_box->lineEdit(), &QLineEdit::textEdited, filterModel,
                      &QSortFilterProxyModel::setFilterFixedString);
     QObject::connect(m_run_button, &QPushButton::clicked, this, &TraceDialog::OnStartClicked);
@@ -271,7 +271,7 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
-void TraceDialog::ShowMessage(const QString &message)
+void TraceDialog::ShowMessage(const QString& message)
 {
     auto message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
@@ -325,7 +325,7 @@ absl::Status TraceDialog::StopPackageAndCleanup()
     return absl::OkStatus();
 }
 
-void TraceDialog::closeEvent(QCloseEvent *event)
+void TraceDialog::closeEvent(QCloseEvent* event)
 {
     absl::Status status = StopPackageAndCleanup();
 
@@ -374,7 +374,7 @@ void TraceDialog::UpdateDeviceList(bool isInitialized)
 
     if (m_devices.empty())
     {
-        QStandardItem *item = new QStandardItem("No devices found");
+        QStandardItem* item = new QStandardItem("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         m_dev_model->appendRow(item);
         m_dev_box->setCurrentIndex(0);
@@ -385,13 +385,13 @@ void TraceDialog::UpdateDeviceList(bool isInitialized)
         {
             if (i == 0)
             {
-                QStandardItem *item = new QStandardItem("Please select a device");
+                QStandardItem* item = new QStandardItem("Please select a device");
                 item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
                 m_dev_model->appendRow(item);
                 m_dev_box->setCurrentIndex(0);
             }
 
-            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+            QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
             m_dev_model->appendRow(item);
             // Keep the original selected devices as selected.
             if (m_cur_dev == m_devices[i].m_serial)
@@ -402,7 +402,7 @@ void TraceDialog::UpdateDeviceList(bool isInitialized)
     }
 }
 
-void TraceDialog::OnDeviceSelected(const QString &s)
+void TraceDialog::OnDeviceSelected(const QString& s)
 {
     if (s.isEmpty() || m_dev_box->currentIndex() == 0)
     {
@@ -459,7 +459,7 @@ void TraceDialog::OnShowAdvancedOptions(bool show)
     }
 }
 
-void TraceDialog::OnPackageSelected(const QString &s)
+void TraceDialog::OnPackageSelected(const QString& s)
 {
     int cur_index = m_pkg_box->currentIndex();
     qDebug() << "Package selected: " << s << ", index: " << cur_index;
@@ -476,7 +476,7 @@ void TraceDialog::OnPackageSelected(const QString &s)
     m_cmd_input_box->setText(m_cur_pkg.c_str());
 }
 
-void TraceDialog::OnInputCommand(const QString &text)
+void TraceDialog::OnInputCommand(const QString& text)
 {
     qDebug() << "Input changed to " << text;
     m_run_button->setEnabled(true);
@@ -485,13 +485,13 @@ void TraceDialog::OnInputCommand(const QString &text)
     m_app_type_box->setCurrentIndex(-1);
 }
 
-void TraceDialog::OnInputArgs(const QString &text)
+void TraceDialog::OnInputArgs(const QString& text)
 {
     qDebug() << "Args changed to " << text;
     m_command_args = text.toStdString();
 }
 
-bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &app_type)
+bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& app_type)
 {
     if (device == nullptr)
     {
@@ -663,14 +663,14 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
-    QProgressDialog *progress_bar =
+    QProgressDialog* progress_bar =
         new QProgressDialog("Capturing PM4 Data ... ", nullptr, 0, 100, this);
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
     progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
     progress_bar->setMinimumDuration(0);
-    CaptureWorker *workerThread = new CaptureWorker(progress_bar);
+    CaptureWorker* workerThread = new CaptureWorker(progress_bar);
 
     if (m_capture_file_local_directory_input_box->text() == "")
     {
@@ -703,7 +703,7 @@ void TraceDialog::OnTraceClicked()
     std::cout << "OnTraceClicked done " << std::endl;
 }
 
-void TraceDialog::OnTraceAvailable(QString const &trace_path) { emit TraceAvailable(trace_path); }
+void TraceDialog::OnTraceAvailable(QString const& trace_path) { emit TraceAvailable(trace_path); }
 
 void TraceDialog::OnDevListRefresh() { UpdateDeviceList(true); }
 
@@ -733,7 +733,7 @@ void TraceDialog::UpdatePackageList()
     m_pkg_model->clear();
     for (size_t i = 0; i < m_pkg_list.size(); i++)
     {
-        QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(m_pkg_list[i].c_str());
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);
@@ -755,7 +755,7 @@ void TraceDialog::OnPackageListFilter()
     }
 }
 
-void TraceDialog::OnPackageListFilterApplied(const QString &filter)
+void TraceDialog::OnPackageListFilterApplied(const QString& filter)
 {
     if (filter == "All")
     {
@@ -874,7 +874,7 @@ void TraceDialog::RetrieveGfxrCapture()
         absl::StrCat(std::string(Dive::kDeviceCapturePath), "/",
                      m_gfxr_capture_file_directory_input_box->text().toStdString());
 
-    QProgressDialog *progress_bar =
+    QProgressDialog* progress_bar =
         new QProgressDialog("Downloading GFXR Capture ... ", nullptr, 0, 100, this);
     progress_bar->setObjectName("gfxr_download_progress");
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
@@ -882,7 +882,7 @@ void TraceDialog::RetrieveGfxrCapture()
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
 
-    GfxrCaptureWorker *workerThread = new GfxrCaptureWorker(progress_bar);
+    GfxrCaptureWorker* workerThread = new GfxrCaptureWorker(progress_bar);
     workerThread->SetGfxrSourceCaptureDir(on_device_capture_file_directory);
 
     workerThread->SetTargetCaptureDir(
@@ -906,9 +906,9 @@ void TraceDialog::RetrieveGfxrCapture()
     m_gfxr_capture_button->setEnabled(false);
 }
 
-void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
+void TraceDialog::OnGFXRCaptureAvailable(QString const& capture_path)
 {
-    QProgressDialog *progress_bar = findChild<QProgressDialog *>("gfxr_download_progress");
+    QProgressDialog* progress_bar = findChild<QProgressDialog*>("gfxr_download_progress");
     if (progress_bar)
     {
         progress_bar->close();
@@ -931,7 +931,7 @@ void AppTypeFilterModel::setFilterActive(bool active)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
 {
     if (m_filter_active)
     {

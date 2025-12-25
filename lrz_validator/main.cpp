@@ -20,10 +20,10 @@
 #include "dive_core/data_core.h"
 #include "pm4_info.h"
 
-bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &output_file_name)
+bool ValidateLRZ(const Dive::CaptureMetadata& meta_data, const std::string& output_file_name)
 {
     size_t event_count = meta_data.m_event_info.size();
-    const Dive::EventStateInfo &event_state = meta_data.m_event_state;
+    const Dive::EventStateInfo& event_state = meta_data.m_event_state;
     bool lrz_test_passed = true;
     std::optional<std::ofstream> output_file = std::nullopt;
     if (!output_file_name.empty())
@@ -33,20 +33,20 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
         output_file.emplace(std::ofstream(output_file_name));
     }
 
-    std::function<void(const std::string &)> OutputDetails;
+    std::function<void(const std::string&)> OutputDetails;
 
     if (output_file.has_value())
     {
-        OutputDetails = [&output_file](const std::string &str) { *output_file << str; };
+        OutputDetails = [&output_file](const std::string& str) { *output_file << str; };
     }
     else
     {
-        OutputDetails = [](const std::string &) {};
+        OutputDetails = [](const std::string&) {};
     }
 
     for (size_t i = 0; i < event_count; ++i)
     {
-        const Dive::EventInfo &info = meta_data.m_event_info[i];
+        const Dive::EventInfo& info = meta_data.m_event_info[i];
         // We only output the drawcalls in direct/binning mode
         if ((info.m_type == Dive::Util::EventType::kDraw) &&
             (info.m_render_mode == Dive::RenderModeType::kDirect ||
@@ -54,7 +54,7 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
              info.m_render_mode == Dive::RenderModeType::kBinningDirect))
         {
             // This is just to align the strings so that they are easier to read
-            auto AppendSpace = [](std::string &str, uint32_t desired_len) {
+            auto AppendSpace = [](std::string& str, uint32_t desired_len) {
                 if (str.length() < desired_len)
                 {
                     str.append(desired_len - str.length(), ' ');
@@ -141,7 +141,7 @@ bool ValidateLRZ(const Dive::CaptureMetadata &meta_data, const std::string &outp
     return lrz_test_passed;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     Pm4InfoInit();
 
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
                      "<output_details_file_name.txt>(optional)";
         return 0;
     }
-    char *input_file_name = argv[1];
+    char* input_file_name = argv[1];
 
     std::string output_file_name = "";
     if (argc == 3)
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
     std::cout << "Validating LRZ...\n";
 
     // LRZ Validation
-    const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
+    const Dive::CaptureMetadata& meta_data = data_core->GetCaptureMetadata();
     const bool lrz_test_passed = ValidateLRZ(meta_data, output_file_name);
     if (lrz_test_passed)
     {

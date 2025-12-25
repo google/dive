@@ -74,7 +74,7 @@ ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 class CrashHandler
 {
  public:
-    static void Initialize(const char *argv0)
+    static void Initialize(const char* argv0)
     {
         QString filename =
             "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ".log.txt";
@@ -98,7 +98,7 @@ class CrashHandler
         std::cout << "  2. Fallback Log Path: " << temp_full_path.toStdString() << std::endl;
     }
 
-    static void Writer(const char *data)
+    static void Writer(const char* data)
     {
         if (data == nullptr)
         {
@@ -139,7 +139,7 @@ class CrashHandler
     inline static char m_fallback_path[kMaxPath] = {0};
 
     template <size_t N>
-    static void SafeStrCopy(char (&dest)[N], const char *src)
+    static void SafeStrCopy(char (&dest)[N], const char* src)
     {
         if (!src)
         {
@@ -154,7 +154,7 @@ class CrashHandler
         dest[i] = '\0';
     }
 
-    static int SysOpen(const char *path)
+    static int SysOpen(const char* path)
     {
 #if defined(_WIN32)
         constexpr int flags = _O_CREAT | _O_TRUNC | _O_WRONLY | _O_TEXT;
@@ -171,7 +171,7 @@ class CrashHandler
 #endif
     }
 
-    static void SysWrite(int fd, const char *data, uint32_t len)
+    static void SysWrite(int fd, const char* data, uint32_t len)
     {
 #if defined(_WIN32)
         _write(fd, data, len);
@@ -197,7 +197,7 @@ bool SetApplicationStyle(QString style_key)
 }
 
 //--------------------------------------------------------------------------------------------------
-void SetDarkMode(QApplication &app)
+void SetDarkMode(QApplication& app)
 {
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, QColor(40, 40, 40));
@@ -232,7 +232,7 @@ void SetDarkMode(QApplication &app)
 }
 
 //--------------------------------------------------------------------------------------------------
-auto SetupFlags(int argc, char **argv)
+auto SetupFlags(int argc, char** argv)
 {
     absl::FlagsUsageConfig flags_usage_config;
     flags_usage_config.version_string = Dive::GetCompleteVersionString;
@@ -260,7 +260,7 @@ std::optional<std::filesystem::path> GetTestSavePath(std::string_view filename)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool ExecuteScenario(std::string_view scenario, MainWindow *main_window)
+bool ExecuteScenario(std::string_view scenario, MainWindow* main_window)
 {
     if (scenario == "exit-after-load")
     {
@@ -294,10 +294,10 @@ bool ExecuteScenario(std::string_view scenario, MainWindow *main_window)
 }
 
 //--------------------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     Dive::AttachToTerminalOutputIfAvailable();
-    std::vector<char *> positional_args = SetupFlags(argc, argv);
+    std::vector<char*> positional_args = SetupFlags(argc, argv);
 
     absl::InitializeSymbolizer(argv[0]);
 
@@ -346,7 +346,7 @@ int main(int argc, char *argv[])
     }
 
     // Display splash screen
-    QSplashScreen *splash_screen = new QSplashScreen();
+    QSplashScreen* splash_screen = new QSplashScreen();
     splash_screen->setPixmap(QPixmap(":/images/dive.png"));
     splash_screen->show();
 
@@ -354,7 +354,7 @@ int main(int argc, char *argv[])
     Pm4InfoInit();
 
     ApplicationController controller;
-    MainWindow *main_window = new MainWindow(controller);
+    MainWindow* main_window = new MainWindow(controller);
 
     if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {

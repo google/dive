@@ -48,12 +48,12 @@ class AppTypeFilterModel : public QSortFilterProxyModel
     Q_OBJECT
 
  public:
-    explicit AppTypeFilterModel(QObject *parent = nullptr) : QSortFilterProxyModel(parent) {}
+    explicit AppTypeFilterModel(QObject* parent = nullptr) : QSortFilterProxyModel(parent) {}
 
     void setFilterActive(bool active);
 
  protected:
-    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
 
  private:
     bool m_filter_active = false;
@@ -64,7 +64,7 @@ class TraceDialog : public QDialog
     Q_OBJECT
 
  public:
-    TraceDialog(ApplicationController &controller, QWidget *parent = 0);
+    TraceDialog(ApplicationController& controller, QWidget* parent = 0);
     ~TraceDialog();
     void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
@@ -75,94 +75,94 @@ class TraceDialog : public QDialog
     void RetrieveGfxrCapture();
 
  protected:
-    void closeEvent(QCloseEvent *event) override;
+    void closeEvent(QCloseEvent* event) override;
 
  private slots:
-    void OnDeviceSelected(const QString &);
-    void OnPackageSelected(const QString &);
+    void OnDeviceSelected(const QString&);
+    void OnPackageSelected(const QString&);
     void OnStartClicked();
     void OnTraceClicked();
-    void OnTraceAvailable(const QString &);
-    void OnGFXRCaptureAvailable(const QString &);
+    void OnTraceAvailable(const QString&);
+    void OnGFXRCaptureAvailable(const QString&);
     void OnDevListRefresh();
     void OnAppListRefresh();
-    void OnInputCommand(const QString &);
-    void OnInputArgs(const QString &);
+    void OnInputCommand(const QString&);
+    void OnInputArgs(const QString&);
     void OnPackageListFilter();
-    void OnPackageListFilterApplied(const QString &filter);
+    void OnPackageListFilterApplied(const QString& filter);
     void OnGfxrCaptureClicked();
-    void ShowMessage(const QString &message);
+    void ShowMessage(const QString& message);
     absl::Status StopPackageAndCleanup();
     void OnCaptureTypeChanged(int id);
     void OnShowAdvancedOptions(bool show);
 
  signals:
-    void TraceAvailable(const QString &);
+    void TraceAvailable(const QString&);
 
  private:
-    bool StartPackage(Dive::AndroidDevice *device, const std::string &app_type);
-    void RetrieveGfxrCapture(Dive::AndroidDevice *device, const std::string &capture_directory);
+    bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
+    void RetrieveGfxrCapture(Dive::AndroidDevice* device, const std::string& capture_directory);
 
-    ApplicationController &m_controller;
+    ApplicationController& m_controller;
 
     const QString kStart_Application = "&Start Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
     const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
-    QHBoxLayout *m_capture_layout;
-    QLabel *m_dev_label;
-    QStandardItemModel *m_dev_model;
-    QComboBox *m_dev_box;
-    QPushButton *m_dev_refresh_button;
+    QHBoxLayout* m_capture_layout;
+    QLabel* m_dev_label;
+    QStandardItemModel* m_dev_model;
+    QComboBox* m_dev_box;
+    QPushButton* m_dev_refresh_button;
 
-    QHBoxLayout *m_capture_type_layout;
-    QLabel *m_capture_type_label;
-    QButtonGroup *m_capture_type_button_group;
-    QRadioButton *m_gfxr_capture_type_button;
-    QRadioButton *m_pm4_capture_type_button;
+    QHBoxLayout* m_capture_type_layout;
+    QLabel* m_capture_type_label;
+    QButtonGroup* m_capture_type_button_group;
+    QRadioButton* m_gfxr_capture_type_button;
+    QRadioButton* m_pm4_capture_type_button;
 
-    QHBoxLayout *m_capture_warning_layout;
-    QLabel *m_capture_warning_label;
+    QHBoxLayout* m_capture_warning_layout;
+    QLabel* m_capture_warning_label;
 
-    QHBoxLayout *m_pkg_filter_layout;
-    QLabel *m_pkg_filter_label;
-    PackageFilter *m_pkg_filter;
-    QHBoxLayout *m_pkg_layout;
-    QLabel *m_pkg_label;
-    QStandardItemModel *m_pkg_model;
-    QComboBox *m_pkg_box;
-    QPushButton *m_pkg_refresh_button;
-    QPushButton *m_pkg_filter_button;
+    QHBoxLayout* m_pkg_filter_layout;
+    QLabel* m_pkg_filter_label;
+    PackageFilter* m_pkg_filter;
+    QHBoxLayout* m_pkg_layout;
+    QLabel* m_pkg_label;
+    QStandardItemModel* m_pkg_model;
+    QComboBox* m_pkg_box;
+    QPushButton* m_pkg_refresh_button;
+    QPushButton* m_pkg_filter_button;
     Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
 
-    QHBoxLayout *m_type_layout;
-    QLabel *m_app_type_label;
-    QStandardItemModel *m_app_type_model;
-    AppTypeFilterModel *m_app_type_filter_model;
-    QComboBox *m_app_type_box;
+    QHBoxLayout* m_type_layout;
+    QLabel* m_app_type_label;
+    QStandardItemModel* m_app_type_model;
+    AppTypeFilterModel* m_app_type_filter_model;
+    QComboBox* m_app_type_box;
 
-    QPushButton *m_capture_button;
-    QPushButton *m_run_button;
-    QPushButton *m_gfxr_capture_button;
-    QPushButton *m_gfxr_retrieve_button;
-    QHBoxLayout *m_button_layout;
+    QPushButton* m_capture_button;
+    QPushButton* m_run_button;
+    QPushButton* m_gfxr_capture_button;
+    QPushButton* m_gfxr_retrieve_button;
+    QHBoxLayout* m_button_layout;
 
-    QHBoxLayout *m_cmd_layout;
-    QLabel *m_file_label;
-    QPushButton *m_open_button;
-    QLineEdit *m_cmd_input_box;
+    QHBoxLayout* m_cmd_layout;
+    QLabel* m_file_label;
+    QPushButton* m_open_button;
+    QLineEdit* m_cmd_input_box;
 
-    QHBoxLayout *m_args_layout;
-    QLabel *m_args_label;
-    QLineEdit *m_args_input_box;
+    QHBoxLayout* m_args_layout;
+    QLabel* m_args_label;
+    QLineEdit* m_args_input_box;
 
-    QHBoxLayout *m_gfxr_capture_file_directory_layout;
-    QLabel *m_gfxr_capture_file_on_device_directory_label;
-    QLineEdit *m_gfxr_capture_file_directory_input_box;
+    QHBoxLayout* m_gfxr_capture_file_directory_layout;
+    QLabel* m_gfxr_capture_file_on_device_directory_label;
+    QLineEdit* m_gfxr_capture_file_directory_input_box;
 
-    QLineEdit *m_capture_file_local_directory_input_box;
+    QLineEdit* m_capture_file_local_directory_input_box;
 
-    QVBoxLayout *m_main_layout;
+    QVBoxLayout* m_main_layout;
     std::vector<Dive::DeviceInfo> m_devices;
     std::string m_cur_dev;
     std::vector<std::string> m_pkg_list;

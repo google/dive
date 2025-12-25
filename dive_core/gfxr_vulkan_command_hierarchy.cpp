@@ -25,7 +25,7 @@ namespace Dive
 // GfxrVulkanCommandHierarchyCreator
 // =================================================================================================
 GfxrVulkanCommandHierarchyCreator::GfxrVulkanCommandHierarchyCreator(
-    CommandHierarchy &command_hierarchy, const GfxrCaptureData &capture_data)
+    CommandHierarchy& command_hierarchy, const GfxrCaptureData& capture_data)
     : m_command_hierarchy(command_hierarchy), m_capture_data(capture_data)
 {
 }
@@ -78,11 +78,11 @@ std::string GfxrVulkanCommandHierarchyCreator::GetCurrDrawCallString()
 
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
-    const DiveAnnotationProcessor::VulkanCommandInfo &vk_cmd_info, uint64_t draw_call_count,
-    std::vector<uint64_t> &render_pass_draw_call_counts)
+    const DiveAnnotationProcessor::VulkanCommandInfo& vk_cmd_info, uint64_t draw_call_count,
+    std::vector<uint64_t>& render_pass_draw_call_counts)
 {
-    const std::string &vulkan_cmd_name = vk_cmd_info.name;
-    const nlohmann::ordered_json &vulkan_cmd_args = vk_cmd_info.args;
+    const std::string& vulkan_cmd_name = vk_cmd_info.name;
+    const nlohmann::ordered_json& vulkan_cmd_args = vk_cmd_info.args;
     std::ostringstream vk_cmd_string_stream;
     vk_cmd_string_stream << vulkan_cmd_name;
     if (vulkan_cmd_name == "vkBeginCommandBuffer")
@@ -207,8 +207,8 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
 
 //--------------------------------------------------------------------------------------------------
 bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
-    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &vkCmds, uint64_t draw_call_count,
-    const std::vector<uint64_t> &render_pass_draw_call_counts)
+    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo>& vkCmds, uint64_t draw_call_count,
+    const std::vector<uint64_t>& render_pass_draw_call_counts)
 {
     std::vector<uint64_t> mutable_render_pass_draw_call_counts = render_pass_draw_call_counts;
 
@@ -228,16 +228,16 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
 }
 
 //--------------------------------------------------------------------------------------------------
-bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData &capture_data)
+bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData& capture_data)
 {
     // Add frame node
     uint64_t frame_root_node_index = AddNode(NodeType::kGfxrRootFrameNode, "Frame");
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, frame_root_node_index);
 
-    const auto &submits = capture_data.GetGfxrSubmits();
+    const auto& submits = capture_data.GetGfxrSubmits();
     for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
     {
-        const DiveAnnotationProcessor::SubmitInfo &submit_info = *submits[submit_index];
+        const DiveAnnotationProcessor::SubmitInfo& submit_info = *submits[submit_index];
 
         OnGfxrSubmit(submit_index, submit_info);
 
@@ -247,10 +247,10 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
             return false;
         }
 
-        const auto &cmd_handles = submit_info.vk_command_buffer_handles;
-        for (const auto &handle : cmd_handles)
+        const auto& cmd_handles = submit_info.vk_command_buffer_handles;
+        for (const auto& handle : cmd_handles)
         {
-            const auto &draw_call_counts = capture_data.GetDrawCallCounts(handle);
+            const auto& draw_call_counts = capture_data.GetDrawCallCounts(handle);
             if (!ProcessVkCmds(capture_data.GetGfxrCommandBuffers(handle),
                                draw_call_counts.begin_command_buffer_draw_call_count,
                                draw_call_counts.render_pass_draw_call_counts))
@@ -289,7 +289,7 @@ bool GfxrVulkanCommandHierarchyCreator::CreateTrees(bool used_in_mixed_command_h
 }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string &&desc)
+uint64_t GfxrVulkanCommandHierarchyCreator::AddNode(NodeType type, std::string&& desc)
 {
     uint64_t node_index = m_command_hierarchy.AddGfxrNode(type, std::move(desc));
 
@@ -368,14 +368,14 @@ bool GfxrVulkanCommandHierarchyCreator::ParseCurDrawCallInfo(std::string_view ke
     return true;
 }
 
-void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &json_args,
+void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& json_args,
                                                 uint64_t curr_index)
 {
     // This block processes key-value pairs where keys represent field names
     // and values can be objects, arrays, or primitives.
     if (json_args.is_object())
     {
-        for (auto const &[key, val] : json_args.items())
+        for (auto const& [key, val] : json_args.items())
         {
             if (val.is_object())
             {
@@ -398,7 +398,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
                          array_node_index);
                 for (size_t i = 0; i < val.size(); ++i)
                 {
-                    const auto &element = val[i];
+                    const auto& element = val[i];
                     if (element.is_object())
                     {
                         // If an array element is an object, recursively process it.
@@ -459,7 +459,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
     {
         for (size_t i = 0; i < json_args.size(); ++i)
         {
-            const auto &element = json_args[i];
+            const auto& element = json_args[i];
             if (element.is_object() || element.is_array())
             {
                 // If an array element is an object or another array,
@@ -481,7 +481,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json &js
 
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnGfxrSubmit(
-    uint32_t submit_index, const DiveAnnotationProcessor::SubmitInfo &submit_info)
+    uint32_t submit_index, const DiveAnnotationProcessor::SubmitInfo& submit_info)
 {
     std::ostringstream submit_string_stream;
     submit_string_stream << submit_info.name << ": " << submit_index;
@@ -503,14 +503,14 @@ void GfxrVulkanCommandHierarchyCreator::CreateTopologies()
 
     // Convert the m_node_children temporary structure into CommandHierarchy's All Event topology
     size_t num_nodes = m_node_children[CommandHierarchy::kAllEventTopology].size();
-    Topology &cur_topology = m_command_hierarchy.m_topology[CommandHierarchy::kAllEventTopology];
+    Topology& cur_topology = m_command_hierarchy.m_topology[CommandHierarchy::kAllEventTopology];
     cur_topology.SetNumNodes(num_nodes);
 
     if (total_num_children[0] == 0)
     {
         for (uint64_t node_index = 0; node_index < num_nodes; ++node_index)
         {
-            auto &node_children = m_node_children[CommandHierarchy::kAllEventTopology];
+            auto& node_children = m_node_children[CommandHierarchy::kAllEventTopology];
             total_num_children[0] += node_children[node_index].size();
         }
     }

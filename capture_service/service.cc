@@ -29,13 +29,13 @@ limitations under the License.
 namespace Dive
 {
 
-absl::Status SendPong(Network::SocketConnection *client_conn)
+absl::Status SendPong(Network::SocketConnection* client_conn)
 {
     Network::PongMessage response;
     return Network::SendSocketMessage(client_conn, response);
 }
 
-absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn)
+absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn)
 {
     Network::HandshakeResponse response;
     response.SetMajorVersion(request->GetMajorVersion());
@@ -43,7 +43,7 @@ absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnec
     return Network::SendSocketMessage(client_conn, response);
 }
 
-absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
+absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
 {
     GetTraceMgr().TriggerTrace();
     GetTraceMgr().WaitForTraceDone();
@@ -54,8 +54,8 @@ absl::Status StartPm4Capture(Network::SocketConnection *client_conn)
     return Network::SendSocketMessage(client_conn, response);
 }
 
-absl::Status DownloadFile(Network::DownloadFileRequest *request,
-                          Network::SocketConnection *client_conn)
+absl::Status DownloadFile(Network::DownloadFileRequest* request,
+                          Network::SocketConnection* client_conn)
 {
     Network::DownloadFileResponse response;
     std::string file_path = request->GetString();
@@ -86,7 +86,7 @@ absl::Status DownloadFile(Network::DownloadFileRequest *request,
     return client_conn->SendFile(file_path);
 }
 
-absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn)
+absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn)
 {
     Network::FileSizeResponse response;
     std::string file_path = request->GetString();
@@ -111,7 +111,7 @@ void ServerMessageHandler::OnConnect() { LOGI("ServerMessageHandler: onConnect()
 void ServerMessageHandler::OnDisconnect() { LOGI("ServerMessageHandler: onDisconnect()"); }
 
 void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                                         Network::SocketConnection *client_conn)
+                                         Network::SocketConnection* client_conn)
 {
     if (!message)
     {
@@ -140,7 +140,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::HANDSHAKE_REQUEST:
         {
             LOGI("Message received: HandShakeRequest");
-            auto *request = dynamic_cast<Network::HandshakeRequest *>(message.get());
+            auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
             if (request)
             {
                 auto status = Handshake(request, client_conn);
@@ -170,7 +170,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::DOWNLOAD_FILE_REQUEST:
         {
             LOGI("Message received: DownloadFileRequest");
-            auto *request = dynamic_cast<Network::DownloadFileRequest *>(message.get());
+            auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
             if (request)
             {
                 auto status = DownloadFile(request, client_conn);
@@ -189,7 +189,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::FILE_SIZE_REQUEST:
         {
             LOGI("Message received: FileSizeRequest");
-            auto *request = dynamic_cast<Network::FileSizeRequest *>(message.get());
+            auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
             if (request)
             {
                 auto status = GetFileSize(request, client_conn);

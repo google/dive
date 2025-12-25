@@ -25,14 +25,14 @@ namespace Dive
 // =================================================================================================
 // DiveCommandHierarchyCreator
 // =================================================================================================
-DiveCommandHierarchyCreator::DiveCommandHierarchyCreator(CommandHierarchy &command_hierarchy)
+DiveCommandHierarchyCreator::DiveCommandHierarchyCreator(CommandHierarchy& command_hierarchy)
     : m_command_hierarchy(command_hierarchy)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hierarchy,
-                                              DiveCaptureData &dive_capture_data,
+bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy& command_hierarchy,
+                                              DiveCaptureData& dive_capture_data,
                                               bool flatten_chain_nodes,
                                               std::optional<uint64_t> reserve_size)
 {
@@ -73,8 +73,8 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
 
 //--------------------------------------------------------------------------------------------------
 void DiveCommandHierarchyCreator::CreateTopologies(
-    CommandHierarchyCreator &pm4_command_hierarchy_creator,
-    GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator)
+    CommandHierarchyCreator& pm4_command_hierarchy_creator,
+    GfxrVulkanCommandHierarchyCreator& gfxr_command_hierarchy_creator)
 {
     uint64_t total_num_children[CommandHierarchy::kTopologyTypeCount] = {};
     uint64_t total_num_shared_children[CommandHierarchy::kTopologyTypeCount] = {};
@@ -86,7 +86,7 @@ void DiveCommandHierarchyCreator::CreateTopologies(
         size_t total_num_nodes =
             num_pm4_nodes + gfxr_command_hierarchy_creator.GetNodeChildren(topology).size();
 
-        SharedNodeTopology &cur_topology = m_command_hierarchy.m_topology[topology];
+        SharedNodeTopology& cur_topology = m_command_hierarchy.m_topology[topology];
         cur_topology.SetNumNodes(total_num_nodes);
 
         // Optional loop: Pre-reserve to prevent the resize() from allocating memory later
@@ -130,11 +130,11 @@ void DiveCommandHierarchyCreator::CreateTopologies(
         {
             // Build the internal GFXR hierarchy for all non-submit nodes.
             // This includes the self-loop filter to ensure no submit nodes are included.
-            const auto &gfxr_dive_indices = gfxr_command_hierarchy_creator.GetCreatedDiveIndices();
+            const auto& gfxr_dive_indices = gfxr_command_hierarchy_creator.GetCreatedDiveIndices();
             for (uint64_t node_index = num_pm4_nodes; node_index < total_num_nodes; ++node_index)
             {
                 uint64_t gfxr_dive_index = gfxr_dive_indices.at(node_index);
-                const auto &children =
+                const auto& children =
                     gfxr_command_hierarchy_creator.GetNodeChildren(topology)[gfxr_dive_index];
 
                 DiveVector<uint64_t> filtered_children;

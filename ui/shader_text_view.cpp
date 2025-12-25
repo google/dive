@@ -24,7 +24,7 @@ ShaderTextView::ShaderTextView() {}
 
 void ShaderTextView::EnableHoverEvent(bool enabled) { m_hover_enabled = enabled; }
 
-void ShaderTextView::enterEvent(QEvent *event)
+void ShaderTextView::enterEvent(QEvent* event)
 {
     if (m_hover_enabled)
     {
@@ -33,7 +33,7 @@ void ShaderTextView::enterEvent(QEvent *event)
     QTextEdit::enterEvent(event);
 }
 
-void ShaderTextView::leaveEvent(QEvent *event)
+void ShaderTextView::leaveEvent(QEvent* event)
 {
     if (m_hover_enabled)
     {

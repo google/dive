@@ -22,7 +22,7 @@ namespace DiveLayer
 {
 
 void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa,
-                               InstanceDispatchTable *dt)
+                               InstanceDispatchTable* dt)
 {
     LOGI("InitInstanceDispatchTable");
 
@@ -35,7 +35,7 @@ void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa
         instance, "vkEnumerateDeviceExtensionProperties");
 }
 
-void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt)
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable* dt)
 {
     LOGI("InitDeviceDispatchTable");
     dt->pfn_get_device_proc_addr = pa;

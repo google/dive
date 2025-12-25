@@ -20,21 +20,21 @@
 #include "command_buffer_model.h"
 #include "dive_core/command_hierarchy.h"
 
-static_assert(sizeof(void *) == sizeof(uint64_t),
+static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
 // =================================================================================================
 // CommandBufferViewDelegate
 // =================================================================================================
 CommandBufferViewDelegate::CommandBufferViewDelegate(
-    const CommandBufferView *command_buffer_view_ptr)
+    const CommandBufferView* command_buffer_view_ptr)
     : QStyledItemDelegate(0), m_command_buffer_view_ptr(command_buffer_view_ptr)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferViewDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
-                                      const QModelIndex &index) const
+void CommandBufferViewDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
+                                      const QModelIndex& index) const
 {
     // Draw vertical border around a ib-level cell
     if (index.column() == CommandBufferModel::kColumnIbLevel)
@@ -54,8 +54,8 @@ void CommandBufferViewDelegate::paint(QPainter *painter, const QStyleOptionViewI
 // =================================================================================================
 // CommandBufferView
 // =================================================================================================
-CommandBufferView::CommandBufferView(const Dive::CommandHierarchy &command_hierarchy,
-                                     QWidget *parent)
+CommandBufferView::CommandBufferView(const Dive::CommandHierarchy& command_hierarchy,
+                                     QWidget* parent)
     : DiveTreeView(command_hierarchy, parent)
 {
     setItemDelegate(new CommandBufferViewDelegate(this));
@@ -63,9 +63,9 @@ CommandBufferView::CommandBufferView(const Dive::CommandHierarchy &command_hiera
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferView::setAndScrollToIndex(QModelIndex &idx)
+void CommandBufferView::setAndScrollToIndex(QModelIndex& idx)
 {
-    auto m = dynamic_cast<CommandBufferModel *>(model());
+    auto m = dynamic_cast<CommandBufferModel*>(model());
     idx = m->index(idx.row(), 1, idx.parent());
     scrollTo(idx);
     setCurrentIndex(idx);
@@ -79,14 +79,14 @@ void CommandBufferView::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferView::searchCommandBufferByText(const QString &search_text)
+void CommandBufferView::searchCommandBufferByText(const QString& search_text)
 {
     search_indexes.clear();
     search_index_it = search_indexes.begin();
 
     if (search_text.isEmpty()) return;
 
-    auto m = dynamic_cast<CommandBufferModel *>(model());
+    auto m = dynamic_cast<CommandBufferModel*>(model());
     search_indexes = m->search(m->index(0, 0), QVariant::fromValue(search_text));
     search_index_it = search_indexes.begin();
 

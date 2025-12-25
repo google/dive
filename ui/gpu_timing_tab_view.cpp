@@ -20,8 +20,8 @@
 
 #include "ui/gpu_timing_model.h"
 
-GpuTimingTabView::GpuTimingTabView(GpuTimingModel &gpu_timing_model,
-                                   const Dive::CommandHierarchy &command_hierarchy, QWidget *parent)
+GpuTimingTabView::GpuTimingTabView(GpuTimingModel& gpu_timing_model,
+                                   const Dive::CommandHierarchy& command_hierarchy, QWidget* parent)
     : QWidget(parent), m_model(gpu_timing_model), m_command_hierarchy(command_hierarchy)
 {
     m_table_view = new QTableView(this);
@@ -43,8 +43,8 @@ GpuTimingTabView::GpuTimingTabView(GpuTimingModel &gpu_timing_model,
 void GpuTimingTabView::OnModelReset() { ResizeColumns(); }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command_hierarchy_model,
-                                               const QModelIndex &parent_index)
+void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel& command_hierarchy_model,
+                                               const QModelIndex& parent_index)
 {
     // Initial call clears the map, and subsequent recursed calls repopulate it
     if (!parent_index.isValid())
@@ -71,8 +71,8 @@ void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel &command
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::CollectTimingIndex(Dive::NodeType node_type, const std::string &node_desc,
-                                          const QModelIndex &model_index)
+void GpuTimingTabView::CollectTimingIndex(Dive::NodeType node_type, const std::string& node_desc,
+                                          const QModelIndex& model_index)
 {
     if (!model_index.isValid())
     {
@@ -108,7 +108,7 @@ void GpuTimingTabView::ResizeColumns()
 }
 
 //--------------------------------------------------------------------------------------------------
-int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
+int GpuTimingTabView::EventIndexToRow(const QModelIndex& model_index)
 {
     if (!model_index.isValid())
     {
@@ -129,7 +129,7 @@ int GpuTimingTabView::EventIndexToRow(const QModelIndex &model_index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
+void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex& model_index)
 {
     int row_count = m_model.rowCount();
 
@@ -139,7 +139,7 @@ void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
         return;
     }
 
-    QItemSelectionModel *selection_model = m_table_view->selectionModel();
+    QItemSelectionModel* selection_model = m_table_view->selectionModel();
     QSignalBlocker blocker(selection_model);
     // Verify that the number of rows in the model is consistent with the rows of
     // m_timed_event_indices
@@ -163,7 +163,7 @@ void GpuTimingTabView::OnEventSelectionChanged(const QModelIndex &model_index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::OnSelectionChanged(const QModelIndex &index)
+void GpuTimingTabView::OnSelectionChanged(const QModelIndex& index)
 {
     // Resize columns to fit the content
     ResizeColumns();
@@ -183,7 +183,7 @@ void GpuTimingTabView::OnSelectionChanged(const QModelIndex &index)
 //--------------------------------------------------------------------------------------------------
 void GpuTimingTabView::ClearSelection()
 {
-    QItemSelectionModel *selection_model = m_table_view->selectionModel();
+    QItemSelectionModel* selection_model = m_table_view->selectionModel();
     if (selection_model)
     {
         selection_model->clear();

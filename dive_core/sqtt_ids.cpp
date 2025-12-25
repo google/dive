@@ -43,7 +43,7 @@ SqttStreamId::SqttStreamId(uint8_t me_id, uint8_t pipe_id)
     }
 }
 
-const char *SqttStreamId::string() const
+const char* SqttStreamId::string() const
 {
     switch (m_id)
     {

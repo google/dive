@@ -35,9 +35,9 @@ class ShaderView : public QFrame
     Q_OBJECT
 
  public:
-    ShaderView(const Dive::DataCore &data_core);
+    ShaderView(const Dive::DataCore& data_core);
     void Reset();
-    void SetupHoverHelp(HoverHelp &);
+    void SetupHoverHelp(HoverHelp&);
 
     bool OnCrossReference(Dive::CrossRef);
 
@@ -45,15 +45,15 @@ class ShaderView : public QFrame
     // void ShaderSelected();
 
  protected:
-    virtual void paintEvent(QPaintEvent *) override;
+    virtual void paintEvent(QPaintEvent*) override;
 
  private slots:
     void OnEventSelected(uint64_t node_index);
     void OnShaderSelectionChanged();
 
  private:
-    const Dive::DataCore &m_data_core;
+    const Dive::DataCore& m_data_core;
     uint64_t m_node_index;
-    ShaderTextView *m_shader_code_text;
-    QTreeWidget *m_shader_list;
+    ShaderTextView* m_shader_code_text;
+    QTreeWidget* m_shader_list;
 };

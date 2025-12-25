@@ -55,14 +55,14 @@ struct DeviceData
 // according to the vulkan loader, vkdevice, vkcmd, vkqueue share the same table
 // search `loader_set_dispatch` in
 // https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/trampoline.c#L1067
-inline uintptr_t DataKey(const void *object) { return (uintptr_t)(*(void **)object); }
+inline uintptr_t DataKey(const void* object) { return (uintptr_t)(*(void**)object); }
 
 namespace
 {
 // Generally we expect to get the same device and instance, so we keep them
 // handy
-static thread_local InstanceData *last_used_instance_data = nullptr;
-static thread_local DeviceData *last_used_device_data = nullptr;
+static thread_local InstanceData* last_used_instance_data = nullptr;
+static thread_local DeviceData* last_used_device_data = nullptr;
 
 std::mutex g_instance_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<InstanceData>> g_instance_data;
@@ -84,7 +84,7 @@ static constexpr std::array<VkExtensionProperties, 1> device_extensions{{
 
 }  // namespace
 
-InstanceData *GetInstanceLayerData(uintptr_t key)
+InstanceData* GetInstanceLayerData(uintptr_t key)
 {
     if (last_used_instance_data && DataKey(last_used_instance_data->instance) == key)
     {
@@ -96,7 +96,7 @@ InstanceData *GetInstanceLayerData(uintptr_t key)
     return last_used_instance_data;
 }
 
-DeviceData *GetDeviceLayerData(uintptr_t key)
+DeviceData* GetDeviceLayerData(uintptr_t key)
 {
     if (last_used_device_data && DataKey(last_used_device_data->device) == key)
     {
@@ -111,26 +111,26 @@ DeviceData *GetDeviceLayerData(uintptr_t key)
 struct VkStruct
 {
     VkStructureType sType;
-    const void *pNext;
+    const void* pNext;
 };
 
-VkStruct *FindOnChain(VkStruct *s, VkStructureType type)
+VkStruct* FindOnChain(VkStruct* s, VkStructureType type)
 {
-    VkStruct *n = (VkStruct *)s->pNext;
+    VkStruct* n = (VkStruct*)s->pNext;
     while (n && n->sType != type)
     {
-        n = (VkStruct *)n->pNext;
+        n = (VkStruct*)n->pNext;
     }
     return n;
 }
 
-VkLayerInstanceCreateInfo *GetLoaderInstanceInfo(const VkInstanceCreateInfo *create_info,
+VkLayerInstanceCreateInfo* GetLoaderInstanceInfo(const VkInstanceCreateInfo* create_info,
                                                  VkLayerFunction func_type)
 {
-    VkStruct *n = (VkStruct *)create_info;
+    VkStruct* n = (VkStruct*)create_info;
     while ((n = FindOnChain(n, VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO)) != nullptr)
     {
-        VkLayerInstanceCreateInfo *vci = (VkLayerInstanceCreateInfo *)n;
+        VkLayerInstanceCreateInfo* vci = (VkLayerInstanceCreateInfo*)n;
         if (vci->function == func_type)
         {
             return vci;
@@ -139,13 +139,13 @@ VkLayerInstanceCreateInfo *GetLoaderInstanceInfo(const VkInstanceCreateInfo *cre
     return nullptr;
 }
 
-VkLayerDeviceCreateInfo *GetLoaderDeviceInfo(const VkDeviceCreateInfo *create_info,
+VkLayerDeviceCreateInfo* GetLoaderDeviceInfo(const VkDeviceCreateInfo* create_info,
                                              VkLayerFunction func_type)
 {
-    VkStruct *n = (VkStruct *)create_info;
+    VkStruct* n = (VkStruct*)create_info;
     while ((n = FindOnChain(n, VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO)) != nullptr)
     {
-        VkLayerDeviceCreateInfo *vdi = (VkLayerDeviceCreateInfo *)n;
+        VkLayerDeviceCreateInfo* vdi = (VkLayerDeviceCreateInfo*)n;
         if (vdi->function == func_type)
         {
             return vdi;
@@ -156,7 +156,7 @@ VkLayerDeviceCreateInfo *GetLoaderDeviceInfo(const VkDeviceCreateInfo *create_in
 
 // Intercept functions.
 // Device functions
-VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
+VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo)
 {
     PFN_vkQueuePresentKHR pfn = nullptr;
 
@@ -165,8 +165,8 @@ VkResult DiveInterceptQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPr
     return sDiveRuntimeLayer.QueuePresentKHR(pfn, queue, pPresentInfo);
 }
 
-VkResult DiveInterceptCreateImage(VkDevice device, const VkImageCreateInfo *pCreateInfo,
-                                  const VkAllocationCallbacks *pAllocator, VkImage *pImage)
+VkResult DiveInterceptCreateImage(VkDevice device, const VkImageCreateInfo* pCreateInfo,
+                                  const VkAllocationCallbacks* pAllocator, VkImage* pImage)
 {
     PFN_vkCreateImage pfn = nullptr;
 
@@ -214,7 +214,7 @@ void DiveInterceptCmdWriteTimestamp(VkCommandBuffer commandBuffer,
 
 VkResult DiveInterceptGetQueryPoolResults(VkDevice device, VkQueryPool queryPool,
                                           uint32_t firstQuery, uint32_t queryCount, size_t dataSize,
-                                          void *pData, VkDeviceSize stride,
+                                          void* pData, VkDeviceSize stride,
                                           VkQueryResultFlags flags)
 {
     PFN_vkGetQueryPoolResults pfn = nullptr;
@@ -227,7 +227,7 @@ VkResult DiveInterceptGetQueryPoolResults(VkDevice device, VkQueryPool queryPool
 }
 
 void DiveInterceptDestroyCommandPool(VkDevice device, VkCommandPool commandPool,
-                                     const VkAllocationCallbacks *pAllocator)
+                                     const VkAllocationCallbacks* pAllocator)
 {
     PFN_vkDestroyCommandPool pfn = nullptr;
 
@@ -238,8 +238,8 @@ void DiveInterceptDestroyCommandPool(VkDevice device, VkCommandPool commandPool,
 }
 
 VkResult DiveInterceptAllocateCommandBuffers(VkDevice device,
-                                             const VkCommandBufferAllocateInfo *pAllocateInfo,
-                                             VkCommandBuffer *pCommandBuffers)
+                                             const VkCommandBufferAllocateInfo* pAllocateInfo,
+                                             VkCommandBuffer* pCommandBuffers)
 {
     PFN_vkAllocateCommandBuffers pfn = nullptr;
 
@@ -251,7 +251,7 @@ VkResult DiveInterceptAllocateCommandBuffers(VkDevice device,
 
 void DiveInterceptFreeCommandBuffers(VkDevice device, VkCommandPool commandPool,
                                      uint32_t commandBufferCount,
-                                     const VkCommandBuffer *pCommandBuffers)
+                                     const VkCommandBuffer* pCommandBuffers)
 {
     PFN_vkFreeCommandBuffers pfn = nullptr;
 
@@ -274,7 +274,7 @@ VkResult DiveInterceptResetCommandBuffer(VkCommandBuffer commandBuffer,
 }
 
 VkResult DiveInterceptBeginCommandBuffer(VkCommandBuffer commandBuffer,
-                                         const VkCommandBufferBeginInfo *pBeginInfo)
+                                         const VkCommandBufferBeginInfo* pBeginInfo)
 {
     PFN_vkBeginCommandBuffer pfn = nullptr;
 
@@ -294,8 +294,8 @@ VkResult DiveInterceptEndCommandBuffer(VkCommandBuffer commandBuffer)
     return sDiveRuntimeLayer.EndCommandBuffer(pfn, commandBuffer);
 }
 
-void DiveInterceptGetDeviceQueue2(VkDevice device, const VkDeviceQueueInfo2 *pQueueInfo,
-                                  VkQueue *pQueue)
+void DiveInterceptGetDeviceQueue2(VkDevice device, const VkDeviceQueueInfo2* pQueueInfo,
+                                  VkQueue* pQueue)
 {
     PFN_vkGetDeviceQueue2 pfn = nullptr;
 
@@ -305,7 +305,7 @@ void DiveInterceptGetDeviceQueue2(VkDevice device, const VkDeviceQueueInfo2 *pQu
 }
 
 void DiveInterceptGetDeviceQueue(VkDevice device, uint32_t queueFamilyIndex, uint32_t queueIndex,
-                                 VkQueue *pQueue)
+                                 VkQueue* pQueue)
 {
     PFN_vkGetDeviceQueue pfn = nullptr;
 
@@ -316,7 +316,7 @@ void DiveInterceptGetDeviceQueue(VkDevice device, uint32_t queueFamilyIndex, uin
 
 VkResult DiveInterceptAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain,
                                           uint64_t timeout, VkSemaphore semaphore, VkFence fence,
-                                          uint32_t *pImageIndex)
+                                          uint32_t* pImageIndex)
 {
     PFN_vkAcquireNextImageKHR pfn = nullptr;
 
@@ -326,7 +326,7 @@ VkResult DiveInterceptAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapch
                                                  pImageIndex);
 }
 
-VkResult DiveInterceptQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo *pSubmits,
+VkResult DiveInterceptQueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits,
                                   VkFence fence)
 {
     PFN_vkQueueSubmit pfn = nullptr;
@@ -338,12 +338,12 @@ VkResult DiveInterceptQueueSubmit(VkQueue queue, uint32_t submitCount, const VkS
 
 // Instance functions
 // Create instance needs a special implementation for layer
-VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo *pCreateInfo,
-                                     const VkAllocationCallbacks *pAllocator, VkInstance *pInstance)
+VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo* pCreateInfo,
+                                     const VkAllocationCallbacks* pAllocator, VkInstance* pInstance)
 {
     LOGI("DiveInterceptCreateInstance");
     // Find the create info
-    VkLayerInstanceCreateInfo *layer_create_info =
+    VkLayerInstanceCreateInfo* layer_create_info =
         GetLoaderInstanceInfo(pCreateInfo, VK_LAYER_LINK_INFO);
 
     if (layer_create_info == NULL)
@@ -373,17 +373,17 @@ VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo *pCreateInfo,
 
     {
         std::lock_guard<std::mutex> lock(g_instance_mutex);
-        auto key = (uintptr_t)(*(void **)(*pInstance));
+        auto key = (uintptr_t)(*(void**)(*pInstance));
         g_instance_data[key] = std::move(id);
     }
 
     return result;
 }
 
-VkResult DiveInterceptCreateDevice(VkPhysicalDevice gpu, const VkDeviceCreateInfo *pCreateInfo,
-                                   const VkAllocationCallbacks *pAllocator, VkDevice *pDevice)
+VkResult DiveInterceptCreateDevice(VkPhysicalDevice gpu, const VkDeviceCreateInfo* pCreateInfo,
+                                   const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
 {
-    VkLayerDeviceCreateInfo *layer_create_info =
+    VkLayerDeviceCreateInfo* layer_create_info =
         GetLoaderDeviceInfo(pCreateInfo, VK_LAYER_LINK_INFO);
     LOGI("DCI %p\n", layer_create_info);
 
@@ -433,14 +433,14 @@ VkResult DiveInterceptCreateDevice(VkPhysicalDevice gpu, const VkDeviceCreateInf
 
     {
         std::lock_guard<std::mutex> lock(g_device_mutex);
-        auto key = (uintptr_t)(*(void **)(*pDevice));
+        auto key = (uintptr_t)(*(void**)(*pDevice));
         g_device_data[key] = std::move(dd);
     }
 
     return result;
 }
 
-void DiveInterceptDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocator)
+void DiveInterceptDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
 {
     PFN_vkDestroyDevice pfn = nullptr;
 
@@ -450,7 +450,7 @@ void DiveInterceptDestroyDevice(VkDevice device, const VkAllocationCallbacks *pA
 }
 
 void DiveInterceptCmdInsertDebugUtilsLabel(VkCommandBuffer commandBuffer,
-                                           const VkDebugUtilsLabelEXT *pLabelInfo)
+                                           const VkDebugUtilsLabelEXT* pLabelInfo)
 {
     PFN_vkCmdInsertDebugUtilsLabelEXT pfn = nullptr;
 
@@ -460,7 +460,7 @@ void DiveInterceptCmdInsertDebugUtilsLabel(VkCommandBuffer commandBuffer,
 }
 
 void DiveInterceptCmdBeginRenderPass(VkCommandBuffer commandBuffer,
-                                     const VkRenderPassBeginInfo *pRenderPassBegin,
+                                     const VkRenderPassBeginInfo* pRenderPassBegin,
                                      VkSubpassContents contents)
 {
     PFN_vkCmdBeginRenderPass pfn = nullptr;
@@ -482,8 +482,8 @@ void DiveInterceptCmdEndRenderPass(VkCommandBuffer commandBuffer)
 }
 
 void DiveInterceptCmdBeginRenderPass2(VkCommandBuffer commandBuffer,
-                                      const VkRenderPassBeginInfo *pRenderPassBegin,
-                                      const VkSubpassBeginInfo *pSubpassBeginInfo)
+                                      const VkRenderPassBeginInfo* pRenderPassBegin,
+                                      const VkSubpassBeginInfo* pSubpassBeginInfo)
 {
     PFN_vkCmdBeginRenderPass2 pfn = nullptr;
 
@@ -494,7 +494,7 @@ void DiveInterceptCmdBeginRenderPass2(VkCommandBuffer commandBuffer,
 }
 
 void DiveInterceptCmdEndRenderPass2(VkCommandBuffer commandBuffer,
-                                    const VkSubpassEndInfo *pSubpassEndInfo)
+                                    const VkSubpassEndInfo* pSubpassEndInfo)
 {
     PFN_vkCmdEndRenderPass2 pfn = nullptr;
 
@@ -507,7 +507,7 @@ void DiveInterceptCmdEndRenderPass2(VkCommandBuffer commandBuffer,
 extern "C"
 {
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceLayerProperties(
-        uint32_t *pPropertyCount, VkLayerProperties *pProperties)
+        uint32_t* pPropertyCount, VkLayerProperties* pProperties)
     {
         LOGI("DiveInterceptEnumerateInstanceLayerProperties");
 
@@ -537,8 +537,8 @@ extern "C"
     }
 
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceExtensionProperties(
-        const VkEnumerateInstanceExtensionPropertiesChain *pChain, char *pLayerName,
-        uint32_t *pPropertyCount, VkExtensionProperties *pProperties)
+        const VkEnumerateInstanceExtensionPropertiesChain* pChain, char* pLayerName,
+        uint32_t* pPropertyCount, VkExtensionProperties* pProperties)
     {
         LOGI("DiveInterceptEnumerateInstanceExtensionProperties");
         VkResult result = VK_SUCCESS;
@@ -601,15 +601,15 @@ extern "C"
     }
 
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(
-        VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount, VkLayerProperties *pProperties)
+        VkPhysicalDevice physicalDevice, uint32_t* pPropertyCount, VkLayerProperties* pProperties)
     {
         LOGI("DiveInterceptEnumerateDeviceLayerProperties");
         return DiveInterceptEnumerateInstanceLayerProperties(pPropertyCount, pProperties);
     }
 
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceExtensionProperties(
-        VkPhysicalDevice physicalDevice, char *pLayerName, uint32_t *pPropertyCount,
-        VkExtensionProperties *pProperties)
+        VkPhysicalDevice physicalDevice, char* pLayerName, uint32_t* pPropertyCount,
+        VkExtensionProperties* pProperties)
     {
         VkResult result = VK_SUCCESS;
 
@@ -646,7 +646,7 @@ extern "C"
 
         // If not called with this layer's name, call down to get the properties and
         // append our extensions, removing duplicates.
-        InstanceData *instance_data = GetInstanceLayerData(DataKey(physicalDevice));
+        InstanceData* instance_data = GetInstanceLayerData(DataKey(physicalDevice));
 
         uint32_t num_other_extensions = 0;
         result = instance_data->dispatch_table.EnumerateDeviceExtensionProperties(
@@ -675,7 +675,7 @@ extern "C"
         // find our unique extensions that need to be added
         uint32_t num_additional_extensions = 0;
         auto num_device_extensions = device_extensions.size();
-        std::vector<const VkExtensionProperties *> additional_extensions(num_device_extensions);
+        std::vector<const VkExtensionProperties*> additional_extensions(num_device_extensions);
 
         for (size_t i = 0; i < num_device_extensions; ++i)
         {
@@ -724,7 +724,7 @@ extern "C"
     }
 
     VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL VK_LAYER_DiveGetDeviceProcAddr(VkDevice dev,
-                                                                            const char *func)
+                                                                            const char* func)
     {
         if (!strcmp(func, "vkGetDeviceProcAddr"))
             return (PFN_vkVoidFunction)&VK_LAYER_DiveGetDeviceProcAddr;
@@ -775,7 +775,7 @@ extern "C"
     }
 
     VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL VK_LAYER_DiveGetInstanceProcAddr(VkInstance inst,
-                                                                              const char *func)
+                                                                              const char* func)
     {
         if (0 == strcmp(func, "vkGetInstanceProcAddr"))
             return (PFN_vkVoidFunction)&VK_LAYER_DiveGetInstanceProcAddr;
@@ -811,7 +811,7 @@ extern "C"
     __declspec(dllexport)
 #endif
     VKAPI_ATTR VkResult VKAPI_CALL
-    VK_LAYER_DiveNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface *pVersionStruct)
+    VK_LAYER_DiveNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVersionStruct)
     {
         LOGI("VkNegotiateLayerInterface\n");
 

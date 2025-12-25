@@ -30,15 +30,15 @@ class MiscStatsTabView : public QWidget
 {
     Q_OBJECT
  public:
-    explicit MiscStatsTabView(const Dive::CaptureStats &stats, QWidget *parent = nullptr);
+    explicit MiscStatsTabView(const Dive::CaptureStats& stats, QWidget* parent = nullptr);
     void LoadStatistics();
  public slots:
  signals:
 
  private:
-    void ResizeColumns(QAbstractItemModel *model, QTableView *view);
+    void ResizeColumns(QAbstractItemModel* model, QTableView* view);
 
-    const Dive::CaptureStats &m_stats;
-    MiscStatsModel *m_misc_stats_model;
-    QTableView *m_misc_stats_view;
+    const Dive::CaptureStats& m_stats;
+    MiscStatsModel* m_misc_stats_model;
+    QTableView* m_misc_stats_view;
 };

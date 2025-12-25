@@ -34,8 +34,8 @@
 // =================================================================================================
 // OverviewTabView
 // =================================================================================================
-OverviewTabView::OverviewTabView(const Dive::CaptureMetadata &capture_metadata,
-                                 const Dive::CaptureStats &stats)
+OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& capture_metadata,
+                                 const Dive::CaptureStats& stats)
     : m_stats(stats)
 {
     m_clipboard_button = new QPushButton();
@@ -53,7 +53,7 @@ OverviewTabView::OverviewTabView(const Dive::CaptureMetadata &capture_metadata,
     m_tile_statistics_view_tab_index = m_tab_widget->addTab(m_tile_statistics_view, "Tile Stats");
     m_misc_statistics_view_tab_index = m_tab_widget->addTab(m_misc_statistics_view, "Misc Stats");
 
-    QVBoxLayout *main_layout = new QVBoxLayout();
+    QVBoxLayout* main_layout = new QVBoxLayout();
     main_layout->addWidget(m_tab_widget);
     setLayout(main_layout);
 
@@ -76,7 +76,7 @@ void OverviewTabView::CopyStatistics()
     Dive::TraceStats trace_stats;
     trace_stats.PrintTraceStats(m_stats, oss);
 
-    QClipboard *clipboard = QApplication::clipboard();
+    QClipboard* clipboard = QApplication::clipboard();
     clipboard->clear(QClipboard::Mode::Clipboard);
     clipboard->setText(QString::fromStdString(oss.str()));
 }

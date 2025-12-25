@@ -460,7 +460,7 @@ EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add()
 
 template <>
 void EventStateInfoRefT<EventStateInfo_CONFIG>::assign(
-    const EventStateInfo &other_obj, EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
+    const EventStateInfo& other_obj, EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
 {
     DIVE_ASSERT(IsValid());
     DIVE_ASSERT(other_obj.IsValidId(other_id));
@@ -533,7 +533,7 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::assign(
 }
 
 template <>
-void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &other) const
+void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef& other) const
 {
     DIVE_ASSERT(m_obj_ptr != nullptr);
     DIVE_ASSERT(m_obj_ptr->IsValidId(m_id));
@@ -556,16 +556,16 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
     }
     {
         VkViewport val[EventStateInfo::kViewportArrayCount];
-        auto *ptr = m_obj_ptr->ViewportPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->ViewportPtr(other.m_id);
+        auto* ptr = m_obj_ptr->ViewportPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->ViewportPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kViewportSize);
         memcpy(ptr, other_ptr, EventStateInfo::kViewportSize);
         memcpy(other_ptr, val, EventStateInfo::kViewportSize);
     }
     {
         VkRect2D val[EventStateInfo::kScissorArrayCount];
-        auto *ptr = m_obj_ptr->ScissorPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->ScissorPtr(other.m_id);
+        auto* ptr = m_obj_ptr->ScissorPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->ScissorPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kScissorSize);
         memcpy(ptr, other_ptr, EventStateInfo::kScissorSize);
         memcpy(other_ptr, val, EventStateInfo::kScissorSize);
@@ -692,32 +692,32 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
     }
     {
         bool val[EventStateInfo::kLogicOpEnabledArrayCount];
-        auto *ptr = m_obj_ptr->LogicOpEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->LogicOpEnabledPtr(other.m_id);
+        auto* ptr = m_obj_ptr->LogicOpEnabledPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->LogicOpEnabledPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kLogicOpEnabledSize);
         memcpy(ptr, other_ptr, EventStateInfo::kLogicOpEnabledSize);
         memcpy(other_ptr, val, EventStateInfo::kLogicOpEnabledSize);
     }
     {
         VkLogicOp val[EventStateInfo::kLogicOpArrayCount];
-        auto *ptr = m_obj_ptr->LogicOpPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->LogicOpPtr(other.m_id);
+        auto* ptr = m_obj_ptr->LogicOpPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->LogicOpPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kLogicOpSize);
         memcpy(ptr, other_ptr, EventStateInfo::kLogicOpSize);
         memcpy(other_ptr, val, EventStateInfo::kLogicOpSize);
     }
     {
         VkPipelineColorBlendAttachmentState val[EventStateInfo::kAttachmentArrayCount];
-        auto *ptr = m_obj_ptr->AttachmentPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->AttachmentPtr(other.m_id);
+        auto* ptr = m_obj_ptr->AttachmentPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->AttachmentPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kAttachmentSize);
         memcpy(ptr, other_ptr, EventStateInfo::kAttachmentSize);
         memcpy(other_ptr, val, EventStateInfo::kAttachmentSize);
     }
     {
         float val[EventStateInfo::kBlendConstantArrayCount];
-        auto *ptr = m_obj_ptr->BlendConstantPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->BlendConstantPtr(other.m_id);
+        auto* ptr = m_obj_ptr->BlendConstantPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->BlendConstantPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kBlendConstantSize);
         memcpy(ptr, other_ptr, EventStateInfo::kBlendConstantSize);
         memcpy(other_ptr, val, EventStateInfo::kBlendConstantSize);
@@ -804,16 +804,16 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
     }
     {
         bool val[EventStateInfo::kUBWCEnabledArrayCount];
-        auto *ptr = m_obj_ptr->UBWCEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->UBWCEnabledPtr(other.m_id);
+        auto* ptr = m_obj_ptr->UBWCEnabledPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->UBWCEnabledPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kUBWCEnabledSize);
         memcpy(ptr, other_ptr, EventStateInfo::kUBWCEnabledSize);
         memcpy(other_ptr, val, EventStateInfo::kUBWCEnabledSize);
     }
     {
         bool val[EventStateInfo::kUBWCLosslessEnabledArrayCount];
-        auto *ptr = m_obj_ptr->UBWCLosslessEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->UBWCLosslessEnabledPtr(other.m_id);
+        auto* ptr = m_obj_ptr->UBWCLosslessEnabledPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->UBWCLosslessEnabledPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kUBWCLosslessEnabledSize);
         memcpy(ptr, other_ptr, EventStateInfo::kUBWCLosslessEnabledSize);
         memcpy(other_ptr, val, EventStateInfo::kUBWCLosslessEnabledSize);

@@ -31,16 +31,16 @@ constexpr std::array<Dive::Stats::Type, 12> kMiscStats = {Dive::Stats::kNumBinni
                                                           Dive::Stats::kColorClearGmemResolves,
                                                           Dive::Stats::kDepthClearGmemResolves};
 
-constexpr std::array<const char *, Dive::Stats::kNumStats> kStatDescriptions = [] {
-    std::array<const char *, Dive::Stats::kNumStats> arr{};
-    for (const auto &[stat, description] : Dive::kStatMap)
+constexpr std::array<const char*, Dive::Stats::kNumStats> kStatDescriptions = [] {
+    std::array<const char*, Dive::Stats::kNumStats> arr{};
+    for (const auto& [stat, description] : Dive::kStatMap)
     {
         arr[stat] = description;
     }
     return arr;
 }();
 
-MiscStatsModel::MiscStatsModel(QObject *parent) : QAbstractItemModel(parent)
+MiscStatsModel::MiscStatsModel(QObject* parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
     headers.append(QString::fromStdString("Statistic"));
@@ -52,7 +52,7 @@ MiscStatsModel::MiscStatsModel(QObject *parent) : QAbstractItemModel(parent)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MiscStatsModel::LoadData(const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list)
+void MiscStatsModel::LoadData(const std::array<uint64_t, Dive::Stats::kNumStats>& stats_list)
 {
     beginResetModel();
     // Clear existing data
@@ -61,7 +61,7 @@ void MiscStatsModel::LoadData(const std::array<uint64_t, Dive::Stats::kNumStats>
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex MiscStatsModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex MiscStatsModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -74,14 +74,14 @@ QModelIndex MiscStatsModel::index(int row, int column, const QModelIndex &parent
         return QModelIndex();
     }
 
-    return createIndex(row, column, (void *)0);
+    return createIndex(row, column, (void*)0);
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex MiscStatsModel::parent(const QModelIndex &index) const { return QModelIndex(); }
+QModelIndex MiscStatsModel::parent(const QModelIndex& index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
-int MiscStatsModel::rowCount(const QModelIndex &parent) const
+int MiscStatsModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -91,10 +91,10 @@ int MiscStatsModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int MiscStatsModel::columnCount(const QModelIndex &parent) const { return m_headers.size(); }
+int MiscStatsModel::columnCount(const QModelIndex& parent) const { return m_headers.size(); }
 
 //--------------------------------------------------------------------------------------------------
-QVariant MiscStatsModel::data(const QModelIndex &index, int role) const
+QVariant MiscStatsModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid() || role != Qt::DisplayRole || m_stats_list.empty())
     {

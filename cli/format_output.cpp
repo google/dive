@@ -42,10 +42,10 @@ namespace cli
 {
 
 //--------------------------------------------------------------------------------------------------
-const char *GetOpCodeStringSafe(uint32_t op_code) { return "UNKNOWN"; }
+const char* GetOpCodeStringSafe(uint32_t op_code) { return "UNKNOWN"; }
 
 //--------------------------------------------------------------------------------------------------
-const char *CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type)
+const char* CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type)
 {
     switch (type)
     {
@@ -60,8 +60,8 @@ const char *CaptureTypeToString(Dive::CaptureDataHeader::CaptureType type)
 }
 
 //--------------------------------------------------------------------------------------------------
-void PrintSharedNodes(std::ostream &out, const Dive::CommandHierarchy *command_hierarchy_ptr,
-                      const Dive::SharedNodeTopology &topology, uint64_t node_index,
+void PrintSharedNodes(std::ostream& out, const Dive::CommandHierarchy* command_hierarchy_ptr,
+                      const Dive::SharedNodeTopology& topology, uint64_t node_index,
                       uint32_t num_tabs)
 {
     for (uint64_t child = 0; child < topology.GetNumSharedChildren(node_index); ++child)
@@ -93,8 +93,8 @@ void PrintSharedNodes(std::ostream &out, const Dive::CommandHierarchy *command_h
 }
 
 //--------------------------------------------------------------------------------------------------
-void VisitNodes(const Dive::CommandHierarchy *command_hierarchy_ptr,
-                const Dive::SharedNodeTopology &topology, uint64_t node_index, uint32_t depth,
+void VisitNodes(const Dive::CommandHierarchy* command_hierarchy_ptr,
+                const Dive::SharedNodeTopology& topology, uint64_t node_index, uint32_t depth,
                 std::function<bool(uint64_t, uint32_t)> visitor)
 {
     if (visitor(node_index, depth))
@@ -108,8 +108,8 @@ void VisitNodes(const Dive::CommandHierarchy *command_hierarchy_ptr,
 }
 
 //--------------------------------------------------------------------------------------------------
-void PrintNodes(std::ostream &out, const Dive::CommandHierarchy *command_hierarchy_ptr,
-                const Dive::SharedNodeTopology &topology, uint64_t node_index, bool verbose)
+void PrintNodes(std::ostream& out, const Dive::CommandHierarchy* command_hierarchy_ptr,
+                const Dive::SharedNodeTopology& topology, uint64_t node_index, bool verbose)
 {
     VisitNodes(command_hierarchy_ptr, topology, node_index, 0,
                [&out, command_hierarchy_ptr, &topology, verbose](uint64_t node_index,
@@ -129,8 +129,8 @@ void PrintNodes(std::ostream &out, const Dive::CommandHierarchy *command_hierarc
 }
 
 //--------------------------------------------------------------------------------------------------
-LoadResult PrintBlock(std::ostream &out, std::istream &capture_file, const std::string &prefix,
-                      const BlockInfo &block_info);
+LoadResult PrintBlock(std::ostream& out, std::istream& capture_file, const std::string& prefix,
+                      const BlockInfo& block_info);
 
 //--------------------------------------------------------------------------------------------------
 std::string BlockTypeToString(BlockType bt)
@@ -144,7 +144,7 @@ std::string BlockTypeToString(BlockType bt)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool IsPossibleBlock(const BlockInfo &info)
+bool IsPossibleBlock(const BlockInfo& info)
 {
     switch (info.m_block_type)
     {
@@ -176,7 +176,7 @@ bool IsPossibleBlock(const BlockInfo &info)
     return false;
 }
 
-LoadResult DiscoverBlocks(std::ostream &out, std::istream &capture_file)
+LoadResult DiscoverBlocks(std::ostream& out, std::istream& capture_file)
 {
     std::vector<char> data{std::istreambuf_iterator<char>(capture_file),
                            std::istreambuf_iterator<char>()};
@@ -217,11 +217,11 @@ LoadResult DiscoverBlocks(std::ostream &out, std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-LoadResult PrintBlocks(std::ostream &out, std::istream &capture_file, const std::string &prefix,
+LoadResult PrintBlocks(std::ostream& out, std::istream& capture_file, const std::string& prefix,
                        std::streampos end_pos = 0)
 {
     BlockInfo block_info;
-    while (capture_file.read((char *)&block_info, sizeof(block_info)))
+    while (capture_file.read((char*)&block_info, sizeof(block_info)))
     {
         auto block_start = capture_file.tellg();
         auto print_res = PrintBlock(out, capture_file, prefix, block_info);
@@ -253,8 +253,8 @@ LoadResult PrintBlocks(std::ostream &out, std::istream &capture_file, const std:
 }
 
 //--------------------------------------------------------------------------------------------------
-LoadResult PrintBlock(std::ostream &out, std::istream &capture_file, const std::string &prefix,
-                      const BlockInfo &block_info)
+LoadResult PrintBlock(std::ostream& out, std::istream& capture_file, const std::string& prefix,
+                      const BlockInfo& block_info)
 {
     char c0 = (char)((uint32_t)block_info.m_block_type) & 0xff;
     char c1 = (char)((uint32_t)block_info.m_block_type >> 8) & 0xff;
@@ -272,7 +272,7 @@ LoadResult PrintBlock(std::ostream &out, std::istream &capture_file, const std::
         {
             // The capture data always begins with some metadata info
             CaptureDataHeader data_header;
-            capture_file.read((char *)&data_header, sizeof(data_header));
+            capture_file.read((char*)&data_header, sizeof(data_header));
             bool incompatible = ((data_header.m_major_version != kCaptureMajorVersion) ||
                                  (data_header.m_minor_version > kCaptureMinorVersion));
             // Cannot open version 0.1 due to CaptureDataHeader change
@@ -306,7 +306,7 @@ LoadResult PrintBlock(std::ostream &out, std::istream &capture_file, const std::
         case BlockType::kMemoryRaw:
         {
             MemoryRawDataHeader memory_raw_data_header;
-            if (!capture_file.read((char *)&memory_raw_data_header, sizeof(memory_raw_data_header)))
+            if (!capture_file.read((char*)&memory_raw_data_header, sizeof(memory_raw_data_header)))
                 return LoadResult::kFileIoError;
 
             out << std::endl;
@@ -327,7 +327,7 @@ LoadResult PrintBlock(std::ostream &out, std::istream &capture_file, const std::
         case BlockType::kText:
         {
             TextBlockHeader text_header;
-            if (!capture_file.read((char *)&text_header, sizeof(text_header)))
+            if (!capture_file.read((char*)&text_header, sizeof(text_header)))
                 return LoadResult::kFileIoError;
 
             std::string name;
@@ -349,7 +349,7 @@ LoadResult PrintBlock(std::ostream &out, std::istream &capture_file, const std::
 }
 
 //--------------------------------------------------------------------------------------------------
-LoadResult PrintCaptureFileBlocks(std::ostream &out, const char *file_name)
+LoadResult PrintCaptureFileBlocks(std::ostream& out, const char* file_name)
 {
     // Open the file stream
     std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
@@ -361,7 +361,7 @@ LoadResult PrintCaptureFileBlocks(std::ostream &out, const char *file_name)
 
     // Read file header
     FileHeader file_header;
-    if (!capture_file.read((char *)&file_header, sizeof(file_header)))
+    if (!capture_file.read((char*)&file_header, sizeof(file_header)))
     {
         std::cerr << "Not able to read: " << file_name << std::endl;
         return LoadResult::kFileIoError;
@@ -383,7 +383,7 @@ LoadResult PrintCaptureFileBlocks(std::ostream &out, const char *file_name)
 }
 
 //--------------------------------------------------------------------------------------------------
-LoadResult ReadCaptureDataHeader(const char *file_name, Dive::CaptureDataHeader *data_header)
+LoadResult ReadCaptureDataHeader(const char* file_name, Dive::CaptureDataHeader* data_header)
 {
     // Open the file stream
     std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
@@ -391,18 +391,18 @@ LoadResult ReadCaptureDataHeader(const char *file_name, Dive::CaptureDataHeader 
 
     // Read file header
     FileHeader file_header;
-    if (!capture_file.read((char *)&file_header, sizeof(file_header)))
+    if (!capture_file.read((char*)&file_header, sizeof(file_header)))
         return LoadResult::kFileIoError;
     if (file_header.m_file_id != kDiveFileId || file_header.m_file_version != kDiveFileVersion)
         return LoadResult::kVersionError;
 
     BlockInfo block_info;
-    while (capture_file.read((char *)&block_info, sizeof(block_info)))
+    while (capture_file.read((char*)&block_info, sizeof(block_info)))
     {
         auto block_start = capture_file.tellg();
         if (block_info.m_block_type == BlockType::kCapture)
         {
-            capture_file.read((char *)data_header, sizeof(*data_header));
+            capture_file.read((char*)data_header, sizeof(*data_header));
             // Cannot open version 0.1 due to CaptureDataHeader change
             if ((data_header->m_major_version == 0) && (data_header->m_minor_version == 1))
                 return LoadResult::kVersionError;
@@ -422,8 +422,8 @@ LoadResult ReadCaptureDataHeader(const char *file_name, Dive::CaptureDataHeader 
 
 //--------------------------------------------------------------------------------------------------
 void ExtractTopology(std::filesystem::path path,
-                     const Dive::CommandHierarchy *command_hierarchy_ptr,
-                     const Dive::SharedNodeTopology *topology_ptr)
+                     const Dive::CommandHierarchy* command_hierarchy_ptr,
+                     const Dive::SharedNodeTopology* topology_ptr)
 {
     std::ofstream out(path);
     if (!out)
@@ -442,10 +442,10 @@ void ExtractTopology(std::filesystem::path path,
     }
 }
 //--------------------------------------------------------------------------------------------------
-std::string CleanFilename(const std::string &in)
+std::string CleanFilename(const std::string& in)
 {
     std::string out = in;
-    for (char &c : out)
+    for (char& c : out)
     {
         if (!(isalnum(c) || c == '.' || c == '_'))
         {
@@ -457,9 +457,9 @@ std::string CleanFilename(const std::string &in)
 
 //--------------------------------------------------------------------------------------------------
 // FIXME pointers?
-void ExtractAssets(const char *dir, const char *capture_filename,
-                   const Dive::Pm4CaptureData &capture_data,
-                   const Dive::CommandHierarchy *command_hierarchy)
+void ExtractAssets(const char* dir, const char* capture_filename,
+                   const Dive::Pm4CaptureData& capture_data,
+                   const Dive::CommandHierarchy* command_hierarchy)
 {
     auto dir_path = std::filesystem::path(dir);
     std::filesystem::create_directories(dir_path);
@@ -480,7 +480,7 @@ void ExtractAssets(const char *dir, const char *capture_filename,
         std::filesystem::create_directories(dir_path / "text");
         for (uint32_t i = 0; i < capture_data.GetNumText(); i++)
         {
-            auto &text = capture_data.GetText(i);
+            auto& text = capture_data.GetText(i);
             auto out_path = dir_path / "text" / CleanFilename(text.GetName());
             std::ofstream out(out_path, std::ios::out | std::ios::binary);
             size_t text_size = text.GetSize();
@@ -500,10 +500,10 @@ void ExtractAssets(const char *dir, const char *capture_filename,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool ParseCapture(const char *filename, std::unique_ptr<Dive::Pm4CaptureData> *out_capture_data,
-                  std::unique_ptr<Dive::CommandHierarchy> *out_command_hierarchy)
+bool ParseCapture(const char* filename, std::unique_ptr<Dive::Pm4CaptureData>* out_capture_data,
+                  std::unique_ptr<Dive::CommandHierarchy>* out_command_hierarchy)
 {
-    std::unique_ptr<Dive::Pm4CaptureData> &capture_data = *out_capture_data;
+    std::unique_ptr<Dive::Pm4CaptureData>& capture_data = *out_capture_data;
     capture_data = std::make_unique<Dive::Pm4CaptureData>();
     if (capture_data->LoadCaptureFile(filename) != Dive::CaptureData::LoadResult::kSuccess)
     {
@@ -512,7 +512,7 @@ bool ParseCapture(const char *filename, std::unique_ptr<Dive::Pm4CaptureData> *o
         return false;
     }
 
-    std::unique_ptr<Dive::CommandHierarchy> &command_hierarchy = *out_command_hierarchy;
+    std::unique_ptr<Dive::CommandHierarchy>& command_hierarchy = *out_command_hierarchy;
     command_hierarchy = std::make_unique<Dive::CommandHierarchy>();
     if (!command_hierarchy)
     {
@@ -531,7 +531,7 @@ bool ParseCapture(const char *filename, std::unique_ptr<Dive::Pm4CaptureData> *o
 }
 
 //--------------------------------------------------------------------------------------------------
-int PrintTopology(const char *filename, TopologyName topology, bool verbose)
+int PrintTopology(const char* filename, TopologyName topology, bool verbose)
 {
     std::unique_ptr<Dive::Pm4CaptureData> capture_data_ptr =
         std::make_unique<Dive::Pm4CaptureData>();
@@ -550,7 +550,7 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
         return EXIT_FAILURE;
     }
 
-    const Dive::SharedNodeTopology *topology_ptr = nullptr;
+    const Dive::SharedNodeTopology* topology_ptr = nullptr;
     switch (topology)
     {
         case TopologyName::kTopologySubmit:
@@ -577,7 +577,7 @@ int PrintTopology(const char *filename, TopologyName topology, bool verbose)
 }
 
 //--------------------------------------------------------------------------------------------------
-int ExtractCapture(const char *filename, const char *extract_assets)
+int ExtractCapture(const char* filename, const char* extract_assets)
 {
     std::unique_ptr<Dive::DataCore> data = std::make_unique<Dive::DataCore>();
     if (data->LoadPm4CaptureData(filename) != Dive::CaptureData::LoadResult::kSuccess)
@@ -586,7 +586,7 @@ int ExtractCapture(const char *filename, const char *extract_assets)
         return EXIT_FAILURE;
     }
 
-    const Dive::CommandHierarchy *command_hierarchy = nullptr;
+    const Dive::CommandHierarchy* command_hierarchy = nullptr;
     if (data->ParsePm4CaptureData())
     {
         command_hierarchy = &data->GetCommandHierarchy();

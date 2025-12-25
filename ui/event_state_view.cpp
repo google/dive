@@ -31,7 +31,7 @@
 
 #define ADD_FIELD_NOT_SET(_field, _items)             \
     {                                                 \
-        QTreeWidgetItem *_item = new QTreeWidgetItem; \
+        QTreeWidgetItem* _item = new QTreeWidgetItem; \
         _item->setText(0, QString(_field));           \
         _item->setText(1, QString("Not Set"));        \
         _items.append(_item);                         \
@@ -39,7 +39,7 @@
 
 #define ADD_FIELD_TYPE_STRING(_field, _string, _prev_field_set, _prev_string, _items) \
     {                                                                                 \
-        QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
+        QTreeWidgetItem* _item = new QTreeWidgetItem;                                 \
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, _string);                                                   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set ||                    \
@@ -50,7 +50,7 @@
 
 #define ADD_FIELD_TYPE_ENUM(_field, _to_string, _num, _prev_field_set, _prev_num, _items) \
     {                                                                                     \
-        QTreeWidgetItem *_item = new QTreeWidgetItem;                                     \
+        QTreeWidgetItem* _item = new QTreeWidgetItem;                                     \
         _item->setText(0, QString(_field));                                               \
         _item->setText(1, QString(_to_string(_num)));                                     \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num)     \
@@ -60,7 +60,7 @@
 
 #define ADD_FIELD_TYPE_NUMBER(_field, _num, _prev_field_set, _prev_num, _items)       \
     {                                                                                 \
-        QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
+        QTreeWidgetItem* _item = new QTreeWidgetItem;                                 \
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, QString::number(_num));                                     \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
@@ -70,7 +70,7 @@
 
 #define ADD_FIELD_TYPE_NUMBER_HEX(_field, _num, _prev_field_set, _prev_num, _items)   \
     {                                                                                 \
-        QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
+        QTreeWidgetItem* _item = new QTreeWidgetItem;                                 \
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, "0x" + QString::number(static_cast<uint32_t>(_num), 16));   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
@@ -80,7 +80,7 @@
 
 #define ADD_FIELD_TYPE_NUMBER_HEX64(_field, _num, _prev_field_set, _prev_num, _items) \
     {                                                                                 \
-        QTreeWidgetItem *_item = new QTreeWidgetItem;                                 \
+        QTreeWidgetItem* _item = new QTreeWidgetItem;                                 \
         _item->setText(0, QString(_field));                                           \
         _item->setText(1, "0x" + QString::number(static_cast<uint64_t>(_num), 16));   \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_num != _num) \
@@ -90,7 +90,7 @@
 
 #define ADD_FIELD_TYPE_BOOL(_field, _bool, _prev_field_set, _prev_bool, _items)         \
     {                                                                                   \
-        QTreeWidgetItem *_item = new QTreeWidgetItem;                                   \
+        QTreeWidgetItem* _item = new QTreeWidgetItem;                                   \
         _item->setText(0, QString(_field));                                             \
         _item->setText(1, (_bool ? "true" : "false"));                                  \
         if (!prev_event_state_it->IsValid() || !_prev_field_set || _prev_bool != _bool) \
@@ -99,7 +99,7 @@
     }
 
 #define ADD_TREE_BRANCH(branch_name)                                              \
-    QTreeWidgetItem *_tree_widget_item = new QTreeWidgetItem(m_event_state_tree); \
+    QTreeWidgetItem* _tree_widget_item = new QTreeWidgetItem(m_event_state_tree); \
     _tree_widget_item->setText(0, branch_name);                                   \
     _tree_widget_item->insertChildren(0, items);
 
@@ -129,9 +129,9 @@
 // =================================================================================================
 // EventStateView
 // =================================================================================================
-EventStateView::EventStateView(const Dive::DataCore &data_core) : m_data_core(data_core)
+EventStateView::EventStateView(const Dive::DataCore& data_core) : m_data_core(data_core)
 {
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     m_event_state_tree = new QTreeWidget();
     m_event_state_tree->setColumnCount(2);
     m_event_state_tree->setHeaderLabels(QStringList() << " "
@@ -145,8 +145,8 @@ EventStateView::EventStateView(const Dive::DataCore &data_core) : m_data_core(da
     layout->setStretchFactor(m_event_state_tree, 1);
     setLayout(layout);
 
-    QObject::connect(m_event_state_tree, SIGNAL(itemEntered(QTreeWidgetItem *, int)), this,
-                     SLOT(OnHover(QTreeWidgetItem *, int)));
+    QObject::connect(m_event_state_tree, SIGNAL(itemEntered(QTreeWidgetItem*, int)), this,
+                     SLOT(OnHover(QTreeWidgetItem*, int)));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -157,9 +157,9 @@ void EventStateView::OnEventSelected(uint64_t node_index)
 
     m_accent_color = GetTextAccentColor();
 
-    auto &metadata = m_data_core.GetCaptureMetadata();
-    auto &command_hierarchy = m_data_core.GetCommandHierarchy();
-    auto &event_state = metadata.m_event_state;
+    auto& metadata = m_data_core.GetCaptureMetadata();
+    auto& command_hierarchy = m_data_core.GetCommandHierarchy();
+    auto& event_state = metadata.m_event_state;
 
     auto previous_event_state = [&](auto it, auto IsType) {
         auto prev_it = std::prev(it);
@@ -167,7 +167,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         {
             auto id = static_cast<Dive::EventStateId>(prev_it->id());
             // Check if it's draw or dispatch events
-            const Dive::EventInfo &prev_event_info =
+            const Dive::EventInfo& prev_event_info =
                 metadata.m_event_info[static_cast<uint32_t>(id)];
             if (IsType(prev_event_info.m_type))
                 break;
@@ -183,7 +183,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
         auto event_id = m_data_core.GetCommandHierarchy().GetEventNodeId(node_index);
         // Check if it's draw or dispatch events
         if (!(event_id < metadata.m_event_info.size())) return;
-        const Dive::EventInfo &event_info = metadata.m_event_info[event_id];
+        const Dive::EventInfo& event_info = metadata.m_event_info[event_id];
         if (event_info.m_type == Dive::Util::EventType::kDraw)
         {
             auto event_state_it = GetStateInfoForEvent(event_state, event_id);
@@ -221,7 +221,7 @@ void EventStateView::OnEventSelected(uint64_t node_index)
 }
 
 Dive::EventStateInfo::ConstIterator EventStateView::GetStateInfoForEvent(
-    const Dive::EventStateInfo &state, uint32_t event_id)
+    const Dive::EventStateInfo& state, uint32_t event_id)
 {
     return state.find(static_cast<Dive::EventStateId>(event_id));
 }
@@ -335,7 +335,7 @@ void EventStateView::DisplayResolveState(Dive::EventStateInfo::ConstIterator eve
 {
     BuildResolveDescriptionMap(event_state_it);
 
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // ResolveScissor
     if (event_state_it->IsResolveScissorSet())
@@ -383,7 +383,7 @@ void EventStateView::DisplayResolveGmemInfo(Dive::EventStateInfo::ConstIterator 
 {
     BuildResolveGmemDescriptionMap(event_state_it);
 
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // ResolveBaseGmem
     if (event_state_it->IsResolveBaseGmemSet())
@@ -414,7 +414,7 @@ void EventStateView::DisplayResolveSysmemInfo(
 {
     BuildResolveSysmemDescriptionMap(event_state_it);
 
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // ResolveBaseSysmem
     if (event_state_it->IsResolveBaseSysmemSet())
@@ -443,7 +443,7 @@ void EventStateView::DisplayInputAssemblyState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // Topology
     if (event_state_it->IsTopologySet())
@@ -471,7 +471,7 @@ void EventStateView::DisplayTessellationState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // PatchControlPoints
     if (event_state_it->IsPatchControlPointsSet())
@@ -489,7 +489,7 @@ void EventStateView::DisplayTessellationState(
 void EventStateView::DisplayRasterizerState(Dive::EventStateInfo::ConstIterator event_state_it,
                                             Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // DepthClampEnabled
     if (event_state_it->IsDepthClampEnabledSet())
@@ -588,7 +588,7 @@ void EventStateView::DisplayFillMultisamplingState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // RasterizationSamples
     if (event_state_it->IsRasterizationSamplesSet())
@@ -643,11 +643,11 @@ void EventStateView::DisplayFillViewportState(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // Viewport
     {
-        QList<QTreeWidgetItem *> child_items;
+        QList<QTreeWidgetItem*> child_items;
         for (uint16_t viewport_id = 0; viewport_id < 16; ++viewport_id)
         {
             if (event_state_it->IsViewportSet(viewport_id))
@@ -681,15 +681,15 @@ void EventStateView::DisplayFillViewportState(
                 ADD_FIELD_NOT_SET(QString::number(viewport_id), child_items);
         }
 
-        QTreeWidgetItem *child_widget_item =
-            new QTreeWidgetItem((QTreeWidget *)0, QStringList(event_state_it->GetViewportName()));
+        QTreeWidgetItem* child_widget_item =
+            new QTreeWidgetItem((QTreeWidget*)0, QStringList(event_state_it->GetViewportName()));
         child_widget_item->insertChildren(0, child_items);
         items.append(child_widget_item);
     }
 
     // Scissor
     {
-        QList<QTreeWidgetItem *> child_items;
+        QList<QTreeWidgetItem*> child_items;
         for (uint16_t scissor_id = 0; scissor_id < 16; ++scissor_id)
         {
             if (event_state_it->IsScissorSet(scissor_id))
@@ -720,8 +720,8 @@ void EventStateView::DisplayFillViewportState(
                 ADD_FIELD_NOT_SET(QString::number(scissor_id), child_items);
         }
 
-        QTreeWidgetItem *child_widget_item =
-            new QTreeWidgetItem((QTreeWidget *)0, QStringList(event_state_it->GetScissorName()));
+        QTreeWidgetItem* child_widget_item =
+            new QTreeWidgetItem((QTreeWidget*)0, QStringList(event_state_it->GetScissorName()));
         child_widget_item->insertChildren(0, child_items);
         items.append(child_widget_item);
     }
@@ -733,7 +733,7 @@ void EventStateView::DisplayFillViewportState(
 void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event_state_it,
                                        Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // DepthTestEnabled
     if (event_state_it->IsDepthTestEnabledSet())
@@ -797,7 +797,7 @@ void EventStateView::DisplayDepthState(Dive::EventStateInfo::ConstIterator event
 void EventStateView::DisplayStencilState(Dive::EventStateInfo::ConstIterator event_state_it,
                                          Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // StencilTestEnabled
     if (event_state_it->IsStencilTestEnabledSet())
@@ -837,16 +837,16 @@ void EventStateView::DisplayStencilState(Dive::EventStateInfo::ConstIterator eve
 void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator event_state_it,
                                             Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> items;
+    QList<QTreeWidgetItem*> items;
 
     // Attachment
     {
-        QList<QTreeWidgetItem *> child_items;
+        QList<QTreeWidgetItem*> child_items;
         for (uint16_t i = 0; i < 8; ++i)
         {
             if (event_state_it->IsAttachmentSet(i))
             {
-                QList<QTreeWidgetItem *> attachment_items;
+                QList<QTreeWidgetItem*> attachment_items;
                 // LogicOpEnabled
                 if (event_state_it->IsLogicOpEnabledSet(i))
                     ADD_FIELD_TYPE_BOOL(event_state_it->GetLogicOpEnabledName(),
@@ -899,8 +899,8 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
                 ADD_FIELD_TYPE_NUMBER_HEX("ColorWriteMask", curr_attach.colorWriteMask, prev_set,
                                           prev_attach.colorWriteMask, attachment_items);
 
-                QTreeWidgetItem *attachment_item =
-                    new QTreeWidgetItem((QTreeWidget *)0, QStringList(QString::number(i)));
+                QTreeWidgetItem* attachment_item =
+                    new QTreeWidgetItem((QTreeWidget*)0, QStringList(QString::number(i)));
                 attachment_item->insertChildren(0, attachment_items);
                 child_items.append(attachment_item);
             }
@@ -908,8 +908,8 @@ void EventStateView::DisplayColorBlendState(Dive::EventStateInfo::ConstIterator 
                 ADD_FIELD_NOT_SET(QString::number(i), child_items);
         }
 
-        QTreeWidgetItem *child_widget_item =
-            new QTreeWidgetItem((QTreeWidget *)0, QStringList(event_state_it->GetAttachmentName()));
+        QTreeWidgetItem* child_widget_item =
+            new QTreeWidgetItem((QTreeWidget*)0, QStringList(event_state_it->GetAttachmentName()));
         child_widget_item->insertChildren(0, child_items);
         items.append(child_widget_item);
     }
@@ -946,7 +946,7 @@ void EventStateView::DisplayHardwareSpecificStates(
     Dive::EventStateInfo::ConstIterator event_state_it,
     Dive::EventStateInfo::ConstIterator prev_event_state_it)
 {
-    QList<QTreeWidgetItem *> depth_target_items, binning_items, thread_items, ubwc_items;
+    QList<QTreeWidgetItem*> depth_target_items, binning_items, thread_items, ubwc_items;
 
     if (event_state_it->IsLRZEnabledSet())
         ADD_FIELD_TYPE_BOOL(event_state_it->GetLRZEnabledName(), event_state_it->LRZEnabled(),
@@ -962,7 +962,7 @@ void EventStateView::DisplayHardwareSpecificStates(
     else
         ADD_FIELD_NOT_SET(event_state_it->GetLRZWriteName(), depth_target_items)
 
-    auto LRZDirStatusToStr = [](const a6xx_lrz_dir_status &status) -> QString {
+    auto LRZDirStatusToStr = [](const a6xx_lrz_dir_status& status) -> QString {
         std::string s;
         switch (status)
         {
@@ -999,7 +999,7 @@ void EventStateView::DisplayHardwareSpecificStates(
     else
         ADD_FIELD_NOT_SET(event_state_it->GetLRZDirWriteName(), depth_target_items)
 
-    auto ZTestModeToStr = [](const a6xx_ztest_mode &mode) -> QString {
+    auto ZTestModeToStr = [](const a6xx_ztest_mode& mode) -> QString {
         std::string s;
         switch (mode)
         {
@@ -1044,7 +1044,7 @@ void EventStateView::DisplayHardwareSpecificStates(
     else
         ADD_FIELD_NOT_SET(event_state_it->GetZTestModeName(), binning_items)
 
-    auto RenderModeToStr = [](const a6xx_render_mode &mode) -> QString {
+    auto RenderModeToStr = [](const a6xx_render_mode& mode) -> QString {
         std::string s;
         switch (mode)
         {
@@ -1070,7 +1070,7 @@ void EventStateView::DisplayHardwareSpecificStates(
         ADD_FIELD_NOT_SET(event_state_it->GetRenderModeName(), binning_items)
 
     // only valid for A6xx
-    auto BuffersLocationToStr = [](const a6xx_buffers_location &location) -> QString {
+    auto BuffersLocationToStr = [](const a6xx_buffers_location& location) -> QString {
         std::string s;
         switch (location)
         {
@@ -1096,7 +1096,7 @@ void EventStateView::DisplayHardwareSpecificStates(
     else
         ADD_FIELD_NOT_SET(event_state_it->GetBuffersLocationName(), binning_items)
 
-    auto ThreadSizeToStr = [](const a6xx_threadsize &size) -> QString {
+    auto ThreadSizeToStr = [](const a6xx_threadsize& size) -> QString {
         std::string s;
         switch (size)
         {
@@ -1183,34 +1183,34 @@ void EventStateView::DisplayHardwareSpecificStates(
             ADD_FIELD_NOT_SET(event_state_it->GetUBWCLosslessEnabledOnDSName(), ubwc_items)
     }
 
-    QTreeWidgetItem *tree_widget_item = new QTreeWidgetItem(m_event_state_tree);
+    QTreeWidgetItem* tree_widget_item = new QTreeWidgetItem(m_event_state_tree);
     tree_widget_item->setText(0, "GPU-specific");
 
-    QTreeWidgetItem *thread_item = new QTreeWidgetItem;
+    QTreeWidgetItem* thread_item = new QTreeWidgetItem;
     thread_item->setText(0, "Threads Invocation");
     thread_item->insertChildren(0, thread_items);
     tree_widget_item->insertChild(0, thread_item);
 
-    QTreeWidgetItem *depth_target_item = new QTreeWidgetItem;
+    QTreeWidgetItem* depth_target_item = new QTreeWidgetItem;
     depth_target_item->setText(0, "Depth Targets");
     depth_target_item->insertChildren(0, depth_target_items);
     tree_widget_item->insertChild(0, depth_target_item);
 
-    QTreeWidgetItem *binning_item = new QTreeWidgetItem;
+    QTreeWidgetItem* binning_item = new QTreeWidgetItem;
     binning_item->setText(0, "Tiling and Binning");
     binning_item->insertChildren(0, binning_items);
     tree_widget_item->insertChild(0, binning_item);
 
-    QTreeWidgetItem *ubwc_item = new QTreeWidgetItem;
+    QTreeWidgetItem* ubwc_item = new QTreeWidgetItem;
     ubwc_item->setText(0, "UBWC status");
     ubwc_item->insertChildren(0, ubwc_items);
     tree_widget_item->insertChild(0, ubwc_item);
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::OnHover(QTreeWidgetItem *item_ptr, int column)
+void EventStateView::OnHover(QTreeWidgetItem* item_ptr, int column)
 {
-    HoverHelp *hover_help_ptr = HoverHelp::Get();
+    HoverHelp* hover_help_ptr = HoverHelp::Get();
     QString field_name = item_ptr->text(0);
     if (m_field_desc.find(field_name.toStdString()) != m_field_desc.end())
     {
@@ -1222,8 +1222,8 @@ void EventStateView::OnHover(QTreeWidgetItem *item_ptr, int column)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::leaveEvent(QEvent *event)
+void EventStateView::leaveEvent(QEvent* event)
 {
-    HoverHelp *hover_help_ptr = HoverHelp::Get();
+    HoverHelp* hover_help_ptr = HoverHelp::Get();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);
 }

@@ -40,30 +40,30 @@ class CommandModel : public QAbstractItemModel
         kEvent
     };
 
-    explicit CommandModel(const Dive::CommandHierarchy &command_hierarchy);
+    explicit CommandModel(const Dive::CommandHierarchy& command_hierarchy);
     ~CommandModel();
 
     void Reset();
     void BeginResetModel();
     void EndResetModel();
-    void SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr);
+    void SetTopologyToView(const Dive::SharedNodeTopology* topology_ptr);
 
-    QVariant data(const QModelIndex &index, int role) const override;
-    Qt::ItemFlags flags(const QModelIndex &index) const override;
+    QVariant data(const QModelIndex& index, int role) const override;
+    Qt::ItemFlags flags(const QModelIndex& index) const override;
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role = Qt::DisplayRole) const override;
     QModelIndex index(int row, int column,
-                      const QModelIndex &parent = QModelIndex()) const override;
-    QModelIndex parent(const QModelIndex &index) const override;
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+                      const QModelIndex& parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex& index) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex& parent = QModelIndex()) const override;
     QModelIndex findNode(uint64_t node_index) const;
 
     static QVariant GetNodeUIId(uint64_t node_index,
-                                const Dive::CommandHierarchy &command_hierarchy,
-                                const Dive::SharedNodeTopology *topology_ptr);
+                                const Dive::CommandHierarchy& command_hierarchy,
+                                const Dive::SharedNodeTopology* topology_ptr);
 
-    QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
+    QList<QModelIndex> search(const QModelIndex& start, const QVariant& value) const;
 
  private:
     enum class UIBarrierIdVariant
@@ -75,9 +75,9 @@ class CommandModel : public QAbstractItemModel
     bool EventNodeHasMarker(uint64_t node_index) const;
     char GetEventNodeStream(uint64_t node_index) const;
     uint32_t GetEventNodeIndexInStream(uint64_t node_index) const;
-    void BuildNodeLookup(const QModelIndex &parent = QModelIndex()) const;
+    void BuildNodeLookup(const QModelIndex& parent = QModelIndex()) const;
 
-    const Dive::CommandHierarchy &m_command_hierarchy;
-    const Dive::SharedNodeTopology *m_topology_ptr;
+    const Dive::CommandHierarchy& m_command_hierarchy;
+    const Dive::SharedNodeTopology* m_topology_ptr;
     mutable std::vector<QPersistentModelIndex> m_node_lookup;
 };

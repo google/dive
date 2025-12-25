@@ -24,11 +24,11 @@
 #include <memory>
 #include <optional>
 
-#include "debug_utils.h"
 #include "dive_core/context.h"
 #include "dive_core/data_core.h"
-#include "file_path.h"
 #include "trace_stats/trace_stats.h"
+#include "ui/debug_utils.h"
+#include "ui/file_path.h"
 
 namespace
 {
@@ -71,13 +71,13 @@ CaptureFileManager::~CaptureFileManager()
     m_thread->wait();
 }
 
-void CaptureFileManager::Start(Dive::DataCore &data_core)
+void CaptureFileManager::Start(const std::shared_ptr<Dive::DataCore> &data_core)
 {
     if (m_worker != nullptr)
     {
         return;
     }
-    m_data_core = &data_core;
+    m_data_core = data_core;
     m_capture_stats = std::make_unique<Dive::CaptureStats>();
 
     m_thread = new QThread(parent());

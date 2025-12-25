@@ -149,7 +149,7 @@ template <ErrorCode C>
 struct ErrorInfoT : public ErrorInfo
 {
     typename ErrorPayloadT<C>::PayloadT m_payload;
-    inline ErrorInfoT(const typename ErrorPayloadT<C>::PayloadT &payload)
+    inline ErrorInfoT(const typename ErrorPayloadT<C>::PayloadT& payload)
         : ErrorInfo(C), m_payload(payload)
     {
     }
@@ -175,12 +175,12 @@ class Error
      public:
         operator Error();
         template <typename T>
-        Builder &operator<<(const T &val)
+        Builder& operator<<(const T& val)
         {
             m_buf << val;
             return *this;
         }
-        Builder &operator<<(std::ostream &(*manip)(std::ostream &))
+        Builder& operator<<(std::ostream& (*manip)(std::ostream&))
         {
             m_buf << manip;
             return *this;
@@ -190,7 +190,7 @@ class Error
         friend class Error;
         Builder() = default;
         template <ErrorCode C>
-        void Init(const typename ErrorPayloadT<C>::PayloadT &payload)
+        void Init(const typename ErrorPayloadT<C>::PayloadT& payload)
         {
             m_info = std::make_shared<ErrorInfoT<C>>(payload);
         }
@@ -201,7 +201,7 @@ class Error
 
     // MakeBuilder creates a Builder and initializes the error code and payload
     template <ErrorCode C>
-    static Builder New(const typename ErrorPayloadT<C>::PayloadT &payload)
+    static Builder New(const typename ErrorPayloadT<C>::PayloadT& payload)
     {
         Builder b;
         b.Init<C>(payload);
@@ -231,22 +231,22 @@ class Error
     ErrorCode Code() const;
 
     // Description returns the description of this error, or "" for non-errors
-    const char *Description() const;
+    const char* Description() const;
 
     // Payload returns the error-code specific payload
     template <ErrorCode C>
-    const typename ErrorPayloadT<C>::PayloadT &Payload() const;
+    const typename ErrorPayloadT<C>::PayloadT& Payload() const;
 
  protected:
     std::shared_ptr<ErrorInfo> m_info;
 };
 
 template <ErrorCode C>
-const typename ErrorPayloadT<C>::PayloadT &Error::Payload() const
+const typename ErrorPayloadT<C>::PayloadT& Error::Payload() const
 {
     if (Code() != C) abort();
-    return static_cast<const ErrorInfoT<C> *>(m_info.get())->m_data;
+    return static_cast<const ErrorInfoT<C>*>(m_info.get())->m_data;
 }
 template <>
-const EmptyErrorPayload &Error::Payload<ErrorCode::Ok>() const;
+const EmptyErrorPayload& Error::Payload<ErrorCode::Ok>() const;
 }  // namespace Dive

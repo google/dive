@@ -25,15 +25,15 @@
 static constexpr int kStallTimeoutSeconds = 10;
 static constexpr int kFileStatusPollingIntervalMs = 50;
 
-void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string &source_capture_dir)
+void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string& source_capture_dir)
 {
     m_source_capture_dir = source_capture_dir;
 }
 
 bool GfxrCaptureWorker::AreTimestampsCurrent(
-    Dive::AndroidDevice *device, const std::map<std::string, std::string> &previous_timestamps)
+    Dive::AndroidDevice* device, const std::map<std::string, std::string>& previous_timestamps)
 {
-    for (const auto &[file_name, timestamp] : previous_timestamps)
+    for (const auto& [file_name, timestamp] : previous_timestamps)
     {
         std::string get_timestamp_command =
             absl::StrCat("shell stat -c %Y ", m_source_capture_dir, "/", file_name.data());
@@ -58,7 +58,7 @@ bool GfxrCaptureWorker::AreTimestampsCurrent(
 
 //--------------------------------------------------------------------------------------------------
 absl::StatusOr<qlonglong> GfxrCaptureWorker::getGfxrCaptureDirectorySize(
-    Dive::AndroidDevice *device)
+    Dive::AndroidDevice* device)
 {
     // Retrieve the names of the files in the capture directory on the device.
     std::string ls_command = "shell ls " + m_source_capture_dir;
@@ -71,7 +71,7 @@ absl::StatusOr<qlonglong> GfxrCaptureWorker::getGfxrCaptureDirectorySize(
     }
 
     m_file_list = absl::StrSplit(std::string(ls_output->data()), '\n', absl::SkipEmpty());
-    for (std::string &file_with_trailing : m_file_list)
+    for (std::string& file_with_trailing : m_file_list)
     {
         // Windows-style line endings use \r\n. When absl::StrSplit splits by \n, the \r remains
         // at the end of each line if the input string originated from a Windows-style line
@@ -122,7 +122,7 @@ absl::StatusOr<qlonglong> GfxrCaptureWorker::getGfxrCaptureDirectorySize(
 
         std::vector<std::string> stat_lines = absl::StrSplit(*stat_output, '\n', absl::SkipEmpty());
 
-        for (const std::string &line : stat_lines)
+        for (const std::string& line : stat_lines)
         {
             std::vector<std::string> parts = absl::StrSplit(line, '|');
 
@@ -139,7 +139,7 @@ absl::StatusOr<qlonglong> GfxrCaptureWorker::getGfxrCaptureDirectorySize(
 
             // Check if this file is one we expect from m_file_list
             if (std::none_of(m_file_list.begin(), m_file_list.end(),
-                             [&file_name](const auto &item) { return item == file_name; }))
+                             [&file_name](const auto& item) { return item == file_name; }))
             {
                 continue;
             }

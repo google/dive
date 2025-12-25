@@ -28,7 +28,7 @@
 #include "dive_core/data_core.h"
 
 // -------------------------------------------------------------------------------------------------
-static bool IsEmbeddedTextASCII(const char *s, size_t size)
+static bool IsEmbeddedTextASCII(const char* s, size_t size)
 {
     if (size > 0 && s[size - 1] == 0)
     {
@@ -42,7 +42,7 @@ static bool IsEmbeddedTextASCII(const char *s, size_t size)
     return true;
 }
 
-static std::string ToHexDump(const char *s, size_t size)
+static std::string ToHexDump(const char* s, size_t size)
 {
     constexpr size_t chunk_size = 16;
 
@@ -76,7 +76,7 @@ class TextFileWidgetItem : public QTreeWidgetItem
  public:
     typedef decltype(std::declval<Dive::Pm4CaptureData>().GetNumText()) IndexType;
 
-    TextFileWidgetItem(std::string name, IndexType index, QTreeWidget *view)
+    TextFileWidgetItem(std::string name, IndexType index, QTreeWidget* view)
         : QTreeWidgetItem(view), m_name(name), m_index(index)
     {
     }
@@ -89,9 +89,9 @@ class TextFileWidgetItem : public QTreeWidgetItem
 };
 
 // -------------------------------------------------------------------------------------------------
-TextFileView::TextFileView(const Dive::DataCore &data_core) : m_data_core(data_core)
+TextFileView::TextFileView(const Dive::DataCore& data_core) : m_data_core(data_core)
 {
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     m_text_list = new QTreeWidget();
     m_text_list->setColumnCount(3);
     m_text_list->setHeaderLabels(QStringList() << "Filename"
@@ -118,11 +118,11 @@ TextFileView::TextFileView(const Dive::DataCore &data_core) : m_data_core(data_c
 void TextFileView::OnFileLoaded()
 {
     Reset();
-    const auto &capture = m_data_core.GetPm4CaptureData();
+    const auto& capture = m_data_core.GetPm4CaptureData();
 
     if (!capture.GetRegisterInfo().GetRegisters().empty())
     {
-        TextFileWidgetItem *treeItem = new TextFileWidgetItem(
+        TextFileWidgetItem* treeItem = new TextFileWidgetItem(
             "registers", std::numeric_limits<TextFileWidgetItem::IndexType>::max(), m_text_list);
 
         // Filename
@@ -136,9 +136,9 @@ void TextFileView::OnFileLoaded()
     TextFileWidgetItem::IndexType num_text = capture.GetNumText();
     for (TextFileWidgetItem::IndexType i = 0; i < num_text; ++i)
     {
-        const auto &text = capture.GetText(i);
+        const auto& text = capture.GetText(i);
 
-        TextFileWidgetItem *treeItem = new TextFileWidgetItem(text.GetName(), i, m_text_list);
+        TextFileWidgetItem* treeItem = new TextFileWidgetItem(text.GetName(), i, m_text_list);
 
         // Filename
         treeItem->setText(0, QString::fromStdString(text.GetName()));
@@ -165,14 +165,14 @@ void TextFileView::Reset()
 //--------------------------------------------------------------------------------------------------
 void TextFileView::OnFileSelectionChanged()
 {
-    const TextFileWidgetItem *item_ptr =
-        static_cast<const TextFileWidgetItem *>(m_text_list->currentItem());
+    const TextFileWidgetItem* item_ptr =
+        static_cast<const TextFileWidgetItem*>(m_text_list->currentItem());
 
-    const auto &capture = m_data_core.GetPm4CaptureData();
+    const auto& capture = m_data_core.GetPm4CaptureData();
     std::string text_data;
     if (item_ptr->GetIndex() < capture.GetNumText())
     {
-        const auto &text = capture.GetText(item_ptr->GetIndex());
+        const auto& text = capture.GetText(item_ptr->GetIndex());
         if (IsEmbeddedTextASCII(text.GetText(), text.GetSize()))
         {
             text_data = std::string(text.GetText(), text.GetText() + text.GetSize());
@@ -191,7 +191,7 @@ void TextFileView::OnFileSelectionChanged()
     {
         std::stringstream sst;
         sst << std::hex;
-        for (auto &kv : capture.GetRegisterInfo().GetRegisters())
+        for (auto& kv : capture.GetRegisterInfo().GetRegisters())
         {
             sst << kv.first << ": 0x" << kv.second << "\n";
         }

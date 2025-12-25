@@ -33,7 +33,7 @@
 EventTimingView::EventTimingView()
 {
     // Add Color by combo box
-    QHBoxLayout *combo_box_layout_ptr = new QHBoxLayout();
+    QHBoxLayout* combo_box_layout_ptr = new QHBoxLayout();
     m_color_combo_box_ptr = new QComboBox(this);
     m_color_combo_box_ptr->addItem("Color by shader");
     m_color_combo_box_ptr->addItem("Color by hardware context");
@@ -64,7 +64,7 @@ EventTimingView::EventTimingView()
 
     // Add shader color legend
     m_shader_legend = new QWidget(this);
-    QHBoxLayout *shader_legend_layout = new QHBoxLayout();
+    QHBoxLayout* shader_legend_layout = new QHBoxLayout();
 
     const uint32_t kStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
     QString shader_names[kStageCount] = {"Vertex Shader", "Pixel Shader", "Compute Shader",
@@ -76,7 +76,7 @@ EventTimingView::EventTimingView()
     for (uint32_t i = 0; i < kStageCount; i++)
     {
         // Add color for the shader
-        QLabel *color_label = new QLabel(this);
+        QLabel* color_label = new QLabel(this);
         color_label->setAutoFillBackground(true);
         QPalette palette = color_label->palette();
         Dive::ShaderStage shader_stage = shader_stage_order[i];
@@ -86,7 +86,7 @@ EventTimingView::EventTimingView()
         shader_legend_layout->addWidget(color_label);
 
         // Add name of the shader
-        QLabel *text_label = new QLabel(this);
+        QLabel* text_label = new QLabel(this);
         text_label->setText(shader_names[i]);
         shader_legend_layout->addWidget(text_label);
     }
@@ -96,14 +96,14 @@ EventTimingView::EventTimingView()
 
     // Add hardware context color legend
     m_hardware_legend = new QWidget(this);
-    QHBoxLayout *hardware_legend_layout = new QHBoxLayout();
+    QHBoxLayout* hardware_legend_layout = new QHBoxLayout();
     const uint32_t kCtxCount = 7;
     QString hardware_context_names[kCtxCount] = {"Ctx 1", "Ctx 2", "Ctx 3", "Ctx 4",
                                                  "Ctx 5", "Ctx 6", "Ctx 7"};
     for (uint32_t i = 0; i < kCtxCount; i++)
     {
         // Add color for the shader
-        QLabel *color_label = new QLabel(this);
+        QLabel* color_label = new QLabel(this);
         color_label->setAutoFillBackground(true);
         QPalette palette = color_label->palette();
         palette.setColor(QPalette::Window, m_event_graphics_item_ptr->GetHardwareContextColor(i));
@@ -111,7 +111,7 @@ EventTimingView::EventTimingView()
         hardware_legend_layout->addWidget(color_label);
 
         // Add name of the shader
-        QLabel *text_label = new QLabel(this);
+        QLabel* text_label = new QLabel(this);
         text_label->setText(hardware_context_names[i]);
         hardware_legend_layout->addWidget(text_label);
     }
@@ -119,7 +119,7 @@ EventTimingView::EventTimingView()
     m_hardware_legend->setLayout(hardware_legend_layout);
     m_hardware_legend->hide();
 
-    QVBoxLayout *main_layout_ptr = new QVBoxLayout();
+    QVBoxLayout* main_layout_ptr = new QVBoxLayout();
     main_layout_ptr->addLayout(combo_box_layout_ptr);
     main_layout_ptr->addWidget(m_event_timing_view_ptr);
     main_layout_ptr->addWidget(m_shader_legend);
@@ -247,7 +247,7 @@ void EventTimingView::OnMouseWheel(QPoint mouse_pos, int angle_delta)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventTimingView::resizeEvent(QResizeEvent *event) { Update(); }
+void EventTimingView::resizeEvent(QResizeEvent* event) { Update(); }
 
 void EventTimingView::OnColorByIndexChange(int index)
 {

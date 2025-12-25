@@ -32,7 +32,7 @@ std::string FileFormatVersion();
 
 //--------------------------------------------------------------------------------------------------
 // Dive Capture / Crash Analysis related
-int ExtractCapture(const char *filename, const char *extract_assets);
+int ExtractCapture(const char* filename, const char* extract_assets);
 
 }  // namespace cli
 }  // namespace Dive

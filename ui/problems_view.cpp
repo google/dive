@@ -38,7 +38,7 @@ class ProblemWidgetItem : public QTreeWidgetItem
 {
  public:
     ProblemWidgetItem(Dive::CrossRef ref, std::string short_desc, std::string long_desc,
-                      QTreeWidget *view)
+                      QTreeWidget* view)
         : QTreeWidgetItem(view), m_ref(ref), m_short_desc(short_desc), m_long_desc(long_desc)
     {
     }
@@ -57,8 +57,8 @@ class ProblemWidgetItem : public QTreeWidgetItem
 // =================================================================================================
 // ProblemsViewDelegate
 // =================================================================================================
-QSize ProblemsViewDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                     const QModelIndex &index) const
+QSize ProblemsViewDelegate::sizeHint(const QStyleOptionViewItem& option,
+                                     const QModelIndex& index) const
 {
     const int kMargin = 5;
     QSize size_hint = QStyledItemDelegate::sizeHint(option, index);
@@ -68,7 +68,7 @@ QSize ProblemsViewDelegate::sizeHint(const QStyleOptionViewItem &option,
 // =================================================================================================
 // ProblemsView
 // =================================================================================================
-ProblemsView::ProblemsView(const Dive::CommandHierarchy &command_hierarchy)
+ProblemsView::ProblemsView(const Dive::CommandHierarchy& command_hierarchy)
     : m_command_hierarchy(command_hierarchy)
 {
     m_log_list = new QTreeWidget();
@@ -84,25 +84,25 @@ ProblemsView::ProblemsView(const Dive::CommandHierarchy &command_hierarchy)
     m_log_list->setMouseTracking(true);
     m_log_list->viewport()->setAttribute(Qt::WA_Hover);
 
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(m_log_list);
     setLayout(layout);
 
     QObject::connect(m_log_list, SIGNAL(itemSelectionChanged()), this,
                      SLOT(OnProblemSelectionChanged()));
-    QObject::connect(m_log_list, SIGNAL(itemEntered(QTreeWidgetItem *, int)), this,
-                     SLOT(OnProblemItemHover(QTreeWidgetItem *, int)));
+    QObject::connect(m_log_list, SIGNAL(itemEntered(QTreeWidgetItem*, int)), this,
+                     SLOT(OnProblemItemHover(QTreeWidgetItem*, int)));
 }
 
 //--------------------------------------------------------------------------------------------------
-void ProblemsView::Update(const Dive::LogRecord *log_ptr)
+void ProblemsView::Update(const Dive::LogRecord* log_ptr)
 {
     m_log_list->clear();
     for (uint32_t i = 0; i < log_ptr->GetNumEntries(); ++i)
     {
-        const Dive::LogRecord::LogEntry &entry = log_ptr->GetEntry(i);
+        const Dive::LogRecord::LogEntry& entry = log_ptr->GetEntry(i);
 
-        ProblemWidgetItem *item =
+        ProblemWidgetItem* item =
             new ProblemWidgetItem(entry.m_ref, entry.m_short_desc, entry.m_long_desc, m_log_list);
         // Column 0
         switch (entry.m_type)
@@ -150,7 +150,7 @@ void ProblemsView::Update(const Dive::LogRecord *log_ptr)
 //--------------------------------------------------------------------------------------------------
 void ProblemsView::OnProblemSelectionChanged()
 {
-    const ProblemWidgetItem *item_ptr = (const ProblemWidgetItem *)m_log_list->currentItem();
+    const ProblemWidgetItem* item_ptr = (const ProblemWidgetItem*)m_log_list->currentItem();
     if (item_ptr->GetAssociation() == Dive::LogAssociation::kEvent)
     {
     }
@@ -164,17 +164,17 @@ void ProblemsView::OnProblemSelectionChanged()
 }
 
 //--------------------------------------------------------------------------------------------------
-void ProblemsView::OnProblemItemHover(QTreeWidgetItem *item_ptr, int column)
+void ProblemsView::OnProblemItemHover(QTreeWidgetItem* item_ptr, int column)
 {
-    ProblemWidgetItem *problem_item_ptr = (ProblemWidgetItem *)item_ptr;
-    HoverHelp *hover_help_ptr = HoverHelp::Get();
+    ProblemWidgetItem* problem_item_ptr = (ProblemWidgetItem*)item_ptr;
+    HoverHelp* hover_help_ptr = HoverHelp::Get();
     std::string desc = problem_item_ptr->GetShortDesc() + "<br>" + problem_item_ptr->GetLongDesc();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone, 0, 0, 0, desc.c_str());
 }
 
 //--------------------------------------------------------------------------------------------------
-void ProblemsView::leaveEvent(QEvent *event)
+void ProblemsView::leaveEvent(QEvent* event)
 {
-    HoverHelp *hover_help_ptr = HoverHelp::Get();
+    HoverHelp* hover_help_ptr = HoverHelp::Get();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);
 }

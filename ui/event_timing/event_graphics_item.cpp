@@ -55,8 +55,8 @@ QPainterPath EventGraphicsItem::shape() const
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventGraphicsItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-                              QWidget *widget)
+void EventGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+                              QWidget* widget)
 {
     QFont font;
     font.setFamily(font.defaultFamily());
@@ -67,11 +67,11 @@ void EventGraphicsItem::paint(QPainter *painter, const QStyleOptionGraphicsItem 
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventGraphicsItem::DrawEvents(QPainter *painter) {}
+void EventGraphicsItem::DrawEvents(QPainter* painter) {}
 
 //--------------------------------------------------------------------------------------------------
-void EventGraphicsItem::CalcRectCoord(uint64_t start_cycle, uint64_t end_cycle, uint64_t *start_x,
-                                      uint64_t *end_x)
+void EventGraphicsItem::CalcRectCoord(uint64_t start_cycle, uint64_t end_cycle, uint64_t* start_x,
+                                      uint64_t* end_x)
 {
 }
 

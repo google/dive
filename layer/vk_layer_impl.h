@@ -23,6 +23,6 @@ namespace DiveLayer
 {
 
 VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
-                         const VkPresentInfoKHR *pPresentInfo);
+                         const VkPresentInfoKHR* pPresentInfo);
 
 }  // namespace DiveLayer

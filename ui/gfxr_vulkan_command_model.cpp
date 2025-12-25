@@ -23,13 +23,13 @@
 #include "dive_core/command_hierarchy.h"
 #include "tool_tip_summaries.h"
 
-static_assert(sizeof(void *) == sizeof(uint64_t),
+static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
 // =================================================================================================
 // GfxrVulkanCommandModel
 // =================================================================================================
-GfxrVulkanCommandModel::GfxrVulkanCommandModel(const Dive::CommandHierarchy &command_hierarchy)
+GfxrVulkanCommandModel::GfxrVulkanCommandModel(const Dive::CommandHierarchy& command_hierarchy)
     : m_command_hierarchy(command_hierarchy),
       m_topology_ptr(nullptr),
       m_vulkan_command_tool_tip_summaries(GetVulkanCommandToolTipSummaries())
@@ -54,7 +54,7 @@ void GfxrVulkanCommandModel::BeginResetModel() { emit beginResetModel(); }
 void GfxrVulkanCommandModel::EndResetModel() { emit endResetModel(); }
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandModel::SetTopologyToView(const Dive::Topology *topology_ptr)
+void GfxrVulkanCommandModel::SetTopologyToView(const Dive::Topology* topology_ptr)
 {
     BeginResetModel();
     m_topology_ptr = topology_ptr;
@@ -63,7 +63,7 @@ void GfxrVulkanCommandModel::SetTopologyToView(const Dive::Topology *topology_pt
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant GfxrVulkanCommandModel::data(const QModelIndex &index, int role) const
+QVariant GfxrVulkanCommandModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid()) return QVariant();
 
@@ -114,7 +114,7 @@ QVariant GfxrVulkanCommandModel::data(const QModelIndex &index, int role) const
 }
 
 //--------------------------------------------------------------------------------------------------
-Qt::ItemFlags GfxrVulkanCommandModel::flags(const QModelIndex &index) const
+Qt::ItemFlags GfxrVulkanCommandModel::flags(const QModelIndex& index) const
 {
     if (!index.isValid()) return Qt::ItemFlags();
 
@@ -129,7 +129,7 @@ QVariant GfxrVulkanCommandModel::headerData(int section, Qt::Orientation orienta
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex GfxrVulkanCommandModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex GfxrVulkanCommandModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (!hasIndex(row, column, parent)) return QModelIndex();
 
@@ -149,7 +149,7 @@ QModelIndex GfxrVulkanCommandModel::index(int row, int column, const QModelIndex
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex GfxrVulkanCommandModel::parent(const QModelIndex &index) const
+QModelIndex GfxrVulkanCommandModel::parent(const QModelIndex& index) const
 {
     if (!index.isValid()) return QModelIndex();
 
@@ -160,11 +160,11 @@ QModelIndex GfxrVulkanCommandModel::parent(const QModelIndex &index) const
     if (parent_node_index == UINT64_MAX) return QModelIndex();
 
     uint64_t row = m_topology_ptr->GetChildIndex(parent_node_index);
-    return createIndex(row, 0, (void *)parent_node_index);
+    return createIndex(row, 0, (void*)parent_node_index);
 }
 
 //--------------------------------------------------------------------------------------------------
-int GfxrVulkanCommandModel::rowCount(const QModelIndex &parent) const
+int GfxrVulkanCommandModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.column() > 0) return 0;
     if (m_topology_ptr == nullptr || m_topology_ptr->Topology::GetNumNodes() == 0) return 0;
@@ -179,7 +179,7 @@ int GfxrVulkanCommandModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int GfxrVulkanCommandModel::columnCount(const QModelIndex &parent) const { return 1; }
+int GfxrVulkanCommandModel::columnCount(const QModelIndex& parent) const { return 1; }
 
 //--------------------------------------------------------------------------------------------------
 QModelIndex GfxrVulkanCommandModel::findNode(uint64_t node_index) const
@@ -191,7 +191,7 @@ QModelIndex GfxrVulkanCommandModel::findNode(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandModel::BuildNodeLookup(const QModelIndex &parent) const
+void GfxrVulkanCommandModel::BuildNodeLookup(const QModelIndex& parent) const
 {
     if (!parent.isValid())
     {
@@ -210,8 +210,8 @@ void GfxrVulkanCommandModel::BuildNodeLookup(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QList<QModelIndex> GfxrVulkanCommandModel::search(const QModelIndex &start,
-                                                  const QVariant &value) const
+QList<QModelIndex> GfxrVulkanCommandModel::search(const QModelIndex& start,
+                                                  const QVariant& value) const
 {
     QList<QModelIndex> result;
     Qt::CaseSensitivity cs = Qt::CaseInsensitive;

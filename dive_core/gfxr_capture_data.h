@@ -30,15 +30,15 @@ class GfxrCaptureData : public CaptureData
  public:
     GfxrCaptureData() = default;
     virtual ~GfxrCaptureData() = default;
-    GfxrCaptureData &operator=(GfxrCaptureData &&) = default;
+    GfxrCaptureData& operator=(GfxrCaptureData&&) = default;
 
-    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &GetGfxrSubmits() const;
-    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo> &GetGfxrCommandBuffers(
+    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>>& GetGfxrSubmits() const;
+    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo>& GetGfxrCommandBuffers(
         uint64_t cmd_handle) const;
-    const DiveAnnotationProcessor::DrawCallCounts &GetDrawCallCounts(uint64_t cmd_handle) const;
+    const DiveAnnotationProcessor::DrawCallCounts& GetDrawCallCounts(uint64_t cmd_handle) const;
 
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
-    LoadResult LoadCaptureFile(const std::string &file_name) override;
+    LoadResult LoadCaptureFile(const std::string& file_name) override;
 
     // Get the gfxr data
     bool IsDiveBlockDataInitialized() const { return m_gfxr_capture_block_data != nullptr; }
@@ -49,7 +49,7 @@ class GfxrCaptureData : public CaptureData
 
     // Writes a new GFXR file based on the original file m_cur_capture_file and modifications
     // recorded in m_gfxr_capture_block_data
-    bool WriteModifiedGfxrFile(const char *new_file_name);
+    bool WriteModifiedGfxrFile(const char* new_file_name);
 
  private:
     // Metadata for the original GFXR file m_cur_capture_file, as well as modifications

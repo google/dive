@@ -35,7 +35,7 @@
 // =================================================================================================
 // CommandTabView
 // =================================================================================================
-CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent)
+CommandTabView::CommandTabView(const Dive::CommandHierarchy& command_hierarchy, QWidget* parent)
     : m_command_hierarchy(command_hierarchy)
 {
     m_command_buffer_model = new CommandBufferModel(command_hierarchy);
@@ -52,7 +52,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     m_search_trigger_button->setObjectName(kCommandBufferSearchButtonName);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
-    QHBoxLayout *options_layout = new QHBoxLayout();
+    QHBoxLayout* options_layout = new QHBoxLayout();
     options_layout->addWidget(m_search_trigger_button);
     options_layout->addStretch();
 
@@ -60,7 +60,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
     m_search_bar->setObjectName(kCommandBufferSearchBarName);
     m_search_bar->hide();
 
-    QVBoxLayout *main_layout = new QVBoxLayout();
+    QVBoxLayout* main_layout = new QVBoxLayout();
     main_layout->addLayout(options_layout);
     main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_command_buffer_view);
@@ -75,7 +75,7 @@ CommandTabView::CommandTabView(const Dive::CommandHierarchy &command_hierarchy, 
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandTabView::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
+void CommandTabView::SetTopologyToView(const Dive::SharedNodeTopology* topology_ptr)
 {
     m_command_buffer_model->SetTopologyToView(topology_ptr);
 }
@@ -104,7 +104,7 @@ void CommandTabView::ResetModel()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandTabView::OnSelectionChanged(const QModelIndex &index)
+void CommandTabView::OnSelectionChanged(const QModelIndex& index)
 {
     if (!index.isValid()) return;
 
@@ -168,8 +168,8 @@ void CommandTabView::OnSearchBarVisibilityChange(bool isHidden)
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::ConnectSearchBar()
 {
-    QObject::connect(m_search_bar, SIGNAL(new_search(const QString &)), m_command_buffer_view,
-                     SLOT(searchCommandBufferByText(const QString &)));
+    QObject::connect(m_search_bar, SIGNAL(new_search(const QString&)), m_command_buffer_view,
+                     SLOT(searchCommandBufferByText(const QString&)));
     QObject::connect(m_search_bar, &SearchBar::next_search, m_command_buffer_view,
                      &CommandBufferView::nextCommandInSearch);
     QObject::connect(m_search_bar, &SearchBar::prev_search, m_command_buffer_view,
@@ -181,8 +181,8 @@ void CommandTabView::ConnectSearchBar()
 //--------------------------------------------------------------------------------------------------
 void CommandTabView::DisconnectSearchBar()
 {
-    QObject::disconnect(m_search_bar, SIGNAL(new_search(const QString &)), m_command_buffer_view,
-                        SLOT(searchCommandBufferByText(const QString &)));
+    QObject::disconnect(m_search_bar, SIGNAL(new_search(const QString&)), m_command_buffer_view,
+                        SLOT(searchCommandBufferByText(const QString&)));
     QObject::disconnect(m_search_bar, &SearchBar::next_search, m_command_buffer_view,
                         &CommandBufferView::nextCommandInSearch);
     QObject::disconnect(m_search_bar, &SearchBar::prev_search, m_command_buffer_view,

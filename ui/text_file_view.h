@@ -31,7 +31,7 @@ class TextFileView : public QFrame
     Q_OBJECT
 
  public:
-    TextFileView(const Dive::DataCore &data_core);
+    TextFileView(const Dive::DataCore& data_core);
     void Reset();
 
  public slots:
@@ -41,7 +41,7 @@ class TextFileView : public QFrame
     void OnFileSelectionChanged();
 
  private:
-    const Dive::DataCore &m_data_core;
-    QPlainTextEdit *m_text;
-    QTreeWidget *m_text_list;
+    const Dive::DataCore& m_data_core;
+    QPlainTextEdit* m_text;
+    QTreeWidget* m_text_list;
 };

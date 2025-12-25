@@ -48,7 +48,7 @@ constexpr const uint32_t kMaxNumVGPRPerWave = 1 << 20;    // 1 MiB
 }  // namespace
 
 //--------------------------------------------------------------------------------------------------
-FileReader::FileReader(const char *file_name)
+FileReader::FileReader(const char* file_name)
     : m_file_name(file_name),
       m_handle(std::unique_ptr<struct archive, decltype(&archive_read_free)>(archive_read_new(),
                                                                              &archive_read_free))
@@ -100,7 +100,7 @@ int FileReader::Open()
         std::cerr << "error archive_read_open_filename: " << archive_error_string(m_handle.get());
         return ret;
     }
-    struct archive_entry *entry;
+    struct archive_entry* entry;
     ret = archive_read_next_header(m_handle.get(), &entry);
     if (ret != ARCHIVE_OK)
     {
@@ -111,9 +111,9 @@ int FileReader::Open()
 }
 
 //--------------------------------------------------------------------------------------------------
-int64_t FileReader::Read(char *buf, int64_t nbytes)
+int64_t FileReader::Read(char* buf, int64_t nbytes)
 {
-    char *ptr = buf;
+    char* ptr = buf;
     int64_t ret = 0;
     while (nbytes > 0)
     {
@@ -141,12 +141,12 @@ int FileReader::Close()
 // =================================================================================================
 // MemoryAllocationInfo
 // =================================================================================================
-const MemoryAllocationData *MemoryAllocationInfo::FindInternalAllocation(uint64_t va_addr,
+const MemoryAllocationData* MemoryAllocationInfo::FindInternalAllocation(uint64_t va_addr,
                                                                          uint64_t size) const
 {
     for (uint32_t alloc = 0; alloc < m_internal_allocs.size(); ++alloc)
     {
-        const MemoryAllocationData &alloc_data = m_internal_allocs[alloc];
+        const MemoryAllocationData& alloc_data = m_internal_allocs[alloc];
         if ((alloc_data.m_gpu_virt_addr <= va_addr) &&
             ((va_addr + size) <= (alloc_data.m_gpu_virt_addr + alloc_data.m_size)))
         {
@@ -157,12 +157,12 @@ const MemoryAllocationData *MemoryAllocationInfo::FindInternalAllocation(uint64_
 }
 
 //--------------------------------------------------------------------------------------------------
-const MemoryAllocationData *MemoryAllocationInfo::FindGlobalAllocation(uint64_t va_addr,
+const MemoryAllocationData* MemoryAllocationInfo::FindGlobalAllocation(uint64_t va_addr,
                                                                        uint64_t size) const
 {
     for (uint32_t alloc = 0; alloc < m_global_allocs.size(); ++alloc)
     {
-        const MemoryAllocationData &alloc_data = m_global_allocs[alloc];
+        const MemoryAllocationData& alloc_data = m_global_allocs[alloc];
         if ((alloc_data.m_gpu_virt_addr <= va_addr) &&
             ((va_addr + size) <= (alloc_data.m_gpu_virt_addr + alloc_data.m_size)))
         {
@@ -175,7 +175,7 @@ const MemoryAllocationData *MemoryAllocationInfo::FindGlobalAllocation(uint64_t 
 //--------------------------------------------------------------------------------------------------
 void MemoryAllocationInfo::AddMemoryAllocations(uint32_t submit_index,
                                                 MemoryAllocationsDataHeader::Type type,
-                                                DiveVector<MemoryAllocationData> &&allocations)
+                                                DiveVector<MemoryAllocationData>&& allocations)
 {
     // There can only be 1 single internal and global allocation set, but there can
     // potentially be a submission allocation set *per* submit
@@ -203,7 +203,7 @@ MemoryManager::~MemoryManager()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MemoryManager::AddMemoryBlock(uint32_t submit_index, uint64_t va_addr, MemoryData &&data)
+void MemoryManager::AddMemoryBlock(uint32_t submit_index, uint64_t va_addr, MemoryData&& data)
 {
     MemoryBlock mem_block;
     mem_block.m_submit_index = submit_index;
@@ -220,7 +220,7 @@ void MemoryManager::AddMemoryBlock(uint32_t submit_index, uint64_t va_addr, Memo
 //--------------------------------------------------------------------------------------------------
 void MemoryManager::AddMemoryAllocations(uint32_t submit_index,
                                          MemoryAllocationsDataHeader::Type type,
-                                         DiveVector<MemoryAllocationData> &&allocations)
+                                         DiveVector<MemoryAllocationData>&& allocations)
 {
     m_memory_allocations.AddMemoryAllocations(submit_index, type, std::move(allocations));
 }
@@ -234,7 +234,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
     // Important: Preserve order of equivalent blocks using stable_sort (later blocks have more
     // updated view of memory)
     std::stable_sort(m_memory_blocks.begin(), m_memory_blocks.end(),
-                     [&](const MemoryBlock &lhs, const MemoryBlock &rhs) -> bool {
+                     [&](const MemoryBlock& lhs, const MemoryBlock& rhs) -> bool {
                          // Only if m_same_submit_only does the submit affect the sort order
                          // When this flag is not enabled, then the memory is "flattened" and memory
                          // can be captured from any submit (ie: memory tracker not reset between
@@ -260,7 +260,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
         uint32_t prev_size = 0;
         for (uint32_t i = 0; i < m_memory_blocks.size(); ++i)
         {
-            const MemoryBlock &memory_block = m_memory_blocks[i];
+            const MemoryBlock& memory_block = m_memory_blocks[i];
 
             if (memory_block.m_submit_index != prev_submit)
             {
@@ -307,7 +307,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
         uint64_t cur_submit = 0;
         for (uint32_t i = 0; i < m_memory_blocks.size(); ++i)
         {
-            const MemoryBlock &memory_block = m_memory_blocks[i];
+            const MemoryBlock& memory_block = m_memory_blocks[i];
 
             if (memory_block.m_submit_index != cur_submit)
                 cur_submit = memory_block.m_submit_index;
@@ -329,7 +329,7 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
             uint32_t cur_submit = 0;
             for (uint32_t i = 0; i < m_memory_blocks.size(); ++i)
             {
-                const MemoryBlock &memory_block = m_memory_blocks[i];
+                const MemoryBlock& memory_block = m_memory_blocks[i];
                 DIVE_ASSERT(memory_block.m_submit_index != cur_submit ||
                             memory_block.m_va_addr >= cur_addr);
                 cur_addr = memory_block.m_va_addr + memory_block.m_data_size;
@@ -341,19 +341,19 @@ void MemoryManager::Finalize(bool same_submit_copy_only, bool duplicate_ib_captu
 }
 
 //--------------------------------------------------------------------------------------------------
-const MemoryAllocationInfo &MemoryManager::GetMemoryAllocationInfo() const
+const MemoryAllocationInfo& MemoryManager::GetMemoryAllocationInfo() const
 {
     return m_memory_allocations;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MemoryManager::RetrieveMemoryData(void *buffer_ptr, uint32_t submit_index, uint64_t va_addr,
+bool MemoryManager::RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
                                        uint64_t size) const
 {
     // Check the last-used block first, because this is the desired block most of the time
     if (m_last_used_block_ptr != nullptr)
     {
-        const MemoryBlock &mem_block = *m_last_used_block_ptr;
+        const MemoryBlock& mem_block = *m_last_used_block_ptr;
         uint64_t mem_block_end_addr = mem_block.m_va_addr + mem_block.m_data_size;
         uint64_t end_addr = va_addr + size;
 
@@ -369,7 +369,7 @@ bool MemoryManager::RetrieveMemoryData(void *buffer_ptr, uint32_t submit_index, 
                           << mem_block.m_data_size << " gpu addr:  " << va_addr << std::endl;
             }
 #endif
-            memcpy(buffer_ptr, (void *)&mem_block.m_data_ptr[va_addr - mem_block.m_va_addr], size);
+            memcpy(buffer_ptr, (void*)&mem_block.m_data_ptr[va_addr - mem_block.m_va_addr], size);
             return true;
         }
     }
@@ -377,10 +377,10 @@ bool MemoryManager::RetrieveMemoryData(void *buffer_ptr, uint32_t submit_index, 
     // Iterate through the memory blocks to find overlapping blocks and do the appropriate memcopies
     uint64_t amount_copied = 0;
     uint32_t num_memory_blocks = (uint32_t)m_memory_blocks.size();
-    const MemoryBlock *memory_blocks = (num_memory_blocks > 0) ? &m_memory_blocks.front() : nullptr;
+    const MemoryBlock* memory_blocks = (num_memory_blocks > 0) ? &m_memory_blocks.front() : nullptr;
     for (uint32_t i = num_memory_blocks - 1; i != UINT32_MAX; --i)
     {
-        const MemoryBlock &mem_block = memory_blocks[i];
+        const MemoryBlock& mem_block = memory_blocks[i];
 
         uint64_t mem_block_end_addr = mem_block.m_va_addr + mem_block.m_data_size;
         uint64_t end_addr = va_addr + size;
@@ -395,8 +395,8 @@ bool MemoryManager::RetrieveMemoryData(void *buffer_ptr, uint32_t submit_index, 
             uint64_t dst_offset = max_start_addr - va_addr;
             uint64_t size_to_copy = min_end_addr - max_start_addr;
 
-            const uint8_t *src_data_ptr = &mem_block.m_data_ptr[0];
-            memcpy((uint8_t *)buffer_ptr + dst_offset, src_data_ptr + src_offset, size_to_copy);
+            const uint8_t* src_data_ptr = &mem_block.m_data_ptr[0];
+            memcpy((uint8_t*)buffer_ptr + dst_offset, src_data_ptr + src_offset, size_to_copy);
             amount_copied += size_to_copy;
 #ifdef _DEBUG
             static int64_t max_buffer_size = 0;
@@ -418,7 +418,7 @@ bool MemoryManager::RetrieveMemoryData(void *buffer_ptr, uint32_t submit_index, 
 //--------------------------------------------------------------------------------------------------
 bool MemoryManager::GetMemoryOfUnknownSizeViaCallback(uint32_t submit_index, uint64_t va_addr,
                                                       PfnGetMemory data_callback,
-                                                      void *user_ptr) const
+                                                      void* user_ptr) const
 {
     uint64_t cur_addr = va_addr;
 
@@ -427,7 +427,7 @@ bool MemoryManager::GetMemoryOfUnknownSizeViaCallback(uint32_t submit_index, uin
     //       otherwise they are just sorted by address
     for (uint64_t i = 0; i < m_memory_blocks.size(); ++i)
     {
-        const MemoryBlock &mem_block = m_memory_blocks[i];
+        const MemoryBlock& mem_block = m_memory_blocks[i];
         bool valid_submit = m_same_submit_only ? (submit_index == mem_block.m_submit_index) : true;
         if (valid_submit)
         {
@@ -437,7 +437,7 @@ bool MemoryManager::GetMemoryOfUnknownSizeViaCallback(uint32_t submit_index, uin
                 uint64_t mem_block_end_addr = mem_block.m_va_addr + mem_block.m_data_size;
                 if (mem_block.m_va_addr <= va_addr && va_addr < mem_block_end_addr)
                 {
-                    void *data_ptr = mem_block.m_data_ptr + (va_addr - mem_block.m_va_addr);
+                    void* data_ptr = mem_block.m_data_ptr + (va_addr - mem_block.m_va_addr);
                     uint64_t size = mem_block_end_addr - va_addr;
                     if (!data_callback(data_ptr, va_addr, size, user_ptr))
                         break;  // Callback indicates no more searching is needed
@@ -473,7 +473,7 @@ uint64_t MemoryManager::GetMaxContiguousSize(uint32_t submit_index, uint64_t va_
     //       otherwise they are just sorted by address
     for (uint64_t i = 0; i < m_memory_blocks.size(); ++i)
     {
-        const MemoryBlock &mem_block = m_memory_blocks[i];
+        const MemoryBlock& mem_block = m_memory_blocks[i];
         bool valid_submit = m_same_submit_only ? (submit_index == mem_block.m_submit_index) : true;
         if (valid_submit)
         {
@@ -511,7 +511,7 @@ bool MemoryManager::IsValid(uint32_t submit_index, uint64_t addr, uint64_t size)
 // SubmitInfo
 // =================================================================================================
 SubmitInfo::SubmitInfo(EngineType engine_type, QueueType queue_type, uint8_t engine_index,
-                       bool is_dummy_submit, DiveVector<IndirectBufferInfo> &&ibs)
+                       bool is_dummy_submit, DiveVector<IndirectBufferInfo>&& ibs)
 {
     m_engine_type = engine_type;
     m_queue_type = queue_type;
@@ -536,16 +536,16 @@ bool SubmitInfo::IsDummySubmit() const { return m_is_dummy_submit; }
 uint32_t SubmitInfo::GetNumIndirectBuffers() const { return (uint32_t)m_ibs.size(); }
 
 //--------------------------------------------------------------------------------------------------
-const IndirectBufferInfo &SubmitInfo::GetIndirectBufferInfo(uint32_t ib_index) const
+const IndirectBufferInfo& SubmitInfo::GetIndirectBufferInfo(uint32_t ib_index) const
 {
     return m_ibs[ib_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-const IndirectBufferInfo *SubmitInfo::GetIndirectBufferInfoPtr() const { return &m_ibs[0]; }
+const IndirectBufferInfo* SubmitInfo::GetIndirectBufferInfoPtr() const { return &m_ibs[0]; }
 
 //--------------------------------------------------------------------------------------------------
-void SubmitInfo::AppendIb(const IndirectBufferInfo &ib) { m_ibs.push_back(ib); }
+void SubmitInfo::AppendIb(const IndirectBufferInfo& ib) { m_ibs.push_back(ib); }
 
 // =================================================================================================
 // Present Info
@@ -648,7 +648,7 @@ uint64_t RingInfo::GetSignaledFenceAddress() const { return m_fence_signaled_add
 // =================================================================================================
 // TextInfo
 // =================================================================================================
-TextInfo::TextInfo(std::string name, uint64_t size, DiveVector<char> &&text)
+TextInfo::TextInfo(std::string name, uint64_t size, DiveVector<char>&& text)
 {
     m_name = std::move(name);
     m_size = size;
@@ -656,19 +656,19 @@ TextInfo::TextInfo(std::string name, uint64_t size, DiveVector<char> &&text)
 }
 
 //--------------------------------------------------------------------------------------------------
-const std::string &TextInfo::GetName() const { return m_name; }
+const std::string& TextInfo::GetName() const { return m_name; }
 
 //--------------------------------------------------------------------------------------------------
 uint64_t TextInfo::GetSize() const { return m_size; }
 
 //--------------------------------------------------------------------------------------------------
-const char *TextInfo::GetText() const { return m_text.data(); }
+const char* TextInfo::GetText() const { return m_text.data(); }
 
 // =================================================================================================
 // WaveInfo
 // =================================================================================================
-WaveStateInfo::WaveStateInfo(const Dive::WaveState &state, DiveVector<uint32_t> &&sgprs,
-                             DiveVector<uint32_t> &&vgprs, DiveVector<uint32_t> &&ttmps)
+WaveStateInfo::WaveStateInfo(const Dive::WaveState& state, DiveVector<uint32_t>&& sgprs,
+                             DiveVector<uint32_t>&& vgprs, DiveVector<uint32_t>&& ttmps)
 {
     m_state = state;
     m_sgprs = sgprs;
@@ -677,32 +677,32 @@ WaveStateInfo::WaveStateInfo(const Dive::WaveState &state, DiveVector<uint32_t> 
 }
 
 //--------------------------------------------------------------------------------------------------
-const Dive::WaveState &WaveStateInfo::GetState() const { return m_state; }
+const Dive::WaveState& WaveStateInfo::GetState() const { return m_state; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<uint32_t> &WaveStateInfo::GetSGPRs() const { return m_sgprs; }
+const DiveVector<uint32_t>& WaveStateInfo::GetSGPRs() const { return m_sgprs; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<uint32_t> &WaveStateInfo::GetVGPRs() const { return m_vgprs; }
+const DiveVector<uint32_t>& WaveStateInfo::GetVGPRs() const { return m_vgprs; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<uint32_t> &WaveStateInfo::GetTTMPs() const { return m_ttmps; }
+const DiveVector<uint32_t>& WaveStateInfo::GetTTMPs() const { return m_ttmps; }
 
 // =================================================================================================
 // WaveInfo
 // =================================================================================================
-WaveInfo::WaveInfo(DiveVector<WaveStateInfo> &&waves) { m_waves = waves; }
+WaveInfo::WaveInfo(DiveVector<WaveStateInfo>&& waves) { m_waves = waves; }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<WaveStateInfo> &WaveInfo::GetWaves() const { return m_waves; }
+const DiveVector<WaveStateInfo>& WaveInfo::GetWaves() const { return m_waves; }
 
 // =================================================================================================
 // RegisterInfo
 // =================================================================================================
-RegisterInfo::RegisterInfo(std::map<std::string, uint32_t> &&regs) { m_registers = regs; }
+RegisterInfo::RegisterInfo(std::map<std::string, uint32_t>&& regs) { m_registers = regs; }
 
 //--------------------------------------------------------------------------------------------------
-const std::map<std::string, uint32_t> &RegisterInfo::GetRegisters() const { return m_registers; }
+const std::map<std::string, uint32_t>& RegisterInfo::GetRegisters() const { return m_registers; }
 
 // =================================================================================================
 // Pm4CaptureData
@@ -710,7 +710,7 @@ const std::map<std::string, uint32_t> &RegisterInfo::GetRegisters() const { retu
 Pm4CaptureData::Pm4CaptureData() : m_progress_tracker(NULL) {}
 
 //--------------------------------------------------------------------------------------------------
-Pm4CaptureData::Pm4CaptureData(ProgressTracker *progress_tracker)
+Pm4CaptureData::Pm4CaptureData(ProgressTracker* progress_tracker)
     : m_progress_tracker(progress_tracker)
 {
 }
@@ -718,7 +718,7 @@ Pm4CaptureData::Pm4CaptureData(ProgressTracker *progress_tracker)
 //--------------------------------------------------------------------------------------------------
 // TODO (gcommodore): Separate loading .rd files from loading .dive files so that this function is
 // used purely for loading a .rd file.
-CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const std::string &file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const std::string& file_name)
 {
     std::string file_name_(file_name);
     std::string file_extension = std::filesystem::path(file_name_).extension().generic_string();
@@ -739,7 +739,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadCaptureFile(const std::string &file_
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const std::string &file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const std::string& file_name)
 {
     // Open the file stream
     std::fstream capture_file(file_name, std::ios::in | std::ios::binary);
@@ -763,7 +763,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadDiveFile(const std::string &file_nam
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const std::string &file_name)
+CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const std::string& file_name)
 {
     FileReader reader(file_name.data());
     if (reader.Open() != 0)
@@ -785,11 +785,11 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(const std::string &file
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult Pm4CaptureData::LoadCaptureFileStream(std::istream &capture_file)
+CaptureData::LoadResult Pm4CaptureData::LoadCaptureFileStream(std::istream& capture_file)
 {
     // Read file header
     FileHeader file_header;
-    if (!capture_file.read((char *)&file_header, sizeof(file_header)))
+    if (!capture_file.read((char*)&file_header, sizeof(file_header)))
     {
         return LoadResult::kFileIoError;
     }
@@ -798,7 +798,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadCaptureFileStream(std::istream &capt
     if (file_header.m_file_version != kDiveFileVersion) return LoadResult::kVersionError;
 
     BlockInfo block_info;
-    while (capture_file.read((char *)&block_info, sizeof(block_info)))
+    while (capture_file.read((char*)&block_info, sizeof(block_info)))
     {
         switch (block_info.m_block_type)
         {
@@ -806,7 +806,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadCaptureFileStream(std::istream &capt
             {
                 // The capture data always begins with some metadata info
                 m_data_header = {};
-                capture_file.read((char *)&m_data_header, sizeof(m_data_header));
+                capture_file.read((char*)&m_data_header, sizeof(m_data_header));
                 bool incompatible = ((m_data_header.m_major_version != kCaptureMajorVersion) ||
                                      (m_data_header.m_minor_version > kCaptureMinorVersion));
                 // Cannot open version 0.1/0.2.x due to CaptureDataHeader change
@@ -842,7 +842,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadCaptureFileStream(std::istream &capt
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_file)
+CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader& capture_file)
 {
     enum rd_sect_type
     {
@@ -876,12 +876,12 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_fil
     uint32_t cur_size = UINT32_MAX;
     bool is_new_submit = false;
     bool skip_commands = false;
-    while (capture_file.Read((char *)&block_info, sizeof(block_info)) > 0)
+    while (capture_file.Read((char*)&block_info, sizeof(block_info)) > 0)
     {
         // Read and discard any trailing 0xffffffff padding from previous block
         while (block_info.m_block_type == 0xffffffff && block_info.m_data_size == 0xffffffff)
         {
-            if (capture_file.Read((char *)&block_info, sizeof(block_info)) <= 0)
+            if (capture_file.Read((char*)&block_info, sizeof(block_info)) <= 0)
                 return LoadResult::kCorruptData;
         }
 
@@ -909,13 +909,13 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_fil
             {
                 // Skip parsing commands from system processes
                 skip_commands = false;
-                char *process_name = new char[block_info.m_data_size];
-                if (!capture_file.Read((char *)process_name, block_info.m_data_size))
+                char* process_name = new char[block_info.m_data_size];
+                if (!capture_file.Read((char*)process_name, block_info.m_data_size))
                     return LoadResult::kFileIoError;
                 skip_commands |= (strcmp(process_name, "fdperf") == 0);
                 skip_commands |= (strcmp(process_name, "chrome") == 0);
                 skip_commands |= (strcmp(process_name, "surfaceflinger") == 0);
-                skip_commands |= ((char *)process_name)[0] == 'X';
+                skip_commands |= ((char*)process_name)[0] == 'X';
                 delete[] process_name;
                 break;
             }
@@ -937,7 +937,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_fil
             {
                 DIVE_ASSERT(block_info.m_data_size == 4);
                 uint32_t gpu_id = 0;
-                capture_file.Read(reinterpret_cast<char *>(&gpu_id), block_info.m_data_size);
+                capture_file.Read(reinterpret_cast<char*>(&gpu_id), block_info.m_data_size);
                 SetGPUID(gpu_id);
             }
             break;
@@ -949,7 +949,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_fil
                 {
                     DIVE_ASSERT(block_info.m_data_size == 8);
                     fd_dev_id dev_id;
-                    capture_file.Read(reinterpret_cast<char *>(&dev_id.chip_id),
+                    capture_file.Read(reinterpret_cast<char*>(&dev_id.chip_id),
                                       block_info.m_data_size);
                     dev_id.gpu_id = 0;
                     auto info = fd_dev_info(&dev_id);
@@ -972,25 +972,25 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader &capture_fil
 CaptureDataHeader::CaptureType Pm4CaptureData::GetCaptureType() const { return m_capture_type; }
 
 //--------------------------------------------------------------------------------------------------
-const MemoryManager &Pm4CaptureData::GetMemoryManager() const { return m_memory; }
+const MemoryManager& Pm4CaptureData::GetMemoryManager() const { return m_memory; }
 
 //--------------------------------------------------------------------------------------------------
 uint32_t Pm4CaptureData::GetNumSubmits() const { return (uint32_t)m_submits.size(); }
 
 //--------------------------------------------------------------------------------------------------
-const SubmitInfo &Pm4CaptureData::GetSubmitInfo(uint32_t submit_index) const
+const SubmitInfo& Pm4CaptureData::GetSubmitInfo(uint32_t submit_index) const
 {
     return m_submits[submit_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-const DiveVector<SubmitInfo> &Pm4CaptureData::GetSubmits() const { return m_submits; }
+const DiveVector<SubmitInfo>& Pm4CaptureData::GetSubmits() const { return m_submits; }
 
 //--------------------------------------------------------------------------------------------------
 uint32_t Pm4CaptureData::GetNumPresents() const { return (uint32_t)m_presents.size(); }
 
 //--------------------------------------------------------------------------------------------------
-const PresentInfo &Pm4CaptureData::GetPresentInfo(uint32_t present_index) const
+const PresentInfo& Pm4CaptureData::GetPresentInfo(uint32_t present_index) const
 {
     return m_presents[present_index];
 }
@@ -999,22 +999,22 @@ const PresentInfo &Pm4CaptureData::GetPresentInfo(uint32_t present_index) const
 uint32_t Pm4CaptureData::GetNumRings() const { return (uint32_t)m_rings.size(); }
 
 //--------------------------------------------------------------------------------------------------
-const RingInfo &Pm4CaptureData::GetRingInfo(uint32_t ring_index) const
+const RingInfo& Pm4CaptureData::GetRingInfo(uint32_t ring_index) const
 {
     return m_rings[ring_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-const WaveInfo &Pm4CaptureData::GetWaveInfo() const { return m_waves; }
+const WaveInfo& Pm4CaptureData::GetWaveInfo() const { return m_waves; }
 
 //--------------------------------------------------------------------------------------------------
-const RegisterInfo &Pm4CaptureData::GetRegisterInfo() const { return m_registers; }
+const RegisterInfo& Pm4CaptureData::GetRegisterInfo() const { return m_registers; }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHeader &data_header)
+bool Pm4CaptureData::LoadCapture(std::istream& capture_file, const CaptureDataHeader& data_header)
 {
     BlockInfo block_info;
-    while (capture_file.read((char *)&block_info, sizeof(block_info)))
+    while (capture_file.read((char*)&block_info, sizeof(block_info)))
     {
         switch (block_info.m_block_type)
         {
@@ -1066,10 +1066,10 @@ bool Pm4CaptureData::LoadCapture(std::istream &capture_file, const CaptureDataHe
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream& capture_file)
 {
     MemoryAllocationsDataHeader memory_allocations_header;
-    if (!capture_file.read((char *)&memory_allocations_header, sizeof(memory_allocations_header)))
+    if (!capture_file.read((char*)&memory_allocations_header, sizeof(memory_allocations_header)))
         return false;
     if (memory_allocations_header.m_num_allocations > kMaxNumMemAlloc) return false;
 
@@ -1077,7 +1077,7 @@ bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
     DiveVector<MemoryAllocationData> allocations;
     allocations.resize(memory_allocations_header.m_num_allocations);
     uint32_t size = memory_allocations_header.m_num_allocations * sizeof(MemoryAllocationData);
-    if (!capture_file.read((char *)&allocations[0], size)) return false;
+    if (!capture_file.read((char*)&allocations[0], size)) return false;
 
     // Add it to memory manager
     uint32_t submit_index = (uint32_t)(m_submits.size());
@@ -1088,17 +1088,17 @@ bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadSubmitBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadSubmitBlock(std::istream& capture_file)
 {
     SubmitDataHeader submit_data_header;
-    if (!capture_file.read((char *)&submit_data_header, sizeof(submit_data_header))) return false;
+    if (!capture_file.read((char*)&submit_data_header, sizeof(submit_data_header))) return false;
 
     // Load the ib info
     DiveVector<IndirectBufferInfo> ibs;
     for (uint32_t ib = 0; ib < submit_data_header.m_num_ibs; ++ib)
     {
         IndirectBufferData ib_data;
-        if (!capture_file.read((char *)&ib_data, sizeof(ib_data))) return false;
+        if (!capture_file.read((char*)&ib_data, sizeof(ib_data))) return false;
 
         IndirectBufferInfo ib_info;
         ib_info.m_va_addr = ib_data.m_va_addr;
@@ -1115,17 +1115,17 @@ bool Pm4CaptureData::LoadSubmitBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadMemoryBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadMemoryBlock(std::istream& capture_file)
 {
     MemoryRawDataHeader memory_raw_data_header;
-    if (!capture_file.read((char *)&memory_raw_data_header, sizeof(memory_raw_data_header)))
+    if (!capture_file.read((char*)&memory_raw_data_header, sizeof(memory_raw_data_header)))
         return false;
 
     if (memory_raw_data_header.m_size_in_bytes > kMaxMemAllocSize) return false;
     MemoryData raw_memory;
     raw_memory.m_data_size = memory_raw_data_header.m_size_in_bytes;
     raw_memory.m_data_ptr = new uint8_t[raw_memory.m_data_size];
-    if (!capture_file.read((char *)raw_memory.m_data_ptr, memory_raw_data_header.m_size_in_bytes))
+    if (!capture_file.read((char*)raw_memory.m_data_ptr, memory_raw_data_header.m_size_in_bytes))
     {
         delete[] raw_memory.m_data_ptr;
         return false;
@@ -1138,10 +1138,10 @@ bool Pm4CaptureData::LoadMemoryBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadPresentBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadPresentBlock(std::istream& capture_file)
 {
     PresentData present_data;
-    if (!capture_file.read((char *)&present_data, sizeof(present_data))) return false;
+    if (!capture_file.read((char*)&present_data, sizeof(present_data))) return false;
 
     uint32_t submit_index = (uint32_t)(m_submits.size() - 1);
     if (present_data.m_valid_data)
@@ -1160,11 +1160,11 @@ bool Pm4CaptureData::LoadPresentBlock(std::istream &capture_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadTextBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadTextBlock(std::istream& capture_file)
 {
     TextBlockHeader text_header;
 
-    if (!capture_file.read((char *)&text_header, sizeof(text_header))) return false;
+    if (!capture_file.read((char*)&text_header, sizeof(text_header))) return false;
 
     std::string name;
     if (text_header.m_name_len > kMaxStrLen || text_header.m_size_in_bytes > kMaxMemAllocSize)
@@ -1175,15 +1175,15 @@ bool Pm4CaptureData::LoadTextBlock(std::istream &capture_file)
     DiveVector<char> data;
     data.resize(text_header.m_size_in_bytes);
 
-    if (!capture_file.read((char *)data.data(), data.size())) return false;
+    if (!capture_file.read((char*)data.data(), data.size())) return false;
 
     m_text.push_back(TextInfo(std::move(name), text_header.m_size_in_bytes, std::move(data)));
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadWaveStateBlock(std::istream &capture_file,
-                                        const CaptureDataHeader &data_header)
+bool Pm4CaptureData::LoadWaveStateBlock(std::istream& capture_file,
+                                        const CaptureDataHeader& data_header)
 {
     // Only one wave block per capture is expected.
     assert(m_waves.GetWaves().size() == 0);
@@ -1191,14 +1191,14 @@ bool Pm4CaptureData::LoadWaveStateBlock(std::istream &capture_file,
     // Read chunk header
     WaveStateBlockHeader wave_header;
 
-    if (!capture_file.read((char *)&wave_header, sizeof(wave_header))) return false;
+    if (!capture_file.read((char*)&wave_header, sizeof(wave_header))) return false;
 
     DiveVector<WaveStateInfo> waves;
     if (wave_header.m_num_waves > kMaxNumWavesPerBlock) return false;
     for (uint32_t i = 0; i < wave_header.m_num_waves; ++i)
     {
         Dive::WaveState state;
-        if (!capture_file.read((char *)&state, sizeof(state))) return false;
+        if (!capture_file.read((char*)&state, sizeof(state))) return false;
 
         assert(state.num_threads == 64);
         assert((state.num_vgprs % state.num_threads) == 0);
@@ -1209,14 +1209,14 @@ bool Pm4CaptureData::LoadWaveStateBlock(std::istream &capture_file,
         DiveVector<uint32_t> sgprs(state.num_sgprs);
         if (sgprs.size() > 0)
         {
-            if (!capture_file.read((char *)sgprs.data(), state.num_sgprs * sizeof(uint32_t)))
+            if (!capture_file.read((char*)sgprs.data(), state.num_sgprs * sizeof(uint32_t)))
                 return false;
         }
 
         DiveVector<uint32_t> vgprs(state.num_vgprs);
         if (vgprs.size() > 0)
         {
-            if (!capture_file.read((char *)vgprs.data(), state.num_vgprs * sizeof(uint32_t)))
+            if (!capture_file.read((char*)vgprs.data(), state.num_vgprs * sizeof(uint32_t)))
                 return false;
         }
 
@@ -1235,7 +1235,7 @@ bool Pm4CaptureData::LoadWaveStateBlock(std::istream &capture_file,
         if (has_temps)
         {
             ttmps.resize(16);
-            if (!capture_file.read((char *)ttmps.data(), 16 * sizeof(uint32_t))) return false;
+            if (!capture_file.read((char*)ttmps.data(), 16 * sizeof(uint32_t))) return false;
         }
 
         waves.emplace_back(state, std::move(sgprs), std::move(vgprs), std::move(ttmps));
@@ -1246,7 +1246,7 @@ bool Pm4CaptureData::LoadWaveStateBlock(std::istream &capture_file,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadRegisterBlock(std::istream &capture_file)
+bool Pm4CaptureData::LoadRegisterBlock(std::istream& capture_file)
 {
     // Only one wave block per capture is expected.
     assert(m_registers.GetRegisters().size() == 0);
@@ -1254,7 +1254,7 @@ bool Pm4CaptureData::LoadRegisterBlock(std::istream &capture_file)
     // Read chunk header
     RegisterBlockHeader reg_header;
 
-    if (!capture_file.read((char *)&reg_header, sizeof(reg_header))) return false;
+    if (!capture_file.read((char*)&reg_header, sizeof(reg_header))) return false;
 
     std::map<std::string, uint32_t> regs;
     for (uint32_t i = 0; i < reg_header.m_num_registers; ++i)
@@ -1263,7 +1263,7 @@ bool Pm4CaptureData::LoadRegisterBlock(std::istream &capture_file)
         if (!std::getline(capture_file, name, '\0')) return false;
 
         uint32_t value;
-        if (!capture_file.read((char *)&value, sizeof(uint32_t))) return false;
+        if (!capture_file.read((char*)&value, sizeof(uint32_t))) return false;
 
         regs.emplace(name, value);
     }
@@ -1272,37 +1272,37 @@ bool Pm4CaptureData::LoadRegisterBlock(std::istream &capture_file)
     return true;
 }
 
-bool Pm4CaptureData::LoadVulkanMetaDataBlock(std::istream &capture_file) { return true; }
+bool Pm4CaptureData::LoadVulkanMetaDataBlock(std::istream& capture_file) { return true; }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadGpuAddressAndSize(FileReader &capture_file, uint32_t block_size,
-                                           uint64_t *gpu_addr, uint32_t *size)
+bool Pm4CaptureData::LoadGpuAddressAndSize(FileReader& capture_file, uint32_t block_size,
+                                           uint64_t* gpu_addr, uint32_t* size)
 {
     assert(block_size >= 2 * sizeof(uint32_t));
 
     uint32_t dword;
-    if (!capture_file.Read((char *)&dword, sizeof(uint32_t))) return false;
+    if (!capture_file.Read((char*)&dword, sizeof(uint32_t))) return false;
     *gpu_addr = dword;
-    if (!capture_file.Read((char *)&dword, sizeof(uint32_t))) return false;
+    if (!capture_file.Read((char*)&dword, sizeof(uint32_t))) return false;
     *size = dword;
 
     // It's possible that only the lower 32-bits are written to the file?
     if (block_size > 2 * sizeof(uint32_t))
     {
-        if (!capture_file.Read((char *)&dword, sizeof(uint32_t))) return false;
+        if (!capture_file.Read((char*)&dword, sizeof(uint32_t))) return false;
         *gpu_addr |= ((uint64_t)(dword)) << 32;
     }
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gpu_addr,
+bool Pm4CaptureData::LoadMemoryBlockAdreno(FileReader& capture_file, uint64_t gpu_addr,
                                            uint32_t size)
 {
     MemoryData raw_memory;
     raw_memory.m_data_size = size;
     raw_memory.m_data_ptr = new uint8_t[raw_memory.m_data_size];
-    if (!capture_file.Read((char *)raw_memory.m_data_ptr, size))
+    if (!capture_file.Read((char*)raw_memory.m_data_ptr, size))
     {
         delete[] raw_memory.m_data_ptr;
         return false;
@@ -1315,7 +1315,7 @@ bool Pm4CaptureData::LoadMemoryBlockAdreno(FileReader &capture_file, uint64_t gp
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Pm4CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file, uint32_t block_size,
+bool Pm4CaptureData::LoadCmdStreamBlockAdreno(FileReader& capture_file, uint32_t block_size,
                                               bool create_new_submit, bool skip_commands)
 {
     uint64_t gpu_addr;
@@ -1345,7 +1345,7 @@ bool Pm4CaptureData::LoadCmdStreamBlockAdreno(FileReader &capture_file, uint32_t
 }
 
 //--------------------------------------------------------------------------------------------------
-void Pm4CaptureData::Finalize(const CaptureDataHeader &data_header)
+void Pm4CaptureData::Finalize(const CaptureDataHeader& data_header)
 {
     // 0.3.2 implemented memory tracking for IBs - ie. no more duplicate capturing
     // Can probably remove this extra check later, since there are very few captures

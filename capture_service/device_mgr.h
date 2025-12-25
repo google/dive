@@ -43,13 +43,13 @@ struct DeviceInfo
     std::string GetDisplayName() const;
 };
 
-inline bool operator==(const DeviceInfo &lhs, const DeviceInfo &rhs)
+inline bool operator==(const DeviceInfo& lhs, const DeviceInfo& rhs)
 {
     return lhs.m_serial == rhs.m_serial && lhs.m_manufacturer == rhs.m_manufacturer &&
            lhs.m_model == rhs.m_model && lhs.m_is_adreno_gpu == rhs.m_is_adreno_gpu;
 }
 
-inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs) { return !(lhs == rhs); }
+inline bool operator!=(const DeviceInfo& lhs, const DeviceInfo& rhs) { return !(lhs == rhs); }
 
 struct DeviceState
 {
@@ -97,17 +97,17 @@ struct GfxrReplaySettings
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates
 // the entire configuration
-absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings &settings,
+absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings& settings,
                                                               bool is_adreno_gpu);
 
 class AndroidDevice
 {
  public:
-    explicit AndroidDevice(const std::string &serial);
+    explicit AndroidDevice(const std::string& serial);
     ~AndroidDevice();
 
-    AndroidDevice &operator=(const AndroidDevice &) = delete;
-    AndroidDevice(const AndroidDevice &) = delete;
+    AndroidDevice& operator=(const AndroidDevice&) = delete;
+    AndroidDevice(const AndroidDevice&) = delete;
 
     absl::Status Init();
     absl::Status ForwardFirstAvailablePort();
@@ -129,11 +129,11 @@ class AndroidDevice
     absl::Status CleanupDevice();
 
     // Cleanup properties related to a specific package
-    absl::Status CleanupPackageProperties(const std::string &package);
+    absl::Status CleanupPackageProperties(const std::string& package);
 
     void EnableGfxr(bool enable_gfxr);
     bool IsProcessRunning(absl::string_view process_name) const;
-    bool FileExists(const std::string &file_path);
+    bool FileExists(const std::string& file_path);
 
     enum class PackageListOptions
     {
@@ -145,28 +145,28 @@ class AndroidDevice
     absl::StatusOr<std::vector<std::string>> ListPackage(
         PackageListOptions option = PackageListOptions::kAll) const;
     std::string GetDeviceDisplayName() const;
-    absl::Status SetupApp(const std::string &package, const ApplicationType type,
-                          const std::string &command_args,
-                          const std::string &gfxr_capture_directory);
-    absl::Status SetupApp(const std::string &binary, const std::string &args,
-                          const ApplicationType type, const std::string &gfxr_capture_directory);
+    absl::Status SetupApp(const std::string& package, const ApplicationType type,
+                          const std::string& command_args,
+                          const std::string& gfxr_capture_directory);
+    absl::Status SetupApp(const std::string& binary, const std::string& args,
+                          const ApplicationType type, const std::string& gfxr_capture_directory);
 
     absl::Status CleanupApp();
     absl::Status StartApp();
     absl::Status StopApp();
-    const AdbSession &Adb() const { return m_adb; }
-    AdbSession &Adb() { return m_adb; }
+    const AdbSession& Adb() const { return m_adb; }
+    AdbSession& Adb() { return m_adb; }
     int Port() const { return m_port; }
     bool IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
 
-    AndroidApplication *GetCurrentApplication() { return m_app.get(); }
+    AndroidApplication* GetCurrentApplication() { return m_app.get(); }
 
     // Fetches file at remote_file_path to local_save_dir and deletes the remote file after
     // If new_file_name specified, local file is renamed
     // If delete_after_retrieve is false, remote file is not deleted
-    absl::Status RetrieveFile(const std::string &remote_file_path,
-                              const std::string &local_save_dir, bool delete_after_retrieve = true,
-                              const std::string &new_file_name = "");
+    absl::Status RetrieveFile(const std::string& remote_file_path,
+                              const std::string& local_save_dir, bool delete_after_retrieve = true,
+                              const std::string& new_file_name = "");
 
     // Pins GPU clock to freq_mhz [MHz]
     absl::Status PinGpuClock(uint32_t freq_mhz) const;
@@ -176,12 +176,12 @@ class AndroidDevice
     absl::Status IsGpuClockPinned(uint32_t expected_freq_mhz) const;
 
     // Triggers a screenshot and saves it to the specified path.
-    absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir);
+    absl::Status TriggerScreenCapture(const std::filesystem::path& on_device_screenshot_dir);
 
     // Verifies that file_name exists locally inside the device resources folder before deploying to
     // target_dir
-    absl::Status DeployDeviceResource(const std::string_view &file_name,
-                                      const std::filesystem::path &target_dir =
+    absl::Status DeployDeviceResource(const std::string_view& file_name,
+                                      const std::filesystem::path& target_dir =
                                           Dive::DeviceResourcesConstants::kDeployFolderPath);
 
     // Uses run-as with app permissions to copy the file from kDeployFolderPath to the app's own
@@ -208,28 +208,28 @@ class DeviceManager
 {
  public:
     DeviceManager() = default;
-    DeviceManager &operator=(const DeviceManager &) = delete;
-    DeviceManager(const DeviceManager &) = delete;
+    DeviceManager& operator=(const DeviceManager&) = delete;
+    DeviceManager(const DeviceManager&) = delete;
 
     std::vector<DeviceInfo> ListDevice() const;
-    absl::StatusOr<AndroidDevice *> SelectDevice(const std::string &serial);
+    absl::StatusOr<AndroidDevice*> SelectDevice(const std::string& serial);
     void RemoveDevice() { m_device = nullptr; }
-    AndroidDevice *GetDevice() const { return m_device.get(); }
+    AndroidDevice* GetDevice() const { return m_device.get(); }
 
     // Exposing for user-initiated cleanup
-    absl::Status CleanupPackageProperties(const std::string &package);
+    absl::Status CleanupPackageProperties(const std::string& package);
 
-    absl::Status DeployReplayApk(const std::string &serial);
-    absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;
+    absl::Status DeployReplayApk(const std::string& serial);
+    absl::Status RunReplayApk(const GfxrReplaySettings& settings) const;
 
  private:
     // Initiates GFXR replay through the GFXR-provided python script, blocking call
-    absl::Status RunReplayGfxrScript(const GfxrReplaySettings &settings) const;
+    absl::Status RunReplayGfxrScript(const GfxrReplaySettings& settings) const;
     // Initiates GFXR replay through the profiling plugin, blocking call
-    absl::Status RunReplayProfilingBinary(const GfxrReplaySettings &settings) const;
+    absl::Status RunReplayProfilingBinary(const GfxrReplaySettings& settings) const;
 
     std::unique_ptr<AndroidDevice> m_device{nullptr};
 };
 
-DeviceManager &GetDeviceManager();
+DeviceManager& GetDeviceManager();
 }  // namespace Dive

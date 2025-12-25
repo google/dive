@@ -31,7 +31,7 @@ limitations under the License.
     } while (0)
 
 template <typename T>
-absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
+absl::Status DoAssignOrReturn(T& lhs, absl::StatusOr<T> result)
 {
     if (result.ok())
     {

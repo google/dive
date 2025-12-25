@@ -30,7 +30,7 @@ limitations under the License.
 namespace Dive
 {
 
-absl::StatusOr<std::string> LogCommand(const std::string &command, const std::string &output,
+absl::StatusOr<std::string> LogCommand(const std::string& command, const std::string& output,
                                        int ret)
 {
     // Always log command and output for debug builds
@@ -48,7 +48,7 @@ absl::StatusOr<std::string> LogCommand(const std::string &command, const std::st
     return output;
 }
 
-absl::StatusOr<std::string> RunCommand(const std::string &command)
+absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
     std::string output;
     std::string err_msg;

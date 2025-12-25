@@ -28,7 +28,7 @@
 class BufferWidgetItem : public QTreeWidgetItem
 {
  public:
-    BufferWidgetItem(uint32_t buffer_index, QTreeWidget *view)
+    BufferWidgetItem(uint32_t buffer_index, QTreeWidget* view)
         : QTreeWidgetItem(view), m_buffer_index(buffer_index)
     {
     }
@@ -41,10 +41,10 @@ class BufferWidgetItem : public QTreeWidgetItem
 // =================================================================================================
 // BufferView
 // =================================================================================================
-BufferView::BufferView(const Dive::DataCore &data_core)
+BufferView::BufferView(const Dive::DataCore& data_core)
     : m_data_core(data_core), m_event_index(UINT32_MAX)
 {
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     m_buffer_list = new QTreeWidget();
     m_buffer_list->setColumnCount(9);
     m_buffer_list->setHeaderLabels(QStringList() << "Shader Stage"
@@ -82,19 +82,19 @@ void BufferView::OnEventSelected(uint32_t event_index)
     m_buffer_indices.clear();
     if (event_index == UINT32_MAX) return;
 
-    const Dive::CaptureMetadata &metadata = m_data_core.GetCaptureMetadata();
+    const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
 
     // Add the buffer(s) to the list
     const uint32_t kShaderStageCount = (uint32_t)Dive::ShaderStage::kShaderStageCount;
-    const Dive::EventInfo &event_info = metadata.m_event_info[event_index];
+    const Dive::EventInfo& event_info = metadata.m_event_info[event_index];
     for (uint32_t shader_stage = 0; shader_stage < kShaderStageCount; ++shader_stage)
     {
         uint32_t num_buffers = (uint32_t)event_info.m_buffer_indices[shader_stage].size();
         for (uint32_t buffer = 0; buffer < num_buffers; ++buffer)
         {
             uint32_t buffer_index = event_info.m_buffer_indices[shader_stage][buffer];
-            const Dive::BufferInfo &buffer_info = metadata.m_buffers[buffer_index];
-            BufferWidgetItem *treeItem = new BufferWidgetItem(buffer_index, m_buffer_list);
+            const Dive::BufferInfo& buffer_info = metadata.m_buffers[buffer_index];
+            BufferWidgetItem* treeItem = new BufferWidgetItem(buffer_index, m_buffer_list);
 
             // Column 0
             treeItem->setText(0, tr(kShaderStageStrings[shader_stage]));
@@ -102,7 +102,7 @@ void BufferView::OnEventSelected(uint32_t event_index)
             // Column 1
             constexpr uint32_t kStrBufferSize = 256;
             char str_buffer[kStrBufferSize];
-            snprintf(str_buffer, kStrBufferSize, "%p", (void *)buffer_info.m_addr);
+            snprintf(str_buffer, kStrBufferSize, "%p", (void*)buffer_info.m_addr);
             treeItem->setText(1, tr(str_buffer));
 
             // Column 2
@@ -135,10 +135,10 @@ void BufferView::OnEventSelected(uint32_t event_index)
             */
             // Column 8
             // Find preferred heap
-            const Dive::Pm4CaptureData &capture_data = m_data_core.GetPm4CaptureData();
-            const Dive::MemoryManager &memory = capture_data.GetMemoryManager();
-            const Dive::MemoryAllocationInfo &mem_alloc_info = memory.GetMemoryAllocationInfo();
-            const Dive::MemoryAllocationData *mem_alloc_ptr;
+            const Dive::Pm4CaptureData& capture_data = m_data_core.GetPm4CaptureData();
+            const Dive::MemoryManager& memory = capture_data.GetMemoryManager();
+            const Dive::MemoryAllocationInfo& mem_alloc_info = memory.GetMemoryAllocationInfo();
+            const Dive::MemoryAllocationData* mem_alloc_ptr;
             mem_alloc_ptr =
                 mem_alloc_info.FindGlobalAllocation(buffer_info.m_addr, buffer_info.m_size);
             DIVE_ASSERT(mem_alloc_ptr != nullptr);
@@ -182,12 +182,12 @@ void BufferView::OnEventSelected(uint32_t event_index)
 void BufferView::OnBufferSelectionChanged()
 {
     // Obtain the buffer_index of the selected item
-    const BufferWidgetItem *item_ptr = (const BufferWidgetItem *)m_buffer_list->currentItem();
+    const BufferWidgetItem* item_ptr = (const BufferWidgetItem*)m_buffer_list->currentItem();
     uint32_t buffer_index = item_ptr->GetBufferIndex();
 
     // Grab the buffer metadata
-    const Dive::CaptureMetadata &metadata = m_data_core.GetCaptureMetadata();
-    const Dive::BufferInfo &buffer_info = metadata.m_buffers[buffer_index];
+    const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
+    const Dive::BufferInfo& buffer_info = metadata.m_buffers[buffer_index];
 
     // Set size of the table
     uint32_t num_dwords = buffer_info.m_size / sizeof(uint32_t);
@@ -199,9 +199,9 @@ void BufferView::OnBufferSelectionChanged()
     // Grab all the data
     std::vector<uint32_t> buffer_memory;
     buffer_memory.resize(num_dwords);
-    const Dive::EventInfo &event_info = metadata.m_event_info[m_event_index];
-    const Dive::Pm4CaptureData &capture_data = m_data_core.GetPm4CaptureData();
-    const Dive::MemoryManager &mem_manager = capture_data.GetMemoryManager();
+    const Dive::EventInfo& event_info = metadata.m_event_info[m_event_index];
+    const Dive::Pm4CaptureData& capture_data = m_data_core.GetPm4CaptureData();
+    const Dive::MemoryManager& mem_manager = capture_data.GetMemoryManager();
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&buffer_memory[0], event_info.m_submit_index,
                                                buffer_info.m_addr, buffer_info.m_size));
 
@@ -217,14 +217,14 @@ void BufferView::OnBufferSelectionChanged()
         char buffer[kBufferSize];
         if (cur_col == 0)
         {
-            snprintf(buffer, kBufferSize, "%p", (void *)dword_addr);
-            QTableWidgetItem *addr_item = new QTableWidgetItem(buffer);
+            snprintf(buffer, kBufferSize, "%p", (void*)dword_addr);
+            QTableWidgetItem* addr_item = new QTableWidgetItem(buffer);
             addr_item->setBackground(QColor(192, 192, 192));
             m_memory_view->setItem(cur_row, cur_col, addr_item);
         }
         else
         {
-            snprintf(buffer, kBufferSize, "%f", *((float *)&buffer_memory[dword]));
+            snprintf(buffer, kBufferSize, "%f", *((float*)&buffer_memory[dword]));
             m_memory_view->setItem(cur_row, cur_col, new QTableWidgetItem(buffer));
             dword++;
         }

@@ -25,18 +25,18 @@ class PerfCounterModel : public QAbstractItemModel
 {
     Q_OBJECT
  public:
-    explicit PerfCounterModel(QObject *parent = nullptr);
+    explicit PerfCounterModel(QObject* parent = nullptr);
 
     // QAbstractItemModel interface
     QModelIndex index(int row, int column,
-                      const QModelIndex &parent = QModelIndex()) const override;
-    QModelIndex parent(const QModelIndex &index) const override;
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+                      const QModelIndex& parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex& index) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex& parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role = Qt::DisplayRole) const override;
-    void SearchInColumn(const QString &value, int column = 0);
+    void SearchInColumn(const QString& value, int column = 0);
     QModelIndex FirstMatch();
     QModelIndex NextMatch();
     QModelIndex PreviousMatch();
@@ -44,18 +44,18 @@ class PerfCounterModel : public QAbstractItemModel
     int GetTotalMatches() const;
     void ClearSearchResults();
     void ResetSearchIterator();
-    void SetIteratorToNearest(const QModelIndex &current_index);
+    void SetIteratorToNearest(const QModelIndex& current_index);
 
     std::optional<uint64_t> GetDrawIndexFromRow(int row) const;
     std::optional<int> GetRowFromDrawIndex(uint64_t draw_index) const;
 
  public slots:
     void OnPerfCounterResultsGenerated(
-        const std::filesystem::path &file_path,
+        const std::filesystem::path& file_path,
         std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
 
  private:
-    void ParseCsv(const QString &file_path);
+    void ParseCsv(const QString& file_path);
     void LoadData();
 
     QList<QModelIndex> m_search_results;

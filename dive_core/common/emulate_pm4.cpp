@@ -43,7 +43,7 @@ namespace Dive
 EmulateStateTracker::EmulateStateTracker() {}
 
 //--------------------------------------------------------------------------------------------------
-bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager, uint32_t submit_index,
+bool EmulateStateTracker::OnPacket(const IMemoryManager& mem_manager, uint32_t submit_index,
                                    uint32_t ib_index, uint64_t va_addr, Pm4Header header)
 {
     if (header.type == 7 && header.type7.opcode == CP_SET_MARKER)
@@ -113,7 +113,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager, uint32_t s
             dword += 2;
             SetReg(reg_pair.m_reg_offset, reg_pair.m_reg_value);
 
-            const RegInfo *reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
+            const RegInfo* reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
             if (reg_info_ptr && reg_info_ptr->m_is_64_bit)
             {
                 RegPair new_reg_pair;
@@ -141,7 +141,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager &mem_manager, uint32_t s
             uint64_t reg_va_addr = va_addr + sizeof(header) + offset_in_bytes;
             uint32_t reg_offset = header.type4.offset + dword;
             DIVE_ASSERT(reg_offset < kNumRegs);
-            const RegInfo *reg_info_ptr = GetRegInfo(reg_offset);
+            const RegInfo* reg_info_ptr = GetRegInfo(reg_offset);
 
             constexpr size_t dword_in_bytes = sizeof(uint32_t);
             uint32_t size_in_dwords = 1;
@@ -297,22 +297,22 @@ bool EmulateStateTracker::IsRegSet(uint32_t offset, ShaderEnableBit shader_enabl
 EmulatePM4::EmulatePM4() {}
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase &callbacks, const IMemoryManager &mem_manager,
+bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase& callbacks, const IMemoryManager& mem_manager,
                                uint32_t submit_index, uint32_t num_ibs,
-                               const IndirectBufferInfo *ib_ptr)
+                               const IndirectBufferInfo* ib_ptr)
 {
     // Used to keep track of progress of emulation so far
     EmulateState emu_state;
     emu_state.m_submit_index = submit_index;
     emu_state.m_top_of_stack = IbLevel::kPrimaryRing;
-    EmulateState::IbStack *primary_ring = &emu_state.m_ib_stack[IbLevel::kPrimaryRing];
+    EmulateState::IbStack* primary_ring = &emu_state.m_ib_stack[IbLevel::kPrimaryRing];
     primary_ring->m_cur_va = UINT64_MAX;
     primary_ring->m_ib_queue_index = primary_ring->m_ib_queue_size = 0;
 
     // Push all the IBs in this submit onto the primary ring stack entry
     for (uint32_t i = 0; i < num_ibs; ++i)
     {
-        const IndirectBufferInfo &ib_info = ib_ptr[i];
+        const IndirectBufferInfo& ib_info = ib_ptr[i];
         if (!QueueIB(ib_info.m_va_addr, ib_info.m_size_in_dwords, ib_info.m_skip, IbType::kNormal,
                      &emu_state))
         {
@@ -330,7 +330,7 @@ bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase &callbacks, const IMemoryMan
     while (emu_state.m_top_of_stack != IbLevel::kPrimaryRing)
     {
         // Callbacks + advance
-        EmulateState::IbStack *cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
+        EmulateState::IbStack* cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
 
         Pm4Header header;
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&header, emu_state.m_submit_index,
@@ -339,13 +339,13 @@ bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase &callbacks, const IMemoryMan
         // Check validity of packet
         if (header.type == 4)
         {
-            Pm4Type4Header *type4_header = (Pm4Type4Header *)&header;
+            Pm4Type4Header* type4_header = (Pm4Type4Header*)&header;
             if (type4_header->offset_parity != CalcParity(type4_header->offset)) return false;
             if (type4_header->count_parity != CalcParity(type4_header->count)) return false;
         }
         else if (header.type == 7)
         {
-            Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
+            Pm4Type7Header* type7_header = (Pm4Type7Header*)&header;
             if (type7_header->opcode_parity != CalcParity(type7_header->opcode)) return false;
             if (type7_header->count_parity != CalcParity(type7_header->count)) return false;
             if (type7_header->zeroes != 0) return false;
@@ -360,8 +360,8 @@ bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase &callbacks, const IMemoryMan
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager, EmulateState *emu_state_ptr,
-                           EmulateCallbacksBase &callbacks, Pm4Header header) const
+bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_state_ptr,
+                           EmulateCallbacksBase& callbacks, Pm4Header header) const
 {
     // Deal with calls and chains
     if (header.type == 7 && (header.type7.opcode == CP_INDIRECT_BUFFER_PFE ||
@@ -475,7 +475,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager, EmulateState *emu_
         // same IB Level. So peek ahead to find where the CP_END_BIN appears so that the size of the
         // common block can be determined. No need to emulate the contents of any intervening IBs,
         // since we know the CP_END_BIN is at the same ib level
-        EmulateState::IbStack *cur_ib_level =
+        EmulateState::IbStack* cur_ib_level =
             &emu_state_ptr->m_ib_stack[emu_state_ptr->m_top_of_stack];
         uint64_t temp_va = cur_ib_level->m_cur_va;
         uint32_t common_block_dword_size = UINT32_MAX;
@@ -561,10 +561,10 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager &mem_manager, EmulateState *emu_
 
 //--------------------------------------------------------------------------------------------------
 bool EmulatePM4::QueueIB(uint64_t ib_addr, uint32_t ib_size_in_dwords, bool skip, IbType ib_type,
-                         EmulateState *emu_state, uint32_t enable_mask) const
+                         EmulateState* emu_state, uint32_t enable_mask) const
 {
     // Grab current stack level info
-    EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
+    EmulateState::IbStack* cur_ib_level = emu_state->GetCurIb();
 
     // Queue up only non-0-sized IBs
     if (ib_size_in_dwords == 0) return true;
@@ -586,11 +586,11 @@ bool EmulatePM4::QueueIB(uint64_t ib_addr, uint32_t ib_size_in_dwords, bool skip
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager, EmulateState *emu_state,
-                                   EmulateCallbacksBase &callbacks) const
+bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager& mem_manager, EmulateState* emu_state,
+                                   EmulateCallbacksBase& callbacks) const
 {
     // Grab current stack level info
-    EmulateState::IbStack *prev_ib_level = emu_state->GetCurIb();
+    EmulateState::IbStack* prev_ib_level = emu_state->GetCurIb();
 
     // Check if there are any queued IBs to advance to. If not, early out.
     if (prev_ib_level->m_ib_queue_index >= prev_ib_level->m_ib_queue_size) return true;
@@ -611,7 +611,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager, EmulateSta
         // Enter next IB level (CALL)
         emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack + 1);
 
-        EmulateState::IbStack *new_ib_level = emu_state->GetCurIb();
+        EmulateState::IbStack* new_ib_level = emu_state->GetCurIb();
         new_ib_level->m_cur_va = prev_ib_level->m_ib_queue_addrs[index];
         new_ib_level->m_cur_ib_size_in_dwords = prev_ib_level->m_ib_queue_sizes_in_dwords[index];
         new_ib_level->m_cur_ib_skip = prev_ib_level->m_ib_queue_skip[index];
@@ -643,7 +643,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager, EmulateSta
     // Advance the queue index to next element in the queue
     prev_ib_level->m_ib_queue_index++;
 
-    EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
+    EmulateState::IbStack* cur_ib_level = emu_state->GetCurIb();
 
     // It's possible that an application has already reset/destroyed the command buffer. Check
     // whether the memory is valid (ie. overwritten), and skip it if it isn't
@@ -670,8 +670,8 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager &mem_manager, EmulateSta
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::CheckAndAdvanceIB(const IMemoryManager &mem_manager, EmulateState *emu_state,
-                                   EmulateCallbacksBase &callbacks) const
+bool EmulatePM4::CheckAndAdvanceIB(const IMemoryManager& mem_manager, EmulateState* emu_state,
+                                   EmulateCallbacksBase& callbacks) const
 {
     // Could be pointing to an IB that needs to be "skipped", or reached the end of current IB.
     // Loop until pointing to a "valid" IB.
@@ -688,16 +688,16 @@ bool EmulatePM4::CheckAndAdvanceIB(const IMemoryManager &mem_manager, EmulateSta
 }
 
 //--------------------------------------------------------------------------------------------------
-void EmulatePM4::AdvancePacket(EmulateState *emu_state, Pm4Header header) const
+void EmulatePM4::AdvancePacket(EmulateState* emu_state, Pm4Header header) const
 {
     uint32_t packet_size = GetPacketSize(header);
     emu_state->GetCurIb()->m_cur_va += packet_size * sizeof(uint32_t);
 }
 
 //--------------------------------------------------------------------------------------------------
-bool EmulatePM4::AdvanceOutOfIB(EmulateState *emu_state, EmulateCallbacksBase &callbacks) const
+bool EmulatePM4::AdvanceOutOfIB(EmulateState* emu_state, EmulateCallbacksBase& callbacks) const
 {
-    EmulateState::IbStack *cur_ib_level = emu_state->GetCurIb();
+    EmulateState::IbStack* cur_ib_level = emu_state->GetCurIb();
 
     emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack - 1);
 
@@ -781,12 +781,12 @@ uint32_t GetPacketSize(Pm4Header header)
 // EmulateCallbacksBase
 // =================================================================================================
 
-bool EmulateCallbacksBase::ProcessSubmits(const DiveVector<SubmitInfo> &submits,
-                                          const IMemoryManager &mem_manager)
+bool EmulateCallbacksBase::ProcessSubmits(const DiveVector<SubmitInfo>& submits,
+                                          const IMemoryManager& mem_manager)
 {
     for (uint32_t submit_index = 0; submit_index < submits.size(); ++submit_index)
     {
-        const Dive::SubmitInfo &submit_info = submits[submit_index];
+        const Dive::SubmitInfo& submit_info = submits[submit_index];
         OnSubmitStart(submit_index, submit_info);
 
         if (submit_info.IsDummySubmit())

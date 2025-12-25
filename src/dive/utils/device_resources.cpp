@@ -71,7 +71,7 @@ absl::StatusOr<std::filesystem::path> ResolveResourcesLocalPath(std::filesystem:
 
     assert(!search_paths.empty());
 
-    for (const auto &p : search_paths)
+    for (const auto& p : search_paths)
     {
         const auto potential_path = p / file_name;
         if (std::filesystem::exists(potential_path))

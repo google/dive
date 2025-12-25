@@ -39,7 +39,7 @@ class ProblemsViewDelegate : public QStyledItemDelegate
     Q_OBJECT
 
  public:
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -48,20 +48,20 @@ class ProblemsView : public QFrame
     Q_OBJECT
 
  public:
-    ProblemsView(const Dive::CommandHierarchy &command_hierarchy);
-    void Update(const Dive::LogRecord *log_ptr);
+    ProblemsView(const Dive::CommandHierarchy& command_hierarchy);
+    void Update(const Dive::LogRecord* log_ptr);
 
  signals:
     void crossReferece(Dive::CrossRef);
 
  private slots:
     void OnProblemSelectionChanged();
-    void OnProblemItemHover(QTreeWidgetItem *item, int column);
+    void OnProblemItemHover(QTreeWidgetItem* item, int column);
 
  protected:
-    virtual void leaveEvent(QEvent *event);
+    virtual void leaveEvent(QEvent* event);
 
  private:
-    QTreeWidget *m_log_list;
-    const Dive::CommandHierarchy &m_command_hierarchy;
+    QTreeWidget* m_log_list;
+    const Dive::CommandHierarchy& m_command_hierarchy;
 };

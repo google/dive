@@ -26,7 +26,7 @@
 #include "viewport_stats_model.h"
 #include "window_scissors_stats_model.h"
 
-TileStatsTabView::TileStatsTabView(const Dive::CaptureStats &stats, QWidget *parent)
+TileStatsTabView::TileStatsTabView(const Dive::CaptureStats& stats, QWidget* parent)
     : QWidget(parent), m_stats(stats)
 {
     m_viewport_stats_model = new ViewportStatsModel();
@@ -41,12 +41,12 @@ TileStatsTabView::TileStatsTabView(const Dive::CaptureStats &stats, QWidget *par
     m_window_scissors_stats_view->setModel(m_window_scissors_stats_model);
     ResizeColumns(m_viewport_stats_model, m_window_scissors_stats_view);
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addWidget(m_viewport_stats_view);
     main_layout->addWidget(m_window_scissors_stats_view);
 }
 
-void TileStatsTabView::ResizeColumns(QAbstractItemModel *model, QTableView *view)
+void TileStatsTabView::ResizeColumns(QAbstractItemModel* model, QTableView* view)
 {
     // Resize columns to fit the content
     uint32_t column_count = (uint32_t)model->columnCount(QModelIndex());

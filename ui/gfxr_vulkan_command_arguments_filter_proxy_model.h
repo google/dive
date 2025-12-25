@@ -24,20 +24,20 @@ class GfxrVulkanCommandArgumentsFilterProxyModel : public QSortFilterProxyModel
 
  public:
     GfxrVulkanCommandArgumentsFilterProxyModel(
-        QObject *parent = nullptr, const Dive::CommandHierarchy *command_hierarchy = nullptr);
+        QObject* parent = nullptr, const Dive::CommandHierarchy* command_hierarchy = nullptr);
 
-    Q_INVOKABLE void SetTargetParentSourceIndex(const QModelIndex &sourceIndex);
+    Q_INVOKABLE void SetTargetParentSourceIndex(const QModelIndex& sourceIndex);
 
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
  protected:
-    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
 
  private:
     QPersistentModelIndex m_targetParentSourceIndex;
-    bool IsDescendant(const QModelIndex &potentialDescendant,
-                      const QModelIndex &potentialAncestor) const;
+    bool IsDescendant(const QModelIndex& potentialDescendant,
+                      const QModelIndex& potentialAncestor) const;
 
-    const Dive::CommandHierarchy *m_command_hierarchy;
+    const Dive::CommandHierarchy* m_command_hierarchy;
     int m_filterFunctionNodeIndex;
 };

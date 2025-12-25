@@ -132,7 +132,7 @@ class Topology
     DiveVector<uint64_t> m_node_child_index;
 
     virtual void SetNumNodes(uint64_t num_nodes);
-    void AddChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
+    void AddChildren(uint64_t node_index, const DiveVector<uint64_t>& children);
 
  private:
     friend class CommandHierarchy;
@@ -190,7 +190,7 @@ class SharedNodeTopology : public Topology
     DiveVector<uint64_t> m_root_node_index;
 
     void SetNumNodes(uint64_t num_nodes) override;
-    void AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t> &children);
+    void AddSharedChildren(uint64_t node_index, const DiveVector<uint64_t>& children);
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -218,12 +218,12 @@ class CommandHierarchy
     //  The Event hierarchy contains kRootNode -> kSubmitNodes/kPresentNodes -> (EventNodes)
     //      Where (EventNodes) == kMarkerNode/kDrawDispatchDmaNode/kSyncNode/kPostambleStateNode
     //  Note that all except kRootNode & kPresentNodes can have kPacketNodes as shared children
-    const SharedNodeTopology &GetSubmitHierarchyTopology() const;
-    const SharedNodeTopology &GetAllEventHierarchyTopology() const;
+    const SharedNodeTopology& GetSubmitHierarchyTopology() const;
+    const SharedNodeTopology& GetAllEventHierarchyTopology() const;
 
     NodeType GetNodeType(uint64_t node_index) const;
-    const char *GetNodeDesc(uint64_t node_index) const;
-    void SetNodeDesc(uint64_t node_index, const std::string &desc);
+    const char* GetNodeDesc(uint64_t node_index) const;
+    void SetNodeDesc(uint64_t node_index, const std::string& desc);
 
     Dive::EngineType GetSubmitNodeEngineType(uint64_t node_index) const;
     uint32_t GetSubmitNodeIndex(uint64_t node_index) const;
@@ -263,7 +263,7 @@ class CommandHierarchy
         kFilterListTypeCount
     };
 
-    const std::unordered_set<uint64_t> &GetFilterExcludeIndices(FilterListType filter_type) const
+    const std::unordered_set<uint64_t>& GetFilterExcludeIndices(FilterListType filter_type) const
     {
         return m_filter_exclude_indices_list[filter_type];
     }
@@ -350,14 +350,14 @@ class CommandHierarchy
         DiveVector<AuxInfo> m_aux_info;
         DiveVector<uint64_t> m_event_node_indices;
 
-        uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
-        uint64_t AddGfxrNode(NodeType type, std::string &&desc);
+        uint64_t AddNode(NodeType type, std::string&& desc, AuxInfo aux_info);
+        uint64_t AddGfxrNode(NodeType type, std::string&& desc);
     };
 
     // Add a node and returns index of the added node
-    uint64_t AddNode(NodeType type, std::string &&desc, AuxInfo aux_info);
+    uint64_t AddNode(NodeType type, std::string&& desc, AuxInfo aux_info);
     // Add a gfxr node and returns index of the added node
-    uint64_t AddGfxrNode(NodeType type, std::string &&desc);
+    uint64_t AddGfxrNode(NodeType type, std::string&& desc);
     void AddToFilterExcludeIndexList(uint64_t index, FilterListType filter_mode)
     {
         m_filter_exclude_indices_list[filter_mode].insert(index);
@@ -372,8 +372,8 @@ class CommandHierarchy
 class CommandHierarchyCreator : public EmulateCallbacksBase
 {
  public:
-    static std::unique_ptr<CommandHierarchyCreator> Create(CommandHierarchy &command_hierarchy,
-                                                           const Pm4CaptureData &capture_data);
+    static std::unique_ptr<CommandHierarchyCreator> Create(CommandHierarchy& command_hierarchy,
+                                                           const Pm4CaptureData& capture_data);
     ~CommandHierarchyCreator() override;
 
     // If flatten_chain_nodes set to true, then chain nodes are children of the top-most
@@ -383,7 +383,7 @@ class CommandHierarchyCreator : public EmulateCallbacksBase
     // potentially speed up the creation
     bool CreateTrees(bool flatten_chain_nodes, std::optional<uint64_t> reserve_size);
 
-    bool CreateTrees(const Pm4CaptureData &capture_data, bool flatten_chain_nodes,
+    bool CreateTrees(const Pm4CaptureData& capture_data, bool flatten_chain_nodes,
                      std::optional<uint64_t> reserve_size);
 
     bool CreateTrees(bool flatten_chain_nodes, bool createTopologies,
@@ -391,45 +391,45 @@ class CommandHierarchyCreator : public EmulateCallbacksBase
 
     // This is used to create a command-hierarchy out of a PM4 universal stream (ie: single IB)
     bool CreateTrees(EngineType engine_type, QueueType queue_type,
-                     std::vector<uint32_t> &command_dwords, uint32_t size_in_dwords);
+                     std::vector<uint32_t>& command_dwords, uint32_t size_in_dwords);
 
-    bool OnIbStart(uint32_t submit_index, uint32_t ib_index, const IndirectBufferInfo &ib_info,
+    bool OnIbStart(uint32_t submit_index, uint32_t ib_index, const IndirectBufferInfo& ib_info,
                    IbType type) override;
 
     bool OnIbEnd(uint32_t submit_index, uint32_t ib_index,
-                 const IndirectBufferInfo &ib_info) override;
+                 const IndirectBufferInfo& ib_info) override;
 
-    bool OnPacket(const IMemoryManager &mem_manager, uint32_t submit_index, uint32_t ib_index,
+    bool OnPacket(const IMemoryManager& mem_manager, uint32_t submit_index, uint32_t ib_index,
                   uint64_t va_addr, Pm4Header header) override;
 
     void CreateTopologies();
 
-    void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) override;
-    void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) override;
+    void OnSubmitStart(uint32_t submit_index, const SubmitInfo& submit_info) override;
+    void OnSubmitEnd(uint32_t submit_index, const SubmitInfo& submit_info) override;
 
-    const DiveVector<DiveVector<uint64_t>> &GetNodeChildren(uint64_t type, size_t sub_index) const
+    const DiveVector<DiveVector<uint64_t>>& GetNodeChildren(uint64_t type, size_t sub_index) const
     {
         return m_node_children[type][sub_index];
     }
 
-    const DiveVector<uint64_t> &GetNodeStartSharedChildren(uint64_t type) const
+    const DiveVector<uint64_t>& GetNodeStartSharedChildren(uint64_t type) const
     {
         return m_node_start_shared_children[type];
     }
 
-    const DiveVector<uint64_t> &GetNodeEndSharedChildren(uint64_t type) const
+    const DiveVector<uint64_t>& GetNodeEndSharedChildren(uint64_t type) const
     {
         return m_node_end_shared_children[type];
     }
 
-    const DiveVector<uint64_t> &GetNodeRootNodeIndices(uint64_t type) const
+    const DiveVector<uint64_t>& GetNodeRootNodeIndices(uint64_t type) const
     {
         return m_node_root_node_indices[type];
     }
 
  protected:
-    CommandHierarchyCreator(CommandHierarchy &command_hierarchy,
-                            const Pm4CaptureData &capture_data);
+    CommandHierarchyCreator(CommandHierarchy& command_hierarchy,
+                            const Pm4CaptureData& capture_data);
 
  private:
     union Type3Ordinal2
@@ -451,45 +451,45 @@ class CommandHierarchyCreator : public EmulateCallbacksBase
         kChildrenNodeTypeCount
     };
 
-    uint64_t AddPacketNode(const IMemoryManager &mem_manager, uint32_t submit_index,
+    uint64_t AddPacketNode(const IMemoryManager& mem_manager, uint32_t submit_index,
                            uint64_t va_addr, bool is_ce_packet, Pm4Header header);
-    uint64_t AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo *reg_info_ptr);
+    uint64_t AddRegisterNode(uint32_t reg, uint64_t reg_value, const RegInfo* reg_info_ptr);
 
     bool IsBeginDebugMarkerNode(uint64_t node_index);
 
-    uint32_t GetMarkerSize(const uint8_t *marker_ptr, size_t num_dwords);
+    uint32_t GetMarkerSize(const uint8_t* marker_ptr, size_t num_dwords);
 
-    void AppendRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+    void AppendRegNodes(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t va_addr,
                         Pm4Header header, uint64_t packet_node_index);
-    void AppendRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+    void AppendRegNodes(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t va_addr,
                         uint32_t dword_count, uint64_t packet_node_index);
-    void AppendContextRegRmwNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
-                                  uint64_t va_addr, const PM4_PFP_TYPE_3_HEADER &header,
+    void AppendContextRegRmwNodes(const IMemoryManager& mem_manager, uint32_t submit_index,
+                                  uint64_t va_addr, const PM4_PFP_TYPE_3_HEADER& header,
                                   uint64_t packet_node_index);
-    void AppendIBFieldNodes(const char *suffix, const IMemoryManager &mem_manager,
+    void AppendIBFieldNodes(const char* suffix, const IMemoryManager& mem_manager,
                             uint32_t submit_index, uint64_t va_addr, bool is_ce_packet,
-                            const PM4_PFP_TYPE_3_HEADER &header, uint64_t packet_node_index);
-    void AppendLoadRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                            const PM4_PFP_TYPE_3_HEADER& header, uint64_t packet_node_index);
+    void AppendLoadRegNodes(const IMemoryManager& mem_manager, uint32_t submit_index,
                             uint64_t va_addr, uint32_t reg_space_start,
-                            const PM4_PFP_TYPE_3_HEADER &header, uint64_t packet_node_index);
-    void AppendLoadRegIndexNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                            const PM4_PFP_TYPE_3_HEADER& header, uint64_t packet_node_index);
+    void AppendLoadRegIndexNodes(const IMemoryManager& mem_manager, uint32_t submit_index,
                                  uint64_t va_addr, uint32_t reg_space_start,
-                                 const PM4_PFP_TYPE_3_HEADER &header, uint64_t packet_node_index);
-    void AppendEventWriteFieldNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
-                                    uint64_t va_addr, const PM4_PFP_TYPE_3_HEADER &header,
-                                    const PacketInfo *packet_info_ptr, uint64_t packet_node_index);
-    void AppendPacketFieldNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                 const PM4_PFP_TYPE_3_HEADER& header, uint64_t packet_node_index);
+    void AppendEventWriteFieldNodes(const IMemoryManager& mem_manager, uint32_t submit_index,
+                                    uint64_t va_addr, const PM4_PFP_TYPE_3_HEADER& header,
+                                    const PacketInfo* packet_info_ptr, uint64_t packet_node_index);
+    void AppendPacketFieldNodes(const IMemoryManager& mem_manager, uint32_t submit_index,
                                 uint64_t va_addr, uint32_t dword_count, bool append_extra_dwords,
-                                const PacketInfo *packet_info_ptr, uint64_t packet_node_index,
-                                const char *prefix = "");
-    void AppendLoadStateExtBufferNode(const IMemoryManager &mem_manager, uint32_t submit_index,
+                                const PacketInfo* packet_info_ptr, uint64_t packet_node_index,
+                                const char* prefix = "");
+    void AppendLoadStateExtBufferNode(const IMemoryManager& mem_manager, uint32_t submit_index,
                                       uint64_t va_addr, uint64_t packet_node_index);
-    void AppendMemRegNodes(const IMemoryManager &mem_manager, uint32_t submit_index,
+    void AppendMemRegNodes(const IMemoryManager& mem_manager, uint32_t submit_index,
                            uint64_t va_addr, uint64_t packet_node_index);
-    void CacheSetDrawStateGroupInfo(const IMemoryManager &mem_manager, uint32_t submit_index,
+    void CacheSetDrawStateGroupInfo(const IMemoryManager& mem_manager, uint32_t submit_index,
                                     uint64_t va_addr, uint64_t set_draw_state_node_index,
                                     Pm4Header header);
-    uint64_t AddNode(NodeType type, std::string &&desc, CommandHierarchy::AuxInfo aux_info = 0);
+    uint64_t AddNode(NodeType type, std::string&& desc, CommandHierarchy::AuxInfo aux_info = 0);
 
     void AppendEventNodeIndex(uint64_t node_index);
 
@@ -511,7 +511,7 @@ class CommandHierarchyCreator : public EmulateCallbacksBase
     bool EventNodeHelper(uint64_t node_index, std::function<bool(uint32_t)> callback) const;
 
     template <typename T>
-    void AddConstantsToPacketNode(const IMemoryManager &mem_manager, uint64_t ext_src_addr,
+    void AddConstantsToPacketNode(const IMemoryManager& mem_manager, uint64_t ext_src_addr,
                                   uint64_t packet_node_index, uint32_t num_dwords,
                                   uint32_t submit_index, uint32_t value_count_per_row);
 
@@ -521,8 +521,8 @@ class CommandHierarchyCreator : public EmulateCallbacksBase
         uint64_t m_group_addr;
     };
 
-    CommandHierarchy &m_command_hierarchy;  // Reference to class being created
-    const Pm4CaptureData &m_capture_data;
+    CommandHierarchy& m_command_hierarchy;  // Reference to class being created
+    const Pm4CaptureData& m_capture_data;
 
     // Parsing State
     DiveVector<uint64_t>

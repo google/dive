@@ -14,7 +14,7 @@
 #include "gfxr_vulkan_command_filter_proxy_model.h"
 
 GfxrVulkanCommandFilterProxyModel::GfxrVulkanCommandFilterProxyModel(
-    const Dive::CommandHierarchy &command_hierarchy, QObject *parent)
+    const Dive::CommandHierarchy& command_hierarchy, QObject* parent)
     : QSortFilterProxyModel(parent), m_command_hierarchy(command_hierarchy)
 {
     m_filter_mode = kActionOnly;
@@ -35,7 +35,7 @@ void GfxrVulkanCommandFilterProxyModel::SetFilter(FilterMode filter_mode)
     ApplyNewFilterMode(filter_mode);
 }
 
-void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index)
+void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelIndex& parent_index)
 {
     if (!parent_index.isValid())
     {
@@ -69,7 +69,7 @@ void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelI
 }
 
 bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int sourceRow,
-                                                         const QModelIndex &sourceParent) const
+                                                         const QModelIndex& sourceParent) const
 {
     QModelIndex indexInSource = sourceModel()->index(sourceRow, 0, sourceParent);
 
@@ -79,8 +79,8 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int sourceRow,
     }
 
     uint64_t node_index = indexInSource.internalId();
-    const GfxrVulkanCommandModel *sourceMyModel =
-        qobject_cast<const GfxrVulkanCommandModel *>(sourceModel());
+    const GfxrVulkanCommandModel* sourceMyModel =
+        qobject_cast<const GfxrVulkanCommandModel*>(sourceModel());
     const Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
     if (!sourceMyModel)

@@ -52,24 +52,24 @@ enum class EventType : uint8_t
     kEventWriteEnd
 };
 
-bool IsEvent(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t addr,
-             uint32_t opcode, const EmulateStateTracker &state_tracker);
+bool IsEvent(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t addr,
+             uint32_t opcode, const EmulateStateTracker& state_tracker);
 
-EventType GetEventType(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
-                       uint32_t opcode, const EmulateStateTracker &state_tracker);
+EventType GetEventType(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t va_addr,
+                       uint32_t opcode, const EmulateStateTracker& state_tracker);
 
-std::string GetEventString(const IMemoryManager &mem_manager, uint32_t submit_index,
+std::string GetEventString(const IMemoryManager& mem_manager, uint32_t submit_index,
                            uint64_t va_addr, Pm4Type7Header header,
-                           const EmulateStateTracker &state_tracker);
-uint32_t GetIndexCount(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t va_addr,
+                           const EmulateStateTracker& state_tracker);
+uint32_t GetIndexCount(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t va_addr,
                        Pm4Type7Header header);
-std::optional<VkPrimitiveTopology> GetTopology(const IMemoryManager &mem_manager,
+std::optional<VkPrimitiveTopology> GetTopology(const IMemoryManager& mem_manager,
                                                uint32_t submit_index, uint64_t va_addr,
                                                Pm4Type7Header header);
 
 // Used to ensure drawcalls with DI_PT_RECTLIST are not correlated since there is no corresponding
 // VkPrimitiveTopology
-bool ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager, uint32_t submit_index,
+bool ShouldIgnoreEventDuringCorrelation(const IMemoryManager& mem_manager, uint32_t submit_index,
                                         uint64_t va_addr, Pm4Type7Header header);
 };  // namespace Util
 
@@ -93,7 +93,7 @@ struct ShaderReference
     uint32_t m_enable_mask;
 
     // To support std::set, if needed
-    bool operator<(const ShaderReference &other) const
+    bool operator<(const ShaderReference& other) const
     {
         if (m_shader_index != other.m_shader_index) return m_shader_index < other.m_shader_index;
         if (m_stage != other.m_stage) return m_stage < other.m_stage;

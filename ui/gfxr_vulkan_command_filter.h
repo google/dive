@@ -25,17 +25,17 @@ class GfxrVulkanCommandFilter : public TreeViewComboBox
     Q_OBJECT
 
  public:
-    GfxrVulkanCommandFilter(DiveTreeView &command_hierarchy_view,
-                            GfxrVulkanCommandFilterProxyModel &proxy_model, QWidget *parent = 0);
+    GfxrVulkanCommandFilter(DiveTreeView& command_hierarchy_view,
+                            GfxrVulkanCommandFilterProxyModel& proxy_model, QWidget* parent = 0);
     void Reset();
 
  public slots:
-    void OnFilterGfxrVulkanCommandChange(const QString &filter_mode);
+    void OnFilterGfxrVulkanCommandChange(const QString& filter_mode);
 
  signals:
     void FilterChanged();
 
  private:
-    DiveTreeView &m_command_hierarchy_view;
-    GfxrVulkanCommandFilterProxyModel &m_proxy_Model;
+    DiveTreeView& m_command_hierarchy_view;
+    GfxrVulkanCommandFilterProxyModel& m_proxy_Model;
 };

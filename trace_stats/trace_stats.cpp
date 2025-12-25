@@ -33,11 +33,11 @@ class ThreadPool
 {
  public:
     ThreadPool() = default;
-    ThreadPool(const ThreadPool &) = delete;
-    ThreadPool &operator=(const ThreadPool &) = delete;
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
     ~ThreadPool() { Stop(); }
 
-    void Run(std::function<void()> &&func)
+    void Run(std::function<void()>&& func)
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -71,7 +71,7 @@ class ThreadPool
             std::swap(workers, m_workers);
         }
         m_condition_variable.notify_all();
-        for (std::thread &worker : workers)
+        for (std::thread& worker : workers)
         {
             worker.join();
         }
@@ -187,16 +187,16 @@ class ThreadPool
     } while (0)
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::GatherTraceStats(const Dive::Context &context,
-                                  const Dive::CaptureMetadata &meta_data,
-                                  CaptureStats &capture_stats)
+void TraceStats::GatherTraceStats(const Dive::Context& context,
+                                  const Dive::CaptureMetadata& meta_data,
+                                  CaptureStats& capture_stats)
 {
     capture_stats = CaptureStats();  // Reset any previous stats
 
-    std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = capture_stats.m_stats_list;
+    std::array<uint64_t, Dive::Stats::kNumStats>& stats_list = capture_stats.m_stats_list;
 
     size_t event_count = meta_data.m_event_info.size();
-    const Dive::EventStateInfo &event_state = meta_data.m_event_state;
+    const Dive::EventStateInfo& event_state = meta_data.m_event_state;
 
     Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
     for (size_t i = 0; i < event_count; ++i)
@@ -206,7 +206,7 @@ void TraceStats::GatherTraceStats(const Dive::Context &context,
             capture_stats = CaptureStats();
             return;
         }
-        const Dive::EventInfo &info = meta_data.m_event_info[i];
+        const Dive::EventInfo& info = meta_data.m_event_info[i];
 
         if (info.m_render_mode != cur_type)
         {
@@ -336,7 +336,7 @@ void TraceStats::GatherTraceStats(const Dive::Context &context,
     {
         auto task_count = static_cast<unsigned int>(meta_data.m_shaders.size());
         thread_pool.Start(thread_pool.SuggestedNumberOfWorkers(task_count));
-        for (const Dive::Disassembly &disassembly : meta_data.m_shaders)
+        for (const Dive::Disassembly& disassembly : meta_data.m_shaders)
         {
             thread_pool.Run([&context, &disassembly]() {
                 if (context.Cancelled())
@@ -348,7 +348,7 @@ void TraceStats::GatherTraceStats(const Dive::Context &context,
         }
     }
 
-    for (const Dive::ShaderReference &ref : capture_stats.m_shader_ref_set)
+    for (const Dive::ShaderReference& ref : capture_stats.m_shader_ref_set)
     {
         if (context.Cancelled())
         {
@@ -365,7 +365,7 @@ void TraceStats::GatherTraceStats(const Dive::Context &context,
         else
             stats_list[Dive::Stats::kNonVS]++;
 
-        const Dive::Disassembly &disass = meta_data.m_shaders[ref.m_shader_index];
+        const Dive::Disassembly& disass = meta_data.m_shaders[ref.m_shader_index];
         shaders_num_instructions.push_back(disass.GetNumInstructions());
         shaders_num_gprs.push_back(disass.GetGPRCount());
     }
@@ -381,15 +381,15 @@ void TraceStats::GatherTraceStats(const Dive::Context &context,
 }
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream)
+void TraceStats::PrintTraceStats(const CaptureStats& capture_stats, std::ostream& ostream)
 {
-    const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = capture_stats.m_stats_list;
+    const std::array<uint64_t, Dive::Stats::kNumStats>& stats_list = capture_stats.m_stats_list;
 
     DIVE_ASSERT(kStatMap.size() == Stats::kNumStats);
 
-    constexpr std::array<const char *, Stats::kNumStats> kStatDescriptions = [&] {
-        std::array<const char *, Stats::kNumStats> arr{};
-        for (const auto &[stat, description] : kStatMap)
+    constexpr std::array<const char*, Stats::kNumStats> kStatDescriptions = [&] {
+        std::array<const char*, Stats::kNumStats> arr{};
+        for (const auto& [stat, description] : kStatMap)
         {
             arr[stat] = description;
         }
@@ -421,7 +421,7 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
         ostream << std::left << string_stream.str();
     };
 
-    for (const Viewport &vp : capture_stats.m_viewports)
+    for (const Viewport& vp : capture_stats.m_viewports)
     {
         ostream << "\t";
         print_field(viewport_stats_desc[kViewport_x], vp.m_vk_viewport.x, false);
@@ -440,7 +440,7 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
             << stats_list[Stats::kNumTilingPasses] << "\n";
 
     uint32_t count = 0;
-    for (const WindowScissor &ws : capture_stats.m_window_scissors)
+    for (const WindowScissor& ws : capture_stats.m_window_scissors)
     {
         ostream << "\t" << count++ << "\t";
         print_field(window_scissor_stats_desc[kWindowScissors_tl_x], ws.m_tl_x, false);

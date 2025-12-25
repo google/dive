@@ -26,7 +26,7 @@
 #include "perf_counter_model.h"
 #include "search_bar.h"
 
-PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWidget *parent)
+PerfCounterTabView::PerfCounterTabView(PerfCounterModel& perf_counter_model, QWidget* parent)
     : QWidget(parent), m_perf_counter_model(perf_counter_model)
 {
     m_proxy_model = new QSortFilterProxyModel(this);
@@ -45,7 +45,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_search_trigger_button->setObjectName(kPerfCounterSearchButtonName);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
-    QHBoxLayout *options_layout = new QHBoxLayout();
+    QHBoxLayout* options_layout = new QHBoxLayout();
     options_layout->addWidget(m_search_trigger_button);
     options_layout->addStretch();
 
@@ -61,7 +61,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_horizontal_header->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_horizontal_header->setSortIndicator(-1, Qt::AscendingOrder);
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addLayout(options_layout);
     main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_perf_counter_view);
@@ -83,7 +83,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::ClearSelection()
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (selection_model)
     {
         selection_model->clear();
@@ -91,7 +91,7 @@ void PerfCounterTabView::ClearSelection()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
+void PerfCounterTabView::OnSelectionChanged(const QModelIndex& index)
 {
     if (!index.isValid())
     {
@@ -150,7 +150,7 @@ void PerfCounterTabView::OnSearchBarVisibilityChange(bool isHidden)
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSearch(const QString &text)
+void PerfCounterTabView::OnSearch(const QString& text)
 {
     // Clear previous search results
     m_perf_counter_model.ClearSearchResults();
@@ -185,7 +185,7 @@ void PerfCounterTabView::OnSearch(const QString &text)
 
         if (firstMatchProxy.isValid())
         {
-            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
             if (selection_model)
             {
                 selection_model->select(firstMatchProxy, QItemSelectionModel::ClearAndSelect |
@@ -210,7 +210,7 @@ void PerfCounterTabView::OnNextMatch()
         QModelIndex nextMatchProxy = m_proxy_model->mapFromSource(nextMatchSource);
         if (nextMatchProxy.isValid())
         {
-            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
             if (selection_model)
             {
                 selection_model->select(nextMatchProxy, QItemSelectionModel::ClearAndSelect |
@@ -235,7 +235,7 @@ void PerfCounterTabView::OnPrevMatch()
         QModelIndex prevMatchProxy = m_proxy_model->mapFromSource(prevMatchSource);
         if (prevMatchProxy.isValid())
         {
-            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
 
             if (selection_model)
             {
@@ -283,7 +283,7 @@ void PerfCounterTabView::DisconnectSearchBar()
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::CorrelateCounter(uint64_t index)
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     QSignalBlocker blocker(selection_model);
     if (auto row = m_perf_counter_model.GetRowFromDrawIndex(index))
     {
@@ -303,7 +303,7 @@ void PerfCounterTabView::CorrelateCounter(uint64_t index)
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::ResizeColumns()
 {
-    QHeaderView *header = m_perf_counter_view->horizontalHeader();
+    QHeaderView* header = m_perf_counter_view->horizontalHeader();
     header->setSectionResizeMode(QHeaderView::ResizeToContents);
 
     uint32_t column_count = static_cast<uint32_t>(m_perf_counter_model.columnCount(QModelIndex()));
@@ -316,7 +316,7 @@ void PerfCounterTabView::ResizeColumns()
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnSortApplied(int column_index)
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (!selection_model)
     {
         return;
@@ -342,7 +342,7 @@ void PerfCounterTabView::OnSortApplied(int column_index)
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnResetSorting()
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (!selection_model)
     {
         return;
@@ -374,11 +374,11 @@ void PerfCounterTabView::OnResetSorting()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSortingCompletedAndScroll(const QModelIndex &index_to_map)
+void PerfCounterTabView::OnSortingCompletedAndScroll(const QModelIndex& index_to_map)
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
-    QSortFilterProxyModel *proxy_model =
-        qobject_cast<QSortFilterProxyModel *>(m_perf_counter_view->model());
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
+    QSortFilterProxyModel* proxy_model =
+        qobject_cast<QSortFilterProxyModel*>(m_perf_counter_view->model());
 
     if (!index_to_map.isValid() || !selection_model || !proxy_model)
     {

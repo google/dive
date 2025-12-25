@@ -59,8 +59,8 @@ struct XrSessionData
     XrGeneratedDispatchTable dispatch_table;
 };
 
-static thread_local XrInstanceData *last_used_xr_instance_data = nullptr;
-static thread_local XrSessionData *last_used_xr_session_data = nullptr;
+static thread_local XrInstanceData* last_used_xr_instance_data = nullptr;
+static thread_local XrSessionData* last_used_xr_session_data = nullptr;
 
 std::mutex g_xr_instance_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<XrInstanceData>> g_xr_instance_data;
@@ -68,7 +68,7 @@ std::unordered_map<uintptr_t, std::unique_ptr<XrInstanceData>> g_xr_instance_dat
 std::mutex g_xr_session_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<XrSessionData>> g_xr_session_data;
 
-XrInstanceData *GetXrInstanceLayerData(uintptr_t key)
+XrInstanceData* GetXrInstanceLayerData(uintptr_t key)
 {
     if (last_used_xr_instance_data && DataKey(last_used_xr_instance_data->instance) == key)
     {
@@ -84,7 +84,7 @@ XrInstanceData *GetXrInstanceLayerData(uintptr_t key)
     return last_used_xr_instance_data;
 }
 
-XrSessionData *GetXrSessionLayerData(uintptr_t key)
+XrSessionData* GetXrSessionLayerData(uintptr_t key)
 {
     if (last_used_xr_session_data && DataKey(last_used_xr_session_data->session) == key)
     {
@@ -99,7 +99,7 @@ XrSessionData *GetXrSessionLayerData(uintptr_t key)
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession session,
-                                                      const XrFrameEndInfo *frameEndInfo)
+                                                      const XrFrameEndInfo* frameEndInfo)
 {
     XrResult result = XrResult::XR_ERROR_HANDLE_INVALID;
 
@@ -118,8 +118,8 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession session,
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateApiLayerInstance(
-    const XrInstanceCreateInfo *info, const struct XrApiLayerCreateInfo *apiLayerInfo,
-    XrInstance *instance)
+    const XrInstanceCreateInfo* info, const struct XrApiLayerCreateInfo* apiLayerInfo,
+    XrInstance* instance)
 {
     LOGD("ApiDiveLayerXrCreateApiLayerInstance called.\n");
     PFN_xrGetInstanceProcAddr next_get_instance_proc_addr = nullptr;
@@ -194,8 +194,8 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroyInstance(XrInstance instance
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateSession(XrInstance instance,
-                                                           const XrSessionCreateInfo *createInfo,
-                                                           XrSession *session)
+                                                           const XrSessionCreateInfo* createInfo,
+                                                           XrSession* session)
 {
     XrResult result = XR_SUCCESS;
     auto inst_data = GetXrInstanceLayerData(DataKey(instance));
@@ -248,8 +248,8 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroySession(XrSession session)
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance instance,
-                                                                 const char *name,
-                                                                 PFN_xrVoidFunction *function)
+                                                                 const char* name,
+                                                                 PFN_xrVoidFunction* function)
 {
     XrResult result = XR_ERROR_HANDLE_INVALID;
     std::string func_name = name;
@@ -294,8 +294,8 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance inst
 extern "C"
 {
     LAYER_EXPORT XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderApiLayerInterface(
-        const XrNegotiateLoaderInfo *loaderInfo, const char * /*apiLayerName*/,
-        XrNegotiateApiLayerRequest *apiLayerRequest)
+        const XrNegotiateLoaderInfo* loaderInfo, const char* /*apiLayerName*/,
+        XrNegotiateApiLayerRequest* apiLayerRequest)
     {
         LOGD("%s : xrNegotiateLoaderApiLayerInterface\n", kDiveXrLayerName);
         if (nullptr == loaderInfo || nullptr == apiLayerRequest ||

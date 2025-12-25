@@ -37,7 +37,7 @@ struct DeviceDispatchTable
 };
 
 void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa,
-                               InstanceDispatchTable *dt);
-void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt);
+                               InstanceDispatchTable* dt);
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable* dt);
 
 }  // namespace DiveLayer

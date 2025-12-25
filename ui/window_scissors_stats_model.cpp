@@ -18,11 +18,11 @@
 #include <QStringList>
 #include <QTextStream>
 
-WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) : QAbstractItemModel(parent)
+WindowScissorsStatsModel::WindowScissorsStatsModel(QObject* parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
 
-    for (const auto &header_str : Dive::window_scissor_stats_desc)
+    for (const auto& header_str : Dive::window_scissor_stats_desc)
     {
         headers.append(QString::fromStdString(header_str));
     }
@@ -33,7 +33,7 @@ WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) : QAbstractI
 }
 
 //--------------------------------------------------------------------------------------------------
-void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor> &window_scissors)
+void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor>& window_scissors)
 {
     beginResetModel();
     // Clear existing data
@@ -43,7 +43,7 @@ void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor> &win
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -55,17 +55,17 @@ QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelInd
     {
         return QModelIndex();
     }
-    return createIndex(row, column, (void *)0);
+    return createIndex(row, column, (void*)0);
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex WindowScissorsStatsModel::parent(const QModelIndex &index) const
+QModelIndex WindowScissorsStatsModel::parent(const QModelIndex& index) const
 {
     return QModelIndex();
 }
 
 //--------------------------------------------------------------------------------------------------
-int WindowScissorsStatsModel::rowCount(const QModelIndex &parent) const
+int WindowScissorsStatsModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -75,12 +75,12 @@ int WindowScissorsStatsModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int WindowScissorsStatsModel::columnCount(const QModelIndex &parent) const
+int WindowScissorsStatsModel::columnCount(const QModelIndex& parent) const
 {
     return m_column_count;
 }
 
-QVariant WindowScissorsStatsModel::data(const QModelIndex &index, int role) const
+QVariant WindowScissorsStatsModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid() || role != Qt::DisplayRole)
     {
@@ -95,7 +95,7 @@ QVariant WindowScissorsStatsModel::data(const QModelIndex &index, int role) cons
         return QVariant();
     }
 
-    const auto &record = m_window_scissors[row];
+    const auto& record = m_window_scissors[row];
 
     switch (col)
     {

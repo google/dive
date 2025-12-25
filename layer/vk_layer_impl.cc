@@ -31,7 +31,7 @@ namespace DiveLayer
 {
 
 VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
-                         const VkPresentInfoKHR *pPresentInfo)
+                         const VkPresentInfoKHR* pPresentInfo)
 {
     VkResult ret = pfn(queue, pPresentInfo);
     Dive::GetTraceMgr().OnNewFrame();

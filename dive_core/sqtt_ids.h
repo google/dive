@@ -34,8 +34,8 @@ class SqttStreamId
     inline SqttStreamId() : m_id(0) {}
     explicit inline SqttStreamId(uint8_t id) : m_id(id) {}
     SqttStreamId(uint8_t me_id, uint8_t pipe_id);
-    bool operator==(const SqttStreamId &other) const { return m_id == other.m_id; }
-    bool operator!=(const SqttStreamId &other) const { return m_id != other.m_id; }
+    bool operator==(const SqttStreamId& other) const { return m_id == other.m_id; }
+    bool operator!=(const SqttStreamId& other) const { return m_id != other.m_id; }
     inline bool IsValid() const { return m_id < kNumSqttStreams; }
 
     template <typename Num,
@@ -45,7 +45,7 @@ class SqttStreamId
         return m_id;
     }
 
-    const char *string() const;
+    const char* string() const;
 
  private:
     uint8_t m_id = UINT8_MAX;

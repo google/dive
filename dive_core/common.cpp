@@ -23,7 +23,7 @@
 #include <cstdio>
 #include <cstring>
 
-void DIVE_LOG_INTERNAL(const char *file, int line, const char *format, ...)
+void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...)
 {
     va_list args;
     char str[8 * 1024];

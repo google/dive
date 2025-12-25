@@ -48,8 +48,8 @@ enum class SyncType
 };
 
 //--------------------------------------------------------------------------------------------------
-SyncType GetSyncType(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t addr,
-                     uint32_t opcode, const EmulateStateTracker &state_tracker)
+SyncType GetSyncType(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t addr,
+                     uint32_t opcode, const EmulateStateTracker& state_tracker)
 {
     // 6xx uses CP_EVENT_WRITE packet, which maps to same opcode as CP_EVENT_WRITE7
     // The event field is in the same location with either packet type
@@ -116,8 +116,8 @@ SyncType GetSyncType(const IMemoryManager &mem_manager, uint32_t submit_index, u
 // =================================================================================================
 // Util
 // =================================================================================================
-bool Util::IsEvent(const IMemoryManager &mem_manager, uint32_t submit_index, uint64_t addr,
-                   uint32_t opcode, const EmulateStateTracker &state_tracker)
+bool Util::IsEvent(const IMemoryManager& mem_manager, uint32_t submit_index, uint64_t addr,
+                   uint32_t opcode, const EmulateStateTracker& state_tracker)
 {
     if (IsDrawDispatchEventOpcode(opcode)) return true;
 
@@ -130,9 +130,9 @@ bool Util::IsEvent(const IMemoryManager &mem_manager, uint32_t submit_index, uin
 }
 
 //--------------------------------------------------------------------------------------------------
-Util::EventType Util::GetEventType(const IMemoryManager &mem_manager, uint32_t submit_index,
+Util::EventType Util::GetEventType(const IMemoryManager& mem_manager, uint32_t submit_index,
                                    uint64_t va_addr, uint32_t opcode,
-                                   const EmulateStateTracker &state_tracker)
+                                   const EmulateStateTracker& state_tracker)
 {
     EventType type = EventType::kUnknown;
     if (IsDrawEventOpcode(opcode))
@@ -191,9 +191,9 @@ Util::EventType Util::GetEventType(const IMemoryManager &mem_manager, uint32_t s
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string Util::GetEventString(const IMemoryManager &mem_manager, uint32_t submit_index,
+std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t submit_index,
                                  uint64_t va_addr, Pm4Type7Header header,
-                                 const EmulateStateTracker &state_tracker)
+                                 const EmulateStateTracker& state_tracker)
 {
     uint32_t opcode = header.opcode;
 
@@ -410,11 +410,11 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager, uint32_t sub
             default:
             {
                 // Note: For CP_EVENT_WRITEs, sync_type maps to a vgt_event_type
-                const PacketInfo *packet_info_ptr = GetPacketInfo(opcode);
+                const PacketInfo* packet_info_ptr = GetPacketInfo(opcode);
                 DIVE_ASSERT(packet_info_ptr != nullptr);
                 DIVE_ASSERT(packet_info_ptr->m_fields.size() > 1);
                 DIVE_ASSERT(strcmp(packet_info_ptr->m_fields[0].m_name, "EVENT") == 0);
-                const char *enum_str =
+                const char* enum_str =
                     GetEnumString(packet_info_ptr->m_fields[0].m_enum_handle, (uint32_t)sync_type);
                 string_stream << "CpEventWrite(type:" << enum_str << ")";
             }
@@ -441,7 +441,7 @@ std::string Util::GetEventString(const IMemoryManager &mem_manager, uint32_t sub
 }
 
 //--------------------------------------------------------------------------------------------------
-bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
+bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager& mem_manager,
                                               uint32_t submit_index, uint64_t va_addr,
                                               Pm4Type7Header header)
 {
@@ -465,7 +465,7 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager &mem_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager, uint32_t submit_index,
+uint32_t Util::GetIndexCount(const IMemoryManager& mem_manager, uint32_t submit_index,
                              uint64_t va_addr, Pm4Type7Header header)
 {
     uint32_t index_count = 0;
@@ -496,7 +496,7 @@ uint32_t Util::GetIndexCount(const IMemoryManager &mem_manager, uint32_t submit_
 }
 
 //--------------------------------------------------------------------------------------------------
-std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager &mem_manager,
+std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager& mem_manager,
                                                      uint32_t submit_index, uint64_t va_addr,
                                                      Pm4Type7Header header)
 {

@@ -28,7 +28,7 @@
 
 static constexpr double kZoomStepFactor = 1.25;
 
-FrameTabView::FrameTabView(QWidget *parent) : QWidget(parent)
+FrameTabView::FrameTabView(QWidget* parent) : QWidget(parent)
 {
     m_image_label = new QLabel(this);
     m_image_label->setAlignment(Qt::AlignCenter);
@@ -46,14 +46,14 @@ FrameTabView::FrameTabView(QWidget *parent) : QWidget(parent)
     m_zoom_in_button = new QPushButton("Zoom In (+)", this);
     m_zoom_out_button = new QPushButton("Zoom Out (-)", this);
 
-    QHBoxLayout *controls_layout = new QHBoxLayout();
+    QHBoxLayout* controls_layout = new QHBoxLayout();
     controls_layout->addWidget(m_actual_size_button);
     controls_layout->addWidget(m_fit_to_fill_button);
     controls_layout->addWidget(m_zoom_in_button);
     controls_layout->addWidget(m_zoom_out_button);
     controls_layout->addStretch();
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addLayout(controls_layout);
     main_layout->addWidget(m_scroll_area);
 
@@ -65,7 +65,7 @@ FrameTabView::FrameTabView(QWidget *parent) : QWidget(parent)
 }
 
 //--------------------------------------------------------------------------------------------------
-void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
+void FrameTabView::OnCaptureScreenshotLoaded(const QString& file_path)
 {
     if (m_image.load(file_path))
     {

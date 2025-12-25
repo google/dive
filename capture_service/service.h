@@ -22,16 +22,16 @@ limitations under the License.
 namespace Dive
 {
 
-absl::Status SendPong(Network::SocketConnection *client_conn);
+absl::Status SendPong(Network::SocketConnection* client_conn);
 
-absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn);
+absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn);
 
-absl::Status StartPm4Capture(Network::SocketConnection *client_conn);
+absl::Status StartPm4Capture(Network::SocketConnection* client_conn);
 
-absl::Status DownloadFile(Network::DownloadFileRequest *request,
-                          Network::SocketConnection *client_conn);
+absl::Status DownloadFile(Network::DownloadFileRequest* request,
+                          Network::SocketConnection* client_conn);
 
-absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn);
+absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn);
 
 class ServerMessageHandler : public Network::IMessageHandler
 {
@@ -39,7 +39,7 @@ class ServerMessageHandler : public Network::IMessageHandler
     void OnConnect() override;
     void OnDisconnect() override;
     void HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                       Network::SocketConnection *client_conn) override;
+                       Network::SocketConnection* client_conn) override;
 };
 
 }  // namespace Dive

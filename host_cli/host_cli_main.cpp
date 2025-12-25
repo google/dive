@@ -76,7 +76,7 @@ absl::Status ValidateFlags()
     return absl::OkStatus();
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     absl::FlagsUsageConfig flags_usage_config;
     flags_usage_config.version_string = Dive::GetCompleteVersionString;

@@ -54,6 +54,7 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "capture_service/constants.h"
+#include "dive/ui/features.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
 #include "dive_core/command_hierarchy.h"
@@ -461,9 +462,11 @@ MainWindow::MainWindow(ApplicationController &controller) : m_controller(control
 
         m_frame_tab_view = new FrameTabView(this);
 
-#if defined(ENABLE_CAPTURE_BUFFERS)
-        m_buffer_view = new BufferView(*m_data_core);
-#endif
+        if constexpr (DiveUIBuildFeatures::kEnableBufferView)
+        {
+            m_buffer_view = new BufferView(*m_data_core);
+        }
+
         m_text_file_view = new TextFileView(*m_data_core);
 
         m_tabs.gfxr_vulkan_command_arguments =
@@ -475,9 +478,10 @@ MainWindow::MainWindow(ApplicationController &controller) : m_controller(control
         m_tabs.perf_counter = m_tab_widget->addTab(m_perf_counter_tab_view, "Perf Counters");
         m_tabs.text_file = m_tab_widget->addTab(m_text_file_view, "Text File");
         m_tabs.shader = m_tab_widget->addTab(m_shader_view, "Shaders");
-#if defined(ENABLE_CAPTURE_BUFFERS)
-        m_tabs.buffer = m_tab_widget->addTab(m_buffer_view, "Buffers");
-#endif
+        if constexpr (DiveUIBuildFeatures::kEnableBufferView)
+        {
+            m_tabs.buffer = m_tab_widget->addTab(m_buffer_view, "Buffers");
+        }
         // Note: qt bug, the last widget can't be set as invisible, otherwise navagation breaks
         //       when widget width is smaller than required to show all tabs.
         //       Workaround: keep overview tab always visible.
@@ -1821,9 +1825,10 @@ void MainWindow::UpdateTabAvailability(TabMask mask)
     SetTabAvailable(m_tab_widget, m_tabs.perf_counter, mask & TabMaskBits::kPerfCounters);
     SetTabAvailable(m_tab_widget, m_tabs.gpu_timing, mask & TabMaskBits::kGpuTiming);
     SetTabAvailable(m_tab_widget, m_tabs.frame, mask & TabMaskBits::kFrame);
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    SetTabAvailable(m_tab_widget, m_tabs.buffer, mask & TabMaskBits::kBuffer);
-#endif
+    if constexpr (DiveUIBuildFeatures::kEnableBufferView)
+    {
+        SetTabAvailable(m_tab_widget, m_tabs.buffer, mask & TabMaskBits::kBuffer);
+    }
     bool has_text = m_data_core->GetPm4CaptureData().GetNumText() > 0;
     SetTabAvailable(m_tab_widget, m_tabs.text_file, (mask & TabMaskBits::kTextFile) && has_text);
     // Disable overview at the end, so qt end up with a disabled tab instead of invisible one.
@@ -2115,10 +2120,11 @@ void MainWindow::DisconnectAllTabs()
 
     QObject::disconnect(this, SIGNAL(EventSelected(uint64_t)), m_event_state_view,
                         SLOT(OnEventSelected(uint64_t)));
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    QObject::disconnect(this, SIGNAL(EventSelected(uint64_t)), m_buffer_view,
-                        SLOT(OnEventSelected(uint64_t)));
-#endif
+    if constexpr (DiveUIBuildFeatures::kEnableBufferView)
+    {
+        QObject::disconnect(this, SIGNAL(EventSelected(uint64_t)), m_buffer_view,
+                            SLOT(OnEventSelected(uint64_t)));
+    }
 
     QObject::disconnect(m_command_hierarchy_view->selectionModel(),
                         SIGNAL(currentChanged(const QModelIndex &, const QModelIndex &)),
@@ -2274,10 +2280,11 @@ void MainWindow::ConnectDiveFileTabs()
     QObject::connect(this, SIGNAL(EventSelected(uint64_t)), m_event_state_view,
                      SLOT(OnEventSelected(uint64_t)));
 
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    QObject::connect(this, SIGNAL(EventSelected(uint64_t)), m_buffer_view,
-                     SLOT(OnEventSelected(uint64_t)));
-#endif
+    if constexpr (DiveUIBuildFeatures::kEnableBufferView)
+    {
+        QObject::connect(this, SIGNAL(EventSelected(uint64_t)), m_buffer_view,
+                         SLOT(OnEventSelected(uint64_t)));
+    }
 
     QObject::connect(m_gfxr_vulkan_command_arguments_tab_view, SIGNAL(HideOtherSearchBars()), this,
                      SLOT(OnTabViewChange()));
@@ -2349,10 +2356,11 @@ void MainWindow::ConnectAdrenoRdFileTabs()
     QObject::connect(m_event_selection, &EventSelection::crossReference, this,
                      &MainWindow::OnCrossReference);
 
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    QObject::connect(this, SIGNAL(EventSelected(uint64_t)), m_buffer_view,
-                     SLOT(OnEventSelected(uint64_t)));
-#endif
+    if constexpr (DiveUIBuildFeatures::kEnableBufferView)
+    {
+        QObject::connect(this, SIGNAL(EventSelected(uint64_t)), m_buffer_view,
+                         SLOT(OnEventSelected(uint64_t)));
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

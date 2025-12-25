@@ -19,8 +19,30 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "absl/strings/str_format.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
+
+namespace
+{
+QString GetHeapString(Dive::MemoryAllocationData::GpuHeap heap)
+{
+    switch (heap)
+    {
+        case Dive::MemoryAllocationData::GpuHeap::GpuHeapLocal:
+            return QObject::tr("Local");
+        case Dive::MemoryAllocationData::GpuHeap::GpuHeapInvisible:
+            return QObject::tr("Invisible");
+        case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartUswc:
+            return QObject::tr("GartUswc");
+        case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
+            return QObject::tr("GartCacheable");
+        case Dive::MemoryAllocationData::GpuHeap::GpuHeapCount:
+            return QObject::tr("GpuHeap(unknown)");
+    }
+    return QObject::tr("GpuHeap(unknown)");
+}
+}  // namespace
 
 // =================================================================================================
 // BufferWidgetItem
@@ -46,15 +68,10 @@ BufferView::BufferView(const Dive::DataCore &data_core)
 {
     QVBoxLayout *layout = new QVBoxLayout();
     m_buffer_list = new QTreeWidget();
-    m_buffer_list->setColumnCount(9);
+    m_buffer_list->setColumnCount(4);
     m_buffer_list->setHeaderLabels(QStringList() << "Shader Stage"
                                                  << "Address"
                                                  << "Size"
-                                                 << "Format"
-                                                 << "Dest-X"
-                                                 << "Dest-Y"
-                                                 << "Dest-Z"
-                                                 << "Dest-W"
                                                  << "Preferred Heap");
     m_memory_view = new QTableWidget();
     m_memory_view->setColumnCount(kNumDwordsPerRow + 1);
@@ -100,40 +117,14 @@ void BufferView::OnEventSelected(uint32_t event_index)
             treeItem->setText(0, tr(kShaderStageStrings[shader_stage]));
 
             // Column 1
-            constexpr uint32_t kStrBufferSize = 256;
-            char str_buffer[kStrBufferSize];
-            snprintf(str_buffer, kStrBufferSize, "%p", (void *)buffer_info.m_addr);
-            treeItem->setText(1, tr(str_buffer));
+            treeItem->setText(
+                1, QString::fromStdString(absl::StrFormat("%" PRIx64, buffer_info.m_addr)));
 
             // Column 2
-            snprintf(str_buffer, kStrBufferSize, "%" PRIu64, buffer_info.m_size);
-            treeItem->setText(2, tr(str_buffer));
-            /*
+            treeItem->setText(
+                2, QString::fromStdString(absl::StrFormat("%" PRIu64, buffer_info.m_size)));
+
             // Column 3
-            snprintf(str_buffer,
-                    kStrBufferSize,
-                    "%s_%s",
-                    kBufferDataFormatStrings[buffer_info.m_data_format],
-                    kBufferNumFormatStrings[buffer_info.m_num_format]);
-            treeItem->setText(3, tr(str_buffer));
-
-            // Column 4
-            snprintf(str_buffer, kStrBufferSize, "%s",
-            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_x]); treeItem->setText(4, tr(str_buffer));
-
-            // Column 5
-            snprintf(str_buffer, kStrBufferSize, "%s",
-            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_y]); treeItem->setText(5, tr(str_buffer));
-
-            // Column 6
-            snprintf(str_buffer, kStrBufferSize, "%s",
-            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_z]); treeItem->setText(6, tr(str_buffer));
-
-            // Column 7
-            snprintf(str_buffer, kStrBufferSize, "%s",
-            kSqSelStrings[(uint32_t)buffer_info.m_dst_sel_w]); treeItem->setText(7, tr(str_buffer));
-            */
-            // Column 8
             // Find preferred heap
             const Dive::Pm4CaptureData &capture_data = m_data_core.GetPm4CaptureData();
             const Dive::MemoryManager &memory = capture_data.GetMemoryManager();
@@ -142,24 +133,8 @@ void BufferView::OnEventSelected(uint32_t event_index)
             mem_alloc_ptr =
                 mem_alloc_info.FindGlobalAllocation(buffer_info.m_addr, buffer_info.m_size);
             DIVE_ASSERT(mem_alloc_ptr != nullptr);
-            switch ((Dive::MemoryAllocationData::GpuHeap)mem_alloc_ptr->m_preferred_heap)
-            {
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapLocal:
-                    snprintf(str_buffer, kStrBufferSize, "Local");
-                    break;
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapInvisible:
-                    snprintf(str_buffer, kStrBufferSize, "Invisible");
-                    break;
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartUswc:
-                    snprintf(str_buffer, kStrBufferSize, "GartUswc");
-                    break;
-                case Dive::MemoryAllocationData::GpuHeap::GpuHeapGartCacheable:
-                    snprintf(str_buffer, kStrBufferSize, "GartCacheable");
-                    break;
-                default:
-                    DIVE_ASSERT(false);
-            }
-            treeItem->setText(8, tr(str_buffer));
+            treeItem->setText(3, GetHeapString(static_cast<Dive::MemoryAllocationData::GpuHeap>(
+                                     mem_alloc_ptr->m_preferred_heap)));
 
             // Store the buffer index for retrieval on item selection
             m_buffer_indices.push_back(buffer_index);

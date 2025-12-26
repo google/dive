@@ -14,63 +14,28 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QDialog>
 #include <future>
-#include <optional>
 
 #include "capture_service/device_mgr.h"
+#include "dive/ui/forward.h"
 #include "dive_core/available_metrics.h"
 #include "utils/component_files.h"
 
-#pragma once
-
-// Forward declarations
-class QLabel;
-class QHBoxLayout;
-class QPushButton;
-class QVBoxLayout;
-class QComboBox;
-class QStandardItemModel;
-class QLineEdit;
-class QListWidget;
-class QSpinBox;
-class QTextEdit;
-class OverlayHelper;
-class MainWindow;
-class QCheckBox;
-class QGroupBox;
-
-class ApplicationController;
-
-namespace Dive
-{
-class AvailableMetrics;
-}  // namespace Dive
-
 class AnalyzeDialog : public QDialog
 {
+    Q_OBJECT
+
     // Data structure to hold a single item from the CSV
     struct CsvItem
     {
-        QString id;
         Dive::MetricType type;
         QString key;
         QString name;
         QString description;
     };
-
-    // Describes all files associated with a GFXR file, does not guarantee existence
-    struct ReplayArtifactsPaths
-    {
-        std::filesystem::path gfxr;
-        // TODO: std::filesystem::path gfxa;
-        std::filesystem::path perf_counter_csv;
-        std::filesystem::path gpu_timing_csv;
-        std::filesystem::path pm4_rd;
-        std::filesystem::path renderdoc_rdc;
-    };
-
-    Q_OBJECT
 
     enum class ReplayStatusUpdateCode : int
     {
@@ -94,13 +59,18 @@ class AnalyzeDialog : public QDialog
     };
 
  public:
+    AnalyzeDialog(const AnalyzeDialog &) = delete;
+    AnalyzeDialog(AnalyzeDialog &&) = delete;
+    AnalyzeDialog &operator=(const AnalyzeDialog &) = delete;
+    AnalyzeDialog &operator=(AnalyzeDialog &&) = delete;
+
     AnalyzeDialog(ApplicationController &controller,
                   const Dive::AvailableMetrics *available_metrics, QWidget *parent = nullptr);
-    ~AnalyzeDialog();
+    ~AnalyzeDialog() override;
     void UpdateDeviceList(bool isInitialized);
  private slots:
     void OnReplayStatusUpdate(int status_code, const QString &error_message);
-    void OnDeviceSelected(const QString &);
+    void OnDeviceSelected();
     void OnDeviceListRefresh();
     void OnReplay();
     void OnOverlayMessage(const QString &message);
@@ -127,6 +97,8 @@ class AnalyzeDialog : public QDialog
         bool replay_perf_counter = false;
         bool replay_custom = false;
     };
+    void InitializeLayout();
+
     void ShowMessage(const std::string &message);
     void SetReplayButton(const std::string &message, bool is_enabled);
     void PopulateMetrics();
@@ -145,7 +117,7 @@ class AnalyzeDialog : public QDialog
     absl::Status RenderDocReplay(Dive::DeviceManager &device_manager,
                                  const std::string &remote_gfxr_file);
 
-    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &messge = "");
+    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &message = "");
     void ExecuteStatusUpdate();
 
     void ReplayImpl(const ReplayConfig &);
@@ -154,27 +126,27 @@ class AnalyzeDialog : public QDialog
 
     ApplicationController &m_controller;
 
-    QLabel *m_metrics_list_label;
-    QListWidget *m_metrics_list;
+    QLabel *m_metrics_list_label = nullptr;
+    QListWidget *m_metrics_list = nullptr;
 
-    QLabel *m_selected_metrics_description_label;
-    QTextEdit *m_selected_metrics_description;
+    QLabel *m_selected_metrics_description_label = nullptr;
+    QTextEdit *m_selected_metrics_description = nullptr;
 
-    QLabel *m_enabled_metrics_list_label;
-    QListWidget *m_enabled_metrics_list;
+    QLabel *m_enabled_metrics_list_label = nullptr;
+    QListWidget *m_enabled_metrics_list = nullptr;
 
-    QHBoxLayout *m_device_layout;
-    QLabel *m_device_label;
-    QStandardItemModel *m_device_model;
-    QComboBox *m_device_box;
-    QPushButton *m_device_refresh_button;
+    QHBoxLayout *m_device_layout = nullptr;
+    QLabel *m_device_label = nullptr;
+    QStandardItemModel *m_device_model = nullptr;
+    QComboBox *m_device_box = nullptr;
+    QPushButton *m_device_refresh_button = nullptr;
 
     // Provides a description of which capture file is open, but immutable from
     // AnalyzeDialog. User would need to close the dialog and use MainWindow toolbar to change the
     // loaded capture
-    QHBoxLayout *m_selected_file_layout;
-    QLabel *m_selected_file_label;
-    QLineEdit *m_selected_file_input_box;
+    QHBoxLayout *m_selected_file_layout = nullptr;
+    QLabel *m_selected_file_label = nullptr;
+    QLineEdit *m_selected_file_input_box = nullptr;
 
     QGroupBox *m_custom_replay_box = nullptr;
     QCheckBox *m_dump_pm4_box = nullptr;
@@ -185,18 +157,18 @@ class AnalyzeDialog : public QDialog
     QSpinBox *m_gpu_time_replay_frame_count = nullptr;
     QSpinBox *m_custom_replay_frame_count = nullptr;
 
-    QHBoxLayout *m_replay_warning_layout;
-    QLabel *m_replay_warning_label;
+    QHBoxLayout *m_replay_warning_layout = nullptr;
+    QLabel *m_replay_warning_label = nullptr;
 
-    QHBoxLayout *m_delete_replay_artifacts_layout;
-    QPushButton *m_delete_replay_artifacts_button;
+    QHBoxLayout *m_delete_replay_artifacts_layout = nullptr;
+    QPushButton *m_delete_replay_artifacts_button = nullptr;
 
-    QHBoxLayout *m_button_layout;
-    QPushButton *m_replay_button;
+    QHBoxLayout *m_button_layout = nullptr;
+    QPushButton *m_replay_button = nullptr;
 
-    QHBoxLayout *m_main_layout;
-    QVBoxLayout *m_left_panel_layout;
-    QVBoxLayout *m_right_panel_layout;
+    QHBoxLayout *m_main_layout = nullptr;
+    QVBoxLayout *m_left_panel_layout = nullptr;
+    QVBoxLayout *m_right_panel_layout = nullptr;
     std::vector<Dive::DeviceInfo> m_devices;
     std::string m_cur_device;
 
@@ -209,15 +181,15 @@ class AnalyzeDialog : public QDialog
     // Other artifacts
     Dive::ComponentFilePaths m_local_capture_files = {};
 
-    QVector<CsvItem> *m_csv_items;
-    std::vector<std::string> *m_enabled_metrics_vector;
+    QVector<CsvItem> m_csv_items;
+    std::vector<std::string> m_enabled_metrics_vector;
     const Dive::AvailableMetrics *m_available_metrics = nullptr;
     // Used to store a csv item's key in the enabled metrics vector.
     const int kDataRole = Qt::UserRole + 1;
     const int kDefaultFrameCount = 300;
     const std::string kDefaultReplayButtonText = "Replay";
     std::future<void> m_replay_active;
-    OverlayHelper *m_overlay;
+    OverlayHelper *m_overlay = nullptr;
 
     struct StatusUpdateQueueItem
     {

@@ -23,11 +23,18 @@ class QAbstractProxyModel;
 class QCheckBox;
 class QComboBox;
 class QGroupBox;
+class QHBoxLayout;
 class QLabel;
+class QLineEdit;
+class QListWidget;
 class QPushButton;
 class QScrollArea;
 class QSortFilterProxyModel;
+class QSpinBox;
+class QStandardItemModel;
 class QTabWidget;
+class QTextEdit;
+class QVBoxLayout;
 
 namespace Dive
 {
@@ -62,6 +69,7 @@ class GfxrVulkanCommandModel;
 class GpuTimingModel;
 class GpuTimingTabView;
 class HoverHelp;
+class MainWindow;
 class OverlayHelper;
 class OverviewTabView;
 class PerfCounterModel;

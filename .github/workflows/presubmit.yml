@@ -64,6 +64,14 @@ jobs:
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build --config Release
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix build/install_artifact --config Release
+      - name: Upload test output
+        uses: actions/upload-artifact@v6
+        with:
+          name: install_artifact_windows
+          path: build/install_artifact
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -280,7 +288,12 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix build/install_artifact --config Release
+      - name: Upload test output
+        uses: actions/upload-artifact@v6
+        with:
+          name: install_artifact_linux
+          path: build/install_artifact
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -403,7 +416,14 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix build/install_artifact --config Release
+      - name: Upload test output
+        uses: actions/upload-artifact@v6
+        with:
+          name: install_artifact_macos
+          path: |
+            build/ui/dive.app
+            build/install_artifact
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build

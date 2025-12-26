@@ -86,10 +86,8 @@ add_executable(
     command_model.h
     command_tab_view.cpp
     command_tab_view.h
-    context.h
     custom_metatypes.cpp
     custom_metatypes.h
-    debug_utils.h
     dive_tree_view.cpp
     dive_tree_view.h
     draw_dispatch_stats_model.cpp
@@ -102,7 +100,6 @@ add_executable(
     event_selection_model.h
     event_state_view.cpp
     event_state_view.h
-    file_path.h
     frame_tab_view.cpp
     frame_tab_view.h
     gfxr_capture_worker.cpp
@@ -124,7 +121,6 @@ add_executable(
     gui_constants.h
     hover_help_model.cpp
     hover_help_model.h
-    impl_pointer.h
     main_window.cpp
     main_window.h
     misc_stats_model.cpp
@@ -134,8 +130,6 @@ add_executable(
     most_expensive_events_view.cpp
     most_expensive_events_view.h
     object_names.h
-    overlay.cpp
-    overlay.h
     overview_tab_view.cpp
     overview_tab_view.h
     package_filter.cpp
@@ -154,8 +148,6 @@ add_executable(
     search_bar.h
     search_dialog.cpp
     search_dialog.h
-    settings.cpp
-    settings.h
     shader_text_view.cpp
     shader_text_view.h
     shader_view.cpp
@@ -233,6 +225,7 @@ target_link_libraries(
     network
     dive_core
     dive_lib_os
+    dive_lib_ui
     device_mgr
     dive_plugin_loader
     component_files

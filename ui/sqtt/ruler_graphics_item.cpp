@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "ruler_graphics_item.h"
+#include "ui/sqtt/ruler_graphics_item.h"
 
 #include <QGraphicsSceneContextMenuEvent>
 #include <QMenu>
@@ -22,6 +22,7 @@
 #include <QTextStream>
 #include <QTransform>
 
+#include "dive/ui/components/settings/settings.h"
 #include "dive_core/common.h"
 #include "dive_core/conversions.h"
 
@@ -96,8 +97,8 @@ QPainterPath RulerGraphicsItem::shape() const
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-                              QWidget *widget)
+void RulerGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+                              QWidget* widget)
 {
     if (m_max_cycles == 0) return;
 
@@ -207,7 +208,7 @@ void RulerGraphicsItem::paint(QPainter *painter, const QStyleOptionGraphicsItem 
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
+void RulerGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
     Settings::DisplayUnit unit = Settings::Get()->ReadRulerDisplayUnit();
 
@@ -233,7 +234,7 @@ void RulerGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
     ns_action.setChecked(unit == Settings::DisplayUnit::kNs);
     menu.addAction(&ns_action);
 
-    QAction *selected_action_ptr = menu.exec(event->screenPos());
+    QAction* selected_action_ptr = menu.exec(event->screenPos());
     if (selected_action_ptr == &cycle_action)
         Settings::Get()->WriteRulerDisplayUnit(Settings::DisplayUnit::kCycle);
     else if (selected_action_ptr == &ms_action)

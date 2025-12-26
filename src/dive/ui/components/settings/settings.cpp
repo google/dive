@@ -13,13 +13,13 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "settings.h"
+#include "dive/ui/components/settings/settings.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QSettings>
 
-#include "dive_core/common.h"
+#include "dive/ui/macros.h"
 
 //--------------------------------------------------------------------------------------------------
 Settings* Settings::Get()

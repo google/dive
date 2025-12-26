@@ -18,7 +18,7 @@
 
 #include <QMetaType>
 
-#include "dive_core/context.h"  // IWYU pragma: export
+#include "dive/types/context.h"  // IWYU pragma: export
 
 // qRegisterMetaType in custom_metatypes.cpp
 Q_DECLARE_METATYPE(Dive::Context)

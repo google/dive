@@ -18,7 +18,7 @@
 
 #include <QObject>
 
-#include "impl_pointer.h"
+#include "dive/ui/types/impl_pointer.h"
 
 class MainWindow;
 

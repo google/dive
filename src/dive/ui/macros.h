@@ -14,24 +14,10 @@
  limitations under the License.
 */
 
-#include "custom_metatypes.h"
+#pragma once
 
-#include <QMetaType>
+#include "absl/base/macros.h"
 
-#include "dive/ui/types/context.h"
-#include "dive/ui/types/file_path.h"
-#include "ui/capture_file_manager.h"
-
-namespace Dive
-{
-
-void RegisterCustomMetaType()
-{
-    qRegisterMetaType<Dive::Context>();
-    qRegisterMetaType<Dive::FilePath>();
-    qRegisterMetaType<Dive::ComponentFilePaths>();
-
-    CaptureFileManager::RegisterCustomMetaType();
-}
-
-}  // namespace Dive
+#ifndef DIVE_ASSERT
+#define DIVE_ASSERT(x) ABSL_ASSERT(x)
+#endif

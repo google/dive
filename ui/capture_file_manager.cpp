@@ -24,10 +24,10 @@
 #include <memory>
 #include <optional>
 
-#include "debug_utils.h"
-#include "dive_core/context.h"
+#include "dive/ui/types/context.h"
+#include "dive/ui/types/file_path.h"
+#include "dive/ui/utils/debug_utils.h"
 #include "dive_core/data_core.h"
-#include "file_path.h"
 #include "trace_stats/trace_stats.h"
 
 namespace

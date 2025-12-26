@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "overlay.h"
+#include "dive/ui/components/overlay/overlay.h"
 
 #include <QDateTime>
 #include <QElapsedTimer>

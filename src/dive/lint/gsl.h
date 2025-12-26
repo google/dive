@@ -14,24 +14,17 @@
  limitations under the License.
 */
 
-#include "custom_metatypes.h"
+#pragma once
 
-#include <QMetaType>
+// Guidelines Support Library
+// For .clang-tidy
 
-#include "dive/ui/types/context.h"
-#include "dive/ui/types/file_path.h"
-#include "ui/capture_file_manager.h"
+#include <type_traits>
 
-namespace Dive
+namespace gsl
 {
 
-void RegisterCustomMetaType()
-{
-    qRegisterMetaType<Dive::Context>();
-    qRegisterMetaType<Dive::FilePath>();
-    qRegisterMetaType<Dive::ComponentFilePaths>();
+template <class T, std::enable_if_t<std::is_pointer_v<T>, bool> = true>
+using owner = T;
 
-    CaptureFileManager::RegisterCustomMetaType();
 }
-
-}  // namespace Dive

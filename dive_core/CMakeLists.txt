@@ -176,7 +176,6 @@ add_library(
     command_hierarchy.h
     common.cpp
     common.h
-    context.h
     conversions.h
     cross_ref.h
     data_core.cpp

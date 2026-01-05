@@ -27,4 +27,6 @@ g_*.cpp
 install/
 gfxr_capture/
 gfxr_capture_*/
+dive_capture_folder/
+dive_capture_*/
 **/.DS_Store

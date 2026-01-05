@@ -16,13 +16,14 @@
 
 #include "dive_core/available_metrics.h"
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <array>
+
 #include "utils/string_utils.h"
 
 namespace Dive
@@ -30,11 +31,11 @@ namespace Dive
 
 namespace
 {
-const std::array kExpectedHeaders = { "MetricID", "MetricType", "Key", "Name", "Description" };
+const std::array kExpectedHeaders = {"MetricID", "MetricType", "Key", "Name", "Description"};
 }  // namespace
 
 std::unique_ptr<AvailableMetrics> AvailableMetrics::LoadFromCsv(
-const std::filesystem::path& file_path)
+    const std::filesystem::path& file_path)
 {
     std::ifstream file(file_path);
     if (!file.is_open())
@@ -43,7 +44,7 @@ const std::filesystem::path& file_path)
         return nullptr;
     }
 
-    auto        available_metrics = std::unique_ptr<AvailableMetrics>(new AvailableMetrics());
+    auto available_metrics = std::unique_ptr<AvailableMetrics>(new AvailableMetrics());
     std::string line;
     // Read and validate header line
     if (!StringUtils::GetTrimmedLine(file, line) || line.empty())
@@ -54,8 +55,8 @@ const std::filesystem::path& file_path)
     size_t line_number = 1;
 
     std::stringstream header_ss(line);
-    std::string       header_field;
-    size_t            column_index = 0;
+    std::string header_field;
+    size_t column_index = 0;
     while (StringUtils::GetTrimmedField(header_ss, header_field, ','))
     {
         if (column_index < kExpectedHeaders.size())
@@ -79,8 +80,8 @@ const std::filesystem::path& file_path)
     while (StringUtils::GetTrimmedLine(file, line))
     {
         line_number++;
-        std::stringstream        ss(line);
-        std::string              field;
+        std::stringstream ss(line);
+        std::string field;
         std::vector<std::string> fields;
         while (StringUtils::GetTrimmedField(ss, field, ','))
         {
@@ -96,7 +97,7 @@ const std::filesystem::path& file_path)
         }
 
         MetricInfo info{};
-        uint32_t   metric_type_val = 0;
+        uint32_t metric_type_val = 0;
         if (!StringUtils::SafeConvertFromString(fields[0], info.m_metric_id) ||
             !StringUtils::SafeConvertFromString(fields[1], metric_type_val))
         {

@@ -39,42 +39,37 @@ void OpenErrorMessageBox(QWidget* parent, const LoadFileResult& result)
     QString title = QString("Unable to open file: ") + result.reference.ToQString();
     switch (result.status)
     {
-    case LoadFileResult::Status::kSuccess:
-        break;
-    case LoadFileResult::Status::kUnknown:
-        OpenErrorMessageBox(parent, title, QString());
-        break;
-    case LoadFileResult::Status::kFileIoError:
-        OpenErrorMessageBox(parent, title, QString("File I/O error!"));
-        break;
-    case LoadFileResult::Status::kCorruptData:
-        OpenErrorMessageBox(parent, title, QString("File corrupt!"));
-        break;
-    case LoadFileResult::Status::kVersionError:
-        OpenErrorMessageBox(parent, title, QString("Incompatible version!"));
-        break;
-    case LoadFileResult::Status::kParseFailure:
-        OpenErrorMessageBox(parent, title, QString("Error parsing file!"));
-        break;
-    case LoadFileResult::Status::kUnsupportedFile:
-        OpenErrorMessageBox(parent, title, QString("File type not supported!"));
-        break;
-    case LoadFileResult::Status::kGfxaAssetMissing:
-        OpenErrorMessageBox(parent,
-                            title,
-                            QString("Required .gfxa file: %1 not found!")
-                            .arg(QString::fromStdString(result.components.gfxa.string())));
-        break;
+        case LoadFileResult::Status::kSuccess:
+            break;
+        case LoadFileResult::Status::kUnknown:
+            OpenErrorMessageBox(parent, title, QString());
+            break;
+        case LoadFileResult::Status::kFileIoError:
+            OpenErrorMessageBox(parent, title, QString("File I/O error!"));
+            break;
+        case LoadFileResult::Status::kCorruptData:
+            OpenErrorMessageBox(parent, title, QString("File corrupt!"));
+            break;
+        case LoadFileResult::Status::kVersionError:
+            OpenErrorMessageBox(parent, title, QString("Incompatible version!"));
+            break;
+        case LoadFileResult::Status::kParseFailure:
+            OpenErrorMessageBox(parent, title, QString("Error parsing file!"));
+            break;
+        case LoadFileResult::Status::kUnsupportedFile:
+            OpenErrorMessageBox(parent, title, QString("File type not supported!"));
+            break;
+        case LoadFileResult::Status::kGfxaAssetMissing:
+            OpenErrorMessageBox(parent, title,
+                                QString("Required .gfxa file: %1 not found!")
+                                    .arg(QString::fromStdString(result.components.gfxa.string())));
+            break;
     }
 }
 
 }  // namespace
 
-ErrorDialog::ErrorDialog(QWidget* parent) :
-    QObject(parent),
-    m_parent(parent)
-{
-}
+ErrorDialog::ErrorDialog(QWidget* parent) : QObject(parent), m_parent(parent) {}
 
 void ErrorDialog::OnLoadingFailure(const LoadFileResult& result) const
 {

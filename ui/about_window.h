@@ -30,10 +30,10 @@ class AboutDialog : public QDialog
 {
     Q_OBJECT
 
-public:
+ public:
     AboutDialog(QWidget* parent = 0);
 
-private:
+ private:
     // Contains the Dive logo and a high-level summary
     QHBoxLayout* CreateHeaderLayout();
     // Contains detailed version info for different components of the Dive tool

@@ -53,7 +53,7 @@ typedef struct PM4_ME_ACQUIRE_MEM__GFX09
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -139,7 +139,7 @@ typedef struct PM4_ME_ATOMIC_GDS
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -237,7 +237,7 @@ typedef struct PM4_ME_ATOMIC_MEM
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -293,7 +293,7 @@ typedef struct PM4_ME_CLEAR_STATE
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -338,7 +338,7 @@ typedef struct PM4_ME_COND_WRITE
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -377,7 +377,7 @@ typedef struct PM4_ME_CONTEXT_CONTROL
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -424,7 +424,7 @@ typedef struct PM4_ME_CONTEXT_REG_RMW
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -503,7 +503,7 @@ typedef struct PM4_ME_COPY_DATA
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -595,7 +595,7 @@ typedef struct PM4_ME_DISPATCH_DIRECT
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t dim_x;
@@ -614,7 +614,7 @@ typedef struct PM4_ME_DISPATCH_INDIRECT
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -686,7 +686,7 @@ typedef struct PM4_ME_DMA_DATA
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -760,7 +760,7 @@ typedef struct PM4_ME_DMA_DATA_FILL_MULTI
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -807,7 +807,7 @@ typedef struct PM4_ME_DRAW_INDEX_2
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t max_size;
@@ -828,7 +828,7 @@ typedef struct PM4_ME_DRAW_INDEX_AUTO
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t index_count;
@@ -843,7 +843,7 @@ typedef struct PM4_ME_DRAW_INDEX_INDIRECT
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -880,7 +880,7 @@ typedef struct PM4_ME_DRAW_INDEX_INDIRECT_MULTI
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -918,7 +918,7 @@ typedef struct PM4_ME_DRAW_INDEX_MULTI_AUTO
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t prim_count;
@@ -944,7 +944,7 @@ typedef struct PM4_ME_DRAW_INDEX_MULTI_INST
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t instance_count;
@@ -961,7 +961,7 @@ typedef struct PM4_ME_DRAW_INDEX_OFFSET_2
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t max_size;
@@ -980,7 +980,7 @@ typedef struct PM4_ME_DRAW_INDIRECT
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -1015,7 +1015,7 @@ typedef struct PM4_ME_DRAW_INDIRECT_MULTI
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -1062,7 +1062,7 @@ typedef struct PM4_ME_EVENT_WRITE
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1109,7 +1109,7 @@ typedef struct PM4_ME_FRAME_CONTROL
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1137,7 +1137,7 @@ typedef struct PM4_ME_GET_LOD_STATS
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t bu_size;
@@ -1178,7 +1178,7 @@ typedef struct PM4_ME_INCREMENT_DE_COUNTER
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t dummy_data;
@@ -1191,7 +1191,7 @@ typedef struct PM4_ME_LOAD_CONFIG_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1234,7 +1234,7 @@ typedef struct PM4_ME_LOAD_CONTEXT_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1289,7 +1289,7 @@ typedef struct PM4_ME_LOAD_CONTEXT_REG_INDEX
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1339,7 +1339,7 @@ typedef struct PM4_ME_LOAD_SH_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1394,7 +1394,7 @@ typedef struct PM4_ME_LOAD_SH_REG_INDEX
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1444,7 +1444,7 @@ typedef struct PM4_ME_LOAD_UCONFIG_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1505,7 +1505,7 @@ typedef struct PM4_ME_MEM_SEMAPHORE
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1542,7 +1542,7 @@ typedef struct PM4_ME_PFP_SYNC_ME
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t dummy_data;
@@ -1563,7 +1563,7 @@ typedef struct PM4_ME_PREAMBLE_CNTL
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1602,7 +1602,7 @@ typedef struct PM4_ME_PRIME_UTCL2
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1657,7 +1657,7 @@ typedef struct PM4_ME_REG_RMW
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1746,7 +1746,7 @@ typedef struct PM4_ME_RELEASE_MEM__GFX09
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1844,7 +1844,7 @@ typedef struct PM4_ME_SET_CONFIG_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1865,7 +1865,7 @@ typedef struct PM4_ME_SET_CONTEXT_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1886,7 +1886,7 @@ typedef struct PM4_ME_SET_CONTEXT_REG_INDEX__GFX09
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1907,7 +1907,7 @@ typedef struct PM4_ME_SET_SH_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1933,7 +1933,7 @@ typedef struct PM4_ME_SET_SH_REG_INDEX
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1962,7 +1962,7 @@ typedef struct PM4_ME_SET_SH_REG_OFFSET
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1996,7 +1996,7 @@ typedef struct PM4_ME_SET_UCONFIG_REG
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2017,7 +2017,7 @@ typedef struct PM4_ME_SET_UCONFIG_REG_INDEX
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2066,7 +2066,7 @@ typedef struct PM4_ME_STRMOUT_BUFFER_UPDATE
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2107,7 +2107,7 @@ typedef struct PM4_ME_SWITCH_BUFFER
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2123,7 +2123,7 @@ typedef struct PM4_ME_WAIT_ON_CE_COUNTER
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2180,7 +2180,7 @@ typedef struct PM4_ME_WAIT_REG_MEM
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2283,7 +2283,7 @@ typedef struct PM4_ME_WAIT_REG_MEM64
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2389,24 +2389,24 @@ typedef struct PM4_ME_WRITE_DATA
     union
     {
         PM4_ME_TYPE_3_HEADER header;
-        uint32_t             ordinal1;
+        uint32_t ordinal1;
     };
 
     union
     {
         struct
         {
-            uint32_t                        reserved1 : 8;
-            ME_WRITE_DATA_dst_sel_enum      dst_sel : 4;
-            uint32_t                        reserved2 : 4;
-            ME_WRITE_DATA_addr_incr_enum    addr_incr : 1;
-            uint32_t                        reserved3 : 2;
-            uint32_t                        resume_vf : 1;
-            ME_WRITE_DATA_wr_confirm_enum   wr_confirm : 1;
-            uint32_t                        reserved4 : 4;
+            uint32_t reserved1 : 8;
+            ME_WRITE_DATA_dst_sel_enum dst_sel : 4;
+            uint32_t reserved2 : 4;
+            ME_WRITE_DATA_addr_incr_enum addr_incr : 1;
+            uint32_t reserved3 : 2;
+            uint32_t resume_vf : 1;
+            ME_WRITE_DATA_wr_confirm_enum wr_confirm : 1;
+            uint32_t reserved4 : 4;
             ME_WRITE_DATA_cache_policy_enum cache_policy : 2;
-            uint32_t                        reserved5 : 3;
-            ME_WRITE_DATA_engine_sel_enum   engine_sel : 2;
+            uint32_t reserved5 : 3;
+            ME_WRITE_DATA_engine_sel_enum engine_sel : 2;
         } bitfields2;
         uint32_t ordinal2;
     };

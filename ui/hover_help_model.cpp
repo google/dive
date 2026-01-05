@@ -15,9 +15,11 @@
 */
 
 #include "hover_help_model.h"
+
 #include <QTextDocument>
 #include <sstream>
 #include <string>
+
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/common.h"
 #include "dive_core/common/gpudefs.h"
@@ -48,15 +50,11 @@ HoverHelp::HoverHelp()
 }
 
 //--------------------------------------------------------------------------------------------------
-void HoverHelp::SetCurItem(Item        item,
-                           uint32_t    param1,
-                           uint32_t    param2,
-                           uint32_t    param3,
+void HoverHelp::SetCurItem(Item item, uint32_t param1, uint32_t param2, uint32_t param3,
                            const char* custom_string_ptr)
 {
     std::string custom_string;
-    if (custom_string_ptr != nullptr)
-        custom_string = custom_string_ptr;
+    if (custom_string_ptr != nullptr) custom_string = custom_string_ptr;
     // Return if new parameters as same as previous parameters
     if (m_prev_item == item && m_prev_param1 == param1 && m_prev_param2 == param2 &&
         m_prev_param3 == param3 && m_prev_custom_string == custom_string)
@@ -86,7 +84,7 @@ void HoverHelp::SetCurItem(Item        item,
         break;
 
     std::string cur_string;
-    int64_t     cur_string_size;
+    int64_t cur_string_size;
     const char* kShaderStageNames[Dive::kShaderStageCount] = {
         "Cs",  // kShaderStageCs
         "Gs",  // kShaderStageGs
@@ -109,17 +107,14 @@ void HoverHelp::SetCurItem(Item        item,
          "This visualization shows Event shader stage occupancy for Shader Engine %d, Compute Unit "
          "%d. Occupancy does not represent utilization, ie. an occupying stage can be idle for "
          "most or part of its duration",
-         param1,
-         param2);
+         param1, param2);
     CASE(kSqttSlotView,
          "This visualization shows wavefront occupancy for Shader Engine %d, Compute Unit %d, Simd "
          "%d. Occupancy does not represent utilization, ie. an occupying wavefront can be idle "
          "for most or part of its duration. There is instruction buffer \"slots\" to hold the PC "
          "for up to 10 wavefronts per Simd, which means up to 10 wavefronts can be occupying a "
          "single Simd at once",
-         param1,
-         param2,
-         param3);
+         param1, param2, param3);
     CASE(kContextView,
          "This visualization shows which of the 7 contexts each graphics Event occupies. This is "
          "a useful view to visualize where the context roll stalls occur. See "
@@ -181,49 +176,33 @@ void HoverHelp::SetCurItem(Item        item,
          "fixed %d Mhz during profiling mode, but can still fluctuate depending on power and heat "
          "characteristics on the GPU. During non-profiling mode, the frequency can fluctuate "
          "anywhere between %d-%d Mhz depending on the part of the frame being processed",
-         param1,
-         param2,
-         param3);
+         param1, param2, param3);
     CASE(kSqttSeRect,
          "This represents occupancy time of all %s shader stage wavefronts for Event %s on Shader "
          "Engine %d. This is derived from the min/max of all Event %s %s shader stage wavefront "
          "occupancy times across all Shader Engine %d Compute Units",
-         kShaderStageNames[param1],
-         m_event_name_fn(param2).c_str(),
-         param3,
-         m_event_name_fn(param2).c_str(),
-         kShaderStageNames[param1],
-         param3);
+         kShaderStageNames[param1], m_event_name_fn(param2).c_str(), param3,
+         m_event_name_fn(param2).c_str(), kShaderStageNames[param1], param3);
     CASE(kSqttCuRect,
          "This represents occupancy time of all %s shader stage wavefronts for Event %s on "
          "Compute Unit %d of the current Shader Engine. This is derived from the min/max of all "
          "Event %s %s shader stage wavefront occupancy times across all Compute Units %d Simds on "
          "the current Shader Engine",
-         kShaderStageNames[param1],
-         m_event_name_fn(param2).c_str(),
-         param3,
-         m_event_name_fn(param2).c_str(),
-         kShaderStageNames[param1],
-         param3);
+         kShaderStageNames[param1], m_event_name_fn(param2).c_str(), param3,
+         m_event_name_fn(param2).c_str(), kShaderStageNames[param1], param3);
     CASE(kSqttSimdRect,
          "This represents occupancy time of all %s shader stage wavefronts for Event %s on "
          "Simd %d of the current Compute unit. This is derived from the min/max of all "
          "Event %s %s shader stage wavefront occupancy times across all Simd %d Slots on "
          "the current Compute Unit",
-         kShaderStageNames[param1],
-         m_event_name_fn(param2).c_str(),
-         param3,
-         m_event_name_fn(param2).c_str(),
-         kShaderStageNames[param1],
-         param3);
+         kShaderStageNames[param1], m_event_name_fn(param2).c_str(), param3,
+         m_event_name_fn(param2).c_str(), kShaderStageNames[param1], param3);
     CASE(kSqttSlotRect,
          "This represents occupancy time of a single wavefront (out of %d) of Event %s occupying "
          "Slot %d of the current Simd. Wavefront occupancy can include periods when wavefronts "
          "from this Event are idle and waiting to be scheduled, so the duration does not represent "
          "how long the Event takes to process",
-         param1,
-         m_event_name_fn(param2).c_str(),
-         param3);
+         param1, m_event_name_fn(param2).c_str(), param3);
     CASE(kSqttGap,
          "This is a gap of %d idle cycles on the GPU where no Event is being scheduled and no "
          "wavefronts are occupying the hardware. This is likely due to a GPU stall waiting on the "
@@ -269,21 +248,17 @@ void HoverHelp::SetCurItem(Item        item,
          "Event %s has a VS shader stage but no PS shader stage. In this case, the end of the "
          "last shader stage represents when the ROP units are finished writing to the surface",
          m_event_name_fn(param1).c_str());
-    CASE(kNavigatorVulkanBarrier,
-         "This block represents the duration of Vulkan barrier %s<br>%s",
-         m_barrier_name_fn(param1).c_str(),
-         m_barrier_params_fn(param1).c_str());
+    CASE(kNavigatorVulkanBarrier, "This block represents the duration of Vulkan barrier %s<br>%s",
+         m_barrier_name_fn(param1).c_str(), m_barrier_params_fn(param1).c_str());
     CASE(kNavigatorDriverBarrier,
          "This block represents the duration of driver-inserted barrier %s<br>%s",
-         m_barrier_name_fn(param1).c_str(),
-         m_barrier_params_fn(param1).c_str());
+         m_barrier_name_fn(param1).c_str(), m_barrier_params_fn(param1).c_str());
     CASE(kNavigatorDebugLabel,
          "This block represents the duration of debug marker <b>%s</b>. This label includes %s."
          "The duration of the debug marker includes all Events and barriers that are part of the "
          "debug marker.<br><br>The debug marker rectangle represents only 1 level of the "
          "hierarchy at a time. It can be collapsed/expanded from the Events view only",
-         m_label_name_fn(param1).c_str(),
-         m_label_includes_fn(param1).c_str());
+         m_label_name_fn(param1).c_str(), m_label_includes_fn(param1).c_str());
     CASE(kEngineView,
          "This view shows all the command buffers submitted to each GPU \"engine\". The "
          "<b>universal engine</b> supports graphics and compute workloads, the "
@@ -398,7 +373,7 @@ void HoverHelp::SetCurItem(Item        item,
 
 //--------------------------------------------------------------------------------------------------
 void HoverHelp::SetCommandHierarchyNodeItem(const Dive::CommandHierarchy& command_hierarchy,
-                                            uint32_t                      node_index)
+                                            uint32_t node_index)
 {
     bool hover_msg_sent = false;
 
@@ -448,25 +423,18 @@ std::string HoverHelp::GetSyncNodeString(uint32_t param1, uint32_t param2, uint3
 }
 
 //--------------------------------------------------------------------------------------------------
-void HoverHelp::OnEnter(Item        item,
-                        uint32_t    param1,
-                        uint32_t    param2,
-                        uint32_t    param3,
+void HoverHelp::OnEnter(Item item, uint32_t param1, uint32_t param2, uint32_t param3,
                         const char* custom_string)
 {
     SetCurItem(item, param1, param2, param3, custom_string);
 }
 
 //--------------------------------------------------------------------------------------------------
-void HoverHelp::OnExit(Item        item,
-                       uint32_t    param1,
-                       uint32_t    param2,
-                       uint32_t    param3,
+void HoverHelp::OnExit(Item item, uint32_t param1, uint32_t param2, uint32_t param3,
                        const char* custom_string_ptr)
 {
     std::string custom_string;
-    if (custom_string_ptr != nullptr)
-        custom_string = custom_string_ptr;
+    if (custom_string_ptr != nullptr) custom_string = custom_string_ptr;
     // Only dismiss hoverhelp on exit if it's still the same message.
     if (m_prev_item == item && m_prev_param1 == param1 && m_prev_param2 == param2 &&
         m_prev_param3 == param3 && m_prev_custom_string == custom_string)

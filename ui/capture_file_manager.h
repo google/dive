@@ -16,11 +16,10 @@
 
 #pragma once
 
-#include <memory>
-
 #include <QMetaType>
 #include <QObject>
 #include <QReadWriteLock>
+#include <memory>
 
 #include "context.h"
 #include "file_path.h"
@@ -35,7 +34,6 @@ struct ComponentFilePaths;
 
 struct LoadFileResult
 {
-
     enum class Status
     {
         kSuccess,
@@ -58,56 +56,56 @@ struct LoadFileResult
 
     Status status = Status::kUnknown;
 
-    FileType                 file_type = FileType::kUnknown;
-    Dive::FilePath           reference = {};
+    FileType file_type = FileType::kUnknown;
+    Dive::FilePath reference = {};
     Dive::ComponentFilePaths components = {};
 };
 
 class CaptureFileManager : public QObject
 {
     Q_OBJECT
-public:
+ public:
     static void RegisterCustomMetaType();
 
-    explicit CaptureFileManager(QObject *parent);
+    explicit CaptureFileManager(QObject* parent);
     ~CaptureFileManager();
 
-    CaptureFileManager(const CaptureFileManager &) = delete;
-    CaptureFileManager(CaptureFileManager &&) = delete;
-    CaptureFileManager &operator=(const CaptureFileManager &) = delete;
-    CaptureFileManager &operator=(CaptureFileManager &&) = delete;
+    CaptureFileManager(const CaptureFileManager&) = delete;
+    CaptureFileManager(CaptureFileManager&&) = delete;
+    CaptureFileManager& operator=(const CaptureFileManager&) = delete;
+    CaptureFileManager& operator=(CaptureFileManager&&) = delete;
 
-    void Start(Dive::DataCore &);
+    void Start(Dive::DataCore&);
 
     // Locking:
-    QReadWriteLock &GetDataCoreLock() { return m_data_core_lock; }
+    QReadWriteLock& GetDataCoreLock() { return m_data_core_lock; }
 
-    Dive::ComponentFilePaths ResolveComponents(const Dive::FilePath &reference);
-    void LoadFile(const Dive::FilePath &reference, const Dive::ComponentFilePaths &components);
+    Dive::ComponentFilePaths ResolveComponents(const Dive::FilePath& reference);
+    void LoadFile(const Dive::FilePath& reference, const Dive::ComponentFilePaths& components);
 
     void GatherTraceStats();
-    void FillCaptureStatsResult(Dive::CaptureStats &out);
+    void FillCaptureStatsResult(Dive::CaptureStats& out);
 
-signals:
-    void FileLoadingFinished(const LoadFileResult &);
+ signals:
+    void FileLoadingFinished(const LoadFileResult&);
     void TraceStatsUpdated();
 
     // private:
     void GatherTraceStatsDone();
-    void LoadFileDone(const LoadFileResult &);
+    void LoadFileDone(const LoadFileResult&);
 
-private slots:
+ private slots:
     void OnGatherTraceStatsDone();
-    void OnLoadFileDone(const LoadFileResult &);
+    void OnLoadFileDone(const LoadFileResult&);
 
-private:
+ private:
     struct LoadFileRequest
     {
-        Dive::FilePath           reference;
+        Dive::FilePath reference;
         Dive::ComponentFilePaths components;
     };
-    Dive::DataCore *m_data_core = nullptr;
-    QReadWriteLock  m_data_core_lock;
+    Dive::DataCore* m_data_core = nullptr;
+    QReadWriteLock m_data_core_lock;
 
     bool m_loading_in_progress = false;
     bool m_working = false;
@@ -118,17 +116,17 @@ private:
 
     std::unique_ptr<Dive::CaptureStats> m_capture_stats;
 
-    QThread *m_thread = nullptr;
-    QObject *m_worker = nullptr;
+    QThread* m_thread = nullptr;
+    QObject* m_worker = nullptr;
 
-    static LoadFileResult LoadFileFailed(LoadFileResult::Status                     status,
-                                         const CaptureFileManager::LoadFileRequest &request);
+    static LoadFileResult LoadFileFailed(LoadFileResult::Status status,
+                                         const CaptureFileManager::LoadFileRequest& request);
 
-    void GatherTraceStatsImpl(const Dive::Context &context);
+    void GatherTraceStatsImpl(const Dive::Context& context);
 
     void StartLoadFile();
 
-    LoadFileResult LoadFileImpl(const Dive::Context &context, const LoadFileRequest &request);
+    LoadFileResult LoadFileImpl(const Dive::Context& context, const LoadFileRequest& request);
 };
 
 Q_DECLARE_METATYPE(LoadFileResult)

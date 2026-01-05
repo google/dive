@@ -14,19 +14,16 @@
 #include "gfxr_vulkan_command_filter_proxy_model.h"
 
 GfxrVulkanCommandFilterProxyModel::GfxrVulkanCommandFilterProxyModel(
-const Dive::CommandHierarchy &command_hierarchy,
-QObject                      *parent) :
-    QSortFilterProxyModel(parent),
-    m_command_hierarchy(command_hierarchy)
+    const Dive::CommandHierarchy& command_hierarchy, QObject* parent)
+    : QSortFilterProxyModel(parent), m_command_hierarchy(command_hierarchy)
 {
-    m_filter_mode = kDrawDispatchOnly;
+    m_filter_mode = kActionOnly;
 }
 
 void GfxrVulkanCommandFilterProxyModel::ApplyNewFilterMode(FilterMode new_mode)
 {
     // Check if the mode is actually changing to avoid unnecessary resets
-    if (m_filter_mode == new_mode)
-        return;
+    if (m_filter_mode == new_mode) return;
 
     beginResetModel();
     m_filter_mode = new_mode;
@@ -38,7 +35,7 @@ void GfxrVulkanCommandFilterProxyModel::SetFilter(FilterMode filter_mode)
     ApplyNewFilterMode(filter_mode);
 }
 
-void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelIndex &parent_index)
+void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelIndex& parent_index)
 {
     if (!parent_index.isValid())
     {
@@ -52,7 +49,7 @@ void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelI
         if (index.isValid())
 
         {
-            uint64_t       node_index = index.internalId();
+            uint64_t node_index = index.internalId();
             Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
             // If a node is a gfxr draw call, add its index to the list.
@@ -71,8 +68,8 @@ void GfxrVulkanCommandFilterProxyModel::CollectGfxrDrawCallIndices(const QModelI
     }
 }
 
-bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sourceRow,
-                                                         const QModelIndex &sourceParent) const
+bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int sourceRow,
+                                                         const QModelIndex& sourceParent) const
 {
     QModelIndex indexInSource = sourceModel()->index(sourceRow, 0, sourceParent);
 
@@ -81,9 +78,9 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
         return true;
     }
 
-    uint64_t                      node_index = indexInSource.internalId();
-    const GfxrVulkanCommandModel *sourceMyModel = qobject_cast<const GfxrVulkanCommandModel *>(
-    sourceModel());
+    uint64_t node_index = indexInSource.internalId();
+    const GfxrVulkanCommandModel* sourceMyModel =
+        qobject_cast<const GfxrVulkanCommandModel*>(sourceModel());
     const Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
     if (!sourceMyModel)
@@ -134,13 +131,18 @@ bool GfxrVulkanCommandFilterProxyModel::filterAcceptsRow(int                sour
             return false;
         }
     }
-    else if (m_filter_mode == kDrawDispatchOnly)
+    else if (m_filter_mode == kActionOnly)
     {
-        // Only display Draw/Dispatch, RenderPass, and debug label commands when filter is enabled.
+        // Only display action and debug label commands when filter is enabled.
         if ((node_type != Dive::NodeType::kGfxrVulkanDrawCommandNode) &&
             (node_type != Dive::NodeType::kGfxrVulkanBeginRenderPassCommandNode) &&
             (node_type != Dive::NodeType::kGfxrVulkanEndRenderPassCommandNode) &&
-            (node_type != Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode))
+            (node_type != Dive::NodeType::kGfxrBeginDebugUtilsLabelCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanCopyBufferCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanClearAttachmentsCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanClearColorImageCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanClearDepthStencilImageCommandNode) &&
+            (node_type != Dive::NodeType::kGfxrVulkanResolveImageCommandNode))
         {
             return false;
         }

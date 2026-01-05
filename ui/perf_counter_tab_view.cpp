@@ -12,20 +12,22 @@
 */
 
 #include "perf_counter_tab_view.h"
-#include "perf_counter_model.h"
-#include "search_bar.h"
-#include <QHBoxLayout>
-#include <QHeaderView>
-#include <QVBoxLayout>
-#include <QIcon>
-#include <QPoint>
+
 #include <qabstractitemmodel.h>
 #include <qpushbutton.h>
-#include "object_names.h"
 
-PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWidget *parent) :
-    QWidget(parent),
-    m_perf_counter_model(perf_counter_model)
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QIcon>
+#include <QPoint>
+#include <QVBoxLayout>
+
+#include "object_names.h"
+#include "perf_counter_model.h"
+#include "search_bar.h"
+
+PerfCounterTabView::PerfCounterTabView(PerfCounterModel& perf_counter_model, QWidget* parent)
+    : QWidget(parent), m_perf_counter_model(perf_counter_model)
 {
     m_proxy_model = new QSortFilterProxyModel(this);
     m_proxy_model->setSourceModel(&m_perf_counter_model);
@@ -43,7 +45,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_search_trigger_button->setObjectName(kPerfCounterSearchButtonName);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
-    QHBoxLayout *options_layout = new QHBoxLayout();
+    QHBoxLayout* options_layout = new QHBoxLayout();
     options_layout->addWidget(m_search_trigger_button);
     options_layout->addStretch();
 
@@ -59,26 +61,20 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
     m_horizontal_header->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_horizontal_header->setSortIndicator(-1, Qt::AscendingOrder);
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addLayout(options_layout);
     main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_perf_counter_view);
 
     QObject::connect(m_search_trigger_button, SIGNAL(clicked()), this, SLOT(OnSearchCounters()));
 
-    QObject::connect(m_search_bar,
-                     SIGNAL(hide_search_bar(bool)),
-                     this,
+    QObject::connect(m_search_bar, SIGNAL(hide_search_bar(bool)), this,
                      SLOT(OnSearchBarVisibilityChange(bool)));
 
-    connect(m_perf_counter_view->selectionModel(),
-            &QItemSelectionModel::currentChanged,
-            this,
+    connect(m_perf_counter_view->selectionModel(), &QItemSelectionModel::currentChanged, this,
             &PerfCounterTabView::OnSelectionChanged);
 
-    QObject::connect(m_horizontal_header,
-                     &QHeaderView::sectionClicked,
-                     this,
+    QObject::connect(m_horizontal_header, &QHeaderView::sectionClicked, this,
                      &PerfCounterTabView::OnSortApplied);
 
     QObject::connect(m_reset_sorting_button, SIGNAL(clicked()), this, SLOT(OnResetSorting()));
@@ -87,7 +83,7 @@ PerfCounterTabView::PerfCounterTabView(PerfCounterModel &perf_counter_model, QWi
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::ClearSelection()
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (selection_model)
     {
         selection_model->clear();
@@ -95,7 +91,7 @@ void PerfCounterTabView::ClearSelection()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
+void PerfCounterTabView::OnSelectionChanged(const QModelIndex& index)
 {
     if (!index.isValid())
     {
@@ -105,7 +101,7 @@ void PerfCounterTabView::OnSelectionChanged(const QModelIndex &index)
     m_perf_counter_view->scrollTo(index, QAbstractItemView::EnsureVisible);
 
     QModelIndex source_index = m_proxy_model->mapToSource(index);
-    int         source_row = source_index.row();
+    int source_row = source_index.row();
 
     // Resize columns to fit the content
     uint32_t column_count = (uint32_t)m_perf_counter_model.columnCount(QModelIndex());
@@ -154,7 +150,7 @@ void PerfCounterTabView::OnSearchBarVisibilityChange(bool isHidden)
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSearch(const QString &text)
+void PerfCounterTabView::OnSearch(const QString& text)
 {
     // Clear previous search results
     m_perf_counter_model.ClearSearchResults();
@@ -189,12 +185,11 @@ void PerfCounterTabView::OnSearch(const QString &text)
 
         if (firstMatchProxy.isValid())
         {
-            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
             if (selection_model)
             {
-                selection_model->select(firstMatchProxy,
-                                        QItemSelectionModel::ClearAndSelect |
-                                        QItemSelectionModel::Rows);
+                selection_model->select(firstMatchProxy, QItemSelectionModel::ClearAndSelect |
+                                                             QItemSelectionModel::Rows);
             }
 
             m_perf_counter_view->setCurrentIndex(firstMatchProxy);
@@ -215,12 +210,11 @@ void PerfCounterTabView::OnNextMatch()
         QModelIndex nextMatchProxy = m_proxy_model->mapFromSource(nextMatchSource);
         if (nextMatchProxy.isValid())
         {
-            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
             if (selection_model)
             {
-                selection_model->select(nextMatchProxy,
-                                        QItemSelectionModel::ClearAndSelect |
-                                        QItemSelectionModel::Rows);
+                selection_model->select(nextMatchProxy, QItemSelectionModel::ClearAndSelect |
+                                                            QItemSelectionModel::Rows);
             }
 
             m_perf_counter_view->setCurrentIndex(nextMatchProxy);
@@ -241,13 +235,12 @@ void PerfCounterTabView::OnPrevMatch()
         QModelIndex prevMatchProxy = m_proxy_model->mapFromSource(prevMatchSource);
         if (prevMatchProxy.isValid())
         {
-            QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+            QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
 
             if (selection_model)
             {
-                selection_model->select(prevMatchProxy,
-                                        QItemSelectionModel::ClearAndSelect |
-                                        QItemSelectionModel::Rows);
+                selection_model->select(prevMatchProxy, QItemSelectionModel::ClearAndSelect |
+                                                            QItemSelectionModel::Rows);
             }
 
             m_perf_counter_view->setCurrentIndex(prevMatchProxy);
@@ -268,9 +261,7 @@ void PerfCounterTabView::ConnectSearchBar()
 
     QObject::connect(m_search_bar, &SearchBar::prev_search, this, &PerfCounterTabView::OnPrevMatch);
 
-    QObject::connect(this,
-                     &PerfCounterTabView::UpdateSearchInfo,
-                     m_search_bar,
+    QObject::connect(this, &PerfCounterTabView::UpdateSearchInfo, m_search_bar,
                      &SearchBar::updateSearchResults);
 }
 
@@ -279,27 +270,21 @@ void PerfCounterTabView::DisconnectSearchBar()
 {
     QObject::disconnect(m_search_bar, &SearchBar::new_search, this, &PerfCounterTabView::OnSearch);
 
-    QObject::disconnect(m_search_bar,
-                        &SearchBar::next_search,
-                        this,
+    QObject::disconnect(m_search_bar, &SearchBar::next_search, this,
                         &PerfCounterTabView::OnNextMatch);
 
-    QObject::disconnect(m_search_bar,
-                        &SearchBar::prev_search,
-                        this,
+    QObject::disconnect(m_search_bar, &SearchBar::prev_search, this,
                         &PerfCounterTabView::OnPrevMatch);
 
-    QObject::disconnect(this,
-                        &PerfCounterTabView::UpdateSearchInfo,
-                        m_search_bar,
+    QObject::disconnect(this, &PerfCounterTabView::UpdateSearchInfo, m_search_bar,
                         &SearchBar::updateSearchResults);
 }
 
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::CorrelateCounter(uint64_t index)
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
-    QSignalBlocker       blocker(selection_model);
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
+    QSignalBlocker blocker(selection_model);
     if (auto row = m_perf_counter_model.GetRowFromDrawIndex(index))
     {
         QModelIndex source_index = m_perf_counter_model.index(*row, 0);
@@ -318,7 +303,7 @@ void PerfCounterTabView::CorrelateCounter(uint64_t index)
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::ResizeColumns()
 {
-    QHeaderView *header = m_perf_counter_view->horizontalHeader();
+    QHeaderView* header = m_perf_counter_view->horizontalHeader();
     header->setSectionResizeMode(QHeaderView::ResizeToContents);
 
     uint32_t column_count = static_cast<uint32_t>(m_perf_counter_model.columnCount(QModelIndex()));
@@ -331,7 +316,7 @@ void PerfCounterTabView::ResizeColumns()
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnSortApplied(int column_index)
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (!selection_model)
     {
         return;
@@ -347,9 +332,7 @@ void PerfCounterTabView::OnSortApplied(int column_index)
 
         if (source_index.isValid())
         {
-            QMetaObject::invokeMethod(this,
-                                      "OnSortingCompletedAndScroll",
-                                      Qt::QueuedConnection,
+            QMetaObject::invokeMethod(this, "OnSortingCompletedAndScroll", Qt::QueuedConnection,
                                       Q_ARG(QModelIndex, source_index));
             return;
         }
@@ -359,7 +342,7 @@ void PerfCounterTabView::OnSortApplied(int column_index)
 //--------------------------------------------------------------------------------------------------
 void PerfCounterTabView::OnResetSorting()
 {
-    QItemSelectionModel *selection_model = m_perf_counter_view->selectionModel();
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (!selection_model)
     {
         return;
@@ -380,9 +363,7 @@ void PerfCounterTabView::OnResetSorting()
 
     if (source_index.isValid())
     {
-        QMetaObject::invokeMethod(this,
-                                  "OnSortingCompletedAndScroll",
-                                  Qt::QueuedConnection,
+        QMetaObject::invokeMethod(this, "OnSortingCompletedAndScroll", Qt::QueuedConnection,
                                   Q_ARG(QModelIndex, source_index));
     }
 
@@ -393,11 +374,11 @@ void PerfCounterTabView::OnResetSorting()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSortingCompletedAndScroll(const QModelIndex &index_to_map)
+void PerfCounterTabView::OnSortingCompletedAndScroll(const QModelIndex& index_to_map)
 {
-    QItemSelectionModel   *selection_model = m_perf_counter_view->selectionModel();
-    QSortFilterProxyModel *proxy_model = qobject_cast<QSortFilterProxyModel *>(
-    m_perf_counter_view->model());
+    QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
+    QSortFilterProxyModel* proxy_model =
+        qobject_cast<QSortFilterProxyModel*>(m_perf_counter_view->model());
 
     if (!index_to_map.isValid() || !selection_model || !proxy_model)
     {

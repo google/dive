@@ -12,10 +12,12 @@
 */
 
 #include "dive_command_hierarchy.h"
-#include "dive_core/common/emulate_pm4.h"
-#include "dive_strings.h"
+
 #include <cstdint>
 #include <iostream>
+
+#include "dive_core/common/emulate_pm4.h"
+#include "dive_strings.h"
 
 namespace Dive
 {
@@ -23,22 +25,21 @@ namespace Dive
 // =================================================================================================
 // DiveCommandHierarchyCreator
 // =================================================================================================
-DiveCommandHierarchyCreator::DiveCommandHierarchyCreator(CommandHierarchy &command_hierarchy) :
-    m_command_hierarchy(command_hierarchy)
+DiveCommandHierarchyCreator::DiveCommandHierarchyCreator(CommandHierarchy& command_hierarchy)
+    : m_command_hierarchy(command_hierarchy)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hierarchy,
-                                              DiveCaptureData        &dive_capture_data,
-                                              bool                    flatten_chain_nodes,
+bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy& command_hierarchy,
+                                              DiveCaptureData& dive_capture_data,
+                                              bool flatten_chain_nodes,
                                               std::optional<uint64_t> reserve_size)
 {
-    auto pm4_command_hierarchy_creator = CommandHierarchyCreator::Create(m_command_hierarchy,
-                                                                         dive_capture_data
-                                                                         .GetPm4CaptureData());
-    auto gfxr_command_hierarchy_creator = std::make_unique<
-    GfxrVulkanCommandHierarchyCreator>(m_command_hierarchy, dive_capture_data.GetGfxrCaptureData());
+    auto pm4_command_hierarchy_creator =
+        CommandHierarchyCreator::Create(m_command_hierarchy, dive_capture_data.GetPm4CaptureData());
+    auto gfxr_command_hierarchy_creator = std::make_unique<GfxrVulkanCommandHierarchyCreator>(
+        m_command_hierarchy, dive_capture_data.GetGfxrCaptureData());
 
     if (!pm4_command_hierarchy_creator || !gfxr_command_hierarchy_creator)
     {
@@ -46,20 +47,19 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
     }
 
     pm4_command_hierarchy_creator->CreateTrees(flatten_chain_nodes,
-                                               /*createTopologies=*/false,
-                                               reserve_size);
+                                               /*createTopologies=*/false, reserve_size);
     gfxr_command_hierarchy_creator->CreateTrees(/*used_in_mixed_command_hierarchy=*/true);
 
-    bool result = pm4_command_hierarchy_creator
-                  ->ProcessSubmits(dive_capture_data.GetPm4CaptureData().GetSubmits(),
-                                   dive_capture_data.GetPm4CaptureData().GetMemoryManager());
+    bool result = pm4_command_hierarchy_creator->ProcessSubmits(
+        dive_capture_data.GetPm4CaptureData().GetSubmits(),
+        dive_capture_data.GetPm4CaptureData().GetMemoryManager());
     if (!result)
     {
         return false;
     }
 
-    result = gfxr_command_hierarchy_creator->ProcessGfxrSubmits(
-    dive_capture_data.GetGfxrCaptureData());
+    result =
+        gfxr_command_hierarchy_creator->ProcessGfxrSubmits(dive_capture_data.GetGfxrCaptureData());
 
     if (!result)
     {
@@ -73,8 +73,8 @@ bool DiveCommandHierarchyCreator::CreateTrees(Dive::CommandHierarchy &command_hi
 
 //--------------------------------------------------------------------------------------------------
 void DiveCommandHierarchyCreator::CreateTopologies(
-CommandHierarchyCreator           &pm4_command_hierarchy_creator,
-GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator)
+    CommandHierarchyCreator& pm4_command_hierarchy_creator,
+    GfxrVulkanCommandHierarchyCreator& gfxr_command_hierarchy_creator)
 {
     uint64_t total_num_children[CommandHierarchy::kTopologyTypeCount] = {};
     uint64_t total_num_shared_children[CommandHierarchy::kTopologyTypeCount] = {};
@@ -83,10 +83,10 @@ GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator)
     for (uint32_t topology = 0; topology < CommandHierarchy::kTopologyTypeCount; ++topology)
     {
         size_t num_pm4_nodes = pm4_command_hierarchy_creator.GetNodeChildren(topology, 0).size();
-        size_t total_num_nodes = num_pm4_nodes +
-                                 gfxr_command_hierarchy_creator.GetNodeChildren(topology).size();
+        size_t total_num_nodes =
+            num_pm4_nodes + gfxr_command_hierarchy_creator.GetNodeChildren(topology).size();
 
-        SharedNodeTopology &cur_topology = m_command_hierarchy.m_topology[topology];
+        SharedNodeTopology& cur_topology = m_command_hierarchy.m_topology[topology];
         cur_topology.SetNumNodes(total_num_nodes);
 
         // Optional loop: Pre-reserve to prevent the resize() from allocating memory later
@@ -96,50 +96,46 @@ GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator)
         {
             for (uint64_t node_index = 0; node_index < num_pm4_nodes; ++node_index)
             {
-                total_num_children[topology] += pm4_command_hierarchy_creator
-                                                .GetNodeChildren(topology, 0)[node_index]
-                                                .size();
-                total_num_shared_children[topology] += pm4_command_hierarchy_creator
-                                                       .GetNodeChildren(topology, 1)[node_index]
-                                                       .size();
+                total_num_children[topology] +=
+                    pm4_command_hierarchy_creator.GetNodeChildren(topology, 0)[node_index].size();
+                total_num_shared_children[topology] +=
+                    pm4_command_hierarchy_creator.GetNodeChildren(topology, 1)[node_index].size();
             }
         }
         cur_topology.m_children_list.reserve(total_num_children[topology]);
         cur_topology.m_shared_children_indices.reserve(total_num_shared_children[topology]);
 
-        DiveVector<uint64_t> combined_root_children = pm4_command_hierarchy_creator
-                                                      .GetNodeChildren(topology, 0)[0];
+        DiveVector<uint64_t> combined_root_children =
+            pm4_command_hierarchy_creator.GetNodeChildren(topology, 0)[0];
 
         for (uint64_t node_index = 1; node_index < num_pm4_nodes; ++node_index)
         {
             DIVE_ASSERT(pm4_command_hierarchy_creator.GetNodeChildren(topology, 0).size() ==
                         pm4_command_hierarchy_creator.GetNodeChildren(topology, 1).size());
-            cur_topology.AddChildren(node_index,
-                                     pm4_command_hierarchy_creator.GetNodeChildren(topology,
-                                                                                   0)[node_index]);
-            cur_topology.AddSharedChildren(node_index,
-                                           pm4_command_hierarchy_creator
-                                           .GetNodeChildren(topology, 1)[node_index]);
+            cur_topology.AddChildren(
+                node_index, pm4_command_hierarchy_creator.GetNodeChildren(topology, 0)[node_index]);
+            cur_topology.AddSharedChildren(
+                node_index, pm4_command_hierarchy_creator.GetNodeChildren(topology, 1)[node_index]);
         }
 
-        cur_topology.m_start_shared_child = std::move(
-        pm4_command_hierarchy_creator.GetNodeStartSharedChildren(topology));
-        cur_topology.m_end_shared_child = std::move(
-        pm4_command_hierarchy_creator.GetNodeEndSharedChildren(topology));
-        cur_topology.m_root_node_index = std::move(
-        pm4_command_hierarchy_creator.GetNodeRootNodeIndices(topology));
+        cur_topology.m_start_shared_child =
+            std::move(pm4_command_hierarchy_creator.GetNodeStartSharedChildren(topology));
+        cur_topology.m_end_shared_child =
+            std::move(pm4_command_hierarchy_creator.GetNodeEndSharedChildren(topology));
+        cur_topology.m_root_node_index =
+            std::move(pm4_command_hierarchy_creator.GetNodeRootNodeIndices(topology));
 
         // Add the gfxr nodes to the topology.
         if (topology == CommandHierarchy::kAllEventTopology)
         {
             // Build the internal GFXR hierarchy for all non-submit nodes.
             // This includes the self-loop filter to ensure no submit nodes are included.
-            const auto &gfxr_dive_indices = gfxr_command_hierarchy_creator.GetCreatedDiveIndices();
+            const auto& gfxr_dive_indices = gfxr_command_hierarchy_creator.GetCreatedDiveIndices();
             for (uint64_t node_index = num_pm4_nodes; node_index < total_num_nodes; ++node_index)
             {
-                uint64_t    gfxr_dive_index = gfxr_dive_indices.at(node_index);
-                const auto &children = gfxr_command_hierarchy_creator.GetNodeChildren(
-                topology)[gfxr_dive_index];
+                uint64_t gfxr_dive_index = gfxr_dive_indices.at(node_index);
+                const auto& children =
+                    gfxr_command_hierarchy_creator.GetNodeChildren(topology)[gfxr_dive_index];
 
                 DiveVector<uint64_t> filtered_children;
                 for (uint64_t child_node : children)
@@ -162,7 +158,7 @@ GfxrVulkanCommandHierarchyCreator &gfxr_command_hierarchy_creator)
             {
                 std::string desc = m_command_hierarchy.GetNodeDesc(node_index);
                 if (m_command_hierarchy.GetNodeType(node_index) ==
-                    NodeType::kGfxrVulkanSubmitNode ||
+                        NodeType::kGfxrVulkanSubmitNode ||
                     m_command_hierarchy.GetNodeType(node_index) == NodeType::kGfxrRootFrameNode)
                 {
                     gfxr_submit_nodes.push_back(node_index);

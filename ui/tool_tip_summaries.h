@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 const std::unordered_map<std::string, const char*>& GetVulkanCommandToolTipSummaries();

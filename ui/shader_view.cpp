@@ -15,67 +15,59 @@
 */
 #include "shader_view.h"
 
+#include <QTextEdit>
+#include <QTreeWidget>
+#include <QVBoxLayout>
+
 #include "dive_core/command_hierarchy.h"
 #include "dive_core/cross_ref.h"
 #include "dive_core/data_core.h"
 #include "dive_core/dive_strings.h"
 #include "dive_core/shader_disassembly.h"
-
 #include "shader_text_view.h"
-
-#include <QTextEdit>
-#include <QTreeWidget>
-#include <QVBoxLayout>
 
 // =================================================================================================
 // ShaderWidgetItem
 // =================================================================================================
 class ShaderWidgetItem : public QTreeWidgetItem
 {
-public:
-    ShaderWidgetItem(Dive::ShaderStage shader_stage,
-                     Dive::CrossRef    shader,
-                     uint32_t          event_index,
-                     QTreeWidget      *view) :
-        QTreeWidgetItem(view),
-        m_shader_stage(shader_stage),
-        m_shader(shader),
-        m_event_index(event_index)
+ public:
+    ShaderWidgetItem(Dive::ShaderStage shader_stage, Dive::CrossRef shader, uint32_t event_index,
+                     QTreeWidget* view)
+        : QTreeWidgetItem(view),
+          m_shader_stage(shader_stage),
+          m_shader(shader),
+          m_event_index(event_index)
     {
     }
 
     // TODO(tianc): make it so we don't need two different reference systems for crashdump and
     // profiler trace.
-    ShaderWidgetItem(Dive::ShaderStage shader_stage,
-                     uint32_t          shader_index,
-                     uint32_t          event_index,
-                     QTreeWidget      *view) :
-        ShaderWidgetItem(shader_stage,
-                         Dive::CrossRef(Dive::CrossRefType::kNone, shader_index),
-                         event_index,
-                         view)
+    ShaderWidgetItem(Dive::ShaderStage shader_stage, uint32_t shader_index, uint32_t event_index,
+                     QTreeWidget* view)
+        : ShaderWidgetItem(shader_stage, Dive::CrossRef(Dive::CrossRefType::kNone, shader_index),
+                           event_index, view)
     {
     }
 
     Dive::ShaderStage GetShaderStage() const { return m_shader_stage; }
-    uint32_t          GetShaderIndex() const { return static_cast<uint32_t>(m_shader.Id()); }
-    uint32_t          GetEventIndex() const { return m_event_index; }
-    Dive::CrossRef    GetShaderRef() const { return m_shader; }
+    uint32_t GetShaderIndex() const { return static_cast<uint32_t>(m_shader.Id()); }
+    uint32_t GetEventIndex() const { return m_event_index; }
+    Dive::CrossRef GetShaderRef() const { return m_shader; }
 
-private:
+ private:
     Dive::ShaderStage m_shader_stage;
-    Dive::CrossRef    m_shader;
-    uint32_t          m_event_index;
+    Dive::CrossRef m_shader;
+    uint32_t m_event_index;
 };
 
 // =================================================================================================
 // ShaderView
 // =================================================================================================
-ShaderView::ShaderView(const Dive::DataCore &data_core) :
-    m_data_core(data_core),
-    m_node_index(UINT64_MAX)
+ShaderView::ShaderView(const Dive::DataCore& data_core)
+    : m_data_core(data_core), m_node_index(UINT64_MAX)
 {
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     m_shader_list = new QTreeWidget();
     m_shader_list->setColumnCount(4);
     m_shader_list->setHeaderLabels(QStringList() << "Shader Stage"
@@ -90,9 +82,7 @@ ShaderView::ShaderView(const Dive::DataCore &data_core) :
     layout->setStretchFactor(m_shader_code_text, 5);
     setLayout(layout);
 
-    QObject::connect(m_shader_list,
-                     SIGNAL(itemSelectionChanged()),
-                     this,
+    QObject::connect(m_shader_list, SIGNAL(itemSelectionChanged()), this,
                      SLOT(OnShaderSelectionChanged()));
 }
 
@@ -105,15 +95,11 @@ void ShaderView::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void ShaderView::SetupHoverHelp(HoverHelp &hoverhelp)
+void ShaderView::SetupHoverHelp(HoverHelp& hoverhelp)
 {
-    QObject::connect(m_shader_code_text,
-                     &ShaderTextView::HoverEnter,
-                     &hoverhelp,
+    QObject::connect(m_shader_code_text, &ShaderTextView::HoverEnter, &hoverhelp,
                      &HoverHelp::OnEnter);
-    QObject::connect(m_shader_code_text,
-                     &ShaderTextView::HoverExit,
-                     &hoverhelp,
+    QObject::connect(m_shader_code_text, &ShaderTextView::HoverExit, &hoverhelp,
                      &HoverHelp::OnExit);
 }
 
@@ -122,15 +108,14 @@ void ShaderView::OnEventSelected(uint64_t node_index)
 {
     m_shader_list->clear();
     m_node_index = node_index;
-    if (m_node_index != UINT64_MAX)
-        repaint();
+    if (m_node_index != UINT64_MAX) repaint();
 }
 
 //--------------------------------------------------------------------------------------------------
 void ShaderView::OnShaderSelectionChanged()
 {
     m_shader_code_text->EnableHoverEvent(false);
-    const ShaderWidgetItem *item_ptr = (const ShaderWidgetItem *)m_shader_list->currentItem();
+    const ShaderWidgetItem* item_ptr = (const ShaderWidgetItem*)m_shader_list->currentItem();
     m_shader_code_text->clear();
     if (item_ptr == nullptr)
     {
@@ -140,8 +125,8 @@ void ShaderView::OnShaderSelectionChanged()
     // Determine shader type by matching column 0 string
     uint32_t shader_index = item_ptr->GetShaderIndex();
 
-    const Dive::CaptureMetadata &metadata = m_data_core.GetCaptureMetadata();
-    const Dive::Disassembly     &shader_info = metadata.m_shaders[shader_index];
+    const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
+    const Dive::Disassembly& shader_info = metadata.m_shaders[shader_index];
     m_shader_code_text->append(shader_info.GetListing().c_str());
     m_shader_code_text->moveCursor(QTextCursor::Start);
     m_shader_code_text->setReadOnly(true);
@@ -153,7 +138,7 @@ bool ShaderView::OnCrossReference(Dive::CrossRef ref)
     if (ref.Type() == Dive::CrossRefType::kShaderAddress)
     {
         char buffer[16 + 2 + 2] = {};  // {"0x", 16 digit, null}
-        snprintf(buffer, 16 + 2 + 1, "%p", reinterpret_cast<void *>(ref.Id()));
+        snprintf(buffer, 16 + 2 + 1, "%p", reinterpret_cast<void*>(ref.Id()));
 
         // Search column 1 (address)
         auto res = m_shader_list->findItems(tr(buffer), Qt::MatchContains, 1);
@@ -168,7 +153,7 @@ bool ShaderView::OnCrossReference(Dive::CrossRef ref)
 }
 
 //--------------------------------------------------------------------------------------------------
-void ShaderView::paintEvent(QPaintEvent *event)
+void ShaderView::paintEvent(QPaintEvent* event)
 {
     if (m_node_index == UINT64_MAX)
     {
@@ -178,8 +163,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
 
     if (m_shader_list->topLevelItemCount() == 0)
     {
-        const Dive::CaptureMetadata  &metadata = m_data_core.GetCaptureMetadata();
-        const Dive::CommandHierarchy &command_hierarchy = m_data_core.GetCommandHierarchy();
+        const Dive::CaptureMetadata& metadata = m_data_core.GetCaptureMetadata();
+        const Dive::CommandHierarchy& command_hierarchy = m_data_core.GetCommandHierarchy();
 
         auto update_shader_list = [&](uint64_t event_node_index) {
             uint32_t event_id = command_hierarchy.GetEventNodeId(event_node_index);
@@ -187,8 +172,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
             {
                 return;
             }
-            const Dive::EventInfo &event = metadata.m_event_info[event_id];
-            for (const auto &reference : event.m_shader_references)
+            const Dive::EventInfo& event = metadata.m_event_info[event_id];
+            for (const auto& reference : event.m_shader_references)
             {
                 auto shader_stage = (uint32_t)reference.m_stage;
                 // Do not add shaders that are not used by the event
@@ -205,12 +190,9 @@ void ShaderView::paintEvent(QPaintEvent *event)
                 uint32_t shader_index = reference.m_shader_index;
                 if (shader_index != UINT32_MAX)
                 {
-                    const Dive::Disassembly &shader_info = metadata.m_shaders[shader_index];
-                    ShaderWidgetItem        *treeItem = new ShaderWidgetItem((Dive::ShaderStage)
-                                                                      shader_stage,
-                                                                      shader_index,
-                                                                      event_id,
-                                                                      m_shader_list);
+                    const Dive::Disassembly& shader_info = metadata.m_shaders[shader_index];
+                    ShaderWidgetItem* treeItem = new ShaderWidgetItem(
+                        (Dive::ShaderStage)shader_stage, shader_index, event_id, m_shader_list);
 
                     // Column 0: Shader Stage
                     treeItem->setText(0, tr(kShaderStageStrings[shader_stage]));
@@ -218,7 +200,7 @@ void ShaderView::paintEvent(QPaintEvent *event)
                     // Column 1: Enable Mask
                     {
                         std::ostringstream ostr;
-                        bool               empty = true;
+                        bool empty = true;
                         if (reference.m_enable_mask &
                             static_cast<uint32_t>(Dive::ShaderEnableBitMask::kBINNING))
                         {
@@ -254,8 +236,8 @@ void ShaderView::paintEvent(QPaintEvent *event)
 
                     // Column 2: Address
                     constexpr uint32_t kBufferSize = 256;
-                    char               buffer[kBufferSize];
-                    snprintf(buffer, kBufferSize, "%p", (void *)shader_info.GetShaderAddr());
+                    char buffer[kBufferSize];
+                    snprintf(buffer, kBufferSize, "%p", (void*)shader_info.GetShaderAddr());
                     treeItem->setText(2, tr(buffer));
 
                     // Column 3: size
@@ -282,9 +264,9 @@ void ShaderView::paintEvent(QPaintEvent *event)
             auto num_children = topology.GetNumChildren(m_node_index);
             for (uint64_t i = 0; i < num_children; i++)
             {
-                auto           child_node_index = topology.GetChildNodeIndex(m_node_index, i);
-                Dive::NodeType child_node_type = m_data_core.GetCommandHierarchy().GetNodeType(
-                child_node_index);
+                auto child_node_index = topology.GetChildNodeIndex(m_node_index, i);
+                Dive::NodeType child_node_type =
+                    m_data_core.GetCommandHierarchy().GetNodeType(child_node_index);
                 if (child_node_type == Dive::NodeType::kEventNode)
                 {
                     update_shader_list(child_node_index);

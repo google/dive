@@ -51,7 +51,7 @@ target_link_libraries(${target_name} dive_legacy_includes gpu_time)
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 target_link_libraries(${target_name} -lm -ldl -llog -landroid)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 

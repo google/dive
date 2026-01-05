@@ -38,34 +38,34 @@ class GfxrVulkanCommandArgumentsTabView : public QFrame
 {
     Q_OBJECT
 
-public:
-    GfxrVulkanCommandArgumentsTabView(const Dive::CommandHierarchy &vulkan_command_hierarchy,
-                                      GfxrVulkanCommandArgumentsFilterProxyModel *proxy_model,
-                                      GfxrVulkanCommandModel *command_hierarchy_model,
-                                      QWidget                *parent = nullptr);
+ public:
+    GfxrVulkanCommandArgumentsTabView(const Dive::CommandHierarchy& vulkan_command_hierarchy,
+                                      GfxrVulkanCommandArgumentsFilterProxyModel* proxy_model,
+                                      GfxrVulkanCommandModel* command_hierarchy_model,
+                                      QWidget* parent = nullptr);
 
-    void SetTopologyToView(const Dive::Topology *topology_ptr);
+    void SetTopologyToView(const Dive::Topology* topology_ptr);
 
     void ResetModel();
 
-public slots:
-    void OnSelectionChanged(const QModelIndex &index);
+ public slots:
+    void OnSelectionChanged(const QModelIndex& index);
     void OnSearchCommandArgs();
     void OnSearchBarVisibilityChange(bool isHidden);
     void ConnectSearchBar();
     void DisconnectSearchBar();
 
-signals:
+ signals:
     // Update property panel for node information.
-    void SendNodeProperty(const QString &);
+    void SendNodeProperty(const QString&);
     void HideOtherSearchBars();
 
-private:
-    DiveTreeView *m_command_hierarchy_view;
-    QPushButton  *m_search_trigger_button;
-    SearchBar    *m_search_bar = nullptr;
+ private:
+    DiveTreeView* m_command_hierarchy_view;
+    QPushButton* m_search_trigger_button;
+    SearchBar* m_search_bar = nullptr;
 
-    const Dive::CommandHierarchy               &m_vulkan_command_hierarchy;
-    GfxrVulkanCommandArgumentsFilterProxyModel *m_arg_proxy_model;
-    GfxrVulkanCommandModel                     *m_command_hierarchy_model;
+    const Dive::CommandHierarchy& m_vulkan_command_hierarchy;
+    GfxrVulkanCommandArgumentsFilterProxyModel* m_arg_proxy_model;
+    GfxrVulkanCommandModel* m_command_hierarchy_model;
 };

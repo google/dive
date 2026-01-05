@@ -27,7 +27,9 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <optional>
+
 #include "adreno.h"
 #include "dive_core/common/pm4_packets/pfp_pm4_packets.h"
 #include "dive_core/stl_replacement.h"
@@ -44,7 +46,7 @@ struct IndirectBufferInfo
 {
     uint64_t m_va_addr;
     uint32_t m_size_in_dwords;
-    uint8_t  m_ib_level;
+    uint8_t m_ib_level;
     uint32_t m_enable_mask;
 
     // Set to true to avoid emulating this Indirect Buffer (IB), probably because it was not
@@ -105,20 +107,17 @@ static constexpr uint32_t kShaderEnableBitCount = 3;
 // Emulation state tracker. Optional to reduce unnecessary memory and processing overhead.
 class EmulateStateTracker
 {
-public:
+ public:
     EmulateStateTracker();
 
     // Call these functions to update the state tracker
-    bool OnPacket(const IMemoryManager &mem_manager,
-                  uint32_t              submit_index,
-                  uint32_t              ib_index,
-                  uint64_t              va_addr,
-                  Pm4Header             header);
+    bool OnPacket(const IMemoryManager& mem_manager, uint32_t submit_index, uint32_t ib_index,
+                  uint64_t va_addr, Pm4Header header);
 
     // Accessing state tracking info
-    bool     IsUConfigStateSet(uint16_t reg) const;
+    bool IsUConfigStateSet(uint16_t reg) const;
     uint32_t GetUConfigRegData(uint16_t reg) const;
-    bool     IsShStateSet(uint16_t reg) const;
+    bool IsShStateSet(uint16_t reg) const;
     uint32_t GetShRegData(uint16_t reg) const;
 
     // Check if any user data registers were set since last draw/dispatch
@@ -126,7 +125,7 @@ public:
     // last time state tracking was reset
     // Note: Does not track any of the system-reserved user data registers!
     uint32_t GetNumberOfUserDataRegsSetSinceLastEvent(ShaderStage stage) const;
-    bool     IsUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t offset) const;
+    bool IsUserDataRegsSetSinceLastEvent(ShaderStage stage, uint8_t offset) const;
 
     // Returns UINT64_MAX if shader not set
     uint64_t GetCurShaderAddr(ShaderStage stage, ShaderEnableBit shader_enable_bit) const;
@@ -156,47 +155,41 @@ public:
 
     bool IsRegSet(uint32_t offset, ShaderEnableBit shader_enable_bit) const;
 
-private:
-    static constexpr size_t        kNumRegs = 0xffff + 1;
-    uint32_t                       m_reg[kShaderEnableBitCount][kNumRegs];
-    uint8_t                        m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1];
-    uint32_t                       m_enable_mask = (1u << kShaderEnableBitCount) - 1;
-    DiveVector<uint32_t>           m_enable_mask_stack;
+ private:
+    static constexpr size_t kNumRegs = 0xffff + 1;
+    uint32_t m_reg[kShaderEnableBitCount][kNumRegs];
+    uint8_t m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1];
+    uint32_t m_enable_mask = (1u << kShaderEnableBitCount) - 1;
+    DiveVector<uint32_t> m_enable_mask_stack;
     std::optional<ShaderEnableBit> m_shader_enable_bit = std::nullopt;
 };
 
 //--------------------------------------------------------------------------------------------------
 class EmulateCallbacksBase
 {
-public:
-    bool ProcessSubmits(const DiveVector<SubmitInfo> &submits, const IMemoryManager &mem_manager);
+ public:
+    bool ProcessSubmits(const DiveVector<SubmitInfo>& submits, const IMemoryManager& mem_manager);
 
     // Callback on an IB start. Also called for all call/chain IBs
     // A return value of false indicates to the emulator to skip parsing this IB
-    virtual bool OnIbStart(uint32_t                  submit_index,
-                           uint32_t                  ib_index,
-                           const IndirectBufferInfo &ib_info,
-                           IbType                    type)
+    virtual bool OnIbStart(uint32_t submit_index, uint32_t ib_index,
+                           const IndirectBufferInfo& ib_info, IbType type)
     {
         m_state_tracker.PushEnableMask(ib_info.m_enable_mask);
         return true;
     }
 
     // Callback for an IB end
-    virtual bool OnIbEnd(uint32_t                  submit_index,
-                         uint32_t                  ib_index,
-                         const IndirectBufferInfo &ib_info)
+    virtual bool OnIbEnd(uint32_t submit_index, uint32_t ib_index,
+                         const IndirectBufferInfo& ib_info)
     {
         m_state_tracker.PopEnableMask();
         return true;
     }
 
     // Callback for each Pm4 packet. Called in order of emulation
-    virtual bool OnPacket(const IMemoryManager &mem_manager,
-                          uint32_t              submit_index,
-                          uint32_t              ib_index,
-                          uint64_t              va_addr,
-                          Pm4Header             header)
+    virtual bool OnPacket(const IMemoryManager& mem_manager, uint32_t submit_index,
+                          uint32_t ib_index, uint64_t va_addr, Pm4Header header)
     {
         if (!m_state_tracker.OnPacket(mem_manager, submit_index, ib_index, va_addr, header))
         {
@@ -205,10 +198,10 @@ public:
         return true;
     }
 
-    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info) = 0;
-    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) = 0;
+    virtual void OnSubmitStart(uint32_t submit_index, const SubmitInfo& submit_info) = 0;
+    virtual void OnSubmitEnd(uint32_t submit_index, const SubmitInfo& submit_info) = 0;
 
-protected:
+ protected:
     virtual ~EmulateCallbacksBase() = default;
     EmulateStateTracker m_state_tracker;
 };
@@ -216,7 +209,7 @@ protected:
 //--------------------------------------------------------------------------------------------------
 class EmulatePM4
 {
-public:
+ public:
     enum IbLevel
     {
         kPrimaryRing,
@@ -239,13 +232,10 @@ public:
     static const uint32_t kMaxNumIbsPerSubmit = 64;
 
     // Emulate a submit
-    bool ExecuteSubmit(EmulateCallbacksBase     &callbacks,
-                       const IMemoryManager     &mem_manager,
-                       uint32_t                  submit_index,
-                       uint32_t                  num_ibs,
-                       const IndirectBufferInfo *ib_ptr);
+    bool ExecuteSubmit(EmulateCallbacksBase& callbacks, const IMemoryManager& mem_manager,
+                       uint32_t submit_index, uint32_t num_ibs, const IndirectBufferInfo* ib_ptr);
 
-private:
+ private:
     // Keep all emulation state together
     struct EmulateState
     {
@@ -258,23 +248,23 @@ private:
             uint64_t m_cur_va;
             uint64_t m_cur_ib_addr;
             uint32_t m_cur_ib_size_in_dwords;
-            bool     m_cur_ib_skip;
+            bool m_cur_ib_skip;
             uint32_t m_cur_ib_enable_mask;
-            IbType   m_cur_ib_type;
+            IbType m_cur_ib_type;
 
             // IB queue (for storing pending CALLs or CHAINs)
-            IbType   m_ib_queue_type[kMaxPendingIbs];
+            IbType m_ib_queue_type[kMaxPendingIbs];
             uint64_t m_ib_queue_addrs[kMaxPendingIbs];
             uint32_t m_ib_queue_sizes_in_dwords[kMaxPendingIbs];
-            bool     m_ib_queue_skip[kMaxPendingIbs];
+            bool m_ib_queue_skip[kMaxPendingIbs];
             uint32_t m_ib_queue_enable_mask[kMaxPendingIbs];
             uint32_t m_ib_queue_index;
             uint32_t m_ib_queue_size;
 
             bool EndOfCurIb() const
             {
-                bool endAddr = (m_cur_va >=
-                                (m_cur_ib_addr + m_cur_ib_size_in_dwords * sizeof(uint32_t)));
+                bool endAddr =
+                    (m_cur_va >= (m_cur_ib_addr + m_cur_ib_size_in_dwords * sizeof(uint32_t)));
                 return (m_cur_ib_skip || endAddr);
             }
         };
@@ -287,41 +277,33 @@ private:
         // Stack to managing the different IB levels
         // Top-most element contains the current Program Counter
         // If top of stack is at IB0, then that means there's nothing to execute
-        IbStack  m_ib_stack[kTotalIbLevels];
-        IbLevel  m_top_of_stack;
-        IbStack *GetCurIb() { return &m_ib_stack[m_top_of_stack]; }
+        IbStack m_ib_stack[kTotalIbLevels];
+        IbLevel m_top_of_stack;
+        IbStack* GetCurIb() { return &m_ib_stack[m_top_of_stack]; }
     };
 
     // Advance dcb pointer after advancing past the packet header. Returns "true" if dcb is blocked.
-    bool AdvanceCb(const IMemoryManager &mem_manager,
-                   EmulateState         *emu_state_ptr,
-                   EmulateCallbacksBase &callbacks,
-                   Pm4Header             header) const;
+    bool AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_state_ptr,
+                   EmulateCallbacksBase& callbacks, Pm4Header header) const;
 
     // Helper function to queue up an IB for later CALL or CHAIN
     // Use AdvanceToIB to actually jump to the 1st queued up IB
-    bool QueueIB(uint64_t      ib_addr,
-                 uint32_t      ib_size_in_dwords,
-                 bool          skip,
-                 IbType        ib_type,
-                 EmulateState *emu_state,
-                 uint32_t      enable_mask = 7) const;
+    bool QueueIB(uint64_t ib_addr, uint32_t ib_size_in_dwords, bool skip, IbType ib_type,
+                 EmulateState* emu_state, uint32_t enable_mask = 7) const;
 
     // Helper function to help with advancing emulation to IB
-    bool AdvanceToQueuedIB(const IMemoryManager &mem_manager,
-                           EmulateState         *emu_state,
-                           EmulateCallbacksBase &callbacks) const;
+    bool AdvanceToQueuedIB(const IMemoryManager& mem_manager, EmulateState* emu_state,
+                           EmulateCallbacksBase& callbacks) const;
 
     // Helper function to advance to next valid IB IF current one is ended/skipped
-    bool CheckAndAdvanceIB(const IMemoryManager &mem_manager,
-                           EmulateState         *emu_state,
-                           EmulateCallbacksBase &callbacks) const;
+    bool CheckAndAdvanceIB(const IMemoryManager& mem_manager, EmulateState* emu_state,
+                           EmulateCallbacksBase& callbacks) const;
 
     // Helper function to help with advancing emulation to next packet
-    void AdvancePacket(EmulateState *emu_state, Pm4Header header) const;
+    void AdvancePacket(EmulateState* emu_state, Pm4Header header) const;
 
     // Helper function to help with advancing emulation out of IB
-    bool AdvanceOutOfIB(EmulateState *emu_state, EmulateCallbacksBase &callbacks) const;
+    bool AdvanceOutOfIB(EmulateState* emu_state, EmulateCallbacksBase& callbacks) const;
 
     uint32_t CalcParity(uint32_t val);
 };

@@ -14,33 +14,34 @@
  limitations under the License.
 */
 #include "command_buffer_model.h"
+
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
-
 #include <iostream>
 #include <sstream>
+
 #include "dive_core/command_hierarchy.h"
 #include "dive_tree_view.h"
 
-static_assert(sizeof(void *) == sizeof(uint64_t),
+static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
-static const char *CommandBufferColumnNames[] = {
+static const char* CommandBufferColumnNames[] = {
     "Command Buffer",
     "IB Level",
     "Address",
 };
 
 static_assert(sizeof(CommandBufferColumnNames) / sizeof(CommandBufferColumnNames[0]) ==
-              static_cast<size_t>(CommandBufferModel::kColumnCount),
+                  static_cast<size_t>(CommandBufferModel::kColumnCount),
               "Mismatched CommandBuffer columns");
 
 // =================================================================================================
 // CommandBufferModel
 // =================================================================================================
-CommandBufferModel::CommandBufferModel(const Dive::CommandHierarchy &command_hierarchy) :
-    m_command_hierarchy(command_hierarchy)
+CommandBufferModel::CommandBufferModel(const Dive::CommandHierarchy& command_hierarchy)
+    : m_command_hierarchy(command_hierarchy)
 {
 }
 
@@ -56,7 +57,7 @@ void CommandBufferModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
+void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology* topology_ptr)
 {
     emit beginResetModel();
     m_topology_ptr = topology_ptr;
@@ -65,22 +66,15 @@ void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology *topol
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::columnCount(const QModelIndex &parent) const
-{
-    return kColumnCount;
-}
+int CommandBufferModel::columnCount(const QModelIndex& parent) const { return kColumnCount; }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::scrollToIndex() const
-{
-    return m_scroll_to_index;
-}
+QModelIndex CommandBufferModel::scrollToIndex() const { return m_scroll_to_index; }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
+QVariant CommandBufferModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid())
-        return QVariant();
+    if (!index.isValid()) return QVariant();
 
     if (role == Qt::TextAlignmentRole)
     {
@@ -91,11 +85,9 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     }
 
     uint64_t node_index = index.internalId();
-    if (role == Qt::ForegroundRole && IsSelected(node_index))
-        return QColor(255, 128, 128);
+    if (role == Qt::ForegroundRole && IsSelected(node_index)) return QColor(255, 128, 128);
 
-    if (role != Qt::DisplayRole)
-        return QVariant();
+    if (role != Qt::DisplayRole) return QVariant();
 
     Dive::NodeType node_type = m_command_hierarchy.GetNodeType(node_index);
 
@@ -105,7 +97,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     {
         if (node_type == Dive::NodeType::kPacketNode)
         {
-            uint64_t           addr = m_command_hierarchy.GetPacketNodeAddr(node_index);
+            uint64_t addr = m_command_hierarchy.GetPacketNodeAddr(node_index);
             std::ostringstream addr_string_stream;
             addr_string_stream << "0x" << std::hex << addr;
             return QString::fromStdString(addr_string_stream.str());
@@ -119,7 +111,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
     {
         if (node_type == Dive::NodeType::kPacketNode)
         {
-            uint64_t           ib_level = m_command_hierarchy.GetPacketNodeIbLevel(node_index);
+            uint64_t ib_level = m_command_hierarchy.GetPacketNodeIbLevel(node_index);
             std::ostringstream ib_level_string_stream;
             ib_level_string_stream << ib_level;
             return QString::fromStdString(ib_level_string_stream.str());
@@ -144,10 +136,9 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
 }
 
 //--------------------------------------------------------------------------------------------------
-Qt::ItemFlags CommandBufferModel::flags(const QModelIndex &index) const
+Qt::ItemFlags CommandBufferModel::flags(const QModelIndex& index) const
 {
-    if (!index.isValid())
-        return Qt::ItemFlags();
+    if (!index.isValid()) return Qt::ItemFlags();
 
     return QAbstractItemModel::flags(index);
 }
@@ -159,8 +150,7 @@ QVariant CommandBufferModel::headerData(int section, Qt::Orientation orientation
     {
         if (section < CommandBufferModel::kColumnCount)
         {
-            if (section != kColumnIbLevel)
-                return QVariant(tr(CommandBufferColumnNames[section]));
+            if (section != kColumnIbLevel) return QVariant(tr(CommandBufferColumnNames[section]));
         }
     }
     else if (role == Qt::TextAlignmentRole)
@@ -175,20 +165,19 @@ QVariant CommandBufferModel::headerData(int section, Qt::Orientation orientation
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex& parent) const
 {
-    if (!hasIndex(row, column, parent))
-        return QModelIndex();
+    if (!hasIndex(row, column, parent)) return QModelIndex();
 
     // Root level
     if (!parent.isValid())
     {
         // Get node index from the second child set. This is because the second child set contains
         // packet nodes. First child set never does.
-        uint64_t root_node_index = m_topology_ptr->GetSharedChildRootNodeIndex(
-        m_selected_node_index);
+        uint64_t root_node_index =
+            m_topology_ptr->GetSharedChildRootNodeIndex(m_selected_node_index);
         uint64_t node_index = m_topology_ptr->GetSharedChildNodeIndex(root_node_index, row);
-        return createIndex(row, column, (void *)node_index);
+        return createIndex(row, column, (void*)node_index);
     }
 
     uint64_t parent_node_index = parent.internalId();
@@ -205,34 +194,31 @@ QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &pa
         child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, index);
     }
     if (child_node_index != UINT64_MAX)
-        return createIndex(row, column, (void *)child_node_index);
+        return createIndex(row, column, (void*)child_node_index);
     else
         return QModelIndex();
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::parent(const QModelIndex &index) const
+QModelIndex CommandBufferModel::parent(const QModelIndex& index) const
 {
-    if (!index.isValid())
-        return QModelIndex();
+    if (!index.isValid()) return QModelIndex();
 
     uint64_t child_node_index = index.internalId();
     return m_node_parent_list[child_node_index];
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::rowCount(const QModelIndex &parent) const
+int CommandBufferModel::rowCount(const QModelIndex& parent) const
 {
-    if (parent.column() > 0)
-        return 0;
-    if (m_selected_node_index == UINT64_MAX)
-        return 0;
+    if (parent.column() > 0) return 0;
+    if (m_selected_node_index == UINT64_MAX) return 0;
 
     if (!parent.isValid())  // Root level
     {
         // Second child set contains packet nodes. First child set never does.
-        uint64_t root_node_index = m_topology_ptr->GetSharedChildRootNodeIndex(
-        m_selected_node_index);
+        uint64_t root_node_index =
+            m_topology_ptr->GetSharedChildRootNodeIndex(m_selected_node_index);
         uint64_t num_children = m_topology_ptr->GetNumSharedChildren(root_node_index);
         return num_children;
     }
@@ -247,7 +233,7 @@ int CommandBufferModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
+void CommandBufferModel::OnSelectionChanged(const QModelIndex& index)
 {
     uint64_t selected_node_index = index.internalId();
     if (m_selected_node_index == selected_node_index)  // Selected same item
@@ -255,10 +241,10 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 
     // Ensures that the selected index passed belongs to the filter model currently displayed in the
     // main window.
-    const DiveFilterModel *dive_filter_model = qobject_cast<const DiveFilterModel *>(index.model());
+    const DiveFilterModel* dive_filter_model = qobject_cast<const DiveFilterModel*>(index.model());
     if (dive_filter_model)
     {
-        const QModelIndex &new_index = dive_filter_model->mapToSource(index);
+        const QModelIndex& new_index = dive_filter_model->mapToSource(index);
         selected_node_index = new_index.internalId();
     }
 
@@ -283,14 +269,14 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
         uint64_t num_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
         for (uint64_t child = 0; child < num_children; ++child)
         {
-            uint64_t child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
-                                                                                child);
+            uint64_t child_node_index =
+                m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, child);
             // Cache the row index for the specific end node
             // Recall a parent has normal children + shared children (e.g. normal fields + packets)
             // The row has to account for both
             if (child_node_index == end_node_index)
             {
-                m_scroll_to_index = createIndex(child, 0, (void *)end_node_index);
+                m_scroll_to_index = createIndex(child, 0, (void*)end_node_index);
 
                 // If the shared node has fields, then the last field should be the scroll-to
                 // position instead
@@ -303,7 +289,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
                     // pass will begin somewhere within the children of CP_START_BIN. So scrolling
                     // to the bottom of the CP_START_BIN is not appropriate in this case
                     if (IsSelected(last_node_index))
-                        m_scroll_to_index = createIndex(i, 0, (void *)last_node_index);
+                        m_scroll_to_index = createIndex(i, 0, (void*)last_node_index);
                 }
             }
         }
@@ -313,16 +299,13 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::searchAddressColumn(QList<QModelIndex>        &search_results,
-                                             int                        row,
-                                             const QModelIndex         &parent,
-                                             const QString             &text,
-                                             const Qt::CaseSensitivity &case_sensitivity) const
+void CommandBufferModel::searchAddressColumn(QList<QModelIndex>& search_results, int row,
+                                             const QModelIndex& parent, const QString& text,
+                                             const Qt::CaseSensitivity& case_sensitivity) const
 {
     QModelIndex command_buffer_address_idx = index(row, CommandBufferModel::kColumnAddress, parent);
 
-    if (!command_buffer_address_idx.isValid())
-        return;
+    if (!command_buffer_address_idx.isValid()) return;
 
     QVariant command_buffer_address_variant = data(command_buffer_address_idx, Qt::DisplayRole);
 
@@ -333,32 +316,29 @@ void CommandBufferModel::searchAddressColumn(QList<QModelIndex>        &search_r
 }
 
 //--------------------------------------------------------------------------------------------------
-QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QVariant &value) const
+QList<QModelIndex> CommandBufferModel::search(const QModelIndex& start, const QVariant& value) const
 {
-    QList<QModelIndex>  result;
+    QList<QModelIndex> result;
     Qt::CaseSensitivity cs = Qt::CaseInsensitive;
 
-    QString     text;
+    QString text;
     QModelIndex p = parent(start);
-    int         from = start.row();
-    int         to = rowCount(p);
+    int from = start.row();
+    int to = rowCount(p);
 
     for (int r = from; r < to; ++r)
     {
         QModelIndex idx = index(r, start.column(), p);
-        if (!idx.isValid())
-            continue;
+        if (!idx.isValid()) continue;
         QVariant v = data(idx, Qt::DisplayRole);
 
-        if (text.isEmpty())
-            text = value.toString();
+        if (text.isEmpty()) text = value.toString();
 
         // Search the address column for the text and append the index if a match is found.
         searchAddressColumn(result, r, p, text, cs);
 
         QString t = v.toString();
-        if (t.contains(text, cs))
-            result.append(idx);
+        if (t.contains(text, cs)) result.append(idx);
 
         // Search the hierarchy
         if (hasChildren(idx))
@@ -369,13 +349,11 @@ QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QV
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
-                                               uint64_t parent_node_index,
-                                               bool     is_parent_part_of_selected)
+bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index,
+                                               bool is_parent_part_of_selected)
 {
     bool is_selected = is_parent_part_of_selected;
-    if (is_parent_part_of_selected)
-        SetIsSelected(parent_node_index);
+    if (is_parent_part_of_selected) SetIsSelected(parent_node_index);
 
     // Because shared (i.e. packet) nodes can have multiple parents, a map is created to match
     // those packets to the parent as seen during a specific traversal
@@ -404,7 +382,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
         {
             uint64_t child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, child);
             QModelIndex model_index = QModelIndex();
-            model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+            model_index = createIndex(parent_row, 0, (void*)parent_node_index);
             DIVE_ASSERT(child_node_index < m_node_parent_list.size());
             m_node_parent_list[child_node_index] = model_index;
 
@@ -420,10 +398,10 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
     uint64_t num_shared_children = m_topology_ptr->GetNumSharedChildren(parent_node_index);
     for (uint64_t child = 0; child < num_shared_children; ++child)
     {
-        uint64_t    child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index,
-                                                                            child);
+        uint64_t child_node_index =
+            m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, child);
         QModelIndex model_index = QModelIndex();
-        model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+        model_index = createIndex(parent_row, 0, (void*)parent_node_index);
         DIVE_ASSERT(child_node_index < m_node_parent_list.size());
         m_node_parent_list[child_node_index] = model_index;
 
@@ -435,8 +413,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row,
         // of the children. Will continue be part of the current event/pass going forward
         is_selected = CreateNodeToParentMap(num_children + child, child_node_index, is_selected);
 
-        if (child_node_index == end_node_index)
-            is_selected = false;
+        if (child_node_index == end_node_index) is_selected = false;
     }
     return is_selected;
 }
@@ -446,7 +423,7 @@ void CommandBufferModel::SetIsSelected(uint64_t node_index)
 {
     uint32_t array_index = node_index / 8;
     uint32_t bit_element = node_index % 8;
-    uint8_t  mask = 0x1 << bit_element;
+    uint8_t mask = 0x1 << bit_element;
     m_node_is_selected_bit_list[array_index] |= mask;
 }
 
@@ -455,6 +432,6 @@ bool CommandBufferModel::IsSelected(uint64_t node_index) const
 {
     uint32_t array_index = node_index / 8;
     uint32_t bit_element = node_index % 8;
-    uint8_t  mask = 0x1 << bit_element;
+    uint8_t mask = 0x1 << bit_element;
     return (m_node_is_selected_bit_list[array_index] & mask) != 0;
 }

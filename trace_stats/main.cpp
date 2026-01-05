@@ -13,20 +13,20 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include <iostream>
-#include <optional>
-#include <vector>
-#include <sstream>
-#include <numeric>
-#include <set>
 #include <array>
+#include <iostream>
+#include <numeric>
+#include <optional>
+#include <set>
+#include <sstream>
+#include <vector>
 
 #include "dive_core/context.h"
 #include "dive_core/data_core.h"
-#include "trace_stats.h"
 #include "pm4_info.h"
+#include "trace_stats.h"
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     Pm4InfoInit();
 
@@ -37,7 +37,7 @@ int main(int argc, char **argv)
                      "<output_details_file_name.txt>(optional)";
         return 0;
     }
-    char *input_file_name = argv[1];
+    char* input_file_name = argv[1];
 
     std::string output_file_name = "";
     if (argc == 3)
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 
     // Load capture
     std::unique_ptr<Dive::DataCore> data_core = std::make_unique<Dive::DataCore>();
-    Dive::CaptureData::LoadResult   load_res = data_core->LoadPm4CaptureData(input_file_name);
+    Dive::CaptureData::LoadResult load_res = data_core->LoadPm4CaptureData(input_file_name);
     if (load_res != Dive::CaptureData::LoadResult::kSuccess)
     {
         std::cout << "Loading capture \"" << input_file_name << "\" failed!";
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
     }
     std::cout << "Gathering Stats...\n";
 
-    std::ostream *ostream = &std::cout;
+    std::ostream* ostream = &std::cout;
     std::ofstream ofstream;
     if (!output_file_name.empty())
     {
@@ -73,9 +73,9 @@ int main(int argc, char **argv)
     }
 
     // Gather Stats...
-    const Dive::CaptureMetadata &meta_data = data_core->GetCaptureMetadata();
-    Dive::CaptureStats           capture_stats;
-    Dive::TraceStats             trace_stats;
+    const Dive::CaptureMetadata& meta_data = data_core->GetCaptureMetadata();
+    Dive::CaptureStats capture_stats;
+    Dive::TraceStats trace_stats;
 
     trace_stats.GatherTraceStats(Dive::Context::Background(), meta_data, capture_stats);
     trace_stats.PrintTraceStats(capture_stats, *ostream);

@@ -29,22 +29,22 @@ std::filesystem::path fp = TEST_DATA_DIR;
 struct StatsTestCase
 {
     AvailableGpuTiming::ObjectType type;
-    uint32_t                       row;
-    float                          mean;
-    float                          median;
+    uint32_t row;
+    float mean;
+    float median;
 };
 
 struct UITestCase
 {
-    int         row;
-    int         col;
+    int row;
+    int col;
     std::string display_str;
 };
 
 TEST(AvailableGpuTiming, GetObjectTypeString_Pass)
 {
     AvailableGpuTiming g;
-    std::string        output;
+    std::string output;
     EXPECT_FALSE(g.IsValid());
 
     output = g.GetObjectTypeString(AvailableGpuTiming::ObjectType::kFrame);
@@ -62,7 +62,7 @@ TEST(AvailableGpuTiming, GetObjectTypeString_Pass)
 TEST(AvailableGpuTiming, GetObjectTypeString_Fail)
 {
     AvailableGpuTiming g;
-    std::string        output;
+    std::string output;
     EXPECT_FALSE(g.IsValid());
 
     output = g.GetObjectTypeString(AvailableGpuTiming::ObjectType::nObjectTypes);
@@ -79,7 +79,7 @@ TEST(AvailableGpuTiming, GetObjectTypeString_Fail)
 
 TEST(AvailableGpuTiming, GetObjectType_Pass)
 {
-    AvailableGpuTiming             g;
+    AvailableGpuTiming g;
     AvailableGpuTiming::ObjectType output;
     EXPECT_FALSE(g.IsValid());
 
@@ -97,7 +97,7 @@ TEST(AvailableGpuTiming, GetObjectType_Pass)
 
 TEST(AvailableGpuTiming, GetObjectType_Fail)
 {
-    AvailableGpuTiming             g;
+    AvailableGpuTiming g;
     AvailableGpuTiming::ObjectType output;
     EXPECT_FALSE(g.IsValid());
 
@@ -116,7 +116,7 @@ TEST(AvailableGpuTiming, GetObjectType_Fail)
 TEST(AvailableGpuTiming, GetColumnTypeString_Pass)
 {
     AvailableGpuTiming g;
-    std::string        output;
+    std::string output;
     EXPECT_FALSE(g.IsValid());
 
     output = g.GetColumnTypeString(AvailableGpuTiming::ColumnType::kObjectType);
@@ -137,7 +137,7 @@ TEST(AvailableGpuTiming, GetColumnTypeString_Pass)
 TEST(AvailableGpuTiming, GetColumnTypeString_Fail)
 {
     AvailableGpuTiming g;
-    std::string        output;
+    std::string output;
     EXPECT_FALSE(g.IsValid());
 
     output = g.GetColumnTypeString(AvailableGpuTiming::ColumnType::nColumnTypes);
@@ -181,8 +181,8 @@ TEST(AvailableGpuTiming, LoadFromCsv_TwiceFail)
 TEST(AvailableGpuTiming, LoadFromString_Pass)
 {
     AvailableGpuTiming g;
-    std::string
-    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,0.001,0.002\n";
+    std::string s =
+        "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,0.001,0.002\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_TRUE(g.LoadFromString(s));
     EXPECT_TRUE(g.IsValid());
@@ -199,7 +199,7 @@ TEST(AvailableGpuTiming, LoadFromString_MalformedHeaderFail)
 TEST(AvailableGpuTiming, LoadFromString_NoHeaderFail)
 {
     AvailableGpuTiming g;
-    std::string        s = "Frame,10,0.345,0.341\nCommandBuffer,0,0.001,0.002\n";
+    std::string s = "Frame,10,0.345,0.341\nCommandBuffer,0,0.001,0.002\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromString(s));
 }
@@ -207,8 +207,9 @@ TEST(AvailableGpuTiming, LoadFromString_NoHeaderFail)
 TEST(AvailableGpuTiming, LoadFromString_StringIdFail)
 {
     AvailableGpuTiming g;
-    std::string        s = "Type,Id,Mean [ms],Median "
-                           "[ms]\nFrame,10,0.345,0.341\nCommandBuffer,placeholder,0.001,0.002\n";
+    std::string s =
+        "Type,Id,Mean [ms],Median "
+        "[ms]\nFrame,10,0.345,0.341\nCommandBuffer,placeholder,0.001,0.002\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromString(s));
 }
@@ -216,8 +217,8 @@ TEST(AvailableGpuTiming, LoadFromString_StringIdFail)
 TEST(AvailableGpuTiming, LoadFromString_StringMeanFail)
 {
     AvailableGpuTiming g;
-    std::string
-    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,placeholder,0.002\n";
+    std::string s =
+        "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,placeholder,0.002\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromString(s));
 }
@@ -225,8 +226,8 @@ TEST(AvailableGpuTiming, LoadFromString_StringMeanFail)
 TEST(AvailableGpuTiming, LoadFromString_FloatIdFail)
 {
     AvailableGpuTiming g;
-    std::string
-    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0.5,0.001,0.002\n";
+    std::string s =
+        "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0.5,0.001,0.002\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromString(s));
     EXPECT_FALSE(g.IsValid());
@@ -235,8 +236,8 @@ TEST(AvailableGpuTiming, LoadFromString_FloatIdFail)
 TEST(AvailableGpuTiming, LoadFromString_IntMeanFail)
 {
     AvailableGpuTiming g;
-    std::string
-    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,10,0.002\n";
+    std::string s =
+        "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,10,0.002\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromString(s));
     EXPECT_FALSE(g.IsValid());
@@ -245,8 +246,8 @@ TEST(AvailableGpuTiming, LoadFromString_IntMeanFail)
 TEST(AvailableGpuTiming, LoadFromString_IntMedianFail)
 {
     AvailableGpuTiming g;
-    std::string
-    s = "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,0.001,20\n";
+    std::string s =
+        "Type,Id,Mean [ms],Median [ms]\nFrame,10,0.345,0.341\nCommandBuffer,0,0.001,20\n";
     EXPECT_FALSE(g.IsValid());
     EXPECT_FALSE(g.LoadFromString(s));
     EXPECT_FALSE(g.IsValid());
@@ -260,14 +261,14 @@ TEST(AvailableGpuTiming, GetStatsByType_Pass)
     EXPECT_TRUE(g.IsValid());
 
     const std::vector<StatsTestCase> test_cases = {
-        { AvailableGpuTiming::ObjectType::kFrame, 0, 0.345f, 0.341f },
-        { AvailableGpuTiming::ObjectType::kCommandBuffer, 0, 0.001f, 0.002f },
-        { AvailableGpuTiming::ObjectType::kCommandBuffer, 1, 0.003f, 0.004f },
-        { AvailableGpuTiming::ObjectType::kCommandBuffer, 2, 0.005f, 0.006f },
-        { AvailableGpuTiming::ObjectType::kCommandBuffer, 3, 0.007f, 0.008f },
-        { AvailableGpuTiming::ObjectType::kCommandBuffer, 4, 0.009f, 0.010f },
-        { AvailableGpuTiming::ObjectType::kRenderPass, 0, 0.228f, 0.229f },
-        { AvailableGpuTiming::ObjectType::kRenderPass, 1, 0.109f, 0.107f },
+        {AvailableGpuTiming::ObjectType::kFrame, 0, 0.345f, 0.341f},
+        {AvailableGpuTiming::ObjectType::kCommandBuffer, 0, 0.001f, 0.002f},
+        {AvailableGpuTiming::ObjectType::kCommandBuffer, 1, 0.003f, 0.004f},
+        {AvailableGpuTiming::ObjectType::kCommandBuffer, 2, 0.005f, 0.006f},
+        {AvailableGpuTiming::ObjectType::kCommandBuffer, 3, 0.007f, 0.008f},
+        {AvailableGpuTiming::ObjectType::kCommandBuffer, 4, 0.009f, 0.010f},
+        {AvailableGpuTiming::ObjectType::kRenderPass, 0, 0.228f, 0.229f},
+        {AvailableGpuTiming::ObjectType::kRenderPass, 1, 0.109f, 0.107f},
     };
 
     for (const auto& tc : test_cases)
@@ -286,8 +287,8 @@ TEST(AvailableGpuTiming, GetStatsByType_InvalidFail)
     EXPECT_FALSE(g.LoadFromCsv(fp / "mock_gpu_time_malformed.csv"));
     EXPECT_FALSE(g.IsValid());
 
-    std::optional<AvailableGpuTiming::Stats>
-    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kFrame, 0);
+    std::optional<AvailableGpuTiming::Stats> ret =
+        g.GetStatsByType(AvailableGpuTiming::ObjectType::kFrame, 0);
     EXPECT_EQ(ret, std::nullopt);
     ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kCommandBuffer, 0);
     EXPECT_EQ(ret, std::nullopt);
@@ -302,8 +303,8 @@ TEST(AvailableGpuTiming, GetStatsByType_OOBFail)
     EXPECT_TRUE(g.LoadFromCsv(fp / "mock_gpu_time.csv"));
     EXPECT_TRUE(g.IsValid());
 
-    std::optional<AvailableGpuTiming::Stats>
-    ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kCommandBuffer, 10);
+    std::optional<AvailableGpuTiming::Stats> ret =
+        g.GetStatsByType(AvailableGpuTiming::ObjectType::kCommandBuffer, 10);
     EXPECT_EQ(ret, std::nullopt);
     ret = g.GetStatsByType(AvailableGpuTiming::ObjectType::kRenderPass, 3);
     EXPECT_EQ(ret, std::nullopt);
@@ -317,14 +318,14 @@ TEST(AvailableGpuTiming, GetStatsByRow_Pass)
     EXPECT_TRUE(g.IsValid());
 
     const std::vector<StatsTestCase> test_cases = {
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 1, 0.345f, 0.341f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 2, 0.001f, 0.002f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 3, 0.003f, 0.004f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 4, 0.228f, 0.229f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 5, 0.005f, 0.006f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 6, 0.007f, 0.008f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 7, 0.109f, 0.107f },
-        { AvailableGpuTiming::ObjectType::nObjectTypes, 8, 0.009f, 0.010f },
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 1, 0.345f, 0.341f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 2, 0.001f, 0.002f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 3, 0.003f, 0.004f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 4, 0.228f, 0.229f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 5, 0.005f, 0.006f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 6, 0.007f, 0.008f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 7, 0.109f, 0.107f},
+        {AvailableGpuTiming::ObjectType::nObjectTypes, 8, 0.009f, 0.010f},
     };
 
     for (const auto& tc : test_cases)

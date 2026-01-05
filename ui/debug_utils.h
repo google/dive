@@ -19,12 +19,14 @@
 #include <chrono>
 #include <utility>
 
-template<typename FuncT> class DebugScoped;
+template <typename FuncT>
+class DebugScoped;
 
 #ifdef NDEBUG
-template<typename FuncT> class DebugScoped
+template <typename FuncT>
+class DebugScoped
 {
-public:
+ public:
     explicit DebugScoped(FuncT&&) {};
     ~DebugScoped() { (void)this; }
 
@@ -34,13 +36,11 @@ public:
     DebugScoped& operator=(DebugScoped&&) = delete;
 };
 #else
-template<typename FuncT> class DebugScoped
+template <typename FuncT>
+class DebugScoped
 {
-public:
-    explicit DebugScoped(FuncT&& func) :
-        m_func(std::forward<FuncT>(func))
-    {
-    }
+ public:
+    explicit DebugScoped(FuncT&& func) : m_func(std::forward<FuncT>(func)) {}
     ~DebugScoped() { Invoke(); }
 
     DebugScoped(const DebugScoped&) = delete;
@@ -48,7 +48,7 @@ public:
     DebugScoped& operator=(const DebugScoped&) = delete;
     DebugScoped& operator=(DebugScoped&&) = delete;
 
-private:
+ private:
     std::optional<FuncT> m_func;
 
     void Invoke()
@@ -61,14 +61,16 @@ private:
 };
 #endif
 
-template<typename FuncT, typename... ArgsT> DebugScoped(FuncT&&) -> DebugScoped<FuncT>;
+template <typename FuncT, typename... ArgsT>
+DebugScoped(FuncT&&) -> DebugScoped<FuncT>;
 
-template<typename FuncT> inline auto DebugScopedStopwatch(FuncT&& func)
+template <typename FuncT>
+inline auto DebugScopedStopwatch(FuncT&& func)
 {
     return DebugScoped([func = func, start = std::chrono::steady_clock::now()]() {
         auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(
-                        std::chrono::steady_clock::now() - start)
-                        .count();
+                            std::chrono::steady_clock::now() - start)
+                            .count();
         func(duration);
     });
 }

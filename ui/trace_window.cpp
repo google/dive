@@ -18,6 +18,8 @@
 
 #include <qboxlayout.h>
 #include <qspinbox.h>
+
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
@@ -30,6 +32,7 @@
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QSizePolicy>
 #include <QSortFilterProxyModel>
 #include <QStandardItem>
@@ -40,49 +43,44 @@
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <QButtonGroup>
-#include <QRadioButton>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+#include "application_controller.h"
 #include "capture_service/android_application.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
+#include "dive/common/app_types.h"
+#include "gfxr_capture_worker.h"
 #include "network/tcp_client.h"
 #include "utils/component_files.h"
-#include "dive/common/app_types.h"
-#include "application_controller.h"
-#include "gfxr_capture_worker.h"
 
 namespace
 {
 
-constexpr size_t kNumGfxrCaptureAppTypes = std::count_if(Dive::kAppTypeInfos.begin(),
-                                                         Dive::kAppTypeInfos.end(),
-                                                         [](const Dive::AppTypeInfo &info) {
-                                                             return info.is_gfxr_capture_supported;
-                                                         });
-const int        kGfxrCaptureButtonId = 1;
-const int        kPm4CaptureButtonId = 2;
+constexpr size_t kNumGfxrCaptureAppTypes =
+    std::count_if(Dive::kAppTypeInfos.begin(), Dive::kAppTypeInfos.end(),
+                  [](const Dive::AppTypeInfo& info) { return info.is_gfxr_capture_supported; });
+const int kGfxrCaptureButtonId = 1;
+const int kPm4CaptureButtonId = 2;
 }  // namespace
 
 // =================================================================================================
 // TraceDialog
 // =================================================================================================
-TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
-    QDialog(parent),
-    m_controller(controller)
+TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
+    : QDialog(parent), m_controller(controller)
 {
     qDebug() << "TraceDialog created.";
     m_capture_layout = new QHBoxLayout();
     m_dev_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
     m_app_type_label = new QLabel(tr("Application Type:"));
-    m_gfxr_capture_file_on_device_directory_label = new QLabel(
-    tr("On Device GFXR Capture File Directory Name:"));
-    QLabel *capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
+    m_gfxr_capture_file_on_device_directory_label =
+        new QLabel(tr("On Device GFXR Capture File Directory Name:"));
+    QLabel* capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
 
     m_dev_model = new QStandardItemModel();
     m_pkg_model = new QStandardItemModel();
@@ -117,9 +115,9 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
 
     m_devices = Dive::GetDeviceManager().ListDevice();
     UpdateDeviceList(false);
-    for (const auto &ty : Dive::kAppTypeInfos)
+    for (const auto& ty : Dive::kAppTypeInfos)
     {
-        QStandardItem *item = new QStandardItem(ty.ui_name.data());
+        QStandardItem* item = new QStandardItem(ty.ui_name.data());
         m_app_type_model->appendRow(item);
     }
     m_app_type_filter_model = new AppTypeFilterModel(this);
@@ -134,19 +132,19 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_pkg_box->setCurrentText("Please select a package");
     m_pkg_box->setMinimumSize(m_dev_box->sizeHint());
     m_pkg_box->setSizeAdjustPolicy(
-    QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
+        QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
     m_pkg_box->setEditable(true);
-    QSortFilterProxyModel *filterModel = new QSortFilterProxyModel(m_pkg_box);
+    QSortFilterProxyModel* filterModel = new QSortFilterProxyModel(m_pkg_box);
     filterModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     filterModel->setSourceModel(m_pkg_box->model());
-    QCompleter *completer = new QCompleter(filterModel, m_pkg_box);
+    QCompleter* completer = new QCompleter(filterModel, m_pkg_box);
     completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     m_pkg_box->setCompleter(completer);
 
     // Capture Debuggable Applications Only Warning
     m_capture_warning_layout = new QHBoxLayout();
-    m_capture_warning_label = new QLabel(
-    tr("⚠ The list below displays debuggable APKs available for capture on the selected device."));
+    m_capture_warning_label = new QLabel(tr(
+        "⚠ The list below displays debuggable APKs available for capture on the selected device."));
     m_capture_warning_label->setWordWrap(true);
     m_capture_warning_layout->addWidget(m_capture_warning_label);
 
@@ -203,16 +201,16 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     m_gfxr_capture_file_directory_layout = new QHBoxLayout();
     m_gfxr_capture_file_directory_input_box = new QLineEdit();
     m_gfxr_capture_file_directory_input_box->setPlaceholderText(
-    "Input a name for the capture directory");
+        "Input a name for the capture directory");
     m_gfxr_capture_file_directory_layout->addWidget(m_gfxr_capture_file_on_device_directory_label);
     m_gfxr_capture_file_directory_layout->addWidget(m_gfxr_capture_file_directory_input_box);
     m_gfxr_capture_file_on_device_directory_label->hide();
     m_gfxr_capture_file_directory_input_box->hide();
 
-    QHBoxLayout *capture_file_local_directory_layout = new QHBoxLayout();
+    QHBoxLayout* capture_file_local_directory_layout = new QHBoxLayout();
     m_capture_file_local_directory_input_box = new QLineEdit();
     m_capture_file_local_directory_input_box->setPlaceholderText(
-    "Input the location to save the directory to");
+        "Input the location to save the directory to");
     capture_file_local_directory_layout->addWidget(capture_file_local_directory_label);
     capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_input_box);
 
@@ -237,51 +235,31 @@ TraceDialog::TraceDialog(ApplicationController &controller, QWidget *parent) :
     setSizeGripEnabled(true);
     setLayout(m_main_layout);
 
-    QObject::connect(m_dev_box,
-                     SIGNAL(currentIndexChanged(const QString &)),
-                     this,
-                     SLOT(OnDeviceSelected(const QString &)));
-    QObject::connect(m_pkg_box,
-                     SIGNAL(currentIndexChanged(const QString &)),
-                     this,
-                     SLOT(OnPackageSelected(const QString &)));
-    QObject::connect(m_pkg_box->lineEdit(),
-                     &QLineEdit::textEdited,
-                     filterModel,
+    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnDeviceSelected(const QString&)));
+    QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnPackageSelected(const QString&)));
+    QObject::connect(m_pkg_box->lineEdit(), &QLineEdit::textEdited, filterModel,
                      &QSortFilterProxyModel::setFilterFixedString);
     QObject::connect(m_run_button, &QPushButton::clicked, this, &TraceDialog::OnStartClicked);
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
-    QObject::connect(m_gfxr_capture_button,
-                     &QPushButton::clicked,
-                     this,
+    QObject::connect(m_gfxr_capture_button, &QPushButton::clicked, this,
                      &TraceDialog::OnGfxrCaptureClicked);
-    QObject::connect(m_dev_refresh_button,
-                     &QPushButton::clicked,
-                     this,
+    QObject::connect(m_dev_refresh_button, &QPushButton::clicked, this,
                      &TraceDialog::OnDevListRefresh);
-    QObject::connect(m_pkg_refresh_button,
-                     &QPushButton::clicked,
-                     this,
+    QObject::connect(m_pkg_refresh_button, &QPushButton::clicked, this,
                      &TraceDialog::OnAppListRefresh);
-    QObject::connect(m_pkg_filter_button,
-                     &QPushButton::clicked,
-                     this,
+    QObject::connect(m_pkg_filter_button, &QPushButton::clicked, this,
                      &TraceDialog::OnPackageListFilter);
     QObject::connect(m_cmd_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputCommand);
     QObject::connect(m_args_input_box, &QLineEdit::textEdited, this, &TraceDialog::OnInputArgs);
-    QObject::connect(m_pkg_filter,
-                     &PackageFilter::FiltersApplied,
-                     this,
+    QObject::connect(m_pkg_filter, &PackageFilter::FiltersApplied, this,
                      &TraceDialog::OnPackageListFilterApplied);
 
-    QObject::connect(m_capture_type_button_group,
-                     QOverload<int>::of(&QButtonGroup::buttonClicked),
-                     this,
-                     &TraceDialog::OnCaptureTypeChanged);
+    QObject::connect(m_capture_type_button_group, QOverload<int>::of(&QButtonGroup::buttonClicked),
+                     this, &TraceDialog::OnCaptureTypeChanged);
 
-    QObject::connect(&m_controller,
-                     &ApplicationController::AdvancedOptionToggled,
-                     this,
+    QObject::connect(&m_controller, &ApplicationController::AdvancedOptionToggled, this,
                      &TraceDialog::OnShowAdvancedOptions);
 
     OnCaptureTypeChanged(kGfxrCaptureButtonId);
@@ -293,7 +271,7 @@ TraceDialog::~TraceDialog()
     Dive::GetDeviceManager().RemoveDevice();
 }
 
-void TraceDialog::ShowMessage(const QString &message)
+void TraceDialog::ShowMessage(const QString& message)
 {
     auto message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
@@ -319,17 +297,16 @@ absl::Status TraceDialog::StopPackageAndCleanup()
         if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture &&
             m_gfxr_capture_button->isEnabled())
         {
-            return absl::FailedPreconditionError("GFXR capture is in process. Please retrieve the "
-                                                 "capture before stopping the application.");
+            return absl::FailedPreconditionError(
+                "GFXR capture is in process. Please retrieve the "
+                "capture before stopping the application.");
         }
         // Only delete the on device capture directory when the application is closed.
-        std::string
-             on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                   "/",
-                                                   m_gfxr_capture_file_directory_input_box->text()
-                                                   .toStdString());
-        auto ret = device->Adb().Run(
-        absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
+        std::string on_device_capture_directory =
+            absl::StrCat(Dive::kDeviceCapturePath, "/",
+                         m_gfxr_capture_file_directory_input_box->text().toStdString());
+        auto ret =
+            device->Adb().Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
         m_gfxr_capture_button->setEnabled(false);
         m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
     }
@@ -342,14 +319,13 @@ absl::Status TraceDialog::StopPackageAndCleanup()
     absl::Status cleanup_status = cur_app->Cleanup();
     if (!cleanup_status.ok())
     {
-        return absl::Status(cleanup_status.code(),
-                            absl::StrCat("Failed to cleanup application: ",
-                                         cleanup_status.message()));
+        return absl::Status(cleanup_status.code(), absl::StrCat("Failed to cleanup application: ",
+                                                                cleanup_status.message()));
     }
     return absl::OkStatus();
 }
 
-void TraceDialog::closeEvent(QCloseEvent *event)
+void TraceDialog::closeEvent(QCloseEvent* event)
 {
     absl::Status status = StopPackageAndCleanup();
 
@@ -398,7 +374,7 @@ void TraceDialog::UpdateDeviceList(bool isInitialized)
 
     if (m_devices.empty())
     {
-        QStandardItem *item = new QStandardItem("No devices found");
+        QStandardItem* item = new QStandardItem("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         m_dev_model->appendRow(item);
         m_dev_box->setCurrentIndex(0);
@@ -409,13 +385,13 @@ void TraceDialog::UpdateDeviceList(bool isInitialized)
         {
             if (i == 0)
             {
-                QStandardItem *item = new QStandardItem("Please select a device");
+                QStandardItem* item = new QStandardItem("Please select a device");
                 item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
                 m_dev_model->appendRow(item);
                 m_dev_box->setCurrentIndex(0);
             }
 
-            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+            QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
             m_dev_model->appendRow(item);
             // Keep the original selected devices as selected.
             if (m_cur_dev == m_devices[i].m_serial)
@@ -426,7 +402,7 @@ void TraceDialog::UpdateDeviceList(bool isInitialized)
     }
 }
 
-void TraceDialog::OnDeviceSelected(const QString &s)
+void TraceDialog::OnDeviceSelected(const QString& s)
 {
     if (s.isEmpty() || m_dev_box->currentIndex() == 0)
     {
@@ -447,10 +423,8 @@ void TraceDialog::OnDeviceSelected(const QString &s)
     auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
     if (!dev_ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to select device ",
-                                           m_cur_dev.c_str(),
-                                           ", error: ",
-                                           dev_ret.status().message());
+        std::string err_msg = absl::StrCat("Failed to select device ", m_cur_dev.c_str(),
+                                           ", error: ", dev_ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
@@ -485,7 +459,7 @@ void TraceDialog::OnShowAdvancedOptions(bool show)
     }
 }
 
-void TraceDialog::OnPackageSelected(const QString &s)
+void TraceDialog::OnPackageSelected(const QString& s)
 {
     int cur_index = m_pkg_box->currentIndex();
     qDebug() << "Package selected: " << s << ", index: " << cur_index;
@@ -502,7 +476,7 @@ void TraceDialog::OnPackageSelected(const QString &s)
     m_cmd_input_box->setText(m_cur_pkg.c_str());
 }
 
-void TraceDialog::OnInputCommand(const QString &text)
+void TraceDialog::OnInputCommand(const QString& text)
 {
     qDebug() << "Input changed to " << text;
     m_run_button->setEnabled(true);
@@ -511,13 +485,13 @@ void TraceDialog::OnInputCommand(const QString &text)
     m_app_type_box->setCurrentIndex(-1);
 }
 
-void TraceDialog::OnInputArgs(const QString &text)
+void TraceDialog::OnInputArgs(const QString& text)
 {
     qDebug() << "Args changed to " << text;
     m_command_args = text.toStdString();
 }
 
-bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &app_type)
+bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& app_type)
 {
     if (device == nullptr)
     {
@@ -541,39 +515,33 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
         if (m_gfxr_capture_file_directory_input_box->text() == "")
         {
             m_gfxr_capture_file_directory_input_box->setText(
-            QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+                QString::fromUtf8(Dive::kDefaultCaptureFolderName));
         }
     }
 
-    if (app_type ==
-        Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)].ui_name.data() ||
+    if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)]
+                        .ui_name.data() ||
         app_type ==
-        Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_OpenXR)].ui_name.data())
+            Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_OpenXR)].ui_name.data())
     {
-        ret = device->SetupApp(m_cur_pkg,
-                               Dive::ApplicationType::OPENXR_APK,
-                               m_command_args,
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::OPENXR_APK, m_command_args,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
-                         .ui_name.data())
+                             .ui_name.data())
     {
-        ret = device->SetupApp(m_cur_pkg,
-                               Dive::ApplicationType::VULKAN_APK,
-                               m_command_args,
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::VULKAN_APK, m_command_args,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_Non_OpenXR)]
-                         .ui_name.data())
+                             .ui_name.data())
     {
-        ret = device->SetupApp(m_cur_pkg,
-                               Dive::ApplicationType::GLES_APK,
-                               m_command_args,
+        ret = device->SetupApp(m_cur_pkg, Dive::ApplicationType::GLES_APK, m_command_args,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     else if (app_type ==
              Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
-             .ui_name.data())
+                 .ui_name.data())
     {
         m_executable = m_cmd_input_box->text().toStdString();
         if (m_executable.empty())
@@ -584,17 +552,13 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
             return false;
         }
         qDebug() << "exe: " << m_executable.c_str() << " args: " << m_command_args.c_str();
-        ret = device->SetupApp(m_executable,
-                               m_command_args,
-                               Dive::ApplicationType::VULKAN_CLI,
+        ret = device->SetupApp(m_executable, m_command_args, Dive::ApplicationType::VULKAN_CLI,
                                m_gfxr_capture_file_directory_input_box->text().toStdString());
     }
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Fail to setup for package ",
-                                           m_cur_pkg,
-                                           " error: ",
-                                           ret.message());
+        std::string err_msg =
+            absl::StrCat("Fail to setup for package ", m_cur_pkg, " error: ", ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -602,10 +566,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
     ret = device->StartApp();
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Fail to start package ",
-                                           m_cur_pkg,
-                                           " error: ",
-                                           ret.message());
+        std::string err_msg =
+            absl::StrCat("Fail to start package ", m_cur_pkg, " error: ", ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -614,9 +576,8 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice *device, const std::string &a
 
     if (!cur_app->IsRunning())
     {
-        std::string err_msg = absl::StrCat("Process for package ",
-                                           m_cur_pkg,
-                                           " not found, possibly crashed.");
+        std::string err_msg =
+            absl::StrCat("Process for package ", m_cur_pkg, " not found, possibly crashed.");
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -645,9 +606,9 @@ void TraceDialog::OnStartClicked()
     auto device = Dive::GetDeviceManager().GetDevice();
     if (!device)
     {
-        std::string
-        err_msg = "No device/application selected. Please select a device and application and "
-                  "then try again.";
+        std::string err_msg =
+            "No device/application selected. Please select a device and application and "
+            "then try again.";
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
@@ -702,37 +663,32 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
-    QProgressDialog *progress_bar = new QProgressDialog("Capturing PM4 Data ... ",
-                                                        nullptr,
-                                                        0,
-                                                        100,
-                                                        this);
+    QProgressDialog* progress_bar =
+        new QProgressDialog("Capturing PM4 Data ... ", nullptr, 0, 100, this);
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
     progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
     progress_bar->setMinimumDuration(0);
-    CaptureWorker *workerThread = new CaptureWorker(progress_bar);
+    CaptureWorker* workerThread = new CaptureWorker(progress_bar);
 
     if (m_capture_file_local_directory_input_box->text() == "")
     {
 #if defined(__APPLE__)
         m_capture_file_local_directory_input_box->setText(
-        QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+            QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
 #else
         m_capture_file_local_directory_input_box->setText(
-        "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+            "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
 #endif
     }
 
     workerThread->SetTargetCaptureDir(
-    m_capture_file_local_directory_input_box->text().toStdString());
+        m_capture_file_local_directory_input_box->text().toStdString());
     connect(workerThread, &CaptureWorker::CaptureAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &CaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &CaptureWorker::ShowMessage, this, &TraceDialog::ShowMessage);
-    connect(workerThread,
-            &CaptureWorker::DownloadedSize,
-            progress_bar,
+    connect(workerThread, &CaptureWorker::DownloadedSize, progress_bar,
             [progress_bar](int64_t downloaded_size, int64_t total_size) {
                 int percentage = 0;
                 if (total_size > 0)
@@ -741,28 +697,17 @@ void TraceDialog::OnTraceClicked()
                 }
                 progress_bar->setValue(percentage);
             });
-    connect(workerThread,
-            &CaptureWorker::UpdateProgressDialog,
-            progress_bar,
+    connect(workerThread, &CaptureWorker::UpdateProgressDialog, progress_bar,
             &QProgressDialog::setLabelText);
     workerThread->start();
     std::cout << "OnTraceClicked done " << std::endl;
 }
 
-void TraceDialog::OnTraceAvailable(QString const &trace_path)
-{
-    emit TraceAvailable(trace_path);
-}
+void TraceDialog::OnTraceAvailable(QString const& trace_path) { emit TraceAvailable(trace_path); }
 
-void TraceDialog::OnDevListRefresh()
-{
-    UpdateDeviceList(true);
-}
+void TraceDialog::OnDevListRefresh() { UpdateDeviceList(true); }
 
-void TraceDialog::OnAppListRefresh()
-{
-    UpdatePackageList();
-}
+void TraceDialog::OnAppListRefresh() { UpdatePackageList(); }
 
 void TraceDialog::UpdatePackageList()
 {
@@ -775,10 +720,8 @@ void TraceDialog::UpdatePackageList()
     auto ret = device->ListPackage(m_pkg_list_options);
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to list package for device ",
-                                           m_cur_dev,
-                                           " error: ",
-                                           ret.status().message());
+        std::string err_msg = absl::StrCat("Failed to list package for device ", m_cur_dev,
+                                           " error: ", ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
@@ -786,11 +729,11 @@ void TraceDialog::UpdatePackageList()
     m_pkg_list = *ret;
 
     const QSignalBlocker blocker(
-    m_pkg_box);  // Do not emit index changed event when update the model
+        m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
     for (size_t i = 0; i < m_pkg_list.size(); i++)
     {
-        QStandardItem *item = new QStandardItem(m_pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(m_pkg_list[i].c_str());
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);
@@ -812,7 +755,7 @@ void TraceDialog::OnPackageListFilter()
     }
 }
 
-void TraceDialog::OnPackageListFilterApplied(const QString &filter)
+void TraceDialog::OnPackageListFilterApplied(const QString& filter)
 {
     if (filter == "All")
     {
@@ -857,17 +800,15 @@ void TraceDialog::EnableCaptureTypeButtons(bool enable)
 
 void TraceDialog::OnGfxrCaptureClicked()
 {
-    auto         device = Dive::GetDeviceManager().GetDevice();
+    auto device = Dive::GetDeviceManager().GetDevice();
     absl::Status ret;
     if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture)
     {
         ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false");
         if (!ret.ok())
         {
-            std::string err_msg = absl::StrCat("Failed to stop runtime gfxr capture ",
-                                               m_cur_pkg,
-                                               " error: ",
-                                               ret.message());
+            std::string err_msg = absl::StrCat("Failed to stop runtime gfxr capture ", m_cur_pkg,
+                                               " error: ", ret.message());
             qDebug() << err_msg.c_str();
             ShowMessage(QString::fromStdString(err_msg));
             return;
@@ -884,22 +825,20 @@ void TraceDialog::OnGfxrCaptureClicked()
         ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger true");
         if (!ret.ok())
         {
-            std::string err_msg = absl::StrCat("Failed to start runtime gfxr capture ",
-                                               m_cur_pkg,
-                                               " error: ",
-                                               ret.message());
+            std::string err_msg = absl::StrCat("Failed to start runtime gfxr capture ", m_cur_pkg,
+                                               " error: ", ret.message());
             qDebug() << err_msg.c_str();
             ShowMessage(QString::fromStdString(err_msg));
             return;
         }
 
         std::filesystem::path capture_path(
-        m_gfxr_capture_file_directory_input_box->text().toStdString());
+            m_gfxr_capture_file_directory_input_box->text().toStdString());
         ret = device->TriggerScreenCapture(capture_path);
         if (!ret.ok())
         {
-            std::string err_msg = absl::StrCat("Failed to create capture screenshot: ",
-                                               ret.message());
+            std::string err_msg =
+                absl::StrCat("Failed to create capture screenshot: ", ret.message());
             qDebug() << err_msg.c_str();
             ShowMessage(QString::fromStdString(err_msg));
             return;
@@ -924,45 +863,36 @@ void TraceDialog::RetrieveGfxrCapture()
     {
 #if defined(__APPLE__)
         m_capture_file_local_directory_input_box->setText(
-        QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+            QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
 #else
         m_capture_file_local_directory_input_box->setText(
-        "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+            "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
 #endif
     }
 
-    std::string
-    on_device_capture_file_directory = absl::StrCat(std::string(Dive::kDeviceCapturePath),
-                                                    "/",
-                                                    m_gfxr_capture_file_directory_input_box->text()
-                                                    .toStdString());
+    std::string on_device_capture_file_directory =
+        absl::StrCat(std::string(Dive::kDeviceCapturePath), "/",
+                     m_gfxr_capture_file_directory_input_box->text().toStdString());
 
-    QProgressDialog *progress_bar = new QProgressDialog("Downloading GFXR Capture ... ",
-                                                        nullptr,
-                                                        0,
-                                                        100,
-                                                        this);
+    QProgressDialog* progress_bar =
+        new QProgressDialog("Downloading GFXR Capture ... ", nullptr, 0, 100, this);
     progress_bar->setObjectName("gfxr_download_progress");
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
     progress_bar->setMinimumHeight(this->minimumHeight() + 50);
     progress_bar->setAutoReset(true);
     progress_bar->setAutoClose(true);
 
-    GfxrCaptureWorker *workerThread = new GfxrCaptureWorker(progress_bar);
+    GfxrCaptureWorker* workerThread = new GfxrCaptureWorker(progress_bar);
     workerThread->SetGfxrSourceCaptureDir(on_device_capture_file_directory);
 
     workerThread->SetTargetCaptureDir(
-    m_capture_file_local_directory_input_box->text().toStdString());
+        m_capture_file_local_directory_input_box->text().toStdString());
 
-    connect(workerThread,
-            &GfxrCaptureWorker::CaptureAvailable,
-            this,
+    connect(workerThread, &GfxrCaptureWorker::CaptureAvailable, this,
             &TraceDialog::OnGFXRCaptureAvailable);
     connect(workerThread, &GfxrCaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &GfxrCaptureWorker::ShowMessage, this, &TraceDialog::ShowMessage);
-    connect(workerThread,
-            &GfxrCaptureWorker::DownloadedSize,
-            progress_bar,
+    connect(workerThread, &GfxrCaptureWorker::DownloadedSize, progress_bar,
             [progress_bar](int64_t downloaded_size, int64_t total_size) {
                 int percentage = 0;
                 if (total_size > 0)
@@ -976,9 +906,9 @@ void TraceDialog::RetrieveGfxrCapture()
     m_gfxr_capture_button->setEnabled(false);
 }
 
-void TraceDialog::OnGFXRCaptureAvailable(QString const &capture_path)
+void TraceDialog::OnGFXRCaptureAvailable(QString const& capture_path)
 {
-    QProgressDialog *progress_bar = findChild<QProgressDialog *>("gfxr_download_progress");
+    QProgressDialog* progress_bar = findChild<QProgressDialog*>("gfxr_download_progress");
     if (progress_bar)
     {
         progress_bar->close();
@@ -1001,7 +931,7 @@ void AppTypeFilterModel::setFilterActive(bool active)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
 {
     if (m_filter_active)
     {

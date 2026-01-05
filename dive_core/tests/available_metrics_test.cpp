@@ -15,6 +15,7 @@
 */
 
 #include "dive_core/available_metrics.h"
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -40,13 +41,13 @@ TEST(AvailableMetrics, LoadFromCsv)
 
     EXPECT_THAT(metrics->GetMetricInfo("COUNTER_A"),
                 AllOf(Not(testing::IsNull()),
-                      MetricInfoEq(MetricInfo{
-                      1, Dive::MetricType::kCount, "COUNTER_A", "Counter A", "Description A" })));
+                      MetricInfoEq(MetricInfo{1, Dive::MetricType::kCount, "COUNTER_A", "Counter A",
+                                              "Description A"})));
 
     EXPECT_THAT(metrics->GetMetricInfo("COUNTER_B"),
                 AllOf(Not(testing::IsNull()),
-                      MetricInfoEq(MetricInfo{
-                      2, Dive::MetricType::kPercent, "COUNTER_B", "Counter B", "Description B" })));
+                      MetricInfoEq(MetricInfo{2, Dive::MetricType::kPercent, "COUNTER_B",
+                                              "Counter B", "Description B"})));
 
     const Dive::MetricInfo* info_c = metrics->GetMetricInfo("COUNTER_C");
     EXPECT_EQ(info_c, nullptr);
@@ -55,8 +56,8 @@ TEST(AvailableMetrics, LoadFromCsv)
 
 TEST(AvailableMetrics, LoadFromCsvIgnoresRowsThatAreMissingColumns)
 {
-    auto metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                 "/mock_available_metrics_malformed.csv");
+    auto metrics =
+        AvailableMetrics::LoadFromCsv(TEST_DATA_DIR "/mock_available_metrics_malformed.csv");
     ASSERT_NE(metrics, nullptr);
     ASSERT_NE(metrics->GetMetricInfo("COUNTER_A"), nullptr);
     ASSERT_EQ(metrics->GetMetricInfo("COUNTER_B"), nullptr);
@@ -64,8 +65,8 @@ TEST(AvailableMetrics, LoadFromCsvIgnoresRowsThatAreMissingColumns)
 
 TEST(AvailableMetrics, LoadFromCsvFailsWhenNoHeader)
 {
-    auto metrics = AvailableMetrics::LoadFromCsv(TEST_DATA_DIR
-                                                 "/mock_available_metrics_no_header.csv");
+    auto metrics =
+        AvailableMetrics::LoadFromCsv(TEST_DATA_DIR "/mock_available_metrics_no_header.csv");
     ASSERT_EQ(metrics, nullptr);
 }
 

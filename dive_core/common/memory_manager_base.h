@@ -26,24 +26,19 @@ namespace Dive
 // Provides interface for memory accesses
 class IMemoryManager
 {
-public:
+ public:
     // Copy the given va/size from the memory blocks
-    virtual bool RetrieveMemoryData(void*    buffer_ptr,
-                                    uint32_t submit_index,
-                                    uint64_t va_addr,
+    virtual bool RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
                                     uint64_t size) const = 0;
 
     // For resources of unknown size (eg. shaders). The caller is responsible (via return value of
     // callback) with notifying when end of resource is reached. Otherwise MemoryManager will keep
     // calling the callback until no more contiguous memory is available for copying.
-    typedef bool (*PfnGetMemory)(const void* data_ptr,
-                                 uint64_t    va_addr,
-                                 uint64_t    size,
-                                 void*       user_ptr);
-    virtual bool GetMemoryOfUnknownSizeViaCallback(uint32_t     submit_index,
-                                                   uint64_t     va_addr,
+    typedef bool (*PfnGetMemory)(const void* data_ptr, uint64_t va_addr, uint64_t size,
+                                 void* user_ptr);
+    virtual bool GetMemoryOfUnknownSizeViaCallback(uint32_t submit_index, uint64_t va_addr,
                                                    PfnGetMemory data_callback,
-                                                   void*        user_ptr) const = 0;
+                                                   void* user_ptr) const = 0;
 
     // Given an address, find the maximum contiguous amount of memory accessible from that point
     virtual uint64_t GetMaxContiguousSize(uint32_t submit_index, uint64_t va_addr) const = 0;

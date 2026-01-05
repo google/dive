@@ -13,18 +13,15 @@
 
 #include "gpu_timing_model.h"
 
-#include <filesystem>
 #include <QDebug>
 #include <QString>
+#include <filesystem>
 #include <string>
 
-GpuTimingModel::GpuTimingModel(QObject *parent) :
-    QAbstractItemModel(parent)
-{
-}
+GpuTimingModel::GpuTimingModel(QObject* parent) : QAbstractItemModel(parent) {}
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingModel::OnGpuTimingResultsGenerated(const QString &file_path)
+void GpuTimingModel::OnGpuTimingResultsGenerated(const QString& file_path)
 {
     emit beginResetModel();
     m_available_gpu_timing_data = {};  // Need to create a new AvailableGpuTiming object because it
@@ -41,7 +38,7 @@ void GpuTimingModel::OnGpuTimingResultsGenerated(const QString &file_path)
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingModel::ParseCsv(const QString &file_path)
+void GpuTimingModel::ParseCsv(const QString& file_path)
 {
     std::filesystem::path fp = file_path.toStdString();
     if (!m_available_gpu_timing_data.LoadFromCsv(fp))
@@ -52,7 +49,7 @@ void GpuTimingModel::ParseCsv(const QString &file_path)
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex GpuTimingModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex GpuTimingModel::index(int row, int column, const QModelIndex& parent) const
 {
     if ((row < 0) || (row >= rowCount(parent)) || (column < 0) || column >= columnCount(parent))
     {
@@ -62,13 +59,10 @@ QModelIndex GpuTimingModel::index(int row, int column, const QModelIndex &parent
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex GpuTimingModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex GpuTimingModel::parent(const QModelIndex& index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
-int GpuTimingModel::rowCount(const QModelIndex &parent) const
+int GpuTimingModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -82,13 +76,13 @@ int GpuTimingModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int GpuTimingModel::columnCount(const QModelIndex &parent) const
+int GpuTimingModel::columnCount(const QModelIndex& parent) const
 {
     return m_available_gpu_timing_data.GetColumns();
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant GpuTimingModel::data(const QModelIndex &index, int role) const
+QVariant GpuTimingModel::data(const QModelIndex& index, int role) const
 {
     if ((!index.isValid()) || (role != Qt::DisplayRole))
     {

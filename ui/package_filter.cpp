@@ -12,20 +12,22 @@
 */
 
 #include "package_filter.h"
+
 #include <qevent.h>
 #include <qnamespace.h>
+
 #include <QLabel>
 #include <iostream>
 #include <string>
+
 #include "QButtonGroup"
-#include "QRadioButton"
 #include "QHBoxLayout"
 #include "QPushButton"
+#include "QRadioButton"
 #include "QVBoxLayout"
 
 //--------------------------------------------------------------------------------------------------
-PackageFilter::PackageFilter(QWidget* parent) :
-    QWidget(parent)
+PackageFilter::PackageFilter(QWidget* parent) : QWidget(parent)
 
 {
     m_filter_button_group = new QButtonGroup(this);
@@ -57,8 +59,8 @@ PackageFilter::PackageFilter(QWidget* parent) :
 //--------------------------------------------------------------------------------------------------
 void PackageFilter::ApplyFilters()
 {
-    QRadioButton* checked_button = qobject_cast<QRadioButton*>(
-    m_filter_button_group->checkedButton());
+    QRadioButton* checked_button =
+        qobject_cast<QRadioButton*>(m_filter_button_group->checkedButton());
     if (checked_button)
     {
         m_active_filter_text = checked_button->text();

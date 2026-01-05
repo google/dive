@@ -27,19 +27,18 @@ limitations under the License.
 #include "dive/common/log.h"
 
 #if defined(__APPLE__)
-#    include <mach-o/dyld.h>
+#include <mach-o/dyld.h>
 #elif defined(__linux__)
-#    include <unistd.h>
+#include <unistd.h>
 
-#    include <climits>
+#include <climits>
 #endif
 
 namespace Dive
 {
 
-absl::StatusOr<std::string> LogCommand(const std::string &command,
-                                       const std::string &output,
-                                       int                ret)
+absl::StatusOr<std::string> LogCommand(const std::string& command, const std::string& output,
+                                       int ret)
 {
     // Always log command and output for debug builds
     LOGD("> %s\n", command.c_str());
@@ -48,9 +47,7 @@ absl::StatusOr<std::string> LogCommand(const std::string &command,
     if (ret != 0)
     {
         auto err_msg = absl::StrFormat("Command `%s` failed with return code %d, error: %s\n",
-                                       command,
-                                       ret,
-                                       output);
+                                       command, ret, output);
         // Always log error
         LOGE("ERROR: %s\n", err_msg.c_str());
         return absl::UnknownError(err_msg);
@@ -58,12 +55,12 @@ absl::StatusOr<std::string> LogCommand(const std::string &command,
     return output;
 }
 
-absl::StatusOr<std::string> RunCommand(const std::string &command)
+absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
     std::string output;
     std::string err_msg;
     std::string cmd_str = command + " 2>&1";  // Get both stdout and stderr;
-    FILE       *pipe = popen(cmd_str.c_str(), "r");
+    FILE* pipe = popen(cmd_str.c_str(), "r");
     if (!pipe)
     {
         err_msg = "Popen call failed\n";
@@ -85,7 +82,7 @@ absl::StatusOr<std::string> RunCommand(const std::string &command)
 absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
 {
 #if defined(__linux__)
-    char    buffer[PATH_MAX];
+    char buffer[PATH_MAX];
     ssize_t length = readlink("/proc/self/exe", buffer, PATH_MAX);
     if (length > 0 && length < PATH_MAX)
     {

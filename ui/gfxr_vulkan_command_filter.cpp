@@ -15,52 +15,47 @@
 */
 
 #include "gfxr_vulkan_command_filter.h"
-#include "gfxr_vulkan_command_filter_proxy_model.h"
-#include "dive_tree_view.h"
-#include <iostream>
+
 #include <qapplication.h>
 #include <qstandarditemmodel.h>
 
-static constexpr const char
-*kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kFilterModeCount] = {
-    "None",
-    "Draw/Dispatch"
-};
-static constexpr GfxrVulkanCommandFilterProxyModel::FilterMode
-kDefaultGfxrVulkanCommandFilterMode = GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly;
+#include <iostream>
+
+#include "dive_tree_view.h"
+#include "gfxr_vulkan_command_filter_proxy_model.h"
+
+static constexpr const char*
+    kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kFilterModeCount] = {
+        "None", "Action"};
+static constexpr GfxrVulkanCommandFilterProxyModel::FilterMode kDefaultGfxrVulkanCommandFilterMode =
+    GfxrVulkanCommandFilterProxyModel::kActionOnly;
 // =================================================================================================
 // GfxrVulkanCommandFilter
 // =================================================================================================
-GfxrVulkanCommandFilter::GfxrVulkanCommandFilter(DiveTreeView &command_hierarchy_view,
-                                                 GfxrVulkanCommandFilterProxyModel &proxy_model,
-                                                 QWidget                           *parent) :
-    m_command_hierarchy_view(command_hierarchy_view),
-    m_proxy_Model(proxy_model)
+GfxrVulkanCommandFilter::GfxrVulkanCommandFilter(DiveTreeView& command_hierarchy_view,
+                                                 GfxrVulkanCommandFilterProxyModel& proxy_model,
+                                                 QWidget* parent)
+    : m_command_hierarchy_view(command_hierarchy_view), m_proxy_Model(proxy_model)
 {
     // Set model for the gfxr command filter combo box
-    QStandardItemModel *gfxr_command_filter_combo_box_model = new QStandardItemModel();
+    QStandardItemModel* gfxr_command_filter_combo_box_model = new QStandardItemModel();
     for (uint32_t i = 0; i < GfxrVulkanCommandFilterProxyModel::kFilterModeCount; i++)
     {
-        QStandardItem *item = new QStandardItem(kGfxrVulkanCommandFilterStrings[i]);
+        QStandardItem* item = new QStandardItem(kGfxrVulkanCommandFilterStrings[i]);
         gfxr_command_filter_combo_box_model->appendRow(item);
     }
     this->setModel(gfxr_command_filter_combo_box_model);
     this->setCurrentIndex(kDefaultGfxrVulkanCommandFilterMode);
 
-    QObject::connect(this,
-                     SIGNAL(currentTextChanged(const QString &)),
-                     this,
-                     SLOT(OnFilterGfxrVulkanCommandChange(const QString &)));
+    QObject::connect(this, SIGNAL(currentTextChanged(const QString&)), this,
+                     SLOT(OnFilterGfxrVulkanCommandChange(const QString&)));
 }
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandFilter::Reset()
-{
-    setCurrentIndex(kDefaultGfxrVulkanCommandFilterMode);
-}
+void GfxrVulkanCommandFilter::Reset() { setCurrentIndex(kDefaultGfxrVulkanCommandFilterMode); }
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandFilter::OnFilterGfxrVulkanCommandChange(const QString &filter_mode)
+void GfxrVulkanCommandFilter::OnFilterGfxrVulkanCommandChange(const QString& filter_mode)
 {
     GfxrVulkanCommandFilterProxyModel::FilterMode new_filter;
 
@@ -69,9 +64,9 @@ void GfxrVulkanCommandFilter::OnFilterGfxrVulkanCommandChange(const QString &fil
         new_filter = GfxrVulkanCommandFilterProxyModel::kNone;
     }
     else if (filter_mode ==
-             kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly])
+             kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kActionOnly])
     {
-        new_filter = GfxrVulkanCommandFilterProxyModel::kDrawDispatchOnly;
+        new_filter = GfxrVulkanCommandFilterProxyModel::kActionOnly;
     }
     else
     {

@@ -26,24 +26,24 @@ class CommandHierarchy;
 //--------------------------------------------------------------------------------------------------
 class DiveCaptureData
 {
-public:
+ public:
     DiveCaptureData();
     DiveCaptureData(Pm4CaptureData m_pm4_capture_data, GfxrCaptureData m_gfxr_capture_data);
     virtual ~DiveCaptureData();
-    DiveCaptureData &operator=(DiveCaptureData &&) = default;
+    DiveCaptureData& operator=(DiveCaptureData&&) = default;
 
-    CaptureData::LoadResult LoadFile(const std::string &file_name);
-    CaptureData::LoadResult LoadFiles(const std::string &pm4_file_name,
-                                      const std::string &gfxr_file_name);
-    const Pm4CaptureData   &GetPm4CaptureData() const;
-    const GfxrCaptureData  &GetGfxrCaptureData() const;
+    CaptureData::LoadResult LoadFile(const std::string& file_name);
+    CaptureData::LoadResult LoadFiles(const std::string& pm4_file_name,
+                                      const std::string& gfxr_file_name);
+    const Pm4CaptureData& GetPm4CaptureData() const;
+    const GfxrCaptureData& GetGfxrCaptureData() const;
 
-private:
-    CaptureData::LoadResult LoadCaptureFileStream(std::istream &capture_file);
-    CaptureData::LoadResult LoadDiveFile(const std::string &file_name);
-    ProgressTracker        *m_progress_tracker;
-    Pm4CaptureData          m_pm4_capture_data;
-    GfxrCaptureData         m_gfxr_capture_data;
+ private:
+    CaptureData::LoadResult LoadCaptureFileStream(std::istream& capture_file);
+    CaptureData::LoadResult LoadDiveFile(const std::string& file_name);
+    ProgressTracker* m_progress_tracker;
+    Pm4CaptureData m_pm4_capture_data;
+    GfxrCaptureData m_gfxr_capture_data;
 };
 
 }  // namespace Dive

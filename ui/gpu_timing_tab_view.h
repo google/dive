@@ -11,9 +11,9 @@
  limitations under the License.
 */
 
-#include <QWidget>
 #include <QTableView>
 #include <QVBoxLayout>
+#include <QWidget>
 #include <vector>
 
 #include "dive_core/command_hierarchy.h"
@@ -27,43 +27,42 @@ class GpuTimingTabView : public QWidget
 {
     Q_OBJECT
 
-public:
-    explicit GpuTimingTabView(GpuTimingModel               &gpu_timing_model,
-                              const Dive::CommandHierarchy &command_hierarchy,
-                              QWidget                      *parent = nullptr);
+ public:
+    explicit GpuTimingTabView(GpuTimingModel& gpu_timing_model,
+                              const Dive::CommandHierarchy& command_hierarchy,
+                              QWidget* parent = nullptr);
 
     // Recursive function to traverse model in order and collect indices of events that will have
     // GPU timing
-    void CollectIndicesFromModel(const QAbstractItemModel &command_hierarchy_model,
-                                 const QModelIndex        &parent_index);
+    void CollectIndicesFromModel(const QAbstractItemModel& command_hierarchy_model,
+                                 const QModelIndex& parent_index);
 
     void ClearSelection();
 
-public slots:
+ public slots:
     void OnModelReset();
-    void OnEventSelectionChanged(const QModelIndex &model_index);
-    void OnSelectionChanged(const QModelIndex &index);
+    void OnEventSelectionChanged(const QModelIndex& model_index);
+    void OnSelectionChanged(const QModelIndex& index);
 
-signals:
+ signals:
     void GpuTimingDataSelected(uint64_t);
 
-private:
+ private:
     void ResizeColumns();
 
     // If the node matches a type within Dive::AvailableGpuTiming::ObjectType, then store the model
     // index in m_timed_event_indices
-    void CollectTimingIndex(Dive::NodeType     node_type,
-                            const std::string &node_desc,
-                            const QModelIndex &model_index);
+    void CollectTimingIndex(Dive::NodeType node_type, const std::string& node_desc,
+                            const QModelIndex& model_index);
 
     // Using m_timed_event_indices, converts Qt model index of an element to the id of the
     // corresponding row in this GPU timing info table
-    int EventIndexToRow(const QModelIndex &model_index);
+    int EventIndexToRow(const QModelIndex& model_index);
 
-    GpuTimingModel               &m_model;
-    const Dive::CommandHierarchy &m_command_hierarchy;
-    QTableView                   *m_table_view;
-    QVBoxLayout                  *m_main_layout;
+    GpuTimingModel& m_model;
+    const Dive::CommandHierarchy& m_command_hierarchy;
+    QTableView* m_table_view;
+    QVBoxLayout* m_main_layout;
 
     // Reverse-lookup vector used for correlating the selected Vulkan event with the highlighted
     // row in the GPU timing data

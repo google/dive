@@ -12,20 +12,19 @@
 */
 
 #include "gfxr_vulkan_command_arguments_filter_proxy_model.h"
+
 #include <cstdint>
 #include <iostream>
 #include <string>
 
 GfxrVulkanCommandArgumentsFilterProxyModel::GfxrVulkanCommandArgumentsFilterProxyModel(
-QObject                      *parent,
-const Dive::CommandHierarchy *command_hierarchy) :
-    QSortFilterProxyModel(parent),
-    m_command_hierarchy(command_hierarchy)
+    QObject* parent, const Dive::CommandHierarchy* command_hierarchy)
+    : QSortFilterProxyModel(parent), m_command_hierarchy(command_hierarchy)
 {
 }
 
 void GfxrVulkanCommandArgumentsFilterProxyModel::SetTargetParentSourceIndex(
-const QModelIndex &sourceIndex)
+    const QModelIndex& sourceIndex)
 {
     if (m_targetParentSourceIndex != sourceIndex)
     {
@@ -36,8 +35,7 @@ const QModelIndex &sourceIndex)
 }
 
 bool GfxrVulkanCommandArgumentsFilterProxyModel::IsDescendant(
-const QModelIndex &potentialDescendant,
-const QModelIndex &potentialAncestor) const
+    const QModelIndex& potentialDescendant, const QModelIndex& potentialAncestor) const
 {
     if (!potentialAncestor.isValid())
     {
@@ -64,7 +62,7 @@ const QModelIndex &potentialAncestor) const
     return false;
 }
 
-QVariant GfxrVulkanCommandArgumentsFilterProxyModel::data(const QModelIndex &index, int role) const
+QVariant GfxrVulkanCommandArgumentsFilterProxyModel::data(const QModelIndex& index, int role) const
 {
     QVariant value = QSortFilterProxyModel::data(index, role);
 
@@ -91,8 +89,7 @@ QVariant GfxrVulkanCommandArgumentsFilterProxyModel::data(const QModelIndex &ind
 }
 
 bool GfxrVulkanCommandArgumentsFilterProxyModel::filterAcceptsRow(
-int                source_row,
-const QModelIndex &source_parent) const
+    int source_row, const QModelIndex& source_parent) const
 {
     if (!m_targetParentSourceIndex.isValid())
     {

@@ -66,9 +66,9 @@ TEST(ValidateGfxrReplaySettingsTest, ReplayFlagsStrEqualsSignFail)
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     rs.replay_flags_str = "--loop-single-frame-count=200";
 
-    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
-                StatusIs(absl::StatusCode::kInvalidArgument,
-                         "replay_flags_str cannot contain '='"));
+    EXPECT_THAT(
+        ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
+        StatusIs(absl::StatusCode::kInvalidArgument, "replay_flags_str cannot contain '='"));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, DoubleLoopSingleFrameCountFail)
@@ -92,9 +92,9 @@ TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePM4DumpFail)
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     rs.run_type = GfxrReplayOptions::kPm4Dump;
 
-    EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/false).status(),
-                StatusIs(absl::StatusCode::kUnimplemented,
-                         "Dump PM4 is only implemented for Adreno GPU"));
+    EXPECT_THAT(
+        ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/false).status(),
+        StatusIs(absl::StatusCode::kUnimplemented, "Dump PM4 is only implemented for Adreno GPU"));
 }
 
 TEST(ValidateGfxrReplaySettingsTest, NonAdrenoDevicePerfCountersFail)
@@ -147,13 +147,13 @@ TEST(ValidateGfxrReplaySettingsTest, PerfCountersDefaultPass)
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     rs.run_type = GfxrReplayOptions::kPerfCounters;
-    rs.metrics = { "PLACEHOLDER_METRICS" };
+    rs.metrics = {"PLACEHOLDER_METRICS"};
 
     GfxrReplaySettings expected_rs = {};
     expected_rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     expected_rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     expected_rs.run_type = GfxrReplayOptions::kPerfCounters;
-    expected_rs.metrics = { "PLACEHOLDER_METRICS" };
+    expected_rs.metrics = {"PLACEHOLDER_METRICS"};
     expected_rs.loop_single_frame_count = 0;
     expected_rs.replay_flags_str = "--loop-single-frame-count 0";
 
@@ -256,9 +256,9 @@ TEST(ValidateGfxrReplaySettingsTest, MixFlagsSettingsPass)
     expected_rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     expected_rs.run_type = GfxrReplayOptions::kGpuTiming;
     expected_rs.loop_single_frame_count = 3;
-    expected_rs
-    .replay_flags_str = "PLACEHOLDER_FLAG_0 PLACEHOLDER_FLAG_1 --loop-single-frame-count 3 "
-                        "--enable-gpu-time";
+    expected_rs.replay_flags_str =
+        "PLACEHOLDER_FLAG_0 PLACEHOLDER_FLAG_1 --loop-single-frame-count 3 "
+        "--enable-gpu-time";
 
     EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true),
                 IsOkAndHolds(GfxrReplaySettingsEq(expected_rs)));
@@ -339,7 +339,7 @@ TEST(ValidateGfxrReplaySettingsTest, RenderDocFailsValidationWithMetrics)
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     rs.run_type = GfxrReplayOptions::kRenderDoc;
-    rs.metrics = { "PLACEHOLDER_METRICS" };
+    rs.metrics = {"PLACEHOLDER_METRICS"};
 
     EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),
                 StatusIs(absl::StatusCode::kInvalidArgument,
@@ -401,7 +401,7 @@ TEST(ValidateGfxrReplaySettingsTest, PerfCountersUseValidationLayerFail)
     rs.remote_capture_path = "PLACEHOLDER_REMOTE_CAPTURE_PATH";
     rs.local_download_dir = "PLACEHOLDER_LOCAL_DOWNLOAD_DIR";
     rs.run_type = rs.run_type = GfxrReplayOptions::kPerfCounters;
-    rs.metrics = { "PLACEHOLDER_METRICS" };
+    rs.metrics = {"PLACEHOLDER_METRICS"};
     rs.use_validation_layer = true;
 
     EXPECT_THAT(ValidateGfxrReplaySettings(rs, /*is_adreno_gpu=*/true).status(),

@@ -15,27 +15,27 @@ limitations under the License.
 */
 
 #include "vk_rt_dispatch.h"
+
 #include "common/log.h"
 
 namespace DiveLayer
 {
 
-void InitInstanceDispatchTable(VkInstance                instance,
-                               PFN_vkGetInstanceProcAddr pa,
-                               InstanceDispatchTable    *dt)
+void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa,
+                               InstanceDispatchTable* dt)
 {
     LOGI("InitInstanceDispatchTable");
 
     dt->pfn_get_instance_proc_addr = pa;
     dt->CreateDevice = (PFN_vkCreateDevice)pa(instance, "vkCreateDevice");
-    dt->EnumerateDeviceLayerProperties = (PFN_vkEnumerateDeviceLayerProperties)
-    pa(instance, "vkEnumerateDeviceLayerProperties");
+    dt->EnumerateDeviceLayerProperties =
+        (PFN_vkEnumerateDeviceLayerProperties)pa(instance, "vkEnumerateDeviceLayerProperties");
 
-    dt->EnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)
-    pa(instance, "vkEnumerateDeviceExtensionProperties");
+    dt->EnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)pa(
+        instance, "vkEnumerateDeviceExtensionProperties");
 }
 
-void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt)
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable* dt)
 {
     LOGI("InitDeviceDispatchTable");
     dt->pfn_get_device_proc_addr = pa;
@@ -46,8 +46,8 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->CmdWriteTimestamp = (PFN_vkCmdWriteTimestamp)pa(device, "vkCmdWriteTimestamp");
     dt->GetQueryPoolResults = (PFN_vkGetQueryPoolResults)pa(device, "vkGetQueryPoolResults");
     dt->DestroyCommandPool = (PFN_vkDestroyCommandPool)pa(device, "vkDestroyCommandPool");
-    dt->AllocateCommandBuffers = (PFN_vkAllocateCommandBuffers)pa(device,
-                                                                  "vkAllocateCommandBuffers");
+    dt->AllocateCommandBuffers =
+        (PFN_vkAllocateCommandBuffers)pa(device, "vkAllocateCommandBuffers");
     dt->FreeCommandBuffers = (PFN_vkFreeCommandBuffers)pa(device, "vkFreeCommandBuffers");
     dt->ResetCommandBuffer = (PFN_vkResetCommandBuffer)pa(device, "vkResetCommandBuffer");
     dt->BeginCommandBuffer = (PFN_vkBeginCommandBuffer)pa(device, "vkBeginCommandBuffer");
@@ -57,8 +57,8 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->GetDeviceQueue2 = (PFN_vkGetDeviceQueue2)pa(device, "vkGetDeviceQueue2");
     dt->GetDeviceQueue = (PFN_vkGetDeviceQueue)pa(device, "vkGetDeviceQueue");
     dt->DestroyDevice = (PFN_vkDestroyDevice)pa(device, "vkDestroyDevice");
-    dt->CmdInsertDebugUtilsLabel = (PFN_vkCmdInsertDebugUtilsLabelEXT)
-    pa(device, "vkCmdInsertDebugUtilsLabelEXT");
+    dt->CmdInsertDebugUtilsLabel =
+        (PFN_vkCmdInsertDebugUtilsLabelEXT)pa(device, "vkCmdInsertDebugUtilsLabelEXT");
 
     dt->CmdBeginRenderPass = (PFN_vkCmdBeginRenderPass)pa(device, "vkCmdBeginRenderPass");
     dt->CmdEndRenderPass = (PFN_vkCmdEndRenderPass)pa(device, "vkCmdEndRenderPass");

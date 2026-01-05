@@ -15,6 +15,8 @@
 */
 #pragma once
 
+#include <string>
+
 #include "dive_core/common/gpudefs.h"
 #include "event_state.h"
 
@@ -22,10 +24,10 @@ namespace Dive
 {
 namespace Analysis
 {
-constexpr double   kReportThresholdUs = 100.0;
+constexpr double kReportThresholdUs = 100.0;
 constexpr uint64_t kReportThresholdCycles = static_cast<uint64_t>(kReportThresholdUs * kClockMhz);
 
-void        PrintDuration(std::ostream& ostr, uint64_t cycles);
+void PrintDuration(std::ostream& ostr, uint64_t cycles);
 std::string DurationString(uint64_t cycles);
 
 EventStateInfo::ConstIterator GetStateInfoForEvent(const EventStateInfo& state, uint32_t event_id);

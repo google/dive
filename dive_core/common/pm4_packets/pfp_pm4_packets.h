@@ -53,7 +53,7 @@ typedef struct PM4_PFP_ACQUIRE_MEM__GFX09
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -139,7 +139,7 @@ typedef struct PM4_PFP_ATOMIC_GDS
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -237,7 +237,7 @@ typedef struct PM4_PFP_ATOMIC_MEM
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -293,7 +293,7 @@ typedef struct PM4_PFP_CLEAR_STATE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -314,7 +314,7 @@ typedef struct PM4_PFP_COND_EXEC
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -378,7 +378,7 @@ typedef struct PM4_PFP_COND_INDIRECT_BUFFER
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -469,7 +469,7 @@ typedef struct PM4_PFP_CONTEXT_CONTROL
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -516,7 +516,7 @@ typedef struct PM4_PFP_CONTEXT_REG_RMW
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -585,7 +585,7 @@ typedef struct PM4_PFP_COPY_DATA
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -667,7 +667,7 @@ typedef struct PM4_PFP_DISPATCH_DIRECT
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t dim_x;
@@ -686,7 +686,7 @@ typedef struct PM4_PFP_DISPATCH_DRAW
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t index_offset;
@@ -738,7 +738,7 @@ typedef struct PM4_PFP_DISPATCH_DRAW_PREAMBLE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -781,7 +781,7 @@ typedef struct PM4_PFP_DISPATCH_INDIRECT
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -853,7 +853,7 @@ typedef struct PM4_PFP_DMA_DATA
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -927,7 +927,7 @@ typedef struct PM4_PFP_DMA_DATA_FILL_MULTI
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -974,7 +974,7 @@ typedef struct PM4_PFP_DRAW_INDEX_2
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t max_size;
@@ -995,7 +995,7 @@ typedef struct PM4_PFP_DRAW_INDEX_AUTO
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t index_count;
@@ -1010,7 +1010,7 @@ typedef struct PM4_PFP_DRAW_INDEX_INDIRECT
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -1047,7 +1047,7 @@ typedef struct PM4_PFP_DRAW_INDEX_INDIRECT_MULTI
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -1112,7 +1112,7 @@ typedef struct PM4_PFP_DRAW_INDEX_MULTI_AUTO
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t prim_count;
@@ -1138,7 +1138,7 @@ typedef struct PM4_PFP_DRAW_INDEX_MULTI_INST
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t instance_count;
@@ -1165,7 +1165,7 @@ typedef struct PM4_PFP_DRAW_INDEX_OFFSET_2
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t max_size;
@@ -1184,7 +1184,7 @@ typedef struct PM4_PFP_DRAW_INDIRECT
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -1219,7 +1219,7 @@ typedef struct PM4_PFP_DRAW_INDIRECT_MULTI
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t data_offset;
@@ -1295,7 +1295,7 @@ typedef struct PM4_PFP_FRAME_CONTROL
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1317,7 +1317,7 @@ typedef struct PM4_PFP_GEN_PDEPTE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t dst_addr_lo;
@@ -1346,7 +1346,7 @@ typedef struct PM4_PFP_INDEX_ATTRIBUTES_INDIRECT
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1379,7 +1379,7 @@ typedef struct PM4_PFP_INDEX_BASE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1402,7 +1402,7 @@ typedef struct PM4_PFP_INDEX_BUFFER_SIZE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t index_buffer_size;
@@ -1421,7 +1421,7 @@ typedef struct PM4_PFP_INDIRECT_BUFFER
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1460,7 +1460,7 @@ typedef struct PM4_PFP_LOAD_CONFIG_REG
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1503,7 +1503,7 @@ typedef struct PM4_PFP_LOAD_CONTEXT_REG
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1558,7 +1558,7 @@ typedef struct PM4_PFP_LOAD_CONTEXT_REG_INDEX
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1608,7 +1608,7 @@ typedef struct PM4_PFP_LOAD_SH_REG
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1663,7 +1663,7 @@ typedef struct PM4_PFP_LOAD_SH_REG_INDEX
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1713,7 +1713,7 @@ typedef struct PM4_PFP_LOAD_UCONFIG_REG
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1756,7 +1756,7 @@ typedef struct PM4_PFP_NOP
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
 } PM4PFP_NOP, *PPM4PFP_NOP;
@@ -1767,7 +1767,7 @@ typedef struct PM4_PFP_NUM_INSTANCES
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t num_instances;
@@ -1780,7 +1780,7 @@ typedef struct PM4_PFP_OCCLUSION_QUERY
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1815,7 +1815,7 @@ typedef struct PM4_PFP_PFP_SYNC_ME
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     uint32_t dummy_data;
@@ -1836,7 +1836,7 @@ typedef struct PM4_PFP_PREAMBLE_CNTL
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1857,7 +1857,7 @@ typedef struct PM4_PFP_PRED_EXEC
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1897,7 +1897,7 @@ typedef struct PM4_PFP_PRIME_UTCL2
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1934,7 +1934,7 @@ typedef struct PM4_PFP_REWIND
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -1963,7 +1963,7 @@ typedef struct PM4_PFP_SET_BASE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2002,7 +2002,7 @@ typedef struct PM4_PFP_SET_CONTEXT_REG
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2030,7 +2030,7 @@ typedef struct PM4_PFP_SET_CONTEXT_REG_INDEX__GFX09
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2078,7 +2078,7 @@ typedef struct PM4_PFP_SET_PREDICATION
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2122,7 +2122,7 @@ typedef struct PM4_PFP_SET_SH_REG_INDEX
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2151,7 +2151,7 @@ typedef struct PM4_PFP_SET_SH_REG_OFFSET
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2200,7 +2200,7 @@ typedef struct PM4_PFP_SET_UCONFIG_REG
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2231,7 +2231,7 @@ typedef struct PM4_PFP_SET_UCONFIG_REG_INDEX
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2281,7 +2281,7 @@ typedef struct PM4_PFP_STRMOUT_BUFFER_UPDATE
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2355,7 +2355,7 @@ typedef struct PM4_PFP_WAIT_REG_MEM
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2458,7 +2458,7 @@ typedef struct PM4_PFP_WAIT_REG_MEM64
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union
@@ -2563,7 +2563,7 @@ typedef struct PM4_PFP_WRITE_DATA
     union
     {
         PM4_PFP_TYPE_3_HEADER header;
-        uint32_t              ordinal1;
+        uint32_t ordinal1;
     };
 
     union

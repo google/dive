@@ -71,6 +71,7 @@ else()
         absl::strings
         absl::statusor
         component_files
+        dive_device_resources
         version_info
         command_utils
     )

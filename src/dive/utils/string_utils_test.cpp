@@ -75,14 +75,13 @@ TEST(StringUtils, SafeConvertFromStringUnsignedInt)
 
     // Test limits
     EXPECT_TRUE(
-    SafeConvertFromString(std::to_string(std::numeric_limits<unsigned int>::max()), val));
+        SafeConvertFromString(std::to_string(std::numeric_limits<unsigned int>::max()), val));
     EXPECT_EQ(val, std::numeric_limits<unsigned int>::max());
 
     // Out of range
     // NOLINTBEGIN
-    constexpr unsigned long long too_big = static_cast<unsigned long long>(
-                                           std::numeric_limits<unsigned int>::max()) +
-                                           1;
+    constexpr unsigned long long too_big =
+        static_cast<unsigned long long>(std::numeric_limits<unsigned int>::max()) + 1;
     EXPECT_FALSE(SafeConvertFromString(std::to_string(too_big), val));
     // NOLINTEND
 }
@@ -233,9 +232,9 @@ TEST(StringUtils, RemoveQuotesTricky)
 
 TEST(StringUtils, GetTrimmedLine_Basic)
 {
-    std::string       content = "Line 1\nLine 2\nLine 3";
+    std::string content = "Line 1\nLine 2\nLine 3";
     std::stringstream ss(content);
-    std::string       line;
+    std::string line;
 
     EXPECT_TRUE(GetTrimmedLine(ss, line));
     EXPECT_EQ(line, "Line 1");
@@ -251,9 +250,9 @@ TEST(StringUtils, GetTrimmedLine_Basic)
 
 TEST(StringUtils, GetTrimmedLine_MultilineQuotes)
 {
-    std::string       content = "Header\n\"Start of multiline\nmiddle\nend of multiline\"\nFooter";
+    std::string content = "Header\n\"Start of multiline\nmiddle\nend of multiline\"\nFooter";
     std::stringstream ss(content);
-    std::string       line;
+    std::string line;
 
     EXPECT_TRUE(GetTrimmedLine(ss, line));
     EXPECT_EQ(line, "Header");
@@ -270,11 +269,12 @@ TEST(StringUtils, GetTrimmedLine_MultilineQuotes)
 TEST(StringUtils, GetTrimmedLine_EscapedQuotesInMultiline)
 {
     // "Line 1 says ""hello""\n and continues here"
-    std::string       content = "\"Line 1 says \"\"hello\"\""
-                                "\n"
-                                " and continues here\"";
+    std::string content =
+        "\"Line 1 says \"\"hello\"\""
+        "\n"
+        " and continues here\"";
     std::stringstream ss(content);
-    std::string       line;
+    std::string line;
 
     EXPECT_TRUE(GetTrimmedLine(ss, line));
     // It should preserve the double double quotes "" as they are technically valid CSV content for
@@ -288,9 +288,9 @@ TEST(StringUtils, GetTrimmedLine_EscapedQuotesInMultiline)
 TEST(StringUtils, GetTrimmedLine_UnfinishedQuote)
 {
     // A quote that opens but never closes before EOF
-    std::string       content = "Normal line\n\"This quote never ends...\nuntil EOF";
+    std::string content = "Normal line\n\"This quote never ends...\nuntil EOF";
     std::stringstream ss(content);
-    std::string       line;
+    std::string line;
 
     EXPECT_TRUE(GetTrimmedLine(ss, line));
     EXPECT_EQ(line, "Normal line");
@@ -302,7 +302,7 @@ TEST(StringUtils, GetTrimmedLine_UnfinishedQuote)
 TEST(StringUtils, GetTrimmedField_BasicCSV)
 {
     std::stringstream ss("apple,banana,cherry");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "apple");
@@ -317,7 +317,7 @@ TEST(StringUtils, GetTrimmedField_WithSpaces)
 {
     // Spaces around delimiters should be trimmed
     std::stringstream ss("  apple  ,  banana  \t,  cherry  ");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "apple");
@@ -330,7 +330,7 @@ TEST(StringUtils, GetTrimmedField_WithSpaces)
 TEST(StringUtils, GetTrimmedField_EmptyFields)
 {
     std::stringstream ss("apple,,cherry,");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "apple");
@@ -353,7 +353,7 @@ TEST(StringUtils, GetTrimmedField_QuotedSimple)
 {
     // Quotes should be removed from the final field result
     std::stringstream ss("\"apple\",\"banana\",\"cherry\"");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "apple");
@@ -367,7 +367,7 @@ TEST(StringUtils, GetTrimmedField_QuotedWithDelimiters)
 {
     // Delimiters inside quotes should be ignored
     std::stringstream ss("  \"Doe, John\"  ,30,\"New York, NY\"");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "Doe, John");
@@ -384,7 +384,7 @@ TEST(StringUtils, GetTrimmedField_EscapedQuotes)
     // "" inside a quoted field should become a single "
     // Input: "He said ""Hello""",NextField
     std::stringstream ss("\"He said \"\"Hello\"\"\",NextField");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "He said \"Hello\"");
@@ -397,7 +397,7 @@ TEST(StringUtils, GetTrimmedField_MixedQuotesAndSpaces)
 {
     // Spaces OUTSIDE the quotes should be ignored.
     std::stringstream ss("  \"apple\"  ,  banana  ");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, ','));
     EXPECT_EQ(field, "apple");
@@ -410,7 +410,7 @@ TEST(StringUtils, GetTrimmedField_DifferentDelimiter)
 {
     // Test with a different delimiter (e.g., pipe |)
     std::stringstream ss("field1|field2|field3");
-    std::string       field;
+    std::string field;
 
     EXPECT_TRUE(GetTrimmedField(ss, field, '|'));
     EXPECT_EQ(field, "field1");

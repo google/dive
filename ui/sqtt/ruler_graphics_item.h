@@ -21,13 +21,14 @@
 
 #pragma once
 #include <QGraphicsItem>
+
 #include "settings.h"
 
 #define RULER_FONT_HEIGHT 9
 
 class RulerGraphicsItem : public QGraphicsItem
 {
-public:
+ public:
     RulerGraphicsItem();
 
     // Set range
@@ -35,7 +36,7 @@ public:
 
     // Get the width of the ruler
     uint64_t GetWidth() const;
-    void     SetWidth(uint64_t width);
+    void SetWidth(uint64_t width);
 
     // Set the leftmost QGraphicsScene coordinate of ruler that is visible
     // This controls what is rendered in the viewport
@@ -50,24 +51,22 @@ public:
     uint64_t GetCyclesVisible(uint64_t visible_width, uint64_t ruler_width) const;
 
     // QGraphicsItem overrides
-    virtual QRectF       boundingRect() const Q_DECL_OVERRIDE;
+    virtual QRectF boundingRect() const Q_DECL_OVERRIDE;
     virtual QPainterPath shape() const Q_DECL_OVERRIDE;
-    virtual void         paint(QPainter                       *painter,
-                               const QStyleOptionGraphicsItem *option,
-                               QWidget                        *widget) Q_DECL_OVERRIDE;
+    virtual void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+                       QWidget* widget) Q_DECL_OVERRIDE;
 
-protected:
-    virtual void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) Q_DECL_OVERRIDE;
+ protected:
+    virtual void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) Q_DECL_OVERRIDE;
 
-private:
+ private:
     QString GetTickString(double value) const;
-    double  DetermineTextStepSize(uint64_t max_units,
-                                  uint64_t max_width,
-                                  uint64_t visible_width) const;
+    double DetermineTextStepSize(uint64_t max_units, uint64_t max_width,
+                                 uint64_t visible_width) const;
 
     uint64_t m_width;
-    int64_t  m_visible_start = 0;
-    int64_t  m_visible_width = 0;
+    int64_t m_visible_start = 0;
+    int64_t m_visible_width = 0;
 
     // Cycle values
     uint64_t m_max_cycles;

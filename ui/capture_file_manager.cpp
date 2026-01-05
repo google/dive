@@ -16,13 +16,12 @@
 
 #include "capture_file_manager.h"
 
+#include <QMessageBox>
+#include <QObject>
+#include <QReadLocker>
+#include <QThread>
 #include <filesystem>
 #include <memory>
-
-#include <QObject>
-#include <QThread>
-#include <QReadLocker>
-#include <QMessageBox>
 #include <optional>
 
 #include "debug_utils.h"
@@ -39,34 +38,26 @@ LoadFileResult::Status ToLoadFileStatus(Dive::CaptureData::LoadResult result)
 {
     switch (result)
     {
-    case Dive::CaptureData::LoadResult::kSuccess:
-        return LoadFileResult::Status::kSuccess;
-    case Dive::CaptureData::LoadResult::kFileIoError:
-        return LoadFileResult::Status::kFileIoError;
-    case Dive::CaptureData::LoadResult::kCorruptData:
-        return LoadFileResult::Status::kCorruptData;
-    case Dive::CaptureData::LoadResult::kVersionError:
-        return LoadFileResult::Status::kVersionError;
+        case Dive::CaptureData::LoadResult::kSuccess:
+            return LoadFileResult::Status::kSuccess;
+        case Dive::CaptureData::LoadResult::kFileIoError:
+            return LoadFileResult::Status::kFileIoError;
+        case Dive::CaptureData::LoadResult::kCorruptData:
+            return LoadFileResult::Status::kCorruptData;
+        case Dive::CaptureData::LoadResult::kVersionError:
+            return LoadFileResult::Status::kVersionError;
     }
     return LoadFileResult::Status::kUnknown;
 }
 }  // namespace
 
-void CaptureFileManager::RegisterCustomMetaType()
-{
-    qRegisterMetaType<LoadFileResult>();
-}
+void CaptureFileManager::RegisterCustomMetaType() { qRegisterMetaType<LoadFileResult>(); }
 
-CaptureFileManager::CaptureFileManager(QObject *parent) :
-    QObject(parent)
+CaptureFileManager::CaptureFileManager(QObject* parent) : QObject(parent)
 {
-    QObject::connect(this,
-                     &CaptureFileManager::LoadFileDone,
-                     this,
+    QObject::connect(this, &CaptureFileManager::LoadFileDone, this,
                      &CaptureFileManager::OnLoadFileDone);
-    QObject::connect(this,
-                     &CaptureFileManager::GatherTraceStatsDone,
-                     this,
+    QObject::connect(this, &CaptureFileManager::GatherTraceStatsDone, this,
                      &CaptureFileManager::OnGatherTraceStatsDone);
 }
 
@@ -80,7 +71,7 @@ CaptureFileManager::~CaptureFileManager()
     m_thread->wait();
 }
 
-void CaptureFileManager::Start(Dive::DataCore &data_core)
+void CaptureFileManager::Start(Dive::DataCore& data_core)
 {
     if (m_worker != nullptr)
     {
@@ -105,7 +96,7 @@ void CaptureFileManager::OnGatherTraceStatsDone()
     }
 }
 
-void CaptureFileManager::OnLoadFileDone(const LoadFileResult &loaded_file)
+void CaptureFileManager::OnLoadFileDone(const LoadFileResult& loaded_file)
 {
     m_working = false;
     if (m_pending_request)
@@ -119,9 +110,8 @@ void CaptureFileManager::OnLoadFileDone(const LoadFileResult &loaded_file)
     emit FileLoadingFinished(loaded_file);
 }
 
-Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FilePath &reference)
+Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FilePath& reference)
 {
-
     if (Dive::IsGfxrFile(reference.value))
     {
         auto ret = Dive::GetComponentFilesHostPaths(reference.value.parent_path(),
@@ -162,11 +152,11 @@ Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FileP
     return Dive::ComponentFilePaths{};
 }
 
-void CaptureFileManager::LoadFile(const Dive::FilePath           &reference,
-                                  const Dive::ComponentFilePaths &components)
+void CaptureFileManager::LoadFile(const Dive::FilePath& reference,
+                                  const Dive::ComponentFilePaths& components)
 {
     m_loading_in_progress = true;
-    m_pending_request = LoadFileRequest{ .reference = reference, .components = components };
+    m_pending_request = LoadFileRequest{.reference = reference, .components = components};
     // Cancel anything that depend on current capture file.
     if (!m_capture_file_context.IsNull())
     {
@@ -195,18 +185,16 @@ void CaptureFileManager::StartLoadFile()
 }
 
 LoadFileResult CaptureFileManager::LoadFileFailed(
-LoadFileResult::Status                     status,
-const CaptureFileManager::LoadFileRequest &request)
+    LoadFileResult::Status status, const CaptureFileManager::LoadFileRequest& request)
 {
-    return LoadFileResult{ .status = status,
-                           .reference = request.reference,
-                           .components = request.components };
+    return LoadFileResult{
+        .status = status, .reference = request.reference, .components = request.components};
 }
 
-LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context   &context,
-                                                const LoadFileRequest &request)
+LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
+                                                const LoadFileRequest& request)
 {
-    const auto &components = request.components;
+    const auto& components = request.components;
 
     QWriteLocker locker(&m_data_core_lock);
     // Note: this function might not run on UI thread, thus can't do any UI modification.
@@ -217,8 +205,8 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context   &context,
     if (found_gfxr_file)
     {
         // Check if the required asset file exists.
-        bool asset_file_exists = (!components.gfxa.empty() &&
-                                  std::filesystem::exists(components.gfxa));
+        bool asset_file_exists =
+            (!components.gfxa.empty() && std::filesystem::exists(components.gfxa));
 
         if (!asset_file_exists)
         {
@@ -246,55 +234,55 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context   &context,
 
     switch (file_type)
     {
-    case LoadFileResult::FileType::kUnknown:
-    {
-        return LoadFileFailed(LoadFileResult::Status::kUnsupportedFile, request);
-    }
-    case LoadFileResult::FileType::kCorrelatedFiles:
-    {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadDiveCaptureData(
-            components.gfxr.string());
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
+        case LoadFileResult::FileType::kUnknown:
         {
-            return LoadFileFailed(ToLoadFileStatus(load_res), request);
+            return LoadFileFailed(LoadFileResult::Status::kUnsupportedFile, request);
         }
+        case LoadFileResult::FileType::kCorrelatedFiles:
+        {
+            if (Dive::CaptureData::LoadResult load_res =
+                    m_data_core->LoadDiveCaptureData(components.gfxr.string());
+                load_res != Dive::CaptureData::LoadResult::kSuccess)
+            {
+                return LoadFileFailed(ToLoadFileStatus(load_res), request);
+            }
 
-        if (!m_data_core->ParseDiveCaptureData())
-        {
-            return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+            if (!m_data_core->ParseDiveCaptureData())
+            {
+                return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+            }
         }
-    }
-    break;
-    case LoadFileResult::FileType::kRdFile:
-    {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadPm4CaptureData(
-            components.pm4_rd.string());
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
+        break;
+        case LoadFileResult::FileType::kRdFile:
         {
-            return LoadFileFailed(ToLoadFileStatus(load_res), request);
-        }
+            if (Dive::CaptureData::LoadResult load_res =
+                    m_data_core->LoadPm4CaptureData(components.pm4_rd.string());
+                load_res != Dive::CaptureData::LoadResult::kSuccess)
+            {
+                return LoadFileFailed(ToLoadFileStatus(load_res), request);
+            }
 
-        if (!m_data_core->ParsePm4CaptureData())
-        {
-            return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+            if (!m_data_core->ParsePm4CaptureData())
+            {
+                return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+            }
         }
-    }
-    break;
-    case LoadFileResult::FileType::kGfxrFile:
-    {
-        if (Dive::CaptureData::LoadResult load_res = m_data_core->LoadGfxrCaptureData(
-            components.gfxr.string());
-            load_res != Dive::CaptureData::LoadResult::kSuccess)
+        break;
+        case LoadFileResult::FileType::kGfxrFile:
         {
-            return LoadFileFailed(ToLoadFileStatus(load_res), request);
-        }
+            if (Dive::CaptureData::LoadResult load_res =
+                    m_data_core->LoadGfxrCaptureData(components.gfxr.string());
+                load_res != Dive::CaptureData::LoadResult::kSuccess)
+            {
+                return LoadFileFailed(ToLoadFileStatus(load_res), request);
+            }
 
-        if (!m_data_core->ParseGfxrCaptureData())
-        {
-            return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+            if (!m_data_core->ParseGfxrCaptureData())
+            {
+                return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+            }
         }
-    }
-    break;
+        break;
     }
     return LoadFileResult{
         .status = LoadFileResult::Status::kSuccess,
@@ -318,7 +306,7 @@ void CaptureFileManager::GatherTraceStats()
     });
 }
 
-void CaptureFileManager::FillCaptureStatsResult(Dive::CaptureStats &out)
+void CaptureFileManager::FillCaptureStatsResult(Dive::CaptureStats& out)
 {
     if (m_working)
     {
@@ -328,7 +316,7 @@ void CaptureFileManager::FillCaptureStatsResult(Dive::CaptureStats &out)
     out = *m_capture_stats;
 }
 
-void CaptureFileManager::GatherTraceStatsImpl(const Dive::Context &context)
+void CaptureFileManager::GatherTraceStatsImpl(const Dive::Context& context)
 {
     auto debug_timer = DebugScopedStopwatch([&context](double duration) {
         if (context.Cancelled())
@@ -344,7 +332,6 @@ void CaptureFileManager::GatherTraceStatsImpl(const Dive::Context &context)
     QReadLocker locker(&m_data_core_lock);
 
     // Gather the trace stats and display in the overview tab
-    Dive::TraceStats{}.GatherTraceStats(context,
-                                        m_data_core->GetCaptureMetadata(),
+    Dive::TraceStats{}.GatherTraceStats(context, m_data_core->GetCaptureMetadata(),
                                         *m_capture_stats);
 }

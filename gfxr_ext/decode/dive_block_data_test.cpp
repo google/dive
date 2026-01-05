@@ -25,7 +25,7 @@ namespace
 
 class DiveBlockDataTestFixture : public testing::Test
 {
-protected:
+ protected:
     void SetUp() override
     {
         // Set of blocks with valid contiguous offset & size
@@ -82,9 +82,9 @@ protected:
         return "modified, content length:" + std::to_string(m_element->size());
     }
 
-    DiveBlockData                                   d = {};
-    TestBlockVisitor                                v = {};
-    std::vector<std::pair<uint32_t, uint32_t>>      o = {};  // offset & size
+    DiveBlockData d = {};
+    TestBlockVisitor v = {};
+    std::vector<std::pair<uint32_t, uint32_t>> o = {};  // offset & size
     std::vector<std::shared_ptr<std::vector<char>>> m = {};
 };
 

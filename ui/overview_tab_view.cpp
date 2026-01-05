@@ -14,29 +14,30 @@
  limitations under the License.
 */
 
-#include <QApplication>
-#include <QSplitter>
-#include <QVBoxLayout>
+#include "overview_tab_view.h"
+
 #include <qclipboard.h>
 #include <qobject.h>
 
+#include <QApplication>
+#include <QSplitter>
+#include <QVBoxLayout>
+
 #include "dive_core/data_core.h"
-#include "trace_stats/trace_stats.h"
-#include "most_expensive_events_view.h"
-#include "overview_tab_view.h"
 #include "draw_dispatch_stats_tab_view.h"
+#include "misc_stats_tab_view.h"
+#include "most_expensive_events_view.h"
 #include "problems_view.h"
 #include "tile_stats_tab_view.h"
-#include "misc_stats_tab_view.h"
+#include "trace_stats/trace_stats.h"
 
 // =================================================================================================
 // OverviewTabView
 // =================================================================================================
-OverviewTabView::OverviewTabView(const Dive::CaptureMetadata &capture_metadata,
-                                 const Dive::CaptureStats    &stats) :
-    m_stats(stats)
+OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& capture_metadata,
+                                 const Dive::CaptureStats& stats)
+    : m_stats(stats)
 {
-
     m_clipboard_button = new QPushButton();
     m_clipboard_button->setIcon(QIcon(":/images/copy.png"));
     m_clipboard_button->setToolTip("Copy all trace stats to clipboard");
@@ -47,18 +48,16 @@ OverviewTabView::OverviewTabView(const Dive::CaptureMetadata &capture_metadata,
 
     m_tab_widget = new QTabWidget();
     m_tab_widget->setCornerWidget(m_clipboard_button, Qt::TopRightCorner);
-    m_draw_dispatch_statistics_view_index = m_tab_widget->addTab(m_draw_dispatch_statistics_view,
-                                                                 "Draw/Dispatch Stats");
+    m_draw_dispatch_statistics_view_index =
+        m_tab_widget->addTab(m_draw_dispatch_statistics_view, "Draw/Dispatch Stats");
     m_tile_statistics_view_tab_index = m_tab_widget->addTab(m_tile_statistics_view, "Tile Stats");
     m_misc_statistics_view_tab_index = m_tab_widget->addTab(m_misc_statistics_view, "Misc Stats");
 
-    QVBoxLayout *main_layout = new QVBoxLayout();
+    QVBoxLayout* main_layout = new QVBoxLayout();
     main_layout->addWidget(m_tab_widget);
     setLayout(main_layout);
 
-    QObject::connect(m_clipboard_button,
-                     &QPushButton::clicked,
-                     this,
+    QObject::connect(m_clipboard_button, &QPushButton::clicked, this,
                      &OverviewTabView::CopyStatistics);
 }
 
@@ -74,10 +73,10 @@ void OverviewTabView::LoadStatistics()
 void OverviewTabView::CopyStatistics()
 {
     std::ostringstream oss;
-    Dive::TraceStats   trace_stats;
+    Dive::TraceStats trace_stats;
     trace_stats.PrintTraceStats(m_stats, oss);
 
-    QClipboard *clipboard = QApplication::clipboard();
+    QClipboard* clipboard = QApplication::clipboard();
     clipboard->clear(QClipboard::Mode::Clipboard);
     clipboard->setText(QString::fromStdString(oss.str()));
 }

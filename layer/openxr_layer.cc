@@ -16,26 +16,27 @@ limitations under the License.
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+
 #include <cstring>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 
-#include "common/log.h"
 #include "capture_service/trace_mgr.h"
+#include "common/log.h"
 #include "layer_common.h"
 #include "openxr/openxr_loader_negotiation.h"
 #include "xr_generated_dispatch_table.h"
 
 #if defined(__GNUC__) && __GNUC__ >= 4
-#    define LAYER_EXPORT __attribute__((visibility("default")))
+#define LAYER_EXPORT __attribute__((visibility("default")))
 #elif defined(__SUNPRO_C) && (__SUNPRO_C >= 0x590)
-#    define LAYER_EXPORT __attribute__((visibility("default")))
+#define LAYER_EXPORT __attribute__((visibility("default")))
 #elif defined(_WIN32)
-#    define LAYER_EXPORT __declspec(dllexport)
+#define LAYER_EXPORT __declspec(dllexport)
 #else
-#    define LAYER_EXPORT
+#define LAYER_EXPORT
 #endif
 
 namespace DiveLayer
@@ -48,26 +49,26 @@ const char kDiveXrLayerName[] = "XR_APILAYER_dive";
 
 struct XrInstanceData
 {
-    XrInstance               instance;
+    XrInstance instance;
     XrGeneratedDispatchTable dispatch_table;
 };
 
 struct XrSessionData
 {
-    XrSession                session;
+    XrSession session;
     XrGeneratedDispatchTable dispatch_table;
 };
 
-static thread_local XrInstanceData *last_used_xr_instance_data = nullptr;
-static thread_local XrSessionData  *last_used_xr_session_data = nullptr;
+static thread_local XrInstanceData* last_used_xr_instance_data = nullptr;
+static thread_local XrSessionData* last_used_xr_session_data = nullptr;
 
-std::mutex                                                     g_xr_instance_mutex;
+std::mutex g_xr_instance_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<XrInstanceData>> g_xr_instance_data;
 
-std::mutex                                                    g_xr_session_mutex;
+std::mutex g_xr_session_mutex;
 std::unordered_map<uintptr_t, std::unique_ptr<XrSessionData>> g_xr_session_data;
 
-XrInstanceData *GetXrInstanceLayerData(uintptr_t key)
+XrInstanceData* GetXrInstanceLayerData(uintptr_t key)
 {
     if (last_used_xr_instance_data && DataKey(last_used_xr_instance_data->instance) == key)
     {
@@ -75,16 +76,15 @@ XrInstanceData *GetXrInstanceLayerData(uintptr_t key)
     }
 
     std::lock_guard<std::mutex> lock(g_xr_instance_mutex);
-    auto                        iter = g_xr_instance_data.find(key);
-    if (iter == g_xr_instance_data.end())
-        return nullptr;
+    auto iter = g_xr_instance_data.find(key);
+    if (iter == g_xr_instance_data.end()) return nullptr;
 
     last_used_xr_instance_data = iter->second.get();
 
     return last_used_xr_instance_data;
 }
 
-XrSessionData *GetXrSessionLayerData(uintptr_t key)
+XrSessionData* GetXrSessionLayerData(uintptr_t key)
 {
     if (last_used_xr_session_data && DataKey(last_used_xr_session_data->session) == key)
     {
@@ -92,15 +92,14 @@ XrSessionData *GetXrSessionLayerData(uintptr_t key)
     }
 
     std::lock_guard<std::mutex> lock(g_xr_session_mutex);
-    auto                        iter = g_xr_session_data.find(key);
-    if (iter == g_xr_session_data.end())
-        return nullptr;
+    auto iter = g_xr_session_data.find(key);
+    if (iter == g_xr_session_data.end()) return nullptr;
     last_used_xr_session_data = iter->second.get();
     return last_used_xr_session_data;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession             session,
-                                                      const XrFrameEndInfo *frameEndInfo)
+XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession session,
+                                                      const XrFrameEndInfo* frameEndInfo)
 {
     XrResult result = XrResult::XR_ERROR_HANDLE_INVALID;
 
@@ -118,16 +117,14 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession             sess
     return result;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL
-ApiDiveLayerXrCreateApiLayerInstance(const XrInstanceCreateInfo        *info,
-                                     const struct XrApiLayerCreateInfo *apiLayerInfo,
-                                     XrInstance                        *instance)
+XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateApiLayerInstance(
+    const XrInstanceCreateInfo* info, const struct XrApiLayerCreateInfo* apiLayerInfo,
+    XrInstance* instance)
 {
-
     LOGD("ApiDiveLayerXrCreateApiLayerInstance called.\n");
-    PFN_xrGetInstanceProcAddr    next_get_instance_proc_addr = nullptr;
+    PFN_xrGetInstanceProcAddr next_get_instance_proc_addr = nullptr;
     PFN_xrCreateApiLayerInstance next_create_api_layer_instance = nullptr;
-    XrApiLayerCreateInfo         new_api_layer_info = {};
+    XrApiLayerCreateInfo new_api_layer_info = {};
 
     // Validate the API layer info and next API layer info structures before we
     // try to use them
@@ -164,13 +161,12 @@ ApiDiveLayerXrCreateApiLayerInstance(const XrInstanceCreateInfo        *info,
     auto id = std::make_unique<XrInstanceData>();
     id->instance = returned_instance;
 
-    GeneratedXrPopulateDispatchTable(&id->dispatch_table,
-                                     returned_instance,
+    GeneratedXrPopulateDispatchTable(&id->dispatch_table, returned_instance,
                                      next_get_instance_proc_addr);
 
     {
         std::lock_guard<std::mutex> lock(g_xr_instance_mutex);
-        auto                        key = DataKey(returned_instance);
+        auto key = DataKey(returned_instance);
         LOGD("key is %lu , instance is %p \n", key, returned_instance);
         g_xr_instance_data[key] = std::move(id);
     }
@@ -180,10 +176,9 @@ ApiDiveLayerXrCreateApiLayerInstance(const XrInstanceCreateInfo        *info,
 
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroyInstance(XrInstance instance)
 {
-
     LOGD("ApiDiveLayerXrDestroyInstance\n");
     XrResult result = XR_SUCCESS;
-    auto     sess_data = GetXrInstanceLayerData(DataKey(instance));
+    auto sess_data = GetXrInstanceLayerData(DataKey(instance));
     if (sess_data)
     {
         result = sess_data->dispatch_table.DestroyInstance(instance);
@@ -198,15 +193,14 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroyInstance(XrInstance instance
     return result;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateSession(XrInstance                 instance,
-                                                           const XrSessionCreateInfo *createInfo,
-                                                           XrSession                 *session)
+XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateSession(XrInstance instance,
+                                                           const XrSessionCreateInfo* createInfo,
+                                                           XrSession* session)
 {
     XrResult result = XR_SUCCESS;
-    auto     inst_data = GetXrInstanceLayerData(DataKey(instance));
+    auto inst_data = GetXrInstanceLayerData(DataKey(instance));
     LOGD("ApiDiveLayerXrCreateSession DataKey(instance) is %lu , instance is %p \n",
-         DataKey(instance),
-         instance);
+         DataKey(instance), instance);
 
     if (inst_data)
     {
@@ -224,9 +218,8 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateSession(XrInstance           
     id->session = *session;
     id->dispatch_table = inst_data->dispatch_table;
     {
-
         std::lock_guard<std::mutex> lock(g_xr_session_mutex);
-        auto                        key = DataKey(*session);
+        auto key = DataKey(*session);
         LOGD("ApiDiveLayerXrCreateSession key %lu, sess %p\n", key, *session);
 
         g_xr_session_data[key] = std::move(id);
@@ -254,12 +247,11 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroySession(XrSession session)
     return XrResult::XR_ERROR_HANDLE_INVALID;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance          instance,
-                                                                 const char         *name,
-                                                                 PFN_xrVoidFunction *function)
+XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance instance,
+                                                                 const char* name,
+                                                                 PFN_xrVoidFunction* function)
 {
-
-    XrResult    result = XR_ERROR_HANDLE_INVALID;
+    XrResult result = XR_ERROR_HANDLE_INVALID;
     std::string func_name = name;
     LOGD("xrGetInstanceProcAddr:  %s\n", func_name.c_str());
 
@@ -301,12 +293,10 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance     
 
 extern "C"
 {
-    LAYER_EXPORT XRAPI_ATTR XrResult XRAPI_CALL
-    xrNegotiateLoaderApiLayerInterface(const XrNegotiateLoaderInfo *loaderInfo,
-                                       const char * /*apiLayerName*/,
-                                       XrNegotiateApiLayerRequest *apiLayerRequest)
+    LAYER_EXPORT XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderApiLayerInterface(
+        const XrNegotiateLoaderInfo* loaderInfo, const char* /*apiLayerName*/,
+        XrNegotiateApiLayerRequest* apiLayerRequest)
     {
-
         LOGD("%s : xrNegotiateLoaderApiLayerInterface\n", kDiveXrLayerName);
         if (nullptr == loaderInfo || nullptr == apiLayerRequest ||
             loaderInfo->structType != XR_LOADER_INTERFACE_STRUCT_LOADER_INFO ||

@@ -29,7 +29,7 @@ namespace cli
 
 class Command
 {
-public:
+ public:
     enum Visibility
     {
         kHidden = 0,
@@ -39,19 +39,19 @@ public:
     Command(const char* name, Visibility Visibility);
     virtual ~Command();
     // `at`: command line arg currently being processed
-    virtual int         operator()(int argc, int at, char** argv) const = 0;
-    virtual int         Help(int argc, int at, char** argv) const = 0;
+    virtual int operator()(int argc, int at, char** argv) const = 0;
+    virtual int Help(int argc, int at, char** argv) const = 0;
     virtual std::string Description() const = 0;
 
-    inline Visibility         GetVisibility() const { return m_visibility; }
+    inline Visibility GetVisibility() const { return m_visibility; }
     inline const std::string& GetName() const { return m_name; }
 
-protected:
+ protected:
     static std::string ProgramName(const char* fullpath);
 
-private:
+ private:
     std::string m_name;
-    Visibility  m_visibility;
+    Visibility m_visibility;
 };
 
 struct HelpCommand;
@@ -64,12 +64,14 @@ struct PacketCommand;
 struct InfoCommand;
 struct RawPM4Command;
 
-template<typename T> struct CommandOf
+template <typename T>
+struct CommandOf
 {
     static const Command& Get();
 };
 
-template<> struct CommandOf<HelpCommand>
+template <>
+struct CommandOf<HelpCommand>
 {
     static const Command& Get(const std::map<std::string, const Command*>*);
 };

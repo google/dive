@@ -26,7 +26,7 @@ int main(int argc, char** argv)
     Pm4InfoInit();
 
     std::map<std::string, const Command*> commands;
-    std::vector<const Command*>           commandlist = {
+    std::vector<const Command*> commandlist = {
         // public
         &CommandOf<HelpCommand>::Get(&commands),
         &CommandOf<VersionCommand>::Get(),

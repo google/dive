@@ -12,10 +12,11 @@
 */
 
 #include "draw_dispatch_stats_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
+
 #include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
 
 constexpr std::array<Dive::Stats::Type, 28> kDrawDispatchStats = {
     Dive::Stats::kBinningDraws,
@@ -53,17 +54,16 @@ constexpr std::array<Dive::Stats::Type, 28> kDrawDispatchStats = {
     Dive::Stats::kMedianGPRs,
 };
 
-constexpr std::array<const char *, Dive::Stats::kNumStats> kStatDescriptions = [] {
-    std::array<const char *, Dive::Stats::kNumStats> arr{};
-    for (const auto &[stat, description] : Dive::kStatMap)
+constexpr std::array<const char*, Dive::Stats::kNumStats> kStatDescriptions = [] {
+    std::array<const char*, Dive::Stats::kNumStats> arr{};
+    for (const auto& [stat, description] : Dive::kStatMap)
     {
         arr[stat] = description;
     }
     return arr;
 }();
 
-DrawDispatchStatsModel::DrawDispatchStatsModel(QObject *parent) :
-    QAbstractItemModel(parent)
+DrawDispatchStatsModel::DrawDispatchStatsModel(QObject* parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
     headers.append(QString::fromStdString("Statistic"));
@@ -76,7 +76,7 @@ DrawDispatchStatsModel::DrawDispatchStatsModel(QObject *parent) :
 
 //--------------------------------------------------------------------------------------------------
 void DrawDispatchStatsModel::LoadData(
-const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list)
+    const std::array<uint64_t, Dive::Stats::kNumStats>& stats_list)
 {
     beginResetModel();
     // Clear existing data
@@ -85,7 +85,7 @@ const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list)
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex DrawDispatchStatsModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex DrawDispatchStatsModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -98,17 +98,14 @@ QModelIndex DrawDispatchStatsModel::index(int row, int column, const QModelIndex
         return QModelIndex();
     }
 
-    return createIndex(row, column, (void *)0);
+    return createIndex(row, column, (void*)0);
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex DrawDispatchStatsModel::parent(const QModelIndex &index) const
-{
-    return QModelIndex();
-}
+QModelIndex DrawDispatchStatsModel::parent(const QModelIndex& index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
-int DrawDispatchStatsModel::rowCount(const QModelIndex &parent) const
+int DrawDispatchStatsModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -118,13 +115,13 @@ int DrawDispatchStatsModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int DrawDispatchStatsModel::columnCount(const QModelIndex &parent) const
+int DrawDispatchStatsModel::columnCount(const QModelIndex& parent) const
 {
     return m_headers.size();
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant DrawDispatchStatsModel::data(const QModelIndex &index, int role) const
+QVariant DrawDispatchStatsModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid() || role != Qt::DisplayRole || m_stats_list.empty())
     {
@@ -164,9 +161,8 @@ QVariant DrawDispatchStatsModel::data(const QModelIndex &index, int role) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant DrawDispatchStatsModel::headerData(int             section,
-                                            Qt::Orientation orientation,
-                                            int             role) const
+QVariant DrawDispatchStatsModel::headerData(int section, Qt::Orientation orientation,
+                                            int role) const
 {
     if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
     {

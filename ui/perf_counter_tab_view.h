@@ -11,10 +11,10 @@
  limitations under the License.
 */
 
-#include <QWidget>
-#include <QTableView>
-#include <QPushButton>
 #include <QMenu>
+#include <QPushButton>
+#include <QTableView>
+#include <QWidget>
 #pragma once
 
 // Forward declaration
@@ -25,37 +25,37 @@ class QSortFilterProxyModel;
 class PerfCounterTabView : public QWidget
 {
     Q_OBJECT
-public:
-    explicit PerfCounterTabView(PerfCounterModel &perf_counter_model, QWidget *parent = nullptr);
+ public:
+    explicit PerfCounterTabView(PerfCounterModel& perf_counter_model, QWidget* parent = nullptr);
     void ClearSelection();
     void CorrelateCounter(uint64_t index);
 
-public slots:
+ public slots:
     void OnSearchBarVisibilityChange(bool isHidden);
-    void OnSelectionChanged(const QModelIndex &index);
+    void OnSelectionChanged(const QModelIndex& index);
     void OnSearchCounters();
-    void OnSearch(const QString &text);
+    void OnSearch(const QString& text);
     void OnNextMatch();
     void OnPrevMatch();
     void OnSortApplied(int column_index);
     void OnResetSorting();
-    void OnSortingCompletedAndScroll(const QModelIndex &index_to_map);
+    void OnSortingCompletedAndScroll(const QModelIndex& index_to_map);
 
-signals:
+ signals:
     void UpdateSearchInfo(uint64_t curr_item_pos, uint64_t total_search_results);
     void HideOtherSearchBars();
     void CounterSelected(uint64_t);
 
-private:
+ private:
     void ConnectSearchBar();
     void DisconnectSearchBar();
     void ResizeColumns();
 
-    QSortFilterProxyModel *m_proxy_model;
-    PerfCounterModel      &m_perf_counter_model;
-    QTableView            *m_perf_counter_view;
-    QPushButton           *m_search_trigger_button;
-    SearchBar             *m_search_bar;
-    QPushButton           *m_reset_sorting_button;
-    QHeaderView           *m_horizontal_header;
+    QSortFilterProxyModel* m_proxy_model;
+    PerfCounterModel& m_perf_counter_model;
+    QTableView* m_perf_counter_view;
+    QPushButton* m_search_trigger_button;
+    SearchBar* m_search_bar;
+    QPushButton* m_reset_sorting_button;
+    QHeaderView* m_horizontal_header;
 };

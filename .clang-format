@@ -8,18 +8,13 @@ ColumnLimit: 100
 
 Language: Cpp
 
-# Residual from Dive style.
-AccessModifierOffset: -4
-AlignConsecutiveDeclarations:
-  Enabled: true
-AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
-AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: MultiLine
-BinPackArguments: false
-BinPackParameters: false
+# Google style: access modifier indent = 1
+AccessModifierOffset: -3
+
+# Fix clang-format-18's Google style:
+PointerAlignment: Left
+
+# Dive Specific:
 BraceWrapping:
   AfterCaseLabel: true
   AfterClass: true
@@ -34,21 +29,5 @@ BraceWrapping:
   BeforeElse: true
   SplitEmptyRecord: false
 BreakBeforeBraces: Custom
-BreakBeforeTernaryOperators: false
-BreakConstructorInitializers: AfterColon
-BreakInheritanceList: AfterColon
-ContinuationIndentWidth: 0
-Cpp11BracedListStyle: false
-DerivePointerAlignment: true
-IncludeBlocks: Preserve
-IndentCaseLabels: false
-IndentPPDirectives: AfterHash
-KeepEmptyLinesAtTheStartOfBlocks: true
-KeepEmptyLinesAtEOF: false
-PackConstructorInitializers: Never
-PenaltyBreakAssignment: 2000
-PenaltyBreakBeforeFirstCallParameter: 10000
-SortIncludes: Never
-SortUsingDeclarations: Lexicographic
-SpaceAfterTemplateKeyword: false
+
 

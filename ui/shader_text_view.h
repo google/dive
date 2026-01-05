@@ -27,24 +27,19 @@ class ShaderTextView : public QTextEdit
 {
     Q_OBJECT
 
-public:
+ public:
     ShaderTextView();
     void EnableHoverEvent(bool enabled = true);
 
-private:
+ private:
     bool m_hover_enabled = false;
-signals:
-    void HoverEnter(HoverHelp::Item item,
-                    uint32_t        param1 = UINT32_MAX,
-                    uint32_t        param2 = UINT32_MAX,
-                    uint32_t        param3 = UINT32_MAX,
-                    const char     *custom_string = nullptr);
-    void HoverExit(HoverHelp::Item item,
-                   uint32_t        param1 = UINT32_MAX,
-                   uint32_t        param2 = UINT32_MAX,
-                   uint32_t        param3 = UINT32_MAX,
-                   const char     *custom_string = nullptr);
-protected slots:
-    void enterEvent(QEvent *event);
-    void leaveEvent(QEvent *event);
+ signals:
+    void HoverEnter(HoverHelp::Item item, uint32_t param1 = UINT32_MAX,
+                    uint32_t param2 = UINT32_MAX, uint32_t param3 = UINT32_MAX,
+                    const char* custom_string = nullptr);
+    void HoverExit(HoverHelp::Item item, uint32_t param1 = UINT32_MAX, uint32_t param2 = UINT32_MAX,
+                   uint32_t param3 = UINT32_MAX, const char* custom_string = nullptr);
+ protected slots:
+    void enterEvent(QEvent* event);
+    void leaveEvent(QEvent* event);
 };

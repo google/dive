@@ -24,7 +24,6 @@ limitations under the License.
 #include <memory>
 
 #include "decode/file_processor.h"
-
 #include "dive_block_data.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
@@ -32,7 +31,7 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 class DiveFileProcessor : public FileProcessor
 {
-public:
+ public:
     void SetLoopSingleFrameCount(uint64_t loop_single_frame_count);
 
     void SetDiveBlockData(std::shared_ptr<DiveBlockData> p_block_data);
@@ -41,25 +40,24 @@ public:
     // overwriting existing file if present
     bool WriteFile(const std::string& name, const std::string& content);
 
-protected:
-    bool ProcessFrameMarker(const format::BlockHeader& block_header,
-                            format::MarkerType         marker_type,
-                            bool&                      should_break) override;
+ protected:
+    bool ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type,
+                            bool& should_break) override;
 
     bool ProcessStateMarker(const format::BlockHeader& block_header,
-                            format::MarkerType         marker_type) override;
+                            format::MarkerType marker_type) override;
 
     void StoreBlockInfo() override;
 
-private:
+ private:
     // The block index of the state end marker
-    uint64_t state_end_marker_block_index_{ 0 };
+    uint64_t state_end_marker_block_index_{0};
     // Application will terminate after the single frame has been looped loop_single_frame_count_
     // times. If 0, application will loop infinitely.
-    uint64_t loop_single_frame_count_{ 1 };
+    uint64_t loop_single_frame_count_{1};
 
     // Capture file offset of the marker that indicates the end of resources setup.
-    int64_t state_end_marker_file_offset_{ 0 };
+    int64_t state_end_marker_file_offset_{0};
 
     // The DiveBlockData object that contains the metadata for the original GFXR file and
     // modifications

@@ -86,8 +86,8 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
 {
     auto third_party_licenses = new QLabel("Third Party Licenses:");
 
-    auto  license_notice = new QPlainTextEdit();
-    QFile licenseFile{ QDir{ QCoreApplication::applicationDirPath() }.filePath("NOTICE") };
+    auto license_notice = new QPlainTextEdit();
+    QFile licenseFile{QDir{QCoreApplication::applicationDirPath()}.filePath("NOTICE")};
     if (licenseFile.open(QIODevice::ReadOnly))
     {
         license_notice->setPlainText(licenseFile.readAll());

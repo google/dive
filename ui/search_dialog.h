@@ -24,26 +24,26 @@ class SearchDialog : public QDialog
 {
     Q_OBJECT
 
-public:
+ public:
     SearchDialog(QWidget* parent = nullptr, const QString& title = "");
 
-public slots:
+ public slots:
     void newSearchResults();
     void prevSearchedItem();
     void nextSearchedItem();
     void resetSearchResults();
     void updateSearchResults(uint64_t curr_item_pos, uint64_t total_num_of_items);
 
-signals:
+ signals:
     void new_search(const QString& search_string);
     void prev_search();
     void next_search();
 
-private:
-    bool         searched = false;
-    QLineEdit*   m_input = nullptr;
+ private:
+    bool searched = false;
+    QLineEdit* m_input = nullptr;
     QPushButton* m_search = nullptr;
     QPushButton* m_prev = nullptr;
     QPushButton* m_next = nullptr;
-    QLabel*      m_search_results = nullptr;
+    QLabel* m_search_results = nullptr;
 };

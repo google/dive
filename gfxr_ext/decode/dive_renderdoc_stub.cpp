@@ -22,9 +22,9 @@ limitations under the License.
 // util/logging.h) will have this problem when compiled on Windows (i.e. for unit tests)
 #define NOMINMAX
 
+#include "third_party/renderdoc/renderdoc_app.h"
 #include "util/defines.h"
 #include "util/logging.h"
-#include "third_party/renderdoc/renderdoc_app.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)

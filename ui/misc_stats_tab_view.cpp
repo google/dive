@@ -12,20 +12,21 @@
 */
 
 #include "misc_stats_tab_view.h"
-#include "misc_stats_model.h"
-#include "search_bar.h"
+
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QVBoxLayout>
 #include <QIcon>
 #include <QPoint>
+#include <QVBoxLayout>
 #include <iostream>
+
+#include "misc_stats_model.h"
 #include "object_names.h"
+#include "search_bar.h"
 #include "trace_stats/trace_stats.h"
 
-MiscStatsTabView::MiscStatsTabView(const Dive::CaptureStats &stats, QWidget *parent) :
-    QWidget(parent),
-    m_stats(stats)
+MiscStatsTabView::MiscStatsTabView(const Dive::CaptureStats& stats, QWidget* parent)
+    : QWidget(parent), m_stats(stats)
 {
     m_misc_stats_model = new MiscStatsModel();
     m_misc_stats_view = new QTableView();
@@ -33,11 +34,11 @@ MiscStatsTabView::MiscStatsTabView(const Dive::CaptureStats &stats, QWidget *par
     m_misc_stats_view->setModel(m_misc_stats_model);
     ResizeColumns(m_misc_stats_model, m_misc_stats_view);
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addWidget(m_misc_stats_view);
 }
 
-void MiscStatsTabView::ResizeColumns(QAbstractItemModel *model, QTableView *view)
+void MiscStatsTabView::ResizeColumns(QAbstractItemModel* model, QTableView* view)
 {
     // Resize columns to fit the content
     uint32_t column_count = (uint32_t)model->columnCount(QModelIndex());

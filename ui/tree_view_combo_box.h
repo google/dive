@@ -22,14 +22,14 @@ class TreeViewComboBox : public QComboBox
 {
     Q_OBJECT
 
-public:
-    TreeViewComboBox(QWidget *parent = 0);
+ public:
+    TreeViewComboBox(QWidget* parent = 0);
 
     virtual void showPopup();
 
-public slots:
-    void selectIndex(const QModelIndex &);
+ public slots:
+    void selectIndex(const QModelIndex&);
 
-private:
-    QTreeView *m_tree_view;
+ private:
+    QTreeView* m_tree_view;
 };

@@ -23,8 +23,8 @@ limitations under the License.
 #include <string>
 #include <thread>
 
-#include "messages.h"
 #include "message_handler.h"
+#include "messages.h"
 
 namespace Network
 {
@@ -32,11 +32,11 @@ namespace Network
 // Default message handler if user doesn't provide/implement one.
 class DefaultMessageHandler : public IMessageHandler
 {
-public:
+ public:
     DefaultMessageHandler();
     void OnConnect() override;
     void HandleMessage(std::unique_ptr<ISerializable> message,
-                       SocketConnection*              client_conn) override;
+                       SocketConnection* client_conn) override;
     void OnDisconnect() override;
 };
 
@@ -46,10 +46,10 @@ public:
 // The server is designed to accept only one client connection at a time.
 class UnixDomainServer
 {
-public:
+ public:
     // Constructs the server, taking ownership of the provided IMessageHandler.
     explicit UnixDomainServer(
-    std::unique_ptr<IMessageHandler> handler = std::make_unique<DefaultMessageHandler>());
+        std::unique_ptr<IMessageHandler> handler = std::make_unique<DefaultMessageHandler>());
 
     // Stops the server and cleans up all resources.
     ~UnixDomainServer();
@@ -63,7 +63,7 @@ public:
     // Gracefully stops the server thread and closes connections.
     void Stop();
 
-private:
+ private:
     // The primary run loop for the server's worker thread.
     void AcceptAndHandleClientLoop();
 
@@ -78,9 +78,9 @@ private:
     std::thread m_server_thread;
 
     std::unique_ptr<IMessageHandler> m_handler;
-    std::atomic<bool>                m_is_running;
-    std::mutex                       m_client_mutex;
-    std::mutex                       m_wait_mutex;
-    std::condition_variable          m_wait_cv;
+    std::atomic<bool> m_is_running;
+    std::mutex m_client_mutex;
+    std::mutex m_wait_mutex;
+    std::condition_variable m_wait_cv;
 };
 }  // namespace Network

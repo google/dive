@@ -16,11 +16,11 @@
 
 #include "trace_stats.h"
 
-#include <functional>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
 #include <deque>
+#include <functional>
+#include <mutex>
+#include <thread>
 
 #include "dive_core/event_state.h"
 
@@ -31,13 +31,13 @@ namespace
 
 class ThreadPool
 {
-public:
+ public:
     ThreadPool() = default;
-    ThreadPool(const ThreadPool &) = delete;
-    ThreadPool &operator=(const ThreadPool &) = delete;
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
     ~ThreadPool() { Stop(); }
 
-    void Run(std::function<void()> &&func)
+    void Run(std::function<void()>&& func)
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -71,7 +71,7 @@ public:
             std::swap(workers, m_workers);
         }
         m_condition_variable.notify_all();
-        for (std::thread &worker : workers)
+        for (std::thread& worker : workers)
         {
             worker.join();
         }
@@ -86,7 +86,7 @@ public:
                                       GetDefaultThreadCount());
     }
 
-private:
+ private:
     std::function<void()> NextTask()
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -114,18 +114,17 @@ private:
         }
     }
 
-    bool                              m_running;
-    std::mutex                        m_mutex;
-    std::deque<std::thread>           m_workers;
+    bool m_running;
+    std::mutex m_mutex;
+    std::deque<std::thread> m_workers;
     std::deque<std::function<void()>> m_tasks;
-    std::condition_variable           m_condition_variable;
+    std::condition_variable m_condition_variable;
 };
 
 }  // namespace
 
-#define CHECK_AND_TRACK_STATE_1(stats_enum, state)                   \
-    if (event_state_it->Is##state##Set() && event_state_it->state()) \
-        stats_list[stats_enum]++;
+#define CHECK_AND_TRACK_STATE_1(stats_enum, state) \
+    if (event_state_it->Is##state##Set() && event_state_it->state()) stats_list[stats_enum]++;
 
 #define CHECK_AND_TRACK_STATE_2(stats_enum, state1, state2)                       \
     if (event_state_it->Is##state1##Set() && event_state_it->Is##state2##Set() && \
@@ -140,13 +139,11 @@ private:
 
 #define CHECK_AND_TRACK_STATE_EQUAL(stats_enum, state, state_value) \
     if (event_state_it->Is##state##Set())                           \
-        if (event_state_it->state() == state_value)                 \
-            stats_list[stats_enum]++;
+        if (event_state_it->state() == state_value) stats_list[stats_enum]++;
 
 #define CHECK_AND_TRACK_STATE_NOT_EQUAL(stats_enum, state, state_value) \
     if (event_state_it->Is##state##Set())                               \
-        if (event_state_it->state() != state_value)                     \
-            stats_list[stats_enum]++;
+        if (event_state_it->state() != state_value) stats_list[stats_enum]++;
 
 #define FUNC_CHOOSER(_f1, _f2, _f3, _f4, ...) _f4
 #define MSVC_WORKAROUND(argsWithParentheses) FUNC_CHOOSER argsWithParentheses
@@ -154,9 +151,9 @@ private:
 // Trailing , is workaround for GCC/CLANG, suppressing false positive error "ISO C99 requires rest
 // arguments to be used" MSVC_WORKAROUND is workaround for MSVC for counting # of arguments
 // correctly
-#define CHECK_AND_TRACK_STATE_N(...) \
-    MSVC_WORKAROUND(                 \
-    (__VA_ARGS__, CHECK_AND_TRACK_STATE_3, CHECK_AND_TRACK_STATE_2, CHECK_AND_TRACK_STATE_1, ))
+#define CHECK_AND_TRACK_STATE_N(...)                                                \
+    MSVC_WORKAROUND((__VA_ARGS__, CHECK_AND_TRACK_STATE_3, CHECK_AND_TRACK_STATE_2, \
+                     CHECK_AND_TRACK_STATE_1, ))
 #define CHECK_AND_TRACK_STATE(stats_enum, ...) \
     CHECK_AND_TRACK_STATE_N(__VA_ARGS__)(stats_enum, __VA_ARGS__)
 
@@ -174,13 +171,12 @@ private:
             auto mid2 = array_name[n / 2];                                                    \
             stats_list[Dive::Stats::kMedian##type] = (uint64_t)((float)(mid1 + mid2) / 2.0f); \
         }                                                                                     \
-        stats_list[Dive::Stats::kMin##type] = *std::min_element(array_name.begin(),           \
-                                                                array_name.end());            \
-        stats_list[Dive::Stats::kMax##type] = *std::max_element(array_name.begin(),           \
-                                                                array_name.end());            \
-        stats_list[Dive::Stats::kTotal##type] = std::accumulate(array_name.begin(),           \
-                                                                array_name.end(),             \
-                                                                (uint64_t)0);                 \
+        stats_list[Dive::Stats::kMin##type] =                                                 \
+            *std::min_element(array_name.begin(), array_name.end());                          \
+        stats_list[Dive::Stats::kMax##type] =                                                 \
+            *std::max_element(array_name.begin(), array_name.end());                          \
+        stats_list[Dive::Stats::kTotal##type] =                                               \
+            std::accumulate(array_name.begin(), array_name.end(), (uint64_t)0);               \
     }
 
 #define GATHER_RESOLVES(type)                         \
@@ -191,16 +187,16 @@ private:
     } while (0)
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::GatherTraceStats(const Dive::Context         &context,
-                                  const Dive::CaptureMetadata &meta_data,
-                                  CaptureStats                &capture_stats)
+void TraceStats::GatherTraceStats(const Dive::Context& context,
+                                  const Dive::CaptureMetadata& meta_data,
+                                  CaptureStats& capture_stats)
 {
     capture_stats = CaptureStats();  // Reset any previous stats
 
-    std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = capture_stats.m_stats_list;
+    std::array<uint64_t, Dive::Stats::kNumStats>& stats_list = capture_stats.m_stats_list;
 
-    size_t                      event_count = meta_data.m_event_info.size();
-    const Dive::EventStateInfo &event_state = meta_data.m_event_state;
+    size_t event_count = meta_data.m_event_info.size();
+    const Dive::EventStateInfo& event_state = meta_data.m_event_state;
 
     Dive::RenderModeType cur_type = Dive::RenderModeType::kUnknown;
     for (size_t i = 0; i < event_count; ++i)
@@ -210,7 +206,7 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
             capture_stats = CaptureStats();
             return;
         }
-        const Dive::EventInfo &info = meta_data.m_event_info[i];
+        const Dive::EventInfo& info = meta_data.m_event_info[i];
 
         if (info.m_render_mode != cur_type)
         {
@@ -272,15 +268,13 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
                 info.m_render_mode == Dive::RenderModeType::kBinningDirect)
             {
                 CHECK_AND_TRACK_STATE(Dive::Stats::kDepthTestEnabled, DepthTestEnabled);
-                CHECK_AND_TRACK_STATE(Dive::Stats::kDepthWriteEnabled,
-                                      DepthTestEnabled,
+                CHECK_AND_TRACK_STATE(Dive::Stats::kDepthWriteEnabled, DepthTestEnabled,
                                       DepthWriteEnabled);
                 if (event_state_it->DepthTestEnabled())
                 {
                     CHECK_AND_TRACK_STATE_EQUAL(Dive::Stats::kEarlyZ, ZTestMode, A6XX_EARLY_Z);
                     CHECK_AND_TRACK_STATE_EQUAL(Dive::Stats::kLateZ, ZTestMode, A6XX_LATE_Z);
-                    CHECK_AND_TRACK_STATE_EQUAL(Dive::Stats::kEarlyZLateZ,
-                                                ZTestMode,
+                    CHECK_AND_TRACK_STATE_EQUAL(Dive::Stats::kEarlyZLateZ, ZTestMode,
                                                 A6XX_EARLY_Z_LATE_Z);
                 }
             }
@@ -289,14 +283,11 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
                 info.m_render_mode == Dive::RenderModeType::kBinningDirect)
             {
                 CHECK_AND_TRACK_STATE(Dive::Stats::kLrzEnabled, DepthTestEnabled, LRZEnabled);
-                CHECK_AND_TRACK_STATE(Dive::Stats::kLrzWriteEnabled,
-                                      DepthTestEnabled,
-                                      DepthWriteEnabled,
-                                      LRZWrite);
+                CHECK_AND_TRACK_STATE(Dive::Stats::kLrzWriteEnabled, DepthTestEnabled,
+                                      DepthWriteEnabled, LRZWrite);
             }
 
-            CHECK_AND_TRACK_STATE_NOT_EQUAL(Dive::Stats::kCullModeEnabled,
-                                            CullMode,
+            CHECK_AND_TRACK_STATE_NOT_EQUAL(Dive::Stats::kCullModeEnabled, CullMode,
                                             VK_CULL_MODE_NONE);
 
             for (uint32_t v = 0; v < 16; ++v)
@@ -335,7 +326,7 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
         GATHER_TOTAL_MIN_MAX_MEDIAN(capture_stats.m_event_num_indices, Indices);
     }
 
-    std::vector<size_t>   shaders_num_instructions;
+    std::vector<size_t> shaders_num_instructions;
     std::vector<uint32_t> shaders_num_gprs;
 
     stats_list[Dive::Stats::kShaders] = meta_data.m_shaders.size();
@@ -345,7 +336,7 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
     {
         auto task_count = static_cast<unsigned int>(meta_data.m_shaders.size());
         thread_pool.Start(thread_pool.SuggestedNumberOfWorkers(task_count));
-        for (const Dive::Disassembly &disassembly : meta_data.m_shaders)
+        for (const Dive::Disassembly& disassembly : meta_data.m_shaders)
         {
             thread_pool.Run([&context, &disassembly]() {
                 if (context.Cancelled())
@@ -357,7 +348,7 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
         }
     }
 
-    for (const Dive::ShaderReference &ref : capture_stats.m_shader_ref_set)
+    for (const Dive::ShaderReference& ref : capture_stats.m_shader_ref_set)
     {
         if (context.Cancelled())
         {
@@ -374,7 +365,7 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
         else
             stats_list[Dive::Stats::kNonVS]++;
 
-        const Dive::Disassembly &disass = meta_data.m_shaders[ref.m_shader_index];
+        const Dive::Disassembly& disass = meta_data.m_shaders[ref.m_shader_index];
         shaders_num_instructions.push_back(disass.GetNumInstructions());
         shaders_num_gprs.push_back(disass.GetGPRCount());
     }
@@ -390,15 +381,15 @@ void TraceStats::GatherTraceStats(const Dive::Context         &context,
 }
 
 //--------------------------------------------------------------------------------------------------
-void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream)
+void TraceStats::PrintTraceStats(const CaptureStats& capture_stats, std::ostream& ostream)
 {
-    const std::array<uint64_t, Dive::Stats::kNumStats> &stats_list = capture_stats.m_stats_list;
+    const std::array<uint64_t, Dive::Stats::kNumStats>& stats_list = capture_stats.m_stats_list;
 
     DIVE_ASSERT(kStatMap.size() == Stats::kNumStats);
 
-    constexpr std::array<const char *, Stats::kNumStats> kStatDescriptions = [&] {
-        std::array<const char *, Stats::kNumStats> arr{};
-        for (const auto &[stat, description] : kStatMap)
+    constexpr std::array<const char*, Stats::kNumStats> kStatDescriptions = [&] {
+        std::array<const char*, Stats::kNumStats> arr{};
+        for (const auto& [stat, description] : kStatMap)
         {
             arr[stat] = description;
         }
@@ -430,7 +421,7 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
         ostream << std::left << string_stream.str();
     };
 
-    for (const Viewport &vp : capture_stats.m_viewports)
+    for (const Viewport& vp : capture_stats.m_viewports)
     {
         ostream << "\t";
         print_field(viewport_stats_desc[kViewport_x], vp.m_vk_viewport.x, false);
@@ -449,18 +440,16 @@ void TraceStats::PrintTraceStats(const CaptureStats &capture_stats, std::ostream
             << stats_list[Stats::kNumTilingPasses] << "\n";
 
     uint32_t count = 0;
-    for (const WindowScissor &ws : capture_stats.m_window_scissors)
+    for (const WindowScissor& ws : capture_stats.m_window_scissors)
     {
         ostream << "\t" << count++ << "\t";
         print_field(window_scissor_stats_desc[kWindowScissors_tl_x], ws.m_tl_x, false);
         print_field(window_scissor_stats_desc[kWindowScissors_br_x], ws.m_br_x, false);
         print_field(window_scissor_stats_desc[kWindowScissors_tl_y], ws.m_tl_y, false);
         print_field(window_scissor_stats_desc[kWindowScissors_br_y], ws.m_br_y, false);
-        print_field(window_scissor_stats_desc[kWindowScissors_Width],
-                    (ws.m_br_x - ws.m_tl_x + 1),
+        print_field(window_scissor_stats_desc[kWindowScissors_Width], (ws.m_br_x - ws.m_tl_x + 1),
                     false);
-        print_field(window_scissor_stats_desc[kWindowScissors_Height],
-                    (ws.m_br_y - ws.m_tl_y + 1),
+        print_field(window_scissor_stats_desc[kWindowScissors_Height], (ws.m_br_y - ws.m_tl_y + 1),
                     true);
         ostream << std::endl;
     }

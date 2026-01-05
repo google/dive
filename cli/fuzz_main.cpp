@@ -17,36 +17,34 @@
 #include <iostream>
 #include <memory>
 
-#include "dive_core/pm4_capture_data.h"
 #include "dive_core/command_hierarchy.h"
+#include "dive_core/pm4_capture_data.h"
 
 //--------------------------------------------------------------------------------------------------
 class membuf : public std::basic_streambuf<char>
 {
-public:
-    membuf(const uint8_t *p, size_t l) { setg((char *)p, (char *)p, (char *)p + l); }
+ public:
+    membuf(const uint8_t* p, size_t l) { setg((char*)p, (char*)p, (char*)p + l); }
 };
 
 class memstream : public std::istream
 {
-public:
-    memstream(const uint8_t *p, size_t l) :
-        std::istream(&m_buffer),
-        m_buffer(p, l)
+ public:
+    memstream(const uint8_t* p, size_t l) : std::istream(&m_buffer), m_buffer(p, l)
     {
         rdbuf(&m_buffer);
     }
 
-private:
+ private:
     membuf m_buffer;
 };
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
     memstream capture_file(data, size);
 
-    std::unique_ptr<Dive::Pm4CaptureData>
-                                  capture_data_ptr = std::make_unique<Dive::Pm4CaptureData>();
+    std::unique_ptr<Dive::Pm4CaptureData> capture_data_ptr =
+        std::make_unique<Dive::Pm4CaptureData>();
     Dive::CaptureData::LoadResult result = capture_data_ptr->LoadCaptureFileStream(capture_file);
 
     if (result != Dive::CaptureData::LoadResult::kSuccess)
@@ -59,13 +57,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
 #ifdef DIVE_FUZZ_LOADER
 // Simple program to help debug Fuzz failures.
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     auto f = fopen(argv[1], "rb");
     fseek(f, SEEK_END, 0);
     size_t size = ftell(f);
     fseek(f, SEEK_SET, 0);
-    uint8_t *data = new uint8_t[size];
+    uint8_t* data = new uint8_t[size];
     fread(data, 1, size, f);
     fclose(f);
 

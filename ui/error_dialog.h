@@ -24,10 +24,10 @@ struct LoadFileResult;
 class ErrorDialog : public QObject
 {
     Q_OBJECT
-public:
+ public:
     ErrorDialog(QWidget* parent);
     void OnLoadingFailure(const LoadFileResult& result) const;
 
-private:
+ private:
     QWidget* m_parent = nullptr;
 };

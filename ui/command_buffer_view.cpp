@@ -14,40 +14,36 @@
  limitations under the License.
 */
 #include "command_buffer_view.h"
+
 #include <QPainter>
+
 #include "command_buffer_model.h"
 #include "dive_core/command_hierarchy.h"
 
-static_assert(sizeof(void *) == sizeof(uint64_t),
+static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
 // =================================================================================================
 // CommandBufferViewDelegate
 // =================================================================================================
 CommandBufferViewDelegate::CommandBufferViewDelegate(
-const CommandBufferView *command_buffer_view_ptr) :
-    QStyledItemDelegate(0),
-    m_command_buffer_view_ptr(command_buffer_view_ptr)
+    const CommandBufferView* command_buffer_view_ptr)
+    : QStyledItemDelegate(0), m_command_buffer_view_ptr(command_buffer_view_ptr)
 {
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferViewDelegate::paint(QPainter                   *painter,
-                                      const QStyleOptionViewItem &option,
-                                      const QModelIndex          &index) const
+void CommandBufferViewDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
+                                      const QModelIndex& index) const
 {
     // Draw vertical border around a ib-level cell
     if (index.column() == CommandBufferModel::kColumnIbLevel)
     {
         painter->save();
         painter->setPen(QPen(Qt::darkGray, 1));
-        painter->drawLine(option.rect.left(),
-                          option.rect.top(),
-                          option.rect.left(),
+        painter->drawLine(option.rect.left(), option.rect.top(), option.rect.left(),
                           option.rect.bottom());
-        painter->drawLine(option.rect.right(),
-                          option.rect.top(),
-                          option.rect.right(),
+        painter->drawLine(option.rect.right(), option.rect.top(), option.rect.right(),
                           option.rect.bottom());
 
         painter->restore();
@@ -58,18 +54,18 @@ void CommandBufferViewDelegate::paint(QPainter                   *painter,
 // =================================================================================================
 // CommandBufferView
 // =================================================================================================
-CommandBufferView::CommandBufferView(const Dive::CommandHierarchy &command_hierarchy,
-                                     QWidget                      *parent) :
-    DiveTreeView(command_hierarchy, parent)
+CommandBufferView::CommandBufferView(const Dive::CommandHierarchy& command_hierarchy,
+                                     QWidget* parent)
+    : DiveTreeView(command_hierarchy, parent)
 {
     setItemDelegate(new CommandBufferViewDelegate(this));
     setAccessibleName("DiveCommandBufferView");
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferView::setAndScrollToIndex(QModelIndex &idx)
+void CommandBufferView::setAndScrollToIndex(QModelIndex& idx)
 {
-    auto m = dynamic_cast<CommandBufferModel *>(model());
+    auto m = dynamic_cast<CommandBufferModel*>(model());
     idx = m->index(idx.row(), 1, idx.parent());
     scrollTo(idx);
     setCurrentIndex(idx);
@@ -83,15 +79,14 @@ void CommandBufferView::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferView::searchCommandBufferByText(const QString &search_text)
+void CommandBufferView::searchCommandBufferByText(const QString& search_text)
 {
     search_indexes.clear();
     search_index_it = search_indexes.begin();
 
-    if (search_text.isEmpty())
-        return;
+    if (search_text.isEmpty()) return;
 
-    auto m = dynamic_cast<CommandBufferModel *>(model());
+    auto m = dynamic_cast<CommandBufferModel*>(model());
     search_indexes = m->search(m->index(0, 0), QVariant::fromValue(search_text));
     search_index_it = search_indexes.begin();
 
@@ -100,8 +95,8 @@ void CommandBufferView::searchCommandBufferByText(const QString &search_text)
         QModelIndex curr_idx = currentIndex();
         if (curr_idx.isValid() && curr_idx != *search_index_it)
         {
-            search_index_it = search_indexes.begin() +
-                              getNearestSearchCommand(curr_idx.internalId());
+            search_index_it =
+                search_indexes.begin() + getNearestSearchCommand(curr_idx.internalId());
         }
         setAndScrollToIndex(*search_index_it);
     }
@@ -117,10 +112,9 @@ void CommandBufferView::nextCommandInSearch()
         QModelIndex curr_idx = currentIndex();
         if (curr_idx.isValid() && curr_idx != *search_index_it)
         {
-            search_index_it = search_indexes.begin() +
-                              getNearestSearchCommand(curr_idx.internalId());
-            if (*search_index_it == curr_idx)
-                ++search_index_it;
+            search_index_it =
+                search_indexes.begin() + getNearestSearchCommand(curr_idx.internalId());
+            if (*search_index_it == curr_idx) ++search_index_it;
         }
         else
         {
@@ -139,10 +133,9 @@ void CommandBufferView::prevCommandInSearch()
         QModelIndex curr_idx = currentIndex();
         if (curr_idx.isValid() && curr_idx != *search_index_it)
         {
-            search_index_it = search_indexes.begin() +
-                              getNearestSearchCommand(curr_idx.internalId());
-            if (*search_index_it == curr_idx)
-                --search_index_it;
+            search_index_it =
+                search_indexes.begin() + getNearestSearchCommand(curr_idx.internalId());
+            if (*search_index_it == curr_idx) --search_index_it;
         }
         else
         {
@@ -168,18 +161,15 @@ int CommandBufferView::getNearestSearchCommand(uint64_t target_index)
     int n = search_indexes.size();
     int left = 0, right = n, mid = 0;
 
-    if (target_index <= get_internal_id(left))
-        return left;
+    if (target_index <= get_internal_id(left)) return left;
 
-    if (target_index >= get_internal_id(right - 1))
-        return right - 1;
+    if (target_index >= get_internal_id(right - 1)) return right - 1;
 
     while (left < right)
     {
         mid = (left + right) / 2;
 
-        if (target_index == get_internal_id(mid))
-            return mid;
+        if (target_index == get_internal_id(mid)) return mid;
         if (target_index < get_internal_id(mid))
         {
             if (mid > 0 && target_index > get_internal_id(mid - 1))

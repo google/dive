@@ -12,17 +12,17 @@
 */
 
 #include "window_scissors_stats_model.h"
-#include <QFile>
-#include <QTextStream>
-#include <QStringList>
-#include <QDebug>
 
-WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) :
-    QAbstractItemModel(parent)
+#include <QDebug>
+#include <QFile>
+#include <QStringList>
+#include <QTextStream>
+
+WindowScissorsStatsModel::WindowScissorsStatsModel(QObject* parent) : QAbstractItemModel(parent)
 {
     QStringList headers;
 
-    for (const auto &header_str : Dive::window_scissor_stats_desc)
+    for (const auto& header_str : Dive::window_scissor_stats_desc)
     {
         headers.append(QString::fromStdString(header_str));
     }
@@ -33,7 +33,7 @@ WindowScissorsStatsModel::WindowScissorsStatsModel(QObject *parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor> &window_scissors)
+void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor>& window_scissors)
 {
     beginResetModel();
     // Clear existing data
@@ -43,7 +43,7 @@ void WindowScissorsStatsModel::LoadData(const std::set<Dive::WindowScissor> &win
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -55,17 +55,17 @@ QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelInd
     {
         return QModelIndex();
     }
-    return createIndex(row, column, (void *)0);
+    return createIndex(row, column, (void*)0);
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex WindowScissorsStatsModel::parent(const QModelIndex &index) const
+QModelIndex WindowScissorsStatsModel::parent(const QModelIndex& index) const
 {
     return QModelIndex();
 }
 
 //--------------------------------------------------------------------------------------------------
-int WindowScissorsStatsModel::rowCount(const QModelIndex &parent) const
+int WindowScissorsStatsModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
@@ -75,12 +75,12 @@ int WindowScissorsStatsModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int WindowScissorsStatsModel::columnCount(const QModelIndex &parent) const
+int WindowScissorsStatsModel::columnCount(const QModelIndex& parent) const
 {
     return m_column_count;
 }
 
-QVariant WindowScissorsStatsModel::data(const QModelIndex &index, int role) const
+QVariant WindowScissorsStatsModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid() || role != Qt::DisplayRole)
     {
@@ -95,33 +95,32 @@ QVariant WindowScissorsStatsModel::data(const QModelIndex &index, int role) cons
         return QVariant();
     }
 
-    const auto &record = m_window_scissors[row];
+    const auto& record = m_window_scissors[row];
 
     switch (col)
     {
-    case Dive::kWindowScissors:
-        return QString::number(row);
-    case Dive::kWindowScissors_tl_x:
-        return QString::number(record.m_tl_x);
-    case Dive::kWindowScissors_br_x:
-        return QString::number(record.m_br_x);
-    case Dive::kWindowScissors_tl_y:
-        return QString::number(record.m_tl_y);
-    case Dive::kWindowScissors_br_y:
-        return QString::number(record.m_br_y);
-    case Dive::kWindowScissors_Width:
-        return QString::number(record.m_br_x - record.m_tl_x + 1);
-    case Dive::kWindowScissors_Height:
-        return QString::number(record.m_br_y - record.m_tl_y + 1);
-    default:
-        return QVariant();
+        case Dive::kWindowScissors:
+            return QString::number(row);
+        case Dive::kWindowScissors_tl_x:
+            return QString::number(record.m_tl_x);
+        case Dive::kWindowScissors_br_x:
+            return QString::number(record.m_br_x);
+        case Dive::kWindowScissors_tl_y:
+            return QString::number(record.m_tl_y);
+        case Dive::kWindowScissors_br_y:
+            return QString::number(record.m_br_y);
+        case Dive::kWindowScissors_Width:
+            return QString::number(record.m_br_x - record.m_tl_x + 1);
+        case Dive::kWindowScissors_Height:
+            return QString::number(record.m_br_y - record.m_tl_y + 1);
+        default:
+            return QVariant();
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant WindowScissorsStatsModel::headerData(int             section,
-                                              Qt::Orientation orientation,
-                                              int             role) const
+QVariant WindowScissorsStatsModel::headerData(int section, Qt::Orientation orientation,
+                                              int role) const
 {
     if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
     {

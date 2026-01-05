@@ -13,6 +13,11 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+#include "text_file_view.h"
+
+#include <QPlainTextEdit>
+#include <QTreeWidget>
+#include <QVBoxLayout>
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -20,16 +25,10 @@
 #include <string>
 #include <utility>
 
-#include <QPlainTextEdit>
-#include <QTreeWidget>
-#include <QVBoxLayout>
-
 #include "dive_core/data_core.h"
 
-#include "text_file_view.h"
-
 // -------------------------------------------------------------------------------------------------
-static bool IsEmbeddedTextASCII(const char *s, size_t size)
+static bool IsEmbeddedTextASCII(const char* s, size_t size)
 {
     if (size > 0 && s[size - 1] == 0)
     {
@@ -38,13 +37,12 @@ static bool IsEmbeddedTextASCII(const char *s, size_t size)
     }
     for (size_t i = 0; i < size; ++i)
     {
-        if (!(std::isprint(s[i]) || std::isspace(s[i])))
-            return false;
+        if (!(std::isprint(s[i]) || std::isspace(s[i]))) return false;
     }
     return true;
 }
 
-static std::string ToHexDump(const char *s, size_t size)
+static std::string ToHexDump(const char* s, size_t size)
 {
     constexpr size_t chunk_size = 16;
 
@@ -53,7 +51,7 @@ static std::string ToHexDump(const char *s, size_t size)
     {
         sst << std::hex << std::setfill('0');
         sst << std::setw(8) << offset << ": ";
-        char   ascii_part[chunk_size + 1] = {};
+        char ascii_part[chunk_size + 1] = {};
         size_t cutoff = std::min(size - offset, chunk_size);
         for (size_t i = 0; i < cutoff; ++i)
         {
@@ -75,28 +73,25 @@ static std::string ToHexDump(const char *s, size_t size)
 // -------------------------------------------------------------------------------------------------
 class TextFileWidgetItem : public QTreeWidgetItem
 {
-public:
+ public:
     typedef decltype(std::declval<Dive::Pm4CaptureData>().GetNumText()) IndexType;
 
-    TextFileWidgetItem(std::string name, IndexType index, QTreeWidget *view) :
-        QTreeWidgetItem(view),
-        m_name(name),
-        m_index(index)
+    TextFileWidgetItem(std::string name, IndexType index, QTreeWidget* view)
+        : QTreeWidgetItem(view), m_name(name), m_index(index)
     {
     }
     std::string GetName() const { return m_name; }
-    IndexType   GetIndex() const { return m_index; }
+    IndexType GetIndex() const { return m_index; }
 
-private:
+ private:
     std::string m_name;
-    IndexType   m_index;
+    IndexType m_index;
 };
 
 // -------------------------------------------------------------------------------------------------
-TextFileView::TextFileView(const Dive::DataCore &data_core) :
-    m_data_core(data_core)
+TextFileView::TextFileView(const Dive::DataCore& data_core) : m_data_core(data_core)
 {
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     m_text_list = new QTreeWidget();
     m_text_list->setColumnCount(3);
     m_text_list->setHeaderLabels(QStringList() << "Filename"
@@ -115,9 +110,7 @@ TextFileView::TextFileView(const Dive::DataCore &data_core) :
     layout->setStretchFactor(m_text, 5);
     setLayout(layout);
 
-    QObject::connect(m_text_list,
-                     SIGNAL(itemSelectionChanged()),
-                     this,
+    QObject::connect(m_text_list, SIGNAL(itemSelectionChanged()), this,
                      SLOT(OnFileSelectionChanged()));
 }
 
@@ -125,14 +118,12 @@ TextFileView::TextFileView(const Dive::DataCore &data_core) :
 void TextFileView::OnFileLoaded()
 {
     Reset();
-    const auto &capture = m_data_core.GetPm4CaptureData();
+    const auto& capture = m_data_core.GetPm4CaptureData();
 
     if (!capture.GetRegisterInfo().GetRegisters().empty())
     {
-        TextFileWidgetItem *
-        treeItem = new TextFileWidgetItem("registers",
-                                          std::numeric_limits<TextFileWidgetItem::IndexType>::max(),
-                                          m_text_list);
+        TextFileWidgetItem* treeItem = new TextFileWidgetItem(
+            "registers", std::numeric_limits<TextFileWidgetItem::IndexType>::max(), m_text_list);
 
         // Filename
         treeItem->setText(0, tr("registers"));
@@ -145,9 +136,9 @@ void TextFileView::OnFileLoaded()
     TextFileWidgetItem::IndexType num_text = capture.GetNumText();
     for (TextFileWidgetItem::IndexType i = 0; i < num_text; ++i)
     {
-        const auto &text = capture.GetText(i);
+        const auto& text = capture.GetText(i);
 
-        TextFileWidgetItem *treeItem = new TextFileWidgetItem(text.GetName(), i, m_text_list);
+        TextFileWidgetItem* treeItem = new TextFileWidgetItem(text.GetName(), i, m_text_list);
 
         // Filename
         treeItem->setText(0, QString::fromStdString(text.GetName()));
@@ -174,14 +165,14 @@ void TextFileView::Reset()
 //--------------------------------------------------------------------------------------------------
 void TextFileView::OnFileSelectionChanged()
 {
-    const TextFileWidgetItem *item_ptr = static_cast<const TextFileWidgetItem *>(
-    m_text_list->currentItem());
+    const TextFileWidgetItem* item_ptr =
+        static_cast<const TextFileWidgetItem*>(m_text_list->currentItem());
 
-    const auto &capture = m_data_core.GetPm4CaptureData();
+    const auto& capture = m_data_core.GetPm4CaptureData();
     std::string text_data;
     if (item_ptr->GetIndex() < capture.GetNumText())
     {
-        const auto &text = capture.GetText(item_ptr->GetIndex());
+        const auto& text = capture.GetText(item_ptr->GetIndex());
         if (IsEmbeddedTextASCII(text.GetText(), text.GetSize()))
         {
             text_data = std::string(text.GetText(), text.GetText() + text.GetSize());
@@ -200,7 +191,7 @@ void TextFileView::OnFileSelectionChanged()
     {
         std::stringstream sst;
         sst << std::hex;
-        for (auto &kv : capture.GetRegisterInfo().GetRegisters())
+        for (auto& kv : capture.GetRegisterInfo().GetRegisters())
         {
             sst << kv.first << ": 0x" << kv.second << "\n";
         }

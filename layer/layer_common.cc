@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <dlfcn.h>
-
 #include "layer_common.h"
+
+#include <dlfcn.h>
 
 #include <atomic>
 #include <cstdio>
@@ -24,8 +24,8 @@ limitations under the License.
 #include <cstring>
 #include <thread>
 
-#include "common/log.h"
 #include "capture_service/server.h"
+#include "common/log.h"
 
 namespace
 {
@@ -36,13 +36,13 @@ bool IsLibwrapLoaded()
 {
     bool loaded = false;
 #if defined(__ANDROID__)
-    FILE *maps = fopen("/proc/self/maps", "r");
+    FILE* maps = fopen("/proc/self/maps", "r");
     if (!maps)
     {
         return loaded;
     }
 
-    char  *line = NULL;
+    char* line = NULL;
     size_t size = 0;
     while (getline(&line, &size, maps) > 0)
     {
@@ -58,15 +58,9 @@ bool IsLibwrapLoaded()
     return loaded;
 }
 
-bool IsLayerLoaded()
-{
-    return g_layer_load_status.load(std::memory_order_acquire);
-}
+bool IsLayerLoaded() { return g_layer_load_status.load(std::memory_order_acquire); }
 
-void SetLayerStatusLoaded()
-{
-    g_layer_load_status.store(true, std::memory_order_release);
-}
+void SetLayerStatusLoaded() { g_layer_load_status.store(true, std::memory_order_release); }
 
 struct InitServer
 {
@@ -99,14 +93,14 @@ struct InitServer
             server_thread.join();
         }
     }
-    bool        is_libwrap_loaded;
+    bool is_libwrap_loaded;
     std::thread server_thread;
 };
 
 void PreventLibraryUnload()
 {
     Dl_info info;
-    if (dladdr(reinterpret_cast<void *>(&PreventLibraryUnload), &info))
+    if (dladdr(reinterpret_cast<void*>(&PreventLibraryUnload), &info))
     {
         dlopen(info.dli_fname, RTLD_NOLOAD | RTLD_NODELETE);
     }

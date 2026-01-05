@@ -18,172 +18,138 @@ limitations under the License.
 #ifndef GFXRECON_DECODE_VULKAN_DIVE_CONSUMER_H
 #define GFXRECON_DECODE_VULKAN_DIVE_CONSUMER_H
 
+#include <set>
+#include <unordered_map>
+#include <vector>
+
 #include "generated/generated_vulkan_replay_consumer.h"
 #include "gpu_time/gpu_time.h"
-#include <set>
-#include <vector>
-#include <unordered_map>
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
 
 class DiveVulkanReplayConsumer : public VulkanReplayConsumer
 {
-public:
+ public:
     DiveVulkanReplayConsumer(std::shared_ptr<application::Application> application,
-                             const VulkanReplayOptions&                options);
+                             const VulkanReplayOptions& options);
 
     ~DiveVulkanReplayConsumer() override;
 
-    void Process_vkCreateInstance(const ApiCallInfo&                                   call_info,
-                                  VkResult                                             returnValue,
-                                  StructPointerDecoder<Decoded_VkInstanceCreateInfo>*  pCreateInfo,
+    void Process_vkCreateInstance(const ApiCallInfo& call_info, VkResult returnValue,
+                                  StructPointerDecoder<Decoded_VkInstanceCreateInfo>* pCreateInfo,
                                   StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                   HandlePointerDecoder<VkInstance>* pInstance) override;
 
-    void Process_vkCreateDevice(const ApiCallInfo&                                   call_info,
-                                VkResult                                             returnValue,
-                                format::HandleId                                     physicalDevice,
-                                StructPointerDecoder<Decoded_VkDeviceCreateInfo>*    pCreateInfo,
+    void Process_vkCreateDevice(const ApiCallInfo& call_info, VkResult returnValue,
+                                format::HandleId physicalDevice,
+                                StructPointerDecoder<Decoded_VkDeviceCreateInfo>* pCreateInfo,
                                 StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                 HandlePointerDecoder<VkDevice>* pDevice) override;
 
     void Process_vkDestroyDevice(
-    const ApiCallInfo&                                   call_info,
-    format::HandleId                                     device,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+        const ApiCallInfo& call_info, format::HandleId device,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
     void Process_vkDestroyCommandPool(
-    const ApiCallInfo&                                   call_info,
-    format::HandleId                                     device,
-    format::HandleId                                     commandPool,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId commandPool,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
     void Process_vkAllocateCommandBuffers(
-    const ApiCallInfo&                                         call_info,
-    VkResult                                                   returnValue,
-    format::HandleId                                           device,
-    StructPointerDecoder<Decoded_VkCommandBufferAllocateInfo>* pAllocateInfo,
-    HandlePointerDecoder<VkCommandBuffer>*                     pCommandBuffers) override;
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+        StructPointerDecoder<Decoded_VkCommandBufferAllocateInfo>* pAllocateInfo,
+        HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers) override;
 
     void Process_vkFreeCommandBuffers(
-    const ApiCallInfo&                     call_info,
-    format::HandleId                       device,
-    format::HandleId                       commandPool,
-    uint32_t                               commandBufferCount,
-    HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers) override;
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId commandPool,
+        uint32_t commandBufferCount,
+        HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers) override;
 
-    void Process_vkResetCommandBuffer(const ApiCallInfo&        call_info,
-                                      VkResult                  returnValue,
-                                      format::HandleId          commandBuffer,
+    void Process_vkResetCommandBuffer(const ApiCallInfo& call_info, VkResult returnValue,
+                                      format::HandleId commandBuffer,
                                       VkCommandBufferResetFlags flags) override;
 
     void Process_vkCreateCommandPool(
-    const ApiCallInfo&                                     call_info,
-    VkResult                                               returnValue,
-    format::HandleId                                       device,
-    StructPointerDecoder<Decoded_VkCommandPoolCreateInfo>* pCreateInfo,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>*   pAllocator,
-    HandlePointerDecoder<VkCommandPool>*                   pCommandPool) override;
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+        StructPointerDecoder<Decoded_VkCommandPoolCreateInfo>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkCommandPool>* pCommandPool) override;
 
-    void Process_vkResetCommandPool(const ApiCallInfo&      call_info,
-                                    VkResult                returnValue,
-                                    format::HandleId        device,
-                                    format::HandleId        commandPool,
+    void Process_vkResetCommandPool(const ApiCallInfo& call_info, VkResult returnValue,
+                                    format::HandleId device, format::HandleId commandPool,
                                     VkCommandPoolResetFlags flags) override;
 
-    void Process_vkQueueSubmit(const ApiCallInfo&                          call_info,
-                               VkResult                                    returnValue,
-                               format::HandleId                            queue,
-                               uint32_t                                    submitCount,
+    void Process_vkQueueSubmit(const ApiCallInfo& call_info, VkResult returnValue,
+                               format::HandleId queue, uint32_t submitCount,
                                StructPointerDecoder<Decoded_VkSubmitInfo>* pSubmits,
-                               format::HandleId                            fence) override;
+                               format::HandleId fence) override;
 
     void Process_vkQueuePresentKHR(
-    const ApiCallInfo&                              call_info,
-    VkResult                                        returnValue,
-    format::HandleId                                queue,
-    StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo) override;
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId queue,
+        StructPointerDecoder<Decoded_VkPresentInfoKHR>* pPresentInfo) override;
 
     void Process_vkBeginCommandBuffer(
-    const ApiCallInfo&                                      call_info,
-    VkResult                                                returnValue,
-    format::HandleId                                        commandBuffer,
-    StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo) override;
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkCommandBufferBeginInfo>* pBeginInfo) override;
 
-    void Process_vkEndCommandBuffer(const ApiCallInfo& call_info,
-                                    VkResult           returnValue,
-                                    format::HandleId   commandBuffer) override;
+    void Process_vkEndCommandBuffer(const ApiCallInfo& call_info, VkResult returnValue,
+                                    format::HandleId commandBuffer) override;
 
-    void Process_vkGetDeviceQueue2(const ApiCallInfo&                                call_info,
-                                   format::HandleId                                  device,
+    void Process_vkGetDeviceQueue2(const ApiCallInfo& call_info, format::HandleId device,
                                    StructPointerDecoder<Decoded_VkDeviceQueueInfo2>* pQueueInfo,
                                    HandlePointerDecoder<VkQueue>* pQueue) override;
 
-    void Process_vkGetDeviceQueue(const ApiCallInfo&             call_info,
-                                  format::HandleId               device,
-                                  uint32_t                       queueFamilyIndex,
-                                  uint32_t                       queueIndex,
+    void Process_vkGetDeviceQueue(const ApiCallInfo& call_info, format::HandleId device,
+                                  uint32_t queueFamilyIndex, uint32_t queueIndex,
                                   HandlePointerDecoder<VkQueue>* pQueue) override;
 
     void Process_vkCmdInsertDebugUtilsLabelEXT(
-    const ApiCallInfo&                                  call_info,
-    format::HandleId                                    commandBuffer,
-    StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo) override;
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkDebugUtilsLabelEXT>* pLabelInfo) override;
 
     void Process_vkCmdBeginRenderPass(
-    const ApiCallInfo&                                   call_info,
-    format::HandleId                                     commandBuffer,
-    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
-    VkSubpassContents                                    contents) override;
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+        VkSubpassContents contents) override;
 
     void Process_vkCmdEndRenderPass(const ApiCallInfo& call_info,
-                                    format::HandleId   commandBuffer) override;
+                                    format::HandleId commandBuffer) override;
 
     void Process_vkCmdBeginRenderPass2(
-    const ApiCallInfo&                                   call_info,
-    format::HandleId                                     commandBuffer,
-    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
-    StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo) override;
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+        StructPointerDecoder<Decoded_VkSubpassBeginInfo>* pSubpassBeginInfo) override;
 
     void Process_vkCmdEndRenderPass2(
-    const ApiCallInfo&                              call_info,
-    format::HandleId                                commandBuffer,
-    StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
 
     void Process_vkCmdBeginRenderPass2KHR(
-    const ApiCallInfo&                                   call_info,
-    format::HandleId                                     commandBuffer,
-    StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
-    StructPointerDecoder<Decoded_VkSubpassBeginInfo>*    pSubpassBeginInfo) override;
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
+        StructPointerDecoder<Decoded_VkSubpassBeginInfo>* pSubpassBeginInfo) override;
 
     void Process_vkCmdEndRenderPass2KHR(
-    const ApiCallInfo&                              call_info,
-    format::HandleId                                commandBuffer,
-    StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo) override;
 
-    void Process_vkCreateFence(const ApiCallInfo&                                   call_info,
-                               VkResult                                             returnValue,
-                               format::HandleId                                     device,
-                               StructPointerDecoder<Decoded_VkFenceCreateInfo>*     pCreateInfo,
+    void Process_vkCreateFence(const ApiCallInfo& call_info, VkResult returnValue,
+                               format::HandleId device,
+                               StructPointerDecoder<Decoded_VkFenceCreateInfo>* pCreateInfo,
                                StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                HandlePointerDecoder<VkFence>* pFence) override;
 
-    void Process_vkGetFenceFdKHR(const ApiCallInfo&                                 call_info,
-                                 VkResult                                           returnValue,
-                                 format::HandleId                                   device,
+    void Process_vkGetFenceFdKHR(const ApiCallInfo& call_info, VkResult returnValue,
+                                 format::HandleId device,
                                  StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo,
-                                 PointerDecoder<int>*                               pFd) override;
+                                 PointerDecoder<int>* pFd) override;
 
     void Process_vkDestroyFence(
-    const ApiCallInfo&                                   call_info,
-    format::HandleId                                     device,
-    format::HandleId                                     fence,
-    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId fence,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
-    void Process_vkAllocateMemory(const ApiCallInfo&                                  call_info,
-                                  VkResult                                            returnValue,
-                                  format::HandleId                                    device,
+    void Process_vkAllocateMemory(const ApiCallInfo& call_info, VkResult returnValue,
+                                  format::HandleId device,
                                   StructPointerDecoder<Decoded_VkMemoryAllocateInfo>* pAllocateInfo,
                                   StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                   HandlePointerDecoder<VkDeviceMemory>* pMemory) override;
@@ -192,16 +158,9 @@ public:
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 
     void ProcessCreateHardwareBufferCommand(
-    format::HandleId                                    device_id,
-    format::HandleId                                    memory_id,
-    uint64_t                                            buffer_id,
-    uint32_t                                            format,
-    uint32_t                                            width,
-    uint32_t                                            height,
-    uint32_t                                            stride,
-    uint64_t                                            usage,
-    uint32_t                                            layers,
-    const std::vector<format::HardwareBufferPlaneInfo>& plane_info) override;
+        format::HandleId device_id, format::HandleId memory_id, uint64_t buffer_id, uint32_t format,
+        uint32_t width, uint32_t height, uint32_t stride, uint64_t usage, uint32_t layers,
+        const std::vector<format::HardwareBufferPlaneInfo>& plane_info) override;
 
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
 
@@ -210,7 +169,7 @@ public:
         return gpu_time_stats_csv_header_str_ + gpu_time_stats_csv_str_;
     }
 
-private:
+ private:
     // Keeps the fences status after setup phase
     enum class FenceStatus
     {
@@ -226,22 +185,22 @@ private:
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
     std::vector<format::HandleId> deferred_release_list_ = {};
-    Dive::GPUTime                 gpu_time_ = {};
+    Dive::GPUTime gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";
-    VkDevice    device_ = VK_NULL_HANDLE;
+    VkDevice device_ = VK_NULL_HANDLE;
     // Cache all vk function pointers
-    PFN_vkResetQueryPool      pfn_vkResetQueryPool_ = nullptr;
-    PFN_vkQueueWaitIdle       pfn_vkQueueWaitIdle_ = nullptr;
-    PFN_vkDestroyQueryPool    pfn_vkDestroyQueryPool_ = nullptr;
-    PFN_vkDeviceWaitIdle      pfn_vkDeviceWaitIdle_ = nullptr;
+    PFN_vkResetQueryPool pfn_vkResetQueryPool_ = nullptr;
+    PFN_vkQueueWaitIdle pfn_vkQueueWaitIdle_ = nullptr;
+    PFN_vkDestroyQueryPool pfn_vkDestroyQueryPool_ = nullptr;
+    PFN_vkDeviceWaitIdle pfn_vkDeviceWaitIdle_ = nullptr;
     PFN_vkGetQueryPoolResults pfn_vkGetQueryPoolResults_ = nullptr;
-    PFN_vkCmdWriteTimestamp   pfn_vkCmdWriteTimestamp_ = nullptr;
-    PFN_vkGetFenceStatus      pfn_vkGetFenceStatus_ = nullptr;
-    PFN_vkQueueSubmit         pfn_vkQueueSubmit_ = nullptr;
-    PFN_vkResetFences         pfn_vkResetFences_ = nullptr;
-    PFN_vkGetFenceFdKHR       pfn_vkGetFenceFdKHR_ = nullptr;
-    bool                      enable_gpu_time_ = false;
+    PFN_vkCmdWriteTimestamp pfn_vkCmdWriteTimestamp_ = nullptr;
+    PFN_vkGetFenceStatus pfn_vkGetFenceStatus_ = nullptr;
+    PFN_vkQueueSubmit pfn_vkQueueSubmit_ = nullptr;
+    PFN_vkResetFences pfn_vkResetFences_ = nullptr;
+    PFN_vkGetFenceFdKHR pfn_vkGetFenceFdKHR_ = nullptr;
+    bool enable_gpu_time_ = false;
     // This is a flag that indicates if the Setup Phase is finised or not for gfx Replay
     // The Setup Phase is done when StateEndMarker is triggered
     bool setup_finished_ = false;

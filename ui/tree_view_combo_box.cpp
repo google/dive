@@ -12,13 +12,12 @@
 */
 
 #include "tree_view_combo_box.h"
+
 #include <QHeaderView>
 #include <QTreeView>
 
 //--------------------------------------------------------------------------------------------------
-TreeViewComboBox::TreeViewComboBox(QWidget *parent) :
-    QComboBox(parent),
-    m_tree_view(nullptr)
+TreeViewComboBox::TreeViewComboBox(QWidget* parent) : QComboBox(parent), m_tree_view(nullptr)
 {
     m_tree_view = new QTreeView(this);
     m_tree_view->setFrameShape(QFrame::NoFrame);
@@ -42,7 +41,7 @@ void TreeViewComboBox::showPopup()
 }
 
 //--------------------------------------------------------------------------------------------------
-void TreeViewComboBox::selectIndex(const QModelIndex &index)
+void TreeViewComboBox::selectIndex(const QModelIndex& index)
 {
     setRootModelIndex(index.parent());
     setCurrentIndex(index.row());

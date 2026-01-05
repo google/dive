@@ -14,13 +14,14 @@
  limitations under the License.
 */
 
+#include "analysis.h"
+
 #include <stdint.h>
+
 #include <iomanip>
 #include <ostream>
 #include <sstream>
 #include <string>
-
-#include "analysis.h"
 
 namespace Dive
 {

@@ -25,10 +25,10 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-
 #include "android_application.h"
-#include "dive/os/command_utils.h"
 #include "constants.h"
+#include "dive/os/command_utils.h"
+#include "dive/utils/device_resources_constants.h"
 
 namespace Dive
 {
@@ -38,27 +38,24 @@ struct DeviceInfo
     std::string m_serial;
     std::string m_manufacturer;
     std::string m_model;
-    bool        m_is_adreno_gpu = false;
+    bool m_is_adreno_gpu = false;
 
     std::string GetDisplayName() const;
 };
 
-inline bool operator==(const DeviceInfo &lhs, const DeviceInfo &rhs)
+inline bool operator==(const DeviceInfo& lhs, const DeviceInfo& rhs)
 {
     return lhs.m_serial == rhs.m_serial && lhs.m_manufacturer == rhs.m_manufacturer &&
            lhs.m_model == rhs.m_model && lhs.m_is_adreno_gpu == rhs.m_is_adreno_gpu;
 }
 
-inline bool operator!=(const DeviceInfo &lhs, const DeviceInfo &rhs)
-{
-    return !(lhs == rhs);
-}
+inline bool operator!=(const DeviceInfo& lhs, const DeviceInfo& rhs) { return !(lhs == rhs); }
 
 struct DeviceState
 {
     std::string m_enforce;
-    bool        m_root_access_requested = false;
-    bool        m_is_root_shell = false;
+    bool m_root_access_requested = false;
+    bool m_is_root_shell = false;
 };
 
 enum class GfxrReplayOptions
@@ -72,8 +69,8 @@ enum class GfxrReplayOptions
 
 struct GfxrReplaySettings
 {
-    std::string       remote_capture_path = "";
-    std::string       local_download_dir = "";
+    std::string remote_capture_path = "";
+    std::string local_download_dir = "";
     GfxrReplayOptions run_type = GfxrReplayOptions::kNormal;
 
     // ----------------------------------------------------------------------
@@ -100,17 +97,17 @@ struct GfxrReplaySettings
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates
 // the entire configuration
-absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings &settings,
+absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings& settings,
                                                               bool is_adreno_gpu);
 
 class AndroidDevice
 {
-public:
-    explicit AndroidDevice(const std::string &serial);
+ public:
+    explicit AndroidDevice(const std::string& serial);
     ~AndroidDevice();
 
-    AndroidDevice &operator=(const AndroidDevice &) = delete;
-    AndroidDevice(const AndroidDevice &) = delete;
+    AndroidDevice& operator=(const AndroidDevice&) = delete;
+    AndroidDevice(const AndroidDevice&) = delete;
 
     absl::Status Init();
     absl::Status ForwardFirstAvailablePort();
@@ -127,16 +124,16 @@ public:
     // - Removing vulkan layers and related global settings
     // - GFXR-related cleanup
     // - Unset properties for PM4 capture
-    // - Remove files for profiling plugin
+    // - Clear deployment folder kDeployFolderPath
     // - ...
     absl::Status CleanupDevice();
 
     // Cleanup properties related to a specific package
-    absl::Status CleanupPackageProperties(const std::string &package);
+    absl::Status CleanupPackageProperties(const std::string& package);
 
     void EnableGfxr(bool enable_gfxr);
     bool IsProcessRunning(absl::string_view process_name) const;
-    bool FileExists(const std::string &file_path);
+    bool FileExists(const std::string& file_path);
 
     enum class PackageListOptions
     {
@@ -146,38 +143,34 @@ public:
     };
 
     absl::StatusOr<std::vector<std::string>> ListPackage(
-    PackageListOptions option = PackageListOptions::kAll) const;
-    std::string  GetDeviceDisplayName() const;
-    absl::Status SetupApp(const std::string    &package,
-                          const ApplicationType type,
-                          const std::string    &command_args,
-                          const std::string    &gfxr_capture_directory);
-    absl::Status SetupApp(const std::string    &binary,
-                          const std::string    &args,
-                          const ApplicationType type,
-                          const std::string    &gfxr_capture_directory);
+        PackageListOptions option = PackageListOptions::kAll) const;
+    std::string GetDeviceDisplayName() const;
+    absl::Status SetupApp(const std::string& package, const ApplicationType type,
+                          const std::string& command_args,
+                          const std::string& gfxr_capture_directory);
+    absl::Status SetupApp(const std::string& binary, const std::string& args,
+                          const ApplicationType type, const std::string& gfxr_capture_directory);
 
-    absl::Status      CleanupApp();
-    absl::Status      StartApp();
-    absl::Status      StopApp();
-    const AdbSession &Adb() const { return m_adb; }
-    AdbSession       &Adb() { return m_adb; }
-    int               Port() const { return m_port; }
-    bool              IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
+    absl::Status CleanupApp();
+    absl::Status StartApp();
+    absl::Status StopApp();
+    const AdbSession& Adb() const { return m_adb; }
+    AdbSession& Adb() { return m_adb; }
+    int Port() const { return m_port; }
+    bool IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
 
-    AndroidApplication *GetCurrentApplication() { return m_app.get(); }
+    AndroidApplication* GetCurrentApplication() { return m_app.get(); }
 
     // Fetches file at remote_file_path to local_save_dir and deletes the remote file after
     // If new_file_name specified, local file is renamed
     // If delete_after_retrieve is false, remote file is not deleted
-    absl::Status RetrieveFile(const std::string &remote_file_path,
-                              const std::string &local_save_dir,
-                              bool               delete_after_retrieve = true,
-                              const std::string &new_file_name = "");
+    absl::Status RetrieveFile(const std::string& remote_file_path,
+                              const std::string& local_save_dir, bool delete_after_retrieve = true,
+                              const std::string& new_file_name = "");
 
     // Pins GPU clock to freq_mhz [MHz]
-    absl::Status             PinGpuClock(uint32_t freq_mhz) const;
-    absl::Status             UnpinGpuClock() const;
+    absl::Status PinGpuClock(uint32_t freq_mhz) const;
+    absl::Status UnpinGpuClock() const;
     absl::StatusOr<uint32_t> GetGpuFrequency() const;
     // Checks if the current GPU clock frequency is expected_freq_mhz [MHz]
     absl::Status IsGpuClockPinned(uint32_t expected_freq_mhz) const;
@@ -185,47 +178,58 @@ public:
     // Triggers a screenshot and saves it to the specified path.
     absl::Status TriggerScreenCapture(const std::filesystem::path &on_device_screenshot_dir) const;
 
-private:
-    // The ABI must be consistent between the connected device and the Dive device libraries
+    // Verifies that file_name exists locally inside the device resources folder before deploying to
+    // target_dir
+    absl::Status DeployDeviceResource(const std::string_view& file_name,
+                                      const std::filesystem::path& target_dir =
+                                          Dive::DeviceResourcesConstants::kDeployFolderPath);
+
+    // Uses run-as with app permissions to copy the file from kDeployFolderPath to the app's own
+    // storage
+    absl::Status CopyWithPermissions(std::string_view package, std::string_view file_name);
+
+    // Uses run-as with app permissions to delete file_name from the app's own storage
+    absl::Status CleanupFileWithPermissions(std::string_view package, std::string_view file_name);
+
+ private:
+    // The ABI must be consistent between the connected device and the Dive device resources
     absl::Status CheckAbi();
 
-    const std::string                   m_serial;
-    DeviceInfo                          m_dev_info;
-    AdbSession                          m_adb;
-    DeviceState                         m_original_state;
+    const std::string m_serial;
+    DeviceInfo m_dev_info;
+    AdbSession m_adb;
+    DeviceState m_original_state;
     std::unique_ptr<AndroidApplication> m_app;
-    bool                                m_gfxr_enabled = false;
-    int                                 m_port = kFirstPort;
+    bool m_gfxr_enabled = false;
+    int m_port = kFirstPort;
 };
 
 class DeviceManager
 {
-public:
+ public:
     DeviceManager() = default;
-    DeviceManager &operator=(const DeviceManager &) = delete;
-    DeviceManager(const DeviceManager &) = delete;
+    DeviceManager& operator=(const DeviceManager&) = delete;
+    DeviceManager(const DeviceManager&) = delete;
 
-    std::vector<DeviceInfo>         ListDevice() const;
-    absl::StatusOr<AndroidDevice *> SelectDevice(const std::string &serial);
-    void                            RemoveDevice() { m_device = nullptr; }
-    AndroidDevice                  *GetDevice() const { return m_device.get(); }
+    std::vector<DeviceInfo> ListDevice() const;
+    absl::StatusOr<AndroidDevice*> SelectDevice(const std::string& serial);
+    void RemoveDevice() { m_device = nullptr; }
+    AndroidDevice* GetDevice() const { return m_device.get(); }
 
     // Exposing for user-initiated cleanup
-    absl::Status CleanupPackageProperties(const std::string &package);
+    absl::Status CleanupPackageProperties(const std::string& package);
 
-    absl::Status DeployReplayApk(const std::string &serial);
-    absl::Status RunReplayApk(const GfxrReplaySettings &settings) const;
+    absl::Status DeployReplayApk(const std::string& serial);
+    absl::Status RunReplayApk(const GfxrReplaySettings& settings) const;
 
-private:
+ private:
     // Initiates GFXR replay through the GFXR-provided python script, blocking call
-    absl::Status RunReplayGfxrScript(const GfxrReplaySettings &settings) const;
+    absl::Status RunReplayGfxrScript(const GfxrReplaySettings& settings) const;
     // Initiates GFXR replay through the profiling plugin, blocking call
-    absl::Status RunReplayProfilingBinary(const GfxrReplaySettings &settings) const;
+    absl::Status RunReplayProfilingBinary(const GfxrReplaySettings& settings) const;
 
-    std::unique_ptr<AndroidDevice> m_device{ nullptr };
+    std::unique_ptr<AndroidDevice> m_device{nullptr};
 };
 
-std::filesystem::path ResolveAndroidLibPath(const std::string &name);
-
-DeviceManager &GetDeviceManager();
+DeviceManager& GetDeviceManager();
 }  // namespace Dive

@@ -33,9 +33,6 @@ TraceManager& GetTraceMgr()
     return trace_mgr;
 }
 
-TraceManager::TraceManager() :
-    m_num_frame_to_trace(kNumFrameToTrace)
-{
-}
+TraceManager::TraceManager() : m_num_frame_to_trace(kNumFrameToTrace) {}
 
 }  // namespace Dive

@@ -37,32 +37,32 @@ enum class TraceState
 
 class TraceManager
 {
-public:
+ public:
     TraceManager();
     virtual void TriggerTrace() {}
     virtual void OnNewFrame() {}
     virtual void WaitForTraceDone() {}
 
-    inline const std::string &GetTraceFilePath() const { return m_trace_file_path; }
-    inline void               SetTraceFilePath(std::string trace_file_path)
+    inline const std::string& GetTraceFilePath() const { return m_trace_file_path; }
+    inline void SetTraceFilePath(std::string trace_file_path)
     {
         m_trace_file_path = std::move(trace_file_path);
     }
 
     inline uint32_t GetNumFrameToTrace() const { return m_num_frame_to_trace; }
-    inline void     SetNumFrameToTrace(uint32_t num_frame_to_trace)
+    inline void SetNumFrameToTrace(uint32_t num_frame_to_trace)
     {
         m_num_frame_to_trace = num_frame_to_trace;
     }
 
-private:
+ private:
     std::string m_trace_file_path;
-    uint32_t    m_num_frame_to_trace;
+    uint32_t m_num_frame_to_trace;
 };
 
 class AndroidTraceManager : public TraceManager
 {
-public:
+ public:
     // `trace_duration` is ignored during trace by frame.
     explicit AndroidTraceManager(absl::Duration trace_duration = absl::Seconds(3));
 
@@ -76,21 +76,21 @@ public:
         return m_state;
     }
 
-private:
-    void               TraceByFrame();
-    void               TraceByDuration();
-    bool               ShouldStartTrace() const;
-    bool               ShouldStopTrace() const;
-    void               OnTraceStart();
-    void               OnTraceStop();
-    absl::Mutex        m_state_lock;
+ private:
+    void TraceByFrame();
+    void TraceByDuration();
+    bool ShouldStartTrace() const;
+    bool ShouldStopTrace() const;
+    void OnTraceStart();
+    void OnTraceStop();
+    absl::Mutex m_state_lock;
     TraceState m_state ABSL_GUARDED_BY(m_state_lock) = TraceState::Idle;
-    uint32_t           m_frame_num = 0;
-    uint32_t           m_trace_start_frame = 0;
-    uint32_t           m_trace_num = 0;
-    absl::Duration     m_trace_duration;
+    uint32_t m_frame_num = 0;
+    uint32_t m_trace_start_frame = 0;
+    uint32_t m_trace_num = 0;
+    absl::Duration m_trace_duration;
 };
 
-TraceManager &GetTraceMgr();
+TraceManager& GetTraceMgr();
 
 }  // namespace Dive

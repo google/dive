@@ -31,27 +31,25 @@ namespace Dive
 //       it->SetMyOtherField(val+1);
 //     }
 //     ```
-template<typename Class, typename Id, typename RefT> class StructOfArraysIterator
+template <typename Class, typename Id, typename RefT>
+class StructOfArraysIterator
 {
-public:
+ public:
     using difference_type = ptrdiff_t;
     using value_type = RefT;
     using pointer = RefT*;
     using reference = RefT;
     using iterator_category = std::random_access_iterator_tag;
     StructOfArraysIterator() = default;
-    StructOfArraysIterator(StructOfArraysIterator&& other) :
-        m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
+    StructOfArraysIterator(StructOfArraysIterator&& other)
+        : m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
     {
     }
-    StructOfArraysIterator(const StructOfArraysIterator& other) :
-        m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
+    StructOfArraysIterator(const StructOfArraysIterator& other)
+        : m_ref(other.m_ref.m_obj_ptr, other.m_ref.m_id)
     {
     }
-    StructOfArraysIterator(Class* obj, Id id) :
-        m_ref(obj, id)
-    {
-    }
+    StructOfArraysIterator(Class* obj, Id id) : m_ref(obj, id) {}
 
     StructOfArraysIterator& operator=(const StructOfArraysIterator& other)
     {
@@ -131,9 +129,9 @@ public:
             i = std::numeric_limits<typename Id::basic_type>::max();
         return StructOfArraysIterator(m_ref.m_obj_ptr, Id(static_cast<typename Id::basic_type>(i)));
     }
-    RefT        operator*() const { return m_ref; }
+    RefT operator*() const { return m_ref; }
     const RefT* operator->() const { return &m_ref; }
-    RefT        operator[](difference_type n) const { return *((*this) + n); }
+    RefT operator[](difference_type n) const { return *((*this) + n); }
 
     friend difference_type operator-(const StructOfArraysIterator& left,
                                      const StructOfArraysIterator& right)
@@ -181,10 +179,10 @@ public:
         return !left.lt(right.obj_ptr(), right->id());
     }
 
-    template<typename _Class, typename _Id, typename _ConstRefT, typename _RefT>
+    template <typename _Class, typename _Id, typename _ConstRefT, typename _RefT>
     friend class StructOfArraysConstIterator;
 
-protected:
+ protected:
     void assign(Class* obj_ptr, Id id)
     {
         m_ref.m_obj_ptr = obj_ptr;
@@ -201,7 +199,7 @@ protected:
         return (difference_type)(*this)->id() - (difference_type)id;
     }
     Class* obj_ptr() const { return m_ref.m_obj_ptr; }
-    bool   eq(std::add_const_t<Class>* obj_ptr, Id id) const
+    bool eq(std::add_const_t<Class>* obj_ptr, Id id) const
     {
         return ((*this).obj_ptr() == obj_ptr) &&
                (((*this)->id() == id) ||
@@ -212,23 +210,23 @@ protected:
         return ((*this).obj_ptr() == obj_ptr) && ((*this)->id() < id);
     }
 
-private:
+ private:
     RefT m_ref;
 };
 
-template<typename Class, typename Id, typename ConstRefT, typename RefT>
+template <typename Class, typename Id, typename ConstRefT, typename RefT>
 class StructOfArraysConstIterator : public StructOfArraysIterator<const Class, Id, ConstRefT>
 {
-public:
+ public:
     StructOfArraysConstIterator() = default;
     StructOfArraysConstIterator(StructOfArraysConstIterator&& other) = default;
     StructOfArraysConstIterator(const StructOfArraysConstIterator& other) = default;
-    StructOfArraysConstIterator(const StructOfArraysIterator<Class, Id, RefT>& other) :
-        StructOfArraysIterator<const Class, Id, ConstRefT>(other.obj_ptr(), other->id())
+    StructOfArraysConstIterator(const StructOfArraysIterator<Class, Id, RefT>& other)
+        : StructOfArraysIterator<const Class, Id, ConstRefT>(other.obj_ptr(), other->id())
     {
     }
-    StructOfArraysConstIterator(const Class* obj, Id id) :
-        StructOfArraysIterator<const Class, Id, ConstRefT>(obj, id)
+    StructOfArraysConstIterator(const Class* obj, Id id)
+        : StructOfArraysIterator<const Class, Id, ConstRefT>(obj, id)
     {
     }
 
@@ -247,75 +245,75 @@ public:
         this->clear();
         return *this;
     }
-    using difference_type = typename StructOfArraysIterator<const Class, Id, ConstRefT>::
-    difference_type;
-    friend difference_type operator-(const StructOfArraysConstIterator&             left,
+    using difference_type =
+        typename StructOfArraysIterator<const Class, Id, ConstRefT>::difference_type;
+    friend difference_type operator-(const StructOfArraysConstIterator& left,
                                      const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left - StructOfArraysConstIterator(right);
     }
     friend difference_type operator-(const StructOfArraysIterator<Class, Id, RefT>& left,
-                                     const StructOfArraysConstIterator&             right)
+                                     const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) - right;
     }
-    friend bool operator==(const StructOfArraysConstIterator&             left,
+    friend bool operator==(const StructOfArraysConstIterator& left,
                            const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left == StructOfArraysConstIterator(right);
     }
     friend bool operator==(const StructOfArraysIterator<Class, Id, RefT>& left,
-                           const StructOfArraysConstIterator&             right)
+                           const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) == right;
     }
-    friend bool operator!=(const StructOfArraysConstIterator&             left,
+    friend bool operator!=(const StructOfArraysConstIterator& left,
                            const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left != StructOfArraysConstIterator(right);
     }
     friend bool operator!=(const StructOfArraysIterator<Class, Id, RefT>& left,
-                           const StructOfArraysConstIterator&             right)
+                           const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) != right;
     }
-    friend bool operator<(const StructOfArraysConstIterator&             left,
+    friend bool operator<(const StructOfArraysConstIterator& left,
                           const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left < StructOfArraysConstIterator(right);
     }
     friend bool operator<(const StructOfArraysIterator<Class, Id, RefT>& left,
-                          const StructOfArraysConstIterator&             right)
+                          const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) < right;
     }
-    friend bool operator<=(const StructOfArraysConstIterator&             left,
+    friend bool operator<=(const StructOfArraysConstIterator& left,
                            const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left <= StructOfArraysConstIterator(right);
     }
     friend bool operator<=(const StructOfArraysIterator<Class, Id, RefT>& left,
-                           const StructOfArraysConstIterator&             right)
+                           const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) <= right;
     }
-    friend bool operator>(const StructOfArraysConstIterator&             left,
+    friend bool operator>(const StructOfArraysConstIterator& left,
                           const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left > StructOfArraysConstIterator(right);
     }
     friend bool operator>(const StructOfArraysIterator<Class, Id, RefT>& left,
-                          const StructOfArraysConstIterator&             right)
+                          const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) > right;
     }
-    friend bool operator>=(const StructOfArraysConstIterator&             left,
+    friend bool operator>=(const StructOfArraysConstIterator& left,
                            const StructOfArraysIterator<Class, Id, RefT>& right)
     {
         return left >= StructOfArraysConstIterator(right);
     }
     friend bool operator>=(const StructOfArraysIterator<Class, Id, RefT>& left,
-                           const StructOfArraysConstIterator&             right)
+                           const StructOfArraysConstIterator& right)
     {
         return StructOfArraysConstIterator(left) >= right;
     }

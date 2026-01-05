@@ -27,11 +27,11 @@ limitations under the License.
     do                                      \
     {                                       \
         const absl::Status status = (expr); \
-        if (!status.ok())                   \
-            return status;                  \
+        if (!status.ok()) return status;    \
     } while (0)
 
-template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> result)
+template <typename T>
+absl::Status DoAssignOrReturn(T& lhs, absl::StatusOr<T> result)
 {
     if (result.ok())
     {
@@ -45,8 +45,7 @@ template<typename T> absl::Status DoAssignOrReturn(T &lhs, absl::StatusOr<T> res
 
 #define ASSIGN_OR_RETURN_IMPL(status, lhs, rexpr)         \
     absl::Status status = DoAssignOrReturn(lhs, (rexpr)); \
-    if (!status.ok())                                     \
-        return status;
+    if (!status.ok()) return status;
 
 #define ASSIGN_OR_RETURN(lhs, rexpr) \
     ASSIGN_OR_RETURN_IMPL(STATUS_MACROS_CONCAT_NAME(_status_or_value, __COUNTER__), lhs, rexpr);

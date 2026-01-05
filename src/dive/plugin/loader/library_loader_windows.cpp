@@ -28,7 +28,7 @@ namespace
 {
 class WindowsLibraryLoader : public IDynamicLibraryLoader
 {
-public:
+ public:
     absl::StatusOr<NativeLibraryHandle> Load(const std::string& path) override
     {
         HMODULE handle = LoadLibraryA(path.c_str());
@@ -36,25 +36,25 @@ public:
         {
             DWORD error_code = GetLastError();
             return absl::UnknownError(
-            absl::StrCat("Failed to load library '", path, "'. Error code: ", error_code));
+                absl::StrCat("Failed to load library '", path, "'. Error code: ", error_code));
         }
         return static_cast<NativeLibraryHandle>(handle);
     }
 
     absl::StatusOr<void*> GetSymbol(NativeLibraryHandle handle,
-                                    const std::string&  symbolName) override
+                                    const std::string& symbolName) override
     {
         FARPROC symbol = GetProcAddress(static_cast<HMODULE>(handle), symbolName.c_str());
         if (symbol == nullptr)
         {
             if (DWORD error_code = GetLastError(); error_code != 0)
             {
-                return absl::UnknownError(
-                absl::StrCat("Failed to find symbol '", symbolName, "'. Error code: ", error_code));
+                return absl::UnknownError(absl::StrCat("Failed to find symbol '", symbolName,
+                                                       "'. Error code: ", error_code));
             }
 
             return absl::UnknownError(
-            absl::StrCat("Symbol '", symbolName, "' not found or is a null export."));
+                absl::StrCat("Symbol '", symbolName, "' not found or is a null export."));
         }
         return static_cast<void*>(symbol);
     }
@@ -65,7 +65,7 @@ public:
         {
             DWORD error_code = GetLastError();
             return absl::UnknownError(
-            absl::StrCat("Failed to free library handle. Error code: ", error_code));
+                absl::StrCat("Failed to free library handle. Error code: ", error_code));
         }
         return absl::OkStatus();
     }

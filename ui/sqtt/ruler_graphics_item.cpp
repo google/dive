@@ -15,11 +15,13 @@
 */
 
 #include "ruler_graphics_item.h"
+
 #include <QGraphicsSceneContextMenuEvent>
 #include <QMenu>
 #include <QPainter>
 #include <QTextStream>
 #include <QTransform>
+
 #include "dive_core/common.h"
 #include "dive_core/conversions.h"
 
@@ -31,16 +33,10 @@ RulerGraphicsItem::RulerGraphicsItem()
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::SetMaxCycles(uint64_t max_cycles)
-{
-    m_max_cycles = max_cycles;
-}
+void RulerGraphicsItem::SetMaxCycles(uint64_t max_cycles) { m_max_cycles = max_cycles; }
 
 //--------------------------------------------------------------------------------------------------
-uint64_t RulerGraphicsItem::GetWidth() const
-{
-    return m_width;
-}
+uint64_t RulerGraphicsItem::GetWidth() const { return m_width; }
 
 //--------------------------------------------------------------------------------------------------
 void RulerGraphicsItem::SetWidth(uint64_t width)
@@ -55,8 +51,7 @@ void RulerGraphicsItem::SetWidth(uint64_t width)
 //--------------------------------------------------------------------------------------------------
 void RulerGraphicsItem::SetVisibleRange(int64_t scene_x, int64_t width)
 {
-    if (m_max_cycles == 0)
-        return;
+    if (m_max_cycles == 0) return;
 
     // Convert to local item coordinate
     int32_t item_x = mapFromScene(scene_x, 0).x();
@@ -90,10 +85,7 @@ uint64_t RulerGraphicsItem::GetCyclesVisible(uint64_t visible_width, uint64_t ru
 }
 
 //--------------------------------------------------------------------------------------------------
-QRectF RulerGraphicsItem::boundingRect() const
-{
-    return QRectF(0, 0, m_width, 39);
-}
+QRectF RulerGraphicsItem::boundingRect() const { return QRectF(0, 0, m_width, 39); }
 
 //--------------------------------------------------------------------------------------------------
 QPainterPath RulerGraphicsItem::shape() const
@@ -104,12 +96,10 @@ QPainterPath RulerGraphicsItem::shape() const
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::paint(QPainter                       *painter,
-                              const QStyleOptionGraphicsItem *option,
-                              QWidget                        *widget)
+void RulerGraphicsItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+                              QWidget* widget)
 {
-    if (m_max_cycles == 0)
-        return;
+    if (m_max_cycles == 0) return;
 
     QRectF rect = boundingRect();
 
@@ -145,13 +135,13 @@ void RulerGraphicsItem::paint(QPainter                       *painter,
     // The integer rounding down allows for a starting coord just to the left of the viewport to
     // still be rendered (ie. partial text rendering on the left)
     uint64_t visible_start = std::max((int64_t)0, m_visible_start);
-    double   visible_start_unit = visible_start / unit_to_item_coord;
-    double   start_unit = (visible_start_unit / m_text_step) * m_text_step;
+    double visible_start_unit = visible_start / unit_to_item_coord;
+    double start_unit = (visible_start_unit / m_text_step) * m_text_step;
     uint64_t start_coord_x = start_unit * unit_to_item_coord;
-    double   next_unit = 0.0;
-    bool     visible = true;
+    double next_unit = 0.0;
+    bool visible = true;
     uint32_t step = 0;
-    int64_t  text_coord_step = m_text_step * unit_to_item_coord;
+    int64_t text_coord_step = m_text_step * unit_to_item_coord;
     while (visible)
     {
         int64_t coord_x = start_coord_x + step * text_coord_step;
@@ -159,8 +149,7 @@ void RulerGraphicsItem::paint(QPainter                       *painter,
         next_unit = start_unit + step * m_text_step;
 
         // Stop drawing beyond the max unit
-        if (next_unit > max_unit)
-            break;
+        if (next_unit > max_unit) break;
 
         QString tick_string = GetTickString(next_unit);
 
@@ -197,15 +186,13 @@ void RulerGraphicsItem::paint(QPainter                       *painter,
             qreal tx = coord_x + mini_step * i;
 
             // Outside of visible range
-            if (tx > (m_visible_start + m_visible_width))
-                break;
+            if (tx > (m_visible_start + m_visible_width)) break;
 
             painter->setWorldTransform(QTransform::fromTranslate(tx + orig_x, orig_y));
             painter->setPen(thin_pen);
 
             qreal line_scale = 1.0 / 7.0;
-            if (i == 5)
-                line_scale = 1.0 / 4.0;
+            if (i == 5) line_scale = 1.0 / 4.0;
 
             painter->drawLine(0, rect.bottom() - (rect.height() * line_scale), 0, rect.bottom());
         }
@@ -220,7 +207,7 @@ void RulerGraphicsItem::paint(QPainter                       *painter,
 }
 
 //--------------------------------------------------------------------------------------------------
-void RulerGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
+void RulerGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event)
 {
     Settings::DisplayUnit unit = Settings::Get()->ReadRulerDisplayUnit();
 
@@ -246,7 +233,7 @@ void RulerGraphicsItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
     ns_action.setChecked(unit == Settings::DisplayUnit::kNs);
     menu.addAction(&ns_action);
 
-    QAction *selected_action_ptr = menu.exec(event->screenPos());
+    QAction* selected_action_ptr = menu.exec(event->screenPos());
     if (selected_action_ptr == &cycle_action)
         Settings::Get()->WriteRulerDisplayUnit(Settings::DisplayUnit::kCycle);
     else if (selected_action_ptr == &ms_action)
@@ -267,7 +254,7 @@ QString RulerGraphicsItem::GetTickString(double value) const
 {
     Settings::DisplayUnit unit = Settings::Get()->ReadRulerDisplayUnit();
 
-    QString     tick_string;
+    QString tick_string;
     QTextStream out(&tick_string);
 
     out.setRealNumberNotation(QTextStream::FixedNotation);  // Equivalent of %f
@@ -296,8 +283,7 @@ QString RulerGraphicsItem::GetTickString(double value) const
 }
 
 //--------------------------------------------------------------------------------------------------
-double RulerGraphicsItem::DetermineTextStepSize(uint64_t max_cycles,
-                                                uint64_t max_width,
+double RulerGraphicsItem::DetermineTextStepSize(uint64_t max_cycles, uint64_t max_width,
                                                 uint64_t visible_width) const
 {
     double text_step_size = 0.0;
@@ -355,8 +341,8 @@ double RulerGraphicsItem::DetermineTextStepSize(uint64_t max_cycles,
     font.setFamily(font.defaultFamily());
     font.setPointSize(RULER_FONT_HEIGHT);
     QFontMetrics fm(font);
-    int          pixel_width = fm.horizontalAdvance(GetTickString(max_units));
-    int64_t      text_coord_step = text_step_size / item_coord_to_unit;
+    int pixel_width = fm.horizontalAdvance(GetTickString(max_units));
+    int64_t text_coord_step = text_step_size / item_coord_to_unit;
     while (((double)text_coord_step * 0.85) < pixel_width)
     {
         text_step_size *= 2;

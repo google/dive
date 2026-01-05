@@ -16,12 +16,14 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <QColor>
+
 #include "dive_core/common/gpudefs.h"
 
 #ifndef _MSC_VER
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 #endif
 
 namespace Dive
@@ -32,19 +34,19 @@ static QColor kShaderStageColor[Dive::kShaderStageCount] = {
     QColor(0, 215, 215),    // kShaderStageGs
     QColor(160, 160, 160),  // kShaderStageHs
     QColor(83, 109, 254),   // kShaderStagePs
-    QColor(255, 82, 82)
-};  // kShaderStageVs
+    QColor(255, 82, 82),    // kShaderStageVs
+};
 
 static QColor kShaderStageBorderColor[Dive::kShaderStageCount] = {
     QColor(0, 75, 0),     // kShaderStageCs
     QColor(0, 107, 107),  // kShaderStageGs
     QColor(128, 90, 30),  // kShaderStageHs
     QColor(55, 55, 200),  // kShaderStagePs
-    QColor(200, 35, 35)
-};  // kShaderStageVs
+    QColor(200, 35, 35),  // kShaderStageVs
+};
 
 }  // namespace Dive
 
 #ifndef _MSC_VER
-#    pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif

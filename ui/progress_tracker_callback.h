@@ -15,6 +15,7 @@
 */
 
 #include <dive_core/progress_tracker.h>
+
 #include <QObject>
 
 #pragma once
@@ -23,11 +24,11 @@ class ProgressTrackerCallback : public QObject, public Dive::ProgressTracker
 {
     Q_OBJECT
 
-public:
+ public:
     ProgressTrackerCallback();
 
     virtual void sendMessage(std::string message);
 
-signals:
-    void sendMessageSignal(const QString &message);
+ signals:
+    void sendMessageSignal(const QString& message);
 };

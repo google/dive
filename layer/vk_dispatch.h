@@ -24,21 +24,20 @@ namespace DiveLayer
 
 struct InstanceDispatchTable
 {
-    PFN_vkGetInstanceProcAddr                pfn_get_instance_proc_addr = nullptr;
-    PFN_vkCreateDevice                       CreateDevice = nullptr;
-    PFN_vkEnumerateDeviceLayerProperties     EnumerateDeviceLayerProperties = nullptr;
+    PFN_vkGetInstanceProcAddr pfn_get_instance_proc_addr = nullptr;
+    PFN_vkCreateDevice CreateDevice = nullptr;
+    PFN_vkEnumerateDeviceLayerProperties EnumerateDeviceLayerProperties = nullptr;
     PFN_vkEnumerateDeviceExtensionProperties EnumerateDeviceExtensionProperties = nullptr;
 };
 
 struct DeviceDispatchTable
 {
     PFN_vkGetDeviceProcAddr pfn_get_device_proc_addr = nullptr;
-    PFN_vkQueuePresentKHR   QueuePresentKHR = nullptr;
+    PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
 };
 
-void InitInstanceDispatchTable(VkInstance                instance,
-                               PFN_vkGetInstanceProcAddr pa,
-                               InstanceDispatchTable    *dt);
-void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt);
+void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa,
+                               InstanceDispatchTable* dt);
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable* dt);
 
 }  // namespace DiveLayer

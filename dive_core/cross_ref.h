@@ -33,14 +33,10 @@ enum class CrossRefType : int
 
 class CrossRef
 {
-public:
+ public:
     typedef uint64_t IdType;
 
-    CrossRef(CrossRefType type = CrossRefType::kNone, IdType id = 0) :
-        m_type(type),
-        m_id(id)
-    {
-    }
+    CrossRef(CrossRefType type = CrossRefType::kNone, IdType id = 0) : m_type(type), m_id(id) {}
 
     CrossRef(const CrossRef&) = default;
     CrossRef& operator=(const CrossRef&) = default;
@@ -49,11 +45,11 @@ public:
     inline bool operator!=(const CrossRef& rhs) { return !(*this == rhs); }
 
     inline CrossRefType Type() const { return m_type; }
-    inline IdType       Id() const { return m_id; }
+    inline IdType Id() const { return m_id; }
 
-private:
+ private:
     CrossRefType m_type;
-    IdType       m_id;
+    IdType m_id;
 };
 
 }  // namespace Dive

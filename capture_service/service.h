@@ -16,30 +16,30 @@ limitations under the License.
 
 #pragma once
 
-#include "network/unix_domain_server.h"
 #include "absl/status/status.h"
+#include "network/unix_domain_server.h"
 
 namespace Dive
 {
 
-absl::Status SendPong(Network::SocketConnection *client_conn);
+absl::Status SendPong(Network::SocketConnection* client_conn);
 
-absl::Status Handshake(Network::HandshakeRequest *request, Network::SocketConnection *client_conn);
+absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn);
 
-absl::Status StartPm4Capture(Network::SocketConnection *client_conn);
+absl::Status StartPm4Capture(Network::SocketConnection* client_conn);
 
-absl::Status DownloadFile(Network::DownloadFileRequest *request,
-                          Network::SocketConnection    *client_conn);
+absl::Status DownloadFile(Network::DownloadFileRequest* request,
+                          Network::SocketConnection* client_conn);
 
-absl::Status GetFileSize(Network::FileSizeRequest *request, Network::SocketConnection *client_conn);
+absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn);
 
 class ServerMessageHandler : public Network::IMessageHandler
 {
-public:
+ public:
     void OnConnect() override;
     void OnDisconnect() override;
     void HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                       Network::SocketConnection              *client_conn) override;
+                       Network::SocketConnection* client_conn) override;
 };
 
 }  // namespace Dive

@@ -27,18 +27,18 @@ ErrorCode Error::Code() const
     else
         return ErrorCode::Ok;
 }
-const char *Error::Description() const
+const char* Error::Description() const
 {
     if (m_info != nullptr)
         return m_info->m_desc.c_str();
     else
         return "";
 }
-template<> const EmptyErrorPayload &Error::Payload<ErrorCode::Ok>() const
+template <>
+const EmptyErrorPayload& Error::Payload<ErrorCode::Ok>() const
 {
     static const EmptyErrorPayload kEmptyPayload;
-    if (Code() != ErrorCode::Ok)
-        abort();
+    if (Code() != ErrorCode::Ok) abort();
     return kEmptyPayload;
 }
 Error::Builder::operator Error()

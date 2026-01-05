@@ -27,18 +27,18 @@ class CommandHierarchy;
 //--------------------------------------------------------------------------------------------------
 class GfxrCaptureData : public CaptureData
 {
-public:
+ public:
     GfxrCaptureData() = default;
     virtual ~GfxrCaptureData() = default;
-    GfxrCaptureData &operator=(GfxrCaptureData &&) = default;
+    GfxrCaptureData& operator=(GfxrCaptureData&&) = default;
 
-    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> &GetGfxrSubmits() const;
-    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo>           &GetGfxrCommandBuffers(
-              uint64_t cmd_handle) const;
-    const DiveAnnotationProcessor::DrawCallCounts &GetDrawCallCounts(uint64_t cmd_handle) const;
+    const std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>>& GetGfxrSubmits() const;
+    const std::vector<DiveAnnotationProcessor::VulkanCommandInfo>& GetGfxrCommandBuffers(
+        uint64_t cmd_handle) const;
+    const DiveAnnotationProcessor::DrawCallCounts& GetDrawCallCounts(uint64_t cmd_handle) const;
 
     // Sets m_cur_capture_file and m_gfxr_capture_block_data with info from the original GFXR file
-    LoadResult LoadCaptureFile(const std::string &file_name) override;
+    LoadResult LoadCaptureFile(const std::string& file_name) override;
 
     // Get the gfxr data
     bool IsDiveBlockDataInitialized() const { return m_gfxr_capture_block_data != nullptr; }
@@ -49,16 +49,16 @@ public:
 
     // Writes a new GFXR file based on the original file m_cur_capture_file and modifications
     // recorded in m_gfxr_capture_block_data
-    bool WriteModifiedGfxrFile(const char *new_file_name);
+    bool WriteModifiedGfxrFile(const char* new_file_name);
 
-private:
+ private:
     // Metadata for the original GFXR file m_cur_capture_file, as well as modifications
     std::shared_ptr<gfxrecon::decode::DiveBlockData> m_gfxr_capture_block_data = nullptr;
 
     // Vector of SubmitInfo objects used to add the GFXR vulkan commands to the UI.
     std::vector<std::unique_ptr<DiveAnnotationProcessor::SubmitInfo>> m_gfxr_submits;
     std::unordered_map<uint64_t, std::vector<DiveAnnotationProcessor::VulkanCommandInfo>>
-                                                                          m_gfxr_command_buffers;
+        m_gfxr_command_buffers;
     std::unordered_map<uint64_t, DiveAnnotationProcessor::DrawCallCounts> m_gfxr_draw_call_counts;
 };
 

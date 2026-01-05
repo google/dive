@@ -17,10 +17,11 @@
 #include <sstream>
 
 #ifdef WIN32
-#    include <windows.h>
+#include <windows.h>
 #else
-#    include <unistd.h>  // for isatty()
-#    include <cstdio>    // for fileno()
+#include <unistd.h>  // for isatty()
+
+#include <cstdio>  // for fileno()
 #endif
 
 #include "cli.h"

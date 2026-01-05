@@ -17,6 +17,7 @@
 #include "gfxr_capture_worker.h"
 
 #include <QDebug>
+
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "utils/component_files.h"
@@ -24,24 +25,21 @@
 static constexpr int kStallTimeoutSeconds = 10;
 static constexpr int kFileStatusPollingIntervalMs = 50;
 
-void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string &source_capture_dir)
+void GfxrCaptureWorker::SetGfxrSourceCaptureDir(const std::string& source_capture_dir)
 {
     m_source_capture_dir = source_capture_dir;
 }
 
 bool GfxrCaptureWorker::AreTimestampsCurrent(
-Dive::AndroidDevice                      *device,
-const std::map<std::string, std::string> &previous_timestamps)
+    Dive::AndroidDevice* device, const std::map<std::string, std::string>& previous_timestamps)
 {
-    for (const auto &[file_name, timestamp] : previous_timestamps)
+    for (const auto& [file_name, timestamp] : previous_timestamps)
     {
-        std::string get_timestamp_command = absl::StrCat("shell stat -c %Y ",
-                                                         m_source_capture_dir,
-                                                         "/",
-                                                         file_name.data());
+        std::string get_timestamp_command =
+            absl::StrCat("shell stat -c %Y ", m_source_capture_dir, "/", file_name.data());
 
-        absl::StatusOr<std::string> current_timestamp = device->Adb().RunAndGetResult(
-        get_timestamp_command);
+        absl::StatusOr<std::string> current_timestamp =
+            device->Adb().RunAndGetResult(get_timestamp_command);
         if (!current_timestamp.ok())
         {
             qDebug() << "Failed to get timestamp for " << file_name.data() << ": "
@@ -60,10 +58,10 @@ const std::map<std::string, std::string> &previous_timestamps)
 
 //--------------------------------------------------------------------------------------------------
 absl::StatusOr<qlonglong> GfxrCaptureWorker::getGfxrCaptureDirectorySize(
-Dive::AndroidDevice *device)
+    Dive::AndroidDevice* device)
 {
     // Retrieve the names of the files in the capture directory on the device.
-    std::string                 ls_command = "shell ls " + m_source_capture_dir;
+    std::string ls_command = "shell ls " + m_source_capture_dir;
     absl::StatusOr<std::string> ls_output = device->Adb().RunAndGetResult(ls_command);
 
     if (!ls_output.ok())
@@ -73,7 +71,7 @@ Dive::AndroidDevice *device)
     }
 
     m_file_list = absl::StrSplit(std::string(ls_output->data()), '\n', absl::SkipEmpty());
-    for (std::string &file_with_trailing : m_file_list)
+    for (std::string& file_with_trailing : m_file_list)
     {
         // Windows-style line endings use \r\n. When absl::StrSplit splits by \n, the \r remains
         // at the end of each line if the input string originated from a Windows-style line
@@ -89,32 +87,30 @@ Dive::AndroidDevice *device)
     while (true)
     {
         auto elapsed_since_progress = std::chrono::duration_cast<std::chrono::seconds>(
-                                      std::chrono::steady_clock::now() - last_progress_time)
-                                      .count();
+                                          std::chrono::steady_clock::now() - last_progress_time)
+                                          .count();
 
         if (elapsed_since_progress > kStallTimeoutSeconds)
         {
-            std::string err_msg = absl::
-            StrFormat("GFXR capture stalled: No change in file status observed for %d seconds.",
-                      kStallTimeoutSeconds);
+            std::string err_msg = absl::StrFormat(
+                "GFXR capture stalled: No change in file status observed for %d seconds.",
+                kStallTimeoutSeconds);
             qDebug() << err_msg.c_str();
             return absl::DeadlineExceededError(err_msg);
         }
 
         // Ensure that the .gfxa, .gfxr, and .png file sizes are set and neither is being written
         // to.
-        qlonglong                          total_size = 0;
+        qlonglong total_size = 0;
         std::map<std::string, std::string> current_timestamps;
-        bool                               found_zero_size = false;
+        bool found_zero_size = false;
         // Get the size of the file and timestamp for the last time the file was updated.
 #if defined(_WIN32)
-        std::string combined_cmd = absl::StrCat("shell stat -c \\\"%n|%s|%Y\\\" ",
-                                                m_source_capture_dir,
-                                                "/*");
+        std::string combined_cmd =
+            absl::StrCat("shell stat -c \\\"%n|%s|%Y\\\" ", m_source_capture_dir, "/*");
 #else
-        std::string combined_cmd = absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ",
-                                                m_source_capture_dir,
-                                                "/*'");
+        std::string combined_cmd =
+            absl::StrCat("shell 'stat -c \"%n|%s|%Y\" ", m_source_capture_dir, "/*'");
 #endif
         absl::StatusOr<std::string> stat_output = device->Adb().RunAndGetResult(combined_cmd);
         if (!stat_output.ok())
@@ -126,7 +122,7 @@ Dive::AndroidDevice *device)
 
         std::vector<std::string> stat_lines = absl::StrSplit(*stat_output, '\n', absl::SkipEmpty());
 
-        for (const std::string &line : stat_lines)
+        for (const std::string& line : stat_lines)
         {
             std::vector<std::string> parts = absl::StrSplit(line, '|');
 
@@ -139,12 +135,11 @@ Dive::AndroidDevice *device)
 
             // Extract filename from the full path
             std::filesystem::path full_path = parts[0];
-            std::string           file_name = full_path.filename().string();
+            std::string file_name = full_path.filename().string();
 
             // Check if this file is one we expect from m_file_list
-            if (std::none_of(m_file_list.begin(),
-                             m_file_list.end(),
-                             [&file_name](const auto &item) { return item == file_name; }))
+            if (std::none_of(m_file_list.begin(), m_file_list.end(),
+                             [&file_name](const auto& item) { return item == file_name; }))
             {
                 continue;
             }
@@ -223,8 +218,7 @@ void GfxrCaptureWorker::run()
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to get size of gfxr capture directory",
-                                               " error: ",
-                                               ret.status().message());
+                                               " error: ", ret.status().message());
             qDebug() << err_msg.c_str();
             emit ShowMessage(QString::fromStdString(err_msg));
             return;
@@ -236,7 +230,7 @@ void GfxrCaptureWorker::run()
     qDebug() << "Begin to download the gfxr capture file to "
              << m_target_capture_dir.generic_string().c_str();
 
-    qlonglong   size = 0;
+    qlonglong size = 0;
     std::string gfxr_stem;
     std::string original_screenshot_path;
 
@@ -283,12 +277,12 @@ void GfxrCaptureWorker::run()
     {
         Dive::ComponentFilePaths component_files = {};
         {
-            absl::StatusOr<Dive::ComponentFilePaths>
-            ret = Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
+            absl::StatusOr<Dive::ComponentFilePaths> ret =
+                Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
             if (!ret.ok())
             {
-                std::string err_msg = absl::StrFormat("Failed to get component files: %s",
-                                                      ret.status().message());
+                std::string err_msg =
+                    absl::StrFormat("Failed to get component files: %s", ret.status().message());
                 qDebug() << err_msg.c_str();
                 return;
             }
@@ -296,8 +290,7 @@ void GfxrCaptureWorker::run()
         }
 
         std::error_code error_code;
-        std::filesystem::rename(original_screenshot_path,
-                                component_files.screenshot_png,
+        std::filesystem::rename(original_screenshot_path, component_files.screenshot_png,
                                 error_code);
 
         if (error_code)
@@ -309,8 +302,8 @@ void GfxrCaptureWorker::run()
     }
 
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - begin)
-                                   .count();
+                                       std::chrono::steady_clock::now() - begin)
+                                       .count();
     qDebug() << "Time used to download the gfxr capture directory is "
              << (time_used_to_load_ms / 1000.0) << " seconds.";
 

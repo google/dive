@@ -36,11 +36,10 @@ class MostExpensiveEventsViewDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
 
-public:
-    void  paint(QPainter                   *painter,
-                const QStyleOptionViewItem &option,
-                const QModelIndex          &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+ public:
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override;
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -48,19 +47,19 @@ class MostExpensiveEventsView : public QFrame
 {
     Q_OBJECT
 
-public:
-    MostExpensiveEventsView(const Dive::CaptureMetadata &capture_metadata);
+ public:
+    MostExpensiveEventsView(const Dive::CaptureMetadata& capture_metadata);
     void Update();
 
-private slots:
+ private slots:
     void OnCustomContextMenuRequested(QPoint pos);
 
-protected:
-    virtual void leaveEvent(QEvent *event) override;
+ protected:
+    virtual void leaveEvent(QEvent* event) override;
 
-private:
+ private:
     QString GetDurationString(uint64_t cycle) const;
 
-    QTreeWidget                 *m_event_list;
-    const Dive::CaptureMetadata &m_capture_metadata;
+    QTreeWidget* m_event_list;
+    const Dive::CaptureMetadata& m_capture_metadata;
 };

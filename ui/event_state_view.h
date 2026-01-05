@@ -15,6 +15,7 @@
 */
 
 #include <QFrame>
+
 #include "dive_core/event_state.h"
 #pragma once
 
@@ -32,24 +33,24 @@ class EventStateView : public QFrame
 {
     Q_OBJECT
 
-public:
-    EventStateView(const Dive::DataCore &data_core);
+ public:
+    EventStateView(const Dive::DataCore& data_core);
 
-private slots:
+ private slots:
     void OnEventSelected(uint64_t node_index);
-    void OnHover(QTreeWidgetItem *item_ptr, int column);
+    void OnHover(QTreeWidgetItem* item_ptr, int column);
 
-protected:
-    virtual void leaveEvent(QEvent *event) override;
+ protected:
+    virtual void leaveEvent(QEvent* event) override;
 
-private:
+ private:
     std::map<std::string, std::string> m_field_desc;
-    const Dive::DataCore              &m_data_core;
-    QTreeWidget                       *m_event_state_tree;
-    QColor                             m_accent_color;
+    const Dive::DataCore& m_data_core;
+    QTreeWidget* m_event_state_tree;
+    QColor m_accent_color;
 
-    Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo &state,
-                                                             uint32_t                    event_id);
+    Dive::EventStateInfo::ConstIterator GetStateInfoForEvent(const Dive::EventStateInfo& state,
+                                                             uint32_t event_id);
 
     // For draw/dispatches
     void BuildDrawDescriptionMap(Dive::EventStateInfo::ConstIterator event_state_it);

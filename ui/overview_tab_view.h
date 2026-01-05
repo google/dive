@@ -14,8 +14,9 @@
  limitations under the License.
 */
 
-#include <QFrame>
 #include <qpushbutton.h>
+
+#include <QFrame>
 
 #pragma once
 
@@ -27,7 +28,7 @@ class EventSelection;
 class QTabWidget;
 
 // Hide/Disable tab depend on QT_VERSION
-void SetTabAvailable(QTabWidget *widget, int index, bool available);
+void SetTabAvailable(QTabWidget* widget, int index, bool available);
 
 namespace Dive
 {
@@ -40,22 +41,22 @@ class OverviewTabView : public QFrame
 {
     Q_OBJECT
 
-public:
-    OverviewTabView(const Dive::CaptureMetadata &capture_metadata, const Dive::CaptureStats &stats);
+ public:
+    OverviewTabView(const Dive::CaptureMetadata& capture_metadata, const Dive::CaptureStats& stats);
 
     void LoadStatistics();
 
-private:
+ private:
     void CopyStatistics();
 
-    QPushButton              *m_clipboard_button;
-    QTabWidget               *m_tab_widget;
-    DrawDispatchStatsTabView *m_draw_dispatch_statistics_view;
-    int                       m_draw_dispatch_statistics_view_index;
-    TileStatsTabView         *m_tile_statistics_view;
-    int                       m_tile_statistics_view_tab_index;
-    MiscStatsTabView         *m_misc_statistics_view;
-    int                       m_misc_statistics_view_tab_index;
+    QPushButton* m_clipboard_button;
+    QTabWidget* m_tab_widget;
+    DrawDispatchStatsTabView* m_draw_dispatch_statistics_view;
+    int m_draw_dispatch_statistics_view_index;
+    TileStatsTabView* m_tile_statistics_view;
+    int m_tile_statistics_view_tab_index;
+    MiscStatsTabView* m_misc_statistics_view;
+    int m_misc_statistics_view_tab_index;
 
-    const Dive::CaptureStats &m_stats;
+    const Dive::CaptureStats& m_stats;
 };

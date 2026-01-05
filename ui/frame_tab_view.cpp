@@ -12,21 +12,23 @@
 */
 
 #include "frame_tab_view.h"
-#include <QHBoxLayout>
-#include <QVBoxLayout>
-#include <QLabel>
+
 #include <qobject.h>
 #include <qpixmap.h>
+#include <qtimer.h>
+
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QPoint>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QVBoxLayout>
+
 #include "object_names.h"
-#include <qtimer.h>
 
 static constexpr double kZoomStepFactor = 1.25;
 
-FrameTabView::FrameTabView(QWidget *parent) :
-    QWidget(parent)
+FrameTabView::FrameTabView(QWidget* parent) : QWidget(parent)
 {
     m_image_label = new QLabel(this);
     m_image_label->setAlignment(Qt::AlignCenter);
@@ -44,20 +46,18 @@ FrameTabView::FrameTabView(QWidget *parent) :
     m_zoom_in_button = new QPushButton("Zoom In (+)", this);
     m_zoom_out_button = new QPushButton("Zoom Out (-)", this);
 
-    QHBoxLayout *controls_layout = new QHBoxLayout();
+    QHBoxLayout* controls_layout = new QHBoxLayout();
     controls_layout->addWidget(m_actual_size_button);
     controls_layout->addWidget(m_fit_to_fill_button);
     controls_layout->addWidget(m_zoom_in_button);
     controls_layout->addWidget(m_zoom_out_button);
     controls_layout->addStretch();
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addLayout(controls_layout);
     main_layout->addWidget(m_scroll_area);
 
-    QObject::connect(m_actual_size_button,
-                     &QPushButton::clicked,
-                     this,
+    QObject::connect(m_actual_size_button, &QPushButton::clicked, this,
                      &FrameTabView::OnActualSize);
     QObject::connect(m_fit_to_fill_button, &QPushButton::clicked, this, &FrameTabView::OnFitToView);
     QObject::connect(m_zoom_in_button, &QPushButton::clicked, this, &FrameTabView::OnZoomIn);
@@ -65,7 +65,7 @@ FrameTabView::FrameTabView(QWidget *parent) :
 }
 
 //--------------------------------------------------------------------------------------------------
-void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
+void FrameTabView::OnCaptureScreenshotLoaded(const QString& file_path)
 {
     if (m_image.load(file_path))
     {
@@ -82,8 +82,7 @@ void FrameTabView::OnCaptureScreenshotLoaded(const QString &file_path)
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::ScaleAndDisplayImage()
 {
-    if (m_image.isNull())
-        return;
+    if (m_image.isNull()) return;
 
     QSize new_size = m_image.size() * m_scale_factor;
 
@@ -96,19 +95,17 @@ void FrameTabView::ScaleAndDisplayImage()
 //--------------------------------------------------------------------------------------------------
 void FrameTabView::OnFitToView()
 {
-    if (m_image.isNull())
-        return;
+    if (m_image.isNull()) return;
 
     QSize viewport_size = m_scroll_area->viewport()->size();
     QSize image_size = m_image.size();
 
-    if (viewport_size.isEmpty() || image_size.isEmpty())
-        return;
+    if (viewport_size.isEmpty() || image_size.isEmpty()) return;
 
-    double width_ratio = static_cast<double>(viewport_size.width()) /
-                         static_cast<double>(image_size.width());
-    double height_ratio = static_cast<double>(viewport_size.height()) /
-                          static_cast<double>(image_size.height());
+    double width_ratio =
+        static_cast<double>(viewport_size.width()) / static_cast<double>(image_size.width());
+    double height_ratio =
+        static_cast<double>(viewport_size.height()) / static_cast<double>(image_size.height());
 
     m_scale_factor = qMax(width_ratio, height_ratio);
 

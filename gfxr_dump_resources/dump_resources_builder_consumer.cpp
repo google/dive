@@ -17,37 +17,32 @@
 #include "dump_resources_builder_consumer.h"
 
 #include "state_machine.h"
-
 #include "third_party/gfxreconstruct/framework/util/logging.h"
 
 namespace Dive::gfxr
 {
 
 DumpResourcesBuilderConsumer::DumpResourcesBuilderConsumer(
-std::function<void(DumpEntry)> dump_found_callback) :
-    dump_found_callback_(std::move(dump_found_callback))
+    std::function<void(DumpEntry)> dump_found_callback)
+    : dump_found_callback_(std::move(dump_found_callback))
 {
 }
 
 void DumpResourcesBuilderConsumer::Process_vkBeginCommandBuffer(
-const gfxrecon::decode::ApiCallInfo& call_info,
-VkResult                             returnValue,
-gfxrecon::format::HandleId           commandBuffer,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
-pBeginInfo)
+    const gfxrecon::decode::ApiCallInfo& call_info, VkResult returnValue,
+    gfxrecon::format::HandleId commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkCommandBufferBeginInfo>*
+        pBeginInfo)
 {
     GFXRECON_LOG_DEBUG("Process_vkBeginCommandBuffer: commandBuffer=%lu", commandBuffer);
-    auto [it, inserted] = incomplete_dumps_
-                          .insert_or_assign(commandBuffer,
-                                            std::make_unique<StateMachine>(
-                                            commandBuffer,
-                                            [this, commandBuffer](DumpEntry dump_entry) {
-                                                dump_found_callback_(std::move(dump_entry));
-                                                incomplete_dumps_.erase(commandBuffer);
-                                            },
-                                            [this, commandBuffer] {
-                                                incomplete_dumps_.erase(commandBuffer);
-                                            }));
+    auto [it, inserted] = incomplete_dumps_.insert_or_assign(
+        commandBuffer, std::make_unique<StateMachine>(
+                           commandBuffer,
+                           [this, commandBuffer](DumpEntry dump_entry) {
+                               dump_found_callback_(std::move(dump_entry));
+                               incomplete_dumps_.erase(commandBuffer);
+                           },
+                           [this, commandBuffer] { incomplete_dumps_.erase(commandBuffer); }));
     if (!inserted)
     {
         GFXRECON_LOG_DEBUG("Command buffer %lu never submitted! Discarding previous state...",
@@ -55,18 +50,15 @@ pBeginInfo)
     }
 
     StateMachine& state_machine = *it->second;
-    state_machine.state().Process_vkBeginCommandBuffer(call_info,
-                                                       returnValue,
-                                                       commandBuffer,
+    state_machine.state().Process_vkBeginCommandBuffer(call_info, returnValue, commandBuffer,
                                                        pBeginInfo);
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdBeginRenderPass(
-const gfxrecon::decode::ApiCallInfo& call_info,
-gfxrecon::format::HandleId           commandBuffer,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-                  pRenderPassBegin,
-VkSubpassContents contents)
+    const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+        pRenderPassBegin,
+    VkSubpassContents contents)
 {
     GFXRECON_LOG_DEBUG("Process_vkCmdBeginRenderPass: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
@@ -75,64 +67,45 @@ VkSubpassContents contents)
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdBeginRenderPass2KHR(
-const gfxrecon::decode::ApiCallInfo& call_info,
-gfxrecon::format::HandleId           commandBuffer,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
-pRenderPassBegin,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
-pSubpassBeginInfo)
+    const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkRenderPassBeginInfo>*
+        pRenderPassBegin,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassBeginInfo>*
+        pSubpassBeginInfo)
 {
     GFXRECON_LOG_DEBUG("Process_vkCmdBeginRenderPass2KHR: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
-        consumer.Process_vkCmdBeginRenderPass2KHR(call_info,
-                                                  commandBuffer,
-                                                  pRenderPassBegin,
+        consumer.Process_vkCmdBeginRenderPass2KHR(call_info, commandBuffer, pRenderPassBegin,
                                                   pSubpassBeginInfo);
     });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdDraw(const gfxrecon::decode::ApiCallInfo& call_info,
                                                      gfxrecon::format::HandleId commandBuffer,
-                                                     uint32_t                   vertexCount,
-                                                     uint32_t                   instanceCount,
-                                                     uint32_t                   firstVertex,
-                                                     uint32_t                   firstInstance)
+                                                     uint32_t vertexCount, uint32_t instanceCount,
+                                                     uint32_t firstVertex, uint32_t firstInstance)
 {
     GFXRECON_LOG_DEBUG("Process_vkCmdDraw: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
-        consumer.Process_vkCmdDraw(call_info,
-                                   commandBuffer,
-                                   vertexCount,
-                                   instanceCount,
-                                   firstVertex,
-                                   firstInstance);
+        consumer.Process_vkCmdDraw(call_info, commandBuffer, vertexCount, instanceCount,
+                                   firstVertex, firstInstance);
     });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdDrawIndexed(
-const gfxrecon::decode::ApiCallInfo& call_info,
-gfxrecon::format::HandleId           commandBuffer,
-uint32_t                             indexCount,
-uint32_t                             instanceCount,
-uint32_t                             firstIndex,
-int32_t                              vertexOffset,
-uint32_t                             firstInstance)
+    const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+    uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset,
+    uint32_t firstInstance)
 {
     GFXRECON_LOG_DEBUG("Process_vkCmdDrawIndexed: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
-        consumer.Process_vkCmdDrawIndexed(call_info,
-                                          commandBuffer,
-                                          indexCount,
-                                          instanceCount,
-                                          firstIndex,
-                                          vertexOffset,
-                                          firstInstance);
+        consumer.Process_vkCmdDrawIndexed(call_info, commandBuffer, indexCount, instanceCount,
+                                          firstIndex, vertexOffset, firstInstance);
     });
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass(
-const gfxrecon::decode::ApiCallInfo& call_info,
-gfxrecon::format::HandleId           commandBuffer)
+    const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer)
 {
     GFXRECON_LOG_DEBUG("Process_vkCmdEndRenderPass: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
@@ -141,9 +114,9 @@ gfxrecon::format::HandleId           commandBuffer)
 }
 
 void DumpResourcesBuilderConsumer::Process_vkCmdEndRenderPass2KHR(
-const gfxrecon::decode::ApiCallInfo&                                                call_info,
-gfxrecon::format::HandleId                                                          commandBuffer,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
+    const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId commandBuffer,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInfo>*
+        pSubpassEndInfo)
 {
     GFXRECON_LOG_DEBUG("Process_vkCmdEndRenderPass2KHR: commandBuffer=%lu", commandBuffer);
     InvokeIfFound(commandBuffer, [&](gfxrecon::decode::VulkanConsumer& consumer) {
@@ -152,36 +125,34 @@ gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubpassEndInf
 }
 
 void DumpResourcesBuilderConsumer::Process_vkQueueSubmit(
-const gfxrecon::decode::ApiCallInfo&                                            call_info,
-VkResult                                                                        returnValue,
-gfxrecon::format::HandleId                                                      queue,
-uint32_t                                                                        submitCount,
-gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
-gfxrecon::format::HandleId                                                      fence)
+    const gfxrecon::decode::ApiCallInfo& call_info, VkResult returnValue,
+    gfxrecon::format::HandleId queue, uint32_t submitCount,
+    gfxrecon::decode::StructPointerDecoder<gfxrecon::decode::Decoded_VkSubmitInfo>* pSubmits,
+    gfxrecon::format::HandleId fence)
 {
     GFXRECON_LOG_DEBUG("Process_vkQueueSubmit");
     for (uint32_t submit_index = 0; submit_index < submitCount; submit_index++)
     {
-        const gfxrecon::decode::Decoded_VkSubmitInfo&
-        submit = pSubmits->GetMetaStructPointer()[submit_index];
+        const gfxrecon::decode::Decoded_VkSubmitInfo& submit =
+            pSubmits->GetMetaStructPointer()[submit_index];
         for (uint32_t command_buffer_index = 0;
              command_buffer_index < pSubmits->GetPointer()->commandBufferCount;
              command_buffer_index++)
         {
-            gfxrecon::format::HandleId command_buffer_id = submit.pCommandBuffers
-                                                           .GetPointer()[command_buffer_index];
+            gfxrecon::format::HandleId command_buffer_id =
+                submit.pCommandBuffers.GetPointer()[command_buffer_index];
             GFXRECON_LOG_DEBUG("... for commandBuffer=%lu", command_buffer_id);
             InvokeIfFound(command_buffer_id, [&](gfxrecon::decode::VulkanConsumer& consumer) {
-                consumer
-                .Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits, fence);
+                consumer.Process_vkQueueSubmit(call_info, returnValue, queue, submitCount, pSubmits,
+                                               fence);
             });
         }
     }
 }
 
 void DumpResourcesBuilderConsumer::InvokeIfFound(
-gfxrecon::format::HandleId                                    command_buffer,
-const std::function<void(gfxrecon::decode::VulkanConsumer&)>& function)
+    gfxrecon::format::HandleId command_buffer,
+    const std::function<void(gfxrecon::decode::VulkanConsumer&)>& function)
 {
     auto it = incomplete_dumps_.find(command_buffer);
     if (it == incomplete_dumps_.end())

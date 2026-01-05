@@ -29,7 +29,7 @@ using Buffer = std::vector<uint8_t>;
 
 class ISerializable
 {
-public:
+ public:
     virtual ~ISerializable() = default;
 
     // Returns the specific type identifier for this message.

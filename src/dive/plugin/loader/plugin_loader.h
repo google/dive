@@ -32,46 +32,43 @@ namespace Dive
 
 class DivePluginBridge : public IDivePluginBridge
 {
-public:
-    QObject *GetQObject(const char *name) const final;
-    void     SetQObject(const char *name, QObject *object);
+ public:
+    QObject* GetQObject(const char* name) const final;
+    void SetQObject(const char* name, QObject* object);
 
-    void *GetMutable(const char *name) const final;
-    void  SetMutable(const char *name, void *object);
+    void* GetMutable(const char* name) const final;
+    void SetMutable(const char* name, void* object);
 
-    const void *GetConst(const char *name) const final;
-    void        SetConst(const char *name, const void *object);
+    const void* GetConst(const char* name) const final;
+    void SetConst(const char* name, const void* object);
 
-private:
-    std::unordered_map<std::string, const void *> m_const_objects;
-    std::unordered_map<std::string, void *>       m_mutable_objects;
-    std::unordered_map<std::string, QObject *>    m_qt_objects;
+ private:
+    std::unordered_map<std::string, const void*> m_const_objects;
+    std::unordered_map<std::string, void*> m_mutable_objects;
+    std::unordered_map<std::string, QObject*> m_qt_objects;
 };
 
 class PluginLoader
 {
-public:
+ public:
     PluginLoader();
     ~PluginLoader();
 
-    PluginLoader(const PluginLoader &) = delete;
-    PluginLoader &operator=(const PluginLoader &) = delete;
+    PluginLoader(const PluginLoader&) = delete;
+    PluginLoader& operator=(const PluginLoader&) = delete;
 
-    absl::Status LoadPlugins(const std::filesystem::path &plugin_directory_path);
-    void         UnloadPlugins();
+    absl::Status LoadPlugins(const std::filesystem::path& plugin_directory_path);
+    void UnloadPlugins();
 
-    const DivePluginBridge &Bridge() const { return m_bridge; }
-    DivePluginBridge       &Bridge() { return m_bridge; }
+    const DivePluginBridge& Bridge() const { return m_bridge; }
+    DivePluginBridge& Bridge() { return m_bridge; }
 
-private:
+ private:
     struct NativeLibraryHandleDeleter
     {
-        IDynamicLibraryLoader *loader;
+        IDynamicLibraryLoader* loader;
 
-        explicit NativeLibraryHandleDeleter(IDynamicLibraryLoader *l = nullptr) :
-            loader(l)
-        {
-        }
+        explicit NativeLibraryHandleDeleter(IDynamicLibraryLoader* l = nullptr) : loader(l) {}
 
         using pointer = NativeLibraryHandle;
         void operator()(NativeLibraryHandle handle) const;
@@ -80,7 +77,7 @@ private:
 
     struct PluginDeleter
     {
-        void operator()(IDivePlugin *plugin) const;
+        void operator()(IDivePlugin* plugin) const;
     };
     using PluginUniquePtr = std::unique_ptr<IDivePlugin, PluginDeleter>;
 
@@ -89,11 +86,10 @@ private:
         // The plugin must be shut down BEFORE its library handle is freed.
         // This ensures reverse destruction order (library_handle then plugin).
         LibraryHandleUniquePtr library_handle;
-        PluginUniquePtr        plugin;
+        PluginUniquePtr plugin;
 
-        LoadedPluginEntry(LibraryHandleUniquePtr lh, PluginUniquePtr p) :
-            library_handle(std::move(lh)),
-            plugin(std::move(p))
+        LoadedPluginEntry(LibraryHandleUniquePtr lh, PluginUniquePtr p)
+            : library_handle(std::move(lh)), plugin(std::move(p))
         {
         }
     };
@@ -102,8 +98,8 @@ private:
     // m_library_loader must be destroyed AFTER m_loaded_plugin_entries
     // because NativeLibraryHandleDeleter uses a raw pointer to m_library_loader.
     std::unique_ptr<IDynamicLibraryLoader> m_library_loader;
-    std::vector<LoadedPluginEntry>         m_loaded_plugin_entries;
-    DivePluginBridge                       m_bridge;
+    std::vector<LoadedPluginEntry> m_loaded_plugin_entries;
+    DivePluginBridge m_bridge;
 };
 
 }  // namespace Dive

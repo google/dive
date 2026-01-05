@@ -29,12 +29,12 @@ struct DiveUIObjectNames
 // Discovery interface for plugin.
 class IDivePluginBridge
 {
-public:
-    virtual QObject*    GetQObject(const char* name) const = 0;
-    virtual void*       GetMutable(const char* name) const = 0;
+ public:
+    virtual QObject* GetQObject(const char* name) const = 0;
+    virtual void* GetMutable(const char* name) const = 0;
     virtual const void* GetConst(const char* name) const = 0;
 
-protected:
+ protected:
     virtual ~IDivePluginBridge() = default;
 };
 
@@ -47,7 +47,7 @@ protected:
 // implementation.
 class IDivePlugin
 {
-public:
+ public:
     virtual ~IDivePlugin() = default;
 
     // Returns a human-readable name for the plugin
@@ -65,9 +65,9 @@ public:
 };
 
 #ifdef WIN32
-#    define DIVE_PLUGIN_EXPORT __declspec(dllexport)
+#define DIVE_PLUGIN_EXPORT __declspec(dllexport)
 #else
-#    define DIVE_PLUGIN_EXPORT
+#define DIVE_PLUGIN_EXPORT
 #endif
 
 extern "C" DIVE_PLUGIN_EXPORT IDivePlugin* CreateDivePluginInstance();

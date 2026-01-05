@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
+
 #include <deque>
 #include <limits>
 #include <numeric>
@@ -32,148 +33,102 @@ namespace DiveLayer
 
 class DiveRuntimeLayer
 {
-public:
+ public:
     DiveRuntimeLayer();
     ~DiveRuntimeLayer();
-    VkResult QueuePresentKHR(PFN_vkQueuePresentKHR   pfn,
-                             VkQueue                 queue,
+    VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                              const VkPresentInfoKHR* pPresentInfo);
 
-    VkResult CreateImage(PFN_vkCreateImage            pfn,
-                         VkDevice                     device,
-                         const VkImageCreateInfo*     pCreateInfo,
-                         const VkAllocationCallbacks* pAllocator,
-                         VkImage*                     pImage);
+    VkResult CreateImage(PFN_vkCreateImage pfn, VkDevice device,
+                         const VkImageCreateInfo* pCreateInfo,
+                         const VkAllocationCallbacks* pAllocator, VkImage* pImage);
 
-    void CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn,
-                        VkCommandBuffer      commandBuffer,
-                        uint32_t             indexCount,
-                        uint32_t             instanceCount,
-                        uint32_t             firstIndex,
-                        int32_t              vertexOffset,
-                        uint32_t             firstInstance);
+    void CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer commandBuffer,
+                        uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex,
+                        int32_t vertexOffset, uint32_t firstInstance);
 
-    void CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn,
-                           VkCommandBuffer         commandBuffer,
-                           VkQueryPool             queryPool,
-                           uint32_t                firstQuery,
-                           uint32_t                queryCount);
+    void CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn, VkCommandBuffer commandBuffer,
+                           VkQueryPool queryPool, uint32_t firstQuery, uint32_t queryCount);
 
-    void CmdWriteTimestamp(PFN_vkCmdWriteTimestamp pfn,
-                           VkCommandBuffer         commandBuffer,
-                           VkPipelineStageFlagBits pipelineStage,
-                           VkQueryPool             queryPool,
-                           uint32_t                query);
+    void CmdWriteTimestamp(PFN_vkCmdWriteTimestamp pfn, VkCommandBuffer commandBuffer,
+                           VkPipelineStageFlagBits pipelineStage, VkQueryPool queryPool,
+                           uint32_t query);
 
-    VkResult GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn,
-                                 VkDevice                  device,
-                                 VkQueryPool               queryPool,
-                                 uint32_t                  firstQuery,
-                                 uint32_t                  queryCount,
-                                 size_t                    dataSize,
-                                 void*                     pData,
-                                 VkDeviceSize              stride,
-                                 VkQueryResultFlags        flags);
+    VkResult GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn, VkDevice device,
+                                 VkQueryPool queryPool, uint32_t firstQuery, uint32_t queryCount,
+                                 size_t dataSize, void* pData, VkDeviceSize stride,
+                                 VkQueryResultFlags flags);
 
-    void DestroyCommandPool(PFN_vkDestroyCommandPool     pfn,
-                            VkDevice                     device,
-                            VkCommandPool                commandPool,
-                            const VkAllocationCallbacks* pAllocator);
+    void DestroyCommandPool(PFN_vkDestroyCommandPool pfn, VkDevice device,
+                            VkCommandPool commandPool, const VkAllocationCallbacks* pAllocator);
 
-    VkResult AllocateCommandBuffers(PFN_vkAllocateCommandBuffers       pfn,
-                                    VkDevice                           device,
+    VkResult AllocateCommandBuffers(PFN_vkAllocateCommandBuffers pfn, VkDevice device,
                                     const VkCommandBufferAllocateInfo* pAllocateInfo,
-                                    VkCommandBuffer*                   pCommandBuffers);
+                                    VkCommandBuffer* pCommandBuffers);
 
-    void FreeCommandBuffers(PFN_vkFreeCommandBuffers pfn,
-                            VkDevice                 device,
-                            VkCommandPool            commandPool,
-                            uint32_t                 commandBufferCount,
-                            const VkCommandBuffer*   pCommandBuffers);
+    void FreeCommandBuffers(PFN_vkFreeCommandBuffers pfn, VkDevice device,
+                            VkCommandPool commandPool, uint32_t commandBufferCount,
+                            const VkCommandBuffer* pCommandBuffers);
 
-    VkResult ResetCommandBuffer(PFN_vkResetCommandBuffer  pfn,
-                                VkCommandBuffer           commandBuffer,
+    VkResult ResetCommandBuffer(PFN_vkResetCommandBuffer pfn, VkCommandBuffer commandBuffer,
                                 VkCommandBufferResetFlags flags);
 
-    VkResult ResetCommandPool(PFN_vkResetCommandPool  pfn,
-                              VkDevice                device,
-                              VkCommandPool           commandPool,
-                              VkCommandPoolResetFlags flags);
+    VkResult ResetCommandPool(PFN_vkResetCommandPool pfn, VkDevice device,
+                              VkCommandPool commandPool, VkCommandPoolResetFlags flags);
 
-    VkResult BeginCommandBuffer(PFN_vkBeginCommandBuffer        pfn,
-                                VkCommandBuffer                 commandBuffer,
+    VkResult BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn, VkCommandBuffer commandBuffer,
                                 const VkCommandBufferBeginInfo* pBeginInfo);
 
     VkResult EndCommandBuffer(PFN_vkEndCommandBuffer pfn, VkCommandBuffer commandBuffer);
 
-    VkResult CreateDevice(PFN_vkGetDeviceProcAddr      pa,
-                          PFN_vkCreateDevice           pfn,
-                          float                        timestampPeriod,
-                          VkPhysicalDevice             physicalDevice,
-                          const VkDeviceCreateInfo*    pCreateInfo,
-                          const VkAllocationCallbacks* pAllocator,
-                          VkDevice*                    pDevice);
+    VkResult CreateDevice(PFN_vkGetDeviceProcAddr pa, PFN_vkCreateDevice pfn, float timestampPeriod,
+                          VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* pCreateInfo,
+                          const VkAllocationCallbacks* pAllocator, VkDevice* pDevice);
 
-    void DestroyDevice(PFN_vkDestroyDevice          pfn,
-                       VkDevice                     device,
+    void DestroyDevice(PFN_vkDestroyDevice pfn, VkDevice device,
                        const VkAllocationCallbacks* pAllocator);
 
-    VkResult AcquireNextImageKHR(PFN_vkAcquireNextImageKHR pfn,
-                                 VkDevice                  device,
-                                 VkSwapchainKHR            swapchain,
-                                 uint64_t                  timeout,
-                                 VkSemaphore               semaphore,
-                                 VkFence                   fence,
-                                 uint32_t*                 pImageIndex);
+    VkResult AcquireNextImageKHR(PFN_vkAcquireNextImageKHR pfn, VkDevice device,
+                                 VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore semaphore,
+                                 VkFence fence, uint32_t* pImageIndex);
 
-    VkResult QueueSubmit(PFN_vkQueueSubmit   pfn,
-                         VkQueue             queue,
-                         uint32_t            submitCount,
-                         const VkSubmitInfo* pSubmits,
-                         VkFence             fence);
+    VkResult QueueSubmit(PFN_vkQueueSubmit pfn, VkQueue queue, uint32_t submitCount,
+                         const VkSubmitInfo* pSubmits, VkFence fence);
 
-    void GetDeviceQueue2(PFN_vkGetDeviceQueue2     pfn,
-                         VkDevice                  device,
-                         const VkDeviceQueueInfo2* pQueueInfo,
-                         VkQueue*                  pQueue);
+    void GetDeviceQueue2(PFN_vkGetDeviceQueue2 pfn, VkDevice device,
+                         const VkDeviceQueueInfo2* pQueueInfo, VkQueue* pQueue);
 
-    void GetDeviceQueue(PFN_vkGetDeviceQueue pfn,
-                        VkDevice             device,
-                        uint32_t             queueFamilyIndex,
-                        uint32_t             queueIndex,
-                        VkQueue*             pQueue);
+    void GetDeviceQueue(PFN_vkGetDeviceQueue pfn, VkDevice device, uint32_t queueFamilyIndex,
+                        uint32_t queueIndex, VkQueue* pQueue);
 
     void CmdInsertDebugUtilsLabel(PFN_vkCmdInsertDebugUtilsLabelEXT pfn,
-                                  VkCommandBuffer                   commandBuffer,
-                                  const VkDebugUtilsLabelEXT*       pLabelInfo);
+                                  VkCommandBuffer commandBuffer,
+                                  const VkDebugUtilsLabelEXT* pLabelInfo);
 
-    void CmdBeginRenderPass(PFN_vkCmdBeginRenderPass     pfn,
-                            VkCommandBuffer              commandBuffer,
+    void CmdBeginRenderPass(PFN_vkCmdBeginRenderPass pfn, VkCommandBuffer commandBuffer,
                             const VkRenderPassBeginInfo* pRenderPassBegin,
-                            VkSubpassContents            contents);
+                            VkSubpassContents contents);
 
     void CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuffer commandBuffer);
 
-    void CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2    pfn,
-                             VkCommandBuffer              commandBuffer,
+    void CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2 pfn, VkCommandBuffer commandBuffer,
                              const VkRenderPassBeginInfo* pRenderPassBegin,
-                             const VkSubpassBeginInfo*    pSubpassBeginInfo);
+                             const VkSubpassBeginInfo* pSubpassBeginInfo);
 
-    void CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn,
-                           VkCommandBuffer         commandBuffer,
+    void CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandBuffer commandBuffer,
                            const VkSubpassEndInfo* pSubpassEndInfo);
 
-private:
-    Dive::GPUTime           m_gpu_time;
+ private:
+    Dive::GPUTime m_gpu_time;
     PFN_vkGetDeviceProcAddr m_device_proc_addr = nullptr;
 
     // Cache all vk function pointers
-    PFN_vkResetQueryPool      m_pfn_vkResetQueryPool = nullptr;
-    PFN_vkQueueWaitIdle       m_pfn_vkQueueWaitIdle = nullptr;
-    PFN_vkDestroyQueryPool    m_pfn_vkDestroyQueryPool = nullptr;
-    PFN_vkDeviceWaitIdle      m_pfn_vkDeviceWaitIdle = nullptr;
+    PFN_vkResetQueryPool m_pfn_vkResetQueryPool = nullptr;
+    PFN_vkQueueWaitIdle m_pfn_vkQueueWaitIdle = nullptr;
+    PFN_vkDestroyQueryPool m_pfn_vkDestroyQueryPool = nullptr;
+    PFN_vkDeviceWaitIdle m_pfn_vkDeviceWaitIdle = nullptr;
     PFN_vkGetQueryPoolResults m_pfn_vkGetQueryPoolResults = nullptr;
-    PFN_vkCmdWriteTimestamp   m_pfn_vkCmdWriteTimestamp = nullptr;
+    PFN_vkCmdWriteTimestamp m_pfn_vkCmdWriteTimestamp = nullptr;
 };
 
 }  // namespace DiveLayer

@@ -24,42 +24,41 @@ namespace DiveLayer
 
 struct InstanceDispatchTable
 {
-    PFN_vkGetInstanceProcAddr                pfn_get_instance_proc_addr = nullptr;
-    PFN_vkCreateDevice                       CreateDevice = nullptr;
-    PFN_vkEnumerateDeviceLayerProperties     EnumerateDeviceLayerProperties = nullptr;
+    PFN_vkGetInstanceProcAddr pfn_get_instance_proc_addr = nullptr;
+    PFN_vkCreateDevice CreateDevice = nullptr;
+    PFN_vkEnumerateDeviceLayerProperties EnumerateDeviceLayerProperties = nullptr;
     PFN_vkEnumerateDeviceExtensionProperties EnumerateDeviceExtensionProperties = nullptr;
 };
 
 struct DeviceDispatchTable
 {
-    PFN_vkGetDeviceProcAddr           pfn_get_device_proc_addr = nullptr;
-    PFN_vkQueuePresentKHR             QueuePresentKHR = nullptr;
-    PFN_vkCreateImage                 CreateImage = nullptr;
-    PFN_vkCmdDrawIndexed              CmdDrawIndexed = nullptr;
-    PFN_vkCmdResetQueryPool           CmdResetQueryPool = nullptr;
-    PFN_vkCmdWriteTimestamp           CmdWriteTimestamp = nullptr;
-    PFN_vkGetQueryPoolResults         GetQueryPoolResults = nullptr;
-    PFN_vkDestroyCommandPool          DestroyCommandPool = nullptr;
-    PFN_vkAllocateCommandBuffers      AllocateCommandBuffers = nullptr;
-    PFN_vkFreeCommandBuffers          FreeCommandBuffers = nullptr;
-    PFN_vkResetCommandBuffer          ResetCommandBuffer = nullptr;
-    PFN_vkBeginCommandBuffer          BeginCommandBuffer = nullptr;
-    PFN_vkEndCommandBuffer            EndCommandBuffer = nullptr;
-    PFN_vkAcquireNextImageKHR         AcquireNextImageKHR = nullptr;
-    PFN_vkQueueSubmit                 QueueSubmit = nullptr;
-    PFN_vkGetDeviceQueue2             GetDeviceQueue2 = nullptr;
-    PFN_vkGetDeviceQueue              GetDeviceQueue = nullptr;
-    PFN_vkDestroyDevice               DestroyDevice = nullptr;
+    PFN_vkGetDeviceProcAddr pfn_get_device_proc_addr = nullptr;
+    PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
+    PFN_vkCreateImage CreateImage = nullptr;
+    PFN_vkCmdDrawIndexed CmdDrawIndexed = nullptr;
+    PFN_vkCmdResetQueryPool CmdResetQueryPool = nullptr;
+    PFN_vkCmdWriteTimestamp CmdWriteTimestamp = nullptr;
+    PFN_vkGetQueryPoolResults GetQueryPoolResults = nullptr;
+    PFN_vkDestroyCommandPool DestroyCommandPool = nullptr;
+    PFN_vkAllocateCommandBuffers AllocateCommandBuffers = nullptr;
+    PFN_vkFreeCommandBuffers FreeCommandBuffers = nullptr;
+    PFN_vkResetCommandBuffer ResetCommandBuffer = nullptr;
+    PFN_vkBeginCommandBuffer BeginCommandBuffer = nullptr;
+    PFN_vkEndCommandBuffer EndCommandBuffer = nullptr;
+    PFN_vkAcquireNextImageKHR AcquireNextImageKHR = nullptr;
+    PFN_vkQueueSubmit QueueSubmit = nullptr;
+    PFN_vkGetDeviceQueue2 GetDeviceQueue2 = nullptr;
+    PFN_vkGetDeviceQueue GetDeviceQueue = nullptr;
+    PFN_vkDestroyDevice DestroyDevice = nullptr;
     PFN_vkCmdInsertDebugUtilsLabelEXT CmdInsertDebugUtilsLabel = nullptr;
-    PFN_vkCmdBeginRenderPass          CmdBeginRenderPass = nullptr;
-    PFN_vkCmdEndRenderPass            CmdEndRenderPass = nullptr;
-    PFN_vkCmdBeginRenderPass2         CmdBeginRenderPass2 = nullptr;
-    PFN_vkCmdEndRenderPass2           CmdEndRenderPass2 = nullptr;
+    PFN_vkCmdBeginRenderPass CmdBeginRenderPass = nullptr;
+    PFN_vkCmdEndRenderPass CmdEndRenderPass = nullptr;
+    PFN_vkCmdBeginRenderPass2 CmdBeginRenderPass2 = nullptr;
+    PFN_vkCmdEndRenderPass2 CmdEndRenderPass2 = nullptr;
 };
 
-void InitInstanceDispatchTable(VkInstance                instance,
-                               PFN_vkGetInstanceProcAddr pa,
-                               InstanceDispatchTable    *dt);
-void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable *dt);
+void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa,
+                               InstanceDispatchTable* dt);
+void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, DeviceDispatchTable* dt);
 
 }  // namespace DiveLayer

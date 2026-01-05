@@ -23,33 +23,23 @@
 namespace Dive::gfxr
 {
 
-StateMachine::StateMachine(gfxrecon::format::HandleId command_buffer,
-                           AcceptingFunction          accept,
-                           RejectingFunction          reject) :
-    command_buffer_(command_buffer),
-    accept_(accept),
-    reject_(reject),
-    find_draw_(*this, find_render_pass_),
-    find_render_pass_(*this, find_draw_),
-    begin_state_(*this, find_render_pass_),
-    state_(&begin_state_)
+StateMachine::StateMachine(gfxrecon::format::HandleId command_buffer, AcceptingFunction accept,
+                           RejectingFunction reject)
+    : command_buffer_(command_buffer),
+      accept_(accept),
+      reject_(reject),
+      find_draw_(*this, find_render_pass_),
+      find_render_pass_(*this, find_draw_),
+      begin_state_(*this, find_render_pass_),
+      state_(&begin_state_)
 {
 }
 
-void StateMachine::Transition(gfxrecon::decode::VulkanConsumer& new_state)
-{
-    state_ = &new_state;
-}
+void StateMachine::Transition(gfxrecon::decode::VulkanConsumer& new_state) { state_ = &new_state; }
 
-DumpEntry& StateMachine::dump_entry()
-{
-    return dump_entry_;
-}
+DumpEntry& StateMachine::dump_entry() { return dump_entry_; }
 
-const gfxrecon::format::HandleId& StateMachine::command_buffer()
-{
-    return command_buffer_;
-}
+const gfxrecon::format::HandleId& StateMachine::command_buffer() { return command_buffer_; }
 
 void StateMachine::Done()
 {
@@ -65,9 +55,6 @@ void StateMachine::Done()
     }
 }
 
-gfxrecon::decode::VulkanConsumer& StateMachine::state()
-{
-    return *state_;
-}
+gfxrecon::decode::VulkanConsumer& StateMachine::state() { return *state_; }
 
 }  // namespace Dive::gfxr

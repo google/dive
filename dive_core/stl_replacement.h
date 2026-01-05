@@ -25,44 +25,46 @@
 namespace Dive
 {
 
-template<class Type> class Vector
+template <class Type>
+class Vector
 {
-public:
+ public:
     Vector();
-    Vector(Vector<Type> &&a);
-    Vector(const Vector<Type> &a);
+    Vector(Vector<Type>&& a);
+    Vector(const Vector<Type>& a);
     Vector(uint64_t size);
     Vector(std::initializer_list<Type> a);
     ~Vector();
-    Type         &operator[](uint64_t i) const;
-    Vector<Type> &operator=(const Vector<Type> &a);
-    Vector<Type> &operator=(Vector<Type> &&a);
-    Type         *data() const;
-    Type         &front() const;
-    Type         &back() const;
-    uint64_t      size() const;
-    uint64_t      capacity() const;
-    bool          empty() const;
-    void          push_back(const Type &a);
-    void          push_back(Type &&a);
-    void          pop_back();
+    Type& operator[](uint64_t i) const;
+    Vector<Type>& operator=(const Vector<Type>& a);
+    Vector<Type>& operator=(Vector<Type>&& a);
+    Type* data() const;
+    Type& front() const;
+    Type& back() const;
+    uint64_t size() const;
+    uint64_t capacity() const;
+    bool empty() const;
+    void push_back(const Type& a);
+    void push_back(Type&& a);
+    void pop_back();
 
-    template<typename... Args> void emplace_back(Args &&...args);
+    template <typename... Args>
+    void emplace_back(Args&&... args);
 
     void resize(uint64_t size);
-    void resize(uint64_t size, const Type &a);
+    void resize(uint64_t size, const Type& a);
     void reserve(uint64_t size);
     void clear();
 
-    Type *begin() { return m_buffer; }
-    Type *end() { return m_buffer + m_size; }
+    Type* begin() { return m_buffer; }
+    Type* end() { return m_buffer + m_size; }
 
-    Type const *begin() const { return m_buffer; }
-    Type const *end() const { return m_buffer + m_size; }
+    Type const* begin() const { return m_buffer; }
+    Type const* end() const { return m_buffer + m_size; }
 
-private:
-    void     internal_clear();
-    Type    *m_buffer;
+ private:
+    void internal_clear();
+    Type* m_buffer;
     uint64_t m_reserved;
     uint64_t m_size;
 };
@@ -71,6 +73,6 @@ private:
 
 #include "stl_replacement.hpp"
 
-template<typename T>
+template <typename T>
 // using DiveVector = std::vector<T>;
 using DiveVector = Dive::Vector<T>;

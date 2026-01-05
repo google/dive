@@ -26,36 +26,36 @@ class PropertyPanel : public QFrame
 {
     Q_OBJECT
 
-public:
-    PropertyPanel(QFrame *m_parent = nullptr);
+ public:
+    PropertyPanel(QFrame* m_parent = nullptr);
 
-private:
+ private:
     const int kMargin = 10;
 
     // Selection info string
-    QScrollArea *m_selection_info_sa;
-    QLabel      *m_selection_info_str;
+    QScrollArea* m_selection_info_sa;
+    QLabel* m_selection_info_str;
 
     // Hover help string
-    QLabel *m_hover_help_str;
+    QLabel* m_hover_help_str;
 
-protected:
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
+ protected:
+    virtual void resizeEvent(QResizeEvent* event) Q_DECL_OVERRIDE;
 
-signals:
+ signals:
     void crossReference(Dive::CrossRef);
 
-public slots:
+ public slots:
 
     // Update property panel on change in hover string
-    void OnHoverStringChange(const QString &);
+    void OnHoverStringChange(const QString&);
 
     // Update property panel on change in selection info
-    void OnSelectionInfoChange(const QString &);
+    void OnSelectionInfoChange(const QString&);
 
     // Update property panel on addition of vulkan params
-    void OnVulkanParams(const QString &);
+    void OnVulkanParams(const QString&);
 
-private slots:
-    void OnLinkActivated(const QString &);
+ private slots:
+    void OnLinkActivated(const QString&);
 };

@@ -43,22 +43,22 @@ SqttStreamId::SqttStreamId(uint8_t me_id, uint8_t pipe_id)
     }
 }
 
-const char *SqttStreamId::string() const
+const char* SqttStreamId::string() const
 {
     switch (m_id)
     {
-    case 0:
-        return "Gfx";
-    case 1:
-        return "Ace A";
-    case 2:
-        return "Ace B";
-    case 3:
-        return "Ace C";
-    case 4:
-        return "Ace D";
-    default:
-        return nullptr;
+        case 0:
+            return "Gfx";
+        case 1:
+            return "Ace A";
+        case 2:
+            return "Ace B";
+        case 3:
+            return "Ace C";
+        case 4:
+            return "Ace D";
+        default:
+            return nullptr;
     }
 }
 

@@ -23,56 +23,46 @@ extern "C"
     // This is needed since the android vulkan loader requires the layer to implement the
     // instance&device enumeration functions
     VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(VkPhysicalDevice physicalDevice,
-                                                                    uint32_t        *pPropertyCount,
-                                                                    VkLayerProperties *pProperties);
+                                                                    uint32_t* pPropertyCount,
+                                                                    VkLayerProperties* pProperties);
 
-    VkResult VKAPI_CALL
-    DiveInterceptEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
-                                                    const char            *pLayerName,
-                                                    uint32_t              *pPropertyCount,
-                                                    VkExtensionProperties *pProperties);
+    VkResult VKAPI_CALL DiveInterceptEnumerateDeviceExtensionProperties(
+        VkPhysicalDevice physicalDevice, const char* pLayerName, uint32_t* pPropertyCount,
+        VkExtensionProperties* pProperties);
 
     VkResult VKAPI_CALL DiveInterceptEnumerateInstanceExtensionProperties(
-    const VkEnumerateInstanceExtensionPropertiesChain *pChain,
-    const char                                        *pLayerName,
-    uint32_t                                          *pPropertyCount,
-    VkExtensionProperties                             *pProperties);
+        const VkEnumerateInstanceExtensionPropertiesChain* pChain, const char* pLayerName,
+        uint32_t* pPropertyCount, VkExtensionProperties* pProperties);
 
-    VkResult VKAPI_CALL vkEnumerateDeviceLayerProperties(VkPhysicalDevice   physicalDevice,
-                                                         uint32_t          *pPropertyCount,
-                                                         VkLayerProperties *pProperties)
+    VkResult VKAPI_CALL vkEnumerateDeviceLayerProperties(VkPhysicalDevice physicalDevice,
+                                                         uint32_t* pPropertyCount,
+                                                         VkLayerProperties* pProperties)
     {
-        return DiveInterceptEnumerateDeviceLayerProperties(physicalDevice,
-                                                           pPropertyCount,
+        return DiveInterceptEnumerateDeviceLayerProperties(physicalDevice, pPropertyCount,
                                                            pProperties);
     }
 
-    VkResult VKAPI_CALL vkEnumerateDeviceExtensionProperties(VkPhysicalDevice       physicalDevice,
-                                                             const char            *pLayerName,
-                                                             uint32_t              *pPropertyCount,
-                                                             VkExtensionProperties *pProperties)
+    VkResult VKAPI_CALL vkEnumerateDeviceExtensionProperties(VkPhysicalDevice physicalDevice,
+                                                             const char* pLayerName,
+                                                             uint32_t* pPropertyCount,
+                                                             VkExtensionProperties* pProperties)
     {
-        return DiveInterceptEnumerateDeviceExtensionProperties(physicalDevice,
-                                                               pLayerName,
-                                                               pPropertyCount,
-                                                               pProperties);
+        return DiveInterceptEnumerateDeviceExtensionProperties(physicalDevice, pLayerName,
+                                                               pPropertyCount, pProperties);
     }
 
-    VkResult VKAPI_CALL vkEnumerateInstanceLayerProperties(uint32_t          *pPropertyCount,
-                                                           VkLayerProperties *pProperties)
+    VkResult VKAPI_CALL vkEnumerateInstanceLayerProperties(uint32_t* pPropertyCount,
+                                                           VkLayerProperties* pProperties)
     {
-        return DiveInterceptEnumerateDeviceLayerProperties(VK_NULL_HANDLE,
-                                                           pPropertyCount,
+        return DiveInterceptEnumerateDeviceLayerProperties(VK_NULL_HANDLE, pPropertyCount,
                                                            pProperties);
     }
 
-    VkResult VKAPI_CALL vkEnumerateInstanceExtensionProperties(const char *pLayerName,
-                                                               uint32_t   *pPropertyCount,
-                                                               VkExtensionProperties *pProperties)
+    VkResult VKAPI_CALL vkEnumerateInstanceExtensionProperties(const char* pLayerName,
+                                                               uint32_t* pPropertyCount,
+                                                               VkExtensionProperties* pProperties)
     {
-        return DiveInterceptEnumerateInstanceExtensionProperties(NULL,
-                                                                 pLayerName,
-                                                                 pPropertyCount,
+        return DiveInterceptEnumerateInstanceExtensionProperties(NULL, pLayerName, pPropertyCount,
                                                                  pProperties);
     }
 #endif

@@ -13,56 +13,55 @@
 
 #pragma once
 
-#include "dive_core/perf_metrics_data.h"
 #include <QAbstractItemModel>
-#include <QVector>
 #include <QStringList>
-#include <optional>
+#include <QVector>
 #include <cstdint>
+#include <optional>
+
+#include "dive_core/perf_metrics_data.h"
 
 class PerfCounterModel : public QAbstractItemModel
 {
     Q_OBJECT
-public:
-    explicit PerfCounterModel(QObject *parent = nullptr);
+ public:
+    explicit PerfCounterModel(QObject* parent = nullptr);
 
     // QAbstractItemModel interface
-    QModelIndex index(int                row,
-                      int                column,
-                      const QModelIndex &parent = QModelIndex()) const override;
-    QModelIndex parent(const QModelIndex &index) const override;
-    int         rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int         columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant    data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    QVariant    headerData(int             section,
-                           Qt::Orientation orientation,
-                           int             role = Qt::DisplayRole) const override;
-    void        SearchInColumn(const QString &value, int column = 0);
+    QModelIndex index(int row, int column,
+                      const QModelIndex& parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex& index) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex& parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+    QVariant headerData(int section, Qt::Orientation orientation,
+                        int role = Qt::DisplayRole) const override;
+    void SearchInColumn(const QString& value, int column = 0);
     QModelIndex FirstMatch();
     QModelIndex NextMatch();
     QModelIndex PreviousMatch();
-    int         GetCurrentMatchIndex() const;
-    int         GetTotalMatches() const;
-    void        ClearSearchResults();
-    void        ResetSearchIterator();
-    void        SetIteratorToNearest(const QModelIndex &current_index);
+    int GetCurrentMatchIndex() const;
+    int GetTotalMatches() const;
+    void ClearSearchResults();
+    void ResetSearchIterator();
+    void SetIteratorToNearest(const QModelIndex& current_index);
 
     std::optional<uint64_t> GetDrawIndexFromRow(int row) const;
-    std::optional<int>      GetRowFromDrawIndex(uint64_t draw_index) const;
+    std::optional<int> GetRowFromDrawIndex(uint64_t draw_index) const;
 
-public slots:
+ public slots:
     void OnPerfCounterResultsGenerated(
-    const std::filesystem::path                                        &file_path,
-    std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
+        const std::filesystem::path& file_path,
+        std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics);
 
-private:
-    void ParseCsv(const QString &file_path);
+ private:
+    void ParseCsv(const QString& file_path);
     void LoadData();
 
-    QList<QModelIndex>                             m_search_results;
-    QList<QModelIndex>::const_iterator             m_search_iterator;
-    QStringList                                    m_headers;
-    int                                            m_column_count = 0;
+    QList<QModelIndex> m_search_results;
+    QList<QModelIndex>::const_iterator m_search_iterator;
+    QStringList m_headers;
+    int m_column_count = 0;
     std::unique_ptr<Dive::PerfMetricsDataProvider> m_perf_metrics_data_provider;
-    std::vector<Dive::PerfMetricsRecord>           m_perf_metrics_record;
+    std::vector<Dive::PerfMetricsRecord> m_perf_metrics_record;
 };

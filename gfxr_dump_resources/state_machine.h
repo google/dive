@@ -18,11 +18,10 @@
 
 #include <functional>
 
-#include "third_party/gfxreconstruct/framework/format/format.h"
-#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
-
 #include "dump_entry.h"
 #include "states.h"
+#include "third_party/gfxreconstruct/framework/format/format.h"
+#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 
 namespace Dive::gfxr
 {
@@ -61,7 +60,7 @@ namespace Dive::gfxr
 // 2. Reject: the dumpable is incomplete and should be discard.
 class StateMachine
 {
-public:
+ public:
     using RejectingFunction = std::function<void()>;
     using AcceptingFunction = std::function<void(DumpEntry)>;
 
@@ -69,14 +68,13 @@ public:
     //
     // `accept` will be run when a complete dumpable is found. `reject` will be run when the current
     // state of this command buffer should be discard.
-    StateMachine(gfxrecon::format::HandleId command_buffer,
-                 AcceptingFunction          accept,
-                 RejectingFunction          reject);
+    StateMachine(gfxrecon::format::HandleId command_buffer, AcceptingFunction accept,
+                 RejectingFunction reject);
 
     // Get the current state machine state.
     gfxrecon::decode::VulkanConsumer& state();
 
-private:
+ private:
     // States are friends to avoid certain methods being public unnecessarily.
     friend class LookingForDraw;
     friend class LookingForBeginRenderPass;
@@ -99,8 +97,8 @@ private:
     AcceptingFunction accept_;
 
     // States of the state machine
-    LookingForDraw               find_draw_;
-    LookingForBeginRenderPass    find_render_pass_;
+    LookingForDraw find_draw_;
+    LookingForBeginRenderPass find_render_pass_;
     LookingForBeginCommandBuffer begin_state_;
 
     // Partial struct that will be filled as info is parsed. Once complete, accept_();

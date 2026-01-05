@@ -23,7 +23,7 @@ namespace Dive
 
 class ProgressTracker
 {
-public:
+ public:
     virtual void sendMessage(std::string message) = 0;
 };
 

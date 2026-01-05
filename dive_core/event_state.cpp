@@ -22,19 +22,18 @@
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <cstring>
-
 #include "event_state.h"
+
+#include <cstring>
 
 namespace Dive
 {
 
-template<>
+template <>
 void EventStateInfoT<EventStateInfo_CONFIG>::Reserve(
-typename EventStateInfo::Id::basic_type new_cap)
+    typename EventStateInfo::Id::basic_type new_cap)
 {
-    if (new_cap <= m_cap)
-        return;
+    if (new_cap <= m_cap) return;
 
     // Round up to next aligned capacity. The address of each field array is:
     //     `m_buffer + field_offset * cap`
@@ -51,7 +50,7 @@ typename EventStateInfo::Id::basic_type new_cap)
     // Allocate new buffer as an array of `max_align_t`, to make sure the buffer
     // is sufficiently aligned for the type of any possible field.
     size_t new_buffer_size = (num_bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
-    auto   new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[new_buffer_size]);
+    auto new_buffer = std::unique_ptr<std::max_align_t[]>(new std::max_align_t[new_buffer_size]);
     memset(new_buffer.get(), 0, sizeof(std::max_align_t) * new_buffer_size);
 
     auto old_topology_ptr = TopologyPtr();
@@ -139,8 +138,7 @@ typename EventStateInfo::Id::basic_type new_cap)
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(DepthClampEnabledPtr(), old_depth_clamp_enabled_ptr, kDepthClampEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(RasterizerDiscardEnabledPtr(),
-           old_rasterizer_discard_enabled_ptr,
+    memcpy(RasterizerDiscardEnabledPtr(), old_rasterizer_discard_enabled_ptr,
            kRasterizerDiscardEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<VkPolygonMode>::value,
                   "Field type must be trivially copyable");
@@ -155,28 +153,24 @@ typename EventStateInfo::Id::basic_type new_cap)
     memcpy(DepthBiasEnabledPtr(), old_depth_bias_enabled_ptr, kDepthBiasEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
-    memcpy(DepthBiasConstantFactorPtr(),
-           old_depth_bias_constant_factor_ptr,
+    memcpy(DepthBiasConstantFactorPtr(), old_depth_bias_constant_factor_ptr,
            kDepthBiasConstantFactorSize * m_size);
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
     memcpy(DepthBiasClampPtr(), old_depth_bias_clamp_ptr, kDepthBiasClampSize * m_size);
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
-    memcpy(DepthBiasSlopeFactorPtr(),
-           old_depth_bias_slope_factor_ptr,
+    memcpy(DepthBiasSlopeFactorPtr(), old_depth_bias_slope_factor_ptr,
            kDepthBiasSlopeFactorSize * m_size);
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
     memcpy(LineWidthPtr(), old_line_width_ptr, kLineWidthSize * m_size);
     static_assert(std::is_trivially_copyable<VkSampleCountFlagBits>::value,
                   "Field type must be trivially copyable");
-    memcpy(RasterizationSamplesPtr(),
-           old_rasterization_samples_ptr,
+    memcpy(RasterizationSamplesPtr(), old_rasterization_samples_ptr,
            kRasterizationSamplesSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(SampleShadingEnabledPtr(),
-           old_sample_shading_enabled_ptr,
+    memcpy(SampleShadingEnabledPtr(), old_sample_shading_enabled_ptr,
            kSampleShadingEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
@@ -185,8 +179,7 @@ typename EventStateInfo::Id::basic_type new_cap)
                   "Field type must be trivially copyable");
     memcpy(SampleMaskPtr(), old_sample_mask_ptr, kSampleMaskSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(AlphaToCoverageEnabledPtr(),
-           old_alpha_to_coverage_enabled_ptr,
+    memcpy(AlphaToCoverageEnabledPtr(), old_alpha_to_coverage_enabled_ptr,
            kAlphaToCoverageEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(DepthTestEnabledPtr(), old_depth_test_enabled_ptr, kDepthTestEnabledSize * m_size);
@@ -196,8 +189,7 @@ typename EventStateInfo::Id::basic_type new_cap)
                   "Field type must be trivially copyable");
     memcpy(DepthCompareOpPtr(), old_depth_compare_op_ptr, kDepthCompareOpSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(DepthBoundsTestEnabledPtr(),
-           old_depth_bounds_test_enabled_ptr,
+    memcpy(DepthBoundsTestEnabledPtr(), old_depth_bounds_test_enabled_ptr,
            kDepthBoundsTestEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<float>::value,
                   "Field type must be trivially copyable");
@@ -209,13 +201,11 @@ typename EventStateInfo::Id::basic_type new_cap)
     memcpy(StencilTestEnabledPtr(), old_stencil_test_enabled_ptr, kStencilTestEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<VkStencilOpState>::value,
                   "Field type must be trivially copyable");
-    memcpy(StencilOpStateFrontPtr(),
-           old_stencil_op_state_front_ptr,
+    memcpy(StencilOpStateFrontPtr(), old_stencil_op_state_front_ptr,
            kStencilOpStateFrontSize * m_size);
     static_assert(std::is_trivially_copyable<VkStencilOpState>::value,
                   "Field type must be trivially copyable");
-    memcpy(StencilOpStateBackPtr(),
-           old_stencil_op_state_back_ptr,
+    memcpy(StencilOpStateBackPtr(), old_stencil_op_state_back_ptr,
            kStencilOpStateBackSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(LogicOpEnabledPtr(), old_logic_op_enabled_ptr, kLogicOpEnabledSize * m_size);
@@ -268,24 +258,20 @@ typename EventStateInfo::Id::basic_type new_cap)
                   "Field type must be trivially copyable");
     memcpy(ThreadSizePtr(), old_thread_size_ptr, kThreadSizeSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(EnableAllHelperLanesPtr(),
-           old_enable_all_helper_lanes_ptr,
+    memcpy(EnableAllHelperLanesPtr(), old_enable_all_helper_lanes_ptr,
            kEnableAllHelperLanesSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(EnablePartialHelperLanesPtr(),
-           old_enable_partial_helper_lanes_ptr,
+    memcpy(EnablePartialHelperLanesPtr(), old_enable_partial_helper_lanes_ptr,
            kEnablePartialHelperLanesSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(UBWCEnabledPtr(), old_ubwc_enabled_ptr, kUBWCEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(UBWCLosslessEnabledPtr(),
-           old_ubwc_lossless_enabled_ptr,
+    memcpy(UBWCLosslessEnabledPtr(), old_ubwc_lossless_enabled_ptr,
            kUBWCLosslessEnabledSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
     memcpy(UBWCEnabledOnDSPtr(), old_ubwc_enabled_on_ds_ptr, kUBWCEnabledOnDSSize * m_size);
     static_assert(std::is_trivially_copyable<bool>::value, "Field type must be trivially copyable");
-    memcpy(UBWCLosslessEnabledOnDSPtr(),
-           old_ubwc_lossless_enabled_on_ds_ptr,
+    memcpy(UBWCLosslessEnabledOnDSPtr(), old_ubwc_lossless_enabled_on_ds_ptr,
            kUBWCLosslessEnabledOnDSSize * m_size);
     static_assert(std::is_trivially_copyable<VkRect2D>::value,
                   "Field type must be trivially copyable");
@@ -366,7 +352,8 @@ typename EventStateInfo::Id::basic_type new_cap)
 #endif
 }
 
-template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add()
+template <>
+EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add()
 {
     if (m_size >= m_cap)
     {
@@ -471,21 +458,18 @@ template<> EventStateInfo::Iterator EventStateInfoT<EventStateInfo_CONFIG>::Add(
     return find(id);
 }
 
-template<>
+template <>
 void EventStateInfoRefT<EventStateInfo_CONFIG>::assign(
-const EventStateInfo                         &other_obj,
-EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
+    const EventStateInfo& other_obj, EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
 {
     DIVE_ASSERT(IsValid());
     DIVE_ASSERT(other_obj.IsValidId(other_id));
     SetTopology(other_obj.Topology(other_id));
     SetPrimRestartEnabled(other_obj.PrimRestartEnabled(other_id));
     SetPatchControlPoints(other_obj.PatchControlPoints(other_id));
-    memcpy(m_obj_ptr->ViewportPtr(m_id),
-           other_obj.ViewportPtr(other_id),
+    memcpy(m_obj_ptr->ViewportPtr(m_id), other_obj.ViewportPtr(other_id),
            EventStateInfo::kViewportSize);
-    memcpy(m_obj_ptr->ScissorPtr(m_id),
-           other_obj.ScissorPtr(other_id),
+    memcpy(m_obj_ptr->ScissorPtr(m_id), other_obj.ScissorPtr(other_id),
            EventStateInfo::kScissorSize);
     SetDepthClampEnabled(other_obj.DepthClampEnabled(other_id));
     SetRasterizerDiscardEnabled(other_obj.RasterizerDiscardEnabled(other_id));
@@ -511,17 +495,13 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetStencilTestEnabled(other_obj.StencilTestEnabled(other_id));
     SetStencilOpStateFront(other_obj.StencilOpStateFront(other_id));
     SetStencilOpStateBack(other_obj.StencilOpStateBack(other_id));
-    memcpy(m_obj_ptr->LogicOpEnabledPtr(m_id),
-           other_obj.LogicOpEnabledPtr(other_id),
+    memcpy(m_obj_ptr->LogicOpEnabledPtr(m_id), other_obj.LogicOpEnabledPtr(other_id),
            EventStateInfo::kLogicOpEnabledSize);
-    memcpy(m_obj_ptr->LogicOpPtr(m_id),
-           other_obj.LogicOpPtr(other_id),
+    memcpy(m_obj_ptr->LogicOpPtr(m_id), other_obj.LogicOpPtr(other_id),
            EventStateInfo::kLogicOpSize);
-    memcpy(m_obj_ptr->AttachmentPtr(m_id),
-           other_obj.AttachmentPtr(other_id),
+    memcpy(m_obj_ptr->AttachmentPtr(m_id), other_obj.AttachmentPtr(other_id),
            EventStateInfo::kAttachmentSize);
-    memcpy(m_obj_ptr->BlendConstantPtr(m_id),
-           other_obj.BlendConstantPtr(other_id),
+    memcpy(m_obj_ptr->BlendConstantPtr(m_id), other_obj.BlendConstantPtr(other_id),
            EventStateInfo::kBlendConstantSize);
     SetLRZEnabled(other_obj.LRZEnabled(other_id));
     SetLRZWrite(other_obj.LRZWrite(other_id));
@@ -539,11 +519,9 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetThreadSize(other_obj.ThreadSize(other_id));
     SetEnableAllHelperLanes(other_obj.EnableAllHelperLanes(other_id));
     SetEnablePartialHelperLanes(other_obj.EnablePartialHelperLanes(other_id));
-    memcpy(m_obj_ptr->UBWCEnabledPtr(m_id),
-           other_obj.UBWCEnabledPtr(other_id),
+    memcpy(m_obj_ptr->UBWCEnabledPtr(m_id), other_obj.UBWCEnabledPtr(other_id),
            EventStateInfo::kUBWCEnabledSize);
-    memcpy(m_obj_ptr->UBWCLosslessEnabledPtr(m_id),
-           other_obj.UBWCLosslessEnabledPtr(other_id),
+    memcpy(m_obj_ptr->UBWCLosslessEnabledPtr(m_id), other_obj.UBWCLosslessEnabledPtr(other_id),
            EventStateInfo::kUBWCLosslessEnabledSize);
     SetUBWCEnabledOnDS(other_obj.UBWCEnabledOnDS(other_id));
     SetUBWCLosslessEnabledOnDS(other_obj.UBWCLosslessEnabledOnDS(other_id));
@@ -554,8 +532,8 @@ EventStateInfoRefT<EventStateInfo_CONFIG>::Id other_id) const
     SetResolveTileMode(other_obj.ResolveTileMode(other_id));
 }
 
-template<>
-void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &other) const
+template <>
+void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef& other) const
 {
     DIVE_ASSERT(m_obj_ptr != nullptr);
     DIVE_ASSERT(m_obj_ptr->IsValidId(m_id));
@@ -578,16 +556,16 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
     }
     {
         VkViewport val[EventStateInfo::kViewportArrayCount];
-        auto      *ptr = m_obj_ptr->ViewportPtr(m_id);
-        auto      *other_ptr = other.m_obj_ptr->ViewportPtr(other.m_id);
+        auto* ptr = m_obj_ptr->ViewportPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->ViewportPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kViewportSize);
         memcpy(ptr, other_ptr, EventStateInfo::kViewportSize);
         memcpy(other_ptr, val, EventStateInfo::kViewportSize);
     }
     {
         VkRect2D val[EventStateInfo::kScissorArrayCount];
-        auto    *ptr = m_obj_ptr->ScissorPtr(m_id);
-        auto    *other_ptr = other.m_obj_ptr->ScissorPtr(other.m_id);
+        auto* ptr = m_obj_ptr->ScissorPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->ScissorPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kScissorSize);
         memcpy(ptr, other_ptr, EventStateInfo::kScissorSize);
         memcpy(other_ptr, val, EventStateInfo::kScissorSize);
@@ -713,33 +691,33 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         other.SetStencilOpStateBack(val);
     }
     {
-        bool  val[EventStateInfo::kLogicOpEnabledArrayCount];
-        auto *ptr = m_obj_ptr->LogicOpEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->LogicOpEnabledPtr(other.m_id);
+        bool val[EventStateInfo::kLogicOpEnabledArrayCount];
+        auto* ptr = m_obj_ptr->LogicOpEnabledPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->LogicOpEnabledPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kLogicOpEnabledSize);
         memcpy(ptr, other_ptr, EventStateInfo::kLogicOpEnabledSize);
         memcpy(other_ptr, val, EventStateInfo::kLogicOpEnabledSize);
     }
     {
         VkLogicOp val[EventStateInfo::kLogicOpArrayCount];
-        auto     *ptr = m_obj_ptr->LogicOpPtr(m_id);
-        auto     *other_ptr = other.m_obj_ptr->LogicOpPtr(other.m_id);
+        auto* ptr = m_obj_ptr->LogicOpPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->LogicOpPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kLogicOpSize);
         memcpy(ptr, other_ptr, EventStateInfo::kLogicOpSize);
         memcpy(other_ptr, val, EventStateInfo::kLogicOpSize);
     }
     {
         VkPipelineColorBlendAttachmentState val[EventStateInfo::kAttachmentArrayCount];
-        auto                               *ptr = m_obj_ptr->AttachmentPtr(m_id);
-        auto                               *other_ptr = other.m_obj_ptr->AttachmentPtr(other.m_id);
+        auto* ptr = m_obj_ptr->AttachmentPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->AttachmentPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kAttachmentSize);
         memcpy(ptr, other_ptr, EventStateInfo::kAttachmentSize);
         memcpy(other_ptr, val, EventStateInfo::kAttachmentSize);
     }
     {
         float val[EventStateInfo::kBlendConstantArrayCount];
-        auto *ptr = m_obj_ptr->BlendConstantPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->BlendConstantPtr(other.m_id);
+        auto* ptr = m_obj_ptr->BlendConstantPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->BlendConstantPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kBlendConstantSize);
         memcpy(ptr, other_ptr, EventStateInfo::kBlendConstantSize);
         memcpy(other_ptr, val, EventStateInfo::kBlendConstantSize);
@@ -825,17 +803,17 @@ void EventStateInfoRefT<EventStateInfo_CONFIG>::swap(const EventStateInfoRef &ot
         other.SetEnablePartialHelperLanes(val);
     }
     {
-        bool  val[EventStateInfo::kUBWCEnabledArrayCount];
-        auto *ptr = m_obj_ptr->UBWCEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->UBWCEnabledPtr(other.m_id);
+        bool val[EventStateInfo::kUBWCEnabledArrayCount];
+        auto* ptr = m_obj_ptr->UBWCEnabledPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->UBWCEnabledPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kUBWCEnabledSize);
         memcpy(ptr, other_ptr, EventStateInfo::kUBWCEnabledSize);
         memcpy(other_ptr, val, EventStateInfo::kUBWCEnabledSize);
     }
     {
-        bool  val[EventStateInfo::kUBWCLosslessEnabledArrayCount];
-        auto *ptr = m_obj_ptr->UBWCLosslessEnabledPtr(m_id);
-        auto *other_ptr = other.m_obj_ptr->UBWCLosslessEnabledPtr(other.m_id);
+        bool val[EventStateInfo::kUBWCLosslessEnabledArrayCount];
+        auto* ptr = m_obj_ptr->UBWCLosslessEnabledPtr(m_id);
+        auto* other_ptr = other.m_obj_ptr->UBWCLosslessEnabledPtr(other.m_id);
         memcpy(val, ptr, EventStateInfo::kUBWCLosslessEnabledSize);
         memcpy(ptr, other_ptr, EventStateInfo::kUBWCLosslessEnabledSize);
         memcpy(other_ptr, val, EventStateInfo::kUBWCLosslessEnabledSize);

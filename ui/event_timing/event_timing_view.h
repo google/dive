@@ -32,25 +32,25 @@ class EventTimingView : public QFrame
 {
     Q_OBJECT
 
-public:
+ public:
     EventTimingView();
     void Reset();
 
-private slots:
+ private slots:
     void Update();
     void OnMouseWheel(QPoint mouse_pos, int angle_delta);
     void OnColorByIndexChange(int index);
 
-protected:
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
+ protected:
+    virtual void resizeEvent(QResizeEvent* event) Q_DECL_OVERRIDE;
 
-private:
-    QWidget   *m_shader_legend;
-    QWidget   *m_hardware_legend;
-    QComboBox *m_color_combo_box_ptr;
+ private:
+    QWidget* m_shader_legend;
+    QWidget* m_hardware_legend;
+    QComboBox* m_color_combo_box_ptr;
 
-    EventTimingGraphicsScene *m_event_timing_scene_ptr;
-    EventTimingGraphicsView  *m_event_timing_view_ptr;
-    RulerGraphicsItem        *m_ruler_item_ptr;
-    EventGraphicsItem        *m_event_graphics_item_ptr;
+    EventTimingGraphicsScene* m_event_timing_scene_ptr;
+    EventTimingGraphicsView* m_event_timing_view_ptr;
+    RulerGraphicsItem* m_ruler_item_ptr;
+    EventGraphicsItem* m_event_graphics_item_ptr;
 };

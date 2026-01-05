@@ -31,12 +31,12 @@ limitations under the License.
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
-#include "absl/time/clock.h"
-#include "absl/time/time.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "android_application.h"
 #include "constants.h"
 #include "device_mgr.h"
@@ -540,7 +540,7 @@ enum class GfxrCaptureControlFlow
 absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& device,
                                                           const GlobalOptions& options)
 {
-    const AdbSession&  adb = device.Adb();
+    const AdbSession& adb = device.Adb();
     const std::string& gfxr_capture_file_dir = options.gfxr_capture_file_dir;
 
     // GFXR relies on capture_android_trigger changing from false to true as the condition for
@@ -549,7 +549,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
         !status.ok())
     {
         return Dive::InternalError(
-        absl::StrCat("Error stopping gfxr runtime capture: ", status.message()));
+            absl::StrCat("Error stopping gfxr runtime capture: ", status.message()));
     }
 
     // Ask the user what to do.
@@ -576,13 +576,13 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
         !status.ok())
     {
         return Dive::InternalError(
-        absl::StrCat("Error starting gfxr runtime capture: ", status.message()));
+            absl::StrCat("Error starting gfxr runtime capture: ", status.message()));
     }
 
     if (absl::Status status = device.TriggerScreenCapture(gfxr_capture_file_dir); !status.ok())
     {
         return Dive::InternalError(
-        absl::StrCat("Error creating capture screenshot: ", status.message()));
+            absl::StrCat("Error creating capture screenshot: ", status.message()));
     }
 
     // Ask the user what to do.
@@ -690,20 +690,18 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
     // Only delete the on device capture directory when the application is closed. If deleted too
     // early then capture will fail.
     absl::Cleanup cleanup_device_files = [&context] {
-        std::string on_device_capture_directory = absl::StrCat(Dive::kDeviceCapturePath,
-                                                               "/",
-                                                               context.options
-                                                               .gfxr_capture_file_dir);
+        std::string on_device_capture_directory =
+            absl::StrCat(Dive::kDeviceCapturePath, "/", context.options.gfxr_capture_file_dir);
         context.mgr.GetDevice()
-        ->Adb()
-        .Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory))
-        .IgnoreError();
+            ->Adb()
+            .Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory))
+            .IgnoreError();
     };
 
     while (true)
     {
-        absl::StatusOr<GfxrCaptureControlFlow>
-        control_flow = TriggerGfxrCapture(*context.mgr.GetDevice(), context.options);
+        absl::StatusOr<GfxrCaptureControlFlow> control_flow =
+            TriggerGfxrCapture(*context.mgr.GetDevice(), context.options);
         if (!control_flow.status().ok())
         {
             return control_flow.status();
@@ -711,11 +709,11 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
 
         switch (*control_flow)
         {
-        case GfxrCaptureControlFlow::kStop:
-            return absl::OkStatus();
-        case GfxrCaptureControlFlow::kContinue:
-            // Nothing to do
-            break;
+            case GfxrCaptureControlFlow::kStop:
+                return absl::OkStatus();
+            case GfxrCaptureControlFlow::kContinue:
+                // Nothing to do
+                break;
         }
     }
 

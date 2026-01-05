@@ -85,6 +85,7 @@ else()
         absl::flags_parse
         absl::algorithm
         absl::strings
+        absl::time
         version_info
     )
     target_include_directories(

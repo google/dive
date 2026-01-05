@@ -33,6 +33,8 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "android_application.h"
 #include "constants.h"
 #include "device_mgr.h"
@@ -543,7 +545,7 @@ absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& o
             {
                 while (!IsCaptureFinished(mgr, gfxr_capture_directory).ok())
                 {
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    absl::SleepFor(absl::Seconds(1));
                     std::cout << "GFXR capture in progress, please wait for current capture to "
                                  "complete before starting another."
                               << std::endl;
@@ -669,7 +671,7 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     }
 
     std::cout << "Waiting " << ctx.options.trigger_capture_after << " seconds...\n";
-    std::this_thread::sleep_for(std::chrono::seconds(ctx.options.trigger_capture_after));
+    absl::SleepFor(absl::Seconds(ctx.options.trigger_capture_after));
 
     status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
     if (!status.ok())

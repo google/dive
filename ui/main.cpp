@@ -22,6 +22,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QScopedPointer>
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
@@ -38,9 +39,14 @@
 #include "application_controller.h"
 #include "custom_metatypes.h"
 #include "dive/os/terminal.h"
+#include "dive/utils/version_info.h"
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
 #include "main_window.h"
+#include "ui/application_controller.h"
+#include "ui/custom_metatypes.h"
+#include "ui/dive_application.h"
+#include "ui/main_window.h"
 #include "utils/version_info.h"
 #ifdef __linux__
 #include <dlfcn.h>
@@ -197,41 +203,6 @@ bool SetApplicationStyle(QString style_key)
 }
 
 //--------------------------------------------------------------------------------------------------
-void SetDarkMode(QApplication& app)
-{
-    QPalette darkPalette;
-    darkPalette.setColor(QPalette::Window, QColor(40, 40, 40));
-    darkPalette.setColor(QPalette::WindowText, Qt::white);
-    darkPalette.setColor(QPalette::Base, QColor(25, 25, 25));
-    darkPalette.setColor(QPalette::AlternateBase, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::ToolTipBase, Qt::white);
-    darkPalette.setColor(QPalette::ToolTipText, Qt::white);
-    darkPalette.setColor(QPalette::Text, Qt::white);
-    darkPalette.setColor(QPalette::Button, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::ButtonText, Qt::white);
-    darkPalette.setColor(QPalette::BrightText, Qt::red);
-    darkPalette.setColor(QPalette::Link, QColor(42, 130, 218));
-    darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-    darkPalette.setColor(QPalette::HighlightedText, Qt::black);
-
-    darkPalette.setColor(QPalette::Disabled, QPalette::Window, QColor(90, 90, 90));
-    darkPalette.setColor(QPalette::Disabled, QPalette::WindowText, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Base, QColor(80, 80, 80));
-    darkPalette.setColor(QPalette::Disabled, QPalette::AlternateBase, QColor(90, 90, 90));
-    darkPalette.setColor(QPalette::Disabled, QPalette::ToolTipBase, QColor(90, 90, 90));
-    darkPalette.setColor(QPalette::Disabled, QPalette::ToolTipText, QColor(160, 160, 160));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Text, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Button, QColor(80, 80, 80));
-    darkPalette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::Disabled, QPalette::BrightText, QColor(160, 160, 160));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Link, QColor(160, 160, 160));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Highlight, QColor(90, 90, 90));
-    darkPalette.setColor(QPalette::Disabled, QPalette::Light, QColor(53, 53, 53));
-
-    QApplication::setPalette(darkPalette);
-}
-
-//--------------------------------------------------------------------------------------------------
 auto SetupFlags(int argc, char** argv)
 {
     absl::FlagsUsageConfig flags_usage_config;
@@ -331,18 +302,12 @@ int main(int argc, char* argv[])
     Dive::RegisterCustomMetaType();
 
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication app(argc, argv);
-    app.setWindowIcon(QIcon(":/images/dive.ico"));
+    QScopedPointer<DiveApplication> app{new DiveApplication(argc, argv)};
+    app->setWindowIcon(QIcon(":/images/dive.ico"));
 
     if (!native_style)
     {
-        SetDarkMode(app);
-
-        // Load and apply the style sheet
-        QFile style_sheet(":/stylesheet.qss");
-        style_sheet.open(QFile::ReadOnly);
-        QString style(style_sheet.readAll());
-        app.setStyleSheet(style);
+        app->ApplyCustomStyle();
     }
 
     // Display splash screen
@@ -353,18 +318,17 @@ int main(int argc, char* argv[])
     // Initialize packet info query data structures needed for parsing
     Pm4InfoInit();
 
-    ApplicationController controller;
-    MainWindow* main_window = new MainWindow(controller);
+    QScopedPointer<MainWindow> main_window{new MainWindow(app->GetController())};
 
     if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {
-        if (!ExecuteScenario(scenario, main_window))
+        if (!ExecuteScenario(scenario, main_window.get()))
         {
             return EXIT_FAILURE;
         }
     }
 
-    if (!controller.InitializePlugins())
+    if (!app->GetController().InitializePlugins())
     {
         qDebug() << "Application: Plugin initialization failed. Application may proceed without "
                     "plugins.";
@@ -380,12 +344,12 @@ int main(int argc, char* argv[])
 
     if (absl::GetFlag(FLAGS_maximize))
     {
-        QTimer::singleShot(kStartDelay, main_window, &MainWindow::showMaximized);
+        QTimer::singleShot(kStartDelay, main_window.get(), &MainWindow::showMaximized);
     }
     else
     {
-        QTimer::singleShot(kStartDelay, main_window, &MainWindow::show);
+        QTimer::singleShot(kStartDelay, main_window.get(), &MainWindow::show);
     }
 
-    return app.exec();
+    return app->exec();
 }

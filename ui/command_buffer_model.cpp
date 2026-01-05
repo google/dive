@@ -13,7 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "command_buffer_model.h"
+
+#include "ui/command_buffer_model.h"
 
 #include <QString>
 #include <QStringList>
@@ -22,7 +23,8 @@
 #include <sstream>
 
 #include "dive_core/command_hierarchy.h"
-#include "dive_tree_view.h"
+#include "ui/color_utils.h"
+#include "ui/dive_tree_view.h"
 
 static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
@@ -85,7 +87,7 @@ QVariant CommandBufferModel::data(const QModelIndex& index, int role) const
     }
 
     uint64_t node_index = index.internalId();
-    if (role == Qt::ForegroundRole && IsSelected(node_index)) return QColor(255, 128, 128);
+    if (role == Qt::ForegroundRole && IsSelected(node_index)) return GetTextAccentColor();
 
     if (role != Qt::DisplayRole) return QVariant();
 
@@ -400,6 +402,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row, uint64_t par
     {
         uint64_t child_node_index =
             m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, child);
+
         QModelIndex model_index = QModelIndex();
         model_index = createIndex(parent_row, 0, (void*)parent_node_index);
         DIVE_ASSERT(child_node_index < m_node_parent_list.size());

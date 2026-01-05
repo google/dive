@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "ruler_graphics_item.h"
+#include "ui/sqtt/ruler_graphics_item.h"
 
 #include <QGraphicsSceneContextMenuEvent>
 #include <QMenu>
@@ -22,6 +22,7 @@
 #include <QTextStream>
 #include <QTransform>
 
+#include "dive/ui/components/settings/settings.h"
 #include "dive_core/common.h"
 #include "dive_core/conversions.h"
 

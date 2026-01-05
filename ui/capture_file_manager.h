@@ -42,6 +42,7 @@ struct LoadFileResult
         kCorruptData,
         kVersionError,
         kParseFailure,
+        kFileNotFound,
         kUnsupportedFile,
         kGfxaAssetMissing,
     };

@@ -56,6 +56,9 @@ void OpenErrorMessageBox(QWidget* parent, const LoadFileResult& result)
         case LoadFileResult::Status::kParseFailure:
             OpenErrorMessageBox(parent, title, QString("Error parsing file!"));
             break;
+        case LoadFileResult::Status::kFileNotFound:
+            OpenErrorMessageBox(parent, title, QString("File not found!"));
+            break;
         case LoadFileResult::Status::kUnsupportedFile:
             OpenErrorMessageBox(parent, title, QString("File type not supported!"));
             break;

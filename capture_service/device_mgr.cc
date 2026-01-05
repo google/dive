@@ -1353,7 +1353,7 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
 }
 
 absl::Status AndroidDevice::TriggerScreenCapture(
-    const std::filesystem::path& on_device_screenshot_dir)
+    const std::filesystem::path& on_device_screenshot_dir) const
 {
     // If the path segment has an extension, it is invalid for a directory name.
     if (on_device_screenshot_dir.has_extension())

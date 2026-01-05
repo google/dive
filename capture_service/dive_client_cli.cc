@@ -551,7 +551,6 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
             absl::StrCat("Error stopping gfxr runtime capture: ", status.message()));
     }
 
-    // Ask the user what to do.
     std::cout << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
                  "application.\n";
     std::string input;
@@ -570,7 +569,6 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
         return GfxrCaptureControlFlow::kStop;
     }
 
-    // Trigger capture
     if (absl::Status status = adb.Run("shell setprop debug.gfxrecon.capture_android_trigger true");
         !status.ok())
     {
@@ -584,7 +582,6 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
             absl::StrCat("Error creating capture screenshot: ", status.message()));
     }
 
-    // Ask the user what to do.
     std::cout << "Press key g+enter to retrieve the capture.\n";
     while (std::getline(std::cin, input))
     {
@@ -600,15 +597,13 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
         return GfxrCaptureControlFlow::kStop;
     }
 
-    // Wait for capture to finish.
     std::cout << "Waiting for the current capture to complete...\n";
     while (!IsCaptureFinished(adb, gfxr_capture_file_dir))
     {
         absl::SleepFor(absl::Seconds(1));
     }
 
-    // Retrieve the capture. If this fails, we print an error but don't exit the tool, allowing
-    // the user to try again.
+    // If this fails, we print an error but don't exit the tool, allowing the user to try again.
     if (absl::Status status = RetrieveGfxrCapture(adb, options); !status.ok())
     {
         std::cout << "Failed to retrieve capture: " << status.message() << '\n';

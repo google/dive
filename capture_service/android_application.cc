@@ -32,7 +32,7 @@ limitations under the License.
 namespace Dive
 {
 
-int GetIndentation(const std::string &line)
+int GetIndentation(const std::string& line)
 {
     int indention = 0;
     for (int i = 0; i < line.size(); i++)
@@ -50,7 +50,7 @@ int GetIndentation(const std::string &line)
     return indention;
 }
 
-std::string ParsePackageForActivity(const std::string &input, const std::string &package)
+std::string ParsePackageForActivity(const std::string& input, const std::string& package)
 {
     bool in_non_data = false;
     bool in_main_action = false;
@@ -60,7 +60,7 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
 
     std::vector<absl::string_view> lines = absl::StrSplit(input, '\n');
 
-    for (const auto &line : lines)
+    for (const auto& line : lines)
     {
         // Skip empty lines
         if (absl::StripAsciiWhitespace(line).empty())
@@ -111,7 +111,7 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
 
             std::vector<absl::string_view> fields = absl::StrSplit(trimmed_line, ' ');
 
-            for (const auto &field : fields)
+            for (const auto& field : fields)
             {
                 if (absl::StrContains(field, target_str))
                 {
@@ -128,7 +128,7 @@ std::string ParsePackageForActivity(const std::string &input, const std::string 
     return "";
 }
 
-AndroidApplication::AndroidApplication(AndroidDevice &dev, std::string package,
+AndroidApplication::AndroidApplication(AndroidDevice& dev, std::string package,
                                        ApplicationType type, std::string command_args)
     : m_dev(dev),
       m_package(std::move(package)),
@@ -199,7 +199,7 @@ absl::Status AndroidApplication::Stop()
 
 bool AndroidApplication::IsRunning() const { return m_dev.IsProcessRunning(m_package); }
 
-VulkanApplication::VulkanApplication(AndroidDevice &dev, std::string package,
+VulkanApplication::VulkanApplication(AndroidDevice& dev, std::string package,
                                      std::string command_args)
     : AndroidApplication(dev, std::move(package), ApplicationType::VULKAN_APK,
                          std::move(command_args))
@@ -217,7 +217,7 @@ VulkanApplication::~VulkanApplication()
     Cleanup().IgnoreError();
 }
 
-GLESApplication::GLESApplication(AndroidDevice &dev, std::string package, std::string command_args)
+GLESApplication::GLESApplication(AndroidDevice& dev, std::string package, std::string command_args)
     : AndroidApplication(dev, std::move(package), ApplicationType::GLES_APK,
                          std::move(command_args))
 {
@@ -452,7 +452,7 @@ absl::Status AndroidApplication::GrantAllFilesAccess()
         absl::StrFormat("shell appops set --uid %s MANAGE_EXTERNAL_STORAGE allow", m_package));
 }
 
-OpenXRApplication::OpenXRApplication(AndroidDevice &dev, std::string package,
+OpenXRApplication::OpenXRApplication(AndroidDevice& dev, std::string package,
                                      std::string command_args)
     : AndroidApplication(dev, std::move(package), ApplicationType::OPENXR_APK,
                          std::move(command_args))
@@ -537,7 +537,7 @@ OpenXRApplication::~OpenXRApplication()
     Cleanup().IgnoreError();
 }
 
-VulkanCliApplication::VulkanCliApplication(AndroidDevice &dev, std::string command,
+VulkanCliApplication::VulkanCliApplication(AndroidDevice& dev, std::string command,
                                            std::string command_args)
     : AndroidApplication(dev, "", ApplicationType::VULKAN_CLI, std::move(command_args)),
       m_command(std::move(command))

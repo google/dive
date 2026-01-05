@@ -24,13 +24,13 @@
 class membuf : public std::basic_streambuf<char>
 {
  public:
-    membuf(const uint8_t *p, size_t l) { setg((char *)p, (char *)p, (char *)p + l); }
+    membuf(const uint8_t* p, size_t l) { setg((char*)p, (char*)p, (char*)p + l); }
 };
 
 class memstream : public std::istream
 {
  public:
-    memstream(const uint8_t *p, size_t l) : std::istream(&m_buffer), m_buffer(p, l)
+    memstream(const uint8_t* p, size_t l) : std::istream(&m_buffer), m_buffer(p, l)
     {
         rdbuf(&m_buffer);
     }
@@ -39,7 +39,7 @@ class memstream : public std::istream
     membuf m_buffer;
 };
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
     memstream capture_file(data, size);
 
@@ -57,13 +57,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
 #ifdef DIVE_FUZZ_LOADER
 // Simple program to help debug Fuzz failures.
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     auto f = fopen(argv[1], "rb");
     fseek(f, SEEK_END, 0);
     size_t size = ftell(f);
     fseek(f, SEEK_SET, 0);
-    uint8_t *data = new uint8_t[size];
+    uint8_t* data = new uint8_t[size];
     fread(data, 1, size, f);
     fclose(f);
 

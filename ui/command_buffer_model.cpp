@@ -24,10 +24,10 @@
 #include "dive_core/command_hierarchy.h"
 #include "dive_tree_view.h"
 
-static_assert(sizeof(void *) == sizeof(uint64_t),
+static_assert(sizeof(void*) == sizeof(uint64_t),
               "Unable to store a uint64_t into internalPointer()!");
 
-static const char *CommandBufferColumnNames[] = {
+static const char* CommandBufferColumnNames[] = {
     "Command Buffer",
     "IB Level",
     "Address",
@@ -40,7 +40,7 @@ static_assert(sizeof(CommandBufferColumnNames) / sizeof(CommandBufferColumnNames
 // =================================================================================================
 // CommandBufferModel
 // =================================================================================================
-CommandBufferModel::CommandBufferModel(const Dive::CommandHierarchy &command_hierarchy)
+CommandBufferModel::CommandBufferModel(const Dive::CommandHierarchy& command_hierarchy)
     : m_command_hierarchy(command_hierarchy)
 {
 }
@@ -57,7 +57,7 @@ void CommandBufferModel::Reset()
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr)
+void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology* topology_ptr)
 {
     emit beginResetModel();
     m_topology_ptr = topology_ptr;
@@ -66,13 +66,13 @@ void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology *topol
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::columnCount(const QModelIndex &parent) const { return kColumnCount; }
+int CommandBufferModel::columnCount(const QModelIndex& parent) const { return kColumnCount; }
 
 //--------------------------------------------------------------------------------------------------
 QModelIndex CommandBufferModel::scrollToIndex() const { return m_scroll_to_index; }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
+QVariant CommandBufferModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid()) return QVariant();
 
@@ -136,7 +136,7 @@ QVariant CommandBufferModel::data(const QModelIndex &index, int role) const
 }
 
 //--------------------------------------------------------------------------------------------------
-Qt::ItemFlags CommandBufferModel::flags(const QModelIndex &index) const
+Qt::ItemFlags CommandBufferModel::flags(const QModelIndex& index) const
 {
     if (!index.isValid()) return Qt::ItemFlags();
 
@@ -165,7 +165,7 @@ QVariant CommandBufferModel::headerData(int section, Qt::Orientation orientation
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (!hasIndex(row, column, parent)) return QModelIndex();
 
@@ -177,7 +177,7 @@ QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &pa
         uint64_t root_node_index =
             m_topology_ptr->GetSharedChildRootNodeIndex(m_selected_node_index);
         uint64_t node_index = m_topology_ptr->GetSharedChildNodeIndex(root_node_index, row);
-        return createIndex(row, column, (void *)node_index);
+        return createIndex(row, column, (void*)node_index);
     }
 
     uint64_t parent_node_index = parent.internalId();
@@ -194,13 +194,13 @@ QModelIndex CommandBufferModel::index(int row, int column, const QModelIndex &pa
         child_node_index = m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, index);
     }
     if (child_node_index != UINT64_MAX)
-        return createIndex(row, column, (void *)child_node_index);
+        return createIndex(row, column, (void*)child_node_index);
     else
         return QModelIndex();
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex CommandBufferModel::parent(const QModelIndex &index) const
+QModelIndex CommandBufferModel::parent(const QModelIndex& index) const
 {
     if (!index.isValid()) return QModelIndex();
 
@@ -209,7 +209,7 @@ QModelIndex CommandBufferModel::parent(const QModelIndex &index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::rowCount(const QModelIndex &parent) const
+int CommandBufferModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.column() > 0) return 0;
     if (m_selected_node_index == UINT64_MAX) return 0;
@@ -233,7 +233,7 @@ int CommandBufferModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
+void CommandBufferModel::OnSelectionChanged(const QModelIndex& index)
 {
     uint64_t selected_node_index = index.internalId();
     if (m_selected_node_index == selected_node_index)  // Selected same item
@@ -241,10 +241,10 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 
     // Ensures that the selected index passed belongs to the filter model currently displayed in the
     // main window.
-    const DiveFilterModel *dive_filter_model = qobject_cast<const DiveFilterModel *>(index.model());
+    const DiveFilterModel* dive_filter_model = qobject_cast<const DiveFilterModel*>(index.model());
     if (dive_filter_model)
     {
-        const QModelIndex &new_index = dive_filter_model->mapToSource(index);
+        const QModelIndex& new_index = dive_filter_model->mapToSource(index);
         selected_node_index = new_index.internalId();
     }
 
@@ -276,7 +276,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
             // The row has to account for both
             if (child_node_index == end_node_index)
             {
-                m_scroll_to_index = createIndex(child, 0, (void *)end_node_index);
+                m_scroll_to_index = createIndex(child, 0, (void*)end_node_index);
 
                 // If the shared node has fields, then the last field should be the scroll-to
                 // position instead
@@ -289,7 +289,7 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
                     // pass will begin somewhere within the children of CP_START_BIN. So scrolling
                     // to the bottom of the CP_START_BIN is not appropriate in this case
                     if (IsSelected(last_node_index))
-                        m_scroll_to_index = createIndex(i, 0, (void *)last_node_index);
+                        m_scroll_to_index = createIndex(i, 0, (void*)last_node_index);
                 }
             }
         }
@@ -299,9 +299,9 @@ void CommandBufferModel::OnSelectionChanged(const QModelIndex &index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void CommandBufferModel::searchAddressColumn(QList<QModelIndex> &search_results, int row,
-                                             const QModelIndex &parent, const QString &text,
-                                             const Qt::CaseSensitivity &case_sensitivity) const
+void CommandBufferModel::searchAddressColumn(QList<QModelIndex>& search_results, int row,
+                                             const QModelIndex& parent, const QString& text,
+                                             const Qt::CaseSensitivity& case_sensitivity) const
 {
     QModelIndex command_buffer_address_idx = index(row, CommandBufferModel::kColumnAddress, parent);
 
@@ -316,7 +316,7 @@ void CommandBufferModel::searchAddressColumn(QList<QModelIndex> &search_results,
 }
 
 //--------------------------------------------------------------------------------------------------
-QList<QModelIndex> CommandBufferModel::search(const QModelIndex &start, const QVariant &value) const
+QList<QModelIndex> CommandBufferModel::search(const QModelIndex& start, const QVariant& value) const
 {
     QList<QModelIndex> result;
     Qt::CaseSensitivity cs = Qt::CaseInsensitive;
@@ -382,7 +382,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row, uint64_t par
         {
             uint64_t child_node_index = m_topology_ptr->GetChildNodeIndex(parent_node_index, child);
             QModelIndex model_index = QModelIndex();
-            model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+            model_index = createIndex(parent_row, 0, (void*)parent_node_index);
             DIVE_ASSERT(child_node_index < m_node_parent_list.size());
             m_node_parent_list[child_node_index] = model_index;
 
@@ -401,7 +401,7 @@ bool CommandBufferModel::CreateNodeToParentMap(uint64_t parent_row, uint64_t par
         uint64_t child_node_index =
             m_topology_ptr->GetSharedChildNodeIndex(parent_node_index, child);
         QModelIndex model_index = QModelIndex();
-        model_index = createIndex(parent_row, 0, (void *)parent_node_index);
+        model_index = createIndex(parent_row, 0, (void*)parent_node_index);
         DIVE_ASSERT(child_node_index < m_node_parent_list.size());
         m_node_parent_list[child_node_index] = model_index;
 

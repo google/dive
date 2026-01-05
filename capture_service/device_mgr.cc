@@ -54,7 +54,7 @@ std::string GetPythonPath()
     if (result.ok())
     {
         std::vector<std::string> lines = absl::StrSplit(*result, '\n');
-        for (const auto &line : lines)
+        for (const auto& line : lines)
         {
             std::string current_path = std::string(absl::StripAsciiWhitespace(line));
             if (!current_path.empty() && !absl::StrContains(current_path, "WindowsApps"))
@@ -91,7 +91,7 @@ std::string GetPythonPath()
     return python_path;
 }
 
-absl::Status ValidatePythonPath(const std::string &python_path)
+absl::Status ValidatePythonPath(const std::string& python_path)
 {
     if (python_path.empty())
     {
@@ -113,7 +113,7 @@ absl::Status ValidatePythonPath(const std::string &python_path)
     return absl::OkStatus();
 }
 
-absl::Status SetSystemProperty(const AdbSession &adb, std::string_view property,
+absl::Status SetSystemProperty(const AdbSession& adb, std::string_view property,
                                std::string_view value)
 {
     return adb.Run(absl::StrFormat("shell setprop %s %s", property, value));
@@ -121,7 +121,7 @@ absl::Status SetSystemProperty(const AdbSession &adb, std::string_view property,
 
 // Set the property to an empty string. The users of the Android API typically don't make a
 // distinction between "set and empty" or "unset".
-absl::Status UnsetSystemProperty(const AdbSession &adb, std::string_view property)
+absl::Status UnsetSystemProperty(const AdbSession& adb, std::string_view property)
 {
     // This command goes through 3 layers of interpretation:
     // 1. Device shell. Requires explicit empty string "" to perform unset.
@@ -131,7 +131,7 @@ absl::Status UnsetSystemProperty(const AdbSession &adb, std::string_view propert
 }
 
 // Delete all persistent Android settings related to using Vulkan debug layers
-absl::Status DisableVulkanLayer(const AdbSession &adb)
+absl::Status DisableVulkanLayer(const AdbSession& adb)
 {
     // See https://developer.android.com/ndk/guides/graphics/validation-layer
     absl::Status status;
@@ -145,7 +145,7 @@ absl::Status DisableVulkanLayer(const AdbSession &adb)
 
 // Set the required Android settings in order to implicitly load a `layer` when `app` is run.
 // `layer_app` is the package that Android will search to find `layer`.
-absl::Status EnableVulkanLayer(const AdbSession &adb, std::string_view app, std::string_view layer,
+absl::Status EnableVulkanLayer(const AdbSession& adb, std::string_view app, std::string_view layer,
                                std::string_view layer_app = "")
 {
     // Start with a clean slate
@@ -163,14 +163,14 @@ absl::Status EnableVulkanLayer(const AdbSession &adb, std::string_view app, std:
     return absl::OkStatus();
 }
 
-absl::Status IsAppInstalled(const AdbSession &adb, std::string_view package)
+absl::Status IsAppInstalled(const AdbSession& adb, std::string_view package)
 {
     return adb.Run(absl::StrFormat("shell pm path %s", package));
 }
 
 }  // namespace
 
-DeviceManager &GetDeviceManager()
+DeviceManager& GetDeviceManager()
 {
     static DeviceManager mgr;
     return mgr;
@@ -181,7 +181,7 @@ std::string DeviceInfo::GetDisplayName() const
     return absl::StrCat(m_manufacturer, " ", m_model, " (", m_serial, ")");
 }
 
-absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings &settings,
+absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings& settings,
                                                               bool is_adreno_gpu)
 {
     // Early return if basic info not provided
@@ -219,7 +219,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
         {
             validated_settings.loop_single_frame_count = std::stoi(*(it + 1));
         }
-        catch (std::exception &e)
+        catch (std::exception& e)
         {
             LOGD("Exception: %s", e.what());
             return absl::InvalidArgumentError(
@@ -357,7 +357,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     return validated_settings;
 }
 
-AndroidDevice::AndroidDevice(const std::string &serial)
+AndroidDevice::AndroidDevice(const std::string& serial)
     : m_serial(serial), m_adb(serial), m_gfxr_enabled(false), m_port(kFirstPort)
 {
     CleanupDevice().IgnoreError();
@@ -463,7 +463,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     std::vector<std::string> lines = absl::StrSplit(*list_packages_output, '\n');
 
     std::vector<std::string> all_packages;
-    for (const auto &line : lines)
+    for (const auto& line : lines)
     {
         std::vector<std::string> fields = absl::StrSplit(line, ':');
         if (fields.size() == 2 && fields[0] == "package")
@@ -480,7 +480,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
     {
         std::vector<std::future<absl::StatusOr<std::string>>> futures;
 
-        for (const auto &pkg : all_packages)
+        for (const auto& pkg : all_packages)
         {
             futures.push_back(std::async(std::launch::async, [this, pkg]() {
                 return Adb().RunAndGetResult("shell dumpsys package " + pkg);
@@ -494,7 +494,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
             {
                 return dumpsys_output.status();
             }
-            const std::string &current_package = all_packages[i];
+            const std::string& current_package = all_packages[i];
 
             if (option == PackageListOptions::kDebuggableOnly)
             {
@@ -563,7 +563,7 @@ absl::Status AndroidDevice::CleanupDevice()
 
     if (m_original_state.m_root_access_requested)
     {
-        const auto &enforce = m_original_state.m_enforce;
+        const auto& enforce = m_original_state.m_enforce;
         if (enforce.find("Enforcing") != enforce.npos)
         {
             LOGD("restore Enforcing to Enforcing\n");
@@ -637,7 +637,7 @@ absl::Status AndroidDevice::CleanupDevice()
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::CleanupPackageProperties(const std::string &package)
+absl::Status AndroidDevice::CleanupPackageProperties(const std::string& package)
 {
     LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s\n", Dive::kLogPrefixCleanup,
          package.c_str());
@@ -647,9 +647,9 @@ absl::Status AndroidDevice::CleanupPackageProperties(const std::string &package)
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::SetupApp(const std::string &package, const ApplicationType type,
-                                     const std::string &command_args,
-                                     const std::string &gfxr_capture_directory)
+absl::Status AndroidDevice::SetupApp(const std::string& package, const ApplicationType type,
+                                     const std::string& command_args,
+                                     const std::string& gfxr_capture_directory)
 {
     if (type == ApplicationType::VULKAN_APK)
     {
@@ -689,9 +689,9 @@ absl::Status AndroidDevice::SetupApp(const std::string &package, const Applicati
     return m_app->Setup();
 }
 
-absl::Status AndroidDevice::SetupApp(const std::string &command, const std::string &command_args,
+absl::Status AndroidDevice::SetupApp(const std::string& command, const std::string& command_args,
                                      const ApplicationType type,
-                                     const std::string &gfxr_capture_directory)
+                                     const std::string& gfxr_capture_directory)
 {
     assert(type == ApplicationType::VULKAN_CLI);
     m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
@@ -757,13 +757,13 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
 
     std::vector<std::string> lines = absl::StrSplit(output, '\n');
 
-    for (const auto &line : lines)
+    for (const auto& line : lines)
     {
         std::vector<std::string> fields = absl::StrSplit(line, '\t');
         if (fields.size() == 2 && fields[1] == "device") serial_list.push_back(fields[0]);
     }
 
-    for (auto &serial : serial_list)
+    for (auto& serial : serial_list)
     {
         DeviceInfo dev;
         AdbSession adb(serial);
@@ -794,7 +794,7 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
     return dev_list;
 }
 
-absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &serial)
+absl::StatusOr<AndroidDevice*> DeviceManager::SelectDevice(const std::string& serial)
 {
     if (serial.empty())
     {
@@ -816,9 +816,9 @@ absl::StatusOr<AndroidDevice *> DeviceManager::SelectDevice(const std::string &s
     return m_device.get();
 }
 
-absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
+absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
 {
-    const AdbSession &adb = m_device->Adb();
+    const AdbSession& adb = m_device->Adb();
 
     LOGD("DeployReplayApk(): starting\n");
 
@@ -889,9 +889,9 @@ absl::Status DeviceManager::DeployReplayApk(const std::string &serial)
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settings) const
+absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settings) const
 {
-    const AdbSession &adb = m_device->Adb();
+    const AdbSession& adb = m_device->Adb();
 
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayGfxrScript(): CLEANUP\n");
@@ -1060,9 +1060,9 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings &settin
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &settings) const
+absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings& settings) const
 {
-    const AdbSession &adb = m_device->Adb();
+    const AdbSession& adb = m_device->Adb();
 
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
@@ -1125,9 +1125,9 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings &s
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) const
+absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) const
 {
-    const AdbSession &adb = m_device->Adb();
+    const AdbSession& adb = m_device->Adb();
 
     LOGD("RunReplayApk(): Check settings before run\n");
     absl::StatusOr<Dive::GfxrReplaySettings> validated_settings =
@@ -1218,7 +1218,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings &settings) con
     return absl::OkStatus();
 }
 
-absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
+absl::Status DeviceManager::CleanupPackageProperties(const std::string& package)
 {
     if (package.empty())
     {
@@ -1232,10 +1232,10 @@ absl::Status DeviceManager::CleanupPackageProperties(const std::string &package)
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::RetrieveFile(const std::string &remote_file_path,
-                                         const std::string &local_save_dir,
+absl::Status AndroidDevice::RetrieveFile(const std::string& remote_file_path,
+                                         const std::string& local_save_dir,
                                          bool delete_after_retrieve,
-                                         const std::string &new_file_name)
+                                         const std::string& new_file_name)
 {
     if (!std::filesystem::is_directory(local_save_dir))
     {
@@ -1282,7 +1282,7 @@ bool AndroidDevice::IsProcessRunning(absl::string_view process_name) const
     return true;
 }
 
-bool AndroidDevice::FileExists(const std::string &file_path)
+bool AndroidDevice::FileExists(const std::string& file_path)
 {
     // Checks if the file file exists. If the file returns exists, 0 is returned, if not, 1 is
     // returned.
@@ -1353,7 +1353,7 @@ absl::Status AndroidDevice::IsGpuClockPinned(uint32_t expected_freq_mhz) const
 }
 
 absl::Status AndroidDevice::TriggerScreenCapture(
-    const std::filesystem::path &on_device_screenshot_dir)
+    const std::filesystem::path& on_device_screenshot_dir)
 {
     // If the path segment has an extension, it is invalid for a directory name.
     if (on_device_screenshot_dir.has_extension())
@@ -1375,8 +1375,8 @@ absl::Status AndroidDevice::TriggerScreenCapture(
     return ret;
 }
 
-absl::Status AndroidDevice::DeployDeviceResource(const std::string_view &file_name,
-                                                 const std::filesystem::path &target_dir)
+absl::Status AndroidDevice::DeployDeviceResource(const std::string_view& file_name,
+                                                 const std::filesystem::path& target_dir)
 {
     std::filesystem::path host_full_lib_path;
     {

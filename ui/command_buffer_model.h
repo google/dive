@@ -44,37 +44,37 @@ class CommandBufferModel : public QAbstractItemModel
     };
 
  public:
-    explicit CommandBufferModel(const Dive::CommandHierarchy &command_hierarchy);
+    explicit CommandBufferModel(const Dive::CommandHierarchy& command_hierarchy);
     ~CommandBufferModel();
 
     void Reset();
 
-    void SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr);
+    void SetTopologyToView(const Dive::SharedNodeTopology* topology_ptr);
 
-    QVariant data(const QModelIndex &index, int role) const override;
-    Qt::ItemFlags flags(const QModelIndex &index) const override;
+    QVariant data(const QModelIndex& index, int role) const override;
+    Qt::ItemFlags flags(const QModelIndex& index) const override;
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role = Qt::DisplayRole) const override;
     QModelIndex index(int row, int column,
-                      const QModelIndex &parent = QModelIndex()) const override;
-    QModelIndex parent(const QModelIndex &index) const override;
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+                      const QModelIndex& parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex& index) const override;
+    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
+    int columnCount(const QModelIndex& parent = QModelIndex()) const override;
 
     QModelIndex scrollToIndex() const;
 
-    QList<QModelIndex> search(const QModelIndex &start, const QVariant &value) const;
+    QList<QModelIndex> search(const QModelIndex& start, const QVariant& value) const;
 
  public slots:
-    void OnSelectionChanged(const QModelIndex &index);
+    void OnSelectionChanged(const QModelIndex& index);
 
  private:
     bool CreateNodeToParentMap(uint64_t parent_row, uint64_t parent_node_index, bool is_cur_event);
     void SetIsSelected(uint64_t node_index);
     bool IsSelected(uint64_t node_index) const;
-    void searchAddressColumn(QList<QModelIndex> &search_results, int row, const QModelIndex &parent,
-                             const QString &text,
-                             const Qt::CaseSensitivity &case_sensitivity) const;
+    void searchAddressColumn(QList<QModelIndex>& search_results, int row, const QModelIndex& parent,
+                             const QString& text,
+                             const Qt::CaseSensitivity& case_sensitivity) const;
 
     uint64_t m_selected_node_index = UINT64_MAX;
 
@@ -85,7 +85,7 @@ class CommandBufferModel : public QAbstractItemModel
     std::vector<uint8_t> m_node_is_selected_bit_list;
     QModelIndex m_scroll_to_index;
 
-    const Dive::CommandHierarchy &m_command_hierarchy;
-    const Dive::SharedNodeTopology *m_topology_ptr = nullptr;
+    const Dive::CommandHierarchy& m_command_hierarchy;
+    const Dive::SharedNodeTopology* m_topology_ptr = nullptr;
     bool m_show_level_column = true;
 };

@@ -70,13 +70,13 @@ class EventGraphicsItem : public QGraphicsItem
     // QGraphicsItem overrides
     virtual QRectF boundingRect() const Q_DECL_OVERRIDE;
     virtual QPainterPath shape() const Q_DECL_OVERRIDE;
-    virtual void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-                       QWidget *widget) Q_DECL_OVERRIDE;
+    virtual void paint(QPainter* painter, const QStyleOptionGraphicsItem* option,
+                       QWidget* widget) Q_DECL_OVERRIDE;
 
  private:
-    void DrawEvents(QPainter *painter);
-    void CalcRectCoord(uint64_t start_cycle, uint64_t end_cycle, uint64_t *start_x,
-                       uint64_t *end_x);
+    void DrawEvents(QPainter* painter);
+    void CalcRectCoord(uint64_t start_cycle, uint64_t end_cycle, uint64_t* start_x,
+                       uint64_t* end_x);
 
     int64_t m_visible_start_x = 0;
     int64_t m_visible_start_y = 0;

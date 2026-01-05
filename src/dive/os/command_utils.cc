@@ -37,7 +37,7 @@ limitations under the License.
 namespace Dive
 {
 
-absl::StatusOr<std::string> LogCommand(const std::string &command, const std::string &output,
+absl::StatusOr<std::string> LogCommand(const std::string& command, const std::string& output,
                                        int ret)
 {
     // Always log command and output for debug builds
@@ -55,12 +55,12 @@ absl::StatusOr<std::string> LogCommand(const std::string &command, const std::st
     return output;
 }
 
-absl::StatusOr<std::string> RunCommand(const std::string &command)
+absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
     std::string output;
     std::string err_msg;
     std::string cmd_str = command + " 2>&1";  // Get both stdout and stderr;
-    FILE *pipe = popen(cmd_str.c_str(), "r");
+    FILE* pipe = popen(cmd_str.c_str(), "r");
     if (!pipe)
     {
         err_msg = "Popen call failed\n";

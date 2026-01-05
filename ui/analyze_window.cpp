@@ -51,7 +51,7 @@
 #include "settings.h"
 
 //--------------------------------------------------------------------------------------------------
-void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
+void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
 {
     if (std::filesystem::remove(file_path))
     {
@@ -66,8 +66,8 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path &file_path)
 // =================================================================================================
 // AnalyzeDialog
 // =================================================================================================
-AnalyzeDialog::AnalyzeDialog(ApplicationController &controller,
-                             const Dive::AvailableMetrics *available_metrics, QWidget *parent)
+AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
+                             const Dive::AvailableMetrics* available_metrics, QWidget* parent)
     : QDialog(parent), m_controller(controller), m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
@@ -236,7 +236,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController &controller,
     // Connect the name list's selection change to a lambda
     QObject::connect(
         m_metrics_list, &QListWidget::currentItemChanged,
-        [&](QListWidgetItem *current, QListWidgetItem *previous) {
+        [&](QListWidgetItem* current, QListWidgetItem* previous) {
             if (current)
             {
                 int index = m_metrics_list->row(current);
@@ -247,14 +247,14 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController &controller,
             }
         });
 
-    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem *item) {
+    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem* item) {
         // This code will execute whenever an item's state changes
         // It will refresh the second list of selected items
         UpdateSelectedMetricsList();
     });
 
-    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString &)), this,
-                     SLOT(OnDeviceSelected(const QString &)));
+    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnDeviceSelected(const QString&)));
     QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
                      &AnalyzeDialog::OnDeviceListRefresh);
     QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
@@ -276,7 +276,7 @@ AnalyzeDialog::~AnalyzeDialog()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnOverlayMessage(const QString &message)
+void AnalyzeDialog::OnOverlayMessage(const QString& message)
 {
     m_overlay->SetMessage(message);
     m_overlay->SetMessageIsTimed();
@@ -285,7 +285,7 @@ void AnalyzeDialog::OnOverlayMessage(const QString &message)
 void AnalyzeDialog::OnDisableOverlay() { m_overlay->Clear(); }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ShowMessage(const std::string &message)
+void AnalyzeDialog::ShowMessage(const std::string& message)
 {
     auto message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
@@ -302,9 +302,9 @@ void AnalyzeDialog::PopulateMetrics()
         // Get the list of all available metrics
         std::vector<std::string> all_keys = m_available_metrics->GetAllMetricKeys();
 
-        for (const auto &key : all_keys)
+        for (const auto& key : all_keys)
         {
-            const Dive::MetricInfo *info = m_available_metrics->GetMetricInfo(key);
+            const Dive::MetricInfo* info = m_available_metrics->GetMetricInfo(key);
             if (info)
             {
                 CsvItem item;
@@ -318,9 +318,9 @@ void AnalyzeDialog::PopulateMetrics()
         }
 
         // Populate the metrics list
-        for (const auto &item : *m_csv_items)
+        for (const auto& item : *m_csv_items)
         {
-            QListWidgetItem *csv_item = new QListWidgetItem(item.name);
+            QListWidgetItem* csv_item = new QListWidgetItem(item.name);
             csv_item->setData(kDataRole, item.key);
             csv_item->setFlags(csv_item->flags() | Qt::ItemIsUserCheckable);
             csv_item->setCheckState(Qt::Unchecked);
@@ -328,7 +328,7 @@ void AnalyzeDialog::PopulateMetrics()
         }
 
         // Add spacer so that all metrics are visible at the end of the list.
-        QListWidgetItem *spacer = new QListWidgetItem();
+        QListWidgetItem* spacer = new QListWidgetItem();
         spacer->setFlags(spacer->flags() & ~Qt::ItemIsSelectable);
         m_metrics_list->addItem(spacer);
     }
@@ -365,7 +365,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
     // Iterate through the source list to find checked items
     for (int i = 0; i < m_metrics_list->count(); ++i)
     {
-        QListWidgetItem *item = m_metrics_list->item(i);
+        QListWidgetItem* item = m_metrics_list->item(i);
 
         // If the item is checked, add it to the target list
         if (item->checkState() == Qt::Checked)
@@ -394,7 +394,7 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 
     if (m_devices.empty())
     {
-        QStandardItem *item = new QStandardItem("No devices found");
+        QStandardItem* item = new QStandardItem("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         m_device_model->appendRow(item);
         m_device_box->setCurrentIndex(0);
@@ -405,13 +405,13 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
         {
             if (i == 0)
             {
-                QStandardItem *item = new QStandardItem("Please select a device");
+                QStandardItem* item = new QStandardItem("Please select a device");
                 item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
                 m_device_model->appendRow(item);
                 m_device_box->setCurrentIndex(0);
             }
 
-            QStandardItem *item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+            QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
             m_device_model->appendRow(item);
             // Keep the original selected devices as selected.
             if (m_cur_device == m_devices[i].m_serial)
@@ -423,7 +423,7 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceSelected(const QString &s)
+void AnalyzeDialog::OnDeviceSelected(const QString& s)
 {
     if (s.isEmpty() || m_device_box->currentIndex() == 0)
     {
@@ -443,7 +443,7 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
     }
 
     m_cur_device = m_devices[device_index].m_serial;
-    if (absl::StatusOr<Dive::AndroidDevice *> ret =
+    if (absl::StatusOr<Dive::AndroidDevice*> ret =
             Dive::GetDeviceManager().SelectDevice(m_cur_device);
         !ret.ok())
     {
@@ -462,7 +462,7 @@ void AnalyzeDialog::OnDeviceSelected(const QString &s)
 void AnalyzeDialog::OnDeviceListRefresh() { UpdateDeviceList(true); }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString &file_path)
+void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString& file_path)
 {
     // Clear members for previous session
     OnAnalyzeCaptureEnded();
@@ -532,7 +532,7 @@ void AnalyzeDialog::OnAnalyzeCaptureEnded()
 
 //--------------------------------------------------------------------------------------------------
 absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
-    Dive::AndroidDevice *device, const std::string &local_asset_file_path)
+    Dive::AndroidDevice* device, const std::string& local_asset_file_path)
 {
     const std::string remote_dir = "/sdcard/gfxr_captures_for_replay";
 
@@ -557,15 +557,15 @@ absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::SetReplayButton(const std::string &message, bool is_enabled)
+void AnalyzeDialog::SetReplayButton(const std::string& message, bool is_enabled)
 {
     m_replay_button->setEnabled(is_enabled);
     m_replay_button->setText(message.c_str());
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
-                                         const std::string &remote_gfxr_file)
+absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager& device_manager,
+                                         const std::string& remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartNormalReplay);
     Dive::GfxrReplaySettings replay_settings;
@@ -580,8 +580,8 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager &device_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
-                                      const std::string &remote_gfxr_file)
+absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager& device_manager,
+                                      const std::string& remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPm4Replay);
     Dive::GfxrReplaySettings replay_settings;
@@ -593,8 +593,8 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager &device_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manager,
-                                              const std::string &remote_gfxr_file)
+absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager& device_manager,
+                                              const std::string& remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPerfCounterReplay);
     Dive::GfxrReplaySettings replay_settings;
@@ -609,8 +609,8 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager &device_manage
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
-                                          const std::string &remote_gfxr_file)
+absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager& device_manager,
+                                          const std::string& remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartGpuTimeReplay);
     Dive::GfxrReplaySettings replay_settings;
@@ -625,8 +625,8 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager &device_manager,
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager &device_manager,
-                                            const std::string &remote_gfxr_file)
+absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager& device_manager,
+                                            const std::string& remote_gfxr_file)
 {
     SetReplayButton("Replaying with RenderDoc...", false);
     Dive::GfxrReplaySettings replay_settings;
@@ -692,7 +692,7 @@ void AnalyzeDialog::OnDeleteReplayArtifacts()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString &message)
+void AnalyzeDialog::OnReplayStatusUpdate(int status_code_int, const QString& message)
 {
     // Cast from qt known type.
     auto status_code = static_cast<ReplayStatusUpdateCode>(status_code_int);
@@ -764,16 +764,16 @@ void AnalyzeDialog::ExecuteStatusUpdate()
     m_status_update_queue.clear();
 }
 
-void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string &message)
+void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string& message)
 {
     qDebug() << message.c_str();
     ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(message));
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ReplayImpl(const ReplayConfig &config)
+void AnalyzeDialog::ReplayImpl(const ReplayConfig& config)
 {
-    Dive::DeviceManager &device_manager = Dive::GetDeviceManager();
+    Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
     auto device = device_manager.GetDevice();
 
     UpdateReplayStatus(ReplayStatusUpdateCode::kSetup);

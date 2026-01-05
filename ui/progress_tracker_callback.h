@@ -30,5 +30,5 @@ class ProgressTrackerCallback : public QObject, public Dive::ProgressTracker
     virtual void sendMessage(std::string message);
 
  signals:
-    void sendMessageSignal(const QString &message);
+    void sendMessageSignal(const QString& message);
 };

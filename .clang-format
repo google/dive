@@ -11,6 +11,9 @@ Language: Cpp
 # Google style: access modifier indent = 1
 AccessModifierOffset: -3
 
+# Fix clang-format-18's Google style:
+PointerAlignment: Left
+
 # Dive Specific:
 BraceWrapping:
   AfterCaseLabel: true
@@ -26,3 +29,5 @@ BraceWrapping:
   BeforeElse: true
   SplitEmptyRecord: false
 BreakBeforeBraces: Custom
+
+

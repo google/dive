@@ -32,10 +32,10 @@ namespace Dive
 // =================================================================================================
 
 //--------------------------------------------------------------------------------------------------
-DataCore::DataCore(ProgressTracker *progress_tracker) : m_progress_tracker(progress_tracker) {}
+DataCore::DataCore(ProgressTracker* progress_tracker) : m_progress_tracker(progress_tracker) {}
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string &file_name)
+CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string& file_name)
 {
     std::filesystem::path rd_file_path(file_name);
     rd_file_path.replace_extension(".rd");
@@ -44,7 +44,7 @@ CaptureData::LoadResult DataCore::LoadDiveCaptureData(const std::string &file_na
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string &file_name)
+CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string& file_name)
 {
     m_pm4_capture_data = Pm4CaptureData(m_progress_tracker);  // Clear any previously loaded data
     m_capture_metadata = CaptureMetadata();
@@ -52,7 +52,7 @@ CaptureData::LoadResult DataCore::LoadPm4CaptureData(const std::string &file_nam
 }
 
 //--------------------------------------------------------------------------------------------------
-CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const std::string &file_name)
+CaptureData::LoadResult DataCore::LoadGfxrCaptureData(const std::string& file_name)
 {
     m_gfxr_capture_data = GfxrCaptureData();
     return m_gfxr_capture_data.LoadCaptureFile(file_name);
@@ -212,36 +212,36 @@ bool DataCore::ParseGfxrCaptureData()
 }
 
 //--------------------------------------------------------------------------------------------------
-const Pm4CaptureData &DataCore::GetPm4CaptureData() const { return m_pm4_capture_data; }
+const Pm4CaptureData& DataCore::GetPm4CaptureData() const { return m_pm4_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-Pm4CaptureData &DataCore::GetMutablePm4CaptureData() { return m_pm4_capture_data; }
+Pm4CaptureData& DataCore::GetMutablePm4CaptureData() { return m_pm4_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-const GfxrCaptureData &DataCore::GetGfxrCaptureData() const { return m_gfxr_capture_data; }
+const GfxrCaptureData& DataCore::GetGfxrCaptureData() const { return m_gfxr_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-GfxrCaptureData &DataCore::GetMutableGfxrCaptureData() { return m_gfxr_capture_data; }
+GfxrCaptureData& DataCore::GetMutableGfxrCaptureData() { return m_gfxr_capture_data; }
 
 //--------------------------------------------------------------------------------------------------
-const CommandHierarchy &DataCore::GetCommandHierarchy() const
+const CommandHierarchy& DataCore::GetCommandHierarchy() const
 {
     return m_capture_metadata.m_command_hierarchy;
 }
 
 //--------------------------------------------------------------------------------------------------
-const CaptureMetadata &DataCore::GetCaptureMetadata() const { return m_capture_metadata; }
+const CaptureMetadata& DataCore::GetCaptureMetadata() const { return m_capture_metadata; }
 
 // =================================================================================================
 // CaptureMetadataCreator
 // =================================================================================================
 std::unique_ptr<CaptureMetadataCreator> CaptureMetadataCreator::Create(
-    CaptureMetadata &capture_metadata)
+    CaptureMetadata& capture_metadata)
 {
     return std::unique_ptr<CaptureMetadataCreator>(new CaptureMetadataCreator(capture_metadata));
 }
 
-CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata)
+CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata& capture_metadata)
     : m_capture_metadata(capture_metadata)
 {
     m_capture_metadata.m_num_pm4_packets = 0;
@@ -251,18 +251,18 @@ CaptureMetadataCreator::CaptureMetadataCreator(CaptureMetadata &capture_metadata
 CaptureMetadataCreator::~CaptureMetadataCreator() {}
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::OnSubmitStart(uint32_t submit_index, const SubmitInfo &submit_info)
+void CaptureMetadataCreator::OnSubmitStart(uint32_t submit_index, const SubmitInfo& submit_info)
 {
     m_state_tracker.Reset();
     m_current_render_mode = RenderModeType::kUnknown;
 }
 
 //--------------------------------------------------------------------------------------------------
-void CaptureMetadataCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInfo &submit_info) {}
+void CaptureMetadataCreator::OnSubmitEnd(uint32_t submit_index, const SubmitInfo& submit_info) {}
 
 //--------------------------------------------------------------------------------------------------
 bool CaptureMetadataCreator::OnIbStart(uint32_t submit_index, uint32_t ib_index,
-                                       const IndirectBufferInfo &ib_info, IbType type)
+                                       const IndirectBufferInfo& ib_info, IbType type)
 {
     EmulateCallbacksBase::OnIbStart(submit_index, ib_index, ib_info, type);
     return true;
@@ -270,14 +270,14 @@ bool CaptureMetadataCreator::OnIbStart(uint32_t submit_index, uint32_t ib_index,
 
 //--------------------------------------------------------------------------------------------------
 bool CaptureMetadataCreator::OnIbEnd(uint32_t submit_index, uint32_t ib_index,
-                                     const IndirectBufferInfo &ib_info)
+                                     const IndirectBufferInfo& ib_info)
 {
     EmulateCallbacksBase::OnIbEnd(submit_index, ib_index, ib_info);
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager, uint32_t submit_index,
+bool CaptureMetadataCreator::OnPacket(const IMemoryManager& mem_manager, uint32_t submit_index,
                                       uint32_t ib_index, uint64_t va_addr, Pm4Header header)
 {
     m_capture_metadata.m_num_pm4_packets++;
@@ -286,7 +286,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager, uint32_
 
     if (header.type != 7) return true;
 
-    Pm4Type7Header *type7_header = (Pm4Type7Header *)&header;
+    Pm4Type7Header* type7_header = (Pm4Type7Header*)&header;
 
     if (type7_header->opcode == CP_SET_MARKER)
     {
@@ -405,7 +405,7 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager &mem_manager, uint32_
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager, uint32_t submit_index,
+bool CaptureMetadataCreator::HandleShaders(const IMemoryManager& mem_manager, uint32_t submit_index,
                                            uint32_t opcode)
 {
     for (uint32_t shader = 0; shader < Dive::kShaderStageCount; ++shader)
@@ -414,7 +414,7 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager, ui
         bool is_valid_shader = is_dispatch && (shader == (uint32_t)ShaderStage::kShaderStageCs);
         is_valid_shader |= !is_dispatch && (shader != (uint32_t)ShaderStage::kShaderStageCs);
 
-        EventInfo &cur_event_info = m_capture_metadata.m_event_info.back();
+        EventInfo& cur_event_info = m_capture_metadata.m_event_info.back();
 
         for (uint32_t enable_index = 0; enable_index < kShaderEnableBitCount; ++enable_index)
         {
@@ -436,7 +436,7 @@ bool CaptureMetadataCreator::HandleShaders(const IMemoryManager &mem_manager, ui
                         // Check if this event already has a reference to this shader, in which case
                         // we just add to the existing reference's enable mask.
                         bool found = false;
-                        for (auto &reference : cur_event_info.m_shader_references)
+                        for (auto& reference : cur_event_info.m_shader_references)
                         {
                             if (reference.m_shader_index == shader_index)
                             {
@@ -987,10 +987,10 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
     uint32_t gras_sc_bin_cntl_reg_offset = GetRegOffsetByName("GRAS_SC_BIN_CNTL");
     if (m_state_tracker.IsRegSet(gras_sc_bin_cntl_reg_offset))
     {
-        const RegInfo *reg_info = GetRegInfo(gras_sc_bin_cntl_reg_offset);
-        const RegField *reg_field_w = GetRegFieldByName("BINW", reg_info);
+        const RegInfo* reg_info = GetRegInfo(gras_sc_bin_cntl_reg_offset);
+        const RegField* reg_field_w = GetRegFieldByName("BINW", reg_info);
         DIVE_ASSERT(reg_field_w != nullptr);
-        const RegField *reg_field_h = GetRegFieldByName("BINH", reg_info);
+        const RegField* reg_field_h = GetRegFieldByName("BINH", reg_info);
         DIVE_ASSERT(reg_field_h != nullptr);
         GRAS_SC_BIN_CNTL gras_sc_bin_cntl;
         gras_sc_bin_cntl.u32All = m_state_tracker.GetRegValue(gras_sc_bin_cntl_reg_offset);

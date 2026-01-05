@@ -23,7 +23,7 @@ namespace Dive
 {
 
 absl::StatusOr<Dive::ComponentFilePaths> GetComponentFilesHostPaths(
-    const std::filesystem::path &parent_dir, const std::string &gfxr_stem)
+    const std::filesystem::path& parent_dir, const std::string& gfxr_stem)
 {
     if (gfxr_stem.empty())
     {

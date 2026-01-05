@@ -25,7 +25,7 @@
 #include "search_bar.h"
 #include "trace_stats/trace_stats.h"
 
-DrawDispatchStatsTabView::DrawDispatchStatsTabView(const Dive::CaptureStats &stats, QWidget *parent)
+DrawDispatchStatsTabView::DrawDispatchStatsTabView(const Dive::CaptureStats& stats, QWidget* parent)
     : QWidget(parent), m_stats(stats)
 {
     m_draw_dispatch_stats_model = new DrawDispatchStatsModel();
@@ -34,11 +34,11 @@ DrawDispatchStatsTabView::DrawDispatchStatsTabView(const Dive::CaptureStats &sta
     m_draw_dispatch_stats_view->setModel(m_draw_dispatch_stats_model);
     ResizeColumns(m_draw_dispatch_stats_model, m_draw_dispatch_stats_view);
 
-    QVBoxLayout *main_layout = new QVBoxLayout(this);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
     main_layout->addWidget(m_draw_dispatch_stats_view);
 }
 
-void DrawDispatchStatsTabView::ResizeColumns(QAbstractItemModel *model, QTableView *view)
+void DrawDispatchStatsTabView::ResizeColumns(QAbstractItemModel* model, QTableView* view)
 {
     // Resize columns to fit the content
     uint32_t column_count = (uint32_t)model->columnCount(QModelIndex());

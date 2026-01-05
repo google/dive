@@ -151,7 +151,7 @@ enum ViewPortStats
     kNumViewportStats
 };
 
-inline const char *viewport_stats_desc[kNumViewportStats] = {
+inline const char* viewport_stats_desc[kNumViewportStats] = {
     "Viewports", "x", "y", "width", "height", "minDepth", "maxDepth",
 };
 
@@ -167,13 +167,13 @@ enum WindowScissorStats
     kNumWindowScissorStats
 };
 
-inline const char *window_scissor_stats_desc[kNumWindowScissorStats] = {
+inline const char* window_scissor_stats_desc[kNumWindowScissorStats] = {
     "Window scissors", "tl_x", "br_x", "tl_y", "br_y", "Width", "Height"};
 
 struct Viewport
 {
     VkViewport m_vk_viewport;
-    bool operator<(const Viewport &other) const
+    bool operator<(const Viewport& other) const
     {
         if (m_vk_viewport.x != other.m_vk_viewport.x)
             return m_vk_viewport.x < other.m_vk_viewport.x;
@@ -195,7 +195,7 @@ struct WindowScissor
     uint32_t m_tl_y;
     uint32_t m_br_x;
     uint32_t m_br_y;
-    bool operator<(const WindowScissor &other) const
+    bool operator<(const WindowScissor& other) const
     {
         uint32_t area = (m_br_x - m_tl_x) * (m_br_y - m_tl_y);
         uint32_t other_area = (other.m_br_x - other.m_tl_x) * (other.m_br_y - other.m_tl_y);
@@ -232,11 +232,11 @@ class TraceStats
     ~TraceStats() = default;
 
     // Gather the trace statistics from the metadata
-    void GatherTraceStats(const Dive::Context &context, const Dive::CaptureMetadata &meta_data,
-                          CaptureStats &capture_stats);
+    void GatherTraceStats(const Dive::Context& context, const Dive::CaptureMetadata& meta_data,
+                          CaptureStats& capture_stats);
 
     // Print the capture statistics to the output stream
-    void PrintTraceStats(const CaptureStats &capture_stats, std::ostream &ostream);
+    void PrintTraceStats(const CaptureStats& capture_stats, std::ostream& ostream);
 };
 
 }  // namespace Dive

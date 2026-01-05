@@ -14,7 +14,7 @@
 #include "event_selection_model.h"
 
 //--------------------------------------------------------------------------------------------------
-EventSelection::EventSelection(const Dive::CommandHierarchy &command_hierarchy)
+EventSelection::EventSelection(const Dive::CommandHierarchy& command_hierarchy)
     : m_command_hierarchy(command_hierarchy)
 {
 }

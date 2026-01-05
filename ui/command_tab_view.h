@@ -35,16 +35,16 @@ class CommandTabView : public QFrame
     Q_OBJECT
 
  public:
-    CommandTabView(const Dive::CommandHierarchy &command_hierarchy, QWidget *parent = nullptr);
+    CommandTabView(const Dive::CommandHierarchy& command_hierarchy, QWidget* parent = nullptr);
 
-    void SetTopologyToView(const Dive::SharedNodeTopology *topology_ptr);
+    void SetTopologyToView(const Dive::SharedNodeTopology* topology_ptr);
 
     void ResetModel();
 
     void ResetHorizontalScroll();
 
  public slots:
-    void OnSelectionChanged(const QModelIndex &index);
+    void OnSelectionChanged(const QModelIndex& index);
     void OnSearchCommandBuffer();
     void OnSearchBarVisibilityChange(bool isHidden);
     void ConnectSearchBar();
@@ -52,16 +52,16 @@ class CommandTabView : public QFrame
 
  signals:
     // Update property panel for node information.
-    void SendNodeProperty(const QString &);
+    void SendNodeProperty(const QString&);
     void HideOtherSearchBars();
 
  private:
     void clearSearchBar();
 
-    CommandBufferView *m_command_buffer_view;
-    CommandBufferModel *m_command_buffer_model;
-    QPushButton *m_search_trigger_button;
-    SearchBar *m_search_bar = nullptr;
+    CommandBufferView* m_command_buffer_view;
+    CommandBufferModel* m_command_buffer_model;
+    QPushButton* m_search_trigger_button;
+    SearchBar* m_search_bar = nullptr;
 
-    const Dive::CommandHierarchy &m_command_hierarchy;
+    const Dive::CommandHierarchy& m_command_hierarchy;
 };

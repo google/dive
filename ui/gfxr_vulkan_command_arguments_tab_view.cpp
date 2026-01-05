@@ -36,9 +36,9 @@
 // GfxrVulkanCommandArgumentsTabView
 // =================================================================================================
 GfxrVulkanCommandArgumentsTabView::GfxrVulkanCommandArgumentsTabView(
-    const Dive::CommandHierarchy &vulkan_command_hierarchy,
-    GfxrVulkanCommandArgumentsFilterProxyModel *proxy_model,
-    GfxrVulkanCommandModel *command_hierarchy_model, QWidget *parent)
+    const Dive::CommandHierarchy& vulkan_command_hierarchy,
+    GfxrVulkanCommandArgumentsFilterProxyModel* proxy_model,
+    GfxrVulkanCommandModel* command_hierarchy_model, QWidget* parent)
     : m_vulkan_command_hierarchy(vulkan_command_hierarchy),
       m_arg_proxy_model(proxy_model),
       m_command_hierarchy_model(command_hierarchy_model)
@@ -52,7 +52,7 @@ GfxrVulkanCommandArgumentsTabView::GfxrVulkanCommandArgumentsTabView(
     m_search_trigger_button->setObjectName(kGfxrVulkanCommandArgumentsSearchButtonName);
     m_search_trigger_button->setIcon(QIcon(":/images/search.png"));
 
-    QHBoxLayout *options_layout = new QHBoxLayout();
+    QHBoxLayout* options_layout = new QHBoxLayout();
     options_layout->addWidget(m_search_trigger_button);
     options_layout->addStretch();
 
@@ -60,7 +60,7 @@ GfxrVulkanCommandArgumentsTabView::GfxrVulkanCommandArgumentsTabView(
     m_search_bar->setObjectName(kGfxrVulkanCommandArgumentsSearchBarName);
     m_search_bar->hide();
 
-    QVBoxLayout *main_layout = new QVBoxLayout();
+    QVBoxLayout* main_layout = new QVBoxLayout();
     main_layout->addLayout(options_layout);
     main_layout->addWidget(m_search_bar);
     main_layout->addWidget(m_command_hierarchy_view);
@@ -74,7 +74,7 @@ GfxrVulkanCommandArgumentsTabView::GfxrVulkanCommandArgumentsTabView(
 }
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandArgumentsTabView::SetTopologyToView(const Dive::Topology *topology_ptr)
+void GfxrVulkanCommandArgumentsTabView::SetTopologyToView(const Dive::Topology* topology_ptr)
 {
     m_command_hierarchy_model->SetTopologyToView(topology_ptr);
 }
@@ -92,7 +92,7 @@ void GfxrVulkanCommandArgumentsTabView::ResetModel()
 }
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &index)
+void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex& index)
 {
     if (!index.isValid())
     {
@@ -100,15 +100,15 @@ void GfxrVulkanCommandArgumentsTabView::OnSelectionChanged(const QModelIndex &in
         return;
     }
 
-    QAbstractItemModel *source_model_ptr = m_command_hierarchy_model;
+    QAbstractItemModel* source_model_ptr = m_command_hierarchy_model;
     QModelIndex source_index = index;
 
     if (index.model() != source_model_ptr)
     {
-        auto *selection_model = qobject_cast<QItemSelectionModel *>(sender());
+        auto* selection_model = qobject_cast<QItemSelectionModel*>(sender());
         if (selection_model)
         {
-            auto *proxy_model = qobject_cast<QSortFilterProxyModel *>(selection_model->model());
+            auto* proxy_model = qobject_cast<QSortFilterProxyModel*>(selection_model->model());
             if (proxy_model)
             {
                 source_index = proxy_model->mapToSource(index);
@@ -170,8 +170,8 @@ void GfxrVulkanCommandArgumentsTabView::OnSearchBarVisibilityChange(bool isHidde
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandArgumentsTabView::ConnectSearchBar()
 {
-    QObject::connect(m_search_bar, SIGNAL(new_search(const QString &)), m_command_hierarchy_view,
-                     SLOT(searchNodeByText(const QString &)));
+    QObject::connect(m_search_bar, SIGNAL(new_search(const QString&)), m_command_hierarchy_view,
+                     SLOT(searchNodeByText(const QString&)));
     QObject::connect(m_search_bar, &SearchBar::next_search, m_command_hierarchy_view,
                      &DiveTreeView::nextNodeInSearch);
     QObject::connect(m_search_bar, &SearchBar::prev_search, m_command_hierarchy_view,
@@ -183,8 +183,8 @@ void GfxrVulkanCommandArgumentsTabView::ConnectSearchBar()
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandArgumentsTabView::DisconnectSearchBar()
 {
-    QObject::disconnect(m_search_bar, SIGNAL(new_search(const QString &)), m_command_hierarchy_view,
-                        SLOT(searchNodeByText(const QString &)));
+    QObject::disconnect(m_search_bar, SIGNAL(new_search(const QString&)), m_command_hierarchy_view,
+                        SLOT(searchNodeByText(const QString&)));
     QObject::disconnect(m_search_bar, &SearchBar::next_search, m_command_hierarchy_view,
                         &DiveTreeView::nextNodeInSearch);
     QObject::disconnect(m_search_bar, &SearchBar::prev_search, m_command_hierarchy_view,

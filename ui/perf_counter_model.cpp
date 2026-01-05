@@ -32,14 +32,14 @@ struct FixedHeader
     };
 };
 
-PerfCounterModel::PerfCounterModel(QObject *parent) : QAbstractItemModel(parent)
+PerfCounterModel::PerfCounterModel(QObject* parent) : QAbstractItemModel(parent)
 {
     m_search_iterator = m_search_results.cbegin();
 }
 
 //--------------------------------------------------------------------------------------------------
 void PerfCounterModel::OnPerfCounterResultsGenerated(
-    const std::filesystem::path &file_path,
+    const std::filesystem::path& file_path,
     std::optional<std::reference_wrapper<const Dive::AvailableMetrics>> available_metrics)
 {
     emit beginResetModel();
@@ -71,7 +71,7 @@ void PerfCounterModel::LoadData()
     headers.append(QString::fromStdString(Dive::kHeaderMap.at(Dive::kDrawID).second));
     headers.append(QString::fromStdString(Dive::kHeaderMap.at(Dive::kLRZState).second));
 
-    for (const auto &header_str : m_perf_metrics_data_provider->GetMetricsNames())
+    for (const auto& header_str : m_perf_metrics_data_provider->GetMetricsNames())
     {
         headers.append(QString::fromStdString(header_str));
     }
@@ -82,7 +82,7 @@ void PerfCounterModel::LoadData()
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex PerfCounterModel::index(int row, int column, const QModelIndex &parent) const
+QModelIndex PerfCounterModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (parent.isValid() || !m_perf_metrics_data_provider)
     {
@@ -95,14 +95,14 @@ QModelIndex PerfCounterModel::index(int row, int column, const QModelIndex &pare
     {
         return QModelIndex();
     }
-    return createIndex(row, column, (void *)0);
+    return createIndex(row, column, (void*)0);
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex PerfCounterModel::parent(const QModelIndex &index) const { return QModelIndex(); }
+QModelIndex PerfCounterModel::parent(const QModelIndex& index) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
-int PerfCounterModel::rowCount(const QModelIndex &parent) const
+int PerfCounterModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid() || !m_perf_metrics_data_provider)
     {
@@ -112,12 +112,12 @@ int PerfCounterModel::rowCount(const QModelIndex &parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int PerfCounterModel::columnCount(const QModelIndex &parent) const
+int PerfCounterModel::columnCount(const QModelIndex& parent) const
 {
     return static_cast<int>(m_headers.size());
 }
 
-QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
+QVariant PerfCounterModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid() || !m_perf_metrics_data_provider || role == Qt::CheckStateRole)
     {
@@ -142,7 +142,7 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
         return QVariant();
     }
 
-    const auto &record = m_perf_metrics_record.at(row);
+    const auto& record = m_perf_metrics_record.at(row);
 
     if (col >= m_headers.length())
     {
@@ -165,7 +165,7 @@ QVariant PerfCounterModel::data(const QModelIndex &index, int role) const
     int metric_col_index = col - FixedHeader::kFixedHeaderCount;
     if (static_cast<size_t>(metric_col_index) < record.m_metric_values.size())
     {
-        const auto &metric_value = record.m_metric_values.at(metric_col_index);
+        const auto& metric_value = record.m_metric_values.at(metric_col_index);
         return metric_value;
     }
 
@@ -187,7 +187,7 @@ QVariant PerfCounterModel::headerData(int section, Qt::Orientation orientation, 
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::SearchInColumn(const QString &text, int column)
+void PerfCounterModel::SearchInColumn(const QString& text, int column)
 {
     if (text.isEmpty() || column < 0 || column >= columnCount())
     {
@@ -281,7 +281,7 @@ void PerfCounterModel::ClearSearchResults()
 void PerfCounterModel::ResetSearchIterator() { m_search_iterator = m_search_results.cbegin(); }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterModel::SetIteratorToNearest(const QModelIndex &current_index)
+void PerfCounterModel::SetIteratorToNearest(const QModelIndex& current_index)
 {
     if (m_search_results.isEmpty() || !current_index.isValid())
     {

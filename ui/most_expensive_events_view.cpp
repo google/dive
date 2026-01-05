@@ -41,7 +41,7 @@ const uint32_t kShaderStageColumn = 4;
 class EventWidgetItem : public QTreeWidgetItem
 {
  public:
-    EventWidgetItem(QTreeWidget *view) : QTreeWidgetItem(view) {}
+    EventWidgetItem(QTreeWidget* view) : QTreeWidgetItem(view) {}
     void SetStageEnabled(Dive::ShaderStage stage, bool enable)
     {
         m_stage_enabled[(uint32_t)stage] = enable;
@@ -49,7 +49,7 @@ class EventWidgetItem : public QTreeWidgetItem
     bool GetStageEnabled(Dive::ShaderStage stage) { return m_stage_enabled[(uint32_t)stage]; }
 
  private:
-    bool operator<(const QTreeWidgetItem &other) const
+    bool operator<(const QTreeWidgetItem& other) const
     {
         int column = treeWidget()->sortColumn();
         if (column == kDurationColumn || column == kOccupancyDurationColumn)
@@ -73,8 +73,8 @@ class EventWidgetItem : public QTreeWidgetItem
 // =================================================================================================
 // MostExpensiveEventsViewDelegate
 // =================================================================================================
-void MostExpensiveEventsViewDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
-                                            const QModelIndex &index) const
+void MostExpensiveEventsViewDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
+                                            const QModelIndex& index) const
 {
     QStyledItemDelegate::paint(painter, option, index);
     painter->save();
@@ -87,7 +87,7 @@ void MostExpensiveEventsViewDelegate::paint(QPainter *painter, const QStyleOptio
             Dive::ShaderStage::kShaderStageCs};
 
         uint32_t offset = 0;
-        EventWidgetItem *item_ptr = (EventWidgetItem *)(index.internalPointer());
+        EventWidgetItem* item_ptr = (EventWidgetItem*)(index.internalPointer());
         for (uint32_t i = 0; i < Dive::kShaderStageCount; ++i)
         {
             Dive::ShaderStage stage = stage_order[i];
@@ -135,8 +135,8 @@ void MostExpensiveEventsViewDelegate::paint(QPainter *painter, const QStyleOptio
 }
 
 //--------------------------------------------------------------------------------------------------
-QSize MostExpensiveEventsViewDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                                const QModelIndex &index) const
+QSize MostExpensiveEventsViewDelegate::sizeHint(const QStyleOptionViewItem& option,
+                                                const QModelIndex& index) const
 {
     const int kMargin = 5;
     QSize size_hint = QStyledItemDelegate::sizeHint(option, index);
@@ -146,7 +146,7 @@ QSize MostExpensiveEventsViewDelegate::sizeHint(const QStyleOptionViewItem &opti
 // =================================================================================================
 // MostExpensiveEventsView
 // =================================================================================================
-MostExpensiveEventsView::MostExpensiveEventsView(const Dive::CaptureMetadata &capture_metadata)
+MostExpensiveEventsView::MostExpensiveEventsView(const Dive::CaptureMetadata& capture_metadata)
     : m_capture_metadata(capture_metadata)
 {
     m_event_list = new QTreeWidget();
@@ -164,7 +164,7 @@ MostExpensiveEventsView::MostExpensiveEventsView(const Dive::CaptureMetadata &ca
     m_event_list->viewport()->setAttribute(Qt::WA_Hover);
     m_event_list->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    QVBoxLayout *layout = new QVBoxLayout();
+    QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(m_event_list);
     setLayout(layout);
 
@@ -205,7 +205,7 @@ void MostExpensiveEventsView::OnCustomContextMenuRequested(QPoint pos)
         ns_action.setChecked(unit == Settings::DisplayUnit::kNs);
         menu.addAction(&ns_action);
 
-        QAction *selected_action_ptr = menu.exec(m_event_list->mapToGlobal(pos));
+        QAction* selected_action_ptr = menu.exec(m_event_list->mapToGlobal(pos));
         if (selected_action_ptr == &cycle_action)
             Settings::Get()->WriteEventListDisplayUnit(Settings::DisplayUnit::kCycle);
         else if (selected_action_ptr == &ms_action)
@@ -219,9 +219,9 @@ void MostExpensiveEventsView::OnCustomContextMenuRequested(QPoint pos)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MostExpensiveEventsView::leaveEvent(QEvent *event)
+void MostExpensiveEventsView::leaveEvent(QEvent* event)
 {
-    HoverHelp *hover_help_ptr = HoverHelp::Get();
+    HoverHelp* hover_help_ptr = HoverHelp::Get();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);
 }
 

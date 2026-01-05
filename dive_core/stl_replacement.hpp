@@ -28,7 +28,7 @@ Vector<Type>::Vector() : m_buffer(nullptr), m_reserved(0), m_size(0)
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Vector<Type>::Vector(Vector &&a) : m_buffer(a.m_buffer), m_reserved(a.m_reserved), m_size(a.m_size)
+Vector<Type>::Vector(Vector&& a) : m_buffer(a.m_buffer), m_reserved(a.m_reserved), m_size(a.m_size)
 {
     a.m_buffer = nullptr;
     a.m_reserved = 0;
@@ -37,7 +37,7 @@ Vector<Type>::Vector(Vector &&a) : m_buffer(a.m_buffer), m_reserved(a.m_reserved
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Vector<Type>::Vector(const Vector &a) : m_buffer(nullptr), m_reserved(0)
+Vector<Type>::Vector(const Vector& a) : m_buffer(nullptr), m_reserved(0)
 {
     // Do not call resize() directly, since it invokes default constructor
     // And not all classes have default constructors
@@ -75,7 +75,7 @@ Vector<Type>::~Vector()
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Type &Vector<Type>::operator[](uint64_t i) const
+Type& Vector<Type>::operator[](uint64_t i) const
 {
     DIVE_ASSERT(i < m_size);
     return m_buffer[i];
@@ -83,7 +83,7 @@ Type &Vector<Type>::operator[](uint64_t i) const
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Vector<Type> &Vector<Type>::operator=(const Vector<Type> &a)
+Vector<Type>& Vector<Type>::operator=(const Vector<Type>& a)
 {
     if (&a != this)
     {
@@ -98,7 +98,7 @@ Vector<Type> &Vector<Type>::operator=(const Vector<Type> &a)
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Vector<Type> &Vector<Type>::operator=(Vector<Type> &&a)
+Vector<Type>& Vector<Type>::operator=(Vector<Type>&& a)
 {
     if (&a != this)
     {
@@ -114,21 +114,21 @@ Vector<Type> &Vector<Type>::operator=(Vector<Type> &&a)
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Type *Vector<Type>::data() const
+Type* Vector<Type>::data() const
 {
     return m_buffer;
 }
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Type &Vector<Type>::front() const
+Type& Vector<Type>::front() const
 {
     return *m_buffer;
 }
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-Type &Vector<Type>::back() const
+Type& Vector<Type>::back() const
 {
     return m_buffer[m_size - 1];
 }
@@ -156,7 +156,7 @@ bool Vector<Type>::empty() const
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-void Vector<Type>::push_back(const Type &a)
+void Vector<Type>::push_back(const Type& a)
 {
     reserve(m_size + 1);
     new (&m_buffer[m_size]) Type(a);
@@ -165,7 +165,7 @@ void Vector<Type>::push_back(const Type &a)
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-void Vector<Type>::push_back(Type &&a)
+void Vector<Type>::push_back(Type&& a)
 {
     reserve(m_size + 1);
 
@@ -188,7 +188,7 @@ void Vector<Type>::pop_back()
 //--------------------------------------------------------------------------------------------------
 template <class Type>
 template <typename... Args>
-void Vector<Type>::emplace_back(Args &&...args)
+void Vector<Type>::emplace_back(Args&&... args)
 {
     reserve(m_size + 1);
 
@@ -213,7 +213,7 @@ void Vector<Type>::resize(uint64_t size)
 
 //--------------------------------------------------------------------------------------------------
 template <class Type>
-void Vector<Type>::resize(uint64_t size, const Type &a)
+void Vector<Type>::resize(uint64_t size, const Type& a)
 {
     reserve(size);
 
@@ -241,7 +241,7 @@ void Vector<Type>::reserve(uint64_t size)
 
         // Can't directly 'new' an array of Type, because Type is not guaranteed to have a default
         // constructor. So use an 'operator new' instead, which doesn't call the constructor
-        Type *new_buffer = (Type *)operator new[](m_reserved * sizeof(Type));
+        Type* new_buffer = (Type*)operator new[](m_reserved * sizeof(Type));
         if (m_buffer != nullptr)
         {
             // Do a move-constructor

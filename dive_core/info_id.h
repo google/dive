@@ -65,7 +65,7 @@ class InfoIdT
     bool operator>(InfoIdT other) const { return m_id > other.m_id; }
     bool operator>=(InfoIdT other) const { return m_id >= other.m_id; }
 
-    InfoIdT &operator++()
+    InfoIdT& operator++()
     {
         ++m_id;
         return *this;
@@ -76,7 +76,7 @@ class InfoIdT
         ++m_id;
         return old;
     }
-    InfoIdT &operator--()
+    InfoIdT& operator--()
     {
         --m_id;
         return *this;

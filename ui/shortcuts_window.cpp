@@ -38,7 +38,7 @@
 // ShortcutsDialog
 // =================================================================================================
 
-ShortcutsDialog::ShortcutsDialog(QWidget *parent)
+ShortcutsDialog::ShortcutsDialog(QWidget* parent)
 {
     // Build shortcuts string
     std::ostringstream os;

@@ -23,7 +23,7 @@
 #include "network/tcp_client.h"
 
 //--------------------------------------------------------------------------------------------------
-void CaptureWorker::SetTargetCaptureDir(const std::string &target_capture_dir)
+void CaptureWorker::SetTargetCaptureDir(const std::string& target_capture_dir)
 {
     if (!std::filesystem::exists(target_capture_dir))
     {

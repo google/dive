@@ -35,18 +35,18 @@ class MainWindow : public QMainWindow
     friend class ApplicationController;
 
  public:
-    explicit MainWindow(ApplicationController &controller);
+    explicit MainWindow(ApplicationController& controller);
     ~MainWindow() override;
 
-    MainWindow(const MainWindow &) = delete;
-    MainWindow(MainWindow &&) = delete;
-    MainWindow &operator=(const MainWindow &) = delete;
-    MainWindow &operator=(MainWindow &&) = delete;
+    MainWindow(const MainWindow&) = delete;
+    MainWindow(MainWindow&&) = delete;
+    MainWindow& operator=(const MainWindow&) = delete;
+    MainWindow& operator=(MainWindow&&) = delete;
 
-    bool LoadFile(const std::string &file_name, bool is_temp_file = false, bool async = true);
+    bool LoadFile(const std::string& file_name, bool is_temp_file = false, bool async = true);
 
  protected:
-    void closeEvent(QCloseEvent *closeEvent) Q_DECL_OVERRIDE;
+    void closeEvent(QCloseEvent* closeEvent) Q_DECL_OVERRIDE;
 
  signals:
     void HideOverlay();
@@ -54,32 +54,32 @@ class MainWindow : public QMainWindow
     void SetSaveMenuStatus(bool);
     void SetSaveAsMenuStatus(bool);
     void FileLoaded();
-    void PendingPerfCounterResults(const QString &file_name);
-    void PendingGpuTimingResults(const QString &file_name);
-    void PendingScreenshot(const QString &file_name);
+    void PendingPerfCounterResults(const QString& file_name);
+    void PendingGpuTimingResults(const QString& file_name);
+    void PendingScreenshot(const QString& file_name);
     void AsyncTraceStatsDone();
-    void AnalyzeCaptureStarted(const QString &file_path);
+    void AnalyzeCaptureStarted(const QString& file_path);
 
  public slots:
     void OnCapture(bool is_capture_delayed = false);
-    void OnCaptureUpdated(const QString &file_path);
+    void OnCaptureUpdated(const QString& file_path);
     void OnSwitchToShaderTab();
-    void OnOpenVulkanDrawCallMenu(const QPoint &pos);
-    void OnOpenVulkanCallMenu(const QPoint &pos);
-    void OnCorrelateVulkanDrawCall(const QModelIndex &);
-    void OnCorrelatePm4DrawCall(const QModelIndex &);
+    void OnOpenVulkanDrawCallMenu(const QPoint& pos);
+    void OnOpenVulkanCallMenu(const QPoint& pos);
+    void OnCorrelateVulkanDrawCall(const QModelIndex&);
+    void OnCorrelatePm4DrawCall(const QModelIndex&);
     void OnCounterSelected(uint64_t);
     void OnGpuTimingDataSelected(uint64_t);
-    void OnCorrelationFilterApplied(uint64_t, const QModelIndex &);
-    void OnPendingPerfCounterResults(const QString &file_name);
-    void OnPendingGpuTimingResults(const QString &file_name);
-    void OnPendingScreenshot(const QString &file_name);
+    void OnCorrelationFilterApplied(uint64_t, const QModelIndex&);
+    void OnPendingPerfCounterResults(const QString& file_name);
+    void OnPendingGpuTimingResults(const QString& file_name);
+    void OnPendingScreenshot(const QString& file_name);
 
  private slots:
-    void OnCommandViewModeChange(const QString &string);
-    void OnCommandViewModeComboBoxHover(const QString &);
-    void OnSelectionChanged(const QModelIndex &index);
-    void OnFilterModeChange(const QString &string);
+    void OnCommandViewModeChange(const QString& string);
+    void OnCommandViewModeComboBoxHover(const QString&);
+    void OnSelectionChanged(const QModelIndex& index);
+    void OnFilterModeChange(const QString& string);
     void OnGfxrFilterModeChange();
     void OnOpenFile();
     void OnNormalCapture();
@@ -91,11 +91,11 @@ class MainWindow : public QMainWindow
     void OnSaveCapture();
     void OnSearchTrigger();
     void OpenRecentFile();
-    void UpdateOverlay(const QString &);
+    void UpdateOverlay(const QString&);
     void OnHideOverlay();
     void OnCrossReference(Dive::CrossRef);
-    void OnFileLoaded(const LoadFileResult &loaded_file);
-    void OnTraceAvailable(const QString &);
+    void OnFileLoaded(const LoadFileResult& loaded_file);
+    void OnTraceAvailable(const QString&);
     void OnTabViewSearchBarVisibilityChange(bool isHidden);
     void OnTabViewChange();
     void ConnectDiveFileTabs();
@@ -123,7 +123,7 @@ class MainWindow : public QMainWindow
     void OnDiveFileLoaded();
     void OnAdrenoRdFileLoaded();
     void OnGfxrFileLoaded();
-    void EmitLoadAssociatedFileTasks(const Dive::ComponentFilePaths &);
+    void EmitLoadAssociatedFileTasks(const Dive::ComponentFilePaths&);
 
     void StartTraceStats();
 
@@ -133,55 +133,55 @@ class MainWindow : public QMainWindow
     void CreateShortcuts();
     void CreateStatusBar();
     void LoadAvailableMetrics();
-    void ShowTempStatus(const QString &status_message);
-    void ExpandResizeHierarchyView(DiveTreeView &tree_view, const QSortFilterProxyModel &model);
-    void SetCurrentFile(const QString &fileName, bool is_temp_file = false);
+    void ShowTempStatus(const QString& status_message);
+    void ExpandResizeHierarchyView(DiveTreeView& tree_view, const QSortFilterProxyModel& model);
+    void SetCurrentFile(const QString& fileName, bool is_temp_file = false);
     void UpdateRecentFileActions(QStringList recent_files);
-    QString StrippedName(const QString &fullFileName);
+    QString StrippedName(const QString& fullFileName);
 
     using TabMask = uint32_t;
     void UpdateTabAvailability(TabMask mask);
 
-    QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model, uint64_t target_node_index);
-    QModelIndex FindSourceIndexFromNode(QAbstractItemModel *model, uint64_t target_node_index,
-                                        const QModelIndex &parent);
+    QModelIndex FindSourceIndexFromNode(QAbstractItemModel* model, uint64_t target_node_index);
+    QModelIndex FindSourceIndexFromNode(QAbstractItemModel* model, uint64_t target_node_index,
+                                        const QModelIndex& parent);
 
     void ResetEventSearchBar();
     void ResetPm4EventSearchBar();
-    void ResetHorizontalScroll(const DiveTreeView &tree_view);
-    void ResetVerticalScroll(const DiveTreeView &tree_view);
-    void ClearViewModelSelection(DiveTreeView &tree_view, bool should_clear_tab);
-    void CorrelateCounter(const QModelIndex &index, bool called_from_gfxr_view);
+    void ResetHorizontalScroll(const DiveTreeView& tree_view);
+    void ResetVerticalScroll(const DiveTreeView& tree_view);
+    void ClearViewModelSelection(DiveTreeView& tree_view, bool should_clear_tab);
+    void CorrelateCounter(const QModelIndex& index, bool called_from_gfxr_view);
 
     std::optional<uint64_t> GetDrawCallIndexFromProxyIndex(
-        const QModelIndex &proxy_index, const QAbstractProxyModel &proxy_model,
-        const std::vector<uint64_t> &draw_call_indices, CorrelationTarget target);
+        const QModelIndex& proxy_index, const QAbstractProxyModel& proxy_model,
+        const std::vector<uint64_t>& draw_call_indices, CorrelationTarget target);
 
-    ApplicationController &m_controller;
+    ApplicationController& m_controller;
 
-    QMenu *m_file_menu;
-    QMenu *m_recent_captures_menu;
-    QAction *m_open_action;
-    QAction *m_save_action;
-    QAction *m_save_as_action;
-    QAction *m_exit_action;
-    QMenu *m_capture_menu;
-    QAction *m_capture_action;
-    QAction *m_capture_delay_action;
-    QAction *m_capture_setting_action;
-    QMenu *m_analyze_menu;
-    QAction *m_analyze_action;
-    QMenu *m_help_menu;
-    QAction *m_about_action;
-    QAction *m_shortcuts_action;
-    QToolBar *m_file_tool_bar;
-    TraceDialog *m_trace_dig;
-    AnalyzeDialog *m_analyze_dig;
-    ErrorDialog *m_error_dialog = nullptr;
+    QMenu* m_file_menu;
+    QMenu* m_recent_captures_menu;
+    QAction* m_open_action;
+    QAction* m_save_action;
+    QAction* m_save_as_action;
+    QAction* m_exit_action;
+    QMenu* m_capture_menu;
+    QAction* m_capture_action;
+    QAction* m_capture_delay_action;
+    QAction* m_capture_setting_action;
+    QMenu* m_analyze_menu;
+    QAction* m_analyze_action;
+    QMenu* m_help_menu;
+    QAction* m_about_action;
+    QAction* m_shortcuts_action;
+    QToolBar* m_file_tool_bar;
+    TraceDialog* m_trace_dig;
+    AnalyzeDialog* m_analyze_dig;
+    ErrorDialog* m_error_dialog = nullptr;
 
-    std::array<QAction *, 3> m_recent_file_actions = {};
+    std::array<QAction*, 3> m_recent_file_actions = {};
 
-    CaptureFileManager *m_capture_manager = nullptr;
+    CaptureFileManager* m_capture_manager = nullptr;
 
     ProgressTrackerCallback m_progress_tracker;
     std::unique_ptr<Dive::DataCore> m_data_core;
@@ -191,38 +191,38 @@ class MainWindow : public QMainWindow
     Dive::LogConsole m_log_console;
     Dive::LogCompound m_log_compound;
 
-    QStatusBar *m_status_bar;
+    QStatusBar* m_status_bar;
 
     // Left pane
-    QGroupBox *m_left_group_box;
+    QGroupBox* m_left_group_box;
     QString m_prev_command_view_mode;
-    DiveTreeView *m_command_hierarchy_view;
-    CommandModel *m_command_hierarchy_model;
-    QPushButton *m_search_trigger_button;
-    SearchBar *m_event_search_bar = nullptr;
+    DiveTreeView* m_command_hierarchy_view;
+    CommandModel* m_command_hierarchy_model;
+    QPushButton* m_search_trigger_button;
+    SearchBar* m_event_search_bar = nullptr;
 
-    TreeViewComboBox *m_view_mode_combo_box;
-    TreeViewComboBox *m_filter_mode_combo_box;
-    GfxrVulkanCommandFilter *m_filter_gfxr_commands_combo_box;
-    QPushButton *m_prev_event_button;
-    QPushButton *m_next_event_button;
-    QList<QPushButton *> m_expand_to_lvl_buttons;
-    GfxrVulkanCommandFilterProxyModel *m_gfxr_vulkan_commands_filter_proxy_model;
-    GfxrVulkanCommandModel *m_gfxr_vulkan_command_hierarchy_model;
-    PerfCounterModel *m_perf_counter_model;
-    GpuTimingModel *m_gpu_timing_model;
+    TreeViewComboBox* m_view_mode_combo_box;
+    TreeViewComboBox* m_filter_mode_combo_box;
+    GfxrVulkanCommandFilter* m_filter_gfxr_commands_combo_box;
+    QPushButton* m_prev_event_button;
+    QPushButton* m_next_event_button;
+    QList<QPushButton*> m_expand_to_lvl_buttons;
+    GfxrVulkanCommandFilterProxyModel* m_gfxr_vulkan_commands_filter_proxy_model;
+    GfxrVulkanCommandModel* m_gfxr_vulkan_command_hierarchy_model;
+    PerfCounterModel* m_perf_counter_model;
+    GpuTimingModel* m_gpu_timing_model;
 
     // Middle pane
-    QGroupBox *m_middle_group_box;
-    DiveTreeView *m_pm4_command_hierarchy_view;
-    QPushButton *m_pm4_search_trigger_button;
-    SearchBar *m_pm4_event_search_bar = nullptr;
-    QPushButton *m_pm4_prev_event_button;
-    QPushButton *m_pm4_next_event_button;
-    QList<QPushButton *> m_pm4_expand_to_lvl_buttons;
+    QGroupBox* m_middle_group_box;
+    DiveTreeView* m_pm4_command_hierarchy_view;
+    QPushButton* m_pm4_search_trigger_button;
+    SearchBar* m_pm4_event_search_bar = nullptr;
+    QPushButton* m_pm4_prev_event_button;
+    QPushButton* m_pm4_next_event_button;
+    QList<QPushButton*> m_pm4_expand_to_lvl_buttons;
 
-    TreeViewComboBox *m_pm4_view_mode_combo_box;
-    TreeViewComboBox *m_pm4_filter_mode_combo_box;
+    TreeViewComboBox* m_pm4_view_mode_combo_box;
+    TreeViewComboBox* m_pm4_filter_mode_combo_box;
 
     struct TabMaskBits
     {
@@ -261,31 +261,31 @@ class MainWindow : public QMainWindow
         int text_file = -1;
     };
     // Right pane
-    QTabWidget *m_tab_widget = nullptr;
+    QTabWidget* m_tab_widget = nullptr;
 
-    CommandTabView *m_command_tab_view = nullptr;
-    OverviewTabView *m_overview_tab_view = nullptr;
-    ShaderView *m_shader_view = nullptr;
-    EventStateView *m_event_state_view = nullptr;
-    GfxrVulkanCommandArgumentsTabView *m_gfxr_vulkan_command_arguments_tab_view = nullptr;
-    PerfCounterTabView *m_perf_counter_tab_view = nullptr;
-    GpuTimingTabView *m_gpu_timing_tab_view = nullptr;
-    FrameTabView *m_frame_tab_view = nullptr;
+    CommandTabView* m_command_tab_view = nullptr;
+    OverviewTabView* m_overview_tab_view = nullptr;
+    ShaderView* m_shader_view = nullptr;
+    EventStateView* m_event_state_view = nullptr;
+    GfxrVulkanCommandArgumentsTabView* m_gfxr_vulkan_command_arguments_tab_view = nullptr;
+    PerfCounterTabView* m_perf_counter_tab_view = nullptr;
+    GpuTimingTabView* m_gpu_timing_tab_view = nullptr;
+    FrameTabView* m_frame_tab_view = nullptr;
 #if defined(ENABLE_CAPTURE_BUFFERS)
-    BufferView *m_buffer_view = nullptr;
+    BufferView* m_buffer_view = nullptr;
 #endif
 #ifndef NDEBUG
-    EventTimingView *m_event_timing_view = nullptr;
+    EventTimingView* m_event_timing_view = nullptr;
 #endif
-    TextFileView *m_text_file_view;
+    TextFileView* m_text_file_view;
     TabIndices m_tabs;
     bool m_tabs_updating = false;
 
-    DiveFilterModel *m_filter_model;
+    DiveFilterModel* m_filter_model;
 
     // Side pane
-    PropertyPanel *m_property_panel;
-    HoverHelp *m_hover_help;
+    PropertyPanel* m_property_panel;
+    HoverHelp* m_hover_help;
 
     std::string m_unsaved_capture_path;
     bool m_capture_saved = false;
@@ -294,12 +294,12 @@ class MainWindow : public QMainWindow
     bool m_gfxr_capture_loaded = false;
     bool m_correlated_capture_loaded = false;
 
-    EventSelection *m_event_selection;
+    EventSelection* m_event_selection;
 
     // Overlay to be displayed while capture
-    OverlayHelper *m_overlay;
+    OverlayHelper* m_overlay;
 
-    GfxrVulkanCommandArgumentsFilterProxyModel *m_gfxr_vulkan_commands_arguments_filter_proxy_model;
+    GfxrVulkanCommandArgumentsFilterProxyModel* m_gfxr_vulkan_commands_arguments_filter_proxy_model;
     std::unique_ptr<Dive::AvailableMetrics> m_available_metrics;
     std::unique_ptr<Dive::CaptureStats> m_capture_stats;
 

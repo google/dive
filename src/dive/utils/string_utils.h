@@ -31,16 +31,16 @@ namespace Dive
 namespace StringUtils
 {
 
-void Trim(std::string &s);
+void Trim(std::string& s);
 
-void RemoveQuotes(std::string &s);
+void RemoveQuotes(std::string& s);
 
 // Helper functions for safe string to number conversion
 template <typename T>
-bool SafeConvertFromString(const std::string &s, T &out)
+bool SafeConvertFromString(const std::string& s, T& out)
 {
-    char *end = nullptr;
-    const char *start = s.c_str();
+    char* end = nullptr;
+    const char* start = s.c_str();
     errno = 0;
 
     if constexpr (std::is_floating_point_v<T>)
@@ -103,9 +103,9 @@ bool SafeConvertFromString(const std::string &s, T &out)
     }
 }
 
-bool GetTrimmedLine(std::istream &file, std::string &line);
+bool GetTrimmedLine(std::istream& file, std::string& line);
 
-bool GetTrimmedField(std::stringstream &ss, std::string &field, char delimiter = ',');
+bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter = ',');
 
 }  // namespace StringUtils
 }  // namespace Dive

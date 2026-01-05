@@ -44,14 +44,14 @@ Activity Resolver Table:
 35ec1d8 Action: "android.intent.action.MAIN" Category: "android.intent.category.LAUNCHER"
 ...
 */
-std::string ParsePackageForActivity(const std::string &input, const std::string &package);
+std::string ParsePackageForActivity(const std::string& input, const std::string& package);
 
 class AndroidDevice;
 
 class AndroidApplication
 {
  public:
-    AndroidApplication(AndroidDevice &dev, std::string package, ApplicationType type,
+    AndroidApplication(AndroidDevice& dev, std::string package, ApplicationType type,
                        std::string command_args);
     virtual ~AndroidApplication() = default;
 
@@ -63,13 +63,13 @@ class AndroidApplication
 
     virtual absl::Status Start();
     virtual absl::Status Stop();
-    const std::string &GetMainActivity() const { return m_main_activity; };
+    const std::string& GetMainActivity() const { return m_main_activity; };
     bool IsDebuggable() const { return m_is_debuggable; }
     bool IsStarted() const { return m_started; }
     virtual bool IsRunning() const;
     void SetGfxrEnabled(bool enable);
 
-    void SetGfxrCaptureFileDirectory(const std::string &capture_file_directory)
+    void SetGfxrCaptureFileDirectory(const std::string& capture_file_directory)
     {
         m_gfxr_capture_file_directory = capture_file_directory;
     };
@@ -83,7 +83,7 @@ class AndroidApplication
  protected:
     absl::Status ParsePackage();
 
-    AndroidDevice &m_dev;
+    AndroidDevice& m_dev;
     std::string m_package;
     ApplicationType m_type;
     std::string m_main_activity;
@@ -99,7 +99,7 @@ class AndroidApplication
 class VulkanApplication : public AndroidApplication
 {
  public:
-    VulkanApplication(AndroidDevice &dev, std::string package, std::string command_args);
+    VulkanApplication(AndroidDevice& dev, std::string package, std::string command_args);
     ~VulkanApplication() override;
     absl::Status Setup() override;
 
@@ -114,7 +114,7 @@ class VulkanApplication : public AndroidApplication
 class GLESApplication : public AndroidApplication
 {
  public:
-    GLESApplication(AndroidDevice &dev, std::string package, std::string command_args);
+    GLESApplication(AndroidDevice& dev, std::string package, std::string command_args);
     ~GLESApplication() override;
     absl::Status Setup() override;
 
@@ -129,7 +129,7 @@ class GLESApplication : public AndroidApplication
 class OpenXRApplication : public AndroidApplication
 {
  public:
-    OpenXRApplication(AndroidDevice &dev, std::string package, std::string command_args);
+    OpenXRApplication(AndroidDevice& dev, std::string package, std::string command_args);
     ~OpenXRApplication() override;
     absl::Status Setup() override;
 
@@ -144,7 +144,7 @@ class OpenXRApplication : public AndroidApplication
 class VulkanCliApplication : public AndroidApplication
 {
  public:
-    VulkanCliApplication(AndroidDevice &dev, std::string command, std::string command_args);
+    VulkanCliApplication(AndroidDevice& dev, std::string command, std::string command_args);
     ~VulkanCliApplication() override;
     absl::Status Setup() override;
 

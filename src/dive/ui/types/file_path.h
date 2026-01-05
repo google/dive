@@ -20,7 +20,7 @@
 #include <QString>
 #include <filesystem>
 
-#include "utils/component_files.h"
+#include "dive/utils/component_files.h"
 
 namespace Dive
 {

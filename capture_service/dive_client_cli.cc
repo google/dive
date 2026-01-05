@@ -667,7 +667,7 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     }
 
     std::cout << "Waiting " << ctx.options.trigger_capture_after << " seconds...\n";
-    std::this_thread::sleep_for(std::chrono::seconds(ctx.options.trigger_capture_after));
+    absl::SleepFor(absl::Seconds(ctx.options.trigger_capture_after));
 
     status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
     if (!status.ok())

@@ -39,7 +39,7 @@
 #include "custom_metatypes.h"
 #include "dive/os/terminal.h"
 #include "dive_core/common.h"
-#include "dive_core/pm4_info.h"
+#include "dive_core/dive_core_init.h"
 #include "main_window.h"
 #include "utils/version_info.h"
 #ifdef __linux__
@@ -351,7 +351,7 @@ int main(int argc, char* argv[])
     splash_screen->show();
 
     // Initialize packet info query data structures needed for parsing
-    Pm4InfoInit();
+    Dive::InitDiveCore();
 
     ApplicationController controller;
     MainWindow* main_window = new MainWindow(controller);

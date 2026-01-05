@@ -184,6 +184,8 @@ add_library(
     dive_capture_data.h
     dive_command_hierarchy.cpp
     dive_command_hierarchy.h
+    dive_core_init.cpp
+    dive_core_init.h
     dive_strings.cpp
     dive_strings.h
     error.cpp

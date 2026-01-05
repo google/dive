@@ -49,10 +49,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "application_controller.h"
-#include "base/files/file_path.h"
-#include "client/crash_report_database.h"
-#include "client/crashpad_client.h"
-#include "client/settings.h"
 #include "custom_metatypes.h"
 #include "dive/os/command_utils.h"
 #include "dive/os/terminal.h"
@@ -71,16 +67,6 @@ constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
 constexpr int kScreenshotDelay = 5000;       // 5s
 
-// Constants for Crashpad
-constexpr char kHandlerBinary[] = "crashpad_handler";
-constexpr char kDbDirectory[] = "crash_database";
-constexpr char kMetricsDirectory[] = "crash_metrics";
-constexpr char kCrashReportUrl[] = "https://clients2.google.com/cr/report";
-constexpr char kProductName[] = "Dive";
-constexpr char kFormat[] = "minidump";
-constexpr char kNoRateLimitFlag[] = "--no-rate-limit";
-constexpr int kMaxCrashpadVersionLength = 30;
-
 ABSL_FLAG(std::string, test_output, "", "Output directory for tests.");
 ABSL_FLAG(std::string, test_prefix, "", "Filename prefix for tests.");
 ABSL_FLAG(std::string, test_scenario, "", "Execute test scenario.");
@@ -96,117 +82,6 @@ ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
 //--------------------------------------------------------------------------------------------------
-absl::StatusOr<std::filesystem::path> GetWritableRoot()
-{
-    std::filesystem::path writable_root;
-#ifdef _WIN32
-    if (const char* local_app_data = std::getenv("LOCALAPPDATA"))
-    {
-        writable_root = std::filesystem::path(local_app_data) / kProductName;
-    }
-    else
-    {
-        return absl::NotFoundError("LOCALAPPDATA environment variable not set.");
-    }
-#elif defined(__APPLE__)
-    if (const char* home = std::getenv("HOME"))
-    {
-        writable_root =
-            std::filesystem::path(home) / "Library" / "Application Support" / kProductName;
-    }
-    else
-    {
-        return absl::NotFoundError("HOME environment variable not set.");
-    }
-#else
-    if (const char* home = std::getenv("HOME"))
-    {
-        writable_root = std::filesystem::path(home) / ".local" / "share" / kProductName;
-    }
-    else
-    {
-        return absl::NotFoundError("HOME environment variable not set.");
-    }
-#endif
-
-    return writable_root;
-}
-
-absl::Status InitializeCrashpad()
-{
-    absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
-    if (!exe_dir.ok())
-    {
-        return exe_dir.status();
-    }
-
-    std::filesystem::path handler_path = *exe_dir / kHandlerBinary;
-#ifdef _WIN32
-    handler_path.replace_extension(".exe");
-#endif
-
-    auto writable_root = GetWritableRoot();
-    if (!writable_root.ok())
-    {
-        return writable_root.status();
-    }
-
-    std::filesystem::path database_path = *writable_root / kDbDirectory;
-    std::filesystem::path metrics_path = *writable_root / kMetricsDirectory;
-
-    std::error_code ec;
-    std::filesystem::create_directories(database_path, ec);
-    if (ec)
-    {
-        return absl::InternalError("Could not create DataBase directory: " + ec.message());
-    }
-    std::filesystem::create_directories(metrics_path, ec);
-    if (ec)
-    {
-        return absl::InternalError("Could not create Metrics directory: " + ec.message());
-    }
-
-    // Crashpad requires explicit user consent or a programmatic override to upload
-    // reports. We enable uploads here to ensure the client can transmit crash
-    // data to the remote collection server.
-    std::unique_ptr<crashpad::CrashReportDatabase> database =
-        crashpad::CrashReportDatabase::Initialize(base::FilePath(database_path.native()));
-    if (database && database->GetSettings())
-    {
-        database->GetSettings()->SetUploadsEnabled(true);
-    }
-    else
-    {
-        return absl::InternalError("Failed to initialize Crashpad database.");
-    }
-
-    std::string version = Dive::GetHostShortVersionString();
-    if (version.size() > kMaxCrashpadVersionLength)
-    {
-        return absl::InternalError(absl::StrCat("Crashpad version string '", version, "' (",
-                                                version.size(), ") is too long, max is ",
-                                                kMaxCrashpadVersionLength));
-    }
-
-    std::map<std::string, std::string> annotations = {
-        {"product", kProductName}, {"format", kFormat}, {"version", version}};
-
-    std::vector<std::string> arguments = {kNoRateLimitFlag};
-
-    static crashpad::CrashpadClient* client = new crashpad::CrashpadClient();
-
-    bool success = client->StartHandler(
-        base::FilePath(handler_path.native()), base::FilePath(database_path.native()),
-        base::FilePath(metrics_path.native()), kCrashReportUrl, annotations, arguments,
-        /*restartable=*/true,
-        /*asynchronous_start=*/false);
-
-    if (!success)
-    {
-        return absl::InternalError("Failed to start Crashpad handler.");
-    }
-    return absl::OkStatus();
-}
 
 class CrashHandler
 {

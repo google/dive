@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 #include <algorithm>
-#include <chrono>
 #include <filesystem>
 #include <future>
 #include <iostream>

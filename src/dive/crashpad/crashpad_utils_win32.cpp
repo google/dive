@@ -36,4 +36,9 @@ absl::StatusOr<std::filesystem::path> GetWritableRoot()
     }
 }
 
+std::filesystem::path GetHandlerBinaryName()
+{
+    return std::filesystem::path(kHandlerBinary).replace_extension(".exe");
+}
+
 }  // namespace Dive

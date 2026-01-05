@@ -23,19 +23,15 @@
 namespace Dive
 {
 
-constexpr char kHandlerBinary[] = "crashpad_handler";
-constexpr char kDbDirectory[] = "crash_database";
-constexpr char kMetricsDirectory[] = "crash_metrics";
-constexpr char kCrashReportUrl[] = "https://clients2.google.com/cr/report";
-constexpr char kProductName[] = "Dive";
-constexpr char kFormat[] = "minidump";
-constexpr char kNoRateLimitFlag[] = "--no-rate-limit";
-constexpr int kMaxCrashpadVersionLength = 30;
+inline constexpr char kProductName[] = "Dive";
+inline constexpr char kHandlerBinary[] = "crashpad_handler";
 
 // Returns the platform-specific writable directory for application data.
 // Windows: %LOCALAPPDATA%/Dive
 // macOS: ~/Library/Application Support/Dive
 // Linux: ~/.local/share/Dive
 absl::StatusOr<std::filesystem::path> GetWritableRoot();
+
+std::filesystem::path GetHandlerBinaryName();
 
 }  // namespace Dive

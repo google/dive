@@ -61,7 +61,6 @@
 #include "ui/custom_metatypes.h"
 #include "ui/dive_application.h"
 #include "ui/main_window.h"
-#include "utils/version_info.h"
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s

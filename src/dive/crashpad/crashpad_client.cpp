@@ -36,19 +36,20 @@
 namespace Dive
 {
 
+namespace
+{
+
+constexpr char kDbDirectory[] = "crash_database";
+constexpr char kMetricsDirectory[] = "crash_metrics";
+constexpr char kCrashReportUrl[] = "https://clients2.google.com/cr/report";
+constexpr char kFormat[] = "minidump";
+constexpr char kNoRateLimitFlag[] = "--no-rate-limit";
+constexpr int kMaxCrashpadVersionLength = 30;
+
+}  // namespace
+
 absl::Status InitializeCrashpad()
 {
-    absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
-    if (!exe_dir.ok())
-    {
-        return exe_dir.status();
-    }
-
-    std::filesystem::path handler_path = *exe_dir / kHandlerBinary;
-#ifdef _WIN32
-    handler_path.replace_extension(".exe");
-#endif
-
     auto writable_root = GetWritableRoot();
     if (!writable_root.ok())
     {
@@ -96,6 +97,13 @@ absl::Status InitializeCrashpad()
         {"product", kProductName}, {"format", kFormat}, {"version", version}};
 
     std::vector<std::string> arguments = {kNoRateLimitFlag};
+
+    absl::StatusOr<std::filesystem::path> exe_dir = Dive::GetExecutableDirectory();
+    if (!exe_dir.ok())
+    {
+        return exe_dir.status();
+    }
+    std::filesystem::path handler_path = *exe_dir / GetHandlerBinaryName();
 
     static crashpad::CrashpadClient* client = new crashpad::CrashpadClient();
 

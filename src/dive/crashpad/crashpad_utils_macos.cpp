@@ -36,4 +36,6 @@ absl::StatusOr<std::filesystem::path> GetWritableRoot()
     }
 }
 
+std::filesystem::path GetHandlerBinaryName() { return kHandlerBinary; }
+
 }  // namespace Dive

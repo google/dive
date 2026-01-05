@@ -21,10 +21,11 @@ project(dive VERSION 1.1.2)
 # ------------------------------------------------------------------------------
 # Global properties
 
-if(CMAKE_BUILD_TYPE)
+get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT is_multi_config)
     message(
         FATAL_ERROR
-        "Due to using Multi-Config generators, the flag CMAKE_BUILD_TYPE is not supported. Try -DCMAKE_BUILD_TYPE=\"\" or a clean build."
+        "Currently we only support Multi-Config generators, e.g. try -G \"Ninja Multi-Config\" rather than -GNinja."
     )
 endif()
 

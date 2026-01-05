@@ -24,6 +24,7 @@ limitations under the License.
 #include <thread>
 
 #include "absl/base/no_destructor.h"
+#include "absl/cleanup/cleanup.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/internal/flag.h"
 #include "absl/flags/parse.h"
@@ -39,6 +40,7 @@ limitations under the License.
 #include "constants.h"
 #include "device_mgr.h"
 #include "dive/common/app_types.h"
+#include "dive/common/macros.h"
 #include "dive/common/status.h"
 #include "dive/os/command_utils.h"
 #include "network/tcp_client.h"
@@ -47,6 +49,8 @@ limitations under the License.
 namespace
 {
 
+using ::Dive::AdbSession;
+using ::Dive::AndroidDevice;
 using ::Dive::DeviceInfo;
 using ::Dive::DeviceManager;
 
@@ -372,12 +376,12 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
 }
 
 // Checks if the capture directory on the device is currently done.
-absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr_capture_directory)
+bool IsCaptureFinished(const AdbSession& adb, const std::string& gfxr_capture_directory)
 {
     std::string on_device_capture_directory =
         absl::StrCat(Dive::kDeviceCapturePath, "/", gfxr_capture_directory);
     std::string command = "shell lsof " + on_device_capture_directory;
-    absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    absl::StatusOr<std::string> output = adb.RunAndGetResult(command);
 
     if (!output.ok())
     {
@@ -392,8 +396,7 @@ absl::Status IsCaptureFinished(Dive::DeviceManager& mgr, const std::string& gfxr
         line_count++;
     }
 
-    return line_count <= 1 ? absl::OkStatus()
-                           : Dive::InternalError("Capture file operation in progress.");
+    return line_count <= 1;
 }
 
 // Renames the screenshot file locally to match the GFXR capture file name.
@@ -454,7 +457,7 @@ absl::StatusOr<std::filesystem::path> GetGfxrCaptureFileName(
 }
 
 // Retrieves a GFXR capture from the device and downloads it.
-absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& options)
+absl::Status RetrieveGfxrCapture(const AdbSession& adb, const GlobalOptions& options)
 {
     const std::string& gfxr_capture_directory = options.gfxr_capture_file_dir;
     std::filesystem::path download_dir = options.download_dir;
@@ -467,7 +470,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
 
     // Retrieve the list of files in the capture directory on the device.
     std::string command = absl::StrFormat("shell ls %s", on_device_capture_directory);
-    absl::StatusOr<std::string> output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    absl::StatusOr<std::string> output = adb.RunAndGetResult(command);
     if (!output.ok())
     {
         return Dive::InternalError("Error getting capture_file name: " +
@@ -498,7 +501,7 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
 
     command = absl::StrFormat(R"(pull "%s" "%s")", on_device_capture_directory,
                               full_target_download_dir.string());
-    output = mgr.GetDevice()->Adb().RunAndGetResult(command);
+    output = adb.RunAndGetResult(command);
     if (!output.ok())
     {
         return Dive::InternalError("Error pulling files: " +
@@ -522,102 +525,95 @@ absl::Status RetrieveGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& 
     return absl::OkStatus();
 }
 
-// Triggers a GFXR capture on the device, allowing for multiple captures and screenshot.
-absl::Status TriggerGfxrCapture(Dive::DeviceManager& mgr, const GlobalOptions& options)
+// Requests from TriggerGfxrCapture that the calling code should honor when determining if multiple
+// captures should be taken.
+enum class GfxrCaptureControlFlow
 {
-    std::cout << "Press key g+enter to trigger a capture and g+enter again to retrieve the "
-                 "capture. Press "
-                 "any other key+enter to stop the application. Note that this may impact your "
-                 "capture file if the capture has not been completed. \n";
-    std::string capture_complete_message =
-        "Capture complete. Press key g+enter to trigger another capture or "
-        "any other key+enter to stop the application.";
+    // Don't take any more GFXR captures.
+    kStop,
+    // Proceed to take another GFXR capture.
+    kContinue,
+};
 
-    const std::string& gfxr_capture_directory = options.gfxr_capture_file_dir;
+// Triggers a GFXR capture and screenshot on the device.
+absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& device,
+                                                          const GlobalOptions& options)
+{
+    const AdbSession& adb = device.Adb();
+    const std::string& gfxr_capture_file_dir = options.gfxr_capture_file_dir;
+
+    // GFXR relies on capture_android_trigger changing from false to true as the condition for
+    // beginning the capture. Thus, ensure the prop starts as false.
+    if (absl::Status status = adb.Run("shell setprop debug.gfxrecon.capture_android_trigger false");
+        !status.ok())
+    {
+        return Dive::InternalError(
+            absl::StrCat("Error stopping gfxr runtime capture: ", status.message()));
+    }
+
+    std::cout << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
+                 "application.\n";
     std::string input;
-    bool is_capturing = false;
-    absl::Status ret;
     while (std::getline(std::cin, input))
     {
         if (input == "g")
         {
-            if (is_capturing)
-            {
-                while (!IsCaptureFinished(mgr, gfxr_capture_directory).ok())
-                {
-                    absl::SleepFor(absl::Seconds(1));
-                    std::cout << "GFXR capture in progress, please wait for current capture to "
-                                 "complete before starting another."
-                              << std::endl;
-                }
-
-                ret = mgr.GetDevice()->Adb().Run(
-                    "shell setprop debug.gfxrecon.capture_android_trigger false");
-                if (!ret.ok())
-                {
-                    return Dive::InternalError("Error stopping gfxr runtime capture: " +
-                                               std::string(ret.message()));
-                }
-
-                // Retrieve the capture. If this fails, we print an error but don't exit the tool,
-                // allowing the user to try again.
-                absl::Status retrieve_status = RetrieveGfxrCapture(mgr, options);
-                if (!retrieve_status.ok())
-                {
-                    std::cout << "Failed to retrieve capture: " << retrieve_status.message()
-                              << std::endl;
-                }
-                else
-                {
-                    std::cout << capture_complete_message << std::endl;
-                }
-                is_capturing = false;
-            }
-            else
-            {
-                ret = mgr.GetDevice()->Adb().Run(
-                    "shell setprop debug.gfxrecon.capture_android_trigger true");
-                if (!ret.ok())
-                {
-                    return Dive::InternalError("Error starting gfxr runtime capture: " +
-                                               std::string(ret.message()));
-                }
-
-                std::filesystem::path gfxr_capture_directory_path(gfxr_capture_directory);
-                ret = mgr.GetDevice()->TriggerScreenCapture(gfxr_capture_directory_path);
-                if (!ret.ok())
-                {
-                    return Dive::InternalError("Error creating capture screenshot: " +
-                                               std::string(ret.message()));
-                }
-
-                is_capturing = true;
-                std::cout << "Capture started. Press key g+enter to retrieve the capture."
-                          << std::endl;
-            }
+            break;
         }
-        else
-        {
-            if (is_capturing)
-            {
-                std::cout << "GFXR capture in progress, press key g+enter to retrieve the capture."
-                          << std::endl;
-            }
-            else
-            {
-                std::cout << "Exiting..." << std::endl;
-                break;
-            }
-        }
+
+        std::cout << "Exiting...\n";
+        return GfxrCaptureControlFlow::kStop;
+    }
+    if (!std::cin.good())
+    {
+        return GfxrCaptureControlFlow::kStop;
     }
 
-    // Only delete the on device capture directory when the application is closed.
-    std::string on_device_capture_directory =
-        absl::StrCat(Dive::kDeviceCapturePath, "/", gfxr_capture_directory);
-    ret =
-        mgr.GetDevice()->Adb().Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
+    if (absl::Status status = adb.Run("shell setprop debug.gfxrecon.capture_android_trigger true");
+        !status.ok())
+    {
+        return Dive::InternalError(
+            absl::StrCat("Error starting gfxr runtime capture: ", status.message()));
+    }
 
-    return absl::OkStatus();
+    if (absl::Status status = device.TriggerScreenCapture(gfxr_capture_file_dir); !status.ok())
+    {
+        return Dive::InternalError(
+            absl::StrCat("Error creating capture screenshot: ", status.message()));
+    }
+
+    std::cout << "Press key g+enter to retrieve the capture.\n";
+    while (std::getline(std::cin, input))
+    {
+        if (input == "g")
+        {
+            break;
+        }
+
+        std::cout << "Press key g+enter to retrieve the capture.\n";
+    }
+    if (!std::cin.good())
+    {
+        return GfxrCaptureControlFlow::kStop;
+    }
+
+    std::cout << "Waiting for the current capture to complete...\n";
+    while (!IsCaptureFinished(adb, gfxr_capture_file_dir))
+    {
+        absl::SleepFor(absl::Seconds(1));
+    }
+
+    // If this fails, we print an error but don't exit the tool, allowing the user to try again.
+    if (absl::Status status = RetrieveGfxrCapture(adb, options); !status.ok())
+    {
+        std::cout << "Failed to retrieve capture: " << status.message() << '\n';
+    }
+    else
+    {
+        std::cout << "Capture complete.\n";
+    }
+
+    return GfxrCaptureControlFlow::kContinue;
 }
 
 absl::Status CmdListDevice(const CommandContext& ctx)
@@ -681,14 +677,41 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     return WaitForExitConfirmation();
 }
 
-absl::Status CmdGfxrCapture(const CommandContext& ctx)
+absl::Status CmdGfxrCapture(const CommandContext& context)
 {
-    absl::Status status = InternalRunPackage(ctx, true);
-    if (!status.ok())
+    RETURN_IF_ERROR(InternalRunPackage(context, /*enable_gfxr=*/true));
+
+    // Only delete the on device capture directory when the application is closed. If deleted too
+    // early then capture will fail.
+    absl::Cleanup cleanup_device_files = [&context] {
+        std::string on_device_capture_directory =
+            absl::StrCat(Dive::kDeviceCapturePath, "/", context.options.gfxr_capture_file_dir);
+        context.mgr.GetDevice()
+            ->Adb()
+            .Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory))
+            .IgnoreError();
+    };
+
+    while (true)
     {
-        return status;
+        absl::StatusOr<GfxrCaptureControlFlow> control_flow =
+            TriggerGfxrCapture(*context.mgr.GetDevice(), context.options);
+        if (!control_flow.status().ok())
+        {
+            return control_flow.status();
+        }
+
+        switch (*control_flow)
+        {
+            case GfxrCaptureControlFlow::kStop:
+                return absl::OkStatus();
+            case GfxrCaptureControlFlow::kContinue:
+                // Nothing to do
+                break;
+        }
     }
-    return TriggerGfxrCapture(ctx.mgr, ctx.options);
+
+    return absl::OkStatus();
 }
 
 absl::Status CmdGfxrReplay(const CommandContext& ctx)

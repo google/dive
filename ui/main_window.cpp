@@ -17,6 +17,7 @@
 
 #include <QAbstractItemModel>
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDebug>
@@ -189,10 +190,10 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 
     m_error_dialog = new ErrorDialog(this);
 
-    m_data_core = std::make_unique<Dive::DataCore>(&m_progress_tracker);
+    m_data_core = std::make_shared<Dive::DataCore>(&m_progress_tracker);
 
     m_capture_manager = new CaptureFileManager(this);
-    m_capture_manager->Start(*m_data_core);
+    m_capture_manager->Start(m_data_core);
     m_capture_manager->GetDataCoreLock().lockForRead();
     m_capture_acquired = true;
 
@@ -1589,6 +1590,7 @@ void MainWindow::CreateActions()
     for (auto& action : m_recent_file_actions)
     {
         action = new QAction(this);
+        action->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileIcon));
         action->setVisible(false);
         connect(action, SIGNAL(triggered()), this, SLOT(OpenRecentFile()));
     }
@@ -1733,7 +1735,6 @@ void MainWindow::CreateStatusBar()
 {
     // Create status bar on the main window.
     m_status_bar = new QStatusBar(this);
-    m_status_bar->setStyleSheet("background:#D0D0D0; color:#282828");
     setStatusBar(m_status_bar);
 }
 

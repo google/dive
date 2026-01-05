@@ -88,6 +88,8 @@ add_executable(
     command_tab_view.h
     custom_metatypes.cpp
     custom_metatypes.h
+    dive_application.cpp
+    dive_application.h
     dive_tree_view.cpp
     dive_tree_view.h
     draw_dispatch_stats_model.cpp
@@ -258,9 +260,10 @@ if(MSVC)
     # 4201: prevent nameless struct/union
     # 4127: "conditional expression is constant" warnings
     # 4324: structure was padded due to alignment specifier
+    # 4996: _CRT_SECURE_NO_WARNINGS
     target_compile_options(
         ${PROJECT_NAME}
-        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324
+        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324 /wd4996
     )
 else()
     target_compile_options(

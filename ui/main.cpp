@@ -16,16 +16,6 @@
 
 #include <fcntl.h>
 
-#include <cstdio>
-#ifdef __linux__
-#include <dlfcn.h>
-#endif
-#if defined(_WIN32)
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
-
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -36,6 +26,7 @@
 #include <QSplashScreen>
 #include <QStyleFactory>
 #include <QTimer>
+#include <cstdio>
 #include <filesystem>
 #include <iostream>
 
@@ -45,14 +36,9 @@
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "application_controller.h"
 #include "custom_metatypes.h"
-#include "dive/os/command_utils.h"
 #include "dive/os/terminal.h"
-#include "dive/utils/string_utils.h"
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
@@ -61,6 +47,16 @@
 #include "ui/custom_metatypes.h"
 #include "ui/dive_application.h"
 #include "ui/main_window.h"
+#include "utils/version_info.h"
+#ifdef __linux__
+#include <dlfcn.h>
+#endif
+
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
 constexpr int kStartDelay = 500;             // 0.5s
@@ -81,7 +77,6 @@ ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
 
 //--------------------------------------------------------------------------------------------------
-
 class CrashHandler
 {
  public:

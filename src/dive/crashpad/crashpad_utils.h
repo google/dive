@@ -24,7 +24,7 @@ namespace Dive
 {
 
 inline constexpr char kProductName[] = "Dive";
-inline constexpr char kHandlerBinary[] = "crashpad_handler";
+inline constexpr char kCrashHandlerBinary[] = "crashpad_handler";
 
 // Returns the platform-specific writable directory for application data.
 // Windows: %LOCALAPPDATA%/Dive

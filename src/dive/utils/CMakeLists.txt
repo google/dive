@@ -17,6 +17,17 @@
 message(CHECK_START "Generate build files for src/dive/utils")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
+# === dive_archive =============================================================
+
+if(NOT ANDROID)
+    add_library(dive_archive dive_archive.h dive_archive.cpp)
+    target_link_libraries(
+        dive_archive
+        PUBLIC dive_src_includes absl::statusor
+        PRIVATE dive_import_libarchive
+    )
+endif()
+
 # === component_files ==========================================================
 
 if(NOT ANDROID)

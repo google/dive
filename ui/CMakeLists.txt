@@ -225,6 +225,7 @@ target_link_libraries(
     absl::span
     absl::symbolize
     network
+    dive_archive
     dive_core
     dive_lib_os
     dive_lib_ui

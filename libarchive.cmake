@@ -72,6 +72,13 @@ else()
     include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
 endif()
 
+add_library(dive_import_libarchive INTERFACE)
+target_link_libraries(dive_import_libarchive INTERFACE ${LibArchive_LIBRARIES})
+target_include_directories(
+    dive_import_libarchive
+    INTERFACE ${LibArchive_INCLUDE_DIRS}
+)
+
 include_directories(LibArchive_INCLUDE_DIRS)
 message("LibArchive_LIBRARIES is " ${LibArchive_LIBRARIES})
 message("LibArchive_INCLUDE_DIRS is " ${LibArchive_INCLUDE_DIRS})

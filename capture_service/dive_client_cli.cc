@@ -780,7 +780,7 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
             // capture is done, don't need any logic here.
             return GfxrCaptureControlFlow::kContinue;
         }
-        return WaitForUserInputToStartGfxrCapture();
+        return WaitForUserInputToRetrieveGfxrCapture();
     };
 
     bool take_single_capture = trigger_capture_after.has_value();

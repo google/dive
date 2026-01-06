@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/base/no_destructor.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -105,7 +106,7 @@ absl::Status InitializeCrashpad()
     }
     std::filesystem::path handler_path = *exe_dir / GetHandlerBinaryName();
 
-    static crashpad::CrashpadClient* client = new crashpad::CrashpadClient();
+    static absl::NoDestructor<crashpad::CrashpadClient> client;
 
     bool success = client->StartHandler(
         base::FilePath(handler_path.native()), base::FilePath(database_path.native()),

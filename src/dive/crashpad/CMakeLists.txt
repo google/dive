@@ -33,6 +33,7 @@ target_link_libraries(
     dive_crashpad
     PUBLIC dive_src_includes absl::status
     PRIVATE
+        absl::base
         absl::statusor
         absl::strings
         version_info

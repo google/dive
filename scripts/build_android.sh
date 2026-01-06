@@ -52,7 +52,7 @@ for build in "${BUILD_TYPE}"
 do
     cmake --build build_android --config=${build} || exit 1
 
-    cmake --install build_android --prefix install --config=${build} || exit 1
+    cmake --install build_android --prefix pkg --config=${build} || exit 1
 done
 
 popd

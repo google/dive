@@ -38,8 +38,6 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-# TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
-set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
 option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" ON)
 
 # Add an option to allow users to easily toggle the runtime layer build
@@ -52,9 +50,17 @@ option(
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 
 # Placeholder value for DESTINATION to override cmake default.
-# e.g. install(TARGETS target_name DESTINATION "${DIVE_INSTALL_DESTINATION}")
-set(DIVE_INSTALL_DESTINATION ".")
-set(DIVE_PLUGINS_INSTALL_DESTINATION "plugins")
+# These are all relative to the install destination prefix which is recommended as "pkg/"
+# e.g. install(TARGETS target_name DESTINATION "${DIVE_INSTALL_DEST_*}")
+set(DIVE_INSTALL_DEST_HOST "host") # Should only be used as destination for host builds
+set(DIVE_INSTALL_DEST_DEVICE "device") # Should only be used as destination for device builds
+# Plugins folders
+set(DIVE_INSTALL_DEST_SAMPLE_PLUGIN "dive_sample_plugin")
+set(DIVE_PROFILING_PLUGIN_DIR "dive_profiling_plugin") # This is not built within Dive
+# macOS bundle
+set(DIVE_MACOS_BUNDLE_RESOURCES "Resources")
+# License file
+set(DIVE_LICENSE_FILE_NAME "NOTICE")
 
 # Disable gtest for install
 set(INSTALL_GTEST OFF)
@@ -108,7 +114,7 @@ if(ANDROID)
     install(
         FILES
             ${CMAKE_CURRENT_BINARY_DIR}/bin/$<CONFIG>/${DEVICE_RESOURCES_VERSION_FILENAME}
-        DESTINATION ${DIVE_INSTALL_DESTINATION}
+        DESTINATION ${DIVE_INSTALL_DEST_DEVICE}
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -182,7 +188,7 @@ else()
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     # Currently hardcoding debug build, unknown reason
     add_subdirectory(third_party/freedreno EXCLUDE_FROM_ALL)
-    install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DESTINATION}")
+    install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
@@ -282,18 +288,18 @@ if(ANDROID)
     install(
         FILES
             ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
+        DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug/replay-debug.apk
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
+        DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
         RENAME "gfxr-replay.apk"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
+        DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")

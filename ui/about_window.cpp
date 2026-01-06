@@ -16,6 +16,7 @@
 #include "about_window.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QHBoxLayout>
@@ -26,8 +27,12 @@
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+#include <filesystem>
 #include <sstream>
 
+#include "dive/build_defs/version_defs.h"
+#include "utils/device_resources.h"
+#include "utils/device_resources_constants.h"
 #include "utils/version_info.h"
 
 // =================================================================================================
@@ -87,10 +92,28 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
     auto third_party_licenses = new QLabel("Third Party Licenses:");
 
     auto license_notice = new QPlainTextEdit();
-    QFile licenseFile{QDir{QCoreApplication::applicationDirPath()}.filePath("NOTICE")};
+
+    std::filesystem::path notice_file_path = DIVE_LICENSE_FILE_NAME;
+    {
+        absl::StatusOr<std::filesystem::path> ret =
+            Dive::ResolveHostResourcesLocalPath(notice_file_path);
+        if (!ret.ok())
+        {
+            std::string err_msg =
+                absl::StrFormat("Can't locate notice file, checked: %s", ret.status().message());
+            qDebug() << err_msg.c_str();
+        }
+        notice_file_path = *ret;
+    }
+
+    QFile licenseFile{notice_file_path.generic_string().c_str()};
     if (licenseFile.open(QIODevice::ReadOnly))
     {
         license_notice->setPlainText(licenseFile.readAll());
+    }
+    else
+    {
+        license_notice->setPlainText("Could not locate license info");
     }
     license_notice->setReadOnly(true);
 

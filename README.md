@@ -69,7 +69,7 @@ Examples:
 - Install the dependencies on device and start the package and do a capture after the applications runs 5 seconds.
     ```sh
     # On Linux
-    ./dive_client_cli --command capture --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --trigger_capture_after 5 --download_dir LOCAL/DIR/TO/SAVE/CAPTURES
+    ./dive_client_cli --command capture --package YOUR.PACKAGE.NAME.HERE --type vulkan_openxr --trigger_capture_after 5s --download_dir LOCAL/DIR/TO/SAVE/CAPTURES
     ```
 
 - Install the dependencies on device and start the package

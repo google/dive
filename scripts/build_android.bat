@@ -53,7 +53,7 @@ if not !ERRORLEVEL!==0 exit /b 1
     cmake --build build_android --config=!build!
     if not !ERRORLEVEL!==0 exit /b 1
 
-    cmake --install build_android --prefix install --config=!build! 
+    cmake --install build_android --prefix pkg --config=!build! 
     if not !ERRORLEVEL!==0 exit /b 1
 ))
 

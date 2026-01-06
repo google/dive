@@ -54,9 +54,7 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
-# Install the plugin to the 'plugins' subdirectory within the installation prefix's bin directory.
-# This ensures that when Dive is installed, its plugins are correctly placed.
 install(
     TARGETS dive_plugin_sample
-    DESTINATION "${DIVE_PLUGINS_INSTALL_DESTINATION}"
+    DESTINATION "${DIVE_INSTALL_DEST_SAMPLE_PLUGIN}"
 )

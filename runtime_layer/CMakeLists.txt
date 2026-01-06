@@ -71,7 +71,11 @@ set_target_properties(
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 
-install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DESTINATION}")
+if(ANDROID)
+    install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+else()
+    install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

@@ -83,7 +83,7 @@ set DIVE_ROOT_PATH=C:\path\to\dive
     You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
 1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
     ```sh
-    cmake --install build --prefix install --config Debug
+    cmake --install build --prefix pkg --config Debug
     ```
 
 ### Windows
@@ -107,7 +107,7 @@ set DIVE_ROOT_PATH=C:\path\to\dive
     with `--config=<Debug/Release/RelWithDebInfo/MinSizeRel>` instead.
 1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
     ```bat
-    cmake --install build --prefix install --config Debug
+    cmake --install build --prefix pkg --config Debug
     ```
 
 ## Dive Device Resources
@@ -115,6 +115,8 @@ set DIVE_ROOT_PATH=C:\path\to\dive
 Warning: We only support "Debug" for the gradle build for GFXR portion, so it will be hardcoded and not depend on the build type chosen below.
 
 Provide the appropriate `ANDROID_ABI` depending on your device.
+
+TIP: The following should be the same as running "scripts/build_android.sh" or "scripts\build_android.bat"
 
 ### Linux
 
@@ -146,7 +148,7 @@ Provide the appropriate `ANDROID_ABI` depending on your device.
     You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
 1. Install (the prefix must be coordinated with that of the [host tools](#dive-host-tools))
     ```sh
-    cmake --install build_android --prefix install --config Debug
+    cmake --install build_android --prefix pkg --config Debug
     ```
 
 ### Windows
@@ -180,7 +182,7 @@ Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 
         ```
 1. Install (the prefix must be coordinated with that of the [host tools](#dive-host-tools))
     ```bat
-    cmake --install build_android --prefix install --config Debug
+    cmake --install build_android --prefix pkg --config Debug
     ```
 
 ### Troubleshooting Tips
@@ -189,3 +191,23 @@ Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 
     * Delete GFXR build folders for a clean build
         * `third_party/gfxreconstruct/android/layer/build`
         * `third_party/gfxreconstruct/android/tools/replay/build`
+
+## App bundle (macOS)
+
+After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle.
+
+```sh
+# TIP: The following should be the same as running "scripts/deploy_mac_bundle.sh"
+
+mv pkg/host/dive.app pkg
+macdeployqt pkg/dive.app
+cp -r pkg/device/* pkg/dive.app/Contents/Resources/
+cp -r pkg/host/* pkg/dive.app/Contents/MacOS/
+
+# Place any plugin folders under pkg/dive.app/Contents/Resources/<plugin_name>
+# For example:
+cp -r pkg/dive_sample_plugin/* pkg/dive.app/Contents/Resources/dive_sample_plugin/
+
+# Ad-hoc signing the application bundle
+codesign --force --deep --sign - pkg/dive.app
+```

@@ -236,6 +236,10 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
     {
         case LoadFileResult::FileType::kUnknown:
         {
+            if (!std::filesystem::exists(request.reference.value))
+            {
+                return LoadFileFailed(LoadFileResult::Status::kFileNotFound, request);
+            }
             return LoadFileFailed(LoadFileResult::Status::kUnsupportedFile, request);
         }
         case LoadFileResult::FileType::kCorrelatedFiles:

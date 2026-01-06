@@ -14,6 +14,7 @@ Checks:
   - "-cppcoreguidelines-avoid-non-const-global-variables" # ABSL_FLAG
   - "-cppcoreguidelines-use-enum-class"
   - "-readability-redundant-access-specifiers" # qt
+  - "-abseil-unchecked-statusor-access" # crashes clangd
 
 CheckOptions:
   - key: readability-implicit-bool-conversion.AllowPointerConditions

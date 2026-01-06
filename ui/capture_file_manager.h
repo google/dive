@@ -19,7 +19,9 @@
 #include <QMetaType>
 #include <QObject>
 #include <QReadWriteLock>
+#include <QTemporaryDir>
 #include <memory>
+#include <optional>
 
 #include "dive/ui/types/context.h"
 #include "dive/ui/types/file_path.h"
@@ -83,8 +85,7 @@ class CaptureFileManager : public QObject
     // Locking:
     QReadWriteLock& GetDataCoreLock() { return m_data_core_lock; }
 
-    Dive::ComponentFilePaths ResolveComponents(const Dive::FilePath& reference);
-    void LoadFile(const Dive::FilePath& reference, const Dive::ComponentFilePaths& components);
+    void LoadFile(const Dive::FilePath& reference);
 
     void GatherTraceStats();
     void FillCaptureStatsResult(Dive::CaptureStats& out);
@@ -102,18 +103,15 @@ class CaptureFileManager : public QObject
     void OnLoadFileDone(const LoadFileResult&);
 
  private:
-    struct LoadFileRequest
-    {
-        Dive::FilePath reference;
-        Dive::ComponentFilePaths components;
-    };
     std::shared_ptr<Dive::DataCore> m_data_core = nullptr;
     QReadWriteLock m_data_core_lock;
 
     bool m_loading_in_progress = false;
     bool m_working = false;
 
-    std::optional<LoadFileRequest> m_pending_request;
+    std::optional<QTemporaryDir> m_temp_dir;
+
+    std::optional<Dive::FilePath> m_pending_request;
 
     Dive::SimpleContext m_capture_file_context;
 
@@ -122,14 +120,14 @@ class CaptureFileManager : public QObject
     QThread* m_thread = nullptr;
     QObject* m_worker = nullptr;
 
-    static LoadFileResult LoadFileFailed(LoadFileResult::Status status,
-                                         const CaptureFileManager::LoadFileRequest& request);
+    Dive::ComponentFilePaths ResolveComponents(std::filesystem::path reference);
+    LoadFileResult LoadFileFailed(LoadFileResult::Status status, const LoadFileResult& partial);
 
     void GatherTraceStatsImpl(const Dive::Context& context);
 
     void StartLoadFile();
 
-    LoadFileResult LoadFileImpl(const Dive::Context& context, const LoadFileRequest& request);
+    LoadFileResult LoadFileImpl(const Dive::Context& context, const Dive::FilePath& request);
 };
 
 Q_DECLARE_METATYPE(LoadFileResult)

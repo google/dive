@@ -194,8 +194,7 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 
     m_capture_manager = new CaptureFileManager(this);
     m_capture_manager->Start(m_data_core);
-    m_capture_manager->GetDataCoreLock().lockForRead();
-    m_capture_acquired = true;
+    m_capture_acquired.emplace(&m_capture_manager->GetDataCoreLock());
 
     QObject::connect(m_capture_manager, &CaptureFileManager::FileLoadingFinished, this,
                      &MainWindow::OnFileLoaded);
@@ -948,13 +947,10 @@ void MainWindow::OnTraceStatsUpdated()
 //--------------------------------------------------------------------------------------------------
 bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool async)
 {
-    bool release_capture = m_capture_acquired;
-    m_capture_acquired = false;
-
     m_gfxr_capture_loaded = false;
     m_correlated_capture_loaded = false;
 
-    if (release_capture)
+    if (m_capture_acquired.has_value())
     {
         // We don't want other UI interaction as they cause race conditions.
         setDisabled(true);
@@ -972,21 +968,20 @@ bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool 
         // Discard associated timing results.
         m_perf_counter_model->OnPerfCounterResultsGenerated("", std::nullopt);
         m_gpu_timing_model->OnGpuTimingResultsGenerated("");
-        m_capture_manager->GetDataCoreLock().unlock();
 
         *m_capture_stats = {};
         m_overview_tab_view->LoadStatistics();
     }
 
+    m_capture_acquired = std::nullopt;
+
     m_progress_tracker.sendMessage("Loading " + file_name);
     m_last_request = LastRequest{.file_name = file_name, .is_temp_file = is_temp_file};
 
     auto reference = Dive::FilePath{file_name};
-    auto components = m_capture_manager->ResolveComponents(reference);
-    m_capture_manager->LoadFile(reference, components);
+    m_capture_manager->LoadFile(reference);
     // Clear task queue for fresh capture.
     m_loading_pending_task.clear();
-    EmitLoadAssociatedFileTasks(components);
     return true;
 }
 
@@ -1097,15 +1092,20 @@ void MainWindow::EmitLoadAssociatedFileTasks(const Dive::ComponentFilePaths& com
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
 {
-    DIVE_ASSERT(!m_capture_acquired);
-    m_capture_manager->GetDataCoreLock().lockForRead();
-    m_capture_acquired = true;
+    DIVE_ASSERT(!m_capture_acquired.has_value());
+    m_capture_acquired.emplace(&m_capture_manager->GetDataCoreLock());
 
     bool load_succeed = (loaded_file.status == LoadFileResult::Status::kSuccess);
     if (!load_succeed)
     {
         m_loading_pending_task.clear();
         m_error_dialog->OnLoadingFailure(loaded_file);
+    }
+
+    if (load_succeed)
+    {
+        // Do the default loading first.
+        EmitLoadAssociatedFileTasks(loaded_file.components);
     }
 
     std::vector<std::function<void()>> tasks;
@@ -1145,7 +1145,8 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
         }
 
         m_hover_help->SetCurItem(HoverHelp::Item::kNone);
-        m_capture_file = QString(m_last_request.file_name.c_str());
+        m_capture_file = QString::fromStdString(m_last_request.file_name);
+        m_gfxr_file = QString::fromStdString(loaded_file.components.gfxr.string());
         qDebug() << "MainWindow::OnFileLoaded: m_capture_file: " << m_capture_file;
         QFileInfo file_info(m_capture_file);
         SetCurrentFile(m_capture_file, m_last_request.is_temp_file);
@@ -1196,15 +1197,15 @@ void MainWindow::OnNormalCapture() { emit OnCapture(false); }
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
 {
-    if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
+    if (m_gfxr_file.isEmpty())
     {
         qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
                     "prompting user to load a file";
         OnOpenFile();
         return;
     }
-    qDebug() << "Launching AnalyzeDialog with: " << m_capture_file;
-    AnalyzeCaptureStarted(m_capture_file);
+    qDebug() << "Launching AnalyzeDialog with: " << m_gfxr_file;
+    AnalyzeCaptureStarted(m_gfxr_file);
 }
 
 //--------------------------------------------------------------------------------------------------

@@ -70,14 +70,8 @@ else()
     set(LibArchive_INCLUDE_DIRS ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
     add_compile_definitions(LIBARCHIVE_STATIC=ON)
     include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
+    add_library(LibArchive::LibArchive ALIAS archive_static)
 endif()
-
-add_library(dive_import_libarchive INTERFACE)
-target_link_libraries(dive_import_libarchive INTERFACE ${LibArchive_LIBRARIES})
-target_include_directories(
-    dive_import_libarchive
-    INTERFACE ${LibArchive_INCLUDE_DIRS}
-)
 
 include_directories(LibArchive_INCLUDE_DIRS)
 message("LibArchive_LIBRARIES is " ${LibArchive_LIBRARIES})

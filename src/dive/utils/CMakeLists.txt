@@ -24,7 +24,7 @@ if(NOT ANDROID)
     target_link_libraries(
         dive_archive
         PUBLIC dive_src_includes absl::statusor
-        PRIVATE dive_import_libarchive
+        PRIVATE LibArchive::LibArchive
     )
 endif()
 

@@ -63,7 +63,7 @@ struct GlobalOptions
     Dive::AppType app_type;
     std::string download_dir;
     std::string gfxr_capture_file_dir;
-    int trigger_capture_after;
+    absl::Duration trigger_capture_after;
 
     Dive::GfxrReplaySettings replay_settings;
 };
@@ -143,6 +143,27 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
     return absl::OkStatus();
 }
 
+// Validates options for --command pm4_capture
+absl::Status ValidatePm4CaptureOptions(const GlobalOptions& options)
+{
+    RETURN_IF_ERROR(ValidateRunOptions(options));
+
+    if (options.trigger_capture_after < absl::ZeroDuration())
+    {
+        return Dive::InvalidArgumentError("--trigger_capture_after must be non-negative");
+    }
+
+    if (options.trigger_capture_after == absl::InfiniteDuration() ||
+        options.trigger_capture_after == -absl::InfiniteDuration())
+
+    {
+        return Dive::InvalidArgumentError(absl::StrCat(
+            "Unsupported --trigger_capture_after value: ", options.trigger_capture_after));
+    }
+
+    return absl::OkStatus();
+}
+
 // Helper to validate options for GFXR replay.
 absl::Status ValidateGfxrReplayOptions(const GlobalOptions& options)
 {
@@ -167,7 +188,7 @@ constexpr std::array<CommandDef, 7> kCommandDefs = {{
     {Command::kRunPackage, "run", "Run an app for manual testing or external capture.",
      ValidateRunOptions, CmdRunPackage},
     {Command::kPm4Capture, "pm4_capture", "Run an app and trigger a PM4 capture after a delay.",
-     ValidateRunOptions, CmdPm4Capture},
+     ValidatePm4CaptureOptions, CmdPm4Capture},
     {Command::kGfxrCapture, "gfxr_capture", "Run an app and enable GFXR capture via key-press.",
      ValidateRunOptions, CmdGfxrCapture},
     {Command::kGfxrReplay, "gfxr_replay", "Deploy and run a GFXR replay.",
@@ -666,8 +687,8 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
         return status;
     }
 
-    std::cout << "Waiting " << ctx.options.trigger_capture_after << " seconds...\n";
-    absl::SleepFor(absl::Seconds(ctx.options.trigger_capture_after));
+    std::cout << "Waiting " << ctx.options.trigger_capture_after << "...\n";
+    absl::SleepFor(ctx.options.trigger_capture_after);
 
     status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
     if (!status.ok())
@@ -883,9 +904,10 @@ ABSL_FLAG(std::string, gfxr_capture_file_dir, "gfxr_capture",
                        "the host within ",
                        "'--download_dir'."));
 
-ABSL_FLAG(int, trigger_capture_after, 5,
-          "The delay in seconds before automatically triggering a capture (only used with "
-          "'pm4_capture').");
+ABSL_FLAG(
+    absl::Duration, trigger_capture_after, absl::Seconds(5),
+    "The delay before automatically triggering a capture (only used with 'pm4_capture'). Provide "
+    "duration with unit: e.g. 5s is 5 seconds. See absl::ParseDuration for all accepted values.");
 
 ABSL_FLAG(std::string, gfxr_replay_file_path, "",
           "The full path to the .gfxr capture file located on the Android device to be replayed.");

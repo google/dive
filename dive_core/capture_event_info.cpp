@@ -225,13 +225,13 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
         if (packet.bitfields0.SOURCE_SELECT == DI_SRC_SEL_AUTO_INDEX)  // No indices provided
         {
             string_stream << "AutoIndex,"
-                          << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
-                          << "NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
+                          << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
+                          << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ")";
         }
         else if (packet.bitfields0.SOURCE_SELECT == DI_SRC_SEL_DMA)  // Indexed draw
         {
-            string_stream << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
-                          << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
+            string_stream << "NumIndices:" << packet.bitfields2.NUM_INDICES << ","
+                          << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
                           << "IndexBase:" << std::hex << "0x" << packet.INDX_BASE << ")";
         }
         else

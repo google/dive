@@ -1000,6 +1000,7 @@ void MainWindow::OnPendingPerfCounterResults(const QString& file_name)
         {
             qDebug() << "Loaded: " << file_path.string().c_str();
         }
+        m_components.perf_counter_csv = file_path;
     };
     if (!m_capture_acquired)
     {
@@ -1021,6 +1022,7 @@ void MainWindow::OnPendingGpuTimingResults(const QString& file_name)
         {
             qDebug() << "Loaded: " << file_name;
         }
+        m_components.gpu_timing_csv = std::filesystem::path(file_name.toStdString());
     };
     if (!m_capture_acquired)
     {
@@ -1042,6 +1044,7 @@ void MainWindow::OnPendingScreenshot(const QString& file_name)
         {
             qDebug() << "Loaded: " << file_name;
         }
+        m_components.screenshot_png = std::filesystem::path(file_name.toStdString());
     };
     if (!m_capture_acquired)
     {
@@ -1146,19 +1149,11 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
 
         m_hover_help->SetCurItem(HoverHelp::Item::kNone);
         m_capture_file = QString::fromStdString(m_last_request.file_name);
-        m_gfxr_file = QString::fromStdString(loaded_file.components.gfxr.string());
+        m_components = loaded_file.components;
         qDebug() << "MainWindow::OnFileLoaded: m_capture_file: " << m_capture_file;
         QFileInfo file_info(m_capture_file);
         SetCurrentFile(m_capture_file, m_last_request.is_temp_file);
         emit SetSaveAsMenuStatus(true);
-        if (m_unsaved_capture_path.empty())
-        {
-            emit SetSaveMenuStatus(false);
-        }
-        else
-        {
-            emit SetSaveMenuStatus(true);
-        }
         ShowTempStatus(tr("File loaded successfully"));
     }
     else
@@ -1173,7 +1168,11 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
 void MainWindow::OnOpenFile()
 {
     QString supported_files = QStringLiteral(
-        "Supported Files (*.rd *.gfxr);;Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
+        "Supported Files (*.rd *.gfxr);;"
+        "Dive Archive(*.dive.zip);;"
+        "Dive files (*.rd);;"
+        "GFXR files (*.gfxr);;"
+        "All files (*.*)");
     QString file_name = QFileDialog::getOpenFileName(
         this, "Open Document", Settings::Get()->ReadLastFilePath(), supported_files);
 
@@ -1197,33 +1196,21 @@ void MainWindow::OnNormalCapture() { emit OnCapture(false); }
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
 {
-    if (m_gfxr_file.isEmpty())
+    if (m_components.gfxr.empty())
     {
         qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
                     "prompting user to load a file";
         OnOpenFile();
         return;
     }
-    qDebug() << "Launching AnalyzeDialog with: " << m_gfxr_file;
-    AnalyzeCaptureStarted(m_gfxr_file);
+    qDebug() << "Launching AnalyzeDialog with: "
+             << QString::fromStdString(m_components.gfxr.string());
+    AnalyzeCaptureStarted(QString::fromStdString(m_components.gfxr.string()));
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnCaptureTrigger()
 {
-    if (!m_capture_saved && !m_unsaved_capture_path.empty())
-    {
-        QMessageBox warning_box;
-        warning_box.setText("The current capture is not saved.");
-        warning_box.setInformativeText("Do you want to proceed with a new capture?");
-        warning_box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
-        warning_box.setDefaultButton(QMessageBox::Ok);
-        warning_box.setModal(true);
-        int ret = warning_box.exec();
-
-        if (ret == QMessageBox::Cancel) return;
-    }
-
     QInputDialog input_dialog;
     input_dialog.setWindowTitle("Capture with delay");
     input_dialog.setLabelText("Enter capture delay (in seconds)");
@@ -1298,29 +1285,6 @@ void MainWindow::OnShortcuts()
 //--------------------------------------------------------------------------------------------------
 void MainWindow::closeEvent(QCloseEvent* closeEvent)
 {
-    if (!m_capture_saved && !m_unsaved_capture_path.empty())
-    {
-        switch (QMessageBox::question(this, QString("Save current capture"),
-                                      (QString("Do you want to save current capture")),
-                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No))
-        {
-            case QMessageBox::Yes:
-                OnSaveCapture();
-                break;
-            case QMessageBox::No:
-            {
-                // Remove unsaved capture files.
-                if (!m_unsaved_capture_path.empty())
-                {
-                    std::filesystem::remove(m_unsaved_capture_path);
-                    m_unsaved_capture_path.clear();
-                }
-                break;
-            }
-            default:
-                DIVE_ASSERT(false);
-        }
-    }
     if (m_trace_dig) m_trace_dig->Cleanup();
     closeEvent->accept();
 }
@@ -1336,23 +1300,23 @@ void MainWindow::OpenRecentFile()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnSaveCapture()
+void MainWindow::OnSaveAs()
 {
     if (m_capture_file.isEmpty())
     {
         return;
     }
-    QString file_name = QFileDialog::getSaveFileName(this, tr("Save the current capture"),
-                                                     QDir::currentPath(), tr("Dive files (*.dive)"),
-                                                     nullptr, QFileDialog::DontConfirmOverwrite);
+    QString file_name = QFileDialog::getSaveFileName(
+        this, tr("Save the current capture"), QDir::currentPath(), tr("Dive Archive (*.dive.zip)"),
+        nullptr, QFileDialog::DontConfirmOverwrite);
     if (file_name.isNull() || file_name.isEmpty() || file_name == m_capture_file)
     {
         return;
     }
 
-    if (!file_name.endsWith(".dive"))
+    if (!file_name.endsWith(".zip"))
     {
-        file_name += ".dive";
+        file_name += ".zip";
     }
     QFile target_file(file_name);
     if (target_file.exists())
@@ -1365,43 +1329,13 @@ void MainWindow::OnSaveCapture()
                 target_file.remove();
                 break;
             case QMessageBox::No:
-                return OnSaveCapture();
+                return;
             default:
                 DIVE_ASSERT(false);
         }
     }
-
-    bool save_result = false;
-    bool is_saving_new_capture = m_unsaved_capture_path == m_capture_file.toStdString();
-    // Save the newly captured file by rename and existing capture by copy.
-    if (is_saving_new_capture)
-    {
-        save_result = QFile::rename(m_capture_file, file_name);
-    }
-    else
-    {
-        save_result = QFile::copy(m_capture_file, file_name);
-    }
-
-    if (save_result)
-    {
-        QMessageBox::information(this, tr("Save capture succeed"), tr("Save capture succeed."));
-    }
-    else
-    {
-        QMessageBox::critical(this, tr("Save capture file failed"),
-                              tr("Save capture file failed."));
-        return;
-    }
-    if (is_saving_new_capture)
-    {
-        m_unsaved_capture_path.clear();
-        // Disable the "Save" menu after the new capture saved.
-        emit SetSaveMenuStatus(false);
-    }
-    m_capture_saved = true;
-    m_capture_file = file_name;
-    SetCurrentFile(m_capture_file);
+    m_capture_manager->SaveFile(Dive::FilePath{std::filesystem::path(file_name.toStdString())},
+                                m_components);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1570,21 +1504,13 @@ void MainWindow::CreateActions()
     m_exit_action->setStatusTip(tr("Exit the application"));
     connect(m_exit_action, SIGNAL(triggered()), this, SLOT(close()));
 
-    // Save file action
-    m_save_action = new QAction(tr("&Save"), this);
-    m_save_action->setStatusTip(tr("Save the current capture"));
-    m_save_action->setIcon(QIcon(":/images/save.png"));
-    m_save_action->setShortcut(QKeySequence::Save);
-    m_save_action->setEnabled(false);
-    connect(m_save_action, &QAction::triggered, this, &MainWindow::OnSaveCapture);
-    connect(this, &MainWindow::SetSaveMenuStatus, m_save_action, &QAction::setEnabled);
-
     // Save as file action
     m_save_as_action = new QAction(tr("&Save As"), this);
     m_save_as_action->setStatusTip(tr("Save the current capture"));
+    m_save_as_action->setIcon(QIcon(":/images/save.png"));
     m_save_as_action->setShortcut(QKeySequence::SaveAs);
-    m_save_as_action->setEnabled(false);
-    connect(m_save_as_action, &QAction::triggered, this, &MainWindow::OnSaveCapture);
+    m_save_as_action->setEnabled(true);
+    connect(m_save_as_action, &QAction::triggered, this, &MainWindow::OnSaveAs);
     connect(this, &MainWindow::SetSaveAsMenuStatus, m_save_as_action, &QAction::setEnabled);
 
     // Recent file actions
@@ -1633,7 +1559,7 @@ void MainWindow::CreateMenus()
     // File Menu
     m_file_menu = menuBar()->addMenu(tr("&File"));
     m_file_menu->addAction(m_open_action);
-    m_file_menu->addAction(m_save_action);
+    m_file_menu->addAction(m_save_as_action);
 
     // TODO (b/447422197) Show this action when the save/load system has been implemented.
     // m_file_menu->addAction(m_save_as_action);
@@ -1664,7 +1590,7 @@ void MainWindow::CreateToolBars()
 
     m_file_tool_bar = addToolBar(tr("&File"));
     m_file_tool_bar->addWidget(open_button);
-    m_file_tool_bar->addAction(m_save_action);
+    m_file_tool_bar->addAction(m_save_as_action);
     m_file_tool_bar->addAction(m_capture_action);
     m_file_tool_bar->addAction(m_analyze_action);
 }

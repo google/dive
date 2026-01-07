@@ -87,6 +87,9 @@ class CaptureFileManager : public QObject
 
     void LoadFile(const Dive::FilePath& reference);
 
+    // Note: save file is synchronous for now.
+    void SaveFile(const Dive::FilePath& dst, const Dive::ComponentFilePaths& components);
+
     void GatherTraceStats();
     void FillCaptureStatsResult(Dive::CaptureStats& out);
 

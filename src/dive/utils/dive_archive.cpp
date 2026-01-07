@@ -45,6 +45,30 @@ UniqueArchiveReadPtr ArchiveReadNew()
     return UniqueArchiveReadPtr{archive_read_new(), &ArchiveReadCloseAndFree};
 }
 
+void ArchiveWriteCloseAndFree(struct archive* archive_writer)
+{
+    if (archive_writer == nullptr)
+    {
+        return;
+    }
+    archive_write_close(archive_writer);
+    archive_write_free(archive_writer);
+}
+
+using UniqueArchiveWritePtr = std::unique_ptr<struct archive, decltype(&ArchiveWriteCloseAndFree)>;
+
+UniqueArchiveWritePtr ArchiveWriteNew()
+{
+    return UniqueArchiveWritePtr{archive_write_new(), &ArchiveWriteCloseAndFree};
+}
+
+using UniqueArchiveEntryPtr = std::unique_ptr<struct archive_entry, decltype(&archive_entry_free)>;
+
+UniqueArchiveEntryPtr ArchiveEntryNew()
+{
+    return UniqueArchiveEntryPtr{archive_entry_new(), &archive_entry_free};
+}
+
 constexpr auto kKnownDiveArchiveExtension =
     std::to_array<std::string_view>({".zip", ".tar", ".tar.gz", ".tgz"});
 
@@ -98,6 +122,27 @@ int WriteArchiveEntry(std::ostream& ost, struct archive* archive_reader)
     return ARCHIVE_FAILED;
 }
 
+int WriteArchiveEntry(struct archive* archive_writer, std::istream& ist)
+{
+    constexpr size_t kBufferSize = 0x100000;  // 1MiB
+
+    la_int64_t processed = 0;
+    std::string buffer(kBufferSize, '\0');
+    while (ist)
+    {
+        ist.read(buffer.data(), buffer.size());
+        if (!ist && !ist.eof())
+        {
+            // Actual error occured.
+            break;
+        }
+        size_t read_count = ist.gcount();
+        archive_write_data(archive_writer, buffer.data(), read_count);
+    }
+
+    return (ist.eof() ? ARCHIVE_OK : ARCHIVE_FAILED);
+}
+
 }  // namespace
 
 namespace Dive
@@ -114,6 +159,40 @@ bool DiveArchive::IsSupportedInputFormat(std::filesystem::path filename)
 std::unique_ptr<DiveArchive> DiveArchive::Open(std::filesystem::path filename)
 {
     return std::unique_ptr<DiveArchive>(new DiveArchive(filename));
+}
+
+bool DiveArchive::Create(std::filesystem::path dst, std::vector<std::filesystem::path> components)
+{
+    if (dst.extension() != ".zip")
+    {
+        // Sanity check
+        return false;
+    }
+    auto writer = ArchiveWriteNew();
+
+    archive_write_set_format_zip(writer.get());
+    archive_write_set_options(writer.get(), "zip:compression=deflate");
+    archive_write_open_filename(writer.get(), dst.string().c_str());
+
+    for (const auto& component : components)
+    {
+        std::ifstream infile(component, std::ios::binary | std::ios::in);
+        if (!infile)
+        {
+            continue;
+        }
+
+        auto entry = ArchiveEntryNew();
+        archive_entry_set_pathname(entry.get(), component.filename().string().c_str());
+
+        struct stat st = {};
+        stat(component.string().c_str(), &st);
+        archive_entry_copy_stat(entry.get(), &st);
+
+        archive_write_header(writer.get(), entry.get());
+        WriteArchiveEntry(writer.get(), infile);
+    }
+    return true;
 }
 
 DiveArchive::DiveArchive(std::filesystem::path archive_path) : m_path(archive_path) {}

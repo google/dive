@@ -27,6 +27,7 @@ class DiveArchive
 {
  public:
     static std::unique_ptr<DiveArchive> Open(std::filesystem::path filename);
+    static bool Create(std::filesystem::path dst, std::vector<std::filesystem::path> components);
 
     // Extract to `dst` directory, returns extracted filepaths.
     std::vector<std::filesystem::path> ExtractTo(std::filesystem::path dst);

@@ -196,6 +196,33 @@ void CaptureFileManager::LoadFile(const Dive::FilePath& reference)
     StartLoadFile();
 }
 
+void CaptureFileManager::SaveFile(const Dive::FilePath& dst,
+                                  const Dive::ComponentFilePaths& components)
+{
+    const auto potential_files = std::to_array<std::filesystem::path>({
+        components.gfxr,
+        components.gfxa,
+        components.perf_counter_csv,
+        components.gpu_timing_csv,
+        components.pm4_rd,
+        components.screenshot_png,
+        components.renderdoc_rdc,
+    });
+    std::vector<std::filesystem::path> files;
+    for (const auto& filepath : potential_files)
+    {
+        if (std::filesystem::exists(filepath))
+        {
+            files.push_back(filepath);
+        }
+    }
+    if (files.empty())
+    {
+        return;
+    }
+    Dive::DiveArchive::Create(dst.value, files);
+}
+
 void CaptureFileManager::StartLoadFile()
 {
     if (m_working || !m_pending_request)

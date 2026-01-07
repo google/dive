@@ -16,6 +16,7 @@
 
 #include "capture_file_manager.h"
 
+#include <QDebug>
 #include <QMessageBox>
 #include <QObject>
 #include <QReadLocker>
@@ -27,6 +28,7 @@
 #include "dive/ui/types/context.h"
 #include "dive/ui/types/file_path.h"
 #include "dive/ui/utils/debug_utils.h"
+#include "dive/utils/dive_archive.h"
 #include "dive_core/data_core.h"
 #include "trace_stats/trace_stats.h"
 
@@ -49,6 +51,35 @@ LoadFileResult::Status ToLoadFileStatus(Dive::CaptureData::LoadResult result)
     }
     return LoadFileResult::Status::kUnknown;
 }
+
+std::filesystem::path GetMainCaptureFile(const std::vector<std::filesystem::path>& paths)
+{
+    std::filesystem::path gfxr_path;
+    std::filesystem::path rd_path;
+    for (const auto& filepath : paths)
+    {
+        if (filepath.extension() == ".gfxr")
+        {
+            if (!gfxr_path.empty())
+            {
+                return {};
+            }
+            gfxr_path = filepath;
+        }
+        else if (filepath.extension() == ".rd")
+        {
+            if (!rd_path.empty())
+            {
+                return {};
+            }
+            rd_path = filepath;
+        }
+    }
+
+    // Prefer gfxr file.
+    return !gfxr_path.empty() ? gfxr_path : rd_path;
+}
+
 }  // namespace
 
 void CaptureFileManager::RegisterCustomMetaType() { qRegisterMetaType<LoadFileResult>(); }
@@ -110,12 +141,12 @@ void CaptureFileManager::OnLoadFileDone(const LoadFileResult& loaded_file)
     emit FileLoadingFinished(loaded_file);
 }
 
-Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FilePath& reference)
+Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(std::filesystem::path reference)
 {
-    if (Dive::IsGfxrFile(reference.value))
+    if (Dive::IsGfxrFile(reference))
     {
-        auto ret = Dive::GetComponentFilesHostPaths(reference.value.parent_path(),
-                                                    reference.value.stem().string());
+        auto ret =
+            Dive::GetComponentFilesHostPaths(reference.parent_path(), reference.stem().string());
         if (ret.ok())
         {
             return *ret;
@@ -123,15 +154,15 @@ Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FileP
         return Dive::ComponentFilePaths{};
     }
 
-    if (Dive::IsRdFile(reference.value))
+    if (Dive::IsRdFile(reference))
     {
-        std::filesystem::path gfxr_file_path = reference.value;
+        std::filesystem::path gfxr_file_path = reference;
         gfxr_file_path.replace_extension("gfxr");
         if (std::filesystem::exists(gfxr_file_path))
         {
             // Try load it as gfxr file:
-            auto ret = Dive::GetComponentFilesHostPaths(reference.value.parent_path(),
-                                                        reference.value.stem().string());
+            auto ret = Dive::GetComponentFilesHostPaths(reference.parent_path(),
+                                                        reference.stem().string());
             if (ret.ok())
             {
                 return *ret;
@@ -143,7 +174,7 @@ Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FileP
             .gfxa = {},
             .perf_counter_csv = {},
             .gpu_timing_csv = {},
-            .pm4_rd = reference.value,
+            .pm4_rd = reference,
             .screenshot_png = {},
             .renderdoc_rdc = {},
         };
@@ -152,11 +183,10 @@ Dive::ComponentFilePaths CaptureFileManager::ResolveComponents(const Dive::FileP
     return Dive::ComponentFilePaths{};
 }
 
-void CaptureFileManager::LoadFile(const Dive::FilePath& reference,
-                                  const Dive::ComponentFilePaths& components)
+void CaptureFileManager::LoadFile(const Dive::FilePath& reference)
 {
     m_loading_in_progress = true;
-    m_pending_request = LoadFileRequest{.reference = reference, .components = components};
+    m_pending_request = reference;
     // Cancel anything that depend on current capture file.
     if (!m_capture_file_context.IsNull())
     {
@@ -184,17 +214,57 @@ void CaptureFileManager::StartLoadFile()
     });
 }
 
-LoadFileResult CaptureFileManager::LoadFileFailed(
-    LoadFileResult::Status status, const CaptureFileManager::LoadFileRequest& request)
+LoadFileResult CaptureFileManager::LoadFileFailed(LoadFileResult::Status status,
+                                                  const LoadFileResult& partial)
 {
+    m_temp_dir = std::nullopt;
     return LoadFileResult{
-        .status = status, .reference = request.reference, .components = request.components};
+        .status = status,
+        .file_type = partial.file_type,
+        .reference = partial.reference,
+        .components = partial.components,
+    };
 }
 
 LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
-                                                const LoadFileRequest& request)
+                                                const Dive::FilePath& request)
 {
-    const auto& components = request.components;
+    m_temp_dir = std::nullopt;
+    LoadFileResult result{
+        .status = LoadFileResult::Status::kUnknown,
+        .file_type = LoadFileResult::FileType::kUnknown,
+        .reference = request,
+        .components = {},
+    };
+
+    if (Dive::DiveArchive::IsSupportedInputFormat(request.value))
+    {
+        if (!std::filesystem::exists(request.value))
+        {
+            return LoadFileFailed(LoadFileResult::Status::kFileNotFound, result);
+        }
+        m_temp_dir.emplace();
+
+        qDebug() << "Extracting" << QString::fromStdString(request.value.string()) << "to"
+                 << m_temp_dir->path();
+
+        auto archive = Dive::DiveArchive::Open(request.value);
+
+        auto dst = std::filesystem::path(m_temp_dir.value().path().toStdString());
+        std::vector<std::filesystem::path> paths = archive->ExtractTo(dst);
+        auto main_file = GetMainCaptureFile(paths);
+        if (main_file.empty())
+        {
+            return LoadFileFailed(LoadFileResult::Status::kUnsupportedFile, result);
+        }
+        result.components = ResolveComponents(main_file);
+    }
+    else
+    {
+        result.components = ResolveComponents(request.value);
+    }
+
+    const auto& components = result.components;
 
     QWriteLocker locker(&m_data_core_lock);
     // Note: this function might not run on UI thread, thus can't do any UI modification.
@@ -210,37 +280,36 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
 
         if (!asset_file_exists)
         {
-            return LoadFileFailed(LoadFileResult::Status::kGfxaAssetMissing, request);
+            return LoadFileFailed(LoadFileResult::Status::kGfxaAssetMissing, result);
         }
     }
 
-    LoadFileResult::FileType file_type = LoadFileResult::FileType::kUnknown;
     if (found_gfxr_file && found_rd_file)
     {
-        file_type = LoadFileResult::FileType::kCorrelatedFiles;
+        result.file_type = LoadFileResult::FileType::kCorrelatedFiles;
     }
     else if (found_gfxr_file)
     {
-        file_type = LoadFileResult::FileType::kGfxrFile;
+        result.file_type = LoadFileResult::FileType::kGfxrFile;
     }
     else if (found_rd_file)
     {
-        file_type = LoadFileResult::FileType::kRdFile;
+        result.file_type = LoadFileResult::FileType::kRdFile;
     }
     else
     {
-        file_type = LoadFileResult::FileType::kUnknown;
+        result.file_type = LoadFileResult::FileType::kUnknown;
     }
 
-    switch (file_type)
+    switch (result.file_type)
     {
         case LoadFileResult::FileType::kUnknown:
         {
-            if (!std::filesystem::exists(request.reference.value))
+            if (!std::filesystem::exists(result.reference.value))
             {
-                return LoadFileFailed(LoadFileResult::Status::kFileNotFound, request);
+                return LoadFileFailed(LoadFileResult::Status::kFileNotFound, result);
             }
-            return LoadFileFailed(LoadFileResult::Status::kUnsupportedFile, request);
+            return LoadFileFailed(LoadFileResult::Status::kUnsupportedFile, result);
         }
         case LoadFileResult::FileType::kCorrelatedFiles:
         {
@@ -248,12 +317,12 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
                     m_data_core->LoadDiveCaptureData(components.gfxr.string());
                 load_res != Dive::CaptureData::LoadResult::kSuccess)
             {
-                return LoadFileFailed(ToLoadFileStatus(load_res), request);
+                return LoadFileFailed(ToLoadFileStatus(load_res), result);
             }
 
             if (!m_data_core->ParseDiveCaptureData())
             {
-                return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+                return LoadFileFailed(LoadFileResult::Status::kParseFailure, result);
             }
         }
         break;
@@ -263,12 +332,12 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
                     m_data_core->LoadPm4CaptureData(components.pm4_rd.string());
                 load_res != Dive::CaptureData::LoadResult::kSuccess)
             {
-                return LoadFileFailed(ToLoadFileStatus(load_res), request);
+                return LoadFileFailed(ToLoadFileStatus(load_res), result);
             }
 
             if (!m_data_core->ParsePm4CaptureData())
             {
-                return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+                return LoadFileFailed(LoadFileResult::Status::kParseFailure, result);
             }
         }
         break;
@@ -278,22 +347,19 @@ LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
                     m_data_core->LoadGfxrCaptureData(components.gfxr.string());
                 load_res != Dive::CaptureData::LoadResult::kSuccess)
             {
-                return LoadFileFailed(ToLoadFileStatus(load_res), request);
+                return LoadFileFailed(ToLoadFileStatus(load_res), result);
             }
 
             if (!m_data_core->ParseGfxrCaptureData())
             {
-                return LoadFileFailed(LoadFileResult::Status::kParseFailure, request);
+                return LoadFileFailed(LoadFileResult::Status::kParseFailure, result);
             }
         }
         break;
     }
-    return LoadFileResult{
-        .status = LoadFileResult::Status::kSuccess,
-        .file_type = file_type,
-        .reference = request.reference,
-        .components = request.components,
-    };
+
+    result.status = LoadFileResult::Status::kSuccess;
+    return result;
 }
 
 void CaptureFileManager::GatherTraceStats()

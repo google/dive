@@ -17,6 +17,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QReadLocker>
 #include <array>
 #include <functional>
 #include <memory>
@@ -186,6 +187,7 @@ class MainWindow : public QMainWindow
     ProgressTrackerCallback m_progress_tracker;
     std::shared_ptr<Dive::DataCore> m_data_core;
     QString m_capture_file;
+    QString m_gfxr_file;
     QString m_last_file_path;
     Dive::LogRecord m_log_record;
     Dive::LogConsole m_log_console;
@@ -303,7 +305,7 @@ class MainWindow : public QMainWindow
     std::unique_ptr<Dive::AvailableMetrics> m_available_metrics;
     std::unique_ptr<Dive::CaptureStats> m_capture_stats;
 
-    bool m_capture_acquired = false;
+    std::optional<QReadLocker> m_capture_acquired;
     LastRequest m_last_request;
 
     std::vector<std::function<void()>> m_loading_pending_task;

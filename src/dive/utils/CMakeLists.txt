@@ -34,7 +34,12 @@ if(NOT ANDROID)
     target_link_libraries(
         dive_device_resources
         PUBLIC absl::statusor
-        PRIVATE absl::strings dive_build_defs dive_src_includes command_utils
+        PRIVATE
+            absl::span
+            absl::strings
+            dive_build_defs
+            dive_src_includes
+            command_utils
     )
 endif()
 

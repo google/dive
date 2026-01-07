@@ -19,14 +19,15 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/types/span.h"
 #include "dive/build_defs/version_defs.h"
 #include "dive/os/command_utils.h"
 
 namespace
 {
 
-absl::StatusOr<std::filesystem::path> ResolvePath(std::vector<std::filesystem::path> search_paths,
-                                                  std::filesystem::path relative_file_path)
+absl::StatusOr<std::filesystem::path> ResolvePath(
+    absl::Span<const std::filesystem::path> search_paths, std::filesystem::path relative_file_path)
 {
     assert(!search_paths.empty());
 
@@ -37,8 +38,7 @@ absl::StatusOr<std::filesystem::path> ResolvePath(std::vector<std::filesystem::p
         const auto potential_path = p / relative_file_path;
         if (std::filesystem::exists(potential_path))
         {
-            auto canonical_path = std::filesystem::canonical(potential_path);
-            return canonical_path;
+            return std::filesystem::canonical(potential_path);
         }
         searched_paths_strings.push_back(potential_path.generic_string());
     }
@@ -57,20 +57,14 @@ namespace Dive
 absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
-    std::filesystem::path cwd;
+    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
+    if (!exec_dir.ok())
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
-        if (!ret.ok())
-        {
-            std::string err_msg = absl::StrFormat("Could not determine executable directory: %s",
-                                                  ret.status().message().data());
-            return absl::NotFoundError(err_msg);
-        }
-        cwd = *ret;
+        return exec_dir.status();
     }
 
     // Host resources should be in the same dir as the caller
-    std::vector<std::filesystem::path> search_dirs = {cwd};
+    std::vector<std::filesystem::path> search_dirs = {*exec_dir};
 
     return ResolvePath(search_dirs, relative_file_path);
 }
@@ -78,24 +72,18 @@ absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(
 absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
-    std::filesystem::path cwd;
+    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
+    if (!exec_dir.ok())
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
-        if (!ret.ok())
-        {
-            std::string err_msg = absl::StrFormat("Could not determine executable directory: %s",
-                                                  ret.status().message().data());
-            return absl::NotFoundError(err_msg);
-        }
-        cwd = *ret;
+        return exec_dir.status();
     }
 
     // Determine device resources location relative to host tool
     std::vector<std::filesystem::path> search_dirs;
     // Most platforms
-    search_dirs.push_back(cwd / ".." / DIVE_INSTALL_DEST_DEVICE);
+    search_dirs.push_back(*exec_dir / ".." / DIVE_INSTALL_DEST_DEVICE);
     // Apple bundle
-    search_dirs.push_back(cwd / ".." / DIVE_MACOS_BUNDLE_RESOURCES);
+    search_dirs.push_back(*exec_dir / ".." / DIVE_MACOS_BUNDLE_RESOURCES);
 
     return ResolvePath(search_dirs, relative_file_path);
 }
@@ -103,24 +91,19 @@ absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
 absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
-    std::filesystem::path cwd;
+    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
+    if (!exec_dir.ok())
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
-        if (!ret.ok())
-        {
-            std::string err_msg = absl::StrFormat("Could not determine executable directory: %s",
-                                                  ret.status().message().data());
-            return absl::NotFoundError(err_msg);
-        }
-        cwd = *ret;
+        return exec_dir.status();
     }
 
     // Determine device resources location relative to host tool
     std::vector<std::filesystem::path> search_dirs;
     // Most platforms
-    search_dirs.push_back(cwd / ".." / DIVE_PROFILING_PLUGIN_DIR);
+    search_dirs.push_back(*exec_dir / ".." / DIVE_PROFILING_PLUGIN_DIR);
     // Apple bundle
-    search_dirs.push_back(cwd / ".." / DIVE_MACOS_BUNDLE_RESOURCES / DIVE_PROFILING_PLUGIN_DIR);
+    search_dirs.push_back(*exec_dir / ".." / DIVE_MACOS_BUNDLE_RESOURCES /
+                          DIVE_PROFILING_PLUGIN_DIR);
 
     return ResolvePath(search_dirs, relative_file_path);
 }

@@ -23,18 +23,26 @@ namespace Dive
 
 struct DeviceResourcesConstants
 {
-    // -------------------------------------------------------------------------
-    // On the host machine, device resources are aggregated into a folder for
-    // convenience. The following paths are defined relative to that folder.
-    //
-    // Currently the device resources folder is DIVE_INSTALL_DIR_PATH (for host build)
-    //
-    // TODO(b/462767957): Remove build_defs DIVE_INSTALL_DIR_PATH and instead predict device
-    // resources folder location based on the executable dir
+    // clang-format off
+/*
+TODO(b/462767957): prepend "pkg/" with unified build directory "build/"
+
+On the host machine, resources are aggregated and installed into the "base resources dir" for convenience.
+
+                            Most platforms (dev & release)              Apple bundle
+--------------------------------------------------------------------------------------------------
+Base resources dir:         DIVE_ROOT/pkg/                              dive.app/Contents/
+Host resources dir:         DIVE_ROOT/pkg/DIVE_INSTALL_DEST_HOST/       dive.app/Contents/MacOS/
+Device resources dir:       DIVE_ROOT/pkg/DIVE_INSTALL_DEST_DEVICE/     dive.app/Contents/DIVE_MACOS_BUNDLE_RESOURCES/
+Profiling resources dir:    DIVE_ROOT/pkg/DIVE_PROFILING_PLUGIN_DIR/    dive.app/Contents/DIVE_MACOS_BUNDLE_RESOURCES/DIVE_PROFILING_PLUGIN_DIR/
+
+*/
+    // clang-format on
+
+    // Device resources:
     static constexpr std::string_view kVkLayerLibName = "libVkLayer_dive.so";
     static constexpr std::string_view kXrLayerLibName = "libXrApiLayer_dive.so";
     static constexpr std::string_view kManifestFileName = "XrApiLayer_dive.json";
-
     // third_party/freedreno
     static constexpr std::string_view kWrapLibName = "libwrap.so";
     // third_party/Vulkan-ValidationLayers
@@ -45,8 +53,7 @@ struct DeviceResourcesConstants
     static constexpr std::string_view kGfxrReplayApkName = "gfxr-replay.apk";
     static constexpr std::string_view kGfxrReconPyName = "gfxrecon.py";
 
-    // Profiling folder, and paths relative to it
-    static constexpr std::string_view kProfilingPluginFolderName = "dive_profiling_plugin";
+    // Profiling plugin resources:
     static constexpr std::string_view kProfilingPluginShaName = "SHA";
     static constexpr std::string_view kProfilingPluginMetricsFileName = "available_metrics.csv";
 

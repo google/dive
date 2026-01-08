@@ -32,6 +32,7 @@ limitations under the License.
 #include "common/log.h"
 #include "common/macros.h"
 #include "constants.h"
+#include "dive/build_defs/resource_defs.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/component_files.h"
 #include "dive/utils/component_files_constants.h"
@@ -848,8 +849,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
 
     std::filesystem::path local_replay_apk_path;
     {
-        absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReplayApkName);
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDeviceResourcesLocalPath(
+            Dive::DeviceResourcesConstants::kGfxrReplayApkName);
         if (!ret.ok())
         {
             return ret.status();
@@ -859,7 +860,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
     std::filesystem::path local_recon_py_path;
     {
         absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
+            Dive::ResolveDeviceResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
         if (!ret.ok())
         {
             return ret.status();
@@ -975,7 +976,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
     std::filesystem::path local_recon_py_path;
     {
         absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
+            Dive::ResolveDeviceResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
         if (!ret.ok())
         {
             return ret.status();
@@ -1067,11 +1068,9 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings& s
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
 
-    RETURN_IF_ERROR(
-        m_device->DeployDeviceResource(Dive::DeviceResourcesConstants::kProfilingPluginFolderName));
-    std::string remote_profiling_dir =
-        absl::StrFormat("%s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath,
-                        Dive::DeviceResourcesConstants::kProfilingPluginFolderName);
+    RETURN_IF_ERROR(m_device->DeployDeviceResource(DIVE_PROFILING_PLUGIN_DIR));
+    std::string remote_profiling_dir = absl::StrFormat(
+        "%s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath, DIVE_PROFILING_PLUGIN_DIR);
 
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
@@ -1380,7 +1379,8 @@ absl::Status AndroidDevice::DeployDeviceResource(const std::string_view& file_na
 {
     std::filesystem::path host_full_lib_path;
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(file_name);
+        absl::StatusOr<std::filesystem::path> ret =
+            Dive::ResolveDeviceResourcesLocalPath(file_name);
         if (!ret.ok())
         {
             return ret.status();

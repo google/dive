@@ -12,7 +12,7 @@
 :: See the License for the specific language governing permissions and
 :: limitations under the License.
 
-:: This script automates the standard build process. For comprehensive documentation and advanced options, please refer to BUILD.md, "Dive Device Libraries" section
+:: This script automates the standard build process for Dive Device Libraries
 
 @echo off
 setlocal enabledelayedexpansion
@@ -53,7 +53,7 @@ if not !ERRORLEVEL!==0 exit /b 1
     cmake --build build_android --config=!build!
     if not !ERRORLEVEL!==0 exit /b 1
 
-    cmake --install build_android --prefix install --config=!build! 
+    cmake --install build_android --prefix pkg --config=!build! 
     if not !ERRORLEVEL!==0 exit /b 1
 ))
 

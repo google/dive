@@ -119,7 +119,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Debug
+          cmake --install build --prefix pkg --config Debug
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -174,7 +174,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix pkg --config Release
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -229,7 +229,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Debug
+          cmake --install build --prefix pkg --config Debug
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -284,7 +284,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix pkg --config Release
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -351,7 +351,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Debug
+          cmake --install build --prefix pkg --config Debug
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -407,7 +407,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix pkg --config Release
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -471,4 +471,4 @@ jobs:
           cat build_android/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build_android --prefix install --config Debug
+          cmake --install build_android --prefix pkg --config Debug

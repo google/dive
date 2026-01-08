@@ -23,6 +23,7 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "dive/build_defs/resource_defs.h"
 #include "dive/build_defs/version_defs.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
@@ -180,7 +181,7 @@ std::string GetLongVersionString()
 {
     std::string summary = GetHostToolsVersionInfo();
 
-    if (auto ret = Dive::ResolveResourcesLocalPath(DIVE_DEVICE_RESOURCES_VERSION_FILENAME);
+    if (auto ret = Dive::ResolveDeviceResourcesLocalPath(DIVE_DEVICE_RESOURCES_VERSION_FILENAME);
         ret.ok())
     {
         std::filesystem::path device_resources_version_path = *ret;
@@ -201,10 +202,9 @@ std::string GetLongVersionString()
     }
 
     std::filesystem::path profiling_sha_path =
-        Dive::DeviceResourcesConstants::kProfilingPluginFolderName;
-    profiling_sha_path /= Dive::DeviceResourcesConstants::kProfilingPluginShaName;
+        Dive::DeviceResourcesConstants::kProfilingPluginShaName;
 
-    if (auto ret = Dive::ResolveResourcesLocalPath(profiling_sha_path); ret.ok())
+    if (auto ret = Dive::ResolveProfilingResourcesLocalPath(profiling_sha_path); ret.ok())
     {
         std::filesystem::path profiling_plugin_version_path = *ret;
         if (absl::StatusOr<std::string> ret =
@@ -230,7 +230,7 @@ absl::StatusOr<std::string> GetDeviceResourceInfo(std::string_view key)
 {
     std::filesystem::path device_resources_version_path;
     {
-        auto ret = Dive::ResolveResourcesLocalPath(DIVE_DEVICE_RESOURCES_VERSION_FILENAME);
+        auto ret = Dive::ResolveDeviceResourcesLocalPath(DIVE_DEVICE_RESOURCES_VERSION_FILENAME);
         if (!ret.ok())
         {
             return ret.status();

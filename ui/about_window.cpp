@@ -30,7 +30,7 @@
 #include <filesystem>
 #include <sstream>
 
-#include "dive/build_defs/version_defs.h"
+#include "dive/build_defs/resource_defs.h"
 #include "utils/device_resources.h"
 #include "utils/device_resources_constants.h"
 #include "utils/version_info.h"

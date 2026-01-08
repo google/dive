@@ -39,6 +39,7 @@ if(NOT ANDROID)
             absl::strings
             dive_build_defs
             dive_src_includes
+            dive_status
             command_utils
     )
 endif()

@@ -1,0 +1,25 @@
+/*
+Copyright 2026 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+#pragma once
+
+#include "dive/build_defs/dive_cmake_generated.h"
+
+// These are within the install destination folder and used to find resource files at runtime
+#define DIVE_DEVICE_RESOURCES_VERSION_FILENAME CMAKE_GENERATED_DEVICE_RESOURCES_VERSION_FILENAME
+#define DIVE_PROFILING_PLUGIN_DIR CMAKE_GENERATED_PROFILING_PLUGIN_DIR
+#define DIVE_INSTALL_DEST_DEVICE CMAKE_GENERATED_INSTALL_DEST_DEVICE
+#define DIVE_MACOS_BUNDLE_RESOURCES CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES
+#define DIVE_LICENSE_FILE_NAME CMAKE_GENERATED_DIVE_LICENSE_FILE_NAME

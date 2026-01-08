@@ -23,6 +23,7 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "dive/build_defs/resource_defs.h"
 #include "dive/build_defs/version_defs.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"

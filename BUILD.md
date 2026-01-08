@@ -124,78 +124,19 @@ cmake --build build --target gfxrecon-convert
 
 ## Dive Device Resources
 
-Warning: We only support "Debug" for the gradle build for GFXR portion, so it will be hardcoded and not depend on the build type chosen below.
+Warning: We only support "Debug" for the gradle build for GFXR portion, so it will be hardcoded and not depend on the build type specified in the script.
 
-Provide the appropriate `ANDROID_ABI` depending on your device.
-
-TIP: The following should be the same as running "scripts/build_android.sh" or "scripts\build_android.bat"
+Modify the script if necessary to provide the appropriate `ANDROID_ABI` depending on your device.
 
 ### Linux
 
-1. Configure
-    ```sh
-    cd $DIVE_ROOT_PATH
-
-    rm -rf build_android
-
-    cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
-        -G "Ninja Multi-Config" \
-        -Bbuild_android \
-        -DCMAKE_MAKE_PROGRAM="ninja" \
-        -DCMAKE_SYSTEM_NAME=Android \
-        -DANDROID_ABI=arm64-v8a \
-        -DANDROID_PLATFORM=android-26 \
-        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
-        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
-    ```
-1. Build with one of the following methods:
-    * Build directly with ninja
-        ```sh
-        ninja -C build_android -f build-Debug.ninja
-        ```
-    * Build using cmake
-        ```sh
-        cmake --build build_android --config=Debug
-        ```
-    You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
-1. Install (the prefix must be coordinated with that of the [host tools](#dive-host-tools))
-    ```sh
-    cmake --install build_android --prefix pkg --config Debug
-    ```
+Running the script `scripts/build_android.sh` will build and install the device resources at `$DIVE_ROOT_PATH/pkg/device`.
 
 ### Windows
 
-Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019):
 
-1. Configure
-    ```bat
-    cd %DIVE_ROOT_PATH%
-
-    rmdir /s build_android
-
-    cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
-        -G "Ninja Multi-Config" ^
-        -Bbuild_android ^
-        -DCMAKE_MAKE_PROGRAM="ninja" ^
-        -DCMAKE_SYSTEM_NAME=Android ^
-        -DANDROID_ABI=arm64-v8a ^
-        -DANDROID_PLATFORM=android-26 ^
-        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
-        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
-    ```
-1. Build with one of the following methods:
-    * Build directly with ninja
-        ```bat
-        ninja -C build_android -f build-Debug.ninja
-        ```
-    * Build using cmake
-        ```bat
-        cmake --build build_android --config=Debug
-        ```
-1. Install (the prefix must be coordinated with that of the [host tools](#dive-host-tools))
-    ```bat
-    cmake --install build_android --prefix pkg --config Debug
-    ```
+Running the script `scripts\build_android.bat` will build and install the device resources at `$DIVE_ROOT_PATH\pkg\device`.
 
 ### Troubleshooting Tips
 * Gradle build
@@ -206,20 +147,8 @@ Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 
 
 ## App bundle (macOS)
 
-After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle.
+After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle from the contents of the `pkg/` directory.
 
-```sh
-# TIP: The following should be the same as running "scripts/deploy_mac_bundle.sh"
+All plugin folders must be placed under `$DIVE_ROOT_PATH/pkg` and named with substring "_plugin" at the end to be properly added to the bundle.
 
-mv pkg/host/dive.app pkg
-macdeployqt pkg/dive.app
-cp -r pkg/device/* pkg/dive.app/Contents/Resources/
-cp -r pkg/host/* pkg/dive.app/Contents/MacOS/
-
-# Place any plugin folders under pkg/dive.app/Contents/Resources/<plugin_name>
-# For example:
-cp -r pkg/dive_sample_plugin/* pkg/dive.app/Contents/Resources/dive_sample_plugin/
-
-# Ad-hoc signing the application bundle
-codesign --force --deep --sign - pkg/dive.app
-```
+Running the script `scripts/deploy_mac_bundle.sh` will create the mac package and place it at `$DIVE_ROOT_PATH/pkg/dive.app`.

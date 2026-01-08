@@ -50,7 +50,8 @@ endif() # WIN32
 find_package(Python3 COMPONENTS Interpreter)
 
 if(NOT Python3_EXECUTABLE)
-    message(FATAL_ERROR "python3 not found")
+    # message(FATAL_ERROR "python3 not found")
+    set(Python3_EXECUTABLE "python3")
 endif() # NOT Python3_EXECUTABLE
 
 add_custom_command(

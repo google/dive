@@ -23,7 +23,7 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
 if(WIN32)
     set(DIVE_LIBRARY_LOADER_SOURCE library_loader_windows.cpp)
-elseif(LINUX)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(DIVE_LIBRARY_LOADER_SOURCE library_loader_linux.cpp)
 elseif(APPLE)
     set(DIVE_LIBRARY_LOADER_SOURCE library_loader_macos.cpp)

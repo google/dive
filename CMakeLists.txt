@@ -14,20 +14,12 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
 project(dive VERSION 1.1.2)
 
 # ------------------------------------------------------------------------------
 # Global properties
-
-get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-if(NOT is_multi_config)
-    message(
-        FATAL_ERROR
-        "Currently we only support Multi-Config generators, e.g. try -G \"Ninja Multi-Config\" rather than -GNinja."
-    )
-endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 

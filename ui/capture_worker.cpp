@@ -86,6 +86,10 @@ void CaptureWorker::run()
 
     Network::TcpClient client;
     const std::string host = "127.0.0.1";
+
+    int* x = nullptr;
+    *x = 0;
+
     int port = device->Port();
     auto status = client.Connect(host, port);
     if (!status.ok())

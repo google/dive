@@ -32,7 +32,7 @@ limitations under the License.
 #include "common/log.h"
 #include "common/macros.h"
 #include "constants.h"
-#include "dive/build_defs/version_defs.h"
+#include "dive/build_defs/resource_defs.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/component_files.h"
 #include "dive/utils/component_files_constants.h"

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script automates the standard build process. For comprehensive documentation and advanced options, please refer to BUILD.md, "Dive Device Resources" section
+# This script automates the standard build process for Dive Device Libraries
 
 PROJECT_ROOT="$(readlink -f $0)"
 PROJECT_ROOT="${PROJECT_ROOT%/*}/.."

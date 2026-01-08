@@ -13,6 +13,7 @@
 
 #include "dive/utils/device_resources.h"
 
+#include <array>
 #include <filesystem>
 #include <vector>
 
@@ -20,22 +21,30 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/types/span.h"
-#include "dive/build_defs/version_defs.h"
+#include "dive/build_defs/resource_defs.h"
+#include "dive/common/status.h"
 #include "dive/os/command_utils.h"
 
 namespace
 {
 
+// search_paths are relative to the executable dir
 absl::StatusOr<std::filesystem::path> ResolvePath(
     absl::Span<const std::filesystem::path> search_paths, std::filesystem::path relative_file_path)
 {
     assert(!search_paths.empty());
 
+    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
+    if (!exec_dir.ok())
+    {
+        return exec_dir.status();
+    }
+
     std::vector<std::string> searched_paths_strings;
 
     for (const auto& p : search_paths)
     {
-        const auto potential_path = p / relative_file_path;
+        const auto potential_path = *exec_dir / p / relative_file_path;
         if (std::filesystem::exists(potential_path))
         {
             return std::filesystem::canonical(potential_path);
@@ -46,7 +55,7 @@ absl::StatusOr<std::filesystem::path> ResolvePath(
     std::string err_msg =
         absl::StrFormat("Cannot find file in deployment dir: %s, searched here: \n%s",
                         relative_file_path, absl::StrJoin(searched_paths_strings, ", \n"));
-    return absl::NotFoundError(err_msg);
+    return Dive::NotFoundError(err_msg);
 }
 
 }  // namespace
@@ -57,14 +66,8 @@ namespace Dive
 absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
-    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
-    if (!exec_dir.ok())
-    {
-        return exec_dir.status();
-    }
-
     // Host resources should be in the same dir as the caller
-    std::vector<std::filesystem::path> search_dirs = {*exec_dir};
+    std::array search_dirs = {std::filesystem::path(".")};
 
     return ResolvePath(search_dirs, relative_file_path);
 }
@@ -72,18 +75,12 @@ absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(
 absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
-    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
-    if (!exec_dir.ok())
-    {
-        return exec_dir.status();
-    }
-
     // Determine device resources location relative to host tool
-    std::vector<std::filesystem::path> search_dirs;
-    // Most platforms
-    search_dirs.push_back(*exec_dir / ".." / DIVE_INSTALL_DEST_DEVICE);
-    // Apple bundle
-    search_dirs.push_back(*exec_dir / ".." / DIVE_MACOS_BUNDLE_RESOURCES);
+    std::filesystem::path base_dir = "..";
+    std::array search_dirs = {// Most platforms
+                              base_dir / DIVE_INSTALL_DEST_DEVICE,
+                              // Apple bundle
+                              base_dir / DIVE_MACOS_BUNDLE_RESOURCES};
 
     return ResolvePath(search_dirs, relative_file_path);
 }
@@ -91,19 +88,14 @@ absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
 absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
-    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
-    if (!exec_dir.ok())
-    {
-        return exec_dir.status();
-    }
-
-    // Determine device resources location relative to host tool
-    std::vector<std::filesystem::path> search_dirs;
-    // Most platforms
-    search_dirs.push_back(*exec_dir / ".." / DIVE_PROFILING_PLUGIN_DIR);
-    // Apple bundle
-    search_dirs.push_back(*exec_dir / ".." / DIVE_MACOS_BUNDLE_RESOURCES /
-                          DIVE_PROFILING_PLUGIN_DIR);
+    // Determine profiling resources location relative to host tool
+    std::filesystem::path base_dir = "..";
+    std::array search_dirs = {
+        // Most platforms
+        base_dir / DIVE_PROFILING_PLUGIN_DIR,
+        // Apple bundle
+        base_dir / DIVE_MACOS_BUNDLE_RESOURCES / DIVE_PROFILING_PLUGIN_DIR,
+    };
 
     return ResolvePath(search_dirs, relative_file_path);
 }

@@ -70,6 +70,7 @@ else()
     set(LibArchive_INCLUDE_DIRS ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
     add_compile_definitions(LIBARCHIVE_STATIC=ON)
     include_directories(${THIRDPARTY_DIRECTORY}/libarchive/libarchive/)
+    add_library(LibArchive::LibArchive ALIAS archive_static)
 endif()
 
 include_directories(LibArchive_INCLUDE_DIRS)

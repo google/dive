@@ -192,7 +192,6 @@ target_include_directories(
         "${CMAKE_SOURCE_DIR}"
         # Include CMAKE_BINARY_DIR for generated files.
         "${CMAKE_BINARY_DIR}"
-        "${LibArchive_INCLUDE_DIRS}"
 )
 
 # Enable asan and ubsan
@@ -225,6 +224,7 @@ target_link_libraries(
     absl::span
     absl::symbolize
     network
+    dive_archive
     dive_core
     dive_lib_os
     dive_lib_ui

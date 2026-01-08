@@ -212,6 +212,9 @@ void GfxrCaptureWorker::run()
         return;
     }
 
+    int* x = nullptr;
+    *x = 0;
+
     qlonglong capture_directory_size = 0;
     {
         absl::StatusOr<qlonglong> ret = getGfxrCaptureDirectorySize(device);

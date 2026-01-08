@@ -81,6 +81,10 @@ set(DIVE_RELEASE_TYPE
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
 
+if("${DIVE_RELEASE_TYPE}" STREQUAL "RelWithDebInfo")
+    include(cmake/breakpad_tools.cmake)
+endif()
+
 # For host tools version info
 set(HOST_PLATFORM_STRING "Unknown")
 if(NOT ANDROID)

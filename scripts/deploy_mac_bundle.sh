@@ -14,25 +14,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script automates the deployment of the Dive app bundle on macOS. For comprehensive documentation and advanced options, please refer to BUILD.md, "App bundle (macOS)" section
+# This script automates the deployment of the Dive app bundle on macOS.
 
 PROJECT_ROOT="$(readlink -f $0)"
 PROJECT_ROOT="${PROJECT_ROOT%/*}/.."
 readonly PROJECT_ROOT="$(readlink -f ${PROJECT_ROOT})"
 INSTALL_DIR="pkg"
+SIGN_BUNDLE=true
 readonly START_TIME=`date +%r`
 
 if [ $# -ne 0 ]; then
-    INSTALL_DIR=$1
+    if [ $# -ne 1 ]; then
+        echo "Too many arguments"
+        echo "Valid usage: 'deploy_mac_bundle.sh [--no-sign]'"
+        exit 1
+    fi
+    if [ "$1" = "--no-sign" ]; then
+        SIGN_BUNDLE=false
+    else
+        echo "Invalid parameter: $1"
+        echo "Valid usage: 'deploy_mac_bundle.sh [--no-sign]'"
+        exit 1
+    fi
 fi
+
 echo "Install dir: ${INSTALL_DIR}"
 
 pushd ${PROJECT_ROOT}
 
 echo "current dir " `pwd`
 
-mv ${INSTALL_DIR}/host/dive.app ${INSTALL_DIR} || exit 1
-macdeployqt ${INSTALL_DIR}/dive.app || exit 1
+if [ ! -d ${INSTALL_DIR}/dive.app ]; then
+    echo .
+    echo "Moving over dive.app and running macdeployqt"
+
+    mv ${INSTALL_DIR}/host/dive.app ${INSTALL_DIR} || exit 1
+    macdeployqt ${INSTALL_DIR}/dive.app || exit 1
+else
+    echo .
+    echo "Skipping moving dive.app and running macdeployqt"
+fi
 
 echo "Copying host tools and device resources into app bundle"
 cp -r ${INSTALL_DIR}/device/* ${INSTALL_DIR}/dive.app/Contents/Resources/ || exit 1
@@ -50,10 +71,17 @@ do
     fi
 done
 
-# Ad-hoc signing the application bundle
-codesign --force --deep --sign - ${INSTALL_DIR}/dive.app || exit 1
+if ${SIGN_BUNDLE}; then
+    echo .
+    echo "Ad-hoc signing the application bundle"
+    codesign --force --deep --sign - ${INSTALL_DIR}/dive.app || exit 1
+else
+    echo .
+    echo "Skipping signing step"
+fi
 
 popd
 
+echo .
 echo "Start Time:" ${START_TIME}
 echo "Finish Time:" `date +%r`

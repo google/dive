@@ -42,6 +42,9 @@ execute_process(
     COMMAND
         ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} ${INPUT_GFXR}
         ${TEST_NAME}.json
+    COMMAND_ERROR_IS_FATAL ANY
+)
+execute_process(
     COMMAND
         ${CMAKE_COMMAND} -E compare_files --ignore-eol ${TEST_NAME}.json
         ${GOLDEN_FILE}

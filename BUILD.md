@@ -13,6 +13,8 @@
     - Android Studio. Make sure to install an SDK and accept the licenses.
     - On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
         - Note: Use Java 17, because this uses an older version of Gradle.
+- dump_syms, which generates debug symbols for release builds, can be installed via the [Rust installer](https://rustup.rs/). Alternatively, on Linux, you can use `sudo apt install cargo`. Once Cargo is set up, run the command `cargo install dump_syms`.
+- On Linux, the curl library is required to upload debug symbols to a Crashpad server. You can install it using `sudo apt install libcurl4-openssl-dev`.
 
 ## Environment Variables
 

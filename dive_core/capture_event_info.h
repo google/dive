@@ -115,9 +115,6 @@ enum class RenderModeType
 //--------------------------------------------------------------------------------------------------
 struct EventInfo
 {
-    // Indices of each buffer used in the event, for each shader
-    std::vector<uint32_t> m_buffer_indices[(uint32_t)ShaderStage::kShaderStageCount];
-
     // Log entries from parsing the capture metadata and disassembling the shaders.
     // These cannot be directly output to the log because we don't know the eventIds while parsing
     // the metadata.

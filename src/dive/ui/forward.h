@@ -43,7 +43,6 @@ struct ComponentFilePaths;
 
 class AnalyzeDialog;
 class ApplicationController;
-class BufferView;
 class CaptureFileManager;
 class CommandModel;
 class CommandTabView;
@@ -53,7 +52,6 @@ class DiveTreeView;
 class ErrorDialog;
 class EventSelection;
 class EventStateView;
-class EventTimingView;
 class FrameTabView;
 class GfxrVulkanCommandArgumentsFilterProxyModel;
 class GfxrVulkanCommandArgumentsTabView;

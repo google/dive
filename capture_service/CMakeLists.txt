@@ -22,11 +22,11 @@ project(DiveService)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_library(warnings_as_errors INTERFACE)
+# Enable warnings as errors
 if(MSVC)
-    target_compile_options(warnings_as_errors INTERFACE /WX)
+    add_compile_options(/WX)
 else()
-    target_compile_options(warnings_as_errors INTERFACE -Werror)
+    add_compile_options(-Werror)
 endif()
 
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
@@ -41,7 +41,6 @@ target_link_libraries(
         absl::time
         absl::str_format
         absl::strings
-    PRIVATE warnings_as_errors
 )
 
 if(ANDROID)
@@ -53,22 +52,13 @@ endif()
 target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(
     service
-    PRIVATE
-        network
-        absl::flags
-        absl::flags_parse
-        trace_mgr
-        command_utils
-        warnings_as_errors
+    PRIVATE network absl::flags absl::flags_parse trace_mgr command_utils
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 add_executable(server server.cc)
 
-target_link_libraries(
-    server
-    PRIVATE service absl::flags absl::flags_parse warnings_as_errors
-)
+target_link_libraries(server PRIVATE service absl::flags absl::flags_parse)
 
 if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
@@ -80,19 +70,17 @@ else()
     )
     target_link_libraries(
         device_mgr
-        PUBLIC
-            dive_legacy_includes
-            absl::cleanup
-            absl::flags
-            absl::flags_parse
-            absl::algorithm
-            absl::strings
-            absl::statusor
-            component_files
-            dive_device_resources
-            version_info
-            command_utils
-        PRIVATE warnings_as_errors
+        dive_legacy_includes
+        absl::cleanup
+        absl::flags
+        absl::flags_parse
+        absl::algorithm
+        absl::strings
+        absl::statusor
+        component_files
+        dive_device_resources
+        version_info
+        command_utils
     )
 
     add_executable(dive_client_cli dive_client_cli.cc)
@@ -106,7 +94,6 @@ else()
         absl::strings
         absl::time
         version_info
-        warnings_as_errors
     )
     target_include_directories(
         dive_client_cli
@@ -125,18 +112,11 @@ else()
         gmock
         gtest
         gtest_main
-        warnings_as_errors
     )
     gtest_discover_tests(device_mgr_test)
 
     add_executable(android_application_test android_application_test.cc)
-    target_link_libraries(
-        android_application_test
-        device_mgr
-        gtest
-        gtest_main
-        warnings_as_errors
-    )
+    target_link_libraries(android_application_test device_mgr gtest gtest_main)
     target_include_directories(
         android_application_test
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -144,13 +124,7 @@ else()
     gtest_discover_tests(android_application_test)
 
     add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
-    target_link_libraries(
-        android_trace_mgr_test
-        trace_mgr
-        gtest
-        gtest_main
-        warnings_as_errors
-    )
+    target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)
     gtest_discover_tests(android_trace_mgr_test)
 endif()
 

@@ -18,6 +18,7 @@ limitations under the License.
 #include <filesystem>
 #include <future>
 #include <iostream>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <system_error>
@@ -30,6 +31,7 @@ limitations under the License.
 #include "absl/flags/parse.h"
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
+#include "absl/functional/function_ref.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -63,7 +65,7 @@ struct GlobalOptions
     Dive::AppType app_type;
     std::string download_dir;
     std::string gfxr_capture_file_dir;
-    absl::Duration trigger_capture_after;
+    std::optional<absl::Duration> trigger_capture_after;
 
     Dive::GfxrReplaySettings replay_settings;
 };
@@ -148,17 +150,21 @@ absl::Status ValidatePm4CaptureOptions(const GlobalOptions& options)
 {
     RETURN_IF_ERROR(ValidateRunOptions(options));
 
-    if (options.trigger_capture_after < absl::ZeroDuration())
+    if (options.trigger_capture_after)
     {
-        return Dive::InvalidArgumentError("--trigger_capture_after must be non-negative");
-    }
+        const absl::Duration& trigger_capture_after = *options.trigger_capture_after;
 
-    if (options.trigger_capture_after == absl::InfiniteDuration() ||
-        options.trigger_capture_after == -absl::InfiniteDuration())
+        if (trigger_capture_after < absl::ZeroDuration())
+        {
+            return Dive::InvalidArgumentError("--trigger_capture_after must be non-negative");
+        }
 
-    {
-        return Dive::InvalidArgumentError(absl::StrCat(
-            "Unsupported --trigger_capture_after value: ", options.trigger_capture_after));
+        if (trigger_capture_after == absl::InfiniteDuration() ||
+            trigger_capture_after == -absl::InfiniteDuration())
+        {
+            return Dive::InvalidArgumentError(
+                absl::StrCat("Unsupported --trigger_capture_after value: ", trigger_capture_after));
+        }
     }
 
     return absl::OkStatus();
@@ -556,9 +562,19 @@ enum class GfxrCaptureControlFlow
     kContinue,
 };
 
-// Triggers a GFXR capture and screenshot on the device.
-absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& device,
-                                                          const GlobalOptions& options)
+// Triggers a GFXR capture and screenshot on the device. Roughly divided into 4 steps:
+//
+// 1. `wait_for_ready_to_capture`
+// 2. Trigger capture and screenshot
+// 3. `wait_for_ready_to_retrieve`
+// 4. Retrieve capture
+//
+// Returning GfxrCaptureControlFlow::kStop from `wait_for_ready_to_capture` or
+// `wait_for_ready_to_retrieve` will skip subsequent steps.
+absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
+    const AndroidDevice& device, const GlobalOptions& options,
+    absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_capture,
+    absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_retrieve)
 {
     const AdbSession& adb = device.Adb();
     const std::string& gfxr_capture_file_dir = options.gfxr_capture_file_dir;
@@ -572,22 +588,13 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
             absl::StrCat("Error stopping gfxr runtime capture: ", status.message()));
     }
 
-    std::cout << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
-                 "application.\n";
-    std::string input;
-    while (std::getline(std::cin, input))
+    switch (wait_for_ready_to_capture())
     {
-        if (input == "g")
-        {
+        case GfxrCaptureControlFlow::kStop:
+            return GfxrCaptureControlFlow::kStop;
+        case GfxrCaptureControlFlow::kContinue:
+            // Intentionally empty; proceed with function
             break;
-        }
-
-        std::cout << "Exiting...\n";
-        return GfxrCaptureControlFlow::kStop;
-    }
-    if (!std::cin.good())
-    {
-        return GfxrCaptureControlFlow::kStop;
     }
 
     if (absl::Status status = adb.Run("shell setprop debug.gfxrecon.capture_android_trigger true");
@@ -603,19 +610,13 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
             absl::StrCat("Error creating capture screenshot: ", status.message()));
     }
 
-    std::cout << "Press key g+enter to retrieve the capture.\n";
-    while (std::getline(std::cin, input))
+    switch (wait_for_ready_to_retrieve())
     {
-        if (input == "g")
-        {
+        case GfxrCaptureControlFlow::kStop:
+            return GfxrCaptureControlFlow::kStop;
+        case GfxrCaptureControlFlow::kContinue:
+            // Intentionally empty; proceed with function
             break;
-        }
-
-        std::cout << "Press key g+enter to retrieve the capture.\n";
-    }
-    if (!std::cin.good())
-    {
-        return GfxrCaptureControlFlow::kStop;
     }
 
     std::cout << "Waiting for the current capture to complete...\n";
@@ -634,6 +635,56 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(const AndroidDevice& d
         std::cout << "Capture complete.\n";
     }
 
+    return GfxrCaptureControlFlow::kContinue;
+}
+
+GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
+{
+    std::cout << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
+                 "application.\n";
+    std::string input;
+    while (std::getline(std::cin, input))
+    {
+        if (input == "g")
+        {
+            break;
+        }
+
+        std::cout << "Exiting...\n";
+        return GfxrCaptureControlFlow::kStop;
+    }
+    if (!std::cin.good())
+    {
+        return GfxrCaptureControlFlow::kStop;
+    }
+
+    return GfxrCaptureControlFlow::kContinue;
+}
+
+GfxrCaptureControlFlow WaitForUserInputToRetrieveGfxrCapture()
+{
+    std::cout << "Press key g+enter to retrieve the capture.\n";
+    std::string input;
+    while (std::getline(std::cin, input))
+    {
+        if (input == "g")
+        {
+            break;
+        }
+
+        std::cout << "Press key g+enter to retrieve the capture.\n";
+    }
+    if (!std::cin.good())
+    {
+        return GfxrCaptureControlFlow::kStop;
+    }
+    return GfxrCaptureControlFlow::kContinue;
+}
+
+GfxrCaptureControlFlow DelayBeforeStartGfxrCapture(absl::Duration trigger_capture_after)
+{
+    std::cout << "Waiting " << trigger_capture_after << "...\n";
+    absl::SleepFor(trigger_capture_after);
     return GfxrCaptureControlFlow::kContinue;
 }
 
@@ -687,8 +738,11 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
         return status;
     }
 
-    std::cout << "Waiting " << ctx.options.trigger_capture_after << "...\n";
-    absl::SleepFor(ctx.options.trigger_capture_after);
+    constexpr absl::Duration kDefaultPm4CaptureTriggerCaptureAfter = absl::Seconds(5);
+    absl::Duration trigger_capture_after =
+        ctx.options.trigger_capture_after.value_or(kDefaultPm4CaptureTriggerCaptureAfter);
+    std::cout << "Waiting " << trigger_capture_after << "...\n";
+    absl::SleepFor(trigger_capture_after);
 
     status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
     if (!status.ok())
@@ -713,10 +767,28 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
             .IgnoreError();
     };
 
+    const std::optional<absl::Duration>& trigger_capture_after =
+        context.options.trigger_capture_after;
+    auto wait_for_ready_to_capture = [&trigger_capture_after] {
+        return trigger_capture_after ? DelayBeforeStartGfxrCapture(*trigger_capture_after)
+                                     : WaitForUserInputToStartGfxrCapture();
+    };
+    auto wait_for_ready_to_retrieve = [&trigger_capture_after] {
+        if (trigger_capture_after)
+        {
+            // Retrieve the capture as soon as possible. Since TriggerGfxrCapture waits until the
+            // capture is done, don't need any logic here.
+            return GfxrCaptureControlFlow::kContinue;
+        }
+        return WaitForUserInputToRetrieveGfxrCapture();
+    };
+
+    bool take_single_capture = trigger_capture_after.has_value();
     while (true)
     {
         absl::StatusOr<GfxrCaptureControlFlow> control_flow =
-            TriggerGfxrCapture(*context.mgr.GetDevice(), context.options);
+            TriggerGfxrCapture(*context.mgr.GetDevice(), context.options, wait_for_ready_to_capture,
+                               wait_for_ready_to_retrieve);
         if (!control_flow.status().ok())
         {
             return control_flow.status();
@@ -729,6 +801,11 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
             case GfxrCaptureControlFlow::kContinue:
                 // Nothing to do
                 break;
+        }
+
+        if (take_single_capture)
+        {
+            return absl::OkStatus();
         }
     }
 
@@ -905,9 +982,12 @@ ABSL_FLAG(std::string, gfxr_capture_file_dir, "gfxr_capture",
                        "'--download_dir'."));
 
 ABSL_FLAG(
-    absl::Duration, trigger_capture_after, absl::Seconds(5),
+    std::optional<absl::Duration>, trigger_capture_after, std::nullopt,
     "The delay before automatically triggering a capture (only used with 'pm4_capture'). Provide "
-    "duration with unit: e.g. 5s is 5 seconds. See absl::ParseDuration for all accepted values.");
+    "duration with unit: e.g. 5s is 5 seconds. See absl::ParseDuration for all accepted values. If "
+    "not provided:\n"
+    "\t--comamnd pm4_capture : wait for 5 seconds\n"
+    "\t--command gfxr_capture : wait for user input");
 
 ABSL_FLAG(std::string, gfxr_replay_file_path, "",
           "The full path to the .gfxr capture file located on the Android device to be replayed.");

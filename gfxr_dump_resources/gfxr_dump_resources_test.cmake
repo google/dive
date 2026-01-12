@@ -20,45 +20,33 @@
 #
 #   enable_testing()
 #   add_test(NAME MyTest
-#     COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources> -DTEST_NAME=MyTest -DINPUT_GFXR=${PROJECT_SOURCE_DIR}/my_capture.gfxr -DGOLDEN_FILE=${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/vs_triangle_300_20221211T232110_dump_resources_golden.json -DADDITIONAL_ARGUMENTS="" -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
+#     COMMAND
+#       ${CMAKE_COMMAND}
+#       -DTEST_EXECUTABLE=$<TARGET_FILE:gfxr_dump_resources>
+#       -DTEST_NAME=MyTest
+#       -DDINPUT_GFXR=${PROJECT_SOURCE_DIR}/my_capture.gfxr
+#       -DGOLDEN_FILE=${PROJECT_SOURCE_DIR}/my_dump_resources_golden.json
+#       -DADDITIONAL_ARGUMENTS=""
+#       -P ${CMAKE_CURRENT_SOURCE_DIR}/gfxr_dump_resources_test.cmake
 #   )
 #
-# TEST_EXECUTABLE will be run with INPUT_GFXR. The test will pass if TEST_EXECUTABLE returns 0 exit code and the contents of the output json match the contents of GOLDEN_FILE.
-# TEST_NAME should match the NAME given to add_test(). This is mainly used to ensure that temp files are unique to the test (to support running tests in parallel).
-# ADDITIONAL_ARGUMENTS will be passed to TEST_EXECUTABLE in addition to the normal command-line. This is where you can specify options and parameters.
+# TEST_EXECUTABLE will be run with INPUT_GFXR. The test will pass if
+# TEST_EXECUTABLE returns 0 exit code and the contents of the output json match
+# the contents of GOLDEN_FILE. TEST_NAME should match the NAME given to
+# add_test(). This is mainly used to ensure that temp files are unique to the
+# test (to support running tests in parallel). ADDITIONAL_ARGUMENTS will be
+# passed to TEST_EXECUTABLE in addition to the normal command-line. This is
+# where you can specify options and parameters.
 
 execute_process(
     COMMAND
         ${TEST_EXECUTABLE} ${ADDITIONAL_ARGUMENTS} ${INPUT_GFXR}
         ${TEST_NAME}.json
-    RESULT_VARIABLE exit_code
+    COMMAND_ERROR_IS_FATAL ANY
 )
-# In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
-if(NOT exit_code EQUAL 0)
-    message(FATAL_ERROR "${TEST_EXECUTABLE} failed: ${exit_code}")
-endif()
-
-# Since git lets users specify newline style, normalize both input and output to compare_files.
-# This is required so that compare_files works regardless of platform and setting.
-# In CMake 3.14+, prefer compare_files --ignore-eol (more succinct)
-configure_file(
-    ${TEST_NAME}.json
-    ${TEST_NAME}_output_unixeol.json
-    NEWLINE_STYLE UNIX
-)
-configure_file(
-    ${GOLDEN_FILE}
-    ${TEST_NAME}_golden_unixeol.json
-    NEWLINE_STYLE UNIX
-)
-
 execute_process(
     COMMAND
-        ${CMAKE_COMMAND} -E compare_files ${TEST_NAME}_output_unixeol.json
-        ${TEST_NAME}_golden_unixeol.json
-    RESULT_VARIABLE exit_code
+        ${CMAKE_COMMAND} -E compare_files --ignore-eol ${TEST_NAME}.json
+        ${GOLDEN_FILE}
+    COMMAND_ERROR_IS_FATAL ANY
 )
-# In CMake 3.19+, prefer COMMAND_ERROR_IS_FATAL (more succinct)
-if(NOT exit_code EQUAL 0)
-    message(FATAL_ERROR "Output differs from golden file")
-endif()

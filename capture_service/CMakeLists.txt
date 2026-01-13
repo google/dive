@@ -22,6 +22,13 @@ project(DiveService)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Enable warnings as errors
+if(MSVC)
+    add_compile_options(/WX)
+else()
+    add_compile_options(-Werror)
+endif()
+
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
 # Group both cc files in the same target since the public header trace_mgr.h declares both.
 add_library(trace_mgr android_trace_mgr.cc trace_mgr.cc)

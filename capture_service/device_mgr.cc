@@ -872,7 +872,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
     absl::StatusOr<std::string> res = RunCommand(cmd);
     if (!res.ok())
     {
-        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n", local_replay_apk_path.c_str());
+        LOGD("ERROR: DeployReplayApk(): deploying apk at: %s\n",
+             local_replay_apk_path.string().c_str());
         return res.status();
     }
 

@@ -324,6 +324,12 @@ GfxrReplaySettings MakeValidGfxrReplaySettings(GfxrReplayOptions run_type)
         case GfxrReplayOptions::kPerfCounters:
             settings.metrics = {"PLACEHOLDER_METRICS"};
             break;
+        case GfxrReplayOptions::kNormal:
+        case GfxrReplayOptions::kPm4Dump:
+        case GfxrReplayOptions::kGpuTiming:
+        case GfxrReplayOptions::kRenderDoc:
+            // Valid without further additions
+            break;
     }
 
     return settings;

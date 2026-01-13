@@ -22,11 +22,11 @@ project(DiveService)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# Enable warnings as errors
+# Enable warnings as errors. Require exhaustive switches.
 if(MSVC)
-    add_compile_options(/WX)
+    add_compile_options(/WX /we4062)
 else()
-    add_compile_options(-Werror)
+    add_compile_options(-Werror -Wswitch)
 endif()
 
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.

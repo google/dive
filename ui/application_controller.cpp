@@ -28,6 +28,7 @@ struct ApplicationController::Impl
 {
     MainWindow* m_main_window = nullptr;
     QAction* m_advanced_option = nullptr;
+    bool m_interactive = true;
 
     Dive::PluginLoader m_plugin_manager;
 };
@@ -35,6 +36,9 @@ struct ApplicationController::Impl
 ApplicationController::ApplicationController() {}
 
 ApplicationController::~ApplicationController() {}
+
+bool ApplicationController::Interactive() { return m_impl->m_interactive; }
+void ApplicationController::SetInteractive(bool enabled) { m_impl->m_interactive = enabled; }
 
 void ApplicationController::Register(MainWindow& main_window)
 {
@@ -77,6 +81,10 @@ bool ApplicationController::InitializePlugins()
     if (absl::Status load_status = m_impl->m_plugin_manager.LoadPlugins(plugins_dir_path);
         !load_status.ok())
     {
+        if (!Interactive())
+        {
+            return false;
+        }
         QMessageBox::warning(m_impl->m_main_window, tr("Plugin Loading Failed"),
                              tr("Failed to load plugins from '%1'. \nError: %2")
                                  .arg(QString::fromStdString(plugin_path))

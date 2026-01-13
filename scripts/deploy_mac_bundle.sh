@@ -55,21 +55,11 @@ else
     echo "Skipping moving dive.app and running macdeployqt"
 fi
 
-echo "Copying host tools and device resources into app bundle"
+echo "Copying resources into app bundle"
 cp -r ${INSTALL_DIR}/device/* ${INSTALL_DIR}/dive.app/Contents/Resources/ || exit 1
 cp -r ${INSTALL_DIR}/host/* ${INSTALL_DIR}/dive.app/Contents/MacOS/ || exit 1
-
-for dir in ${PROJECT_ROOT}/${INSTALL_DIR}/*/
-do
-    BASENAME="$(basename -- $dir)"
-    if [[ ${BASENAME} == *"plugin" ]]; then
-        echo "Copying plugin dir: ${BASENAME}"
-        mkdir -p ${INSTALL_DIR}/dive.app/Contents/Resources/${BASENAME}/ || exit 1
-        cp -r ${INSTALL_DIR}/${BASENAME}/* ${INSTALL_DIR}/dive.app/Contents/Resources/${BASENAME}/ || exit 1
-    else
-        echo "Skipping non-plugin dir: ${BASENAME}" 
-    fi
-done
+mkdir -p ${INSTALL_DIR}/dive.app/Contents/Resources/plugins/ || exit 1
+cp -r ${INSTALL_DIR}/plugins/* ${INSTALL_DIR}/dive.app/Contents/Resources/plugins/ || exit 1
 
 if ${SIGN_BUNDLE}; then
     echo .

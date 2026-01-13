@@ -360,6 +360,9 @@ INSTANTIATE_TEST_SUITE_P(, UseValidationLayerIsSupportedTest,
                          Values(GfxrReplayOptions::kNormal, GfxrReplayOptions::kPm4Dump,
                                 GfxrReplayOptions::kGpuTiming));
 
+// TODO: b/459459670 - Update tests once solved. While use_validation_layer is theoretically
+// supported by all GfxrReplayOptions values, there's a small practical limitation about setting the
+// system properties reliably that prevents this from working universally.
 class UseValidationLayerIsNotSupportedTest : public ::testing::TestWithParam<GfxrReplayOptions>
 {};
 

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <QObject>
+#include <QString>
 
 #include "dive/ui/types/impl_pointer.h"
 
@@ -31,6 +32,9 @@ class ApplicationController : public QObject
     ApplicationController();
     ~ApplicationController();
 
+    bool IsInteractive();
+    void SetInteractive(bool enabled);
+
     void Register(MainWindow&);
 
     void MainWindowInitialized();
@@ -39,6 +43,8 @@ class ApplicationController : public QObject
     bool InitializePlugins();
 
     bool AdvancedOptionEnabled() const;
+
+    void NotifyWarning(QWidget* parent, const QString& title, const QString& text);
  signals:
     void AdvancedOptionToggled(bool enabled);
 

@@ -390,16 +390,6 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager& mem_manager, uint32_
         }
 
         m_capture_metadata.m_event_info.push_back(event_info);
-
-#if defined(ENABLE_CAPTURE_BUFFERS)
-        // Parse descriptor tables, descriptors, and descriptor contents (ie: textures,
-        // buffers, etc)
-        ShaderReflector sr;
-        SRDCallbacks srd_callbacks;
-        if (!sr.Process(srd_callbacks, mem_manager, m_state_tracker, m_constant_engine_emu,
-                        submit_index, header.opcode, this))
-            return false;
-#endif
     }
     return true;
 }

@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "device_mgr.h"
 
+#include <iomanip>
+
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
 #include "absl/strings/str_join.h"

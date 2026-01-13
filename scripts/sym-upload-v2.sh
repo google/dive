@@ -19,17 +19,20 @@
 #    Uploads Crashpad .sym files to Google Symbol Collector using sym-upload-v2 via curl.
 #
 # USAGE
-#    ./sym-upload-v2.sh <ApiKey> <SymFilePath> <UploadUrl>
+#    ./sym-upload-v2.sh <SymFilePath> <UploadUrl>
 # ==============================================================================
 
 # strict mode: exit on error, undefined vars, or pipe failures
-set -e
-set -u
-set -o pipefail
+set -euo pipefail
 
-API_KEY="${1:-}"
-SYM_FILE_PATH="${2:-}"
-UPLOAD_URL="${3:-}"
+SYM_FILE_PATH="${1:-}"
+UPLOAD_URL="${2:-}"
+
+readonly API_KEY="${CRASHPAD_API_KEY:-}"
+if [[ -z "$API_KEY" ]]; then
+    echo "CRASHPAD_API_KEY environment variable is not set. Symbol upload will fail. Exiting."
+    exit 1
+fi
 
 # Helper functions.
 
@@ -58,8 +61,8 @@ function get_json_value() {
 
 # Validation.
 
-if [[ -z "$API_KEY" || -z "$SYM_FILE_PATH" || -z "$UPLOAD_URL" ]]; then
-    echo "Usage: $0 <ApiKey> <SymFilePath> <UploadUrl>"
+if [[ -z "$SYM_FILE_PATH" || -z "$UPLOAD_URL" ]]; then
+    echo "Usage: $0 <SymFilePath> <UploadUrl>"
     exit 1
 fi
 

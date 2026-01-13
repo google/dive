@@ -93,15 +93,6 @@ function(upload_debug_symbols TARGET_NAME)
         VERBATIM
     )
 
-    if(DEFINED ENV{CRASHPAD_API_KEY})
-        set(CRASHPAD_API_KEY "$ENV{CRASHPAD_API_KEY}")
-    else()
-        message(
-            FATAL_ERROR
-            "CRASHPAD_API_KEY environment variable is not set. Symbol upload will fail."
-        )
-    endif()
-
     if(WIN32)
         set(UPLOAD_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/sym-upload-v2.ps1")
         add_custom_command(
@@ -109,7 +100,7 @@ function(upload_debug_symbols TARGET_NAME)
             POST_BUILD
             COMMAND
                 powershell.exe -ExecutionPolicy Bypass -File "${UPLOAD_SCRIPT}"
-                "${CRASHPAD_API_KEY}" "${SYM_FILENAME}" "${CRASHPAD_UPLOAD_URL}"
+                "${SYM_FILENAME}" "${CRASHPAD_UPLOAD_URL}"
             WORKING_DIRECTORY "${BINARY_OUTPUT_DIR}"
             COMMENT "Uploading debug symbols using curl via PowerShell."
             VERBATIM
@@ -120,7 +111,7 @@ function(upload_debug_symbols TARGET_NAME)
             TARGET ${TARGET_NAME}
             POST_BUILD
             COMMAND
-                bash "${UPLOAD_SCRIPT}" "${CRASHPAD_API_KEY}" "${SYM_FILENAME}"
+                bash "${UPLOAD_SCRIPT}" "${SYM_FILENAME}"
                 "${CRASHPAD_UPLOAD_URL}"
             WORKING_DIRECTORY "${BINARY_OUTPUT_DIR}"
             COMMENT "Uploading debug symbols using curl via Bash."

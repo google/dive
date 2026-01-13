@@ -17,15 +17,20 @@
 #    Uploads Crashpad .sym files to Google Symbol Collector using sym-upload-v2 via curl.
 #
 # USAGE
-#    ./sym-upload-v2.ps1 <ApiKey> <SymFilePath> <UploadUrl>
+#    ./sym-upload-v2.ps1 <SymFilePath> <UploadUrl>
 # ==============================================================================
 
 
 param (
-    [string]$ApiKey,
     [string]$SymFilePath,
     [string]$UploadUrl
 )
+
+$ApiKey = $env:CRASHPAD_API_KEY
+if ([string]::IsNullOrWhiteSpace($ApiKey)) {
+    Write-Host "CRASHPAD_API_KEY environment variable is not set. Symbol upload will fail. Exiting." -ForegroundColor Red
+    exit 1
+}
 
 $ErrorActionPreference = "Stop"
 

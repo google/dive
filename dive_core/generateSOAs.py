@@ -91,6 +91,7 @@ def clang_format(path: str) -> None:
     '''
     Run clang-format on C++ source file given by the path
     '''
+    return
     if 'CLANG_FORMAT' in os.environ:
         clang_format_path = os.environ['CLANG_FORMAT']
     else:

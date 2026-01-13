@@ -14,20 +14,12 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
 project(dive VERSION 1.1.2)
 
 # ------------------------------------------------------------------------------
 # Global properties
-
-get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-if(NOT is_multi_config)
-    message(
-        FATAL_ERROR
-        "Currently we only support Multi-Config generators, e.g. try -G \"Ninja Multi-Config\" rather than -GNinja."
-    )
-endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # Defaults to ON with cmake 3.26+
 
@@ -40,6 +32,7 @@ endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 # TODO: b/462767957 - remove set(CMAKE_INSTALL_PREFIX ...) once we fix search path and mac build.
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install")
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" ON)
 
 # Add an option to allow users to easily toggle the runtime layer build
 option(
@@ -162,15 +155,17 @@ if(NOT ANDROID)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 
-    message(CHECK_START "Generate build files for third_party/crashpad")
-    list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    set(CRASHPAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(CRASHPAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    add_subdirectory(third_party/crashpad EXCLUDE_FROM_ALL)
-    list(POP_BACK CMAKE_MESSAGE_INDENT)
-    message(CHECK_PASS "done")
-    add_library(crashpad_client ALIAS client)
-    set_target_properties(handler PROPERTIES OUTPUT_NAME "crashpad_handler")
+    if(DIVE_BUILD_WITH_CRASHPAD)
+        message(CHECK_START "Generate build files for third_party/crashpad")
+        list(APPEND CMAKE_MESSAGE_INDENT "  ")
+        set(CRASHPAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(CRASHPAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        add_subdirectory(third_party/crashpad EXCLUDE_FROM_ALL)
+        list(POP_BACK CMAKE_MESSAGE_INDENT)
+        message(CHECK_PASS "done")
+        add_library(crashpad_client ALIAS client)
+        set_target_properties(handler PROPERTIES OUTPUT_NAME "crashpad_handler")
+    endif()
 else()
     message(
         CHECK_START

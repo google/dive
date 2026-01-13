@@ -77,8 +77,6 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
     m_metrics_list = new QListWidget();
-    m_csv_items = new QVector<CsvItem>();
-    m_enabled_metrics_vector = new std::vector<std::string>();
     PopulateMetrics();
 
     // Metrics Description
@@ -240,9 +238,9 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
             if (current)
             {
                 int index = m_metrics_list->row(current);
-                if (index >= 0 && index < m_csv_items->size())
+                if (index >= 0 && index < m_csv_items.size())
                 {
-                    m_selected_metrics_description->setText(m_csv_items->at(index).description);
+                    m_selected_metrics_description->setText(m_csv_items[index].description);
                 }
             }
         });
@@ -313,12 +311,12 @@ void AnalyzeDialog::PopulateMetrics()
                 item.key = QString::fromStdString(key);
                 item.name = QString::fromStdString(info->m_name);
                 item.description = QString::fromStdString(info->m_description);
-                m_csv_items->append(item);
+                m_csv_items.append(item);
             }
         }
 
         // Populate the metrics list
-        for (const auto& item : *m_csv_items)
+        for (const auto& item : m_csv_items)
         {
             QListWidgetItem* csv_item = new QListWidgetItem(item.name);
             csv_item->setData(kDataRole, item.key);
@@ -360,7 +358,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
 {
     // Clear the existing items in the target list
     m_enabled_metrics_list->clear();
-    m_enabled_metrics_vector->clear();
+    m_enabled_metrics_vector.clear();
 
     // Iterate through the source list to find checked items
     for (int i = 0; i < m_metrics_list->count(); ++i)
@@ -371,7 +369,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
         if (item->checkState() == Qt::Checked)
         {
             m_enabled_metrics_list->addItem(item->text());
-            m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
+            m_enabled_metrics_vector.push_back(item->data(kDataRole).toString().toStdString());
         }
     }
 }
@@ -603,7 +601,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager& device_manage
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
 
     // Variant-specific config
-    replay_settings.metrics = *m_enabled_metrics_vector;
+    replay_settings.metrics = m_enabled_metrics_vector;
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -664,7 +662,7 @@ void AnalyzeDialog::OnReplay()
         return ShowMessage("No replay setting enabled. Please enable at least one setting.");
     }
 
-    if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
+    if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector.empty())
     {
         return ShowMessage("Perf counter setting is enabled. Please enable at least one metric.");
     }

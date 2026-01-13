@@ -55,6 +55,7 @@ option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 set(DIVE_INSTALL_DEST_HOST "host") # Should only be used as destination for host builds
 set(DIVE_INSTALL_DEST_DEVICE "device") # Should only be used as destination for device builds
 # Plugins folders
+set(DIVE_PLUGINS_PARENT_DIR "plugins")
 set(DIVE_INSTALL_DEST_SAMPLE_PLUGIN "dive_sample_plugin")
 set(DIVE_PROFILING_PLUGIN_DIR "dive_profiling_plugin") # This is not built within Dive
 # macOS bundle

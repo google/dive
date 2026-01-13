@@ -134,15 +134,15 @@ Running the script `scripts/build_android.sh` will build and install the device 
 
 ### Windows
 
-Run the following in the Visual Studio Developer Command Prompt for VS 2022 (or 2019):
-
-Running the script `scripts\build_android.bat` will build and install the device resources at `$DIVE_ROOT_PATH\pkg\device`.
+In the Visual Studio Developer Command Prompt for VS 2022 (or 2019), running the script `scripts\build_android.bat` will build and install the device resources at `$DIVE_ROOT_PATH\pkg\device`.
 
 ### Troubleshooting Tips
 * Gradle build
     * Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
     * Delete GFXR build folders for a clean build
+        * `third_party/gfxreconstruct/android/layer/.cxx`
         * `third_party/gfxreconstruct/android/layer/build`
+        * `third_party/gfxreconstruct/android/tools/replay/.cxx`
         * `third_party/gfxreconstruct/android/tools/replay/build`
 
 ## App bundle (macOS)

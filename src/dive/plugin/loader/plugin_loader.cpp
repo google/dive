@@ -20,6 +20,7 @@
 #include <string>
 
 #include "absl/strings/str_cat.h"
+#include "dive/utils/device_resources.h"
 
 namespace Dive
 {
@@ -75,7 +76,7 @@ PluginLoader::PluginLoader() : m_library_loader(CreateDynamicLibraryLoader()) {}
 
 PluginLoader::~PluginLoader() { UnloadPlugins(); }
 
-absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_path)
+absl::Status PluginLoader::LoadPlugins()
 {
     std::string error_message;
 
@@ -83,13 +84,13 @@ absl::Status PluginLoader::LoadPlugins(const std::filesystem::path& plugins_dir_
         absl::StrAppend(&error_message, "PluginLoader: ", msg, "\n");
     };
 
-    if (!std::filesystem::exists(plugins_dir_path) ||
-        !std::filesystem::is_directory(plugins_dir_path))
+    absl::StatusOr<std::filesystem::path> plugins_dir_path = Dive::ResolvePluginsDir();
+    if (!plugins_dir_path.ok())
     {
-        return absl::NotFoundError("Plugin directory not found: " + plugins_dir_path.string());
+        return plugins_dir_path.status();
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(plugins_dir_path))
+    for (const auto& entry : std::filesystem::directory_iterator(*plugins_dir_path))
     {
         if (!entry.is_regular_file())
         {

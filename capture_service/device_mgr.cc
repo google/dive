@@ -32,7 +32,6 @@ limitations under the License.
 #include "common/log.h"
 #include "common/macros.h"
 #include "constants.h"
-#include "dive/build_defs/resource_defs.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/component_files.h"
 #include "dive/utils/component_files_constants.h"
@@ -1078,18 +1077,20 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings& s
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
 
-    RETURN_IF_ERROR(m_device->DeployDeviceResource(DIVE_PROFILING_PLUGIN_DIR));
-    std::string remote_profiling_dir = absl::StrFormat(
-        "%s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath, DIVE_PROFILING_PLUGIN_DIR);
+    absl::StatusOr<std::string> remote_profiling_dir = m_device->DeployProfilingPluginDir();
+    if (!remote_profiling_dir.ok())
+    {
+        return remote_profiling_dir.status();
+    }
 
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
-        std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
+        std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", *remote_profiling_dir);
         adb.Run(clean_cmd).IgnoreError();
     });
 
     std::string binary_path_on_device =
-        absl::StrFormat("%s/%s", remote_profiling_dir, kProfilingPluginName);
+        absl::StrFormat("%s/%s", *remote_profiling_dir, kProfilingPluginName);
     RETURN_IF_ERROR(adb.Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
 
     LOGD("RunReplayProfilingBinary(): RUN\n");
@@ -1382,6 +1383,24 @@ absl::Status AndroidDevice::TriggerScreenCapture(
     absl::Status ret =
         m_adb.Run(absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
     return ret;
+}
+
+absl::StatusOr<std::string> AndroidDevice::DeployProfilingPluginDir(
+    const std::filesystem::path& target_dir)
+{
+    absl::StatusOr<std::filesystem::path> local_profiling_dir_path =
+        Dive::ResolveProfilingResourcesLocalPath(".");
+    if (!local_profiling_dir_path.ok())
+    {
+        return local_profiling_dir_path.status();
+    }
+
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell mkdir -p '%s')", target_dir)));
+
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(
+        R"(push "%s" "%s")", local_profiling_dir_path->generic_string(), target_dir)));
+
+    return absl::StrFormat("%s/%s", target_dir, Dive::GetProfilingDirName());
 }
 
 absl::Status AndroidDevice::DeployDeviceResource(const std::string_view& file_name,

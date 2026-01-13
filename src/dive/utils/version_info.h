@@ -26,7 +26,7 @@ namespace Dive
 
 struct VersionInfoConstants
 {
-    // Expected fields in DIVE_DEVICE_RESOURCES_VERSION_FILENAME
+    // Expected fields in CMAKE_GENERATED_DEVICE_RESOURCES_VERSION_FILENAME
     static constexpr size_t kKeyCount = 5;
     static constexpr std::string_view kNameSha = "sha";
     static constexpr std::string_view kNameVersion = "version";
@@ -75,11 +75,12 @@ std::string GetLongVersionString();
 std::string GetCompleteVersionString();
 
 // Returns a validated key-value map representing all the info within
-// DIVE_DEVICE_RESOURCES_VERSION_FILENAME
+// CMAKE_GENERATED_DEVICE_RESOURCES_VERSION_FILENAME
 absl::StatusOr<std::map<std::string_view, std::string_view>> GetDeviceResourcesVersionMap(
     const std::string& csv_content);
 
-// Returns the value of the field represented by a key in DIVE_DEVICE_RESOURCES_VERSION_FILENAME
+// Returns the value of the field represented by a key in
+// CMAKE_GENERATED_DEVICE_RESOURCES_VERSION_FILENAME
 absl::StatusOr<std::string> GetDeviceResourceInfo(std::string_view key);
 
 }  // namespace Dive

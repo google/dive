@@ -69,18 +69,12 @@ bool ApplicationController::InitializePlugins()
     {
         return false;
     }
-    // This assumes plugins are in a 'plugins' subdirectory relative to the executable's directory.
-    std::string plugin_path = QCoreApplication::applicationDirPath().toStdString() + "/plugins";
 
-    std::filesystem::path plugins_dir_path(plugin_path);
-
-    if (absl::Status load_status = m_impl->m_plugin_manager.LoadPlugins(plugins_dir_path);
-        !load_status.ok())
+    if (absl::Status load_status = m_impl->m_plugin_manager.LoadPlugins(); !load_status.ok())
     {
-        QMessageBox::warning(m_impl->m_main_window, tr("Plugin Loading Failed"),
-                             tr("Failed to load plugins from '%1'. \nError: %2")
-                                 .arg(QString::fromStdString(plugin_path))
-                                 .arg(QString::fromStdString(std::string(load_status.message()))));
+        QMessageBox::warning(
+            m_impl->m_main_window, tr("Plugin Loading Failed"),
+            tr("Error: '%1'").arg(QString::fromStdString(std::string(load_status.message()))));
         return false;
     }
     return true;

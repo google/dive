@@ -19,6 +19,19 @@
 
 namespace Dive
 {
+// -----------------------------------------------------------------------------
+// Wrappers so that fewer files are regenerated when dive_cmake_generated.h is, every time SHA
+// changes
+
+std::string_view GetDeviceResourcesVersionFileName();
+
+std::string_view GetProfilingDirName();
+
+std::string_view GetLicenseFileName();
+
+// -----------------------------------------------------------------------------
+// Returns the path of the parent dir containing plugins subdirectories
+absl::StatusOr<std::filesystem::path> ResolvePluginsDir();
 
 // Returns the full local path of relative_file_path, which represents a host resource file
 absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(

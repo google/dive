@@ -30,7 +30,6 @@
 #include <filesystem>
 #include <sstream>
 
-#include "dive/build_defs/resource_defs.h"
 #include "utils/device_resources.h"
 #include "utils/device_resources_constants.h"
 #include "utils/version_info.h"
@@ -42,10 +41,22 @@
 AboutDialog::AboutDialog(QWidget* parent)
 {
     auto main_layout = new QVBoxLayout;
-    main_layout->addLayout(CreateHeaderLayout());
-    main_layout->addLayout(CreateVersionLayout());
-    main_layout->addLayout(CreateLicenseLayout());
-    main_layout->addLayout(CreateButtonLayout());
+    if (auto layout = CreateHeaderLayout())
+    {
+        main_layout->addLayout(layout);
+    }
+    if (auto layout = CreateVersionLayout())
+    {
+        main_layout->addLayout(layout);
+    }
+    if (auto layout = CreateLicenseLayout())
+    {
+        main_layout->addLayout(layout);
+    }
+    if (auto layout = CreateButtonLayout())
+    {
+        main_layout->addLayout(layout);
+    }
 
     // Disable help icon, set size, title, and layout
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -93,7 +104,7 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
 
     auto license_notice = new QPlainTextEdit();
 
-    std::filesystem::path notice_file_path = DIVE_LICENSE_FILE_NAME;
+    std::filesystem::path notice_file_path = Dive::GetLicenseFileName();
     {
         absl::StatusOr<std::filesystem::path> ret =
             Dive::ResolveHostResourcesLocalPath(notice_file_path);
@@ -102,6 +113,7 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
             std::string err_msg =
                 absl::StrFormat("Can't locate notice file, checked: %s", ret.status().message());
             qDebug() << err_msg.c_str();
+            return nullptr;
         }
         notice_file_path = *ret;
     }

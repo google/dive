@@ -66,11 +66,11 @@ std::ostream& operator<<(std::ostream& os, const std::optional<int>& optional_in
 void PrintTo(const GfxrReplaySettings& settings, std::ostream* os)
 {
     *os << "GfxrReplaySettings {\n";
-    *os << "  romete_capture_path: " << settings.remote_capture_path << ",\n";
-    *os << "  local_download_dir: " << settings.local_download_dir << ",\n";
+    *os << "  romete_capture_path: " << std::quoted(settings.remote_capture_path) << ",\n";
+    *os << "  local_download_dir: " << std::quoted(settings.local_download_dir) << ",\n";
     *os << "  run_type: " << settings.run_type << ",\n";
     *os << "  replay_flags_str: " << std::quoted(settings.replay_flags_str) << ",\n";
-    *os << "  wait_for_debugger: " << settings.wait_for_debugger << ",\n";
+    *os << "  wait_for_debugger: " << (settings.wait_for_debugger ? "true" : "false") << ",\n";
     *os << "  metrics: [" << absl::StrJoin(settings.metrics, ", ") << "],\n";
     *os << "  loop_single_frame_count: " << settings.loop_single_frame_count << ",\n";
     *os << "  use_validation_layer: " << (settings.use_validation_layer ? "true" : "false")

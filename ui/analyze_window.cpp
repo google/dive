@@ -450,8 +450,8 @@ void AnalyzeDialog::OnDeviceSelected(const QString& s)
         m_cur_device = "";
         Dive::GetDeviceManager().RemoveDevice();
 
-        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s",
-                                              m_cur_device, ret.status().message());
+        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s", m_cur_device,
+                                              ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(err_msg);
         OnDeviceListRefresh();

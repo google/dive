@@ -77,6 +77,14 @@ function(upload_debug_symbols TARGET_NAME)
         set(DEBUG_FILE "$<TARGET_PDB_FILE:${TARGET_NAME}>")
     elseif(APPLE)
         set(DEBUG_FILE "$<TARGET_FILE:${TARGET_NAME}>.dSYM")
+        add_custom_command(
+            TARGET ${TARGET_NAME}
+            POST_BUILD
+            COMMAND dsymutil $<TARGET_FILE:${TARGET_NAME}>
+            WORKING_DIRECTORY "${BINARY_OUTPUT_DIR}"
+            COMMENT "Generating debug symbols bundle (dSYM)"
+            VERBATIM
+        )
     elseif(UNIX)
         set(DEBUG_FILE "$<TARGET_FILE:${TARGET_NAME}>")
     endif()

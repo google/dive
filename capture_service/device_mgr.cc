@@ -816,8 +816,9 @@ absl::StatusOr<AndroidDevice*> DeviceManager::SelectDevice(const std::string& se
         // The way this class is used in the UI code, there may be a period of time between when
         // ListDevice and SelectDevice is called. This means that even m_device may now be invalid.
         // Don't clear it though, since (a) without checking, it might still be OK to use, and (b)
-        // we previously returned a non-owning pointer to it which would also be invalid. (b) could
-        // be solved by returning a weak_pointer instead.
+        // we previously returned a non-owning pointer to it which would then become invalid (any
+        // use would lead to heap-use-after-free). (b) could be solved by returning a weak_pointer
+        // instead.
         return device.status();
     }
 

@@ -105,6 +105,11 @@ absl::Status InitializeCrashpad()
         return exe_dir.status();
     }
     std::filesystem::path handler_path = *exe_dir / GetHandlerBinaryName();
+    if (!std::filesystem::exists(handler_path))
+    {
+        return absl::NotFoundError(
+            absl::StrCat("Crashpad handler not found at: ", handler_path.string()));
+    }
 
     static absl::NoDestructor<crashpad::CrashpadClient> client;
 

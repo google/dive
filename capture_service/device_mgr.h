@@ -103,8 +103,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
 class AndroidDevice
 {
  public:
-    static absl::StatusOr<absl_nonnull std::unique_ptr<AndroidDevice>> Create(
-        const std::string& serial);
+    static absl::StatusOr<std::unique_ptr<AndroidDevice>> Create(const std::string& serial);
 
     ~AndroidDevice();
 

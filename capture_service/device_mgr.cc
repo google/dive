@@ -357,8 +357,7 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     return validated_settings;
 }
 
-absl::StatusOr<absl_nonnull std::unique_ptr<AndroidDevice>> AndroidDevice::Create(
-    const std::string& serial)
+absl::StatusOr<std::unique_ptr<AndroidDevice>> AndroidDevice::Create(const std::string& serial)
 {
     if (serial.empty())
     {

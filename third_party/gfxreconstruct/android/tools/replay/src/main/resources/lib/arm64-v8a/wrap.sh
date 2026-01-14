@@ -35,7 +35,7 @@ fi
 
 echo "capture_pm4_enabled is " $capture_pm4_enabled
 if [[ "$capture_pm4_enabled" == "true" || "$capture_pm4_enabled" == "1" ]]; then
-    export LD_PRELOAD=/data/local/tmp/libwrap.so
+    export LD_PRELOAD=/data/local/tmp/dive/libwrap.so
 fi
 
 exec $cmd

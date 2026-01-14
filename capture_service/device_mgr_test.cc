@@ -494,9 +494,9 @@ INSTANTIATE_TEST_SUITE_P(, HardcodedLoopSingleFrameCountTest,
                          Values(GfxrReplayOptions::kPm4Dump, GfxrReplayOptions::kPerfCounters,
                                 GfxrReplayOptions::kRenderDoc));
 
-TEST(DeviceManagerTest, EmptySerialIsInvalidForSelectDevice)
+TEST(AndroidDeviceTest, EmptySerialIsInvalidForCreate)
 {
-    ASSERT_EQ(DeviceManager().SelectDevice("").status().code(), absl::StatusCode::kInvalidArgument);
+    ASSERT_THAT(AndroidDevice::Create(""), StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace

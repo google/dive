@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "device_mgr.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <future>
 #include <memory>
@@ -809,6 +810,15 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
 
 absl::StatusOr<AndroidDevice*> DeviceManager::SelectDevice(const std::string& serial)
 {
+    std::vector<DeviceInfo> devices = ListDevice();
+    if (std::none_of(devices.begin(), devices.end(), [&serial](const DeviceInfo& device_info) {
+            return device_info.m_serial == serial;
+        }))
+    {
+        return absl::FailedPreconditionError(
+            absl::StrCat("Device is not available to be selected: ", serial));
+    }
+
     absl::StatusOr<std::unique_ptr<AndroidDevice>> device = AndroidDevice::Create(serial);
     if (!device.ok())
     {

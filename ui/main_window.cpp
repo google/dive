@@ -967,6 +967,9 @@ bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool 
         m_gpu_timing_model->OnGpuTimingResultsGenerated("");
         m_capture_manager->GetDataCoreLock().unlock();
 
+        // Reset the command buffer model and view.
+        m_command_tab_view->ResetModel();
+
         *m_capture_stats = {};
         m_overview_tab_view->LoadStatistics();
     }

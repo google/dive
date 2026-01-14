@@ -104,21 +104,17 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
 
     auto license_notice = new QPlainTextEdit();
 
-    std::filesystem::path notice_file_path = Dive::GetLicenseFileName();
+    absl::StatusOr<std::filesystem::path> notice_file_path =
+        Dive::ResolveHostResourcesLocalPath(Dive::GetLicenseFileName());
+    if (!notice_file_path.ok())
     {
-        absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveHostResourcesLocalPath(notice_file_path);
-        if (!ret.ok())
-        {
-            std::string err_msg =
-                absl::StrFormat("Can't locate notice file, checked: %s", ret.status().message());
-            qDebug() << err_msg.c_str();
-            return nullptr;
-        }
-        notice_file_path = *ret;
+        std::string err_msg = absl::StrFormat("Can't locate notice file, checked: %s",
+                                              notice_file_path.status().message());
+        qDebug() << err_msg.c_str();
+        return nullptr;
     }
 
-    QFile licenseFile{notice_file_path.generic_string().c_str()};
+    QFile licenseFile{notice_file_path->generic_string().c_str()};
     if (licenseFile.open(QIODevice::ReadOnly))
     {
         license_notice->setPlainText(licenseFile.readAll());

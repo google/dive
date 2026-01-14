@@ -67,6 +67,14 @@ for this purpose.
 - "Update with rebase" only when the branch is out-of-date. This ensures a linear history in case "Rebase and merge" is used to submit a PR.
 - Add a comment to the PR describing what manual tests were performed by the contributor.
 
+### Unit and regression tests
+```sh
+cd $DIVE_ROOT_PATH
+ctest -C Debug --test-dir build
+```
+
+Make sure to have built everything according to BUILD.md (don't forget the install step) before running the tests.
+
 ## Updating Dive's gfxreconstruct subtree
 
 1. Create a branch to contain the merge.

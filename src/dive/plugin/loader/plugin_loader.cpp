@@ -84,7 +84,7 @@ absl::Status PluginLoader::LoadPlugins()
         absl::StrAppend(&error_message, "PluginLoader: ", msg, "\n");
     };
 
-    absl::StatusOr<std::filesystem::path> plugins_dir_path = Dive::ResolvePluginsDir();
+    absl::StatusOr<std::filesystem::path> plugins_dir_path = ResolvePluginsDir();
     if (!plugins_dir_path.ok())
     {
         return plugins_dir_path.status();

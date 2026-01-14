@@ -327,12 +327,14 @@ if(NOT ANDROID)
 
     # MacOS has limited thread stack size, allocating large object in stack makes its stack overflow
     # This has been fixed in https://github.com/google/dive/pull/541
-    if(APPLE)
+    if(CMAKE_HOST_APPLE)
         set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_BINARY_DIR}/ui/$<CONFIG>/dive.app/Contents/MacOS/dive
+            ${CMAKE_CURRENT_SOURCE_DIR}/pkg/dive.app/Contents/MacOS/dive
         )
+    elseif(CMAKE_HOST_WIN32)
+        set(DIVE_EXECUTABLE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/pkg/host/dive.exe)
     else()
-        set(DIVE_EXECUTABLE_PATH ${CMAKE_BINARY_DIR}/ui/dive)
+        set(DIVE_EXECUTABLE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/pkg/host/dive)
     endif()
     set(DIVE_TEST_TRACE_DIR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces)
     set(DIVE_TEST_TRACE

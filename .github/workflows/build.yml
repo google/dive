@@ -336,6 +336,13 @@ jobs:
       - name: Produce install artifacts
         run: |
           cmake --install build --prefix pkg --config Debug
+      - name: Put files in app bundle
+        run: |
+          mv ./pkg/host/dive.app ./pkg/
+          macdeployqt ./pkg/dive.app
+          cp -r ./pkg/host/* ./pkg/dive.app/Contents/MacOS/
+          mkdir -p ./pkg/dive.app/Contents/Resources/plugins/
+          cp -r ./pkg/plugins/* ./pkg/dive.app/Contents/Resources/plugins/
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -390,6 +397,13 @@ jobs:
       - name: Produce install artifacts
         run: |
           cmake --install build --prefix pkg --config Release
+      - name: Put files in app bundle
+        run: |
+          mv ./pkg/host/dive.app ./pkg/
+          macdeployqt ./pkg/dive.app
+          cp -r ./pkg/host/* ./pkg/dive.app/Contents/MacOS/
+          mkdir -p ./pkg/dive.app/Contents/Resources/plugins/
+          cp -r ./pkg/plugins/* ./pkg/dive.app/Contents/Resources/plugins/
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build

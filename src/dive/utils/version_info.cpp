@@ -180,8 +180,7 @@ std::string GetLongVersionString()
 {
     std::string summary = GetHostToolsVersionInfo();
 
-    if (auto ret = Dive::ResolveDeviceResourcesLocalPath(Dive::GetDeviceResourcesVersionFileName());
-        ret.ok())
+    if (auto ret = ResolveDeviceResourcesLocalPath(GetDeviceResourcesVersionFileName()); ret.ok())
     {
         std::filesystem::path device_resources_version_path = *ret;
         if (absl::StatusOr<std::string> ret =
@@ -203,7 +202,7 @@ std::string GetLongVersionString()
     std::filesystem::path profiling_sha_path =
         Dive::DeviceResourcesConstants::kProfilingPluginShaName;
 
-    if (auto ret = Dive::ResolveProfilingResourcesLocalPath(profiling_sha_path); ret.ok())
+    if (auto ret = ResolveProfilingResourcesLocalPath(profiling_sha_path); ret.ok())
     {
         std::filesystem::path profiling_plugin_version_path = *ret;
         if (absl::StatusOr<std::string> ret =

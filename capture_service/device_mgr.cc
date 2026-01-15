@@ -357,6 +357,19 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
     return validated_settings;
 }
 
+absl::StatusOr<std::unique_ptr<AndroidDevice>> AndroidDevice::Create(const std::string& serial)
+{
+    if (serial.empty())
+    {
+        return absl::InvalidArgumentError("Device Serial is empty");
+    }
+
+    auto device = std::unique_ptr<AndroidDevice>(new AndroidDevice(serial));
+    RETURN_IF_ERROR(device->Init());
+
+    return device;
+}
+
 AndroidDevice::AndroidDevice(const std::string& serial)
     : m_serial(serial), m_adb(serial), m_gfxr_enabled(false), m_port(kFirstPort)
 {
@@ -796,23 +809,19 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
 
 absl::StatusOr<AndroidDevice*> DeviceManager::SelectDevice(const std::string& serial)
 {
-    if (serial.empty())
+    absl::StatusOr<std::unique_ptr<AndroidDevice>> device = AndroidDevice::Create(serial);
+    if (!device.ok())
     {
-        return absl::InvalidArgumentError("Device Serial is empty");
+        // The way this class is used in the UI code, there may be a period of time between when
+        // ListDevice and SelectDevice is called. This means that even m_device may now be invalid.
+        // Don't clear it though, since (a) without checking, it might still be OK to use, and (b)
+        // we previously returned a non-owning pointer to it which would then become invalid (any
+        // use would lead to heap-use-after-free). (b) could be solved by returning a weak_pointer
+        // instead.
+        return device.status();
     }
 
-    m_device = std::make_unique<AndroidDevice>(serial);
-    if (!m_device)
-    {
-        return absl::UnavailableError("Failed to allocate memory for AndroidDevice");
-    }
-
-    absl::Status status = m_device->Init();
-    if (!status.ok())
-    {
-        return status;
-    }
-
+    m_device = std::move(device).value();
     return m_device.get();
 }
 

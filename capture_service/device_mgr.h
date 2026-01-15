@@ -103,7 +103,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
 class AndroidDevice
 {
  public:
-    explicit AndroidDevice(const std::string& serial);
+    static absl::StatusOr<std::unique_ptr<AndroidDevice>> Create(const std::string& serial);
+
     ~AndroidDevice();
 
     AndroidDevice& operator=(const AndroidDevice&) = delete;
@@ -192,6 +193,8 @@ class AndroidDevice
     absl::Status CleanupFileWithPermissions(std::string_view package, std::string_view file_name);
 
  private:
+    explicit AndroidDevice(const std::string& serial);
+
     // The ABI must be consistent between the connected device and the Dive device resources
     absl::Status CheckAbi();
 
@@ -212,6 +215,10 @@ class DeviceManager
     DeviceManager(const DeviceManager&) = delete;
 
     std::vector<DeviceInfo> ListDevice() const;
+    // Creates and stores an object representing the connection to the device with the given serial.
+    // `serial` must correspond to one returned by ListDevice. Returns a non-owning reference to
+    // that which was created. If this fails then DeviceManager state will remain unaltered;
+    // GetDevice will return the previous SelectDevice result.
     absl::StatusOr<AndroidDevice*> SelectDevice(const std::string& serial);
     void RemoveDevice() { m_device = nullptr; }
     AndroidDevice* GetDevice() const { return m_device.get(); }

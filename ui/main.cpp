@@ -38,6 +38,7 @@
 #include "absl/flags/usage_config.h"
 #include "application_controller.h"
 #include "custom_metatypes.h"
+#include "dive/crashpad/crashpad_client.h"
 #include "dive/os/terminal.h"
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
@@ -270,13 +271,23 @@ int main(int argc, char* argv[])
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);
 
-    absl::InitializeSymbolizer(argv[0]);
+    if (auto ret = Dive::InitializeCrashpad(); ret.ok())
+    {
+        qDebug() << "Crashpad initialized successfully.";
+    }
+    else
+    {
+        qDebug() << "Crashpad initialization failed: " << ret.message().data();
+        qDebug() << "Falling back to absl::InstallFailureSignalHandler.";
 
-    CrashHandler::Initialize(argv[0]);
+        absl::InitializeSymbolizer(argv[0]);
 
-    absl::FailureSignalHandlerOptions options;
-    options.writerfn = CrashHandler::Writer;
-    absl::InstallFailureSignalHandler(options);
+        CrashHandler::Initialize(argv[0]);
+
+        absl::FailureSignalHandlerOptions options;
+        options.writerfn = CrashHandler::Writer;
+        absl::InstallFailureSignalHandler(options);
+    }
 
     const bool native_style = absl::GetFlag(FLAGS_native_style);
     if (!native_style)

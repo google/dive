@@ -19,6 +19,7 @@ echo "Format in-place using gersemi tool"
 SRC_DIRS=(
     "capture_service"
     "cli"
+    "cmake"
     "dive_core"
     "gfxr_dump_resources"
     "gfxr_ext"

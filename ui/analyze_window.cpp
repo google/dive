@@ -50,6 +50,13 @@
 #include "dive/ui/components/settings/settings.h"
 #include "ui/application_controller.h"
 
+namespace
+{
+
+using ::Dive::DeviceInfo;
+using ::Dive::DeviceManager;
+using ::Dive::GetDeviceManager;
+
 //--------------------------------------------------------------------------------------------------
 void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
 {
@@ -62,6 +69,8 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
         qDebug() << "Was not present: " << file_path.string().c_str();
     }
 }
+
+}  // namespace
 
 // =================================================================================================
 // AnalyzeDialog
@@ -77,8 +86,6 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     // Metrics List
     m_metrics_list_label = new QLabel(tr("Available Metrics:"));
     m_metrics_list = new QListWidget();
-    m_csv_items = new QVector<CsvItem>();
-    m_enabled_metrics_vector = new std::vector<std::string>();
     PopulateMetrics();
 
     // Metrics Description
@@ -102,12 +109,11 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     m_device_label = new QLabel(tr("Devices:"));
     m_device_model = new QStandardItemModel();
     m_device_box = new QComboBox();
-    m_device_refresh_button = new QPushButton("&Refresh", this);
-    m_devices = Dive::GetDeviceManager().ListDevice();
-    UpdateDeviceList(false);
-    m_device_box->setCurrentText("Please select a device");
     m_device_box->setModel(m_device_model);
-    m_device_box->setCurrentIndex(0);
+    // UpdateDeviceList will initialize m_devices, m_device_model, and m_device_box. It requires
+    // m_replay_button to be valid. force_update to ensure everything is initialized.
+    UpdateDeviceList(/*force_update=*/true);
+    m_device_refresh_button = new QPushButton("&Refresh", this);
     m_device_layout->addWidget(m_device_label);
     m_device_layout->addWidget(m_device_box);
     m_device_layout->addWidget(m_device_refresh_button);
@@ -240,9 +246,9 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
             if (current)
             {
                 int index = m_metrics_list->row(current);
-                if (index >= 0 && index < m_csv_items->size())
+                if (index >= 0 && index < m_csv_items.size())
                 {
-                    m_selected_metrics_description->setText(m_csv_items->at(index).description);
+                    m_selected_metrics_description->setText(m_csv_items[index].description);
                 }
             }
         });
@@ -313,12 +319,12 @@ void AnalyzeDialog::PopulateMetrics()
                 item.key = QString::fromStdString(key);
                 item.name = QString::fromStdString(info->m_name);
                 item.description = QString::fromStdString(info->m_description);
-                m_csv_items->append(item);
+                m_csv_items.append(item);
             }
         }
 
         // Populate the metrics list
-        for (const auto& item : *m_csv_items)
+        for (const auto& item : m_csv_items)
         {
             QListWidgetItem* csv_item = new QListWidgetItem(item.name);
             csv_item->setData(kDataRole, item.key);
@@ -360,7 +366,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
 {
     // Clear the existing items in the target list
     m_enabled_metrics_list->clear();
-    m_enabled_metrics_vector->clear();
+    m_enabled_metrics_vector.clear();
 
     // Iterate through the source list to find checked items
     for (int i = 0; i < m_metrics_list->count(); ++i)
@@ -371,19 +377,20 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
         if (item->checkState() == Qt::Checked)
         {
             m_enabled_metrics_list->addItem(item->text());
-            m_enabled_metrics_vector->push_back(item->data(kDataRole).toString().toStdString());
+            m_enabled_metrics_vector.push_back(item->data(kDataRole).toString().toStdString());
         }
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
+void AnalyzeDialog::UpdateDeviceList(bool force_update)
 {
-    auto cur_list = Dive::GetDeviceManager().ListDevice();
+    DeviceManager& device_manager = GetDeviceManager();
+    auto cur_list = device_manager.ListDevice();
     qDebug() << "m_device_box->currentIndex() " << m_device_box->currentIndex();
-    if (cur_list == m_devices && isInitialized)
+    if (cur_list == m_devices && !force_update)
     {
-        qDebug() << "No changes from the list of the connected devices. ";
+        qDebug() << "No changes from the list of the connected devices.";
         return;
     }
 
@@ -392,33 +399,36 @@ void AnalyzeDialog::UpdateDeviceList(bool isInitialized)
     // Replay button should only be enabled when a device is selected.
     m_replay_button->setEnabled(false);
 
-    if (m_devices.empty())
+    // The first index is always textual feedback for the user.
+    QStandardItem* item =
+        new QStandardItem(m_devices.empty() ? "No devices found" : "Please select a device");
+    item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
+    m_device_model->appendRow(item);
+
+    std::optional<size_t> current_device_index;
+    for (size_t i = 0; i < m_devices.size(); ++i)
     {
-        QStandardItem* item = new QStandardItem("No devices found");
-        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        m_device_model->appendRow(item);
-        m_device_box->setCurrentIndex(0);
+        m_device_model->appendRow(new QStandardItem(m_devices[i].GetDisplayName().c_str()));
+        if (m_cur_device == m_devices[i].m_serial)
+        {
+            current_device_index = i;
+        }
+    }
+
+    if (current_device_index)
+    {
+        // Keep the original selected devices as selected. The devices start after all non-device
+        // entries.
+        size_t device_model_index = *current_device_index + 1;
+        m_device_box->setCurrentIndex(static_cast<int>(device_model_index));
     }
     else
     {
-        for (size_t i = 0; i < m_devices.size(); i++)
-        {
-            if (i == 0)
-            {
-                QStandardItem* item = new QStandardItem("Please select a device");
-                item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-                m_device_model->appendRow(item);
-                m_device_box->setCurrentIndex(0);
-            }
-
-            QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
-            m_device_model->appendRow(item);
-            // Keep the original selected devices as selected.
-            if (m_cur_device == m_devices[i].m_serial)
-            {
-                m_device_box->setCurrentIndex(static_cast<int>(i));
-            }
-        }
+        // If not in the list then it must have disconnected. Therefore, it can no longer the
+        // currently selected device.
+        m_device_box->setCurrentIndex(0);
+        m_cur_device = "";
+        device_manager.RemoveDevice();
     }
 }
 
@@ -447,8 +457,13 @@ void AnalyzeDialog::OnDeviceSelected(const QString& s)
             Dive::GetDeviceManager().SelectDevice(m_cur_device);
         !ret.ok())
     {
-        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s",
-                                              m_cur_device.c_str(), ret.status().message());
+        // Reset as much device-specific state as possible when selection fails. Otherwise, we might
+        // get stuck with a half-initialized device.
+        m_cur_device = "";
+        Dive::GetDeviceManager().RemoveDevice();
+
+        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s", m_cur_device,
+                                              ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(err_msg);
         OnDeviceListRefresh();
@@ -459,7 +474,7 @@ void AnalyzeDialog::OnDeviceSelected(const QString& s)
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceListRefresh() { UpdateDeviceList(true); }
+void AnalyzeDialog::OnDeviceListRefresh() { UpdateDeviceList(/*force_update=*/false); }
 
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString& file_path)
@@ -603,7 +618,7 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager& device_manage
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
 
     // Variant-specific config
-    replay_settings.metrics = *m_enabled_metrics_vector;
+    replay_settings.metrics = m_enabled_metrics_vector;
 
     return device_manager.RunReplayApk(replay_settings);
 }
@@ -664,7 +679,7 @@ void AnalyzeDialog::OnReplay()
         return ShowMessage("No replay setting enabled. Please enable at least one setting.");
     }
 
-    if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector->empty())
+    if (m_perf_counter_box->isChecked() && m_enabled_metrics_vector.empty())
     {
         return ShowMessage("Perf counter setting is enabled. Please enable at least one metric.");
     }

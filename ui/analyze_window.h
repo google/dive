@@ -97,7 +97,9 @@ class AnalyzeDialog : public QDialog
     AnalyzeDialog(ApplicationController& controller,
                   const Dive::AvailableMetrics* available_metrics, QWidget* parent = nullptr);
     ~AnalyzeDialog();
-    void UpdateDeviceList(bool isInitialized);
+    // Populates the devices combo box with all availble devices. If force_update is false then only
+    // does work if the current list of devices doesn't match what's shown in the UI.
+    void UpdateDeviceList(bool force_update);
  private slots:
     void OnReplayStatusUpdate(int status_code, const QString& error_message);
     void OnDeviceSelected(const QString&);
@@ -165,6 +167,8 @@ class AnalyzeDialog : public QDialog
 
     QHBoxLayout* m_device_layout;
     QLabel* m_device_label;
+    // Index 0 is text providing feedback to the user. Indices [1..N+1] correspond to m_devices[i]
+    // where N is m_deviecs.size()
     QStandardItemModel* m_device_model;
     QComboBox* m_device_box;
     QPushButton* m_device_refresh_button;
@@ -209,8 +213,8 @@ class AnalyzeDialog : public QDialog
     // Other artifacts
     Dive::ComponentFilePaths m_local_capture_files = {};
 
-    QVector<CsvItem>* m_csv_items;
-    std::vector<std::string>* m_enabled_metrics_vector;
+    QVector<CsvItem> m_csv_items;
+    std::vector<std::string> m_enabled_metrics_vector;
     const Dive::AvailableMetrics* m_available_metrics = nullptr;
     // Used to store a csv item's key in the enabled metrics vector.
     const int kDataRole = Qt::UserRole + 1;

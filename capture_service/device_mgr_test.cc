@@ -16,13 +16,82 @@ limitations under the License.
 
 #include "device_mgr.h"
 
+#include <iomanip>
+
 #include "absl/status/status.h"
 #include "absl/status/status_matchers.h"
+#include "absl/strings/str_join.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace Dive
 {
+
+std::ostream& operator<<(std::ostream& os, const GfxrReplayOptions& run_type)
+{
+    switch (run_type)
+    {
+        case GfxrReplayOptions::kNormal:
+            os << "GfxrReplayOptions::kNormal";
+            break;
+        case GfxrReplayOptions::kPm4Dump:
+            os << "GfxrReplayOptions::kPm4Dump";
+            break;
+        case GfxrReplayOptions::kPerfCounters:
+            os << "GfxrReplayOptions::kPerfCounters";
+            break;
+        case GfxrReplayOptions::kGpuTiming:
+            os << "GfxrReplayOptions::kGpuTiming";
+            break;
+        case GfxrReplayOptions::kRenderDoc:
+            os << "GfxrReplayOptions::kRenderDoc";
+            break;
+        default:
+            os << "<Unkonwn GfxrReplayOptions>";
+            break;
+    }
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const std::optional<int>& optional_int)
+{
+    if (!optional_int)
+    {
+        os << "std::nullopt";
+        return os;
+    }
+
+    os << absl::StrCat(*optional_int);
+    return os;
+}
+
+void PrintTo(const GfxrReplaySettings& settings, std::ostream* os)
+{
+    *os << "GfxrReplaySettings {\n";
+    *os << "  remote_capture_path: " << std::quoted(settings.remote_capture_path) << ",\n";
+    *os << "  local_download_dir: " << std::quoted(settings.local_download_dir) << ",\n";
+    *os << "  run_type: " << settings.run_type << ",\n";
+    *os << "  replay_flags_str: " << std::quoted(settings.replay_flags_str) << ",\n";
+    *os << "  wait_for_debugger: " << (settings.wait_for_debugger ? "true" : "false") << ",\n";
+    *os << "  metrics: [" << absl::StrJoin(settings.metrics, ", ") << "],\n";
+    *os << "  loop_single_frame_count: " << settings.loop_single_frame_count << ",\n";
+    *os << "  use_validation_layer: " << (settings.use_validation_layer ? "true" : "false")
+        << ",\n";
+    *os << "}";
+}
+
+// Called by IsOkAndHolds if !ok(). Removes the print of "200-byte object <CC, ...>" which clutters
+// the output without adding diagnostic value.
+void PrintTo(const absl::StatusOr<GfxrReplaySettings>& settings, std::ostream* os)
+{
+    if (!settings.ok())
+    {
+        *os << "is NOT OK";
+        return;
+    }
+    PrintTo(*settings, os);
+}
+
 namespace
 {
 

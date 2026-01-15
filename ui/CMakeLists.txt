@@ -70,8 +70,6 @@ add_executable(
     analyze_window.h
     application_controller.cpp
     application_controller.h
-    buffer_view.cpp
-    buffer_view.h
     capture_file_manager.cpp
     capture_file_manager.h
     capture_worker.cpp
@@ -171,18 +169,6 @@ add_executable(
     viewport_stats_model.h
     window_scissors_stats_model.cpp
     window_scissors_stats_model.h
-    # Event Timing
-    event_timing/event_graphics_item.cpp
-    event_timing/event_graphics_item.h
-    event_timing/event_timing_graphics_scene.cpp
-    event_timing/event_timing_graphics_scene.h
-    event_timing/event_timing_graphics_view.cpp
-    event_timing/event_timing_graphics_view.h
-    event_timing/event_timing_view.cpp
-    event_timing/event_timing_view.h
-    # SQTT
-    sqtt/ruler_graphics_item.cpp
-    sqtt/ruler_graphics_item.h
 )
 
 target_include_directories(

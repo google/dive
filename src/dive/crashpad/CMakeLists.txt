@@ -17,7 +17,7 @@
 add_library(
     dive_crashpad
     crashpad_client.h
-    crashpad_client.cpp
+    $<IF:$<BOOL:${DIVE_BUILD_WITH_CRASHPAD}>,crashpad_client.cpp,crashpad_client_stub.cpp>
     crashpad_utils.h
     $<$<PLATFORM_ID:Windows>:crashpad_utils_win32.cpp>
     $<$<PLATFORM_ID:Darwin>:crashpad_utils_macos.cpp>

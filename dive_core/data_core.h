@@ -44,9 +44,6 @@ struct CaptureMetadata
     // Note: deque is used here since Disassembly is not copyable nor movable.
     std::deque<Disassembly> m_shaders;
 
-    // Information about each buffer in the capture
-    std::vector<BufferInfo> m_buffers;
-
     // Information about each event in the capture
     std::vector<EventInfo> m_event_info;
 
@@ -117,28 +114,6 @@ class DataCore
     CaptureMetadata m_capture_metadata;
 };
 
-#if defined(ENABLE_CAPTURE_BUFFERS)
-//--------------------------------------------------------------------------------------------------
-// Shader reflector callback class, for use by the CaptureMetadataCreator
-class SRDCallbacks : public IShaderReflectorCallbacks
-{
- public:
-    // Callbacks on each SRD table used by the shader. The SRD table is a buffer that contains 1 or
-    // more SRDs, each of which might be a different type
-    virtual bool OnSRDTable(ShaderStage shader_stage, uint64_t va_addr, uint64_t size,
-                            void* user_ptr)
-    {
-        return true;
-    }
-
-    virtual bool OnSRDTable(ShaderStage shader_stage, void* data_ptr, uint64_t va_addr,
-                            uint64_t size, void* user_ptr)
-    {
-        return true;
-    }
-};
-#endif
-
 //--------------------------------------------------------------------------------------------------
 // Handles creation of much of the metadata "info" from the capture
 class CaptureMetadataCreator : public EmulateCallbacksBase
@@ -183,18 +158,8 @@ class CaptureMetadataCreator : public EmulateCallbacksBase
     // Map from shader address to shader index (in m_capture_metadata.m_shaders)
     std::map<uint64_t, uint32_t> m_shader_addrs;
 
-    // Map from buffer address to buffer index (in m_capture_metadata.m_buffers)
-    std::map<uint64_t, uint32_t> m_buffer_addrs;
-
     CaptureMetadata& m_capture_metadata;
     RenderModeType m_current_render_mode = RenderModeType::kUnknown;
-
-#if defined(ENABLE_CAPTURE_BUFFERS)
-    // SRDCallbacks is a friend class, since it is essentially doing part of
-    // CaptureMetadataCreator's work and is only a separate class due to the callback nature of SRD
-    // reflection
-    friend class SRDCallbacks;
-#endif
 };
 
 }  // namespace Dive

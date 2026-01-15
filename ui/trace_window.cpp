@@ -306,7 +306,7 @@ absl::Status TraceDialog::StopPackageAndCleanup()
             absl::StrCat(Dive::kDeviceCapturePath, "/",
                          m_gfxr_capture_file_directory_input_box->text().toStdString());
         auto ret =
-            device->Adb().Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
+            device->Adb().Shell(absl::StrFormat("rm -rf %s", on_device_capture_directory));
         m_gfxr_capture_button->setEnabled(false);
         m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
     }
@@ -804,7 +804,7 @@ void TraceDialog::OnGfxrCaptureClicked()
     absl::Status ret;
     if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture)
     {
-        ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false");
+        ret = device->Adb().Shell("setprop debug.gfxrecon.capture_android_trigger false");
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to stop runtime gfxr capture ", m_cur_pkg,
@@ -822,7 +822,7 @@ void TraceDialog::OnGfxrCaptureClicked()
     }
     else if (m_gfxr_capture_button->text() == kStart_Gfxr_Runtime_Capture)
     {
-        ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger true");
+        ret = device->Adb().Shell("setprop debug.gfxrecon.capture_android_trigger true");
         if (!ret.ok())
         {
             std::string err_msg = absl::StrCat("Failed to start runtime gfxr capture ", m_cur_pkg,

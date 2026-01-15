@@ -540,7 +540,7 @@ absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
     const std::string remote_dir = "/sdcard/gfxr_captures_for_replay";
 
     // Create the remote directory on the device.
-    RETURN_IF_ERROR(device->Adb().Run(absl::StrFormat("shell mkdir -p %s", remote_dir)));
+    RETURN_IF_ERROR(device->Adb().Shell(absl::StrFormat("mkdir -p %s", remote_dir)));
 
     // Push the .gfxr file.
     std::string local_gfxr_path = m_selected_capture_file_string.toStdString();

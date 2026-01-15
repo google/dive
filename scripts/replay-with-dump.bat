@@ -62,16 +62,16 @@ exit /b 1
 :GFXR_DUMP_RESOURCES_FOUND
 echo Debug: Found gfxr_dump_resources.exe at: "%GFXR_DUMP_RESOURCES%"
 
-SET DIVE_CLIENT_CLI_BASE_PATH=%BUILD_DIR%/gfxr_dump_resources
+SET DIVE_CLIENT_CLI_BASE_PATH=%BUILD_DIR%/bin
 
 IF EXIST "%DIVE_CLIENT_CLI_BASE_PATH%/Debug/dive_client_cli.exe" (
-    SET "GFXR_DUMP_RESOURCES=%DIVE_CLIENT_CLI_BASE_PATH%/Debug/dive_client_cli.exe"
+    SET "DIVE_CLIENT_CLI=%DIVE_CLIENT_CLI_BASE_PATH%/Debug/dive_client_cli.exe"
     GOTO :DIVE_CLIENT_CLI_FOUND
 ) ELSE IF EXIST "%DIVE_CLIENT_CLI_BASE_PATH%/Release/dive_client_cli.exe" (
-    SET "GFXR_DUMP_RESOURCES=%DIVE_CLIENT_CLI_BASE_PATH%/Release/dive_client_cli.exe"
+    SET "DIVE_CLIENT_CLI=%DIVE_CLIENT_CLI_BASE_PATH%/Release/dive_client_cli.exe"
     GOTO :DIVE_CLIENT_CLI_FOUND
 ) ELSE IF EXIST "%DIVE_CLIENT_CLI_BASE_PATH%/dive_client_cli.exe" (
-    SET "GFXR_DUMP_RESOURCES=%DIVE_CLIENT_CLI_BASE_PATH%/dive_client_cli.exe"
+    SET "DIVE_CLIENT_CLI=%DIVE_CLIENT_CLI_BASE_PATH%/dive_client_cli.exe"
     GOTO :DIVE_CLIENT_CLI_FOUND
 )
 echo Error: dive_client_cli.exe not found in %BUILD_DIR%

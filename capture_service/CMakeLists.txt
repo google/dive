@@ -108,6 +108,7 @@ else()
     target_link_libraries(
         device_mgr_test
         absl::status_matchers
+        absl::strings
         device_mgr
         gmock
         gtest

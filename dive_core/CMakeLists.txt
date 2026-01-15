@@ -53,8 +53,11 @@ if(NOT Python3_EXECUTABLE)
     message(FATAL_ERROR "python3 not found")
 endif() # NOT Python3_EXECUTABLE
 
-execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import mako" RESULTS_VARIABLE mako_missing)
-if (mako_missing)
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import mako"
+    RESULTS_VARIABLE mako_missing
+)
+if(mako_missing)
     message(FATAL_ERROR "Python mako module missing. See BUILD.md")
 endif()
 

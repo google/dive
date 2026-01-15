@@ -86,6 +86,12 @@ set DIVE_ROOT_PATH=C:\path\to\dive
     cmake --install build --prefix install --config Debug
     ```
 
+If you want to build a GFXR tool like `gfxrecon-convert`:
+
+```
+cmake --build build --target gfxrecon-convert
+```
+
 ### Windows
 
 1. Configure
@@ -109,6 +115,12 @@ set DIVE_ROOT_PATH=C:\path\to\dive
     ```bat
     cmake --install build --prefix install --config Debug
     ```
+
+If you want to build a GFXR tool like `gfxrecon-convert`:
+
+```
+cmake --build build --target gfxrecon-convert
+```
 
 ## Dive Device Resources
 

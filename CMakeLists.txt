@@ -49,6 +49,18 @@ option(
     ON
 )
 
+set(DIVE_ANDROID_PREBUILT
+    "${CMAKE_SOURCE_DIR}/install"
+    CACHE STRING
+    "Prebuilt Dive Android binaries"
+)
+
+set(DIVE_PROFILING_PLUGIN_PATH
+    "${CMAKE_SOURCE_DIR}/install/dive_profiling_plugin"
+    CACHE STRING
+    "Prebuilt Dive Profiling Plugin"
+)
+
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 
 # Placeholder value for DESTINATION to override cmake default.

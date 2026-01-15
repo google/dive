@@ -304,11 +304,54 @@ if(MSVC)
 endif()
 
 if(APPLE)
+    set(MACOS_RESOURCE_FILES "")
+
+    if(EXISTS "${DIVE_ANDROID_PREBUILT}")
+        list(
+            APPEND MACOS_RESOURCE_FILES
+            "${DIVE_ANDROID_PREBUILT}/gfxr-replay.apk"
+            "${DIVE_ANDROID_PREBUILT}/gfxrecon.py"
+            "${DIVE_ANDROID_PREBUILT}/libVkLayer_dive.so"
+            "${DIVE_ANDROID_PREBUILT}/libVkLayer_khronos_validation.so"
+            "${DIVE_ANDROID_PREBUILT}/libXrApiLayer_dive.so"
+            "${DIVE_ANDROID_PREBUILT}/XrApiLayer_dive.json"
+            "${DIVE_ANDROID_PREBUILT}/libVkLayer_rt_dive.so"
+            "${DIVE_ANDROID_PREBUILT}/libwrap.so"
+            "${DIVE_ANDROID_PREBUILT}/libVkLayer_gfxreconstruct.so"
+        )
+    endif()
+
     set_target_properties(
         ${PROJECT_NAME}
         PROPERTIES
             MACOSX_BUNDLE TRUE
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
+            RESOURCE "${MACOS_RESOURCE_FILES}"
+    )
+
+    if(EXISTS "${DIVE_PROFILING_PLUGIN_PATH}")
+        add_custom_command(
+            TARGET ${PROJECT_NAME}
+            POST_BUILD
+            COMMAND
+                cp -r "${DIVE_PROFILING_PLUGIN_PATH}"
+                "$<TARGET_BUNDLE_DIR:${PROJECT_NAME}>/Contents/Resources/dive_profiling_plugin"
+        )
+    endif()
+
+    # Install Qt Dependencies
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND macdeployqt "$<TARGET_BUNDLE_DIR:${PROJECT_NAME}>"
+    )
+    # Add dive.app/MacOS/dive_client_cli
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND
+            cp "$<TARGET_FILE:dive_client_cli>"
+            "$<TARGET_BUNDLE_DIR:${PROJECT_NAME}>/Contents/MacOS"
     )
 endif()
 
@@ -318,27 +361,8 @@ if(APPLE)
     install(
         CODE
             "
-        message(STATUS \"Running macdeployqt...\")
-        execute_process(COMMAND \"macdeployqt\" \"${CMAKE_INSTALL_PREFIX}/dive.app\")
         message(STATUS \"Creating install directory in app bundle\")
         execute_process(COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        message(STATUS \"Copying Android files to app bundle\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/gfxr-replay.apk\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/gfxrecon.py\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_khronos_validation.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libXrApiLayer_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/XrApiLayer_dive.json\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_rt_dive.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libwrap.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/libVkLayer_gfxreconstruct.so\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/\")
-        message(STATUS \"Copying dive_client_cli to app bundle\")
-        execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_client_cli\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")
-
-        if(IS_DIRECTORY \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin\")
-            message(STATUS \"Copying dive_profiling_plugin to app bundle\")
-                execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy_directory \"${CMAKE_INSTALL_PREFIX}/dive_profiling_plugin/\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/Resources/dive_profiling_plugin\")
-        endif()
         if(EXISTS \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\")
             message(STATUS \"Copying dive_compositor_capture.sh to app bundle\")
             execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"${CMAKE_INSTALL_PREFIX}/dive_compositor_capture.sh\" \"${CMAKE_INSTALL_PREFIX}/dive.app/Contents/MacOS/\")

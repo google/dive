@@ -17,6 +17,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QReadLocker>
 #include <array>
 #include <functional>
 #include <memory>
@@ -24,6 +25,7 @@
 #include <vector>
 
 #include "dive/ui/forward.h"
+#include "dive/utils/component_files.h"
 #include "dive_core/cross_ref.h"
 #include "dive_core/log.h"
 #include "ui/progress_tracker_callback.h"
@@ -88,7 +90,7 @@ class MainWindow : public QMainWindow
     void OnExpandToLevel();
     void OnAbout();
     void OnShortcuts();
-    void OnSaveCapture();
+    void OnSaveAs();
     void OnSearchTrigger();
     void OpenRecentFile();
     void UpdateOverlay(const QString&);
@@ -162,7 +164,6 @@ class MainWindow : public QMainWindow
     QMenu* m_file_menu;
     QMenu* m_recent_captures_menu;
     QAction* m_open_action;
-    QAction* m_save_action;
     QAction* m_save_as_action;
     QAction* m_exit_action;
     QMenu* m_capture_menu;
@@ -186,6 +187,8 @@ class MainWindow : public QMainWindow
     ProgressTrackerCallback m_progress_tracker;
     std::shared_ptr<Dive::DataCore> m_data_core;
     QString m_capture_file;
+    QString m_gfxr_file;
+    Dive::ComponentFilePaths m_components;
     QString m_last_file_path;
     Dive::LogRecord m_log_record;
     Dive::LogConsole m_log_console;
@@ -280,8 +283,6 @@ class MainWindow : public QMainWindow
     PropertyPanel* m_property_panel;
     HoverHelp* m_hover_help;
 
-    std::string m_unsaved_capture_path;
-    bool m_capture_saved = false;
     int m_capture_num = 0;
     int m_previous_tab_index = -1;
     bool m_gfxr_capture_loaded = false;
@@ -296,7 +297,7 @@ class MainWindow : public QMainWindow
     std::unique_ptr<Dive::AvailableMetrics> m_available_metrics;
     std::unique_ptr<Dive::CaptureStats> m_capture_stats;
 
-    bool m_capture_acquired = false;
+    std::optional<QReadLocker> m_capture_acquired;
     LastRequest m_last_request;
 
     std::vector<std::function<void()>> m_loading_pending_task;

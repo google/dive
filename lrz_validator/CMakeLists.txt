@@ -37,7 +37,6 @@ include_directories(
     ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_BINARY_DIR}
-    ${LibArchive_INCLUDE_DIRS}
 )
 
 add_executable(${PROJECT_NAME} "main.cpp")

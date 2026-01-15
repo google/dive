@@ -22,8 +22,9 @@ target_link_libraries(dive_lib_os PUBLIC dive_src_includes)
 add_library(
     command_utils
     command_utils.h
-    $<$<PLATFORM_ID:Windows>:command_utils_win32.cc>
-    $<$<PLATFORM_ID:Linux,Darwin>:command_utils.cc>
+    command_utils.cpp
+    $<$<PLATFORM_ID:Windows>:command_utils_win32.cpp>
+    $<$<PLATFORM_ID:Linux,Darwin>:command_utils_unix.cpp>
 )
 target_compile_definitions(
     command_utils

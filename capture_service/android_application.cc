@@ -142,7 +142,7 @@ AndroidApplication::AndroidApplication(AndroidDevice& dev, std::string package,
 absl::Status AndroidApplication::ParsePackage()
 {
     std::string output;
-    ASSIGN_OR_RETURN(output, m_dev.Adb().RunAndGetResult("shell dumpsys package " + m_package));
+    ASSIGN_OR_RETURN(output, m_dev.Adb().ShellAndGetResult("dumpsys package " + m_package));
 
     m_main_activity = ParsePackageForActivity(output, m_package);
     m_is_debuggable = absl::StrContains(output, "DEBUGGABLE");
@@ -155,25 +155,22 @@ absl::Status AndroidApplication::Cleanup()
          m_package.c_str());
     if (m_gfxr_enabled)
     {
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
-        RETURN_IF_ERROR(
-            m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames \\\"\\\""));
-        RETURN_IF_ERROR(
-            m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
-        RETURN_IF_ERROR(
-            m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(m_dev.Adb().SetProp("debug.gfxrecon.capture_file", ""));
+        RETURN_IF_ERROR(m_dev.Adb().SetProp("debug.gfxrecon.capture_trigger_frames", ""));
+        RETURN_IF_ERROR(m_dev.Adb().SetProp("debug.gfxrecon.capture_use_asset_file", "false"));
+        RETURN_IF_ERROR(m_dev.Adb().SetProp("debug.gfxrecon.capture_android_trigger", ""));
         if (!m_package.empty())
         {
-            RETURN_IF_ERROR(m_dev.Adb().Run(
-                absl::StrFormat("shell run-as %s rm %s", m_package,
+            RETURN_IF_ERROR(m_dev.Adb().Shell(
+                absl::StrFormat("run-as %s rm %s", m_package,
                                 Dive::DeviceResourcesConstants::kVkGfxrLayerLibName)));
         }
 
-        m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_app").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
+        m_dev.Adb().Shell("settings delete global enable_gpu_debug_layers").IgnoreError();
+        m_dev.Adb().Shell("settings delete global gpu_debug_app").IgnoreError();
+        m_dev.Adb().Shell("settings delete global gpu_debug_layers").IgnoreError();
+        m_dev.Adb().Shell("settings delete global gpu_debug_layer_app").IgnoreError();
+        m_dev.Adb().Shell("settings delete global gpu_debug_layers_gles").IgnoreError();
     }
 
     LOGI("%s AndroidApplication::Cleanup(): package %s done\n", Dive::kLogPrefixCleanup,
@@ -183,16 +180,16 @@ absl::Status AndroidApplication::Cleanup()
 
 absl::Status AndroidApplication::Start()
 {
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell input keyevent KEYCODE_WAKEUP"));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am start -S -W %s -n %s/%s",
-                                                    m_command_args, m_package, m_main_activity)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("input keyevent KEYCODE_WAKEUP"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(
+        absl::StrFormat("am start -S -W %s -n %s/%s", m_command_args, m_package, m_main_activity)));
     m_started = IsRunning();
     return absl::OkStatus();
 }
 
 absl::Status AndroidApplication::Stop()
 {
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell am force-stop %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("am force-stop %s", m_package)));
     m_started = false;
     return absl::OkStatus();
 }
@@ -257,19 +254,19 @@ absl::Status GLESApplication::Pm4CaptureSetup()
     RETURN_IF_ERROR(
         m_dev.CopyWithPermissions(/*package=*/m_package,
                                   /*file_name=*/Dive::DeviceResourcesConstants::kVkLayerLibName));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("settings put global enable_gpu_debug_layers 1"));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
+        m_dev.Adb().Shell(absl::StrFormat("settings put global gpu_debug_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(
+        absl::StrFormat("settings put global gpu_debug_layer_app %s", m_package)));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_layers_gles %s",
-                                        Dive::DeviceResourcesConstants::kVkLayerLibName)));
+        m_dev.Adb().Shell(absl::StrFormat("settings put global gpu_debug_layers_gles %s",
+                                          Dive::DeviceResourcesConstants::kVkLayerLibName)));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s", m_package,
-                                        Dive::DeviceResourcesConstants::kDeployFolderPath,
-                                        Dive::DeviceResourcesConstants::kWrapLibName)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package)));
+        m_dev.Adb().Shell(absl::StrFormat("setprop wrap.%s  LD_PRELOAD=%s/%s", m_package,
+                                          Dive::DeviceResourcesConstants::kDeployFolderPath,
+                                          Dive::DeviceResourcesConstants::kWrapLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("getprop wrap.%s", m_package)));
 
     return absl::OkStatus();
 }
@@ -323,18 +320,18 @@ absl::Status VulkanApplication::Pm4CaptureSetup()
     RETURN_IF_ERROR(
         m_dev.CopyWithPermissions(/*package=*/m_package,
                                   /*file_name=*/Dive::DeviceResourcesConstants::kVkLayerLibName));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("settings put global enable_gpu_debug_layers 1"));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layers %s", kVkLayerName)));
+        m_dev.Adb().Shell(absl::StrFormat("settings put global gpu_debug_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(
+        absl::StrFormat("settings put global gpu_debug_layer_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(
+        absl::StrFormat("settings put global gpu_debug_layers %s", kVkLayerName)));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s", m_package,
-                                        Dive::DeviceResourcesConstants::kDeployFolderPath,
-                                        Dive::DeviceResourcesConstants::kWrapLibName)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package)));
+        m_dev.Adb().Shell(absl::StrFormat("setprop wrap.%s  LD_PRELOAD=%s/%s", m_package,
+                                          Dive::DeviceResourcesConstants::kDeployFolderPath,
+                                          Dive::DeviceResourcesConstants::kWrapLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("getprop wrap.%s", m_package)));
 
     return absl::OkStatus();
 }
@@ -371,7 +368,7 @@ void AndroidApplication::SetGfxrEnabled(bool enable) { m_gfxr_enabled = enable; 
 
 absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory)
 {
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", directory)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("mkdir -p %s", directory)));
 
     return absl::OkStatus();
 }
@@ -385,19 +382,18 @@ absl::Status AndroidApplication::GfxrSetup()
         /*package=*/m_package,
         /*file_name=*/Dive::DeviceResourcesConstants::kVkGfxrLayerLibName));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
-        "shell run-as %s ls %s", m_package, Dive::DeviceResourcesConstants::kVkGfxrLayerLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("run-as %s ls %s", m_package, Dive::DeviceResourcesConstants::kVkGfxrLayerLibName)));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("settings put global enable_gpu_debug_layers 1"));
 
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
+        m_dev.Adb().Shell(absl::StrFormat("settings put global gpu_debug_app %s", m_package)));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layers %s", kVkGfxrLayerName)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(
+        absl::StrFormat("settings put global gpu_debug_layers %s", kVkGfxrLayerName)));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run(
-        absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(
+        absl::StrFormat("settings put global gpu_debug_layer_app %s", m_package)));
 
     std::string gfxr_capture_directory =
         absl::StrCat(kDeviceCapturePath, "/", m_gfxr_capture_file_directory);
@@ -407,14 +403,14 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
+        m_dev.Adb().Shell("setprop debug.gfxrecon.capture_file " + capture_file_location));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.gfxrecon.capture_trigger_frames 1"));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.gfxrecon.capture_use_asset_file true"));
 
     // capture_android_trigger must be set in order for GFXR to listen for triggers.
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.gfxrecon.capture_android_trigger false"));
 
     LOGD("GFXR capture setup for %s done\n", m_package.c_str());
     return absl::OkStatus();
@@ -448,8 +444,8 @@ absl::Status AndroidApplication::GrantAllFilesAccess()
     {
         return absl::OkStatus();
     }
-    return m_dev.Adb().Run(
-        absl::StrFormat("shell appops set --uid %s MANAGE_EXTERNAL_STORAGE allow", m_package));
+    return m_dev.Adb().Shell(
+        absl::StrFormat("appops set --uid %s MANAGE_EXTERNAL_STORAGE allow", m_package));
 }
 
 OpenXRApplication::OpenXRApplication(AndroidDevice& dev, std::string package,
@@ -484,10 +480,10 @@ absl::Status OpenXRApplication::Pm4CaptureSetup()
         /*file_name=*/Dive::DeviceResourcesConstants::kManifestFileName,
         /*target_dir=*/Dive::DeviceResourcesConstants::kDeployManifestFolderPath));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell setprop wrap.%s  LD_PRELOAD=%s/%s", m_package,
-                                        Dive::DeviceResourcesConstants::kDeployFolderPath,
-                                        Dive::DeviceResourcesConstants::kWrapLibName)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell getprop wrap.%s", m_package)));
+        m_dev.Adb().Shell(absl::StrFormat("setprop wrap.%s  LD_PRELOAD=%s/%s", m_package,
+                                          Dive::DeviceResourcesConstants::kDeployFolderPath,
+                                          Dive::DeviceResourcesConstants::kWrapLibName)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("getprop wrap.%s", m_package)));
     return absl::OkStatus();
 }
 
@@ -505,8 +501,8 @@ absl::Status OpenXRApplication::Cleanup()
     {
         // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
         // `debug.openxr.enable_frame_delimiter`
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false"));
+        RETURN_IF_ERROR(m_dev.Adb().Shell("setprop openxr.enable_frame_delimiter false"));
+        RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.openxr.enable_frame_delimiter false"));
     }
     else
     {
@@ -523,8 +519,7 @@ absl::Status OpenXRApplication::Cleanup()
 absl::Status OpenXRApplication::Pm4CaptureCleanup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
-        "shell rm -r %s", Dive::DeviceResourcesConstants::kDeployManifestFolderPath)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("rm -r %s", Dive::DeviceResourcesConstants::kDeployManifestFolderPath)));
     return absl::OkStatus();
 }
 
@@ -575,7 +570,7 @@ absl::Status VulkanCliApplication::Pm4CaptureSetup()
         /*file_name=*/Dive::DeviceResourcesConstants::kVkLayerLibName,
         /*target_dir=*/Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName)));
+        m_dev.Adb().Shell(absl::StrFormat("setprop debug.vulkan.layers %s", kVkLayerName)));
     return absl::OkStatus();
 }
 
@@ -590,9 +585,8 @@ absl::Status VulkanCliApplication::Cleanup()
     }
 
     LOGI("%s VulkanCliApplication::Cleanup\n", Dive::kLogPrefixCleanup);
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
-        "shell rm -fr %s", Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("rm -fr %s", Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("setprop debug.vulkan.layers \"''\"")));
     LOGI("%s VulkanCliApplication::Cleanup done\n", Dive::kLogPrefixCleanup);
 
     return absl::OkStatus();
@@ -613,14 +607,14 @@ absl::Status VulkanCliApplication::Start()
     }
 
     RETURN_IF_ERROR(m_dev.Adb().RunCommandBackground(cmd));
-    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().RunAndGetResult("shell pidof " + m_command));
+    ASSIGN_OR_RETURN(m_pid, m_dev.Adb().ShellAndGetResult("pidof " + m_command));
     m_started = true;
     return absl::OkStatus();
 }
 
 absl::Status VulkanCliApplication::Stop()
 {
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell kill -9 %s", m_pid)));
+    RETURN_IF_ERROR(m_dev.Adb().Shell(absl::StrFormat("kill -9 %s", m_pid)));
     m_started = false;
     return absl::OkStatus();
 }
@@ -630,9 +624,9 @@ absl::Status VulkanCliApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.DeployDeviceResource(
         /*file_name=*/Dive::DeviceResourcesConstants::kVkGfxrLayerLibName,
         /*target_dir=*/Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop cpm.gfxr_layer 1"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop cpm.gfxr_layer 1"));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkGfxrLayerName)));
+        m_dev.Adb().Shell(absl::StrFormat("setprop debug.vulkan.layers %s", kVkGfxrLayerName)));
 
     std::string gfxr_capture_directory =
         absl::StrCat(kDeviceCapturePath, "/", m_gfxr_capture_file_directory);
@@ -640,10 +634,10 @@ absl::Status VulkanCliApplication::GfxrSetup()
         absl::StrCat(gfxr_capture_directory, "/", m_command, ".gfxr");
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
     RETURN_IF_ERROR(
-        m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
+        m_dev.Adb().Shell("setprop debug.gfxrecon.capture_file " + capture_file_location));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.gfxrecon.capture_trigger_frames 1"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.gfxrecon.capture_use_asset_file true"));
+    RETURN_IF_ERROR(m_dev.Adb().Shell("setprop debug.gfxrecon.capture_android_trigger false"));
     LOGD("GFXR capture setup for %s done\n", m_command.c_str());
     return absl::OkStatus();
 }

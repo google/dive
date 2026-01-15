@@ -48,6 +48,11 @@ absl::StatusOr<std::string> LogCommand(const std::string& command, const std::st
     return output;
 }
 
+std::string MakeCommand(std::string_view program, const std::vector<std::string>& args)
+{
+    return MakeWindowsCommand(program, args);
+}
+
 absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
     std::string output;

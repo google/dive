@@ -81,7 +81,8 @@ set(DIVE_RELEASE_TYPE
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
 
-if("${DIVE_RELEASE_TYPE}" STREQUAL "RelWithDebInfo")
+option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
+if(UPLOAD_DEBUG_SYMBOLS)
     include(cmake/breakpad_tools.cmake)
 endif()
 

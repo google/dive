@@ -394,6 +394,6 @@ add_custom_command(
     COMMENT "Copying Crashpad handler to output directory"
 )
 
-if("${DIVE_RELEASE_TYPE}" STREQUAL "RelWithDebInfo")
+if(UPLOAD_DEBUG_SYMBOLS)
     upload_debug_symbols(${PROJECT_NAME})
 endif()

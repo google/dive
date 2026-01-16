@@ -18,6 +18,50 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 project(dive VERSION 1.1.2)
 
+# Prevent recursive projects
+if(NOT ANDROID)
+    set(DIVE_GFXR_GRADLE_CONSOLE
+        "verbose"
+        CACHE STRING
+        "Value of --console to use when building GFXR with Gradle"
+    )
+
+    if(CMAKE_HOST_WIN32)
+        set(GRADLE_EXEC "gradlew.bat")
+    else()
+        set(GRADLE_EXEC "gradlew")
+    endif()
+
+    include(ExternalProject)
+    ExternalProject_Add(
+        DiveAndroid
+        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
+        BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/DiveAndroid
+        CMAKE_ARGS
+            "-GNinja Multi-Config" -DCMAKE_SYSTEM_NAME=Android
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER
+            -DCMAKE_TOOLCHAIN_FILE=$ENV{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake
+        INSTALL_COMMAND ""
+    )
+    ExternalProject_Add(
+        GFXR
+        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/third_party/gfxreconstruct/android
+        BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/GFXR
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND
+            ${CMAKE_CURRENT_LIST_DIR}/third_party/gfxreconstruct/android/${GRADLE_EXEC}
+            -b
+            ${CMAKE_CURRENT_LIST_DIR}/third_party/gfxreconstruct/android/build.gradle
+            layer:assembleDebug replay:assembleDebug
+            --console=${DIVE_GFXR_GRADLE_CONSOLE} -Parm64-v8a
+        INSTALL_COMMAND ""
+    )
+    # TODO: How to chain dependencies?
+    # TODO: install and package GFXR
+endif()
+
 # ------------------------------------------------------------------------------
 # Global properties
 
@@ -231,72 +275,6 @@ else()
     if(DIVE_BUILD_RUNTIME_LAYER_FOR_WIN AND CMAKE_HOST_WIN32)
         add_subdirectory(runtime_layer)
     endif()
-endif()
-
-# ------------------------------------------------------------------------------
-# GFXR Gradle build (that depends on Dive libraries)
-# Hardcode debug build since release build is incompatible with PM4 capture
-
-if(ANDROID)
-    message(CHECK_START "Build GFXR layer and replay tool")
-    list(APPEND CMAKE_MESSAGE_INDENT "  ")
-
-    set(DIVE_GFXR_GRADLE_CONSOLE
-        "verbose"
-        CACHE STRING
-        "Value of --console to use when building GFXR with Gradle"
-    )
-
-    if(CMAKE_HOST_WIN32)
-        set(GRADLE_EXEC "gradlew.bat")
-    else()
-        set(GRADLE_EXEC "./gradlew")
-    endif()
-
-    execute_process(
-        COMMAND
-            ${GRADLE_EXEC} layer:assembleDebug replay:assembleDebug
-            --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
-        WORKING_DIRECTORY
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
-        COMMAND_ERROR_IS_FATAL ANY
-    )
-    list(POP_BACK CMAKE_MESSAGE_INDENT)
-    message(CHECK_PASS "done")
-
-    message(CHECK_START "Extract GFXR files and prepare install")
-    list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    file(
-        ARCHIVE_EXTRACT
-        INPUT
-            "${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/layer/build/outputs/aar/layer-debug.aar"
-        DESTINATION "${CMAKE_BINARY_DIR}/gfxr_layer"
-        # TOUCH # Note: CMake 3.24 feature
-    )
-    # Update the file modification time so CMake process dependency properly.
-    # Note: GFXR archive uses a fixed timestamp for their content.
-    file(
-        TOUCH_NOCREATE
-        "${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so"
-    )
-    install(
-        FILES
-            ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
-    )
-    install(
-        FILES
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug/replay-debug.apk
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
-        RENAME "gfxr-replay.apk"
-    )
-    install(
-        FILES
-            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
-        DESTINATION "${DIVE_INSTALL_DESTINATION}"
-    )
-    list(POP_BACK CMAKE_MESSAGE_INDENT)
-    message(CHECK_PASS "done")
 endif()
 
 # ------------------------------------------------------------------------------

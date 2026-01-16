@@ -115,15 +115,12 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
     }
 
     QFile licenseFile{notice_file_path->generic_string().c_str()};
-    if (licenseFile.open(QIODevice::ReadOnly))
-    {
-        license_notice->setPlainText(licenseFile.readAll());
-    }
-    else
+    if (!licenseFile.open(QIODevice::ReadOnly))
     {
         qDebug() << "Could not open license file: " << notice_file_path->generic_string().c_str();
         return nullptr;
     }
+    license_notice->setPlainText(licenseFile.readAll());
     license_notice->setReadOnly(true);
 
     QVBoxLayout* license_layout = new QVBoxLayout;

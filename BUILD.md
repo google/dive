@@ -149,6 +149,6 @@ In the Visual Studio Developer Command Prompt for VS 2022 (or 2019), running the
 
 After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle from the contents of the `pkg/` directory.
 
-All plugin folders must be placed under `$DIVE_ROOT_PATH/pkg` and named with substring "_plugin" at the end to be properly added to the bundle.
+All external plugin folders must be placed under `$DIVE_ROOT_PATH/pkg/plugins` to be properly added to the bundle.
 
 Running the script `scripts/deploy_mac_bundle.sh` will create the mac package and place it at `$DIVE_ROOT_PATH/pkg/dive.app`.

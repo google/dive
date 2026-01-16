@@ -42,6 +42,7 @@
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
+#include "dive_crashpad/crashpad_client.h"
 #include "main_window.h"
 #include "ui/application_controller.h"
 #include "ui/custom_metatypes.h"
@@ -269,6 +270,16 @@ int main(int argc, char* argv[])
 {
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);
+
+    if (auto ret = Dive::InitializeCrashpad(); ret.ok())
+    {
+        qDebug() << "Crashpad initialized successfully.";
+    }
+    else
+    {
+        qDebug() << "Crashpad initialization failed " << ret.message().data();
+        return EXIT_FAILURE;
+    }
 
     absl::InitializeSymbolizer(argv[0]);
 

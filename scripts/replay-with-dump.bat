@@ -39,21 +39,21 @@ SET REMOTE_TEMP_DIR=/sdcard/Download
 SET PUSH_DIR=%REMOTE_TEMP_DIR%/replay
 SET DUMP_DIR=%REMOTE_TEMP_DIR%/dump
 
-SET GFXR_BASE_PATH=%BUILD_DIR%/gfxr_dump_resources
+SET GFXR_DUMP_RESOURCES_BASE_PATH=%BUILD_DIR%/gfxr_dump_resources
 
 IF NOT EXIST "%BUILD_DIR%" (
     echo Error: %BUILD_DIR% folder does not exist. Please build the project first.
     exit /b 1
 )
 
-IF EXIST "%GFXR_BASE_PATH%/Debug/gfxr_dump_resources.exe" (
-    SET "GFXR_DUMP_RESOURCES=%GFXR_BASE_PATH%/Debug/gfxr_dump_resources.exe"
+IF EXIST "%GFXR_DUMP_RESOURCES_BASE_PATH%/Debug/gfxr_dump_resources.exe" (
+    SET "GFXR_DUMP_RESOURCES=%GFXR_DUMP_RESOURCES_BASE_PATH%/Debug/gfxr_dump_resources.exe"
     GOTO :GFXR_DUMP_RESOURCES_FOUND
-) ELSE IF EXIST "%GFXR_BASE_PATH%/Release/gfxr_dump_resources.exe" (
-    SET "GFXR_DUMP_RESOURCES=%GFXR_BASE_PATH%/Release/gfxr_dump_resources.exe"
+) ELSE IF EXIST "%GFXR_DUMP_RESOURCES_BASE_PATH%/Release/gfxr_dump_resources.exe" (
+    SET "GFXR_DUMP_RESOURCES=%GFXR_DUMP_RESOURCES_BASE_PATH%/Release/gfxr_dump_resources.exe"
     GOTO :GFXR_DUMP_RESOURCES_FOUND
-) ELSE IF EXIST "%GFXR_BASE_PATH%/gfxr_dump_resources.exe" (
-    SET "GFXR_DUMP_RESOURCES=%GFXR_BASE_PATH%/gfxr_dump_resources.exe"
+) ELSE IF EXIST "%GFXR_DUMP_RESOURCES_BASE_PATH%/gfxr_dump_resources.exe" (
+    SET "GFXR_DUMP_RESOURCES=%GFXR_DUMP_RESOURCES_BASE_PATH%/gfxr_dump_resources.exe"
     GOTO :GFXR_DUMP_RESOURCES_FOUND
 )
 echo Error: gfxr_dump_resources.exe not found in %BUILD_DIR%
@@ -62,28 +62,23 @@ exit /b 1
 :GFXR_DUMP_RESOURCES_FOUND
 echo Debug: Found gfxr_dump_resources.exe at: "%GFXR_DUMP_RESOURCES%"
 
-SET GFXRECON=../third_party/gfxreconstruct/android/scripts/gfxrecon.py
-SET REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
+SET DIVE_CLIENT_CLI_BASE_PATH=%BUILD_DIR%/bin
 
-:: Uninstall first since install can fail if the APK has a different cert from the one installed (i.e. it was built on another machine)
-adb shell pm path "%REPLAY_PACKAGE%" >nul
-if %ERRORLEVEL% EQU 0 (
-    adb uninstall "%REPLAY_PACKAGE%"
+IF EXIST "%DIVE_CLIENT_CLI_BASE_PATH%/Debug/dive_client_cli.exe" (
+    SET "DIVE_CLIENT_CLI=%DIVE_CLIENT_CLI_BASE_PATH%/Debug/dive_client_cli.exe"
+    GOTO :DIVE_CLIENT_CLI_FOUND
+) ELSE IF EXIST "%DIVE_CLIENT_CLI_BASE_PATH%/Release/dive_client_cli.exe" (
+    SET "DIVE_CLIENT_CLI=%DIVE_CLIENT_CLI_BASE_PATH%/Release/dive_client_cli.exe"
+    GOTO :DIVE_CLIENT_CLI_FOUND
+) ELSE IF EXIST "%DIVE_CLIENT_CLI_BASE_PATH%/dive_client_cli.exe" (
+    SET "DIVE_CLIENT_CLI=%DIVE_CLIENT_CLI_BASE_PATH%/dive_client_cli.exe"
+    GOTO :DIVE_CLIENT_CLI_FOUND
 )
-adb shell settings put global verifier_verify_adb_installs 0
-python "%GFXRECON%" install-apk ../install/gfxr-replay.apk
-IF %ERRORLEVEL% NEQ 0 (
-    echo Could not install replay APK.
-    adb shell settings put global verifier_verify_adb_installs 1
-    exit /b %ERRORLEVEL%
-)
-adb shell settings put global verifier_verify_adb_installs 1
+echo Error: dive_client_cli.exe not found in %BUILD_DIR%
+exit /b 1
 
-:: Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
-:: was not required on all devices tested but doesn't hurt.
-adb shell appops set "%REPLAY_PACKAGE%" MANAGE_EXTERNAL_STORAGE allow
-
-adb logcat -c
+:DIVE_CLIENT_CLI_FOUND
+echo Debug: Found dive_client_cli.exe at: "%DIVE_CLIENT_CLI%"
 
 call "%GFXR_DUMP_RESOURCES%" --last_draw_only "%GFXR%" "%JSON%"
 IF %ERRORLEVEL% NEQ 0 (
@@ -115,30 +110,9 @@ IF %ERRORLEVEL% NEQ 0 (
 )
 
 :REPLAY
-:: This is to make sure pushing is finished
-timeout /t 10 /nobreak >nul
-
-python "%GFXRECON%" replay ^
-    --dump-resources "%PUSH_DIR%/%JSON_BASENAME%" ^
-    --dump-resources-dir "%DUMP_DIR%" ^
-    --dump-resources-dump-all-image-subresources ^
-    "%PUSH_DIR%/%GFXR_BASENAME%"
-IF %ERRORLEVEL% NEQ 0 (
-    echo Error running gfxrecon replay.
-    exit /b %ERRORLEVEL%
-)
-
-:: This is to make sure running pidof after the app starts.
-timeout /t 10 /nobreak >nul
-
-:WAIT_FOR_REPLAY
-adb shell pidof "%REPLAY_PACKAGE%" >nul 2>&1
-IF %ERRORLEVEL% EQU 0 (
-    timeout /t 1 /nobreak >nul
-    GOTO :WAIT_FOR_REPLAY
-)
-
-adb logcat -d -s gfxrecon
+call "%DIVE_CLIENT_CLI%" --command gfxr_replay ^
+    --gfxr_replay_file_path "%PUSH_DIR%/%GFXR_BASENAME%" ^
+    --gfxr_replay_flags "--dump-resources %PUSH_DIR%/%JSON_BASENAME% --dump-resources-dir %DUMP_DIR% --dump-resources-dump-all-image-subresources"
 
 adb pull "%DUMP_DIR%"
 IF %ERRORLEVEL% NEQ 0 (

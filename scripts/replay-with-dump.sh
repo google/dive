@@ -21,8 +21,15 @@
 
 set -eux
 
+# Fairly reliable directory on remote device, as long as app has MANAGE_EXTERNAL_STORAGE permissions.
+# /data/local/tmp doesn't work on all devices tested.
+REMOTE_TEMP_DIR=/sdcard/Download
+PUSH_DIR="$REMOTE_TEMP_DIR/replay"
+DUMP_DIR="$REMOTE_TEMP_DIR/dump"
+
 cleanup() {
-    adb shell settings put global verifier_verify_adb_installs 1
+    adb shell rm -rf -- "$DUMP_DIR"
+    adb shell rm -rf -- "$PUSH_DIR"
 }
 
 # Ensure device is in a safe, usable state when the script terminates
@@ -38,24 +45,8 @@ GFXR_BASENAME=$(basename "$GFXR")
 BUILD_DIR=build
 JSON_BASENAME=dump.json
 JSON="$BUILD_DIR/$JSON_BASENAME"
-# Fairly reliable directory on remote device, as long as app has MANAGE_EXTERNAL_STORAGE permissions.
-# /data/local/tmp doesn't work on all devices tested.
-REMOTE_TEMP_DIR=/sdcard/Download
-PUSH_DIR="$REMOTE_TEMP_DIR/replay"
-DUMP_DIR="$REMOTE_TEMP_DIR/dump"
 GFXR_DUMP_RESOURCES=$(find "$BUILD_DIR" -name gfxr_dump_resources -executable -type f)
-GFXRECON=./third_party/gfxreconstruct/android/scripts/gfxrecon.py
-REPLAY_PACKAGE=com.lunarg.gfxreconstruct.replay
-
-# Uninstall first since install can fail if the APK has a different cert from the one installed (i.e. it was built on another machine)
-adb shell pm path "$REPLAY_PACKAGE" && adb uninstall "$REPLAY_PACKAGE"
-adb shell settings put global verifier_verify_adb_installs 0
-python "$GFXRECON" install-apk ./install/gfxr-replay.apk
-# Currently, REMOTE_TEMP_DIR is /sdcard/Download. Ensure the app has permissions to use it
-# was not required on all devices tested but doesn't hurt.
-adb shell appops set "$REPLAY_PACKAGE" MANAGE_EXTERNAL_STORAGE allow
-
-adb logcat -c
+DIVE_CLIENT_CLI=$(find "$BUILD_DIR" -name dive_client_cli -executable -type f)
 
 $GFXR_DUMP_RESOURCES --last_draw_only "$GFXR" "$JSON"
 adb shell mkdir -p "$PUSH_DIR"
@@ -65,22 +56,9 @@ if [ $# -eq 2 ]; then
     GFXA="$2"
     adb push "$GFXA" "$PUSH_DIR"
 fi
-python "$GFXRECON" replay \
-    --dump-resources "$PUSH_DIR/$JSON_BASENAME" \
-    --dump-resources-dir "$DUMP_DIR" \
-    --dump-resources-dump-all-image-subresources \
-    "$PUSH_DIR/$GFXR_BASENAME"
+$DIVE_CLIENT_CLI --command gfxr_replay \
+    --gfxr_replay_file_path "$PUSH_DIR/$GFXR_BASENAME" \
+    --gfxr_replay_flags "--dump-resources $PUSH_DIR/$JSON_BASENAME --dump-resources-dir $DUMP_DIR --dump-resources-dump-all-image-subresources"
 
-# gfxrecon.py replay does not wait for the app to start so.
-# In order to use pidof to determine when the replay is done, we need to give it time to launch first.
-sleep 5
-# We can infer that replay is finished when the replay app process is gone.
-while adb shell pidof "$REPLAY_PACKAGE"
-do
-    sleep 1
-done
-
-adb logcat -d -s gfxrecon
 adb pull "$DUMP_DIR"
-adb shell rm -rf "$DUMP_DIR"
-adb shell rm -rf "$PUSH_DIR"
+echo "Results in $DUMP_DIR"

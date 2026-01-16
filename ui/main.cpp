@@ -41,7 +41,7 @@
 #include "dive/os/terminal.h"
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
-#include "dive_core/pm4_info.h"
+#include "dive_core/dive_core_init.h"
 #include "main_window.h"
 #include "ui/application_controller.h"
 #include "ui/custom_metatypes.h"
@@ -316,7 +316,7 @@ int main(int argc, char* argv[])
     splash_screen->show();
 
     // Initialize packet info query data structures needed for parsing
-    Pm4InfoInit();
+    Dive::InitDiveCore();
 
     QScopedPointer<MainWindow> main_window{new MainWindow(app->GetController())};
 

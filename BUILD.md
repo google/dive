@@ -67,29 +67,30 @@ set DIVE_ROOT_PATH=C:\path\to\dive
     # Assumes python is on the path
 
     cd $DIVE_ROOT_PATH
-    rm -rf build
+    rm -rf build/host
+    rm -rf build/pkg/host
 
-    cmake . -G "Ninja Multi-Config" -Bbuild
+    cmake . -G "Ninja Multi-Config" -Bbuild/host
     ```
 1. Build with one of the following methods:
     * Build directly with ninja
         ```sh
-        ninja -C build -f build-Debug.ninja
+        ninja -C build/host -f build-Debug.ninja
         ```
     * Build using cmake
         ```sh
-        cmake --build build --config=Debug
+        cmake --build build/host --config=Debug
         ```
     You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
 1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
     ```sh
-    cmake --install build --prefix pkg --config Debug
+    cmake --install build/host --prefix build/pkg --config Debug
     ```
 
 If you want to build a GFXR tool like `gfxrecon-convert`:
 
 ```
-cmake --build build --target gfxrecon-convert
+cmake --build build/host --target gfxrecon-convert
 ```
 
 ### Windows
@@ -99,27 +100,28 @@ cmake --build build --target gfxrecon-convert
     REM Assumes python is on the path
 
     cd %DIVE_ROOT_PATH%
-    rmdir /s build
+    rmdir /s build\host
+    rmdir /s build\pkg\host
 
-    cmake . -G "Visual Studio 17 2022" -Bbuild
+    cmake . -G "Visual Studio 17 2022" -Bbuild/host
     ```
 1. Build with one of the following methods:
     * Build with Visual Studio by opening `dive.sln` using IDE and selecting the appropriate build type
     * Build using cmake:
         ```bat
-        cmake --build build --config=Debug
+        cmake --build build/host --config=Debug
         ```
     You can specify other build types as well
     with `--config=<Debug/Release/RelWithDebInfo/MinSizeRel>` instead.
 1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
     ```bat
-    cmake --install build --prefix pkg --config Debug
+    cmake --install build/host --prefix build/pkg --config Debug
     ```
 
 If you want to build a GFXR tool like `gfxrecon-convert`:
 
 ```
-cmake --build build --target gfxrecon-convert
+cmake --build build/host --target gfxrecon-convert
 ```
 
 ## Dive Device Resources

@@ -18,7 +18,7 @@
 
 set -euo pipefail
 readonly PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
-readonly INSTALL_DIR="pkg"
+readonly INSTALL_DIR="build/pkg"
 SIGN_BUNDLE=true
 readonly START_TIME="$(date +%r)"
 

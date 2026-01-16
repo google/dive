@@ -31,6 +31,9 @@ class ApplicationController : public QObject
     ApplicationController();
     ~ApplicationController();
 
+    bool Interactive();
+    void SetInteractive(bool enabled);
+
     void Register(MainWindow&);
 
     void MainWindowInitialized();

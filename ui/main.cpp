@@ -322,6 +322,7 @@ int main(int argc, char* argv[])
 
     if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {
+        app->GetController().SetInteractive(false);
         if (!ExecuteScenario(scenario, main_window.get()))
         {
             return EXIT_FAILURE;
@@ -332,6 +333,10 @@ int main(int argc, char* argv[])
     {
         qDebug() << "Application: Plugin initialization failed. Application may proceed without "
                     "plugins.";
+        if (!app->GetController().Interactive())
+        {
+            return EXIT_FAILURE;
+        }
     }
 
     if (positional_args.size() == 2)

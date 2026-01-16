@@ -62,7 +62,12 @@ endif()
 
 target_link_libraries(
     dive_plugin_loader
-    PRIVATE absl::status absl::statusor absl::strings dive_src_includes
+    PRIVATE
+        absl::status
+        absl::statusor
+        absl::strings
+        dive_src_includes
+        dive_device_resources
 )
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

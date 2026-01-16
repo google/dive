@@ -1527,11 +1527,10 @@ void MainWindow::OnSearchTrigger()
 void MainWindow::LoadAvailableMetrics()
 {
     std::filesystem::path metrics_file_path =
-        Dive::DeviceResourcesConstants::kProfilingPluginFolderName;
-    metrics_file_path /= Dive::DeviceResourcesConstants::kProfilingPluginMetricsFileName;
+        Dive::DeviceResourcesConstants::kProfilingPluginMetricsFileName;
     {
         absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(metrics_file_path);
+            Dive::ResolveProfilingResourcesLocalPath(metrics_file_path);
         if (!ret.ok())
         {
             std::string err_msg = absl::StrFormat(

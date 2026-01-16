@@ -94,8 +94,8 @@ absl::StatusOr<std::filesystem::path> ResolvePluginsDir()
     }
     if (!std::filesystem::is_directory(*plugins_dir_path))
     {
-        std::string err_msg = absl::StrFormat("Plugins dir path not dir: %s", *plugins_dir_path);
-        return absl::NotFoundError(err_msg);
+        return absl::NotFoundError(
+            absl::StrFormat("Plugins dir path not dir: %s", *plugins_dir_path));
     }
 
     return *plugins_dir_path;

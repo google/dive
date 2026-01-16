@@ -121,7 +121,8 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
     }
     else
     {
-        license_notice->setPlainText("Could not locate license info");
+        qDebug() << "Could not open license file: " << notice_file_path->generic_string().c_str();
+        return nullptr;
     }
     license_notice->setReadOnly(true);
 

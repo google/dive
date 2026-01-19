@@ -1,0 +1,71 @@
+name: Reusable Dive Build on Windows
+
+on:
+  workflow_call:
+    inputs:
+      build_type:
+        required: true
+        type: string
+      upload_cache:
+        required: true
+        type: boolean
+
+jobs:
+  build_host_windows:
+    name: Build Host Windows ${{ inputs.build_type }}
+    runs-on: windows-2022
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install and start sccache
+        uses: mozilla/sccache-action@v0.0.5
+        id: sccache
+      - name: Cache sccache (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache@v4
+        with:
+          path: "~/.cache/sccache"
+          key: ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-
+      - name: Restore sccache (!upload_cache)
+        if: ${{ !(inputs.upload_cache) }}
+        uses: actions/cache/restore@v4
+        with:
+          path: "~/.cache/sccache"
+          key: ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: 5.15.2
+          target: desktop
+          arch: win64_msvc2019_64
+      - uses: ilammy/setup-nasm@v1
+      - name: Install dependency
+        run: |
+          python3 -m pip install mako
+      - name: Zero sccache stats
+        run: sccache --zero-stats
+      - name: Generate build files with cmake
+        run: |
+          cmake `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache `
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache `
+            -Bbuild .
+      - name: Build Dive host tools with VS 2022
+        run: |
+          cmake --build build --config ${{ inputs.build_type }}
+      - name: Show sccache stats
+        run: sccache --show-stats
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix pkg --config ${{ inputs.build_type }}
+      - name: Run tests
+        run: |
+          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build

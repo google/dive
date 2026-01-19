@@ -1,0 +1,103 @@
+name: Reusable Dive Build on Linux
+
+on:
+  workflow_call:
+    inputs:
+      build_type:
+        required: true
+        type: string
+      cc:
+        required: true
+        type: string
+      cxx:
+        required: true
+        type: string
+      upload_cache:
+        required: true
+        type: boolean
+
+jobs:
+  build_host_linux:
+    name: Build Host Linux ${{ inputs.build_type }} ${{ inputs.cc }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install Qt dependencies (including xcb)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
+          setup-python: false
+      - name: Install dependency
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes \
+            ccache \
+            cmake \
+            ${{ inputs.cc }} \
+            libsystemd-dev \
+            libbsd-dev \
+            ninja-build \
+            python3-mako \
+            libxcb-glx0-dev \
+            libcurl4-openssl-dev
+          which ${{ inputs.cc }}
+      - name: Configure ccache for uploading (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        run: ccache -z
+      - name: Configure ccache for restoring (!upload_cache)
+        if: ${{ !(inputs.upload_cache) }}
+        run: |
+          ccache -z
+          ccache --set-config=read_only=true
+      - name: Cache ccache (upload_cache)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-
+      - name: Restore ccache (!upload_cache)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-
+      - name: Generate build files with cmake
+        run: |
+          cmake \
+            -G "Ninja Multi-Config" \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${{ inputs.cc }} \
+            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${{ inputs.cxx }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -Bbuild .
+      - name: Build Dive host tools with ninja with ${{ inputs.cc }}
+        run: |
+          ninja -C build -f build-${{ inputs.build_type }}.ninja
+      - name: Ninja log
+        run: |
+          cat build/.ninja_log
+      - name: Show ccache stats
+        run: ccache -s
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix pkg --config ${{ inputs.build_type }}
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+      - name: Run tests
+        run: |
+          export DISPLAY=:99
+          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build

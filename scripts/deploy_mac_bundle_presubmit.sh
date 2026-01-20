@@ -1,5 +1,6 @@
-#
-# Copyright 2025 Google LLC
+#!/bin/bash
+
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
 
-# License is handled by ui/CMakeLists.txt
-install(
-    FILES ${CMAKE_CURRENT_SOURCE_DIR}/android/${ANDROID_ABI}/libVkLayer_khronos_validation.so
-    DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
-)
+# This script is used by Github workflows to create the app bundle on macOS runners, since the presubmit folder structure is different from dev builds.
+
+set -euo pipefail          
+          
+mv ./pkg/host/dive.app ./pkg/
+macdeployqt ./pkg/dive.app
+cp -r ./pkg/host/* ./pkg/dive.app/Contents/MacOS/
+mkdir -p ./pkg/dive.app/Contents/Resources/plugins/

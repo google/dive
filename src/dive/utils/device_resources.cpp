@@ -13,79 +13,148 @@
 
 #include "dive/utils/device_resources.h"
 
+#include <array>
 #include <filesystem>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "dive/build_defs/version_defs.h"
+#include "absl/types/span.h"
+#include "dive/build_defs/dive_cmake_generated.h"
+#include "dive/common/status.h"
 #include "dive/os/command_utils.h"
 
-namespace Dive
+namespace
 {
 
-// Returns possible locations for the device resources folder on the host machine
-absl::StatusOr<std::vector<std::filesystem::path>> GetPotentialDeviceResourcesDirs()
+// search_paths are relative to the executable dir
+absl::StatusOr<std::filesystem::path> ResolvePath(
+    absl::Span<const std::filesystem::path> search_paths, std::filesystem::path relative_file_path)
 {
-    std::vector<std::filesystem::path> search_paths;
+    assert(!search_paths.empty());
 
-    absl::StatusOr<std::filesystem::path> ret = Dive::GetExecutableDirectory();
-    if (!ret.ok())
+    absl::StatusOr<std::filesystem::path> exec_dir = Dive::GetExecutableDirectory();
+    if (!exec_dir.ok())
     {
-        std::string warn_msg = absl::StrFormat(
-            "Could not determine executable directory: %s. Search will not include "
-            "executable-relative paths.",
-            ret.status().message().data());
-        return absl::NotFoundError(warn_msg);
-    }
-
-    std::filesystem::path exe_dir = *ret;
-
-    // TODO(b/462767957): Update below based on new arrangement of device resources folder
-
-    // For host tools, dev build
-    search_paths.push_back(DIVE_INSTALL_DIR_PATH);
-
-    // Predict location for release builds
-    search_paths.push_back(exe_dir / "install");
-
-    // Apple
-    search_paths.push_back(exe_dir / ".." / "Resources");
-
-    return search_paths;
-}
-
-absl::StatusOr<std::filesystem::path> ResolveResourcesLocalPath(std::filesystem::path file_name)
-{
-    std::vector<std::filesystem::path> search_paths;
-    {
-        auto ret = GetPotentialDeviceResourcesDirs();
-        if (!ret.ok())
-        {
-            return ret.status();
-        }
-        search_paths = *ret;
+        return exec_dir.status();
     }
 
     std::vector<std::string> searched_paths_strings;
 
-    assert(!search_paths.empty());
-
     for (const auto& p : search_paths)
     {
-        const auto potential_path = p / file_name;
+        const auto potential_path = *exec_dir / p / relative_file_path;
         if (std::filesystem::exists(potential_path))
         {
-            auto canonical_path = std::filesystem::canonical(potential_path);
-            return canonical_path;
+            return std::filesystem::canonical(potential_path);
         }
         searched_paths_strings.push_back(potential_path.generic_string());
     }
 
     std::string err_msg =
-        absl::StrFormat("Cannot find file in deployment dir: %s, searched here: \n%s", file_name,
-                        absl::StrJoin(searched_paths_strings, ", \n"));
-    return absl::NotFoundError(err_msg);
+        absl::StrFormat("Cannot find file in deployment dir: %s, searched here: \n%s",
+                        relative_file_path, absl::StrJoin(searched_paths_strings, ", \n"));
+    return Dive::NotFoundError(err_msg);
+}
+
+}  // namespace
+
+namespace Dive
+{
+std::string_view GetDeviceResourcesVersionFileName()
+{
+    return CMAKE_GENERATED_DEVICE_RESOURCES_VERSION_FILENAME;
+}
+
+std::string_view GetProfilingDirName() { return CMAKE_GENERATED_PROFILING_PLUGIN_DIR; }
+
+std::string_view GetLicenseFileName() { return CMAKE_GENERATED_DIVE_LICENSE_FILE_NAME; }
+
+absl::StatusOr<std::filesystem::path> ResolvePluginsDir()
+{
+    // Determine plugins location relative to host tool
+    std::filesystem::path base_dir_installed = "..";
+    std::filesystem::path dive_root_dev = "../../..";
+    std::array search_dirs = {
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+        // Apple bundle
+        base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES /
+            CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+        // For launching host tool from Windows VS debugger, assuming other parts were installed
+        // under pkg/
+        dive_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+    };
+
+    absl::StatusOr<std::filesystem::path> plugins_dir_path = ResolvePath(search_dirs, ".");
+    if (!plugins_dir_path.ok())
+    {
+        return plugins_dir_path.status();
+    }
+    if (!std::filesystem::is_directory(*plugins_dir_path))
+    {
+        return absl::NotFoundError(
+            absl::StrFormat("Plugins dir path not dir: %s", *plugins_dir_path));
+    }
+
+    return *plugins_dir_path;
+}
+
+absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(
+    std::filesystem::path relative_file_path)
+{
+    // Host resources should be in the same dir as the caller
+    std::array search_dirs = {
+        // Most platforms
+        std::filesystem::path("."),
+        // For launching host tool from Windows VS debugger, assuming other parts were installed
+        // under pkg/
+        std::filesystem::path("../../..") / "pkg" / CMAKE_GENERATED_INSTALL_DEST_HOST,
+    };
+
+    return ResolvePath(search_dirs, relative_file_path);
+}
+
+absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
+    std::filesystem::path relative_file_path)
+{
+    // Determine device resources location relative to host tool
+    std::filesystem::path base_dir_installed = "..";
+    std::filesystem::path dive_root_dev = "../../..";
+    std::array search_dirs = {
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
+        // Apple bundle
+        base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES,
+        // For launching host tool from Windows VS debugger, assuming other parts were installed
+        // under pkg/
+        dive_root_dev / "pkg" / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
+    };
+
+    return ResolvePath(search_dirs, relative_file_path);
+}
+
+absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
+    std::filesystem::path relative_file_path)
+{
+    // Determine profiling resources location relative to host tool
+    std::filesystem::path base_dir_installed = "..";
+    std::filesystem::path dive_root_dev = "../../..";
+    std::array search_dirs = {
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR /
+            CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
+        // Apple bundle
+        base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES /
+            CMAKE_GENERATED_PLUGINS_PARENT_DIR / CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
+        // For launching host tool from Windows VS debugger, assuming other parts were installed
+        // under pkg/
+        dive_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR /
+            CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
+    };
+
+    return ResolvePath(search_dirs, relative_file_path);
 }
 
 }  // namespace Dive

@@ -179,6 +179,12 @@ class AndroidDevice
     // Triggers a screenshot and saves it to the specified path.
     absl::Status TriggerScreenCapture(const std::filesystem::path& on_device_screenshot_dir) const;
 
+    // Verifies that profiling plugin dir exists locally before deploying to target_dir. Returns
+    // on-device path
+    absl::StatusOr<std::string> DeployProfilingPluginDir(
+        const std::filesystem::path& target_dir =
+            Dive::DeviceResourcesConstants::kDeployFolderPath);
+
     // Verifies that file_name exists locally inside the device resources folder before deploying to
     // target_dir
     absl::Status DeployDeviceResource(const std::string_view& file_name,

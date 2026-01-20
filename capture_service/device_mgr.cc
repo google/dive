@@ -867,8 +867,8 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
 
     std::filesystem::path local_replay_apk_path;
     {
-        absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReplayApkName);
+        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveDeviceResourcesLocalPath(
+            Dive::DeviceResourcesConstants::kGfxrReplayApkName);
         if (!ret.ok())
         {
             return ret.status();
@@ -878,7 +878,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
     std::filesystem::path local_recon_py_path;
     {
         absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
+            Dive::ResolveDeviceResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
         if (!ret.ok())
         {
             return ret.status();
@@ -995,7 +995,7 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
     std::filesystem::path local_recon_py_path;
     {
         absl::StatusOr<std::filesystem::path> ret =
-            Dive::ResolveResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
+            Dive::ResolveDeviceResourcesLocalPath(Dive::DeviceResourcesConstants::kGfxrReconPyName);
         if (!ret.ok())
         {
             return ret.status();
@@ -1087,20 +1087,20 @@ absl::Status DeviceManager::RunReplayProfilingBinary(const GfxrReplaySettings& s
     LOGD("RunReplayProfilingBinary(): SETUP\n");
     LOGD("RunReplayProfilingBinary(): Deploy libraries and binaries\n");
 
-    RETURN_IF_ERROR(
-        m_device->DeployDeviceResource(Dive::DeviceResourcesConstants::kProfilingPluginFolderName));
-    std::string remote_profiling_dir =
-        absl::StrFormat("%s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath,
-                        Dive::DeviceResourcesConstants::kProfilingPluginFolderName);
+    absl::StatusOr<std::string> remote_profiling_dir = m_device->DeployProfilingPluginDir();
+    if (!remote_profiling_dir.ok())
+    {
+        return remote_profiling_dir.status();
+    }
 
     absl::Cleanup cleanup([&]() {
         LOGD("RunReplayProfilingBinary(): CLEANUP\n");
-        std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", remote_profiling_dir);
+        std::string clean_cmd = absl::StrFormat("shell rm -rf -- %s", *remote_profiling_dir);
         adb.Run(clean_cmd).IgnoreError();
     });
 
     std::string binary_path_on_device =
-        absl::StrFormat("%s/%s", remote_profiling_dir, kProfilingPluginName);
+        absl::StrFormat("%s/%s", *remote_profiling_dir, kProfilingPluginName);
     RETURN_IF_ERROR(adb.Run(absl::StrCat("shell chmod +x ", binary_path_on_device)));
 
     LOGD("RunReplayProfilingBinary(): RUN\n");
@@ -1395,12 +1395,31 @@ absl::Status AndroidDevice::TriggerScreenCapture(
     return ret;
 }
 
+absl::StatusOr<std::string> AndroidDevice::DeployProfilingPluginDir(
+    const std::filesystem::path& target_dir)
+{
+    absl::StatusOr<std::filesystem::path> local_profiling_dir_path =
+        Dive::ResolveProfilingResourcesLocalPath(".");
+    if (!local_profiling_dir_path.ok())
+    {
+        return local_profiling_dir_path.status();
+    }
+
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell mkdir -p '%s')", target_dir)));
+
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(
+        R"(push "%s" "%s")", local_profiling_dir_path->generic_string(), target_dir)));
+
+    return absl::StrFormat("%s/%s", target_dir, Dive::GetProfilingDirName());
+}
+
 absl::Status AndroidDevice::DeployDeviceResource(const std::string_view& file_name,
                                                  const std::filesystem::path& target_dir)
 {
     std::filesystem::path host_full_lib_path;
     {
-        absl::StatusOr<std::filesystem::path> ret = Dive::ResolveResourcesLocalPath(file_name);
+        absl::StatusOr<std::filesystem::path> ret =
+            Dive::ResolveDeviceResourcesLocalPath(file_name);
         if (!ret.ok())
         {
             return ret.status();

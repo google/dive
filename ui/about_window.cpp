@@ -16,6 +16,7 @@
 #include "about_window.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QHBoxLayout>
@@ -26,8 +27,11 @@
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+#include <filesystem>
 #include <sstream>
 
+#include "utils/device_resources.h"
+#include "utils/device_resources_constants.h"
 #include "utils/version_info.h"
 
 // =================================================================================================
@@ -37,10 +41,22 @@
 AboutDialog::AboutDialog(QWidget* parent)
 {
     auto main_layout = new QVBoxLayout;
-    main_layout->addLayout(CreateHeaderLayout());
-    main_layout->addLayout(CreateVersionLayout());
-    main_layout->addLayout(CreateLicenseLayout());
-    main_layout->addLayout(CreateButtonLayout());
+    if (auto layout = CreateHeaderLayout())
+    {
+        main_layout->addLayout(layout);
+    }
+    if (auto layout = CreateVersionLayout())
+    {
+        main_layout->addLayout(layout);
+    }
+    if (auto layout = CreateLicenseLayout())
+    {
+        main_layout->addLayout(layout);
+    }
+    if (auto layout = CreateButtonLayout())
+    {
+        main_layout->addLayout(layout);
+    }
 
     // Disable help icon, set size, title, and layout
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -87,11 +103,24 @@ QVBoxLayout* AboutDialog::CreateLicenseLayout()
     auto third_party_licenses = new QLabel("Third Party Licenses:");
 
     auto license_notice = new QPlainTextEdit();
-    QFile licenseFile{QDir{QCoreApplication::applicationDirPath()}.filePath("NOTICE")};
-    if (licenseFile.open(QIODevice::ReadOnly))
+
+    absl::StatusOr<std::filesystem::path> notice_file_path =
+        Dive::ResolveHostResourcesLocalPath(Dive::GetLicenseFileName());
+    if (!notice_file_path.ok())
     {
-        license_notice->setPlainText(licenseFile.readAll());
+        std::string err_msg = absl::StrFormat("Can't locate notice file, checked: %s",
+                                              notice_file_path.status().message());
+        qDebug() << err_msg.c_str();
+        return nullptr;
     }
+
+    QFile licenseFile{notice_file_path->generic_string().c_str()};
+    if (!licenseFile.open(QIODevice::ReadOnly))
+    {
+        qDebug() << "Could not open license file: " << notice_file_path->generic_string().c_str();
+        return nullptr;
+    }
+    license_notice->setPlainText(licenseFile.readAll());
     license_notice->setReadOnly(true);
 
     QVBoxLayout* license_layout = new QVBoxLayout;

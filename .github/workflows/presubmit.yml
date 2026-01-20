@@ -12,7 +12,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
-# Arbitrarily chosen subset of the full combination
+# Subset of the full combination, no Debug builds other than on Windows platform
 jobs:
   build_host_linux:
     permissions:
@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - build_type: Debug
+          - build_type: Release
             cc: gcc-14
             cxx: g++-14
           - build_type: Release
@@ -38,9 +38,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
     uses: ./.github/workflows/build_windows.yml
     with:
-      build_type: Debug
+      build_type: ${{ matrix.build_type }}
       upload_cache: false
 
   build_host_mac:
@@ -58,5 +61,5 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/build_android.yml
     with:
-      build_type: Debug
+      build_type: Release
       upload_cache: false

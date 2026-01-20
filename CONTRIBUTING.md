@@ -90,12 +90,6 @@ Make sure to have built everything according to BUILD.md (don't forget the insta
     ```sh
     git submodule update --init --recursive
     ```
-1. Update `//third_party/Vulkan-Headers` to `//third_party/gfxreconstruct/external/Vulkan-Headers`:
-    ```sh
-    cd third_party/Vulkan-Headers
-    git fetch
-    git checkout $(git -C ../gfxreconstruct/external/Vulkan-Headers rev-parse HEAD)
-    ```
 1. Regenerate GFXR Vulkan code:
     ```sh
     cd third_party/gfxreconstruct/framework/generated

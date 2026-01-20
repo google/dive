@@ -22,11 +22,11 @@ project(DiveService)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# Enable warnings as errors
+# Enable warnings as errors. Require exhaustive switches.
 if(MSVC)
-    add_compile_options(/WX)
+    add_compile_options(/WX /we4062)
 else()
-    add_compile_options(-Werror)
+    add_compile_options(-Werror -Wswitch)
 endif()
 
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
@@ -78,7 +78,9 @@ else()
         absl::strings
         absl::statusor
         component_files
+        dive_build_defs
         dive_device_resources
+        dive_src_includes
         version_info
         command_utils
     )
@@ -100,7 +102,7 @@ else()
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
 
-    install(TARGETS dive_client_cli DESTINATION "${DIVE_INSTALL_DESTINATION}")
+    install(TARGETS dive_client_cli DESTINATION "${DIVE_INSTALL_DEST_HOST}")
 
     enable_testing()
     include(GoogleTest)

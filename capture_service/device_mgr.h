@@ -103,7 +103,8 @@ absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySe
 class AndroidDevice
 {
  public:
-    explicit AndroidDevice(const std::string& serial);
+    static absl::StatusOr<std::unique_ptr<AndroidDevice>> Create(const std::string& serial);
+
     ~AndroidDevice();
 
     AndroidDevice& operator=(const AndroidDevice&) = delete;
@@ -178,6 +179,12 @@ class AndroidDevice
     // Triggers a screenshot and saves it to the specified path.
     absl::Status TriggerScreenCapture(const std::filesystem::path& on_device_screenshot_dir) const;
 
+    // Verifies that profiling plugin dir exists locally before deploying to target_dir. Returns
+    // on-device path
+    absl::StatusOr<std::string> DeployProfilingPluginDir(
+        const std::filesystem::path& target_dir =
+            Dive::DeviceResourcesConstants::kDeployFolderPath);
+
     // Verifies that file_name exists locally inside the device resources folder before deploying to
     // target_dir
     absl::Status DeployDeviceResource(const std::string_view& file_name,
@@ -192,6 +199,8 @@ class AndroidDevice
     absl::Status CleanupFileWithPermissions(std::string_view package, std::string_view file_name);
 
  private:
+    explicit AndroidDevice(const std::string& serial);
+
     // The ABI must be consistent between the connected device and the Dive device resources
     absl::Status CheckAbi();
 
@@ -212,6 +221,10 @@ class DeviceManager
     DeviceManager(const DeviceManager&) = delete;
 
     std::vector<DeviceInfo> ListDevice() const;
+    // Creates and stores an object representing the connection to the device with the given serial.
+    // `serial` must correspond to one returned by ListDevice. Returns a non-owning reference to
+    // that which was created. If this fails then DeviceManager state will remain unaltered;
+    // GetDevice will return the previous SelectDevice result.
     absl::StatusOr<AndroidDevice*> SelectDevice(const std::string& serial);
     void RemoveDevice() { m_device = nullptr; }
     AndroidDevice* GetDevice() const { return m_device.get(); }

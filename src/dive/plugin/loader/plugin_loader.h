@@ -57,7 +57,7 @@ class PluginLoader
     PluginLoader(const PluginLoader&) = delete;
     PluginLoader& operator=(const PluginLoader&) = delete;
 
-    absl::Status LoadPlugins(const std::filesystem::path& plugin_directory_path);
+    absl::Status LoadPlugins();
     void UnloadPlugins();
 
     const DivePluginBridge& Bridge() const { return m_bridge; }

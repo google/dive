@@ -37,6 +37,9 @@ jobs:
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build --config Debug
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix pkg --config Debug
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -64,6 +67,9 @@ jobs:
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build --config Release
+      - name: Produce install artifacts
+        run: |
+          cmake --install build --prefix pkg --config Release
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -119,7 +125,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Debug
+          cmake --install build --prefix pkg --config Debug
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -174,7 +180,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix pkg --config Release
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -229,7 +235,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Debug
+          cmake --install build --prefix pkg --config Debug
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -284,7 +290,7 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix pkg --config Release
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -351,7 +357,10 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Debug
+          cmake --install build --prefix pkg --config Debug
+      - name: Put files in app bundle
+        run: |
+          scripts/deploy_mac_bundle_presubmit.sh
       - name: Run tests
         run: |
           ctest --output-on-failure -C Debug --test-dir build
@@ -407,7 +416,10 @@ jobs:
           cat build/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix install --config Release
+          cmake --install build --prefix pkg --config Release
+      - name: Put files in app bundle
+        run: |
+          scripts/deploy_mac_bundle_presubmit.sh
       - name: Run tests
         run: |
           ctest --output-on-failure -C Release --test-dir build
@@ -471,4 +483,4 @@ jobs:
           cat build_android/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build_android --prefix install --config Debug
+          cmake --install build_android --prefix pkg --config Debug

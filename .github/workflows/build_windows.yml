@@ -15,40 +15,36 @@ jobs:
     name: Build Host Windows ${{ inputs.build_type }}
     runs-on: windows-2022
     steps:
-      - name: Check out code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
-      - name: Install and start sccache
-        uses: mozilla/sccache-action@v0.0.5
+      - uses: mozilla/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
         id: sccache
-      - name: Cache sccache (upload_cache)
+      - name: (sccache) Cache (upload_cache)
         if: ${{ inputs.upload_cache }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: "~/.cache/sccache"
           key: ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-
-      - name: Restore sccache (!upload_cache)
+      - name: (sccache) Restore (!upload_cache)
         if: ${{ !(inputs.upload_cache) }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: "~/.cache/sccache"
           key: ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
         with:
           version: 5.15.2
-          target: desktop
           arch: win64_msvc2019_64
-      - uses: ilammy/setup-nasm@v1
-      - name: Install dependency
+      - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b # v1.5.2
+      - name: Install Dive dependencies
         run: |
           python3 -m pip install mako
-      - name: Zero sccache stats
+      - name: (sccache) Zero stats
         run: sccache --zero-stats
       - name: Generate build files with cmake
         run: |
@@ -61,7 +57,7 @@ jobs:
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build --config ${{ inputs.build_type }}
-      - name: Show sccache stats
+      - name: (sccache) Show stats
         run: sccache --show-stats
       - name: Produce install artifacts
         run: |

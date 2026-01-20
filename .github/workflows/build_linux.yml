@@ -21,20 +21,19 @@ jobs:
     name: Build Host Linux ${{ inputs.build_type }} ${{ inputs.cc }}
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt dependencies (including xcb)
         run: |
           sudo apt-get update
           sudo apt-get install -y libxcb-xinerama0 libxcb-xinerama0-dev libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libxcb1 libx11-xcb1
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
         with:
+          version: 5.15.2
           # Minimize the number of Python installations so that CMake chooses the system Python with python3-mako.
           setup-python: false
-      - name: Install dependency
+      - name: Install Dive dependencies
         run: |
           sudo apt-get update --yes
           sudo apt-get install --yes \
@@ -48,25 +47,25 @@ jobs:
             libxcb-glx0-dev \
             libcurl4-openssl-dev
           which ${{ inputs.cc }}
-      - name: Configure ccache for uploading (upload_cache)
+      - name: (ccache) Configure for uploading (upload_cache)
         if: ${{ inputs.upload_cache }}
         run: ccache -z
-      - name: Configure ccache for restoring (!upload_cache)
+      - name: (ccache) Configure for restoring (!upload_cache)
         if: ${{ !(inputs.upload_cache) }}
         run: |
           ccache -z
           ccache --set-config=read_only=true
-      - name: Cache ccache (upload_cache)
-        if: github.ref == 'refs/heads/main'
-        uses: actions/cache@v4
+      - name: (ccache) Cache (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-
-      - name: Restore ccache (!upload_cache)
-        if: github.ref != 'refs/heads/main'
-        uses: actions/cache/restore@v4
+      - name: (ccache) Restore (!upload_cache)
+        if: ${{ !(inputs.upload_cache) }}
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
@@ -88,7 +87,7 @@ jobs:
       - name: Ninja log
         run: |
           cat build/.ninja_log
-      - name: Show ccache stats
+      - name: (ccache) Show stats
         run: ccache -s
       - name: Produce install artifacts
         run: |

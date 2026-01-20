@@ -15,8 +15,7 @@ jobs:
     name: Build Host Mac ${{ inputs.build_type }}
     runs-on: macos-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Install Qt 5.15 via Homebrew
@@ -27,37 +26,35 @@ jobs:
           echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
       - name: Check Qt Version
         run: qmake --version
-      - name: Install ccache
+      - name: (ccache) Install via Homebrew
         run: brew install ccache
-      - name: Configure ccache for uploading (upload_cache)
+      - name: (ccache) Configure for uploading (upload_cache)
         if: ${{ inputs.upload_cache }}
         run: ccache -z
-      - name: Configure ccache for restoring (!upload_cache)
+      - name: (ccache) Configure for restoring (!upload_cache)
         if: ${{ !(inputs.upload_cache) }}
         run: |
           ccache -z
           ccache --set-config=read_only=true
-      - name: Cache ccache (upload_cache)
-        if: github.ref == 'refs/heads/main'
-        uses: actions/cache@v4
+      - name: (ccache) Cache (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-
-      - name: Restore ccache (!upload_cache)
-        if: github.ref != 'refs/heads/main'
-        uses: actions/cache/restore@v4
+      - name: (ccache) Restore (!upload_cache)
+        if: ${{ !(inputs.upload_cache) }}
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-
-      - name: Install dependency
+      - name: Install Dive dependencies
         run: |
           python3 -m pip install --break-system-packages mako
-      - name: Zero ccache stats
-        run: ccache -z
       - name: Generate build files with cmake
         run: |
           time cmake \
@@ -70,7 +67,7 @@ jobs:
       - name: Build Dive host tools with ninja
         run: |
           time ninja -C build -d stats -f build-${{ inputs.build_type }}.ninja
-      - name: Show ccache stats
+      - name: (ccache) Show stats
         run: ccache -s
       - name: Ninja log
         run: |

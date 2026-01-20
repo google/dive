@@ -7,8 +7,8 @@
 name: Pull Request Cleanup
 on:
   pull_request_target: # required for pull request from forks
-    types: [ closed ]
-    branches: [ main ]
+    types: [closed]
+    branches: [main]
 
 jobs:
   cleanup:

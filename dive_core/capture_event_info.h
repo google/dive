@@ -15,13 +15,14 @@
 */
 
 #pragma once
+#include <vulkan/vulkan_core.h>
+
 #include <vector>
 
 #include "capture_data.h"
 #include "common.h"
 #include "dive_core/common/emulate_pm4.h"
 #include "shader_disassembly.h"
-#include "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
 
 namespace Dive
 {

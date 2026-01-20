@@ -28,7 +28,6 @@ set(target_name VkLayer_dive)
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
     ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp/
 )
 
@@ -65,7 +64,11 @@ list(
     wrap
 )
 
-target_link_libraries(${target_name} ${TARGET_LINK_LIBS})
+target_link_libraries(
+    ${target_name}
+    ${TARGET_LINK_LIBS}
+    PRIVATE Vulkan::Headers
+)
 target_link_directories(
     ${target_name}
     PRIVATE ${CMAKE_SOURCE_DIR}/capture_service

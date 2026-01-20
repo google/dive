@@ -31,9 +31,6 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# TODO: Try to use include_directories sparingly or at the highest level appropriate
-include_directories(${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include)
-
 # ---------------------
 # data_core_wrapper_lib
 add_library(data_core_wrapper_lib data_core_wrapper.h data_core_wrapper.cpp)

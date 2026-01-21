@@ -27,6 +27,7 @@ jobs:
       build_type: ${{ matrix.build_type }}
       cc: ${{ matrix.cc }}
       cxx: ${{ matrix.cxx }}
+      restore_cache: false
       upload_cache: true
 
   build_host_windows:
@@ -39,6 +40,7 @@ jobs:
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
+      restore_cache: false
       upload_cache: true
 
   build_host_mac:
@@ -51,6 +53,7 @@ jobs:
     uses: ./.github/workflows/build_mac.yml
     with:
       build_type: ${{ matrix.build_type }}
+      restore_cache: false
       upload_cache: true
 
   build_device_android:
@@ -63,4 +66,5 @@ jobs:
     uses: ./.github/workflows/build_android.yml
     with:
       build_type: ${{ matrix.build_type }}
+      restore_cache: false
       upload_cache: true

@@ -6,6 +6,9 @@ on:
       build_type:
         required: true
         type: string
+      restore_cache:
+        required: true
+        type: boolean
       upload_cache:
         required: true
         type: boolean
@@ -14,6 +17,8 @@ jobs:
   build_host_mac:
     name: Build Host Mac ${{ inputs.build_type }}
     runs-on: macos-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v6
         with:
@@ -26,35 +31,21 @@ jobs:
           echo "PATH=$(brew --prefix qt@5)/bin:$PATH" >> $GITHUB_ENV
       - name: Check Qt Version
         run: qmake --version
-      - name: (ccache) Install via Homebrew
-        run: brew install ccache
-      - name: (ccache) Configure for uploading (upload_cache)
-        if: ${{ inputs.upload_cache }}
-        run: ccache -z
-      - name: (ccache) Configure for restoring (!upload_cache)
-        if: ${{ !(inputs.upload_cache) }}
-        run: |
-          ccache -z
-          ccache --set-config=read_only=true
-      - name: (ccache) Cache (upload_cache)
-        if: ${{ inputs.upload_cache }}
-        uses: actions/cache@v5
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-
-      - name: (ccache) Restore (!upload_cache)
-        if: ${{ !(inputs.upload_cache) }}
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-
       - name: Install Dive dependencies
         run: |
           python3 -m pip install --break-system-packages mako
+      - name: (ccache) Install via Homebrew
+        run: brew install ccache
+      - name: (ccache) Clear stats
+        run: ccache -z
+      - name: (ccache) Restore (restore_cache)
+        if: ${{ inputs.restore_cache }}
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-
       - name: Generate build files with cmake
         run: |
           time cmake \
@@ -67,8 +58,6 @@ jobs:
       - name: Build Dive host tools with ninja
         run: |
           time ninja -C build -d stats -f build-${{ inputs.build_type }}.ninja
-      - name: (ccache) Show stats
-        run: ccache -s
       - name: Ninja log
         run: |
           cat build/.ninja_log
@@ -81,3 +70,11 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
+      - name: (ccache) Show stats
+        run: ccache -s
+      - name: (ccache) Save (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}

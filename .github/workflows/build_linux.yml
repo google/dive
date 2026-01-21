@@ -12,6 +12,9 @@ on:
       cxx:
         required: true
         type: string
+      restore_cache:
+        required: true
+        type: boolean
       upload_cache:
         required: true
         type: boolean
@@ -20,6 +23,8 @@ jobs:
   build_host_linux:
     name: Build Host Linux ${{ inputs.build_type }} ${{ inputs.cc }}
     runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v6
         with:
@@ -47,27 +52,13 @@ jobs:
             libxcb-glx0-dev \
             libcurl4-openssl-dev
           which ${{ inputs.cc }}
-      - name: (ccache) Configure for uploading (upload_cache)
-        if: ${{ inputs.upload_cache }}
+      - name: (ccache) Clear stats
         run: ccache -z
-      - name: (ccache) Configure for restoring (!upload_cache)
-        if: ${{ !(inputs.upload_cache) }}
-        run: |
-          ccache -z
-          ccache --set-config=read_only=true
-      - name: (ccache) Cache (upload_cache)
-        if: ${{ inputs.upload_cache }}
-        uses: actions/cache@v5
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-
-      - name: (ccache) Restore (!upload_cache)
-        if: ${{ !(inputs.upload_cache) }}
+      - name: (ccache) Restore (restore_cache)
+        if: ${{ inputs.restore_cache }}
         uses: actions/cache/restore@v5
         with:
-          path: ${{ github.workspace }}/.ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-
@@ -87,8 +78,6 @@ jobs:
       - name: Ninja log
         run: |
           cat build/.ninja_log
-      - name: (ccache) Show stats
-        run: ccache -s
       - name: Produce install artifacts
         run: |
           cmake --install build --prefix pkg --config ${{ inputs.build_type }}
@@ -100,3 +89,11 @@ jobs:
         run: |
           export DISPLAY=:99
           ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
+      - name: (ccache) Show stats
+        run: ccache -s
+      - name: (ccache) Save (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}

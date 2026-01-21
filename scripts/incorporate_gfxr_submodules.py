@@ -17,8 +17,12 @@
 This is required as part of a subtree pull in order so that we can check out
 GFXR submodules correctly.
 
-NOTE: If GFXR deletes a submodule, this won't detect that. This will only add
-new submodules or update existing ones.
+Limitations:
+
+- If GFXR deletes a submodule, this won't detect that. This will only add
+  new submodules or update existing ones.
+- Does not handle git config multi-value variables
+- Does not preserve whitespace at the end of git config values
 """
 
 import argparse
@@ -164,8 +168,9 @@ def git_config_get(
         capture_output=True,
     )
     process.check_returncode()
-    # TODO: The value may have intentional trailing newlines that this throws away
-    # TODO: This does not support multi-value
+    # git prints a trailing whitespace which we want to remove. Unfortunately,
+    # this will also remove any whitespace that is intentionally in the config
+    # file. This is not a requirement so I kept the simplest solution.
     return process.stdout.rstrip()
 
 

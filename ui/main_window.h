@@ -286,6 +286,7 @@ class MainWindow : public QMainWindow
     int m_previous_tab_index = -1;
     bool m_gfxr_capture_loaded = false;
     bool m_correlated_capture_loaded = false;
+    bool m_analyze_capture_pending = false;
 
     EventSelection* m_event_selection;
 

@@ -32,6 +32,11 @@ target_sources(gfxrecon_decode
                PRIVATE
                     ${CMAKE_CURRENT_LIST_DIR}/annotation_handler.h
                     ${CMAKE_CURRENT_LIST_DIR}/api_decoder.h
+                    ${CMAKE_CURRENT_LIST_DIR}/api_payload.h
+                    ${CMAKE_CURRENT_LIST_DIR}/block_buffer.h
+                    ${CMAKE_CURRENT_LIST_DIR}/block_buffer.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/block_parser.h
+                    ${CMAKE_CURRENT_LIST_DIR}/block_parser.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/common_consumer_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/common_handle_mapping_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/common_object_info_table.h
@@ -113,6 +118,8 @@ target_sources(gfxrecon_decode
                     $<$<BOOL:${OPENXR_SUPPORT_ENABLED}>:${CMAKE_CURRENT_LIST_DIR}/openxr_tracked_object_info_table.cpp>
                     ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.h
                     ${CMAKE_CURRENT_LIST_DIR}/mark_injected_commands.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/parsed_block.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/parsed_block.h
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder_base.h
                     ${CMAKE_CURRENT_LIST_DIR}/pointer_decoder.h
                     ${CMAKE_CURRENT_LIST_DIR}/portability.h
@@ -200,8 +207,6 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/marker_json_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/metadata_json_consumer.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_enum_util.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_util.h
-                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_feature_util.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_mapping_util.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_handle_mapping_util.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_object_cleanup_util.h
@@ -225,12 +230,17 @@ target_sources(gfxrecon_decode
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_common.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_common.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_as.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_as.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_draw_calls.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_draw_calls.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_compute_ray_tracing.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_compute_ray_tracing.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_delegate.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_delegate.cpp
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_delegate_dumped_resources.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_transfer.h
+                    ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_transfer.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_json.h
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_replay_dump_resources_json.cpp
                     ${CMAKE_CURRENT_LIST_DIR}/vulkan_resource_allocator.h
@@ -280,7 +290,6 @@ target_sources(gfxrecon_decode
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_enum_to_json.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_json_consumer.cpp
-                    ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_feature_util.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_pnext_struct_decoder.cpp
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.h
                     ${PROJECT_SOURCE_DIR}/framework/generated/generated_vulkan_referenced_resource_consumer.cpp

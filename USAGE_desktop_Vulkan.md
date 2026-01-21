@@ -14,7 +14,7 @@ Copyright &copy; 2022 Advanced Micro Devices, Inc.
 # GFXReconstruct API Capture and Replay - Vulkan
 
 ***This document describes the GFXReconstruct software for capturing and
-replaying Vulkan API calls on Desktop systems (i.e. Windows, Linux, MacOS).***
+replaying Vulkan API calls on Desktop systems (i.e. Windows, Linux, macOS).***
 
 If you are looking for capturing/replaying on a different platform, please refer
 to one of these other documents:
@@ -124,6 +124,16 @@ The following command would be executed from the command line to set the
 ```bash
 export VK_INSTANCE_LAYERS=VK_LAYER_LUNARG_gfxreconstruct
 ```
+
+#### Capture specific app
+
+##### Capture specific app for Windows
+
+set GFXRECON_CAPTURE_PROCESS_NAME=your_app_name
+
+##### Capture specific app for Linux
+
+export GFXRECON_CAPTURE_PROCESS_NAME=your_app_name
 
 #### Understanding GFXReconstruct Layer Memory Capture
 
@@ -274,8 +284,9 @@ option values.
 
 | Option                                         | Environment Variable                                    | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------------------------- | ------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capture File Name                              | GFXRECON_CAPTURE_FILE                                   | STRING  | Path to use when creating the capture file.  Default is: `gfxrecon_capture.gfxr`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Capture File Name                              | GFXRECON_CAPTURE_FILE                                   | STRING  | Path to use when creating the capture file. Supports variable patterns for dynamic file paths, such as `${AppName}` (the application or executable name). Default is: `gfxrecon_capture.gfxr` |
 | Capture Specific Frames                        | GFXRECON_CAPTURE_FRAMES                                 | STRING  | Specify one or more comma-separated frame ranges to capture.  Each range will be written to its own file.  A frame range can be specified as a single value, to specify a single frame to capture, or as two hyphenated values, to specify the first and last frame to capture.  Frame ranges should be specified in ascending order and cannot overlap. Note that frame numbering is 1-based (i.e. the first frame is frame 1). Example: `200,301-305` will create two capture files, one containing a single frame and one containing five frames.  Default is: Empty string (all frames are captured).                                                                                                                                                                                                                                                                                                                                                                   |
+| Capture specific app                           | GFXRECON_CAPTURE_PROCESS_NAME                           | STRING  | Specify one app name to be captured. Default is: ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Quit after capturing frame ranges              | GFXRECON_QUIT_AFTER_CAPTURE_FRAMES                      | BOOL    | Setting it to `true` will force the application to terminate once all frame ranges specified by `GFXRECON_CAPTURE_FRAMES` have been captured. Default is: `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Hotkey Capture Trigger                         | GFXRECON_CAPTURE_TRIGGER                                | STRING  | Specify a hotkey (any one of F1-F12, TAB, CONTROL) that will be used to start/stop capture.  Example: `F3` will set the capture trigger to F3 hotkey. One capture file will be generated for each pair of start/stop hotkey presses. Default is: Empty string (hotkey capture trigger is disabled).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Hotkey Capture Trigger Frames                  | GFXRECON_CAPTURE_TRIGGER_FRAMES                         | STRING  | Specify a limit on the number of frames to be captured via hotkey.  Example: `1` will capture exactly one frame when the trigger key is pressed. Default is: Empty string (no limit)                                                                                                                                                                                                                                                      |
@@ -301,12 +312,12 @@ option values.
 | Page Guard External Memory                     | GFXRECON_PAGE_GUARD_EXTERNAL_MEMORY                     | BOOL    | When the `page_guard` memory tracking mode is enabled, use the VK_EXT_external_memory_host extension to eliminate the need for shadow memory allocations. For each memory allocation from a host visible memory type, the capture layer will create an allocation from system memory, which it can monitor for write access, and provide that allocation to vkAllocateMemory as external memory. Only available on Windows. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Page Guard Persistent Memory                   | GFXRECON_PAGE_GUARD_PERSISTENT_MEMORY                   | BOOL    | When the `page_guard` memory tracking mode is enabled, this option changes the way that the shadow memory used to detect modifications to mapped memory is allocated. The default behavior is to allocate and copy the mapped memory range on map and free the allocation on unmap. When this option is enabled, an allocation with a size equal to that of the object being mapped is made once on the first map and is not freed until the object is destroyed.  This option is intended to be used with applications that frequently map and unmap large memory ranges, to avoid frequent allocation and copy operations that can have a negative impact on performance.  This option is ignored when GFXRECON_PAGE_GUARD_EXTERNAL_MEMORY is enabled. Default is `false`                                                                                                                                                                                                 |
 | Page Guard Align Buffer Sizes                  | GFXRECON_PAGE_GUARD_ALIGN_BUFFER_SIZES                  | BOOL    | When the `page_guard` memory tracking mode is enabled, this option overrides the Vulkan API calls that report buffer memory properties to report that buffer sizes and alignments must be a multiple of the system page size.  This option is intended to be used with applications that perform CPU writes and GPU writes/copies to different buffers that are bound to the same page of mapped memory, which may result in data being lost when copying pages from the `page_guard` shadow allocation to the real allocation.  This data loss can result in visible corruption during capture.  Forcing buffer sizes and alignments to a multiple of the system page size prevents multiple buffers from being bound to the same page, avoiding data loss from simultaneous CPU writes to the shadow allocation and GPU writes to the real allocation for different buffers bound to the same page.  This option is only available for the Vulkan API.  Default is `true` |
-| Page Guard Unblock SIGSEGV                     | GFXRECON_PAGE_GUARD_UNBLOCK_SIGSEGV                     | BOOL    | When the `page_guard` memory tracking mode is enabled and in the case that SIGSEGV has been marked as blocked in thread's signal mask, setting this enviroment variable to `true` will forcibly re-enable the signal in the thread's signal mask. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Page Guard Signal Handler Watcher              | GFXRECON_PAGE_GUARD_SIGNAL_HANDLER_WATCHER              | BOOL    | When the `page_guard` memory tracking mode is enabled, setting this enviroment variable to `true` will spawn a thread which will will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Page Guard Unblock SIGSEGV                     | GFXRECON_PAGE_GUARD_UNBLOCK_SIGSEGV                     | BOOL    | When the `page_guard` memory tracking mode is enabled and in the case that SIGSEGV has been marked as blocked in thread's signal mask, setting this environment variable to `true` will forcibly re-enable the signal in the thread's signal mask. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Page Guard Signal Handler Watcher              | GFXRECON_PAGE_GUARD_SIGNAL_HANDLER_WATCHER              | BOOL    | When the `page_guard` memory tracking mode is enabled, setting this environment variable to `true` will spawn a thread which will will periodically reinstall the `SIGSEGV` handler if it has been replaced by the application being traced. Default is `false`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Page Guard Signal Handler Watcher Max Restores | GFXRECON_PAGE_GUARD_SIGNAL_HANDLER_WATCHER_MAX_RESTORES | INTEGER | Sets the number of times the watcher will attempt to restore the signal handler. Setting it to a negative will make the watcher thread run indefinitely. Default is `1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Force Command Serialization                    | GFXRECON_FORCE_COMMAND_SERIALIZATION                    | BOOL    | Sets exclusive locks(unique_lock) for every ApiCall. It can avoid external multi-thread to cause captured issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Queue Zero Only                                | GFXRECON_QUEUE_ZERO_ONLY                                | BOOL    | Forces to using only QueueFamilyIndex: 0 and queueCount: 1 on capturing to avoid replay error for unavailble VkQueue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Allow Pipeline Compile Required                | GFXRECON_ALLOW_PIPELINE_COMPILE_REQUIRED                | BOOL    | The default behaviour forces VK_PIPELINE_COMPILE_REQUIRED to be returned from Create*Pipelines calls which have VK_PIPELINE_CREATE_FAIL_ON_PIPELINE_COMPILE_REQUIRED_BIT set, and skips dispatching and recording the calls. This forces applications to fallback to recompiling pipelines without caching, the Vulkan calls for which will be captured. Enabling this option causes capture to record the application's calls and implementation's return values unmodified, but the resulting captures are fragile to changes in Vulkan implementations if they use pipeline caching.                                                                                                                                                                                                                                                                                                                                                                                     |
+| Queue Zero Only                                | GFXRECON_QUEUE_ZERO_ONLY                                | BOOL    | Forces to using only QueueFamilyIndex: 0 and queueCount: 1 on capturing to avoid replay error for unavailable VkQueue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Allow Pipeline Compile Required                | GFXRECON_ALLOW_PIPELINE_COMPILE_REQUIRED                | BOOL    | The default behavior forces VK_PIPELINE_COMPILE_REQUIRED to be returned from Create*Pipelines calls which have VK_PIPELINE_CREATE_FAIL_ON_PIPELINE_COMPILE_REQUIRED_BIT set, and skips dispatching and recording the calls. This forces applications to fallback to recompiling pipelines without caching, the Vulkan calls for which will be captured. Enabling this option causes capture to record the application's calls and implementation's return values unmodified, but the resulting captures are fragile to changes in Vulkan implementations if they use pipeline caching.                                                                                                                                                                                                                                                                                                                                                                                     |
 | Stop Recording Calls in Threads With Invalid Data | GFXRECON_SKIP_THREADS_WITH_INVALID_DATA | BOOL | When a thread is encountered which contains data that is unexpected, skip the data and mark the thread as skippable.  This is important especially in OpenXR where other API commands (such as Vulkan) may be generated inside of the OpenXR commands, but may still be referenced in some fashion outside of the OpenXR commands.  This results in issues during replay.  So, this option prevents those commands, and the threads containing those commands from being recorded to the capture file.  Default is `false` and it is only valid when OpenXR capture is enabled.                                               |
 
 #### Memory Tracking Known Issues
@@ -376,6 +387,52 @@ A sample layer settings file, documenting each available setting, can be found
 in the GFXReconstruct GitHub repository at `layer/vk_layer_settings.txt`. Most
 binary distributions of the GFXReconstruct software will also include a sample
 settings file.
+
+#### Layer Settings via VK_EXT_layer_settings
+
+An alternative way to configure the GFXReconstruct Vulkan capture layer is via the Vulkan
+`VK_EXT_layer_settings` extension, which allows settings to be passed directly through the
+Vulkan API at instance creation time. This is especially useful in environments where
+environment variables and settings files are not available or convenient (such as some
+launchers or embedded systems).
+
+GFXReconstruct supports reading capture options from `VkLayerSettingEXT` structures
+provided in the `pNext` chain of `VkInstanceCreateInfo` when creating a Vulkan instance.
+This allows you to specify settings programmatically, without relying on environment
+variables or external files.
+
+To use this feature, add a `VkLayerSettingsCreateInfoEXT` structure to the `pNext` chain
+of your `VkInstanceCreateInfo`, and include settings for the
+`VK_LAYER_LUNARG_gfxreconstruct` layer. For example, to set the capture file name:
+
+```c
+const char* capture_file_value[] = { "my_capture.gfxr" };
+
+VkLayerSettingEXT capture_file_setting = {
+    .pLayerName = "VK_LAYER_LUNARG_gfxreconstruct",
+    .pSettingName = "capture_file",
+    .type = VK_LAYER_SETTING_TYPE_STRING_EXT,
+    .valueCount = 1,
+    .pValues = capture_file_value,
+};
+
+VkLayerSettingsCreateInfoEXT layer_settings_info = {
+    .sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT,
+    .pNext = NULL,
+    .settingCount = 1,
+    .pSettings = &capture_file_setting
+};
+
+VkInstanceCreateInfo instance_info = {
+    .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+    .pNext = &layer_settings_info,
+    // ... other fields ...
+};
+```
+
+Supported settings include:
+
+- `capture_file` (string): Path to use when creating the capture file (same as `GFXRECON_CAPTURE_FILE`).
 
 #### Selecting Settings for the page_guard Memory Tracking Mode
 
@@ -455,7 +512,7 @@ configured to capture only from frame 100 through frame 200 into a new capture f
 ### Asset files
 
 When doing a trimmed capture, `GFXRECON_CAPTURE_USE_ASSET_FILE` gives the option to
-dump all assets (images, buffers and descriptors) separetly in a different capture
+dump all assets (images, buffers and descriptors) separately in a different capture
 file called the asset file. When this option is enabled assets are tracked and
 only those that are changed during a tracking period (outside of a trim range) are
 dumped into the asset file. This first time a trim range is encountered (or the
@@ -557,12 +614,14 @@ gfxrecon-replay         [-h | --help] [--version] [--cpu-mask <binary-mask>] [--
                         [--screenshot-dir <dir>] [--screenshot-prefix <file-prefix>]
                         [--screenshot-scale SCALE] [--screenshot-size WIDTHxHEIGHT]
                         [--screenshot-interval <N>]
+                        [--capture]
                         [--sfa | --skip-failed-allocations] [--replace-shaders <dir>]
                         [--opcd | --omit-pipeline-cache-data] [--wsi <platform>]
                         [--surface-index <N>] [--remove-unsupported] [--validate]
                         [-m <mode> | --memory-translation <mode>]
                         [--fwo <x,y> | --force-windowed-origin <x,y>]
                         [--swapchain MODE] [--use-captured-swapchain-indices]
+                        [--present-mode <mode>]
                         [--mfr|--measurement-frame-range <start-frame>-<end-frame>]
                         [--measurement-file <file>] [--quit-after-measurement-range]
                         [--flush-measurement-range]
@@ -570,21 +629,11 @@ gfxrecon-replay         [-h | --help] [--version] [--cpu-mask <binary-mask>] [--
                         [--debug-messenger-level <level>]
                         [--no-debug-popup] [--use-colorspace-fallback]
                         [--wait-before-present]
-                        [--dump-resources <submit-index,command-index,draw-call-index>]
-                        [--dump-resources <arg>]
-                        [--dump-resources <filename>]
                         [--dump-resources <filename>.json]
-                        [--dump-resources-before-draw] [--dump-resources-scale <scale>]
                         [--dump-resources-dir <dir>]
-                        [--dump-resources-image-format <format>]
-                        [--dump-resources-dump-depth-attachment]
-                        [--dump-resources-dump-color-attachment-index <index>]
-                        [--dump-resources-dump-vertex-index-buffers]
-                        [--dump-resources-json-output-per-command]
-                        [--dump-resources-dump-immutable-resources]
-                        [--dump-resources-dump-all-image-subresources] <file>
                         [--pbi-all] [--pbis <index1,index2>]
                         [--pipeline-creation-jobs | --pcj <num_jobs>]
+                        [--deduplicate-device]
 
 
 Required arguments:
@@ -665,6 +714,12 @@ Optional arguments:
                         unspecified screenshots will use the swapchain images
                         dimensions. If --screenshot-scale is also specified then
                         this option is ignored.
+  --capture             Capture the replaying GFXR file. Capture uses the same log
+                        options as replay. All other capture option behavior and
+                        usage is the same as when capturing with the GFXR layer. The
+                        capture functionality is included in the `gfxrecon-replay`
+                        executable--no GFXR capture layer is added to the Vulkan layer
+                        chain.
   --sfa                 Skip vkAllocateMemory, vkAllocateCommandBuffers, and
                         vkAllocateDescriptorSets calls that failed during
                         capture (same as --skip-failed-allocations).
@@ -718,6 +773,13 @@ Optional arguments:
                                         capture directly on the swapchain setup for replay.
                             offscreen   Disable creating swapchains, surfaces
                                         and windows. To see rendering, add the --screenshots option.
+  --present-mode <mode> Set swapchain's VkPresentModeKHR.
+                        Available modes are:
+                            capture: Present mode used at capture time.
+                            immediate: VK_PRESENT_MODE_IMMEDIATE_KHR
+                            mailbox: VK_PRESENT_MODE_MAILBOX_KHR
+                            fifo: VK_PRESENT_MODE_FIFO_KHR
+                            fifo_relaxed: VK_PRESENT_MODE_FIFO_RELAXED_KHR
   --vssb
                         Skip blit to real swapchain to gain performance during replay.
   --use-captured-swapchain-indices
@@ -758,10 +820,10 @@ Optional arguments:
               This allows preserving frames when capturing a replay that uses.
               offscreen swapchain.
   --sgfs <status>
-              Specify behaviour to skip calls to vkWaitForFences and vkGetFenceStatus:
+              Specify behavior to skip calls to vkWaitForFences and vkGetFenceStatus:
                 status=0 : Don't skip
                 status=1 : Skip unsuccessful calls
-                status=2 : Allways skip
+                status=2 : Always skip
               If no skip frame range is specified (--sgfr), the status applies to all
               frames.
   --sgfr <frame-ranges>
@@ -771,65 +833,12 @@ Optional arguments:
               Force wait on completion of queue operations for all queues
               before calling Present. This is needed for accurate acquisition
               of instrumentation data on some platforms.
-  --dump-resources <submit-index,command-index,draw-call-index>
-              The capture file will be examined, and <submit-index,command-index,draw-call-index>
-              will be converted to <arg> as used in --dump-resources <arg> below.
-              The converted args will be used as the args for dump resources.
-  --dump-resources <arg>
-              <arg> is BeginCommandBuffer=<n>,Draw=<o>,BeginRenderPass=<p>,
-              NextSubpass=<q>,EndRenderPass=<r>,Dispatch=<s>,TraceRays=<t>,
-              QueueSubmit=<u>
-              Dump gpu resources after the given vmCmdDraw*, vkCmdDispatch, or vkCmdTraceRaysKHR
-              is replayed. The parameter for each is a block index from the capture file. The
-              additional parameters are used to identify during which occurence of the
-              vkCmdDraw/vkCmdDispatch/vkCmdTraceRaysKHR resources will be dumped.  NextSubPass can
-              be repeated 0 or more times to indicate subpasses within a render pass.  Note that
-              the minimal set of parameters must be one of:
-                  BeginCmdBuffer, Draw, BeginRenderPass, EndRenderPass, and QueueSubmit
-                  BeginCmdBuffer, Dispatch and QueueSubmit
-                  BeginCmdBuffer, TraceRays and QueueSubmit
-  --dump-resources <filename>
-              Extract --dump-resources block indices args from the specified file, with each line in
-              the file containing a comma or space separated list of the parameters to
-              --dump-resources <arg>. The file can contain multiple lines specifying multiple dumps.
   --dump-resources <filename>.json
-              Extract --dump-resources block indices args from the specified json file. The format for the
-              json file is documented in detail in the gfxreconstruct documentation.
-  --dump-resources-image-format <format>
-              Image file format to use for image resource dumping.
-              Available formats are:
-                  bmp         Bitmap file format.  This is the default format.
-                  png         Png file format.
-  --dump-resources-before-draw
-              In addition to dumping gpu resources after the CmdDraw, CmdDispatch and CmdTraceRays calls
-              specified by the --dump-resources <arg>, also dump resources before those
-              calls.
-  --dump-resources-scale <scale>
-              Scale images generated by dump resources by the given scale factor. The scale factor must
-              be a floating point number greater than 0. Values greater than 10 are capped at 10. Default
-              value is 1.0.
+              Extract dump resources block indices and options from the
+              specified json file. The format for the json file is
+              documented in detail in vulkan_dump_resources.md.
   --dump-resources-dir <dir>
               Directory to write dump resources output files. Default is the current working directory.
-  --dump-resources-image-format <format>
-              Image file format to use when dumping image resources. Available formats are: bmp, png
-  --dump-resources-dump-depth-attachment
-              Configures whether to dump the depth attachment when dumping draw calls. Default is disabled.
-  --dump-resources-dump-color-attachment-index <index>
-              Specify which color attachment to dump when dumping draw calls. It should be an unsigned zero
-              based integer. Default is to dump all color attachments.
-  --dump-resources-dump-vertex-index-buffers
-              Enables dumping of vertex and index buffers while dumping draw call resources.
-  --dump-resources-json-output-per-command
-              Enables storing a json output file for each dumped command. Overrides default behavior which
-              is generating one output json file that contains the information for all dumped commands.
-  --dump-resources-dump-immutable-resources
-              Enables dumping of resources that are used as inputs in the commands requested for dumping.
-  --dump-resources-dump-all-image-subresources
-              Enables dumping of all image sub resources (mip map levels and array layers).
-  --dump-resources-dump-raw-images
-              When enabled all image resources will be dumped verbatim as raw bin files.
-  --dump-resources-dump-separate-alpha
-              When enabled alpha channel of dumped images will be dumped in a separate file.
   --pbi-all
               Print all block information.
   --pbis <index1,index2>
@@ -852,6 +861,9 @@ Optional arguments:
                         `--load-pipeline-cache`.
   --quit-after-frame
               Specify a frame after which replay will terminate.
+
+  --deduplicate-device
+              If set, at most one VkDevice will be created for each VkPhysicalDevice for RenderDoc and DXVK case.
 ```
 
 ### Key Controls
@@ -871,7 +883,7 @@ Virtual Swapchain insulates higher layers in the Vulkan stack from these problem
 
 ### Debug mode VMA errors
 
-gfxrec-replay with the -m rebind option uses the Vulkan Memory Allocator library for memory allocations. If gfxrecon-replay is compiled debuggable, VMA_ASSERT errors in VMA can be trapped for debugging by setting GFXRECON_LOG_BREAK_ON_ERROR to true.
+gfxrecon-replay with the -m rebind option uses the Vulkan Memory Allocator library for memory allocations. If gfxrecon-replay is compiled debuggable, VMA_ASSERT errors in VMA can be trapped for debugging by setting GFXRECON_LOG_BREAK_ON_ERROR to true.
 
 ### Fence skipping
 

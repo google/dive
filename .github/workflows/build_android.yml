@@ -49,12 +49,10 @@ jobs:
           ccache --set-config=read_only=true
       - name: Cache ccache (upload_cache)
         if: ${{ inputs.upload_cache }}
-        uses: actions/cache@v5
+        uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-
       - name: Restore ccache (!upload_cache)
         if: ${{ !(inputs.upload_cache) }}
         uses: actions/cache/restore@v5

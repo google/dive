@@ -64,9 +64,8 @@ class DiveBlockDataTestFixture : public testing::Test
             // Called at the beginning of each block
             d.AddOriginalBlock(i, o[i].first);
         }
-        // Fake block that indicates the end of the file
-        d.AddOriginalBlock(o.size(), o.back().first + o.back().second);
-        d.FinalizeOriginalBlocksMapSizes();
+        auto [last_block_offset, last_block_size] = o.back();
+        d.FinalizeOriginalBlocksMapSizes(last_block_offset + last_block_size);
     }
 
     // Gives the descrip string of o[id] that TestBlockVisitor would produce
@@ -113,20 +112,21 @@ TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_Success)
 TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_AlreadyLocked_Success)
 {
     LockExampleOriginals();
-    EXPECT_TRUE(d.FinalizeOriginalBlocksMapSizes());
+    auto [last_block_offset, last_block_size] = o.back();
+    EXPECT_TRUE(d.FinalizeOriginalBlocksMapSizes(last_block_offset + last_block_size));
     EXPECT_TRUE(d.IsOriginalBlocksMapLocked());
 }
 
 TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_EmptyOriginals_Fail)
 {
-    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes());
+    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes(0));
 }
 
 TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_NegativeSizeBlock_Fail)
 {
     d.AddOriginalBlock(0, 100);
     d.AddOriginalBlock(1, 50);
-    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes());
+    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes(0));
 }
 
 TEST_F(DiveBlockDataTestFixture, AddModification_Unlocked_Fail)

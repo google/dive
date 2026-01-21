@@ -219,5 +219,16 @@ DataSpan FStreamFileInputStream::ReadSpan(const size_t bytes)
     return DataSpan();
 }
 
+// GOOGLE: [single-frame-looping] Add tell so we can find the loop point
+int64_t FStreamFileInputStream::FileTell()
+{
+    GFXRECON_ASSERT(fd_);
+    // Since FStreamFileInputStream employs a look-ahead buffer, the file position may be set past data that has yet to
+    // be processed. However, callers assume that they're getting the start of unprocessed data. Fortunately,
+    // read_ahead_bytes_ stores the size of the look-ahead buffer, which is the difference between the true file
+    // position and the start of unprocessed data.
+    return util::platform::FileTell(fd_) - read_ahead_bytes_;
+}
+
 GFXRECON_END_NAMESPACE(util)
 GFXRECON_END_NAMESPACE(gfxrecon)

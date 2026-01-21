@@ -75,8 +75,8 @@ const char kLayerProperty[]      = "debug.vulkan.layers";
 
 const int32_t kSwipeDistance = 200;
 
-void        ProcessAppCmd(struct android_app* app, int32_t cmd);
-int32_t     ProcessInputEvent(struct android_app* app, AInputEvent* event);
+void    ProcessAppCmd(struct android_app* app, int32_t cmd);
+int32_t ProcessInputEvent(struct android_app* app, AInputEvent* event);
 
 static std::unique_ptr<gfxrecon::decode::FileProcessor> file_processor;
 
@@ -189,14 +189,14 @@ void android_main(struct android_app* app)
 
                 // GOOGLE: replace VulkanReplayConsumer with dive specific DiveVulkanReplayConsumer
                 gfxrecon::decode::DiveVulkanReplayConsumer vulkan_replay_consumer(application, replay_options);
-                gfxrecon::decode::VulkanDecoder        vulkan_decoder;
+                gfxrecon::decode::VulkanDecoder            vulkan_decoder;
 
-<<<<<<< HEAD
                 // GOOGLE: Pass replay options to enable/disable gpu time
                 if (arg_parser.IsOptionSet(kEnableGPUTime))
                 {
                     vulkan_replay_consumer.SetEnableGPUTime(replay_options.enable_gpu_time);
-=======
+                }
+
                 if (replay_options.capture)
                 {
                     gfxrecon::vulkan_recapture::RecaptureVulkanEntry::InitSingleton();
@@ -207,7 +207,6 @@ void android_main(struct android_app* app)
                     vulkan_replay_consumer.SetupForRecapture(gfxrecon::vulkan_recapture::GetInstanceProcAddr,
                                                              gfxrecon::vulkan_recapture::dispatch_CreateInstance,
                                                              gfxrecon::vulkan_recapture::dispatch_CreateDevice);
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
                 }
 
                 ApiReplayOptions  api_replay_options;
@@ -314,7 +313,6 @@ void android_main(struct android_app* app)
                     GFXRECON_WRITE_CONSOLE("File did not contain any frames");
                 }
 
-<<<<<<< HEAD
                 // GOOGLE: Save GPU time stats file
                 if (arg_parser.IsOptionSet(kEnableGPUTime))
                 {
@@ -329,11 +327,11 @@ void android_main(struct android_app* app)
                     {
                         GFXRECON_WRITE_CONSOLE("Unable to write GPU stats file");
                     }
-=======
+                }
+
                 if (replay_options.capture)
                 {
                     gfxrecon::vulkan_recapture::RecaptureVulkanEntry::DestroySingleton();
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
                 }
             }
         }

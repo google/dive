@@ -61,6 +61,9 @@ class FStreamFileInputStream
     bool     ReadOverwriteSpan(const size_t bytes, DataSpan& span);
     DataSpan ReadSpan(const size_t bytes);
 
+    // GOOGLE: [single-frame-looping] Add tell so we can find the loop point
+    int64_t FileTell();
+
     explicit operator bool() const { return IsOpen(); }
 
     // This saves on fread calls for small reads/peeks.  1024 is as big

@@ -35,33 +35,16 @@ const char kOptions[] =
     "measurement-range,--flush-inside-measurement-range,--vssb|--virtual-swapchain-skip-blit,--use-captured-swapchain-"
     "indices,--dcp,--discard-cached-psos,--use-colorspace-fallback,--use-cached-psos,--dx12-override-object-names,--"
     "dx12-ags-inject-markers,--offscreen-swapchain-frame-boundary,--wait-before-present,--dump-resources-before-draw,"
-<<<<<<< HEAD
-    "--dump-resources-dump-depth-attachment,--dump-resources-dump-vertex-index-buffers,"
-    "--dump-resources-json-output-per-command,--dump-resources-dump-immutable-resources,"
-    "--dump-resources-dump-all-image-subresources,--dump-resources-dump-raw-images,--dump-resources-dump-"
-    "separate-alpha,--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,"
-    "--add-new-pipeline-caches,--screenshot-ignore-FrameBoundaryANDROID,--dump-resources-dump-unused-vertex-bindings,--"
-    "deduplicate-device,--log-timestamps,--enable-gpu-time";
-=======
     "--dump-resources-modifiable-state-only,--pbi-all,--preload-measurement-range,--add-new-pipeline-caches,--"
-    "screenshot-ignore-FrameBoundaryANDROID,--deduplicate-device,--log-timestamps,--capture";
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
+    "screenshot-ignore-FrameBoundaryANDROID,--deduplicate-device,--log-timestamps,--capture,--enable-gpu-time";
 const char kArguments[] =
     "--log-level,--log-file,--cpu-mask,--gpu,--gpu-group,--pause-frame,--wsi,--surface-index,-m|--memory-translation,"
     "--replace-shaders,--screenshots,--screenshot-interval,--denied-messages,--allowed-messages,--screenshot-format,--"
     "screenshot-dir,--screenshot-prefix,--screenshot-size,--screenshot-scale,--mfr|--measurement-frame-range,--fw|--"
     "force-windowed,--fwo|--force-windowed-origin,--batching-memory-usage,--measurement-file,--swapchain,--sgfs|--skip-"
-<<<<<<< HEAD
-    "get-fence-status,--sgfr|--"
-    "skip-get-fence-ranges,--dump-resources,--dump-resources-scale,--dump-resources-"
-    "image-format,--dump-resources-dir,"
-    "--dump-resources-dump-color-attachment-index,--pbis,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-"
-    "pipeline-cache,--quit-after-frame,--loop-single-frame-count";
-=======
     "get-fence-status,--sgfr|--skip-get-fence-ranges,--dump-resources,--dump-resources-dir,--dump-resources-image-"
     "format,pbis,--pcj|--pipeline-creation-jobs,--save-pipeline-cache,--load-pipeline-cache,--quit-after-frame,--"
-    "present-mode";
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
+    "present-mode,--loop-single-frame-count";
 
 static void PrintUsage(const char* exe_name)
 {
@@ -206,6 +189,16 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  --pbi-all\t\tPrint all block information.");
     GFXRECON_WRITE_CONSOLE(
         "  --pbis <index1,index2>\t\tPrint block information between block index1 and block index2.");
+    // GOOGLE: [single-frame-looping] Usage message details
+    GFXRECON_WRITE_CONSOLE("  --loop-single-frame-count <n>");
+    GFXRECON_WRITE_CONSOLE("          \t\tNon-negative integer used only for replaying a single frame GFXR ");
+    GFXRECON_WRITE_CONSOLE("          \t\tcapture. It specifies how many times the frame will be replayed before ");
+    GFXRECON_WRITE_CONSOLE("          \t\tthe application terminates. 1 indicates no looping behaviour ");
+    GFXRECON_WRITE_CONSOLE("          \t\t(replay a single frame), and 0 indicates looping infinitely ");
+    GFXRECON_WRITE_CONSOLE("          \t\tuntil the app is forced to stop.");
+    // GOOGLE: [enable-gpu-time] Usage message details
+    GFXRECON_WRITE_CONSOLE("  --enable-gpu-time");
+    GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, gpu time measurement will be enabled for replay.");
 #if defined(WIN32)
     GFXRECON_WRITE_CONSOLE("")
     GFXRECON_WRITE_CONSOLE("Windows only:")
@@ -214,28 +207,6 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE(
         "          \t\tThis can include vertex, index, const buffer, shader resource, render target,");
     GFXRECON_WRITE_CONSOLE("          \t\tand depth stencil resources. Resources are dumped after the drawcall.");
-<<<<<<< HEAD
-    GFXRECON_WRITE_CONSOLE("  --dump-resources-dir <dir>");
-    GFXRECON_WRITE_CONSOLE("          \t\tDirectory to write dump resources output files.");
-    GFXRECON_WRITE_CONSOLE("          \t\tDefault is the current working directory.");
-
-    // GOOGLE: [single-frame-looping] Usage message details
-    GFXRECON_WRITE_CONSOLE("  --loop-single-frame-count <n>");
-    GFXRECON_WRITE_CONSOLE("          \t\tNon-negative integer used only for replaying a single frame GFXR ");
-    GFXRECON_WRITE_CONSOLE("          \t\tcapture. It specifies how many times the frame will be replayed before ");
-    GFXRECON_WRITE_CONSOLE("          \t\tthe application terminates. 1 indicates no looping behaviour ");
-    GFXRECON_WRITE_CONSOLE("          \t\t(replay a single frame), and 0 indicates looping infinitely ");
-    GFXRECON_WRITE_CONSOLE("          \t\tuntil the app is forced to stop.");
-
-    // GOOGLE: [enable-gpu-time] Usage message details
-    GFXRECON_WRITE_CONSOLE("  --enable-gpu-time");
-    GFXRECON_WRITE_CONSOLE("          \t\tWhen enabled, gpu time measurement will be enabled for replay.");
-
-#if defined(WIN32)
-    GFXRECON_WRITE_CONSOLE("")
-    GFXRECON_WRITE_CONSOLE("Windows only:")
-=======
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
     GFXRECON_WRITE_CONSOLE(
         "  --fwo <x,y>\t\tForce windowed mode if not already, and allow setting of a custom window location.");
     GFXRECON_WRITE_CONSOLE("          \t\t(Same as --force-windowed-origin)");

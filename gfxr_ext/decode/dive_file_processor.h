@@ -23,6 +23,7 @@ limitations under the License.
 
 #include <memory>
 
+#include "decode/block_parser.h"
 #include "decode/file_processor.h"
 #include "dive_block_data.h"
 
@@ -41,11 +42,9 @@ class DiveFileProcessor : public FileProcessor
     bool WriteFile(const std::string& name, const std::string& content);
 
  protected:
-    bool ProcessFrameMarker(const format::BlockHeader& block_header, format::MarkerType marker_type,
-                            bool& should_break) override;
+    bool ProcessFrameDelimiter(const FrameEndMarkerArgs& end_frame) override;
 
-    bool ProcessStateMarker(const format::BlockHeader& block_header,
-                            format::MarkerType marker_type) override;
+    void ProcessStateEndMarker(const StateEndMarkerArgs& state_end) override;
 
     void StoreBlockInfo() override;
 
@@ -63,8 +62,9 @@ class DiveFileProcessor : public FileProcessor
     // modifications
     std::shared_ptr<DiveBlockData> dive_block_data_ = nullptr;
 
-    // Need to store this because the active file is sometimes the .gfxa one
-    std::string gfxr_file_name_ = "";
+    // Need to store this because the active file is sometimes the .gfxa one. Since the parent class
+    // "owns" this value, avoid sharing ownership and accidentally extending lifetime beyond use.
+    std::weak_ptr<FileInputStream> gfxr_file_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

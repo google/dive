@@ -63,6 +63,10 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
 
     out << "{\n";
 
+    out << "  \"DumpResourcesOptions\": {\n";
+    out << "    \"DumpAllImageSubresources\": true\n";
+    out << "  },\n";
+
     out << "  \"BeginCommandBuffer\": [";
     for (int i = 0; i < dumpables.size(); ++i)
     {

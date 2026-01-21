@@ -6,10 +6,7 @@ on:
       build_type:
         required: true
         type: string
-      restore_cache:
-        required: true
-        type: boolean
-      upload_cache:
+      use_cache:
         required: true
         type: boolean
 
@@ -18,12 +15,13 @@ jobs:
     name: Build Host Windows ${{ inputs.build_type }}
     runs-on: windows-2022
     env:
-      SCCACHE_DIR: "%APPDATA%\\Mozilla\\sccache\\cache"
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
       - uses: mozilla/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+        if: ${{ inputs.use_cache }}
       - uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
         with:
           version: 5.15.2
@@ -34,14 +32,6 @@ jobs:
           python3 -m pip install mako
       - name: (sccache) Clear stats
         run: sccache --zero-stats
-      - name: (sccache) Restore (restore_cache)
-        if: ${{ inputs.restore_cache }}
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-
       - name: Generate build files with cmake
         run: |
           cmake `
@@ -59,11 +49,3 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
-      - name: (sccache) Show stats
-        run: sccache --show-stats
-      - name: (sccache) Save (upload_cache)
-        if: ${{ inputs.upload_cache }}
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: ${{ runner.os }}-${{ inputs.build_type }}-sccache-continuous-${{ github.sha }}

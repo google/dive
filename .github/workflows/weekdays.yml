@@ -40,8 +40,7 @@ jobs:
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
-      restore_cache: false
-      upload_cache: true
+      use_cache: true
 
   build_host_mac:
     permissions:

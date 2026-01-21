@@ -1,18 +1,13 @@
-name: Dive Presubmit
+name: Dive Weekday Scheduled Tests
 
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the main branch
 on:
-  push:
-    branches: [main]
-  pull_request: # Note it also runs as postsubmit
+  schedule:
+    - cron: "40 5 * * 1,2,3,4,5" # 5:40 UTC (1:40 or 2:40 eastern)
+  workflow_dispatch: # manual
 
-# Cancel previous runs if a more recent commit is pushed.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}
-  cancel-in-progress: true
-
-# Subset of the full combination, no Debug builds other than on Windows platform
+# Full combination
 jobs:
   build_host_linux:
     permissions:
@@ -20,19 +15,19 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
+        build_type: [Debug, Release]
+        cc: [gcc-14, clang-19]
         include:
-          - build_type: Release
-            cc: gcc-14
+          - cc: gcc-14
             cxx: g++-14
-          - build_type: Release
-            cc: clang-19
+          - cc: clang-19
             cxx: clang++-19
     uses: ./.github/workflows/build_linux.yml
     with:
       build_type: ${{ matrix.build_type }}
       cc: ${{ matrix.cc }}
       cxx: ${{ matrix.cxx }}
-      upload_cache: false
+      upload_cache: true
 
   build_host_windows:
     permissions:
@@ -44,22 +39,28 @@ jobs:
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
-      upload_cache: false
+      upload_cache: true
 
   build_host_mac:
     permissions:
       contents: read
       pull-requests: write
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
     uses: ./.github/workflows/build_mac.yml
     with:
-      build_type: Release
-      upload_cache: false
+      build_type: ${{ matrix.build_type }}
+      upload_cache: true
 
   build_device_android:
     permissions:
       contents: read
       pull-requests: write
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
     uses: ./.github/workflows/build_android.yml
     with:
-      build_type: Release
-      upload_cache: false
+      build_type: ${{ matrix.build_type }}
+      upload_cache: true

@@ -4,7 +4,7 @@ name: Dive Lint
 # events but only for the main branch
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   lint_cpplint:
@@ -27,25 +27,25 @@ jobs:
   lint_cmake_format:
     runs-on: windows-2022
     steps:
-    - name: Check out code
-      uses: actions/checkout@v6
-    - name: Install dependencies
-      run: |
-        python3 -m pip install gersemi==0.23.1
-    - name: Run windows cmake formatting script
-      run: |
-        scripts\format_cmake.bat
-    - name: Check git diff
-      run: |
-        scripts\check_git_diff.bat
+      - name: Check out code
+        uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          python3 -m pip install gersemi==0.23.1
+      - name: Run windows cmake formatting script
+        run: |
+          scripts\format_cmake.bat
+      - name: Check git diff
+        run: |
+          scripts\check_git_diff.bat
 
   lint_clang_format:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
-    - uses: DoozyX/clang-format-lint-action@v0.20
-      with:
-        source: '.'
-        exclude: './third_party'
-        extensions: 'h,cpp,cc'
-        clangFormatVersion: 18.1.8
+      - uses: actions/checkout@v6
+      - uses: DoozyX/clang-format-lint-action@bcb4eb2cb0d707ee4f3e5cc3b456eb075f12cf73 # v0.20
+        with:
+          source: "."
+          exclude: "./third_party"
+          extensions: "h,cpp,cc"
+          clangFormatVersion: 18.1.8

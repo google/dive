@@ -1161,6 +1161,19 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
         SetCurrentFile("", false);
     }
 
+    if (m_analyze_capture_pending)
+    {
+        m_analyze_capture_pending = false;
+        if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
+        {
+            QMessageBox::critical(this, QString("Cannot analyze file"),
+                                  (QString("Unable to analyze file: ") + m_capture_file) +
+                                      ". GFXR capture not loaded.");
+            return;
+        }
+        OnAnalyzeCapture();
+    }
+
     emit FileLoaded();
 }
 
@@ -1196,6 +1209,7 @@ void MainWindow::OnAnalyzeCapture()
     {
         qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
                     "prompting user to load a file";
+        m_analyze_capture_pending = true;
         OnOpenFile();
         return;
     }

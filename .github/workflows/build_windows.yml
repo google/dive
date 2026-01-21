@@ -6,22 +6,15 @@ on:
       build_type:
         required: true
         type: string
-      use_cache:
-        required: true
-        type: boolean
 
 jobs:
   build_host_windows:
     name: Build Host Windows ${{ inputs.build_type }}
     runs-on: windows-2022
-    env:
-      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
-      - uses: mozilla/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
-        if: ${{ inputs.use_cache }}
       - uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
         with:
           version: 5.15.2
@@ -30,15 +23,11 @@ jobs:
       - name: Install Dive dependencies
         run: |
           python3 -m pip install mako
-      - name: (sccache) Clear stats
-        run: sccache --zero-stats
       - name: Generate build files with cmake
         run: |
           cmake `
             -G "Visual Studio 17 2022" `
             -A x64 `
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache `
-            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache `
             -Bbuild .
       - name: Build Dive host tools with VS 2022
         run: |

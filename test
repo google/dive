@@ -1,0 +1,21 @@
+[a "b"]
+	c = foo
+[a "b.c"]
+	d = foo
+[ "."]
+	foo = a
+[ "...."]
+	foo = a
+[ "=.=.=.="]
+	foo = bar
+[ "=.=.=.=.fo"]
+	o = bar
+[s "s.=.=.=.=.fo"]
+	o = bar
+[s "s=.=.=.=.fo"]
+	o = bar
+[s "ection.=."]
+	foo = a
+[section ""]
+	foo = \n\n\n
+	foo = hi

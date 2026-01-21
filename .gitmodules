@@ -10,15 +10,19 @@
 [submodule "third_party/gfxreconstruct/external/SPIRV-Headers"]
 	path = third_party/gfxreconstruct/external/SPIRV-Headers
 	url = https://github.com/KhronosGroup/SPIRV-Headers.git
+	shallow = true
 [submodule "third_party/gfxreconstruct/external/SPIRV-Reflect"]
 	path = third_party/gfxreconstruct/external/SPIRV-Reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+	shallow = true
 [submodule "third_party/gfxreconstruct/external/Vulkan-Headers"]
 	path = third_party/gfxreconstruct/external/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+	shallow = true
 [submodule "third_party/gfxreconstruct/external/OpenXR-SDK"]
 	path = third_party/gfxreconstruct/external/OpenXR-SDK
 	url = https://github.com/KhronosGroup/OpenXR-SDK.git
+	shallow = true
 [submodule "third_party/googletest"]
 	path = third_party/googletest
 	url = https://github.com/google/googletest.git

@@ -364,20 +364,12 @@ bool FileProcessor::ProcessBlocks()
 // the correct sizing of the block payload are done by the caller
 bool FileProcessor::ReadBlockBuffer(BlockParser& parser, BlockBuffer& block_buffer)
 {
-<<<<<<< HEAD
-    assert(block_header != nullptr);
-
     // GOOGLE: Store info about block offset before any bytes are read
     StoreBlockInfo();
 
-    bool success = false;
-
-    if (ReadBytes(block_header, sizeof(*block_header)))
-=======
     bool         success = true;
     BlockIOError status  = parser.ReadBlockBuffer(GetCurrentFile().active_file, block_buffer);
     if (status == kErrorNone)
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
     {
         bytes_read_ += block_buffer.Size();
     }
@@ -653,22 +645,6 @@ void FileProcessor::PrintBlockInfo() const
     }
 }
 
-<<<<<<< HEAD
-// GOOGLE: Retrieve name of current active file
-std::string FileProcessor::GetActiveFilename()
-{
-    GFXRECON_ASSERT(!file_stack_.empty());
-    return file_stack_.back().filename;
-}
-
-// GOOGLE: [single-frame-looping] Active file tell utility
-int64_t FileProcessor::TellFile(const std::string& filename)
-{
-    auto file_entry = active_files_.find(filename);
-    assert(file_entry != active_files_.end());
-
-    return util::platform::FileTell(file_entry->second.fd);
-=======
 bool FileProcessor::HandleBlockEof(const char* operation, bool report_frame_and_block)
 {
 
@@ -706,7 +682,6 @@ bool FileProcessor::HandleBlockEof(const char* operation, bool report_frame_and_
         }
     }
     return success;
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
 }
 
 GFXRECON_END_NAMESPACE(decode)

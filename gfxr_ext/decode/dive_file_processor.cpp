@@ -44,9 +44,6 @@ bool ShouldCreateRenderDocCapture()
 
 }  // namespace
 
-// TODO GH #1195: frame numbering should be 1-based.
-const uint32_t kFirstFrame = 0;
-
 void DiveFileProcessor::SetLoopSingleFrameCount(uint64_t loop_single_frame_count)
 {
     loop_single_frame_count_ = loop_single_frame_count;
@@ -92,153 +89,126 @@ bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& co
     return true;
 }
 
-bool DiveFileProcessor::ProcessFrameMarker(const format::BlockHeader& block_header,
-                                           format::MarkerType marker_type, bool& should_break)
+bool DiveFileProcessor::ProcessFrameDelimiter(const FrameEndMarkerArgs& end_frame)
 {
-    // Read the rest of the frame marker data. Currently frame markers are not dispatched to
-    // decoders.
-    uint64_t frame_number = 0;
-    bool success = ReadBytes(&frame_number, sizeof(frame_number));
+    // current_frame_number_ increments during single frame looping despite the frame number staying
+    // the same. To avoid triggering an assert in FileProcessor::ProcessFrameDelimiter (and to match
+    // previous behavior), set current_frame_number_ to the expected value.
+    //
+    // TODO: b/481393648 - Set current_frame_number_ to 0 instead after investigation
+    auto loop_current_frame_number = current_frame_number_;
+    current_frame_number_ = end_frame.frame_number - GetFirstFrame();
+    bool is_frame_delimiter = FileProcessor::ProcessFrameDelimiter(end_frame);
+    current_frame_number_ = loop_current_frame_number;
 
-    if (success)
-    {
-        // Validate frame end marker's frame number matches first_frame_ when
-        // capture_uses_frame_markers_ is true.
-        GFXRECON_ASSERT((marker_type != format::kEndMarker) || (!UsesFrameMarkers()) ||
-                        (frame_number == GetFirstFrame()));
-
-        for (auto decoder : decoders_)
-        {
-            if (marker_type == format::kEndMarker)
-            {
-                decoder->DispatchFrameEndMarker(frame_number);
-            }
-            else
-            {
-                GFXRECON_LOG_WARNING("Skipping unrecognized frame marker with type %u",
-                                     marker_type);
-            }
-        }
-    }
-    else
-    {
-        HandleBlockReadError(kErrorReadingBlockData, "Failed to read frame marker data");
-    }
-
-    // Break from loop on frame delimiter.
-    if (IsFrameDelimiter(block_header.type, marker_type))
-    {
-        // If the capture file contains frame markers, it will have a frame marker for every
-        // frame-ending API call such as vkQueuePresentKHR. If this is the first frame marker
-        // encountered, reset the frame count and ignore frame-ending API calls in
-        // IsFrameDelimiter(format::ApiCallId call_id).
-        if (!UsesFrameMarkers())
-        {
-            SetUsesFrameMarkers(true);
-            current_frame_number_ = kFirstFrame;
-        }
 #if defined(__ANDROID__)
-        if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
-        {
-            DivePM4Capture::GetInstance().TryStopCapture();
-        }
-#endif
-        // Make sure to increment the frame number on the way out.
-        ++current_frame_number_;
-        ++block_index_;
-        should_break = true;
-
-        // At the last frame in the capture file, determine whether to jump back to the state end
-        // marker, or terminate replay if the loop count has been reached
-        if ((loop_single_frame_count_ > 0) && (current_frame_number_ >= loop_single_frame_count_))
-        {
-            if (ShouldCreateRenderDocCapture())
-            {
-                // Finalize the RenderDoc capture after all loops have completed. While the intended
-                // use case is to capture only 1 frame (which can be accomplished by setting
-                // loop_single_frame_count_), I don't see any reason to prevent the user from
-                // capturing all loops if they really want to.
-                if (const RENDERDOC_API_1_0_0* renderdoc = GetRenderDocApi(); renderdoc != nullptr)
-                {
-                    if (renderdoc->EndFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr) != 1)
-                    {
-                        GFXRECON_LOG_WARNING(
-                            "EndFrameCapture failed, RenderDoc .rdc capture likely not created!");
-                    }
-                }
-                else
-                {
-                    GFXRECON_LOG_WARNING(
-                        "GetRenderDocApi failed. Could not end RenderDoc capture!");
-                }
-            }
-
-            GFXRECON_LOG_INFO("Looped %d frames, terminating replay asap", current_frame_number_);
-            return success;
-        }
-        GFXRECON_ASSERT(!gfxr_file_name_.empty());
-        block_index_ = state_end_marker_block_index_;
-        SeekActiveFile(gfxr_file_name_, state_end_marker_file_offset_, util::platform::FileSeekSet);
-        should_break = false;
-    }
-    return success;
-}
-
-bool DiveFileProcessor::ProcessStateMarker(const format::BlockHeader& block_header,
-                                           format::MarkerType marker_type)
-{
-    bool success = FileProcessor::ProcessStateMarker(block_header, marker_type);
-
-    if ((success) && (marker_type == format::kEndMarker))
+    if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
     {
-        // Store state end marker offset
-        GFXRECON_ASSERT(!gfxr_file_name_.empty());
-        state_end_marker_file_offset_ = TellFile(gfxr_file_name_);
-        state_end_marker_block_index_ = block_index_;
-        GFXRECON_LOG_INFO("Stored state end marker offset %d", state_end_marker_file_offset_);
-        GFXRECON_LOG_INFO("Single frame number %d", GetFirstFrame());
-#if defined(__ANDROID__)
-        if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
-        {
-            DivePM4Capture::GetInstance().TryStartCapture();
-        }
-        // Tell other processes that replay has finished trim state loading.
-        // TODO: b/444647876 - Implementation that doesn't use global state (filesystem)
-        if (!std::ofstream(Dive::kReplayStateLoadedSignalFile))
-        {
-            GFXRECON_LOG_INFO(
-                "Failed to create a file signaling that trim state loading is "
-                "complete. This will impact our ability to gather metrics.");
-        }
+        DivePM4Capture::GetInstance().TryStopCapture();
+    }
 #endif
-        // Don't bother trying to start a capture for infinite replay since it will never finish!
-        if (loop_single_frame_count_ > 0 && ShouldCreateRenderDocCapture())
+
+    // At the last frame in the capture file, determine whether to jump back to the state end
+    // marker, or terminate replay if the loop count has been reached
+    bool finite_looping = loop_single_frame_count_ > 0;
+    // Reaching the Frame End marker means that we've completed one loop. current_frame_number_
+    // will be incremented by 1 each loop, but that is handled by FileProcessor after we return.
+    uint64_t loops_done = current_frame_number_ + 1;
+    if (finite_looping && (loops_done >= loop_single_frame_count_))
+    {
+        if (ShouldCreateRenderDocCapture())
         {
+            // Finalize the RenderDoc capture after all loops have completed. While the intended
+            // use case is to capture only 1 frame (which can be accomplished by setting
+            // loop_single_frame_count_), I don't see any reason to prevent the user from
+            // capturing all loops if they really want to.
             if (const RENDERDOC_API_1_0_0* renderdoc = GetRenderDocApi(); renderdoc != nullptr)
             {
-                renderdoc->SetCaptureFilePathTemplate(
-                    Dive::GetRenderDocCaptureFilePathTemplate(gfxr_file_name_).string().c_str());
-                // Let RenderDoc choose the Vulkan context and window handle since we typically only
-                // expect one of each.
-                renderdoc->StartFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr);
+                if (renderdoc->EndFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr) != 1)
+                {
+                    GFXRECON_LOG_WARNING(
+                        "EndFrameCapture failed, RenderDoc .rdc capture likely not created!");
+                }
             }
             else
             {
-                GFXRECON_LOG_DEBUG("GetRenderDocApi failed! Could not start RenderDoc capture.");
+                GFXRECON_LOG_WARNING("GetRenderDocApi failed. Could not end RenderDoc capture!");
             }
         }
+
+        GFXRECON_LOG_INFO("Looped %d frames, terminating replay asap", loop_single_frame_count_);
+        // The act of not seeking should cause replay to hit EOF and stop (assuming there is only
+        // one frame in the capture file)
+        return is_frame_delimiter;
     }
 
-    return success;
+    // The block index is printed by --pbi-all. It helps correlate problematic blocks with manual
+    // inspection of capture file. Reset it to the loop point to make debugging easier.
+    block_index_ = state_end_marker_block_index_;
+
+    std::shared_ptr<FileInputStream> gfxr_file = gfxr_file_.lock();
+    GFXRECON_ASSERT(gfxr_file);
+    SeekActiveFile(gfxr_file, state_end_marker_file_offset_, util::platform::FileSeekSet);
+
+    return is_frame_delimiter;
+}
+
+void DiveFileProcessor::ProcessStateEndMarker(const StateEndMarkerArgs& state_end)
+{
+    FileProcessor::ProcessStateEndMarker(state_end);
+
+    // Store state end marker offset
+    std::shared_ptr<FileInputStream> gfxr_file = gfxr_file_.lock();
+    GFXRECON_ASSERT(gfxr_file);
+    state_end_marker_file_offset_ = gfxr_file->FileTell();
+    // The block index is useful while debugging to match the call stack or --pbi output with the
+    // capture file. If it's not reset to the loop point then it just keeps counting up.
+    state_end_marker_block_index_ = block_index_;
+    GFXRECON_LOG_INFO("Stored state end marker offset %d", state_end_marker_file_offset_);
+    GFXRECON_LOG_INFO("Single frame number %d", GetFirstFrame());
+#if defined(__ANDROID__)
+    if (DivePM4Capture::GetInstance().IsPM4CaptureEnabled())
+    {
+        DivePM4Capture::GetInstance().TryStartCapture();
+    }
+    // Tell other processes that replay has finished trim state loading.
+    // TODO: b/444647876 - Implementation that doesn't use global state (filesystem)
+    if (!std::ofstream(Dive::kReplayStateLoadedSignalFile))
+    {
+        GFXRECON_LOG_INFO(
+            "Failed to create a file signaling that trim state loading is "
+            "complete. This will impact our ability to gather metrics.");
+    }
+#endif
+    // Don't bother trying to start a capture for infinite replay since it will never finish!
+    if (loop_single_frame_count_ > 0 && ShouldCreateRenderDocCapture())
+    {
+        if (const RENDERDOC_API_1_0_0* renderdoc = GetRenderDocApi(); renderdoc != nullptr)
+        {
+            renderdoc->SetCaptureFilePathTemplate(
+                Dive::GetRenderDocCaptureFilePathTemplate(gfxr_file->GetFilename())
+                    .string()
+                    .c_str());
+            // Let RenderDoc choose the Vulkan context and window handle since we typically only
+            // expect one of each.
+            renderdoc->StartFrameCapture(/*device=*/nullptr, /*wndHandle=*/nullptr);
+        }
+        else
+        {
+            GFXRECON_LOG_DEBUG("GetRenderDocApi failed! Could not start RenderDoc capture.");
+        }
+    }
 }
 
 void DiveFileProcessor::StoreBlockInfo()
 {
-    if (gfxr_file_name_.empty())
+    std::shared_ptr<FileInputStream> gfxr_file = gfxr_file_.lock();
+    if (!gfxr_file)
     {
         // Assuming that the first time StoreBlockInfo() is called, the active file is .gfxr file
-        gfxr_file_name_ = GetActiveFilename();
-        GFXRECON_LOG_INFO("Storing active filename %s", gfxr_file_name_.c_str());
+        gfxr_file = file_stack_.back().active_file;
+        gfxr_file_ = gfxr_file;
+        GFXRECON_LOG_INFO("Storing active filename %s", gfxr_file->GetFilename().c_str());
     }
 
     if (!dive_block_data_)
@@ -246,7 +216,7 @@ void DiveFileProcessor::StoreBlockInfo()
         return;
     }
 
-    int64_t offset = TellFile(gfxr_file_name_);
+    int64_t offset = gfxr_file->FileTell();
     GFXRECON_ASSERT(offset > 0);
     dive_block_data_->AddOriginalBlock(block_index_, static_cast<uint64_t>(offset));
 }

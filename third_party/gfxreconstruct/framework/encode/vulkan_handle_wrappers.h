@@ -257,13 +257,11 @@ struct ImageWrapper : public HandleWrapper<VkImage>, AssetWrapperBase
 
     std::set<VkSwapchainKHR> parent_swapchains;
 
-<<<<<<< HEAD
     // GOOGLE: We leak fragment density maps to workaround a crash; need to track if it's an FDM.
+    // TODO: b/434227689 - Remove is_fdm when the crash is fixed.
     bool is_fdm{ false };
-=======
     // optional opaque descriptor-data used by VK_EXT_descriptor_buffer
     std::vector<uint8_t> opaque_descriptor_data;
->>>>>>> a96ad06c9b807e1f65bddc499863e81ad4ba68fb
 };
 
 struct SamplerWrapper : public HandleWrapper<VkSampler>

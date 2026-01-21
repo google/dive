@@ -63,6 +63,16 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
 
     out << "{\n";
 
+    // The DumpResourcesOptions object configures dump resource behavior. See
+    // //third_party/gfxreconstruct/vulkan_dump_resources.md for all options.
+    out << "  \"DumpResourcesOptions\": {\n";
+    // XR apps using multiview have 1 VkImage with 2 layers to stores the left/right eyes. By
+    // default, only the left eye is dumped since it's the first image layer is dumped. To get both
+    // left and right eyes we need to dump all layers; DumpAllImageSubresources instructs GFXR to do
+    // so.
+    out << "    \"DumpAllImageSubresources\": true\n";
+    out << "  },\n";
+
     out << "  \"BeginCommandBuffer\": [";
     for (int i = 0; i < dumpables.size(); ++i)
     {

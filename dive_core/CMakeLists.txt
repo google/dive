@@ -143,7 +143,6 @@ target_include_directories(
         ${FREEDRENO_ISA_DIRECTORY}
         ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common
         ${THIRDPARTY_DIRECTORY}/mesa/src/
-        ${THIRDPARTY_DIRECTORY}/mesa/include/
         ${THIRDPARTY_DIRECTORY}/libarchive/libarchive/
 )
 

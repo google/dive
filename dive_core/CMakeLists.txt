@@ -141,7 +141,6 @@ target_include_directories(
         ${CMAKE_SOURCE_DIR}
         ${DIVE_CORE_GENERATED_FILE_DIR}
         ${FREEDRENO_ISA_DIRECTORY}
-        ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
         ${THIRDPARTY_DIRECTORY}/mesa/src/freedreno/common
         ${THIRDPARTY_DIRECTORY}/mesa/src/
         ${THIRDPARTY_DIRECTORY}/mesa/include/
@@ -224,7 +223,7 @@ add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 
 target_link_libraries(
     ${PROJECT_NAME}
-    PUBLIC dive_core_includes absl::no_destructor absl::strings
+    PUBLIC dive_core_includes absl::no_destructor absl::strings Vulkan::Headers
 )
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")

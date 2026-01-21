@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include <vulkan/vk_layer.h>
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 extern "C"
 {

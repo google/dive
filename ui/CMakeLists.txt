@@ -169,7 +169,6 @@ add_executable(
 target_include_directories(
     ${PROJECT_NAME}
     PUBLIC
-        "${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include"
         "${CMAKE_SOURCE_DIR}"
         # Include CMAKE_BINARY_DIR for generated files.
         "${CMAKE_BINARY_DIR}"

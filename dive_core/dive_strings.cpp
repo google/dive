@@ -16,9 +16,9 @@
 
 #include "dive_strings.h"
 
-#include <map>
+#include <vulkan/vulkan_core.h>
 
-#include "third_party/Vulkan-Headers/include/vulkan/vulkan_core.h"
+#include <map>
 
 // clang-format off
 static const std::map<uint32_t, const char *> sVkFormatToString =

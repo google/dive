@@ -38,15 +38,16 @@ set(SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_android.cc"
 )
 
-include_directories(
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party/Vulkan-Headers/include
-    ${CMAKE_SOURCE_DIR}/gpu_time
-)
+include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_time)
 
 add_library(${target_name} SHARED ${HDR_FILES} ${SRC_FILES})
 
-target_link_libraries(${target_name} dive_legacy_includes gpu_time)
+target_link_libraries(
+    ${target_name}
+    dive_legacy_includes
+    gpu_time
+    Vulkan::Headers
+)
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 target_link_libraries(${target_name} -lm -ldl -llog -landroid)

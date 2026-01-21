@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "dive_vulkan_replay_consumer.h"
 
+#include <vulkan/vulkan_core.h>
+
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -27,7 +29,6 @@ limitations under the License.
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
 #include "util/to_string.h"
-#include "vulkan/vulkan_core.h"
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)

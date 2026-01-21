@@ -7,7 +7,7 @@
             "dive_core/common/gpudefs.h",
             "info_id.h",
             "struct_of_arrays.h",
-            "third_party/Vulkan-Headers/include/vulkan/vulkan.h"
+            "vulkan/vulkan_core.h"
         ],
         "options": [
             "isSet",

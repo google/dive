@@ -34,10 +34,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_library(dive_lib_trace_stats "trace_stats.cpp" "trace_stats.h")
-target_link_libraries(dive_lib_trace_stats PUBLIC dive_core dive_src_includes)
-target_include_directories(
+target_link_libraries(
     dive_lib_trace_stats
-    PUBLIC ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include ${CMAKE_SOURCE_DIR}
+    PUBLIC dive_core dive_src_includes Vulkan::Headers
 )
 
 add_executable(${PROJECT_NAME} "main.cpp")

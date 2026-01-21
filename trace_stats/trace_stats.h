@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <vulkan/vulkan_core.h>
+
 #include <array>
 #include <set>
 #include <vector>
@@ -24,7 +26,6 @@
 #include "dive/types/context.h"
 #include "dive_core/capture_event_info.h"
 #include "dive_core/data_core.h"
-#include "vulkan/vulkan_core.h"
 
 namespace Dive
 {

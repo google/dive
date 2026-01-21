@@ -209,6 +209,8 @@ add_subdirectory(third_party/abseil-cpp)
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
 
+include(cmake/vulkan.cmake)
+
 # ------------------------------------------------------------------------------
 # Add all subdirectories of Dive project
 

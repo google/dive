@@ -33,10 +33,7 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-include_directories(
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_BINARY_DIR}
-)
+include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(${PROJECT_NAME} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE dive_core)

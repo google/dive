@@ -939,7 +939,8 @@ void MainWindow::OnTraceStatsUpdated()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool async)
+bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool async,
+                          bool is_analyze_capture_pending)
 {
     bool release_capture = m_capture_acquired;
     m_capture_acquired = false;
@@ -975,7 +976,9 @@ bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool 
     }
 
     m_progress_tracker.sendMessage("Loading " + file_name);
-    m_last_request = LastRequest{.file_name = file_name, .is_temp_file = is_temp_file};
+    m_last_request = LastRequest{.file_name = file_name,
+                                 .is_temp_file = is_temp_file,
+                                 .is_analyze_capture_pending = is_analyze_capture_pending};
 
     auto reference = Dive::FilePath{file_name};
     auto components = m_capture_manager->ResolveComponents(reference);
@@ -1161,9 +1164,8 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
         SetCurrentFile("", false);
     }
 
-    if (m_analyze_capture_pending)
+    if (m_last_request.is_analyze_capture_pending)
     {
-        m_analyze_capture_pending = false;
         if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
         {
             QMessageBox::critical(this, QString("Cannot analyze file"),
@@ -1178,7 +1180,7 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnOpenFile()
+void MainWindow::OnOpenFile(bool is_analyze_capture_pending)
 {
     QString supported_files = QStringLiteral(
         "Supported Files (*.rd *.gfxr);;Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
@@ -1189,7 +1191,8 @@ void MainWindow::OnOpenFile()
     {
         QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
         Settings::Get()->WriteLastFilePath(last_file_path);
-        if (!LoadFile(file_name.toStdString().c_str()))
+        if (!LoadFile(file_name.toStdString().c_str(), /*is_temp_file*/ false, /*async*/ true,
+                      is_analyze_capture_pending))
         {
             QMessageBox::critical(this, QString("Error opening file"),
                                   (QString("Unable to open file: ") + file_name));
@@ -1209,8 +1212,7 @@ void MainWindow::OnAnalyzeCapture()
     {
         qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
                     "prompting user to load a file";
-        m_analyze_capture_pending = true;
-        OnOpenFile();
+        OnOpenFile(/*is_analyze_capture_pending*/ true);
         return;
     }
     qDebug() << "Launching AnalyzeDialog with: " << m_capture_file;

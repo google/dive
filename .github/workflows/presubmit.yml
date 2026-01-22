@@ -45,6 +45,8 @@ jobs:
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
+      restore_cache: true
+      upload_cache: true # TODO UNICORN: false
 
   build_host_mac:
     permissions:

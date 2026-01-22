@@ -6,11 +6,19 @@ on:
       build_type:
         required: true
         type: string
+      restore_cache:
+        required: true
+        type: boolean
+      upload_cache:
+        required: true
+        type: boolean
 
 jobs:
   build_host_windows:
     name: Build Host Windows ${{ inputs.build_type }}
     runs-on: windows-2022
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v6
         with:
@@ -20,13 +28,26 @@ jobs:
           version: 5.15.2
           arch: win64_msvc2019_64
       - uses: ilammy/setup-nasm@72793074d3c8cdda771dba85f6deafe00623038b # v1.5.2
+      - uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
       - name: Install Dive dependencies
         run: |
           python3 -m pip install mako
+      - name: (ccache) Clear stats
+        run: ccache -z
+      - name: (ccache) Restore (restore_cache)
+        if: ${{ inputs.restore_cache }}
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-
       - name: Generate build files with cmake
         run: |
           cmake `
             -G "Visual Studio 17 2022" `
+            -DCMAKE_C_COMPILER_LAUNCHER="ccache" `
+            -DCMAKE_CXX_COMPILER_LAUNCHER="ccache" `
             -A x64 `
             -Bbuild .
       - name: Build Dive host tools with VS 2022
@@ -38,3 +59,11 @@ jobs:
       - name: Run tests
         run: |
           ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
+      - name: (ccache) Show stats
+        run: ccache -s
+      - name: (ccache) Save (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}

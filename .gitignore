@@ -12,13 +12,10 @@
 /.cache/
 
 # Build-related directories
-# TODO: b/462767957 - Move build_android/ and pkg/ contents to under the unified build dir 
 build/
-build_android/
 third_party/freedreno/libs/
 third_party/freedreno/obj
 .gradle/
-pkg/
 # Amdvlk auto-generated files
 *.pyc
 g_*.h

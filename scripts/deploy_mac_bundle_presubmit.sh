@@ -18,7 +18,7 @@
 
 set -euo pipefail          
           
-mv ./pkg/host/dive.app ./pkg/
-macdeployqt ./pkg/dive.app
-cp -r ./pkg/host/* ./pkg/dive.app/Contents/MacOS/
-mkdir -p ./pkg/dive.app/Contents/Resources/plugins/
+mv ./build/pkg/host/dive.app ./build/pkg/
+macdeployqt ./build/pkg/dive.app
+cp -r ./build/pkg/host/* ./build/pkg/dive.app/Contents/MacOS/
+mkdir -p ./build/pkg/dive.app/Contents/Resources/plugins/

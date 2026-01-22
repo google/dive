@@ -1210,8 +1210,9 @@ void MainWindow::OnAnalyzeCapture()
 {
     if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
     {
-        qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
-                    "prompting user to load a file";
+        qDebug()
+            << "No gfxr or correlated capture loaded. Prompting user to load a file. If gfxr or "
+               "correlated capture is loaded, AnalyzeDialog will be launched after loading.";
         OnOpenFile(/*is_analyze_capture_pending*/ true);
         return;
     }

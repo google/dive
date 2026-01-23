@@ -11,6 +11,9 @@
 /compile_commands.json
 /.cache/
 
+# Crashpad prebuilt directory
+third_party/dive_crashpad/prebuilt
+
 # Build-related directories
 # TODO: b/462767957 - Move build_android/ and pkg/ contents to under the unified build dir 
 build/

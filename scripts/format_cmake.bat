@@ -29,6 +29,7 @@ lrz_validator ^
 network ^
 plugins ^
 runtime_layer ^
+third_party/dive_crashpad ^
 trace_stats ^
 ui ^
 src

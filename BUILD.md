@@ -132,11 +132,11 @@ Modify the script if necessary to provide the appropriate `ANDROID_ABI` dependin
 
 ### Linux
 
-Running the script `scripts/build_android.sh` will build and install the device resources at `$DIVE_ROOT_PATH/pkg/device`.
+Running the script `scripts/build_android.sh Debug` will build and install the device resources at `$DIVE_ROOT_PATH/pkg/device`.
 
 ### Windows
 
-In the Visual Studio Developer Command Prompt for VS 2022 (or 2019), running the script `scripts\build_android.bat` will build and install the device resources at `$DIVE_ROOT_PATH\pkg\device`.
+In the Visual Studio Developer Command Prompt for VS 2022 (or 2019), running the script `scripts\build_android.bat Debug` will build and install the device resources at `$DIVE_ROOT_PATH\pkg\device`.
 
 ### Troubleshooting Tips
 * Gradle build

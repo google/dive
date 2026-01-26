@@ -334,8 +334,9 @@ void TraceDialog::closeEvent(QCloseEvent* event)
     // The operation was successful, close normally.
     if (status.ok())
     {
-        m_run_button->setEnabled(true);
+        m_run_button->setEnabled(false);
         m_run_button->setText(kStart_Application);
+        m_gfxr_capture_button->setEnabled(false);
         EnableCaptureTypeButtons(true);
         m_gfxr_capture_type_button->setChecked(true);
         OnCaptureTypeChanged(kGfxrCaptureButtonId);
@@ -359,6 +360,30 @@ void TraceDialog::closeEvent(QCloseEvent* event)
         m_run_button->setText(kStart_Application);
         event->accept();
     }
+}
+
+void TraceDialog::showEvent(QShowEvent* event)
+{
+    if (!m_cur_dev.empty())
+    {
+        QModelIndexList matches =
+            m_dev_model->match(m_dev_model->index(0, 0),
+                               Qt::UserRole,                // Search this role
+                               QString(m_cur_dev.c_str()),  // For the current device serial
+                               1,                           // Stop after 1 match
+                               Qt::MatchExactly);
+
+        if (matches.empty())
+        {
+            ResetDialog();
+        }
+        else
+        {
+            m_run_button->setEnabled(!m_cur_pkg.empty());
+        }
+    }
+
+    QDialog::showEvent(event);
 }
 
 void TraceDialog::OnCaptureTypeChanged(int button_id)
@@ -838,6 +863,24 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const& capture_path)
     qDebug() << success_msg.c_str();
     ShowMessage(QString::fromStdString(success_msg));
     emit TraceAvailable(capture_path);
+}
+
+void TraceDialog::ResetDialog()
+{
+    if (m_gfxr_capture)
+    {
+        m_gfxr_capture_button->setEnabled(false);
+        m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
+        m_gfxr_capture_file_directory_input_box->clear();
+    }
+    m_cur_dev.clear();
+    m_cur_pkg.clear();
+    m_cmd_input_box->clear();
+    m_args_input_box->clear();
+    m_capture_file_local_directory_input_box->clear();
+    m_app_type_box->setCurrentIndex(-1);
+    m_pkg_box->setCurrentIndex(-1);
+    m_run_button->setEnabled(false);
 }
 
 // =================================================================================================

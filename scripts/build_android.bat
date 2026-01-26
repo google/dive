@@ -17,19 +17,27 @@
 @echo off
 setlocal enabledelayedexpansion
 set PROJECT_ROOT=%~dp0\..
-set BUILD_TYPE=Debug
+set DIVE_RELEASE_TYPE="dev"
 set startTime=%time%
 
-if "%~1"=="" goto parsingdone
-if "%1"=="Debug" set BUILD_TYPE=%1
-if "%1"=="Release" set BUILD_TYPE=%1
-if not !BUILD_TYPE!==%1 (
-    echo Invalid parameter passed for BUILD_TYPE: %1
-    echo Valid options: 'Debug', 'Release'
+if "%~1"=="" (
+    echo "Must specify BUILD_TYPE"
+    echo "Valid usage: 'build_android.bat Debug|Release|RelWithDebInfo [dive_release_type_str]'"
     exit /b 1
 )
-:parsingdone
-echo Building all the following types: !BUILD_TYPE!
+
+if "%1"=="Debug" set BUILD_TYPE="%1"
+if "%1"=="Release" set BUILD_TYPE="%1"
+if "%1"=="RelWithDebInfo" set BUILD_TYPE="%1"
+if not !BUILD_TYPE!=="%1" (
+    echo "Invalid parameter passed for BUILD_TYPE: %1"
+    echo "Valid usage: 'build_android.bat Debug|Release|RelWithDebInfo [dive_release_type_str]'"
+    exit /b 1
+)
+
+if NOT "%~2"=="" set DIVE_RELEASE_TYPE="%2"
+
+echo Building with BUILD_TYPE: !BUILD_TYPE! DIVE_RELEASE_TYPE: !DIVE_RELEASE_TYPE!
 
 pushd %PROJECT_ROOT%
 
@@ -42,20 +50,15 @@ cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.
     -DANDROID_PLATFORM=android-26 ^
     -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER ^
     -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER ^
+    -DDIVE_RELEASE_TYPE=!DIVE_RELEASE_TYPE!
 
 if not !ERRORLEVEL!==0 exit /b 1
 
-(for %%b in (!BUILD_TYPE!) do (
-    setlocal enabledelayedexpansion
-    echo.
-    set build=%%b
-
-    cmake --build build/device --config=!build!
+cmake --build build/device --config=!BUILD_TYPE!
     if not !ERRORLEVEL!==0 exit /b 1
 
-    cmake --install build/device --prefix build/pkg --config=!build! 
-    if not !ERRORLEVEL!==0 exit /b 1
-))
+cmake --install build/device --prefix build/pkg --config=!BUILD_TYPE! 
+if not !ERRORLEVEL!==0 exit /b 1
 
 popd
 

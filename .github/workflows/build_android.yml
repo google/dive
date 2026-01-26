@@ -70,22 +70,22 @@ jobs:
           -DDIVE_GFXR_GRADLE_CONSOLE=plain \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-          -Bbuild_android .
+          -Bbuild/device .
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Build lib with NDK
         run: |
-          ninja -C build_android -f build-${{ inputs.build_type }}.ninja
+          ninja -C build/device -f build-${{ inputs.build_type }}.ninja
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Ninja log
         run: |
-          cat build_android/.ninja_log
+          cat build/device/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build_android --prefix pkg --config ${{ inputs.build_type }}
+          cmake --install build/device --prefix build/pkg --config ${{ inputs.build_type }}
       - name: (ccache) Show stats
         run: ccache -s
       - name: (ccache) Save (upload_cache)

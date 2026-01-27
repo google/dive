@@ -45,4 +45,8 @@ absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
 absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
     std::filesystem::path relative_file_path);
 
+std::filesystem::path ResolveHostRootPath();
+
+absl::StatusOr<std::filesystem::path> GetNextHostSessionPath(
+    const std::filesystem::path& host_root_path);
 }  // namespace Dive

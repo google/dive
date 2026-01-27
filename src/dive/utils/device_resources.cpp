@@ -24,6 +24,7 @@
 #include "dive/build_defs/dive_cmake_generated.h"
 #include "dive/common/status.h"
 #include "dive/os/command_utils.h"
+#include "dive/utils/device_resources_constants.h"
 
 namespace
 {
@@ -155,6 +156,63 @@ absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
     };
 
     return ResolvePath(search_dirs, relative_file_path);
+}
+
+std::filesystem::path ResolveHostRootPath()
+{
+    std::filesystem::path base_path;
+#if defined(__APPLE__)
+    const char* home_dir = std::getenv("HOME");
+    if (home_dir)
+    {
+        base_path = std::filesystem::path(home_dir);
+    }
+    else
+    {
+        base_path = std::filesystem::current_path();
+    }
+#else
+    base_path = std::filesystem::current_path();
+#endif
+
+    return base_path / std::string(Dive::DeviceResourcesConstants::kHostRootDirectoryName);
+}
+
+absl::StatusOr<std::filesystem::path> GetNextHostSessionPath(
+    const std::filesystem::path& host_root_path)
+{
+    if (!std::filesystem::exists(host_root_path))
+    {
+        std::error_code ec;
+        if (!std::filesystem::create_directories(host_root_path, ec))
+        {
+            return Dive::InternalError(absl::StrCat("Error creating directory (",
+                                                    host_root_path.string(), "): ", ec.message()));
+        }
+    }
+
+    int session_index = 1;
+    std::string session_dir_name;
+    std::filesystem::path session_path;
+    while (true)
+    {
+        session_dir_name =
+            std::string(Dive::DeviceResourcesConstants::kHostSessionDirectoryPrefix) +
+            std::to_string(session_index);
+        session_path = host_root_path / session_dir_name;
+        if (!std::filesystem::exists(session_path))
+        {
+            std::error_code ec;
+            if (!std::filesystem::create_directories(session_path, ec))
+            {
+                return Dive::InternalError(absl::StrCat(
+                    "Error creating directory (", session_path.string(), "): ", ec.message()));
+            }
+            return session_path;
+        }
+        session_index++;
+    }
+    return Dive::InternalError("Failed to find a unique capture directory.");
 }
 
 }  // namespace Dive

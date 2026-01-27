@@ -45,6 +45,7 @@ limitations under the License.
 #include "dive/common/macros.h"
 #include "dive/common/status.h"
 #include "dive/os/command_utils.h"
+#include "dive/utils/device_resources.h"
 #include "network/tcp_client.h"
 #include "utils/version_info.h"
 
@@ -64,7 +65,6 @@ struct GlobalOptions
     std::string vulkan_command_args;
     Dive::AppType app_type;
     std::string download_dir;
-    std::string gfxr_capture_file_dir;
     std::optional<absl::Duration> trigger_capture_after;
 
     Dive::GfxrReplaySettings replay_settings;
@@ -140,6 +140,12 @@ absl::Status ValidateRunOptions(const GlobalOptions& options)
     {
         return Dive::InvalidArgumentError(
             "GFXR capture is not supported for GLES OpenXR applications.");
+    }
+
+    if (!std::filesystem::is_directory(std::filesystem::path(options.download_dir)))
+    {
+        return Dive::InvalidArgumentError(
+            absl::StrCat("Invalid download directory: ", options.download_dir));
     }
 
     return absl::OkStatus();
@@ -319,27 +325,27 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
         case Dive::AppType::kVulkan_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::OPENXR_APK,
                                    ctx.options.vulkan_command_args,
-                                   ctx.options.gfxr_capture_file_dir);
+                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
             break;
         case Dive::AppType::kVulkan_Non_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::VULKAN_APK,
                                    ctx.options.vulkan_command_args,
-                                   ctx.options.gfxr_capture_file_dir);
+                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
             break;
         case Dive::AppType::kVulkanCLI_Non_OpenXR:
             ret = device->SetupApp(ctx.options.vulkan_command, ctx.options.vulkan_command_args,
                                    Dive::ApplicationType::VULKAN_CLI,
-                                   ctx.options.gfxr_capture_file_dir);
+                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
             break;
         case Dive::AppType::kGLES_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::OPENXR_APK,
                                    ctx.options.vulkan_command_args,
-                                   ctx.options.gfxr_capture_file_dir);
+                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
             break;
         case Dive::AppType::kGLES_Non_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::GLES_APK,
                                    ctx.options.vulkan_command_args,
-                                   ctx.options.gfxr_capture_file_dir);
+                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
             break;
         default:
             return Dive::InvalidArgumentError("Unknown application type.");
@@ -382,11 +388,14 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
         return Dive::StatusWithContext(capture_file_path.status(), "StartPm4Capture failed");
     }
 
-    std::filesystem::path target_download_dir(download_dir);
-    if (!std::filesystem::is_directory(target_download_dir))
+    std::filesystem::path target_download_dir;
+    if (auto ret = Dive::GetNextHostSessionPath(download_dir); ret.ok())
     {
-        return Dive::InvalidArgumentError("Invalid download directory: " +
-                                          target_download_dir.string());
+        target_download_dir = *ret;
+    }
+    else
+    {
+        return Dive::StatusWithContext(ret.status(), "Failed to get next host session path");
     }
 
     std::filesystem::path p(*capture_file_path);
@@ -405,8 +414,8 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
 // Checks if the capture directory on the device is currently done.
 bool IsCaptureFinished(const AdbSession& adb, const std::string& gfxr_capture_directory)
 {
-    std::string on_device_capture_directory =
-        absl::StrCat(Dive::kDeviceCapturePath, "/", gfxr_capture_directory);
+    std::string on_device_capture_directory = absl::StrCat(
+        Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/", gfxr_capture_directory);
     std::string command = "shell lsof " + on_device_capture_directory;
     absl::StatusOr<std::string> output = adb.RunAndGetResult(command);
 
@@ -486,12 +495,11 @@ absl::StatusOr<std::filesystem::path> GetGfxrCaptureFileName(
 // Retrieves a GFXR capture from the device and downloads it.
 absl::Status RetrieveGfxrCapture(const AdbSession& adb, const GlobalOptions& options)
 {
-    const std::string& gfxr_capture_directory = options.gfxr_capture_file_dir;
-    std::filesystem::path download_dir = options.download_dir;
-
     // Need to explicitly use forward slash so that this works on Windows targetting Android
+    // We append /. to copy all files rather than the directory itself
     std::string on_device_capture_directory =
-        absl::StrCat(Dive::kDeviceCapturePath, "/", gfxr_capture_directory);
+        absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
+                     Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName, "/.");
 
     std::cout << "Retrieving capture..." << std::endl;
 
@@ -513,17 +521,14 @@ absl::Status RetrieveGfxrCapture(const AdbSession& adb, const GlobalOptions& opt
                                    on_device_capture_directory);
     }
 
-    // Find name for new local target directory
-    std::filesystem::path full_target_download_dir = download_dir / gfxr_capture_directory;
-    bool local_target_dir_exists = std::filesystem::exists(full_target_download_dir);
-    int suffix = 0;
-    while (local_target_dir_exists)
+    std::filesystem::path full_target_download_dir;
+    if (auto ret = Dive::GetNextHostSessionPath(options.download_dir); ret.ok())
     {
-        // Append numerical suffix to make a fresh dir
-        full_target_download_dir =
-            download_dir / absl::StrFormat("%s_%s", gfxr_capture_directory, std::to_string(suffix));
-        suffix++;
-        local_target_dir_exists = std::filesystem::exists(full_target_download_dir);
+        full_target_download_dir = *ret;
+    }
+    else
+    {
+        return Dive::StatusWithContext(ret.status(), "Failed to get next host session path");
     }
 
     command = absl::StrFormat(R"(pull "%s" "%s")", on_device_capture_directory,
@@ -577,7 +582,6 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
     absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_retrieve)
 {
     const AdbSession& adb = device.Adb();
-    const std::string& gfxr_capture_file_dir = options.gfxr_capture_file_dir;
 
     // GFXR relies on capture_android_trigger changing from false to true as the condition for
     // beginning the capture. Thus, ensure the prop starts as false.
@@ -604,7 +608,9 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
             absl::StrCat("Error starting gfxr runtime capture: ", status.message()));
     }
 
-    if (absl::Status status = device.TriggerScreenCapture(gfxr_capture_file_dir); !status.ok())
+    if (absl::Status status = device.TriggerScreenCapture(
+            Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+        !status.ok())
     {
         return Dive::InternalError(
             absl::StrCat("Error creating capture screenshot: ", status.message()));
@@ -620,7 +626,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
     }
 
     std::cout << "Waiting for the current capture to complete...\n";
-    while (!IsCaptureFinished(adb, gfxr_capture_file_dir))
+    while (!IsCaptureFinished(adb, Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName))
     {
         absl::SleepFor(absl::Seconds(1));
     }
@@ -760,7 +766,8 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
     // early then capture will fail.
     absl::Cleanup cleanup_device_files = [&context] {
         std::string on_device_capture_directory =
-            absl::StrCat(Dive::kDeviceCapturePath, "/", context.options.gfxr_capture_file_dir);
+            absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
+                         Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
         context.mgr.GetDevice()
             ->Adb()
             .Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory))
@@ -970,16 +977,8 @@ ABSL_FLAG(std::string, vulkan_command_args, "", "Arguments to pass to the Vulkan
 
 ABSL_FLAG(Dive::AppType, type, Dive::AppType::kVulkan_OpenXR, GenerateAppTypeFlagHelp());
 
-ABSL_FLAG(std::string, download_dir, ".",
-          "The local host directory where captured files will be saved. Defaults to the current "
-          "directory.");
-
-ABSL_FLAG(std::string, gfxr_capture_file_dir, "gfxr_capture",
-          absl::StrCat("The name of the temporary subdirectory on the Android device (under '",
-                       Dive::kDeviceCapturePath,
-                       "') where the GFXR capture is stored. This subdirectory name is mirrored on "
-                       "the host within ",
-                       "'--download_dir'."));
+ABSL_FLAG(std::string, download_dir, Dive::ResolveHostRootPath(),
+          "The local host directory where captured files will be saved.");
 
 ABSL_FLAG(
     std::optional<absl::Duration>, trigger_capture_after, std::nullopt,
@@ -1027,7 +1026,6 @@ int main(int argc, char** argv)
         .vulkan_command_args = absl::GetFlag(FLAGS_vulkan_command_args),
         .app_type = absl::GetFlag(FLAGS_type),
         .download_dir = absl::GetFlag(FLAGS_download_dir),
-        .gfxr_capture_file_dir = absl::GetFlag(FLAGS_gfxr_capture_file_dir),
         .trigger_capture_after = absl::GetFlag(FLAGS_trigger_capture_after),
         .replay_settings =
             {
@@ -1040,6 +1038,8 @@ int main(int argc, char** argv)
                 .use_validation_layer = absl::GetFlag(FLAGS_validation_layer),
             },
     };
+
+    std::cout << "value of download_dir = " << opts.download_dir << std::endl;
 
     Command cmd = absl::GetFlag(FLAGS_command);
     const CommandDef* selected_def = nullptr;

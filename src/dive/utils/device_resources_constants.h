@@ -63,6 +63,26 @@ Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN
     static constexpr std::string_view kDeployVulkanGlobalFolderPath = "/data/local/debug/vulkan";
     static constexpr std::string_view kDeployManifestFolderPath =
         "/system/etc/openxr/1/api_layers/implicit.d/";
+
+    // -------------------------------------------------------------------------
+    // Host (local machine) Constants
+    // -------------------------------------------------------------------------
+
+    // The name of the top-level container directory on the host.
+    // Example: "dive_captures" (which lives in $HOME or pwd).
+    static constexpr char kHostRootDirectoryName[] = "dive_captures";
+    // The prefix for individual session sub-directories.
+    // Example: "capture_" -> results in "capture_1", "capture_2".
+    static constexpr char kHostSessionDirectoryPrefix[] = "capture_";
+
+    // -------------------------------------------------------------------------
+    // Device (Android) Constants
+    // -------------------------------------------------------------------------
+
+    // The absolute path to the standard Download directory on Android.
+    static constexpr char kDeviceDownloadPath[] = "/sdcard/Download";
+    // The name of the temporary staging directory created on the device.
+    static constexpr char kDeviceStagingDirectoryName[] = "dive_capture_files";
 };
 
 }  // namespace Dive

@@ -53,6 +53,7 @@
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
 #include "dive/common/app_types.h"
+#include "dive/utils/device_resources.h"
 #include "gfxr_capture_worker.h"
 #include "network/tcp_client.h"
 #include "utils/component_files.h"
@@ -208,11 +209,11 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_gfxr_capture_file_directory_input_box->hide();
 
     QHBoxLayout* capture_file_local_directory_layout = new QHBoxLayout();
-    m_capture_file_local_directory_input_box = new QLineEdit();
-    m_capture_file_local_directory_input_box->setPlaceholderText(
-        "Input the location to save the directory to");
+    m_capture_file_local_root_directory_input_box = new QLineEdit();
+    m_capture_file_local_root_directory_input_box->setPlaceholderText(
+        "Input the location to save the root directory to");
     capture_file_local_directory_layout->addWidget(capture_file_local_directory_label);
-    capture_file_local_directory_layout->addWidget(m_capture_file_local_directory_input_box);
+    capture_file_local_directory_layout->addWidget(m_capture_file_local_root_directory_input_box);
 
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
@@ -303,7 +304,7 @@ absl::Status TraceDialog::StopPackageAndCleanup()
         }
         // Only delete the on device capture directory when the application is closed.
         std::string on_device_capture_directory =
-            absl::StrCat(Dive::kDeviceCapturePath, "/",
+            absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
                          m_gfxr_capture_file_directory_input_box->text().toStdString());
         auto ret =
             device->Adb().Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory));
@@ -515,7 +516,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
         if (m_gfxr_capture_file_directory_input_box->text() == "")
         {
             m_gfxr_capture_file_directory_input_box->setText(
-                QString::fromUtf8(Dive::kDefaultCaptureFolderName));
+                QString::fromUtf8(Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName));
         }
     }
 
@@ -672,19 +673,16 @@ void TraceDialog::OnTraceClicked()
     progress_bar->setMinimumDuration(0);
     CaptureWorker* workerThread = new CaptureWorker(progress_bar);
 
-    if (m_capture_file_local_directory_input_box->text() == "")
+    if (m_capture_file_local_root_directory_input_box->text() == "")
     {
-#if defined(__APPLE__)
-        m_capture_file_local_directory_input_box->setText(
-            QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
-#else
-        m_capture_file_local_directory_input_box->setText(
-            "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
-#endif
+        std::filesystem::path host_root_path = Dive::ResolveHostRootPath();
+        qDebug() << "ecapia host_root_path = " << host_root_path.string().c_str();
+        m_capture_file_local_root_directory_input_box->setText(
+            QString::fromStdString(host_root_path.string()));
     }
 
     workerThread->SetTargetCaptureDir(
-        m_capture_file_local_directory_input_box->text().toStdString());
+        m_capture_file_local_root_directory_input_box->text().toStdString());
     connect(workerThread, &CaptureWorker::CaptureAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &CaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &CaptureWorker::ShowMessage, this, &TraceDialog::ShowMessage);
@@ -859,19 +857,16 @@ void TraceDialog::RetrieveGfxrCapture()
         return;
     }
 
-    if (m_capture_file_local_directory_input_box->text() == "")
+    if (m_capture_file_local_root_directory_input_box->text() == "")
     {
-#if defined(__APPLE__)
-        m_capture_file_local_directory_input_box->setText(
-            QDir::homePath() + "/" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
-#else
-        m_capture_file_local_directory_input_box->setText(
-            "./" + QString::fromUtf8(Dive::kDefaultCaptureFolderName));
-#endif
+        std::filesystem::path host_root_path = Dive::ResolveHostRootPath();
+        qDebug() << "ecapia host_root_path = " << host_root_path.string().c_str();
+        m_capture_file_local_root_directory_input_box->setText(
+            QString::fromStdString(host_root_path.string()));
     }
 
     std::string on_device_capture_file_directory =
-        absl::StrCat(std::string(Dive::kDeviceCapturePath), "/",
+        absl::StrCat(std::string(Dive::DeviceResourcesConstants::kDeviceDownloadPath), "/",
                      m_gfxr_capture_file_directory_input_box->text().toStdString());
 
     QProgressDialog* progress_bar =
@@ -886,7 +881,7 @@ void TraceDialog::RetrieveGfxrCapture()
     workerThread->SetGfxrSourceCaptureDir(on_device_capture_file_directory);
 
     workerThread->SetTargetCaptureDir(
-        m_capture_file_local_directory_input_box->text().toStdString());
+        m_capture_file_local_root_directory_input_box->text().toStdString());
 
     connect(workerThread, &GfxrCaptureWorker::CaptureAvailable, this,
             &TraceDialog::OnGFXRCaptureAvailable);

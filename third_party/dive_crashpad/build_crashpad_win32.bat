@@ -16,52 +16,20 @@
 @echo off
 setlocal enabledelayedexpansion
 
-if "%~1"=="" (
-    echo Error: Commit hash file argument missing
+if "%~7"=="" (
+    echo Error: Unexpected number of arguments.
+    echo Usage: %~nx0 ^<commit_hash_file^> ^<prebuilt_dir^> ^<metadata_file^> ^<config^> ^<compiler_stamp^> ^<cached_libs^> ^<cached_handler^>
     exit /b 1
 )
-if not exist "%~1" (
-    echo Error: Commit hash file not found: %~1
-    exit /b 1
-)
+
 set COMMIT_HASH_FILE=%~1
 set /p COMMIT_HASH=<"%COMMIT_HASH_FILE%"
-
-if "%~2"=="" (
-    echo Error: Output directory argument missing
-    exit /b 1
-)
 set PREBUILT_DIR=%~2
-
-if "%~3"=="" (
-    echo Error: Metadata file path argument missing
-    exit /b 1
-)
 set METADATA_FILE=%~3
-
-if "%~4"=="" (
-    echo Error: CONFIG string argument missing
-    exit /b 1
-)
 set CONFIG=%~4
-
-if "%~5"=="" (
-    echo Error: Compiler stamp string argument missing
-    exit /b 1
-)
 set COMPILER_STAMP=%~5
 set CURRENT_STAMP=%CONFIG%_%COMPILER_STAMP%
-
-if "%~6"=="" (
-    echo Error: Cached Libs list missing
-    exit /b 1
-)
 set CACHED_LIBS_STR=%~6
-
-if "%~7"=="" (
-    echo Error: Cached Handler path missing
-    exit /b 1
-)
 set CACHED_HANDLER=%~7
 
 if exist "%METADATA_FILE%" (

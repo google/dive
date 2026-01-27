@@ -17,48 +17,21 @@
 #
 
 validate_and_check_cache() {
-    if [[ ! -e $1 ]]; then
-        echo "Error: Commit hash file not found: $1"
+
+    if [ "$#" -ne 7 ]; then
+        echo "Error: Unexpected number of arguments."
+        echo "Usage: validate_and_check_cache <commit_hash_file> <prebuilt_dir> <metadata_file> <config> <compiler_stamp> <cached_libs> <cached_handler>"
         exit 1
     fi
+
     readonly COMMIT_HASH_FILE="$1"
     export COMMIT_HASH="$(cat <"${COMMIT_HASH_FILE}")"
-
-    if [[ -z "$2" ]]; then 
-        echo "Error: Output directory argument missing"
-        exit 1
-    fi
     export PREBUILT_DIR="$2"
-
-    if [[ -z "$3" ]]; then
-        echo "Error: Metadata file path argument missing"
-        exit 1
-    fi
     export METADATA_FILE="$3"
-
-    if [[ -z "$4" ]]; then
-        echo "Error: CONFIG string argument missing"
-        exit 1
-    fi
     export CONFIG="$4"
-
-    if [[ -z "$5" ]]; then
-        echo "Error: Compiler stamp string argument missing"
-        exit 1
-    fi
     readonly COMPILER_STAMP="$5"
     export CURRENT_STAMP="${CONFIG}_${COMPILER_STAMP}"
-
-    if [[ -z "$6" ]]; then
-        echo "Error: Cached libs list missing"
-        exit 1
-    fi
     readonly CACHED_LIBS_STR="$6"
-
-    if [[ -z "$7" ]]; then
-        echo "Error: Cached handler path missing"
-        exit 1
-    fi
     readonly CACHED_HANDLER="$7"
 
     if [[ -f "${METADATA_FILE}" ]]; then

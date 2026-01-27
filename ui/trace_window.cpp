@@ -676,7 +676,6 @@ void TraceDialog::OnTraceClicked()
     if (m_capture_file_local_root_directory_input_box->text() == "")
     {
         std::filesystem::path host_root_path = Dive::ResolveHostRootPath();
-        qDebug() << "ecapia host_root_path = " << host_root_path.string().c_str();
         m_capture_file_local_root_directory_input_box->setText(
             QString::fromStdString(host_root_path.string()));
     }
@@ -860,7 +859,6 @@ void TraceDialog::RetrieveGfxrCapture()
     if (m_capture_file_local_root_directory_input_box->text() == "")
     {
         std::filesystem::path host_root_path = Dive::ResolveHostRootPath();
-        qDebug() << "ecapia host_root_path = " << host_root_path.string().c_str();
         m_capture_file_local_root_directory_input_box->setText(
             QString::fromStdString(host_root_path.string()));
     }

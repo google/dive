@@ -977,7 +977,7 @@ ABSL_FLAG(std::string, vulkan_command_args, "", "Arguments to pass to the Vulkan
 
 ABSL_FLAG(Dive::AppType, type, Dive::AppType::kVulkan_OpenXR, GenerateAppTypeFlagHelp());
 
-ABSL_FLAG(std::string, download_dir, Dive::ResolveHostRootPath(),
+ABSL_FLAG(std::string, download_dir, Dive::ResolveHostRootPath().string(),
           "The local host directory where captured files will be saved.");
 
 ABSL_FLAG(
@@ -1038,8 +1038,6 @@ int main(int argc, char** argv)
                 .use_validation_layer = absl::GetFlag(FLAGS_validation_layer),
             },
     };
-
-    std::cout << "value of download_dir = " << opts.download_dir << std::endl;
 
     Command cmd = absl::GetFlag(FLAGS_command);
     const CommandDef* selected_def = nullptr;

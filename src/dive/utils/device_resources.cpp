@@ -191,28 +191,25 @@ absl::StatusOr<std::filesystem::path> GetNextHostSessionPath(
         }
     }
 
-    int session_index = 1;
-    std::string session_dir_name;
-    std::filesystem::path session_path;
-    while (true)
+    std::string timestamp =
+        absl::FormatTime("%Y-%m-%d_%H:%M:%S", absl::Now(), absl::LocalTimeZone());
+    std::string session_dir_name =
+        absl::StrCat(Dive::DeviceResourcesConstants::kHostSessionDirectoryPrefix, timestamp);
+
+    std::filesystem::path session_path = host_root_path / session_dir_name;
+    if (!std::filesystem::exists(session_path))
     {
-        session_dir_name =
-            std::string(Dive::DeviceResourcesConstants::kHostSessionDirectoryPrefix) +
-            std::to_string(session_index);
-        session_path = host_root_path / session_dir_name;
-        if (!std::filesystem::exists(session_path))
+        std::error_code ec;
+        if (!std::filesystem::create_directories(session_path, ec))
         {
-            std::error_code ec;
-            if (!std::filesystem::create_directories(session_path, ec))
-            {
-                return Dive::InternalError(absl::StrCat(
-                    "Error creating directory (", session_path.string(), "): ", ec.message()));
-            }
-            return session_path;
+            return Dive::InternalError(absl::StrCat("Error creating directory (",
+                                                    session_path.string(), "): ", ec.message()));
         }
-        session_index++;
+        return session_path;
     }
-    return Dive::InternalError("Failed to find a unique capture directory.");
+
+    return Dive::InternalError(
+        absl::StrCat("Host session directory already exists: ", session_path.string()));
 }
 
 }  // namespace Dive

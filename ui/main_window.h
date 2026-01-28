@@ -43,8 +43,7 @@ class MainWindow : public QMainWindow
     MainWindow& operator=(const MainWindow&) = delete;
     MainWindow& operator=(MainWindow&&) = delete;
 
-    bool LoadFile(const std::string& file_name, bool is_temp_file = false, bool async = true,
-                  bool is_analyze_capture_pending = false);
+    bool LoadFile(const std::string& file_name, bool is_temp_file = false, bool async = true);
 
  protected:
     void closeEvent(QCloseEvent* closeEvent) Q_DECL_OVERRIDE;
@@ -82,7 +81,7 @@ class MainWindow : public QMainWindow
     void OnSelectionChanged(const QModelIndex& index);
     void OnFilterModeChange(const QString& string);
     void OnGfxrFilterModeChange();
-    void OnOpenFile(bool is_analyze_capture_pending = false);
+    void OnOpenFile();
     void OnNormalCapture();
     void OnCaptureTrigger();
     void OnAnalyzeCapture();
@@ -114,7 +113,6 @@ class MainWindow : public QMainWindow
     {
         std::string file_name;
         bool is_temp_file;
-        bool is_analyze_capture_pending;
     };
     enum class CorrelationTarget
     {

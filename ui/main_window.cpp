@@ -939,8 +939,7 @@ void MainWindow::OnTraceStatsUpdated()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool async,
-                          bool is_analyze_capture_pending)
+bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool async)
 {
     bool release_capture = m_capture_acquired;
     m_capture_acquired = false;
@@ -976,9 +975,7 @@ bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool 
     }
 
     m_progress_tracker.sendMessage("Loading " + file_name);
-    m_last_request = LastRequest{.file_name = file_name,
-                                 .is_temp_file = is_temp_file,
-                                 .is_analyze_capture_pending = is_analyze_capture_pending};
+    m_last_request = LastRequest{.file_name = file_name, .is_temp_file = is_temp_file};
 
     auto reference = Dive::FilePath{file_name};
     auto components = m_capture_manager->ResolveComponents(reference);
@@ -1143,6 +1140,7 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
                 break;
         }
 
+        m_analyze_action->setEnabled(m_gfxr_capture_loaded || m_correlated_capture_loaded);
         m_hover_help->SetCurItem(HoverHelp::Item::kNone);
         m_capture_file = QString(m_last_request.file_name.c_str());
         qDebug() << "MainWindow::OnFileLoaded: m_capture_file: " << m_capture_file;
@@ -1164,23 +1162,11 @@ void MainWindow::OnFileLoaded(const LoadFileResult& loaded_file)
         SetCurrentFile("", false);
     }
 
-    if (m_last_request.is_analyze_capture_pending)
-    {
-        if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
-        {
-            QMessageBox::critical(this, QString("Cannot analyze file"),
-                                  (QString("Unable to analyze file: ") + m_capture_file) +
-                                      ". GFXR capture not loaded.");
-            return;
-        }
-        OnAnalyzeCapture();
-    }
-
     emit FileLoaded();
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnOpenFile(bool is_analyze_capture_pending)
+void MainWindow::OnOpenFile()
 {
     QString supported_files = QStringLiteral(
         "Supported Files (*.rd *.gfxr);;Dive files (*.rd);;GFXR files (*.gfxr);;All files (*.*)");
@@ -1191,8 +1177,7 @@ void MainWindow::OnOpenFile(bool is_analyze_capture_pending)
     {
         QString last_file_path = file_name.left(file_name.lastIndexOf('/'));
         Settings::Get()->WriteLastFilePath(last_file_path);
-        if (!LoadFile(file_name.toStdString().c_str(), /*is_temp_file*/ false, /*async*/ true,
-                      is_analyze_capture_pending))
+        if (!LoadFile(file_name.toStdString().c_str()))
         {
             QMessageBox::critical(this, QString("Error opening file"),
                                   (QString("Unable to open file: ") + file_name));
@@ -1210,10 +1195,9 @@ void MainWindow::OnAnalyzeCapture()
 {
     if (!m_gfxr_capture_loaded && !m_correlated_capture_loaded)
     {
-        qDebug()
-            << "No gfxr or correlated capture loaded. Prompting user to load a file. If gfxr or "
-               "correlated capture is loaded, AnalyzeDialog will be launched after loading.";
-        OnOpenFile(/*is_analyze_capture_pending*/ true);
+        qDebug() << "Not launching AnalyzeDialog because GFXR file not succesfully loaded, instead "
+                    "prompting user to load a file";
+        OnOpenFile();
         return;
     }
     qDebug() << "Launching AnalyzeDialog with: " << m_capture_file;
@@ -1621,9 +1605,10 @@ void MainWindow::CreateActions()
     connect(m_capture_delay_action, &QAction::triggered, this, &MainWindow::OnCaptureTrigger);
 
     // Analyze action
-    m_analyze_action = new QAction(tr("Analyze Capture"), this);
-    m_analyze_action->setStatusTip(tr("Analyze a Capture"));
+    m_analyze_action = new QAction(tr("Analyze GFXR Capture"), this);
+    m_analyze_action->setStatusTip(tr("Analyze currently loaded GFXR capture"));
     m_analyze_action->setIcon(QIcon(":/images/analyze.png"));
+    m_analyze_action->setEnabled(false);
     m_analyze_action->setShortcut(QKeySequence("f7"));
     connect(m_analyze_action, &QAction::triggered, this, &MainWindow::OnAnalyzeCapture);
 

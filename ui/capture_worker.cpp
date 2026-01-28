@@ -20,49 +20,21 @@
 
 #include "absl/strings/str_cat.h"
 #include "capture_service/device_mgr.h"
+#include "dive/utils/device_resources.h"
 #include "network/tcp_client.h"
 
 //--------------------------------------------------------------------------------------------------
-void CaptureWorker::SetTargetCaptureDir(const std::string& target_capture_dir)
+void CaptureWorker::SetTargetCaptureDir(const std::string& host_root_dir)
 {
-    if (!std::filesystem::exists(target_capture_dir))
+    if (auto ret = Dive::GetNextHostSessionPath(host_root_dir); ret.ok())
     {
-        std::error_code ec;
-        if (!std::filesystem::create_directories(target_capture_dir, ec))
-        {
-            std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
-            qDebug() << err_msg.c_str();
-            emit ShowMessage(QString::fromStdString(err_msg));
-            return;
-        }
-
-        m_target_capture_dir = target_capture_dir;
+        m_host_capture_dir = *ret;
     }
     else
     {
-        // If the target directory already exists on the local machine, append a number to it to
-        // differentiate.
-        int counter = 1;
-        std::filesystem::path newDirPath;
-        while (true)
-        {
-            newDirPath = std::filesystem::path(target_capture_dir + "_" + std::to_string(counter));
-            if (!std::filesystem::exists(newDirPath))
-            {
-                std::error_code ec;
-
-                if (!std::filesystem::create_directories(newDirPath, ec))
-                {
-                    std::string err_msg = absl::StrCat("Error creating directory: ", ec.message());
-                    qDebug() << err_msg.c_str();
-                    emit ShowMessage(QString::fromStdString(err_msg));
-                    return;
-                }
-                m_target_capture_dir = newDirPath;
-                break;
-            }
-            counter++;
-        }
+        std::string err_msg = std::string(ret.status().message());
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
     }
 }
 
@@ -110,10 +82,10 @@ void CaptureWorker::run()
         return;
     }
     std::filesystem::path p(*capture_file_path);
-    std::filesystem::path target_download_path(m_target_capture_dir);
-    target_download_path /= p.filename();
+    std::filesystem::path host_download_path(m_host_capture_dir);
+    host_download_path /= p.filename();
     qDebug() << "Begin to download the capture file to "
-             << target_download_path.generic_string().c_str();
+             << host_download_path.generic_string().c_str();
 
     auto file_size = client.GetCaptureFileSize(p.generic_string());
     if (file_size.ok())
@@ -133,18 +105,18 @@ void CaptureWorker::run()
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the capture file to "
-             << target_download_path.generic_string().c_str();
+             << host_download_path.generic_string().c_str();
 
     emit UpdateProgressDialog("Downloading ...");
     auto progress = [this, total_size](size_t size) {
         emit DownloadedSize(static_cast<qlonglong>(size), total_size);
     };
-    status = client.DownloadFileFromServer(*capture_file_path,
-                                           target_download_path.generic_string(), progress);
+    status = client.DownloadFileFromServer(*capture_file_path, host_download_path.generic_string(),
+                                           progress);
     if (status.ok())
     {
         qDebug() << "Capture saved at "
-                 << std::filesystem::canonical(target_download_path).generic_string().c_str();
+                 << std::filesystem::canonical(host_download_path).generic_string().c_str();
     }
     else
     {
@@ -158,11 +130,11 @@ void CaptureWorker::run()
                                        std::chrono::steady_clock::now() - begin)
                                        .count();
     QString download_msg = QString("Capture downloaded to %1 in %2 seconds)")
-                               .arg(target_download_path.generic_string().c_str())
+                               .arg(host_download_path.generic_string().c_str())
                                .arg(time_used_to_load_ms / 1000.0);
     qDebug() << download_msg;
 
-    QString capture_saved_path(target_download_path.generic_string().c_str());
+    QString capture_saved_path(host_download_path.generic_string().c_str());
     emit ShowMessage(download_msg);
     emit CaptureAvailable(capture_saved_path);
 }

@@ -23,6 +23,7 @@ g_*.cpp
 
 .env
 
+dive_captures/
 gfxr_capture/
 gfxr_capture_*/
 **/.DS_Store

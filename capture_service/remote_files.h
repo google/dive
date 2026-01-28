@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <filesystem>
 
+#include "dive/utils/device_resources_constants.h"
 #include "utils/component_files_constants.h"
 
 namespace Dive
@@ -33,7 +34,8 @@ namespace Dive
 inline std::filesystem::path GetRenderDocCaptureFilePathTemplate(
     const std::filesystem::path& gfxr_filepath)
 {
-    return std::filesystem::path(kDeviceCapturePath) / gfxr_filepath.stem();
+    return std::filesystem::path(DeviceResourcesConstants::kDeviceDownloadPath) /
+           gfxr_filepath.stem();
 }
 
 // Get the expected filename of the completed RenderDoc capture. The returned path is designed to

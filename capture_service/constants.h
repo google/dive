@@ -23,14 +23,11 @@ inline constexpr char kVkGfxrLayerName[] = "VK_LAYER_LUNARG_gfxreconstruct";
 inline constexpr char kVkLayerName[] = "VK_LAYER_Dive";
 inline constexpr char kXrLayerName[] = "XR_APILAYER_dive";
 inline constexpr char kVkValidationLayerName[] = "VK_LAYER_KHRONOS_validation";
-inline constexpr char kDeviceCapturePath[] = "/sdcard/Download";
 inline constexpr int kDownLoadFileChunkSize = 4096;
 inline constexpr char kUnixAbstractPath[] = "dive_abstract";
 inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
 inline constexpr char kReplayPm4DumpFileNamePropertyName[] =
     "debug.dive.replay.capture_pm4_file_name";
-inline constexpr char kDefaultCaptureFolderName[] = "dive_capture_folder";
-inline constexpr char kDefaultReplayFolderName[] = "gfxr_replay_downloads";
 inline constexpr char kProfilingPluginName[] = "dive_drawcall_metrics";
 // This file will be created by replay when it has completed trim state loading. /sdcard/Download/
 // is the base path since GFXR can reliably write there.

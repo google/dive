@@ -54,22 +54,22 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER="cmake;-E;time;ccache" \
             -DCMAKE_C_LINKER_LAUNCHER="cmake;-E;time" \
             -DCMAKE_CXX_LINKER_LAUNCHER="cmake;-E;time" \
-            -Bbuild .
+            -Bbuild/host .
       - name: Build Dive host tools with ninja
         run: |
-          time ninja -C build -d stats -f build-${{ inputs.build_type }}.ninja
+          time ninja -C build/host -d stats -f build-${{ inputs.build_type }}.ninja
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix pkg --config ${{ inputs.build_type }}
+          cmake --install build/host --prefix build/pkg --config ${{ inputs.build_type }}
       - name: Put files in app bundle
         run: |
           scripts/deploy_mac_bundle_presubmit.sh
       - name: Run tests
         run: |
-          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
+          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build/host
       - name: (ccache) Show stats
         run: ccache -s
       - name: (ccache) Save (upload_cache)

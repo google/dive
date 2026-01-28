@@ -28,13 +28,13 @@ jobs:
           cmake `
             -G "Visual Studio 17 2022" `
             -A x64 `
-            -Bbuild .
+            -Bbuild/host .
       - name: Build Dive host tools with VS 2022
         run: |
-          cmake --build build --config ${{ inputs.build_type }}
+          cmake --build build/host --config ${{ inputs.build_type }}
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix pkg --config ${{ inputs.build_type }}
+          cmake --install build/host --prefix build/pkg --config ${{ inputs.build_type }}
       - name: Run tests
         run: |
-          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
+          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build/host

@@ -25,17 +25,16 @@ struct DeviceResourcesConstants
 {
     // clang-format off
 /*
-TODO(b/462767957): prepend "pkg/" with unified build directory "build/"
 
 On the host machine, resources are aggregated and installed into the "base resources dir" for convenience.
 
-                            Most platforms (dev & release)                          Apple bundle
-------------------------------------------------------------------------------------------------
-Base resources dir:         DIVE_ROOT/pkg/                                          dive.app/Contents/
-Host resources dir:         DIVE_ROOT/pkg/CMAKE_GENERATED_INSTALL_DEST_HOST/        dive.app/Contents/MacOS/
-Device resources dir:       DIVE_ROOT/pkg/CMAKE_GENERATED_INSTALL_DEST_DEVICE/      dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/
-Plugin parent dir:          DIVE_ROOT/pkg/CMAKE_GENERATED_PLUGINS_PARENT_DIR/       dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/
-Profiling resources dir:    DIVE_ROOT/pkg/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/     dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/
+                            Most platforms (dev & release)                                  Apple bundle (DIVE_ROOT/build/pkg/dive.app)
+---------------------------------------------------------------------------------------------------------------------------------------
+Base resources dir:         DIVE_ROOT/build/pkg/                                            dive.app/Contents/
+Host resources dir:         DIVE_ROOT/build/pkg/CMAKE_GENERATED_INSTALL_DEST_HOST/          dive.app/Contents/MacOS/
+Device resources dir:       DIVE_ROOT/build/pkg/CMAKE_GENERATED_INSTALL_DEST_DEVICE/        dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/
+Plugin parent dir:          DIVE_ROOT/build/pkg/CMAKE_GENERATED_PLUGINS_PARENT_DIR/         dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/
+Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/       dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/
 
 */
     // clang-format on
@@ -64,6 +63,26 @@ Profiling resources dir:    DIVE_ROOT/pkg/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/ 
     static constexpr std::string_view kDeployVulkanGlobalFolderPath = "/data/local/debug/vulkan";
     static constexpr std::string_view kDeployManifestFolderPath =
         "/system/etc/openxr/1/api_layers/implicit.d/";
+
+    // -------------------------------------------------------------------------
+    // Host (local machine) Constants
+    // -------------------------------------------------------------------------
+
+    // The name of the top-level container directory on the host.
+    // Example: "dive_captures" (which lives in $HOME or pwd).
+    static constexpr char kHostRootDirectoryName[] = "dive_captures";
+    // The prefix for individual session sub-directories.
+    // Example: "capture_" -> results in "capture_1", "capture_2".
+    static constexpr char kHostSessionDirectoryPrefix[] = "capture_";
+
+    // -------------------------------------------------------------------------
+    // Device (Android) Constants
+    // -------------------------------------------------------------------------
+
+    // The absolute path to the standard Download directory on Android.
+    static constexpr char kDeviceDownloadPath[] = "/sdcard/Download";
+    // The name of the temporary staging directory created on the device.
+    static constexpr char kDeviceStagingDirectoryName[] = "dive_capture_files";
 };
 
 }  // namespace Dive

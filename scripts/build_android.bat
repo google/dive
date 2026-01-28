@@ -35,7 +35,7 @@ pushd %PROJECT_ROOT%
 
 cmake . -DCMAKE_TOOLCHAIN_FILE=%ANDROID_NDK_HOME%/build/cmake/android.toolchain.cmake ^
     -G "Ninja Multi-Config"^
-    -Bbuild_android ^
+    -Bbuild/device ^
     -DCMAKE_MAKE_PROGRAM="ninja" ^
     -DCMAKE_SYSTEM_NAME=Android ^
     -DANDROID_ABI=arm64-v8a ^
@@ -50,10 +50,10 @@ if not !ERRORLEVEL!==0 exit /b 1
     echo.
     set build=%%b
 
-    cmake --build build_android --config=!build!
+    cmake --build build/device --config=!build!
     if not !ERRORLEVEL!==0 exit /b 1
 
-    cmake --install build_android --prefix pkg --config=!build! 
+    cmake --install build/device --prefix build/pkg --config=!build! 
     if not !ERRORLEVEL!==0 exit /b 1
 ))
 

@@ -71,16 +71,16 @@ jobs:
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${{ inputs.cxx }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -Bbuild .
+            -Bbuild/host .
       - name: Build Dive host tools with ninja with ${{ inputs.cc }}
         run: |
-          ninja -C build -f build-${{ inputs.build_type }}.ninja
+          ninja -C build/host -f build-${{ inputs.build_type }}.ninja
       - name: Ninja log
         run: |
-          cat build/.ninja_log
+          cat build/host/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build --prefix pkg --config ${{ inputs.build_type }}
+          cmake --install build/host --prefix build/pkg --config ${{ inputs.build_type }}
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
@@ -88,7 +88,7 @@ jobs:
       - name: Run tests
         run: |
           export DISPLAY=:99
-          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build
+          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build/host
       - name: (ccache) Show stats
         run: ccache -s
       - name: (ccache) Save (upload_cache)

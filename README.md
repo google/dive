@@ -25,6 +25,34 @@ REM On Windows
 %DIVE_ROOT_PATH%\install\dive.exe
 ```
 
+# Capture Output Directory
+
+The output directory for Dive UI and Dive CLI is unified and follows a standard pattern.
+
+**Default Output (Linux/Windows):**
+By default, captures are saved relative to the current working directory:
+```sh
+./dive_captures/capture_<timestamp_1>/
+./dive_captures/capture_<timestamp_2>/
+./dive_captures/capture_<timestamp_3>/
+```
+
+**Default Output (macOS):**
+On macOS, captures are stored under `${HOME}` to ensure writability:
+```sh
+${HOME}/dive_captures/capture_<timestamp_1>/
+${HOME}/dive_captures/capture_<timestamp_2>/
+${HOME}/dive_captures/capture_<timestamp_3>/
+```
+
+**Custom CLI Output:**
+If the `--download_dir` flag is specified in the Dive CLI, the same subdirectory pattern is preserved:
+```sh
+${download_dir}/capture_<timestamp_1>/
+${download_dir}/capture_<timestamp_2>/
+${download_dir}/capture_<timestamp_3>/
+```
+
 # CLI Tools
 
 Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device resources.

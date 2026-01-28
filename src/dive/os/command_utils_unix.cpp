@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "dive/os/command_utils.h"
-
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -25,6 +23,7 @@ limitations under the License.
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
 #include "dive/common/log.h"
+#include "dive/os/command_utils.h"
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -53,6 +52,11 @@ absl::StatusOr<std::string> LogCommand(const std::string& command, const std::st
         return absl::UnknownError(err_msg);
     }
     return output;
+}
+
+std::string MakeCommand(std::string_view program, const std::vector<std::string>& args)
+{
+    return MakeUnixCommand(program, args);
 }
 
 absl::StatusOr<std::string> RunCommand(const std::string& command)

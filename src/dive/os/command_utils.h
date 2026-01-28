@@ -18,7 +18,9 @@ limitations under the License.
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -30,9 +32,22 @@ namespace Dive
 absl::StatusOr<std::string> LogCommand(const std::string& command, const std::string& output,
                                        int ret);
 
+std::string BashEscape(std::string_view original, bool force_escape = false);
+std::string WindowsCrtProgramEscape(std::string_view original);
+std::string WindowsCrtArgumentEscape(std::string_view original);
+std::string MakeWindowsCommand(std::string_view program, const std::vector<std::string>& args);
+std::string MakeUnixCommand(std::string_view program, const std::vector<std::string>& args);
+
+std::string MakeCommand(std::string_view program, const std::vector<std::string>& args);
+
 // Runs a command line application.
 // Returns the output of the command if it finished successfully, or error status otherwise
 absl::StatusOr<std::string> RunCommand(const std::string& command);
+inline absl::StatusOr<std::string> RunCommand(const std::string& program,
+                                              const std::vector<std::string>& args)
+{
+    return RunCommand(MakeCommand(program, args));
+}
 
 // Returns the directory of the currently running executable.
 absl::StatusOr<std::filesystem::path> GetExecutableDirectory();
@@ -72,6 +87,29 @@ class AdbSession
         auto worker = [full_command]() { RunCommand(full_command).IgnoreError(); };
         m_background_threads.emplace_back(std::thread(worker));
         return absl::OkStatus();
+    }
+
+    absl::Status Shell(std::string_view program, const std::vector<std::string>& args) const
+    {
+        return RunCommand("adb", {"-s", m_serial, "shell", MakeUnixCommand(program, args)})
+            .status();
+    }
+    absl::Status Shell(std::string_view command) const
+    {
+        return RunCommand("adb", {"-s", m_serial, "shell", std::string(command)}).status();
+    }
+    absl::StatusOr<std::string> ShellAndGetResult(std::string_view program,
+                                                  const std::vector<std::string>& args) const
+    {
+        return RunCommand("adb", {"-s", m_serial, "shell", MakeUnixCommand(program, args)});
+    }
+    absl::StatusOr<std::string> ShellAndGetResult(std::string_view command) const
+    {
+        return RunCommand("adb", {"-s", m_serial, "shell", std::string(command)});
+    }
+    absl::Status SetProp(std::string_view key, std::string_view value) const
+    {
+        return Shell("setprop", {std::string(key), std::string(value)});
     }
 
  private:

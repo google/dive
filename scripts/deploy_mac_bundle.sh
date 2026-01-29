@@ -15,33 +15,42 @@
 # limitations under the License.
 
 # This script automates the deployment of the Dive app bundle on macOS.
+# When --presubmit is specified, the following changes will happen:
+# - Assume only host tools and sample plugin were built and avoid copying device resources
+# - Do not try to switch directory to the PROJECT_ROOT
+# - Do not sign the application bundle (same as --no-sign)
 
 set -euo pipefail
-readonly PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
 readonly INSTALL_DIR="build/pkg"
 SIGN_BUNDLE=true
+IS_PRESUBMIT=false
 readonly START_TIME="$(date +%r)"
 
 if [ $# -ne 0 ]; then
     if [ $# -ne 1 ]; then
         echo "Too many arguments"
-        echo "Valid usage: 'deploy_mac_bundle.sh [--no-sign]'"
+        echo "Valid usage: 'deploy_mac_bundle.sh [--presubmit | --no-sign]'"
         exit 1
     fi
     if [ "$1" = "--no-sign" ]; then
         SIGN_BUNDLE=false
+    elif [ "$1" = "--presubmit" ]; then
+        IS_PRESUBMIT=true
+        SIGN_BUNDLE=false
     else
         echo "Invalid parameter: $1"
-        echo "Valid usage: 'deploy_mac_bundle.sh [--no-sign]'"
+        echo "Valid usage: 'deploy_mac_bundle.sh [--presubmit | --no-sign]'"
         exit 1
     fi
 fi
 
+if [ ! ${IS_PRESUBMIT} ]; then
+    readonly PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
+    pushd ${PROJECT_ROOT}
+fi
+
+echo "Current dir: $(pwd)"
 echo "Install dir: ${INSTALL_DIR}"
-
-pushd ${PROJECT_ROOT}
-
-echo "current dir $(pwd)"
 
 if [ ! -d ${INSTALL_DIR}/dive.app ]; then
     echo .
@@ -55,7 +64,11 @@ else
 fi
 
 echo "Copying resources into app bundle"
-cp -r ${INSTALL_DIR}/device/* ${INSTALL_DIR}/dive.app/Contents/Resources/
+if [ ! ${IS_PRESUBMIT} ]; then
+    cp -r ${INSTALL_DIR}/device/* ${INSTALL_DIR}/dive.app/Contents/Resources/
+else
+    echo "Skipping copying of device resources"
+fi
 cp -r ${INSTALL_DIR}/host/* ${INSTALL_DIR}/dive.app/Contents/MacOS/
 mkdir -p ${INSTALL_DIR}/dive.app/Contents/Resources/plugins/
 cp -r ${INSTALL_DIR}/plugins/* ${INSTALL_DIR}/dive.app/Contents/Resources/plugins/
@@ -69,7 +82,9 @@ else
     echo "Skipping signing step"
 fi
 
-popd
+if [ ! ${IS_PRESUBMIT} ]; then
+    popd
+fi
 
 echo .
 echo "Start Time: ${START_TIME}"

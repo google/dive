@@ -88,6 +88,11 @@ set(DIVE_RELEASE_TYPE
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
 
+option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
+if(DIVE_BUILD_WITH_CRASHPAD AND UPLOAD_DEBUG_SYMBOLS)
+    include(cmake/breakpad_tools.cmake)
+endif()
+
 # For host tools version info
 set(HOST_PLATFORM_STRING "Unknown")
 if(NOT ANDROID)

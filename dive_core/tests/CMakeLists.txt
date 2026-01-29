@@ -40,3 +40,19 @@ target_compile_definitions(
     PRIVATE TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 gtest_discover_tests(available_gpu_time_test)
+
+add_executable(gfxr_capture_data_test gfxr_capture_data_test.cpp)
+target_link_libraries(
+    gfxr_capture_data_test
+    gtest
+    gmock
+    gtest_main
+    dive_core
+    absl::statusor
+    absl::any_invocable
+)
+target_compile_definitions(
+    gfxr_capture_data_test
+    PRIVATE TEST_DATA_DIR="${dive_SOURCE_DIR}/tests/gfxr_traces"
+)
+gtest_discover_tests(gfxr_capture_data_test)

@@ -75,7 +75,50 @@ static inline void copy_dispatch_table_from_device(VkDevice device, VkCommandBuf
     *reinterpret_cast<void**>(handle) = *reinterpret_cast<void**>(device);
 }
 
+/**
+ * @brief   StripWaitSemaphores can be used to remove all wait-semaphores for a provided VkSubmitInfo.
+ *          Respective pointer in submit_info will be set to nullptr and count to zero.
+ *
+ * @param   submit_info     a provided VkSubmitInfo(2) struct
+ * @return  an array of Semaphores that have been stripped/removed from submit_info
+ */
+std::vector<std::pair<VkSemaphore, uint64_t>> StripWaitSemaphores(VkSubmitInfo* submit_info);
+std::vector<std::pair<VkSemaphore, uint64_t>> StripWaitSemaphores(VkSubmitInfo2* submit_info);
+
 [[maybe_unused]] static const char* kVulkanVrFrameDelimiterString = "vr-marker,frame_end,type,application";
+
+/**
+ * @brief   Scales a VkExtent3D to the provided mip map level
+ *
+ * @param[in]   extent    The VkExtent3D to scale
+ * @param[in]   level     The mip map level
+ * @return  The scaled VkExtent3D
+ */
+static constexpr VkExtent3D ScaleToMipLevel(const VkExtent3D& extent, uint32_t level)
+{
+    const VkExtent3D mip_extent = VkExtent3D{ std::max(1u, extent.width >> level),
+                                              std::max(1u, extent.height >> level),
+                                              std::max(1u, extent.depth >> level) };
+
+    return mip_extent;
+}
+
+/**
+ * @brief   Scales a VkExtent3D with the provided scaling factor
+ *
+ * @param[in]   extent    The VkExtent3D to scale
+ * @param[in]   scale     The scaling factor
+ * @return  The scaled VkExtent3D
+ */
+static constexpr VkExtent3D ScaleExtent(const VkExtent3D& extent, float scale)
+{
+    const VkExtent3D scaled_extent =
+        VkExtent3D{ static_cast<uint32_t>(std::max(1.0f, static_cast<float>(extent.width) * scale)),
+                    static_cast<uint32_t>(std::max(1.0f, static_cast<float>(extent.height) * scale)),
+                    static_cast<uint32_t>(std::max(1.0f, static_cast<float>(extent.depth) * scale)) };
+
+    return scaled_extent;
+}
 
 GFXRECON_END_NAMESPACE(graphics)
 GFXRECON_END_NAMESPACE(gfxrecon)

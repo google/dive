@@ -10,11 +10,17 @@
 
 bool clean_gfxr_json(int depth, nlohmann::json::parse_event_t event, nlohmann::json& parsed)
 {
+    static bool skip_next_buffer = false;
+
     switch (event)
     {
         case nlohmann::json::parse_event_t::key:
         {
             auto key = to_string(parsed);
+            if (key == "\"api_version\"")
+                return false;
+            if (key == "\"apiVersion\"")
+                return false;
             if (std::strncmp("\"pfn\"", key.c_str(), 4) == 0)
                 return false;
             if (key == "\"hinstance\"")
@@ -31,6 +37,21 @@ bool clean_gfxr_json(int depth, nlohmann::json::parse_event_t event, nlohmann::j
                 return false;
             if (key == "\"app_name\"")
                 return false;
+            if (skip_next_buffer && key == "\"buffer\"")
+            {
+                skip_next_buffer = false;
+                return false;
+            }
+        }
+        break;
+        case nlohmann::json::parse_event_t::value:
+        {
+            auto value = to_string(parsed);
+            if (value == "\"VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID\"" ||
+                value == "\"vkGetAndroidHardwareBufferPropertiesANDROID\"")
+            {
+                skip_next_buffer = true;
+            }
         }
         break;
         case nlohmann::json::parse_event_t::object_end:

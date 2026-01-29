@@ -55,21 +55,7 @@ ${download_dir}/capture_<timestamp_3>/
 
 # CLI Tools
 
-Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device resources.
-
-```sh
-# On Linux
-$DIVE_ROOT_PATH/install/dive_client_cli
-$DIVE_ROOT_PATH/install/divecli
-$DIVE_ROOT_PATH/install/host_cli
-```
-
-```bat
-REM On Windows
-%DIVE_ROOT_PATH%\install\dive_client_cli.exe
-%DIVE_ROOT_PATH%\install\divecli.exe
-%DIVE_ROOT_PATH%\install\host_cli.exe
-```
+Refer to [BUILD.md](BUILD.md) to first build the Dive host tools and the device resources. The executables will be installed into `$DIVE_ROOT_PATH/build/pkg/host/`
 
 ## `divecli`
 Supports manipulation of PM4-related files and raw strings

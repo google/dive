@@ -70,7 +70,7 @@ for this purpose.
 ### Unit and regression tests
 ```sh
 cd $DIVE_ROOT_PATH
-ctest -C Debug --test-dir build
+ctest -C Debug --test-dir build/host
 ```
 
 Make sure to have built everything according to BUILD.md (don't forget the install step) before running the tests.

@@ -58,7 +58,7 @@ def main(args):
     my_env = os.environ.copy()
 
     dive_root_path = get_dive_root(my_env)
-    print("DIVE_ROOT_PATH={}\n".format(dive_root_path))
+    print("DIVE_ROOT_PATH={}".format(dive_root_path))
     os.chdir(dive_root_path)
 
     # Some initial checks

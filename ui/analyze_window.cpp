@@ -77,7 +77,7 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
 // =================================================================================================
 AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
                              const Dive::AvailableMetrics* available_metrics, QWidget* parent)
-    : QDialog(parent), m_controller(controller), m_available_metrics(available_metrics)
+    : DeviceDialog(parent), m_controller(controller), m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
 
@@ -107,15 +107,11 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     // Device Selector
     m_device_layout = new QHBoxLayout();
     m_device_label = new QLabel(tr("Devices:"));
-    m_device_model = new QStandardItemModel();
-    m_device_box = new QComboBox();
-    m_device_box->setModel(m_device_model);
-    // UpdateDeviceList will initialize m_devices, m_device_model, and m_device_box. It requires
-    // m_replay_button to be valid. force_update to ensure everything is initialized.
-    UpdateDeviceList(/*force_update=*/true);
+    m_dev_box = new QComboBox();
+    m_dev_box->setModel(m_dev_model);
     m_device_refresh_button = new QPushButton("&Refresh", this);
     m_device_layout->addWidget(m_device_label);
-    m_device_layout->addWidget(m_device_box);
+    m_device_layout->addWidget(m_dev_box);
     m_device_layout->addWidget(m_device_refresh_button);
 
     // Selected File
@@ -259,8 +255,8 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
         UpdateSelectedMetricsList();
     });
 
-    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
-                     SLOT(OnDeviceSelected(const QString&)));
+    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnDeviceSelectionChanged(const QString&)));
     QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
                      &AnalyzeDialog::OnDeviceListRefresh);
     QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
@@ -291,14 +287,19 @@ void AnalyzeDialog::OnOverlayMessage(const QString& message)
 void AnalyzeDialog::OnDisableOverlay() { m_overlay->Clear(); }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::ShowMessage(const std::string& message)
+void AnalyzeDialog::ShowMessage(const QString& message)
 {
     auto message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
-    message_box->setText(message.c_str());
+    message_box->setText(message);
     message_box->open();
-    return;
 }
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::OnDeviceSelected() { m_replay_button->setEnabled(true); }
+
+//--------------------------------------------------------------------------------------------------
+void AnalyzeDialog::OnDeviceSelectionCleared() { m_replay_button->setEnabled(false); }
 
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::PopulateMetrics()
@@ -383,98 +384,7 @@ void AnalyzeDialog::UpdateSelectedMetricsList()
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::UpdateDeviceList(bool force_update)
-{
-    DeviceManager& device_manager = GetDeviceManager();
-    auto cur_list = device_manager.ListDevice();
-    qDebug() << "m_device_box->currentIndex() " << m_device_box->currentIndex();
-    if (cur_list == m_devices && !force_update)
-    {
-        qDebug() << "No changes from the list of the connected devices.";
-        return;
-    }
-
-    m_devices = cur_list;
-    m_device_model->clear();
-    // Replay button should only be enabled when a device is selected.
-    m_replay_button->setEnabled(false);
-
-    // The first index is always textual feedback for the user.
-    QStandardItem* item =
-        new QStandardItem(m_devices.empty() ? "No devices found" : "Please select a device");
-    item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-    m_device_model->appendRow(item);
-
-    std::optional<size_t> current_device_index;
-    for (size_t i = 0; i < m_devices.size(); ++i)
-    {
-        m_device_model->appendRow(new QStandardItem(m_devices[i].GetDisplayName().c_str()));
-        if (m_cur_device == m_devices[i].m_serial)
-        {
-            current_device_index = i;
-        }
-    }
-
-    if (current_device_index)
-    {
-        // Keep the original selected devices as selected. The devices start after all non-device
-        // entries.
-        size_t device_model_index = *current_device_index + 1;
-        m_device_box->setCurrentIndex(static_cast<int>(device_model_index));
-    }
-    else
-    {
-        // If not in the list then it must have disconnected. Therefore, it can no longer the
-        // currently selected device.
-        m_device_box->setCurrentIndex(0);
-        m_cur_device = "";
-        device_manager.RemoveDevice();
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceSelected(const QString& s)
-{
-    if (s.isEmpty() || m_device_box->currentIndex() == 0)
-    {
-        qDebug() << "No devices selected";
-        return;
-    }
-    int device_index = m_device_box->currentIndex() - 1;
-    assert(static_cast<size_t>(device_index) < m_devices.size());
-
-    qDebug() << "Device selected: " << m_cur_device.c_str() << ", index " << device_index
-             << ", m_devices[device_index].m_serial " << m_devices[device_index].m_serial.c_str();
-    if (m_cur_device == m_devices[device_index].m_serial)
-    {
-        // Enable the replay button as soon as a device is selected.
-        m_replay_button->setEnabled(true);
-        return;
-    }
-
-    m_cur_device = m_devices[device_index].m_serial;
-    if (absl::StatusOr<Dive::AndroidDevice*> ret =
-            Dive::GetDeviceManager().SelectDevice(m_cur_device);
-        !ret.ok())
-    {
-        // Reset as much device-specific state as possible when selection fails. Otherwise, we might
-        // get stuck with a half-initialized device.
-        m_cur_device = "";
-        Dive::GetDeviceManager().RemoveDevice();
-
-        std::string err_msg = absl::StrFormat("Failed to select device %s, error: %s", m_cur_device,
-                                              ret.status().message());
-        qDebug() << err_msg.c_str();
-        ShowMessage(err_msg);
-        OnDeviceListRefresh();
-        return;
-    }
-
-    m_replay_button->setEnabled(true);
-}
-
-//--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::OnDeviceListRefresh() { UpdateDeviceList(/*force_update=*/false); }
+void AnalyzeDialog::OnDeviceListRefresh() { UpdateDeviceList(); }
 
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString& file_path)
@@ -532,6 +442,7 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString& file_path)
         QString::fromStdString(local_gfxr_parse.parent_path().generic_string());
     Settings::Get()->WriteLastFilePath(last_file_path);
 
+    UpdateDeviceList();
     // Open the dialog for users to initiate analysis
     show();
 }
@@ -737,12 +648,12 @@ void AnalyzeDialog::ExecuteStatusUpdate()
                 DisableOverlay();
                 break;
             case ReplayStatusUpdateCode::kSuccess:
-                ShowMessage(item.message.toStdString());
+                ShowMessage(item.message);
                 SetReplayButton(kDefaultReplayButtonText, true);
                 OverlayMessage("Replay done.");
                 break;
             case ReplayStatusUpdateCode::kFailure:
-                ShowMessage(item.message.toStdString());
+                ShowMessage(item.message);
                 SetReplayButton(kDefaultReplayButtonText, true);
                 OverlayMessage("Replay failed.");
                 break;
@@ -751,7 +662,7 @@ void AnalyzeDialog::ExecuteStatusUpdate()
                 OverlayMessage("Setting up replay...");
                 break;
             case ReplayStatusUpdateCode::kSetupDeviceFailure:
-                ShowMessage(item.message.toStdString());
+                ShowMessage(item.message);
                 SetReplayButton(kDefaultReplayButtonText, false);
                 OnDeviceListRefresh();
                 break;
@@ -814,7 +725,7 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig& config)
     }
 
     // Deploying install/gfxr-replay.apk
-    ret = device_manager.DeployReplayApk(m_cur_device);
+    ret = device_manager.DeployReplayApk(m_cur_dev);
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to push files to device: ", ret.message());

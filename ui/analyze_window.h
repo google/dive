@@ -19,6 +19,7 @@
 #include <optional>
 
 #include "capture_service/device_mgr.h"
+#include "device_dialog.h"
 #include "dive_core/available_metrics.h"
 #include "utils/component_files.h"
 
@@ -47,7 +48,7 @@ namespace Dive
 class AvailableMetrics;
 }  // namespace Dive
 
-class AnalyzeDialog : public QDialog
+class AnalyzeDialog : public DeviceDialog
 {
     // Data structure to hold a single item from the CSV
     struct CsvItem
@@ -97,12 +98,8 @@ class AnalyzeDialog : public QDialog
     AnalyzeDialog(ApplicationController& controller,
                   const Dive::AvailableMetrics* available_metrics, QWidget* parent = nullptr);
     ~AnalyzeDialog();
-    // Populates the devices combo box with all availble devices. If force_update is false then only
-    // does work if the current list of devices doesn't match what's shown in the UI.
-    void UpdateDeviceList(bool force_update);
  private slots:
     void OnReplayStatusUpdate(int status_code, const QString& error_message);
-    void OnDeviceSelected(const QString&);
     void OnDeviceListRefresh();
     void OnReplay();
     void OnOverlayMessage(const QString& message);
@@ -129,7 +126,9 @@ class AnalyzeDialog : public QDialog
         bool replay_perf_counter = false;
         bool replay_custom = false;
     };
-    void ShowMessage(const std::string& message);
+    void ShowMessage(const QString& message) override;
+    void OnDeviceSelected() override;
+    void OnDeviceSelectionCleared() override;
     void SetReplayButton(const std::string& message, bool is_enabled);
     void PopulateMetrics();
     void UpdateSelectedMetricsList();
@@ -167,10 +166,6 @@ class AnalyzeDialog : public QDialog
 
     QHBoxLayout* m_device_layout;
     QLabel* m_device_label;
-    // Index 0 is text providing feedback to the user. Indices [1..N+1] correspond to m_devices[i]
-    // where N is m_deviecs.size()
-    QStandardItemModel* m_device_model;
-    QComboBox* m_device_box;
     QPushButton* m_device_refresh_button;
 
     // Provides a description of which capture file is open, but immutable from
@@ -201,8 +196,6 @@ class AnalyzeDialog : public QDialog
     QHBoxLayout* m_main_layout;
     QVBoxLayout* m_left_panel_layout;
     QVBoxLayout* m_right_panel_layout;
-    std::vector<Dive::DeviceInfo> m_devices;
-    std::string m_cur_device;
 
     // Representing a session with a specific GFXR capture file opened
     //

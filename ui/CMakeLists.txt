@@ -81,6 +81,8 @@ add_executable(
     command_tab_view.h
     custom_metatypes.cpp
     custom_metatypes.h
+    device_dialog.cpp
+    device_dialog.h
     dive_application.cpp
     dive_application.h
     dive_tree_view.cpp

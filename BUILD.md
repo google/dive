@@ -153,4 +153,7 @@ After building the host tools and the device resources as outlined above and ins
 
 All external plugin folders must be placed under `$DIVE_ROOT_PATH/build/pkg/plugins` to be properly added to the bundle.
 
-Running the script `scripts/deploy_mac_bundle.sh` will create the mac package and place it at `$DIVE_ROOT_PATH/build/pkg/dive.app`.
+```sh
+python scripts/deploy_mac_bundle.py --help
+```
+This will deploy the mac package and place it at `$DIVE_ROOT_PATH/build/pkg/dive.app`.

@@ -44,9 +44,7 @@ if(MSVC)
 endif()
 
 add_custom_command(TARGET ags_capture PRE_BUILD
-                    COMMAND lib /def:${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def /out:${LINK_AGS_OUTPUT} /machine:${LINK_ARCH}
-                    DEPENDS ${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def)
-
+                    COMMAND lib /def:${CMAKE_CURRENT_LIST_DIR}/amd_ags_x64_orig.def /out:${LINK_AGS_OUTPUT} /machine:${LINK_ARCH})
 
 install(FILES $<TARGET_FILE_DIR:ags_capture>/amd_ags_x64_capture.dll DESTINATION ${CMAKE_INSTALL_BINDIR}/d3d12_capture)
 

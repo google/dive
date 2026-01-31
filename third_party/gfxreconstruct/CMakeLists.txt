@@ -32,7 +32,7 @@ set_property(GLOBAL PROPERTY TEST_SCRIPT ${CMAKE_ROOT})
 
 include(GNUInstallDirs)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${PROJECT_SOURCE_DIR}/external/cmake-modules")
@@ -119,6 +119,12 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/project_version_$<CONFIG>.h" INPUT "${
 # Since project_version_$<CONFIG>.h differs per build, set a compiler definition that files can use to include it
 add_definitions(-DPROJECT_VERSION_HEADER_FILE="project_version_$<CONFIG>.h")
 
+# Isolate the repo SHA in a library to reduce the amount of recompilation on git commit, checkout, etc.
+# Clients should #include PROJECT_VERSION_HEADER_FILE and call GetProjectVersionString()
+configure_file("${PROJECT_SOURCE_DIR}/project_version_string.h.in" "${CMAKE_BINARY_DIR}/project_version_string.h")
+add_library(project_version STATIC "${PROJECT_SOURCE_DIR}/project_version.cpp")
+target_include_directories(project_version PUBLIC "${CMAKE_BINARY_DIR}")
+
 option(BUILD_WERROR "Build with warnings as errors" ON)
 
 # Code checks
@@ -170,12 +176,25 @@ if (MSVC)
     message(STATUS "CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION: " ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
 
     set(GFXR_ARM_WINDOWS_BUILD FALSE)
+    # These checks help also keeping `cmake-gui` behaviour consistent when default values are passed.
+
     # Some IDEs pass -A in lowercase or in mixed case.
     # Normalize the CMAKE_GENERATOR_PLATFORM string to upper case to avoid architecture detection mismatch.
-    string(TOUPPER "${CMAKE_GENERATOR_PLATFORM}" NORMALIZED_CMAKE_GENERATOR_PLATFORM)
-    if (NORMALIZED_CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-        set(GFXR_ARM_WINDOWS_BUILD TRUE)
-    endif ()
+    # can't assume ${CMAKE_GENERATOR_PLATFORM} is always defined and/or non-empty!
+    if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "")
+        string(TOUPPER "${CMAKE_GENERATOR_PLATFORM}" NORMALIZED_CMAKE_GENERATOR_PLATFORM)
+        if (NORMALIZED_CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+            set(GFXR_ARM_WINDOWS_BUILD TRUE)
+        endif()
+    else()
+        # No target platform is specified. Try to compute using native tools architecture.
+        string(TOUPPER "${CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE}" NORMALIZED_CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE)
+        if(NORMALIZED_CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE STREQUAL "ARM64")
+            set(GFXR_ARM_WINDOWS_BUILD TRUE)
+        endif()
+    endif()
+
+    message(STATUS "GFXR_ARM_WINDOWS_BUILD: " ${GFXR_ARM_WINDOWS_BUILD})
 
     # Default to using the precompiled LZ4 and ZLIB binaries for VisualStudio builds.
     set(PRECOMPILED_ARCH "64")
@@ -209,7 +228,7 @@ if (MSVC)
         add_definitions(-DD3D12_SUPPORT)
 
         # Check Windows SDK version and print warning if there is a mismatch.
-        set(EXPECTED_WIN_SDK_VER "10.0.20348.0")
+        set(EXPECTED_WIN_SDK_VER "10.0.26100.0")
         if (NOT ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION} STREQUAL ${EXPECTED_WIN_SDK_VER})
             message(WARNING
                     "D3D12 support is authored against Windows SDK ${EXPECTED_WIN_SDK_VER}. Windows SDK version "
@@ -285,6 +304,10 @@ if (APPLE)
             "${PROJECT_SOURCE_DIR}/external/precompiled/macos"
             ${CMAKE_PREFIX_PATH})
 endif ()
+
+if(ANDROID)
+    add_link_options(-Wl,-z,max-page-size=16384)
+endif()
 
 # GFXReconstruct provided find modules
 if (WIN32)
@@ -393,6 +416,7 @@ target_include_directories(spirv_registry SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}
 
 add_library(OpenXR INTERFACE)
 if (OPENXR_SUPPORT_ENABLED)
+    option(DYNAMIC_LOADER "" OFF)
     add_subdirectory(${PROJECT_SOURCE_DIR}/external/OpenXR-SDK)
     target_include_directories(OpenXR INTERFACE ${PROJECT_SOURCE_DIR}/external/OpenXR-SDK/include)
     target_compile_definitions(OpenXR INTERFACE XR_NO_PROTOTYPES ENABLE_OPENXR_SUPPORT=1)

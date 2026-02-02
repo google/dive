@@ -16,6 +16,7 @@
 
 import pathlib
 import subprocess
+from timeit import default_timer
 
 def get_dive_root(my_env):
     """Predicts Dive root path from:
@@ -29,10 +30,20 @@ def get_dive_root(my_env):
         print("Predicting DIVE_ROOT_PATH")
         dive_root = pathlib.Path(__file__).parent.parent.resolve()
     
-    print("DIVE_ROOT_PATH={}".format(dive_root))
+    print(f"DIVE_ROOT_PATH={dive_root}")
     return dive_root
 
 def echo_and_run(cmd):
-    print("\n> {}".format(" ".join(cmd)))
+    print(f"\n> {" ".join(cmd)}")
     subprocess.run(cmd, check=True, text=True)
     return
+
+class timer:
+    def __enter__(self):
+        self.start = default_timer()
+        return
+
+    def __exit__(self, type, value, traceback):
+        self.end = default_timer()
+        self.elapsed_time = self.end - self.start
+        print(f"\nTime Elapsed: {self.elapsed_time:.3f}s")

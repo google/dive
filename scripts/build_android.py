@@ -18,7 +18,6 @@ import argparse
 import common_dive_utils as dive
 import os
 import shutil
-from timeit import default_timer as timer
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -64,7 +63,7 @@ def main(args):
 
     print("\nGenerating build files with cmake...")
     cmd = ["cmake", ".", 
-        "-DCMAKE_TOOLCHAIN_FILE={}/build/cmake/android.toolchain.cmake".format(android_ndk_home),
+        f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
         "-GNinja Multi-Config",
         "-Bbuild/device",
         "-DCMAKE_MAKE_PROGRAM=ninja",
@@ -73,14 +72,14 @@ def main(args):
         "-DANDROID_PLATFORM=android-26",
         "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
         "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
-        "-DDIVE_RELEASE_TYPE={}".format(args.dive_release_type)
+        f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
     ]
     dive.echo_and_run(cmd)
 
     print("\nBuilding with ninja...")
     cmd = ["ninja",
         "-C", "build/device",
-        "-f", "build-{}.ninja".format(args.build_type)
+        "-f", f"build-{args.build_type}.ninja"
     ]
     dive.echo_and_run(cmd)
 
@@ -93,7 +92,7 @@ def main(args):
     cmd = ["cmake",
         "--install", "build/device",
         "--prefix", "build/pkg",
-        "--config", "{}".format(args.build_type)
+        "--config", f"{args.build_type}"
     ]
     dive.echo_and_run(cmd)
 
@@ -103,7 +102,5 @@ def main(args):
     return
 
 if __name__ == "__main__":
-    start = timer()
-    main(parse_args())
-    end = timer()
-    print("\nTime Elapsed: {}s".format(end - start))
+    with dive.timer() as t:
+        main(parse_args())

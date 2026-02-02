@@ -18,7 +18,6 @@ import argparse
 import common_dive_utils as dive
 import os
 import shutil
-from timeit import default_timer as timer
 
 RELATIVE_INSTALL_DIR = "build/pkg"
 
@@ -39,7 +38,7 @@ def main(args):
     dive_root_path = dive.get_dive_root(my_env)
     os.chdir(dive_root_path)
     os.chdir(RELATIVE_INSTALL_DIR)
-    print("\nNavigated to folder: {}".format(os.getcwd()))
+    print(f"\nNavigated to folder: {os.getcwd()}")
 
     # Some initial checks
     print("\nChecking macdeployqt...")
@@ -77,13 +76,11 @@ def main(args):
         cmd = ["codesign", "--force", "--deep", "--sign", "-", "dive.app"]
         dive.echo_and_run(cmd)
 
-    print("\nApplication now at {}/dive.app".format(os.getcwd()))
+    print(f"\nApplication now at {os.getcwd()}/dive.app")
 
     os.chdir(owd)
     return
 
 if __name__ == "__main__":
-    start = timer()
-    main(parse_args())
-    end = timer()
-    print("\nTime Elapsed: {}s".format(end - start))
+    with dive.timer() as t:
+        main(parse_args())

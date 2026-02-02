@@ -83,29 +83,32 @@ endif()
 set(DIVE_RELEASE_TYPE
     "dev"
     CACHE STRING
-    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>"
+    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|rel>"
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
-set(ALLOWED_TYPES "dev" "canary" "release" "internal")
+set(ALLOWED_TYPES "dev" "rel")
 if(NOT DIVE_RELEASE_TYPE IN_LIST ALLOWED_TYPES)
     message(
         FATAL_ERROR
-        "Invalid DIVE_RELEASE_TYPE: '${DIVE_RELEASE_TYPE}'. \
-    Allowed values are: dev, canary, release, internal"
+        "Invalid DIVE_RELEASE_TYPE: '${DIVE_RELEASE_TYPE}'. Allowed values are: dev and rel"
     )
 endif()
 
-if(DIVE_RELEASE_TYPE STREQUAL "release")
-    set(DIVE_BUILD_WITH_CRASHPAD ON)
-else()
-    set(DIVE_BUILD_WITH_CRASHPAD OFF)
-endif()
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" OFF)
 if(DIVE_BUILD_WITH_CRASHPAD)
-    add_compile_definitions(DIVE_BUILD_WITH_CRASHPAD)
+    add_compile_definitions(
+        $<$<CONFIG:RelWithDebInfo>:DIVE_BUILD_WITH_CRASHPAD>
+    )
 endif()
 
 option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
-if(DIVE_BUILD_WITH_CRASHPAD AND UPLOAD_DEBUG_SYMBOLS)
+if(UPLOAD_DEBUG_SYMBOLS)
+    if(NOT DIVE_BUILD_WITH_CRASHPAD)
+        message(
+            FATAL_ERROR
+            "UPLOAD_DEBUG_SYMBOLS requires DIVE_BUILD_WITH_CRASHPAD to be ON"
+        )
+    endif()
     include(cmake/breakpad_tools.cmake)
 endif()
 

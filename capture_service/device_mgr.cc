@@ -979,6 +979,9 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
 
     if (settings.use_validation_layer)
     {
+        RETURN_IF_ERROR(m_device->DeployDeviceResource(
+            Dive::DeviceResourcesConstants::kVkValidationLayerLibName,
+            Dive::DeviceResourcesConstants::kDeployFolderPath));
         RETURN_IF_ERROR(m_device->CopyWithPermissions(
             /*package=*/kGfxrReplayAppName,
             /*file_name=*/

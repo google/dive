@@ -42,7 +42,6 @@
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
 #include "dive_core/pm4_info.h"
-#include "dive_crashpad/crashpad_client.h"
 #include "main_window.h"
 #include "ui/application_controller.h"
 #include "ui/custom_metatypes.h"
@@ -57,6 +56,10 @@
 #include <io.h>
 #else
 #include <unistd.h>
+#endif
+
+#if DIVE_BUILD_WITH_CRASHPAD
+#include "dive_crashpad/crashpad_client.h"
 #endif
 
 constexpr int kSplashScreenDuration = 2000;  // 2s
@@ -265,12 +268,24 @@ bool ExecuteScenario(std::string_view scenario, MainWindow* main_window)
     return false;
 }
 
+void InitializeAbslCrashHandler(const char* arg)
+{
+    absl::InitializeSymbolizer(arg);
+
+    CrashHandler::Initialize(arg);
+
+    absl::FailureSignalHandlerOptions options;
+    options.writerfn = CrashHandler::Writer;
+    absl::InstallFailureSignalHandler(options);
+}
+
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);
 
+#if DIVE_BUILD_WITH_CRASHPAD
     if (auto ret = Dive::InitializeCrashpad(); ret.ok())
     {
         qDebug() << "Crashpad initialized successfully.";
@@ -278,16 +293,12 @@ int main(int argc, char* argv[])
     else
     {
         qDebug() << "Crashpad initialization failed: " << ret.message().data();
-        qDebug() << "Falling back to absl::InstallFailureSignalHandler.";
-
-        absl::InitializeSymbolizer(argv[0]);
-
-        CrashHandler::Initialize(argv[0]);
-
-        absl::FailureSignalHandlerOptions options;
-        options.writerfn = CrashHandler::Writer;
-        absl::InstallFailureSignalHandler(options);
+        qDebug() << "Falling back to AbslCrashHandler.";
+        InitializeAbslCrashHandler(argv[0]);
     }
+#else
+    InitializeAbslCrashHandler(argv[0]);
+#endif
 
     const bool native_style = absl::GetFlag(FLAGS_native_style);
     if (!native_style)

@@ -215,8 +215,10 @@ target_link_libraries(
     dive_build_defs
     dive_lib_trace_stats
     dive_src_includes
-    dive_crashpad
 )
+if(DIVE_BUILD_WITH_CRASHPAD)
+    target_link_libraries(${PROJECT_NAME} dive_crashpad)
+endif()
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
@@ -319,15 +321,18 @@ add_dependencies(${PROJECT_NAME} notice_file)
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
 
-add_custom_command(
-    TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND
-        ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:crashpad_handler_exe> $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    COMMENT
-        "Copying crashpad_handler to build directory alongside dive binary..."
-)
+if(DIVE_BUILD_WITH_CRASHPAD)
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:crashpad_handler_exe>
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
+        COMMENT
+            "Copying crashpad_handler to build directory alongside dive binary..."
+    )
+endif()
 
 if(DIVE_BUILD_WITH_CRASHPAD AND UPLOAD_DEBUG_SYMBOLS)
     upload_debug_symbols(${PROJECT_NAME})

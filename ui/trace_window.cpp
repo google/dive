@@ -432,7 +432,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
     EnableCaptureTypeButtons(false);
 
     absl::Status ret;
-    qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
+    qDebug() << "Start app on dev: " << m_cur_device.c_str() << ", package: " << m_cur_pkg.c_str()
              << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
 
     if (m_gfxr_capture)
@@ -644,7 +644,7 @@ void TraceDialog::UpdatePackageList()
     auto ret = device->ListPackage(m_pkg_list_options);
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to list package for device ", m_cur_dev,
+        std::string err_msg = absl::StrCat("Failed to list package for device ", m_cur_device,
                                            " error: ", ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));

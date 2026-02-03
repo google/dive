@@ -55,7 +55,7 @@ void DeviceDialog::UpdateDeviceList()
         QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
         m_device_model->appendRow(item);
         // Track previously selected device (offset by 1 due to placeholder)
-        if (m_cur_dev == m_devices[i].m_serial)
+        if (m_cur_device == m_devices[i].m_serial)
         {
             index_to_select = static_cast<int>(i) + 1;
         }
@@ -81,30 +81,30 @@ void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
     assert(device_index >= 0 && static_cast<size_t>(device_index) < m_devices.size());
 
     const auto& target_device = m_devices[device_index];
-    if (m_cur_dev == target_device.m_serial)
+    if (m_cur_device == target_device.m_serial)
     {
-        qDebug() << "Device already selected: " << m_cur_dev.c_str();
+        qDebug() << "Device already selected: " << m_cur_device.c_str();
         OnDeviceSelected();
         return;
     }
     Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
-    if (!m_cur_dev.empty())
+    if (!m_cur_device.empty())
     {
-        qDebug() << "Deselecting device: " << m_cur_dev.c_str();
-        m_cur_dev.clear();
+        qDebug() << "Deselecting device: " << m_cur_device.c_str();
+        m_cur_device.clear();
         device_manager.RemoveDevice();
     }
 
-    m_cur_dev = target_device.m_serial;
-    auto dev_ret = device_manager.SelectDevice(m_cur_dev);
+    m_cur_device = target_device.m_serial;
+    auto dev_ret = device_manager.SelectDevice(m_cur_device);
     if (!dev_ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to select device ", m_cur_dev.c_str(),
+        std::string err_msg = absl::StrCat("Failed to select device ", m_cur_device.c_str(),
                                            ", error: ", dev_ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
-    qDebug() << "Device selected: " << m_cur_dev.c_str();
+    qDebug() << "Device selected: " << m_cur_device.c_str();
     OnDeviceSelected();
 }

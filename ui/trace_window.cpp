@@ -76,7 +76,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
 {
     qDebug() << "TraceDialog created.";
     m_capture_layout = new QHBoxLayout();
-    m_dev_label = new QLabel(tr("Devices:"));
+    m_device_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
     m_app_type_label = new QLabel(tr("Application Type:"));
     m_gfxr_capture_file_on_device_directory_label =
@@ -86,7 +86,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_pkg_model = new QStandardItemModel();
     m_app_type_model = new QStandardItemModel();
 
-    m_dev_box = new QComboBox();
+    m_device_box = new QComboBox();
     m_pkg_box = new QComboBox();
     m_app_type_box = new QComboBox();
 
@@ -99,7 +99,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_gfxr_capture_button->setEnabled(false);
     m_gfxr_capture_button->hide();
 
-    m_dev_refresh_button = new QPushButton("&Refresh", this);
+    m_device_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_filter_button = new QPushButton(this);
     m_pkg_filter = new PackageFilter(this);
@@ -121,14 +121,14 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_app_type_filter_model = new AppTypeFilterModel(this);
     m_app_type_filter_model->setSourceModel(m_app_type_model);
 
-    m_dev_box->setModel(m_dev_model);
-    m_dev_box->setCurrentIndex(0);
-    m_dev_box->setCurrentText("Please select a device");
+    m_device_box->setModel(m_device_model);
+    m_device_box->setCurrentIndex(0);
+    m_device_box->setCurrentText("Please select a device");
 
     m_pkg_box->setModel(m_pkg_model);
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_box->setCurrentText("Please select a package");
-    m_pkg_box->setMinimumSize(m_dev_box->sizeHint());
+    m_pkg_box->setMinimumSize(m_device_box->sizeHint());
     m_pkg_box->setSizeAdjustPolicy(
         QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
     m_pkg_box->setEditable(true);
@@ -176,9 +176,9 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_args_layout->addWidget(m_args_label);
     m_args_layout->addWidget(m_args_input_box);
 
-    m_capture_layout->addWidget(m_dev_label);
-    m_capture_layout->addWidget(m_dev_box, 1);
-    m_capture_layout->addWidget(m_dev_refresh_button);
+    m_capture_layout->addWidget(m_device_label);
+    m_capture_layout->addWidget(m_device_box, 1);
+    m_capture_layout->addWidget(m_device_refresh_button);
 
     m_pkg_filter_layout = new QHBoxLayout();
     m_pkg_filter_label = new QLabel("Package Filters:");
@@ -233,7 +233,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     setSizeGripEnabled(true);
     setLayout(m_main_layout);
 
-    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString&)), this,
+    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnDeviceSelectionChanged(const QString&)));
     QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnPackageSelected(const QString&)));
@@ -243,7 +243,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
     QObject::connect(m_gfxr_capture_button, &QPushButton::clicked, this,
                      &TraceDialog::OnGfxrCaptureClicked);
-    QObject::connect(m_dev_refresh_button, &QPushButton::clicked, this,
+    QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
                      &TraceDialog::OnDevListRefresh);
     QObject::connect(m_pkg_refresh_button, &QPushButton::clicked, this,
                      &TraceDialog::OnAppListRefresh);
@@ -277,11 +277,7 @@ void TraceDialog::ShowMessage(const QString& message)
     message_box->open();
 }
 
-void TraceDialog::OnDeviceSelected()
-{
-    UpdatePackageList();
-    m_run_button->setEnabled(true);
-}
+void TraceDialog::OnDeviceSelected() { UpdatePackageList(); }
 
 void TraceDialog::OnDeviceSelectionCleared() { m_run_button->setEnabled(false); }
 

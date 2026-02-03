@@ -107,11 +107,11 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     // Device Selector
     m_device_layout = new QHBoxLayout();
     m_device_label = new QLabel(tr("Devices:"));
-    m_dev_box = new QComboBox();
-    m_dev_box->setModel(m_dev_model);
+    m_device_box = new QComboBox();
+    m_device_box->setModel(m_device_model);
     m_device_refresh_button = new QPushButton("&Refresh", this);
     m_device_layout->addWidget(m_device_label);
-    m_device_layout->addWidget(m_dev_box);
+    m_device_layout->addWidget(m_device_box);
     m_device_layout->addWidget(m_device_refresh_button);
 
     // Selected File
@@ -255,7 +255,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
         UpdateSelectedMetricsList();
     });
 
-    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString&)), this,
+    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnDeviceSelectionChanged(const QString&)));
     QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
                      &AnalyzeDialog::OnDeviceListRefresh);

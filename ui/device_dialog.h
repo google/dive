@@ -44,6 +44,6 @@ class DeviceDialog : public QDialog
  protected:
     std::vector<Dive::DeviceInfo> m_devices;
     std::string m_cur_dev;
-    QStandardItemModel* m_dev_model;
-    QComboBox* m_dev_box;
+    QStandardItemModel* m_device_model;
+    QComboBox* m_device_box;
 };

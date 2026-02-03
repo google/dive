@@ -25,35 +25,35 @@
 
 DeviceDialog::DeviceDialog(QWidget* parent) : QDialog(parent)
 {
-    m_dev_model = new QStandardItemModel(this);
+    m_device_model = new QStandardItemModel(this);
 }
 
 DeviceDialog::~DeviceDialog() {}
 
 void DeviceDialog::UpdateDeviceList()
 {
-    m_dev_model->clear();
+    m_device_model->clear();
     m_devices = Dive::GetDeviceManager().ListDevice();
     if (m_devices.empty())
     {
         QStandardItem* item = new QStandardItem("No devices found");
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        m_dev_model->appendRow(item);
-        m_dev_box->setCurrentIndex(0);
+        m_device_model->appendRow(item);
+        m_device_box->setCurrentIndex(0);
         OnDeviceSelectionCleared();
         return;
     }
 
     QStandardItem* placeholder = new QStandardItem("Please select a device");
     placeholder->setFlags(placeholder->flags() & ~Qt::ItemIsSelectable);
-    m_dev_model->appendRow(placeholder);
+    m_device_model->appendRow(placeholder);
 
     // Default to placeholder
     int index_to_select = 0;
     for (size_t i = 0; i < m_devices.size(); ++i)
     {
         QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
-        m_dev_model->appendRow(item);
+        m_device_model->appendRow(item);
         // Track previously selected device (offset by 1 due to placeholder)
         if (m_cur_dev == m_devices[i].m_serial)
         {
@@ -65,19 +65,19 @@ void DeviceDialog::UpdateDeviceList()
     {
         index_to_select = 1;
     }
-    m_dev_box->setCurrentIndex(index_to_select);
+    m_device_box->setCurrentIndex(index_to_select);
 }
 
 void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
 {
-    if (s.isEmpty() || m_dev_box->currentIndex() == 0)
+    if (s.isEmpty() || m_device_box->currentIndex() == 0)
     {
         qDebug() << "No devices selected";
         OnDeviceSelectionCleared();
         return;
     }
 
-    int device_index = m_dev_box->currentIndex() - 1;
+    int device_index = m_device_box->currentIndex() - 1;
     assert(device_index >= 0 && static_cast<size_t>(device_index) < m_devices.size());
 
     const auto& target_device = m_devices[device_index];

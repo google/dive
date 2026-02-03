@@ -112,8 +112,8 @@ class TraceDialog : public DeviceDialog
     const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
     QHBoxLayout* m_capture_layout;
-    QLabel* m_dev_label;
-    QPushButton* m_dev_refresh_button;
+    QLabel* m_device_label;
+    QPushButton* m_device_refresh_button;
 
     QHBoxLayout* m_capture_type_layout;
     QLabel* m_capture_type_label;

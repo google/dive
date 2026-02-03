@@ -39,7 +39,6 @@ if(MSVC)
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" ON)
-
 # Add an option to allow users to easily toggle the runtime layer build
 option(
     DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
@@ -169,18 +168,6 @@ if(NOT ANDROID)
     add_subdirectory(third_party/gfxreconstruct EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
-
-    if(DIVE_BUILD_WITH_CRASHPAD)
-        message(CHECK_START "Generate build files for third_party/crashpad")
-        list(APPEND CMAKE_MESSAGE_INDENT "  ")
-        set(CRASHPAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-        set(CRASHPAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-        add_subdirectory(third_party/crashpad EXCLUDE_FROM_ALL)
-        list(POP_BACK CMAKE_MESSAGE_INDENT)
-        message(CHECK_PASS "done")
-        add_library(crashpad_client ALIAS client)
-        set_target_properties(handler PROPERTIES OUTPUT_NAME "crashpad_handler")
-    endif()
 else()
     message(
         CHECK_START
@@ -209,6 +196,8 @@ add_subdirectory(third_party/abseil-cpp)
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
 
+include(cmake/vulkan.cmake)
+
 # ------------------------------------------------------------------------------
 # Add all subdirectories of Dive project
 
@@ -233,6 +222,9 @@ else()
     add_subdirectory(network)
     add_subdirectory(plugins)
     add_subdirectory(src)
+    if(DIVE_BUILD_WITH_CRASHPAD)
+        add_subdirectory(third_party/dive_crashpad)
+    endif()
     add_subdirectory(trace_stats)
     add_subdirectory(ui)
     if(DIVE_BUILD_RUNTIME_LAYER_FOR_WIN AND CMAKE_HOST_WIN32)
@@ -329,12 +321,16 @@ if(NOT ANDROID)
     # This has been fixed in https://github.com/google/dive/pull/541
     if(CMAKE_HOST_APPLE)
         set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_CURRENT_SOURCE_DIR}/pkg/dive.app/Contents/MacOS/dive
+            ${CMAKE_CURRENT_SOURCE_DIR}/build/pkg/dive.app/Contents/MacOS/dive
         )
     elseif(CMAKE_HOST_WIN32)
-        set(DIVE_EXECUTABLE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/pkg/host/dive.exe)
+        set(DIVE_EXECUTABLE_PATH
+            ${CMAKE_CURRENT_SOURCE_DIR}/build/pkg/host/dive.exe
+        )
     else()
-        set(DIVE_EXECUTABLE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/pkg/host/dive)
+        set(DIVE_EXECUTABLE_PATH
+            ${CMAKE_CURRENT_SOURCE_DIR}/build/pkg/host/dive
+        )
     endif()
     set(DIVE_TEST_TRACE_DIR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces)
     set(DIVE_TEST_TRACE

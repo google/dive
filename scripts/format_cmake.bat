@@ -18,6 +18,7 @@ echo Format in-place using gersemi tool
 set SRC_DIRS=^
 capture_service ^
 cli ^
+cmake ^
 dive_core ^
 gfxr_dump_resources ^
 gfxr_ext ^
@@ -28,6 +29,7 @@ lrz_validator ^
 network ^
 plugins ^
 runtime_layer ^
+third_party/dive_crashpad ^
 trace_stats ^
 ui ^
 src

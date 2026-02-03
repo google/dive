@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "gpu_time.h"
 
+#include <vulkan/vulkan_core.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>

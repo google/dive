@@ -39,7 +39,7 @@ echo "current dir " `pwd`
 
 cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
     -G "Ninja Multi-Config" \
-    -Bbuild_android \
+    -Bbuild/device \
     -DCMAKE_MAKE_PROGRAM="ninja" \
     -DCMAKE_SYSTEM_NAME=Android \
     -DANDROID_ABI=arm64-v8a \
@@ -50,9 +50,9 @@ cmake . -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain
 
 for build in "${BUILD_TYPE}"
 do
-    cmake --build build_android --config=${build} || exit 1
+    cmake --build build/device --config=${build} || exit 1
 
-    cmake --install build_android --prefix pkg --config=${build} || exit 1
+    cmake --install build/device --prefix build/pkg --config=${build} || exit 1
 done
 
 popd

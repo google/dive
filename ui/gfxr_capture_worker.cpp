@@ -228,7 +228,7 @@ void GfxrCaptureWorker::run()
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     qDebug() << "Begin to download the gfxr capture file to "
-             << m_target_capture_dir.generic_string().c_str();
+             << m_host_capture_dir.generic_string().c_str();
 
     qlonglong size = 0;
     std::string gfxr_stem;
@@ -239,13 +239,13 @@ void GfxrCaptureWorker::run()
     for (std::string file : m_file_list)
     {
         std::filesystem::path filename = file.data();
-        std::filesystem::path target_path = m_target_capture_dir;
-        target_path /= filename;
+        std::filesystem::path host_path = m_host_capture_dir;
+        host_path /= filename;
 
         // Source path is intended for Android, cannot use std::filesystem here
         std::string source_file = absl::StrCat(m_source_capture_dir, "/", filename.string());
 
-        auto retrieve_file = device->RetrieveFile(source_file, m_target_capture_dir.string());
+        auto retrieve_file = device->RetrieveFile(source_file, m_host_capture_dir.string());
 
         if (!retrieve_file.ok())
         {
@@ -262,14 +262,14 @@ void GfxrCaptureWorker::run()
             {
                 gfxr_stem = filename.stem().string();
             }
-            gfxr_capture_file_path = target_path.string();
+            gfxr_capture_file_path = host_path.string();
         }
         else if (Dive::IsPngFile(filename))
         {
-            original_screenshot_path = target_path.string();
+            original_screenshot_path = host_path.string();
         }
 
-        size += static_cast<qlonglong>(std::filesystem::file_size(target_path.string()));
+        size += static_cast<qlonglong>(std::filesystem::file_size(host_path.string()));
         emit DownloadedSize(size, capture_directory_size);
     }
 
@@ -278,7 +278,7 @@ void GfxrCaptureWorker::run()
         Dive::ComponentFilePaths component_files = {};
         {
             absl::StatusOr<Dive::ComponentFilePaths> ret =
-                Dive::GetComponentFilesHostPaths(m_target_capture_dir, gfxr_stem);
+                Dive::GetComponentFilesHostPaths(m_host_capture_dir, gfxr_stem);
             if (!ret.ok())
             {
                 std::string err_msg =

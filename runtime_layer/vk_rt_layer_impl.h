@@ -17,7 +17,7 @@ limitations under the License.
 #pragma once
 
 #include <vulkan/vk_layer.h>
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #include <deque>
 #include <limits>

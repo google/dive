@@ -945,8 +945,8 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
 
     // These are only used if kPm4Dump
     std::string dump_pm4_file_name = parse_remote_capture.stem().string() + ".rd";
-    std::string remote_pm4_path =
-        absl::StrFormat("%s/%s", kDeviceCapturePath, dump_pm4_file_name.c_str());
+    std::string remote_pm4_path = absl::StrFormat(
+        "%s/%s", Dive::DeviceResourcesConstants::kDeviceDownloadPath, dump_pm4_file_name.c_str());
     std::string remote_pm4_inprogress_path =
         absl::StrFormat("%s.inprogress", remote_pm4_path.c_str());
 
@@ -1384,9 +1384,9 @@ absl::Status AndroidDevice::TriggerScreenCapture(
             on_device_screenshot_dir.string()));
     }
 
-    std::filesystem::path full_capture_path = std::filesystem::path(Dive::kDeviceCapturePath) /
-                                              on_device_screenshot_dir /
-                                              Dive::kCaptureScreenshotFile;
+    std::filesystem::path full_capture_path =
+        std::filesystem::path(Dive::DeviceResourcesConstants::kDeviceDownloadPath) /
+        on_device_screenshot_dir / Dive::kCaptureScreenshotFile;
 
     std::string on_device_capture_screen_shot = full_capture_path.generic_string();
 

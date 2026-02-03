@@ -33,7 +33,6 @@ target_include_directories(
     PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_BINARY_DIR}/dive_core
-        ${THIRDPARTY_DIRECTORY}/Vulkan-Headers/include
         ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 

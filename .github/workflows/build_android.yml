@@ -6,6 +6,9 @@ on:
       build_type:
         required: true
         type: string
+      restore_cache:
+        required: true
+        type: boolean
       upload_cache:
         required: true
         type: boolean
@@ -14,6 +17,8 @@ jobs:
   build_device_linux:
     name: Build Device Linux ${{ inputs.build_type }}
     runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -39,27 +44,13 @@ jobs:
         with:
           ndk-version: r25
           add-to-path: true
-      - name: Configure ccache for uploading (upload_cache)
-        if: ${{ inputs.upload_cache }}
+      - name: (ccache) Clear stats
         run: ccache -z
-      - name: Configure ccache for restoring (!upload_cache)
-        if: ${{ !(inputs.upload_cache) }}
-        run: |
-          ccache -z
-          ccache --set-config=read_only=true
-      - name: Cache ccache (upload_cache)
-        if: ${{ inputs.upload_cache }}
-        uses: actions/cache@v5
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-
-      - name: Restore ccache (!upload_cache)
-        if: ${{ !(inputs.upload_cache) }}
+      - name: (ccache) Restore (restore_cache)
+        if: ${{ inputs.restore_cache }}
         uses: actions/cache/restore@v5
         with:
-          path: ${{ github.workspace }}/.ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-
@@ -79,21 +70,27 @@ jobs:
           -DDIVE_GFXR_GRADLE_CONSOLE=plain \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-          -Bbuild_android .
+          -Bbuild/device .
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Build lib with NDK
         run: |
-          ninja -C build_android -f build-${{ inputs.build_type }}.ninja
+          ninja -C build/device -f build-${{ inputs.build_type }}.ninja
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Ninja log
         run: |
-          cat build_android/.ninja_log
-      - name: Show ccache stats
-        run: ccache -s
+          cat build/device/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build_android --prefix pkg --config ${{ inputs.build_type }}
+          cmake --install build/device --prefix build/pkg --config ${{ inputs.build_type }}
+      - name: (ccache) Show stats
+        run: ccache -s
+      - name: (ccache) Save (upload_cache)
+        if: ${{ inputs.upload_cache }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-android-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}

@@ -77,7 +77,6 @@ target_link_libraries(
     dive_renderdoc
     gfxrecon_decode
     gpu_time
-    absl::any_invocable
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if(WIN32)

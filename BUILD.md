@@ -37,6 +37,29 @@ export PATH=$QTDIR:$PATH
 export DIVE_ROOT_PATH=/path/to/dive
 ```
 
+### macOS
+
+- Install build dependencies: `brew install cmake ninja python`
+- Install Qt 5: `brew install qt@5`
+- Install Java 17: `brew install openjdk@17`
+```sh
+# Example setup
+
+# Android NDK prerequisite
+export ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/25.2.9519653
+
+# gfxreconstruct prerequisite (Java 17)
+export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home
+
+# QT prerequisite
+export QTDIR="$(brew --prefix qt@5)"
+export CMAKE_PREFIX_PATH=$QTDIR
+export PATH=$QTDIR/bin:$PATH
+
+# Recommended but not necessary
+export DIVE_ROOT_PATH=~/src/dive
+```
+
 ### Windows
 ```bat
 REM Example setup
@@ -60,7 +83,7 @@ set DIVE_ROOT_PATH=C:\path\to\dive
 
 ## Dive Host Tools
 
-### Linux
+### Linux / macOS
 
 1. Configure
     ```sh
@@ -130,7 +153,7 @@ Warning: We only support "Debug" for the gradle build for GFXR portion, so it wi
 
 Modify the script if necessary to provide the appropriate `ANDROID_ABI` depending on your device.
 
-### Linux
+### Linux / macOS
 
 Running the script `scripts/build_android.sh` will build and install the device resources at `$DIVE_ROOT_PATH/pkg/device`.
 

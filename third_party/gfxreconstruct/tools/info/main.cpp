@@ -70,15 +70,17 @@
 
 #include <nlohmann/json.hpp>
 
-const char kHelpShortOption[]   = "-h";
-const char kHelpLongOption[]    = "--help";
-const char kVersionOption[]     = "--version";
-const char kNoDebugPopup[]      = "--no-debug-popup";
-const char kExeInfoOnlyOption[] = "--exe-info-only";
-const char kEnvVarsOnlyOption[] = "--env-vars-only";
-const char kEnumGpuIndices[]    = "--enum-gpu-indices";
+const char kHelpShortOption[]      = "-h";
+const char kHelpLongOption[]       = "--help";
+const char kVersionOption[]        = "--version";
+const char kNoDebugPopup[]         = "--no-debug-popup";
+const char kExeInfoOnlyOption[]    = "--exe-info-only";
+const char kEnvVarsOnlyOption[]    = "--env-vars-only";
+const char kFileFormatOnlyOption[] = "--file-format-only";
+const char kEnumGpuIndices[]       = "--enum-gpu-indices";
 
-const char kOptions[] = "-h|--help,--version,--no-debug-popup,--exe-info-only,--env-vars-only,--enum-gpu-indices";
+const char kOptions[] =
+    "-h|--help,--version,--no-debug-popup,--exe-info-only,--env-vars-only,--file-format-only,--enum-gpu-indices";
 
 const char kUnrecognizedFormatString[] = "<unrecognized-format>";
 
@@ -117,11 +119,11 @@ class AnnotationRecorder : public gfxrecon::decode::AnnotationHandler
 
 struct ApiAgnosticStats
 {
-    gfxrecon::format::CompressionType      compression_type;
-    uint32_t                               trim_start_frame;
-    uint32_t                               frame_count;
-    gfxrecon::decode::FileProcessor::Error error_state;
-    bool                                   uses_frame_markers;
+    gfxrecon::format::CompressionType compression_type;
+    uint32_t                          trim_start_frame;
+    uint32_t                          frame_count;
+    gfxrecon::decode::BlockIOError    error_state;
+    bool                              uses_frame_markers;
 };
 
 std::string AdapterTypeToString(gfxrecon::format::AdapterType type)
@@ -156,6 +158,7 @@ static void PrintUsage(const char* exe_name)
     GFXRECON_WRITE_CONSOLE("  -h\t\t\tPrint usage information and exit (same as --help).");
     GFXRECON_WRITE_CONSOLE("  --version\t\tPrint version information and exit.");
     GFXRECON_WRITE_CONSOLE("  --exe-info-only\tQuickly exit after extracting captured application's executable name");
+    GFXRECON_WRITE_CONSOLE("  --file-format-only\tQuickly exit after extracting file format information");
     GFXRECON_WRITE_CONSOLE(
         "  --env-vars-only\tQuickly exit after extracting captured application's environment variables");
 #if defined(WIN32) && defined(_DEBUG)
@@ -191,7 +194,7 @@ static bool CheckOptionPrintVersion(const char* exe_name, const gfxrecon::util::
         }
 
         GFXRECON_WRITE_CONSOLE("%s version info:", app_name.c_str());
-        GFXRECON_WRITE_CONSOLE("  GFXReconstruct Version %s", GFXRECON_PROJECT_VERSION_STRING);
+        GFXRECON_WRITE_CONSOLE("  GFXReconstruct Version %s", GetProjectVersionString());
         GFXRECON_WRITE_CONSOLE("  Vulkan Header Version %u.%u.%u",
                                VK_VERSION_MAJOR(VK_HEADER_VERSION_COMPLETE),
                                VK_VERSION_MINOR(VK_HEADER_VERSION_COMPLETE),
@@ -314,6 +317,43 @@ void PrintAnnotations(uint32_t                          annotation_count,
     }
 }
 
+struct FileFormatInfo
+{
+    uint32_t major_version               = 0;
+    uint32_t minor_version               = 0;
+    bool     uses_frame_markers          = false;
+    bool     file_supports_frame_markers = false;
+
+    FileFormatInfo(const gfxrecon::decode::FileProcessor& file_processor)
+    {
+        const gfxrecon::format::FileHeader& file_header = file_processor.GetFileHeader();
+        major_version                                   = file_header.major_version;
+        minor_version                                   = file_header.minor_version;
+        uses_frame_markers                              = file_processor.UsesFrameMarkers();
+        file_supports_frame_markers                     = file_processor.FileSupportsFrameMarkers();
+    }
+
+    bool NeedsUpdate() const
+    {
+        return major_version == 0 && minor_version == 0 && uses_frame_markers && !file_supports_frame_markers;
+    }
+};
+
+void PrintFileFormatInfo(const FileFormatInfo& file_format_info)
+{
+    GFXRECON_WRITE_CONSOLE(
+        "\tFile format version: %u.%u", file_format_info.major_version, file_format_info.minor_version);
+    const char* frame_marker_type = file_format_info.uses_frame_markers
+                                        ? (file_format_info.NeedsUpdate() ? "explicit (unsupported)" : "explicit")
+                                        : "implicit";
+    GFXRECON_WRITE_CONSOLE("\tFrame delimiters: %s", frame_marker_type);
+}
+
+void PrintFileFormatInfo(const gfxrecon::decode::FileProcessor& file_processor)
+{
+    PrintFileFormatInfo(FileFormatInfo{ file_processor });
+}
+
 void PrintDriverInfo(const gfxrecon::decode::InfoConsumer& driver_info_consumer)
 {
     GFXRECON_WRITE_CONSOLE("");
@@ -361,7 +401,7 @@ void GatherExeInfo(gfxrecon::decode::FileProcessor& file_processor, gfxrecon::de
 }
 
 // A short pass to get exe info. Only processes the first blocks of a capture file.
-void GatherAndPrintExeInfo(const std::string& input_filename)
+bool GatherAndPrintExeInfo(const std::string& input_filename)
 {
     gfxrecon::decode::InfoConsumer  info_consumer(true);
     gfxrecon::decode::FileProcessor file_processor;
@@ -370,6 +410,38 @@ void GatherAndPrintExeInfo(const std::string& input_filename)
         GatherExeInfo(file_processor, info_consumer);
         PrintExeInfo(info_consumer);
     }
+
+    return file_processor.GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone;
+}
+
+FileFormatInfo GatherFileFormatInfo(gfxrecon::decode::FileProcessor& file_processor,
+                                    gfxrecon::decode::InfoConsumer&  info_consumer)
+{
+    gfxrecon::decode::InfoDecoder info_decoder;
+    info_decoder.AddConsumer(&info_consumer);
+    file_processor.AddDecoder(&info_decoder);
+    bool success = file_processor.ProcessNextFrame();
+    if (success && !file_processor.UsesFrameMarkers())
+    {
+        file_processor.ProcessNextFrame();
+    }
+    return FileFormatInfo(file_processor);
+}
+
+// A short pass to get file format info. Only processes the first two frames of a capture file.
+bool GatherAndPrintFileFormatInfo(const std::string& input_filename)
+{
+    const gfxrecon::decode::InfoConsumer::NoMaxBlockTag no_max_tag;
+    gfxrecon::decode::InfoConsumer                      info_consumer(no_max_tag);
+    gfxrecon::decode::FileProcessor                     file_processor;
+    if (file_processor.Initialize(input_filename))
+    {
+        FileFormatInfo file_format_info = GatherFileFormatInfo(file_processor, info_consumer);
+        GFXRECON_WRITE_CONSOLE("File format info:");
+        PrintFileFormatInfo(file_format_info);
+    }
+
+    return file_processor.GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone;
 }
 
 #if ENABLE_OPENXR_SUPPORT
@@ -399,10 +471,11 @@ void PrintVulkanStats(const gfxrecon::decode::FileProcessor&       file_processo
                       const ApiAgnosticStats&                      api_agnostic_stats,
                       const AnnotationRecorder&                    annotation_recoder)
 {
-    if (api_agnostic_stats.error_state == gfxrecon::decode::FileProcessor::kErrorNone)
+    if (api_agnostic_stats.error_state == gfxrecon::decode::BlockIOError::kErrorNone)
     {
         GFXRECON_WRITE_CONSOLE("");
         GFXRECON_WRITE_CONSOLE("File info:");
+
         gfxrecon::format::CompressionType compression_type = gfxrecon::format::CompressionType::kNone;
 
         auto file_options = file_processor.GetFileOptions();
@@ -442,6 +515,8 @@ void PrintVulkanStats(const gfxrecon::decode::FileProcessor&       file_processo
                                    trim_start_frame,
                                    trim_start_frame + frame_count - 1);
         }
+
+        PrintFileFormatInfo(file_processor);
 
         // Application info.
         uint32_t api_version = vulkan_stats_consumer.GetApiVersion();
@@ -535,7 +610,7 @@ void PrintVulkanStats(const gfxrecon::decode::FileProcessor&       file_processo
             GFXRECON_WRITE_CONSOLE("\nFile did not contain any frames");
         }
     }
-    else if (api_agnostic_stats.error_state != gfxrecon::decode::FileProcessor::kErrorNone)
+    else if (api_agnostic_stats.error_state != gfxrecon::decode::BlockIOError::kErrorNone)
     {
         GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
         gfxrecon::util::Log::Release();
@@ -585,7 +660,7 @@ void PrintDx12AdapterInfo(gfxrecon::decode::Dx12StatsConsumer& dx12_consumer)
 
         for (const auto& adapter : adapters)
         {
-            const int64_t luid = (adapter.LuidHighPart << 31) | adapter.LuidLowPart;
+            const int64_t luid = pack_luid(adapter);
 
             std::string adapter_workload_pct = "";
 
@@ -680,12 +755,13 @@ void PrintDxrEiInfo(gfxrecon::decode::Dx12StatsConsumer& dx12_consumer)
     }
 }
 
-void PrintD3D12Stats(gfxrecon::decode::Dx12StatsConsumer& dx12_consumer,
+void PrintD3D12Stats(gfxrecon::decode::FileProcessor&     file_processor,
+                     gfxrecon::decode::Dx12StatsConsumer& dx12_consumer,
                      const ApiAgnosticStats&              api_agnostic_stats,
                      gfxrecon::decode::InfoConsumer&      info_consumer,
                      const AnnotationRecorder&            annotation_recoder)
 {
-    if (api_agnostic_stats.error_state == gfxrecon::decode::FileProcessor::kErrorNone)
+    if (api_agnostic_stats.error_state == gfxrecon::decode::BlockIOError::kErrorNone)
     {
         GFXRECON_WRITE_CONSOLE("");
         GFXRECON_WRITE_CONSOLE("File info:");
@@ -724,6 +800,8 @@ void PrintD3D12Stats(gfxrecon::decode::Dx12StatsConsumer& dx12_consumer,
             GFXRECON_WRITE_CONSOLE("\tTest present count: %u", dx12_consumer.GetDXGITestPresentCount());
         }
 
+        PrintFileFormatInfo(file_processor);
+
         PrintDriverInfo(info_consumer);
 
         PrintDx12RuntimeInfo(dx12_consumer);
@@ -734,7 +812,7 @@ void PrintD3D12Stats(gfxrecon::decode::Dx12StatsConsumer& dx12_consumer,
 
         PrintDxrEiInfo(dx12_consumer);
     }
-    else if (api_agnostic_stats.error_state != gfxrecon::decode::FileProcessor::kErrorNone)
+    else if (api_agnostic_stats.error_state != gfxrecon::decode::BlockIOError::kErrorNone)
     {
         GFXRECON_WRITE_CONSOLE("A failure has occurred during file processing");
         gfxrecon::util::Log::Release();
@@ -801,7 +879,7 @@ void PrintEnvironmentVariableInfo(gfxrecon::decode::InfoConsumer& info_consumer)
     }
 }
 
-void GatherAndPrintEnvVars(const std::string& input_filename)
+bool GatherAndPrintEnvVars(const std::string& input_filename)
 {
     gfxrecon::decode::FileProcessor file_processor;
     if (file_processor.Initialize(input_filename))
@@ -811,7 +889,7 @@ void GatherAndPrintEnvVars(const std::string& input_filename)
         info_decoder.AddConsumer(&info_consumer);
         file_processor.AddDecoder(&info_decoder);
         file_processor.ProcessAllFrames();
-        if (file_processor.GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone)
+        if (file_processor.GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone)
         {
             PrintEnvironmentVariableInfo(info_consumer);
         }
@@ -820,9 +898,11 @@ void GatherAndPrintEnvVars(const std::string& input_filename)
             GFXRECON_LOG_ERROR("Encountered error while reading capture. Unable to report environment variables.");
         }
     }
+
+    return file_processor.GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone;
 }
 
-void GatherAndPrintAllInfo(const std::string& input_filename)
+bool GatherAndPrintAllInfo(const std::string& input_filename)
 {
     gfxrecon::decode::FileProcessor file_processor;
     if (file_processor.Initialize(input_filename))
@@ -868,7 +948,7 @@ void GatherAndPrintAllInfo(const std::string& input_filename)
 #endif
 
         file_processor.ProcessAllFrames();
-        if (file_processor.GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone)
+        if (file_processor.GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone)
         {
             ApiAgnosticStats api_agnostic_stats = {};
             GatherApiAgnosticStats(api_agnostic_stats, file_processor, stat_consumer);
@@ -907,7 +987,7 @@ void GatherAndPrintAllInfo(const std::string& input_filename)
 #if defined(D3D12_SUPPORT)
             if (dx12_detection_consumer.WasD3D12APIDetected() || print_all_apis)
             {
-                PrintD3D12Stats(dx12_consumer, api_agnostic_stats, info_consumer, annotation_recorder);
+                PrintD3D12Stats(file_processor, dx12_consumer, api_agnostic_stats, info_consumer, annotation_recorder);
             }
 #endif
 #if ENABLE_OPENXR_SUPPORT
@@ -926,6 +1006,8 @@ void GatherAndPrintAllInfo(const std::string& input_filename)
             GFXRECON_WRITE_CONSOLE("Encountered error while reading capture. Stats unavailable.");
         }
     }
+
+    return file_processor.GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone;
 }
 
 int main(int argc, const char** argv)
@@ -964,20 +1046,25 @@ int main(int argc, const char** argv)
 
     const std::vector<std::string>& positional_arguments = arg_parser.GetPositionalArguments();
     std::string                     input_filename       = positional_arguments[0];
+    bool                            success              = true;
 
     if (arg_parser.IsOptionSet(kExeInfoOnlyOption))
     {
-        GatherAndPrintExeInfo(input_filename);
+        success = GatherAndPrintExeInfo(input_filename);
     }
     else if (arg_parser.IsOptionSet(kEnvVarsOnlyOption))
     {
-        GatherAndPrintEnvVars(input_filename);
+        success = GatherAndPrintEnvVars(input_filename);
+    }
+    else if (arg_parser.IsOptionSet(kFileFormatOnlyOption))
+    {
+        success = GatherAndPrintFileFormatInfo(input_filename);
     }
     else
     {
-        GatherAndPrintAllInfo(input_filename);
+        success = GatherAndPrintAllInfo(input_filename);
     }
 
     gfxrecon::util::Log::Release();
-    return 0;
+    return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }

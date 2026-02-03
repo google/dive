@@ -192,7 +192,7 @@ absl::StatusOr<std::filesystem::path> GetNextHostSessionPath(
     }
 
     std::string timestamp =
-        absl::FormatTime("%Y-%m-%d_%H:%M:%S", absl::Now(), absl::LocalTimeZone());
+        absl::FormatTime("%Y-%m-%d_%H-%M-%S", absl::Now(), absl::LocalTimeZone());
     std::string session_dir_name =
         absl::StrCat(Dive::DeviceResourcesConstants::kHostSessionDirectoryPrefix, timestamp);
 

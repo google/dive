@@ -14,34 +14,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pathlib
 import subprocess
 from timeit import default_timer
 
-def get_dive_root(my_env):
+def get_dive_root() -> pathlib.Path:
     """Predicts Dive root path from:
         1. Env var DIVE_ROOT_PATH, if it exists
         2. Relative position to this script
     """
-    if "DIVE_ROOT_PATH" in my_env:
+    if "DIVE_ROOT_PATH" in os.environ:
         print("Found DIVE_ROOT_PATH in environment variables")
-        dive_root = my_env["DIVE_ROOT_PATH"]
+        dive_root = os.environ["DIVE_ROOT_PATH"]
     else:
         print("Predicting DIVE_ROOT_PATH")
         dive_root = pathlib.Path(__file__).parent.parent.resolve()
     
     print(f"DIVE_ROOT_PATH={dive_root}")
-    return dive_root
+    return pathlib.Path(dive_root)
 
 def echo_and_run(cmd):
     print(f"\n> {" ".join(cmd)}")
     subprocess.run(cmd, check=True, text=True)
-    return
 
-class timer:
+class Timer:
     def __enter__(self):
         self.start = default_timer()
-        return
 
     def __exit__(self, type, value, traceback):
         self.end = default_timer()

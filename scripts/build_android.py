@@ -16,41 +16,60 @@
 
 import argparse
 import common_dive_utils as dive
+import enum
 import os
 import shutil
+
+class BuildType(enum.StrEnum):
+    DEBUG = "Debug"
+    REL_WITH_DEB_INFO = "RelWithDebInfo"
+    RELEASE = "Release"
 
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="build_android",
-        description='This script automates the standard build process for Dive Device Libraries')
-    parser.add_argument("--dive_release_type", default="dev", 
-        help="Description string for Device Libraries version info (default: dev)")
-    parser.add_argument("--build_type", default="Debug", choices=["Debug", "RelWithDebInfo", "Release"], 
-        help="Build type for Dive libraries " 
-        "(excluding GFXR gradle build which is always Debug) (default: Debug)")
-    parser.add_argument("--clean_build", action="store_true",
+        description='This script automates the standard build process for Dive Device Libraries',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--dive_release_type", 
+        default="dev", 
+        help="Description string for Device Libraries version info")
+    parser.add_argument(
+        "--build_type", 
+        type=BuildType, 
+        default=BuildType.DEBUG, 
+        choices=[str(build_type) for build_type in BuildType],
+        help="Build type for Dive libraries (excluding GFXR gradle build which is always Debug)")
+    parser.add_argument(
+        "--clean_build", 
+        action="store_true",
         help="Clean device build folders before rebuilding")
     return parser.parse_args()
 
 def main(args):
-    owd = os.getcwd()
-    my_env = os.environ.copy()
+    old_working_directory = os.getcwd()
 
-    dive_root_path = dive.get_dive_root(my_env)
+    dive_root_path = dive.get_dive_root()
     os.chdir(dive_root_path)
 
     # Some initial checks
     if args.build_type != "Debug":
         print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
     print("\nChecking env vars...")
-    if "ANDROID_NDK_HOME" not in my_env:
+    if "ANDROID_NDK_HOME" not in os.environ:
         raise Exception("ANDROID_NDK_HOME env var must be set")
-    android_ndk_home = my_env["ANDROID_NDK_HOME"]
+    android_ndk_home = os.environ["ANDROID_NDK_HOME"]
+    
     print("\nChecking cmake...")
-    cmd = ["cmake", "--version"]
+    cmake_exec = shutil.which("cmake")
+    assert(cmake_exec is not None)
+    cmd = [cmake_exec, "--version"]
     dive.echo_and_run(cmd)
+
     print("\nChecking ninja...")
-    cmd = ["ninja", "--version"]
+    ninja_exec = shutil.which("ninja")
+    assert(ninja_exec is not None)
+    cmd = [ninja_exec, "--version"]
     dive.echo_and_run(cmd)
 
     if (args.clean_build):
@@ -98,9 +117,8 @@ def main(args):
 
     print("\nTIP: Remember to build host tools")
     print("TIP: Remember to place plugins in build/pkg/plugins")
-    os.chdir(owd)
-    return
+    os.chdir(old_working_directory)
 
 if __name__ == "__main__":
-    with dive.timer() as t:
+    with dive.Timer() as t:
         main(parse_args())

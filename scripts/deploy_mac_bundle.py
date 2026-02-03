@@ -25,25 +25,33 @@ def parse_args():
     parser = argparse.ArgumentParser(
         prog="deploy_mac_bundle",
         description='This script automates the bundling for Dive application on MacOS')
-    parser.add_argument("--no_sign", action="store_true",
+    parser.add_argument(
+        "--no_sign", 
+        action="store_true",
         help="Do not sign the app bundle")
-    parser.add_argument("--no_device_libraries", action="store_true",
+    parser.add_argument(
+        "--no_device_libraries", 
+        action="store_true",
         help="Do not copy over the device librares into the bundle")
     return parser.parse_args()
 
 def main(args):
-    owd = os.getcwd()
-    my_env = os.environ.copy()
+    old_working_directory = os.getcwd()
 
-    dive_root_path = dive.get_dive_root(my_env)
+    dive_root_path = dive.get_dive_root()
     os.chdir(dive_root_path)
     os.chdir(RELATIVE_INSTALL_DIR)
     print(f"\nNavigated to folder: {os.getcwd()}")
 
     # Some initial checks
     print("\nChecking macdeployqt...")
-    cmd = ["which", "macdeployqt"]
-    dive.echo_and_run(cmd)
+    macdeployqt_exec = shutil.which("macdeployqt")
+    assert(macdeployqt_exec is not None)
+
+    if not args.no_sign:
+        print("\nChecking codesign...")
+        codesign_exec = shutil.which("codesign")
+        assert(codesign_exec is not None)
 
     print("\nSetting up dive.app...")
     # New dive.app was installed with host tools, move it and run macdeployqt
@@ -52,7 +60,7 @@ def main(args):
             shutil.rmtree("./dive.app")
         shutil.move("./host/dive.app", "./dive.app")
 
-        cmd = ["macdeployqt", "dive.app"]
+        cmd = [macdeployqt_exec, "dive.app"]
         dive.echo_and_run(cmd)
     # There is an existing dive.app that has been deployed already, skip setup and proceed
     elif os.path.exists("./dive.app"):
@@ -73,14 +81,13 @@ def main(args):
     if args.no_sign:
         print("\nSkipping signing step becaouse --no_sign...")
     else:
-        cmd = ["codesign", "--force", "--deep", "--sign", "-", "dive.app"]
+        cmd = [codesign_exec, "--force", "--deep", "--sign", "-", "dive.app"]
         dive.echo_and_run(cmd)
 
     print(f"\nApplication now at {os.getcwd()}/dive.app")
 
-    os.chdir(owd)
-    return
+    os.chdir(old_working_directory)
 
 if __name__ == "__main__":
-    with dive.timer() as t:
+    with dive.Timer() as t:
         main(parse_args())

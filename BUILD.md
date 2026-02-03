@@ -133,7 +133,7 @@ Modify the script if necessary to provide the appropriate `ANDROID_ABI` dependin
 TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
 
 ```sh
-python scripts/build_android.py --help
+python scripts/build_android.py
 ```
 
 The script will build and install the device resources at `$DIVE_ROOT_PATH/build/pkg/device`
@@ -154,6 +154,6 @@ After building the host tools and the device resources as outlined above and ins
 All external plugin folders must be placed under `$DIVE_ROOT_PATH/build/pkg/plugins` to be properly added to the bundle.
 
 ```sh
-python scripts/deploy_mac_bundle.py --help
+python scripts/deploy_mac_bundle.py
 ```
 This will deploy the mac package and place it at `$DIVE_ROOT_PATH/build/pkg/dive.app`.

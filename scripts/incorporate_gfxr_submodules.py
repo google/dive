@@ -14,8 +14,7 @@
 
 """Combines //third_party/gfxreconstruct/.gitmodules with //.gitmodules.
 
-This is required as part of a subtree pull in order so that we can check out
-GFXR submodules correctly.
+This is required for a successful subtree pull of GFXR.
 
 Limitations:
 
@@ -279,21 +278,26 @@ def main(args: argparse.Namespace):
 
 def parse_args() -> argparse.Namespace:
     repo_base_path = pathlib.Path(__file__).parent / ".."
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Combines additions from an override .gitmodules to a base .gitmodules."
+    )
     parser.add_argument(
         "--git_path",
         type=pathlib.Path,
         default=shutil.which("git"),
+        help="Location of the git executable to run",
     )
     parser.add_argument(
         "--base_gitmodules",
         type=pathlib.Path,
         default=repo_base_path / ".gitmodules",
+        help="The .gitmodules files to update",
     )
     parser.add_argument(
         "--override_gitmodules",
         type=pathlib.Path,
         default=repo_base_path / "third_party" / "gfxreconstruct" / ".gitmodules",
+        help="The .gitmodules file with additions that we want to incorporate",
     )
     return parser.parse_args()
 

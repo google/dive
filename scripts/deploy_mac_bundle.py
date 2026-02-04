@@ -21,6 +21,7 @@ import shutil
 
 RELATIVE_INSTALL_DIR = "build/pkg"
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="deploy_mac_bundle",
@@ -34,6 +35,7 @@ def parse_args():
         action="store_true",
         help="Do not copy over the device librares into the bundle")
     return parser.parse_args()
+
 
 def main(args):
     old_working_directory = os.getcwd()
@@ -88,6 +90,7 @@ def main(args):
 
     os.chdir(old_working_directory)
 
+
 if __name__ == "__main__":
-    with dive.Timer() as t:
+    with dive.Timer():
         main(parse_args())

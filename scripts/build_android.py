@@ -20,10 +20,12 @@ import enum
 import os
 import shutil
 
+
 class BuildType(enum.StrEnum):
     DEBUG = "Debug"
     REL_WITH_DEB_INFO = "RelWithDebInfo"
     RELEASE = "Release"
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -45,6 +47,7 @@ def parse_args():
         action="store_true",
         help="Clean device build folders before rebuilding")
     return parser.parse_args()
+
 
 def main(args):
     old_working_directory = os.getcwd()
@@ -72,7 +75,7 @@ def main(args):
     cmd = [ninja_exec, "--version"]
     dive.echo_and_run(cmd)
 
-    if (args.clean_build):
+    if args.clean_build:
         print("\nClearing device build folders...")
         if os.path.exists("build/device"):
             shutil.rmtree("build/device")
@@ -81,7 +84,7 @@ def main(args):
 
 
     print("\nGenerating build files with cmake...")
-    cmd = ["cmake", ".", 
+    cmd = [cmake_exec, ".", 
         f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
         "-GNinja Multi-Config",
         "-Bbuild/device",
@@ -96,7 +99,7 @@ def main(args):
     dive.echo_and_run(cmd)
 
     print("\nBuilding with ninja...")
-    cmd = ["ninja",
+    cmd = [ninja_exec,
         "-C", "build/device",
         "-f", f"build-{args.build_type}.ninja"
     ]
@@ -108,7 +111,7 @@ def main(args):
         shutil.rmtree("build/pkg/device")
 
     print("\nInstalling with cmake...")
-    cmd = ["cmake",
+    cmd = [cmake_exec,
         "--install", "build/device",
         "--prefix", "build/pkg",
         "--config", f"{args.build_type}"
@@ -119,6 +122,7 @@ def main(args):
     print("TIP: Remember to place plugins in build/pkg/plugins")
     os.chdir(old_working_directory)
 
+
 if __name__ == "__main__":
-    with dive.Timer() as t:
+    with dive.Timer():
         main(parse_args())

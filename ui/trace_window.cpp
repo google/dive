@@ -72,22 +72,21 @@ const int kPm4CaptureButtonId = 2;
 // TraceDialog
 // =================================================================================================
 TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
-    : QDialog(parent), m_controller(controller)
+    : DeviceDialog(parent), m_controller(controller)
 {
     qDebug() << "TraceDialog created.";
     m_capture_layout = new QHBoxLayout();
-    m_dev_label = new QLabel(tr("Devices:"));
+    m_device_label = new QLabel(tr("Devices:"));
     m_pkg_label = new QLabel(tr("Packages:"));
     m_app_type_label = new QLabel(tr("Application Type:"));
     m_gfxr_capture_file_on_device_directory_label =
         new QLabel(tr("On Device GFXR Capture File Directory Name:"));
     QLabel* capture_file_local_directory_label = new QLabel(tr("Local Capture Save Location:"));
 
-    m_dev_model = new QStandardItemModel();
     m_pkg_model = new QStandardItemModel();
     m_app_type_model = new QStandardItemModel();
 
-    m_dev_box = new QComboBox();
+    m_device_box = new QComboBox();
     m_pkg_box = new QComboBox();
     m_app_type_box = new QComboBox();
 
@@ -100,7 +99,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_gfxr_capture_button->setEnabled(false);
     m_gfxr_capture_button->hide();
 
-    m_dev_refresh_button = new QPushButton("&Refresh", this);
+    m_device_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_refresh_button = new QPushButton("&Refresh", this);
     m_pkg_filter_button = new QPushButton(this);
     m_pkg_filter = new PackageFilter(this);
@@ -114,8 +113,6 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
 
     m_main_layout = new QVBoxLayout();
 
-    m_devices = Dive::GetDeviceManager().ListDevice();
-    UpdateDeviceList(false);
     for (const auto& ty : Dive::kAppTypeInfos)
     {
         QStandardItem* item = new QStandardItem(ty.ui_name.data());
@@ -124,14 +121,14 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_app_type_filter_model = new AppTypeFilterModel(this);
     m_app_type_filter_model->setSourceModel(m_app_type_model);
 
-    m_dev_box->setModel(m_dev_model);
-    m_dev_box->setCurrentIndex(0);
-    m_dev_box->setCurrentText("Please select a device");
+    m_device_box->setModel(m_device_model);
+    m_device_box->setCurrentIndex(0);
+    m_device_box->setCurrentText("Please select a device");
 
     m_pkg_box->setModel(m_pkg_model);
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_box->setCurrentText("Please select a package");
-    m_pkg_box->setMinimumSize(m_dev_box->sizeHint());
+    m_pkg_box->setMinimumSize(m_device_box->sizeHint());
     m_pkg_box->setSizeAdjustPolicy(
         QComboBox::SizeAdjustPolicy::AdjustToMinimumContentsLengthWithIcon);
     m_pkg_box->setEditable(true);
@@ -179,9 +176,9 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_args_layout->addWidget(m_args_label);
     m_args_layout->addWidget(m_args_input_box);
 
-    m_capture_layout->addWidget(m_dev_label);
-    m_capture_layout->addWidget(m_dev_box, 1);
-    m_capture_layout->addWidget(m_dev_refresh_button);
+    m_capture_layout->addWidget(m_device_label);
+    m_capture_layout->addWidget(m_device_box, 1);
+    m_capture_layout->addWidget(m_device_refresh_button);
 
     m_pkg_filter_layout = new QHBoxLayout();
     m_pkg_filter_label = new QLabel("Package Filters:");
@@ -236,8 +233,8 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     setSizeGripEnabled(true);
     setLayout(m_main_layout);
 
-    QObject::connect(m_dev_box, SIGNAL(currentIndexChanged(const QString&)), this,
-                     SLOT(OnDeviceSelected(const QString&)));
+    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnDeviceSelectionChanged(const QString&)));
     QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnPackageSelected(const QString&)));
     QObject::connect(m_pkg_box->lineEdit(), &QLineEdit::textEdited, filterModel,
@@ -246,7 +243,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     QObject::connect(m_capture_button, &QPushButton::clicked, this, &TraceDialog::OnTraceClicked);
     QObject::connect(m_gfxr_capture_button, &QPushButton::clicked, this,
                      &TraceDialog::OnGfxrCaptureClicked);
-    QObject::connect(m_dev_refresh_button, &QPushButton::clicked, this,
+    QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
                      &TraceDialog::OnDevListRefresh);
     QObject::connect(m_pkg_refresh_button, &QPushButton::clicked, this,
                      &TraceDialog::OnAppListRefresh);
@@ -279,6 +276,10 @@ void TraceDialog::ShowMessage(const QString& message)
     message_box->setText(message);
     message_box->open();
 }
+
+void TraceDialog::OnDeviceSelected() { UpdatePackageList(); }
+
+void TraceDialog::OnDeviceSelectionCleared() { m_run_button->setEnabled(false); }
 
 absl::Status TraceDialog::StopPackageAndCleanup()
 {
@@ -360,80 +361,6 @@ void TraceDialog::closeEvent(QCloseEvent* event)
     }
 }
 
-void TraceDialog::UpdateDeviceList(bool isInitialized)
-{
-    auto cur_list = Dive::GetDeviceManager().ListDevice();
-    qDebug() << "m_dev_box->currentIndex() " << m_dev_box->currentIndex();
-    if (cur_list == m_devices && isInitialized)
-    {
-        qDebug() << "No changes from the list of the connected devices. ";
-        return;
-    }
-
-    m_devices = cur_list;
-    m_dev_model->clear();
-
-    if (m_devices.empty())
-    {
-        QStandardItem* item = new QStandardItem("No devices found");
-        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        m_dev_model->appendRow(item);
-        m_dev_box->setCurrentIndex(0);
-    }
-    else
-    {
-        for (size_t i = 0; i < m_devices.size(); i++)
-        {
-            if (i == 0)
-            {
-                QStandardItem* item = new QStandardItem("Please select a device");
-                item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-                m_dev_model->appendRow(item);
-                m_dev_box->setCurrentIndex(0);
-            }
-
-            QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
-            m_dev_model->appendRow(item);
-            // Keep the original selected devices as selected.
-            if (m_cur_dev == m_devices[i].m_serial)
-            {
-                m_dev_box->setCurrentIndex(static_cast<int>(i));
-            }
-        }
-    }
-}
-
-void TraceDialog::OnDeviceSelected(const QString& s)
-{
-    if (s.isEmpty() || m_dev_box->currentIndex() == 0)
-    {
-        qDebug() << "No devices selected";
-        return;
-    }
-    int dev_index = m_dev_box->currentIndex() - 1;
-    assert(static_cast<size_t>(dev_index) < m_devices.size());
-
-    qDebug() << "Device selected: " << m_cur_dev.c_str() << ", index " << dev_index
-             << ", m_devices[dev_index].m_serial " << m_devices[dev_index].m_serial.c_str();
-    if (m_cur_dev == m_devices[dev_index].m_serial)
-    {
-        return;
-    }
-
-    m_cur_dev = m_devices[dev_index].m_serial;
-    auto dev_ret = Dive::GetDeviceManager().SelectDevice(m_cur_dev);
-    if (!dev_ret.ok())
-    {
-        std::string err_msg = absl::StrCat("Failed to select device ", m_cur_dev.c_str(),
-                                           ", error: ", dev_ret.status().message());
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
-        return;
-    }
-
-    UpdatePackageList();
-}
-
 void TraceDialog::OnCaptureTypeChanged(int button_id)
 {
     m_gfxr_capture = (button_id == kGfxrCaptureButtonId);
@@ -505,7 +432,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
     EnableCaptureTypeButtons(false);
 
     absl::Status ret;
-    qDebug() << "Start app on dev: " << m_cur_dev.c_str() << ", package: " << m_cur_pkg.c_str()
+    qDebug() << "Start app on dev: " << m_cur_device.c_str() << ", package: " << m_cur_pkg.c_str()
              << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
 
     if (m_gfxr_capture)
@@ -702,7 +629,7 @@ void TraceDialog::OnTraceClicked()
 
 void TraceDialog::OnTraceAvailable(QString const& trace_path) { emit TraceAvailable(trace_path); }
 
-void TraceDialog::OnDevListRefresh() { UpdateDeviceList(true); }
+void TraceDialog::OnDevListRefresh() { UpdateDeviceList(); }
 
 void TraceDialog::OnAppListRefresh() { UpdatePackageList(); }
 
@@ -717,7 +644,7 @@ void TraceDialog::UpdatePackageList()
     auto ret = device->ListPackage(m_pkg_list_options);
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to list package for device ", m_cur_dev,
+        std::string err_msg = absl::StrCat("Failed to list package for device ", m_cur_device,
                                            " error: ", ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));

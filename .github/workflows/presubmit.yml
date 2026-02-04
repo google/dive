@@ -21,10 +21,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - build_type: Release
+          - build_type: RelWithDebInfo
             cc: gcc-14
             cxx: g++-14
-          - build_type: Release
+          - build_type: RelWithDebInfo
             cc: clang-19
             cxx: clang++-19
     uses: ./.github/workflows/build_linux.yml
@@ -41,7 +41,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        build_type: [Debug, Release]
+        build_type: [Debug, RelWithDebInfo]
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
@@ -52,7 +52,7 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/build_mac.yml
     with:
-      build_type: Release
+      build_type: RelWithDebInfo
       restore_cache: true
       upload_cache: false
 
@@ -62,6 +62,6 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/build_android.yml
     with:
-      build_type: Release
+      build_type: RelWithDebInfo
       restore_cache: true
       upload_cache: false

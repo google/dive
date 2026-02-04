@@ -15,7 +15,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        build_type: [Debug, Release]
+        build_type: [Debug, RelWithDebInfo]
         cc: [gcc-14, clang-19]
         include:
           - cc: gcc-14
@@ -36,7 +36,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        build_type: [Debug, Release]
+        build_type: [Debug, RelWithDebInfo]
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
@@ -47,7 +47,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        build_type: [Debug, Release]
+        build_type: [Debug, RelWithDebInfo]
     uses: ./.github/workflows/build_mac.yml
     with:
       build_type: ${{ matrix.build_type }}
@@ -60,7 +60,7 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        build_type: [Debug, Release]
+        build_type: [Debug, RelWithDebInfo]
     uses: ./.github/workflows/build_android.yml
     with:
       build_type: ${{ matrix.build_type }}

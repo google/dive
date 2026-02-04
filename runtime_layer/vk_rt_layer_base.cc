@@ -14,12 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <dlfcn.h>
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan_core.h>
 
 #include <array>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -29,6 +32,76 @@ limitations under the License.
 #include "common/log.h"
 #include "vk_rt_dispatch.h"
 #include "vk_rt_layer_impl.h"
+
+namespace
+{
+std::atomic<bool> g_layer_is_ready(false);
+}
+
+void SetLayerReady() { g_layer_is_ready.store(true, std::memory_order_release); }
+
+bool IsLayerReady() { return g_layer_is_ready.load(std::memory_order_acquire); }
+
+void RunServer()
+{
+    auto server =
+        std::make_unique<Network::UnixDomainServer>(std::make_unique<ServerMessageHandler>());
+
+    constexpr char kUnixAbstractPath[] = "dive_abstract";
+    std::string server_address = kUnixAbstractPath;
+    auto status = server->Start(server_address);
+    if (!status.ok())
+    {
+        LOGW("Error starting the server: %.*s", static_cast<int>(status.message().length()),
+             status.message().data());
+    }
+    LOGI("Server listening on %s", server_address.c_str());
+    server->Wait();
+}
+
+struct ServerStarter
+{
+    std::thread server_thread;
+
+    ServerStarter()
+    {
+        server_thread = std::thread([]() {
+            // Wait until the layer intercepts CreateInstance
+            while (!IsLayerReady())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            LOGI("Layer is ready, starting server...");
+            RunServer();
+        });
+    }
+
+    ~ServerStarter()
+    {
+        if (server_thread.joinable())
+        {
+            server_thread.join();
+        }
+    }
+};
+
+void PreventLayerUnload()
+{
+    Dl_info info;
+    if (dladdr(reinterpret_cast<void*>(&PreventLayerUnload), &info))
+    {
+        dlopen(info.dli_fname, RTLD_NOLOAD | RTLD_NODELETE);
+    }
+}
+
+extern "C"
+{
+    __attribute__((constructor)) void OnLayerLibraryLoad()
+    {
+        [[maybe_unused]] static struct ServerStarter starter;
+        PreventLayerUnload();
+    }
+}
 
 namespace DiveLayer
 {
@@ -375,6 +448,8 @@ VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo* pCreateInfo,
         auto key = (uintptr_t)(*(void**)(*pInstance));
         g_instance_data[key] = std::move(id);
     }
+
+    SetLayerReady();
 
     return result;
 }

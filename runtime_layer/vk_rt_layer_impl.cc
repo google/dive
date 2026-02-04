@@ -31,6 +31,168 @@ limitations under the License.
 
 #include "common/log.h"
 
+absl::Status SendPong(Network::SocketConnection* client_conn)
+{
+    Network::PongMessage response;
+    return Network::SendSocketMessage(client_conn, response);
+}
+
+absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn)
+{
+    Network::HandshakeResponse response;
+    response.SetMajorVersion(request->GetMajorVersion());
+    response.SetMinorVersion(request->GetMinorVersion());
+    return Network::SendSocketMessage(client_conn, response);
+}
+
+absl::Status DownloadFile(Network::DownloadFileRequest* request,
+                          Network::SocketConnection* client_conn)
+{
+    Network::DownloadFileResponse response;
+    std::string file_path = request->GetString();
+
+    std::error_code ec;
+    auto file_size = std::filesystem::file_size(file_path, ec);
+    if (!ec)
+    {
+        response.SetFound(true);
+        response.SetFilePath(file_path);
+        response.SetFileSizeStr(std::to_string(file_size));
+    }
+    else
+    {
+        response.SetFound(false);
+        response.SetErrorReason(ec.message());
+    }
+
+    auto status = Network::SendSocketMessage(client_conn, response);
+    if (!status.ok())
+    {
+        return status;
+    }
+    if (!response.GetFound())
+    {
+        return absl::NotFoundError(response.GetErrorReason());
+    }
+    return client_conn->SendFile(file_path);
+}
+
+absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn)
+{
+    Network::FileSizeResponse response;
+    std::string file_path = request->GetString();
+
+    std::error_code ec;
+    auto file_size = std::filesystem::file_size(file_path, ec);
+    if (!ec)
+    {
+        response.SetFound(true);
+        response.SetFileSizeStr(std::to_string(file_size));
+    }
+    else
+    {
+        response.SetFound(false);
+        response.SetErrorReason(ec.message());
+    }
+    return Network::SendSocketMessage(client_conn, response);
+}
+
+void ServerMessageHandler::OnConnect() { LOGI("ServerMessageHandler: onConnect()"); }
+
+void ServerMessageHandler::OnDisconnect() { LOGI("ServerMessageHandler: onDisconnect()"); }
+
+void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
+                                         Network::SocketConnection* client_conn)
+{
+    if (!message)
+    {
+        LOGI("Message is null.");
+        return;
+    }
+    if (!client_conn)
+    {
+        LOGI("Client connection is null.");
+        return;
+    }
+
+    switch (message->GetMessageType())
+    {
+        case Network::MessageType::PING_MESSAGE:
+        {
+            LOGI("Message received: Ping");
+            auto status = SendPong(client_conn);
+            if (!status.ok())
+            {
+                LOGI("Send pong failed: %.*s", (int)status.message().length(),
+                     status.message().data());
+            }
+            break;
+        }
+        case Network::MessageType::HANDSHAKE_REQUEST:
+        {
+            LOGI("Message received: HandShakeRequest");
+            auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
+            if (request)
+            {
+                auto status = Handshake(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("Handshake failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
+            }
+            else
+            {
+                LOGI("HandShakeRequest message is null.");
+            }
+            break;
+        }
+        case Network::MessageType::DOWNLOAD_FILE_REQUEST:
+        {
+            LOGI("Message received: DownloadFileRequest");
+            auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
+            if (request)
+            {
+                auto status = DownloadFile(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("DownloadFile failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
+            }
+            else
+            {
+                LOGI("DownloadFileRequest message is null.");
+            }
+            break;
+        }
+        case Network::MessageType::FILE_SIZE_REQUEST:
+        {
+            LOGI("Message received: FileSizeRequest");
+            auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
+            if (request)
+            {
+                auto status = GetFileSize(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("GetFileSize failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
+            }
+            else
+            {
+                LOGI("FileSizeRequest message is null.");
+            }
+            break;
+        }
+        default:
+        {
+            LOGW("Message type %d unhandled.", (int)message->GetMessageType());
+            break;
+        }
+    }
+}
+
 namespace DiveLayer
 {
 
@@ -280,6 +442,7 @@ VkResult DiveRuntimeLayer::CreateDevice(PFN_vkGetDeviceProcAddr pa, PFN_vkCreate
                                         const VkDeviceCreateInfo* pCreateInfo,
                                         const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
 {
+    LOGI("ecapia DiveRuntimeLayer::CreateDevice");
     VkResult result = pfn(physicalDevice, pCreateInfo, pAllocator, pDevice);
     m_device_proc_addr = pa;
 

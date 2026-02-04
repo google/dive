@@ -20,6 +20,7 @@ limitations under the License.
 #include <vulkan/vulkan_core.h>
 
 #include <deque>
+#include <filesystem>
 #include <limits>
 #include <numeric>
 #include <set>
@@ -27,6 +28,25 @@ limitations under the License.
 #include <vector>
 
 #include "gpu_time.h"
+#include "network/unix_domain_server.h"
+
+absl::Status SendPong(Network::SocketConnection* client_conn);
+
+absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn);
+
+absl::Status DownloadFile(Network::DownloadFileRequest* request,
+                          Network::SocketConnection* client_conn);
+
+absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn);
+
+class ServerMessageHandler : public Network::IMessageHandler
+{
+ public:
+    void OnConnect() override;
+    void OnDisconnect() override;
+    void HandleMessage(std::unique_ptr<Network::ISerializable> message,
+                       Network::SocketConnection* client_conn) override;
+};
 
 namespace DiveLayer
 {

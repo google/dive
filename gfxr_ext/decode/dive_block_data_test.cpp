@@ -32,6 +32,9 @@ class DiveBlockDataTestFixture : public testing::Test
         o.push_back(std::pair<uint32_t, uint32_t>(100, 10));
         o.push_back(std::pair<uint32_t, uint32_t>(110, 90));
         o.push_back(std::pair<uint32_t, uint32_t>(200, 50));
+
+        auto [last_block_offset, last_block_size] = o.back();
+        file_size = last_block_offset + last_block_size;
     }
 
     void PopulateExampleModifications()
@@ -64,9 +67,8 @@ class DiveBlockDataTestFixture : public testing::Test
             // Called at the beginning of each block
             d.AddOriginalBlock(i, o[i].first);
         }
-        // Fake block that indicates the end of the file
-        d.AddOriginalBlock(o.size(), o.back().first + o.back().second);
-        d.FinalizeOriginalBlocksMapSizes();
+
+        d.FinalizeOriginalBlocksMapSizes(file_size);
     }
 
     // Gives the descrip string of o[id] that TestBlockVisitor would produce
@@ -85,6 +87,7 @@ class DiveBlockDataTestFixture : public testing::Test
     DiveBlockData d = {};
     TestBlockVisitor v = {};
     std::vector<std::pair<uint32_t, uint32_t>> o = {};  // offset & size
+    uint32_t file_size = 0;
     std::vector<std::shared_ptr<std::vector<char>>> m = {};
 };
 
@@ -113,20 +116,20 @@ TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_Success)
 TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_AlreadyLocked_Success)
 {
     LockExampleOriginals();
-    EXPECT_TRUE(d.FinalizeOriginalBlocksMapSizes());
+    EXPECT_TRUE(d.FinalizeOriginalBlocksMapSizes(file_size));
     EXPECT_TRUE(d.IsOriginalBlocksMapLocked());
 }
 
 TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_EmptyOriginals_Fail)
 {
-    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes());
+    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes(file_size));
 }
 
 TEST_F(DiveBlockDataTestFixture, FinalizeOriginalBlocksMapSizes_NegativeSizeBlock_Fail)
 {
     d.AddOriginalBlock(0, 100);
     d.AddOriginalBlock(1, 50);
-    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes());
+    EXPECT_FALSE(d.FinalizeOriginalBlocksMapSizes(file_size));
 }
 
 TEST_F(DiveBlockDataTestFixture, AddModification_Unlocked_Fail)

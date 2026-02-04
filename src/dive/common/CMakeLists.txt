@@ -15,4 +15,13 @@
 #
 
 add_library(dive_status status.h status.cpp)
-target_link_libraries(dive_status PUBLIC dive_src_includes absl::stacktrace)
+target_link_libraries(
+    dive_status
+    PUBLIC
+        dive_src_includes
+        absl::stacktrace
+        absl::symbolize
+        absl::strings
+        absl::str_format
+        absl::cord
+)

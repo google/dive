@@ -118,7 +118,7 @@ class DiveBlockData
     bool AddOriginalBlock(size_t index, uint64_t offset);
 
     // Calculate block sizes, drop the file-end block and lock the map
-    bool FinalizeOriginalBlocksMapSizes();
+    bool FinalizeOriginalBlocksMapSizes(uint64_t file_size);
     bool IsOriginalBlocksMapLocked() const { return original_blocks_map_locked_; }
 
     // Add or edit modifications

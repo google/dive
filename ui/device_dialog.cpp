@@ -53,6 +53,7 @@ void DeviceDialog::UpdateDeviceList()
     for (size_t i = 0; i < m_devices.size(); ++i)
     {
         QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+        item->setData(QString(m_devices[i].m_serial.c_str()), Qt::UserRole);
         m_device_model->appendRow(item);
         // Track previously selected device (offset by 1 due to placeholder)
         if (m_cur_device == m_devices[i].m_serial)

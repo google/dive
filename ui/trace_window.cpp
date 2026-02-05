@@ -364,12 +364,12 @@ void TraceDialog::closeEvent(QCloseEvent* event)
 
 void TraceDialog::showEvent(QShowEvent* event)
 {
-    if (!m_cur_dev.empty())
+    if (!m_cur_device.empty())
     {
         QModelIndexList matches =
-            m_dev_model->match(m_dev_model->index(0, 0),
+            m_device_model->match(m_device_model->index(0, 0),
                                Qt::UserRole,                // Search this role
-                               QString(m_cur_dev.c_str()),  // For the current device serial
+                               QString(m_cur_device.c_str()),  // For the current device serial
                                1,                           // Stop after 1 match
                                Qt::MatchExactly);
 
@@ -867,20 +867,19 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const& capture_path)
 
 void TraceDialog::ResetDialog()
 {
-    if (m_gfxr_capture)
-    {
-        m_gfxr_capture_button->setEnabled(false);
-        m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
-        m_gfxr_capture_file_directory_input_box->clear();
-    }
-    m_cur_dev.clear();
+    m_gfxr_capture_button->setEnabled(false);
+    m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
+    m_gfxr_capture_file_directory_input_box->clear();
+    m_cur_device.clear();
     m_cur_pkg.clear();
     m_cmd_input_box->clear();
     m_args_input_box->clear();
-    m_capture_file_local_directory_input_box->clear();
+    m_capture_file_local_root_directory_input_box->clear();
     m_app_type_box->setCurrentIndex(-1);
     m_pkg_box->setCurrentIndex(-1);
+    m_pkg_model->clear();
     m_run_button->setEnabled(false);
+    m_capture_button->setEnabled(false);
 }
 
 // =================================================================================================

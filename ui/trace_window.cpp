@@ -368,10 +368,10 @@ void TraceDialog::showEvent(QShowEvent* event)
     {
         QModelIndexList matches =
             m_device_model->match(m_device_model->index(0, 0),
-                               Qt::UserRole,                // Search this role
-                               QString(m_cur_device.c_str()),  // For the current device serial
-                               1,                           // Stop after 1 match
-                               Qt::MatchExactly);
+                                  Qt::UserRole,                   // Search this role
+                                  QString(m_cur_device.c_str()),  // For the current device serial
+                                  1,                              // Stop after 1 match
+                                  Qt::MatchExactly);
 
         if (matches.empty())
         {
@@ -423,7 +423,6 @@ void TraceDialog::OnPackageSelected(const QString& s)
     if (m_cur_pkg != m_pkg_list[cur_index])
     {
         m_cur_pkg = m_pkg_list[cur_index];
-        m_app_type_box->setCurrentIndex(-1);
     }
     m_run_button->setEnabled(true);
     m_cmd_input_box->setText(m_cur_pkg.c_str());
@@ -435,7 +434,6 @@ void TraceDialog::OnInputCommand(const QString& text)
     m_run_button->setEnabled(true);
     m_cur_pkg = text.toStdString();
     m_pkg_box->setCurrentIndex(-1);
-    m_app_type_box->setCurrentIndex(-1);
 }
 
 void TraceDialog::OnInputArgs(const QString& text)
@@ -875,7 +873,8 @@ void TraceDialog::ResetDialog()
     m_cmd_input_box->clear();
     m_args_input_box->clear();
     m_capture_file_local_root_directory_input_box->clear();
-    m_app_type_box->setCurrentIndex(-1);
+    // Reset the app type to the default Vulkan (OpenXR)
+    m_app_type_box->setCurrentIndex(0);
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_model->clear();
     m_run_button->setEnabled(false);

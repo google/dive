@@ -85,7 +85,6 @@ void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
     if (m_cur_device == target_device.m_serial)
     {
         qDebug() << "Device already selected: " << m_cur_device.c_str();
-        OnDeviceSelected();
         return;
     }
     Dive::DeviceManager& device_manager = Dive::GetDeviceManager();

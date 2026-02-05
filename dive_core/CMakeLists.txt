@@ -223,6 +223,7 @@ add_dependencies(${PROJECT_NAME} freedreno_devices_header)
 target_link_libraries(
     ${PROJECT_NAME}
     PUBLIC dive_core_includes absl::no_destructor absl::strings Vulkan::Headers
+    PRIVATE absl::str_format absl::statusor absl::status
 )
 
 make_directory("${FREEDRENO_ISA_DIRECTORY}")
@@ -355,9 +356,10 @@ if(MSVC)
     # 4100: unreferenced formal parameter
     # 4201: prevent nameless struct/union
     # 4127: conditional expression is constant
+    # 4324: structure was padded due to alignment specifier (prevents using absl::Cleanup)
     target_compile_options(
         ${PROJECT_NAME}
-        PRIVATE /W4 /WX /wd4100 /wd4201 /wd4127
+        PRIVATE /W4 /WX /wd4100 /wd4201 /wd4127 /wd4324
     )
     # Add NOMINMAX definition for Windows builds to prevent min/max macro conflicts
     target_compile_definitions(${PROJECT_NAME} PUBLIC NOMINMAX)

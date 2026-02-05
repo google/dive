@@ -109,7 +109,7 @@ bool DiveBlockData::AddOriginalBlock(size_t index, uint64_t offset)
     return true;
 }
 
-bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
+bool DiveBlockData::FinalizeOriginalBlocksMapSizes(uint64_t file_size)
 {
     if (original_blocks_map_locked_)
     {
@@ -150,10 +150,8 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes()
         original_blocks_map_[i]->size_ = size;
     }
 
-    // The file processor calls AddOriginalBlock() even at the very end of the GFXR file, so this
-    // last block has a size of 0 and its offset is equal to the file size. The info was used in the
-    // calculation of the size of the penultimate block and now the last block needs to be trimmed.
-    original_blocks_map_.pop_back();
+    DiveOriginalBlock& last_block = *original_blocks_map_.back();
+    last_block.size_ = file_size - last_block.offset_;
 
     original_blocks_map_locked_ = true;
     return true;

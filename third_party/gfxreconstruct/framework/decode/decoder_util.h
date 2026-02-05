@@ -56,8 +56,9 @@ bool IsComplete(std::vector<T>& consumers, uint64_t block_index)
 {
     VkQueue queue = VK_NULL_HANDLE;
 
-    const auto queue_family_flags = device_info->queue_family_creation_flags.find(queue_family_index);
-    assert(queue_family_flags != device_info->queue_family_creation_flags.end());
+    const auto queue_family_flags =
+        device_info->enabled_queue_family_flags.queue_family_creation_flags.find(queue_family_index);
+    assert(queue_family_flags != device_info->enabled_queue_family_flags.queue_family_creation_flags.end());
 
     // If the queue has flags, it has to use GetDeviceQueue2 to get it.
     if (queue_family_flags->second != 0)

@@ -16,15 +16,59 @@
 
 #include "gfxr_capture_data.h"
 
+#include <filesystem>
 #include <iostream>
 
+#include "absl/cleanup/cleanup.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "dive_core/common/common.h"
 #include "generated/generated_vulkan_dive_consumer.h"
 #include "gfxr_ext/decode/dive_file_processor.h"
 #include "third_party/gfxreconstruct/framework/generated/generated_vulkan_decoder.h"
+#include "util/platform.h"
 
 namespace Dive
 {
+
+namespace
+{
+using gfxrecon::util::platform::FileClose;
+using gfxrecon::util::platform::FileOpen;
+using gfxrecon::util::platform::FileSeek;
+using gfxrecon::util::platform::FileSeekOrigin;
+using gfxrecon::util::platform::FileTell;
+
+absl::StatusOr<uint64_t> GetFileSize(const std::filesystem::path& file_path)
+{
+    FILE* file = nullptr;
+    if (int32_t error = FileOpen(&file, file_path.string().c_str(), "rb"); error != 0)
+    {
+        return absl::ErrnoToStatus(error, absl::StrFormat("Can't open: %s", file_path));
+    }
+    absl::Cleanup close_file = [file]() {
+        FileClose(file);  // Ignore error
+    };
+
+    if (!FileSeek(file, 0, FileSeekOrigin::FileSeekEnd))
+    {
+        return absl::ErrnoToStatus(errno,
+                                   absl::StrFormat("Can't seek to end of file: %s", file_path));
+    }
+
+    int64_t file_size = FileTell(file);
+    if (file_size == -1)
+    {
+        return absl::ErrnoToStatus(
+            errno, absl::StrFormat("Failed to get the file position indicator: %s", file_path));
+    }
+
+    GFXRECON_ASSERT(file_size >= 0);
+    return static_cast<uint64_t>(file_size);
+}
+}  // namespace
+
 // =================================================================================================
 // GfxrCaptureData
 // =================================================================================================
@@ -72,7 +116,14 @@ CaptureData::LoadResult GfxrCaptureData::LoadCaptureFile(const std::string& file
     m_gfxr_command_buffers = dive_annotation_processor.TakeVkCommandsCache();
     m_gfxr_draw_call_counts = dive_annotation_processor.TakeDrawCallMap();
 
-    if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes())
+    absl::StatusOr<uint64_t> file_size = GetFileSize(file_name);
+    if (!file_size.ok())
+    {
+        std::cerr << file_size.status().message() << '\n';
+        return LoadResult::kFileIoError;
+    }
+
+    if (!m_gfxr_capture_block_data->FinalizeOriginalBlocksMapSizes(*file_size))
     {
         std::cerr << "Error: cannot lock gfxrecon DiveBlockData" << std::endl;
         return LoadResult::kFileIoError;

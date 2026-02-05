@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "capture_service/device_mgr.h"
+#include "device_dialog.h"
 #include "package_filter.h"
 
 #pragma once
@@ -59,14 +60,13 @@ class AppTypeFilterModel : public QSortFilterProxyModel
     bool m_filter_active = false;
 };
 
-class TraceDialog : public QDialog
+class TraceDialog : public DeviceDialog
 {
     Q_OBJECT
 
  public:
     TraceDialog(ApplicationController& controller, QWidget* parent = 0);
     ~TraceDialog();
-    void UpdateDeviceList(bool isInitialized);
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void ShowGfxrFields();
@@ -78,7 +78,6 @@ class TraceDialog : public QDialog
     void closeEvent(QCloseEvent* event) override;
 
  private slots:
-    void OnDeviceSelected(const QString&);
     void OnPackageSelected(const QString&);
     void OnStartClicked();
     void OnTraceClicked();
@@ -91,7 +90,7 @@ class TraceDialog : public QDialog
     void OnPackageListFilter();
     void OnPackageListFilterApplied(const QString& filter);
     void OnGfxrCaptureClicked();
-    void ShowMessage(const QString& message);
+    void ShowMessage(const QString& message) override;
     absl::Status StopPackageAndCleanup();
     void OnCaptureTypeChanged(int id);
     void OnShowAdvancedOptions(bool show);
@@ -103,6 +102,9 @@ class TraceDialog : public QDialog
     bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice* device, const std::string& capture_directory);
 
+    void OnDeviceSelected() override;
+    void OnDeviceSelectionCleared() override;
+
     ApplicationController& m_controller;
 
     const QString kStart_Application = "&Start Application";
@@ -110,10 +112,8 @@ class TraceDialog : public QDialog
     const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
     QHBoxLayout* m_capture_layout;
-    QLabel* m_dev_label;
-    QStandardItemModel* m_dev_model;
-    QComboBox* m_dev_box;
-    QPushButton* m_dev_refresh_button;
+    QLabel* m_device_label;
+    QPushButton* m_device_refresh_button;
 
     QHBoxLayout* m_capture_type_layout;
     QLabel* m_capture_type_label;
@@ -163,8 +163,6 @@ class TraceDialog : public QDialog
     QLineEdit* m_capture_file_local_root_directory_input_box;
 
     QVBoxLayout* m_main_layout;
-    std::vector<Dive::DeviceInfo> m_devices;
-    std::string m_cur_dev;
     std::vector<std::string> m_pkg_list;
     std::string m_cur_pkg;
     std::string m_executable;

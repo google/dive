@@ -58,6 +58,10 @@
 #include "parse_dump_resources_cli.h"
 #include "replay_pre_processing.h"
 
+// Includes for recapture
+#include "encode/vulkan_capture_manager.h"
+#include "recapture_vulkan_entry.h"
+
 #include <exception>
 #include <memory>
 #include <stdexcept>
@@ -66,11 +70,11 @@
 
 extern "C"
 {
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = 615;
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = 616;
 }
 extern "C"
 {
-    __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\";
+    __declspec(dllexport) extern const char* D3D12SDKPath = reinterpret_cast<const char*>(u8".\\D3D12\\");
 }
 
 #include <conio.h>
@@ -153,7 +157,7 @@ int main(int argc, const char** argv)
             // Select WSI context based on CLI
             std::string wsi_extension = GetWsiExtensionName(GetWsiPlatform(arg_parser));
             auto        application   = std::make_shared<gfxrecon::application::Application>(
-                kApplicationName, wsi_extension, file_processor.get());
+                kApplicationName, file_processor.get(), wsi_extension, nullptr);
 
             gfxrecon::decode::VulkanTrackedObjectInfoTable tracked_object_info_table;
             gfxrecon::decode::VulkanReplayOptions          vulkan_replay_options =
@@ -201,6 +205,18 @@ int main(int argc, const char** argv)
 
             gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, vulkan_replay_options);
             gfxrecon::decode::VulkanDecoder        vulkan_decoder;
+
+            if (vulkan_replay_options.capture)
+            {
+                gfxrecon::vulkan_recapture::RecaptureVulkanEntry::InitSingleton();
+
+                // Set replay to use the GetInstanceProcAddr function from RecaptureVulkanEntry so that replay first
+                // calls into the capture layer instead of directly into the loader and Vulkan runtime.
+                // Set the capture manager's instance and device creation callbacks.
+                vulkan_replay_consumer.SetupForRecapture(gfxrecon::vulkan_recapture::GetInstanceProcAddr,
+                                                         gfxrecon::vulkan_recapture::dispatch_CreateInstance,
+                                                         gfxrecon::vulkan_recapture::dispatch_CreateDevice);
+            }
 
             ApiReplayOptions  api_replay_options;
             ApiReplayConsumer api_replay_consumer;
@@ -307,7 +323,7 @@ int main(int argc, const char** argv)
             fps_info.EndFile(file_processor->GetCurrentFrameNumber() + 1);
 
             if ((file_processor->GetCurrentFrameNumber() > 0) &&
-                (file_processor->GetErrorState() == gfxrecon::decode::FileProcessor::kErrorNone))
+                (file_processor->GetErrorState() == gfxrecon::decode::BlockIOError::kErrorNone))
             {
                 if (file_processor->GetCurrentFrameNumber() < measurement_start_frame)
                 {
@@ -335,7 +351,7 @@ int main(int argc, const char** argv)
                     fps_info.LogMeasurements();
                 }
             }
-            else if (file_processor->GetErrorState() != gfxrecon::decode::FileProcessor::kErrorNone)
+            else if (file_processor->GetErrorState() != gfxrecon::decode::BlockIOError::kErrorNone)
             {
                 GFXRECON_WRITE_CONSOLE("A failure has occurred during replay");
                 return_code = -1;
@@ -343,6 +359,11 @@ int main(int argc, const char** argv)
             else
             {
                 GFXRECON_WRITE_CONSOLE("File did not contain any frames");
+            }
+
+            if (vulkan_replay_options.capture)
+            {
+                gfxrecon::vulkan_recapture::RecaptureVulkanEntry::DestroySingleton();
             }
         }
     }

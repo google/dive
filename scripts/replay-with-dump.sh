@@ -58,7 +58,7 @@ if [ $# -eq 2 ]; then
 fi
 $DIVE_CLIENT_CLI --command gfxr_replay \
     --gfxr_replay_file_path "$PUSH_DIR/$GFXR_BASENAME" \
-    --gfxr_replay_flags "--dump-resources $PUSH_DIR/$JSON_BASENAME --dump-resources-dir $DUMP_DIR --dump-resources-dump-all-image-subresources"
+    --gfxr_replay_flags "--dump-resources $PUSH_DIR/$JSON_BASENAME --dump-resources-dir $DUMP_DIR"
 
 adb pull "$DUMP_DIR"
 echo "Results in $DUMP_DIR"

@@ -104,7 +104,7 @@ def main(args):
     ]
     dive.echo_and_run(cmd)
 
-    # This step is necessary because cmake may not overwrite file of same name even if the contents have changed
+    # TODO: b/482108095 - This step is necessary because cmake may not overwrite file of same name even if the contents have changed
     if os.path.exists("build/pkg/device"):
         print("\nClearing install folder...")
         shutil.rmtree("build/pkg/device")

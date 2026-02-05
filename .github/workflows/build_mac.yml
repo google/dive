@@ -66,7 +66,7 @@ jobs:
           cmake --install build/host --prefix build/pkg --config ${{ inputs.build_type }}
       - name: Put files in app bundle
         run: |
-          python scripts/deploy_mac_bundle.py --no_device_libraries --no_sign
+          python scripts/deploy_mac_bundle.py --no-device-libraries --no-sign
       - name: Run tests
         run: |
           ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build/host

@@ -33,17 +33,17 @@ def parse_args():
         description='This script automates the standard build process for Dive Device Libraries',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        "--dive_release_type", 
+        "--dive-release-type", 
         default="dev", 
         help="Description string for Device Libraries version info")
     parser.add_argument(
-        "--build_type", 
+        "--build-type", 
         type=BuildType, 
         default=BuildType.DEBUG, 
         choices=[str(build_type) for build_type in BuildType],
         help="Build type for Dive libraries (excluding GFXR gradle build which is always Debug)")
     parser.add_argument(
-        "--clean_build", 
+        "--clean-build", 
         action="store_true",
         help="Clean device build folders before rebuilding")
     return parser.parse_args()
@@ -88,7 +88,6 @@ def main(args):
         f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
         "-GNinja Multi-Config",
         "-Bbuild/device",
-        "-DCMAKE_MAKE_PROGRAM=ninja",
         "-DCMAKE_SYSTEM_NAME=Android",
         "-DANDROID_ABI=arm64-v8a",
         "-DANDROID_PLATFORM=android-26",
@@ -124,5 +123,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    dive.check_python_version()
+
     with dive.Timer():
         main(parse_args())

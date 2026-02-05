@@ -24,16 +24,18 @@ RELATIVE_INSTALL_DIR = "build/pkg"
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        prog="deploy_mac_bundle",
+        prog="deploy-mac-bundle",
         description='This script automates the bundling for Dive application on MacOS')
     parser.add_argument(
-        "--no_sign", 
-        action="store_true",
-        help="Do not sign the app bundle")
+        "--sign", 
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Sign the app bundle")
     parser.add_argument(
-        "--no_device_libraries", 
-        action="store_true",
-        help="Do not copy over the device librares into the bundle")
+        "--device-libraries",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Copy over the device librares into the bundle")
     return parser.parse_args()
 
 
@@ -50,41 +52,41 @@ def main(args):
     macdeployqt_exec = shutil.which("macdeployqt")
     assert(macdeployqt_exec is not None)
 
-    if not args.no_sign:
+    if args.sign:
         print("\nChecking codesign...")
         codesign_exec = shutil.which("codesign")
         assert(codesign_exec is not None)
 
     print("\nSetting up dive.app...")
     # New dive.app was installed with host tools, move it and run macdeployqt
-    if os.path.exists("./host/dive.app"):
-        if os.path.exists("./dive.app"):
-            shutil.rmtree("./dive.app")
-        shutil.move("./host/dive.app", "./dive.app")
+    if os.path.exists("host/dive.app"):
+        if os.path.exists("dive.app"):
+            shutil.rmtree("dive.app")
+        shutil.move("host/dive.app", "dive.app")
 
         cmd = [macdeployqt_exec, "dive.app"]
         dive.echo_and_run(cmd)
     # There is an existing dive.app that has been deployed already, skip setup and proceed
-    elif os.path.exists("./dive.app"):
+    elif os.path.exists("dive.app"):
         print("\nSkipping setup because it was already done, reinstall host tools to retrigger...")
     else:
         raise Exception("Not detecting any dive.app bundle, have you installed host tools?")
 
     print("\nCopying resources into app bundle...")
 
-    shutil.copytree("./host", "./dive.app/Contents/MacOS", dirs_exist_ok=True)
-    shutil.copytree("./plugins", "./dive.app/Contents/Resources/plugins", dirs_exist_ok=True)
+    shutil.copytree("host", "dive.app/Contents/MacOS", dirs_exist_ok=True)
+    shutil.copytree("plugins", "dive.app/Contents/Resources/plugins", dirs_exist_ok=True)
 
-    if args.no_device_libraries:
-        print("\nSkipping copying device libraries because --no_device_libraries...")
+    if args.device_libraries:
+        shutil.copytree("device", "dive.app/Contents/Resources", dirs_exist_ok=True)
     else:
-        shutil.copytree("./device", "./dive.app/Contents/Resources", dirs_exist_ok=True)
+        print("\nSkipping copying device libraries because --no-device-libraries...")
 
-    if args.no_sign:
-        print("\nSkipping signing step becaouse --no_sign...")
-    else:
+    if args.sign:
         cmd = [codesign_exec, "--force", "--deep", "--sign", "-", "dive.app"]
         dive.echo_and_run(cmd)
+    else:
+        print("\nSkipping signing step because --no-sign...")
 
     print(f"\nApplication now at {os.getcwd()}/dive.app")
 
@@ -92,5 +94,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    dive.check_python_version()
+
     with dive.Timer():
         main(parse_args())

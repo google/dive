@@ -17,7 +17,12 @@
 import os
 import pathlib
 import subprocess
-from timeit import default_timer
+import sys
+import timeit
+
+
+def check_python_version():
+    assert sys.version_info >= (3, 9)
 
 
 def get_dive_root() -> pathlib.Path:
@@ -43,9 +48,9 @@ def echo_and_run(cmd):
 
 class Timer:
     def __enter__(self):
-        self._start = default_timer()
+        self._start = timeit.default_timer()
 
     def __exit__(self, type, value, traceback):
-        end = default_timer()
+        end = timeit.default_timer()
         elapsed_time = end - self._start
         print(f"\nTime Elapsed: {elapsed_time:.3f}s")

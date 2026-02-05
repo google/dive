@@ -25,7 +25,8 @@ RELATIVE_INSTALL_DIR = "build/pkg"
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="deploy-mac-bundle",
-        description='This script automates the bundling for Dive application on MacOS')
+        description='This script automates the bundling for Dive application on MacOS',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         "--sign", 
         action=argparse.BooleanOptionalAction,

@@ -85,7 +85,8 @@ Make sure to have built everything according to BUILD.md (don't forget the insta
     ```sh
     git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
     ```
-1. Copy missing submodule entries from `//third_party/gfxreconstruct/.gitmodules` into `//.gitmodules`
+1. Run `//scripts/incorporate_gfxr_submodules.py` so that the required submodules are cloned.
+1. Since the previous step can't remove submodules, remove any `third_party/gfxreconstruct/external/*` submodule entries in `//.gitmodules` that aren't in `//third_party/gfxreconstruct/.gitmodules`.
 1. Update the submodules so that the merge commit includes the correct SHA:
     ```sh
     git submodule update --init --recursive

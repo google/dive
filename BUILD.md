@@ -130,13 +130,13 @@ Warning: We only support "Debug" for the gradle build for GFXR portion, so it wi
 
 Modify the script if necessary to provide the appropriate `ANDROID_ABI` depending on your device.
 
-### Linux
+TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
 
-Running the script `scripts/build_android.sh` will build and install the device resources at `$DIVE_ROOT_PATH/pkg/device`.
+```sh
+python scripts/build_android.py
+```
 
-### Windows
-
-In the Visual Studio Developer Command Prompt for VS 2022 (or 2019), running the script `scripts\build_android.bat` will build and install the device resources at `$DIVE_ROOT_PATH\pkg\device`.
+The script will build and install the device resources at `$DIVE_ROOT_PATH/build/pkg/device`
 
 ### Troubleshooting Tips
 * Gradle build
@@ -149,8 +149,11 @@ In the Visual Studio Developer Command Prompt for VS 2022 (or 2019), running the
 
 ## App bundle (macOS)
 
-After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle from the contents of the `pkg/` directory.
+After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle from the contents of the `build/pkg/` directory.
 
-All external plugin folders must be placed under `$DIVE_ROOT_PATH/pkg/plugins` to be properly added to the bundle.
+All external plugin folders must be placed under `$DIVE_ROOT_PATH/build/pkg/plugins` to be properly added to the bundle.
 
-Running the script `scripts/deploy_mac_bundle.sh` will create the mac package and place it at `$DIVE_ROOT_PATH/pkg/dive.app`.
+```sh
+python scripts/deploy_mac_bundle.py
+```
+This will deploy the mac package and place it at `$DIVE_ROOT_PATH/build/pkg/dive.app`.

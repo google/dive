@@ -585,7 +585,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
 
     // GFXR relies on capture_android_trigger changing from false to true as the condition for
     // beginning the capture. Thus, ensure the prop starts as false.
-    if (absl::Status status = adb.Run("shell setprop debug.gfxrecon.capture_android_trigger false");
+    if (absl::Status status = adb.Shell("setprop debug.gfxrecon.capture_android_trigger false");
         !status.ok())
     {
         return Dive::InternalError(
@@ -601,7 +601,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
             break;
     }
 
-    if (absl::Status status = adb.Run("shell setprop debug.gfxrecon.capture_android_trigger true");
+    if (absl::Status status = adb.Shell("setprop debug.gfxrecon.capture_android_trigger true");
         !status.ok())
     {
         return Dive::InternalError(
@@ -770,7 +770,7 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
                          Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
         context.mgr.GetDevice()
             ->Adb()
-            .Run(absl::StrFormat("shell rm -rf %s", on_device_capture_directory))
+            .Shell(absl::StrFormat("rm -rf %s", on_device_capture_directory))
             .IgnoreError();
     };
 

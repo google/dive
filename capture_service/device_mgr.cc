@@ -117,7 +117,7 @@ absl::Status ValidatePythonPath(const std::string& python_path)
 absl::Status SetSystemProperty(const AdbSession& adb, std::string_view property,
                                std::string_view value)
 {
-    return adb.Run(absl::StrFormat("shell setprop %s %s", property, value));
+    return adb.SetProp(property, value);
 }
 
 // Set the property to an empty string. The users of the Android API typically don't make a
@@ -128,7 +128,7 @@ absl::Status UnsetSystemProperty(const AdbSession& adb, std::string_view propert
     // 1. Device shell. Requires explicit empty string "" to perform unset.
     // 2. Host shell. Requires quotes to be escaped with backslash.
     // 3. C++ string literals. Requires quotes and backslashes to be escaped with backslash.
-    return adb.Run(absl::StrFormat("shell setprop %s \\\"\\\"", property));
+    return adb.SetProp(property, "");
 }
 
 // Delete all persistent Android settings related to using Vulkan debug layers
@@ -136,11 +136,11 @@ absl::Status DisableVulkanLayer(const AdbSession& adb)
 {
     // See https://developer.android.com/ndk/guides/graphics/validation-layer
     absl::Status status;
-    status.Update(adb.Run("shell settings delete global enable_gpu_debug_layers"));
-    status.Update(adb.Run("shell settings delete global gpu_debug_app"));
-    status.Update(adb.Run("shell settings delete global gpu_debug_layers"));
-    status.Update(adb.Run("shell settings delete global gpu_debug_layer_app"));
-    status.Update(adb.Run("shell settings delete global gpu_debug_layers_gles"));
+    status.Update(adb.Shell("settings delete global enable_gpu_debug_layers"));
+    status.Update(adb.Shell("settings delete global gpu_debug_app"));
+    status.Update(adb.Shell("settings delete global gpu_debug_layers"));
+    status.Update(adb.Shell("settings delete global gpu_debug_layer_app"));
+    status.Update(adb.Shell("settings delete global gpu_debug_layers_gles"));
     return status;
 }
 
@@ -152,21 +152,20 @@ absl::Status EnableVulkanLayer(const AdbSession& adb, std::string_view app, std:
     // Start with a clean slate
     RETURN_IF_ERROR(DisableVulkanLayer(adb));
     // See https://developer.android.com/ndk/guides/graphics/validation-layer
-    RETURN_IF_ERROR(adb.Run("shell settings put global enable_gpu_debug_layers 1"));
-    RETURN_IF_ERROR(adb.Run(absl::StrFormat("shell settings put global gpu_debug_app %s", app)));
+    RETURN_IF_ERROR(adb.Shell("settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(adb.Shell(absl::StrFormat("settings put global gpu_debug_app %s", app)));
     RETURN_IF_ERROR(
-        adb.Run(absl::StrFormat("shell settings put global gpu_debug_layers %s", layer)));
+        adb.Shell(absl::StrFormat("settings put global gpu_debug_layers %s", layer)));
     if (!layer_app.empty())
     {
-        RETURN_IF_ERROR(adb.Run(
-            absl::StrFormat("shell settings put global gpu_debug_layer_app %s", layer_app)));
+        RETURN_IF_ERROR(adb.Shell(absl::StrFormat("settings put global gpu_debug_layer_app %s", layer_app)));
     }
     return absl::OkStatus();
 }
 
 absl::Status IsAppInstalled(const AdbSession& adb, std::string_view package)
 {
-    return adb.Run(absl::StrFormat("shell pm path %s", package));
+    return adb.Shell(absl::StrFormat("pm path %s", package));
 }
 
 }  // namespace
@@ -389,20 +388,20 @@ AndroidDevice::~AndroidDevice()
 absl::Status AndroidDevice::Init()
 {
     m_dev_info.m_serial = m_serial;
-    ASSIGN_OR_RETURN(m_dev_info.m_model, Adb().RunAndGetResult("shell getprop ro.product.model"));
+    ASSIGN_OR_RETURN(m_dev_info.m_model, Adb().ShellAndGetResult("getprop ro.product.model"));
     ASSIGN_OR_RETURN(m_dev_info.m_manufacturer,
-                     Adb().RunAndGetResult("shell getprop ro.product.manufacturer"));
+                     Adb().ShellAndGetResult("getprop ro.product.manufacturer"));
 
     LOGD("select: %s\n", GetDeviceDisplayName().c_str());
     LOGD("AndroidDevice created.\n");
     // Determine if the adb was running in root.
     m_original_state.m_is_root_shell = false;
-    auto res = Adb().RunAndGetResult("shell whoami");
+    auto res = Adb().ShellAndGetResult("whoami");
     if (res.ok())
     {
         m_original_state.m_is_root_shell = (*res == "root");
     }
-    res = Adb().RunAndGetResult("shell getprop ro.hardware.vulkan");
+    res = Adb().ShellAndGetResult("getprop ro.hardware.vulkan");
     if (res.ok())
     {
         m_dev_info.m_is_adreno_gpu = (*res == "adreno");
@@ -431,7 +430,7 @@ absl::Status AndroidDevice::CheckAbi()
         installed_abi = *ret;
     }
     std::string device_abi = "";
-    ASSIGN_OR_RETURN(device_abi, Adb().RunAndGetResult("shell getprop ro.product.cpu.abi"));
+    ASSIGN_OR_RETURN(device_abi, Adb().ShellAndGetResult("getprop ro.product.cpu.abi"));
     if (device_abi != installed_abi)
     {
         std::string err_msg = absl::StrFormat(
@@ -450,9 +449,9 @@ absl::Status AndroidDevice::RequestRootAccess()
     RETURN_IF_ERROR(Adb().Run("wait-for-device"));
     m_original_state.m_root_access_requested = true;
 
-    ASSIGN_OR_RETURN(m_original_state.m_enforce, Adb().RunAndGetResult("shell getenforce"));
+    ASSIGN_OR_RETURN(m_original_state.m_enforce, Adb().ShellAndGetResult("getenforce"));
 
-    RETURN_IF_ERROR(Adb().Run("shell setenforce 0"));
+    RETURN_IF_ERROR(Adb().Shell("setenforce 0"));
 
     return absl::OkStatus();
 }
@@ -497,7 +496,7 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
         for (const auto& pkg : all_packages)
         {
             futures.push_back(std::async(std::launch::async, [this, pkg]() {
-                return Adb().RunAndGetResult("shell dumpsys package " + pkg);
+                return Adb().ShellAndGetResult("dumpsys package " + pkg);
             }));
         }
 
@@ -568,12 +567,12 @@ absl::Status AndroidDevice::CleanupDevice()
          m_serial.c_str());
 
     UnpinGpuClock().IgnoreError();
-    Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
+    Adb().Shell("setprop compositor.high_priority 1").IgnoreError();
 
     // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
     // `debug.openxr.enable_frame_delimiter`
-    Adb().Run("shell setprop openxr.enable_frame_delimiter false").IgnoreError();
-    Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false").IgnoreError();
+    Adb().Shell("setprop openxr.enable_frame_delimiter false").IgnoreError();
+    Adb().Shell("setprop debug.openxr.enable_frame_delimiter false").IgnoreError();
 
     if (m_original_state.m_root_access_requested)
     {
@@ -581,12 +580,12 @@ absl::Status AndroidDevice::CleanupDevice()
         if (enforce.find("Enforcing") != enforce.npos)
         {
             LOGD("restore Enforcing to Enforcing\n");
-            Adb().Run("shell setenforce 1").IgnoreError();
+            Adb().Shell("setenforce 1").IgnoreError();
         }
         else if (enforce.find("Permissive") != enforce.npos)
         {
             LOGD("restore Enforcing to Permissive\n");
-            Adb().Run("shell setenforce 0").IgnoreError();
+            Adb().Shell("setenforce 0").IgnoreError();
         }
         if (!m_original_state.m_is_root_shell)
         {
@@ -595,10 +594,10 @@ absl::Status AndroidDevice::CleanupDevice()
     }
 
     Adb()
-        .Run(absl::StrFormat("shell rm -rf -- %s",
+        .Shell(absl::StrFormat("rm -rf -- %s",
                              Dive::DeviceResourcesConstants::kDeployManifestFolderPath))
         .IgnoreError();
-    Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
+    Adb().Shell(absl::StrFormat("rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
     if (output.ok())
     {
@@ -608,11 +607,11 @@ absl::Status AndroidDevice::CleanupDevice()
         }
     }
 
-    Adb().Run("shell settings delete global enable_gpu_debug_layers").IgnoreError();
-    Adb().Run("shell settings delete global gpu_debug_app").IgnoreError();
-    Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
-    Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
-    Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
+    Adb().Shell("settings delete global enable_gpu_debug_layers").IgnoreError();
+    Adb().Shell("settings delete global gpu_debug_app").IgnoreError();
+    Adb().Shell("settings delete global gpu_debug_layers").IgnoreError();
+    Adb().Shell("settings delete global gpu_debug_layer_app").IgnoreError();
+    Adb().Shell("settings delete global gpu_debug_layers_gles").IgnoreError();
 
     // clean up for gfxr renderdoc capture
     UnsetSystemProperty(Adb(), kReplayCreateRenderDocCapture).IgnoreError();
@@ -625,25 +624,20 @@ absl::Status AndroidDevice::CleanupDevice()
 
     // clean up for gfxr replay app
     Adb()
-        .Run(absl::StrFormat("shell appops set %s MANAGE_EXTERNAL_STORAGE default",
+        .Shell(absl::StrFormat("appops set %s MANAGE_EXTERNAL_STORAGE default",
                              kGfxrReplayAppName))
         .IgnoreError();
     Adb().Run(absl::StrFormat("uninstall %s", kGfxrReplayAppName)).IgnoreError();
-    Adb().Run("shell settings delete global verifier_verify_adb_installs").IgnoreError();
-    Adb().Run("shell am clear-debug-app").IgnoreError();
+    Adb().Shell("settings delete global verifier_verify_adb_installs").IgnoreError();
+    Adb().Shell("am clear-debug-app").IgnoreError();
 
     // cleanup for gfxr PM4 capture
-    Adb()
-        .Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
-        .IgnoreError();
-    Adb()
-        .Run(absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
-        .IgnoreError();
+    Adb().SetProp(kEnableReplayPm4DumpPropertyName, "0").IgnoreError();
+    Adb().SetProp(kReplayPm4DumpFileNamePropertyName, "").IgnoreError();
 
     // clean up entire deployment folder (kDeployFolderPath)
     Adb()
-        .Run(absl::StrFormat("shell rm -rf -- %s",
-                             Dive::DeviceResourcesConstants::kDeployFolderPath))
+        .Shell(absl::StrFormat("rm -rf -- %s", Dive::DeviceResourcesConstants::kDeployFolderPath))
         .IgnoreError();
 
     LOGI("%s AndroidDevice::CleanupDevice(): package %s done\n", Dive::kLogPrefixCleanup,
@@ -655,7 +649,7 @@ absl::Status AndroidDevice::CleanupPackageProperties(const std::string& package)
 {
     LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s\n", Dive::kLogPrefixCleanup,
          package.c_str());
-    Adb().Run(absl::StrFormat("shell setprop wrap.%s \\\"\\\"", package)).IgnoreError();
+    Adb().SetProp(absl::StrFormat("wrap.%s", package), "").IgnoreError();
     LOGI("%s AndroidDevice::CleanupPackageProperties(): package %s done\n", Dive::kLogPrefixCleanup,
          package.c_str());
     return absl::OkStatus();
@@ -682,9 +676,9 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
             // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
             // `debug.openxr.enable_frame_delimiter`
             RETURN_IF_ERROR(RequestRootAccess());
-            RETURN_IF_ERROR(Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
+            RETURN_IF_ERROR(Adb().Shell("setprop openxr.enable_frame_delimiter true"));
             // New prop is prefixed with debug.
-            RETURN_IF_ERROR(Adb().Run("shell setprop debug.openxr.enable_frame_delimiter true"));
+            RETURN_IF_ERROR(Adb().Shell("setprop debug.openxr.enable_frame_delimiter true"));
         }
     }
     if (m_app == nullptr)
@@ -783,7 +777,7 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
         AdbSession adb(serial);
 
         dev.m_serial = std::move(serial);
-        result = adb.RunAndGetResult("shell getprop ro.product.manufacturer");
+        result = adb.ShellAndGetResult("getprop ro.product.manufacturer");
         if (result.ok())
         {
             dev.m_manufacturer = *result;
@@ -793,7 +787,7 @@ std::vector<DeviceInfo> DeviceManager::ListDevice() const
             continue;
         }
 
-        result = adb.RunAndGetResult("shell getprop ro.product.model");
+        result = adb.ShellAndGetResult("getprop ro.product.model");
         if (result.ok())
         {
             dev.m_model = *result;
@@ -844,7 +838,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
     std::string python_path = GetPythonPath();
     RETURN_IF_ERROR(ValidatePythonPath(python_path));
 
-    if (absl::Status status = adb.Run("shell settings put global verifier_verify_adb_installs 0");
+    if (absl::Status status = adb.Shell("settings put global verifier_verify_adb_installs 0");
         !status.ok())
     {
         LOGI(
@@ -854,8 +848,7 @@ absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
             std::string(status.message()).c_str());
     }
     absl::Cleanup enable_verify_adb_installs = [&adb] {
-        if (absl::Status status =
-                adb.Run("shell settings delete global verifier_verify_adb_installs");
+        if (absl::Status status = adb.Shell("settings delete global verifier_verify_adb_installs");
             !status.ok())
         {
             LOGI(
@@ -917,11 +910,8 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
         LOGD("RunReplayGfxrScript(): CLEANUP\n");
         if (settings.run_type == GfxrReplayOptions::kPm4Dump)
         {
-            adb.Run(absl::StrFormat("shell setprop %s 0", kEnableReplayPm4DumpPropertyName))
-                .IgnoreError();
-            adb.Run(
-                   absl::StrFormat("shell setprop %s \\\"\\\"", kReplayPm4DumpFileNamePropertyName))
-                .IgnoreError();
+            adb.SetProp(kEnableReplayPm4DumpPropertyName, "0").IgnoreError();
+            adb.SetProp(kReplayPm4DumpFileNamePropertyName, "").IgnoreError();
         }
         else if (settings.run_type == GfxrReplayOptions::kRenderDoc)
         {
@@ -1162,7 +1152,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
 
     LOGD("RunReplayApk(): Attempt to pin GPU clock frequency\n");
     bool trouble_pinning_clock = false;
-    auto ret = adb.Run("shell setprop compositor.high_priority 0");
+    auto ret = adb.Shell("setprop compositor.high_priority 0");
     if (!ret.ok())
     {
         LOGW("WARNING: Could not disable the compositor preemption: %s\n",
@@ -1170,7 +1160,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
         trouble_pinning_clock = true;
     }
     absl::Cleanup enable_compositor_preemption = [this, &adb] {
-        absl::Status ret = adb.Run("shell setprop compositor.high_priority 1");
+        absl::Status ret = adb.Shell("setprop compositor.high_priority 1");
         if (!ret.ok())
         {
             LOGW("WARNING: Could not re-enable the compositor preemption: %s\n",
@@ -1210,17 +1200,17 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
     if (validated_settings->wait_for_debugger)
     {
         RETURN_IF_ERROR(
-            adb.Run(absl::StrFormat("shell am set-debug-app -w %s", kGfxrReplayAppName)));
+            adb.Shell(absl::StrFormat("am set-debug-app -w %s", kGfxrReplayAppName)));
     }
     absl::Cleanup clear_debug_app = [&validated_settings, &adb]() {
         if (validated_settings->wait_for_debugger)
         {
-            adb.Run("shell am clear-debug-app").IgnoreError();
+            adb.Shell("am clear-debug-app").IgnoreError();
         }
     };
 
     // Wake up the screen.
-    RETURN_IF_ERROR(adb.Run("shell input keyevent KEYCODE_WAKEUP"));
+    RETURN_IF_ERROR(adb.Shell("input keyevent KEYCODE_WAKEUP"));
 
     LOGD("RunReplayApk(): Starting replay\n");
     absl::Status ret_run;
@@ -1291,7 +1281,7 @@ absl::Status AndroidDevice::RetrieveFile(const std::string& remote_file_path,
         return absl::OkStatus();
     }
 
-    return Adb().Run(absl::StrFormat("shell rm -rf %s", remote_file_path));
+    return Adb().Shell(absl::StrFormat("rm -rf %s", remote_file_path));
 }
 
 void AndroidDevice::EnableGfxr(bool enable_gfxr) { m_gfxr_enabled = enable_gfxr; }
@@ -1394,7 +1384,7 @@ absl::Status AndroidDevice::TriggerScreenCapture(
     std::string on_device_capture_screen_shot = full_capture_path.generic_string();
 
     absl::Status ret =
-        m_adb.Run(absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
+        m_adb.Shell(absl::StrFormat("screencap -p %s", on_device_capture_screen_shot));
     return ret;
 }
 

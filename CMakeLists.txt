@@ -38,7 +38,6 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" ON)
 # Add an option to allow users to easily toggle the runtime layer build
 option(
     DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
@@ -84,9 +83,34 @@ endif()
 set(DIVE_RELEASE_TYPE
     "dev"
     CACHE STRING
-    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>"
+    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|rel>"
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
+set(ALLOWED_TYPES "dev" "rel")
+if(NOT DIVE_RELEASE_TYPE IN_LIST ALLOWED_TYPES)
+    message(
+        FATAL_ERROR
+        "Invalid DIVE_RELEASE_TYPE: '${DIVE_RELEASE_TYPE}'. Allowed values are: dev and rel"
+    )
+endif()
+
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" OFF)
+if(DIVE_BUILD_WITH_CRASHPAD)
+    add_compile_definitions(
+        $<$<CONFIG:RelWithDebInfo>:DIVE_BUILD_WITH_CRASHPAD>
+    )
+endif()
+
+option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
+if(UPLOAD_DEBUG_SYMBOLS)
+    if(NOT DIVE_BUILD_WITH_CRASHPAD)
+        message(
+            FATAL_ERROR
+            "UPLOAD_DEBUG_SYMBOLS requires DIVE_BUILD_WITH_CRASHPAD to be ON"
+        )
+    endif()
+    include(cmake/breakpad_tools.cmake)
+endif()
 
 # For host tools version info
 set(HOST_PLATFORM_STRING "Unknown")

@@ -69,6 +69,31 @@ set(COMPILER_STAMP
 
 string(REPLACE ";" " " CACHED_LIBS_STR "${CACHED_LIBS}")
 
+set(CRASHPAD_HEADERS
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/crashpad_client.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/settings.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/crash_report_database.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/third_party/mini_chromium/mini_chromium/base/files/file_path.h"
+)
+
+if(EXISTS "${METADATA_FILE}")
+    set(HEADERS_MISSING FALSE)
+    foreach(HEADER_FILE IN LISTS CRASHPAD_HEADERS)
+        if(NOT EXISTS "${HEADER_FILE}")
+            set(HEADERS_MISSING TRUE)
+            break()
+        endif()
+    endforeach()
+
+    if(HEADERS_MISSING)
+        message(
+            STATUS
+            "Crashpad headers missing from build directory. Removing metadata file to trigger rebuild."
+        )
+        file(REMOVE "${METADATA_FILE}")
+    endif()
+endif()
+
 add_custom_target(
     dive_crashpad_ensure_binaries
     COMMAND

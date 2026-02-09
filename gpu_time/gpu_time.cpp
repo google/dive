@@ -907,32 +907,43 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdInsertDebugUtilsLabelEXT(
 GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass(
     VkCommandBuffer command_buffer, PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
 {
-    if (!m_enable)
-    {
-        return GPUTime::GpuTimeStatus();
-    }
-    uint32_t slot = m_timestamp_allocator.AllocateSlot();
-    m_cmds[command_buffer].renderpass_slots.push_back(slot);
-    pfn_cmd_write_timestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, slot);
-    return GPUTime::GpuTimeStatus();
+    return BeginRenderPass(command_buffer, pfn_cmd_write_timestamp);
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass(VkCommandBuffer command_buffer,
                                                    PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
 {
-    if (!m_enable)
-    {
-        return GPUTime::GpuTimeStatus();
-    }
-    uint32_t slot = m_timestamp_allocator.AllocateSlot();
-    m_cmds[command_buffer].renderpass_slots.push_back(slot);
-    pfn_cmd_write_timestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool,
-                            slot);
-    return GPUTime::GpuTimeStatus();
+    return EndRenderPass(command_buffer, pfn_cmd_write_timestamp);
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass2(
     VkCommandBuffer command_buffer, PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+{
+    return BeginRenderPass(command_buffer, pfn_cmd_write_timestamp);
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer command_buffer,
+                                                    PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+{
+    return EndRenderPass(command_buffer, pfn_cmd_write_timestamp);
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass2KHR(
+    VkCommandBuffer command_buffer, PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+{
+    return BeginRenderPass(command_buffer, pfn_cmd_write_timestamp);
+}
+
+GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2KHR(
+    VkCommandBuffer command_buffer, PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+{
+    return EndRenderPass(command_buffer, pfn_cmd_write_timestamp);
+}
+
+void GPUTime::ClearFrameCache() { m_frame_cmds.clear(); }
+
+GPUTime::GpuTimeStatus GPUTime::BeginRenderPass(VkCommandBuffer command_buffer,
+                                                PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
 {
     if (!m_enable)
     {
@@ -944,8 +955,8 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdBeginRenderPass2(
     return GPUTime::GpuTimeStatus();
 }
 
-GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer command_buffer,
-                                                    PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+GPUTime::GpuTimeStatus GPUTime::EndRenderPass(VkCommandBuffer command_buffer,
+                                              PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
 {
     if (!m_enable)
     {
@@ -957,7 +968,5 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2(VkCommandBuffer command_buff
                             slot);
     return GPUTime::GpuTimeStatus();
 }
-
-void Dive::GPUTime::ClearFrameCache() { m_frame_cmds.clear(); }
 
 }  // namespace Dive

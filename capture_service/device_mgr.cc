@@ -49,47 +49,25 @@ namespace
 
 absl::StatusOr<std::string> GetPython3Executable()
 {
-    std::string python_path;
     std::vector<std::string> python_names = {"python3", "python"};
 
     for (const std::string& python_name : python_names)
     {
         std::string cmd = absl::StrFormat("%s --version", python_name);
         absl::StatusOr<std::string> res = RunCommand(cmd);
-        if (res.ok())
+        if (!res.ok())
         {
-            if (absl::StrContains(*res, "Python 3"))
-            {
-                return python_name;
-            }
+            continue;
+        }
+        if (absl::StrContains(*res, "Python 3"))
+        {
+            LOGD("GetPython3Executable() returning: %s\n", python_name.c_str());
+            return python_name;
         }
     }
 
-    std::string err_msg = absl::StrFormat("Could not find python 3 on path, tried: %s",
-                                          absl::StrJoin(python_names, ", "));
-    return absl::NotFoundError(err_msg);
-}
-
-absl::Status ValidatePythonPath(const std::string& python_path)
-{
-    if (python_path.empty())
-    {
-        return absl::InvalidArgumentError("Python path is empty.");
-    }
-    absl::StatusOr<std::string> result =
-        Dive::RunCommand(absl::StrFormat("%s --version", python_path));
-    if (!result.ok())
-    {
-        return absl::UnavailableError(absl::StrFormat("Failed to execute '%s --version': %s",
-                                                      python_path, result.status().message()));
-    }
-    if (!absl::StrContains(*result, "Python 3"))
-    {
-        return absl::FailedPreconditionError(absl::StrFormat(
-            "'%s' is not a Python 3 executable. Version output: %s", python_path, *result));
-    }
-    LOGD("Python version validation successful for %s: %s\n", python_path.c_str(), result->c_str());
-    return absl::OkStatus();
+    return absl::NotFoundError(absl::StrFormat("Could not find python 3 on path, tried: %s",
+                                               absl::StrJoin(python_names, ", ")));
 }
 
 absl::Status SetSystemProperty(const AdbSession& adb, std::string_view property,

@@ -38,7 +38,6 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" ON)
 # Add an option to allow users to easily toggle the runtime layer build
 option(
     DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
@@ -47,6 +46,19 @@ option(
 )
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
+
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" OFF)
+
+option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
+if(UPLOAD_DEBUG_SYMBOLS)
+    if(NOT DIVE_BUILD_WITH_CRASHPAD)
+        message(
+            FATAL_ERROR
+            "UPLOAD_DEBUG_SYMBOLS requires DIVE_BUILD_WITH_CRASHPAD to be ON"
+        )
+    endif()
+    include(cmake/breakpad_tools.cmake)
+endif()
 
 # Placeholder value for DESTINATION to override cmake default.
 # These are all relative to the install destination prefix which is recommended as "pkg/"
@@ -84,7 +96,7 @@ endif()
 set(DIVE_RELEASE_TYPE
     "dev"
     CACHE STRING
-    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>"
+    "Release type name string (used in the Dive version string)"
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
 

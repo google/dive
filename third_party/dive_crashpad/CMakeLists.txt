@@ -21,6 +21,8 @@ project(dive_crashpad)
 message(CHECK_START "Generate build files for third_party/dive_crashpad")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 if(WIN32)
     set(PLATFORM "win32")
     set(LAUNCHER cmd /c)
@@ -69,10 +71,35 @@ set(COMPILER_STAMP
 
 string(REPLACE ";" " " CACHED_LIBS_STR "${CACHED_LIBS}")
 
+set(CRASHPAD_HEADERS
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/crashpad_client.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/settings.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/crash_report_database.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/third_party/mini_chromium/mini_chromium/base/files/file_path.h"
+)
+
+if(EXISTS "${METADATA_FILE}")
+    set(HEADERS_MISSING FALSE)
+    foreach(HEADER_FILE IN LISTS CRASHPAD_HEADERS)
+        if(NOT EXISTS "${HEADER_FILE}")
+            set(HEADERS_MISSING TRUE)
+            break()
+        endif()
+    endforeach()
+
+    if(HEADERS_MISSING)
+        message(
+            STATUS
+            "Crashpad headers missing from build directory. Removing metadata file to trigger rebuild."
+        )
+        file(REMOVE "${METADATA_FILE}")
+    endif()
+endif()
+
 add_custom_target(
     dive_crashpad_ensure_binaries
     COMMAND
-        ${LAUNCHER} "${CMAKE_CURRENT_LIST_DIR}/${SCRIPT_NAME}"
+        ${Python3_EXECUTABLE} "${CMAKE_CURRENT_LIST_DIR}/build_crashpad.py"
         "${CMAKE_CURRENT_LIST_DIR}/crashpad_commit.txt" "${PREBUILT_DIR}"
         "${METADATA_FILE}" "$<CONFIG>" "${COMPILER_STAMP}" "${CACHED_LIBS_STR}"
         "${CACHED_HANDLER}"

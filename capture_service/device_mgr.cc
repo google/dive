@@ -53,8 +53,7 @@ absl::StatusOr<std::string> GetPython3Executable()
 
     for (const std::string& python_name : python_names)
     {
-        std::string cmd = absl::StrFormat("%s --version", python_name);
-        absl::StatusOr<std::string> res = RunCommand(cmd);
+        absl::StatusOr<std::string> res = RunCommand(absl::StrFormat("%s --version", python_name));
         if (!res.ok())
         {
             continue;

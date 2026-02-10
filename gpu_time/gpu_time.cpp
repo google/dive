@@ -33,6 +33,14 @@ limitations under the License.
 namespace Dive
 {
 
+GPUTime::~GPUTime()
+{
+    if (m_query_pool != VK_NULL_HANDLE)
+    {
+        m_destroy_query_pool(m_device, m_query_pool, m_allocator);
+    }
+}
+
 GPUTime::TimeStampSlotAllocator::TimeStampSlotAllocator() { Reset(); }
 
 void GPUTime::TimeStampSlotAllocator::Reset()
@@ -338,7 +346,8 @@ GPUTime::GpuTimeStatus GPUTime::OnCreateDevice(VkDevice device,
                                                const VkAllocationCallbacks* allocator_ptr,
                                                float timestamp_period,
                                                PFN_vkCreateQueryPool pfn_create_query_pool,
-                                               PFN_vkResetQueryPool pfn_reset_query_pool)
+                                               PFN_vkResetQueryPool pfn_reset_query_pool,
+                                               PFN_vkDestroyQueryPool pfn_destroy_query_pool)
 {
     if (device == VK_NULL_HANDLE)
     {
@@ -348,6 +357,7 @@ GPUTime::GpuTimeStatus GPUTime::OnCreateDevice(VkDevice device,
     m_allocator = allocator_ptr;
     m_device = device;
     m_timestamp_period = timestamp_period;
+    m_destroy_query_pool = pfn_destroy_query_pool;
 
     // Create a query pool for timestamps
     VkQueryPoolCreateInfo queryPoolInfo{};
@@ -369,8 +379,7 @@ GPUTime::GpuTimeStatus GPUTime::OnCreateDevice(VkDevice device,
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnDestroyDevice(VkDevice device,
-                                                PFN_vkQueueWaitIdle pfn_queue_wait_idle,
-                                                PFN_vkDestroyQueryPool pfn_destroy_query_pool)
+                                                PFN_vkQueueWaitIdle pfn_queue_wait_idle)
 {
     if (device != m_device)
     {
@@ -390,7 +399,7 @@ GPUTime::GpuTimeStatus GPUTime::OnDestroyDevice(VkDevice device,
         }
         m_queues.clear();
 
-        pfn_destroy_query_pool(m_device, m_query_pool, m_allocator);
+        m_destroy_query_pool(m_device, m_query_pool, m_allocator);
         m_query_pool = VK_NULL_HANDLE;
         m_allocator = nullptr;
     }

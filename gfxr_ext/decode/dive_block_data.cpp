@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "dive_block_data.h"
 
+#include <algorithm>
 #include <fstream>
 #include <memory>
 
@@ -127,6 +128,8 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes(uint64_t file_size)
     original_header_block_.size_ = original_blocks_map_[0]->offset_;
 
     // Calculating block sizes
+    std::vector<uint64_t> block_sizes;
+    uint64_t n_blocks_exceeding_buffer_size = 0;
     for (size_t i = 0; i < original_blocks_map_.size() - 1; i++)
     {
         uint64_t current_block_start = original_blocks_map_[i]->offset_;
@@ -138,20 +141,23 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes(uint64_t file_size)
             return false;
         }
         uint64_t size = current_block_end - current_block_start;
+        block_sizes.push_back(size);
         if (size > kDiveBlockBufferSize)
         {
-            GFXRECON_LOG_WARNING(
-                "Original block with id (%d) is larger than kDiveBlockBufferSize: "
-                "%d > %d, will cause "
-                "more copy operations when writing new file",
-                i, size, kDiveBlockBufferSize);
+            n_blocks_exceeding_buffer_size++;
         }
-
         original_blocks_map_[i]->size_ = size;
     }
 
     DiveOriginalBlock& last_block = *original_blocks_map_.back();
     last_block.size_ = file_size - last_block.offset_;
+
+    std::sort(block_sizes.begin(), block_sizes.end());
+    uint64_t rough_median = block_sizes.at(static_cast<uint32_t>(block_sizes.size() / 2));
+    GFXRECON_LOG_INFO(
+        "Approx median block size: %d bytes, buffer size: %d bytes, and %d/%d blocks exceeded the "
+        "buffer",
+        rough_median, kDiveBlockBufferSize, n_blocks_exceeding_buffer_size, block_sizes.size());
 
     original_blocks_map_locked_ = true;
     return true;

@@ -204,6 +204,7 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // This is a flag that indicates if the Setup Phase is finised or not for gfx Replay
     // The Setup Phase is done when StateEndMarker is triggered
     bool setup_finished_ = false;
+    uint32_t api_version_ = 0;
 };
 
 GFXRECON_END_NAMESPACE(decode)

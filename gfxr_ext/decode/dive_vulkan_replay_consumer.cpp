@@ -56,6 +56,31 @@ std::span<const char* const> AddExtensions(std::span<const char* const> current_
     return new_extensions;
 }
 
+bool HasHostQueryResetFeature(VkPhysicalDevice physical_device,
+                              PFN_vkGetPhysicalDeviceFeatures2KHR get_physical_device_features)
+{
+    VkPhysicalDeviceHostQueryResetFeaturesEXT query_reset_features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT,
+        .pNext = NULL,
+        .hostQueryReset = VK_FALSE,
+    };
+    VkPhysicalDeviceFeatures2 features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &query_reset_features,
+        .features = {},
+    };
+    get_physical_device_features(physical_device, &features);
+    return query_reset_features.hostQueryReset == VK_TRUE;
+}
+
+template <typename T>
+T* AllocateAndInitialize(const T& initial_value)
+{
+    T* allocated = DecodeAllocator::Allocate<T>();
+    *allocated = initial_value;
+    return allocated;
+}
+
 }  // namespace
 
 DiveVulkanReplayConsumer::DiveVulkanReplayConsumer(
@@ -93,6 +118,8 @@ void DiveVulkanReplayConsumer::Process_vkCreateInstance(
         // cleaned up at the appropriate time.
     }
 
+    api_version_ = create_info.pApplicationInfo ? create_info.pApplicationInfo->apiVersion : 0;
+
     VulkanReplayConsumer::Process_vkCreateInstance(call_info, returnValue, pCreateInfo, pAllocator,
                                                    pInstance);
 }
@@ -103,6 +130,43 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkDevice>* pDevice)
 {
+    VulkanPhysicalDeviceInfo* physical_device_info =
+        GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
+    GFXRECON_ASSERT(physical_device_info != nullptr);
+    VkPhysicalDevice physical_device = physical_device_info->handle;
+
+    if (HasHostQueryResetFeature(physical_device,
+                                 GetInstanceTable(physical_device)->GetPhysicalDeviceFeatures2KHR))
+    {
+        VkDeviceCreateInfo& create_info = *pCreateInfo->GetPointer();
+
+        // Additions to create_info must be allocated via DecodeAllocator to ensure they outlive all
+        // consumer invocations.
+        create_info.pNext = AllocateAndInitialize(VkPhysicalDeviceHostQueryResetFeaturesEXT{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT,
+            .pNext = pCreateInfo->GetMetaStructPointer()->pNext
+                         ? pCreateInfo->GetMetaStructPointer()->pNext->GetPointer()
+                         : nullptr,
+            .hostQueryReset = VK_TRUE,
+        });
+
+        std::span<const char* const> extensions(create_info.ppEnabledExtensionNames,
+                                                create_info.enabledExtensionCount);
+        if (api_version_ < VK_MAKE_VERSION(1, 2, 0) &&
+            std::none_of(
+                extensions.begin(), extensions.end(),
+                [](const char* extension) {
+                    return util::platform::StringCompare(
+                               extension, VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME) == 0;
+                }))
+        {
+            std::span<const char* const> new_extensions =
+                AddExtensions(extensions, {{VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME}});
+            create_info.ppEnabledExtensionNames = new_extensions.data();
+            create_info.enabledExtensionCount = new_extensions.size();
+        }
+    }
+
     VulkanReplayConsumer::Process_vkCreateDevice(call_info, returnValue, physicalDevice,
                                                  pCreateInfo, pAllocator, pDevice);
 
@@ -120,22 +184,30 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
     PFN_vkCreateQueryPool CreateQueryPool = GetDeviceTable(device)->CreateQueryPool;
 
     // Initialize all vk func pointers
-    pfn_vkResetQueryPool_ = GetDeviceTable(device)->ResetQueryPool;
     pfn_vkQueueWaitIdle_ = GetDeviceTable(device)->QueueWaitIdle;
     pfn_vkDestroyQueryPool_ = GetDeviceTable(device)->DestroyQueryPool;
     pfn_vkCmdWriteTimestamp_ = GetDeviceTable(device)->CmdWriteTimestamp;
     pfn_vkDeviceWaitIdle_ = GetDeviceTable(device)->DeviceWaitIdle;
     pfn_vkResetQueryPool_ = GetDeviceTable(device)->ResetQueryPool;
+    if (pfn_vkResetQueryPool_ == graphics::noop::vkResetQueryPool)
+    {
+        pfn_vkResetQueryPool_ = GetDeviceTable(device)->ResetQueryPoolEXT;
+        if (pfn_vkResetQueryPool_ == graphics::noop::vkResetQueryPoolEXT)
+        {
+            GFXRECON_LOG_WARNING(
+                "Physical device doesn't support vkResetQueryPool. GPUTime not guaranteed to "
+                "work!");
+        }
+    }
     pfn_vkGetQueryPoolResults_ = GetDeviceTable(device)->GetQueryPoolResults;
     pfn_vkGetFenceStatus_ = GetDeviceTable(device)->GetFenceStatus;
     pfn_vkQueueSubmit_ = GetDeviceTable(device)->QueueSubmit;
     pfn_vkResetFences_ = GetDeviceTable(device)->ResetFences;
     pfn_vkGetFenceFdKHR_ = GetDeviceTable(device)->GetFenceFdKHR;
 
-    auto in_physicalDevice = GetObjectInfoTable().GetVkPhysicalDeviceInfo(physicalDevice);
     VkPhysicalDeviceProperties deviceProperties;
-    GetInstanceTable(in_physicalDevice->handle)
-        ->GetPhysicalDeviceProperties(in_physicalDevice->handle, &deviceProperties);
+    GetInstanceTable(physical_device)
+        ->GetPhysicalDeviceProperties(physical_device, &deviceProperties);
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCreateDevice(
         device, pAllocator->GetPointer(), deviceProperties.limits.timestampPeriod, CreateQueryPool,

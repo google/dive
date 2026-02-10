@@ -118,7 +118,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
 
     Dive::GPUTime::GpuTimeStatus status = gpu_time_.OnCreateDevice(
         device, pAllocator->GetPointer(), deviceProperties.limits.timestampPeriod, CreateQueryPool,
-        pfn_vkResetQueryPool_);
+        pfn_vkResetQueryPool_, pfn_vkDestroyQueryPool_);
 
     if (!status.success)
     {
@@ -134,7 +134,7 @@ void DiveVulkanReplayConsumer::Process_vkDestroyDevice(
         MapHandle<VulkanDeviceInfo>(device, &CommonObjectInfoTable::GetVkDeviceInfo);
 
     Dive::GPUTime::GpuTimeStatus status =
-        gpu_time_.OnDestroyDevice(in_device, pfn_vkQueueWaitIdle_, pfn_vkDestroyQueryPool_);
+        gpu_time_.OnDestroyDevice(in_device, pfn_vkQueueWaitIdle_);
     fence_signal_queue_ = VK_NULL_HANDLE;
     device_ = VK_NULL_HANDLE;
     if (!status.success)

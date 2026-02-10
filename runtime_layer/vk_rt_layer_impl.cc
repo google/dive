@@ -310,8 +310,9 @@ VkResult DiveRuntimeLayer::CreateDevice(PFN_vkGetDeviceProcAddr pa, PFN_vkCreate
     m_pfn_vkCmdWriteTimestamp = reinterpret_cast<PFN_vkCmdWriteTimestamp>(
         m_device_proc_addr(*pDevice, "vkCmdWriteTimestamp"));
 
-    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnCreateDevice(
-        *pDevice, pAllocator, timestampPeriod, CreateQueryPool, m_pfn_vkResetQueryPool);
+    Dive::GPUTime::GpuTimeStatus status =
+        m_gpu_time.OnCreateDevice(*pDevice, pAllocator, timestampPeriod, CreateQueryPool,
+                                  m_pfn_vkResetQueryPool, m_pfn_vkDestroyQueryPool);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
@@ -329,8 +330,7 @@ void DiveRuntimeLayer::DestroyDevice(PFN_vkDestroyDevice pfn, VkDevice device,
         return;
     }
 
-    Dive::GPUTime::GpuTimeStatus status =
-        m_gpu_time.OnDestroyDevice(device, m_pfn_vkQueueWaitIdle, m_pfn_vkDestroyQueryPool);
+    Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnDestroyDevice(device, m_pfn_vkQueueWaitIdle);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());

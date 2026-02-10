@@ -122,7 +122,7 @@ void CreateGPUTime(GPUTime& gpu_time, float timestamp_period)
     ASSERT_TRUE(gpu_time
                     .OnCreateDevice(MOCK_DEVICE,
                                     /*allocator=*/nullptr, timestamp_period, MockCreateQueryPool,
-                                    MockResetQueryPool)
+                                    MockResetQueryPool, MockDestroyQueryPool)
                     .success);
 }
 
@@ -130,8 +130,7 @@ void DestroyGPUTime(GPUTime& gpu_time)
 {
     VkQueue queue = MOCK_QUEUE;
     gpu_time.OnGetDeviceQueue(&queue);
-    ASSERT_TRUE(
-        gpu_time.OnDestroyDevice(MOCK_DEVICE, MockQueueWaitIdle, MockDestroyQueryPool).success);
+    ASSERT_TRUE(gpu_time.OnDestroyDevice(MOCK_DEVICE, MockQueueWaitIdle).success);
 }
 
 MATCHER_P(StatsEq, expected, "")

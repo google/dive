@@ -51,7 +51,7 @@ class GPUTime
     };
 
     GPUTime() = default;
-    ~GPUTime() = default;
+    ~GPUTime();
 
     VkDevice GetDevice() const { return m_device; }
     // When disabled, the system will not insert any timestamp, but still create following
@@ -67,10 +67,10 @@ class GPUTime
     GpuTimeStatus OnCreateDevice(VkDevice device, const VkAllocationCallbacks* allocator_ptr,
                                  float timestamp_period,
                                  PFN_vkCreateQueryPool pfn_create_query_pool,
-                                 PFN_vkResetQueryPool pfn_reset_query_pool);
+                                 PFN_vkResetQueryPool pfn_reset_query_pool,
+                                 PFN_vkDestroyQueryPool pfn_destroy_query_pool);
 
-    GpuTimeStatus OnDestroyDevice(VkDevice device, PFN_vkQueueWaitIdle pfn_queue_wait_idle,
-                                  PFN_vkDestroyQueryPool pfn_destroy_query_pool);
+    GpuTimeStatus OnDestroyDevice(VkDevice device, PFN_vkQueueWaitIdle pfn_queue_wait_idle);
 
     GpuTimeStatus OnDestroyCommandPool(VkCommandPool command_pool);
 
@@ -240,6 +240,7 @@ class GPUTime
     VkDevice m_device = VK_NULL_HANDLE;
     const VkAllocationCallbacks* m_allocator = nullptr;
     VkQueryPool m_query_pool = VK_NULL_HANDLE;
+    PFN_vkDestroyQueryPool m_destroy_query_pool = nullptr;
     uint64_t m_frame_index = 0;
     uint32_t m_timestamp_counter = 0;
     float m_timestamp_period = 0.0f;

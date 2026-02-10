@@ -521,14 +521,35 @@ void DiveVulkanReplayConsumer::Process_vkCmdBeginRenderPass2KHR(
     StructPointerDecoder<Decoded_VkRenderPassBeginInfo>* pRenderPassBegin,
     StructPointerDecoder<Decoded_VkSubpassBeginInfo>* pSubpassBeginInfo)
 {
-    Process_vkCmdBeginRenderPass2(call_info, commandBuffer, pRenderPassBegin, pSubpassBeginInfo);
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdBeginRenderPass2KHR(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
+
+    VulkanReplayConsumer::Process_vkCmdBeginRenderPass2KHR(call_info, commandBuffer,
+                                                           pRenderPassBegin, pSubpassBeginInfo);
 }
 
 void DiveVulkanReplayConsumer::Process_vkCmdEndRenderPass2KHR(
     const ApiCallInfo& call_info, format::HandleId commandBuffer,
     StructPointerDecoder<Decoded_VkSubpassEndInfo>* pSubpassEndInfo)
 {
-    Process_vkCmdEndRenderPass2(call_info, commandBuffer, pSubpassEndInfo);
+    VulkanReplayConsumer::Process_vkCmdEndRenderPass2KHR(call_info, commandBuffer, pSubpassEndInfo);
+
+    VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
+        commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
+    Dive::GPUTime::GpuTimeStatus status =
+        gpu_time_.OnCmdEndRenderPass2KHR(in_commandBuffer, pfn_vkCmdWriteTimestamp_);
+    if (!status.success)
+    {
+        GFXRECON_LOG_ERROR(status.message.c_str());
+    }
 }
 
 void DiveVulkanReplayConsumer::Process_vkCreateFence(

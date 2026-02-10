@@ -118,6 +118,12 @@ class GPUTime
     GpuTimeStatus OnCmdEndRenderPass2(VkCommandBuffer command_buffer,
                                       PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
+    GpuTimeStatus OnCmdBeginRenderPass2KHR(VkCommandBuffer command_buffer,
+                                           PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+
+    GpuTimeStatus OnCmdEndRenderPass2KHR(VkCommandBuffer command_buffer,
+                                         PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+
     struct Stats
     {
         double average = 0.0;
@@ -217,6 +223,10 @@ class GPUTime
                                   PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
     void RemoveCmdFromFrameCache(VkCommandBuffer cmd);
+    GpuTimeStatus BeginRenderPass(VkCommandBuffer command_buffer,
+                                  PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+    GpuTimeStatus EndRenderPass(VkCommandBuffer command_buffer,
+                                PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
 
     // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
     uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];

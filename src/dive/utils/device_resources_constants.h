@@ -65,6 +65,14 @@ Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN
         "/system/etc/openxr/1/api_layers/implicit.d/";
 
     // -------------------------------------------------------------------------
+    // Network Constants
+    // -------------------------------------------------------------------------
+
+    // The abstract namespace path for the Unix domain socket used for
+    // communication between the host and the device.
+    static constexpr char kUnixAbstractPath[] = "dive_abstract";
+
+    // -------------------------------------------------------------------------
     // Host (local machine) Constants
     // -------------------------------------------------------------------------
 

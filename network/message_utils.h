@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Google Inc.
+Copyright 2026 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,21 +16,19 @@ limitations under the License.
 
 #pragma once
 
-#include "absl/status/status.h"
-#include "network/unix_domain_server.h"
+#include "messages.h"
+#include "socket_connection.h"
 
-namespace Dive
+namespace Network
 {
 
-absl::Status StartPm4Capture(Network::SocketConnection* client_conn);
+absl::Status SendPong(Network::SocketConnection* client_conn);
 
-class ServerMessageHandler : public Network::IMessageHandler
-{
- public:
-    void OnConnect() override;
-    void OnDisconnect() override;
-    void HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                       Network::SocketConnection* client_conn) override;
-};
+absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn);
 
-}  // namespace Dive
+absl::Status DownloadFile(Network::DownloadFileRequest* request,
+                          Network::SocketConnection* client_conn);
+
+absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn);
+
+}  // namespace Network

@@ -24,24 +24,12 @@ limitations under the License.
 
 #include "common/log.h"
 #include "constants.h"
+#include "dive/utils/device_resources_constants.h"
+#include "network/message_utils.h"
 #include "trace_mgr.h"
 
 namespace Dive
 {
-
-absl::Status SendPong(Network::SocketConnection* client_conn)
-{
-    Network::PongMessage response;
-    return Network::SendSocketMessage(client_conn, response);
-}
-
-absl::Status Handshake(Network::HandshakeRequest* request, Network::SocketConnection* client_conn)
-{
-    Network::HandshakeResponse response;
-    response.SetMajorVersion(request->GetMajorVersion());
-    response.SetMinorVersion(request->GetMinorVersion());
-    return Network::SendSocketMessage(client_conn, response);
-}
 
 absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
 {
@@ -51,58 +39,6 @@ absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
 
     Network::Pm4CaptureResponse response;
     response.SetString(capture_file_path);
-    return Network::SendSocketMessage(client_conn, response);
-}
-
-absl::Status DownloadFile(Network::DownloadFileRequest* request,
-                          Network::SocketConnection* client_conn)
-{
-    Network::DownloadFileResponse response;
-    std::string file_path = request->GetString();
-
-    std::error_code ec;
-    auto file_size = std::filesystem::file_size(file_path, ec);
-    if (!ec)
-    {
-        response.SetFound(true);
-        response.SetFilePath(file_path);
-        response.SetFileSizeStr(std::to_string(file_size));
-    }
-    else
-    {
-        response.SetFound(false);
-        response.SetErrorReason(ec.message());
-    }
-
-    auto status = Network::SendSocketMessage(client_conn, response);
-    if (!status.ok())
-    {
-        return status;
-    }
-    if (!response.GetFound())
-    {
-        return absl::NotFoundError(response.GetErrorReason());
-    }
-    return client_conn->SendFile(file_path);
-}
-
-absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn)
-{
-    Network::FileSizeResponse response;
-    std::string file_path = request->GetString();
-
-    std::error_code ec;
-    auto file_size = std::filesystem::file_size(file_path, ec);
-    if (!ec)
-    {
-        response.SetFound(true);
-        response.SetFileSizeStr(std::to_string(file_size));
-    }
-    else
-    {
-        response.SetFound(false);
-        response.SetErrorReason(ec.message());
-    }
     return Network::SendSocketMessage(client_conn, response);
 }
 
@@ -129,7 +65,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::PING_MESSAGE:
         {
             LOGI("Message received: Ping");
-            auto status = SendPong(client_conn);
+            auto status = Network::SendPong(client_conn);
             if (!status.ok())
             {
                 LOGI("Send pong failed: %.*s", (int)status.message().length(),
@@ -143,7 +79,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
             if (request)
             {
-                auto status = Handshake(request, client_conn);
+                auto status = Network::Handshake(request, client_conn);
                 if (!status.ok())
                 {
                     LOGI("Handshake failed: %.*s", (int)status.message().length(),
@@ -173,7 +109,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
             if (request)
             {
-                auto status = DownloadFile(request, client_conn);
+                auto status = Network::DownloadFile(request, client_conn);
                 if (!status.ok())
                 {
                     LOGI("DownloadFile failed: %.*s", (int)status.message().length(),
@@ -192,7 +128,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
             if (request)
             {
-                auto status = GetFileSize(request, client_conn);
+                auto status = Network::GetFileSize(request, client_conn);
                 if (!status.ok())
                 {
                     LOGI("GetFileSize failed: %.*s", (int)status.message().length(),
@@ -221,7 +157,7 @@ void RunServer()
     auto server =
         std::make_unique<Network::UnixDomainServer>(std::make_unique<ServerMessageHandler>());
 
-    std::string server_address = kUnixAbstractPath;
+    std::string server_address = Dive::DeviceResourcesConstants::kUnixAbstractPath;
     auto status = server->Start(server_address);
     if (!status.ok())
     {

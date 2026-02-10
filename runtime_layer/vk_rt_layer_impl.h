@@ -20,6 +20,7 @@ limitations under the License.
 #include <vulkan/vulkan_core.h>
 
 #include <deque>
+#include <filesystem>
 #include <limits>
 #include <numeric>
 #include <set>
@@ -27,9 +28,19 @@ limitations under the License.
 #include <vector>
 
 #include "gpu_time.h"
+#include "network/unix_domain_server.h"
 
 namespace DiveLayer
 {
+
+class ServerMessageHandler : public Network::IMessageHandler
+{
+ public:
+    void OnConnect() override;
+    void OnDisconnect() override;
+    void HandleMessage(std::unique_ptr<Network::ISerializable> message,
+                       Network::SocketConnection* client_conn) override;
+};
 
 class DiveRuntimeLayer
 {

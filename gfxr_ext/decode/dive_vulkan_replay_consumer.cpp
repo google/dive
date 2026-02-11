@@ -43,7 +43,8 @@ std::span<const char* const> AddExtensions(std::span<const char* const> current_
 {
     // Memory from DecodeAllocator will be freed when all consumers are done.
     size_t new_size = current_extensions.size() + additions.size();
-    std::span<const char*> new_extensions(DecodeAllocator::Allocate<const char*>(new_size), new_size);
+    std::span<const char*> new_extensions(DecodeAllocator::Allocate<const char*>(new_size),
+                                          new_size);
     for (size_t i = 0; i < current_extensions.size(); ++i)
     {
         new_extensions[i] = current_extensions[i];

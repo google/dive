@@ -23,6 +23,7 @@ limitations under the License.
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <span>
 
 #include "dive_renderdoc.h"
 #include "generated/generated_vulkan_struct_handle_mappers.h"
@@ -32,6 +33,29 @@ limitations under the License.
 
 GFXRECON_BEGIN_NAMESPACE(gfxrecon)
 GFXRECON_BEGIN_NAMESPACE(decode)
+
+namespace
+{
+
+// Returns a new array which is the combination of the inputs.
+std::span<const char* const> AddExtensions(std::span<const char* const> current_extensions,
+                                           std::span<const char* const> additions)
+{
+    // Memory from DecodeAllocator will be freed when all consumers are done.
+    size_t new_size = current_extensions.size() + additions.size();
+    std::span<const char*> new_extensions(DecodeAllocator::Allocate<const char*>(new_size), new_size);
+    for (size_t i = 0; i < current_extensions.size(); ++i)
+    {
+        new_extensions[i] = current_extensions[i];
+    }
+    for (size_t i = 0; i < additions.size(); ++i)
+    {
+        new_extensions[i + current_extensions.size()] = additions[i];
+    }
+    return new_extensions;
+}
+
+}  // namespace
 
 DiveVulkanReplayConsumer::DiveVulkanReplayConsumer(
     std::shared_ptr<application::Application> application, const VulkanReplayOptions& options)
@@ -51,23 +75,19 @@ void DiveVulkanReplayConsumer::Process_vkCreateInstance(
     // surface extension but not VK_KHR_surface (which they all depend on). It's easier to fix here
     // than to patch GFXR.
     VkInstanceCreateInfo& create_info = *pCreateInfo->GetPointer();
-    std::vector<const char*> extensions(
-        create_info.ppEnabledExtensionNames,
-        create_info.ppEnabledExtensionNames + create_info.enabledExtensionCount);
-    if (const auto iter = std::find_if(extensions.cbegin(), extensions.cend(),
+    std::span<const char* const> extensions(create_info.ppEnabledExtensionNames,
+                                            static_cast<size_t>(create_info.enabledExtensionCount));
+    if (const auto iter = std::find_if(extensions.begin(), extensions.end(),
                                        [](const char* extension) {
                                            return strcmp(extension,
                                                          VK_KHR_SURFACE_EXTENSION_NAME) == 0;
                                        });
-        iter == extensions.cend())
+        iter == extensions.end())
     {
-        // This is brittle since if the user calls
-        // GetMetaStructPointer()->ppEnabledExtensionNames->GetPointer() they will get the original
-        // value in the .gfxr file (not any of our modifications). There's really no reason to do
-        // this but it's still possible.
-        extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-        create_info.ppEnabledExtensionNames = extensions.data();
-        create_info.enabledExtensionCount = extensions.size();
+        std::span<const char* const> new_extensions =
+            AddExtensions(extensions, {{VK_KHR_SURFACE_EXTENSION_NAME}});
+        create_info.ppEnabledExtensionNames = new_extensions.data();
+        create_info.enabledExtensionCount = new_extensions.size();
         // The pointers that we are replacing are owned by the DecodeAllocator so they will get
         // cleaned up at the appropriate time.
     }

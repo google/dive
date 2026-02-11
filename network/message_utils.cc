@@ -42,30 +42,38 @@ absl::Status DownloadFile(Network::DownloadFileRequest* request,
 {
     Network::DownloadFileResponse response;
     std::string file_path = request->GetString();
-
     std::error_code ec;
-    auto file_size = std::filesystem::file_size(file_path, ec);
-    if (!ec)
+
+    if (std::filesystem::is_regular_file(file_path, ec))
     {
-        response.SetFound(true);
-        response.SetFilePath(file_path);
-        response.SetFileSizeStr(std::to_string(file_size));
+        if (auto file_size = std::filesystem::file_size(file_path, ec); !ec)
+        {
+            response.SetFound(true);
+            response.SetFilePath(file_path);
+            response.SetFileSizeStr(std::to_string(file_size));
+        }
+        else
+        {
+            response.SetFound(false);
+            response.SetErrorReason(ec.message());
+        }
     }
     else
     {
         response.SetFound(false);
-        response.SetErrorReason(ec.message());
+        response.SetErrorReason(ec ? ec.message() : "Path does not exist or is not a regular file");
     }
 
-    auto status = Network::SendSocketMessage(client_conn, response);
-    if (!status.ok())
+    if (auto status = Network::SendSocketMessage(client_conn, response); !status.ok())
     {
         return Dive::StatusWithContext(status, "DownloadFile");
     }
+
     if (!response.GetFound())
     {
         return Dive::NotFoundError(response.GetErrorReason());
     }
+
     return client_conn->SendFile(file_path);
 }
 
@@ -73,19 +81,27 @@ absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConne
 {
     Network::FileSizeResponse response;
     std::string file_path = request->GetString();
-
     std::error_code ec;
-    auto file_size = std::filesystem::file_size(file_path, ec);
-    if (!ec)
+
+    if (std::filesystem::is_regular_file(file_path, ec))
     {
-        response.SetFound(true);
-        response.SetFileSizeStr(std::to_string(file_size));
+        if (auto file_size = std::filesystem::file_size(file_path, ec); !ec)
+        {
+            response.SetFound(true);
+            response.SetFileSizeStr(std::to_string(file_size));
+        }
+        else
+        {
+            response.SetFound(false);
+            response.SetErrorReason(ec.message());
+        }
     }
     else
     {
         response.SetFound(false);
-        response.SetErrorReason(ec.message());
+        response.SetErrorReason(ec ? ec.message() : "Path does not exist or is not a regular file");
     }
+
     return Network::SendSocketMessage(client_conn, response);
 }
 

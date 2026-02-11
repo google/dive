@@ -140,15 +140,25 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
     {
         VkDeviceCreateInfo& create_info = *pCreateInfo->GetPointer();
 
-        // Additions to create_info must be allocated via DecodeAllocator to ensure they outlive all
-        // consumer invocations.
-        create_info.pNext = AllocateAndInitialize(VkPhysicalDeviceHostQueryResetFeaturesEXT{
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT,
-            .pNext = pCreateInfo->GetMetaStructPointer()->pNext
-                         ? pCreateInfo->GetMetaStructPointer()->pNext->GetPointer()
-                         : nullptr,
-            .hostQueryReset = VK_TRUE,
-        });
+        if (auto* host_query_reset_feature =
+                graphics::vulkan_struct_get_pnext<VkPhysicalDeviceHostQueryResetFeaturesEXT>(
+                    &create_info);
+            host_query_reset_feature != nullptr)
+        {
+            host_query_reset_feature->hostQueryReset = VK_TRUE;
+        }
+        else
+        {
+            // Additions to create_info must be allocated via DecodeAllocator to ensure they outlive
+            // all consumer invocations.
+            create_info.pNext = AllocateAndInitialize(VkPhysicalDeviceHostQueryResetFeaturesEXT{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT,
+                .pNext = pCreateInfo->GetMetaStructPointer()->pNext
+                             ? pCreateInfo->GetMetaStructPointer()->pNext->GetPointer()
+                             : nullptr,
+                .hostQueryReset = VK_TRUE,
+            });
+        }
 
         std::span<const char* const> extensions(create_info.ppEnabledExtensionNames,
                                                 create_info.enabledExtensionCount);

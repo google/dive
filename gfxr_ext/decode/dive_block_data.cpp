@@ -129,6 +129,7 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes(uint64_t file_size)
 
     // Calculating block sizes
     std::vector<uint64_t> block_sizes;
+    block_sizes.reserve(original_blocks_map_.size());
     uint64_t n_blocks_exceeding_buffer_size = 0;
     for (size_t i = 0; i < original_blocks_map_.size() - 1; i++)
     {
@@ -141,22 +142,34 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes(uint64_t file_size)
             return false;
         }
         uint64_t size = current_block_end - current_block_start;
+
+        // Gather block data for stats
         block_sizes.push_back(size);
         if (size > kDiveBlockBufferSize)
         {
             n_blocks_exceeding_buffer_size++;
         }
+
         original_blocks_map_[i]->size_ = size;
     }
 
     DiveOriginalBlock& last_block = *original_blocks_map_.back();
     last_block.size_ = file_size - last_block.offset_;
 
+    // Gather last block data for stats
+    block_sizes.push_back(last_block.size_);
+    if (last_block.size_ > kDiveBlockBufferSize)
+    {
+        n_blocks_exceeding_buffer_size++;
+    }
+
+    // Report stats
+    assert(block_sizes.size() == original_blocks_map_.size());
     std::sort(block_sizes.begin(), block_sizes.end());
-    uint64_t rough_median = block_sizes.at(static_cast<uint32_t>(block_sizes.size() / 2));
+    uint64_t rough_median = block_sizes[block_sizes.size() / 2];
     GFXRECON_LOG_INFO(
-        "Approx median block size: %d bytes, buffer size: %d bytes, and %d/%d blocks exceeded the "
-        "buffer",
+        "Approx median block size: %u bytes, buffer size: %zu bytes, and %u/%zu blocks exceeded "
+        "the buffer",
         rough_median, kDiveBlockBufferSize, n_blocks_exceeding_buffer_size, block_sizes.size());
 
     original_blocks_map_locked_ = true;

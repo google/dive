@@ -84,7 +84,7 @@ def fetch_and_sync_crashpad(root_dir, commit_hash):
         run_command(["fetch", "crashpad"], cwd=root_dir, shell=(platform.system() == "Windows"))
 
     print(f"Syncing Crashpad to {commit_hash}...")
-    run_command(["git", "fetch", "origin", commit_hash], cwd=crashpad_dir)
+    run_command(["git", "fetch", "origin"], cwd=crashpad_dir)
     run_command(["git", "checkout", commit_hash], cwd=crashpad_dir)
     run_command(["gclient", "sync"], cwd=crashpad_dir, shell=(platform.system() == "Windows"))
 

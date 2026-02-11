@@ -20,11 +20,11 @@ set(USE_CRASHPAD_CONDITION
 
 add_library(crash_report STATIC)
 
-target_sources(crash_report PRIVATE absl_utils.h crash_report.h)
-
 target_sources(
     crash_report
     PRIVATE
+        absl_utils.h
+        crash_report.h
         $<$<BOOL:${USE_CRASHPAD_CONDITION}>:crash_report_crashpad.cpp>
         $<$<NOT:${USE_CRASHPAD_CONDITION}>:crash_report_absl.cpp>
 )
@@ -37,11 +37,5 @@ target_link_libraries(
         absl::symbolize
         absl::failure_signal_handler
         absl::strings
+        $<$<BOOL:${USE_CRASHPAD_CONDITION}>:dive_crashpad>
 )
-
-target_link_libraries(
-    crash_report
-    PRIVATE $<$<BOOL:${USE_CRASHPAD_CONDITION}>:dive_crashpad>
-)
-
-target_include_directories(crash_report PUBLIC "${CMAKE_CURRENT_LIST_DIR}")

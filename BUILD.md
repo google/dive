@@ -35,7 +35,7 @@ export QTDIR=~/Qt/5.11.2/gcc_64
 export CMAKE_PREFIX_PATH=$QTDIR
 export PATH=$QTDIR:$PATH
 
-# Crashpad Symbol Upload (Required for Release builds)
+# Crashpad Symbol Upload (Required for Official Releases)
 export CRASHPAD_API_KEY=<your_api_key>
 
 # Recommended but not necessary
@@ -57,7 +57,7 @@ set QTDIR=C:\Users\name\...\Qt\5.11.2\msvc2017_64
 set CMAKE_PREFIX_PATH=%QTDIR%
 set PATH=%QTDIR%\bin;%PATH%
 
-REM Crashpad Symbol Upload (Required for Release builds)
+REM Crashpad Symbol Upload (Required for Official Releases)
 set CRASHPAD_API_KEY=<your_api_key>
 
 REM Recommended but not necessary

@@ -34,28 +34,21 @@ def main():
 
     api_key = os.environ.get("CRASHPAD_API_KEY")
     if not api_key:
-        print("[ERROR] CRASHPAD_API_KEY environment variable is not set. Symbol upload will fail.")
-        sys.exit(1)
+        raise RuntimeError("CRASHPAD_API_KEY environment variable is not set. Symbol upload will fail.")
 
     if not os.path.exists(args.sym_file_path):
-        print(f"[ERROR] Symbol file not found at {args.sym_file_path}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Symbol file not found at {args.sym_file_path}")
 
-    try:
-        with open(args.sym_file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            first_line = f.readline().strip()
-        
-        parts = first_line.split()
-        if len(parts) < 5:
-            print("[ERROR] Invalid .sym file format. Header missing required parts.")
-            sys.exit(1)
+    with open(args.sym_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        first_line = f.readline().strip()
+    
+    parts = first_line.split()
+    if len(parts) < 5:
+        raise ValueError("Invalid .sym file format. Header missing required parts.")
 
-        # Standard sym format: MODULE OS CPU ID FILENAME
-        debug_id = parts[3]
-        debug_file = parts[4]
-    except Exception as e:
-        print(f"[ERROR] Failed to read symbol file: {e}")
-        sys.exit(1)
+    # Standard sym format: MODULE OS CPU ID FILENAME
+    debug_id = parts[3]
+    debug_file = parts[4]
 
     base_url = args.upload_url.rstrip('/')
     write_step(f"Preparing upload for {debug_file} ({debug_id})")
@@ -69,16 +62,14 @@ def main():
         
         with urllib.request.urlopen(req) as response:
             if response.status != 200:
-                print(f"[ERROR] Create request failed with status {response.status}")
-                sys.exit(1)
+                raise RuntimeError(f"Create request failed with status {response.status}")
             
             data = json.load(response)
             upload_url_signed = data.get('uploadUrl')
             upload_key = data.get('uploadKey')
 
         if not upload_url_signed or not upload_key:
-            print(f"[ERROR] Server response missing credentials. Raw response: {data}")
-            sys.exit(1)
+            raise ValueError(f"Server response missing credentials. Raw response: {data}")
 
         write_step("Sending file to storage...")
 
@@ -91,8 +82,7 @@ def main():
         
         with urllib.request.urlopen(req) as response:
             if response.status not in (200, 201):
-                print(f"[ERROR] File transfer failed with status {response.status}")
-                sys.exit(1)
+                raise RuntimeError(f"File transfer failed with status {response.status}")
 
         write_step("Notifying collector of completion...")
 
@@ -111,24 +101,16 @@ def main():
         
         with urllib.request.urlopen(req) as response:
             if response.status != 200:
-                print(f"[ERROR] Finalization failed with status {response.status}")
-                sys.exit(1)
+                raise RuntimeError(f"Finalization failed with status {response.status}")
 
         print("\n[SUCCESS] Symbol uploaded and finalized.\n")
 
     except urllib.error.HTTPError as e:
-        print(f"\n[ERROR] HTTP Error: {e.code} {e.reason}")
         try:
-            print(f"Response: {e.read().decode('utf-8')}")
-        except:
+            print(f"Response context: {e.read().decode('utf-8')}")
+        except Exception:
             pass
-        sys.exit(1)
-    except urllib.error.URLError as e:
-        print(f"\n[ERROR] Connection Error: {e.reason}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n[ERROR] Unexpected error: {e}")
-        sys.exit(1)
+        raise
 
 if __name__ == "__main__":
     main()

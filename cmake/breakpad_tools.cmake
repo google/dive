@@ -47,22 +47,6 @@ else()
     )
 endif()
 
-# sym-upload-v2 is performed using curl via PowerShell (Windows) or Bash (Linux and macOS).
-
-if(WIN32)
-    message(
-        STATUS
-        "On Windows, sym-upload-v2 is performed using curl.exe via PowerShell."
-    )
-elseif(APPLE)
-    enable_language(OBJCXX)
-    enable_language(OBJC)
-    message(STATUS "On macOS, sym-upload-v2 is performed using curl via Bash.")
-elseif(UNIX)
-    find_package(CURL REQUIRED)
-    message(STATUS "On Linux, sym-upload-v2 is performed using curl via Bash.")
-endif()
-
 # Upload debug symbols to the Crashpad server
 
 function(upload_debug_symbols TARGET_NAME)
@@ -108,10 +92,11 @@ function(upload_debug_symbols TARGET_NAME)
         POST_BUILD
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/scripts/sym_upload_v2.py" "${SYM_FILENAME}"
-            "${CRASHPAD_UPLOAD_URL}"
+            "${CMAKE_SOURCE_DIR}/scripts/upload_debug_symbols_to_crashpad.py"
+            "${SYM_FILENAME}" "${CRASHPAD_UPLOAD_URL}"
         WORKING_DIRECTORY "${BINARY_OUTPUT_DIR}"
-        COMMENT "Uploading debug symbols using sym_upload_v2.py..."
+        COMMENT
+            "Uploading debug symbols using upload_debug_symbols_to_crashpad.py..."
         VERBATIM
     )
 endfunction()

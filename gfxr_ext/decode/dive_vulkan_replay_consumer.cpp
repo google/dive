@@ -97,27 +97,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateInstance(
     StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
     HandlePointerDecoder<VkInstance>* pInstance)
 {
-    // Fix VUID-vkCreateInstance-ppEnabledExtensionNames-01388. GFXR Replay adds the platform
-    // surface extension but not VK_KHR_surface (which they all depend on). It's easier to fix here
-    // than to patch GFXR.
     VkInstanceCreateInfo& create_info = *pCreateInfo->GetPointer();
-    std::span<const char* const> extensions(create_info.ppEnabledExtensionNames,
-                                            static_cast<size_t>(create_info.enabledExtensionCount));
-    if (const auto iter = std::find_if(extensions.begin(), extensions.end(),
-                                       [](const char* extension) {
-                                           return strcmp(extension,
-                                                         VK_KHR_SURFACE_EXTENSION_NAME) == 0;
-                                       });
-        iter == extensions.end())
-    {
-        std::span<const char* const> new_extensions =
-            AddExtensions(extensions, {{VK_KHR_SURFACE_EXTENSION_NAME}});
-        create_info.ppEnabledExtensionNames = new_extensions.data();
-        create_info.enabledExtensionCount = new_extensions.size();
-        // The pointers that we are replacing are owned by the DecodeAllocator so they will get
-        // cleaned up at the appropriate time.
-    }
-
     api_version_ = create_info.pApplicationInfo ? create_info.pApplicationInfo->apiVersion : 0;
 
     VulkanReplayConsumer::Process_vkCreateInstance(call_info, returnValue, pCreateInfo, pAllocator,

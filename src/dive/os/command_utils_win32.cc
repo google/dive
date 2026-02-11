@@ -34,7 +34,7 @@ absl::StatusOr<std::string> LogAndReturnOutput(const std::string& command,
                                                const std::string& output, int ret)
 {
     // Always log output
-    LOGD("%s\n", output.c_str());
+    LOGI("%s\n", output.c_str());
 
     if (ret != 0)
     {
@@ -47,7 +47,7 @@ absl::StatusOr<std::string> LogAndReturnOutput(const std::string& command,
 absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
     // Always log command before execution
-    LOGD("> %s\n", command.c_str());
+    LOGI("> %s\n", command.c_str());
 
     std::string output;
     std::string err_msg;

@@ -97,15 +97,16 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/dive # to be removed
 )
 
-# TODO: b/483461576 - Enable constructor reorder warnings when all issues are fixed
-if(
-    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
-    OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+target_compile_options(
+    gfxr_decode_ext_lib
+    PRIVATE
+        # TODO: b/483461576 - Enable constructor reorder warnings when all issues are fixed
+        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wno-reorder-ctor>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-reorder>
+        # C4100 is "unreference parameter". While Google C++ Style advocates removing unused
+        # parameters, these warnings originate from GFXR headers.
+        $<$<CXX_COMPILER_ID:MSVC>:/wd4100>
 )
-    target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder-ctor)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder)
-endif()
 
 # ------------------------
 # gfxr_decode_ext_lib_test

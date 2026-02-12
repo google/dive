@@ -154,6 +154,10 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
                                   StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
                                   HandlePointerDecoder<VkDeviceMemory>* pMemory) override;
 
+    void Process_vkGetImageMemoryRequirements(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
+        StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 

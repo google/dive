@@ -17,6 +17,7 @@ limitations under the License.
 #include "dive_block_data.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <fstream>
 #include <memory>
 
@@ -168,8 +169,8 @@ bool DiveBlockData::FinalizeOriginalBlocksMapSizes(uint64_t file_size)
     std::sort(block_sizes.begin(), block_sizes.end());
     uint64_t rough_median = block_sizes[block_sizes.size() / 2];
     GFXRECON_LOG_INFO(
-        "Approx median block size: %u bytes, buffer size: %zu bytes, and %u/%zu blocks exceeded "
-        "the buffer",
+        "Approx median block size: %" PRIu64 " bytes, buffer size: %zu bytes, and %" PRIu64
+        "/%zu blocks exceeded the buffer",
         rough_median, kDiveBlockBufferSize, n_blocks_exceeding_buffer_size, block_sizes.size());
 
     original_blocks_map_locked_ = true;

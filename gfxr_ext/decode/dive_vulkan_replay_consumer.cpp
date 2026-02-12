@@ -151,7 +151,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
             std::span<const char* const> new_extensions =
                 AddExtensions(extensions, {{VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME}});
             create_info.ppEnabledExtensionNames = new_extensions.data();
-            create_info.enabledExtensionCount = new_extensions.size();
+            create_info.enabledExtensionCount = static_cast<uint32_t>(new_extensions.size());
         }
     }
 

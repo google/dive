@@ -762,7 +762,7 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 
     if (!reset_fence_list.empty())
     {
-        VkResult result = pfn_vkResetFences_(
+        [[maybe_unused]] VkResult result = pfn_vkResetFences_(
             device_, static_cast<uint32_t>(reset_fence_list.size()), reset_fence_list.data());
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }

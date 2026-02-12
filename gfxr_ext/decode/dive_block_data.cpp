@@ -280,7 +280,7 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path,
         return false;
     }
 
-    FILE* original_fd;
+    FILE* original_fd = nullptr;
     int result = util::platform::FileOpen(&original_fd, original_file_path.c_str(), "rb");
     if (result || original_fd == nullptr)
     {
@@ -288,7 +288,7 @@ bool DiveBlockData::WriteGFXRFile(const std::string& original_file_path,
         return false;
     }
 
-    FILE* new_fd;
+    FILE* new_fd = nullptr;
     result = util::platform::FileOpen(&new_fd, new_file_path.c_str(), "wb");
     if (result || new_fd == nullptr)
     {

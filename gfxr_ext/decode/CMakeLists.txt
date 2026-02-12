@@ -98,7 +98,10 @@ target_include_directories(
 )
 
 # TODO: b/483461576 - Enable constructor reorder warnings when all issues are fixed
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+if(
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+)
     target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder-ctor)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder)

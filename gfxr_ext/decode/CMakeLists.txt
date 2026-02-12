@@ -97,8 +97,8 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/dive # to be removed
 )
 
-# TODO: b/483461576 - Enable constructor reorider warnings when all issues are fixed
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+# TODO: b/483461576 - Enable constructor reorder warnings when all issues are fixed
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder-ctor)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder)

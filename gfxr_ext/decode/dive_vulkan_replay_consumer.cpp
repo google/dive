@@ -715,6 +715,29 @@ void DiveVulkanReplayConsumer::Process_vkAllocateMemory(
                                                    pAllocator, pMemory);
 }
 
+void DiveVulkanReplayConsumer::Process_vkGetImageMemoryRequirements(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
+    StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements)
+{
+    VulkanImageInfo* image_info = GetObjectInfoTable().GetVkImageInfo(image);
+    GFXRECON_ASSERT(image_info != nullptr);
+    if (image_info->external_memory_android && image_info->memory == VK_NULL_HANDLE)
+    {
+        // When GFXR capture writes the resources for trim state, it does not consider whether the
+        // image is an AHardwareBuffer. As a result, it emits vkGetImageMemoryRequirements instead
+        // of vkGetAndroidHardwareBufferPropertiesANDROID. It seems like it's fine to ignore this
+        // call because the parameters required to allocate memory are baked into the capture file.
+        // TODO: b/484035145 - Remove when GFXR handles this case properly
+        GFXRECON_LOG_INFO(
+            "Ignoring call to vkGetImageMemoryRequirements for image 0x%x since it's an external "
+            "AHardwareBuffer that hasn't been bound to memory.")
+        return;
+    }
+
+    VulkanReplayConsumer::Process_vkGetImageMemoryRequirements(call_info, device, image,
+                                                               pMemoryRequirements);
+}
+
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();

@@ -47,6 +47,7 @@ target_link_libraries(
     dive_legacy_includes
     gpu_time
     Vulkan::Headers
+    network
 )
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)

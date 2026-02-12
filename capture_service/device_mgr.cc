@@ -491,7 +491,8 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
     for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
     {
         auto res = Adb().RunAndGetResult(
-            absl::StrFormat("forward tcp:%d localabstract:%s", p, kUnixAbstractPath));
+            absl::StrFormat("forward tcp:%d localabstract:%s", p,
+                            Dive::DeviceResourcesConstants::kUnixAbstractPath));
         if (res.ok())
         {
             m_port = p;

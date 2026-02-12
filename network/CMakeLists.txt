@@ -24,6 +24,7 @@ set(NETWORK_SRCS
     messages.cc
     tcp_client.cc
     unix_domain_server.cc
+    message_utils.cc
 )
 
 set(NETWORK_HDRS
@@ -34,6 +35,7 @@ set(NETWORK_HDRS
     tcp_client.h
     message_handler.h
     unix_domain_server.h
+    message_utils.h
 )
 
 add_library(network STATIC ${NETWORK_SRCS} ${NETWORK_HDRS})

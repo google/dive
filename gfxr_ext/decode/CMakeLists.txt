@@ -37,6 +37,12 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+if(MSVC)
+    add_compile_options(/WX /W4)
+else()
+    add_compile_options(-Werror -Wall)
+endif()
+
 add_library(dive_renderdoc)
 if(ANDROID)
     target_sources(dive_renderdoc PRIVATE dive_renderdoc_android.cpp)
@@ -90,6 +96,13 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/dive # to be removed
 )
+
+# TODO: b/483461576 - Enable constructor reorider warnings when all issues are fixed
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder-ctor)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(gfxr_decode_ext_lib PRIVATE -Wno-reorder)
+endif()
 
 # ------------------------
 # gfxr_decode_ext_lib_test

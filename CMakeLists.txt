@@ -38,7 +38,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" ON)
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" OFF)
 # Add an option to allow users to easily toggle the runtime layer build
 option(
     DIVE_BUILD_RUNTIME_LAYER_FOR_WIN

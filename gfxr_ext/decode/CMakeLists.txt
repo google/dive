@@ -103,6 +103,7 @@ target_compile_options(
         # TODO: b/483461576 - Enable constructor reorder warnings when all issues are fixed
         $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wno-reorder-ctor>
         $<$<CXX_COMPILER_ID:GNU>:-Wno-reorder>
+    PUBLIC
         # C4100 is "unreference parameter". While Google C++ Style advocates removing unused
         # parameters, these warnings originate from GFXR headers.
         $<$<CXX_COMPILER_ID:MSVC>:/wd4100>

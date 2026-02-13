@@ -63,7 +63,7 @@ bool DiveFileProcessor::WriteFile(const std::string& name, const std::string& co
 {
     std::string new_file_path = absolute_path_ + "/" + name;
 
-    FILE* fd;
+    FILE* fd = nullptr;
     int result = util::platform::FileOpen(&fd, new_file_path.c_str(), "wb");
     if (result || fd == nullptr)
     {

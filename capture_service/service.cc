@@ -22,7 +22,8 @@ limitations under the License.
 #include <memory>
 #include <string>
 
-#include "common/log.h"
+#include "absl/base/log_severity.h"
+#include "absl/log/log.h"
 #include "constants.h"
 #include "dive/utils/device_resources_constants.h"
 #include "network/message_utils.h"
@@ -42,21 +43,21 @@ absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
     return Network::SendSocketMessage(client_conn, response);
 }
 
-void ServerMessageHandler::OnConnect() { LOGI("ServerMessageHandler: onConnect()"); }
+void ServerMessageHandler::OnConnect() { LOG(INFO) << "ServerMessageHandler: onConnect()"; }
 
-void ServerMessageHandler::OnDisconnect() { LOGI("ServerMessageHandler: onDisconnect()"); }
+void ServerMessageHandler::OnDisconnect() { LOG(INFO) << "ServerMessageHandler: onDisconnect()"; }
 
 void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
                                          Network::SocketConnection* client_conn)
 {
     if (!message)
     {
-        LOGI("Message is null.");
+        LOG(INFO) << "Message is null.";
         return;
     }
     if (!client_conn)
     {
-        LOGI("Client connection is null.");
+        LOG(INFO) << "Client connection is null.";
         return;
     }
 
@@ -64,92 +65,87 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
     {
         case Network::MessageType::PING_MESSAGE:
         {
-            LOGI("Message received: Ping");
+            LOG(INFO) << "Message received: Ping";
             auto status = Network::SendPong(client_conn);
             if (!status.ok())
             {
-                LOGI("Send pong failed: %.*s", (int)status.message().length(),
-                     status.message().data());
+                LOG(ERROR) << "Send pong failed: " << status.message();
             }
             break;
         }
         case Network::MessageType::HANDSHAKE_REQUEST:
         {
-            LOGI("Message received: HandShakeRequest");
+            LOG(INFO) << "Message received: HandShakeRequest";
             auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
             if (request)
             {
                 auto status = Network::Handshake(request, client_conn);
                 if (!status.ok())
                 {
-                    LOGI("Handshake failed: %.*s", (int)status.message().length(),
-                         status.message().data());
+                    LOG(ERROR) << "Handshake failed: " << status.message();
                 }
             }
             else
             {
-                LOGI("HandShakeRequest message is null.");
+                LOG(INFO) << "HandShakeRequest message is null.";
             }
             break;
         }
         case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
-            LOGI("Message received: Pm4CaptureRequest");
+            LOG(INFO) << "Message received: Pm4CaptureRequest";
             auto status = StartPm4Capture(client_conn);
             if (!status.ok())
             {
-                LOGI("StartPm4Capture failed: %.*s", (int)status.message().length(),
-                     status.message().data());
+                LOG(ERROR) << "StartPm4Capture failed: " << status.message();
             }
             break;
         }
         case Network::MessageType::DOWNLOAD_FILE_REQUEST:
         {
-            LOGI("Message received: DownloadFileRequest");
+            LOG(INFO) << "Message received: DownloadFileRequest";
             auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
             if (request)
             {
                 auto status = Network::DownloadFile(request, client_conn);
                 if (!status.ok())
                 {
-                    LOGI("DownloadFile failed: %.*s", (int)status.message().length(),
-                         status.message().data());
+                    LOG(ERROR) << "DownloadFile failed: " << status.message();
                 }
             }
             else
             {
-                LOGI("DownloadFileRequest message is null.");
+                LOG(INFO) << "DownloadFileRequest message is null.";
             }
             break;
         }
         case Network::MessageType::FILE_SIZE_REQUEST:
         {
-            LOGI("Message received: FileSizeRequest");
+            LOG(INFO) << "Message received: FileSizeRequest";
             auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
             if (request)
             {
                 auto status = Network::GetFileSize(request, client_conn);
                 if (!status.ok())
                 {
-                    LOGI("GetFileSize failed: %.*s", (int)status.message().length(),
-                         status.message().data());
+                    LOG(ERROR) << "GetFileSize failed: " << status.message();
                 }
             }
             else
             {
-                LOGI("FileSizeRequest message is null.");
+                LOG(INFO) << "FileSizeRequest message is null.";
             }
             break;
         }
         default:
         {
-            LOGW("Message type %d unhandled.", (int)message->GetMessageType());
+            LOG(WARNING) << "Message type unhandled, type: ", message->GetMessageType();
             break;
         }
     }
 }
 
-void RunServer()
+int RunServer()
 {
     // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
     // It avoids the need to grant INTERNET permission to the target application.
@@ -161,17 +157,14 @@ void RunServer()
     auto status = server->Start(server_address);
     if (!status.ok())
     {
-        LOGW("Error starting the server: %.*s", static_cast<int>(status.message().length()),
-             status.message().data());
+        LOG(ERROR) << "Could not start the server: " << status.message();
+        return 1;
     }
-    LOGI("Server listening on %s", server_address.c_str());
+    LOG(INFO) << "Server listening on: " << server_address;
     server->Wait();
-}
-
-int ServerMain()
-{
-    RunServer();
     return 0;
 }
+
+int ServerMain() { return RunServer(); }
 
 }  // namespace Dive

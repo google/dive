@@ -24,7 +24,8 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
-#include "dive/common/log.h"
+#include "absl/strings/str_join.h"
+#include "dive/log/log_utils.h"
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -37,24 +38,9 @@ limitations under the License.
 namespace Dive
 {
 
-absl::StatusOr<std::string> LogAndReturnOutput(const std::string& command,
-                                               const std::string& output, int ret)
-{
-    // Always log output
-    LOGI("%s\n", output.c_str());
-
-    if (ret != 0)
-    {
-        return absl::UnknownError(absl::StrFormat(
-            "Command `%s` failed with return code %d, error: %s\n", command, ret, output));
-    }
-    return output;
-}
-
 absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
-    // Always log command before execution
-    LOGI("> %s\n", command.c_str());
+    LogCommand(command);
 
     std::string output;
     std::string err_msg;
@@ -63,7 +49,6 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     if (!pipe)
     {
         err_msg = "Popen call failed\n";
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
 
@@ -75,7 +60,7 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     output = absl::StripAsciiWhitespace(output);
     int ret = pclose(pipe);
 
-    return LogAndReturnOutput(command, output, ret);
+    return LogCommandAndReturnOutput(command, output, ret);
 }
 
 absl::StatusOr<std::filesystem::path> GetExecutableDirectory()

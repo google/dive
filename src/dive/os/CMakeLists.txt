@@ -17,7 +17,7 @@
 add_library(dive_lib_os terminal.cpp terminal.h)
 target_link_libraries(dive_lib_os PUBLIC dive_src_includes)
 
-# === command_utils ==========================================================
+# === command_utils ============================================================
 
 add_library(
     command_utils
@@ -29,4 +29,7 @@ target_compile_definitions(
     command_utils
     PRIVATE $<$<PLATFORM_ID:Windows>:UNICODE> $<$<PLATFORM_ID:Windows>:_UNICODE>
 )
-target_link_libraries(command_utils PRIVATE dive_src_includes absl::status)
+target_link_libraries(
+    command_utils
+    PRIVATE dive_log_utils dive_src_includes absl::status
+)

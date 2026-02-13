@@ -19,7 +19,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
-#include "dive/common/log.h"
+#include "dive/log/log_utils.h"
 #include "dive/os/command_utils.h"
 
 #ifndef WIN32
@@ -30,24 +30,9 @@ limitations under the License.
 namespace Dive
 {
 
-absl::StatusOr<std::string> LogAndReturnOutput(const std::string& command,
-                                               const std::string& output, int ret)
-{
-    // Always log output
-    LOGI("%s\n", output.c_str());
-
-    if (ret != 0)
-    {
-        return absl::UnknownError(absl::StrFormat(
-            "Command `%s` failed with return code %d, error: %s\n", command, ret, output));
-    }
-    return output;
-}
-
 absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
-    // Always log command before execution
-    LOGI("> %s\n", command.c_str());
+    LogCommand(command);
 
     std::string output;
     std::string err_msg;
@@ -71,25 +56,21 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     if (!CreatePipe(&hChildStdOutRd, &hChildStdOutWr, &sa, 0))
     {
         err_msg = "Create pipe to read stdout failed.";
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
     if (!SetHandleInformation(hChildStdOutRd, HANDLE_FLAG_INHERIT, 0))
     {
         err_msg = "SetHandleInformation for stdout failed.";
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
     if (!CreatePipe(&hChildStdErrRd, &hChildStdErrWr, &sa, 0))
     {
         err_msg = "CreatePipe for stderr failed.";
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
     if (!SetHandleInformation(hChildStdErrRd, HANDLE_FLAG_INHERIT, 0))
     {
         err_msg = "SetHandleInformation for stdout failed.";
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
 
@@ -106,7 +87,6 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     if (res == 0)
     {
         err_msg = "Failed to convert std::string to utf-8 string.";
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
 
@@ -124,7 +104,6 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     if (!bSuccess)
     {
         err_msg = absl::StrFormat("Error create process %d", GetLastError());
-        LOGE("%s\n", err_msg.c_str());
         return absl::InternalError(err_msg);
     }
     else
@@ -163,7 +142,7 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    return LogAndReturnOutput(command, output, ret);
+    return LogCommandAndReturnOutput(command, output, ret);
 }
 
 absl::StatusOr<std::filesystem::path> GetExecutableDirectory()

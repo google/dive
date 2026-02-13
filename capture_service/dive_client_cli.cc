@@ -24,6 +24,7 @@ limitations under the License.
 #include <system_error>
 #include <thread>
 
+#include "absl/base/log_severity.h"
 #include "absl/base/no_destructor.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/flags/flag.h"
@@ -32,6 +33,7 @@ limitations under the License.
 #include "absl/flags/usage.h"
 #include "absl/flags/usage_config.h"
 #include "absl/functional/function_ref.h"
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -44,6 +46,7 @@ limitations under the License.
 #include "dive/common/app_types.h"
 #include "dive/common/macros.h"
 #include "dive/common/status.h"
+#include "dive/log/log.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/device_resources.h"
 #include "network/tcp_client.h"
@@ -234,11 +237,11 @@ std::string GenerateAppTypeFlagHelp()
 // Waits for user input before exiting.
 absl::Status WaitForExitConfirmation()
 {
-    std::cout << "Press any key+enter to exit" << std::endl;
+    LOG(INFO) << "Press any key+enter to exit";
     std::string input;
     if (std::getline(std::cin, input))
     {
-        std::cout << "Exiting..." << std::endl;
+        LOG(INFO) << "Exiting...";
     }
     return absl::OkStatus();
 }
@@ -260,7 +263,7 @@ absl::StatusOr<std::string> AutoSelectSerial(const std::vector<DeviceInfo>& devi
     if (devices.size() == 1)
     {
         const std::string& serial = devices.front().m_serial;
-        std::cout << "Using single connected device: " << serial << std::endl;
+        LOG(INFO) << "Using single connected device: " << serial;
         return serial;
     }
 
@@ -407,7 +410,7 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
         return status;
     }
 
-    std::cout << "Capture saved at " << download_file_path << std::endl;
+    LOG(INFO) << "Capture saved at " << download_file_path;
     return absl::OkStatus();
 }
 
@@ -421,7 +424,7 @@ bool IsCaptureFinished(const AdbSession& adb, const std::string& gfxr_capture_di
 
     if (!output.ok())
     {
-        std::cout << "Error checking directory: " << output.status().message() << std::endl;
+        LOG(WARNING) << "Error checking directory: " << output.status().message();
     }
 
     std::stringstream ss(output->c_str());
@@ -456,8 +459,8 @@ absl::Status RenameScreenshotFile(const std::filesystem::path& full_target_downl
     const std::filesystem::path new_screenshot_file_path =
         full_target_download_dir / absl::StrCat(base_name, ".png");
 
-    std::cout << "Renaming screenshot from " << old_screenshot_file_path.string() << " to "
-              << new_screenshot_file_path.string() << std::endl;
+    LOG(INFO) << "Renaming screenshot from " << old_screenshot_file_path << " to "
+              << new_screenshot_file_path;
 
     try
     {
@@ -501,7 +504,7 @@ absl::Status RetrieveGfxrCapture(const AdbSession& adb, const GlobalOptions& opt
         absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
                      Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName, "/.");
 
-    std::cout << "Retrieving capture..." << std::endl;
+    LOG(INFO) << "Retrieving capture...";
 
     // Retrieve the list of files in the capture directory on the device.
     std::string command = absl::StrFormat("shell ls %s", on_device_capture_directory);
@@ -550,10 +553,10 @@ absl::Status RetrieveGfxrCapture(const AdbSession& adb, const GlobalOptions& opt
     if (absl::Status ret = RenameScreenshotFile(full_target_download_dir, *gfxr_capture_file);
         !ret.ok())
     {
-        std::cout << "Warning: Error renaming screenshot: " << ret.message() << std::endl;
+        LOG(WARNING) << "Error renaming screenshot: " << ret.message();
     }
 
-    std::cout << "Capture sucessfully saved at " << full_target_download_dir << std::endl;
+    LOG(INFO) << "Capture sucessfully saved at " << full_target_download_dir;
     return absl::OkStatus();
 }
 
@@ -625,7 +628,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
             break;
     }
 
-    std::cout << "Waiting for the current capture to complete...\n";
+    LOG(INFO) << "Waiting for the current capture to complete...";
     while (!IsCaptureFinished(adb, Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName))
     {
         absl::SleepFor(absl::Seconds(1));
@@ -634,11 +637,11 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
     // If this fails, we print an error but don't exit the tool, allowing the user to try again.
     if (absl::Status status = RetrieveGfxrCapture(adb, options); !status.ok())
     {
-        std::cout << "Failed to retrieve capture: " << status.message() << '\n';
+        LOG(ERROR) << "Failed to retrieve capture: " << status.message();
     }
     else
     {
-        std::cout << "Capture complete.\n";
+        LOG(INFO) << "Capture complete.";
     }
 
     return GfxrCaptureControlFlow::kContinue;
@@ -646,8 +649,8 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
 
 GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
 {
-    std::cout << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
-                 "application.\n";
+    LOG(INFO) << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
+                 "application.";
     std::string input;
     while (std::getline(std::cin, input))
     {
@@ -656,7 +659,7 @@ GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
             break;
         }
 
-        std::cout << "Exiting...\n";
+        LOG(INFO) << "Exiting...";
         return GfxrCaptureControlFlow::kStop;
     }
     if (!std::cin.good())
@@ -669,7 +672,7 @@ GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
 
 GfxrCaptureControlFlow WaitForUserInputToRetrieveGfxrCapture()
 {
-    std::cout << "Press key g+enter to retrieve the capture.\n";
+    LOG(INFO) << "Press key g+enter to retrieve the capture.";
     std::string input;
     while (std::getline(std::cin, input))
     {
@@ -678,7 +681,7 @@ GfxrCaptureControlFlow WaitForUserInputToRetrieveGfxrCapture()
             break;
         }
 
-        std::cout << "Press key g+enter to retrieve the capture.\n";
+        LOG(INFO) << "Press key g+enter to retrieve the capture.";
     }
     if (!std::cin.good())
     {
@@ -689,7 +692,7 @@ GfxrCaptureControlFlow WaitForUserInputToRetrieveGfxrCapture()
 
 GfxrCaptureControlFlow DelayBeforeStartGfxrCapture(absl::Duration trigger_capture_after)
 {
-    std::cout << "Waiting " << trigger_capture_after << "...\n";
+    LOG(INFO) << "Waiting " << trigger_capture_after << "...";
     absl::SleepFor(trigger_capture_after);
     return GfxrCaptureControlFlow::kContinue;
 }
@@ -699,13 +702,13 @@ absl::Status CmdListDevice(const CommandContext& ctx)
     auto list = ctx.mgr.ListDevice();
     if (list.empty())
     {
-        std::cout << "No device connected." << std::endl;
+        LOG(INFO) << "No device connected.";
         return absl::OkStatus();
     }
-    std::cout << "Devices: " << std::endl;
+    LOG(INFO) << "Devices:";
     for (const auto& device : list)
     {
-        std::cout << "\t" << device.GetDisplayName() << std::endl;
+        LOG(INFO) << "\t" << device.GetDisplayName();
     }
     return absl::OkStatus();
 }
@@ -718,10 +721,10 @@ absl::Status CmdListPackage(const CommandContext& ctx)
     {
         return ret.status();
     }
-    std::cout << "Packages: " << std::endl;
+    LOG(INFO) << "Packages:";
     for (const auto& pkg : *ret)
     {
-        std::cout << "\t" << pkg << std::endl;
+        LOG(INFO) << "\t" << pkg;
     }
     return absl::OkStatus();
 }
@@ -747,7 +750,7 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     constexpr absl::Duration kDefaultPm4CaptureTriggerCaptureAfter = absl::Seconds(5);
     absl::Duration trigger_capture_after =
         ctx.options.trigger_capture_after.value_or(kDefaultPm4CaptureTriggerCaptureAfter);
-    std::cout << "Waiting " << trigger_capture_after << "...\n";
+    LOG(INFO) << "Waiting " << trigger_capture_after << "...";
     absl::SleepFor(trigger_capture_after);
 
     status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
@@ -1018,6 +1021,8 @@ int main(int argc, char** argv)
     absl::SetFlagsUsageConfig(flags_usage_config);
     absl::SetProgramUsageMessage("Dive Tool CLI. Use --help for details.");
     absl::ParseCommandLine(argc, argv);
+    Dive::AbslLogger absl_logger = {};
+    absl_logger.Init();
 
     GlobalOptions opts{
         .serial = absl::GetFlag(FLAGS_device),
@@ -1052,15 +1057,15 @@ int main(int argc, char** argv)
 
     if (cmd == Command::kNone || selected_def == nullptr)
     {
-        std::cout << "Error: No valid command specified.\n"
-                  << GenerateCommandFlagHelp() << std::endl;
+        LOG(ERROR) << "No valid command specified.";
+        LOG(INFO) << GenerateCommandFlagHelp();
         return EXIT_FAILURE;
     }
 
     if (absl::Status status = selected_def->validator(opts); !status.ok())
     {
-        std::cout << status.message() << std::endl;
-        std::cout << Dive::GetStackTrace(status) << std::endl;
+        LOG(ERROR) << status.message();
+        LOG(INFO) << Dive::GetStackTrace(status);
         return EXIT_FAILURE;
     }
 
@@ -1070,23 +1075,23 @@ int main(int argc, char** argv)
         std::vector<DeviceInfo> devices = mgr.ListDevice();
         if (devices.empty())
         {
-            std::cout << "No Android devices connected." << std::endl;
+            LOG(ERROR) << "No Android devices connected.";
             return EXIT_FAILURE;
         }
 
         absl::StatusOr<std::string> validated_serial = ValidateSerial(devices, opts.serial);
         if (!validated_serial.ok())
         {
-            std::cout << validated_serial.status().message() << std::endl;
-            std::cout << Dive::GetStackTrace(validated_serial.status()) << std::endl;
+            LOG(ERROR) << validated_serial.status().message();
+            LOG(INFO) << Dive::GetStackTrace(validated_serial.status());
             return EXIT_FAILURE;
         }
         opts.serial = *validated_serial;
 
         if (absl::Status status = InitializeDevice(mgr, opts.serial); !status.ok())
         {
-            std::cout << status.message() << std::endl;
-            std::cout << Dive::GetStackTrace(status) << std::endl;
+            LOG(ERROR) << status.message();
+            LOG(INFO) << Dive::GetStackTrace(status);
             return EXIT_FAILURE;
         }
     }
@@ -1095,9 +1100,8 @@ int main(int argc, char** argv)
     absl::Status ret = selected_def->executor(ctx);
     if (!ret.ok())
     {
-        std::cout << "Error executing command '" << selected_def->name << "': " << ret.message()
-                  << std::endl;
-        std::cout << Dive::GetStackTrace(ret) << std::endl;
+        LOG(ERROR) << ret.message();
+        LOG(INFO) << Dive::GetStackTrace(ret);
         return EXIT_FAILURE;
     }
 

@@ -37,6 +37,12 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+if(MSVC)
+    add_compile_options(/WX /W4)
+else()
+    add_compile_options(-Werror -Wall)
+endif()
+
 add_library(dive_renderdoc)
 if(ANDROID)
     target_sources(dive_renderdoc PRIVATE dive_renderdoc_android.cpp)
@@ -89,6 +95,18 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../../
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/dive # to be removed
+)
+
+target_compile_options(
+    gfxr_decode_ext_lib
+    PRIVATE
+        # TODO: b/483461576 - Enable constructor reorder warnings when all issues are fixed
+        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wno-reorder-ctor>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-reorder>
+    PUBLIC
+        # C4100 is "unreference parameter". While Google C++ Style advocates removing unused
+        # parameters, these warnings originate from GFXR headers.
+        $<$<CXX_COMPILER_ID:MSVC>:/wd4100>
 )
 
 # ------------------------

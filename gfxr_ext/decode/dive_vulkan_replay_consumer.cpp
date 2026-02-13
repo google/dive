@@ -151,7 +151,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
             std::span<const char* const> new_extensions =
                 AddExtensions(extensions, {{VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME}});
             create_info.ppEnabledExtensionNames = new_extensions.data();
-            create_info.enabledExtensionCount = new_extensions.size();
+            create_info.enabledExtensionCount = static_cast<uint32_t>(new_extensions.size());
         }
     }
 
@@ -785,7 +785,7 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 
     if (!reset_fence_list.empty())
     {
-        VkResult result = pfn_vkResetFences_(
+        [[maybe_unused]] VkResult result = pfn_vkResetFences_(
             device_, static_cast<uint32_t>(reset_fence_list.size()), reset_fence_list.data());
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }

@@ -20,6 +20,7 @@ limitations under the License.
 #include <fstream>
 #include <iostream>
 
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -156,7 +157,7 @@ std::string GetDeviceResourcesVersionInfo(const std::string& csv_content)
         auto ret = GetDeviceResourcesVersionMap(csv_content);
         if (!ret.ok())
         {
-            std::cerr << ret.status().message() << std::endl;
+            LOG(ERROR) << ret.status().message();
             return "";
         }
         device_info_map = *ret;
@@ -191,12 +192,12 @@ std::string GetLongVersionString()
         }
         else
         {
-            std::cerr << ret.status().message() << std::endl;
+            LOG(ERROR) << ret.status().message();
         }
     }
     else
     {
-        std::cerr << ret.status().message() << std::endl;
+        LOG(ERROR) << ret.status().message();
     }
 
     std::filesystem::path profiling_sha_path =

@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// TODO b/464042788 - Try to deprecate in favour of absl logging library
+
 #pragma once
 
 #if defined __ANDROID__

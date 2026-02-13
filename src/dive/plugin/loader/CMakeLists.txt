@@ -63,6 +63,7 @@ endif()
 target_link_libraries(
     dive_plugin_loader
     PRIVATE
+        absl::log
         absl::status
         absl::statusor
         absl::strings

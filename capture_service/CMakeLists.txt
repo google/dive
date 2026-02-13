@@ -17,8 +17,6 @@
 message(CHECK_START "Generate build files for capture_service")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
-project(DiveService)
-
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -41,24 +39,39 @@ target_link_libraries(
         absl::time
         absl::str_format
         absl::strings
+        absl::log
 )
 
 if(ANDROID)
     add_library(service service.cc)
-    target_link_libraries(service PRIVATE log)
 else()
     add_library(service service.cc trace_mgr.cc)
 endif()
 target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(
     service
-    PRIVATE network absl::flags absl::flags_parse trace_mgr command_utils
+    PRIVATE
+        network
+        absl::flags
+        absl::flags_parse
+        absl::log
+        trace_mgr
+        command_utils
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 add_executable(server server.cc)
 
-target_link_libraries(server PRIVATE service absl::flags absl::flags_parse)
+target_link_libraries(
+    server
+    PRIVATE
+        service
+        absl::flags
+        absl::flags_parse
+        absl::log
+        dive_log
+        dive_src_includes
+)
 
 if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
@@ -77,6 +90,7 @@ else()
         absl::algorithm
         absl::strings
         absl::statusor
+        absl::log
         component_files
         dive_build_defs
         dive_device_resources
@@ -95,7 +109,9 @@ else()
         absl::flags_parse
         absl::strings
         absl::time
+        absl::log
         version_info
+        dive_log
     )
     target_include_directories(
         dive_client_cli

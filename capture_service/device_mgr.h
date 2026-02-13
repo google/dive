@@ -16,7 +16,6 @@ limitations under the License.
 
 #pragma once
 
-#include <cassert>
 #include <filesystem>
 #include <memory>
 #include <optional>

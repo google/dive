@@ -15,6 +15,7 @@
 #
 
 add_subdirectory(build_defs)
+add_subdirectory(log)
 add_subdirectory(os)
 add_subdirectory(plugin)
 add_subdirectory(utils)

@@ -19,6 +19,7 @@
 #include <iostream>
 #include <string>
 
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "dive/utils/device_resources.h"
 
@@ -144,8 +145,8 @@ absl::Status PluginLoader::LoadPlugins()
 
         PluginUniquePtr plugin(raw_plugin);
 
-        std::cout << "PluginLoader: Successfully instantiated plugin: " << plugin->PluginName()
-                  << " Version: " << plugin->PluginVersion() << std::endl;
+        LOG(INFO) << "PluginLoader: Successfully instantiated plugin: " << plugin->PluginName()
+                  << " Version: " << plugin->PluginVersion();
 
         if (!plugin->Initialize(m_bridge))
         {
@@ -153,8 +154,8 @@ absl::Status PluginLoader::LoadPlugins()
         }
 
         m_loaded_plugin_entries.emplace_back(std::move(library_handle_ptr), std::move(plugin));
-        std::cout << "PluginLoader: Plugin " << m_loaded_plugin_entries.back().plugin->PluginName()
-                  << " initialized successfully." << std::endl;
+        LOG(INFO) << "PluginLoader: Plugin " << m_loaded_plugin_entries.back().plugin->PluginName()
+                  << " initialized successfully.";
     }
 
     if (!error_message.empty())
@@ -168,11 +169,11 @@ absl::Status PluginLoader::LoadPlugins()
 
 void PluginLoader::UnloadPlugins()
 {
-    std::cout << "PluginLoader: Unloading all plugins..." << std::endl;
+    LOG(INFO) << "PluginLoader: Unloading all plugins...";
 
     m_loaded_plugin_entries.clear();
 
-    std::cout << "PluginLoader: All plugins unloaded." << std::endl;
+    LOG(INFO) << "PluginLoader: All plugins unloaded.";
 }
 
 void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle handle) const
@@ -181,12 +182,12 @@ void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle ha
     {
         if (absl::Status free = loader->Free(handle); free.ok())
         {
-            std::cout << "PluginLoader: Library handle auto-freed via RAII." << std::endl;
+            LOG(INFO) << "PluginLoader: Library handle auto-freed via RAII.";
         }
         else
         {
-            std::cout << "PluginLoader: Failed to auto-free library handle. Error: "
-                      << free.message() << std::endl;
+            LOG(INFO) << "PluginLoader: Failed to auto-free library handle. Error: "
+                      << free.message();
         }
     }
 }

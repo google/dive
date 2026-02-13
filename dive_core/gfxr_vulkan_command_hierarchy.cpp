@@ -92,8 +92,16 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
             AddNode(NodeType::kGfxrVulkanBeginCommandBufferNode, vk_cmd_string_stream.str());
         m_cur_command_buffer_node_index = cmd_buffer_index;
         GetArgs(vulkan_cmd_args, m_cur_command_buffer_node_index);
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_submit_node_index,
-                 cmd_buffer_index);
+        if (m_cur_parent_node_index_stack.empty())
+        {
+            AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_submit_node_index,
+                     cmd_buffer_index);
+        }
+        else
+        {
+            AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                     m_cur_parent_node_index_stack.top(), cmd_buffer_index);
+        }
     }
     else if (vulkan_cmd_name == "vkEndCommandBuffer")
     {
@@ -101,17 +109,34 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
             AddNode(NodeType::kGfxrVulkanEndCommandBufferNode, vk_cmd_string_stream.str());
 
         GetArgs(vulkan_cmd_args, cmd_buffer_index);
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_command_buffer_node_index,
-                 cmd_buffer_index);
+
+        if (m_cur_parent_node_index_stack.empty())
+        {
+            AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_submit_node_index,
+                     cmd_buffer_index);
+        }
+        else
+        {
+            AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                     m_cur_parent_node_index_stack.top(), cmd_buffer_index);
+        }
     }
     else if (vulkan_cmd_name.find("BeginDebugUtilsLabelEXT") != std::string::npos)
     {
         std::string label_name = vulkan_cmd_args["pLabelInfo"]["pLabelName"];
-
         uint64_t begin_debug_utils_label_cmd_index =
             AddNode(NodeType::kGfxrBeginDebugUtilsLabelCommandNode, label_name.c_str());
         GetArgs(vulkan_cmd_args, begin_debug_utils_label_cmd_index);
-        ConditionallyAddChild(begin_debug_utils_label_cmd_index);
+        if (m_cur_parent_node_index_stack.empty())
+        {
+            AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_submit_node_index,
+                     begin_debug_utils_label_cmd_index);
+        }
+        else
+        {
+            AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
+                     m_cur_parent_node_index_stack.top(), begin_debug_utils_label_cmd_index);
+        }
         m_cur_parent_node_index_stack.push(begin_debug_utils_label_cmd_index);
     }
     else if (vulkan_cmd_name.find("EndDebugUtilsLabelEXT") != std::string::npos)
@@ -157,7 +182,6 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
             AddNode(NodeType::kGfxrVulkanBeginRenderPassCommandNode, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
-        m_cur_parent_node_index_stack.push(vk_cmd_index);
     }
     else if (vulkan_cmd_name.find("vkCmdEndRenderPass") != std::string::npos)
     {
@@ -168,7 +192,11 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
         if (!m_cur_parent_node_index_stack.empty())
         {
             // Remove the corresponding vkCmdBeginRenderPass node from the stack
-            m_cur_parent_node_index_stack.pop();
+            if (m_command_hierarchy.GetNodeType(m_cur_parent_node_index_stack.top()) ==
+                NodeType::kGfxrVulkanBeginRenderPassCommandNode)
+            {
+                m_cur_parent_node_index_stack.pop();
+            }
         }
     }
     else
@@ -216,12 +244,6 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
     {
         DiveAnnotationProcessor::VulkanCommandInfo vk_cmd_info = vkCmds[i];
         OnCommand(vk_cmd_info, draw_call_count, mutable_render_pass_draw_call_counts);
-    }
-
-    // Ensure the parent node index stack is cleared
-    while (!m_cur_parent_node_index_stack.empty())
-    {
-        m_cur_parent_node_index_stack.pop();
     }
 
     return true;

@@ -31,6 +31,8 @@ limitations under the License.
 
 #include "common/log.h"
 #include "dive/utils/device_resources_constants.h"
+#include "network/unix_domain_server.h"
+#include "server_message_handler.h"
 #include "vk_rt_dispatch.h"
 #include "vk_rt_layer_impl.h"
 

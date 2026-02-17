@@ -199,6 +199,9 @@ class AndroidDevice
     // Uses run-as with app permissions to delete file_name from the app's own storage
     absl::Status CleanupFileWithPermissions(std::string_view package, std::string_view file_name);
 
+    // Check if the device's screen is on
+    absl::Status CheckScreenOn();
+
  private:
     explicit AndroidDevice(const std::string& serial);
 

@@ -402,6 +402,18 @@ absl::Status AndroidDevice::CheckAbi()
     return absl::OkStatus();
 }
 
+absl::Status AndroidDevice::CheckScreenOn()
+{
+    absl::StatusOr<std::string> interactive_result =
+        Adb().RunAndGetResult("shell dumpsys input_method | grep mInteractive=true");
+    if (!interactive_result.ok() || interactive_result->empty())
+    {
+        return absl::FailedPreconditionError(
+            "Device screen is off. Please ensure the screen is on before retrying");
+    }
+    return absl::OkStatus();
+}
+
 absl::Status AndroidDevice::RequestRootAccess()
 {
     RETURN_IF_ERROR(Adb().Run("root"));
@@ -1107,6 +1119,12 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
     if (!validated_settings.ok())
     {
         return validated_settings.status();
+    }
+
+    absl::Status screen_on = m_device->CheckScreenOn();
+    if (!screen_on.ok())
+    {
+        return screen_on;
     }
 
     LOG(INFO) << "RunReplayApk(): Attempt to pin GPU clock frequency";

@@ -14,12 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <dlfcn.h>
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan_core.h>
 
 #include <array>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -27,8 +30,87 @@ limitations under the License.
 #include <vector>
 
 #include "common/log.h"
+#include "dive/utils/device_resources_constants.h"
 #include "vk_rt_dispatch.h"
 #include "vk_rt_layer_impl.h"
+
+namespace DiveLayer
+{
+
+class LayerManager
+{
+ public:
+    static LayerManager& Get()
+    {
+        static LayerManager instance;
+        return instance;
+    }
+
+    void MarkLayerReady() { m_is_ready.store(true, std::memory_order_release); }
+
+    bool IsLayerReady() const { return m_is_ready.load(std::memory_order_acquire); }
+
+ private:
+    LayerManager()
+    {
+        PreventLibraryUnload();
+
+        m_server_thread = std::thread([this]() {
+            // Wait until the layer intercepts CreateInstance
+            while (!IsLayerReady())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+
+            LOGI("Layer is ready, starting server...");
+
+            m_server = std::make_unique<Network::UnixDomainServer>(
+                std::make_unique<ServerMessageHandler>());
+
+            std::string server_address = Dive::DeviceResourcesConstants::kUnixAbstractPath;
+            auto status = m_server->Start(server_address);
+            if (!status.ok())
+            {
+                LOGW("Error starting the server: %.*s", static_cast<int>(status.message().length()),
+                     status.message().data());
+            }
+            LOGI("Server listening on %s", server_address.c_str());
+            m_server->Wait();
+        });
+    }
+
+    ~LayerManager()
+    {
+        if (m_server)
+        {
+            m_server->Stop();
+        }
+        if (m_server_thread.joinable())
+        {
+            m_server_thread.join();
+        }
+    }
+
+    void PreventLibraryUnload()
+    {
+        Dl_info info;
+        if (dladdr(reinterpret_cast<void*>(&LayerManager::Get), &info))
+        {
+            dlopen(info.dli_fname, RTLD_NOLOAD | RTLD_NODELETE);
+        }
+    }
+
+    std::atomic<bool> m_is_ready{false};
+    std::unique_ptr<Network::UnixDomainServer> m_server;
+    std::thread m_server_thread;
+};
+
+}  // namespace DiveLayer
+
+extern "C"
+{
+    __attribute__((constructor)) void OnLayerLibraryLoad() { DiveLayer::LayerManager::Get(); }
+}
 
 namespace DiveLayer
 {
@@ -375,6 +457,9 @@ VkResult DiveInterceptCreateInstance(const VkInstanceCreateInfo* pCreateInfo,
         auto key = (uintptr_t)(*(void**)(*pInstance));
         g_instance_data[key] = std::move(id);
     }
+
+    LayerManager& layer_manager = LayerManager::Get();
+    layer_manager.MarkLayerReady();
 
     return result;
 }

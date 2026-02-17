@@ -24,7 +24,6 @@ inline constexpr char kVkLayerName[] = "VK_LAYER_Dive";
 inline constexpr char kXrLayerName[] = "XR_APILAYER_dive";
 inline constexpr char kVkValidationLayerName[] = "VK_LAYER_KHRONOS_validation";
 inline constexpr int kDownLoadFileChunkSize = 4096;
-inline constexpr char kUnixAbstractPath[] = "dive_abstract";
 inline constexpr char kEnableReplayPm4DumpPropertyName[] = "debug.dive.replay.capture_pm4";
 inline constexpr char kReplayPm4DumpFileNamePropertyName[] =
     "debug.dive.replay.capture_pm4_file_name";

@@ -14,6 +14,12 @@
     - On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
         - Note: Use Java 17, because this uses an older version of Gradle.
 
+For MacOS, they can be installed via the brew command
+
+```sh
+brew install cmake ninja qt@5 python openjdk@17
+```
+
 ## Environment Variables
 
 Add permanently or per-session as desired.
@@ -56,11 +62,30 @@ REM Recommended but not necessary
 set DIVE_ROOT_PATH=C:\path\to\dive
 ```
 
+### MacOS
+```sh
+# Example setup
+
+# Android NDK prerequisite
+export ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/25.2.9519653
+
+# gfxreconstruct prerequisite
+export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home
+
+# QT prerequisite
+export QTDIR="$(brew --prefix qt@5)"
+export CMAKE_PREFIX_PATH=$QTDIR
+export PATH=$QTDIR/bin:$PATH
+
+# Recommended but not necessary
+export DIVE_ROOT_PATH=~/src/dive
+```
+
 # Building Dive
 
 ## Dive Host Tools
 
-### Linux
+### Linux and MacOS
 
 1. Configure
     ```sh

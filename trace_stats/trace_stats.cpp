@@ -210,8 +210,7 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
 
         if (info.m_render_mode != cur_type)
         {
-            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
-                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis)
                 capture_stats.m_num_binning_passes++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
                 capture_stats.m_num_tiling_passes++;
@@ -250,10 +249,10 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
             GatherResolves(Stats::kDepthClearGmemResolves);
         else if (info.m_type == Util::EventType::kDraw)
         {
-            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
-                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis)
                 stats_list[Dive::Stats::kBinningDraws]++;
-            else if (info.m_render_mode == Dive::RenderModeType::kDirect)
+            else if (info.m_render_mode == Dive::RenderModeType::kDirect ||
+                     info.m_render_mode == Dive::RenderModeType::kBinningDirect)
                 stats_list[Dive::Stats::kDirectDraws]++;
             else if (info.m_render_mode == Dive::RenderModeType::kTiled)
                 stats_list[Dive::Stats::kTiledDraws]++;
@@ -264,8 +263,10 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
             const uint32_t event_id = static_cast<uint32_t>(i);
             auto event_state_it = event_state.find(static_cast<Dive::EventStateId>(event_id));
 
-            if (info.m_render_mode == Dive::RenderModeType::kBinningVis ||
-                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
+            if (info.m_render_mode == Dive::RenderModeType::kDirect ||
+                info.m_render_mode == Dive::RenderModeType::kBinningVis ||
+                info.m_render_mode == Dive::RenderModeType::kBinningDirect ||
+                info.m_render_mode == Dive::RenderModeType::kTiled)
             {
                 CHECK_AND_TRACK_STATE(Dive::Stats::kDepthTestEnabled, DepthTestEnabled);
                 CHECK_AND_TRACK_STATE(Dive::Stats::kDepthWriteEnabled, DepthTestEnabled,
@@ -278,9 +279,7 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
                                                 A6XX_EARLY_Z_LATE_Z);
                 }
             }
-            if (info.m_render_mode == Dive::RenderModeType::kDirect ||
-                info.m_render_mode == Dive::RenderModeType::kBinningVis ||
-                info.m_render_mode == Dive::RenderModeType::kBinningDirect)
+            if (info.m_render_mode == Dive::RenderModeType::kBinningVis)
             {
                 CHECK_AND_TRACK_STATE(Dive::Stats::kLrzEnabled, DepthTestEnabled, LRZEnabled);
                 CHECK_AND_TRACK_STATE(Dive::Stats::kLrzWriteEnabled, DepthTestEnabled,

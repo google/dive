@@ -20,6 +20,7 @@ limitations under the License.
 #include <vulkan/vulkan_core.h>
 
 #include <deque>
+#include <filesystem>
 #include <limits>
 #include <numeric>
 #include <set>

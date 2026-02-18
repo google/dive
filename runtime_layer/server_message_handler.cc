@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Google Inc.
+Copyright 2026 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,33 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "service.h"
-
-#include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <memory>
-#include <string>
+#include "server_message_handler.h"
 
 #include "common/log.h"
-#include "constants.h"
-#include "dive/utils/device_resources_constants.h"
 #include "network/message_utils.h"
-#include "trace_mgr.h"
 
-namespace Dive
+namespace DiveLayer
 {
-
-absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
-{
-    GetTraceMgr().TriggerTrace();
-    GetTraceMgr().WaitForTraceDone();
-    std::string capture_file_path = GetTraceMgr().GetTraceFilePath();
-
-    Network::Pm4CaptureResponse response;
-    response.SetString(capture_file_path);
-    return Network::SendSocketMessage(client_conn, response);
-}
 
 void ServerMessageHandler::OnConnect() { LOGI("ServerMessageHandler: onConnect()"); }
 
@@ -92,17 +72,6 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             }
             break;
         }
-        case Network::MessageType::PM4_CAPTURE_REQUEST:
-        {
-            LOGI("Message received: Pm4CaptureRequest");
-            auto status = StartPm4Capture(client_conn);
-            if (!status.ok())
-            {
-                LOGI("StartPm4Capture failed: %.*s", (int)status.message().length(),
-                     status.message().data());
-            }
-            break;
-        }
         case Network::MessageType::DOWNLOAD_FILE_REQUEST:
         {
             LOGI("Message received: DownloadFileRequest");
@@ -149,29 +118,4 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
     }
 }
 
-void RunServer()
-{
-    // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
-    // It avoids the need to grant INTERNET permission to the target application.
-    // Also, no file-based permissions apply since it is in an abstract namespace.
-    auto server =
-        std::make_unique<Network::UnixDomainServer>(std::make_unique<ServerMessageHandler>());
-
-    std::string server_address = Dive::DeviceResourcesConstants::kUnixAbstractPath;
-    auto status = server->Start(server_address);
-    if (!status.ok())
-    {
-        LOGW("Error starting the server: %.*s", static_cast<int>(status.message().length()),
-             status.message().data());
-    }
-    LOGI("Server listening on %s", server_address.c_str());
-    server->Wait();
-}
-
-int ServerMain()
-{
-    RunServer();
-    return 0;
-}
-
-}  // namespace Dive
+}  // namespace DiveLayer

@@ -39,12 +39,6 @@ if(MSVC)
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" OFF)
-# Add an option to allow users to easily toggle the runtime layer build
-option(
-    DIVE_BUILD_RUNTIME_LAYER_FOR_WIN
-    "Build the Dive runtime layer (VkLayer_rt_dive) for Windows"
-    ON
-)
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 
@@ -227,9 +221,6 @@ else()
     endif()
     add_subdirectory(trace_stats)
     add_subdirectory(ui)
-    if(DIVE_BUILD_RUNTIME_LAYER_FOR_WIN AND CMAKE_HOST_WIN32)
-        add_subdirectory(runtime_layer)
-    endif()
 endif()
 
 # ------------------------------------------------------------------------------

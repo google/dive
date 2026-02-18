@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Google Inc.
+Copyright 2026 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,13 +16,10 @@ limitations under the License.
 
 #pragma once
 
-#include "absl/status/status.h"
 #include "network/unix_domain_server.h"
 
-namespace Dive
+namespace DiveLayer
 {
-
-absl::Status StartPm4Capture(Network::SocketConnection* client_conn);
 
 class ServerMessageHandler : public Network::IMessageHandler
 {
@@ -33,4 +30,4 @@ class ServerMessageHandler : public Network::IMessageHandler
                        Network::SocketConnection* client_conn) override;
 };
 
-}  // namespace Dive
+}  // namespace DiveLayer

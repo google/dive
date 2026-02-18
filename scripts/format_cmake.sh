@@ -23,6 +23,7 @@ SRC_DIRS=(
     "dive_core"
     "gfxr_dump_resources"
     "gfxr_ext"
+    "gfxrecon-explorer"
     "gpu_time"
     "host_cli"
     "layer"

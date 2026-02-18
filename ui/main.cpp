@@ -38,6 +38,7 @@
 #include "absl/flags/usage_config.h"
 #include "application_controller.h"
 #include "custom_metatypes.h"
+#include "dive/crash_report/crash_report.h"
 #include "dive/os/terminal.h"
 #include "dive/utils/version_info.h"
 #include "dive_core/common.h"
@@ -75,117 +76,6 @@ ABSL_RETIRED_FLAG(std::string, stylesheet, "", "Set the application stylesheet")
 ABSL_RETIRED_FLAG(bool, widgetcount, false, "Qt flag widgetcount");
 ABSL_RETIRED_FLAG(bool, reverse, false, "Qt flag reverse");
 ABSL_RETIRED_FLAG(std::string, qmljsdebugger, "", "Qt flag qmljsdebugger");
-
-//--------------------------------------------------------------------------------------------------
-class CrashHandler
-{
- public:
-    static void Initialize(const char* argv0)
-    {
-        QString filename =
-            "dive-" + QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ".log.txt";
-
-        // Try to open in the executable directory
-        // This might fail if the executable folder is not writable
-        QString exe_dir = QFileInfo(argv0).absolutePath();
-        QString exe_full_path = QDir(exe_dir).filePath(filename);
-
-        // If we couldn't write next to the exe (permission denied), use temp folder.
-        // Windows: %TEMP%
-        // Linux: /tmp
-        QString temp_dir = QDir::tempPath();
-        QString temp_full_path = QDir(temp_dir).filePath(filename);
-
-        SafeStrCopy(m_primary_path, exe_full_path.toLocal8Bit().constData());
-        SafeStrCopy(m_fallback_path, temp_full_path.toLocal8Bit().constData());
-
-        std::cout << "Crash handler initialized" << std::endl;
-        std::cout << "  1. Primary Log Path:  " << exe_full_path.toStdString() << std::endl;
-        std::cout << "  2. Fallback Log Path: " << temp_full_path.toStdString() << std::endl;
-    }
-
-    static void Writer(const char* data)
-    {
-        if (data == nullptr)
-        {
-            return;
-        }
-
-        // Avoid strlen for crash handler to be safe
-        uint32_t len = 0;
-        while (data[len] != '\0')
-        {
-            len++;
-        }
-
-        if (m_fd == kInvalidFd)
-        {
-            m_fd = SysOpen(m_primary_path);
-
-            if (m_fd == kInvalidFd)
-            {
-                m_fd = SysOpen(m_fallback_path);
-            }
-        }
-
-        if (m_fd != kInvalidFd)
-        {
-            SysWrite(m_fd, data, len);
-        }
-    }
-
- private:
-    static constexpr int kInvalidFd = -1;
-    static constexpr int kMaxPath = 2048;
-
-    inline static int m_fd = kInvalidFd;
-
-    // Use char array to avoid potential allocation within the crash handler
-    inline static char m_primary_path[kMaxPath] = {0};
-    inline static char m_fallback_path[kMaxPath] = {0};
-
-    template <size_t N>
-    static void SafeStrCopy(char (&dest)[N], const char* src)
-    {
-        if (!src)
-        {
-            return;
-        }
-
-        size_t i = 0;
-        for (; i < N - 1 && src[i] != '\0'; ++i)
-        {
-            dest[i] = src[i];
-        }
-        dest[i] = '\0';
-    }
-
-    static int SysOpen(const char* path)
-    {
-#if defined(_WIN32)
-        constexpr int flags = _O_CREAT | _O_TRUNC | _O_WRONLY | _O_TEXT;
-        constexpr int mode = _S_IREAD | _S_IWRITE;
-        return _open(path, flags, mode);
-#else
-        constexpr int flags = O_CREAT | O_TRUNC | O_WRONLY;
-        // 0: Indicates this is an octal number
-        // 6: (Owner):  Read (4) + Write (2) = Read/Write
-        // 6: (Group):  Read (4) + Write (2) = Read/Write
-        // 4: (Others): Read (4) = Read Only
-        constexpr int mode = 0664;
-        return open(path, flags, mode);
-#endif
-    }
-
-    static void SysWrite(int fd, const char* data, uint32_t len)
-    {
-#if defined(_WIN32)
-        _write(fd, data, len);
-#else
-        [[maybe_unused]] ssize_t res = write(fd, data, len);
-#endif
-    }
-};
 
 //--------------------------------------------------------------------------------------------------
 bool SetApplicationStyle(QString style_key)
@@ -270,13 +160,11 @@ int main(int argc, char* argv[])
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);
 
-    absl::InitializeSymbolizer(argv[0]);
-
-    CrashHandler::Initialize(argv[0]);
-
-    absl::FailureSignalHandlerOptions options;
-    options.writerfn = CrashHandler::Writer;
-    absl::InstallFailureSignalHandler(options);
+    if (absl::Status ret = Dive::InitializeCrashReporting(argv[0]); !ret.ok())
+    {
+        qDebug() << "Failed to initialize crash reporting: " << ret.message().data();
+        return EXIT_FAILURE;
+    }
 
     const bool native_style = absl::GetFlag(FLAGS_native_style);
     if (!native_style)

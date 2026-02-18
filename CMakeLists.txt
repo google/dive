@@ -38,9 +38,10 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
-option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with CrashPad" OFF)
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
+
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" ON)
 
 # Placeholder value for DESTINATION to override cmake default.
 # These are all relative to the install destination prefix which is recommended as "pkg/"
@@ -78,7 +79,7 @@ endif()
 set(DIVE_RELEASE_TYPE
     "dev"
     CACHE STRING
-    "Release type can be set with cmake flag -DDIVE_RELEASE_TYPE=<dev|canary|release|internal>"
+    "Release type name string (used in the Dive version string)"
 )
 string(STRIP "${DIVE_RELEASE_TYPE}" DIVE_RELEASE_TYPE)
 

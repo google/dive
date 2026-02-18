@@ -217,6 +217,7 @@ target_link_libraries(
     dive_build_defs
     dive_lib_trace_stats
     dive_src_includes
+    crash_report
 )
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
@@ -319,3 +320,23 @@ add_dependencies(${PROJECT_NAME} notice_file)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
+
+if(DIVE_BUILD_WITH_CRASHPAD)
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND
+            $<$<CONFIG:RelWithDebInfo>:${CMAKE_COMMAND}>
+            $<$<CONFIG:RelWithDebInfo>:-E>
+            $<$<CONFIG:RelWithDebInfo>:copy_if_different>
+            $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE:crashpad_handler_exe>>
+            $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${PROJECT_NAME}>>
+        COMMENT
+            "[Crash Report] Copying crashpad_handler only for RelWithDebInfo builds."
+    )
+    install(
+        PROGRAMS $<TARGET_FILE:crashpad_handler_exe>
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+        CONFIGURATIONS RelWithDebInfo
+    )
+endif()

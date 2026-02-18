@@ -29,7 +29,11 @@ class AndroidLogSink final : public absl::LogSink
 
     void Send(const absl::LogEntry& entry) override;
 
-    std::string m_android_native_tag = "native";
+    std::string_view GetAndroidTag() { return m_android_tag; }
+    void SetAndroidTag(std::string_view android_tag) { m_android_tag = android_tag; }
+
+ private:
+    std::string m_android_tag = "dive";
 };
 
 }  // namespace Dive

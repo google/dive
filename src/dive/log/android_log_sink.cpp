@@ -53,10 +53,10 @@ int AndroidLogLevel(const absl::LogEntry& entry)
 void AndroidLogSink::Send(const absl::LogEntry& entry)
 {
     const int level = AndroidLogLevel(entry);
-    __android_log_write(level, m_android_native_tag.c_str(),
+    __android_log_write(level, m_android_tag.c_str(),
                         entry.text_message_with_prefix_and_newline_c_str());
     if (entry.log_severity() == absl::LogSeverity::kFatal)
-        __android_log_write(ANDROID_LOG_FATAL, m_android_native_tag.c_str(), "terminating.\n");
+        __android_log_write(ANDROID_LOG_FATAL, m_android_tag.c_str(), "terminating.\n");
 }
 
 }  // namespace Dive

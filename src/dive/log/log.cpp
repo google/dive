@@ -29,26 +29,27 @@ limitations under the License.
 namespace Dive
 {
 
-void AbslLogger::Init(std::string_view android_native_tag)
+void AbslLogger::Init(std::string_view android_tag)
 {
     absl::SetStderrThreshold(absl::LogSeverityAtLeast::kInfo);
     absl::InitializeLog();
 
-    if (!android_native_tag.empty())
+    if (!android_tag.empty())
     {
-        m_android_log_sink.m_android_native_tag = android_native_tag;
+        m_android_log_sink.SetAndroidTag(android_tag);
     }
 
     absl::AddLogSink(&m_android_log_sink);
 
-    if (android_native_tag.empty())
+    if (android_tag.empty())
     {
-        LOG(INFO) << "AbslLogger initialized with no android_native_tag";
+        LOG(INFO) << "AbslLogger initialized with no android tag, using default:"
+                  << m_android_log_sink.GetAndroidTag();
     }
     else
     {
-        LOG(INFO) << "AbslLogger initialized with android_native_tag: "
-                  << m_android_log_sink.m_android_native_tag;
+        LOG(INFO) << "AbslLogger initialized with android tag: "
+                  << m_android_log_sink.GetAndroidTag();
     }
 }
 

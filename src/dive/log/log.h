@@ -26,13 +26,10 @@ namespace Dive
 class AbslLogger
 {
  public:
-    void Init(std::string_view android_native_tag = "");
+    void Init(std::string_view android_tag = "");
 
  private:
     AndroidLogSink m_android_log_sink = {};
-
-    // Only used if m_android_log_sink is not a stub
-    std::string m_android_native_tag = "native";
 };
 
 }  // namespace Dive

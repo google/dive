@@ -298,6 +298,7 @@ void GfxrCaptureWorker::run()
             std::string err_msg =
                 absl::StrFormat("Failed to get component files: %s", ret.status().message());
             qDebug() << err_msg.c_str();
+            emit ShowMessage(QString::fromStdString(err_msg));
             return;
         }
         component_files = *ret;
@@ -308,9 +309,12 @@ void GfxrCaptureWorker::run()
 
     if (error_code)
     {
-        qDebug() << "Failed to rename screenshot file from " << original_screenshot_path.c_str()
-                 << " to " << component_files.screenshot_png.c_str() << ": "
-                 << error_code.message().c_str();
+        std::string err_msg = absl::StrFormat(
+            "Failed to rename screenshot file from %s to %s: %s", original_screenshot_path.c_str(),
+            component_files.screenshot_png.c_str(), error_code.message().c_str());
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+        return;
     }
 
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

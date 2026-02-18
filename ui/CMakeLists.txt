@@ -340,3 +340,7 @@ if(DIVE_BUILD_WITH_CRASHPAD)
         CONFIGURATIONS RelWithDebInfo
     )
 endif()
+
+if(DIVE_BUILD_WITH_CRASHPAD AND UPLOAD_DEBUG_SYMBOLS)
+    upload_debug_symbols(${PROJECT_NAME})
+endif()

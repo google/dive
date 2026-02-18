@@ -43,6 +43,19 @@ option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 
 option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" ON)
 
+option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
+if(UPLOAD_DEBUG_SYMBOLS)
+    if(NOT DIVE_BUILD_WITH_CRASHPAD)
+        message(
+            FATAL_ERROR
+            "UPLOAD_DEBUG_SYMBOLS requires DIVE_BUILD_WITH_CRASHPAD to be ON"
+        )
+    endif()
+    if(NOT ANDROID)
+        include(cmake/breakpad_tools.cmake)
+    endif()
+endif()
+
 # Placeholder value for DESTINATION to override cmake default.
 # These are all relative to the install destination prefix which is recommended as "pkg/"
 # e.g. install(TARGETS target_name DESTINATION "${DIVE_INSTALL_DEST_*}")

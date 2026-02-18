@@ -25,10 +25,7 @@ limitations under the License.
 namespace Dive
 {
 
-// TODO b/464042788 - Try making a helper function for the prefix/function logging with absl
-// cleanup?
-
-// TODO b/464042788 - Look into possibility of using C++20 <source_location> library with the
+// TODO b/485635019 - Look into possibility of using C++20 <source_location> library with the
 // current compilers we are using for Dive project
 
 // Log command with a ">" prefix for easy skimming of the log

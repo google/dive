@@ -27,7 +27,7 @@
 namespace Dive
 {
 
-// TODO b/464042788 - Try passing down the appropriate file to logger with
+// TODO b/485635019 - Try passing down the appropriate file to logger with
 // LOG().AtLocation(location.file_name(), location.line())
 
 void LogCommand(const std::string& command)

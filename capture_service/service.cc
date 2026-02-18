@@ -43,6 +43,8 @@ absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
     return Network::SendSocketMessage(client_conn, response);
 }
 
+// TODO b/483449238 - Reduce log severity level for ServerMessageHandler logs
+
 void ServerMessageHandler::OnConnect() { LOG(INFO) << "ServerMessageHandler: onConnect()"; }
 
 void ServerMessageHandler::OnDisconnect() { LOG(INFO) << "ServerMessageHandler: onDisconnect()"; }

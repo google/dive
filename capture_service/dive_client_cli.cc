@@ -237,11 +237,11 @@ std::string GenerateAppTypeFlagHelp()
 // Waits for user input before exiting.
 absl::Status WaitForExitConfirmation()
 {
-    LOG(INFO) << "Press any key+enter to exit";
+    std::cout << "Press any key+enter to exit" << std::endl;
     std::string input;
     if (std::getline(std::cin, input))
     {
-        LOG(INFO) << "Exiting...";
+        std::cout << "Exiting..." << std::endl;
     }
     return absl::OkStatus();
 }
@@ -649,8 +649,9 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
 
 GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
 {
-    LOG(INFO) << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
-                 "application.";
+    std::cout << "Press key g+enter to trigger a capture. Press any other key+enter to stop the "
+                 "application."
+              << std::endl;
     std::string input;
     while (std::getline(std::cin, input))
     {
@@ -659,7 +660,7 @@ GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
             break;
         }
 
-        LOG(INFO) << "Exiting...";
+        std::cout << "Exiting..." << std::endl;
         return GfxrCaptureControlFlow::kStop;
     }
     if (!std::cin.good())
@@ -672,7 +673,7 @@ GfxrCaptureControlFlow WaitForUserInputToStartGfxrCapture()
 
 GfxrCaptureControlFlow WaitForUserInputToRetrieveGfxrCapture()
 {
-    LOG(INFO) << "Press key g+enter to retrieve the capture.";
+    std::cout << "Press key g+enter to retrieve the capture." << std::endl;
     std::string input;
     while (std::getline(std::cin, input))
     {
@@ -681,7 +682,7 @@ GfxrCaptureControlFlow WaitForUserInputToRetrieveGfxrCapture()
             break;
         }
 
-        LOG(INFO) << "Press key g+enter to retrieve the capture.";
+        std::cout << "Press key g+enter to retrieve the capture." << std::endl;
     }
     if (!std::cin.good())
     {

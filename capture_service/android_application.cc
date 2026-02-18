@@ -151,7 +151,7 @@ absl::Status AndroidApplication::ParsePackage()
 
 absl::Status AndroidApplication::Cleanup()
 {
-    LOG(INFO) << "##### AndroidApplication::Cleanup() package " << m_package << " started";
+    LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " started";
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
@@ -174,7 +174,7 @@ absl::Status AndroidApplication::Cleanup()
         m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
         m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
     }
-    LOG(INFO) << "##### AndroidApplication::Cleanup() package " << m_package << " ended";
+    LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " ended";
 
     return absl::OkStatus();
 }
@@ -364,7 +364,7 @@ absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory
 
 absl::Status AndroidApplication::GfxrSetup()
 {
-    LOG(INFO) << "##### AndroidApplication::GfxrSetup() package " << m_package << " started";
+    LOG(INFO) << "AndroidApplication::GfxrSetup() package " << m_package << " started";
     RETURN_IF_ERROR(
         m_dev.DeployDeviceResource(Dive::DeviceResourcesConstants::kVkGfxrLayerLibName));
 
@@ -403,7 +403,7 @@ absl::Status AndroidApplication::GfxrSetup()
     // capture_android_trigger must be set in order for GFXR to listen for triggers.
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
 
-    LOG(INFO) << "##### AndroidApplication::GfxrSetup() package " << m_package << " done";
+    LOG(INFO) << "AndroidApplication::GfxrSetup() package " << m_package << " done";
     return absl::OkStatus();
 }
 
@@ -606,7 +606,7 @@ absl::Status VulkanCliApplication::Stop()
 
 absl::Status VulkanCliApplication::GfxrSetup()
 {
-    LOG(INFO) << "##### VulkanCliApplication::GfxrSetup() cmd " << m_command << " started";
+    LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " started";
     RETURN_IF_ERROR(m_dev.DeployDeviceResource(
         /*file_name=*/Dive::DeviceResourcesConstants::kVkGfxrLayerLibName,
         /*target_dir=*/Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath));
@@ -624,7 +624,7 @@ absl::Status VulkanCliApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
-    LOG(INFO) << "##### VulkanCliApplication::GfxrSetup() cmd " << m_command << " ended";
+    LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " ended";
     return absl::OkStatus();
 }
 bool VulkanCliApplication::IsRunning() const { return m_dev.IsProcessRunning(m_command); }

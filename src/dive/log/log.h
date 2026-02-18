@@ -29,9 +29,6 @@ class AbslLogger
     void Init(std::string_view android_native_tag = "");
 
  private:
-    // https://lld.llvm.org/missingkeyfunction.html#missing-key-function
-    virtual void KeyFunction() const final {}
-
     AndroidLogSink m_android_log_sink = {};
 
     // Only used if m_android_log_sink is not a stub

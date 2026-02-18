@@ -523,7 +523,7 @@ absl::Status AndroidDevice::SetupDevice()
 
 absl::Status AndroidDevice::CleanupDevice()
 {
-    LOG(INFO) << "##### AndroidDevice::CleanupDevice() device serial " << m_serial << " started";
+    LOG(INFO) << "AndroidDevice::CleanupDevice() device serial " << m_serial << " started";
 
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
@@ -604,7 +604,7 @@ absl::Status AndroidDevice::CleanupDevice()
                              Dive::DeviceResourcesConstants::kDeployFolderPath))
         .IgnoreError();
 
-    LOG(INFO) << "##### AndroidDevice::CleanupDevice() device serial " << m_serial << " ended";
+    LOG(INFO) << "AndroidDevice::CleanupDevice() device serial " << m_serial << " ended";
     return absl::OkStatus();
 }
 

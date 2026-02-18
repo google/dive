@@ -1121,11 +1121,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
         return validated_settings.status();
     }
 
-    absl::Status screen_on = m_device->CheckScreenOn();
-    if (!screen_on.ok())
-    {
-        return screen_on;
-    }
+    RETURN_IF_ERROR(m_device->CheckScreenOn());
 
     LOG(INFO) << "RunReplayApk(): Attempt to pin GPU clock frequency";
     bool trouble_pinning_clock = false;

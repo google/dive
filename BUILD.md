@@ -13,6 +13,8 @@
     - Android Studio. Make sure to install an SDK and accept the licenses.
     - On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
         - Note: Use Java 17, because this uses an older version of Gradle.
+- dump_syms, which generates debug symbols for release builds, can be installed via the [Rust installer](https://rustup.rs/). Alternatively, on Linux, you can use `sudo apt install cargo`. Also on macOS, you can use `brew install rust`. Once Cargo is set up, run the command `cargo install dump_syms`.
+- On Linux, the curl library is required to upload debug symbols to a Crashpad server. You can install it using `sudo apt install libcurl4-openssl-dev`.
 
 For MacOS, they can be installed via the brew command
 
@@ -39,6 +41,9 @@ export QTDIR=~/Qt/5.11.2/gcc_64
 export CMAKE_PREFIX_PATH=$QTDIR
 export PATH=$QTDIR:$PATH
 
+# Crashpad Symbol Upload (Required for Official Releases)
+export CRASHPAD_API_KEY=<your_api_key>
+
 # Recommended but not necessary
 export DIVE_ROOT_PATH=/path/to/dive
 ```
@@ -57,6 +62,9 @@ REM QT prerequisite, msvc directory
 set QTDIR=C:\Users\name\...\Qt\5.11.2\msvc2017_64
 set CMAKE_PREFIX_PATH=%QTDIR%
 set PATH=%QTDIR%\bin;%PATH%
+
+REM Crashpad Symbol Upload (Required for Official Releases)
+set CRASHPAD_API_KEY=<your_api_key>
 
 REM Recommended but not necessary
 set DIVE_ROOT_PATH=C:\path\to\dive

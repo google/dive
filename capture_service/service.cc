@@ -139,6 +139,25 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             }
             break;
         }
+        case Network::MessageType::REMOVE_FILE_REQUEST:
+        {
+            LOGI("Message received: RemoveFileRequest");
+            auto* request = dynamic_cast<Network::RemoveFileRequest*>(message.get());
+            if (request)
+            {
+                auto status = Network::RemoveFile(request, client_conn);
+                if (!status.ok())
+                {
+                    LOGI("RemoveFile failed: %.*s", (int)status.message().length(),
+                         status.message().data());
+                }
+            }
+            else
+            {
+                LOGI("RemoveFileRequest message is null.");
+            }
+            break;
+        }
         default:
         {
             LOG(WARNING) << "Message type unhandled, type: ", message->GetMessageType();

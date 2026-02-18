@@ -31,4 +31,7 @@ absl::Status DownloadFile(Network::DownloadFileRequest* request,
 
 absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConnection* client_conn);
 
+absl::Status RemoveFile(Network::RemoveFileRequest* request,
+                        Network::SocketConnection* client_conn);
+
 }  // namespace Network

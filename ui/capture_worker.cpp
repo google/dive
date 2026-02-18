@@ -126,6 +126,16 @@ void CaptureWorker::run()
         emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
+
+    status = client.RemoveFile(*capture_file_path);
+    if (!status.ok())
+    {
+        std::string err_msg =
+            absl::StrCat("Failed to remove capture file, error: ", status.message());
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+    }
+
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                        std::chrono::steady_clock::now() - begin)
                                        .count();

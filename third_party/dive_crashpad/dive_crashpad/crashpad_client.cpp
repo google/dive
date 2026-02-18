@@ -123,6 +123,7 @@ absl::Status InitializeCrashpad()
     {
         return absl::InternalError("Failed to start Crashpad handler.");
     }
+    std::cout << "Crashpad initialized successfully." << std::endl;
     return absl::OkStatus();
 }
 

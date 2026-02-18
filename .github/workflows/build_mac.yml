@@ -57,19 +57,25 @@ jobs:
             -Bbuild/host .
       - name: Build Dive host tools with ninja
         run: |
-          time ninja -C build/host -d stats -f build-${{ inputs.build_type }}.ninja
+          time ninja -C build/host -d stats -f build-${INPUTS_BUILD_TYPE}.ninja
+        env:
+          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: Ninja log
         run: |
           cat build/host/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build/host --prefix build/pkg --config ${{ inputs.build_type }}
+          cmake --install build/host --prefix build/pkg --config ${INPUTS_BUILD_TYPE}
+        env:
+          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: Put files in app bundle
         run: |
           python scripts/deploy_mac_bundle.py --no-device-libraries --no-sign
       - name: Run tests
         run: |
-          ctest --output-on-failure -C ${{ inputs.build_type }} --test-dir build/host
+          ctest --output-on-failure -C ${INPUTS_BUILD_TYPE} --test-dir build/host
+        env:
+          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: (ccache) Show stats
         run: ccache -s
       - name: (ccache) Save (upload_cache)

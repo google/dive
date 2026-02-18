@@ -76,16 +76,19 @@ jobs:
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Build lib with NDK
         run: |
-          ninja -C build/device -f build-${{ inputs.build_type }}.ninja
+          ninja -C build/device -f build-${INPUTS_BUILD_TYPE}.ninja
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: Ninja log
         run: |
           cat build/device/.ninja_log
       - name: Produce install artifacts
         run: |
-          cmake --install build/device --prefix build/pkg --config ${{ inputs.build_type }}
+          cmake --install build/device --prefix build/pkg --config ${INPUTS_BUILD_TYPE}
+        env:
+          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: (ccache) Show stats
         run: ccache -s
       - name: (ccache) Save (upload_cache)

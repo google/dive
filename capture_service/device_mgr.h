@@ -158,6 +158,7 @@ class AndroidDevice
     AdbSession& Adb() { return m_adb; }
     int Port() const { return m_port; }
     bool IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
+    std::string Serial() const { return m_serial; }
 
     AndroidApplication* GetCurrentApplication() { return m_app.get(); }
 

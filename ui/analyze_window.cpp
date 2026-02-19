@@ -724,8 +724,10 @@ void AnalyzeDialog::ReplayImpl(const ReplayConfig& config)
         return;
     }
 
+    std::string selected_device_serial = GetCurrentDeviceSerial();
+
     // Deploying install/gfxr-replay.apk
-    ret = device_manager.DeployReplayApk(m_cur_device);
+    ret = device_manager.DeployReplayApk(selected_device_serial);
     if (!ret.ok())
     {
         std::string err_msg = absl::StrCat("Failed to push files to device: ", ret.message());

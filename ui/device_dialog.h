@@ -31,6 +31,7 @@ class DeviceDialog : public QDialog
  public:
     explicit DeviceDialog(QWidget* parent = nullptr);
     virtual ~DeviceDialog();
+    std::string GetCurrentDeviceSerial() const;
     void UpdateDeviceList();
 
  protected:
@@ -43,7 +44,6 @@ class DeviceDialog : public QDialog
 
  protected:
     std::vector<Dive::DeviceInfo> m_devices;
-    std::string m_cur_device;
     QStandardItemModel* m_device_model;
     QComboBox* m_device_box;
 };

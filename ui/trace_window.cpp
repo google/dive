@@ -591,6 +591,23 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
+    auto device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        std::string err_msg = "Failed to connect to device";
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
+
+    if (auto ret = device->Adb().CheckDeviceUnlocked(m_cur_pkg); !ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
+
     QProgressDialog* progress_bar =
         new QProgressDialog("Capturing PM4 Data ... ", nullptr, 0, 100, this);
     progress_bar->setMinimumWidth(this->minimumWidth() + 50);
@@ -725,6 +742,22 @@ void TraceDialog::EnableCaptureTypeButtons(bool enable)
 void TraceDialog::OnGfxrCaptureClicked()
 {
     auto device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        std::string err_msg = "Failed to connect to device";
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
+
+    if (auto ret = device->Adb().CheckDeviceUnlocked(m_cur_pkg); !ret.ok())
+    {
+        std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
+
     absl::Status ret;
     if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture)
     {

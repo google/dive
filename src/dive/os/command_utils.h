@@ -74,6 +74,8 @@ class AdbSession
         return absl::OkStatus();
     }
 
+    absl::Status CheckDeviceUnlocked(const std::string& package_name);
+
  private:
     std::string m_serial;
     std::vector<std::thread> m_background_threads;

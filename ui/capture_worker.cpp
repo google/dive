@@ -44,9 +44,12 @@ void CaptureWorker::run()
     auto device = Dive::GetDeviceManager().GetDevice();
     if (device == nullptr)
     {
-        qDebug() << "Failed to connect to device";
+        std::string err_msg = "Failed to connect to device";
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
         return;
     }
+
     auto app = device->GetCurrentApplication();
     if (app == nullptr || !app->IsRunning())
     {

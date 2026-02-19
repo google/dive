@@ -74,6 +74,9 @@ class MainWindow : public QMainWindow
     void OnPendingPerfCounterResults(const QString& file_name);
     void OnPendingGpuTimingResults(const QString& file_name);
     void OnPendingScreenshot(const QString& file_name);
+    void OnConfigureWhatIfModifcation();
+    void OnWhatIfSetupTrigger();
+    void OnWhatIfRuntimeEnabled(const QString& package_name, bool is_runtime_what_if_enabled);
 
  private slots:
     void OnCommandViewModeChange(const QString& string);
@@ -171,12 +174,16 @@ class MainWindow : public QMainWindow
     QAction* m_capture_setting_action;
     QMenu* m_analyze_menu;
     QAction* m_analyze_action;
+    QMenu* m_what_if_menu;
+    QAction* m_what_if_setup_action;
     QMenu* m_help_menu;
     QAction* m_about_action;
     QAction* m_shortcuts_action;
     QToolBar* m_file_tool_bar;
     TraceDialog* m_trace_dig;
     AnalyzeDialog* m_analyze_dig;
+    WhatIfSetupDialog* m_what_if_setup_dig;
+    WhatIfConfigureDialog* m_what_if_configure_dig;
     ErrorDialog* m_error_dialog = nullptr;
 
     std::array<QAction*, 3> m_recent_file_actions = {};
@@ -200,6 +207,12 @@ class MainWindow : public QMainWindow
     CommandModel* m_command_hierarchy_model;
     QPushButton* m_search_trigger_button;
     SearchBar* m_event_search_bar = nullptr;
+    QWidget* m_what_if_container;
+    QLabel* m_what_if_info_label;
+    QPushButton* m_what_if_configure_button;
+    QPushButton* m_what_if_run_time_stop_application_button;
+    QLabel* m_what_if_runtime_what_if_application_label;
+    QLabel* m_what_if_runtime_what_if_application_name_label;
 
     TreeViewComboBox* m_view_mode_combo_box;
     TreeViewComboBox* m_filter_mode_combo_box;

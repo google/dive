@@ -36,8 +36,8 @@ class DeviceDialog : public QDialog
 
  protected:
     virtual void ShowMessage(const QString& message) = 0;
-    virtual void OnDeviceSelected() = 0;
-    virtual void OnDeviceSelectionCleared() = 0;
+    virtual void OnDeviceSelected() {};
+    virtual void OnDeviceSelectionCleared() {};
 
  protected slots:
     void OnDeviceSelectionChanged(const QString& s);

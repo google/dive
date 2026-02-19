@@ -600,7 +600,7 @@ void TraceDialog::OnTraceClicked()
         return;
     }
 
-    if (auto ret = device->Adb().CheckDeviceUnlocked(m_cur_pkg); !ret.ok())
+    if (auto ret = device->IsAppRunningOnForeground(m_cur_pkg); !ret.ok())
     {
         std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
         qDebug() << err_msg.c_str();
@@ -750,7 +750,7 @@ void TraceDialog::OnGfxrCaptureClicked()
         return;
     }
 
-    if (auto ret = device->Adb().CheckDeviceUnlocked(m_cur_pkg); !ret.ok())
+    if (auto ret = device->IsAppRunningOnForeground(m_cur_pkg); !ret.ok())
     {
         std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
         qDebug() << err_msg.c_str();

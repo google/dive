@@ -23,7 +23,6 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "dive/common/log.h"
 
@@ -99,36 +98,6 @@ absl::StatusOr<std::filesystem::path> GetExecutableDirectory()
     }
 #endif
     return absl::InternalError("Failed to get executable directory.");
-}
-
-absl::Status AdbSession::CheckDeviceUnlocked(const std::string& package_name)
-{
-    std::string command = absl::StrFormat(
-        "shell \"dumpsys activity activities 2>/dev/null | grep '%s' | grep 'visible=true' | grep "
-        "-q 'visibleRequested=true' && echo 1 || echo 0\"",
-        package_name);
-
-    absl::StatusOr<std::string> output = RunAndGetResult(command);
-    if (!output.ok())
-    {
-        return output.status();
-    }
-
-    std::string result = *output;
-    result.erase(std::remove_if(result.begin(), result.end(), ::isspace), result.end());
-    if (result != "1")
-    {
-        std::string err_msg = absl::StrCat(
-            "The application '", package_name,
-            "' is not fully visible or active. "
-            "The device might be locked, asleep, or the app is running in the background. "
-            "Please ensure the device is unlocked and the app is actively running on screen, "
-            "then "
-            "try again.");
-        return absl::InternalError(err_msg);
-    }
-
-    return absl::OkStatus();
 }
 
 }  // namespace Dive

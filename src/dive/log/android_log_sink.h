@@ -29,7 +29,7 @@ class AndroidLogSink final : public absl::LogSink
 
     void Send(const absl::LogEntry& entry) override;
 
-    std::string_view GetAndroidTag() { return m_android_tag; }
+    std::string_view GetAndroidTag() const { return m_android_tag; }
     void SetAndroidTag(std::string_view android_tag) { m_android_tag = android_tag; }
 
  private:

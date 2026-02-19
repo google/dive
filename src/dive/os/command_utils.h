@@ -22,13 +22,10 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_split.h"
 
 namespace Dive
 {
-// Logs the result of a command line application.
-// Returns the output of the command if it finished successfully, or error status otherwise
-absl::StatusOr<std::string> LogAndReturnOutput(const std::string& command,
-                                               const std::string& output, int ret);
 
 // Runs a command line application.
 // Returns the output of the command if it finished successfully, or error status otherwise

@@ -17,11 +17,11 @@ limitations under the License.
 #include <string>
 #include <string_view>
 
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "common/log.h"
 #include "trace_mgr.h"
 
 extern "C"
@@ -50,7 +50,7 @@ void AndroidTraceManager::TraceByFrame()
     std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_frame_num);
 
     SetTraceFilePath(full_path);
-    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+    LOG(INFO) << "Set capture file path as " << GetTraceFilePath();
     // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
     SetCaptureName(path.c_str(), num.c_str());
     {
@@ -78,7 +78,7 @@ void AndroidTraceManager::TraceByDuration()
         SetCaptureState(1);
         m_state = TraceState::Tracing;
     }
-    LOGD("Set capture file path as %s", GetTraceFilePath().c_str());
+    LOG(INFO) << "Set capture file path as " << GetTraceFilePath();
 
     absl::SleepFor(m_trace_duration);
     {
@@ -151,7 +151,7 @@ void AndroidTraceManager::OnTraceStart()
 #endif
     SetCaptureState(1);
     m_state = TraceState::Tracing;
-    LOGI("Triggered at frame %d", m_frame_num);
+    LOG(INFO) << "Triggered at frame " << m_frame_num;
     m_trace_start_frame = m_frame_num;
 }
 
@@ -162,7 +162,7 @@ void AndroidTraceManager::OnTraceStop()
 #endif
     SetCaptureState(0);
     m_state = TraceState::Finished;
-    LOGI("Finished at frame %d", m_frame_num);
+    LOG(INFO) << "Finished at frame " << m_frame_num;
 }
 
 }  // namespace Dive

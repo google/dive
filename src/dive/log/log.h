@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Google Inc.
+Copyright 2026 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,14 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "server.h"
+#pragma once
 
-#include "dive/log/log.h"
+#include <string>
 
-int main(int argc, char** argv)
+#include "dive/log/android_log_sink.h"
+
+namespace Dive
 {
-    Dive::AbslLogger absl_logger = {};
-    absl_logger.Init("dive_server");
-    Dive::ServerMain();
-    return 0;
-}
+
+class AbslLogger
+{
+ public:
+    void Init(std::string_view android_tag = "");
+
+ private:
+    AndroidLogSink m_android_log_sink = {};
+};
+
+}  // namespace Dive

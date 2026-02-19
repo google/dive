@@ -93,6 +93,7 @@ if(NOT ANDROID)
         version_info_test
         version_info
         absl::status_matchers
+        absl::log
         gmock
         gtest
         gtest_main

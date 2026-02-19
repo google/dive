@@ -202,6 +202,9 @@ class AndroidDevice
     // Check if the device's screen is on
     absl::Status CheckScreenOn();
 
+    // Check if the device is unlocked
+    absl::Status CheckDeviceUnlocked();
+
  private:
     explicit AndroidDevice(const std::string& serial);
 

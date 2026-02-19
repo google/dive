@@ -29,6 +29,7 @@ set(target_name VkLayer_rt_dive)
 set(HDR_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/server_message_handler.h"
 )
 
 set(SRC_FILES
@@ -36,6 +37,7 @@ set(SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_base.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_impl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_layer_android.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/server_message_handler.cc"
 )
 
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_time)
@@ -47,6 +49,7 @@ target_link_libraries(
     dive_legacy_includes
     gpu_time
     Vulkan::Headers
+    network
 )
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)

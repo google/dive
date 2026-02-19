@@ -273,32 +273,48 @@ void GfxrCaptureWorker::run()
         emit DownloadedSize(size, capture_directory_size);
     }
 
-    if (!original_screenshot_path.empty() && !gfxr_stem.empty())
+    if (original_screenshot_path.empty())
     {
-        Dive::ComponentFilePaths component_files = {};
-        {
-            absl::StatusOr<Dive::ComponentFilePaths> ret =
-                Dive::GetComponentFilesHostPaths(m_host_capture_dir, gfxr_stem);
-            if (!ret.ok())
-            {
-                std::string err_msg =
-                    absl::StrFormat("Failed to get component files: %s", ret.status().message());
-                qDebug() << err_msg.c_str();
-                return;
-            }
-            component_files = *ret;
-        }
+        std::string err_msg = "Failed to find screenshot in capture directory.";
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
 
-        std::error_code error_code;
-        std::filesystem::rename(original_screenshot_path, component_files.screenshot_png,
-                                error_code);
+    if (gfxr_stem.empty())
+    {
+        std::string err_msg = "Failed to find gfxr file in capture directory.";
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
 
-        if (error_code)
+    Dive::ComponentFilePaths component_files = {};
+    {
+        absl::StatusOr<Dive::ComponentFilePaths> ret =
+            Dive::GetComponentFilesHostPaths(m_host_capture_dir, gfxr_stem);
+        if (!ret.ok())
         {
-            qDebug() << "Failed to rename screenshot file from " << original_screenshot_path.c_str()
-                     << " to " << component_files.screenshot_png.c_str() << ": "
-                     << error_code.message().c_str();
+            std::string err_msg =
+                absl::StrFormat("Failed to get component files: %s", ret.status().message());
+            qDebug() << err_msg.c_str();
+            emit ShowMessage(QString::fromStdString(err_msg));
+            return;
         }
+        component_files = *ret;
+    }
+
+    std::error_code error_code;
+    std::filesystem::rename(original_screenshot_path, component_files.screenshot_png, error_code);
+
+    if (error_code)
+    {
+        std::string err_msg = absl::StrFormat(
+            "Failed to rename screenshot file from %s to %s: %s", original_screenshot_path.c_str(),
+            component_files.screenshot_png.c_str(), error_code.message().c_str());
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+        return;
     }
 
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

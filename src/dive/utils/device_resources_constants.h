@@ -41,6 +41,7 @@ Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN
 
     // Device resources:
     static constexpr std::string_view kVkLayerLibName = "libVkLayer_dive.so";
+    static constexpr std::string_view kVkRuntimeLayerLibName = "libVkLayer_rt_dive.so";
     static constexpr std::string_view kXrLayerLibName = "libXrApiLayer_dive.so";
     static constexpr std::string_view kManifestFileName = "XrApiLayer_dive.json";
     // third_party/freedreno

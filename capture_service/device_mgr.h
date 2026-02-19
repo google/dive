@@ -133,6 +133,7 @@ class AndroidDevice
     absl::Status CleanupPackageProperties(const std::string& package);
 
     void EnableGfxr(bool enable_gfxr);
+    void EnableRuntimeWhatIf(bool enable_runtime_what_if);
     bool IsProcessRunning(absl::string_view process_name) const;
     bool FileExists(const std::string& file_path);
 
@@ -211,6 +212,7 @@ class AndroidDevice
     DeviceState m_original_state;
     std::unique_ptr<AndroidApplication> m_app;
     bool m_gfxr_enabled = false;
+    bool m_runtime_what_if_enabled = false;
     int m_port = kFirstPort;
 };
 

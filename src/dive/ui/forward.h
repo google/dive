@@ -20,14 +20,23 @@
 
 class QAbstractItemModel;
 class QAbstractProxyModel;
+class QButtonGroup;
 class QCheckBox;
 class QComboBox;
 class QGroupBox;
+class QHBoxLayout;
 class QLabel;
+class QLineEdit;
+class QPlainTextEdit;
+class QProgressDialog;
 class QPushButton;
+class QRadioButton;
 class QScrollArea;
 class QSortFilterProxyModel;
+class QSpinBox;
+class QStandardItemModel;
 class QTabWidget;
+class QVBoxLayout;
 
 namespace Dive
 {
@@ -72,6 +81,8 @@ class ShaderView;
 class SqttView;
 class TextFileView;
 class TraceDialog;
+class WhatIfSetupDialog;
+class WhatIfConfigureDialog;
 class TreeViewComboBox;
 
 struct LoadFileResult;

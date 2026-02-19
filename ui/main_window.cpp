@@ -97,6 +97,8 @@
 #include "ui/shortcuts_window.h"
 #include "ui/text_file_view.h"
 #include "ui/trace_window.h"
+#include "ui/what_if_configure_dialog.h"
+#include "ui/what_if_setup_dialog.h"
 
 namespace
 {
@@ -210,6 +212,22 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 
     {
         QVBoxLayout* left_vertical_layout = new QVBoxLayout();
+
+        QHBoxLayout* what_ifs_layout = new QHBoxLayout();
+        m_what_if_container = new QWidget();
+        m_what_if_container->setLayout(what_ifs_layout);
+        m_what_if_info_label = new QLabel(tr("What-If Analysis:"));
+        m_what_if_configure_button = new QPushButton(tr("Configure"));
+        m_what_if_run_time_stop_application_button = new QPushButton(tr("Stop Application"));
+        m_what_if_runtime_what_if_application_label = new QLabel(tr("Current Application: "));
+        m_what_if_runtime_what_if_application_name_label = new QLabel(tr("None"));
+        what_ifs_layout->addWidget(m_what_if_info_label);
+        what_ifs_layout->addWidget(m_what_if_configure_button);
+        what_ifs_layout->addWidget(m_what_if_run_time_stop_application_button);
+        what_ifs_layout->addStretch(1);
+        what_ifs_layout->addWidget(m_what_if_runtime_what_if_application_label);
+        what_ifs_layout->addWidget(m_what_if_runtime_what_if_application_name_label);
+        m_what_if_container->hide();
 
         QFrame* text_combo_box_frame = new QFrame();
 
@@ -326,6 +344,7 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
             expand_to_lvl_layout->addWidget(expand_to_lvl_button);
         expand_to_lvl_layout->addStretch();
 
+        left_vertical_layout->addWidget(m_what_if_container);
         left_vertical_layout->addWidget(m_event_search_bar);
         left_vertical_layout->addWidget(text_combo_box_frame);
         left_vertical_layout->addWidget(m_command_hierarchy_view);
@@ -508,6 +527,8 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 
     m_trace_dig = new TraceDialog(m_controller, this);
     m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
+    m_what_if_setup_dig = new WhatIfSetupDialog(m_controller, this);
+    m_what_if_configure_dig = new WhatIfConfigureDialog(m_controller, this);
 
     m_overlay = new OverlayHelper(this);
     m_overlay->Initialize(horizontal_splitter);
@@ -556,6 +577,14 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
                      m_pm4_command_hierarchy_view, &DiveTreeView::OnFilterModeChanged);
     QObject::connect(m_filter_model, &DiveFilterModel::FilterModeChanged, m_command_hierarchy_view,
                      &DiveTreeView::OnFilterModeChanged);
+
+    // What-If connections
+    QObject::connect(m_what_if_setup_dig, &WhatIfSetupDialog::RuntimeWhatIfEnabled, this,
+                     &MainWindow::OnWhatIfRuntimeEnabled);
+    QObject::connect(m_what_if_run_time_stop_application_button, &QPushButton::clicked,
+                     m_what_if_setup_dig, &WhatIfSetupDialog::OnStopRuntimeWhatIf);
+    QObject::connect(m_what_if_configure_button, &QPushButton::clicked, this,
+                     &MainWindow::OnConfigureWhatIfModifcation);
 
     CreateActions();
     CreateMenus();
@@ -1238,6 +1267,32 @@ void MainWindow::OnCapture(bool is_capture_delayed)
 }
 
 //--------------------------------------------------------------------------------------------------
+void MainWindow::OnWhatIfSetupTrigger()
+{
+    m_what_if_setup_dig->UpdateDeviceList();
+    m_what_if_setup_dig->show();
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnWhatIfRuntimeEnabled(const QString& package_name,
+                                        bool is_runtime_what_if_enabled)
+{
+    if (is_runtime_what_if_enabled)
+    {
+        m_what_if_runtime_what_if_application_name_label->setText(package_name);
+        m_what_if_container->show();
+    }
+    else
+    {
+        m_what_if_runtime_what_if_application_name_label->setText("None");
+        m_what_if_container->hide();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnConfigureWhatIfModifcation() { m_what_if_configure_dig->show(); }
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnExpandToLevel()
 {
     QObject* sender_obj = sender();
@@ -1311,6 +1366,7 @@ void MainWindow::closeEvent(QCloseEvent* closeEvent)
         }
     }
     if (m_trace_dig) m_trace_dig->Cleanup();
+    if (m_what_if_setup_dig) m_what_if_setup_dig->Cleanup();
     closeEvent->accept();
 }
 
@@ -1605,6 +1661,13 @@ void MainWindow::CreateActions()
     m_analyze_action->setShortcut(QKeySequence("f7"));
     connect(m_analyze_action, &QAction::triggered, this, &MainWindow::OnAnalyzeCapture);
 
+    // What If Setup action
+    m_what_if_setup_action = new QAction(tr("What Ifs"), this);
+    m_what_if_setup_action->setStatusTip(tr("Setup What If scenarios"));
+    m_what_if_setup_action->setIcon(QIcon(":/images/what-if-light-bulb.svg"));
+    m_what_if_setup_action->setShortcut(QKeySequence("f8"));
+    connect(m_what_if_setup_action, &QAction::triggered, this, &MainWindow::OnWhatIfSetupTrigger);
+
     // Shortcuts action
     m_shortcuts_action = new QAction(tr("&Shortcuts"), this);
     m_shortcuts_action->setStatusTip(tr("Display application keyboard shortcuts"));
@@ -1638,6 +1701,9 @@ void MainWindow::CreateMenus()
     m_analyze_menu = menuBar()->addMenu(tr("&Analyze"));
     m_analyze_menu->addAction(m_analyze_action);
 
+    m_what_if_menu = menuBar()->addMenu(tr("&What Ifs"));
+    m_what_if_menu->addAction(m_what_if_setup_action);
+
     m_help_menu = menuBar()->addMenu(tr("&Help"));
     m_help_menu->addAction(m_shortcuts_action);
     m_help_menu->addAction(m_about_action);
@@ -1656,6 +1722,7 @@ void MainWindow::CreateToolBars()
     m_file_tool_bar->addAction(m_save_action);
     m_file_tool_bar->addAction(m_capture_action);
     m_file_tool_bar->addAction(m_analyze_action);
+    m_file_tool_bar->addAction(m_what_if_setup_action);
 }
 
 //--------------------------------------------------------------------------------------------------

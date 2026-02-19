@@ -111,13 +111,13 @@ absl::Status RemoveFileResponse::Serialize(Buffer& dest) const
 
 absl::Status RemoveFileResponse::Deserialize(const Buffer& src)
 {
-    size_t offset = 0;
     // Deserialize the 'success' boolean.
-    if (src.size() < offset + sizeof(uint8_t))
+    if (src.size() < sizeof(uint8_t))
     {
         return Dive::InvalidArgumentError("Buffer too small for 'success' field.");
     }
-    m_success = (src[offset] != 0);
+    m_success = (src[0] != 0);
+    size_t offset = 0;
     offset += sizeof(uint8_t);
 
     ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));

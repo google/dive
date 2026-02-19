@@ -118,7 +118,7 @@ absl::Status RemoveFile(Network::RemoveFileRequest* request, Network::SocketConn
     else
     {
         response.SetSuccess(false);
-        response.SetErrorReason(ec ? ec.message() : "File not found or could not be removed");
+        response.SetErrorReason(ec ? ec.message() : "Unknown error");
     }
 
     return Network::SendSocketMessage(client_conn, response);

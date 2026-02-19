@@ -131,7 +131,7 @@ void CaptureWorker::run()
     if (!status.ok())
     {
         std::string err_msg =
-            absl::StrCat("Failed to remove capture file, error: ", status.message());
+            absl::StrCat("Failed to remove PM4 capture on device, error: ", status.message());
         qDebug() << err_msg.c_str();
         emit ShowMessage(QString::fromStdString(err_msg));
     }

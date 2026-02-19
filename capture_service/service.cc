@@ -68,8 +68,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::PING_MESSAGE:
         {
             LOG(INFO) << "Message received: Ping";
-            auto status = Network::SendPong(client_conn);
-            if (!status.ok())
+            if (absl::Status status = Network::SendPong(client_conn); !status.ok())
             {
                 LOG(ERROR) << "Send pong failed: " << status.message();
             }
@@ -79,27 +78,24 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         {
             LOG(INFO) << "Message received: HandShakeRequest";
             auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
-            if (request)
+            if (!request)
             {
-                auto status = Network::Handshake(request, client_conn);
-                if (!status.ok())
-                {
-                    LOG(ERROR) << "Handshake failed: " << status.message();
-                }
+                LOG(ERROR) << "HandShakeRequest message is null.";
+                return;
             }
-            else
+
+            if (absl::Status status = Network::Handshake(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "HandShakeRequest message is null.";
+                LOG(INFO) << "Handshake failed: " << status.message();
             }
             break;
         }
         case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
             LOG(INFO) << "Message received: Pm4CaptureRequest";
-            auto status = StartPm4Capture(client_conn);
-            if (!status.ok())
+            if (absl::Status status = StartPm4Capture(client_conn); !status.ok())
             {
-                LOG(ERROR) << "StartPm4Capture failed: " << status.message();
+                LOG(INFO) << "StartPm4Capture failed: " << status.message();
             }
             break;
         }
@@ -107,17 +103,15 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         {
             LOG(INFO) << "Message received: DownloadFileRequest";
             auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
-            if (request)
+            if (!request)
             {
-                auto status = Network::DownloadFile(request, client_conn);
-                if (!status.ok())
-                {
-                    LOG(ERROR) << "DownloadFile failed: " << status.message();
-                }
+                LOG(ERROR) << "DownloadFileRequest message is null.";
+                return;
             }
-            else
+
+            if (absl::Status status = Network::DownloadFile(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "DownloadFileRequest message is null.";
+                LOG(INFO) << "DownloadFile failed: " << status.message();
             }
             break;
         }
@@ -125,36 +119,31 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         {
             LOG(INFO) << "Message received: FileSizeRequest";
             auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
-            if (request)
+            if (!request)
             {
-                auto status = Network::GetFileSize(request, client_conn);
-                if (!status.ok())
-                {
-                    LOG(ERROR) << "GetFileSize failed: " << status.message();
-                }
+                LOG(ERROR) << "FileSizeRequest message is null.";
+                return;
             }
-            else
+
+            if (absl::Status status = Network::GetFileSize(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "FileSizeRequest message is null.";
+                LOG(INFO) << "GetFileSize failed:" << status.message();
             }
             break;
         }
         case Network::MessageType::REMOVE_FILE_REQUEST:
         {
-            LOGI("Message received: RemoveFileRequest");
+            LOG(INFO) << "Message received: RemoveFileRequest";
             auto* request = dynamic_cast<Network::RemoveFileRequest*>(message.get());
-            if (request)
+            if (!request)
             {
-                auto status = Network::RemoveFile(request, client_conn);
-                if (!status.ok())
-                {
-                    LOGI("RemoveFile failed: %.*s", (int)status.message().length(),
-                         status.message().data());
-                }
+                LOG(ERROR) << "RemoveFileRequest message is null.";
+                return;
             }
-            else
+
+            if (absl::Status status = Network::RemoveFile(request, client_conn); !status.ok())
             {
-                LOGI("RemoveFileRequest message is null.");
+                LOG(INFO) << "RemoveFile failed: " << status.message();
             }
             break;
         }

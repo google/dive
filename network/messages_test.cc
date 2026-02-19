@@ -192,7 +192,7 @@ TEST(MessagesTest, FileSizeMessage)
     ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
 }
 
-TEST(MessagesTest, RemoveFileMessage)
+TEST(MessagesTest, RemoveFileMessageSuccess)
 {
     Network::RemoveFileRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/to_be_removed.rd");
@@ -219,6 +219,21 @@ TEST(MessagesTest, RemoveFileMessage)
     ASSERT_EQ(res_deserialize.GetMessageType(), Network::MessageType::REMOVE_FILE_RESPONSE);
     ASSERT_EQ(res_serialize.GetSuccess(), res_deserialize.GetSuccess());
     ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
+}
+
+TEST(MessagesTest, RemoveFileMessageFailure)
+{
+    Network::RemoveFileRequest req_serialize;
+    req_serialize.SetString("/sdcard/captures/to_be_removed.rd");
+    Network::Buffer buf;
+    auto status = req_serialize.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::REMOVE_FILE_REQUEST);
+    Network::RemoveFileRequest req_deserialize;
+    status = req_deserialize.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req_deserialize.GetMessageType(), Network::MessageType::REMOVE_FILE_REQUEST);
+    ASSERT_EQ(req_serialize.GetString(), req_deserialize.GetString());
 
     Network::RemoveFileResponse res_serialize_fail;
     res_serialize_fail.SetSuccess(false);

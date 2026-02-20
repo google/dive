@@ -366,9 +366,7 @@ void TraceDialog::showEvent(QShowEvent* event)
 {
     QDialog::showEvent(event);
 
-    std::string current_device_serial = GetCurrentDeviceSerial();
-
-    if (current_device_serial.empty())
+    if (GetCurrentDeviceSerial().empty())
     {
         ResetDialog();
     }
@@ -662,10 +660,8 @@ void TraceDialog::UpdatePackageList()
     auto ret = device->ListPackage(m_pkg_list_options);
     if (!ret.ok())
     {
-        std::string current_device_serial = GetCurrentDeviceSerial();
-
         std::string err_msg =
-            absl::StrCat("Failed to list package for device ", current_device_serial,
+            absl::StrCat("Failed to list package for device ", GetCurrentDeviceSerial(),
                          " error: ", ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));

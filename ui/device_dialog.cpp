@@ -92,8 +92,8 @@ void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
     }
 
     Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
-    auto current_dev = device_manager.GetDevice();
-    if (current_dev && current_dev->Serial() == selected_device_serial)
+    auto current_device = device_manager.GetDevice();
+    if (current_device && current_device->Serial() == selected_device_serial)
     {
         qDebug() << "Device already selected: " << selected_device_serial.c_str();
         return;
@@ -102,9 +102,8 @@ void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
     auto dev_ret = device_manager.SelectDevice(selected_device_serial);
     if (!dev_ret.ok())
     {
-        std::string err_msg =
-            absl::StrCat("Failed to select device ", selected_device_serial.c_str(),
-                         ", error: ", dev_ret.status().message());
+        std::string err_msg = absl::StrCat("Failed to select device ", selected_device_serial,
+                                           ", error: ", dev_ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;

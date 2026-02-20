@@ -30,8 +30,19 @@ DeviceDialog::DeviceDialog(QWidget* parent) : QDialog(parent)
 
 DeviceDialog::~DeviceDialog() {}
 
+std::string DeviceDialog::GetCurrentDeviceSerial() const
+{
+    int index = m_device_box->currentIndex();
+    // Return empty if pointing at the placeholder (index 0) or an invalid index
+    if (index <= 0) return "";
+
+    return m_device_box->itemData(index, Qt::UserRole).toString().toStdString();
+}
+
 void DeviceDialog::UpdateDeviceList()
 {
+    std::string previous_device_serial = GetCurrentDeviceSerial();
+
     m_device_model->clear();
     m_devices = Dive::GetDeviceManager().ListDevice();
     if (m_devices.empty())
@@ -53,9 +64,10 @@ void DeviceDialog::UpdateDeviceList()
     for (size_t i = 0; i < m_devices.size(); ++i)
     {
         QStandardItem* item = new QStandardItem(m_devices[i].GetDisplayName().c_str());
+        item->setData(QString(m_devices[i].m_serial.c_str()), Qt::UserRole);
         m_device_model->appendRow(item);
         // Track previously selected device (offset by 1 due to placeholder)
-        if (m_cur_device == m_devices[i].m_serial)
+        if (previous_device_serial == m_devices[i].m_serial)
         {
             index_to_select = static_cast<int>(i) + 1;
         }
@@ -70,41 +82,32 @@ void DeviceDialog::UpdateDeviceList()
 
 void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
 {
-    if (s.isEmpty() || m_device_box->currentIndex() == 0)
+    std::string selected_device_serial = GetCurrentDeviceSerial();
+
+    if (selected_device_serial.empty())
     {
         qDebug() << "No devices selected";
         OnDeviceSelectionCleared();
         return;
     }
 
-    int device_index = m_device_box->currentIndex() - 1;
-    assert(device_index >= 0 && static_cast<size_t>(device_index) < m_devices.size());
-
-    const auto& target_device = m_devices[device_index];
-    if (m_cur_device == target_device.m_serial)
+    Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
+    auto current_device = device_manager.GetDevice();
+    if (current_device && current_device->Serial() == selected_device_serial)
     {
-        qDebug() << "Device already selected: " << m_cur_device.c_str();
-        OnDeviceSelected();
+        qDebug() << "Device already selected: " << selected_device_serial.c_str();
         return;
     }
-    Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
-    if (!m_cur_device.empty())
-    {
-        qDebug() << "Deselecting device: " << m_cur_device.c_str();
-        m_cur_device.clear();
-        device_manager.RemoveDevice();
-    }
 
-    m_cur_device = target_device.m_serial;
-    auto dev_ret = device_manager.SelectDevice(m_cur_device);
+    auto dev_ret = device_manager.SelectDevice(selected_device_serial);
     if (!dev_ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to select device ", m_cur_device.c_str(),
+        std::string err_msg = absl::StrCat("Failed to select device ", selected_device_serial,
                                            ", error: ", dev_ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
-    qDebug() << "Device selected: " << m_cur_device.c_str();
+    qDebug() << "Device selected: " << selected_device_serial.c_str();
     OnDeviceSelected();
 }

@@ -20,6 +20,7 @@ limitations under the License.
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -158,6 +159,7 @@ class AndroidDevice
     AdbSession& Adb() { return m_adb; }
     int Port() const { return m_port; }
     bool IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
+    std::string_view Serial() const { return m_serial; }
 
     AndroidApplication* GetCurrentApplication() { return m_app.get(); }
 

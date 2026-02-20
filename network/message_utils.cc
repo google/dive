@@ -105,4 +105,23 @@ absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConne
     return Network::SendSocketMessage(client_conn, response);
 }
 
+absl::Status RemoveFile(Network::RemoveFileRequest* request, Network::SocketConnection* client_conn)
+{
+    Network::RemoveFileResponse response;
+    std::string file_path = request->GetString();
+    std::error_code ec;
+
+    if (std::filesystem::remove(file_path, ec))
+    {
+        response.SetSuccess(true);
+    }
+    else
+    {
+        response.SetSuccess(false);
+        response.SetErrorReason(ec ? ec.message() : "Unknown error");
+    }
+
+    return Network::SendSocketMessage(client_conn, response);
+}
+
 }  // namespace Network

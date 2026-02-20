@@ -46,7 +46,9 @@ enum class MessageType : uint32_t
     DOWNLOAD_FILE_REQUEST = 7,
     DOWNLOAD_FILE_RESPONSE = 8,
     FILE_SIZE_REQUEST = 9,
-    FILE_SIZE_RESPONSE = 10
+    FILE_SIZE_RESPONSE = 10,
+    REMOVE_FILE_REQUEST = 11,
+    REMOVE_FILE_RESPONSE = 12
 };
 
 class HandshakeMessage : public ISerializable
@@ -108,6 +110,32 @@ class Pm4CaptureResponse : public StringMessage
 {
  public:
     MessageType GetMessageType() const override { return MessageType::PM4_CAPTURE_RESPONSE; }
+};
+
+class RemoveFileRequest : public StringMessage
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::REMOVE_FILE_REQUEST; }
+};
+
+class RemoveFileResponse : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::REMOVE_FILE_RESPONSE; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    bool GetSuccess() const { return m_success; }
+    void SetSuccess(bool success) { m_success = success; }
+
+    const std::string& GetErrorReason() const { return m_error_reason; }
+    void SetErrorReason(std::string error_reason) { m_error_reason = std::move(error_reason); }
+
+ private:
+    // Flag indicating whether the file was removed successfully.
+    bool m_success;
+    // A description of the error if the removal failed. Empty if successful.
+    std::string m_error_reason;
 };
 
 class PingMessage : public EmptyMessage

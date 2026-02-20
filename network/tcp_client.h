@@ -65,6 +65,9 @@ class TcpClient
     // Gets the capture file size from the server.
     absl::StatusOr<size_t> GetCaptureFileSize(const std::string& remote_file_path);
 
+    // Removes a file from device.
+    absl::Status RemoveFile(const std::string& remote_file_path);
+
  private:
     // Performs a ping-pong check with the server.
     absl::Status PingServer();

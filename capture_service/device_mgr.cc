@@ -330,7 +330,11 @@ absl::StatusOr<std::unique_ptr<AndroidDevice>> AndroidDevice::Create(const std::
 }
 
 AndroidDevice::AndroidDevice(const std::string& serial)
-    : m_serial(serial), m_adb(serial), m_gfxr_enabled(false), m_port(kFirstPort)
+    : m_serial(serial),
+      m_adb(serial),
+      m_gfxr_enabled(false),
+      m_runtime_what_if_enabled(false),
+      m_port(kFirstPort)
 {
     CleanupDevice().IgnoreError();
 }
@@ -518,6 +522,12 @@ absl::Status AndroidDevice::SetupDevice()
         RETURN_IF_ERROR(ForwardFirstAvailablePort());
     }
 
+    if (m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName,
+                                             Dive::DeviceResourcesConstants::kDeployFolderPath));
+    }
+
     return absl::OkStatus();
 }
 
@@ -652,6 +662,20 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
     else
     {
         m_app->SetGfxrEnabled(false);
+    }
+
+    if (m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(CopyWithPermissions(
+            /*package=*/package,
+            /*file_name=*/
+            Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName));
+
+        RETURN_IF_ERROR(
+            EnableVulkanLayer(Adb(),
+                              /*app=*/package,
+                              /*layer=*/Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName,
+                              /*layer_app=*/package));
     }
     return m_app->Setup();
 }
@@ -1242,6 +1266,11 @@ absl::Status AndroidDevice::RetrieveFile(const std::string& remote_file_path,
 }
 
 void AndroidDevice::EnableGfxr(bool enable_gfxr) { m_gfxr_enabled = enable_gfxr; }
+
+void AndroidDevice::EnableRuntimeWhatIf(bool enable_runtime_what_if)
+{
+    m_runtime_what_if_enabled = enable_runtime_what_if;
+}
 
 bool AndroidDevice::IsProcessRunning(absl::string_view process_name) const
 {

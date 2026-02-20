@@ -221,11 +221,9 @@ class DeviceManager
     DeviceManager& operator=(const DeviceManager&) = delete;
     DeviceManager(const DeviceManager&) = delete;
 
+    std::string GetPythonPath() const;
+    absl::Status ValidatePythonPath(const std::string& python_path) const;
     std::vector<DeviceInfo> ListDevice() const;
-    // Creates and stores an object representing the connection to the device with the given serial.
-    // `serial` must correspond to one returned by ListDevice. Returns a non-owning reference to
-    // that which was created. If this fails then DeviceManager state will remain unaltered;
-    // GetDevice will return the previous SelectDevice result.
     absl::StatusOr<AndroidDevice*> SelectDevice(const std::string& serial);
     void RemoveDevice() { m_device = nullptr; }
     AndroidDevice* GetDevice() const { return m_device.get(); }

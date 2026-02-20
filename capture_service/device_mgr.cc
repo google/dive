@@ -404,9 +404,9 @@ absl::Status AndroidDevice::CheckAbi()
 
 absl::Status AndroidDevice::CheckScreenOn()
 {
-    absl::StatusOr<std::string> interactive_result =
+    absl::StatusOr<std::string> grep_output =
         Adb().RunAndGetResult("shell dumpsys input_method | grep mInteractive=true");
-    if (!interactive_result.ok() || interactive_result->empty())
+    if (!grep_output.ok() || grep_output->empty())
     {
         return absl::FailedPreconditionError(
             "Device screen is off. Please ensure the screen is on before retrying");
@@ -416,9 +416,9 @@ absl::Status AndroidDevice::CheckScreenOn()
 
 absl::Status AndroidDevice::CheckDeviceUnlocked()
 {
-    absl::StatusOr<std::string> interactive_result =
+    absl::StatusOr<std::string> grep_output =
         Adb().RunAndGetResult("shell dumpsys trust | grep deviceLocked=0");
-    if (!interactive_result.ok() || interactive_result->empty())
+    if (!grep_output.ok() || grep_output->empty())
     {
         return absl::FailedPreconditionError(
             "Device is locked. Please ensure the device is unlocked before retrying");

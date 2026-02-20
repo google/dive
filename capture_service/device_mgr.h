@@ -135,6 +135,7 @@ class AndroidDevice
     void EnableGfxr(bool enable_gfxr);
     bool IsProcessRunning(absl::string_view process_name) const;
     bool FileExists(const std::string& file_path);
+    absl::Status IsAppRunningOnForeground(const std::string& package_name);
 
     enum class PackageListOptions
     {

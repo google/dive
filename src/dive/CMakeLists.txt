@@ -23,4 +23,5 @@ add_subdirectory(common)
 
 if(NOT ANDROID)
     add_subdirectory(ui)
+    add_subdirectory(crash_report)
 endif()

@@ -54,12 +54,12 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 {
     if (!message)
     {
-        LOG(INFO) << "Message is null.";
+        LOG(ERROR) << "Message is null.";
         return;
     }
     if (!client_conn)
     {
-        LOG(INFO) << "Client connection is null.";
+        LOG(ERROR) << "Client connection is null.";
         return;
     }
 
@@ -72,7 +72,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             {
                 LOG(ERROR) << "Send pong failed: " << status.message();
             }
-            break;
+            return;
         }
         case Network::MessageType::HANDSHAKE_REQUEST:
         {
@@ -86,18 +86,19 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 
             if (absl::Status status = Network::Handshake(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "Handshake failed: " << status.message();
+                LOG(ERROR) << "Handshake failed: " << status.message();
+                return;
             }
-            break;
+            return;
         }
         case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
             LOG(INFO) << "Message received: Pm4CaptureRequest";
             if (absl::Status status = StartPm4Capture(client_conn); !status.ok())
             {
-                LOG(INFO) << "StartPm4Capture failed: " << status.message();
+                LOG(ERROR) << "StartPm4Capture failed: " << status.message();
             }
-            break;
+            return;
         }
         case Network::MessageType::DOWNLOAD_FILE_REQUEST:
         {
@@ -111,9 +112,10 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 
             if (absl::Status status = Network::DownloadFile(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "DownloadFile failed: " << status.message();
+                LOG(ERROR) << "DownloadFile failed: " << status.message();
+                return;
             }
-            break;
+            return;
         }
         case Network::MessageType::FILE_SIZE_REQUEST:
         {
@@ -127,9 +129,10 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 
             if (absl::Status status = Network::GetFileSize(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "GetFileSize failed:" << status.message();
+                LOG(ERROR) << "GetFileSize failed:" << status.message();
+                return;
             }
-            break;
+            return;
         }
         case Network::MessageType::REMOVE_FILE_REQUEST:
         {
@@ -143,14 +146,15 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 
             if (absl::Status status = Network::RemoveFile(request, client_conn); !status.ok())
             {
-                LOG(INFO) << "RemoveFile failed: " << status.message();
+                LOG(ERROR) << "RemoveFile failed: " << status.message();
+                return;
             }
-            break;
+            return;
         }
         default:
         {
             LOG(WARNING) << "Message type unhandled, type: ", message->GetMessageType();
-            break;
+            return;
         }
     }
 }

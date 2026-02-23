@@ -127,8 +127,7 @@ void CaptureWorker::run()
         return;
     }
 
-    status = client.RemoveFile(*capture_file_path);
-    if (!status.ok())
+    if (status = client.RemoveFile(*capture_file_path); !status.ok())
     {
         std::string err_msg =
             absl::StrCat("Failed to remove PM4 capture on device, error: ", status.message());

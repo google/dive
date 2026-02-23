@@ -192,7 +192,7 @@ TEST(MessagesTest, FileSizeMessage)
     ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
 }
 
-TEST(MessagesTest, RemoveFileMessageSuccess)
+TEST(MessagesTest, RemoveFileRequest)
 {
     Network::RemoveFileRequest req_serialize;
     req_serialize.SetString("/sdcard/captures/to_be_removed.rd");
@@ -205,12 +205,15 @@ TEST(MessagesTest, RemoveFileMessageSuccess)
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(req_deserialize.GetMessageType(), Network::MessageType::REMOVE_FILE_REQUEST);
     ASSERT_EQ(req_serialize.GetString(), req_deserialize.GetString());
+}
 
+TEST(MessageTest, RemoveFileResponseSuccess)
+{
     Network::RemoveFileResponse res_serialize;
     res_serialize.SetSuccess(true);
     res_serialize.SetErrorReason("");
-    buf.clear();
-    status = res_serialize.Serialize(buf);
+    Network::Buffer buf;
+    auto status = res_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::REMOVE_FILE_RESPONSE);
     Network::RemoveFileResponse res_deserialize;
@@ -221,25 +224,13 @@ TEST(MessagesTest, RemoveFileMessageSuccess)
     ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
 }
 
-TEST(MessagesTest, RemoveFileMessageFailure)
+TEST(MessagesTest, RemoveFileResponseFailure)
 {
-    Network::RemoveFileRequest req_serialize;
-    req_serialize.SetString("/sdcard/captures/to_be_removed.rd");
-    Network::Buffer buf;
-    auto status = req_serialize.Serialize(buf);
-    ASSERT_TRUE(status.ok());
-    ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::REMOVE_FILE_REQUEST);
-    Network::RemoveFileRequest req_deserialize;
-    status = req_deserialize.Deserialize(buf);
-    ASSERT_TRUE(status.ok());
-    ASSERT_EQ(req_deserialize.GetMessageType(), Network::MessageType::REMOVE_FILE_REQUEST);
-    ASSERT_EQ(req_serialize.GetString(), req_deserialize.GetString());
-
     Network::RemoveFileResponse res_serialize_fail;
     res_serialize_fail.SetSuccess(false);
     res_serialize_fail.SetErrorReason("File not found!");
-    buf.clear();
-    status = res_serialize_fail.Serialize(buf);
+    Network::Buffer buf;
+    auto status = res_serialize_fail.Serialize(buf);
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(res_serialize_fail.GetMessageType(), Network::MessageType::REMOVE_FILE_RESPONSE);
     Network::RemoveFileResponse res_deserialize_fail;

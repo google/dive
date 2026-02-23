@@ -108,10 +108,9 @@ absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConne
 absl::Status RemoveFile(Network::RemoveFileRequest* request, Network::SocketConnection* client_conn)
 {
     Network::RemoveFileResponse response;
-    std::string file_path = request->GetString();
     std::error_code ec;
 
-    if (std::filesystem::remove(file_path, ec))
+    if (std::filesystem::remove(request->GetString(), ec))
     {
         response.SetSuccess(true);
     }

@@ -69,8 +69,8 @@ class WhatIfConfigureDialog : public DeviceDialog
 
     ApplicationController& m_controller;
 
-    const QString kAdd_Modification = "&Add Modification";
-    const QString kDismiss = "&Dismiss";
+    static constexpr std::string_view kAdd_Modification = "&Add Modification";
+    static constexpr std::string_view kDismiss = "&Dismiss";
 
     // --- Header Section ---
     QHBoxLayout* m_what_if_title_layout;

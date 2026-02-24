@@ -38,13 +38,13 @@ struct WhatIfModificationTypeInfo
     std::span<const std::string_view> supported_commands;
 };
 
-static constexpr std::string_view kDrawCmds[] = {"vkCmdDraw", "vkCmdDrawIndexed",
+inline constexpr std::string_view kDrawCmds[] = {"vkCmdDraw", "vkCmdDrawIndexed",
                                                  "vkCmdDrawIndirect", "vkCmdDrawIndexedIndirect"};
-static constexpr std::string_view kImageCmds[] = {"vkCmdCreateImage"};
-static constexpr std::string_view kRenderPassCmds[] = {"vkCmdBeginRenderPass",
+inline constexpr std::string_view kImageCmds[] = {"vkCmdCreateImage"};
+inline constexpr std::string_view kRenderPassCmds[] = {"vkCmdBeginRenderPass",
                                                        "vkCmdBeginRenderPass2"};
-static constexpr std::string_view kSamplerCmds[] = {"vkCreateSampler"};
-static constexpr std::string_view kTimestampCmds[] = {"vkCmdWriteTimestamp"};
+inline constexpr std::string_view kSamplerCmds[] = {"vkCreateSampler"};
+inline constexpr std::string_view kTimestampCmds[] = {"vkCmdWriteTimestamp"};
 
 inline constexpr std::array<WhatIfModificationTypeInfo, 6> kWhatIfModificationTypeInfos = {{
     {.type = WhatModificationType::kDrawCallDisabled,

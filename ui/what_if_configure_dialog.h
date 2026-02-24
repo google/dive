@@ -11,10 +11,10 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include "device_dialog.h"
 #include "dive/ui/forward.h"
-
-#pragma once
 
 // Event filter to keep a QComboBox popup open when checking/unchecking items.
 class MultiCheckComboBoxEventFilter : public QObject
@@ -39,7 +39,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     Q_OBJECT
 
  public:
-    WhatIfConfigureDialog(ApplicationController& controller, QWidget* parent = 0);
+    WhatIfConfigureDialog(ApplicationController& controller, QWidget* parent = nullptr);
     ~WhatIfConfigureDialog();
 
  protected:
@@ -72,17 +72,10 @@ class WhatIfConfigureDialog : public DeviceDialog
     static constexpr std::string_view kAdd_Modification = "&Add Modification";
     static constexpr std::string_view kDismiss = "&Dismiss";
 
-    // --- Header Section ---
-    QHBoxLayout* m_what_if_title_layout;
-    QLabel* m_what_if_title_label;
-
     // --- What-If Type Section ---
-    QHBoxLayout* m_what_if_type_layout;
     QComboBox* m_what_if_type_box;
-    QStandardItemModel* m_what_if_type_model;
 
     // Command Selection
-    QLabel* m_what_if_command_label;
     QComboBox* m_what_if_command_box;
     QStandardItemModel* m_what_if_command_model;
 
@@ -127,13 +120,8 @@ class WhatIfConfigureDialog : public DeviceDialog
     QStandardItemModel* m_what_if_flag_model;
 
     // --- Modification Warning ---
-    QHBoxLayout* warning_layout;
     QLabel* m_what_if_modification_warning_label;
 
     // --- Button Section ---
-    QHBoxLayout* m_button_layout;
-    QPushButton* m_dismiss_button;
     QPushButton* m_add_modification_button;
-
-    QVBoxLayout* m_main_layout;
 };

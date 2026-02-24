@@ -86,19 +86,19 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     titleFont.setPointSize(titleFont.pointSize() + 2);
 
     // --- Header Section ---
-    m_what_if_title_label = new QLabel(tr("Explore What-If Scenarios"));
+    QLabel* m_what_if_title_label = new QLabel(tr("Explore What-If Scenarios"));
     m_what_if_title_label->setFont(titleFont);
-    m_what_if_info_label =
+    QLabel* m_what_if_info_label =
         new QLabel(tr("Modify vulkan calls, shaders, etc. to explore the potential impact "
                       "rendering the application."));
     m_what_if_info_label->setWordWrap(true);
 
     // --- Radio Button Group Section ---
-    m_what_if_type_button_group = new QButtonGroup(this);
+    QButtonGroup* m_what_if_type_button_group = new QButtonGroup(this);
 
     m_runtime_what_if_type_button = new QRadioButton(tr("In a Running Application"));
     m_runtime_what_if_type_button->setChecked(true);
-    m_runtime_what_if_type_label =
+    QLabel* m_runtime_what_if_type_label =
         new QLabel(tr("This provides fewer options, but allows the running application to be "
                       "controlled interactively to get an overall feeling for performance."));
     m_runtime_what_if_type_label->setWordWrap(true);
@@ -168,7 +168,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     settingsGrid->addWidget(m_app_type_box, 3, 1, 1, 2);
 
     // --- Buttons ---
-    m_button_layout = new QHBoxLayout();
+    QHBoxLayout* m_button_layout = new QHBoxLayout();
     m_dismiss_button = new QPushButton(tr("Dismiss"), this);
     m_start_application_button = new QPushButton(kStart_Application.data(), this);
     m_start_application_button->setEnabled(false);
@@ -176,7 +176,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     m_button_layout->addWidget(m_start_application_button);
 
     // --- Main Layout ---
-    m_main_layout = new QVBoxLayout(this);
+    QVBoxLayout* m_main_layout = new QVBoxLayout(this);
     m_main_layout->addWidget(m_what_if_title_label);
     m_main_layout->addWidget(m_what_if_info_label);
     m_main_layout->addSpacing(15);

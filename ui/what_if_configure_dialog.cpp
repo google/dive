@@ -128,9 +128,9 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     titleFont.setPointSize(titleFont.pointSize() + 2);
 
     // --- Header Section ---
-    m_what_if_title_label = new QLabel(tr("What would happen if..."));
+    QLabel* m_what_if_title_label = new QLabel(tr("What would happen if..."));
     m_what_if_title_label->setFont(titleFont);
-    m_what_if_type_model = new QStandardItemModel();
+    QStandardItemModel* m_what_if_type_model = new QStandardItemModel();
     m_what_if_type_box = new QComboBox();
 
     QStandardItem* what_if_type_placeholder =
@@ -151,7 +151,7 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     settingsGrid->setColumnStretch(1, 0);
 
     // --- Command Selector ---
-    m_what_if_command_label = new QLabel(tr("Command:"));
+    QLabel* m_what_if_command_label = new QLabel(tr("Command:"));
     m_what_if_command_box = new QComboBox();
     m_what_if_command_model = new QStandardItemModel();
     m_what_if_command_box->setModel(m_what_if_command_model);
@@ -306,22 +306,22 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     m_what_if_flag_container->hide();
 
     // --- Modification Warning ---
-    warning_layout = new QHBoxLayout();
+    QHBoxLayout* warning_layout = new QHBoxLayout();
     m_what_if_modification_warning_label =
         new QLabel(tr("⚠ When testing this modification, the application will be relaunched."));
     warning_layout->addWidget(m_what_if_modification_warning_label);
     m_what_if_modification_warning_label->hide();
 
     // --- Buttons ---
-    m_button_layout = new QHBoxLayout();
-    m_dismiss_button = new QPushButton(kDismiss.data(), this);
+    QHBoxLayout* m_button_layout = new QHBoxLayout();
+    QPushButton* m_dismiss_button = new QPushButton(kDismiss.data(), this);
     m_add_modification_button = new QPushButton(kAdd_Modification.data(), this);
     m_add_modification_button->setEnabled(false);
     m_button_layout->addWidget(m_dismiss_button);
     m_button_layout->addWidget(m_add_modification_button);
 
     // --- Main Layout ---
-    m_main_layout = new QVBoxLayout(this);
+    QVBoxLayout* m_main_layout = new QVBoxLayout(this);
     m_main_layout->addWidget(m_what_if_title_label);
     m_main_layout->addSpacing(15);
 

@@ -41,10 +41,10 @@ namespace
 constexpr int kNumImageCreationFlags = 2;
 constexpr int kNumRenderPassTypes = 4;
 
-constexpr const char* kFrameTitleStrings[kNumImageCreationFlags] = {
+constexpr std::string_view kFrameTitleStrings[kNumImageCreationFlags] = {
     "VK_IMAGE_CREATE_FRAGMENT_DENSITY_MAP_OFFSET_BIT_QCOM", "VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT"};
 
-constexpr const char* kRenderPassTypeStrings[kNumRenderPassTypes] = {
+constexpr std::string_view kRenderPassTypeStrings[kNumRenderPassTypes] = {
     "Shadow Map Pass", "G-Buffer/Deferred Pass", "Lightening Pass", "UI/Overlay Pass"};
 }  // namespace
 
@@ -263,7 +263,7 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
         what_if_render_pass_type_filter_placeholder);
     for (int i = 0; i < kNumRenderPassTypes; i++)
     {
-        QStandardItem* item = new QStandardItem(kRenderPassTypeStrings[i]);
+        QStandardItem* item = new QStandardItem(kRenderPassTypeStrings[i].data());
         m_what_if_render_pass_render_pass_type_filter_model->appendRow(item);
     }
     m_what_if_render_pass_render_pass_type_filter_box->setModel(
@@ -290,7 +290,7 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     m_what_if_flag_model->appendRow(what_if_flag_place_holder);
     for (int i = 0; i < kNumImageCreationFlags; i++)
     {
-        QStandardItem* item = new QStandardItem(kFrameTitleStrings[i]);
+        QStandardItem* item = new QStandardItem(kFrameTitleStrings[i].data());
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
         item->setCheckable(true);
         item->setCheckState(Qt::Unchecked);
@@ -314,8 +314,8 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
 
     // --- Buttons ---
     m_button_layout = new QHBoxLayout();
-    m_dismiss_button = new QPushButton(tr("Dismiss"), this);
-    m_add_modification_button = new QPushButton(kAdd_Modification, this);
+    m_dismiss_button = new QPushButton(kDismiss.data(), this);
+    m_add_modification_button = new QPushButton(kAdd_Modification.data(), this);
     m_add_modification_button->setEnabled(false);
     m_button_layout->addWidget(m_dismiss_button);
     m_button_layout->addWidget(m_add_modification_button);

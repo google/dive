@@ -76,9 +76,9 @@ class WhatIfSetupDialog : public DeviceDialog
 
     ApplicationController& m_controller;
 
-    const QString kStart_Application = "&Start Application";
-    const QString kStop_Application = "&Stop Application";
-    const QString kDismiss = "&Dismiss";
+    static constexpr std::string_view kStart_Application = "&Start Application";
+    static constexpr std::string_view kStop_Application = "&Stop Application";
+    static constexpr std::string_view kDismiss = "&Dismiss";
 
     QHBoxLayout* m_what_if_title_layout;
     QLabel* m_what_if_title_label;

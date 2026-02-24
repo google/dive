@@ -21,9 +21,9 @@ limitations under the License.
 namespace Dive
 {
 
-struct DeviceResourcesConstants
+namespace DeviceResourcesConstants
 {
-    // clang-format off
+// clang-format off
 /*
 
 On the host machine, resources are aggregated and installed into the "base resources dir" for convenience.
@@ -37,60 +37,59 @@ Plugin parent dir:          DIVE_ROOT/build/pkg/CMAKE_GENERATED_PLUGINS_PARENT_D
 Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/       dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/
 
 */
-    // clang-format on
+// clang-format on
 
-    // Device resources:
-    static constexpr std::string_view kVkLayerLibName = "libVkLayer_dive.so";
-    static constexpr std::string_view kXrLayerLibName = "libXrApiLayer_dive.so";
-    static constexpr std::string_view kManifestFileName = "XrApiLayer_dive.json";
-    // third_party/freedreno
-    static constexpr std::string_view kWrapLibName = "libwrap.so";
-    // third_party/Vulkan-ValidationLayers
-    static constexpr std::string_view kVkValidationLayerLibName =
-        "libVkLayer_khronos_validation.so";
-    // third_party/gfxreconstruct
-    static constexpr std::string_view kVkGfxrLayerLibName = "libVkLayer_gfxreconstruct.so";
-    static constexpr std::string_view kGfxrReplayApkName = "gfxr-replay.apk";
-    static constexpr std::string_view kGfxrReconPyName = "gfxrecon.py";
+// Device resources:
+inline constexpr std::string_view kVkLayerLibName = "libVkLayer_dive.so";
+inline constexpr std::string_view kXrLayerLibName = "libXrApiLayer_dive.so";
+inline constexpr std::string_view kManifestFileName = "XrApiLayer_dive.json";
+// third_party/freedreno
+inline constexpr std::string_view kWrapLibName = "libwrap.so";
+// third_party/Vulkan-ValidationLayers
+inline constexpr std::string_view kVkValidationLayerLibName = "libVkLayer_khronos_validation.so";
+// third_party/gfxreconstruct
+inline constexpr std::string_view kVkGfxrLayerLibName = "libVkLayer_gfxreconstruct.so";
+inline constexpr std::string_view kGfxrReplayApkName = "gfxr-replay.apk";
+inline constexpr std::string_view kGfxrReconPyName = "gfxrecon.py";
 
-    // Profiling plugin resources:
-    static constexpr std::string_view kProfilingPluginShaName = "SHA";
-    static constexpr std::string_view kProfilingPluginMetricsFileName = "available_metrics.csv";
+// Profiling plugin resources:
+inline constexpr std::string_view kProfilingPluginShaName = "SHA";
+inline constexpr std::string_view kProfilingPluginMetricsFileName = "available_metrics.csv";
 
-    // -------------------------------------------------------------------------
-    // On the device, device resources are deployed into these locations
-    static constexpr std::string_view kDeployFolderPath = "/data/local/tmp/dive";
-    static constexpr std::string_view kDeployVulkanGlobalFolderPath = "/data/local/debug/vulkan";
-    static constexpr std::string_view kDeployManifestFolderPath =
-        "/system/etc/openxr/1/api_layers/implicit.d/";
+// -------------------------------------------------------------------------
+// On the device, device resources are deployed into these locations
+inline constexpr std::string_view kDeployFolderPath = "/data/local/tmp/dive";
+inline constexpr std::string_view kDeployVulkanGlobalFolderPath = "/data/local/debug/vulkan";
+inline constexpr std::string_view kDeployManifestFolderPath =
+    "/system/etc/openxr/1/api_layers/implicit.d/";
 
-    // -------------------------------------------------------------------------
-    // Network Constants
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// Network Constants
+// -------------------------------------------------------------------------
 
-    // The abstract namespace path for the Unix domain socket used for
-    // communication between the host and the device.
-    static constexpr char kUnixAbstractPath[] = "dive_abstract";
+// The abstract namespace path for the Unix domain socket used for
+// communication between the host and the device.
+inline constexpr char kUnixAbstractPath[] = "dive_abstract";
 
-    // -------------------------------------------------------------------------
-    // Host (local machine) Constants
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// Host (local machine) Constants
+// -------------------------------------------------------------------------
 
-    // The name of the top-level container directory on the host.
-    // Example: "dive_captures" (which lives in $HOME or pwd).
-    static constexpr char kHostRootDirectoryName[] = "dive_captures";
-    // The prefix for individual session sub-directories.
-    // Example: "capture_" -> results in "capture_1", "capture_2".
-    static constexpr char kHostSessionDirectoryPrefix[] = "capture_";
+// The name of the top-level container directory on the host.
+// Example: "dive_captures" (which lives in $HOME or pwd).
+inline constexpr char kHostRootDirectoryName[] = "dive_captures";
+// The prefix for individual session sub-directories.
+// Example: "capture_" -> results in "capture_1", "capture_2".
+inline constexpr char kHostSessionDirectoryPrefix[] = "capture_";
 
-    // -------------------------------------------------------------------------
-    // Device (Android) Constants
-    // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// Device (Android) Constants
+// -------------------------------------------------------------------------
 
-    // The absolute path to the standard Download directory on Android.
-    static constexpr char kDeviceDownloadPath[] = "/sdcard/Download";
-    // The name of the temporary staging directory created on the device.
-    static constexpr char kDeviceStagingDirectoryName[] = "dive_capture_files";
-};
+// The absolute path to the standard Download directory on Android.
+inline constexpr char kDeviceDownloadPath[] = "/sdcard/Download";
+// The name of the temporary staging directory created on the device.
+inline constexpr char kDeviceStagingDirectoryName[] = "dive_capture_files";
+};  // namespace DeviceResourcesConstants
 
 }  // namespace Dive

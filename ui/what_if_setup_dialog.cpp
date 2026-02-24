@@ -77,6 +77,8 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
 {
     qDebug() << "WhatIfSetupDialog created.";
 
+    setWindowTitle("What-Ifs");
+
     // --- Font Definitions ---
     QFont boldFont = this->font();
     boldFont.setBold(true);
@@ -84,7 +86,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     titleFont.setPointSize(titleFont.pointSize() + 2);
 
     // --- Header Section ---
-    m_what_if_title_label = new QLabel(tr("Explore Optimizations"));
+    m_what_if_title_label = new QLabel(tr("Explore What-If Scenarios"));
     m_what_if_title_label->setFont(titleFont);
     m_what_if_info_label =
         new QLabel(tr("Modify vulkan calls, shaders, etc. to explore the potential impact "

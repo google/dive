@@ -119,6 +119,8 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
 {
     qDebug() << "WhatIfConfigureDialog created.";
 
+    setWindowTitle("Dive Runtime What-Ifs");
+
     // --- Font Definitions ---
     QFont boldFont = this->font();
     boldFont.setBold(true);

@@ -207,10 +207,10 @@ class MainWindow : public QMainWindow
     CommandModel* m_command_hierarchy_model;
     QPushButton* m_search_trigger_button;
     SearchBar* m_event_search_bar = nullptr;
-    QWidget* m_what_if_container;
-    QPushButton* m_what_if_configure_button;
-    QPushButton* m_what_if_run_time_stop_application_button;
-    QLabel* m_what_if_runtime_what_if_application_name_label;
+    QWidget* m_what_if_container = nullptr;
+    QPushButton* m_what_if_configure_button = nullptr;
+    QPushButton* m_what_if_run_time_stop_application_button = nullptr;
+    QLabel* m_what_if_runtime_what_if_application_name_label = nullptr;
 
     TreeViewComboBox* m_view_mode_combo_box;
     TreeViewComboBox* m_filter_mode_combo_box;

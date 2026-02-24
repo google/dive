@@ -73,55 +73,55 @@ class WhatIfConfigureDialog : public DeviceDialog
     static constexpr std::string_view kDismiss = "&Dismiss";
 
     // --- What-If Type Section ---
-    QComboBox* m_what_if_type_box;
+    QComboBox* m_what_if_type_box = nullptr;
 
     // Command Selection
-    QComboBox* m_what_if_command_box;
-    QStandardItemModel* m_what_if_command_model;
+    QComboBox* m_what_if_command_box = nullptr;
+    QStandardItemModel* m_what_if_command_model = nullptr;
 
     // --- Filter Section ---
-    QLabel* m_what_if_filter_label;
+    QLabel* m_what_if_filter_label = nullptr;
 
     // --- Draw Call Filters ---
-    QWidget* m_what_if_draw_call_filters_container;
-    QLabel* m_what_if_draw_call_index_count_filter_label;
-    QSpinBox* m_what_if_draw_call_index_count_filter_box;
+    QWidget* m_what_if_draw_call_filters_container = nullptr;
+    QLabel* m_what_if_draw_call_index_count_filter_label = nullptr;
+    QSpinBox* m_what_if_draw_call_index_count_filter_box = nullptr;
 
-    QLabel* m_what_if_draw_call_vertex_count_filter_label;
-    QSpinBox* m_what_if_draw_call_vertex_count_filter_box;
+    QLabel* m_what_if_draw_call_vertex_count_filter_label = nullptr;
+    QSpinBox* m_what_if_draw_call_vertex_count_filter_box = nullptr;
 
-    QLabel* m_what_if_draw_call_instance_count_filter_label;
-    QSpinBox* m_what_if_draw_call_instance_count_filter_box;
+    QLabel* m_what_if_draw_call_instance_count_filter_label = nullptr;
+    QSpinBox* m_what_if_draw_call_instance_count_filter_box = nullptr;
 
-    QLabel* m_what_if_draw_call_draw_count_filter_label;
-    QSpinBox* m_what_if_draw_call_draw_count_filter_box;
+    QLabel* m_what_if_draw_call_draw_count_filter_label = nullptr;
+    QSpinBox* m_what_if_draw_call_draw_count_filter_box = nullptr;
 
-    QLabel* m_what_if_draw_call_pso_property_filter_label;
-    QComboBox* m_what_if_draw_call_pso_property_filter_box;
-    QStandardItemModel* m_what_if_draw_call_pso_property_filter_model;
+    QLabel* m_what_if_draw_call_pso_property_filter_label = nullptr;
+    QComboBox* m_what_if_draw_call_pso_property_filter_box = nullptr;
+    QStandardItemModel* m_what_if_draw_call_pso_property_filter_model = nullptr;
 
-    QLabel* m_what_if_draw_call_render_pass_filter_label;
-    QComboBox* m_what_if_draw_call_render_pass_filter_box;
-    QStandardItemModel* m_what_if_draw_call_render_pass_filter_model;
+    QLabel* m_what_if_draw_call_render_pass_filter_label = nullptr;
+    QComboBox* m_what_if_draw_call_render_pass_filter_box = nullptr;
+    QStandardItemModel* m_what_if_draw_call_render_pass_filter_model = nullptr;
 
     // --- Render Pass Filters ---
-    QWidget* m_what_if_render_pass_filters_container;
-    QLabel* m_what_if_render_pass_command_buffer_filter_label;
-    QComboBox* m_what_if_render_pass_command_buffer_filter_box;
-    QStandardItemModel* m_what_if_render_pass_command_buffer_filter_model;
-    QLabel* m_what_if_render_pass_render_pass_type_filter_label;
-    QComboBox* m_what_if_render_pass_render_pass_type_filter_box;
-    QStandardItemModel* m_what_if_render_pass_render_pass_type_filter_model;
+    QWidget* m_what_if_render_pass_filters_container = nullptr;
+    QLabel* m_what_if_render_pass_command_buffer_filter_label = nullptr;
+    QComboBox* m_what_if_render_pass_command_buffer_filter_box = nullptr;
+    QStandardItemModel* m_what_if_render_pass_command_buffer_filter_model = nullptr;
+    QLabel* m_what_if_render_pass_render_pass_type_filter_label = nullptr;
+    QComboBox* m_what_if_render_pass_render_pass_type_filter_box = nullptr;
+    QStandardItemModel* m_what_if_render_pass_render_pass_type_filter_model = nullptr;
 
     // --- Flag Section ---
-    QWidget* m_what_if_flag_container;
-    QLabel* m_what_if_flag_label;
-    QComboBox* m_what_if_flag_box;
-    QStandardItemModel* m_what_if_flag_model;
+    QWidget* m_what_if_flag_container = nullptr;
+    QLabel* m_what_if_flag_label = nullptr;
+    QComboBox* m_what_if_flag_box = nullptr;
+    QStandardItemModel* m_what_if_flag_model = nullptr;
 
     // --- Modification Warning ---
-    QLabel* m_what_if_modification_warning_label;
+    QLabel* m_what_if_modification_warning_label = nullptr;
 
     // --- Button Section ---
-    QPushButton* m_add_modification_button;
+    QPushButton* m_add_modification_button = nullptr;
 };

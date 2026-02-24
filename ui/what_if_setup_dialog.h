@@ -80,29 +80,29 @@ class WhatIfSetupDialog : public DeviceDialog
     static constexpr std::string_view kStop_Application = "&Stop Application";
     static constexpr std::string_view kDismiss = "&Dismiss";
 
-    QRadioButton* m_runtime_what_if_type_button;
-    QLabel* m_replay_what_if_type_label;
-    QRadioButton* m_replay_what_if_type_button;
+    QRadioButton* m_runtime_what_if_type_button = nullptr;
+    QLabel* m_replay_what_if_type_label = nullptr;
+    QRadioButton* m_replay_what_if_type_button = nullptr;
 
-    QLabel* m_device_label;
-    QPushButton* m_device_refresh_button;
+    QLabel* m_device_label = nullptr;
+    QPushButton* m_device_refresh_button = nullptr;
 
-    QLabel* m_pkg_label;
-    QStandardItemModel* m_pkg_model;
-    QComboBox* m_pkg_box;
-    QPushButton* m_pkg_refresh_button;
+    QLabel* m_pkg_label = nullptr;
+    QStandardItemModel* m_pkg_model = nullptr;
+    QComboBox* m_pkg_box = nullptr;
+    QPushButton* m_pkg_refresh_button = nullptr;
     Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
 
-    QLabel* m_args_label;
-    QLineEdit* m_args_input_box;
+    QLabel* m_args_label = nullptr;
+    QLineEdit* m_args_input_box = nullptr;
 
-    QLabel* m_app_type_label;
-    QStandardItemModel* m_app_type_model;
-    WhatIfAppTypeFilterModel* m_app_type_filter_model;
-    QComboBox* m_app_type_box;
+    QLabel* m_app_type_label = nullptr;
+    QStandardItemModel* m_app_type_model = nullptr;
+    WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
+    QComboBox* m_app_type_box = nullptr;
 
-    QPushButton* m_dismiss_button;
-    QPushButton* m_start_application_button;
+    QPushButton* m_dismiss_button = nullptr;
+    QPushButton* m_start_application_button = nullptr;
 
     std::vector<std::string> m_pkg_list;
     QString m_cur_pkg;

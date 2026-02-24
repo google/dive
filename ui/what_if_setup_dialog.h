@@ -11,12 +11,12 @@
  limitations under the License.
 */
 
+#pragma once
+
 #include <QSortFilterProxyModel>
 
 #include "device_dialog.h"
 #include "dive/ui/forward.h"
-
-#pragma once
 
 class WhatIfAppTypeFilterModel : public QSortFilterProxyModel
 {
@@ -39,7 +39,7 @@ class WhatIfSetupDialog : public DeviceDialog
     Q_OBJECT
 
  public:
-    WhatIfSetupDialog(ApplicationController& controller, QWidget* parent = 0);
+    WhatIfSetupDialog(ApplicationController& controller, QWidget* parent = nullptr);
     ~WhatIfSetupDialog();
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
@@ -80,47 +80,30 @@ class WhatIfSetupDialog : public DeviceDialog
     static constexpr std::string_view kStop_Application = "&Stop Application";
     static constexpr std::string_view kDismiss = "&Dismiss";
 
-    QHBoxLayout* m_what_if_title_layout;
-    QLabel* m_what_if_title_label;
-
-    QHBoxLayout* m_what_if_info_layout;
-    QLabel* m_what_if_info_label;
-
-    QHBoxLayout* m_what_if_type_layout;
-    QButtonGroup* m_what_if_type_button_group;
-    QVBoxLayout* m_runtime_what_if_type_button_layout;
-    QLabel* m_runtime_what_if_type_label;
     QRadioButton* m_runtime_what_if_type_button;
-    QVBoxLayout* m_replay_what_if_type_button_layout;
     QLabel* m_replay_what_if_type_label;
     QRadioButton* m_replay_what_if_type_button;
 
-    QHBoxLayout* m_device_layout;
     QLabel* m_device_label;
     QPushButton* m_device_refresh_button;
 
-    QHBoxLayout* m_pkg_layout;
     QLabel* m_pkg_label;
     QStandardItemModel* m_pkg_model;
     QComboBox* m_pkg_box;
     QPushButton* m_pkg_refresh_button;
     Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
 
-    QHBoxLayout* m_args_layout;
     QLabel* m_args_label;
     QLineEdit* m_args_input_box;
 
-    QHBoxLayout* m_type_layout;
     QLabel* m_app_type_label;
     QStandardItemModel* m_app_type_model;
     WhatIfAppTypeFilterModel* m_app_type_filter_model;
     QComboBox* m_app_type_box;
 
-    QHBoxLayout* m_button_layout;
     QPushButton* m_dismiss_button;
     QPushButton* m_start_application_button;
 
-    QVBoxLayout* m_main_layout;
     std::vector<std::string> m_pkg_list;
     QString m_cur_pkg;
     std::string m_executable;

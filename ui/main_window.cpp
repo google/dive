@@ -216,10 +216,11 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
         QHBoxLayout* what_ifs_layout = new QHBoxLayout();
         m_what_if_container = new QWidget();
         m_what_if_container->setLayout(what_ifs_layout);
-        m_what_if_info_label = new QLabel(tr("What-If Analysis:"));
+        QLabel* m_what_if_info_label = new QLabel(tr("What-If Analysis:"));
         m_what_if_configure_button = new QPushButton(tr("Configure"));
         m_what_if_run_time_stop_application_button = new QPushButton(tr("Stop Application"));
-        m_what_if_runtime_what_if_application_label = new QLabel(tr("Current Application: "));
+        QLabel* m_what_if_runtime_what_if_application_label =
+            new QLabel(tr("Current Application: "));
         m_what_if_runtime_what_if_application_name_label = new QLabel(tr("None"));
         what_ifs_layout->addWidget(m_what_if_info_label);
         what_ifs_layout->addWidget(m_what_if_configure_button);

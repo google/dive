@@ -15,7 +15,6 @@ limitations under the License.
 
 #include <array>
 #include <string_view>
-#include <vector>
 
 namespace Dive
 {

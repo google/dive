@@ -38,7 +38,7 @@ struct AppTypeInfo
     std::string_view ui_name;
     std::string_view cli_name;
     bool is_gfxr_capture_supported;
-    bool is_what_if_supported;
+    bool is_what_if_supported = true;
     std::string_view description;
 };
 
@@ -47,19 +47,16 @@ inline constexpr std::array<AppTypeInfo, 5> kAppTypeInfos = {{
      .ui_name = "Vulkan (OpenXR)",
      .cli_name = "vulkan_openxr",
      .is_gfxr_capture_supported = true,
-     .is_what_if_supported = true,
      .description = "For Vulkan OpenXR applications (apk)"},
     {.type = AppType::kVulkan_Non_OpenXR,
      .ui_name = "Vulkan (Non-OpenXR)",
      .cli_name = "vulkan_non_openxr",
      .is_gfxr_capture_supported = true,
-     .is_what_if_supported = true,
      .description = "For Vulkan applications (apk)"},
     {.type = AppType::kVulkanCLI_Non_OpenXR,
      .ui_name = "Vulkan CLI (Non-OpenXR)",
      .cli_name = "vulkan_cli_non_openxr",
      .is_gfxr_capture_supported = true,
-     .is_what_if_supported = true,
      .description = "For command line Vulkan application"},
     {.type = AppType::kGLES_OpenXR,
      .ui_name = "GLES (OpenXR)",

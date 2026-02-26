@@ -132,10 +132,10 @@ class RemoveFileResponse : public ISerializable
     void SetErrorReason(std::string error_reason) { m_error_reason = std::move(error_reason); }
 
  private:
-    // Flag indicating whether the file was removed successfully.
-    bool m_success;
     // A description of the error if the removal failed. Empty if successful.
     std::string m_error_reason;
+    // Flag indicating whether the file was removed successfully.
+    bool m_success = false;
 };
 
 class PingMessage : public EmptyMessage

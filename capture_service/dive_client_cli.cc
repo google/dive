@@ -370,12 +370,12 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
 // Triggers a capture on the device and downloads the resulting file.
 absl::Status TriggerPm4Capture(const CommandContext& ctx)
 {
-    auto device = ctx.mgr.GetDevice();
+    Dive::AndroidDevice* device = ctx.mgr.GetDevice();
     if (device == nullptr)
     {
         return Dive::FailedPreconditionError("No device selected, can't capture.");
     }
-    if (auto ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
+    if (absl::Status ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
     {
         return Dive::StatusWithContext(ret, "Device check failed");
     }
@@ -585,15 +585,16 @@ enum class GfxrCaptureControlFlow
 // Returning GfxrCaptureControlFlow::kStop from `wait_for_ready_to_capture` or
 // `wait_for_ready_to_retrieve` will skip subsequent steps.
 absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
-    AndroidDevice* device, const GlobalOptions& options,
+    const CommandContext& ctx,
     absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_capture,
     absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_retrieve)
 {
+    Dive::AndroidDevice* device = ctx.mgr.GetDevice();
     if (device == nullptr)
     {
         return Dive::FailedPreconditionError("No device selected, can't capture.");
     }
-    if (auto ret = device->IsAppRunningOnForeground(options.package); !ret.ok())
+    if (absl::Status ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
     {
         return Dive::StatusWithContext(ret, "Device check failed");
     }
@@ -649,7 +650,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
     }
 
     // If this fails, we print an error but don't exit the tool, allowing the user to try again.
-    if (absl::Status status = RetrieveGfxrCapture(adb, options); !status.ok())
+    if (absl::Status status = RetrieveGfxrCapture(adb, ctx.options); !status.ok())
     {
         LOG(ERROR) << "Failed to retrieve capture: " << status.message();
     }
@@ -812,8 +813,7 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
     while (true)
     {
         absl::StatusOr<GfxrCaptureControlFlow> control_flow =
-            TriggerGfxrCapture(context.mgr.GetDevice(), context.options, wait_for_ready_to_capture,
-                               wait_for_ready_to_retrieve);
+            TriggerGfxrCapture(context, wait_for_ready_to_capture, wait_for_ready_to_retrieve);
         if (!control_flow.status().ok())
         {
             return control_flow.status();

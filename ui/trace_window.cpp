@@ -607,7 +607,7 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
     if (device == nullptr)
     {
         std::string err_msg = "Failed to connect to device";
@@ -616,7 +616,7 @@ void TraceDialog::OnTraceClicked()
         return;
     }
 
-    if (auto ret = device->IsAppRunningOnForeground(m_cur_pkg); !ret.ok())
+    if (absl::Status ret = device->IsAppRunningOnForeground(m_cur_pkg); !ret.ok())
     {
         std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
         qDebug() << err_msg.c_str();
@@ -758,7 +758,7 @@ void TraceDialog::EnableCaptureTypeButtons(bool enable)
 
 void TraceDialog::OnGfxrCaptureClicked()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
     if (device == nullptr)
     {
         std::string err_msg = "Failed to connect to device";
@@ -767,7 +767,7 @@ void TraceDialog::OnGfxrCaptureClicked()
         return;
     }
 
-    if (auto ret = device->IsAppRunningOnForeground(m_cur_pkg); !ret.ok())
+    if (absl::Status ret = device->IsAppRunningOnForeground(m_cur_pkg); !ret.ok())
     {
         std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
         qDebug() << err_msg.c_str();

@@ -1308,11 +1308,9 @@ absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& package_
     {
         return absl::FailedPreconditionError(absl::StrCat(
             "The application '", package_name,
-            "' is not fully visible or active. "
-            "The device might be locked, asleep, or the app is running in the background. "
-            "Please ensure the device is unlocked and the app is running in the foreground on "
-            "screen, "
-            "then try again."));
+            "' is not fully visible or active. The device might be locked, asleep, or the app is "
+            "running in the background. Please ensure the device is unlocked and the app is "
+            "running in the foreground on screen, then try again."));
     }
 
     return absl::OkStatus();

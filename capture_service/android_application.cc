@@ -362,6 +362,11 @@ absl::Status VulkanApplication::Cleanup()
         return status;
     }
 
+    if (!m_gfxr_enabled && !m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(Pm4CaptureCleanup());
+    }
+
     RETURN_IF_ERROR(m_dev.CleanupPackageProperties(m_package));
     return absl::OkStatus();
 }
@@ -552,7 +557,7 @@ absl::Status OpenXRApplication::Cleanup()
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false"));
     }
-    else
+    else if (!m_runtime_what_if_enabled)
     {
         RETURN_IF_ERROR(Pm4CaptureCleanup());
     }

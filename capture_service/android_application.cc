@@ -174,6 +174,7 @@ absl::Status AndroidApplication::Cleanup()
         m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
         m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
     }
+    m_gfxr_enabled = false;
     LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " ended";
 
     return absl::OkStatus();
@@ -278,15 +279,15 @@ absl::Status GLESApplication::Pm4CaptureCleanup()
 
 absl::Status GLESApplication::Cleanup()
 {
+    if (!m_gfxr_enabled)
+    {
+        RETURN_IF_ERROR(Pm4CaptureCleanup());
+    }
+
     auto status = AndroidApplication::Cleanup();
     if (!status.ok())
     {
         return status;
-    }
-
-    if (!m_gfxr_enabled)
-    {
-        RETURN_IF_ERROR(Pm4CaptureCleanup());
     }
 
     RETURN_IF_ERROR(m_dev.CleanupPackageProperties(m_package));
@@ -338,15 +339,15 @@ absl::Status VulkanApplication::Pm4CaptureCleanup()
 
 absl::Status VulkanApplication::Cleanup()
 {
+    if (!m_gfxr_enabled)
+    {
+        RETURN_IF_ERROR(Pm4CaptureCleanup());
+    }
+
     auto status = AndroidApplication::Cleanup();
     if (!status.ok())
     {
         return status;
-    }
-
-    if (!m_gfxr_enabled)
-    {
-        RETURN_IF_ERROR(Pm4CaptureCleanup());
     }
 
     RETURN_IF_ERROR(m_dev.CleanupPackageProperties(m_package));
@@ -478,12 +479,6 @@ absl::Status OpenXRApplication::Pm4CaptureSetup()
 
 absl::Status OpenXRApplication::Cleanup()
 {
-    auto status = AndroidApplication::Cleanup();
-    if (!status.ok())
-    {
-        return status;
-    }
-
     if (m_gfxr_enabled)
     {
         // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
@@ -494,6 +489,12 @@ absl::Status OpenXRApplication::Cleanup()
     else
     {
         RETURN_IF_ERROR(Pm4CaptureCleanup());
+    }
+
+    auto status = AndroidApplication::Cleanup();
+    if (!status.ok())
+    {
+        return status;
     }
 
     RETURN_IF_ERROR(m_dev.CleanupPackageProperties(m_package));
@@ -564,15 +565,15 @@ absl::Status VulkanCliApplication::Pm4CaptureCleanup() { return absl::OkStatus()
 
 absl::Status VulkanCliApplication::Cleanup()
 {
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
+        "shell rm -fr %s", Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));
+
     auto status = AndroidApplication::Cleanup();
     if (!status.ok())
     {
         return status;
     }
-
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
-        "shell rm -fr %s", Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));
 
     return absl::OkStatus();
 }

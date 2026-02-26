@@ -539,6 +539,7 @@ absl::Status AndroidDevice::SetupDevice()
 {
     if (m_runtime_what_if_enabled)
     {
+        RETURN_IF_ERROR(ForwardFirstAvailablePort());
         return absl::OkStatus();
     }
 

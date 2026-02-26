@@ -167,14 +167,20 @@ absl::Status AndroidApplication::Cleanup()
                 absl::StrFormat("shell run-as %s rm %s", m_package,
                                 Dive::DeviceResourcesConstants::kVkGfxrLayerLibName)));
         }
-
-        m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_app").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
-        m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
     }
+    else if (m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(RuntimeWhatIfCleanup());
+    }
+
+    m_dev.Adb().Run("shell settings delete global enable_gpu_debug_layers").IgnoreError();
+    m_dev.Adb().Run("shell settings delete global gpu_debug_app").IgnoreError();
+    m_dev.Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
+    m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
+    m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
+
     m_gfxr_enabled = false;
+    m_runtime_what_if_enabled = false;
     LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " ended";
 
     return absl::OkStatus();
@@ -298,6 +304,12 @@ absl::Status VulkanApplication::Setup()
 {
     RETURN_IF_ERROR(GrantAllFilesAccess());
     Stop().IgnoreError();
+    if (m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(RuntimeWhatIfSetup());
+        return absl::OkStatus();
+    }
+
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(GfxrSetup());
@@ -355,6 +367,53 @@ absl::Status VulkanApplication::Cleanup()
 }
 
 void AndroidApplication::SetGfxrEnabled(bool enable) { m_gfxr_enabled = enable; }
+
+void AndroidApplication::SetRuntimeWhatIfEnabled(bool enable)
+{
+    m_runtime_what_if_enabled = enable;
+}
+
+absl::Status AndroidApplication::RuntimeWhatIfSetup()
+{
+    LOG(INFO) << "AndroidApplication::RuntimeWhatIfSetup() package " << m_package << " started";
+    RETURN_IF_ERROR(m_dev.RequestRootAccess());
+    RETURN_IF_ERROR(
+        m_dev.DeployDeviceResource(Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName));
+    RETURN_IF_ERROR(m_dev.CopyWithPermissions(
+        /*package=*/m_package,
+        /*file_name=*/Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName));
+
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 1"));
+    RETURN_IF_ERROR(
+        m_dev.Adb().Run(absl::StrFormat("shell settings put global gpu_debug_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+        absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+        absl::StrFormat("shell settings put global gpu_debug_layers %s", Dive::kVkLayerName)));
+
+    return absl::OkStatus();
+}
+
+absl::Status AndroidApplication::RuntimeWhatIfCleanup()
+{
+    LOG(INFO) << "AndroidApplication::RuntimeWhatIfCleanup() package " << m_package << " started";
+    RETURN_IF_ERROR(m_dev.RequestRootAccess());
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings put global enable_gpu_debug_layers 0"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_app"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell settings delete global gpu_debug_layers"));
+    if (!m_package.empty())
+    {
+        RETURN_IF_ERROR(m_dev.Adb().Run(
+            absl::StrFormat("shell run-as %s rm ./%s", m_package,
+                            Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName)));
+    }
+    RETURN_IF_ERROR(m_dev.Adb().Run(
+        absl::StrFormat("shell rm %s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath,
+                        Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName)));
+
+    return absl::OkStatus();
+}
 
 absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory)
 {
@@ -452,6 +511,13 @@ OpenXRApplication::OpenXRApplication(AndroidDevice& dev, std::string package,
 absl::Status OpenXRApplication::Setup()
 {
     RETURN_IF_ERROR(GrantAllFilesAccess());
+
+    if (m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(RuntimeWhatIfSetup());
+        return absl::OkStatus();
+    }
+
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(GfxrSetup());
@@ -539,6 +605,13 @@ VulkanCliApplication::~VulkanCliApplication()
 absl::Status VulkanCliApplication::Setup()
 {
     RETURN_IF_ERROR(GrantAllFilesAccess());
+
+    if (m_runtime_what_if_enabled)
+    {
+        RETURN_IF_ERROR(RuntimeWhatIfSetup());
+        return absl::OkStatus();
+    }
+
     if (m_gfxr_enabled)
     {
         RETURN_IF_ERROR(GfxrSetup());

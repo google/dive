@@ -537,19 +537,19 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
 
 absl::Status AndroidDevice::SetupDevice()
 {
+    if (m_runtime_what_if_enabled)
+    {
+        return absl::OkStatus();
+    }
+
     RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kWrapLibName));
+
     if (!m_gfxr_enabled)
     {
         RETURN_IF_ERROR(RequestRootAccess());
         RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kVkLayerLibName));
         RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kXrLayerLibName));
         RETURN_IF_ERROR(ForwardFirstAvailablePort());
-    }
-
-    if (m_runtime_what_if_enabled)
-    {
-        RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName,
-                                             Dive::DeviceResourcesConstants::kDeployFolderPath));
     }
 
     return absl::OkStatus();
@@ -690,16 +690,7 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
 
     if (m_runtime_what_if_enabled)
     {
-        RETURN_IF_ERROR(CopyWithPermissions(
-            /*package=*/package,
-            /*file_name=*/
-            Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName));
-
-        RETURN_IF_ERROR(
-            EnableVulkanLayer(Adb(),
-                              /*app=*/package,
-                              /*layer=*/Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName,
-                              /*layer_app=*/package));
+        m_app->SetRuntimeWhatIfEnabled(true);
     }
     return m_app->Setup();
 }

@@ -298,10 +298,8 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     qDebug() << "Start app on dev: " << device_serial.c_str() << ", package: " << m_cur_pkg
              << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
 
-    if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)]
-                        .ui_name.data() ||
-        app_type ==
-            Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_OpenXR)].ui_name.data())
+    if (app_type ==
+        Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)].ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg.toStdString(), Dive::ApplicationType::OPENXR_APK,
                                m_command_args,

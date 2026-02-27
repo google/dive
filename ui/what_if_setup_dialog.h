@@ -81,7 +81,6 @@ class WhatIfSetupDialog : public DeviceDialog
     static constexpr std::string_view kDismiss = "&Dismiss";
 
     QRadioButton* m_runtime_what_if_type_button = nullptr;
-    QLabel* m_replay_what_if_type_label = nullptr;
     QRadioButton* m_replay_what_if_type_button = nullptr;
 
     QLabel* m_device_label = nullptr;
@@ -97,11 +96,9 @@ class WhatIfSetupDialog : public DeviceDialog
     QLineEdit* m_args_input_box = nullptr;
 
     QLabel* m_app_type_label = nullptr;
-    QStandardItemModel* m_app_type_model = nullptr;
     WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
     QComboBox* m_app_type_box = nullptr;
 
-    QPushButton* m_dismiss_button = nullptr;
     QPushButton* m_start_application_button = nullptr;
 
     std::vector<std::string> m_pkg_list;

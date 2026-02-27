@@ -138,7 +138,7 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     what_if_type_placeholder->setFlags(what_if_type_placeholder->flags() & ~Qt::ItemIsSelectable);
     m_what_if_type_model->appendRow(what_if_type_placeholder);
 
-    for (const auto& ty : Dive::kWhatIfModificationTypeInfos)
+    for (const auto& ty : Dive::kWhatIfTypeInfos)
     {
         QStandardItem* item = new QStandardItem(ty.ui_name.data());
         m_what_if_type_model->appendRow(item);
@@ -197,10 +197,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_draw_count_filter_box, 1, 2);
 
-    m_what_if_draw_call_pso_property_filter_label =
+    QLabel* m_what_if_draw_call_pso_property_filter_label =
         new QLabel(tr("Pipeline State Object (PSO) Property:"));
     m_what_if_draw_call_pso_property_filter_box = new QComboBox();
-    m_what_if_draw_call_pso_property_filter_model = new QStandardItemModel();
+    QStandardItemModel* m_what_if_draw_call_pso_property_filter_model = new QStandardItemModel();
     QStandardItem* what_if_draw_call_pso_property_filter_placeholder =
         new QStandardItem("Select a PSO property");
     what_if_draw_call_pso_property_filter_placeholder->setFlags(
@@ -213,9 +213,9 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_pso_property_filter_box, 2, 2);
 
-    m_what_if_draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
+    QLabel* m_what_if_draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
     m_what_if_draw_call_render_pass_filter_box = new QComboBox();
-    m_what_if_draw_call_render_pass_filter_model = new QStandardItemModel();
+    QStandardItemModel* m_what_if_draw_call_render_pass_filter_model = new QStandardItemModel();
     QStandardItem* what_if_render_pass_render_pass_filter_placeholder =
         new QStandardItem("Select a render pass");
     what_if_render_pass_render_pass_filter_placeholder->setFlags(
@@ -237,9 +237,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     render_pass_filter_layout->setColumnStretch(2, 1);
     render_pass_filter_layout->setColumnStretch(1, 0);
 
-    m_what_if_render_pass_command_buffer_filter_label = new QLabel(tr("Command Buffer:"));
+    QLabel* m_what_if_render_pass_command_buffer_filter_label = new QLabel(tr("Command Buffer:"));
     m_what_if_render_pass_command_buffer_filter_box = new QComboBox();
-    m_what_if_render_pass_command_buffer_filter_model = new QStandardItemModel();
+    QStandardItemModel* m_what_if_render_pass_command_buffer_filter_model =
+        new QStandardItemModel();
     QStandardItem* what_if_render_pass_command_buffer_filter_placeholder =
         new QStandardItem("Select a command buffer");
     what_if_render_pass_command_buffer_filter_placeholder->setFlags(
@@ -252,9 +253,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
                                          Qt::AlignRight);
     render_pass_filter_layout->addWidget(m_what_if_render_pass_command_buffer_filter_box, 0, 2);
 
-    m_what_if_render_pass_render_pass_type_filter_label = new QLabel(tr("Type:"));
+    QLabel* m_what_if_render_pass_render_pass_type_filter_label = new QLabel(tr("Type:"));
     m_what_if_render_pass_render_pass_type_filter_box = new QComboBox();
-    m_what_if_render_pass_render_pass_type_filter_model = new QStandardItemModel();
+    QStandardItemModel* m_what_if_render_pass_render_pass_type_filter_model =
+        new QStandardItemModel();
     QStandardItem* what_if_render_pass_type_filter_placeholder =
         new QStandardItem("Select render pass type");
     what_if_render_pass_type_filter_placeholder->setFlags(
@@ -279,7 +281,7 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     QHBoxLayout* flag_layout = new QHBoxLayout(m_what_if_flag_container);
     flag_layout->setContentsMargins(0, 0, 0, 0);
 
-    m_what_if_flag_label = new QLabel(tr("Flag(s):"));
+    QLabel* m_what_if_flag_label = new QLabel(tr("Flag(s):"));
     m_what_if_flag_box = new QComboBox();
     MultiCheckComboBoxEventFilter* filter = new MultiCheckComboBoxEventFilter(m_what_if_flag_box);
     m_what_if_flag_box->view()->viewport()->installEventFilter(filter);
@@ -439,8 +441,7 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
     const int modification_type_index =
         m_what_if_type_box->currentIndex() - 1;  // -1 because of the placeholder
 
-    const auto& modification_type_info =
-        Dive::kWhatIfModificationTypeInfos[modification_type_index];
+    const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
 
     emit AddModification(modification_type_info.ui_name_short.data());
 
@@ -472,9 +473,8 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
 
     // Based on the modification type, check if the required fields are filled. At least one filter
     // or flag should be selected.
-    const auto& modification_type_info =
-        Dive::kWhatIfModificationTypeInfos[modification_type_index];
-    if (modification_type_info.type == Dive::WhatModificationType::kDrawCallDisabled)
+    const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
+    if (modification_type_info.type == Dive::WhatIfType::kDrawCallDisabled)
     {
         if (m_what_if_draw_call_index_count_filter_box->value() == 0 &&
             m_what_if_draw_call_vertex_count_filter_box->value() == 0 &&
@@ -487,7 +487,7 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
             return;
         }
     }
-    else if (modification_type_info.type == Dive::WhatModificationType::kImageCreationFlagRemoved)
+    else if (modification_type_info.type == Dive::WhatIfType::kImageCreationFlagRemoved)
     {
         if (m_what_if_flag_box->isVisible())
         {
@@ -509,10 +509,8 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
             }
         }
     }
-    else if (modification_type_info.type ==
-                 Dive::WhatModificationType::kRenderPassLoadStoreOpOverridden ||
-             modification_type_info.type ==
-                 Dive::WhatModificationType::kRenderPassScissorOverridden)
+    else if (modification_type_info.type == Dive::WhatIfType::kRenderPassLoadStoreOpOverridden ||
+             modification_type_info.type == Dive::WhatIfType::kRenderPassScissorOverridden)
     {
         if (m_what_if_render_pass_command_buffer_filter_box->currentIndex() == 0 &&
             m_what_if_render_pass_render_pass_type_filter_box->currentIndex() == 0)
@@ -538,9 +536,8 @@ void WhatIfConfigureDialog::OnWhatIfModificationCommandChanged(int index)
 
     // Based on the modification type, check if the required fields are filled. At least one filter
     // or flag should be selected.
-    const auto& modification_type_info =
-        Dive::kWhatIfModificationTypeInfos[modification_type_index];
-    if (modification_type_info.type == Dive::WhatModificationType::kDrawCallDisabled)
+    const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
+    if (modification_type_info.type == Dive::WhatIfType::kDrawCallDisabled)
     {
         ResetDrawCallFilters();
 
@@ -580,8 +577,7 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
         m_add_modification_button->setEnabled(false);
         return;
     }
-    const auto& ty_info =
-        Dive::kWhatIfModificationTypeInfos[index - 1];  // -1 because of the placeholder
+    const auto& ty_info = Dive::kWhatIfTypeInfos[index - 1];  // -1 because of the placeholder
     m_what_if_command_box->clear();
     m_what_if_command_model->clear();
     HideAllFields();
@@ -593,25 +589,25 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
     }
     m_what_if_command_box->setModel(m_what_if_command_model);
 
-    if (ty_info.type == Dive::WhatModificationType::kDrawCallDisabled)
+    if (ty_info.type == Dive::WhatIfType::kDrawCallDisabled)
     {
         ShowDrawCallFields();
     }
-    else if (ty_info.type == Dive::WhatModificationType::kRenderPassScissorOverridden)
+    else if (ty_info.type == Dive::WhatIfType::kRenderPassScissorOverridden)
     {
         ShowRenderPassFields();
     }
-    else if (ty_info.type == Dive::WhatModificationType::kImageCreationFlagRemoved)
+    else if (ty_info.type == Dive::WhatIfType::kImageCreationFlagRemoved)
     {
         ShowImageCreationFields();
         m_what_if_modification_warning_label->show();
     }
-    else if (ty_info.type == Dive::WhatModificationType::kRenderPassLoadStoreOpOverridden)
+    else if (ty_info.type == Dive::WhatIfType::kRenderPassLoadStoreOpOverridden)
     {
         ShowRenderPassFields();
         m_what_if_modification_warning_label->show();
     }
-    else if (ty_info.type == Dive::WhatModificationType::kAnisotropicFilterDisabled)
+    else if (ty_info.type == Dive::WhatIfType::kAnisotropicFilterDisabled)
     {
         m_what_if_modification_warning_label->show();
     }

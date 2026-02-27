@@ -106,7 +106,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
 
     m_replay_what_if_type_button = new QRadioButton(tr("For an existing Capture"));
     m_replay_what_if_type_button->setEnabled(false);
-    m_replay_what_if_type_label = new QLabel(
+    QLabel* m_replay_what_if_type_label = new QLabel(
         tr("This provides more options, but analyzes the effects on a single frame capture."));
     m_replay_what_if_type_label->setWordWrap(true);
     m_replay_what_if_type_label->setContentsMargins(25, 0, 0, 10);
@@ -152,7 +152,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     settingsGrid->addWidget(m_args_input_box, 2, 1, 1, 2);
 
     // App Type Selection
-    m_app_type_model = new QStandardItemModel();
+    QStandardItemModel* m_app_type_model = new QStandardItemModel();
     for (const auto& ty : Dive::kAppTypeInfos)
     {
         QStandardItem* item = new QStandardItem(ty.ui_name.data());
@@ -169,7 +169,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
 
     // --- Buttons ---
     QHBoxLayout* m_button_layout = new QHBoxLayout();
-    m_dismiss_button = new QPushButton(tr("Dismiss"), this);
+    QPushButton* m_dismiss_button = new QPushButton(tr("Dismiss"), this);
     m_start_application_button = new QPushButton(kStart_Application.data(), this);
     m_start_application_button->setEnabled(false);
     m_button_layout->addWidget(m_dismiss_button);

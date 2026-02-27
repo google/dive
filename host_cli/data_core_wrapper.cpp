@@ -40,9 +40,8 @@ absl::Status DataCoreWrapper::LoadGfxrFile(const std::filesystem::path& original
 {
     CHECK(m_data_core != nullptr) << "data core is null";
 
-    if (CaptureData::LoadResult res = m_data_core->GetMutableGfxrCaptureData().LoadCaptureFile(
-            original_gfxr_file_path.string());
-        res != CaptureData::LoadResult::kSuccess)
+    if (m_data_core->GetMutableGfxrCaptureData().LoadCaptureFile(
+            original_gfxr_file_path.string()) != CaptureData::LoadResult::kSuccess)
     {
         return absl::UnknownError(
             absl::StrFormat("Could not load GFXR file: %s", original_gfxr_file_path));
@@ -58,9 +57,8 @@ absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::filesystem::path& new_
         return absl::FailedPreconditionError("Must load original GFXR first");
     }
 
-    if (bool write_result = m_data_core->GetMutableGfxrCaptureData().WriteModifiedGfxrFile(
-            new_gfxr_file_path.string().c_str());
-        !write_result)
+    if (!m_data_core->GetMutableGfxrCaptureData().WriteModifiedGfxrFile(
+            new_gfxr_file_path.string().c_str()))
     {
         return absl::InternalError("Could not write GFXR file");
     }
@@ -68,7 +66,7 @@ absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::filesystem::path& new_
     return absl::OkStatus();
 }
 
-absl::Status DataCoreWrapper::RemoveGfxrBlocks(std::vector<int> block_ids)
+absl::Status DataCoreWrapper::RemoveGfxrBlocks(std::span<const int> block_ids)
 {
     CHECK(m_data_core != nullptr) << "data core is null";
     if (!IsGfxrLoaded())
@@ -77,7 +75,7 @@ absl::Status DataCoreWrapper::RemoveGfxrBlocks(std::vector<int> block_ids)
     }
     if (block_ids.empty())
     {
-        return absl::FailedPreconditionError("No block_ids to remove");
+        return absl::InvalidArgumentError("No block_ids to remove");
     }
 
     std::shared_ptr<gfxrecon::decode::DiveBlockData> dive_block_data =
@@ -85,9 +83,8 @@ absl::Status DataCoreWrapper::RemoveGfxrBlocks(std::vector<int> block_ids)
 
     for (const auto& id : block_ids)
     {
-        bool res = dive_block_data->AddModification(/*primary_id=*/id, /*secondary_id=*/0,
-                                                    /*blob_ptr=*/nullptr);
-        if (!res)
+        if (!dive_block_data->AddModification(/*primary_id=*/id, /*secondary_id=*/0,
+                                              /*blob_ptr=*/nullptr))
         {
             return absl::InternalError(absl::StrFormat("Could not delete block id: %d", id));
         }

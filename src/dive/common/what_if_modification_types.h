@@ -19,7 +19,7 @@ limitations under the License.
 namespace Dive
 {
 
-enum class WhatModificationType
+enum class WhatIfType
 {
     kDrawCallDisabled,
     kImageCreationFlagRemoved,
@@ -29,9 +29,9 @@ enum class WhatModificationType
     kTimestampsDisabled,
 };
 
-struct WhatIfModificationTypeInfo
+struct WhatIfTypeInfo
 {
-    WhatModificationType type;
+    WhatIfType type;
     std::string_view ui_name;
     std::string_view ui_name_short;
     std::span<const std::string_view> supported_commands;
@@ -45,28 +45,28 @@ inline constexpr std::string_view kRenderPassCmds[] = {"vkCmdBeginRenderPass",
 inline constexpr std::string_view kSamplerCmds[] = {"vkCreateSampler"};
 inline constexpr std::string_view kTimestampCmds[] = {"vkCmdWriteTimestamp"};
 
-inline constexpr std::array<WhatIfModificationTypeInfo, 6> kWhatIfModificationTypeInfos = {{
-    {.type = WhatModificationType::kDrawCallDisabled,
+inline constexpr std::array<WhatIfTypeInfo, 6> kWhatIfTypeInfos = {{
+    {.type = WhatIfType::kDrawCallDisabled,
      .ui_name = "Draw calls were disabled",
      .ui_name_short = "Disable Draw Calls",
      .supported_commands = kDrawCmds},
-    {.type = WhatModificationType::kImageCreationFlagRemoved,
+    {.type = WhatIfType::kImageCreationFlagRemoved,
      .ui_name = "Image creation flags were removed",
      .ui_name_short = "Remove Image Flags",
      .supported_commands = kImageCmds},
-    {.type = WhatModificationType::kRenderPassLoadStoreOpOverridden,
+    {.type = WhatIfType::kRenderPassLoadStoreOpOverridden,
      .ui_name = "Load/Store operations were overridden in the render pass",
      .ui_name_short = "Override Load/Store Operations",
      .supported_commands = kRenderPassCmds},
-    {.type = WhatModificationType::kRenderPassScissorOverridden,
+    {.type = WhatIfType::kRenderPassScissorOverridden,
      .ui_name = "The scissor of a renderpass was set to 1x1",
      .ui_name_short = "Override Scissor",
      .supported_commands = kRenderPassCmds},
-    {.type = WhatModificationType::kAnisotropicFilterDisabled,
+    {.type = WhatIfType::kAnisotropicFilterDisabled,
      .ui_name = "Anisotropic filters were disabled",
      .ui_name_short = "Disable Anisotropic Filters",
      .supported_commands = kSamplerCmds},
-    {.type = WhatModificationType::kTimestampsDisabled,
+    {.type = WhatIfType::kTimestampsDisabled,
      .ui_name = "Timestamps were disabled",
      .ui_name_short = "Disable Timestamps",
      .supported_commands = kTimestampCmds},

@@ -96,26 +96,17 @@ class WhatIfConfigureDialog : public DeviceDialog
     QLabel* m_what_if_draw_call_draw_count_filter_label = nullptr;
     QSpinBox* m_what_if_draw_call_draw_count_filter_box = nullptr;
 
-    QLabel* m_what_if_draw_call_pso_property_filter_label = nullptr;
     QComboBox* m_what_if_draw_call_pso_property_filter_box = nullptr;
-    QStandardItemModel* m_what_if_draw_call_pso_property_filter_model = nullptr;
 
-    QLabel* m_what_if_draw_call_render_pass_filter_label = nullptr;
     QComboBox* m_what_if_draw_call_render_pass_filter_box = nullptr;
-    QStandardItemModel* m_what_if_draw_call_render_pass_filter_model = nullptr;
 
     // --- Render Pass Filters ---
     QWidget* m_what_if_render_pass_filters_container = nullptr;
-    QLabel* m_what_if_render_pass_command_buffer_filter_label = nullptr;
     QComboBox* m_what_if_render_pass_command_buffer_filter_box = nullptr;
-    QStandardItemModel* m_what_if_render_pass_command_buffer_filter_model = nullptr;
-    QLabel* m_what_if_render_pass_render_pass_type_filter_label = nullptr;
     QComboBox* m_what_if_render_pass_render_pass_type_filter_box = nullptr;
-    QStandardItemModel* m_what_if_render_pass_render_pass_type_filter_model = nullptr;
 
     // --- Flag Section ---
     QWidget* m_what_if_flag_container = nullptr;
-    QLabel* m_what_if_flag_label = nullptr;
     QComboBox* m_what_if_flag_box = nullptr;
     QStandardItemModel* m_what_if_flag_model = nullptr;
 

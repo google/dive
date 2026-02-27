@@ -20,6 +20,7 @@ limitations under the License.
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -158,6 +159,7 @@ class AndroidDevice
     AdbSession& Adb() { return m_adb; }
     int Port() const { return m_port; }
     bool IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
+    std::string_view Serial() const { return m_serial; }
 
     AndroidApplication* GetCurrentApplication() { return m_app.get(); }
 
@@ -196,6 +198,12 @@ class AndroidDevice
 
     // Uses run-as with app permissions to delete file_name from the app's own storage
     absl::Status CleanupFileWithPermissions(std::string_view package, std::string_view file_name);
+
+    // Check if the device's screen is on
+    absl::Status CheckScreenOn();
+
+    // Check if the device is unlocked
+    absl::Status CheckDeviceUnlocked();
 
  private:
     explicit AndroidDevice(const std::string& serial);

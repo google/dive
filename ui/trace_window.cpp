@@ -334,8 +334,9 @@ void TraceDialog::closeEvent(QCloseEvent* event)
     // The operation was successful, close normally.
     if (status.ok())
     {
-        m_run_button->setEnabled(true);
+        m_run_button->setEnabled(false);
         m_run_button->setText(kStart_Application);
+        m_gfxr_capture_button->setEnabled(false);
         EnableCaptureTypeButtons(true);
         m_gfxr_capture_type_button->setChecked(true);
         OnCaptureTypeChanged(kGfxrCaptureButtonId);
@@ -358,6 +359,20 @@ void TraceDialog::closeEvent(QCloseEvent* event)
         m_run_button->setEnabled(true);
         m_run_button->setText(kStart_Application);
         event->accept();
+    }
+}
+
+void TraceDialog::showEvent(QShowEvent* event)
+{
+    QDialog::showEvent(event);
+
+    if (GetCurrentDeviceSerial().empty())
+    {
+        ResetDialog();
+    }
+    else
+    {
+        m_run_button->setEnabled(!m_cur_pkg.empty());
     }
 }
 
@@ -398,7 +413,6 @@ void TraceDialog::OnPackageSelected(const QString& s)
     if (m_cur_pkg != m_pkg_list[cur_index])
     {
         m_cur_pkg = m_pkg_list[cur_index];
-        m_app_type_box->setCurrentIndex(-1);
     }
     m_run_button->setEnabled(true);
     m_cmd_input_box->setText(m_cur_pkg.c_str());
@@ -410,7 +424,6 @@ void TraceDialog::OnInputCommand(const QString& text)
     m_run_button->setEnabled(true);
     m_cur_pkg = text.toStdString();
     m_pkg_box->setCurrentIndex(-1);
-    m_app_type_box->setCurrentIndex(-1);
 }
 
 void TraceDialog::OnInputArgs(const QString& text)
@@ -431,9 +444,12 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
     m_run_button->setDisabled(true);
     EnableCaptureTypeButtons(false);
 
+    std::string current_device_serial = GetCurrentDeviceSerial();
+
     absl::Status ret;
-    qDebug() << "Start app on dev: " << m_cur_device.c_str() << ", package: " << m_cur_pkg.c_str()
-             << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
+    qDebug() << "Start app on dev: " << current_device_serial.c_str()
+             << ", package: " << m_cur_pkg.c_str() << ", type: " << app_type.c_str()
+             << ", args: " << m_command_args.c_str();
 
     if (m_gfxr_capture)
     {
@@ -644,8 +660,9 @@ void TraceDialog::UpdatePackageList()
     auto ret = device->ListPackage(m_pkg_list_options);
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to list package for device ", m_cur_device,
-                                           " error: ", ret.status().message());
+        std::string err_msg =
+            absl::StrCat("Failed to list package for device ", GetCurrentDeviceSerial(),
+                         " error: ", ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
@@ -838,6 +855,23 @@ void TraceDialog::OnGFXRCaptureAvailable(QString const& capture_path)
     qDebug() << success_msg.c_str();
     ShowMessage(QString::fromStdString(success_msg));
     emit TraceAvailable(capture_path);
+}
+
+void TraceDialog::ResetDialog()
+{
+    m_gfxr_capture_button->setEnabled(false);
+    m_gfxr_capture_button->setText(kStart_Gfxr_Runtime_Capture);
+    m_gfxr_capture_file_directory_input_box->clear();
+    m_cur_pkg.clear();
+    m_cmd_input_box->clear();
+    m_args_input_box->clear();
+    m_capture_file_local_root_directory_input_box->clear();
+    // Reset the app type to the default Vulkan (OpenXR)
+    m_app_type_box->setCurrentIndex(0);
+    m_pkg_box->setCurrentIndex(-1);
+    m_pkg_model->clear();
+    m_run_button->setEnabled(false);
+    m_capture_button->setEnabled(false);
 }
 
 // =================================================================================================

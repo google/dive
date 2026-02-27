@@ -402,6 +402,30 @@ absl::Status AndroidDevice::CheckAbi()
     return absl::OkStatus();
 }
 
+absl::Status AndroidDevice::CheckScreenOn()
+{
+    absl::StatusOr<std::string> grep_output =
+        Adb().RunAndGetResult("shell dumpsys input_method | grep mInteractive=true");
+    if (!grep_output.ok() || grep_output->empty())
+    {
+        return absl::FailedPreconditionError(
+            "Device screen is off. Please ensure the screen is on before retrying");
+    }
+    return absl::OkStatus();
+}
+
+absl::Status AndroidDevice::CheckDeviceUnlocked()
+{
+    absl::StatusOr<std::string> grep_output =
+        Adb().RunAndGetResult("shell dumpsys trust | grep deviceLocked=0");
+    if (!grep_output.ok() || grep_output->empty())
+    {
+        return absl::FailedPreconditionError(
+            "Device is locked. Please ensure the device is unlocked before retrying");
+    }
+    return absl::OkStatus();
+}
+
 absl::Status AndroidDevice::RequestRootAccess()
 {
     RETURN_IF_ERROR(Adb().Run("root"));
@@ -1108,6 +1132,9 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
     {
         return validated_settings.status();
     }
+
+    RETURN_IF_ERROR(m_device->CheckScreenOn());
+    RETURN_IF_ERROR(m_device->CheckDeviceUnlocked());
 
     LOG(INFO) << "RunReplayApk(): Attempt to pin GPU clock frequency";
     bool trouble_pinning_clock = false;

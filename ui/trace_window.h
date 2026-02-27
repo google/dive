@@ -76,6 +76,7 @@ class TraceDialog : public DeviceDialog
 
  protected:
     void closeEvent(QCloseEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
  private slots:
     void OnPackageSelected(const QString&);
@@ -101,6 +102,7 @@ class TraceDialog : public DeviceDialog
  private:
     bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice* device, const std::string& capture_directory);
+    void ResetDialog();
 
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;

@@ -16,6 +16,17 @@ limitations under the License.
 #include <array>
 #include <string_view>
 
+namespace
+{
+inline constexpr std::string_view kDrawCmds[] = {"vkCmdDraw", "vkCmdDrawIndexed",
+                                                 "vkCmdDrawIndirect", "vkCmdDrawIndexedIndirect"};
+inline constexpr std::string_view kImageCmds[] = {"vkCmdCreateImage"};
+inline constexpr std::string_view kRenderPassCmds[] = {"vkCmdBeginRenderPass",
+                                                       "vkCmdBeginRenderPass2"};
+inline constexpr std::string_view kSamplerCmds[] = {"vkCreateSampler"};
+inline constexpr std::string_view kTimestampCmds[] = {"vkCmdWriteTimestamp"};
+}  // namespace
+
 namespace Dive
 {
 
@@ -36,14 +47,6 @@ struct WhatIfTypeInfo
     std::string_view ui_name_short;
     std::span<const std::string_view> supported_commands;
 };
-
-inline constexpr std::string_view kDrawCmds[] = {"vkCmdDraw", "vkCmdDrawIndexed",
-                                                 "vkCmdDrawIndirect", "vkCmdDrawIndexedIndirect"};
-inline constexpr std::string_view kImageCmds[] = {"vkCmdCreateImage"};
-inline constexpr std::string_view kRenderPassCmds[] = {"vkCmdBeginRenderPass",
-                                                       "vkCmdBeginRenderPass2"};
-inline constexpr std::string_view kSamplerCmds[] = {"vkCreateSampler"};
-inline constexpr std::string_view kTimestampCmds[] = {"vkCmdWriteTimestamp"};
 
 inline constexpr std::array<WhatIfTypeInfo, 6> kWhatIfTypeInfos = {{
     {.type = WhatIfType::kDrawCallDisabled,

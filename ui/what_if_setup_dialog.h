@@ -76,12 +76,11 @@ class WhatIfSetupDialog : public DeviceDialog
 
     ApplicationController& m_controller;
 
-    static constexpr std::string_view kStart_Application = "&Start Application";
-    static constexpr std::string_view kStop_Application = "&Stop Application";
-    static constexpr std::string_view kDismiss = "&Dismiss";
-
     QRadioButton* m_runtime_what_if_type_button = nullptr;
     QRadioButton* m_replay_what_if_type_button = nullptr;
+
+    QWidget* m_runtime_options_widget = nullptr;
+    QWidget* m_replay_options_widget = nullptr;
 
     QLabel* m_device_label = nullptr;
     QPushButton* m_device_refresh_button = nullptr;
@@ -90,10 +89,17 @@ class WhatIfSetupDialog : public DeviceDialog
     QStandardItemModel* m_pkg_model = nullptr;
     QComboBox* m_pkg_box = nullptr;
     QPushButton* m_pkg_refresh_button = nullptr;
-    Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
 
     QLabel* m_args_label = nullptr;
     QLineEdit* m_args_input_box = nullptr;
+
+    struct RuntimeData
+    {
+        std::vector<std::string> m_pkg_list;
+        QString m_cur_pkg;
+        std::string m_command_args;
+        Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
+    };
 
     QLabel* m_app_type_label = nullptr;
     WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
@@ -101,9 +107,5 @@ class WhatIfSetupDialog : public DeviceDialog
 
     QPushButton* m_start_application_button = nullptr;
 
-    std::vector<std::string> m_pkg_list;
-    QString m_cur_pkg;
-    std::string m_executable;
-    std::string m_command_args;
-    bool m_runtime_what_if_enabled;
+    RuntimeData m_runtime_data;
 };

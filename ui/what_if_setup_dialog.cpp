@@ -46,6 +46,10 @@ constexpr size_t kNumWhatIfAppTypes =
                   [](const Dive::AppTypeInfo& info) { return info.is_what_if_supported; });
 constexpr int kRuntimeWhatIfButtonId = 1;
 constexpr int kReplayWhatIfButtonId = 2;
+
+constexpr std::string_view kStart_Application = "&Start Application";
+constexpr std::string_view kStop_Application = "&Stop Application";
+constexpr std::string_view kDismiss = "&Dismiss";
 }  // namespace
 
 // =================================================================================================
@@ -114,8 +118,12 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     m_what_if_type_button_group->addButton(m_runtime_what_if_type_button, kRuntimeWhatIfButtonId);
     m_what_if_type_button_group->addButton(m_replay_what_if_type_button, kReplayWhatIfButtonId);
 
+    m_runtime_options_widget = new QWidget(this);
+    m_replay_options_widget = new QWidget(this);
+
     // --- Grid Section ---
-    QGridLayout* settingsGrid = new QGridLayout();
+    QGridLayout* settingsGrid = new QGridLayout(m_runtime_options_widget);
+    settingsGrid->setContentsMargins(0, 0, 0, 0);
     settingsGrid->setColumnStretch(1, 1);  // Allows the input boxes to expand
 
     // Device Selection
@@ -129,7 +137,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
 
     // Package Selection
     m_pkg_model = new QStandardItemModel();
-    m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
+    m_runtime_data.m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
     m_pkg_label = new QLabel(tr("Packages:"));
     m_pkg_box = new QComboBox();
     m_pkg_box->setModel(m_pkg_model);
@@ -187,7 +195,8 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     m_main_layout->addWidget(m_replay_what_if_type_label);
 
     m_main_layout->addSpacing(15);
-    m_main_layout->addLayout(settingsGrid);
+    m_main_layout->addWidget(m_runtime_options_widget);
+    m_main_layout->addWidget(m_replay_options_widget);
     m_main_layout->addStretch();
     m_main_layout->addLayout(m_button_layout);
 
@@ -228,7 +237,7 @@ void WhatIfSetupDialog::UpdatePackageList()
         return;
     }
 
-    auto ret = device->ListPackage(m_pkg_list_options);
+    auto ret = device->ListPackage(m_runtime_data.m_pkg_list_options);
     if (!ret.ok())
     {
         std::string device_serial = GetCurrentDeviceSerial();
@@ -238,14 +247,14 @@ void WhatIfSetupDialog::UpdatePackageList()
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
-    m_pkg_list = *ret;
+    m_runtime_data.m_pkg_list = *ret;
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
-    for (size_t i = 0; i < m_pkg_list.size(); i++)
+    for (size_t i = 0; i < m_runtime_data.m_pkg_list.size(); i++)
     {
-        QStandardItem* item = new QStandardItem(m_pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(m_runtime_data.m_pkg_list[i].c_str());
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);
@@ -272,7 +281,7 @@ void WhatIfSetupDialog::ResetDialog()
     // Reset the app type to the default Vulkan (OpenXR)
     m_app_type_box->setCurrentIndex(0);
     m_args_input_box->clear();
-    m_cur_pkg.clear();
+    m_runtime_data.m_cur_pkg.clear();
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_model->clear();
     m_start_application_button->setEnabled(false);
@@ -295,43 +304,47 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
 
     absl::Status ret;
     std::string device_serial = GetCurrentDeviceSerial();
-    qDebug() << "Start app on dev: " << device_serial.c_str() << ", package: " << m_cur_pkg
-             << ", type: " << app_type.c_str() << ", args: " << m_command_args.c_str();
+    qDebug() << "Start app on dev: " << device_serial.c_str()
+             << ", package: " << m_runtime_data.m_cur_pkg.toStdString().c_str()
+             << ", type: " << app_type.c_str()
+             << ", args: " << m_runtime_data.m_command_args.c_str();
 
     if (app_type ==
         Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)].ui_name.data())
     {
-        ret = device->SetupApp(m_cur_pkg.toStdString(), Dive::ApplicationType::OPENXR_APK,
-                               m_command_args,
+        ret = device->SetupApp(m_runtime_data.m_cur_pkg.toStdString(),
+                               Dive::ApplicationType::OPENXR_APK, m_runtime_data.m_command_args,
                                /*gfxr_capture_directory*/ "");
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
                              .ui_name.data())
     {
-        ret = device->SetupApp(m_cur_pkg.toStdString(), Dive::ApplicationType::VULKAN_APK,
-                               m_command_args,
+        ret = device->SetupApp(m_runtime_data.m_cur_pkg.toStdString(),
+                               Dive::ApplicationType::VULKAN_APK, m_runtime_data.m_command_args,
                                /*gfxr_capture_directory*/ "");
     }
     else if (app_type ==
              Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
                  .ui_name.data())
     {
-        if (m_cur_pkg.isEmpty())
+        if (m_runtime_data.m_cur_pkg.isEmpty())
         {
             std::string err_msg = "Please input a valid command to execute";
             qDebug() << err_msg.c_str();
             ShowMessage(QString::fromStdString(err_msg));
             return false;
         }
-        qDebug() << "exe: " << m_cur_pkg << " args: " << m_command_args.c_str();
-        ret = device->SetupApp(m_cur_pkg.toStdString(), m_command_args,
-                               Dive::ApplicationType::VULKAN_CLI,
+        qDebug() << "exe: " << m_runtime_data.m_cur_pkg.toStdString().c_str()
+                 << " args: " << m_runtime_data.m_command_args.c_str();
+        ret = device->SetupApp(m_runtime_data.m_cur_pkg.toStdString(),
+                               m_runtime_data.m_command_args, Dive::ApplicationType::VULKAN_CLI,
                                /*gfxr_capture_directory*/ "");
     }
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Fail to setup for package ", m_cur_pkg.toStdString(),
-                                           " error: ", ret.message());
+        std::string err_msg =
+            absl::StrCat("Fail to setup for package ", m_runtime_data.m_cur_pkg.toStdString(),
+                         " error: ", ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -339,8 +352,9 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     ret = device->StartApp();
     if (!ret.ok())
     {
-        std::string err_msg = absl::StrCat("Fail to start package ", m_cur_pkg.toStdString(),
-                                           " error: ", ret.message());
+        std::string err_msg =
+            absl::StrCat("Fail to start package ", m_runtime_data.m_cur_pkg.toStdString(),
+                         " error: ", ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -349,8 +363,9 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
 
     if (!cur_app->IsRunning())
     {
-        std::string err_msg = absl::StrCat("Process for package ", m_cur_pkg.toStdString(),
-                                           " not found, possibly crashed.");
+        std::string err_msg =
+            absl::StrCat("Process for package ", m_runtime_data.m_cur_pkg.toStdString(),
+                         " not found, possibly crashed.");
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -362,7 +377,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
         m_start_application_button->setText(kStop_Application.data());
     }
 
-    emit RuntimeWhatIfEnabled(m_cur_pkg, true);
+    emit RuntimeWhatIfEnabled(m_runtime_data.m_cur_pkg, true);
     return true;
 }
 
@@ -400,30 +415,14 @@ void WhatIfSetupDialog::StopPackage()
 
 void WhatIfSetupDialog::ShowRuntimeWhatIfFields()
 {
-    m_device_label->setVisible(true);
-    m_device_box->setVisible(true);
-    m_device_refresh_button->setVisible(true);
-    m_pkg_label->setVisible(true);
-    m_pkg_box->setVisible(true);
-    m_pkg_refresh_button->setVisible(true);
-    m_args_label->setVisible(true);
-    m_args_input_box->setVisible(true);
-    m_app_type_label->setVisible(true);
-    m_app_type_box->setVisible(true);
+    m_runtime_options_widget->setVisible(true);
+    m_replay_options_widget->setVisible(false);
 }
 
 void WhatIfSetupDialog::ShowReplayWhatIfFields()
 {
-    m_device_label->setVisible(false);
-    m_device_box->setVisible(false);
-    m_device_refresh_button->setVisible(false);
-    m_pkg_label->setVisible(false);
-    m_pkg_box->setVisible(false);
-    m_pkg_refresh_button->setVisible(false);
-    m_args_label->setVisible(false);
-    m_args_input_box->setVisible(false);
-    m_app_type_label->setVisible(false);
-    m_app_type_box->setVisible(false);
+    m_runtime_options_widget->setVisible(false);
+    m_replay_options_widget->setVisible(true);
 }
 
 void WhatIfSetupDialog::OnStopRuntimeWhatIf() { StopPackage(); }
@@ -435,7 +434,7 @@ void WhatIfSetupDialog::OnDevListRefresh() { UpdateDeviceList(); }
 void WhatIfSetupDialog::OnInputArgs(const QString& text)
 {
     qDebug() << "Args changed to " << text;
-    m_command_args = text.toStdString();
+    m_runtime_data.m_command_args = text.toStdString();
 }
 
 void WhatIfSetupDialog::OnPackageSelected(const QString& s)
@@ -446,10 +445,10 @@ void WhatIfSetupDialog::OnPackageSelected(const QString& s)
     {
         return;
     }
-    if (m_cur_pkg.toStdString() != m_pkg_list[cur_index])
+    if (m_runtime_data.m_cur_pkg.toStdString() != m_runtime_data.m_pkg_list[cur_index])
     {
-        m_cur_pkg = m_pkg_list[cur_index].c_str();
-        qDebug() << "Current package set to: " << m_cur_pkg;
+        m_runtime_data.m_cur_pkg = m_runtime_data.m_pkg_list[cur_index].c_str();
+        qDebug() << "Current package set to: " << m_runtime_data.m_cur_pkg.toStdString().c_str();
     }
     m_start_application_button->setEnabled(true);
 }
@@ -488,28 +487,28 @@ void WhatIfSetupDialog::OnStartClicked()
     int source_row = sourceModelIndex.row();
 
     std::string ty_str = Dive::kAppTypeInfos[source_row].ui_name.data();
-    if (m_start_application_button->text() == kStart_Application.data())
+    if (m_start_application_button->text() != kStart_Application.data())
     {
-        qDebug() << "Start Application clicked with package: " << m_cur_pkg
-                 << ", type: " << ty_str.c_str();
-        if (!StartPackage(device, ty_str))
-        {
-            m_start_application_button->setDisabled(false);
-            m_start_application_button->setText(kStart_Application.data());
-            EnableWhatIfTypeButtons(true);
-        }
-    }
-    else
-    {
-        qDebug() << "Stop Application clicked for package: " << m_cur_pkg;
+        qDebug() << "Stop Application clicked for package: "
+                 << m_runtime_data.m_cur_pkg.toStdString().c_str();
         StopPackage();
+        return;
+    }
+
+    qDebug() << "Start Application clicked with package: "
+             << m_runtime_data.m_cur_pkg.toStdString().c_str() << ", type: " << ty_str.c_str();
+    if (!StartPackage(device, ty_str))
+    {
+        m_start_application_button->setDisabled(false);
+        m_start_application_button->setText(kStart_Application.data());
+        EnableWhatIfTypeButtons(true);
     }
 }
 
 void WhatIfSetupDialog::OnWhatIfTypeChanged(int button_id)
 {
-    m_runtime_what_if_enabled = (button_id == kRuntimeWhatIfButtonId);
-    if (m_runtime_what_if_enabled)
+    const bool runtime_what_if_enabled = (button_id == kRuntimeWhatIfButtonId);
+    if (runtime_what_if_enabled)
     {
         ShowRuntimeWhatIfFields();
     }
@@ -551,6 +550,6 @@ void WhatIfSetupDialog::showEvent(QShowEvent* event)
     }
     else
     {
-        m_start_application_button->setEnabled(!m_cur_pkg.isEmpty());
+        m_start_application_button->setEnabled(!m_runtime_data.m_cur_pkg.isEmpty());
     }
 }

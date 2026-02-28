@@ -221,13 +221,13 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
         m_what_if_run_time_stop_application_button = new QPushButton(tr("Stop Application"));
         QLabel* m_what_if_runtime_what_if_application_label =
             new QLabel(tr("Current Application: "));
-        m_what_if_runtime_what_if_application_name_label = new QLabel(tr("None"));
+        m_what_if_runtime_application_name_label = new QLabel(tr("None"));
         what_ifs_layout->addWidget(m_what_if_info_label);
         what_ifs_layout->addWidget(m_what_if_configure_button);
         what_ifs_layout->addWidget(m_what_if_run_time_stop_application_button);
         what_ifs_layout->addStretch(1);
         what_ifs_layout->addWidget(m_what_if_runtime_what_if_application_label);
-        what_ifs_layout->addWidget(m_what_if_runtime_what_if_application_name_label);
+        what_ifs_layout->addWidget(m_what_if_runtime_application_name_label);
         m_what_if_container->hide();
 
         QFrame* text_combo_box_frame = new QFrame();
@@ -1280,12 +1280,12 @@ void MainWindow::OnWhatIfRuntimeEnabled(const QString& package_name,
 {
     if (is_runtime_what_if_enabled)
     {
-        m_what_if_runtime_what_if_application_name_label->setText(package_name);
+        m_what_if_runtime_application_name_label->setText(package_name);
         m_what_if_container->show();
     }
     else
     {
-        m_what_if_runtime_what_if_application_name_label->setText("None");
+        m_what_if_runtime_application_name_label->setText("None");
         m_what_if_container->hide();
     }
 }

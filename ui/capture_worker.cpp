@@ -126,6 +126,15 @@ void CaptureWorker::run()
         emit ShowMessage(QString::fromStdString(err_msg));
         return;
     }
+
+    if (absl::Status remove_status = client.RemoveFile(*capture_file_path); !remove_status.ok())
+    {
+        std::string err_msg = absl::StrCat("Failed to remove PM4 capture on device, error: ",
+                                           remove_status.message());
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+    }
+
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                        std::chrono::steady_clock::now() - begin)
                                        .count();

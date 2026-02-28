@@ -310,6 +310,64 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
     return file_size;
 }
 
+absl::Status TcpClient::RemoveFile(const std::string& remote_file_path)
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return Dive::FailedPreconditionError("RemoveFile: Client is not connected.");
+    }
+
+    RemoveFileRequest remove_request;
+    remove_request.SetString(remote_file_path);
+    std::cout << "Client: Requesting to remove file from server '" << remote_file_path << "'."
+              << std::endl;
+    absl::Status send_status = SendSocketMessage(m_connection.get(), remove_request);
+    if (!send_status.ok())
+    {
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       Dive::StatusWithContext(send_status,
+                                                               "RemoveFile: "
+                                                               "SendSocketMessage fail"));
+    }
+
+    auto receive = ReceiveSocketMessage(m_connection.get());
+    if (!receive.ok())
+    {
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       Dive::StatusWithContext(receive.status(),
+                                                               "RemoveFile: "
+                                                               "ReceiveSocketMessage fail"));
+    }
+
+    auto response = *std::move(receive);
+    if (response->GetMessageType() != MessageType::REMOVE_FILE_RESPONSE)
+    {
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "RemoveFile: Unexpected message type in response "
+            "(Expected: ",
+            MessageType::REMOVE_FILE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
+    }
+
+    RemoveFileResponse* remove_response = dynamic_cast<RemoveFileResponse*>(response.get());
+    if (!remove_response)
+    {
+        return Dive::InternalError(
+            "RemoveFile: Failed to cast received message to RemoveFileResponse.");
+    }
+
+    if (!remove_response->GetSuccess())
+    {
+        return Dive::InternalError(
+            absl::StrCat("RemoveFile: Server failed to remove file. Reason: ",
+                         remove_response->GetErrorReason()));
+    }
+
+    std::cout << "Client: File '" << remote_file_path << "' removed successfully from server."
+              << std::endl;
+    return Dive::OkStatus();
+}
+
 absl::Status TcpClient::PingServer()
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);

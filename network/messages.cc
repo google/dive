@@ -101,6 +101,32 @@ absl::Status StringMessage::Deserialize(const Buffer& src)
     return Dive::OkStatus();
 }
 
+absl::Status RemoveFileResponse::Serialize(Buffer& dest) const
+{
+    WriteStringToBuffer(m_error_reason, dest);
+    dest.push_back(static_cast<uint8_t>(m_success));
+
+    return Dive::OkStatus();
+}
+
+absl::Status RemoveFileResponse::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
+
+    if (src.size() < offset + sizeof(uint8_t))
+    {
+        return Dive::InvalidArgumentError("Buffer too small for 'success' field.");
+    }
+    m_success = (src[offset] != 0);
+    offset += sizeof(uint8_t);
+    if (offset != src.size())
+    {
+        return Dive::InvalidArgumentError("RemoveFileResponse has unexpected trailing data.");
+    }
+    return Dive::OkStatus();
+}
+
 absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
 {
     dest.push_back(static_cast<uint8_t>(m_found));
@@ -263,6 +289,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
             break;
         case MessageType::FILE_SIZE_RESPONSE:
             message = std::make_unique<FileSizeResponse>();
+            break;
+        case MessageType::REMOVE_FILE_REQUEST:
+            message = std::make_unique<RemoveFileRequest>();
+            break;
+        case MessageType::REMOVE_FILE_RESPONSE:
+            message = std::make_unique<RemoveFileResponse>();
             break;
         default:
             conn->Close();

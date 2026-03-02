@@ -398,7 +398,7 @@ absl::Status AndroidApplication::GfxrSetup()
 
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
 
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
 
     // capture_android_trigger must be set in order for GFXR to listen for triggers.
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
@@ -622,7 +622,7 @@ absl::Status VulkanCliApplication::GfxrSetup()
     RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
+    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
     LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " ended";
     return absl::OkStatus();

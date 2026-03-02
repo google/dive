@@ -276,7 +276,7 @@ bool DiveBlockData::TraverseBlocks(BlockVisitor& visitor) const
 
             if (current_modification_ptr == nullptr)
             {
-                GFXRECON_LOG_INFO("Original block (%d) was marked for deletion", primary_id);
+                // GFXRECON_LOG_INFO("Original block (%d) was marked for deletion", primary_id);
                 continue;
             }
 

@@ -177,7 +177,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
 
     // --- Buttons ---
     QHBoxLayout* m_button_layout = new QHBoxLayout();
-    QPushButton* m_dismiss_button = new QPushButton(tr("Dismiss"), this);
+    QPushButton* m_dismiss_button = new QPushButton(tr(kDismiss.data()), this);
     m_start_application_button = new QPushButton(kStartApplication.data(), this);
     m_start_application_button->setEnabled(false);
     m_button_layout->addWidget(m_dismiss_button);

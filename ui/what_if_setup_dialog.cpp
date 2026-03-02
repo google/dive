@@ -47,8 +47,8 @@ constexpr size_t kNumWhatIfAppTypes =
 constexpr int kRuntimeWhatIfButtonId = 1;
 constexpr int kReplayWhatIfButtonId = 2;
 
-constexpr std::string_view kStart_Application = "&Start Application";
-constexpr std::string_view kStop_Application = "&Stop Application";
+constexpr std::string_view kStartApplication = "&Start Application";
+constexpr std::string_view kStopApplication = "&Stop Application";
 constexpr std::string_view kDismiss = "&Dismiss";
 }  // namespace
 
@@ -178,7 +178,7 @@ WhatIfSetupDialog::WhatIfSetupDialog(ApplicationController& controller, QWidget*
     // --- Buttons ---
     QHBoxLayout* m_button_layout = new QHBoxLayout();
     QPushButton* m_dismiss_button = new QPushButton(tr("Dismiss"), this);
-    m_start_application_button = new QPushButton(kStart_Application.data(), this);
+    m_start_application_button = new QPushButton(kStartApplication.data(), this);
     m_start_application_button->setEnabled(false);
     m_button_layout->addWidget(m_dismiss_button);
     m_button_layout->addWidget(m_start_application_button);
@@ -285,7 +285,7 @@ void WhatIfSetupDialog::ResetDialog()
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_model->clear();
     m_start_application_button->setEnabled(false);
-    m_start_application_button->setText(kStart_Application.data());
+    m_start_application_button->setText(kStartApplication.data());
 
     EnableWhatIfTypeButtons(true);
 }
@@ -374,7 +374,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     if (cur_app)
     {
         m_start_application_button->setDisabled(false);
-        m_start_application_button->setText(kStop_Application.data());
+        m_start_application_button->setText(kStopApplication.data());
     }
 
     emit RuntimeWhatIfEnabled(m_runtime_data.m_cur_pkg, true);
@@ -487,7 +487,7 @@ void WhatIfSetupDialog::OnStartClicked()
     int source_row = sourceModelIndex.row();
 
     std::string ty_str = Dive::kAppTypeInfos[source_row].ui_name.data();
-    if (m_start_application_button->text() != kStart_Application.data())
+    if (m_start_application_button->text() != kStartApplication.data())
     {
         qDebug() << "Stop Application clicked for package: "
                  << m_runtime_data.m_cur_pkg.toStdString().c_str();
@@ -500,7 +500,7 @@ void WhatIfSetupDialog::OnStartClicked()
     if (!StartPackage(device, ty_str))
     {
         m_start_application_button->setDisabled(false);
-        m_start_application_button->setText(kStart_Application.data());
+        m_start_application_button->setText(kStartApplication.data());
         EnableWhatIfTypeButtons(true);
     }
 }
@@ -531,7 +531,7 @@ void WhatIfSetupDialog::closeEvent(QCloseEvent* event)
         EnableWhatIfTypeButtons(true);
         m_runtime_what_if_type_button->setChecked(true);
         OnWhatIfTypeChanged(kRuntimeWhatIfButtonId);
-        m_start_application_button->setText(kStart_Application.data());
+        m_start_application_button->setText(kStartApplication.data());
     }
 
     event->accept();

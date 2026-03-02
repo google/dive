@@ -544,6 +544,18 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
     return true;
 }
 
+Dive::AndroidDevice* TraceDialog::GetAndValidateDevice()
+{
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    if (device == nullptr)
+    {
+        std::string err_msg = "Failed to connect to device";
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+    }
+    return device;
+}
+
 void TraceDialog::OnStartClicked()
 {
     qDebug() << "Command: " << m_cmd_input_box->text();
@@ -607,12 +619,9 @@ void TraceDialog::OnStartClicked()
 
 void TraceDialog::OnTraceClicked()
 {
-    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidDevice* device = GetAndValidateDevice();
     if (device == nullptr)
     {
-        std::string err_msg = "Failed to connect to device";
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
         return;
     }
 
@@ -758,12 +767,9 @@ void TraceDialog::EnableCaptureTypeButtons(bool enable)
 
 void TraceDialog::OnGfxrCaptureClicked()
 {
-    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidDevice* device = GetAndValidateDevice();
     if (device == nullptr)
     {
-        std::string err_msg = "Failed to connect to device";
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
         return;
     }
 

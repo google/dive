@@ -16,7 +16,10 @@ limitations under the License.
 #include <array>
 #include <string_view>
 
-namespace
+namespace Dive
+{
+
+namespace WhatIf
 {
 inline constexpr std::string_view kDrawCmds[] = {"vkCmdDraw", "vkCmdDrawIndexed",
                                                  "vkCmdDrawIndirect", "vkCmdDrawIndexedIndirect"};
@@ -25,10 +28,7 @@ inline constexpr std::string_view kRenderPassCmds[] = {"vkCmdBeginRenderPass",
                                                        "vkCmdBeginRenderPass2"};
 inline constexpr std::string_view kSamplerCmds[] = {"vkCreateSampler"};
 inline constexpr std::string_view kTimestampCmds[] = {"vkCmdWriteTimestamp"};
-}  // namespace
-
-namespace Dive
-{
+}  // namespace WhatIf
 
 enum class WhatIfType
 {
@@ -52,27 +52,27 @@ inline constexpr std::array<WhatIfTypeInfo, 6> kWhatIfTypeInfos = {{
     {.type = WhatIfType::kDrawCallDisabled,
      .ui_name = "Draw calls were disabled",
      .ui_name_short = "Disable Draw Calls",
-     .supported_commands = kDrawCmds},
+     .supported_commands = WhatIf::kDrawCmds},
     {.type = WhatIfType::kImageCreationFlagRemoved,
      .ui_name = "Image creation flags were removed",
      .ui_name_short = "Remove Image Flags",
-     .supported_commands = kImageCmds},
+     .supported_commands = WhatIf::kImageCmds},
     {.type = WhatIfType::kRenderPassLoadStoreOpOverridden,
      .ui_name = "Load/Store operations were overridden in the render pass",
      .ui_name_short = "Override Load/Store Operations",
-     .supported_commands = kRenderPassCmds},
+     .supported_commands = WhatIf::kRenderPassCmds},
     {.type = WhatIfType::kRenderPassScissorOverridden,
      .ui_name = "The scissor of a renderpass was set to 1x1",
      .ui_name_short = "Override Scissor",
-     .supported_commands = kRenderPassCmds},
+     .supported_commands = WhatIf::kRenderPassCmds},
     {.type = WhatIfType::kAnisotropicFilterDisabled,
      .ui_name = "Anisotropic filters were disabled",
      .ui_name_short = "Disable Anisotropic Filters",
-     .supported_commands = kSamplerCmds},
+     .supported_commands = WhatIf::kSamplerCmds},
     {.type = WhatIfType::kTimestampsDisabled,
      .ui_name = "Timestamps were disabled",
      .ui_name_short = "Disable Timestamps",
-     .supported_commands = kTimestampCmds},
+     .supported_commands = WhatIf::kTimestampCmds},
 }};
 
 }  // namespace Dive

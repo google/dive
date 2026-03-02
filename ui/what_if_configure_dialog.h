@@ -14,6 +14,7 @@
 #pragma once
 
 #include "device_dialog.h"
+#include "dive/common/what_if_modification_types.h"
 #include "dive/ui/forward.h"
 
 // Event filter to keep a QComboBox popup open when checking/unchecking items.
@@ -55,9 +56,6 @@ class WhatIfConfigureDialog : public DeviceDialog
     void OnWhatIfModificationTypeChanged(int index);
     void OnUpdateAddModificationButtonState();
 
- signals:
-    void AddModification(const QString& modification_type_short_name);
-
  private:
     void HideAllFields();
     void ResetDrawCallFilters();
@@ -66,6 +64,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     void ShowRenderPassFields();
     void ShowSamplerCreationFields();
     void ShowTimestampFields();
+    void AddModification(const Dive::WhatIfModificationTypeInfo& type_info);
 
     ApplicationController& m_controller;
 

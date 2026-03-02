@@ -35,6 +35,7 @@
 #include "application_controller.h"
 #include "capture_service/device_mgr.h"
 #include "dive/common/what_if_modification_types.h"
+#include "network/tcp_client.h"
 
 namespace
 {
@@ -433,16 +434,56 @@ void WhatIfConfigureDialog::ShowMessage(const QString& message)
     message_box->open();
 }
 
+void WhatIfConfigureDialog::AddModification(const Dive::WhatIfModificationTypeInfo& type_info)
+{
+    if (type_info.type == Dive::WhatModificationType::kDrawCallDisabled)
+    {
+        qDebug() << "Preparing kDrawCallDisabled message";
+        int index_count = m_what_if_draw_call_index_count_filter_box->value();
+        int vertex_count = m_what_if_draw_call_vertex_count_filter_box->value();
+        int instance_count = m_what_if_draw_call_instance_count_filter_box->value();
+        int draw_count = m_what_if_draw_call_draw_count_filter_box->value();
+
+        qDebug() << "Index Count: " << index_count;
+        qDebug() << "Vertex Count: " << vertex_count;
+        qDebug() << "Instance Count: " << instance_count;
+        qDebug() << "Draw Count: " << draw_count;
+
+        Network::TcpClient client;
+        const std::string host = "127.0.0.1";
+        int port = Dive::GetDeviceManager().GetDevice()->Port();
+        absl::Status status = client.Connect(host, port);
+        if (!status.ok())
+        {
+            std::string err_msg(status.message());
+            qDebug() << "Connection failed: " << err_msg.c_str();
+            return;
+        }
+        qDebug() << "client connected";
+        status =
+            client.SendDrawCallFiltering(index_count, vertex_count, instance_count, draw_count);
+        if (!status.ok())
+        {
+            std::string err_msg(status.message());
+            qDebug() << "SendDrawCallFiltering failed: " << err_msg.c_str();
+            return;
+        }
+    }
+    else
+    {
+        ShowMessage(QString::fromStdString("Modification not supported"));
+    }
+}
+
 //--------------------------------------------------------------------------------------------------
 void WhatIfConfigureDialog::OnAddModificationClicked()
 {
     const int modification_type_index =
         m_what_if_type_box->currentIndex() - 1;  // -1 because of the placeholder
 
-    const auto& modification_type_info =
-        Dive::kWhatIfModificationTypeInfos[modification_type_index];
+    const auto modification_type_info = Dive::kWhatIfModificationTypeInfos[modification_type_index];
 
-    emit AddModification(modification_type_info.ui_name_short.data());
+    AddModification(modification_type_info);
 
     ShowMessage(QString::fromStdString(absl::StrCat("\"", modification_type_info.ui_name_short,
                                                     "\"", " modification added successfully")));

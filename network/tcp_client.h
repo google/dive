@@ -65,6 +65,9 @@ class TcpClient
     // Gets the capture file size from the server.
     absl::StatusOr<size_t> GetCaptureFileSize(const std::string& remote_file_path);
 
+    absl::Status SendDrawCallFiltering(int index_count, int vertex_count, int instance_count,
+                                       int draw_count);
+
  private:
     // Performs a ping-pong check with the server.
     absl::Status PingServer();

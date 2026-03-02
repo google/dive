@@ -310,6 +310,59 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
     return file_size;
 }
 
+absl::Status TcpClient::SendDrawCallFiltering(int index_count, int vertex_count, int instance_count,
+                                              int draw_count)
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return Dive::FailedPreconditionError("SendDrawCallFiltering: Client is not connected.");
+    }
+    DrawcallFilteringRequest request;
+    request.SetIndexCount(index_count);
+    request.SetVertexCount(vertex_count);
+    request.SetInstanceCount(instance_count);
+    request.SetDrawCount(draw_count);
+
+    absl::Status status = SendSocketMessage(m_connection.get(), request);
+    if (!status.ok())
+    {
+        return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
+                                       Dive::StatusWithContext(status,
+                                                               "SendDrawCallFiltering: "
+                                                               "SendSocketMessage fail"));
+    }
+
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
+    if (!receive.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(receive.status(),
+                                    "SendDrawCallFiltering: ReceiveSocketMessage "
+                                    "fail"));
+    }
+
+    std::unique_ptr<ISerializable> response = *std::move(receive);
+    if (response->GetMessageType() != MessageType::DRAWCALL_FILTERING_RESPONSE)
+    {
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "SendDrawCallFiltering: Unexpected message type in Ping response "
+            "(Expected: ",
+            MessageType::DRAWCALL_FILTERING_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
+    }
+
+    auto* drawcall_response = dynamic_cast<DrawcallFilteringResponse*>(response.get());
+    if (!drawcall_response)
+    {
+        return Dive::InternalError(
+            "SendDrawCallFiltering: Failed to cast received message to PongMessage.");
+    }
+    std::cout << "Client: Drawcall filtering successful." << std::endl;
+    return Dive::OkStatus();
+}
+
 absl::Status TcpClient::PingServer()
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);

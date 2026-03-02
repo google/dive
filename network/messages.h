@@ -16,6 +16,7 @@ limitations under the License.
 
 #pragma once
 
+#include "dive/common/macros.h"
 #include "dive/common/status.h"
 #include "serializable.h"
 #include "socket_connection.h"
@@ -46,7 +47,9 @@ enum class MessageType : uint32_t
     DOWNLOAD_FILE_REQUEST = 7,
     DOWNLOAD_FILE_RESPONSE = 8,
     FILE_SIZE_REQUEST = 9,
-    FILE_SIZE_RESPONSE = 10
+    FILE_SIZE_RESPONSE = 10,
+    DRAWCALL_FILTERING_REQUEST = 11,
+    DRAWCALL_FILTERING_RESPONSE = 12,
 };
 
 class HandshakeMessage : public ISerializable
@@ -196,6 +199,59 @@ class FileSizeResponse : public ISerializable
     // A string representation of the downloaded file's size.
     // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
     std::string m_file_size_str;
+};
+
+class DrawcallFilteringRequest : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::DRAWCALL_FILTERING_REQUEST; }
+    absl::Status Serialize(Buffer& dest) const override
+    {
+        dest.clear();
+        WriteUint32ToBuffer(m_index_count, dest);
+        WriteUint32ToBuffer(m_vertex_count, dest);
+        WriteUint32ToBuffer(m_instance_count, dest);
+        WriteUint32ToBuffer(m_draw_count, dest);
+        return Dive::OkStatus();
+    }
+    absl::Status Deserialize(const Buffer& src) override
+    {
+        size_t offset = 0;
+        ASSIGN_OR_RETURN(m_index_count, ReadUint32FromBuffer(src, offset));
+        ASSIGN_OR_RETURN(m_vertex_count, ReadUint32FromBuffer(src, offset));
+        ASSIGN_OR_RETURN(m_instance_count, ReadUint32FromBuffer(src, offset));
+        ASSIGN_OR_RETURN(m_draw_count, ReadUint32FromBuffer(src, offset));
+        if (offset != src.size())
+        {
+            return Dive::InvalidArgumentError(
+                "DrawcallFilteringRequest has unexpected trailing data.");
+        }
+        return Dive::OkStatus();
+    }
+
+    uint32_t GetIndexCount() const { return m_index_count; }
+    void SetIndexCount(uint32_t count) { m_index_count = count; }
+
+    uint32_t GetVertexCount() const { return m_vertex_count; }
+    void SetVertexCount(uint32_t count) { m_vertex_count = count; }
+
+    uint32_t GetInstanceCount() const { return m_instance_count; }
+    void SetInstanceCount(uint32_t count) { m_instance_count = count; }
+
+    uint32_t GetDrawCount() const { return m_draw_count; }
+    void SetDrawCount(uint32_t count) { m_draw_count = count; }
+
+ private:
+    uint32_t m_index_count = 0;
+    uint32_t m_vertex_count = 0;
+    uint32_t m_instance_count = 0;
+    uint32_t m_draw_count = 0;
+};
+
+class DrawcallFilteringResponse : public EmptyMessage
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::DRAWCALL_FILTERING_RESPONSE; }
 };
 
 // Message Helper Functions (TLV Framing).

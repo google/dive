@@ -110,6 +110,33 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             }
             break;
         }
+        case Network::MessageType::DRAWCALL_FILTERING_REQUEST:
+        {
+            LOGI("Message received: DrawcallFilteringRequest");
+            auto* request = dynamic_cast<Network::DrawcallFilteringRequest*>(message.get());
+            if (!request)
+            {
+                LOGI("DrawcallFilteringRequest message is null.");
+                return;
+            }
+            int vertex_count = request->GetVertexCount();
+            int index_count = request->GetIndexCount();
+            int instance_count = request->GetInstanceCount();
+            int draw_count = request->GetDrawCount();
+            LOGI(
+                "Drawcall filtering: vertex_count=%d, index_count=%d, instance_count=%d, "
+                "draw_count=%d",
+                vertex_count, index_count, instance_count, draw_count);
+
+            Network::DrawcallFilteringResponse response;
+            auto status = Network::SendSocketMessage(client_conn, response);
+            if (!status.ok())
+            {
+                LOGI("DrawcallFiltering failed: %.*s", (int)status.message().length(),
+                     status.message().data());
+            }
+            break;
+        }
         default:
         {
             LOGW("Message type %d unhandled.", (int)message->GetMessageType());

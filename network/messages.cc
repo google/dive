@@ -264,6 +264,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
         case MessageType::FILE_SIZE_RESPONSE:
             message = std::make_unique<FileSizeResponse>();
             break;
+        case MessageType::DRAWCALL_FILTERING_REQUEST:
+            message = std::make_unique<DrawcallFilteringRequest>();
+            break;
+        case MessageType::DRAWCALL_FILTERING_RESPONSE:
+            message = std::make_unique<DrawcallFilteringResponse>();
+            break;
         default:
             conn->Close();
             return Dive::InvalidArgumentError(absl::StrCat("Unknown message type: ", type));

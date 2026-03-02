@@ -1290,6 +1290,32 @@ bool AndroidDevice::FileExists(const std::string& file_path)
     return result.ok();
 }
 
+absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& package_name)
+{
+    absl::StatusOr<std::string> output = Adb().RunAndGetResult(
+        absl::StrFormat("shell \"dumpsys activity activities 2>/dev/null | "
+                        "awk '/%s/ && /visible=true/ && /visibleRequested=true/ {found=1; exit} "
+                        "END {print found+0}'\"",
+                        package_name));
+    if (!output.ok())
+    {
+        return output.status();
+    }
+
+    std::string result = *output;
+    absl::StripAsciiWhitespace(&result);
+    if (result != "1")
+    {
+        return absl::FailedPreconditionError(absl::StrCat(
+            "The application '", package_name,
+            "' is not fully visible or active. The device might be locked, asleep, or the app is "
+            "running in the background. Please ensure the device is unlocked and the app is "
+            "running in the foreground on screen, then try again."));
+    }
+
+    return absl::OkStatus();
+}
+
 absl::Status AndroidDevice::PinGpuClock(uint32_t freq_mhz) const
 {
     std::string cmd = "shell surfaceflinger --enable-spf-gpu-lock";

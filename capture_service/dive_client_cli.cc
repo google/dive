@@ -368,16 +368,21 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
 }
 
 // Triggers a capture on the device and downloads the resulting file.
-absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& download_dir)
+absl::Status TriggerPm4Capture(const CommandContext& ctx)
 {
-    if (mgr.GetDevice() == nullptr)
+    Dive::AndroidDevice* device = ctx.mgr.GetDevice();
+    if (device == nullptr)
     {
         return Dive::FailedPreconditionError("No device selected, can't capture.");
+    }
+    if (absl::Status ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
+    {
+        return Dive::StatusWithContext(ret, "Device check failed");
     }
 
     Network::TcpClient client;
     const std::string host = "127.0.0.1";
-    int port = mgr.GetDevice()->Port();
+    int port = device->Port();
 
     absl::Status status = client.Connect(host, port);
     if (!status.ok())
@@ -392,7 +397,7 @@ absl::Status TriggerPm4Capture(Dive::DeviceManager& mgr, const std::string& down
     }
 
     std::filesystem::path target_download_dir;
-    if (auto ret = Dive::GetNextHostSessionPath(download_dir); ret.ok())
+    if (auto ret = Dive::GetNextHostSessionPath(ctx.options.download_dir); ret.ok())
     {
         target_download_dir = *ret;
     }
@@ -580,11 +585,21 @@ enum class GfxrCaptureControlFlow
 // Returning GfxrCaptureControlFlow::kStop from `wait_for_ready_to_capture` or
 // `wait_for_ready_to_retrieve` will skip subsequent steps.
 absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
-    const AndroidDevice& device, const GlobalOptions& options,
+    const CommandContext& ctx,
     absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_capture,
     absl::FunctionRef<GfxrCaptureControlFlow()> wait_for_ready_to_retrieve)
 {
-    const AdbSession& adb = device.Adb();
+    Dive::AndroidDevice* device = ctx.mgr.GetDevice();
+    if (device == nullptr)
+    {
+        return Dive::FailedPreconditionError("No device selected, can't capture.");
+    }
+    if (absl::Status ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
+    {
+        return Dive::StatusWithContext(ret, "Device check failed");
+    }
+
+    const AdbSession& adb = device->Adb();
 
     // GFXR relies on capture_android_trigger changing from false to true as the condition for
     // beginning the capture. Thus, ensure the prop starts as false.
@@ -611,7 +626,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
             absl::StrCat("Error starting gfxr runtime capture: ", status.message()));
     }
 
-    if (absl::Status status = device.TriggerScreenCapture(
+    if (absl::Status status = device->TriggerScreenCapture(
             Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
         !status.ok())
     {
@@ -635,7 +650,7 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
     }
 
     // If this fails, we print an error but don't exit the tool, allowing the user to try again.
-    if (absl::Status status = RetrieveGfxrCapture(adb, options); !status.ok())
+    if (absl::Status status = RetrieveGfxrCapture(adb, ctx.options); !status.ok())
     {
         LOG(ERROR) << "Failed to retrieve capture: " << status.message();
     }
@@ -754,7 +769,7 @@ absl::Status CmdPm4Capture(const CommandContext& ctx)
     LOG(INFO) << "Waiting " << trigger_capture_after << "...";
     absl::SleepFor(trigger_capture_after);
 
-    status = TriggerPm4Capture(ctx.mgr, ctx.options.download_dir);
+    status = TriggerPm4Capture(ctx);
     if (!status.ok())
     {
         return Dive::StatusWithContext(status, "Triggering PM4 capture failed");
@@ -798,8 +813,7 @@ absl::Status CmdGfxrCapture(const CommandContext& context)
     while (true)
     {
         absl::StatusOr<GfxrCaptureControlFlow> control_flow =
-            TriggerGfxrCapture(*context.mgr.GetDevice(), context.options, wait_for_ready_to_capture,
-                               wait_for_ready_to_retrieve);
+            TriggerGfxrCapture(context, wait_for_ready_to_capture, wait_for_ready_to_retrieve);
         if (!control_flow.status().ok())
         {
             return control_flow.status();

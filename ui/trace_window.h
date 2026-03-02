@@ -103,6 +103,7 @@ class TraceDialog : public DeviceDialog
     bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice* device, const std::string& capture_directory);
     void ResetDialog();
+    Dive::AndroidDevice* GetAndValidateDevice();
 
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;

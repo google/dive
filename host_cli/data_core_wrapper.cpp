@@ -16,8 +16,10 @@
 
 #include "data_core_wrapper.h"
 
+#include "absl/log/check.h"
 #include "dive_core/capture_data.h"
 #include "dive_core/data_core.h"
+#include "gfxr_ext/decode/dive_block_data.h"
 
 namespace Dive::HostCli
 {
@@ -30,17 +32,16 @@ DataCoreWrapper::DataCoreWrapper()
 
 bool DataCoreWrapper::IsGfxrLoaded() const
 {
-    assert(m_data_core != nullptr);
+    CHECK(m_data_core != nullptr) << "data core is null";
     return m_data_core->GetGfxrCaptureData().IsDiveBlockDataInitialized();
 }
 
-absl::Status DataCoreWrapper::LoadGfxrFile(const std::string& original_gfxr_file_path)
+absl::Status DataCoreWrapper::LoadGfxrFile(const std::filesystem::path& original_gfxr_file_path)
 {
-    assert(m_data_core != nullptr);
+    CHECK(m_data_core != nullptr) << "data core is null";
 
-    CaptureData::LoadResult load_result =
-        m_data_core->GetMutableGfxrCaptureData().LoadCaptureFile(original_gfxr_file_path.c_str());
-    if (load_result != CaptureData::LoadResult::kSuccess)
+    if (m_data_core->GetMutableGfxrCaptureData().LoadCaptureFile(
+            original_gfxr_file_path.string()) != CaptureData::LoadResult::kSuccess)
     {
         return absl::UnknownError(
             absl::StrFormat("Could not load GFXR file: %s", original_gfxr_file_path));
@@ -48,21 +49,46 @@ absl::Status DataCoreWrapper::LoadGfxrFile(const std::string& original_gfxr_file
     return absl::OkStatus();
 }
 
-absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::string& new_gfxr_file_path)
+absl::Status DataCoreWrapper::WriteNewGfxrFile(const std::filesystem::path& new_gfxr_file_path)
 {
-    assert(m_data_core != nullptr);
+    CHECK(m_data_core != nullptr) << "data core is null";
     if (!IsGfxrLoaded())
     {
         return absl::FailedPreconditionError("Must load original GFXR first");
     }
 
-    bool write_result =
-        m_data_core->GetMutableGfxrCaptureData().WriteModifiedGfxrFile(new_gfxr_file_path.c_str());
-    if (!write_result)
+    if (!m_data_core->GetMutableGfxrCaptureData().WriteModifiedGfxrFile(
+            new_gfxr_file_path.string().c_str()))
     {
         return absl::InternalError("Could not write GFXR file");
     }
 
+    return absl::OkStatus();
+}
+
+absl::Status DataCoreWrapper::RemoveGfxrBlocks(std::span<const int> block_ids)
+{
+    CHECK(m_data_core != nullptr) << "data core is null";
+    if (!IsGfxrLoaded())
+    {
+        return absl::FailedPreconditionError("Must load original GFXR first");
+    }
+    if (block_ids.empty())
+    {
+        return absl::InvalidArgumentError("No block_ids to remove");
+    }
+
+    std::shared_ptr<gfxrecon::decode::DiveBlockData> dive_block_data =
+        m_data_core->GetMutableGfxrCaptureData().GetMutableGfxrData();
+
+    for (const auto& id : block_ids)
+    {
+        if (!dive_block_data->AddModification(/*primary_id=*/id, /*secondary_id=*/0,
+                                              /*blob_ptr=*/nullptr))
+        {
+            return absl::InternalError(absl::StrFormat("Could not delete block id: %d", id));
+        }
+    }
     return absl::OkStatus();
 }
 

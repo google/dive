@@ -41,10 +41,20 @@ ABSL_FLAG(std::string, input_file_path, "",
 ABSL_FLAG(std::string, output_gfxr_path, "",
           "If specified, a new .gfxr file will be generated from the original file "
           "(--input_file_path) and any specified modifications");
+ABSL_FLAG(std::vector<std::string>, delete_gfxr_blocks, {},
+          "If specified, the blocks with these ids will be omitted from the modified .gfxr file. "
+          "Example: --delete_gfxr_blocks=1,2");
 
-absl::Status ValidateFlags()
+struct ValidatedFlags
 {
-    std::string input_file_ext = "";
+    bool input_gfxr_file = false;
+    bool output_gfxr_file = false;
+    std::vector<int> delete_block_ids = {};
+};
+
+absl::StatusOr<ValidatedFlags> ValidateFlags()
+{
+    ValidatedFlags valid_flags = {};
 
     std::string input_file_path = absl::GetFlag(FLAGS_input_file_path);
     if (!input_file_path.empty())
@@ -58,22 +68,47 @@ absl::Status ValidateFlags()
             return absl::InvalidArgumentError(absl::StrFormat(
                 "unrecognizable extension provided for --input_file_path: %s", ext));
         }
-        input_file_ext = ext;
+        if (ext == ".gfxr")
+        {
+            valid_flags.input_gfxr_file = true;
+        }
     }
 
     std::string output_gfxr_path = absl::GetFlag(FLAGS_output_gfxr_path);
     if (!output_gfxr_path.empty())
     {
-        if (input_file_ext != ".gfxr")
+        if (!valid_flags.input_gfxr_file)
         {
             return absl::InvalidArgumentError(
                 "if --output_gfxr_path is specified, then --input_file_path must also be specified "
-                "for "
-                "a .gfxr file");
+                "for a .gfxr file");
+        }
+        valid_flags.output_gfxr_file = true;
+    }
+
+    std::vector<std::string> delete_gfxr_block = absl::GetFlag(FLAGS_delete_gfxr_blocks);
+    if (!delete_gfxr_block.empty())
+    {
+        if (!valid_flags.input_gfxr_file)
+        {
+            return absl::InvalidArgumentError(
+                "if --delete_gfxr_blocks is specified, then --input_file_path must also be "
+                "specified for a .gfxr file");
+        }
+        for (auto const& ele : delete_gfxr_block)
+        {
+            int i = 0;
+            if (!absl::SimpleAtoi(ele, &i))
+            {
+                return absl::InvalidArgumentError(absl::StrFormat(
+                    "flag --delete_gfxr_blocks accepts comma-separated integers, invalid input: %s",
+                    ele));
+            }
+            valid_flags.delete_block_ids.push_back(i);
         }
     }
 
-    return absl::OkStatus();
+    return valid_flags;
 }
 
 int main(int argc, char** argv)
@@ -81,41 +116,48 @@ int main(int argc, char** argv)
     absl::FlagsUsageConfig flags_usage_config;
     flags_usage_config.version_string = Dive::GetCompleteVersionString;
     absl::SetFlagsUsageConfig(flags_usage_config);
-    absl::SetProgramUsageMessage(
-        absl::StrCat("This CLI tool is intended to provide access to the dive_core"
-                     "\nlibrary for utility and for testing. Currently it supports"
-                     "\nmanipulation of .gfxr files. Sample usage:\n\n",
-                     argv[0], " --help"));
+    absl::SetProgramUsageMessage(absl::StrCat(
+        "This CLI tool is intended to provide access to the dive_core library for utility and for "
+        "testing. Currently it supports manipulation of .gfxr files. Sample usage:\n\n",
+        argv[0], " --help"));
     absl::ParseCommandLine(argc, argv);
 
-    absl::Status res = ValidateFlags();
-    if (!res.ok())
+    absl::StatusOr<ValidatedFlags> valid_flags = ValidateFlags();
+    if (!valid_flags.ok())
     {
-        std::cout << res << std::endl;
+        std::cout << valid_flags.status().message() << std::endl;
         return 1;
     }
 
     Dive::HostCli::DataCoreWrapper data_core;
 
-    std::filesystem::path input_file_path = absl::GetFlag(FLAGS_input_file_path);
-    if (input_file_path.extension().string() == ".gfxr")
+    if (valid_flags->input_gfxr_file)
     {
-        absl::Status res = data_core.LoadGfxrFile(input_file_path.string());
-        if (!res.ok())
+        if (absl::Status res = data_core.LoadGfxrFile(absl::GetFlag(FLAGS_input_file_path));
+            !res.ok())
         {
             std::cout << res << std::endl;
             return 1;
         }
 
-        std::string output_gfxr_path = absl::GetFlag(FLAGS_output_gfxr_path);
-        if (output_gfxr_path.empty())
+        if (!valid_flags->delete_block_ids.empty())
+        {
+            if (absl::Status res = data_core.RemoveGfxrBlocks(valid_flags->delete_block_ids);
+                !res.ok())
+            {
+                std::cout << res << std::endl;
+                return 1;
+            }
+        }
+
+        if (!valid_flags->output_gfxr_file)
         {
             // Nothing further to do with the loaded .gfxr file
             return 0;
         }
 
-        res = data_core.WriteNewGfxrFile(output_gfxr_path);
-        if (!res.ok())
+        if (absl::Status res = data_core.WriteNewGfxrFile(absl::GetFlag(FLAGS_output_gfxr_path));
+            !res.ok())
         {
             std::cout << res << std::endl;
             return 1;

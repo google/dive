@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <memory>
 
 #include "absl/status/status.h"
@@ -32,8 +33,9 @@ class DataCoreWrapper
     DataCoreWrapper();
     bool IsGfxrLoaded() const;
     bool IsDataCoreInitialized() const { return m_data_core != nullptr; }
-    absl::Status LoadGfxrFile(const std::string& original_gfxr_file_path);
-    absl::Status WriteNewGfxrFile(const std::string& new_gfxr_file_path);
+    absl::Status LoadGfxrFile(const std::filesystem::path& original_gfxr_file_path);
+    absl::Status WriteNewGfxrFile(const std::filesystem::path& new_gfxr_file_path);
+    absl::Status RemoveGfxrBlocks(std::span<const int> block_ids);
 
  private:
     std::unique_ptr<Dive::DataCore> m_data_core = nullptr;

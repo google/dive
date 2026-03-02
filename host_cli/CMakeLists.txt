@@ -34,7 +34,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # ---------------------
 # data_core_wrapper_lib
 add_library(data_core_wrapper_lib data_core_wrapper.h data_core_wrapper.cpp)
-target_link_libraries(data_core_wrapper_lib PUBLIC dive_core absl::status)
+target_link_libraries(
+    data_core_wrapper_lib
+    PUBLIC dive_core absl::status absl::log
+)
 target_include_directories(
     data_core_wrapper_lib
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../
@@ -100,5 +103,11 @@ add_modify_gfxr_test(
         ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
 )
 
-list(POP_BACK CMAKE_MESSAGE_INDENT)
-message(CHECK_PASS "done")
+add_modify_gfxr_test(
+    NAME ModifyGfxrSeparateAssetsDeleteBlocks
+    INPUT_GFXR
+        ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545.gfxr
+    GOLDEN_FILE
+        ${PROJECT_SOURCE_DIR}/tests/gfxr_traces/golden/com.google.bigwheels.project_sample_01_triangle.debug_trim_trigger_20250718T132545_delete_blocks_220_223.gfxr
+    ADDITIONAL_ARGUMENTS --delete_gfxr_blocks=220,223
+)

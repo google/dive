@@ -410,18 +410,6 @@ void WhatIfSetupDialog::StopPackage()
     ResetDialog();
 }
 
-void WhatIfSetupDialog::ShowRuntimeWhatIfFields()
-{
-    m_runtime_options_widget->setVisible(true);
-    m_replay_options_widget->setVisible(false);
-}
-
-void WhatIfSetupDialog::ShowReplayWhatIfFields()
-{
-    m_runtime_options_widget->setVisible(false);
-    m_replay_options_widget->setVisible(true);
-}
-
 void WhatIfSetupDialog::OnStopRuntimeWhatIf() { StopPackage(); }
 
 void WhatIfSetupDialog::OnAppListRefresh() { UpdatePackageList(); }
@@ -504,14 +492,15 @@ void WhatIfSetupDialog::OnStartClicked()
 
 void WhatIfSetupDialog::OnWhatIfTypeChanged(int button_id)
 {
-    const bool runtime_what_if_enabled = (button_id == kRuntimeWhatIfButtonId);
-    if (runtime_what_if_enabled)
+    if (button_id == kRuntimeWhatIfButtonId)
     {
-        ShowRuntimeWhatIfFields();
+        m_runtime_options_widget->setVisible(true);
+        m_replay_options_widget->setVisible(false);
     }
     else
     {
-        ShowReplayWhatIfFields();
+        m_runtime_options_widget->setVisible(false);
+        m_replay_options_widget->setVisible(true);
     }
 }
 

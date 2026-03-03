@@ -119,7 +119,37 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
     qDebug() << "WhatIfConfigureDialog created.";
 
     setWindowTitle("Dive Runtime What-Ifs");
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
 
+    // --- Header Section ---
+    main_layout->addLayout(CreateHeaderLayout());
+    main_layout->addSpacing(15);
+
+    // --- Settings Section ---
+    main_layout->addLayout(CreateSettingsLayout());
+    main_layout->addStretch();
+
+    // --- Modification Warning ---
+    QHBoxLayout* warning_layout = new QHBoxLayout();
+    m_what_if_modification_warning_label =
+        new QLabel(tr("⚠ When testing this modification, the application will be relaunched."));
+    warning_layout->addWidget(m_what_if_modification_warning_label);
+    m_what_if_modification_warning_label->hide();
+    main_layout->addLayout(warning_layout);
+
+    // --- Button Section ---
+    main_layout->addLayout(CreateButtonLayout());
+    setLayout(main_layout);
+
+    HideAllFields();
+    m_what_if_command_box->setEnabled(false);
+
+    SetupConnections();
+}
+
+QVBoxLayout* WhatIfConfigureDialog::CreateHeaderLayout()
+{
+    QVBoxLayout* layout = new QVBoxLayout();
     // --- Font Definition ---
     QFont title_font = this->font();
     title_font.setBold(true);
@@ -143,6 +173,14 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
     }
     m_what_if_type_box->setModel(what_if_type_model);
 
+    layout->addWidget(what_if_title_label);
+    layout->addSpacing(15);
+    layout->addWidget(m_what_if_type_box);
+    return layout;
+}
+
+QGridLayout* WhatIfConfigureDialog::CreateSettingsLayout()
+{
     // --- Grid Section ---
     QGridLayout* settings_grid = new QGridLayout();
     settings_grid->setColumnStretch(2, 1);
@@ -159,7 +197,21 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
     // --- Filter Section ---
     m_what_if_filter_label = new QLabel(tr("Filter By:"));
     settings_grid->addWidget(m_what_if_filter_label, 1, 0, Qt::AlignRight);
-    // --- Draw Call Filters ---
+
+    SetupDrawCallFiltersContainer();
+    settings_grid->addWidget(m_what_if_draw_call_filters_container, 2, 0, 1, 3);
+
+    SetupRenderPassFiltersContainer();
+    settings_grid->addWidget(m_what_if_render_pass_filters_container, 3, 0, 1, 3);
+
+    SetupFlagContainer();
+    settings_grid->addWidget(m_what_if_flag_container, 4, 0, 1, 3);
+
+    return settings_grid;
+}
+
+void WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
+{
     m_what_if_draw_call_filters_container = new QWidget();
     QGridLayout* draw_call_filter_layout = new QGridLayout(m_what_if_draw_call_filters_container);
     draw_call_filter_layout->setContentsMargins(0, 0, 0, 0);
@@ -224,9 +276,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
     draw_call_filter_layout->addWidget(what_if_draw_call_render_pass_filter_label, 3, 1,
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_render_pass_filter_box, 3, 2);
-    settings_grid->addWidget(m_what_if_draw_call_filters_container, 2, 0, 1, 3);
+}
 
-    // --- Render Pass Filters ---
+void WhatIfConfigureDialog::SetupRenderPassFiltersContainer()
+{
     m_what_if_render_pass_filters_container = new QWidget();
     QGridLayout* render_pass_filter_layout =
         new QGridLayout(m_what_if_render_pass_filters_container);
@@ -269,10 +322,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
     render_pass_filter_layout->addWidget(what_if_render_pass_render_pass_type_filter_label, 1, 1,
                                          Qt::AlignRight);
     render_pass_filter_layout->addWidget(m_what_if_render_pass_render_pass_type_filter_box, 1, 2);
+}
 
-    settings_grid->addWidget(m_what_if_render_pass_filters_container, 3, 0, 1, 3);
-
-    // --- Flag Section ---
+void WhatIfConfigureDialog::SetupFlagContainer()
+{
     m_what_if_flag_container = new QWidget();
     QHBoxLayout* flag_layout = new QHBoxLayout(m_what_if_flag_container);
     flag_layout->setContentsMargins(0, 0, 0, 0);
@@ -299,57 +352,34 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
     flag_layout->addWidget(what_if_flag_label);
     flag_layout->addWidget(m_what_if_flag_box);
 
-    settings_grid->addWidget(m_what_if_flag_container, 4, 0, 1, 3);
-
     m_what_if_flag_container->hide();
+}
 
-    // --- Modification Warning ---
-    QHBoxLayout* warning_layout = new QHBoxLayout();
-    m_what_if_modification_warning_label =
-        new QLabel(tr("⚠ When testing this modification, the application will be relaunched."));
-    warning_layout->addWidget(m_what_if_modification_warning_label);
-    m_what_if_modification_warning_label->hide();
-
-    // --- Buttons ---
+QHBoxLayout* WhatIfConfigureDialog::CreateButtonLayout()
+{
     QHBoxLayout* button_layout = new QHBoxLayout();
     QPushButton* dismiss_button = new QPushButton(kDismiss.data(), this);
     m_add_modification_button = new QPushButton(kAdd_Modification.data(), this);
     m_add_modification_button->setEnabled(false);
     button_layout->addWidget(dismiss_button);
     button_layout->addWidget(m_add_modification_button);
-    // --- Main Layout ---
-    QVBoxLayout* main_layout = new QVBoxLayout(this);
-    main_layout->addWidget(what_if_title_label);
-    main_layout->addSpacing(15);
 
-    main_layout->addWidget(m_what_if_type_box);
+    QObject::connect(dismiss_button, &QPushButton::clicked, this,
+                     &WhatIfConfigureDialog::ResetDialog);
+    QObject::connect(dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
+    QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
+                     &WhatIfConfigureDialog::OnAddModificationClicked);
+    return button_layout;
+}
 
-    main_layout->addSpacing(15);
-    main_layout->addLayout(settings_grid);
-    main_layout->addStretch();
-    main_layout->addLayout(warning_layout);
-    main_layout->addLayout(button_layout);
-    setLayout(main_layout);
-
-    HideAllFields();
-    m_what_if_command_box->setEnabled(false);
-
+void WhatIfConfigureDialog::SetupConnections()
+{
     QObject::connect(m_what_if_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnWhatIfModificationTypeChanged);
 
     QObject::connect(m_what_if_command_box, QOverload<int>::of(&QComboBox::currentIndexChanged),
                      this, &WhatIfConfigureDialog::OnWhatIfModificationCommandChanged);
 
-    // Connections for buttons
-    QObject::connect(dismiss_button, &QPushButton::clicked, this,
-                     &WhatIfConfigureDialog::ResetDialog);
-
-    QObject::connect(dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
-
-    QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
-                     &WhatIfConfigureDialog::OnAddModificationClicked);
-
-    // Connections to update the Add Modification button state:
     QObject::connect(m_what_if_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 

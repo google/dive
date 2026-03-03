@@ -72,6 +72,13 @@ class WhatIfSetupDialog : public DeviceDialog
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
 
+    // --- Layout Creation ---
+    QVBoxLayout* CreateHeaderLayout();
+    QVBoxLayout* CreateRadioButtonLayout();
+    void InitializeRuntimeOptions();
+    void InitializeReplayOptions();
+    QHBoxLayout* CreateButtonLayout();
+
     // --- What-If Type Section ---
     QRadioButton* m_runtime_what_if_type_button = nullptr;
     QRadioButton* m_replay_what_if_type_button = nullptr;

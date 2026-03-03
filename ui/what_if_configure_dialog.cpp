@@ -120,15 +120,14 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
 
     setWindowTitle("Dive Runtime What-Ifs");
 
-    // --- Font Definitions ---
-    QFont bold_font = this->font();
-    bold_font.setBold(true);
-    QFont titleFont = bold_font;
-    titleFont.setPointSize(titleFont.pointSize() + 2);
+    // --- Font Definition ---
+    QFont title_font = this->font();
+    title_font.setBold(true);
+    title_font.setPointSize(title_font.pointSize() + 2);
 
     // --- Header Section ---
     QLabel* what_if_title_label = new QLabel(tr("What would happen if..."));
-    what_if_title_label->setFont(titleFont);
+    what_if_title_label->setFont(title_font);
     QStandardItemModel* what_if_type_model = new QStandardItemModel();
     m_what_if_type_box = new QComboBox();
 

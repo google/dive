@@ -73,7 +73,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     // --- What-If Type Section ---
     QComboBox* m_what_if_type_box = nullptr;
 
-    // Command Selection
+    // --- Command Selection ---
     QComboBox* m_what_if_command_box = nullptr;
     QStandardItemModel* m_what_if_command_model = nullptr;
 

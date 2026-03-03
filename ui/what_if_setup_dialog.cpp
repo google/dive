@@ -234,17 +234,19 @@ void WhatIfSetupDialog::UpdatePackageList()
         return;
     }
 
-    auto ret = device->ListPackage(m_runtime_data.m_pkg_list_options);
-    if (!ret.ok())
+    if (auto ret = device->ListPackage(m_runtime_data.m_pkg_list_options); !ret.ok())
     {
         std::string device_serial = GetCurrentDeviceSerial();
-        std::string err_msg = absl::StrCat("Failed to list package for device ", device_serial,
-                                           " error: ", ret.status().message());
+        std::string err_msg = absl::StrFormat("Failed to list package for device %s, error: %s",
+                                               device_serial, ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
-    m_runtime_data.m_pkg_list = *ret;
+    else
+    {
+        m_runtime_data.m_pkg_list = *ret;
+    }
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
@@ -340,8 +342,9 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     if (!ret.ok())
     {
         std::string err_msg =
-            absl::StrCat("Fail to setup for package ", m_runtime_data.m_cur_pkg.toStdString(),
-                         " error: ", ret.message());
+            absl::StrFormat("Fail to setup for package %s, error: %s",
+                            m_runtime_data.m_cur_pkg.toStdString(),
+                            ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -350,8 +353,9 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     if (!ret.ok())
     {
         std::string err_msg =
-            absl::StrCat("Fail to start package ", m_runtime_data.m_cur_pkg.toStdString(),
-                         " error: ", ret.message());
+            absl::StrFormat("Fail to start package %s, error: %s",
+                            m_runtime_data.m_cur_pkg.toStdString(),
+                            ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -361,8 +365,8 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     if (!cur_app->IsRunning())
     {
         std::string err_msg =
-            absl::StrCat("Process for package ", m_runtime_data.m_cur_pkg.toStdString(),
-                         " not found, possibly crashed.");
+            absl::StrFormat("Process for package %s not found, possibly crashed.",
+                            m_runtime_data.m_cur_pkg.toStdString());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -391,13 +395,12 @@ void WhatIfSetupDialog::StopPackage()
     }
 
     device->StopApp().IgnoreError();
-    absl::Status status = cur_app->Cleanup();
 
-    if (!status.ok())
+    if (absl::Status status = cur_app->Cleanup(); !status.ok())
     {
         qDebug() << "Failed to cleanup application: " << status.ToString().c_str();
         ShowMessage(QString::fromStdString(
-            absl::StrCat("Failed to cleanup application: ", status.message())));
+            absl::StrFormat("Failed to cleanup application: %s", status.message())));
 
         // Exit without resetting UI if it's a specific precondition failure
         if (status.code() == absl::StatusCode::kFailedPrecondition)
@@ -451,10 +454,9 @@ void WhatIfSetupDialog::OnStartClicked()
     }
 
     device->EnableRuntimeWhatIf(/*enable_runtime_what_if=*/true);
-    absl::Status ret = device->SetupDevice();
-    if (!ret.ok())
+    if (absl::Status ret = device->SetupDevice(); !ret.ok())
     {
-        std::string err_msg = absl::StrCat("Fail to setup device: ", ret.message());
+        std::string err_msg = absl::StrFormat("Fail to setup device: ", ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;

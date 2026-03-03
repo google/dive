@@ -484,7 +484,7 @@ void WhatIfSetupDialog::OnStartClicked()
     device->EnableRuntimeWhatIf(/*enable_runtime_what_if=*/true);
     if (absl::Status ret = device->SetupDevice(); !ret.ok())
     {
-        std::string err_msg = absl::StrFormat("Fail to setup device: ", ret.message());
+        std::string err_msg = absl::StrFormat("Fail to setup device: %s", ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;

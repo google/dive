@@ -72,18 +72,30 @@ class WhatIfSetupDialog : public DeviceDialog
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
 
+    // --- What-If Type Section ---
     QRadioButton* m_runtime_what_if_type_button = nullptr;
     QRadioButton* m_replay_what_if_type_button = nullptr;
 
+    // --- Options Section ---
     QWidget* m_runtime_options_widget = nullptr;
     QWidget* m_replay_options_widget = nullptr;
 
+    // --- Package Section ---
     QStandardItemModel* m_pkg_model = nullptr;
     QComboBox* m_pkg_box = nullptr;
     QPushButton* m_pkg_refresh_button = nullptr;
 
+    // --- Additional Args Section ---
     QLineEdit* m_args_input_box = nullptr;
 
+    // --- App Type Section ---
+    WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
+    QComboBox* m_app_type_box = nullptr;
+
+    // --- Start Button ---
+    QPushButton* m_start_application_button = nullptr;
+
+    // Runtime data that needs to be accessed across different methods
     struct RuntimeData
     {
         std::vector<std::string> m_pkg_list;
@@ -91,11 +103,6 @@ class WhatIfSetupDialog : public DeviceDialog
         std::string m_command_args;
         Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
     };
-
-    WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
-    QComboBox* m_app_type_box = nullptr;
-
-    QPushButton* m_start_application_button = nullptr;
 
     RuntimeData m_runtime_data;
 };

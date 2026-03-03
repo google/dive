@@ -42,6 +42,15 @@ class WhatIfConfigureDialog : public DeviceDialog
     WhatIfConfigureDialog(QWidget* parent = nullptr);
     ~WhatIfConfigureDialog();
 
+    // -- Layout Creation --
+    QVBoxLayout* CreateHeaderLayout();
+    QGridLayout* CreateSettingsLayout();
+    void SetupDrawCallFiltersContainer();
+    void SetupRenderPassFiltersContainer();
+    void SetupFlagContainer();
+    QHBoxLayout* CreateButtonLayout();
+    void SetupConnections();
+
  protected:
     void closeEvent(QCloseEvent* event) override;
 

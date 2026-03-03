@@ -82,12 +82,37 @@ WhatIfSetupDialog::WhatIfSetupDialog(QWidget* parent) : DeviceDialog(parent)
 
     setWindowTitle("What-Ifs");
 
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
+
+    // --- Header Section ---
+    main_layout->addLayout(CreateHeaderLayout());
+    main_layout->addSpacing(15);
+
+    // --- Radio Button Group Section ---
+    main_layout->addLayout(CreateRadioButtonLayout());
+    main_layout->addSpacing(15);
+
+    // --- Options Section ---
+    InitializeRuntimeOptions();
+    main_layout->addWidget(m_runtime_options_widget);
+    InitializeReplayOptions();
+    main_layout->addWidget(m_replay_options_widget);
+
+    // --- Button Section ---
+    main_layout->addStretch();
+    main_layout->addLayout(CreateButtonLayout());
+    setLayout(main_layout);
+}
+
+QVBoxLayout* WhatIfSetupDialog::CreateHeaderLayout()
+{
+    QVBoxLayout* layout = new QVBoxLayout();
+
     // --- Font Definition ---
     QFont title_font = this->font();
     title_font.setBold(true);
     title_font.setPointSize(title_font.pointSize() + 2);
 
-    // --- Header Section ---
     QLabel* what_if_title_label = new QLabel(tr("Explore What-If Scenarios"));
     what_if_title_label->setFont(title_font);
     QLabel* what_if_info_label =
@@ -95,6 +120,14 @@ WhatIfSetupDialog::WhatIfSetupDialog(QWidget* parent) : DeviceDialog(parent)
                       "rendering the application."));
     what_if_info_label->setWordWrap(true);
 
+    layout->addWidget(what_if_title_label);
+    layout->addWidget(what_if_info_label);
+    return layout;
+}
+
+QVBoxLayout* WhatIfSetupDialog::CreateRadioButtonLayout()
+{
+    QVBoxLayout* layout = new QVBoxLayout();
     // --- Radio Button Group Section ---
     QButtonGroup* what_if_type_button_group = new QButtonGroup(this);
 
@@ -116,9 +149,19 @@ WhatIfSetupDialog::WhatIfSetupDialog(QWidget* parent) : DeviceDialog(parent)
     what_if_type_button_group->addButton(m_runtime_what_if_type_button, kRuntimeWhatIfButtonId);
     what_if_type_button_group->addButton(m_replay_what_if_type_button, kReplayWhatIfButtonId);
 
-    m_runtime_options_widget = new QWidget(this);
-    m_replay_options_widget = new QWidget(this);
+    QObject::connect(what_if_type_button_group, QOverload<int>::of(&QButtonGroup::buttonClicked),
+                     this, &WhatIfSetupDialog::OnWhatIfTypeChanged);
 
+    layout->addWidget(m_runtime_what_if_type_button);
+    layout->addWidget(runtime_what_if_type_label);
+    layout->addWidget(m_replay_what_if_type_button);
+    layout->addWidget(replay_what_if_type_label);
+    return layout;
+}
+
+void WhatIfSetupDialog::InitializeRuntimeOptions()
+{
+    m_runtime_options_widget = new QWidget(this);
     // --- Grid Section ---
     QGridLayout* settings_grid = new QGridLayout(m_runtime_options_widget);
     settings_grid->setContentsMargins(0, 0, 0, 0);
@@ -173,31 +216,6 @@ WhatIfSetupDialog::WhatIfSetupDialog(QWidget* parent) : DeviceDialog(parent)
     settings_grid->addWidget(app_type_label, 3, 0, Qt::AlignRight);
     settings_grid->addWidget(m_app_type_box, 3, 1, 1, 2);
 
-    // --- Buttons ---
-    QHBoxLayout* button_layout = new QHBoxLayout();
-    QPushButton* dismiss_button = new QPushButton(tr(kDismiss.data()), this);
-    m_start_application_button = new QPushButton(kStartApplication.data(), this);
-    m_start_application_button->setEnabled(false);
-    button_layout->addWidget(dismiss_button);
-    button_layout->addWidget(m_start_application_button);
-    // --- Main Layout ---
-    QVBoxLayout* main_layout = new QVBoxLayout(this);
-    main_layout->addWidget(what_if_title_label);
-    main_layout->addWidget(what_if_info_label);
-    main_layout->addSpacing(15);
-
-    main_layout->addWidget(m_runtime_what_if_type_button);
-    main_layout->addWidget(runtime_what_if_type_label);
-    main_layout->addWidget(m_replay_what_if_type_button);
-    main_layout->addWidget(replay_what_if_type_label);
-
-    main_layout->addSpacing(15);
-    main_layout->addWidget(m_runtime_options_widget);
-    main_layout->addWidget(m_replay_options_widget);
-    main_layout->addStretch();
-    main_layout->addLayout(button_layout);
-    setLayout(main_layout);
-
     QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnDeviceSelectionChanged(const QString&)));
     QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
@@ -208,10 +226,27 @@ WhatIfSetupDialog::WhatIfSetupDialog(QWidget* parent) : DeviceDialog(parent)
                      &QSortFilterProxyModel::setFilterFixedString);
     QObject::connect(m_args_input_box, &QLineEdit::textEdited, this,
                      &WhatIfSetupDialog::OnInputArgs);
+}
+
+void WhatIfSetupDialog::InitializeReplayOptions()
+{
+    m_replay_options_widget = new QWidget(this);
+}
+
+QHBoxLayout* WhatIfSetupDialog::CreateButtonLayout()
+{
+    QHBoxLayout* button_layout = new QHBoxLayout();
+    QPushButton* dismiss_button = new QPushButton(tr(kDismiss.data()), this);
+    m_start_application_button = new QPushButton(kStartApplication.data(), this);
+    m_start_application_button->setEnabled(false);
+    button_layout->addWidget(dismiss_button);
+    button_layout->addWidget(m_start_application_button);
+
     QObject::connect(m_start_application_button, &QPushButton::clicked, this,
                      &WhatIfSetupDialog::OnStartClicked);
 
     QObject::connect(dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
+    return button_layout;
 }
 
 WhatIfSetupDialog::~WhatIfSetupDialog()

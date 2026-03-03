@@ -23,6 +23,7 @@ class QAbstractProxyModel;
 class QButtonGroup;
 class QCheckBox;
 class QComboBox;
+class QGridLayout;
 class QGroupBox;
 class QHBoxLayout;
 class QLabel;

@@ -39,7 +39,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     Q_OBJECT
 
  public:
-    WhatIfConfigureDialog(ApplicationController& controller, QWidget* parent = nullptr);
+    WhatIfConfigureDialog(QWidget* parent = nullptr);
     ~WhatIfConfigureDialog();
 
  protected:
@@ -66,8 +66,6 @@ class WhatIfConfigureDialog : public DeviceDialog
     void ShowRenderPassFields();
     void ShowSamplerCreationFields();
     void ShowTimestampFields();
-
-    ApplicationController& m_controller;
 
     static constexpr std::string_view kAdd_Modification = "&Add Modification";
     static constexpr std::string_view kDismiss = "&Dismiss";

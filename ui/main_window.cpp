@@ -528,8 +528,8 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 
     m_trace_dig = new TraceDialog(m_controller, this);
     m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
-    m_what_if_setup_dig = new WhatIfSetupDialog(m_controller, this);
-    m_what_if_configure_dig = new WhatIfConfigureDialog(m_controller, this);
+    m_what_if_setup_dig = new WhatIfSetupDialog(this);
+    m_what_if_configure_dig = new WhatIfConfigureDialog(this);
 
     m_overlay = new OverlayHelper(this);
     m_overlay->Initialize(horizontal_splitter);

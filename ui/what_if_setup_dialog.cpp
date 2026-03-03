@@ -228,10 +228,7 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
                      &WhatIfSetupDialog::OnInputArgs);
 }
 
-void WhatIfSetupDialog::InitializeReplayOptions()
-{
-    m_replay_options_widget = new QWidget(this);
-}
+void WhatIfSetupDialog::InitializeReplayOptions() { m_replay_options_widget = new QWidget(this); }
 
 QHBoxLayout* WhatIfSetupDialog::CreateButtonLayout()
 {
@@ -272,7 +269,7 @@ void WhatIfSetupDialog::UpdatePackageList()
     {
         std::string device_serial = GetCurrentDeviceSerial();
         std::string err_msg = absl::StrFormat("Failed to list package for device %s, error: %s",
-                                               device_serial, ret.status().message());
+                                              device_serial, ret.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
@@ -377,8 +374,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     {
         std::string err_msg =
             absl::StrFormat("Fail to setup for package %s, error: %s",
-                            m_runtime_data.m_cur_pkg.toStdString(),
-                            ret.message());
+                            m_runtime_data.m_cur_pkg.toStdString(), ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -388,8 +384,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     {
         std::string err_msg =
             absl::StrFormat("Fail to start package %s, error: %s",
-                            m_runtime_data.m_cur_pkg.toStdString(),
-                            ret.message());
+                            m_runtime_data.m_cur_pkg.toStdString(), ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -398,9 +393,8 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
 
     if (!cur_app->IsRunning())
     {
-        std::string err_msg =
-            absl::StrFormat("Process for package %s not found, possibly crashed.",
-                            m_runtime_data.m_cur_pkg.toStdString());
+        std::string err_msg = absl::StrFormat("Process for package %s not found, possibly crashed.",
+                                              m_runtime_data.m_cur_pkg.toStdString());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;

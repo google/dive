@@ -62,8 +62,8 @@ bool MultiCheckComboBoxEventFilter::eventFilter(QObject* watched, QEvent* event)
     {
         if (event->type() == QEvent::MouseButtonPress)
         {
-            QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-            QModelIndex index = combo_box->view()->indexAt(mouseEvent->pos());
+            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
+            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
 
             if (index.isValid())
             {
@@ -90,8 +90,8 @@ bool MultiCheckComboBoxEventFilter::eventFilter(QObject* watched, QEvent* event)
         {
             // Consume the MouseButtonRelease on the checkable item
             // to be absolutely sure the combo box popup doesn't close.
-            QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-            QModelIndex index = combo_box->view()->indexAt(mouseEvent->pos());
+            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
+            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
             if (index.isValid())
             {
                 const QStandardItemModel* model =
@@ -114,54 +114,52 @@ bool MultiCheckComboBoxEventFilter::eventFilter(QObject* watched, QEvent* event)
 // =================================================================================================
 // WhatIfConfigureDialog
 // =================================================================================================
-WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, QWidget* parent)
-    : m_controller(controller)
+WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
 {
     qDebug() << "WhatIfConfigureDialog created.";
 
     setWindowTitle("Dive Runtime What-Ifs");
 
     // --- Font Definitions ---
-    QFont boldFont = this->font();
-    boldFont.setBold(true);
-    QFont titleFont = boldFont;
+    QFont bold_font = this->font();
+    bold_font.setBold(true);
+    QFont titleFont = bold_font;
     titleFont.setPointSize(titleFont.pointSize() + 2);
 
     // --- Header Section ---
-    QLabel* m_what_if_title_label = new QLabel(tr("What would happen if..."));
-    m_what_if_title_label->setFont(titleFont);
-    QStandardItemModel* m_what_if_type_model = new QStandardItemModel();
+    QLabel* what_if_title_label = new QLabel(tr("What would happen if..."));
+    what_if_title_label->setFont(titleFont);
+    QStandardItemModel* what_if_type_model = new QStandardItemModel();
     m_what_if_type_box = new QComboBox();
 
     QStandardItem* what_if_type_placeholder =
         new QStandardItem("Please select a modification type");
     what_if_type_placeholder->setFlags(what_if_type_placeholder->flags() & ~Qt::ItemIsSelectable);
-    m_what_if_type_model->appendRow(what_if_type_placeholder);
+    what_if_type_model->appendRow(what_if_type_placeholder);
 
     for (const auto& ty : Dive::kWhatIfTypeInfos)
     {
         QStandardItem* item = new QStandardItem(ty.ui_name.data());
-        m_what_if_type_model->appendRow(item);
+        what_if_type_model->appendRow(item);
     }
-    m_what_if_type_box->setModel(m_what_if_type_model);
+    m_what_if_type_box->setModel(what_if_type_model);
 
     // --- Grid Section ---
-    QGridLayout* settingsGrid = new QGridLayout();
-    settingsGrid->setColumnStretch(2, 1);
-    settingsGrid->setColumnStretch(1, 0);
+    QGridLayout* settings_grid = new QGridLayout();
+    settings_grid->setColumnStretch(2, 1);
+    settings_grid->setColumnStretch(1, 0);
 
     // --- Command Selector ---
-    QLabel* m_what_if_command_label = new QLabel(tr("Command:"));
+    QLabel* what_if_command_label = new QLabel(tr("Command:"));
     m_what_if_command_box = new QComboBox();
     m_what_if_command_model = new QStandardItemModel();
     m_what_if_command_box->setModel(m_what_if_command_model);
-    settingsGrid->addWidget(m_what_if_command_label, 0, 0, Qt::AlignRight);
-    settingsGrid->addWidget(m_what_if_command_box, 0, 1, 1, 2);
+    settings_grid->addWidget(what_if_command_label, 0, 0, Qt::AlignRight);
+    settings_grid->addWidget(m_what_if_command_box, 0, 1, 1, 2);
 
     // --- Filter Section ---
     m_what_if_filter_label = new QLabel(tr("Filter By:"));
-    settingsGrid->addWidget(m_what_if_filter_label, 1, 0, Qt::AlignRight);
-
+    settings_grid->addWidget(m_what_if_filter_label, 1, 0, Qt::AlignRight);
     // --- Draw Call Filters ---
     m_what_if_draw_call_filters_container = new QWidget();
     QGridLayout* draw_call_filter_layout = new QGridLayout(m_what_if_draw_call_filters_container);
@@ -197,37 +195,37 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_draw_count_filter_box, 1, 2);
 
-    QLabel* m_what_if_draw_call_pso_property_filter_label =
+    QLabel* what_if_draw_call_pso_property_filter_label =
         new QLabel(tr("Pipeline State Object (PSO) Property:"));
     m_what_if_draw_call_pso_property_filter_box = new QComboBox();
-    QStandardItemModel* m_what_if_draw_call_pso_property_filter_model = new QStandardItemModel();
+    QStandardItemModel* what_if_draw_call_pso_property_filter_model = new QStandardItemModel();
     QStandardItem* what_if_draw_call_pso_property_filter_placeholder =
         new QStandardItem("Select a PSO property");
     what_if_draw_call_pso_property_filter_placeholder->setFlags(
         what_if_draw_call_pso_property_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    m_what_if_draw_call_pso_property_filter_model->appendRow(
+    what_if_draw_call_pso_property_filter_model->appendRow(
         what_if_draw_call_pso_property_filter_placeholder);
     m_what_if_draw_call_pso_property_filter_box->setModel(
-        m_what_if_draw_call_pso_property_filter_model);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_pso_property_filter_label, 2, 1,
+        what_if_draw_call_pso_property_filter_model);
+    draw_call_filter_layout->addWidget(what_if_draw_call_pso_property_filter_label, 2, 1,
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_pso_property_filter_box, 2, 2);
 
-    QLabel* m_what_if_draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
+    QLabel* what_if_draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
     m_what_if_draw_call_render_pass_filter_box = new QComboBox();
-    QStandardItemModel* m_what_if_draw_call_render_pass_filter_model = new QStandardItemModel();
+    QStandardItemModel* what_if_draw_call_render_pass_filter_model = new QStandardItemModel();
     QStandardItem* what_if_render_pass_render_pass_filter_placeholder =
         new QStandardItem("Select a render pass");
     what_if_render_pass_render_pass_filter_placeholder->setFlags(
         what_if_render_pass_render_pass_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    m_what_if_draw_call_render_pass_filter_model->appendRow(
+    what_if_draw_call_render_pass_filter_model->appendRow(
         what_if_render_pass_render_pass_filter_placeholder);
     m_what_if_draw_call_render_pass_filter_box->setModel(
-        m_what_if_draw_call_render_pass_filter_model);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_render_pass_filter_label, 3, 1,
+        what_if_draw_call_render_pass_filter_model);
+    draw_call_filter_layout->addWidget(what_if_draw_call_render_pass_filter_label, 3, 1,
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_render_pass_filter_box, 3, 2);
-    settingsGrid->addWidget(m_what_if_draw_call_filters_container, 2, 0, 1, 3);
+    settings_grid->addWidget(m_what_if_draw_call_filters_container, 2, 0, 1, 3);
 
     // --- Render Pass Filters ---
     m_what_if_render_pass_filters_container = new QWidget();
@@ -237,51 +235,50 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     render_pass_filter_layout->setColumnStretch(2, 1);
     render_pass_filter_layout->setColumnStretch(1, 0);
 
-    QLabel* m_what_if_render_pass_command_buffer_filter_label = new QLabel(tr("Command Buffer:"));
+    QLabel* what_if_render_pass_command_buffer_filter_label = new QLabel(tr("Command Buffer:"));
     m_what_if_render_pass_command_buffer_filter_box = new QComboBox();
-    QStandardItemModel* m_what_if_render_pass_command_buffer_filter_model =
-        new QStandardItemModel();
+    QStandardItemModel* what_if_render_pass_command_buffer_filter_model = new QStandardItemModel();
     QStandardItem* what_if_render_pass_command_buffer_filter_placeholder =
         new QStandardItem("Select a command buffer");
     what_if_render_pass_command_buffer_filter_placeholder->setFlags(
         what_if_render_pass_command_buffer_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    m_what_if_render_pass_command_buffer_filter_model->appendRow(
+    what_if_render_pass_command_buffer_filter_model->appendRow(
         what_if_render_pass_command_buffer_filter_placeholder);
     m_what_if_render_pass_command_buffer_filter_box->setModel(
-        m_what_if_render_pass_command_buffer_filter_model);
-    render_pass_filter_layout->addWidget(m_what_if_render_pass_command_buffer_filter_label, 0, 1,
+        what_if_render_pass_command_buffer_filter_model);
+    render_pass_filter_layout->addWidget(what_if_render_pass_command_buffer_filter_label, 0, 1,
                                          Qt::AlignRight);
     render_pass_filter_layout->addWidget(m_what_if_render_pass_command_buffer_filter_box, 0, 2);
 
-    QLabel* m_what_if_render_pass_render_pass_type_filter_label = new QLabel(tr("Type:"));
+    QLabel* what_if_render_pass_render_pass_type_filter_label = new QLabel(tr("Type:"));
     m_what_if_render_pass_render_pass_type_filter_box = new QComboBox();
-    QStandardItemModel* m_what_if_render_pass_render_pass_type_filter_model =
+    QStandardItemModel* what_if_render_pass_render_pass_type_filter_model =
         new QStandardItemModel();
     QStandardItem* what_if_render_pass_type_filter_placeholder =
         new QStandardItem("Select render pass type");
     what_if_render_pass_type_filter_placeholder->setFlags(
         what_if_render_pass_type_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    m_what_if_render_pass_render_pass_type_filter_model->appendRow(
+    what_if_render_pass_render_pass_type_filter_model->appendRow(
         what_if_render_pass_type_filter_placeholder);
     for (int i = 0; i < kNumRenderPassTypes; i++)
     {
         QStandardItem* item = new QStandardItem(kRenderPassTypeStrings[i].data());
-        m_what_if_render_pass_render_pass_type_filter_model->appendRow(item);
+        what_if_render_pass_render_pass_type_filter_model->appendRow(item);
     }
     m_what_if_render_pass_render_pass_type_filter_box->setModel(
-        m_what_if_render_pass_render_pass_type_filter_model);
-    render_pass_filter_layout->addWidget(m_what_if_render_pass_render_pass_type_filter_label, 1, 1,
+        what_if_render_pass_render_pass_type_filter_model);
+    render_pass_filter_layout->addWidget(what_if_render_pass_render_pass_type_filter_label, 1, 1,
                                          Qt::AlignRight);
     render_pass_filter_layout->addWidget(m_what_if_render_pass_render_pass_type_filter_box, 1, 2);
 
-    settingsGrid->addWidget(m_what_if_render_pass_filters_container, 3, 0, 1, 3);
+    settings_grid->addWidget(m_what_if_render_pass_filters_container, 3, 0, 1, 3);
 
     // --- Flag Section ---
     m_what_if_flag_container = new QWidget();
     QHBoxLayout* flag_layout = new QHBoxLayout(m_what_if_flag_container);
     flag_layout->setContentsMargins(0, 0, 0, 0);
 
-    QLabel* m_what_if_flag_label = new QLabel(tr("Flag(s):"));
+    QLabel* what_if_flag_label = new QLabel(tr("Flag(s):"));
     m_what_if_flag_box = new QComboBox();
     MultiCheckComboBoxEventFilter* filter = new MultiCheckComboBoxEventFilter(m_what_if_flag_box);
     m_what_if_flag_box->view()->viewport()->installEventFilter(filter);
@@ -300,10 +297,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     }
     m_what_if_flag_box->setModel(m_what_if_flag_model);
 
-    flag_layout->addWidget(m_what_if_flag_label);
+    flag_layout->addWidget(what_if_flag_label);
     flag_layout->addWidget(m_what_if_flag_box);
 
-    settingsGrid->addWidget(m_what_if_flag_container, 4, 0, 1, 3);
+    settings_grid->addWidget(m_what_if_flag_container, 4, 0, 1, 3);
 
     m_what_if_flag_container->hide();
 
@@ -315,27 +312,25 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
     m_what_if_modification_warning_label->hide();
 
     // --- Buttons ---
-    QHBoxLayout* m_button_layout = new QHBoxLayout();
-    QPushButton* m_dismiss_button = new QPushButton(kDismiss.data(), this);
+    QHBoxLayout* button_layout = new QHBoxLayout();
+    QPushButton* dismiss_button = new QPushButton(kDismiss.data(), this);
     m_add_modification_button = new QPushButton(kAdd_Modification.data(), this);
     m_add_modification_button->setEnabled(false);
-    m_button_layout->addWidget(m_dismiss_button);
-    m_button_layout->addWidget(m_add_modification_button);
-
+    button_layout->addWidget(dismiss_button);
+    button_layout->addWidget(m_add_modification_button);
     // --- Main Layout ---
-    QVBoxLayout* m_main_layout = new QVBoxLayout(this);
-    m_main_layout->addWidget(m_what_if_title_label);
-    m_main_layout->addSpacing(15);
+    QVBoxLayout* main_layout = new QVBoxLayout(this);
+    main_layout->addWidget(what_if_title_label);
+    main_layout->addSpacing(15);
 
-    m_main_layout->addWidget(m_what_if_type_box);
+    main_layout->addWidget(m_what_if_type_box);
 
-    m_main_layout->addSpacing(15);
-    m_main_layout->addLayout(settingsGrid);
-    m_main_layout->addStretch();
-    m_main_layout->addLayout(warning_layout);
-    m_main_layout->addLayout(m_button_layout);
-
-    setLayout(m_main_layout);
+    main_layout->addSpacing(15);
+    main_layout->addLayout(settings_grid);
+    main_layout->addStretch();
+    main_layout->addLayout(warning_layout);
+    main_layout->addLayout(button_layout);
+    setLayout(main_layout);
 
     HideAllFields();
     m_what_if_command_box->setEnabled(false);
@@ -347,10 +342,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(ApplicationController& controller, 
                      this, &WhatIfConfigureDialog::OnWhatIfModificationCommandChanged);
 
     // Connections for buttons
-    QObject::connect(m_dismiss_button, &QPushButton::clicked, this,
+    QObject::connect(dismiss_button, &QPushButton::clicked, this,
                      &WhatIfConfigureDialog::ResetDialog);
 
-    QObject::connect(m_dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
+    QObject::connect(dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
 
     QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
                      &WhatIfConfigureDialog::OnAddModificationClicked);

@@ -39,7 +39,7 @@ class WhatIfSetupDialog : public DeviceDialog
     Q_OBJECT
 
  public:
-    WhatIfSetupDialog(ApplicationController& controller, QWidget* parent = nullptr);
+    WhatIfSetupDialog(QWidget* parent = nullptr);
     ~WhatIfSetupDialog();
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
@@ -74,23 +74,16 @@ class WhatIfSetupDialog : public DeviceDialog
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
 
-    ApplicationController& m_controller;
-
     QRadioButton* m_runtime_what_if_type_button = nullptr;
     QRadioButton* m_replay_what_if_type_button = nullptr;
 
     QWidget* m_runtime_options_widget = nullptr;
     QWidget* m_replay_options_widget = nullptr;
 
-    QLabel* m_device_label = nullptr;
-    QPushButton* m_device_refresh_button = nullptr;
-
-    QLabel* m_pkg_label = nullptr;
     QStandardItemModel* m_pkg_model = nullptr;
     QComboBox* m_pkg_box = nullptr;
     QPushButton* m_pkg_refresh_button = nullptr;
 
-    QLabel* m_args_label = nullptr;
     QLineEdit* m_args_input_box = nullptr;
 
     struct RuntimeData
@@ -101,7 +94,6 @@ class WhatIfSetupDialog : public DeviceDialog
         Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
     };
 
-    QLabel* m_app_type_label = nullptr;
     WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
     QComboBox* m_app_type_box = nullptr;
 

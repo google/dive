@@ -83,6 +83,7 @@ target_link_libraries(
     dive_renderdoc
     gfxrecon_decode
     gpu_time
+    absl::any_invocable
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if(WIN32)
@@ -107,6 +108,8 @@ target_compile_options(
         # C4100 is "unreference parameter". While Google C++ Style advocates removing unused
         # parameters, these warnings originate from GFXR headers.
         $<$<CXX_COMPILER_ID:MSVC>:/wd4100>
+        # C4127 is "conditional expression is constant". This is caused by absl::AnyInvocable
+        $<$<CXX_COMPILER_ID:MSVC>:/wd4127>
 )
 
 # ------------------------

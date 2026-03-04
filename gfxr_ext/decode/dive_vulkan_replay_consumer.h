@@ -22,6 +22,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "generated/generated_vulkan_replay_consumer.h"
 #include "gpu_time/gpu_time.h"
 
@@ -158,6 +159,26 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
         StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements) override;
 
+    void Process_vkCreateImage(const ApiCallInfo& call_info, VkResult returnValue,
+                               format::HandleId device,
+                               StructPointerDecoder<Decoded_VkImageCreateInfo>* pCreateInfo,
+                               StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                               HandlePointerDecoder<VkImage>* pImage) override;
+
+    void Process_vkDestroyImage(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
+    void Process_vkCreateImageView(const ApiCallInfo& call_info, VkResult returnValue,
+                                   format::HandleId device,
+                                   StructPointerDecoder<Decoded_VkImageViewCreateInfo>* pCreateInfo,
+                                   StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                   HandlePointerDecoder<VkImageView>* pView) override;
+
+    void Process_vkDestroyImageView(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId imageView,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 
@@ -189,6 +210,13 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
     std::vector<format::HandleId> deferred_release_list_ = {};
+    // Track objects that are created in the frame loop that must be destroyed at the end of the
+    // frame to prevent leaking. Based on how the application manages rendering and how GFXR capture
+    // works, we might get captures that straddle frames. This typically results in vkCreate calls
+    // that lack vkDestroy calls. For these cases, we can track and free objects so that they are
+    // not leaked.
+    std::unordered_map<format::HandleId, absl::AnyInvocable<void()>>
+        objects_to_destroy_at_frame_end_;
     Dive::GPUTime gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";

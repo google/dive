@@ -25,7 +25,9 @@ limitations under the License.
 #include <numeric>
 #include <span>
 
+#include "decode/vulkan_object_info.h"
 #include "dive_renderdoc.h"
+#include "format/format.h"
 #include "generated/generated_vulkan_struct_handle_mappers.h"
 #include "graphics/vulkan_struct_get_pnext.h"
 #include "util/logging.h"
@@ -652,6 +654,25 @@ void DiveVulkanReplayConsumer::Process_vkCreateFence(
         deferred_release_list_.push_back(*(pFence->GetPointer()));
         fence_initial_status_[*(pFence->GetHandlePointer())] = FenceStatus::kUnsignaled;
     }
+    else
+    {
+        format::HandleId fence = *(pFence->GetPointer());
+        objects_to_destroy_at_frame_end_.insert(
+            {fence, [this, fence]() {
+                 VulkanFenceInfo* fence_info = GetObjectInfoTable().GetVkFenceInfo(fence);
+                 GFXRECON_ASSERT(fence_info != nullptr);
+
+                 VkDevice device = MapHandle<VulkanDeviceInfo>(
+                     fence_info->parent_id, &CommonObjectInfoTable::GetVkDeviceInfo);
+                 GFXRECON_ASSERT(device != VK_NULL_HANDLE);
+
+                 // From GetAllocationCallbacks: "Replay does not currently attempt emulate the
+                 // captured application's use of VkAllocationCallbacks.""
+                 GetDeviceTable(device)->DestroyFence(device, fence_info->handle,
+                                                      /*pAllocator=*/nullptr);
+                 RemoveHandle(fence, &CommonObjectInfoTable::RemoveVkFenceInfo);
+             }});
+    }
 }
 
 void DiveVulkanReplayConsumer::Process_vkDestroyFence(
@@ -663,6 +684,11 @@ void DiveVulkanReplayConsumer::Process_vkDestroyFence(
     if (it == deferred_release_list_.end())
     {
         VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
+    }
+
+    if (setup_finished_)
+    {
+        objects_to_destroy_at_frame_end_.erase(fence);
     }
 }
 
@@ -738,6 +764,91 @@ void DiveVulkanReplayConsumer::Process_vkGetImageMemoryRequirements(
                                                                pMemoryRequirements);
 }
 
+void DiveVulkanReplayConsumer::Process_vkCreateImage(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkImageCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkImage>* pImage)
+{
+    if (setup_finished_)
+    {
+        format::HandleId image = *pImage->GetPointer();
+        objects_to_destroy_at_frame_end_.insert(
+            {image, [this, image]() {
+                 VulkanImageInfo* image_info = GetObjectInfoTable().GetVkImageInfo(image);
+                 GFXRECON_ASSERT(image_info != nullptr);
+
+                 VulkanDeviceInfo* device_info =
+                     GetObjectInfoTable().GetVkDeviceInfo(image_info->parent_id);
+                 GFXRECON_ASSERT(device_info != nullptr);
+
+                 // GFXR does extra book-keeping so can't just vkDestroyImage. This code was
+                 // distilled from VulkanReplayConsumer::Process_vkDestroyImage.
+
+                 // From GetAllocationCallbacks: "Replay does not currently attempt emulate the
+                 // captured application's use of VkAllocationCallbacks."
+                 device_info->allocator->DestroyImage(image_info->handle,
+                                                      /*allocation_callbacks=*/nullptr,
+                                                      image_info->allocator_data);
+                 RemoveHandle(image, &CommonObjectInfoTable::RemoveVkImageInfo);
+             }});
+    }
+    VulkanReplayConsumer::Process_vkCreateImage(call_info, returnValue, device, pCreateInfo,
+                                                pAllocator, pImage);
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyImage(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    if (setup_finished_)
+    {
+        objects_to_destroy_at_frame_end_.erase(image);
+    }
+    VulkanReplayConsumer::Process_vkDestroyImage(call_info, device, image, pAllocator);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCreateImageView(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkImageViewCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkImageView>* pView)
+{
+    if (setup_finished_)
+    {
+        format::HandleId image_view = *pView->GetPointer();
+        objects_to_destroy_at_frame_end_.insert(
+            {image_view, [this, image_view]() {
+                 VulkanImageViewInfo* image_view_info =
+                     GetObjectInfoTable().GetVkImageViewInfo(image_view);
+                 GFXRECON_ASSERT(image_view_info != nullptr);
+
+                 VkDevice device = MapHandle<VulkanDeviceInfo>(
+                     image_view_info->parent_id, &CommonObjectInfoTable::GetVkDeviceInfo);
+                 GFXRECON_ASSERT(device != VK_NULL_HANDLE);
+
+                 // From GetAllocationCallbacks: "Replay does not currently attempt emulate the
+                 // captured application's use of VkAllocationCallbacks.""
+                 GetDeviceTable(device)->DestroyImageView(device, image_view_info->handle,
+                                                          /*pAllocator=*/nullptr);
+                 RemoveHandle(image_view, &CommonObjectInfoTable::RemoveVkImageViewInfo);
+             }});
+    }
+    VulkanReplayConsumer::Process_vkCreateImageView(call_info, returnValue, device, pCreateInfo,
+                                                    pAllocator, pView);
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyImageView(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId imageView,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    if (setup_finished_)
+    {
+        objects_to_destroy_at_frame_end_.erase(imageView);
+    }
+    VulkanReplayConsumer::Process_vkDestroyImageView(call_info, device, imageView, pAllocator);
+}
+
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();
@@ -789,6 +900,12 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
             device_, static_cast<uint32_t>(reset_fence_list.size()), reset_fence_list.data());
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }
+
+    for (auto& [unused, destroy_object] : objects_to_destroy_at_frame_end_)
+    {
+        destroy_object();
+    }
+    objects_to_destroy_at_frame_end_.clear();
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(

@@ -171,14 +171,14 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
     QLabel* device_label = new QLabel(tr("Device:"));
     m_device_box = new QComboBox();
     m_device_box->setModel(m_device_model);
-    QPushButton* m_device_refresh_button = new QPushButton(tr("&Refresh"));
+    QPushButton* device_refresh_button = new QPushButton(tr("&Refresh"));
     settings_grid->addWidget(device_label, 0, 0, Qt::AlignRight);
     settings_grid->addWidget(m_device_box, 0, 1);
-    settings_grid->addWidget(m_device_refresh_button, 0, 2);
+    settings_grid->addWidget(device_refresh_button, 0, 2);
 
     // Package Selection
     m_pkg_model = new QStandardItemModel();
-    m_runtime_data.m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
+    m_runtime_data.pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
     QLabel* pkg_label = new QLabel(tr("Packages:"));
     m_pkg_box = new QComboBox();
     m_pkg_box->setModel(m_pkg_model);
@@ -195,9 +195,9 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
     settings_grid->addWidget(m_pkg_refresh_button, 1, 2);
 
     // Additional Args
-    QLabel* m_args_label = new QLabel(tr("Additional Args:"));
+    QLabel* args_label = new QLabel(tr("Additional Args:"));
     m_args_input_box = new QLineEdit();
-    settings_grid->addWidget(m_args_label, 2, 0, Qt::AlignRight);
+    settings_grid->addWidget(args_label, 2, 0, Qt::AlignRight);
     settings_grid->addWidget(m_args_input_box, 2, 1, 1, 2);
 
     // App Type Selection
@@ -218,7 +218,7 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
 
     QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnDeviceSelectionChanged(const QString&)));
-    QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
+    QObject::connect(device_refresh_button, &QPushButton::clicked, this,
                      &WhatIfSetupDialog::OnDevListRefresh);
     QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnPackageSelected(const QString&)));
@@ -265,7 +265,7 @@ void WhatIfSetupDialog::UpdatePackageList()
         return;
     }
 
-    if (auto ret = device->ListPackage(m_runtime_data.m_pkg_list_options); !ret.ok())
+    if (auto ret = device->ListPackage(m_runtime_data.pkg_list_options); !ret.ok())
     {
         std::string device_serial = GetCurrentDeviceSerial();
         std::string err_msg = absl::StrFormat("Failed to list package for device %s, error: %s",
@@ -276,15 +276,15 @@ void WhatIfSetupDialog::UpdatePackageList()
     }
     else
     {
-        m_runtime_data.m_pkg_list = *ret;
+        m_runtime_data.pkg_list = *ret;
     }
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
-    for (size_t i = 0; i < m_runtime_data.m_pkg_list.size(); i++)
+    for (size_t i = 0; i < m_runtime_data.pkg_list.size(); i++)
     {
-        QStandardItem* item = new QStandardItem(m_runtime_data.m_pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(m_runtime_data.pkg_list[i].c_str());
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);
@@ -311,7 +311,7 @@ void WhatIfSetupDialog::ResetDialog()
     // Reset the app type to the default Vulkan (OpenXR)
     m_app_type_box->setCurrentIndex(0);
     m_args_input_box->clear();
-    m_runtime_data.m_cur_pkg.clear();
+    m_runtime_data.cur_pkg.clear();
     m_pkg_box->setCurrentIndex(-1);
     m_pkg_model->clear();
     m_start_application_button->setEnabled(false);
@@ -335,46 +335,44 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     absl::Status ret;
     std::string device_serial = GetCurrentDeviceSerial();
     qDebug() << "Start app on dev: " << device_serial.c_str()
-             << ", package: " << m_runtime_data.m_cur_pkg.toStdString().c_str()
-             << ", type: " << app_type.c_str()
-             << ", args: " << m_runtime_data.m_command_args.c_str();
+             << ", package: " << m_runtime_data.cur_pkg.toStdString().c_str()
+             << ", type: " << app_type.c_str() << ", args: " << m_runtime_data.command_args.c_str();
 
     if (app_type ==
         Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)].ui_name.data())
     {
-        ret = device->SetupApp(m_runtime_data.m_cur_pkg.toStdString(),
-                               Dive::ApplicationType::OPENXR_APK, m_runtime_data.m_command_args,
+        ret = device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
+                               Dive::ApplicationType::OPENXR_APK, m_runtime_data.command_args,
                                /*gfxr_capture_directory*/ "");
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
                              .ui_name.data())
     {
-        ret = device->SetupApp(m_runtime_data.m_cur_pkg.toStdString(),
-                               Dive::ApplicationType::VULKAN_APK, m_runtime_data.m_command_args,
+        ret = device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
+                               Dive::ApplicationType::VULKAN_APK, m_runtime_data.command_args,
                                /*gfxr_capture_directory*/ "");
     }
     else if (app_type ==
              Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
                  .ui_name.data())
     {
-        if (m_runtime_data.m_cur_pkg.isEmpty())
+        if (m_runtime_data.cur_pkg.isEmpty())
         {
             std::string err_msg = "Please input a valid command to execute";
             qDebug() << err_msg.c_str();
             ShowMessage(QString::fromStdString(err_msg));
             return false;
         }
-        qDebug() << "exe: " << m_runtime_data.m_cur_pkg.toStdString().c_str()
-                 << " args: " << m_runtime_data.m_command_args.c_str();
-        ret = device->SetupApp(m_runtime_data.m_cur_pkg.toStdString(),
-                               m_runtime_data.m_command_args, Dive::ApplicationType::VULKAN_CLI,
+        qDebug() << "exe: " << m_runtime_data.cur_pkg.toStdString().c_str()
+                 << " args: " << m_runtime_data.command_args.c_str();
+        ret = device->SetupApp(m_runtime_data.cur_pkg.toStdString(), m_runtime_data.command_args,
+                               Dive::ApplicationType::VULKAN_CLI,
                                /*gfxr_capture_directory*/ "");
     }
     if (!ret.ok())
     {
-        std::string err_msg =
-            absl::StrFormat("Fail to setup for package %s, error: %s",
-                            m_runtime_data.m_cur_pkg.toStdString(), ret.message());
+        std::string err_msg = absl::StrFormat("Fail to setup for package %s, error: %s",
+                                              m_runtime_data.cur_pkg.toStdString(), ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -382,9 +380,8 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     ret = device->StartApp();
     if (!ret.ok())
     {
-        std::string err_msg =
-            absl::StrFormat("Fail to start package %s, error: %s",
-                            m_runtime_data.m_cur_pkg.toStdString(), ret.message());
+        std::string err_msg = absl::StrFormat("Fail to start package %s, error: %s",
+                                              m_runtime_data.cur_pkg.toStdString(), ret.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -394,7 +391,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     if (!cur_app->IsRunning())
     {
         std::string err_msg = absl::StrFormat("Process for package %s not found, possibly crashed.",
-                                              m_runtime_data.m_cur_pkg.toStdString());
+                                              m_runtime_data.cur_pkg.toStdString());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
@@ -406,7 +403,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
         m_start_application_button->setText(kStopApplication.data());
     }
 
-    emit RuntimeWhatIfEnabled(m_runtime_data.m_cur_pkg, true);
+    emit RuntimeWhatIfEnabled(m_runtime_data.cur_pkg, true);
     return true;
 }
 
@@ -450,7 +447,7 @@ void WhatIfSetupDialog::OnDevListRefresh() { UpdateDeviceList(); }
 void WhatIfSetupDialog::OnInputArgs(const QString& text)
 {
     qDebug() << "Args changed to " << text;
-    m_runtime_data.m_command_args = text.toStdString();
+    m_runtime_data.command_args = text.toStdString();
 }
 
 void WhatIfSetupDialog::OnPackageSelected(const QString& s)
@@ -461,10 +458,10 @@ void WhatIfSetupDialog::OnPackageSelected(const QString& s)
     {
         return;
     }
-    if (m_runtime_data.m_cur_pkg.toStdString() != m_runtime_data.m_pkg_list[cur_index])
+    if (m_runtime_data.cur_pkg.toStdString() != m_runtime_data.pkg_list[cur_index])
     {
-        m_runtime_data.m_cur_pkg = m_runtime_data.m_pkg_list[cur_index].c_str();
-        qDebug() << "Current package set to: " << m_runtime_data.m_cur_pkg.toStdString().c_str();
+        m_runtime_data.cur_pkg = m_runtime_data.pkg_list[cur_index].c_str();
+        qDebug() << "Current package set to: " << m_runtime_data.cur_pkg.toStdString().c_str();
     }
     m_start_application_button->setEnabled(true);
 }
@@ -505,13 +502,13 @@ void WhatIfSetupDialog::OnStartClicked()
     if (m_start_application_button->text() != kStartApplication.data())
     {
         qDebug() << "Stop Application clicked for package: "
-                 << m_runtime_data.m_cur_pkg.toStdString().c_str();
+                 << m_runtime_data.cur_pkg.toStdString().c_str();
         StopPackage();
         return;
     }
 
     qDebug() << "Start Application clicked with package: "
-             << m_runtime_data.m_cur_pkg.toStdString().c_str() << ", type: " << ty_str.c_str();
+             << m_runtime_data.cur_pkg.toStdString().c_str() << ", type: " << ty_str.c_str();
     if (!StartPackage(device, ty_str))
     {
         m_start_application_button->setDisabled(false);
@@ -566,6 +563,6 @@ void WhatIfSetupDialog::showEvent(QShowEvent* event)
     }
     else
     {
-        m_start_application_button->setEnabled(!m_runtime_data.m_cur_pkg.isEmpty());
+        m_start_application_button->setEnabled(!m_runtime_data.cur_pkg.isEmpty());
     }
 }

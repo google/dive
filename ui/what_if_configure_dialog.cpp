@@ -46,6 +46,9 @@ constexpr std::string_view kFrameTitleStrings[kNumImageCreationFlags] = {
 
 constexpr std::string_view kRenderPassTypeStrings[kNumRenderPassTypes] = {
     "Shadow Map Pass", "G-Buffer/Deferred Pass", "Lightening Pass", "UI/Overlay Pass"};
+
+constexpr std::string_view kAddModification = "&Add Modification";
+constexpr std::string_view kDismiss = "&Dismiss";
 }  // namespace
 
 // =================================================================================================
@@ -127,21 +130,15 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
 
     // --- Settings Section ---
     main_layout->addLayout(CreateSettingsLayout());
+    m_specific_what_if_settings_container = CreateSpecificWhatIfSettingsContainer();
+    main_layout->addWidget(m_specific_what_if_settings_container);
     main_layout->addStretch();
-
-    // --- Modification Warning ---
-    QHBoxLayout* warning_layout = new QHBoxLayout();
-    m_what_if_modification_warning_label =
-        new QLabel(tr("⚠ When testing this modification, the application will be relaunched."));
-    warning_layout->addWidget(m_what_if_modification_warning_label);
-    m_what_if_modification_warning_label->hide();
-    main_layout->addLayout(warning_layout);
 
     // --- Button Section ---
     main_layout->addLayout(CreateButtonLayout());
     setLayout(main_layout);
 
-    HideAllFields();
+    m_specific_what_if_settings_container->hide();
     m_what_if_command_box->setEnabled(false);
 
     SetupConnections();
@@ -194,26 +191,40 @@ QGridLayout* WhatIfConfigureDialog::CreateSettingsLayout()
     settings_grid->addWidget(what_if_command_label, 0, 0, Qt::AlignRight);
     settings_grid->addWidget(m_what_if_command_box, 0, 1, 1, 2);
 
-    // --- Filter Section ---
-    m_what_if_filter_label = new QLabel(tr("Filter By:"));
-    settings_grid->addWidget(m_what_if_filter_label, 1, 0, Qt::AlignRight);
-
-    SetupDrawCallFiltersContainer();
-    settings_grid->addWidget(m_what_if_draw_call_filters_container, 2, 0, 1, 3);
-
-    SetupRenderPassFiltersContainer();
-    settings_grid->addWidget(m_what_if_render_pass_filters_container, 3, 0, 1, 3);
-
-    SetupFlagContainer();
-    settings_grid->addWidget(m_what_if_flag_container, 4, 0, 1, 3);
-
     return settings_grid;
 }
 
-void WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
+QWidget* WhatIfConfigureDialog::CreateSpecificWhatIfSettingsContainer()
 {
-    m_what_if_draw_call_filters_container = new QWidget();
-    QGridLayout* draw_call_filter_layout = new QGridLayout(m_what_if_draw_call_filters_container);
+    QWidget* container = new QWidget();
+    QVBoxLayout* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    // --- Filter Section ---
+    m_what_if_filter_label = new QLabel(tr("Filter By:"));
+    layout->addWidget(m_what_if_filter_label);
+
+    m_what_if_draw_call_filters_container = SetupDrawCallFiltersContainer();
+    layout->addWidget(m_what_if_draw_call_filters_container);
+
+    m_what_if_render_pass_filters_container = SetupRenderPassFiltersContainer();
+    layout->addWidget(m_what_if_render_pass_filters_container);
+
+    m_what_if_flag_container = SetupFlagContainer();
+    layout->addWidget(m_what_if_flag_container);
+
+    // --- Modification Warning ---
+    m_what_if_modification_warning_label =
+        new QLabel(tr("⚠ When testing this modification, the application will be relaunched."));
+    layout->addWidget(m_what_if_modification_warning_label);
+
+    return container;
+}
+
+QWidget* WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
+{
+    QWidget* container = new QWidget();
+    QGridLayout* draw_call_filter_layout = new QGridLayout(container);
     draw_call_filter_layout->setContentsMargins(0, 0, 0, 0);
     draw_call_filter_layout->setColumnStretch(2, 1);
     draw_call_filter_layout->setColumnStretch(1, 0);
@@ -276,13 +287,13 @@ void WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
     draw_call_filter_layout->addWidget(what_if_draw_call_render_pass_filter_label, 3, 1,
                                        Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_what_if_draw_call_render_pass_filter_box, 3, 2);
+    return container;
 }
 
-void WhatIfConfigureDialog::SetupRenderPassFiltersContainer()
+QWidget* WhatIfConfigureDialog::SetupRenderPassFiltersContainer()
 {
-    m_what_if_render_pass_filters_container = new QWidget();
-    QGridLayout* render_pass_filter_layout =
-        new QGridLayout(m_what_if_render_pass_filters_container);
+    QWidget* container = new QWidget();
+    QGridLayout* render_pass_filter_layout = new QGridLayout(container);
     render_pass_filter_layout->setContentsMargins(0, 0, 0, 0);
     render_pass_filter_layout->setColumnStretch(2, 1);
     render_pass_filter_layout->setColumnStretch(1, 0);
@@ -322,12 +333,13 @@ void WhatIfConfigureDialog::SetupRenderPassFiltersContainer()
     render_pass_filter_layout->addWidget(what_if_render_pass_render_pass_type_filter_label, 1, 1,
                                          Qt::AlignRight);
     render_pass_filter_layout->addWidget(m_what_if_render_pass_render_pass_type_filter_box, 1, 2);
+    return container;
 }
 
-void WhatIfConfigureDialog::SetupFlagContainer()
+QWidget* WhatIfConfigureDialog::SetupFlagContainer()
 {
-    m_what_if_flag_container = new QWidget();
-    QHBoxLayout* flag_layout = new QHBoxLayout(m_what_if_flag_container);
+    QWidget* container = new QWidget();
+    QHBoxLayout* flag_layout = new QHBoxLayout(container);
     flag_layout->setContentsMargins(0, 0, 0, 0);
 
     QLabel* what_if_flag_label = new QLabel(tr("Flag(s):"));
@@ -352,14 +364,15 @@ void WhatIfConfigureDialog::SetupFlagContainer()
     flag_layout->addWidget(what_if_flag_label);
     flag_layout->addWidget(m_what_if_flag_box);
 
-    m_what_if_flag_container->hide();
+    container->hide();
+    return container;
 }
 
 QHBoxLayout* WhatIfConfigureDialog::CreateButtonLayout()
 {
     QHBoxLayout* button_layout = new QHBoxLayout();
     QPushButton* dismiss_button = new QPushButton(kDismiss.data(), this);
-    m_add_modification_button = new QPushButton(kAdd_Modification.data(), this);
+    m_add_modification_button = new QPushButton(kAddModification.data(), this);
     m_add_modification_button->setEnabled(false);
     button_layout->addWidget(dismiss_button);
     button_layout->addWidget(m_add_modification_button);
@@ -431,7 +444,8 @@ WhatIfConfigureDialog::~WhatIfConfigureDialog()
 void WhatIfConfigureDialog::ResetDialog()
 {
     m_what_if_type_box->setCurrentIndex(-1);
-    HideAllFields();
+    m_specific_what_if_settings_container->hide();
+    this->adjustSize();
     m_what_if_command_box->clear();
     m_what_if_command_box->setEnabled(false);
     m_what_if_render_pass_command_buffer_filter_box->setCurrentIndex(-1);
@@ -587,6 +601,7 @@ void WhatIfConfigureDialog::OnWhatIfModificationCommandChanged(int index)
             m_what_if_draw_call_instance_count_filter_label->show();
             m_what_if_draw_call_instance_count_filter_box->show();
         }
+        this->adjustSize();
     }
 }
 
@@ -595,7 +610,8 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
 {
     if (index == -1)  // Placeholder selected
     {
-        HideAllFields();
+        m_specific_what_if_settings_container->hide();
+        this->adjustSize();
         m_what_if_command_box->clear();
         m_what_if_command_box->setEnabled(false);
         m_add_modification_button->setEnabled(false);
@@ -604,7 +620,7 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
     const auto& ty_info = Dive::kWhatIfTypeInfos[index - 1];  // -1 because of the placeholder
     m_what_if_command_box->clear();
     m_what_if_command_model->clear();
-    HideAllFields();
+    HideSpecificWhatIfSettings();
     m_what_if_command_box->setEnabled(true);
 
     for (const auto& cmd : ty_info.supported_commands)
@@ -613,48 +629,49 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
     }
     m_what_if_command_box->setModel(m_what_if_command_model);
 
-    if (ty_info.type == Dive::WhatIfType::kDrawCallDisabled)
+    m_specific_what_if_settings_container->show();
+    switch (ty_info.type)
     {
-        ShowDrawCallFields();
+        case Dive::WhatIfType::kDrawCallDisabled:
+            m_what_if_filter_label->show();
+            m_what_if_draw_call_filters_container->show();
+            break;
+        case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
+            m_what_if_modification_warning_label->show();
+            [[fallthrough]];
+        case Dive::WhatIfType::kRenderPassScissorOverridden:
+            m_what_if_filter_label->show();
+            m_what_if_render_pass_filters_container->show();
+            break;
+        case Dive::WhatIfType::kImageCreationFlagRemoved:
+            m_what_if_flag_container->show();
+            m_what_if_modification_warning_label->show();
+            break;
+        case Dive::WhatIfType::kAnisotropicFilterDisabled:
+            m_what_if_modification_warning_label->show();
+            break;
+        default:
+            m_specific_what_if_settings_container->hide();
+            qDebug() << absl::StrCat("The case ", ty_info.ui_name, " is unimplemented/unsupported")
+                            .c_str();
+            break;
     }
-    else if (ty_info.type == Dive::WhatIfType::kRenderPassScissorOverridden)
-    {
-        ShowRenderPassFields();
-    }
-    else if (ty_info.type == Dive::WhatIfType::kImageCreationFlagRemoved)
-    {
-        ShowImageCreationFields();
-        m_what_if_modification_warning_label->show();
-    }
-    else if (ty_info.type == Dive::WhatIfType::kRenderPassLoadStoreOpOverridden)
-    {
-        ShowRenderPassFields();
-        m_what_if_modification_warning_label->show();
-    }
-    else if (ty_info.type == Dive::WhatIfType::kAnisotropicFilterDisabled)
-    {
-        m_what_if_modification_warning_label->show();
-    }
+    this->adjustSize();
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::HideAllFields()
+void WhatIfConfigureDialog::HideSpecificWhatIfSettings()
 {
-    m_what_if_filter_label->hide();
+    m_specific_what_if_settings_container->hide();
 
-    // Draw Call Filters
-    m_what_if_draw_call_filters_container->hide();
-
-    // Render Pass Filters
-    m_what_if_render_pass_filters_container->hide();
-
-    // Flag Section
-    m_what_if_flag_container->hide();
-
-    // Warning Message
-    m_what_if_modification_warning_label->hide();
-
-    this->adjustSize();
+    const auto& children = m_specific_what_if_settings_container->children();
+    for (QObject* child : children)
+    {
+        if (QWidget* widget = qobject_cast<QWidget*>(child))
+        {
+            widget->hide();
+        }
+    }
 }
 
 void WhatIfConfigureDialog::ResetDrawCallFilters()
@@ -677,31 +694,6 @@ void WhatIfConfigureDialog::ResetDrawCallFilters()
 
     m_what_if_draw_call_pso_property_filter_box->setCurrentIndex(0);
     m_what_if_draw_call_render_pass_filter_box->setCurrentIndex(0);
-
-    this->adjustSize();
-}
-
-//--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::ShowDrawCallFields()
-{
-    m_what_if_filter_label->show();
-    m_what_if_draw_call_filters_container->show();
-    this->adjustSize();
-}
-
-//--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::ShowImageCreationFields()
-{
-    m_what_if_flag_container->show();
-    this->adjustSize();
-}
-
-//--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::ShowRenderPassFields()
-{
-    m_what_if_filter_label->show();
-    m_what_if_render_pass_filters_container->show();
-    this->adjustSize();
 }
 
 //--------------------------------------------------------------------------------------------------

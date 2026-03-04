@@ -45,9 +45,10 @@ class WhatIfConfigureDialog : public DeviceDialog
     // -- Layout Creation --
     QVBoxLayout* CreateHeaderLayout();
     QGridLayout* CreateSettingsLayout();
-    void SetupDrawCallFiltersContainer();
-    void SetupRenderPassFiltersContainer();
-    void SetupFlagContainer();
+    QWidget* CreateSpecificWhatIfSettingsContainer();
+    QWidget* SetupDrawCallFiltersContainer();
+    QWidget* SetupRenderPassFiltersContainer();
+    QWidget* SetupFlagContainer();
     QHBoxLayout* CreateButtonLayout();
     void SetupConnections();
 
@@ -68,16 +69,8 @@ class WhatIfConfigureDialog : public DeviceDialog
     void AddModification(const QString& modification_type_short_name);
 
  private:
-    void HideAllFields();
+    void HideSpecificWhatIfSettings();
     void ResetDrawCallFilters();
-    void ShowDrawCallFields();
-    void ShowImageCreationFields();
-    void ShowRenderPassFields();
-    void ShowSamplerCreationFields();
-    void ShowTimestampFields();
-
-    static constexpr std::string_view kAdd_Modification = "&Add Modification";
-    static constexpr std::string_view kDismiss = "&Dismiss";
 
     // --- What-If Type Section ---
     QComboBox* m_what_if_type_box = nullptr;
@@ -85,6 +78,9 @@ class WhatIfConfigureDialog : public DeviceDialog
     // --- Command Selection ---
     QComboBox* m_what_if_command_box = nullptr;
     QStandardItemModel* m_what_if_command_model = nullptr;
+
+    // --- Specific Settings Container ---
+    QWidget* m_specific_what_if_settings_container = nullptr;
 
     // --- Filter Section ---
     QLabel* m_what_if_filter_label = nullptr;

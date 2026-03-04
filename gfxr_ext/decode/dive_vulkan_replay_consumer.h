@@ -158,6 +158,10 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
         StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements) override;
 
+    void Process_vkImportFenceFdKHR(
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+        StructPointerDecoder<Decoded_VkImportFenceFdInfoKHR>* pImportFenceFdInfo) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 
@@ -189,6 +193,10 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
     std::vector<format::HandleId> deferred_release_list_ = {};
+    // File descriptors made during the frame loop that should be closed at the end of the frame to
+    // avoid leaking. The key is the FD stored in the capture file. The value is the FD made during
+    // replay. We need to track both since vkImportFenceFdKHR uses the former.
+    std::unordered_map<int, int> fds_to_close_at_frame_end_;
     Dive::GPUTime gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";

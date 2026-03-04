@@ -738,6 +738,16 @@ void DiveVulkanReplayConsumer::Process_vkGetImageMemoryRequirements(
                                                                pMemoryRequirements);
 }
 
+void DiveVulkanReplayConsumer::Process_vkImportFenceFdKHR(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkImportFenceFdInfoKHR>* pImportFenceFdInfo)
+{
+    if (setup_finished_)
+    {
+        fds_to_close_at_frame_end_.erase(pImportFenceFdInfo->GetPointer()->fd);
+    }
+}
+
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 {
     gpu_time_.ClearFrameCache();
@@ -789,6 +799,12 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
             device_, static_cast<uint32_t>(reset_fence_list.size()), reset_fence_list.data());
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }
+
+    for (auto [unused_capture_fd, replay_fd] : fds_to_close_at_frame_end_)
+    {
+        close(replay_fd);
+    }
+    fds_to_close_at_frame_end_.clear();
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
@@ -805,7 +821,6 @@ void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
     int* out_pFd = pFd->IsNull() ? nullptr : pFd->AllocateOutputData(1, -1);
 
     VkResult replay_result = pfn_vkGetFenceFdKHR_(in_device->handle, in_pGetFdInfo, out_pFd);
-
     if (replay_result != VK_SUCCESS)
     {
         GFXRECON_LOG_WARNING(
@@ -814,6 +829,24 @@ void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
             util::ToString(replay_result).c_str());
         replay_result = VK_SUCCESS;
         return;
+    }
+
+    if (setup_finished_)
+    {
+        if (int* fd = pFd->GetOutputPointer(); fd != nullptr)
+        {
+            int fd_in_capture = *pFd->GetPointer();
+
+            auto [iter, was_inserted] = fds_to_close_at_frame_end_.insert({fd_in_capture, *fd});
+            if (!was_inserted)
+            {
+                // If the app got the same FD twice then maybe it was reused by the OS. Which
+                // means that maybe the app closed it. Whatever the case, close it to prevent
+                // leaks.
+                close(iter->second);
+                iter->second = *fd;
+            }
+        }
     }
 }
 

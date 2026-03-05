@@ -113,15 +113,15 @@ QVBoxLayout* WhatIfSetupDialog::CreateHeaderLayout()
     title_font.setBold(true);
     title_font.setPointSize(title_font.pointSize() + 2);
 
-    QLabel* what_if_title_label = new QLabel(tr("Explore What-If Scenarios"));
-    what_if_title_label->setFont(title_font);
-    QLabel* what_if_info_label =
+    QLabel* title_label = new QLabel(tr("Explore What-If Scenarios"));
+    title_label->setFont(title_font);
+    QLabel* info_label =
         new QLabel(tr("Modify vulkan calls, shaders, etc. to explore the potential impact "
                       "rendering the application."));
-    what_if_info_label->setWordWrap(true);
+    info_label->setWordWrap(true);
 
-    layout->addWidget(what_if_title_label);
-    layout->addWidget(what_if_info_label);
+    layout->addWidget(title_label);
+    layout->addWidget(info_label);
     return layout;
 }
 
@@ -259,24 +259,27 @@ void WhatIfSetupDialog::EnableWhatIfTypeButtons(bool enable)
 
 void WhatIfSetupDialog::UpdatePackageList()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
     if (device == nullptr)
     {
         return;
     }
 
-    if (auto ret = device->ListPackage(m_runtime_data.pkg_list_options); !ret.ok())
+    absl::StatusOr<std::vector<std::string>> package_list =
+        device->ListPackage(m_runtime_data.pkg_list_options);
+
+    if (!package_list.ok())
     {
         std::string device_serial = GetCurrentDeviceSerial();
         std::string err_msg = absl::StrFormat("Failed to list package for device %s, error: %s",
-                                              device_serial, ret.status().message());
+                                              device_serial, package_list.status().message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
     else
     {
-        m_runtime_data.pkg_list = *ret;
+        m_runtime_data.pkg_list = *package_list;
     }
 
     const QSignalBlocker blocker(
@@ -293,7 +296,7 @@ void WhatIfSetupDialog::UpdatePackageList()
 
 void WhatIfSetupDialog::ShowMessage(const QString& message)
 {
-    auto message_box = new QMessageBox(this);
+    QMessageBox* message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message);
     message_box->open();
@@ -332,7 +335,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     m_start_application_button->setDisabled(true);
     EnableWhatIfTypeButtons(false);
 
-    absl::Status ret;
+    absl::Status setup_app_res;
     std::string device_serial = GetCurrentDeviceSerial();
     qDebug() << "Start app on dev: " << device_serial.c_str()
              << ", package: " << m_runtime_data.cur_pkg.toStdString().c_str()
@@ -341,16 +344,18 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     if (app_type ==
         Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)].ui_name.data())
     {
-        ret = device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
-                               Dive::ApplicationType::OPENXR_APK, m_runtime_data.command_args,
-                               /*gfxr_capture_directory*/ "");
+        setup_app_res =
+            device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
+                             Dive::ApplicationType::OPENXR_APK, m_runtime_data.command_args,
+                             /*gfxr_capture_directory*/ "");
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
                              .ui_name.data())
     {
-        ret = device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
-                               Dive::ApplicationType::VULKAN_APK, m_runtime_data.command_args,
-                               /*gfxr_capture_directory*/ "");
+        setup_app_res =
+            device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
+                             Dive::ApplicationType::VULKAN_APK, m_runtime_data.command_args,
+                             /*gfxr_capture_directory*/ "");
     }
     else if (app_type ==
              Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
@@ -365,28 +370,40 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
         }
         qDebug() << "exe: " << m_runtime_data.cur_pkg.toStdString().c_str()
                  << " args: " << m_runtime_data.command_args.c_str();
-        ret = device->SetupApp(m_runtime_data.cur_pkg.toStdString(), m_runtime_data.command_args,
-                               Dive::ApplicationType::VULKAN_CLI,
-                               /*gfxr_capture_directory*/ "");
+        setup_app_res =
+            device->SetupApp(m_runtime_data.cur_pkg.toStdString(), m_runtime_data.command_args,
+                             Dive::ApplicationType::VULKAN_CLI,
+                             /*gfxr_capture_directory*/ "");
     }
-    if (!ret.ok())
+    if (!setup_app_res.ok())
     {
-        std::string err_msg = absl::StrFormat("Fail to setup for package %s, error: %s",
-                                              m_runtime_data.cur_pkg.toStdString(), ret.message());
+        std::string err_msg =
+            absl::StrFormat("Fail to setup for package %s, error: %s",
+                            m_runtime_data.cur_pkg.toStdString(), setup_app_res.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
     }
-    ret = device->StartApp();
-    if (!ret.ok())
+    if (absl::Status start_app_res = device->StartApp(); !start_app_res.ok())
     {
-        std::string err_msg = absl::StrFormat("Fail to start package %s, error: %s",
-                                              m_runtime_data.cur_pkg.toStdString(), ret.message());
+        std::string err_msg =
+            absl::StrFormat("Fail to start package %s, error: %s",
+                            m_runtime_data.cur_pkg.toStdString(), start_app_res.message());
         qDebug() << err_msg.c_str();
         ShowMessage(QString::fromStdString(err_msg));
         return false;
     }
-    auto cur_app = device->GetCurrentApplication();
+
+    Dive::AndroidApplication* cur_app = device->GetCurrentApplication();
+
+    if (!cur_app)
+    {
+        std::string err_msg = absl::StrFormat("Failed to get current application for package %s",
+                                              m_runtime_data.cur_pkg.toStdString());
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+        return false;
+    }
 
     if (!cur_app->IsRunning())
     {
@@ -397,11 +414,8 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
         return false;
     }
 
-    if (cur_app)
-    {
-        m_start_application_button->setDisabled(false);
-        m_start_application_button->setText(kStopApplication.data());
-    }
+    m_start_application_button->setDisabled(false);
+    m_start_application_button->setText(kStopApplication.data());
 
     emit RuntimeWhatIfEnabled(m_runtime_data.cur_pkg, true);
     return true;
@@ -409,8 +423,8 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
 
 void WhatIfSetupDialog::StopPackage()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
-    auto cur_app = device ? device->GetCurrentApplication() : nullptr;
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidApplication* cur_app = device ? device->GetCurrentApplication() : nullptr;
 
     if (!device || !cur_app || !cur_app->IsRunning())
     {
@@ -468,7 +482,7 @@ void WhatIfSetupDialog::OnPackageSelected(const QString& s)
 
 void WhatIfSetupDialog::OnStartClicked()
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
     if (!device)
     {
         std::string err_msg =
@@ -533,8 +547,8 @@ void WhatIfSetupDialog::OnWhatIfTypeChanged(int button_id)
 
 void WhatIfSetupDialog::closeEvent(QCloseEvent* event)
 {
-    auto device = Dive::GetDeviceManager().GetDevice();
-    auto cur_app = device ? device->GetCurrentApplication() : nullptr;
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    Dive::AndroidApplication* cur_app = device ? device->GetCurrentApplication() : nullptr;
 
     bool no_application_currently_running_on_device =
         (device == nullptr) || (cur_app == nullptr) || !cur_app->IsRunning();

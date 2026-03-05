@@ -130,16 +130,16 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
 
     // --- Settings Section ---
     main_layout->addLayout(CreateSettingsLayout());
-    m_specific_what_if_settings_container = CreateSpecificWhatIfSettingsContainer();
-    main_layout->addWidget(m_specific_what_if_settings_container);
+    m_specific_settings_container = CreateSpecificSettingsContainer();
+    main_layout->addWidget(m_specific_settings_container);
     main_layout->addStretch();
 
     // --- Button Section ---
     main_layout->addLayout(CreateButtonLayout());
     setLayout(main_layout);
 
-    m_specific_what_if_settings_container->hide();
-    m_what_if_command_box->setEnabled(false);
+    m_specific_settings_container->hide();
+    m_command_box->setEnabled(false);
 
     SetupConnections();
 }
@@ -153,26 +153,25 @@ QVBoxLayout* WhatIfConfigureDialog::CreateHeaderLayout()
     title_font.setPointSize(title_font.pointSize() + 2);
 
     // --- Header Section ---
-    QLabel* what_if_title_label = new QLabel(tr("What would happen if..."));
-    what_if_title_label->setFont(title_font);
-    QStandardItemModel* what_if_type_model = new QStandardItemModel();
-    m_what_if_type_box = new QComboBox();
+    QLabel* title_label = new QLabel(tr("What would happen if..."));
+    title_label->setFont(title_font);
+    QStandardItemModel* type_model = new QStandardItemModel();
+    m_type_box = new QComboBox();
 
-    QStandardItem* what_if_type_placeholder =
-        new QStandardItem("Please select a modification type");
-    what_if_type_placeholder->setFlags(what_if_type_placeholder->flags() & ~Qt::ItemIsSelectable);
-    what_if_type_model->appendRow(what_if_type_placeholder);
+    QStandardItem* type_placeholder = new QStandardItem("Please select a modification type");
+    type_placeholder->setFlags(type_placeholder->flags() & ~Qt::ItemIsSelectable);
+    type_model->appendRow(type_placeholder);
 
     for (const auto& ty : Dive::kWhatIfTypeInfos)
     {
         QStandardItem* item = new QStandardItem(ty.ui_name.data());
-        what_if_type_model->appendRow(item);
+        type_model->appendRow(item);
     }
-    m_what_if_type_box->setModel(what_if_type_model);
+    m_type_box->setModel(type_model);
 
-    layout->addWidget(what_if_title_label);
+    layout->addWidget(title_label);
     layout->addSpacing(15);
-    layout->addWidget(m_what_if_type_box);
+    layout->addWidget(m_type_box);
     return layout;
 }
 
@@ -184,39 +183,39 @@ QGridLayout* WhatIfConfigureDialog::CreateSettingsLayout()
     settings_grid->setColumnStretch(1, 0);
 
     // --- Command Selector ---
-    QLabel* what_if_command_label = new QLabel(tr("Command:"));
-    m_what_if_command_box = new QComboBox();
-    m_what_if_command_model = new QStandardItemModel();
-    m_what_if_command_box->setModel(m_what_if_command_model);
-    settings_grid->addWidget(what_if_command_label, 0, 0, Qt::AlignRight);
-    settings_grid->addWidget(m_what_if_command_box, 0, 1, 1, 2);
+    QLabel* command_label = new QLabel(tr("Command:"));
+    m_command_box = new QComboBox();
+    m_command_model = new QStandardItemModel();
+    m_command_box->setModel(m_command_model);
+    settings_grid->addWidget(command_label, 0, 0, Qt::AlignRight);
+    settings_grid->addWidget(m_command_box, 0, 1, 1, 2);
 
     return settings_grid;
 }
 
-QWidget* WhatIfConfigureDialog::CreateSpecificWhatIfSettingsContainer()
+QWidget* WhatIfConfigureDialog::CreateSpecificSettingsContainer()
 {
     QWidget* container = new QWidget();
     QVBoxLayout* layout = new QVBoxLayout(container);
     layout->setContentsMargins(0, 0, 0, 0);
 
     // --- Filter Section ---
-    m_what_if_filter_label = new QLabel(tr("Filter By:"));
-    layout->addWidget(m_what_if_filter_label);
+    m_filter_label = new QLabel(tr("Filter By:"));
+    layout->addWidget(m_filter_label);
 
-    m_what_if_draw_call_filters_container = SetupDrawCallFiltersContainer();
-    layout->addWidget(m_what_if_draw_call_filters_container);
+    m_draw_call_filters_container = SetupDrawCallFiltersContainer();
+    layout->addWidget(m_draw_call_filters_container);
 
-    m_what_if_render_pass_filters_container = SetupRenderPassFiltersContainer();
-    layout->addWidget(m_what_if_render_pass_filters_container);
+    m_render_pass_filters_container = SetupRenderPassFiltersContainer();
+    layout->addWidget(m_render_pass_filters_container);
 
-    m_what_if_flag_container = SetupFlagContainer();
-    layout->addWidget(m_what_if_flag_container);
+    m_flag_container = SetupFlagContainer();
+    layout->addWidget(m_flag_container);
 
     // --- Modification Warning ---
-    m_what_if_modification_warning_label =
+    m_modification_warning_label =
         new QLabel(tr("⚠ When testing this modification, the application will be relaunched."));
-    layout->addWidget(m_what_if_modification_warning_label);
+    layout->addWidget(m_modification_warning_label);
 
     return container;
 }
@@ -229,64 +228,46 @@ QWidget* WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
     draw_call_filter_layout->setColumnStretch(2, 1);
     draw_call_filter_layout->setColumnStretch(1, 0);
 
-    m_what_if_draw_call_index_count_filter_label = new QLabel(tr("Index Count:"));
-    m_what_if_draw_call_index_count_filter_box = new QSpinBox();
-    m_what_if_draw_call_index_count_filter_box->setRange(0, 1000);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_index_count_filter_label, 0, 1,
-                                       Qt::AlignRight);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_index_count_filter_box, 0, 2);
+    CreateDrawCallFilterSpinner(m_index_count_filter, tr("Index Count:"), 0, 1000);
+    draw_call_filter_layout->addWidget(m_index_count_filter.label, 0, 1, Qt::AlignRight);
+    draw_call_filter_layout->addWidget(m_index_count_filter.spin_box, 0, 2);
 
-    m_what_if_draw_call_vertex_count_filter_label = new QLabel(tr("Vertex Count:"));
-    m_what_if_draw_call_vertex_count_filter_box = new QSpinBox();
-    m_what_if_draw_call_vertex_count_filter_box->setRange(0, 1000);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_vertex_count_filter_label, 0, 1,
-                                       Qt::AlignRight);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_vertex_count_filter_box, 0, 2);
+    CreateDrawCallFilterSpinner(m_vertex_count_filter, tr("Vertex Count:"), 0, 1000);
+    draw_call_filter_layout->addWidget(m_vertex_count_filter.label, 0, 1, Qt::AlignRight);
+    draw_call_filter_layout->addWidget(m_vertex_count_filter.spin_box, 0, 2);
 
-    m_what_if_draw_call_instance_count_filter_label = new QLabel(tr("Instance Count:"));
-    m_what_if_draw_call_instance_count_filter_box = new QSpinBox();
-    m_what_if_draw_call_instance_count_filter_box->setRange(0, 1000);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_instance_count_filter_label, 1, 1,
-                                       Qt::AlignRight);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_instance_count_filter_box, 1, 2);
+    CreateDrawCallFilterSpinner(m_instance_count_filter, tr("Instance Count:"), 0, 1000);
+    draw_call_filter_layout->addWidget(m_instance_count_filter.label, 1, 1, Qt::AlignRight);
+    draw_call_filter_layout->addWidget(m_instance_count_filter.spin_box, 1, 2);
 
-    m_what_if_draw_call_draw_count_filter_label = new QLabel(tr("Draw Count:"));
-    m_what_if_draw_call_draw_count_filter_box = new QSpinBox();
-    m_what_if_draw_call_draw_count_filter_box->setRange(0, 1000);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_draw_count_filter_label, 1, 1,
-                                       Qt::AlignRight);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_draw_count_filter_box, 1, 2);
+    CreateDrawCallFilterSpinner(m_draw_count_filter, tr("Draw Count:"), 0, 1000);
+    draw_call_filter_layout->addWidget(m_draw_count_filter.label, 1, 1, Qt::AlignRight);
+    draw_call_filter_layout->addWidget(m_draw_count_filter.spin_box, 1, 2);
 
-    QLabel* what_if_draw_call_pso_property_filter_label =
+    QLabel* draw_call_pso_property_filter_label =
         new QLabel(tr("Pipeline State Object (PSO) Property:"));
-    m_what_if_draw_call_pso_property_filter_box = new QComboBox();
-    QStandardItemModel* what_if_draw_call_pso_property_filter_model = new QStandardItemModel();
-    QStandardItem* what_if_draw_call_pso_property_filter_placeholder =
+    m_draw_call_pso_property_filter_box = new QComboBox();
+    QStandardItemModel* draw_call_pso_property_filter_model = new QStandardItemModel();
+    QStandardItem* draw_call_pso_property_filter_placeholder =
         new QStandardItem("Select a PSO property");
-    what_if_draw_call_pso_property_filter_placeholder->setFlags(
-        what_if_draw_call_pso_property_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    what_if_draw_call_pso_property_filter_model->appendRow(
-        what_if_draw_call_pso_property_filter_placeholder);
-    m_what_if_draw_call_pso_property_filter_box->setModel(
-        what_if_draw_call_pso_property_filter_model);
-    draw_call_filter_layout->addWidget(what_if_draw_call_pso_property_filter_label, 2, 1,
-                                       Qt::AlignRight);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_pso_property_filter_box, 2, 2);
+    draw_call_pso_property_filter_placeholder->setFlags(
+        draw_call_pso_property_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
+    draw_call_pso_property_filter_model->appendRow(draw_call_pso_property_filter_placeholder);
+    m_draw_call_pso_property_filter_box->setModel(draw_call_pso_property_filter_model);
+    draw_call_filter_layout->addWidget(draw_call_pso_property_filter_label, 2, 1, Qt::AlignRight);
+    draw_call_filter_layout->addWidget(m_draw_call_pso_property_filter_box, 2, 2);
 
-    QLabel* what_if_draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
-    m_what_if_draw_call_render_pass_filter_box = new QComboBox();
-    QStandardItemModel* what_if_draw_call_render_pass_filter_model = new QStandardItemModel();
-    QStandardItem* what_if_render_pass_render_pass_filter_placeholder =
+    QLabel* draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
+    m_draw_call_render_pass_filter_box = new QComboBox();
+    QStandardItemModel* draw_call_render_pass_filter_model = new QStandardItemModel();
+    QStandardItem* render_pass_render_pass_filter_placeholder =
         new QStandardItem("Select a render pass");
-    what_if_render_pass_render_pass_filter_placeholder->setFlags(
-        what_if_render_pass_render_pass_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    what_if_draw_call_render_pass_filter_model->appendRow(
-        what_if_render_pass_render_pass_filter_placeholder);
-    m_what_if_draw_call_render_pass_filter_box->setModel(
-        what_if_draw_call_render_pass_filter_model);
-    draw_call_filter_layout->addWidget(what_if_draw_call_render_pass_filter_label, 3, 1,
-                                       Qt::AlignRight);
-    draw_call_filter_layout->addWidget(m_what_if_draw_call_render_pass_filter_box, 3, 2);
+    render_pass_render_pass_filter_placeholder->setFlags(
+        render_pass_render_pass_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
+    draw_call_render_pass_filter_model->appendRow(render_pass_render_pass_filter_placeholder);
+    m_draw_call_render_pass_filter_box->setModel(draw_call_render_pass_filter_model);
+    draw_call_filter_layout->addWidget(draw_call_render_pass_filter_label, 3, 1, Qt::AlignRight);
+    draw_call_filter_layout->addWidget(m_draw_call_render_pass_filter_box, 3, 2);
     return container;
 }
 
@@ -298,41 +279,37 @@ QWidget* WhatIfConfigureDialog::SetupRenderPassFiltersContainer()
     render_pass_filter_layout->setColumnStretch(2, 1);
     render_pass_filter_layout->setColumnStretch(1, 0);
 
-    QLabel* what_if_render_pass_command_buffer_filter_label = new QLabel(tr("Command Buffer:"));
-    m_what_if_render_pass_command_buffer_filter_box = new QComboBox();
-    QStandardItemModel* what_if_render_pass_command_buffer_filter_model = new QStandardItemModel();
-    QStandardItem* what_if_render_pass_command_buffer_filter_placeholder =
+    QLabel* render_pass_command_buffer_filter_label = new QLabel(tr("Command Buffer:"));
+    m_render_pass_command_buffer_filter_box = new QComboBox();
+    QStandardItemModel* render_pass_command_buffer_filter_model = new QStandardItemModel();
+    QStandardItem* render_pass_command_buffer_filter_placeholder =
         new QStandardItem("Select a command buffer");
-    what_if_render_pass_command_buffer_filter_placeholder->setFlags(
-        what_if_render_pass_command_buffer_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    what_if_render_pass_command_buffer_filter_model->appendRow(
-        what_if_render_pass_command_buffer_filter_placeholder);
-    m_what_if_render_pass_command_buffer_filter_box->setModel(
-        what_if_render_pass_command_buffer_filter_model);
-    render_pass_filter_layout->addWidget(what_if_render_pass_command_buffer_filter_label, 0, 1,
+    render_pass_command_buffer_filter_placeholder->setFlags(
+        render_pass_command_buffer_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
+    render_pass_command_buffer_filter_model->appendRow(
+        render_pass_command_buffer_filter_placeholder);
+    m_render_pass_command_buffer_filter_box->setModel(render_pass_command_buffer_filter_model);
+    render_pass_filter_layout->addWidget(render_pass_command_buffer_filter_label, 0, 1,
                                          Qt::AlignRight);
-    render_pass_filter_layout->addWidget(m_what_if_render_pass_command_buffer_filter_box, 0, 2);
+    render_pass_filter_layout->addWidget(m_render_pass_command_buffer_filter_box, 0, 2);
 
-    QLabel* what_if_render_pass_render_pass_type_filter_label = new QLabel(tr("Type:"));
-    m_what_if_render_pass_render_pass_type_filter_box = new QComboBox();
-    QStandardItemModel* what_if_render_pass_render_pass_type_filter_model =
-        new QStandardItemModel();
-    QStandardItem* what_if_render_pass_type_filter_placeholder =
+    QLabel* render_pass_render_pass_type_filter_label = new QLabel(tr("Type:"));
+    m_render_pass_render_pass_type_filter_box = new QComboBox();
+    QStandardItemModel* render_pass_render_pass_type_filter_model = new QStandardItemModel();
+    QStandardItem* render_pass_type_filter_placeholder =
         new QStandardItem("Select render pass type");
-    what_if_render_pass_type_filter_placeholder->setFlags(
-        what_if_render_pass_type_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    what_if_render_pass_render_pass_type_filter_model->appendRow(
-        what_if_render_pass_type_filter_placeholder);
+    render_pass_type_filter_placeholder->setFlags(render_pass_type_filter_placeholder->flags() &
+                                                  ~Qt::ItemIsSelectable);
+    render_pass_render_pass_type_filter_model->appendRow(render_pass_type_filter_placeholder);
     for (int i = 0; i < kNumRenderPassTypes; i++)
     {
         QStandardItem* item = new QStandardItem(kRenderPassTypeStrings[i].data());
-        what_if_render_pass_render_pass_type_filter_model->appendRow(item);
+        render_pass_render_pass_type_filter_model->appendRow(item);
     }
-    m_what_if_render_pass_render_pass_type_filter_box->setModel(
-        what_if_render_pass_render_pass_type_filter_model);
-    render_pass_filter_layout->addWidget(what_if_render_pass_render_pass_type_filter_label, 1, 1,
+    m_render_pass_render_pass_type_filter_box->setModel(render_pass_render_pass_type_filter_model);
+    render_pass_filter_layout->addWidget(render_pass_render_pass_type_filter_label, 1, 1,
                                          Qt::AlignRight);
-    render_pass_filter_layout->addWidget(m_what_if_render_pass_render_pass_type_filter_box, 1, 2);
+    render_pass_filter_layout->addWidget(m_render_pass_render_pass_type_filter_box, 1, 2);
     return container;
 }
 
@@ -342,27 +319,27 @@ QWidget* WhatIfConfigureDialog::SetupFlagContainer()
     QHBoxLayout* flag_layout = new QHBoxLayout(container);
     flag_layout->setContentsMargins(0, 0, 0, 0);
 
-    QLabel* what_if_flag_label = new QLabel(tr("Flag(s):"));
-    m_what_if_flag_box = new QComboBox();
-    MultiCheckComboBoxEventFilter* filter = new MultiCheckComboBoxEventFilter(m_what_if_flag_box);
-    m_what_if_flag_box->view()->viewport()->installEventFilter(filter);
-    m_what_if_flag_model = new QStandardItemModel();
+    QLabel* flag_label = new QLabel(tr("Flag(s):"));
+    m_flag_box = new QComboBox();
+    MultiCheckComboBoxEventFilter* filter = new MultiCheckComboBoxEventFilter(m_flag_box);
+    m_flag_box->view()->viewport()->installEventFilter(filter);
+    m_flag_model = new QStandardItemModel();
 
-    QStandardItem* what_if_flag_place_holder = new QStandardItem("Select image creation flag(s)");
-    what_if_flag_place_holder->setFlags(what_if_flag_place_holder->flags() & ~Qt::ItemIsSelectable);
-    m_what_if_flag_model->appendRow(what_if_flag_place_holder);
+    QStandardItem* flag_place_holder = new QStandardItem("Select image creation flag(s)");
+    flag_place_holder->setFlags(flag_place_holder->flags() & ~Qt::ItemIsSelectable);
+    m_flag_model->appendRow(flag_place_holder);
     for (int i = 0; i < kNumImageCreationFlags; i++)
     {
         QStandardItem* item = new QStandardItem(kFrameTitleStrings[i].data());
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
         item->setCheckable(true);
         item->setCheckState(Qt::Unchecked);
-        m_what_if_flag_model->appendRow(item);
+        m_flag_model->appendRow(item);
     }
-    m_what_if_flag_box->setModel(m_what_if_flag_model);
+    m_flag_box->setModel(m_flag_model);
 
-    flag_layout->addWidget(what_if_flag_label);
-    flag_layout->addWidget(m_what_if_flag_box);
+    flag_layout->addWidget(flag_label);
+    flag_layout->addWidget(m_flag_box);
 
     container->hide();
     return container;
@@ -387,49 +364,45 @@ QHBoxLayout* WhatIfConfigureDialog::CreateButtonLayout()
 
 void WhatIfConfigureDialog::SetupConnections()
 {
-    QObject::connect(m_what_if_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+    QObject::connect(m_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnWhatIfModificationTypeChanged);
 
-    QObject::connect(m_what_if_command_box, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                     this, &WhatIfConfigureDialog::OnWhatIfModificationCommandChanged);
+    QObject::connect(m_command_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                     &WhatIfConfigureDialog::OnWhatIfModificationCommandChanged);
 
-    QObject::connect(m_what_if_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+    QObject::connect(m_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_draw_call_index_count_filter_box,
-                     QOverload<int>::of(&QSpinBox::valueChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+    QObject::connect(m_index_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
+                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_draw_call_vertex_count_filter_box,
-                     QOverload<int>::of(&QSpinBox::valueChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+    QObject::connect(m_vertex_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
+                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_draw_call_instance_count_filter_box,
-                     QOverload<int>::of(&QSpinBox::valueChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+    QObject::connect(m_instance_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
+                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_draw_call_draw_count_filter_box,
-                     QOverload<int>::of(&QSpinBox::valueChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+    QObject::connect(m_draw_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
+                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_draw_call_pso_property_filter_box,
+    QObject::connect(m_draw_call_pso_property_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_draw_call_render_pass_filter_box,
+    QObject::connect(m_draw_call_render_pass_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_render_pass_command_buffer_filter_box,
+    QObject::connect(m_render_pass_command_buffer_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
-    QObject::connect(m_what_if_render_pass_render_pass_type_filter_box,
+    QObject::connect(m_render_pass_render_pass_type_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                      &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
 
     // Connect flag model dataChanged for check state changes
-    QObject::connect(m_what_if_flag_model, &QStandardItemModel::dataChanged, this,
+    QObject::connect(m_flag_model, &QStandardItemModel::dataChanged, this,
                      &WhatIfConfigureDialog::OnFlagModelChanged);
 }
 
@@ -443,18 +416,18 @@ WhatIfConfigureDialog::~WhatIfConfigureDialog()
 //--------------------------------------------------------------------------------------------------
 void WhatIfConfigureDialog::ResetDialog()
 {
-    m_what_if_type_box->setCurrentIndex(-1);
-    m_specific_what_if_settings_container->hide();
+    m_type_box->setCurrentIndex(-1);
+    m_specific_settings_container->hide();
     this->adjustSize();
-    m_what_if_command_box->clear();
-    m_what_if_command_box->setEnabled(false);
-    m_what_if_render_pass_command_buffer_filter_box->setCurrentIndex(-1);
-    m_what_if_render_pass_render_pass_type_filter_box->setCurrentIndex(-1);
+    m_command_box->clear();
+    m_command_box->setEnabled(false);
+    m_render_pass_command_buffer_filter_box->setCurrentIndex(-1);
+    m_render_pass_render_pass_type_filter_box->setCurrentIndex(-1);
 
     // Reset flag checkboxes
-    for (int i = 1; i < m_what_if_flag_model->rowCount(); ++i)
+    for (int i = 1; i < m_flag_model->rowCount(); ++i)
     {
-        QStandardItem* item = m_what_if_flag_model->item(i);
+        QStandardItem* item = m_flag_model->item(i);
         if (item && item->isCheckable())
         {
             item->setCheckState(Qt::Unchecked);
@@ -467,7 +440,7 @@ void WhatIfConfigureDialog::ResetDialog()
 //--------------------------------------------------------------------------------------------------
 void WhatIfConfigureDialog::ShowMessage(const QString& message)
 {
-    auto message_box = new QMessageBox(this);
+    QMessageBox* message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message);
     message_box->open();
@@ -477,7 +450,7 @@ void WhatIfConfigureDialog::ShowMessage(const QString& message)
 void WhatIfConfigureDialog::OnAddModificationClicked()
 {
     const int modification_type_index =
-        m_what_if_type_box->currentIndex() - 1;  // -1 because of the placeholder
+        m_type_box->currentIndex() - 1;  // -1 because of the placeholder
 
     const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
 
@@ -502,7 +475,7 @@ void WhatIfConfigureDialog::OnFlagModelChanged(const QModelIndex& topLeft,
 void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
 {
     const int modification_type_index =
-        m_what_if_type_box->currentIndex() - 1;  // -1 because of the placeholder
+        m_type_box->currentIndex() - 1;  // -1 because of the placeholder
     if (modification_type_index < 0)
     {
         m_add_modification_button->setEnabled(false);
@@ -514,12 +487,12 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
     const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
     if (modification_type_info.type == Dive::WhatIfType::kDrawCallDisabled)
     {
-        if (m_what_if_draw_call_index_count_filter_box->value() == 0 &&
-            m_what_if_draw_call_vertex_count_filter_box->value() == 0 &&
-            m_what_if_draw_call_instance_count_filter_box->value() == 0 &&
-            m_what_if_draw_call_draw_count_filter_box->value() == 0 &&
-            m_what_if_draw_call_pso_property_filter_box->currentIndex() == 0 &&
-            m_what_if_draw_call_render_pass_filter_box->currentIndex() == 0)
+        if (m_index_count_filter.spin_box->value() == 0 &&
+            m_vertex_count_filter.spin_box->value() == 0 &&
+            m_instance_count_filter.spin_box->value() == 0 &&
+            m_draw_count_filter.spin_box->value() == 0 &&
+            m_draw_call_pso_property_filter_box->currentIndex() == 0 &&
+            m_draw_call_render_pass_filter_box->currentIndex() == 0)
         {
             m_add_modification_button->setEnabled(false);
             return;
@@ -527,13 +500,13 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
     }
     else if (modification_type_info.type == Dive::WhatIfType::kImageCreationFlagRemoved)
     {
-        if (m_what_if_flag_box->isVisible())
+        if (m_flag_box->isVisible())
         {
             bool any_flag_checked = false;
             // Iterate through the model items, skipping the placeholder at index 0
-            for (int i = 1; i < m_what_if_flag_model->rowCount(); ++i)
+            for (int i = 1; i < m_flag_model->rowCount(); ++i)
             {
-                QStandardItem* item = m_what_if_flag_model->item(i);
+                QStandardItem* item = m_flag_model->item(i);
                 if (item && item->isCheckable() && item->checkState() == Qt::Checked)
                 {
                     any_flag_checked = true;
@@ -550,8 +523,8 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
     else if (modification_type_info.type == Dive::WhatIfType::kRenderPassLoadStoreOpOverridden ||
              modification_type_info.type == Dive::WhatIfType::kRenderPassScissorOverridden)
     {
-        if (m_what_if_render_pass_command_buffer_filter_box->currentIndex() == 0 &&
-            m_what_if_render_pass_render_pass_type_filter_box->currentIndex() == 0)
+        if (m_render_pass_command_buffer_filter_box->currentIndex() == 0 &&
+            m_render_pass_render_pass_type_filter_box->currentIndex() == 0)
         {
             m_add_modification_button->setEnabled(false);
             return;
@@ -565,7 +538,7 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
 void WhatIfConfigureDialog::OnWhatIfModificationCommandChanged(int index)
 {
     const int modification_type_index =
-        m_what_if_type_box->currentIndex() - 1;  // -1 because of the placeholder
+        m_type_box->currentIndex() - 1;  // -1 because of the placeholder
     if (modification_type_index < 0)
     {
         m_add_modification_button->setEnabled(false);
@@ -579,27 +552,27 @@ void WhatIfConfigureDialog::OnWhatIfModificationCommandChanged(int index)
     {
         ResetDrawCallFilters();
 
-        QString command_string = m_what_if_command_box->itemText(index);
+        QString command_string = m_command_box->itemText(index);
         if (command_string.contains("Indirect", Qt::CaseInsensitive))
         {
-            m_what_if_draw_call_draw_count_filter_label->show();
-            m_what_if_draw_call_draw_count_filter_box->show();
+            m_draw_count_filter.label->show();
+            m_draw_count_filter.spin_box->show();
         }
         else if (command_string.contains("Indexed", Qt::CaseInsensitive))
         {
-            m_what_if_draw_call_index_count_filter_label->show();
-            m_what_if_draw_call_index_count_filter_box->show();
+            m_index_count_filter.label->show();
+            m_index_count_filter.spin_box->show();
 
-            m_what_if_draw_call_instance_count_filter_label->show();
-            m_what_if_draw_call_instance_count_filter_box->show();
+            m_instance_count_filter.label->show();
+            m_instance_count_filter.spin_box->show();
         }
         else
         {
-            m_what_if_draw_call_vertex_count_filter_label->show();
-            m_what_if_draw_call_vertex_count_filter_box->show();
+            m_vertex_count_filter.label->show();
+            m_vertex_count_filter.spin_box->show();
 
-            m_what_if_draw_call_instance_count_filter_label->show();
-            m_what_if_draw_call_instance_count_filter_box->show();
+            m_instance_count_filter.label->show();
+            m_instance_count_filter.spin_box->show();
         }
         this->adjustSize();
     }
@@ -610,48 +583,49 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
 {
     if (index == -1)  // Placeholder selected
     {
-        m_specific_what_if_settings_container->hide();
+        m_specific_settings_container->hide();
         this->adjustSize();
-        m_what_if_command_box->clear();
-        m_what_if_command_box->setEnabled(false);
+        m_command_box->clear();
+        m_command_box->setEnabled(false);
         m_add_modification_button->setEnabled(false);
         return;
     }
-    const auto& ty_info = Dive::kWhatIfTypeInfos[index - 1];  // -1 because of the placeholder
-    m_what_if_command_box->clear();
-    m_what_if_command_model->clear();
-    HideSpecificWhatIfSettings();
-    m_what_if_command_box->setEnabled(true);
+    const Dive::WhatIfTypeInfo& ty_info =
+        Dive::kWhatIfTypeInfos[index - 1];  // -1 because of the placeholder
+    m_command_box->clear();
+    m_command_model->clear();
+    HideSpecificSettings();
+    m_command_box->setEnabled(true);
 
     for (const auto& cmd : ty_info.supported_commands)
     {
-        m_what_if_command_model->appendRow(new QStandardItem(cmd.data()));
+        m_command_model->appendRow(new QStandardItem(cmd.data()));
     }
-    m_what_if_command_box->setModel(m_what_if_command_model);
+    m_command_box->setModel(m_command_model);
 
-    m_specific_what_if_settings_container->show();
+    m_specific_settings_container->show();
     switch (ty_info.type)
     {
         case Dive::WhatIfType::kDrawCallDisabled:
-            m_what_if_filter_label->show();
-            m_what_if_draw_call_filters_container->show();
+            m_filter_label->show();
+            m_draw_call_filters_container->show();
             break;
         case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
-            m_what_if_modification_warning_label->show();
+            m_modification_warning_label->show();
             [[fallthrough]];
         case Dive::WhatIfType::kRenderPassScissorOverridden:
-            m_what_if_filter_label->show();
-            m_what_if_render_pass_filters_container->show();
+            m_filter_label->show();
+            m_render_pass_filters_container->show();
             break;
         case Dive::WhatIfType::kImageCreationFlagRemoved:
-            m_what_if_flag_container->show();
-            m_what_if_modification_warning_label->show();
+            m_flag_container->show();
+            m_modification_warning_label->show();
             break;
         case Dive::WhatIfType::kAnisotropicFilterDisabled:
-            m_what_if_modification_warning_label->show();
+            m_modification_warning_label->show();
             break;
         default:
-            m_specific_what_if_settings_container->hide();
+            m_specific_settings_container->hide();
             qDebug() << absl::StrCat("The case ", ty_info.ui_name, " is unimplemented/unsupported")
                             .c_str();
             break;
@@ -660,11 +634,11 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::HideSpecificWhatIfSettings()
+void WhatIfConfigureDialog::HideSpecificSettings()
 {
-    m_specific_what_if_settings_container->hide();
+    m_specific_settings_container->hide();
 
-    const auto& children = m_specific_what_if_settings_container->children();
+    const auto& children = m_specific_settings_container->children();
     for (QObject* child : children)
     {
         if (QWidget* widget = qobject_cast<QWidget*>(child))
@@ -676,24 +650,31 @@ void WhatIfConfigureDialog::HideSpecificWhatIfSettings()
 
 void WhatIfConfigureDialog::ResetDrawCallFilters()
 {
-    m_what_if_draw_call_draw_count_filter_label->hide();
-    m_what_if_draw_call_draw_count_filter_box->hide();
-    m_what_if_draw_call_draw_count_filter_box->setValue(0);
+    HideDrawCallFilterSpinner(m_draw_count_filter);
+    HideDrawCallFilterSpinner(m_index_count_filter);
+    HideDrawCallFilterSpinner(m_instance_count_filter);
+    HideDrawCallFilterSpinner(m_vertex_count_filter);
 
-    m_what_if_draw_call_index_count_filter_label->hide();
-    m_what_if_draw_call_index_count_filter_box->hide();
-    m_what_if_draw_call_index_count_filter_box->setValue(0);
+    m_draw_call_pso_property_filter_box->setCurrentIndex(0);
+    m_draw_call_render_pass_filter_box->setCurrentIndex(0);
+}
 
-    m_what_if_draw_call_instance_count_filter_label->hide();
-    m_what_if_draw_call_instance_count_filter_box->hide();
-    m_what_if_draw_call_instance_count_filter_box->setValue(0);
+void WhatIfConfigureDialog::CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter,
+                                                        const QString& label_text, int min, int max)
+{
+    filter.label = new QLabel(label_text);
+    filter.spin_box = new QSpinBox();
+    filter.spin_box->setRange(min, max);
+}
 
-    m_what_if_draw_call_vertex_count_filter_label->hide();
-    m_what_if_draw_call_vertex_count_filter_box->hide();
-    m_what_if_draw_call_vertex_count_filter_box->setValue(0);
-
-    m_what_if_draw_call_pso_property_filter_box->setCurrentIndex(0);
-    m_what_if_draw_call_render_pass_filter_box->setCurrentIndex(0);
+void WhatIfConfigureDialog::HideDrawCallFilterSpinner(DrawCallFilterSpinner& filter)
+{
+    if (filter.label) filter.label->hide();
+    if (filter.spin_box)
+    {
+        filter.spin_box->hide();
+        filter.spin_box->setValue(0);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

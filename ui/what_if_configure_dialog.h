@@ -34,6 +34,12 @@ class MultiCheckComboBoxEventFilter : public QObject
     QComboBox* combo_box;
 };
 
+struct DrawCallFilterSpinner
+{
+    QLabel* label = nullptr;
+    QSpinBox* spin_box = nullptr;
+};
+
 class WhatIfConfigureDialog : public DeviceDialog
 {
     Q_OBJECT
@@ -45,7 +51,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     // -- Layout Creation --
     QVBoxLayout* CreateHeaderLayout();
     QGridLayout* CreateSettingsLayout();
-    QWidget* CreateSpecificWhatIfSettingsContainer();
+    QWidget* CreateSpecificSettingsContainer();
     QWidget* SetupDrawCallFiltersContainer();
     QWidget* SetupRenderPassFiltersContainer();
     QWidget* SetupFlagContainer();
@@ -69,52 +75,48 @@ class WhatIfConfigureDialog : public DeviceDialog
     void AddModification(const QString& modification_type_short_name);
 
  private:
-    void HideSpecificWhatIfSettings();
+    void HideSpecificSettings();
     void ResetDrawCallFilters();
+    void CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter, const QString& label_text,
+                                     int min, int max);
+    void HideDrawCallFilterSpinner(DrawCallFilterSpinner& filter);
 
     // --- What-If Type Section ---
-    QComboBox* m_what_if_type_box = nullptr;
+    QComboBox* m_type_box = nullptr;
 
     // --- Command Selection ---
-    QComboBox* m_what_if_command_box = nullptr;
-    QStandardItemModel* m_what_if_command_model = nullptr;
+    QComboBox* m_command_box = nullptr;
+    QStandardItemModel* m_command_model = nullptr;
 
     // --- Specific Settings Container ---
-    QWidget* m_specific_what_if_settings_container = nullptr;
+    QWidget* m_specific_settings_container = nullptr;
 
     // --- Filter Section ---
-    QLabel* m_what_if_filter_label = nullptr;
+    QLabel* m_filter_label = nullptr;
 
     // --- Draw Call Filters ---
-    QWidget* m_what_if_draw_call_filters_container = nullptr;
-    QLabel* m_what_if_draw_call_index_count_filter_label = nullptr;
-    QSpinBox* m_what_if_draw_call_index_count_filter_box = nullptr;
+    QWidget* m_draw_call_filters_container = nullptr;
+    DrawCallFilterSpinner m_index_count_filter;
+    DrawCallFilterSpinner m_vertex_count_filter;
+    DrawCallFilterSpinner m_instance_count_filter;
+    DrawCallFilterSpinner m_draw_count_filter;
 
-    QLabel* m_what_if_draw_call_vertex_count_filter_label = nullptr;
-    QSpinBox* m_what_if_draw_call_vertex_count_filter_box = nullptr;
+    QComboBox* m_draw_call_pso_property_filter_box = nullptr;
 
-    QLabel* m_what_if_draw_call_instance_count_filter_label = nullptr;
-    QSpinBox* m_what_if_draw_call_instance_count_filter_box = nullptr;
-
-    QLabel* m_what_if_draw_call_draw_count_filter_label = nullptr;
-    QSpinBox* m_what_if_draw_call_draw_count_filter_box = nullptr;
-
-    QComboBox* m_what_if_draw_call_pso_property_filter_box = nullptr;
-
-    QComboBox* m_what_if_draw_call_render_pass_filter_box = nullptr;
+    QComboBox* m_draw_call_render_pass_filter_box = nullptr;
 
     // --- Render Pass Filters ---
-    QWidget* m_what_if_render_pass_filters_container = nullptr;
-    QComboBox* m_what_if_render_pass_command_buffer_filter_box = nullptr;
-    QComboBox* m_what_if_render_pass_render_pass_type_filter_box = nullptr;
+    QWidget* m_render_pass_filters_container = nullptr;
+    QComboBox* m_render_pass_command_buffer_filter_box = nullptr;
+    QComboBox* m_render_pass_render_pass_type_filter_box = nullptr;
 
     // --- Flag Section ---
-    QWidget* m_what_if_flag_container = nullptr;
-    QComboBox* m_what_if_flag_box = nullptr;
-    QStandardItemModel* m_what_if_flag_model = nullptr;
+    QWidget* m_flag_container = nullptr;
+    QComboBox* m_flag_box = nullptr;
+    QStandardItemModel* m_flag_model = nullptr;
 
     // --- Modification Warning ---
-    QLabel* m_what_if_modification_warning_label = nullptr;
+    QLabel* m_modification_warning_label = nullptr;
 
     // --- Button Section ---
     QPushButton* m_add_modification_button = nullptr;

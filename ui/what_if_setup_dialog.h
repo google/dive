@@ -66,7 +66,7 @@ class WhatIfSetupDialog : public DeviceDialog
 
  private:
     void ResetDialog();
-    bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
+    absl::Status StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
     void StopPackage();
 
     void OnDeviceSelected() override;

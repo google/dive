@@ -34,12 +34,6 @@ class MultiCheckComboBoxEventFilter : public QObject
     QComboBox* combo_box;
 };
 
-struct DrawCallFilterSpinner
-{
-    QLabel* label = nullptr;
-    QSpinBox* spin_box = nullptr;
-};
-
 class WhatIfConfigureDialog : public DeviceDialog
 {
     Q_OBJECT
@@ -75,6 +69,13 @@ class WhatIfConfigureDialog : public DeviceDialog
     void AddModification(const QString& modification_type_short_name);
 
  private:
+    // Contains the filter widgets for a draw call filter (e.g. index count, vertex count)
+    struct DrawCallFilterSpinner
+    {
+        QLabel* label = nullptr;
+        QSpinBox* spin_box = nullptr;
+    };
+
     void HideSpecificSettings();
     void ResetDrawCallFilters();
     void CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter, const QString& label_text,

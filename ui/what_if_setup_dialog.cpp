@@ -34,6 +34,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "application_controller.h"
 #include "capture_service/device_mgr.h"
 #include "dive/common/app_types.h"
@@ -277,10 +278,8 @@ void WhatIfSetupDialog::UpdatePackageList()
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
-    else
-    {
-        m_runtime_data.pkg_list = *package_list;
-    }
+
+    m_runtime_data.pkg_list = *package_list;
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
@@ -323,11 +322,12 @@ void WhatIfSetupDialog::ResetDialog()
     EnableWhatIfTypeButtons(true);
 }
 
-bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::string& app_type)
+absl::Status WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device,
+                                             const std::string& app_type)
 {
     if (device == nullptr)
     {
-        return false;
+        return absl::InternalError("Device is null");
     }
 
     device->CleanupApp().IgnoreError();
@@ -363,10 +363,7 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     {
         if (m_runtime_data.cur_pkg.isEmpty())
         {
-            std::string err_msg = "Please input a valid command to execute";
-            qDebug() << err_msg.c_str();
-            ShowMessage(QString::fromStdString(err_msg));
-            return false;
+            return absl::InvalidArgumentError("Please input a valid package to run");
         }
         qDebug() << "exe: " << m_runtime_data.cur_pkg.toStdString().c_str()
                  << " args: " << m_runtime_data.command_args.c_str();
@@ -377,48 +374,40 @@ bool WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device, const std::str
     }
     if (!setup_app_res.ok())
     {
-        std::string err_msg =
+        return absl::Status(
+            setup_app_res.code(),
             absl::StrFormat("Fail to setup for package %s, error: %s",
-                            m_runtime_data.cur_pkg.toStdString(), setup_app_res.message());
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
-        return false;
+                            m_runtime_data.cur_pkg.toStdString(), setup_app_res.message()));
     }
     if (absl::Status start_app_res = device->StartApp(); !start_app_res.ok())
     {
-        std::string err_msg =
+        return absl::Status(
+            start_app_res.code(),
             absl::StrFormat("Fail to start package %s, error: %s",
-                            m_runtime_data.cur_pkg.toStdString(), start_app_res.message());
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
-        return false;
+                            m_runtime_data.cur_pkg.toStdString(), start_app_res.message()));
     }
 
     Dive::AndroidApplication* cur_app = device->GetCurrentApplication();
 
     if (!cur_app)
     {
-        std::string err_msg = absl::StrFormat("Failed to get current application for package %s",
-                                              m_runtime_data.cur_pkg.toStdString());
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
-        return false;
+        return absl::InternalError(
+            absl::StrFormat("Failed to get current application for package %s",
+                            m_runtime_data.cur_pkg.toStdString()));
     }
 
     if (!cur_app->IsRunning())
     {
-        std::string err_msg = absl::StrFormat("Process for package %s not found, possibly crashed.",
-                                              m_runtime_data.cur_pkg.toStdString());
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
-        return false;
+        return absl::InternalError(
+            absl::StrFormat("Process for package %s not found, possibly crashed.",
+                            m_runtime_data.cur_pkg.toStdString()));
     }
 
     m_start_application_button->setDisabled(false);
     m_start_application_button->setText(kStopApplication.data());
 
     emit RuntimeWhatIfEnabled(m_runtime_data.cur_pkg, true);
-    return true;
+    return absl::OkStatus();
 }
 
 void WhatIfSetupDialog::StopPackage()
@@ -523,8 +512,11 @@ void WhatIfSetupDialog::OnStartClicked()
 
     qDebug() << "Start Application clicked with package: "
              << m_runtime_data.cur_pkg.toStdString().c_str() << ", type: " << ty_str.c_str();
-    if (!StartPackage(device, ty_str))
+    absl::Status status = StartPackage(device, ty_str);
+    if (!status.ok())
     {
+        qDebug() << std::string(status.message()).c_str();
+        ShowMessage(QString::fromStdString(std::string(status.message())));
         m_start_application_button->setDisabled(false);
         m_start_application_button->setText(kStartApplication.data());
         EnableWhatIfTypeButtons(true);
@@ -562,21 +554,17 @@ void WhatIfSetupDialog::closeEvent(QCloseEvent* event)
     }
 
     event->accept();
-    return;
 }
 
 void WhatIfSetupDialog::showEvent(QShowEvent* event)
 {
     QDialog::showEvent(event);
 
-    std::string current_device_serial = GetCurrentDeviceSerial();
-
-    if (current_device_serial.empty())
+    if (std::string current_device_serial = GetCurrentDeviceSerial(); current_device_serial.empty())
     {
         ResetDialog();
+        return;
     }
-    else
-    {
-        m_start_application_button->setEnabled(!m_runtime_data.cur_pkg.isEmpty());
-    }
+
+    m_start_application_button->setEnabled(!m_runtime_data.cur_pkg.isEmpty());
 }

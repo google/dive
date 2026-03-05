@@ -189,6 +189,8 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
     std::vector<format::HandleId> deferred_release_list_ = {};
+    // Fences that have been created with VkExportFenceCreateInfo.
+    std::unordered_set<format::HandleId> exportable_fences_;
     Dive::GPUTime gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";

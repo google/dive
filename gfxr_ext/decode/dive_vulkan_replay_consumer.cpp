@@ -25,6 +25,10 @@ limitations under the License.
 #include <numeric>
 #include <span>
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
 #include "dive_renderdoc.h"
 #include "generated/generated_vulkan_struct_handle_mappers.h"
 #include "graphics/vulkan_struct_get_pnext.h"
@@ -36,6 +40,10 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 namespace
 {
+
+#ifdef _WIN32
+inline int close(int fd) { return _close(fd); }
+#endif
 
 // Returns a new array which is the combination of the inputs.
 std::span<const char* const> AddExtensions(std::span<const char* const> current_extensions,
@@ -746,6 +754,8 @@ void DiveVulkanReplayConsumer::Process_vkImportFenceFdKHR(
     {
         fds_to_close_at_frame_end_.erase(pImportFenceFdInfo->GetPointer()->fd);
     }
+    VulkanReplayConsumer::Process_vkImportFenceFdKHR(call_info, returnValue, device,
+                                                     pImportFenceFdInfo);
 }
 
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)

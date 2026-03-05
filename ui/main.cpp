@@ -301,6 +301,7 @@ int main(int argc, char* argv[])
 
     Dive::RegisterCustomMetaType();
 
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QScopedPointer<DiveApplication> app{new DiveApplication(argc, argv)};
     app->setWindowIcon(QIcon(":/images/dive.ico"));

@@ -20,5 +20,6 @@
         <file>images/filter.png</file>
         <file>images/analyze.png</file>
         <file>images/copy.png</file>
+        <file>images/what-if-light-bulb.svg</file>
     </qresource>
 </RCC>

@@ -31,6 +31,7 @@
 #include <QVBoxLayout>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "application_controller.h"
 #include "capture_service/device_mgr.h"
@@ -49,6 +50,76 @@ constexpr std::string_view kRenderPassTypeStrings[kNumRenderPassTypes] = {
 
 constexpr std::string_view kAddModification = "&Add Modification";
 constexpr std::string_view kDismiss = "&Dismiss";
+
+absl::StatusOr<bool> CustomEventFilter(QComboBox* combo_box, QObject* watched, QEvent* event)
+{
+    if (!combo_box || watched != combo_box->view()->viewport())
+    {
+        return absl::FailedPreconditionError("Not the watched viewport");
+    }
+
+    switch (event->type())
+    {
+        case QEvent::MouseButtonPress:
+        {
+            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
+            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
+
+            if (!index.isValid())
+            {
+                return absl::NotFoundError("Invalid index");
+            }
+
+            QStandardItemModel* model = qobject_cast<QStandardItemModel*>(combo_box->model());
+            if (!model)
+            {
+                return absl::InternalError("Model is not QStandardItemModel");
+            }
+
+            QStandardItem* item = model->itemFromIndex(index);
+            if (!item || !item->isCheckable() || !(item->flags() & Qt::ItemIsEnabled))
+            {
+                return absl::FailedPreconditionError("Item not checkable or enabled");
+            }
+
+            // Manually toggle the check state
+            Qt::CheckState current_state = item->checkState();
+            item->setCheckState(current_state == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+
+            // Consume the mouse press event. This prevents the default
+            // selection behavior and stops the event from propagating
+            // further, which might close the combo box popup.
+            return true;
+        }
+        case QEvent::MouseButtonRelease:
+        {
+            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
+            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
+            if (!index.isValid())
+            {
+                return absl::NotFoundError("Invalid index");
+            }
+
+            const QStandardItemModel* model =
+                qobject_cast<const QStandardItemModel*>(combo_box->model());
+            if (!model)
+            {
+                return absl::InternalError("Model is not QStandardItemModel");
+            }
+
+            QStandardItem* item = model->itemFromIndex(index);
+            if (!item || !item->isCheckable() || !(item->flags() & Qt::ItemIsEnabled))
+            {
+                return absl::FailedPreconditionError("Item not checkable or enabled");
+            }
+
+            return true;
+        }
+        default:
+            return absl::UnimplementedError(
+                absl::StrCat("Event type ", static_cast<int>(event->type()), " not handled"));
+    }
+}
 }  // namespace
 
 // =================================================================================================
@@ -61,54 +132,10 @@ MultiCheckComboBoxEventFilter::MultiCheckComboBoxEventFilter(QComboBox* parent)
 
 bool MultiCheckComboBoxEventFilter::eventFilter(QObject* watched, QEvent* event)
 {
-    if (combo_box && watched == combo_box->view()->viewport())
+    absl::StatusOr<bool> result = CustomEventFilter(combo_box, watched, event);
+    if (result.ok())
     {
-        if (event->type() == QEvent::MouseButtonPress)
-        {
-            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
-            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
-
-            if (index.isValid())
-            {
-                QStandardItemModel* model = qobject_cast<QStandardItemModel*>(combo_box->model());
-                if (model)
-                {
-                    QStandardItem* item = model->itemFromIndex(index);
-                    if (item && item->isCheckable() && (item->flags() & Qt::ItemIsEnabled))
-                    {
-                        // Manually toggle the check state
-                        Qt::CheckState current_state = item->checkState();
-                        item->setCheckState(current_state == Qt::Checked ? Qt::Unchecked
-                                                                         : Qt::Checked);
-
-                        // Consume the mouse press event. This prevents the default
-                        // selection behavior and stops the event from propagating
-                        // further, which might close the combo box popup.
-                        return true;
-                    }
-                }
-            }
-        }
-        else if (event->type() == QEvent::MouseButtonRelease)
-        {
-            // Consume the MouseButtonRelease on the checkable item
-            // to be absolutely sure the combo box popup doesn't close.
-            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
-            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
-            if (index.isValid())
-            {
-                const QStandardItemModel* model =
-                    qobject_cast<const QStandardItemModel*>(combo_box->model());
-                if (model)
-                {
-                    QStandardItem* item = model->itemFromIndex(index);
-                    if (item && item->isCheckable() && (item->flags() & Qt::ItemIsEnabled))
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
+        return *result;
     }
 
     return QObject::eventFilter(watched, event);
@@ -117,7 +144,7 @@ bool MultiCheckComboBoxEventFilter::eventFilter(QObject* watched, QEvent* event)
 // =================================================================================================
 // WhatIfConfigureDialog
 // =================================================================================================
-WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent)
+WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent) : DeviceDialog(parent)
 {
     qDebug() << "WhatIfConfigureDialog created.";
 
@@ -485,22 +512,23 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
     // Based on the modification type, check if the required fields are filled. At least one filter
     // or flag should be selected.
     const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
-    if (modification_type_info.type == Dive::WhatIfType::kDrawCallDisabled)
+    switch (modification_type_info.type)
     {
-        if (m_index_count_filter.spin_box->value() == 0 &&
-            m_vertex_count_filter.spin_box->value() == 0 &&
-            m_instance_count_filter.spin_box->value() == 0 &&
-            m_draw_count_filter.spin_box->value() == 0 &&
-            m_draw_call_pso_property_filter_box->currentIndex() == 0 &&
-            m_draw_call_render_pass_filter_box->currentIndex() == 0)
+        case Dive::WhatIfType::kDrawCallDisabled:
         {
-            m_add_modification_button->setEnabled(false);
-            return;
+            if (m_index_count_filter.spin_box->value() == 0 &&
+                m_vertex_count_filter.spin_box->value() == 0 &&
+                m_instance_count_filter.spin_box->value() == 0 &&
+                m_draw_count_filter.spin_box->value() == 0 &&
+                m_draw_call_pso_property_filter_box->currentIndex() == 0 &&
+                m_draw_call_render_pass_filter_box->currentIndex() == 0)
+            {
+                m_add_modification_button->setEnabled(false);
+                return;
+            }
+            break;
         }
-    }
-    else if (modification_type_info.type == Dive::WhatIfType::kImageCreationFlagRemoved)
-    {
-        if (m_flag_box->isVisible())
+        case Dive::WhatIfType::kImageCreationFlagRemoved:
         {
             bool any_flag_checked = false;
             // Iterate through the model items, skipping the placeholder at index 0
@@ -518,17 +546,26 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
                 m_add_modification_button->setEnabled(false);
                 return;
             }
+            break;
         }
-    }
-    else if (modification_type_info.type == Dive::WhatIfType::kRenderPassLoadStoreOpOverridden ||
-             modification_type_info.type == Dive::WhatIfType::kRenderPassScissorOverridden)
-    {
-        if (m_render_pass_command_buffer_filter_box->currentIndex() == 0 &&
-            m_render_pass_render_pass_type_filter_box->currentIndex() == 0)
+        case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
+        case Dive::WhatIfType::kRenderPassScissorOverridden:
         {
-            m_add_modification_button->setEnabled(false);
-            return;
+            if (m_render_pass_command_buffer_filter_box->currentIndex() == 0 &&
+                m_render_pass_render_pass_type_filter_box->currentIndex() == 0)
+            {
+                m_add_modification_button->setEnabled(false);
+                return;
+            }
+            break;
         }
+        case Dive::WhatIfType::kAnisotropicFilterDisabled:
+            break;
+        default:
+            qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,
+                                     " is unimplemented/unsupported")
+                            .c_str();
+            break;
     }
 
     m_add_modification_button->setEnabled(true);
@@ -651,9 +688,13 @@ void WhatIfConfigureDialog::HideSpecificSettings()
 void WhatIfConfigureDialog::ResetDrawCallFilters()
 {
     HideDrawCallFilterSpinner(m_draw_count_filter);
+    m_draw_count_filter.spin_box->setValue(0);
     HideDrawCallFilterSpinner(m_index_count_filter);
+    m_index_count_filter.spin_box->setValue(0);
     HideDrawCallFilterSpinner(m_instance_count_filter);
+    m_instance_count_filter.spin_box->setValue(0);
     HideDrawCallFilterSpinner(m_vertex_count_filter);
+    m_vertex_count_filter.spin_box->setValue(0);
 
     m_draw_call_pso_property_filter_box->setCurrentIndex(0);
     m_draw_call_render_pass_filter_box->setCurrentIndex(0);
@@ -673,7 +714,6 @@ void WhatIfConfigureDialog::HideDrawCallFilterSpinner(DrawCallFilterSpinner& fil
     if (filter.spin_box)
     {
         filter.spin_box->hide();
-        filter.spin_box->setValue(0);
     }
 }
 

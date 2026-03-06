@@ -210,6 +210,8 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
     std::vector<format::HandleId> deferred_release_list_ = {};
+    // Fences that have been created with VkExportFenceCreateInfo.
+    std::unordered_set<format::HandleId> exportable_fences_;
     // Track objects that are created in the frame loop that must be destroyed at the end of the
     // frame to prevent leaking. Based on how the application manages rendering and how GFXR capture
     // works, we might get captures that straddle frames. This typically results in vkCreate calls

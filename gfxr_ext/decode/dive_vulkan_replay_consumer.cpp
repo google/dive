@@ -649,17 +649,23 @@ void DiveVulkanReplayConsumer::Process_vkCreateFence(
         return;
     }
 
+    format::HandleId fence_id = *pFence->GetPointer();
+    if (graphics::vulkan_struct_get_pnext<VkExportFenceCreateInfo>(pCreateInfo->GetPointer()) !=
+        nullptr)
+    {
+        exportable_fences_.insert(fence_id);
+    }
+
     if (!setup_finished_)
     {
-        deferred_release_list_.push_back(*(pFence->GetPointer()));
+        deferred_release_list_.push_back(fence_id);
         fence_initial_status_[*(pFence->GetHandlePointer())] = FenceStatus::kUnsignaled;
     }
     else
     {
-        format::HandleId fence = *(pFence->GetPointer());
         objects_to_destroy_at_frame_end_.insert(
-            {fence, [this, fence]() {
-                 VulkanFenceInfo* fence_info = GetObjectInfoTable().GetVkFenceInfo(fence);
+            {fence_id, [this, fence_id]() {
+                 VulkanFenceInfo* fence_info = GetObjectInfoTable().GetVkFenceInfo(fence_id);
                  GFXRECON_ASSERT(fence_info != nullptr);
 
                  VkDevice device = MapHandle<VulkanDeviceInfo>(
@@ -670,7 +676,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateFence(
                  // captured application's use of VkAllocationCallbacks.""
                  GetDeviceTable(device)->DestroyFence(device, fence_info->handle,
                                                       /*pAllocator=*/nullptr);
-                 RemoveHandle(fence, &CommonObjectInfoTable::RemoveVkFenceInfo);
+                 RemoveHandle(fence_id, &CommonObjectInfoTable::RemoveVkFenceInfo);
              }});
     }
 }
@@ -685,6 +691,8 @@ void DiveVulkanReplayConsumer::Process_vkDestroyFence(
     {
         VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
     }
+
+    exportable_fences_.erase(fence);
 
     if (setup_finished_)
     {
@@ -912,10 +920,7 @@ void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
     const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
     StructPointerDecoder<Decoded_VkFenceGetFdInfoKHR>* pGetFdInfo, PointerDecoder<int>* pFd)
 {
-    // Workaround for compositor captures. A fence may not have been created with the exportable
-    // flag, causing vkGetFenceFdKHR to fail on replay. Since the file descriptor is not used, we
-    // can ignore the error and allow replay to continue. The workaround tries with the call and if
-    // it failed, then ignore the error and continue the replay.
+    // Reimplement the superclass to control when CheckResult is called.
     auto in_device = GetObjectInfoTable().GetVkDeviceInfo(device);
     MapStructHandles(pGetFdInfo->GetMetaStructPointer(), GetObjectInfoTable());
     auto in_pGetFdInfo = pGetFdInfo->GetPointer();
@@ -923,14 +928,27 @@ void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
 
     VkResult replay_result = pfn_vkGetFenceFdKHR_(in_device->handle, in_pGetFdInfo, out_pFd);
 
-    if (replay_result != VK_SUCCESS)
+    // Workaround VUID-VkFenceGetFdInfoKHR-handleType-01453: Still run the function so that the
+    // validation error is generated, but ignore any errors it returns. Ideally, the app developers
+    // would fix the validation errors.
+    bool is_exportable = exportable_fences_.contains(pGetFdInfo->GetMetaStructPointer()->fence);
+    if (!is_exportable && replay_result != returnValue)
     {
         GFXRECON_LOG_WARNING(
-            "vkGetFenceFdKHR failed with error %s. Ignoring error and continuing "
-            "replay.",
-            util::ToString(replay_result).c_str());
-        replay_result = VK_SUCCESS;
-        return;
+            "vkGetFenceFdKHR returned %s that does not match return value from capture file: %s. "
+            "This is expected since the fence wasn't created with VkExportFenceCreateInfo. Run "
+            "with the validation layers to learn more.",
+            util::ToString<VkResult>(replay_result).c_str(),
+            util::ToString<VkResult>(returnValue).c_str());
+        if (replay_result != VK_SUCCESS)
+        {
+            return;
+        }
+        replay_result = returnValue;
+    }
+    else
+    {
+        CheckResult("vkGetFenceFdKHR", returnValue, replay_result, call_info);
     }
 }
 

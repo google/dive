@@ -91,7 +91,7 @@ absl::Status PluginLoader::LoadPlugins()
         return plugins_dir_path.status();
     }
 
-    for (const auto& entry : std::filesystem::directory_iterator(*plugins_dir_path))
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(*plugins_dir_path))
     {
         if (!entry.is_regular_file())
         {

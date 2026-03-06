@@ -193,6 +193,8 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
     std::vector<format::HandleId> deferred_release_list_ = {};
+    // Fences that have been created with VkExportFenceCreateInfo.
+    std::unordered_set<format::HandleId> exportable_fences_;
     // File descriptors made during the frame loop that should be closed at the end of the frame to
     // avoid leaking. The key is the FD stored in the capture file. The value is the FD made during
     // replay. We need to track both since vkImportFenceFdKHR uses the former.

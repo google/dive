@@ -21,10 +21,11 @@ project(dive_crashpad)
 message(CHECK_START "Generate build files for third_party/dive_crashpad")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 if(WIN32)
     set(PLATFORM "win32")
     set(LAUNCHER cmd /c)
-    set(SCRIPT_NAME "build_crashpad_win32.bat")
     set(HANDLER_NAME "crashpad_handler.exe")
     set(LIB_BASE "base.lib")
     set(LIB_COMMON "common.lib")
@@ -34,7 +35,6 @@ if(WIN32)
 elseif(APPLE)
     set(PLATFORM "mac")
     set(LAUNCHER bash)
-    set(SCRIPT_NAME "build_crashpad_mac.sh")
     set(HANDLER_NAME "crashpad_handler")
     set(LIB_BASE "libbase.a")
     set(LIB_COMMON "libcommon.a")
@@ -44,7 +44,6 @@ elseif(APPLE)
 else()
     set(PLATFORM "linux")
     set(LAUNCHER bash)
-    set(SCRIPT_NAME "build_crashpad_linux.sh")
     set(HANDLER_NAME "crashpad_handler")
     set(LIB_BASE "libbase.a")
     set(LIB_COMMON "libcommon.a")
@@ -69,26 +68,54 @@ set(COMPILER_STAMP
 
 string(REPLACE ";" " " CACHED_LIBS_STR "${CACHED_LIBS}")
 
+set(CRASHPAD_HEADERS
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/crashpad_client.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/settings.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/client/crash_report_database.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/crashpad/third_party/mini_chromium/mini_chromium/base/files/file_path.h"
+)
+
+if(EXISTS "${METADATA_FILE}")
+    set(HEADERS_MISSING FALSE)
+    foreach(HEADER_FILE IN LISTS CRASHPAD_HEADERS)
+        if(NOT EXISTS "${HEADER_FILE}")
+            set(HEADERS_MISSING TRUE)
+            break()
+        endif()
+    endforeach()
+
+    if(HEADERS_MISSING)
+        message(
+            STATUS
+            "Crashpad headers missing from build directory. Removing metadata file to trigger rebuild."
+        )
+        file(REMOVE "${METADATA_FILE}")
+    endif()
+endif()
+
+set(SCRIPT_PATH "${CMAKE_CURRENT_LIST_DIR}/build_crashpad.py")
+set(CRASHPAD_COMMIT_PATH "${CMAKE_CURRENT_LIST_DIR}/crashpad_commit.txt")
+
 add_custom_target(
     dive_crashpad_ensure_binaries
     COMMAND
-        ${LAUNCHER} "${CMAKE_CURRENT_LIST_DIR}/${SCRIPT_NAME}"
-        "${CMAKE_CURRENT_LIST_DIR}/crashpad_commit.txt" "${PREBUILT_DIR}"
-        "${METADATA_FILE}" "$<CONFIG>" "${COMPILER_STAMP}" "${CACHED_LIBS_STR}"
+        ${Python3_EXECUTABLE} "${SCRIPT_PATH}" --commit-hash-file
+        "${CRASHPAD_COMMIT_PATH}" --prebuilt-dir "${PREBUILT_DIR}"
+        --metadata-file "${METADATA_FILE}" --config "$<CONFIG>" --compiler-stamp
+        "${COMPILER_STAMP}" --cached-libs "${CACHED_LIBS_STR}" --cached-handler
         "${CACHED_HANDLER}"
     BYPRODUCTS ${CACHED_HANDLER} ${CACHED_LIBS} ${METADATA_FILE}
-    DEPENDS
-        "${CMAKE_CURRENT_LIST_DIR}/${SCRIPT_NAME}"
-        "${CMAKE_CURRENT_LIST_DIR}/crashpad_commit.txt"
+    DEPENDS "${SCRIPT_PATH}" "${CRASHPAD_COMMIT_PATH}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    COMMENT "Verifying Crashpad cache (${PLATFORM}_$<CONFIG>)..."
+    COMMENT "[Crash Report] Verifying Crashpad cache (${PLATFORM}_$<CONFIG>)..."
     VERBATIM
 )
 
 add_library(
     dive_crashpad
     STATIC
-    dive_crashpad/crashpad_client.cpp
+    $<$<CONFIG:RelWithDebInfo>:dive_crashpad/crashpad_client.cpp>
+    $<$<NOT:$<CONFIG:RelWithDebInfo>>:dive_crashpad/crashpad_client_stub.cpp>
     dive_crashpad/crashpad_client.h
     dive_crashpad/crashpad_utils.h
     dive_crashpad/${PLATFORM_UTILS}
@@ -99,7 +126,7 @@ add_dependencies(dive_crashpad dive_crashpad_ensure_binaries)
 target_link_libraries(
     dive_crashpad
     PUBLIC absl::base absl::status absl::strings
-    PRIVATE ${CACHED_LIBS}
+    PRIVATE $<$<CONFIG:RelWithDebInfo>:${CACHED_LIBS}>
 )
 
 if(APPLE)

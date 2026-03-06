@@ -159,6 +159,10 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         const ApiCallInfo& call_info, format::HandleId device, format::HandleId image,
         StructPointerDecoder<Decoded_VkMemoryRequirements>* pMemoryRequirements) override;
 
+    void Process_vkImportFenceFdKHR(
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+        StructPointerDecoder<Decoded_VkImportFenceFdInfoKHR>* pImportFenceFdInfo) override;
+
     void Process_vkCreateImage(const ApiCallInfo& call_info, VkResult returnValue,
                                format::HandleId device,
                                StructPointerDecoder<Decoded_VkImageCreateInfo>* pCreateInfo,
@@ -212,6 +216,10 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     std::vector<format::HandleId> deferred_release_list_ = {};
     // Fences that have been created with VkExportFenceCreateInfo.
     std::unordered_set<format::HandleId> exportable_fences_;
+    // File descriptors made during the frame loop that should be closed at the end of the frame to
+    // avoid leaking. The key is the FD stored in the capture file. The value is the FD made during
+    // replay. We need to track both since vkImportFenceFdKHR uses the former.
+    std::unordered_map<int, int> fds_to_close_at_frame_end_;
     // Track objects that are created in the frame loop that must be destroyed at the end of the
     // frame to prevent leaking. Based on how the application manages rendering and how GFXR capture
     // works, we might get captures that straddle frames. This typically results in vkCreate calls

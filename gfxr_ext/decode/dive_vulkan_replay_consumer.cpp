@@ -25,6 +25,10 @@ limitations under the License.
 #include <numeric>
 #include <span>
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
 #include "decode/vulkan_object_info.h"
 #include "dive_renderdoc.h"
 #include "format/format.h"
@@ -38,6 +42,10 @@ GFXRECON_BEGIN_NAMESPACE(decode)
 
 namespace
 {
+
+#ifdef _WIN32
+inline int close(int fd) { return _close(fd); }
+#endif
 
 // Returns a new array which is the combination of the inputs.
 std::span<const char* const> AddExtensions(std::span<const char* const> current_extensions,
@@ -772,6 +780,18 @@ void DiveVulkanReplayConsumer::Process_vkGetImageMemoryRequirements(
                                                                pMemoryRequirements);
 }
 
+void DiveVulkanReplayConsumer::Process_vkImportFenceFdKHR(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkImportFenceFdInfoKHR>* pImportFenceFdInfo)
+{
+    if (setup_finished_)
+    {
+        fds_to_close_at_frame_end_.erase(pImportFenceFdInfo->GetPointer()->fd);
+    }
+    VulkanReplayConsumer::Process_vkImportFenceFdKHR(call_info, returnValue, device,
+                                                     pImportFenceFdInfo);
+}
+
 void DiveVulkanReplayConsumer::Process_vkCreateImage(
     const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
     StructPointerDecoder<Decoded_VkImageCreateInfo>* pCreateInfo,
@@ -909,6 +929,12 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
         GFXRECON_ASSERT(result == VK_SUCCESS);
     }
 
+    for (auto [unused_capture_fd, replay_fd] : fds_to_close_at_frame_end_)
+    {
+        close(replay_fd);
+    }
+    fds_to_close_at_frame_end_.clear();
+
     for (auto& [unused, destroy_object] : objects_to_destroy_at_frame_end_)
     {
         destroy_object();
@@ -949,6 +975,24 @@ void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(
     else
     {
         CheckResult("vkGetFenceFdKHR", returnValue, replay_result, call_info);
+    }
+
+    if (setup_finished_)
+    {
+        if (int* fd = pFd->GetOutputPointer(); fd != nullptr)
+        {
+            int fd_in_capture = *pFd->GetPointer();
+
+            auto [iter, was_inserted] = fds_to_close_at_frame_end_.insert({fd_in_capture, *fd});
+            if (!was_inserted)
+            {
+                // If the app got the same FD twice then maybe it was reused by the OS. Which
+                // means that maybe the app closed it. Whatever the case, close it to prevent
+                // leaks.
+                close(iter->second);
+                iter->second = *fd;
+            }
+        }
     }
 }
 

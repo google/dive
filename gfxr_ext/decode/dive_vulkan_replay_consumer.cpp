@@ -153,10 +153,12 @@ void DiveVulkanReplayConsumer::Process_vkCreateDevice(
         std::span<const char* const> extensions(create_info.ppEnabledExtensionNames,
                                                 create_info.enabledExtensionCount);
         if (api_version_ < VK_MAKE_VERSION(1, 2, 0) &&
-            std::none_of(extensions.begin(), extensions.end(), [](const char* extension) {
-                return util::platform::StringCompare(extension,
-                                                     VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME) == 0;
-            }))
+            std::none_of(
+                extensions.begin(), extensions.end(),
+                [](const char* extension) {
+                    return util::platform::StringCompare(
+                               extension, VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME) == 0;
+                }))
         {
             std::span<const char* const> new_extensions =
                 AddExtensions(extensions, {{VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME}});
@@ -698,13 +700,13 @@ void DiveVulkanReplayConsumer::Process_vkDestroyFence(
     if (it == deferred_release_list_.end())
     {
         VulkanReplayConsumer::Process_vkDestroyFence(call_info, device, fence, pAllocator);
-    }
 
-    exportable_fences_.erase(fence);
+        exportable_fences_.erase(fence);
 
-    if (setup_finished_)
-    {
-        objects_to_destroy_at_frame_end_.erase(fence);
+        if (setup_finished_)
+        {
+            objects_to_destroy_at_frame_end_.erase(fence);
+        }
     }
 }
 

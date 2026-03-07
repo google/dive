@@ -15,6 +15,7 @@
 
 #include <QSortFilterProxyModel>
 
+#include "absl/status/status.h"
 #include "device_dialog.h"
 #include "dive/ui/forward.h"
 

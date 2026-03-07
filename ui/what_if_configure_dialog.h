@@ -61,9 +61,10 @@ class WhatIfConfigureDialog : public DeviceDialog
     void OnAddModificationClicked();
     void OnFlagModelChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight,
                             const QVector<int>& roles);
-    void OnWhatIfModificationCommandChanged(int index);
+    // Updates the command list and UI visibility when the modification type changes
     void OnWhatIfModificationTypeChanged(int index);
-    void OnUpdateAddModificationButtonState();
+    // Central slot to handle any configuration value change
+    void OnConfigValuesChanged();
 
  signals:
     void AddModification(const QString& modification_type_short_name);
@@ -78,6 +79,11 @@ class WhatIfConfigureDialog : public DeviceDialog
 
     void HideSpecificSettings();
     void ResetDrawCallFilters();
+    void HideDrawCallFilters();
+    // Updates the visibility of UI elements based on the selected type and command
+    void UpdateVisibility();
+    // Checks validity of inputs and enables/disables the Add button
+    void UpdateAddModificationButtonState();
     void CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter, const QString& label_text,
                                      int min, int max);
     void HideDrawCallFilterSpinner(DrawCallFilterSpinner& filter);
@@ -121,4 +127,5 @@ class WhatIfConfigureDialog : public DeviceDialog
 
     // --- Button Section ---
     QPushButton* m_add_modification_button = nullptr;
+    QPushButton* m_dismiss_button = nullptr;
 };

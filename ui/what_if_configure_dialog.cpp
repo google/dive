@@ -51,9 +51,9 @@ constexpr std::string_view kRenderPassTypeStrings[kNumRenderPassTypes] = {
 constexpr std::string_view kAddModification = "&Add Modification";
 constexpr std::string_view kDismiss = "&Dismiss";
 
-absl::StatusOr<bool> CustomEventFilter(QComboBox* combo_box, QObject* watched, QEvent* event)
+absl::Status CustomEventFilter(QComboBox* combo_box, QObject* watched, QEvent* event)
 {
-    if (!combo_box || watched != combo_box->view()->viewport())
+    if (!combo_box || (watched != combo_box->view()->viewport()))
     {
         return absl::FailedPreconditionError("Not the watched viewport");
     }
@@ -61,10 +61,10 @@ absl::StatusOr<bool> CustomEventFilter(QComboBox* combo_box, QObject* watched, Q
     switch (event->type())
     {
         case QEvent::MouseButtonPress:
+        case QEvent::MouseButtonRelease:
         {
             QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
             QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
-
             if (!index.isValid())
             {
                 return absl::NotFoundError("Invalid index");
@@ -82,38 +82,17 @@ absl::StatusOr<bool> CustomEventFilter(QComboBox* combo_box, QObject* watched, Q
                 return absl::FailedPreconditionError("Item not checkable or enabled");
             }
 
-            // Manually toggle the check state
-            Qt::CheckState current_state = item->checkState();
-            item->setCheckState(current_state == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+            if (event->type() == QEvent::MouseButtonPress)
+            {
+                // Manually toggle the check state
+                Qt::CheckState current_state = item->checkState();
+                item->setCheckState(current_state == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+            }
 
-            // Consume the mouse press event. This prevents the default
+            // Consume the mouse event. This prevents the default
             // selection behavior and stops the event from propagating
             // further, which might close the combo box popup.
-            return true;
-        }
-        case QEvent::MouseButtonRelease:
-        {
-            QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
-            QModelIndex index = combo_box->view()->indexAt(mouse_event->pos());
-            if (!index.isValid())
-            {
-                return absl::NotFoundError("Invalid index");
-            }
-
-            const QStandardItemModel* model =
-                qobject_cast<const QStandardItemModel*>(combo_box->model());
-            if (!model)
-            {
-                return absl::InternalError("Model is not QStandardItemModel");
-            }
-
-            QStandardItem* item = model->itemFromIndex(index);
-            if (!item || !item->isCheckable() || !(item->flags() & Qt::ItemIsEnabled))
-            {
-                return absl::FailedPreconditionError("Item not checkable or enabled");
-            }
-
-            return true;
+            return absl::OkStatus();
         }
         default:
             return absl::UnimplementedError(
@@ -132,10 +111,15 @@ MultiCheckComboBoxEventFilter::MultiCheckComboBoxEventFilter(QComboBox* parent)
 
 bool MultiCheckComboBoxEventFilter::eventFilter(QObject* watched, QEvent* event)
 {
-    absl::StatusOr<bool> result = CustomEventFilter(combo_box, watched, event);
+    absl::Status result = CustomEventFilter(combo_box, watched, event);
     if (result.ok())
     {
-        return *result;
+        return true;
+    }
+
+    if (result.code() != absl::StatusCode::kUnimplemented)
+    {
+        qDebug() << "CustomEventFilter failed: " << result.ToString().c_str();
     }
 
     return QObject::eventFilter(watched, event);
@@ -375,17 +359,12 @@ QWidget* WhatIfConfigureDialog::SetupFlagContainer()
 QHBoxLayout* WhatIfConfigureDialog::CreateButtonLayout()
 {
     QHBoxLayout* button_layout = new QHBoxLayout();
-    QPushButton* dismiss_button = new QPushButton(kDismiss.data(), this);
+    m_dismiss_button = new QPushButton(kDismiss.data(), this);
     m_add_modification_button = new QPushButton(kAddModification.data(), this);
     m_add_modification_button->setEnabled(false);
-    button_layout->addWidget(dismiss_button);
+    button_layout->addWidget(m_dismiss_button);
     button_layout->addWidget(m_add_modification_button);
 
-    QObject::connect(dismiss_button, &QPushButton::clicked, this,
-                     &WhatIfConfigureDialog::ResetDialog);
-    QObject::connect(dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
-    QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
-                     &WhatIfConfigureDialog::OnAddModificationClicked);
     return button_layout;
 }
 
@@ -395,38 +374,42 @@ void WhatIfConfigureDialog::SetupConnections()
                      &WhatIfConfigureDialog::OnWhatIfModificationTypeChanged);
 
     QObject::connect(m_command_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnWhatIfModificationCommandChanged);
-
-    QObject::connect(m_type_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_index_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_vertex_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_instance_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_draw_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_draw_call_pso_property_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_draw_call_render_pass_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_render_pass_command_buffer_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_render_pass_render_pass_type_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnUpdateAddModificationButtonState);
+                     &WhatIfConfigureDialog::OnConfigValuesChanged);
+
+    QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
+                     &WhatIfConfigureDialog::OnAddModificationClicked);
+
+    QObject::connect(m_dismiss_button, &QPushButton::clicked, this,
+                     &WhatIfConfigureDialog::ResetDialog);
+    QObject::connect(m_dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
 
     // Connect flag model dataChanged for check state changes
     QObject::connect(m_flag_model, &QStandardItemModel::dataChanged, this,
@@ -444,12 +427,9 @@ WhatIfConfigureDialog::~WhatIfConfigureDialog()
 void WhatIfConfigureDialog::ResetDialog()
 {
     m_type_box->setCurrentIndex(-1);
-    m_specific_settings_container->hide();
-    this->adjustSize();
-    m_command_box->clear();
-    m_command_box->setEnabled(false);
     m_render_pass_command_buffer_filter_box->setCurrentIndex(-1);
     m_render_pass_render_pass_type_filter_box->setCurrentIndex(-1);
+    ResetDrawCallFilters();
 
     // Reset flag checkboxes
     for (int i = 1; i < m_flag_model->rowCount(); ++i)
@@ -460,8 +440,6 @@ void WhatIfConfigureDialog::ResetDialog()
             item->setCheckState(Qt::Unchecked);
         }
     }
-
-    m_add_modification_button->setEnabled(false);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -494,12 +472,12 @@ void WhatIfConfigureDialog::OnFlagModelChanged(const QModelIndex& topLeft,
 {
     if (roles.isEmpty() || roles.contains(Qt::CheckStateRole))
     {
-        OnUpdateAddModificationButtonState();
+        OnConfigValuesChanged();
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
+void WhatIfConfigureDialog::UpdateAddModificationButtonState()
 {
     const int modification_type_index =
         m_type_box->currentIndex() - 1;  // -1 because of the placeholder
@@ -530,23 +508,18 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
         }
         case Dive::WhatIfType::kImageCreationFlagRemoved:
         {
-            bool any_flag_checked = false;
             // Iterate through the model items, skipping the placeholder at index 0
             for (int i = 1; i < m_flag_model->rowCount(); ++i)
             {
                 QStandardItem* item = m_flag_model->item(i);
                 if (item && item->isCheckable() && item->checkState() == Qt::Checked)
                 {
-                    any_flag_checked = true;
-                    break;
+                    m_add_modification_button->setEnabled(true);
+                    return;
                 }
             }
-            if (!any_flag_checked)
-            {
-                m_add_modification_button->setEnabled(false);
-                return;
-            }
-            break;
+            m_add_modification_button->setEnabled(false);
+            return;
         }
         case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
         case Dive::WhatIfType::kRenderPassScissorOverridden:
@@ -572,80 +545,65 @@ void WhatIfConfigureDialog::OnUpdateAddModificationButtonState()
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::OnWhatIfModificationCommandChanged(int index)
+void WhatIfConfigureDialog::OnConfigValuesChanged()
 {
-    const int modification_type_index =
-        m_type_box->currentIndex() - 1;  // -1 because of the placeholder
-    if (modification_type_index < 0)
-    {
-        m_add_modification_button->setEnabled(false);
-        return;
-    }
-
-    // Based on the modification type, check if the required fields are filled. At least one filter
-    // or flag should be selected.
-    const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
-    if (modification_type_info.type == Dive::WhatIfType::kDrawCallDisabled)
-    {
-        ResetDrawCallFilters();
-
-        QString command_string = m_command_box->itemText(index);
-        if (command_string.contains("Indirect", Qt::CaseInsensitive))
-        {
-            m_draw_count_filter.label->show();
-            m_draw_count_filter.spin_box->show();
-        }
-        else if (command_string.contains("Indexed", Qt::CaseInsensitive))
-        {
-            m_index_count_filter.label->show();
-            m_index_count_filter.spin_box->show();
-
-            m_instance_count_filter.label->show();
-            m_instance_count_filter.spin_box->show();
-        }
-        else
-        {
-            m_vertex_count_filter.label->show();
-            m_vertex_count_filter.spin_box->show();
-
-            m_instance_count_filter.label->show();
-            m_instance_count_filter.spin_box->show();
-        }
-        this->adjustSize();
-    }
+    UpdateVisibility();
+    UpdateAddModificationButtonState();
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
+void WhatIfConfigureDialog::UpdateVisibility()
 {
-    if (index == -1)  // Placeholder selected
+    // Based on the modification type, check if the required fields are filled. At least one filter
+    // or flag should be selected.
+    int type_index = m_type_box->currentIndex();
+    if (type_index <= 0)
     {
-        m_specific_settings_container->hide();
+        HideSpecificSettings();
         this->adjustSize();
-        m_command_box->clear();
-        m_command_box->setEnabled(false);
-        m_add_modification_button->setEnabled(false);
         return;
     }
-    const Dive::WhatIfTypeInfo& ty_info =
-        Dive::kWhatIfTypeInfos[index - 1];  // -1 because of the placeholder
-    m_command_box->clear();
-    m_command_model->clear();
+
     HideSpecificSettings();
-    m_command_box->setEnabled(true);
-
-    for (const auto& cmd : ty_info.supported_commands)
-    {
-        m_command_model->appendRow(new QStandardItem(cmd.data()));
-    }
-    m_command_box->setModel(m_command_model);
-
     m_specific_settings_container->show();
-    switch (ty_info.type)
+    const auto& modification_type_info = Dive::kWhatIfTypeInfos[type_index - 1];
+
+    switch (modification_type_info.type)
     {
         case Dive::WhatIfType::kDrawCallDisabled:
+        {
             m_filter_label->show();
             m_draw_call_filters_container->show();
+            HideDrawCallFilters();
+
+            QString command_string = m_command_box->currentText();
+            if (command_string.contains("Indirect", Qt::CaseInsensitive))
+            {
+                m_draw_count_filter.label->show();
+                m_draw_count_filter.spin_box->show();
+            }
+            else if (command_string.contains("Indexed", Qt::CaseInsensitive))
+            {
+                m_index_count_filter.label->show();
+                m_index_count_filter.spin_box->show();
+
+                m_instance_count_filter.label->show();
+                m_instance_count_filter.spin_box->show();
+            }
+            else
+            {
+                m_vertex_count_filter.label->show();
+                m_vertex_count_filter.spin_box->show();
+
+                m_instance_count_filter.label->show();
+                m_instance_count_filter.spin_box->show();
+            }
+            this->adjustSize();
+            break;
+        }
+        case Dive::WhatIfType::kImageCreationFlagRemoved:
+            m_flag_container->show();
+            m_modification_warning_label->show();
             break;
         case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
             m_modification_warning_label->show();
@@ -654,20 +612,49 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
             m_filter_label->show();
             m_render_pass_filters_container->show();
             break;
-        case Dive::WhatIfType::kImageCreationFlagRemoved:
-            m_flag_container->show();
-            m_modification_warning_label->show();
-            break;
         case Dive::WhatIfType::kAnisotropicFilterDisabled:
             m_modification_warning_label->show();
             break;
         default:
             m_specific_settings_container->hide();
-            qDebug() << absl::StrCat("The case ", ty_info.ui_name, " is unimplemented/unsupported")
+            qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,
+                                     " is unimplemented/unsupported")
                             .c_str();
             break;
     }
     this->adjustSize();
+}
+
+//--------------------------------------------------------------------------------------------------
+void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
+{
+    // Update Command Model
+    m_command_box->blockSignals(true);
+    m_command_box->clear();
+    m_command_model->clear();
+
+    if (index > 0)
+    {
+        const Dive::WhatIfTypeInfo& ty_info =
+            Dive::kWhatIfTypeInfos[index - 1];  // -1 because of the placeholder
+        for (const auto& cmd : ty_info.supported_commands)
+        {
+            m_command_model->appendRow(new QStandardItem(cmd.data()));
+        }
+        m_command_box->setModel(m_command_model);
+        m_command_box->setEnabled(true);
+        if (m_command_model->rowCount() > 0)
+        {
+            m_command_box->setCurrentIndex(0);
+        }
+    }
+    else
+    {
+        m_command_box->setEnabled(false);
+    }
+    m_command_box->blockSignals(false);
+
+    OnConfigValuesChanged();
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -687,17 +674,21 @@ void WhatIfConfigureDialog::HideSpecificSettings()
 
 void WhatIfConfigureDialog::ResetDrawCallFilters()
 {
-    HideDrawCallFilterSpinner(m_draw_count_filter);
     m_draw_count_filter.spin_box->setValue(0);
-    HideDrawCallFilterSpinner(m_index_count_filter);
     m_index_count_filter.spin_box->setValue(0);
-    HideDrawCallFilterSpinner(m_instance_count_filter);
     m_instance_count_filter.spin_box->setValue(0);
-    HideDrawCallFilterSpinner(m_vertex_count_filter);
     m_vertex_count_filter.spin_box->setValue(0);
 
     m_draw_call_pso_property_filter_box->setCurrentIndex(0);
     m_draw_call_render_pass_filter_box->setCurrentIndex(0);
+}
+
+void WhatIfConfigureDialog::HideDrawCallFilters()
+{
+    HideDrawCallFilterSpinner(m_draw_count_filter);
+    HideDrawCallFilterSpinner(m_index_count_filter);
+    HideDrawCallFilterSpinner(m_instance_count_filter);
+    HideDrawCallFilterSpinner(m_vertex_count_filter);
 }
 
 void WhatIfConfigureDialog::CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter,

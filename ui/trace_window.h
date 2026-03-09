@@ -73,7 +73,7 @@ class TraceDialog : public DeviceDialog
     void HideGfxrFields();
     void EnableDialogInputs(bool enable);
     void RetrieveGfxrCapture();
-    Dive::AndroidDevice& GetDevice() { return *m_device; }
+    Dive::AndroidDevice* GetAndValidateDevice();
     void SetResetDialogOnClose(bool reset) { m_dialog_reset_on_close = reset; }
     void UpdateCaptureFileDirectories(std::string on_device_capture_file_directory = "");
     void SetTraceDialogForCapture();
@@ -118,7 +118,6 @@ class TraceDialog : public DeviceDialog
     bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice* device, const std::string& capture_directory);
     void ResetDialog();
-    Dive::AndroidDevice* GetAndValidateDevice();
 
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
@@ -193,5 +192,4 @@ class TraceDialog : public DeviceDialog
     // being used by plugins, this behavior may not be desired. In those cases, this flag can be set
     // to false to skip the cleanup and simply close the dialog.
     bool m_dialog_reset_on_close = true;
-    Dive::AndroidDevice* m_device = nullptr;
 };

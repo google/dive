@@ -149,10 +149,10 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent) : DeviceDialog(par
     main_layout->addLayout(CreateButtonLayout());
     setLayout(main_layout);
 
-    m_specific_settings_container->hide();
     m_command_box->setEnabled(false);
 
     SetupConnections();
+    OnConfigValuesChanged();
 }
 
 QVBoxLayout* WhatIfConfigureDialog::CreateHeaderLayout()
@@ -352,7 +352,6 @@ QWidget* WhatIfConfigureDialog::SetupFlagContainer()
     flag_layout->addWidget(flag_label);
     flag_layout->addWidget(m_flag_box);
 
-    container->hide();
     return container;
 }
 
@@ -557,15 +556,13 @@ void WhatIfConfigureDialog::UpdateVisibility()
     // Based on the modification type, check if the required fields are filled. At least one filter
     // or flag should be selected.
     int type_index = m_type_box->currentIndex();
+    HideSpecificSettings();
     if (type_index <= 0)
     {
-        HideSpecificSettings();
         this->adjustSize();
         return;
     }
 
-    HideSpecificSettings();
-    m_specific_settings_container->show();
     const auto& modification_type_info = Dive::kWhatIfTypeInfos[type_index - 1];
 
     switch (modification_type_info.type)
@@ -579,24 +576,17 @@ void WhatIfConfigureDialog::UpdateVisibility()
             QString command_string = m_command_box->currentText();
             if (command_string.contains("Indirect", Qt::CaseInsensitive))
             {
-                m_draw_count_filter.label->show();
-                m_draw_count_filter.spin_box->show();
+                SetDrawCallFilterSpinnerVisibility(m_draw_count_filter, /*is_visible=*/true);
             }
             else if (command_string.contains("Indexed", Qt::CaseInsensitive))
             {
-                m_index_count_filter.label->show();
-                m_index_count_filter.spin_box->show();
-
-                m_instance_count_filter.label->show();
-                m_instance_count_filter.spin_box->show();
+                SetDrawCallFilterSpinnerVisibility(m_index_count_filter, /*is_visible=*/true);
+                SetDrawCallFilterSpinnerVisibility(m_instance_count_filter, /*is_visible=*/true);
             }
             else
             {
-                m_vertex_count_filter.label->show();
-                m_vertex_count_filter.spin_box->show();
-
-                m_instance_count_filter.label->show();
-                m_instance_count_filter.spin_box->show();
+                SetDrawCallFilterSpinnerVisibility(m_vertex_count_filter, /*is_visible=*/true);
+                SetDrawCallFilterSpinnerVisibility(m_instance_count_filter, /*is_visible=*/true);
             }
             this->adjustSize();
             break;
@@ -616,7 +606,6 @@ void WhatIfConfigureDialog::UpdateVisibility()
             m_modification_warning_label->show();
             break;
         default:
-            m_specific_settings_container->hide();
             qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,
                                      " is unimplemented/unsupported")
                             .c_str();
@@ -660,8 +649,6 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
 //--------------------------------------------------------------------------------------------------
 void WhatIfConfigureDialog::HideSpecificSettings()
 {
-    m_specific_settings_container->hide();
-
     const auto& children = m_specific_settings_container->children();
     for (QObject* child : children)
     {
@@ -685,10 +672,10 @@ void WhatIfConfigureDialog::ResetDrawCallFilters()
 
 void WhatIfConfigureDialog::HideDrawCallFilters()
 {
-    HideDrawCallFilterSpinner(m_draw_count_filter);
-    HideDrawCallFilterSpinner(m_index_count_filter);
-    HideDrawCallFilterSpinner(m_instance_count_filter);
-    HideDrawCallFilterSpinner(m_vertex_count_filter);
+    SetDrawCallFilterSpinnerVisibility(m_draw_count_filter, /*is_visible=*/false);
+    SetDrawCallFilterSpinnerVisibility(m_index_count_filter, /*is_visible=*/false);
+    SetDrawCallFilterSpinnerVisibility(m_instance_count_filter, /*is_visible=*/false);
+    SetDrawCallFilterSpinnerVisibility(m_vertex_count_filter, /*is_visible=*/false);
 }
 
 void WhatIfConfigureDialog::CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter,
@@ -699,12 +686,13 @@ void WhatIfConfigureDialog::CreateDrawCallFilterSpinner(DrawCallFilterSpinner& f
     filter.spin_box->setRange(min, max);
 }
 
-void WhatIfConfigureDialog::HideDrawCallFilterSpinner(DrawCallFilterSpinner& filter)
+void WhatIfConfigureDialog::SetDrawCallFilterSpinnerVisibility(DrawCallFilterSpinner& filter,
+                                                               bool is_visible)
 {
-    if (filter.label) filter.label->hide();
+    if (filter.label) filter.label->setVisible(is_visible);
     if (filter.spin_box)
     {
-        filter.spin_box->hide();
+        filter.spin_box->setVisible(is_visible);
     }
 }
 

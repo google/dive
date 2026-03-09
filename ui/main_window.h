@@ -74,7 +74,7 @@ class MainWindow : public QMainWindow
     void OnPendingPerfCounterResults(const QString& file_name);
     void OnPendingGpuTimingResults(const QString& file_name);
     void OnPendingScreenshot(const QString& file_name);
-    void OnConfigureWhatIfModifcation();
+    void OnConfigureWhatIfModification();
     void OnWhatIfSetupTrigger();
     void OnWhatIfRuntimeEnabled(const QString& package_name, bool is_runtime_what_if_enabled);
 
@@ -155,6 +155,15 @@ class MainWindow : public QMainWindow
     void ResetVerticalScroll(const DiveTreeView& tree_view);
     void ClearViewModelSelection(DiveTreeView& tree_view, bool should_clear_tab);
     void CorrelateCounter(const QModelIndex& index, bool called_from_gfxr_view);
+    void SetupRuntimeWhatIfHeader();
+
+    struct RuntimeWhatIfHeader
+    {
+        QWidget* container = nullptr;
+        QPushButton* configure_button = nullptr;
+        QPushButton* stop_app_button = nullptr;
+        QLabel* app_name_label = nullptr;
+    };
 
     std::optional<uint64_t> GetDrawCallIndexFromProxyIndex(
         const QModelIndex& proxy_index, const QAbstractProxyModel& proxy_model,
@@ -207,10 +216,7 @@ class MainWindow : public QMainWindow
     CommandModel* m_command_hierarchy_model;
     QPushButton* m_search_trigger_button;
     SearchBar* m_event_search_bar = nullptr;
-    QWidget* m_what_if_container = nullptr;
-    QPushButton* m_what_if_configure_button = nullptr;
-    QPushButton* m_what_if_run_time_stop_application_button = nullptr;
-    QLabel* m_what_if_runtime_application_name_label = nullptr;
+    RuntimeWhatIfHeader m_runtime_what_if_header = {};
 
     TreeViewComboBox* m_view_mode_combo_box;
     TreeViewComboBox* m_filter_mode_combo_box;

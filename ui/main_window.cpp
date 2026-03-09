@@ -213,21 +213,7 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
     {
         QVBoxLayout* left_vertical_layout = new QVBoxLayout();
 
-        QHBoxLayout* what_ifs_layout = new QHBoxLayout();
-        m_what_if_container = new QWidget();
-        m_what_if_container->setLayout(what_ifs_layout);
-        QLabel* what_if_info_label = new QLabel(tr("What-If Analysis:"));
-        m_what_if_configure_button = new QPushButton(tr("Configure"));
-        m_what_if_run_time_stop_application_button = new QPushButton(tr("Stop Application"));
-        QLabel* what_if_runtime_what_if_application_label = new QLabel(tr("Current Application: "));
-        m_what_if_runtime_application_name_label = new QLabel(tr("None"));
-        what_ifs_layout->addWidget(what_if_info_label);
-        what_ifs_layout->addWidget(m_what_if_configure_button);
-        what_ifs_layout->addWidget(m_what_if_run_time_stop_application_button);
-        what_ifs_layout->addStretch(1);
-        what_ifs_layout->addWidget(what_if_runtime_what_if_application_label);
-        what_ifs_layout->addWidget(m_what_if_runtime_application_name_label);
-        m_what_if_container->hide();
+        SetupRuntimeWhatIfHeader();
 
         QFrame* text_combo_box_frame = new QFrame();
 
@@ -344,7 +330,7 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
             expand_to_lvl_layout->addWidget(expand_to_lvl_button);
         expand_to_lvl_layout->addStretch();
 
-        left_vertical_layout->addWidget(m_what_if_container);
+        left_vertical_layout->addWidget(m_runtime_what_if_header.container);
         left_vertical_layout->addWidget(m_event_search_bar);
         left_vertical_layout->addWidget(text_combo_box_frame);
         left_vertical_layout->addWidget(m_command_hierarchy_view);
@@ -581,10 +567,10 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
     // What-If connections
     QObject::connect(m_what_if_setup_dig, &WhatIfSetupDialog::RuntimeWhatIfEnabled, this,
                      &MainWindow::OnWhatIfRuntimeEnabled);
-    QObject::connect(m_what_if_run_time_stop_application_button, &QPushButton::clicked,
+    QObject::connect(m_runtime_what_if_header.stop_app_button, &QPushButton::clicked,
                      m_what_if_setup_dig, &WhatIfSetupDialog::OnStopRuntimeWhatIf);
-    QObject::connect(m_what_if_configure_button, &QPushButton::clicked, this,
-                     &MainWindow::OnConfigureWhatIfModifcation);
+    QObject::connect(m_runtime_what_if_header.configure_button, &QPushButton::clicked, this,
+                     &MainWindow::OnConfigureWhatIfModification);
 
     CreateActions();
     CreateMenus();
@@ -1279,18 +1265,18 @@ void MainWindow::OnWhatIfRuntimeEnabled(const QString& package_name,
 {
     if (is_runtime_what_if_enabled)
     {
-        m_what_if_runtime_application_name_label->setText(package_name);
-        m_what_if_container->show();
+        m_runtime_what_if_header.app_name_label->setText(package_name);
+        m_runtime_what_if_header.container->show();
     }
     else
     {
-        m_what_if_runtime_application_name_label->setText("None");
-        m_what_if_container->hide();
+        m_runtime_what_if_header.app_name_label->setText("None");
+        m_runtime_what_if_header.container->hide();
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnConfigureWhatIfModifcation() { m_what_if_configure_dig->show(); }
+void MainWindow::OnConfigureWhatIfModification() { m_what_if_configure_dig->show(); }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnExpandToLevel()
@@ -1365,8 +1351,14 @@ void MainWindow::closeEvent(QCloseEvent* closeEvent)
                 DIVE_ASSERT(false);
         }
     }
-    if (m_trace_dig) m_trace_dig->Cleanup();
-    if (m_what_if_setup_dig) m_what_if_setup_dig->Cleanup();
+    if (m_trace_dig)
+    {
+        m_trace_dig->Cleanup();
+    }
+    if (m_what_if_setup_dig)
+    {
+        m_what_if_setup_dig->Cleanup();
+    }
     closeEvent->accept();
 }
 
@@ -3111,4 +3103,24 @@ void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
 
         m_command_hierarchy_view->viewport()->update();
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::SetupRuntimeWhatIfHeader()
+{
+    QHBoxLayout* what_ifs_layout = new QHBoxLayout();
+    m_runtime_what_if_header.container = new QWidget();
+    m_runtime_what_if_header.container->setLayout(what_ifs_layout);
+    QLabel* what_if_info_label = new QLabel(tr("What-If Analysis:"));
+    m_runtime_what_if_header.configure_button = new QPushButton(tr("Configure"));
+    m_runtime_what_if_header.stop_app_button = new QPushButton(tr("Stop Application"));
+    QLabel* what_if_runtime_what_if_application_label = new QLabel(tr("Current Application: "));
+    m_runtime_what_if_header.app_name_label = new QLabel(tr("None"));
+    what_ifs_layout->addWidget(what_if_info_label);
+    what_ifs_layout->addWidget(m_runtime_what_if_header.configure_button);
+    what_ifs_layout->addWidget(m_runtime_what_if_header.stop_app_button);
+    what_ifs_layout->addStretch(1);
+    what_ifs_layout->addWidget(what_if_runtime_what_if_application_label);
+    what_ifs_layout->addWidget(m_runtime_what_if_header.app_name_label);
+    m_runtime_what_if_header.container->hide();
 }

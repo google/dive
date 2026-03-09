@@ -86,7 +86,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     void UpdateAddModificationButtonState();
     void CreateDrawCallFilterSpinner(DrawCallFilterSpinner& filter, const QString& label_text,
                                      int min, int max);
-    void HideDrawCallFilterSpinner(DrawCallFilterSpinner& filter);
+    void SetDrawCallFilterSpinnerVisibility(DrawCallFilterSpinner& filter, bool is_visible);
 
     // --- What-If Type Section ---
     QComboBox* m_type_box = nullptr;

@@ -50,6 +50,11 @@ endif() # WIN32
 find_package(Python3 COMPONENTS Interpreter)
 
 if(NOT Python3_EXECUTABLE)
+    # Note: CMake find_package(Python3) does not work on Kokoro for some reason.
+    find_program(Python3_EXECUTABLE NAMES python3 python)
+endif() # NOT Python3_EXECUTABLE
+
+if(NOT Python3_EXECUTABLE)
     message(FATAL_ERROR "python3 not found")
 endif() # NOT Python3_EXECUTABLE
 

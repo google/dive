@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/base/no_destructor.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -51,6 +52,7 @@ constexpr int kMaxCrashpadVersionLength = 30;
 
 absl::Status InitializeCrashpad()
 {
+    LOG(INFO) << "[Crash Report] Initializing Crashpad.";
     auto writable_root = GetWritableRoot();
     if (!writable_root.ok())
     {
@@ -123,6 +125,7 @@ absl::Status InitializeCrashpad()
     {
         return absl::InternalError("Failed to start Crashpad handler.");
     }
+    LOG(INFO) << "[Crash Report] Crashpad initialized successfully.";
     return absl::OkStatus();
 }
 

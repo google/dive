@@ -21,6 +21,7 @@
 #include <QPalette>
 #include <QScopedValueRollback>
 #include <QString>
+#include <optional>
 
 #include "ui/application_controller.h"
 

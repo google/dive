@@ -1316,7 +1316,10 @@ absl::Status AndroidDevice::CheckShellOutput(const std::string& command,
                                              const std::string& error_msg)
 {
     auto output = Adb().RunAndGetResult(absl::StrFormat("shell \"%s\"", command));
-    if (!output.ok()) return output.status();
+    if (!output.ok())
+    {
+        return output.status();
+    }
 
     std::string result = *output;
     absl::StripAsciiWhitespace(&result);

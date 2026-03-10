@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include "dive/common/status.h"
+#include "dive/network/schema/root_generated.h"
 #include "serializable.h"
 #include "socket_connection.h"
 
@@ -37,6 +38,7 @@ absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offs
 
 enum class MessageType : uint32_t
 {
+    MESSAGE_FLATBUFFER = 0,
     HANDSHAKE_REQUEST = 1,
     HANDSHAKE_RESPONSE = 2,
     PING_MESSAGE = 3,
@@ -49,6 +51,18 @@ enum class MessageType : uint32_t
     FILE_SIZE_RESPONSE = 10,
     REMOVE_FILE_REQUEST = 11,
     REMOVE_FILE_RESPONSE = 12
+};
+
+class FlatbufferMessage : public ISerializable
+{
+ public:
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    Buffer& GetBuffer();
+
+ private:
+    Buffer buffer;
 };
 
 class HandshakeMessage : public ISerializable

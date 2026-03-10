@@ -1,0 +1,51 @@
+namespace DiveRpc;
+
+union Payload {
+  HandshakeRequest: VersionCode,
+  HandshakeResponse: VersionCode,
+
+  PingMessage: Ignored,
+  PongMessage: Ignored,
+
+  Pm4CaptureRequest: Ignored,
+  Pm4CaptureResponse: Path,
+
+  DownloadFileRequest: Path,
+  DownloadFileResponse: FileInfo,
+
+  FileSizeRequest: Path,
+  FileSizeResponse: FileInfo,
+
+  RemoveFileRequest: Path,
+  RemoveFileResponse: Ignored,
+}
+
+enum StatusCode: int32 {
+  Success = 0,
+  Unknown = 1,
+  NotFound = 2,
+}
+
+table Packet {
+  status: StatusCode = Success;
+  payload: Payload;
+  message: string;
+}
+
+struct VersionCode {
+  major: uint32;
+  minor: uint32;
+}
+
+table Ignored {}
+
+table Path {
+  path: string;
+}
+
+table FileInfo {
+  path: string;
+  size: uint64;
+}
+
+root_type Packet;

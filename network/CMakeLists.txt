@@ -46,7 +46,7 @@ if(ANDROID)
     list(APPEND NETWORK_LINK_LIBS log)
 endif()
 
-target_link_libraries(network PUBLIC dive_status PRIVATE ${NETWORK_LINK_LIBS})
+target_link_libraries(network PUBLIC dive_status FlatBuffers::FlatBuffers PRIVATE ${NETWORK_LINK_LIBS})
 
 if(NOT ANDROID)
     enable_testing()

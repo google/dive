@@ -63,6 +63,18 @@ absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offs
     return result;
 }
 
+absl::Status FlatbufferMessage::Serialize(Buffer& dest) const
+{
+    dest = buffer;
+    return Dive::OkStatus();
+}
+
+absl::Status FlatbufferMessage::Deserialize(const Buffer& src)
+{
+    buffer = src;
+    return Dive::OkStatus();
+}
+
 absl::Status HandshakeMessage::Serialize(Buffer& dest) const
 {
     dest.clear();
@@ -254,6 +266,41 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     if (!status.ok())
     {
         return status;
+    }
+
+    if (static_cast<MessageType>(type) == MessageType::MESSAGE_FLATBUFFER)
+    {
+        const DiveRpc::Packet* packet = DiveRpc::GetPacket(payload_buffer.data());
+        switch (packet->payload_type())
+        {
+            case DiveRpc::Payload_NONE:
+                break;
+            case DiveRpc::Payload_HandshakeRequest:
+            {
+                auto message = std::make_unique<HandshakeRequest>();
+                auto payload = packet->payload_as_HandshakeRequest();
+                message->SetMajorVersion(payload->major());
+                message->SetMinorVersion(payload->minor());
+                return message;
+            }
+            case DiveRpc::Payload_HandshakeResponse:
+            case DiveRpc::Payload_PingMessage:
+            case DiveRpc::Payload_PongMessage:
+            case DiveRpc::Payload_Pm4CaptureRequest:
+            case DiveRpc::Payload_Pm4CaptureResponse:
+            case DiveRpc::Payload_DownloadFileRequest:
+            case DiveRpc::Payload_DownloadFileResponse:
+            case DiveRpc::Payload_FileSizeRequest:
+            case DiveRpc::Payload_FileSizeResponse:
+            case DiveRpc::Payload_RemoveFileRequest:
+            case DiveRpc::Payload_RemoveFileResponse:
+                // ...
+                break;
+        }
+
+        auto message = std::make_unique<HandshakeRequest>();
+        message->Deserialize(payload_buffer).IgnoreError();
+        return message;
     }
 
     // Create and deserialize the message object.

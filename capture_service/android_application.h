@@ -68,6 +68,9 @@ class AndroidApplication
     bool IsStarted() const { return m_started; }
     virtual bool IsRunning() const;
     void SetGfxrEnabled(bool enable);
+    void SetRuntimeWhatIfEnabled(bool enable);
+    absl::Status RuntimeWhatIfSetup();
+    absl::Status RuntimeWhatIfCleanup();
 
     void SetGfxrCaptureFileDirectory(const std::string& capture_file_directory)
     {
@@ -94,6 +97,7 @@ class AndroidApplication
     bool m_started;
 
     bool m_gfxr_enabled;
+    bool m_runtime_what_if_enabled;
 };
 
 class VulkanApplication : public AndroidApplication

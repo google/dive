@@ -38,6 +38,7 @@ struct AppTypeInfo
     std::string_view ui_name;
     std::string_view cli_name;
     bool is_gfxr_capture_supported;
+    bool is_what_if_supported = true;
     std::string_view description;
 };
 
@@ -61,11 +62,13 @@ inline constexpr std::array<AppTypeInfo, 5> kAppTypeInfos = {{
      .ui_name = "GLES (OpenXR)",
      .cli_name = "gles_openxr",
      .is_gfxr_capture_supported = false,
+     .is_what_if_supported = false,
      .description = "For GLES OpenXR applications (apk)"},
     {.type = AppType::kGLES_Non_OpenXR,
      .ui_name = "GLES (Non-OpenXR)",
      .cli_name = "gles_non_openxr",
      .is_gfxr_capture_supported = false,
+     .is_what_if_supported = false,
      .description = "for GLES applications (apk)"},
 }};
 

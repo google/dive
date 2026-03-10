@@ -71,8 +71,18 @@ class TraceDialog : public DeviceDialog
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void ShowGfxrFields();
     void HideGfxrFields();
-    void EnableCaptureTypeButtons(bool enable);
+    void EnableDialogInputs(bool enable);
     void RetrieveGfxrCapture();
+    Dive::AndroidDevice* GetAndValidateDevice();
+    void SetResetDialogOnClose(bool reset) { m_dialog_reset_on_close = reset; }
+    void UpdateCaptureFileDirectories(std::string on_device_capture_file_directory = "");
+    void SetTraceDialogForCapture();
+    void ResetTraceDialogOnAppStop();
+
+ public slots:
+    void OnPackageListSet(QList<std::string> package_list);
+    void OnStartPackage();
+    void OnStopPackage();
 
  protected:
     void closeEvent(QCloseEvent* event) override;
@@ -80,7 +90,7 @@ class TraceDialog : public DeviceDialog
 
  private slots:
     void OnPackageSelected(const QString&);
-    void OnStartClicked();
+    void OnRunButtonClicked();
     void OnTraceClicked();
     void OnTraceAvailable(const QString&);
     void OnGFXRCaptureAvailable(const QString&);
@@ -98,12 +108,16 @@ class TraceDialog : public DeviceDialog
 
  signals:
     void TraceAvailable(const QString&);
+    void PackageSelected(const QString& curr_package_name, const QString& prev_package_name);
+    void PackageListAvailable(bool gfrx_capture_enabled, QList<std::string> package_list);
+    void StartPackageClicked(const QString& capture_dir = "", bool gfrx_capture_enabled = false);
+    void StopPackageClicked(bool gfrx_capture_enabled = false);
+    void CloseDialog(bool gfrx_capture_enabled);
 
  private:
     bool StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
     void RetrieveGfxrCapture(Dive::AndroidDevice* device, const std::string& capture_directory);
     void ResetDialog();
-    Dive::AndroidDevice* GetAndValidateDevice();
 
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
@@ -111,6 +125,7 @@ class TraceDialog : public DeviceDialog
     ApplicationController& m_controller;
 
     const QString kStart_Application = "&Start Application";
+    const QString kStop_Application = "&Stop Application";
     const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
     const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
 
@@ -167,8 +182,14 @@ class TraceDialog : public DeviceDialog
 
     QVBoxLayout* m_main_layout;
     std::vector<std::string> m_pkg_list;
-    std::string m_cur_pkg;
+    QString m_cur_pkg;
     std::string m_executable;
     std::string m_command_args;
+    std::string m_on_device_capture_file_directory;
     bool m_gfxr_capture = false;
+    // m_dialog_reset_on_close is true by default, meaning that when the dialog is closed it will
+    // perform the usual cleanup and reset flow. However, in some cases such as when the dialog is
+    // being used by plugins, this behavior may not be desired. In those cases, this flag can be set
+    // to false to skip the cleanup and simply close the dialog.
+    bool m_dialog_reset_on_close = true;
 };

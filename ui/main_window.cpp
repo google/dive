@@ -592,7 +592,11 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 MainWindow::~MainWindow() {}
 
 //--------------------------------------------------------------------------------------------------
-TraceDialog& MainWindow::GetTraceDialog() { return *m_trace_dig; }
+TraceDialog& MainWindow::GetTraceDialog()
+{
+    DIVE_ASSERT(m_trace_dig);
+    return *m_trace_dig;
+}
 
 //--------------------------------------------------------------------------------------------------
 ProgressTrackerCallback& MainWindow::GetProgressTracker() { return m_progress_tracker; }

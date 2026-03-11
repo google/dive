@@ -23,6 +23,7 @@ set(NETWORK_SRCS
     socket_connection.cc
     messages.cc
     tcp_client.cc
+    base_message_handler.cc
     unix_domain_server.cc
     message_utils.cc
 )
@@ -34,13 +35,14 @@ set(NETWORK_HDRS
     messages.h
     tcp_client.h
     message_handler.h
+    base_message_handler.h
     unix_domain_server.h
     message_utils.h
 )
 
 add_library(network STATIC ${NETWORK_SRCS} ${NETWORK_HDRS})
 
-set(NETWORK_LINK_LIBS absl::status absl::statusor)
+set(NETWORK_LINK_LIBS absl::status absl::statusor absl::log)
 
 if(ANDROID)
     list(APPEND NETWORK_LINK_LIBS log)

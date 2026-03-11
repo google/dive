@@ -930,6 +930,7 @@ void TraceDialog::SetTraceDialogForCapture()
     else
     {
         m_capture_button->setEnabled(true);
+        UpdateCaptureFileDirectories();
     }
 }
 

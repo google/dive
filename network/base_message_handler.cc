@@ -27,9 +27,9 @@ limitations under the License.
 namespace Network
 {
 
-void BaseMessageHandler::OnConnect() { LOG(INFO) << "ServerMessageHandler: onConnect()"; }
+void BaseMessageHandler::OnConnect() { LOG(INFO) << "BaseMessageHandler: onConnect()"; }
 
-void BaseMessageHandler::OnDisconnect() { LOG(INFO) << "ServerMessageHandler: onDisconnect()"; }
+void BaseMessageHandler::OnDisconnect() { LOG(INFO) << "BaseMessageHandler: onDisconnect()"; }
 
 void BaseMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
                                        Network::SocketConnection* client_conn)

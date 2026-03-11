@@ -509,6 +509,7 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
     LoadAvailableMetrics();
 
     m_trace_dig = new TraceDialog(m_controller, this);
+    m_trace_dig->setObjectName("TraceDialog");
     m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
     m_what_if_setup_dig = new WhatIfSetupDialog(this);
     m_what_if_configure_dig = new WhatIfConfigureDialog(this);

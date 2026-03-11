@@ -210,6 +210,7 @@ int main(int argc, char* argv[])
     Pm4InfoInit();
 
     QScopedPointer<MainWindow> main_window{new MainWindow(app->GetController())};
+    main_window->setObjectName("MainWindow");
 
     if (auto scenario = absl::GetFlag(FLAGS_test_scenario); !scenario.empty())
     {

@@ -92,10 +92,12 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
 
     m_button_layout = new QHBoxLayout();
     m_run_button = new QPushButton(kStart_Application, this);
+    m_run_button->setObjectName("Start Application");
     m_run_button->setEnabled(false);
     m_capture_button = new QPushButton("&Trace", this);
     m_capture_button->setEnabled(false);
     m_gfxr_capture_button = new QPushButton(kStart_Gfxr_Runtime_Capture, this);
+    m_gfxr_capture_button->setObjectName("GFXR Capture Button");
     m_gfxr_capture_button->setEnabled(false);
     m_gfxr_capture_button->hide();
 
@@ -165,6 +167,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_cmd_layout = new QHBoxLayout();
     m_file_label = new QLabel("Executable:");
     m_cmd_input_box = new QLineEdit();
+    m_cmd_input_box->setObjectName("Executable LineEdit");
     m_cmd_input_box->setPlaceholderText("Input a command or select from the package list");
     m_cmd_input_box->setClearButtonEnabled(true);
     m_cmd_layout->addWidget(m_file_label);
@@ -275,6 +278,7 @@ TraceDialog::~TraceDialog()
 void TraceDialog::ShowMessage(const QString& message)
 {
     auto message_box = new QMessageBox(this);
+    message_box->setObjectName("TraceDialog MessageBox");
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message);
     message_box->open();

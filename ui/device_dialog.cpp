@@ -96,6 +96,7 @@ void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
     if (current_device && current_device->Serial() == selected_device_serial)
     {
         qDebug() << "Device already selected: " << selected_device_serial.c_str();
+        OnDeviceSelected();
         return;
     }
 

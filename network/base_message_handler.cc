@@ -59,12 +59,7 @@ void BaseMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> m
         case Network::MessageType::HANDSHAKE_REQUEST:
         {
             LOG(INFO) << "Message received: HandShakeRequest";
-            auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "HandShakeRequest message is null.";
-                return;
-            }
+            auto* request = static_cast<Network::HandshakeRequest*>(message.get());
 
             if (absl::Status status = Network::Handshake(request, client_conn); !status.ok())
             {
@@ -76,12 +71,7 @@ void BaseMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> m
         case Network::MessageType::DOWNLOAD_FILE_REQUEST:
         {
             LOG(INFO) << "Message received: DownloadFileRequest";
-            auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "DownloadFileRequest message is null.";
-                return;
-            }
+            auto* request = static_cast<Network::DownloadFileRequest*>(message.get());
 
             if (absl::Status status = Network::DownloadFile(request, client_conn); !status.ok())
             {
@@ -93,12 +83,7 @@ void BaseMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> m
         case Network::MessageType::FILE_SIZE_REQUEST:
         {
             LOG(INFO) << "Message received: FileSizeRequest";
-            auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "FileSizeRequest message is null.";
-                return;
-            }
+            auto* request = static_cast<Network::FileSizeRequest*>(message.get());
 
             if (absl::Status status = Network::GetFileSize(request, client_conn); !status.ok())
             {
@@ -110,12 +95,7 @@ void BaseMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> m
         case Network::MessageType::REMOVE_FILE_REQUEST:
         {
             LOG(INFO) << "Message received: RemoveFileRequest";
-            auto* request = dynamic_cast<Network::RemoveFileRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "RemoveFileRequest message is null.";
-                return;
-            }
+            auto* request = static_cast<Network::RemoveFileRequest*>(message.get());
 
             if (absl::Status status = Network::RemoveFile(request, client_conn); !status.ok())
             {
@@ -126,7 +106,8 @@ void BaseMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> m
         }
         default:
         {
-            LOG(WARNING) << "Message type unhandled, type: ", message->GetMessageType();
+            LOG(WARNING) << "Message type unhandled, type: "
+                         << static_cast<uint32_t>(message->GetMessageType());
             return;
         }
     }

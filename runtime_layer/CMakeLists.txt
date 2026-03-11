@@ -50,6 +50,7 @@ target_link_libraries(
     gpu_time
     Vulkan::Headers
     network
+    absl::log
 )
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)

@@ -16,17 +16,22 @@ limitations under the License.
 
 #pragma once
 
-#include "network/base_message_handler.h"
-#include "network/unix_domain_server.h"
+#include <memory>
 
-namespace DiveLayer
+#include "message_handler.h"
+#include "serializable.h"
+#include "socket_connection.h"
+
+namespace Network
 {
 
-class ServerMessageHandler : public Network::BaseMessageHandler
+class BaseMessageHandler : public Network::IMessageHandler
 {
  public:
+    void OnConnect() override;
+    void OnDisconnect() override;
     void HandleMessage(std::unique_ptr<Network::ISerializable> message,
                        Network::SocketConnection* client_conn) override;
 };
 
-}  // namespace DiveLayer
+}  // namespace Network

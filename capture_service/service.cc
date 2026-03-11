@@ -43,12 +43,6 @@ absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
     return Network::SendSocketMessage(client_conn, response);
 }
 
-// TODO b/483449238 - Reduce log severity level for ServerMessageHandler logs
-
-void ServerMessageHandler::OnConnect() { LOG(INFO) << "ServerMessageHandler: onConnect()"; }
-
-void ServerMessageHandler::OnDisconnect() { LOG(INFO) << "ServerMessageHandler: onDisconnect()"; }
-
 void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
                                          Network::SocketConnection* client_conn)
 {
@@ -65,32 +59,6 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
 
     switch (message->GetMessageType())
     {
-        case Network::MessageType::PING_MESSAGE:
-        {
-            LOG(INFO) << "Message received: Ping";
-            if (absl::Status status = Network::SendPong(client_conn); !status.ok())
-            {
-                LOG(ERROR) << "Send pong failed: " << status.message();
-            }
-            return;
-        }
-        case Network::MessageType::HANDSHAKE_REQUEST:
-        {
-            LOG(INFO) << "Message received: HandShakeRequest";
-            auto* request = dynamic_cast<Network::HandshakeRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "HandShakeRequest message is null.";
-                return;
-            }
-
-            if (absl::Status status = Network::Handshake(request, client_conn); !status.ok())
-            {
-                LOG(ERROR) << "Handshake failed: " << status.message();
-                return;
-            }
-            return;
-        }
         case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
             LOG(INFO) << "Message received: Pm4CaptureRequest";
@@ -100,60 +68,9 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             }
             return;
         }
-        case Network::MessageType::DOWNLOAD_FILE_REQUEST:
-        {
-            LOG(INFO) << "Message received: DownloadFileRequest";
-            auto* request = dynamic_cast<Network::DownloadFileRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "DownloadFileRequest message is null.";
-                return;
-            }
-
-            if (absl::Status status = Network::DownloadFile(request, client_conn); !status.ok())
-            {
-                LOG(ERROR) << "DownloadFile failed: " << status.message();
-                return;
-            }
-            return;
-        }
-        case Network::MessageType::FILE_SIZE_REQUEST:
-        {
-            LOG(INFO) << "Message received: FileSizeRequest";
-            auto* request = dynamic_cast<Network::FileSizeRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "FileSizeRequest message is null.";
-                return;
-            }
-
-            if (absl::Status status = Network::GetFileSize(request, client_conn); !status.ok())
-            {
-                LOG(ERROR) << "GetFileSize failed:" << status.message();
-                return;
-            }
-            return;
-        }
-        case Network::MessageType::REMOVE_FILE_REQUEST:
-        {
-            LOG(INFO) << "Message received: RemoveFileRequest";
-            auto* request = dynamic_cast<Network::RemoveFileRequest*>(message.get());
-            if (!request)
-            {
-                LOG(ERROR) << "RemoveFileRequest message is null.";
-                return;
-            }
-
-            if (absl::Status status = Network::RemoveFile(request, client_conn); !status.ok())
-            {
-                LOG(ERROR) << "RemoveFile failed: " << status.message();
-                return;
-            }
-            return;
-        }
         default:
         {
-            LOG(WARNING) << "Message type unhandled, type: ", message->GetMessageType();
+            Network::BaseMessageHandler::HandleMessage(std::move(message), client_conn);
             return;
         }
     }

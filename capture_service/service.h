@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include "absl/status/status.h"
+#include "network/base_message_handler.h"
 #include "network/unix_domain_server.h"
 
 namespace Dive
@@ -24,11 +25,9 @@ namespace Dive
 
 absl::Status StartPm4Capture(Network::SocketConnection* client_conn);
 
-class ServerMessageHandler : public Network::IMessageHandler
+class ServerMessageHandler : public Network::BaseMessageHandler
 {
  public:
-    void OnConnect() override;
-    void OnDisconnect() override;
     void HandleMessage(std::unique_ptr<Network::ISerializable> message,
                        Network::SocketConnection* client_conn) override;
 };

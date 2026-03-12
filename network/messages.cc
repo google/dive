@@ -103,6 +103,7 @@ absl::Status StringMessage::Deserialize(const Buffer& src)
 
 absl::Status RemoveFileResponse::Serialize(Buffer& dest) const
 {
+    dest.clear();
     WriteStringToBuffer(m_error_reason, dest);
     dest.push_back(static_cast<uint8_t>(m_success));
 
@@ -129,6 +130,7 @@ absl::Status RemoveFileResponse::Deserialize(const Buffer& src)
 
 absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
 {
+    dest.clear();
     dest.push_back(static_cast<uint8_t>(m_found));
     WriteStringToBuffer(m_error_reason, dest);
     WriteStringToBuffer(m_file_path, dest);
@@ -160,6 +162,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
 
 absl::Status FileSizeResponse::Serialize(Buffer& dest) const
 {
+    dest.clear();
     dest.push_back(static_cast<uint8_t>(m_found));
     WriteStringToBuffer(m_error_reason, dest);
     WriteStringToBuffer(m_file_size_str, dest);
@@ -183,6 +186,38 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("Message has unexpected trailing data.");
+    }
+    return Dive::OkStatus();
+}
+
+absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
+{
+    dest.clear();
+    WriteUint32ToBuffer(m_vertex_count, dest);
+    WriteUint32ToBuffer(m_index_count, dest);
+    WriteUint32ToBuffer(m_instance_count, dest);
+    dest.push_back(static_cast<uint8_t>(m_filter_by_vertex_count));
+    dest.push_back(static_cast<uint8_t>(m_filter_by_index_count));
+    dest.push_back(static_cast<uint8_t>(m_filter_by_instance_count));
+    return Dive::OkStatus();
+}
+
+absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_vertex_count, ReadUint32FromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_index_count, ReadUint32FromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_instance_count, ReadUint32FromBuffer(src, offset));
+    if (src.size() < offset + 3 * sizeof(uint8_t))
+    {
+        return Dive::InvalidArgumentError("Buffer too small for filter flags.");
+    }
+    m_filter_by_vertex_count = (src[offset++] != 0);
+    m_filter_by_index_count = (src[offset++] != 0);
+    m_filter_by_instance_count = (src[offset++] != 0);
+    if (offset != src.size())
+    {
+        return Dive::InvalidArgumentError("DrawcallFilteringRequest has unexpected trailing data.");
     }
     return Dive::OkStatus();
 }
@@ -295,6 +330,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
             break;
         case MessageType::REMOVE_FILE_RESPONSE:
             message = std::make_unique<RemoveFileResponse>();
+            break;
+        case MessageType::DRAWCALL_FILTER_CONFIG_REQUEST:
+            message = std::make_unique<DrawcallFilterConfigRequest>();
+            break;
+        case MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE:
+            message = std::make_unique<DrawcallFilterConfigResponse>();
             break;
         default:
             conn->Close();

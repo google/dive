@@ -105,11 +105,48 @@ VkResult DiveRuntimeLayer::CreateImage(PFN_vkCreateImage pfn, VkDevice device,
     return pfn(device, pCreateInfo, pAllocator, pImage);
 }
 
+void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
+                               uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
+                               uint32_t firstInstance)
+{
+    DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+
+    if (config.filter_by_vertex_count && vertexCount == config.target_vertex_count)
+    {
+        return;
+    }
+    if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    {
+        return;
+    }
+
+    pfn(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
 void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer commandBuffer,
                                       uint32_t indexCount, uint32_t instanceCount,
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
+    DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+
+    if (config.filter_by_index_count && indexCount == config.target_index_count)
+    {
+        return;
+    }
+    if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    {
+        return;
+    }
+
     //  Disable drawcalls with N index count
     //  Specifically for visibility mask:
     //  BiRP is using 2 drawcalls with 42 each, URP is using 1 drawcall with 84,

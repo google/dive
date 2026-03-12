@@ -68,6 +68,11 @@ class TcpClient
     // Removes a file from device.
     absl::Status RemoveFile(const std::string& remote_file_path);
 
+    // Sends a drawcall filter configuration request to the server.
+    absl::Status SendDrawcallFilterConfig(bool filter_by_vertex_count, uint32_t vertex_count,
+                                          bool filter_by_index_count, uint32_t index_count,
+                                          bool filter_by_instance_count, uint32_t instance_count);
+
  private:
     // Performs a ping-pong check with the server.
     absl::Status PingServer();

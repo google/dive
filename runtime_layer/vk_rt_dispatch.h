@@ -35,6 +35,7 @@ struct DeviceDispatchTable
     PFN_vkGetDeviceProcAddr pfn_get_device_proc_addr = nullptr;
     PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
     PFN_vkCreateImage CreateImage = nullptr;
+    PFN_vkCmdDraw CmdDraw = nullptr;
     PFN_vkCmdDrawIndexed CmdDrawIndexed = nullptr;
     PFN_vkCmdResetQueryPool CmdResetQueryPool = nullptr;
     PFN_vkCmdWriteTimestamp CmdWriteTimestamp = nullptr;

@@ -279,14 +279,18 @@ void WhatIfSetupDialog::UpdatePackageList()
         return;
     }
 
-    m_runtime_data.pkg_list = *package_list;
+    m_runtime_data.pkg_list.clear();
+    for (const auto& pkg : *package_list)
+    {
+        m_runtime_data.pkg_list.append(QString::fromStdString(pkg));
+    }
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
-    for (size_t i = 0; i < m_runtime_data.pkg_list.size(); i++)
+    for (int i = 0; i < m_runtime_data.pkg_list.size(); i++)
     {
-        QStandardItem* item = new QStandardItem(m_runtime_data.pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(m_runtime_data.pkg_list[i]);
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);
@@ -461,9 +465,9 @@ void WhatIfSetupDialog::OnPackageSelected(const QString& s)
     {
         return;
     }
-    if (m_runtime_data.cur_pkg.toStdString() != m_runtime_data.pkg_list[cur_index])
+    if (m_runtime_data.cur_pkg != m_runtime_data.pkg_list[cur_index])
     {
-        m_runtime_data.cur_pkg = m_runtime_data.pkg_list[cur_index].c_str();
+        m_runtime_data.cur_pkg = m_runtime_data.pkg_list[cur_index];
         qDebug() << "Current package set to: " << m_runtime_data.cur_pkg.toStdString().c_str();
     }
     m_start_application_button->setEnabled(true);

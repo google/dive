@@ -106,7 +106,7 @@ class WhatIfSetupDialog : public DeviceDialog
     // Runtime data that needs to be accessed across different methods
     struct RuntimeData
     {
-        std::vector<std::string> pkg_list;
+        QStringList pkg_list;
         QString cur_pkg;
         std::string command_args;
         Dive::AndroidDevice::PackageListOptions pkg_list_options;

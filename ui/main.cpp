@@ -160,7 +160,9 @@ int main(int argc, char* argv[])
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);
 
-    if (absl::Status ret = Dive::InitializeCrashReporting(argv[0]); !ret.ok())
+    const std::string crashpad_product_name = "Dive";
+    if (absl::Status ret = Dive::InitializeCrashReporting(argv[0], crashpad_product_name);
+        !ret.ok())
     {
         qDebug() << "Failed to initialize crash reporting: " << ret.message().data();
         return EXIT_FAILURE;

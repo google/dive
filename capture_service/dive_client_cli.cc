@@ -46,6 +46,7 @@ limitations under the License.
 #include "dive/common/app_types.h"
 #include "dive/common/macros.h"
 #include "dive/common/status.h"
+#include "dive/crash_report/crash_report.h"
 #include "dive/log/log.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/device_resources.h"
@@ -1029,8 +1030,16 @@ ABSL_FLAG(bool, validation_layer, false,
 ABSL_FLAG(bool, wait_for_debugger, false,
           "Tell GFXR replay app to wait for a debugger before continuing to replay");
 
-int main(int argc, char** argv)
+int main(int argc, char* argv[])
 {
+    const std::string crashpad_product_name = "Dive_CLI";
+    if (absl::Status ret = Dive::InitializeCrashReporting(argv[0], crashpad_product_name);
+        !ret.ok())
+    {
+        LOG(ERROR) << "Failed to initialize crash reporting: " << ret.message();
+        return EXIT_FAILURE;
+    }
+
     absl::FlagsUsageConfig flags_usage_config;
     flags_usage_config.version_string = Dive::GetCompleteVersionString;
     absl::SetFlagsUsageConfig(flags_usage_config);

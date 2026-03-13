@@ -20,7 +20,7 @@
 namespace Dive
 {
 
-absl::Status InitializeCrashpadClient()
+absl::Status InitializeCrashpad(const std::string& product_name)
 {
     LOG(INFO) << "[Crash Report] Crashpad is intentionally disabled in this configuration.";
     return absl::OkStatus();

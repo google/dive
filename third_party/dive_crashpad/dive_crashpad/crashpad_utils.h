@@ -23,14 +23,13 @@
 namespace Dive
 {
 
-inline constexpr char kProductName[] = "Dive";
 inline constexpr char kCrashHandlerBinary[] = "crashpad_handler";
 
 // Returns the platform-specific writable directory for application data.
-// Windows: %LOCALAPPDATA%/Dive
-// macOS: ~/Library/Application Support/Dive
-// Linux: ~/.local/share/Dive
-absl::StatusOr<std::filesystem::path> GetWritableRoot();
+// Windows: %LOCALAPPDATA%/product_name
+// macOS: ~/Library/Application Support/product_name
+// Linux: ~/.local/share/product_name
+absl::StatusOr<std::filesystem::path> GetWritableRoot(const std::string& product_name);
 
 std::filesystem::path GetHandlerBinaryName();
 

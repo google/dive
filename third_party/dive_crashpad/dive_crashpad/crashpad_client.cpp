@@ -50,10 +50,10 @@ constexpr int kMaxCrashpadVersionLength = 30;
 
 }  // namespace
 
-absl::Status InitializeCrashpad()
+absl::Status InitializeCrashpad(const std::string& product_name)
 {
     LOG(INFO) << "[Crash Report] Initializing Crashpad.";
-    auto writable_root = GetWritableRoot();
+    auto writable_root = GetWritableRoot(product_name);
     if (!writable_root.ok())
     {
         return writable_root.status();
@@ -97,7 +97,7 @@ absl::Status InitializeCrashpad()
     }
 
     std::map<std::string, std::string> annotations = {
-        {"product", kProductName}, {"format", kFormat}, {"version", version}};
+        {"product", product_name}, {"format", kFormat}, {"version", version}};
 
     std::vector<std::string> arguments = {kNoRateLimitFlag};
 

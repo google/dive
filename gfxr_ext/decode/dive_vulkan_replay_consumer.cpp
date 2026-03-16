@@ -491,18 +491,10 @@ void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
     // wait until the GPU is completely finished with everything. Once the GPU is idle, that fence
     // is guaranteed to be signaled.
 
-    // Suprisingly, this also fixes VUID-vkQueueSubmit-pSignalSemaphores-00067
-    // This error is because minImageCount is larger than 1 (3 for example), and for looping:
-    // - Iteration 1: we acquire an image (e.g., Index 0), signal Semaphore A during rendering, and
-    // then present Index 0 while waiting on Semaphore A.
-    // - Iteration 2: Since the swapchain has multiple images, the next call to
-    // vkAcquireNextImageKHR returns a different image (e.g., Index 1). The loop then tries to
-    // signal Semaphore A again for the rendering of Index 1. However, Semaphore A is still "tied"
-    // to the presentation of Index 0, which hasn't been re-acquired yet.
-    // Note that this is NOT happening for OpenXR apps since they do not call vkAcquireNextImageKHR
-    // My guess is that by calling vkDeviceWaitIdle, we forcing the driver to finish all gpu work
-    // which most likely includes Presenting, so when we call vkAcquireNextImageKHR at the start of
-    // the next loop iteration, the driver sees the GPU is idle, and returns the same index
+    // This also fixes VUID-vkQueueSubmit-pSignalSemaphores-00067
+    // This error is because without vkDeviceWaitIdle, the replay attempts to re-signal the
+    // semaphore for the image while the previous iteration's presentation of this image is still
+    // pending in the driver.
 
     // TODO(wangra): vkDeviceWaitIdle might be too heavy as it will flush all gpu caches. this might
     // have performance impact. Maybe we should consider waiting for VkFence

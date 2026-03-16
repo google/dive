@@ -242,7 +242,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     marker.marker_type = format::kEndMarker;
     output_stream_->Write(&marker, sizeof(marker));
 
-    // GOOGLE: Move partially recorded command buffer after StateEndMarker
+    // GOOGLE: Move partially recorded command buffer after StateEndMarker 
     // so that both vkBeginCommandBuffer and vkEndCommandBuffer of the same cmd are after StateEndMarker
     for (auto cmd_wrapper : partially_recorded_primary_cmds)
     {

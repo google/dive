@@ -127,7 +127,7 @@ To build with Crashpad, ensure the CMake flag "DIVE_BUILD_WITH_CRASHPAD=ON" and 
 If you want to build a GFXR tool like `gfxrecon-convert`:
 
 ```
-cmake --build build/host --target gfxrecon-convert
+cmake --build build/host --target third_party/gfxreconstruct/tools/convert/gfxrecon-convert
 ```
 
 ### Windows

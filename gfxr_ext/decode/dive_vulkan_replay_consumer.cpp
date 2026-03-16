@@ -483,6 +483,31 @@ void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
         GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
         gpu_time_stats_csv_str_ = gpu_time_.GetStatsCSVString();
     }
+
+    /********************************************************************************************/
+    // Fix for VUID-vkQueueSubmit-fence-00064
+    // This error occurs when we try to use a VkFence in vkQueueSubmit while that fence is already
+    // active (submitted but not yet signaled). By calling vkDeviceWaitIdle, we force the CPU to
+    // wait until the GPU is completely finished with everything. Once the GPU is idle, that fence
+    // is guaranteed to be signaled.
+
+    // Suprisingly, this also fixes VUID-vkQueueSubmit-pSignalSemaphores-00067
+    // This error is because minImageCount is larger than 1 (3 for example), and for looping:
+    // - Iteration 1: we acquire an image (e.g., Index 0), signal Semaphore A during rendering, and
+    // then present Index 0 while waiting on Semaphore A.
+    // - Iteration 2: Since the swapchain has multiple images, the next call to
+    // vkAcquireNextImageKHR returns a different image (e.g., Index 1). The loop then tries to
+    // signal Semaphore A again for the rendering of Index 1. However, Semaphore A is still "tied"
+    // to the presentation of Index 0, which hasn't been re-acquired yet.
+    // Note that this is NOT happening for OpenXR apps since they do not call vkAcquireNextImageKHR
+    // My guess is that by calling vkDeviceWaitIdle, we forcing the driver to finish all gpu work
+    // which most likely includes Presenting, so when we call vkAcquireNextImageKHR at the start of
+    // the next loop iteration, the driver sees the GPU is idle, and returns the same index
+
+    // TODO(wangra): vkDeviceWaitIdle might be too heavy as it will flush all gpu caches. this might
+    // have performance impact. Maybe we should consider waiting for VkFence
+    pfn_vkDeviceWaitIdle_(device_);
+    /********************************************************************************************/
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue2(
@@ -894,31 +919,6 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
 
 void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
 {
-    /********************************************************************************************/
-    // Fix for VUID-vkQueueSubmit-fence-00064
-    // This error occurs when we try to use a VkFence in vkQueueSubmit while that fence is already
-    // active (submitted but not yet signaled). By calling vkDeviceWaitIdle, we force the CPU to
-    // wait until the GPU is completely finished with everything. Once the GPU is idle, that fence
-    // is guaranteed to be signaled.
-
-    // Suprisingly, this also fixes VUID-vkQueueSubmit-pSignalSemaphores-00067
-    // This error is because minImageCount is larger than 1 (3 for example), and for looping:
-    // - Iteration 1: we acquire an image (e.g., Index 0), signal Semaphore A during rendering, and
-    // then present Index 0 while waiting on Semaphore A.
-    // - Iteration 2: Since the swapchain has multiple images, the next call to
-    // vkAcquireNextImageKHR returns a different image (e.g., Index 1). The loop then tries to
-    // signal Semaphore A again for the rendering of Index 1. However, Semaphore A is still "tied"
-    // to the presentation of Index 0, which hasn't been re-acquired yet.
-    // Note that this is NOT happening for OpenXR apps since they do not call vkAcquireNextImageKHR
-    // My guess is that by calling vkDeviceWaitIdle, we forcing the driver to finish all gpu work
-    // which most likely includes Presenting, so when we call vkAcquireNextImageKHR at the start of
-    // the next loop iteration, the driver sees the GPU is idle, and returns the same index
-
-    // TODO(wangra): vkDeviceWaitIdle might be too heavy as it will flush all gpu caches. this might
-    // have performance impact. Maybe we should consider waiting for VkFence
-    pfn_vkDeviceWaitIdle_(device_);
-    /********************************************************************************************/
-
     std::vector<VkFence> reset_fence_list = {};
 
     // We try to bring back the initial status for all fences at the end of each loop

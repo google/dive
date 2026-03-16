@@ -120,8 +120,7 @@ uint64_t VulkanStateWriter::WriteAssets(const VulkanStateTable& state_table)
 
 uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint64_t frame_number)
 {
-    // GOOGLE: Since we want each capture file to have its own asset file, Ensure each asset file has a complete copy of
-    // state (not just the deltas).
+    // GOOGLE: Each capture file should have its own asset file. Ensure each asset file has a complete copy of state.
     state_table.VisitWrappers([](vulkan_wrappers::BufferWrapper* buffer_wrapper) { buffer_wrapper->dirty = true; });
     state_table.VisitWrappers([](vulkan_wrappers::ImageWrapper* iamge_wrapper) { iamge_wrapper->dirty = true; });
     state_table.VisitWrappers(
@@ -243,7 +242,7 @@ uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint
     marker.marker_type = format::kEndMarker;
     output_stream_->Write(&marker, sizeof(marker));
 
-    // GOOGLE: Move partially recorded command buffer after StateEndMarker 
+    // GOOGLE: Move partially recorded command buffer after StateEndMarker
     // so that both vkBeginCommandBuffer and vkEndCommandBuffer of the same cmd are after StateEndMarker
     for (auto cmd_wrapper : partially_recorded_primary_cmds)
     {

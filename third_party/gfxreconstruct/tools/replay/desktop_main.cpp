@@ -33,6 +33,9 @@
 #include "generated/generated_vulkan_decoder.h"
 #include "generated/generated_vulkan_replay_consumer.h"
 
+#include "gfxr_ext/decode/dive_file_processor.h"
+#include "gfxr_ext/decode/dive_vulkan_replay_consumer.h"
+
 #if ENABLE_OPENXR_SUPPORT
 #include "decode/openxr_tracked_object_info_table.h"
 #include "generated/generated_openxr_decoder.h"
@@ -145,7 +148,7 @@ int main(int argc, const char** argv)
         }
         else
         {
-            file_processor = std::make_unique<gfxrecon::decode::FileProcessor>();
+            file_processor = std::make_unique<gfxrecon::decode::DiveFileProcessor>();
         }
 
         if (!file_processor->Initialize(filename))
@@ -203,8 +206,18 @@ int main(int argc, const char** argv)
                                                  quit_after_frame,
                                                  quit_frame);
 
-            gfxrecon::decode::VulkanReplayConsumer vulkan_replay_consumer(application, vulkan_replay_options);
+            gfxrecon::decode::DiveVulkanReplayConsumer vulkan_replay_consumer(application, vulkan_replay_options);
             gfxrecon::decode::VulkanDecoder        vulkan_decoder;
+
+            if (vulkan_replay_options.loop_single_frame_count.has_value())
+            {
+                static_cast<gfxrecon::decode::DiveFileProcessor*>(file_processor.get())->SetLoopSingleFrameCount(*(vulkan_replay_options.loop_single_frame_count));
+            }
+
+            if (arg_parser.IsOptionSet(kEnableGPUTime))
+            {
+                vulkan_replay_consumer.SetEnableGPUTime(vulkan_replay_options.enable_gpu_time);
+            }
 
             if (vulkan_replay_options.capture)
             {

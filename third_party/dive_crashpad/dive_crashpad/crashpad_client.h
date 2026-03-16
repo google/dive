@@ -16,11 +16,13 @@
 
 #pragma once
 
+#include <string>
+
 #include "absl/status/status.h"
 
 namespace Dive
 {
 
-absl::Status InitializeCrashpad();
+absl::Status InitializeCrashpad(const std::string& product_name);
 
 }  // namespace Dive

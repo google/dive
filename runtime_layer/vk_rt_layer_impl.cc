@@ -58,6 +58,9 @@ DiveRuntimeLayer::~DiveRuntimeLayer() {}
 VkResult DiveRuntimeLayer::QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                                            const VkPresentInfoKHR* pPresentInfo)
 {
+    // Process frame boundary tasks for non-OpenXR apps.
+    ProcessFrameBoundaryTasks();
+
     // Be careful, this func is NOT called for OpenXR app!!!
     VkResult result = pfn(queue, pPresentInfo);
 
@@ -105,11 +108,48 @@ VkResult DiveRuntimeLayer::CreateImage(PFN_vkCreateImage pfn, VkDevice device,
     return pfn(device, pCreateInfo, pAllocator, pImage);
 }
 
+void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
+                               uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
+                               uint32_t firstInstance)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+
+    if (config.filter_by_vertex_count && vertexCount == config.target_vertex_count)
+    {
+        return;
+    }
+    if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    {
+        return;
+    }
+
+    pfn(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
 void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer commandBuffer,
                                       uint32_t indexCount, uint32_t instanceCount,
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+
+    if (config.filter_by_index_count && indexCount == config.target_index_count)
+    {
+        return;
+    }
+    if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    {
+        return;
+    }
+
     //  Disable drawcalls with N index count
     //  Specifically for visibility mask:
     //  BiRP is using 2 drawcalls with 42 each, URP is using 1 drawcall with 84,
@@ -384,6 +424,9 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit pfn, VkQueue queue, uin
         }
     }
 
+    // Process frame boundary tasks for OpenXR apps.
+    ProcessFrameBoundaryTasks();
+
     return result;
 }
 
@@ -475,6 +518,31 @@ void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandB
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
+    }
+}
+
+void DiveRuntimeLayer::EnqueueFrameBoundaryTask(std::function<void()> task)
+{
+    std::lock_guard<std::mutex> lock(m_task_mutex);
+    m_frame_boundary_tasks.push_back(std::move(task));
+}
+
+void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
+{
+    std::vector<std::function<void()>> tasks_to_run;
+    {
+        std::lock_guard<std::mutex> lock(m_task_mutex);
+        if (m_frame_boundary_tasks.empty())
+        {
+            return;
+        }
+
+        tasks_to_run = std::move(m_frame_boundary_tasks);
+    }
+
+    for (auto& task : tasks_to_run)
+    {
+        task();
     }
 }
 

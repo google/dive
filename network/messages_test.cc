@@ -28,6 +28,21 @@ namespace
 
 using ::absl_testing::IsOkAndHolds;
 
+TEST(MessagesTest, WriteAndReadBool)
+{
+    Network::Buffer buf;
+    bool write_value = true;
+    Network::WriteBoolToBuffer(write_value, buf);
+    size_t offset = 0;
+    ASSERT_THAT(Network::ReadBoolFromBuffer(buf, offset), IsOkAndHolds(write_value));
+
+    buf.clear();
+    write_value = false;
+    Network::WriteBoolToBuffer(write_value, buf);
+    offset = 0;
+    ASSERT_THAT(Network::ReadBoolFromBuffer(buf, offset), IsOkAndHolds(write_value));
+}
+
 TEST(MessagesTest, WriteAndReadUint32)
 {
     Network::Buffer buf;
@@ -238,6 +253,45 @@ TEST(MessagesTest, RemoveFileResponseFailure)
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(res_serialize_fail.GetSuccess(), res_deserialize_fail.GetSuccess());
     ASSERT_EQ(res_serialize_fail.GetErrorReason(), res_deserialize_fail.GetErrorReason());
+}
+
+TEST(MessagesTest, DrawcallFilterConfigRequest)
+{
+    Network::DrawcallFilterConfigRequest req_serialize;
+    req_serialize.SetVertexCount(100);
+    req_serialize.SetIndexCount(200);
+    req_serialize.SetInstanceCount(5);
+    req_serialize.SetFilterByVertexCount(true);
+    req_serialize.SetFilterByIndexCount(false);
+    req_serialize.SetFilterByInstanceCount(true);
+    Network::Buffer buf;
+    absl::Status status = req_serialize.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req_serialize.GetMessageType(), Network::MessageType::DRAWCALL_FILTER_CONFIG_REQUEST);
+
+    Network::DrawcallFilterConfigRequest req_deserialize;
+    status = req_deserialize.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req_deserialize.GetMessageType(),
+              Network::MessageType::DRAWCALL_FILTER_CONFIG_REQUEST);
+    ASSERT_EQ(req_serialize.GetVertexCount(), req_deserialize.GetVertexCount());
+    ASSERT_EQ(req_serialize.GetIndexCount(), req_deserialize.GetIndexCount());
+    ASSERT_EQ(req_serialize.GetInstanceCount(), req_deserialize.GetInstanceCount());
+    ASSERT_EQ(req_serialize.GetFilterByVertexCount(), req_deserialize.GetFilterByVertexCount());
+    ASSERT_EQ(req_serialize.GetFilterByIndexCount(), req_deserialize.GetFilterByIndexCount());
+    ASSERT_EQ(req_serialize.GetFilterByInstanceCount(), req_deserialize.GetFilterByInstanceCount());
+}
+
+TEST(MessagesTest, DrawcallFilterConfigResponse)
+{
+    Network::DrawcallFilterConfigResponse res;
+    Network::Buffer buf;
+    absl::Status status = res.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(res.GetMessageType(), Network::MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE);
+
+    status = res.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
 }
 
 }  // namespace

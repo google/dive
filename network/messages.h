@@ -23,6 +23,9 @@ limitations under the License.
 namespace Network
 {
 
+// Helper to write a bool to a buffer.
+void WriteBoolToBuffer(bool value, Buffer& dest);
+
 // Helper to write a uint32_t to a buffer.
 void WriteUint32ToBuffer(uint32_t value, Buffer& dest);
 
@@ -34,6 +37,9 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
 
 // Helper to read a string (length + data) from the buffer.
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset);
+
+// Helper to read a bool from a buffer.
+absl::StatusOr<bool> ReadBoolFromBuffer(const Buffer& src, size_t& offset);
 
 enum class MessageType : uint32_t
 {
@@ -48,7 +54,9 @@ enum class MessageType : uint32_t
     FILE_SIZE_REQUEST = 9,
     FILE_SIZE_RESPONSE = 10,
     REMOVE_FILE_REQUEST = 11,
-    REMOVE_FILE_RESPONSE = 12
+    REMOVE_FILE_RESPONSE = 12,
+    DRAWCALL_FILTER_CONFIG_REQUEST = 13,
+    DRAWCALL_FILTER_CONFIG_RESPONSE = 14,
 };
 
 class HandshakeMessage : public ISerializable
@@ -224,6 +232,54 @@ class FileSizeResponse : public ISerializable
     // A string representation of the downloaded file's size.
     // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
     std::string m_file_size_str;
+};
+
+class DrawcallFilterConfigRequest : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override
+    {
+        return MessageType::DRAWCALL_FILTER_CONFIG_REQUEST;
+    }
+
+    absl::Status Serialize(Buffer& dest) const override;
+
+    absl::Status Deserialize(const Buffer& src) override;
+
+    uint32_t GetVertexCount() const { return m_vertex_count; }
+    void SetVertexCount(uint32_t count) { m_vertex_count = count; }
+
+    uint32_t GetIndexCount() const { return m_index_count; }
+    void SetIndexCount(uint32_t count) { m_index_count = count; }
+
+    uint32_t GetInstanceCount() const { return m_instance_count; }
+    void SetInstanceCount(uint32_t count) { m_instance_count = count; }
+
+    bool GetFilterByVertexCount() const { return m_filter_by_vertex_count; }
+    void SetFilterByVertexCount(bool filter) { m_filter_by_vertex_count = filter; }
+
+    bool GetFilterByIndexCount() const { return m_filter_by_index_count; }
+    void SetFilterByIndexCount(bool filter) { m_filter_by_index_count = filter; }
+
+    bool GetFilterByInstanceCount() const { return m_filter_by_instance_count; }
+    void SetFilterByInstanceCount(bool filter) { m_filter_by_instance_count = filter; }
+
+ private:
+    uint32_t m_vertex_count = 0;
+    uint32_t m_index_count = 0;
+    uint32_t m_instance_count = 0;
+    bool m_filter_by_vertex_count = false;
+    bool m_filter_by_index_count = false;
+    bool m_filter_by_instance_count = false;
+};
+
+class DrawcallFilterConfigResponse : public EmptyMessage
+{
+ public:
+    MessageType GetMessageType() const override
+    {
+        return MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE;
+    }
 };
 
 // Message Helper Functions (TLV Framing).

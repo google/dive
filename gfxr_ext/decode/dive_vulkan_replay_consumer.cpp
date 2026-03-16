@@ -1034,5 +1034,39 @@ void DiveVulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
         device_id, memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
 }
 
+void DiveVulkanReplayConsumer::Process_vkCmdPipelineBarrier(
+    const ApiCallInfo& call_info, format::HandleId commandBuffer, VkPipelineStageFlags srcStageMask,
+    VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags,
+    uint32_t memoryBarrierCount, StructPointerDecoder<Decoded_VkMemoryBarrier>* pMemoryBarriers,
+    uint32_t bufferMemoryBarrierCount,
+    StructPointerDecoder<Decoded_VkBufferMemoryBarrier>* pBufferMemoryBarriers,
+    uint32_t imageMemoryBarrierCount,
+    StructPointerDecoder<Decoded_VkImageMemoryBarrier>* pImageMemoryBarriers)
+{
+    // Fix for VUID-vkCmdDraw-None-09600:
+    // Captured traces assume swapchain images are in PRESENT_SRC_KHR from a previous
+    // (unrecorded) frame. In replay, these images start as UNDEFINED. Forcing
+    // oldLayout to UNDEFINED is spec-compliant and prevents layout mismatch errors.
+    if (imageMemoryBarrierCount > 0 && pImageMemoryBarriers != nullptr)
+    {
+        VkImageMemoryBarrier* image_barriers = pImageMemoryBarriers->GetPointer();
+        if (image_barriers != nullptr)
+        {
+            for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i)
+            {
+                if (image_barriers[i].oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                {
+                    image_barriers[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                }
+            }
+        }
+    }
+
+    VulkanReplayConsumer::Process_vkCmdPipelineBarrier(
+        call_info, commandBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount,
+        pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount,
+        pImageMemoryBarriers);
+}
+
 GFXRECON_END_NAMESPACE(decode)
 GFXRECON_END_NAMESPACE(gfxrecon)

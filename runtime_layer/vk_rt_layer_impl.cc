@@ -58,6 +58,9 @@ DiveRuntimeLayer::~DiveRuntimeLayer() {}
 VkResult DiveRuntimeLayer::QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                                            const VkPresentInfoKHR* pPresentInfo)
 {
+    // Process frame boundary tasks for non-OpenXR apps.
+    ProcessFrameBoundaryTasks();
+
     // Be careful, this func is NOT called for OpenXR app!!!
     VkResult result = pfn(queue, pPresentInfo);
 
@@ -109,7 +112,7 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
                                uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
                                uint32_t firstInstance)
 {
-    DrawcallFilterConfig config;
+    Network::DrawcallFilterConfig config;
     {
         std::shared_lock lock(m_config_mutex);
         config = m_filter_config;
@@ -132,7 +135,7 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
-    DrawcallFilterConfig config;
+    Network::DrawcallFilterConfig config;
     {
         std::shared_lock lock(m_config_mutex);
         config = m_filter_config;
@@ -421,6 +424,9 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit pfn, VkQueue queue, uin
         }
     }
 
+    // Process frame boundary tasks for OpenXR apps.
+    ProcessFrameBoundaryTasks();
+
     return result;
 }
 
@@ -512,6 +518,31 @@ void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandB
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
+    }
+}
+
+void DiveRuntimeLayer::EnqueueFrameBoundaryTask(std::function<void()> task)
+{
+    std::lock_guard<std::mutex> lock(m_task_mutex);
+    m_frame_boundary_tasks.push_back(std::move(task));
+}
+
+void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
+{
+    std::vector<std::function<void()>> tasks_to_run;
+    {
+        std::lock_guard<std::mutex> lock(m_task_mutex);
+        if (m_frame_boundary_tasks.empty())
+        {
+            return;
+        }
+
+        tasks_to_run = std::move(m_frame_boundary_tasks);
+    }
+
+    for (auto& task : tasks_to_run)
+    {
+        task();
     }
 }
 

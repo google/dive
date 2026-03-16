@@ -829,6 +829,7 @@ extern "C"
         if (0 == strcmp(func, "vkQueuePresentKHR"))
             return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
         if (0 == strcmp(func, "vkCreateImage")) return (PFN_vkVoidFunction)DiveInterceptCreateImage;
+        if (0 == strcmp(func, "vkCmdDraw")) return (PFN_vkVoidFunction)DiveInterceptCmdDraw;
         if (0 == strcmp(func, "vkCmdDrawIndexed"))
             return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
         if (0 == strcmp(func, "vkCmdResetQueryPool"))

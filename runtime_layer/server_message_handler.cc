@@ -17,6 +17,7 @@ limitations under the License.
 #include "server_message_handler.h"
 
 #include "absl/log/log.h"
+#include "network/drawcall_filter_config.h"
 #include "network/message_utils.h"
 #include "vk_rt_layer_impl.h"
 
@@ -45,7 +46,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         {
             LOG(INFO) << "Message received: DrawcallFilterConfigRequest";
             auto* request = static_cast<Network::DrawcallFilterConfigRequest*>(message.get());
-            DrawcallFilterConfig config;
+            Network::DrawcallFilterConfig config;
             config.target_vertex_count = request->GetVertexCount();
             config.target_index_count = request->GetIndexCount();
             config.target_instance_count = request->GetInstanceCount();
@@ -53,7 +54,8 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             config.filter_by_index_count = request->GetFilterByIndexCount();
             config.filter_by_instance_count = request->GetFilterByInstanceCount();
 
-            sDiveRuntimeLayer.UpdateFilterConfig(config);
+            sDiveRuntimeLayer.EnqueueFrameBoundaryTask(
+                [config]() { sDiveRuntimeLayer.UpdateFilterConfig(config); });
 
             Network::DrawcallFilterConfigResponse response;
             if (absl::Status status = Network::SendSocketMessage(client_conn, response);

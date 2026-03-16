@@ -25,6 +25,8 @@ constexpr uint32_t kMaxPayloadSize = 16 * 1024 * 1024;
 namespace Network
 {
 
+void WriteBoolToBuffer(bool value, Buffer& dest) { dest.push_back(static_cast<uint8_t>(value)); }
+
 void WriteUint32ToBuffer(uint32_t value, Buffer& dest)
 {
     uint32_t net_val = htonl(value);
@@ -36,6 +38,17 @@ void WriteStringToBuffer(const std::string& str, Buffer& dest)
 {
     WriteUint32ToBuffer(static_cast<uint32_t>(str.length()), dest);
     dest.insert(dest.end(), str.begin(), str.end());
+}
+
+absl::StatusOr<bool> ReadBoolFromBuffer(const Buffer& src, size_t& offset)
+{
+    if (src.size() < offset + sizeof(uint8_t))
+    {
+        return Dive::InvalidArgumentError("Buffer too small to read a bool.");
+    }
+    bool value = (src[offset] != 0);
+    offset += sizeof(uint8_t);
+    return value;
 }
 
 absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
@@ -105,7 +118,7 @@ absl::Status RemoveFileResponse::Serialize(Buffer& dest) const
 {
     dest.clear();
     WriteStringToBuffer(m_error_reason, dest);
-    dest.push_back(static_cast<uint8_t>(m_success));
+    WriteBoolToBuffer(m_success, dest);
 
     return Dive::OkStatus();
 }
@@ -114,13 +127,7 @@ absl::Status RemoveFileResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
     ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
-
-    if (src.size() < offset + sizeof(uint8_t))
-    {
-        return Dive::InvalidArgumentError("Buffer too small for 'success' field.");
-    }
-    m_success = (src[offset] != 0);
-    offset += sizeof(uint8_t);
+    ASSIGN_OR_RETURN(m_success, ReadBoolFromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("RemoveFileResponse has unexpected trailing data.");
@@ -131,7 +138,7 @@ absl::Status RemoveFileResponse::Deserialize(const Buffer& src)
 absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
 {
     dest.clear();
-    dest.push_back(static_cast<uint8_t>(m_found));
+    WriteBoolToBuffer(m_found, dest);
     WriteStringToBuffer(m_error_reason, dest);
     WriteStringToBuffer(m_file_path, dest);
     WriteStringToBuffer(m_file_size_str, dest);
@@ -142,14 +149,7 @@ absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
 absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-    // Deserialize the 'found' boolean.
-    if (src.size() < offset + sizeof(uint8_t))
-    {
-        return Dive::InvalidArgumentError("Buffer too small for 'found' field.");
-    }
-    m_found = (src[offset] != 0);
-    offset += sizeof(uint8_t);
-
+    ASSIGN_OR_RETURN(m_found, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_file_path, ReadStringFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
@@ -163,7 +163,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
 absl::Status FileSizeResponse::Serialize(Buffer& dest) const
 {
     dest.clear();
-    dest.push_back(static_cast<uint8_t>(m_found));
+    WriteBoolToBuffer(m_found, dest);
     WriteStringToBuffer(m_error_reason, dest);
     WriteStringToBuffer(m_file_size_str, dest);
 
@@ -173,14 +173,7 @@ absl::Status FileSizeResponse::Serialize(Buffer& dest) const
 absl::Status FileSizeResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-    // Deserialize the 'found' boolean.
-    if (src.size() < offset + sizeof(uint8_t))
-    {
-        return Dive::InvalidArgumentError("Buffer too small for 'found' field.");
-    }
-    m_found = (src[offset] != 0);
-    offset += sizeof(uint8_t);
-
+    ASSIGN_OR_RETURN(m_found, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
     if (offset != src.size())
@@ -196,9 +189,9 @@ absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
     WriteUint32ToBuffer(m_vertex_count, dest);
     WriteUint32ToBuffer(m_index_count, dest);
     WriteUint32ToBuffer(m_instance_count, dest);
-    dest.push_back(static_cast<uint8_t>(m_filter_by_vertex_count));
-    dest.push_back(static_cast<uint8_t>(m_filter_by_index_count));
-    dest.push_back(static_cast<uint8_t>(m_filter_by_instance_count));
+    WriteBoolToBuffer(m_filter_by_vertex_count, dest);
+    WriteBoolToBuffer(m_filter_by_index_count, dest);
+    WriteBoolToBuffer(m_filter_by_instance_count, dest);
     return Dive::OkStatus();
 }
 
@@ -208,13 +201,9 @@ absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_vertex_count, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_index_count, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_instance_count, ReadUint32FromBuffer(src, offset));
-    if (src.size() < offset + 3 * sizeof(uint8_t))
-    {
-        return Dive::InvalidArgumentError("Buffer too small for filter flags.");
-    }
-    m_filter_by_vertex_count = (src[offset++] != 0);
-    m_filter_by_index_count = (src[offset++] != 0);
-    m_filter_by_instance_count = (src[offset++] != 0);
+    ASSIGN_OR_RETURN(m_filter_by_vertex_count, ReadBoolFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_filter_by_index_count, ReadBoolFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_filter_by_instance_count, ReadBoolFromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("DrawcallFilteringRequest has unexpected trailing data.");

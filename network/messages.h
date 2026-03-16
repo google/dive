@@ -23,6 +23,9 @@ limitations under the License.
 namespace Network
 {
 
+// Helper to write a bool to a buffer.
+void WriteBoolToBuffer(bool value, Buffer& dest);
+
 // Helper to write a uint32_t to a buffer.
 void WriteUint32ToBuffer(uint32_t value, Buffer& dest);
 
@@ -34,6 +37,9 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
 
 // Helper to read a string (length + data) from the buffer.
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset);
+
+// Helper to read a bool from a buffer.
+absl::StatusOr<bool> ReadBoolFromBuffer(const Buffer& src, size_t& offset);
 
 enum class MessageType : uint32_t
 {
@@ -259,12 +265,12 @@ class DrawcallFilterConfigRequest : public ISerializable
     void SetFilterByInstanceCount(bool filter) { m_filter_by_instance_count = filter; }
 
  private:
-    bool m_filter_by_vertex_count = false;
     uint32_t m_vertex_count = 0;
-    bool m_filter_by_index_count = false;
     uint32_t m_index_count = 0;
-    bool m_filter_by_instance_count = false;
     uint32_t m_instance_count = 0;
+    bool m_filter_by_vertex_count = false;
+    bool m_filter_by_index_count = false;
+    bool m_filter_by_instance_count = false;
 };
 
 class DrawcallFilterConfigResponse : public EmptyMessage

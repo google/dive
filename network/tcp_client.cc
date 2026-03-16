@@ -368,10 +368,7 @@ absl::Status TcpClient::RemoveFile(const std::string& remote_file_path)
     return Dive::OkStatus();
 }
 
-absl::Status TcpClient::SendDrawcallFilterConfig(bool filter_by_vertex_count, uint32_t vertex_count,
-                                                 bool filter_by_index_count, uint32_t index_count,
-                                                 bool filter_by_instance_count,
-                                                 uint32_t instance_count)
+absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& config)
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);
     if (!IsConnected())
@@ -379,12 +376,12 @@ absl::Status TcpClient::SendDrawcallFilterConfig(bool filter_by_vertex_count, ui
         return Dive::FailedPreconditionError("SendDrawcallFilterConfig: Client is not connected.");
     }
     DrawcallFilterConfigRequest request;
-    request.SetFilterByVertexCount(filter_by_vertex_count);
-    request.SetVertexCount(vertex_count);
-    request.SetFilterByIndexCount(filter_by_index_count);
-    request.SetIndexCount(index_count);
-    request.SetFilterByInstanceCount(filter_by_instance_count);
-    request.SetInstanceCount(instance_count);
+    request.SetFilterByVertexCount(config.filter_by_vertex_count);
+    request.SetFilterByIndexCount(config.filter_by_index_count);
+    request.SetFilterByInstanceCount(config.filter_by_instance_count);
+    request.SetVertexCount(config.target_vertex_count);
+    request.SetIndexCount(config.target_index_count);
+    request.SetInstanceCount(config.target_instance_count);
 
     absl::Status status = SendSocketMessage(m_connection.get(), request);
     if (!status.ok())

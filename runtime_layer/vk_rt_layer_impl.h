@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <mutex>
 #include <numeric>
@@ -30,24 +31,10 @@ limitations under the License.
 #include <vector>
 
 #include "gpu_time.h"
+#include "network/drawcall_filter_config.h"
 
 namespace DiveLayer
 {
-
-struct DrawcallFilterConfig
-{
-    // Vertex Count (for vkCmdDraw)
-    bool filter_by_vertex_count = false;
-    uint32_t target_vertex_count = 0;
-
-    // Index Count (for vkCmdDrawIndexed)
-    bool filter_by_index_count = false;
-    uint32_t target_index_count = 0;
-
-    // Instance Count (for vkCmdDraw and vkCmdDrawIndexed)
-    bool filter_by_instance_count = false;
-    uint32_t target_instance_count = 0;
-};
 
 class DiveRuntimeLayer
 {
@@ -139,11 +126,15 @@ class DiveRuntimeLayer
     void CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandBuffer commandBuffer,
                            const VkSubpassEndInfo* pSubpassEndInfo);
 
-    void UpdateFilterConfig(const DrawcallFilterConfig& config)
+    void UpdateFilterConfig(const Network::DrawcallFilterConfig& config)
     {
         std::unique_lock lock(m_config_mutex);
         m_filter_config = config;
     }
+
+    void EnqueueFrameBoundaryTask(std::function<void()> task);
+
+    void ProcessFrameBoundaryTasks();
 
  private:
     Dive::GPUTime m_gpu_time;
@@ -159,7 +150,11 @@ class DiveRuntimeLayer
 
     // Configuration for drawcall filtering.
     std::shared_mutex m_config_mutex;
-    DrawcallFilterConfig m_filter_config;
+    Network::DrawcallFilterConfig m_filter_config;
+
+    // Frame boundary tasks to be executed at the end of a frame.
+    std::mutex m_task_mutex;
+    std::vector<std::function<void()>> m_frame_boundary_tasks;
 };
 
 }  // namespace DiveLayer

@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
         !ret.ok())
     {
         qDebug() << "Failed to initialize crash reporting: " << ret.message().data();
-        return EXIT_FAILURE;
+        qDebug() << "Continuing Dive UI without crash reporting.";
     }
 
     const bool native_style = absl::GetFlag(FLAGS_native_style);

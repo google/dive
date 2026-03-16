@@ -1037,7 +1037,7 @@ int main(int argc, char* argv[])
         !ret.ok())
     {
         LOG(ERROR) << "Failed to initialize crash reporting: " << ret.message();
-        return EXIT_FAILURE;
+        LOG(WARNING) << "Continuing Dive CLI without crash reporting.";
     }
 
     absl::FlagsUsageConfig flags_usage_config;

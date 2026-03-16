@@ -506,7 +506,10 @@ void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
 
     // TODO(wangra): vkDeviceWaitIdle might be too heavy as it will flush all gpu caches. this might
     // have performance impact. Maybe we should consider waiting for VkFence
-    pfn_vkDeviceWaitIdle_(device_);
+    if (!gpu_time_.IsEnabled())
+    {
+        pfn_vkDeviceWaitIdle_(device_);
+    }
     /********************************************************************************************/
 }
 

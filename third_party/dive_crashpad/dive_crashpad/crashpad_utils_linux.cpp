@@ -24,11 +24,11 @@
 namespace Dive
 {
 
-absl::StatusOr<std::filesystem::path> GetWritableRoot()
+absl::StatusOr<std::filesystem::path> GetWritableRoot(const std::string& product_name)
 {
     if (const char* home = std::getenv("HOME"))
     {
-        return std::filesystem::path(home) / ".local" / "share" / kProductName;
+        return std::filesystem::path(home) / ".local" / "share" / product_name;
     }
     else
     {

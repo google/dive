@@ -112,6 +112,7 @@ else()
         absl::log
         version_info
         dive_log
+        crash_report
     )
     target_include_directories(
         dive_client_cli
@@ -119,6 +120,30 @@ else()
     )
 
     install(TARGETS dive_client_cli DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+
+    if(DIVE_BUILD_WITH_CRASHPAD)
+        add_custom_command(
+            TARGET dive_client_cli
+            POST_BUILD
+            COMMAND
+                $<$<CONFIG:RelWithDebInfo>:${CMAKE_COMMAND}>
+                $<$<CONFIG:RelWithDebInfo>:-E>
+                $<$<CONFIG:RelWithDebInfo>:copy_if_different>
+                $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE:crashpad_handler_exe>>
+                $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:dive_client_cli>>
+            COMMENT
+                "[Crash Report] Copying crashpad_handler only for RelWithDebInfo builds."
+        )
+        install(
+            PROGRAMS $<TARGET_FILE:crashpad_handler_exe>
+            DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+            CONFIGURATIONS RelWithDebInfo
+        )
+    endif()
+
+    if(DIVE_BUILD_WITH_CRASHPAD AND UPLOAD_DEBUG_SYMBOLS)
+        upload_debug_symbols(dive_client_cli)
+    endif()
 
     enable_testing()
     include(GoogleTest)

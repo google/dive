@@ -126,6 +126,16 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
     {
         return;
     }
+    if (config.enable_drawcall_limit)
+    {
+        std::lock_guard<std::mutex> lock(m_cmd_buffer_state_mutex);
+
+        if (m_drawcall_counts[commandBuffer] >= config.max_drawcalls)
+        {
+            return;
+        }
+        m_drawcall_counts[commandBuffer]++;
+    }
 
     pfn(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
@@ -148,6 +158,16 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
     if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
     {
         return;
+    }
+    if (config.enable_drawcall_limit)
+    {
+        std::lock_guard<std::mutex> lock(m_cmd_buffer_state_mutex);
+
+        if (m_drawcall_counts[commandBuffer] >= config.max_drawcalls)
+        {
+            return;
+        }
+        m_drawcall_counts[commandBuffer]++;
     }
 
     //  Disable drawcalls with N index count
@@ -283,6 +303,12 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
+    // Reset the drawcall counter safely for this specific command buffer.
+    {
+        std::lock_guard<std::mutex> lock(m_cmd_buffer_state_mutex);
+        m_drawcall_counts[commandBuffer] = 0;
+    }
+
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)
     {

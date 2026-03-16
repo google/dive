@@ -379,9 +379,11 @@ absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& con
     request.SetFilterByVertexCount(config.filter_by_vertex_count);
     request.SetFilterByIndexCount(config.filter_by_index_count);
     request.SetFilterByInstanceCount(config.filter_by_instance_count);
+    request.SetMaxDrawcalls(config.max_drawcalls);
     request.SetVertexCount(config.target_vertex_count);
     request.SetIndexCount(config.target_index_count);
     request.SetInstanceCount(config.target_instance_count);
+    request.SetEnableDrawcallLimit(config.enable_drawcall_limit);
 
     absl::Status status = SendSocketMessage(m_connection.get(), request);
     if (!status.ok())

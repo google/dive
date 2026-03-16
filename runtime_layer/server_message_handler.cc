@@ -50,9 +50,11 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             config.target_vertex_count = request->GetVertexCount();
             config.target_index_count = request->GetIndexCount();
             config.target_instance_count = request->GetInstanceCount();
+            config.max_drawcalls = request->GetMaxDrawcalls();
             config.filter_by_vertex_count = request->GetFilterByVertexCount();
             config.filter_by_index_count = request->GetFilterByIndexCount();
             config.filter_by_instance_count = request->GetFilterByInstanceCount();
+            config.enable_drawcall_limit = request->GetEnableDrawcallLimit();
 
             sDiveRuntimeLayer.EnqueueFrameBoundaryTask(
                 [config]() { sDiveRuntimeLayer.UpdateFilterConfig(config); });

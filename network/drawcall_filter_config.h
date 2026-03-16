@@ -34,6 +34,10 @@ struct DrawcallFilterConfig
     // Instance Count (for vkCmdDraw and vkCmdDrawIndexed)
     bool filter_by_instance_count = false;
     uint32_t target_instance_count = 0;
+
+    // Drawcall limit
+    bool enable_drawcall_limit = false;
+    uint32_t max_drawcalls = 0;
 };
 
 }  // namespace Network

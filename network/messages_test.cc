@@ -261,9 +261,11 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     req_serialize.SetVertexCount(100);
     req_serialize.SetIndexCount(200);
     req_serialize.SetInstanceCount(5);
+    req_serialize.SetMaxDrawcalls(1000);
     req_serialize.SetFilterByVertexCount(true);
     req_serialize.SetFilterByIndexCount(false);
     req_serialize.SetFilterByInstanceCount(true);
+    req_serialize.SetEnableDrawcallLimit(true);
     Network::Buffer buf;
     absl::Status status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
@@ -277,9 +279,11 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     ASSERT_EQ(req_serialize.GetVertexCount(), req_deserialize.GetVertexCount());
     ASSERT_EQ(req_serialize.GetIndexCount(), req_deserialize.GetIndexCount());
     ASSERT_EQ(req_serialize.GetInstanceCount(), req_deserialize.GetInstanceCount());
+    ASSERT_EQ(req_serialize.GetMaxDrawcalls(), req_deserialize.GetMaxDrawcalls());
     ASSERT_EQ(req_serialize.GetFilterByVertexCount(), req_deserialize.GetFilterByVertexCount());
     ASSERT_EQ(req_serialize.GetFilterByIndexCount(), req_deserialize.GetFilterByIndexCount());
     ASSERT_EQ(req_serialize.GetFilterByInstanceCount(), req_deserialize.GetFilterByInstanceCount());
+    ASSERT_EQ(req_serialize.GetEnableDrawcallLimit(), req_deserialize.GetEnableDrawcallLimit());
 }
 
 TEST(MessagesTest, DrawcallFilterConfigResponse)

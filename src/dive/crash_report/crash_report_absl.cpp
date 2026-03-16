@@ -21,7 +21,7 @@
 namespace Dive
 {
 
-absl::Status InitializeCrashReporting(const char* argv)
+absl::Status InitializeCrashReporting(const char* argv, const std::string& product_name)
 {
     LOG(INFO) << "[Crash Report] Initializing Absl Crash Handler.";
     absl::InitializeSymbolizer(argv);

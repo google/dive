@@ -176,6 +176,12 @@ if(NOT ANDROID)
     add_subdirectory(third_party/gfxreconstruct EXCLUDE_FROM_ALL)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
+
+    message(CHECK_START "Generate build files for third_party/flatbuffers")
+    list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    add_subdirectory(third_party/flatbuffers EXCLUDE_FROM_ALL)
+    list(POP_BACK CMAKE_MESSAGE_INDENT)
+    message(CHECK_PASS "done")
 else()
     message(
         CHECK_START

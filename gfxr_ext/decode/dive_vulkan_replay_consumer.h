@@ -191,6 +191,16 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         uint32_t width, uint32_t height, uint32_t stride, uint64_t usage, uint32_t layers,
         const std::vector<format::HardwareBufferPlaneInfo>& plane_info) override;
 
+    void Process_vkCmdPipelineBarrier(
+        const ApiCallInfo& call_info, format::HandleId commandBuffer,
+        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
+        VkDependencyFlags dependencyFlags, uint32_t memoryBarrierCount,
+        StructPointerDecoder<Decoded_VkMemoryBarrier>* pMemoryBarriers,
+        uint32_t bufferMemoryBarrierCount,
+        StructPointerDecoder<Decoded_VkBufferMemoryBarrier>* pBufferMemoryBarriers,
+        uint32_t imageMemoryBarrierCount,
+        StructPointerDecoder<Decoded_VkImageMemoryBarrier>* pImageMemoryBarriers) override;
+
     void SetEnableGPUTime(bool enable) { enable_gpu_time_ = enable; }
 
     std::string GetGPUTimeStatsCSVStr() const

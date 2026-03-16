@@ -20,6 +20,9 @@
 namespace Dive
 {
 
-absl::Status InitializeCrashReporting(const char* argv) { return InitializeCrashpad(); }
+absl::Status InitializeCrashReporting(const char* argv, const std::string& product_name)
+{
+    return InitializeCrashpad(product_name);
+}
 
 }  // namespace Dive

@@ -713,9 +713,9 @@ void TraceDialog::UpdatePackageList()
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
-    for (int i = 0; i < m_pkg_list.size(); i++)
+    for (const QString& pkg : m_pkg_list)
     {
-        QStandardItem* item = new QStandardItem(m_pkg_list[i]);
+        QStandardItem* item = new QStandardItem(pkg);
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);

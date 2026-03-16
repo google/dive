@@ -23,6 +23,7 @@ limitations under the License.
 #include <string>
 #include <thread>
 
+#include "drawcall_filter_config.h"
 #include "messages.h"
 
 namespace Network
@@ -67,6 +68,9 @@ class TcpClient
 
     // Removes a file from device.
     absl::Status RemoveFile(const std::string& remote_file_path);
+
+    // Sends a drawcall filter configuration request to the server.
+    absl::Status SendDrawcallFilterConfig(const DrawcallFilterConfig& config);
 
  private:
     // Performs a ping-pong check with the server.

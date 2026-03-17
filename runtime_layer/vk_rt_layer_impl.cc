@@ -128,13 +128,12 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
     }
     if (config.enable_drawcall_limit)
     {
-        std::lock_guard<std::mutex> lock(m_cmd_buffer_state_mutex);
-
-        if (m_drawcall_counts[commandBuffer] >= config.max_drawcalls)
+        uint32_t current_count = m_global_drawcall_counter.load(std::memory_order_relaxed);
+        if (current_count >= config.max_drawcalls)
         {
             return;
         }
-        m_drawcall_counts[commandBuffer]++;
+        m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed);
     }
 
     pfn(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
@@ -161,13 +160,12 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
     }
     if (config.enable_drawcall_limit)
     {
-        std::lock_guard<std::mutex> lock(m_cmd_buffer_state_mutex);
-
-        if (m_drawcall_counts[commandBuffer] >= config.max_drawcalls)
+        uint32_t current_count = m_global_drawcall_counter.load(std::memory_order_relaxed);
+        if (current_count >= config.max_drawcalls)
         {
             return;
         }
-        m_drawcall_counts[commandBuffer]++;
+        m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed);
     }
 
     //  Disable drawcalls with N index count
@@ -303,12 +301,6 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
-    // Reset the drawcall counter safely for this specific command buffer.
-    {
-        std::lock_guard<std::mutex> lock(m_cmd_buffer_state_mutex);
-        m_drawcall_counts[commandBuffer] = 0;
-    }
-
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)
     {
@@ -555,6 +547,8 @@ void DiveRuntimeLayer::EnqueueFrameBoundaryTask(std::function<void()> task)
 
 void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
 {
+    m_global_drawcall_counter.store(0, std::memory_order_relaxed);
+
     std::vector<std::function<void()>> tasks_to_run;
     {
         std::lock_guard<std::mutex> lock(m_task_mutex);

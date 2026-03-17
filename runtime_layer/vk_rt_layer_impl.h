@@ -156,9 +156,8 @@ class DiveRuntimeLayer
     std::mutex m_task_mutex;
     std::vector<std::function<void()>> m_frame_boundary_tasks;
 
-    // Per-command-buffer state tracking
-    std::mutex m_cmd_buffer_state_mutex;
-    std::unordered_map<VkCommandBuffer, uint32_t> m_drawcall_counts;
+    // Global drawcall counter.
+    std::atomic<uint32_t> m_global_drawcall_counter{0};
 };
 
 }  // namespace DiveLayer

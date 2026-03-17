@@ -22,6 +22,7 @@ limitations under the License.
 #include <limits>
 
 #include "absl/status/status_matchers.h"
+#include "drawcall_filter_config.h"
 
 namespace
 {
@@ -323,6 +324,47 @@ TEST(MessagesTest, DrawcallFilterConfigResponse)
 
     status = res.Deserialize(buf);
     ASSERT_TRUE(status.ok());
+}
+
+TEST(MessagesTest, LivePSOsRequest)
+{
+    Network::LivePSOsRequest req;
+    Network::Buffer buf;
+    absl::Status status = req.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req.GetMessageType(), Network::MessageType::LIVE_PSOS_REQUEST);
+
+    status = req.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+}
+
+TEST(MessagesTest, LivePSOsResponse)
+{
+    Network::LivePSOsResponse res_serialize;
+    std::vector<Network::PSOInfo> mock_psos;
+    mock_psos.push_back({123456789012345ULL, true, "PSO_alpha_blend_enabled"});
+    mock_psos.push_back({987654321098765ULL, false, "MyCustomEngineOpaqueMaterial"});
+    res_serialize.SetPSOs(mock_psos);
+
+    Network::Buffer buf;
+    absl::Status status = res_serialize.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::LIVE_PSOS_RESPONSE);
+
+    Network::LivePSOsResponse res_deserialize;
+    status = res_deserialize.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+
+    const auto& deserialized_psos = res_deserialize.GetPSOs();
+    ASSERT_EQ(deserialized_psos.size(), 2);
+
+    ASSERT_EQ(deserialized_psos[0].pipeline_handle, 123456789012345ULL);
+    ASSERT_EQ(deserialized_psos[0].has_alpha_blend, true);
+    ASSERT_EQ(deserialized_psos[0].name, "PSO_alpha_blend_enabled");
+
+    ASSERT_EQ(deserialized_psos[1].pipeline_handle, 987654321098765ULL);
+    ASSERT_EQ(deserialized_psos[1].has_alpha_blend, false);
+    ASSERT_EQ(deserialized_psos[1].name, "MyCustomEngineOpaqueMaterial");
 }
 
 }  // namespace

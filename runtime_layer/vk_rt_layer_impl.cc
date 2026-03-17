@@ -50,6 +50,17 @@ static size_t sTotalIndexCounter = 0;
 static constexpr uint32_t kDrawcallCountLimit = 300;
 static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 
+// Because Vulkan guarantees that a specific VkCommandBuffer is only recorded by a single CPU thread
+// at a time, a thread_local map is mathematically guaranteed to never experience a data race. It
+// requires absolutely no mutexes.
+// This map exists independently on every CPU core. No locks required!
+// Also, this keeps track of the current pipeline alpha state.
+static thread_local std::unordered_map<VkCommandBuffer, bool> sCmdBufferCurrentPipelineHasAlpha;
+
+// The maximum number of command buffers that can be tracked simultaneously by the local thread.
+// It is used to prevent stale data for sCmdBufferCurrentPipelineHasAlpha.
+static constexpr uint32_t kMaxConcurrentCBs = 512;
+
 // DiveRuntimeLayer
 DiveRuntimeLayer::DiveRuntimeLayer() : m_device_proc_addr(nullptr) {}
 
@@ -108,21 +119,102 @@ VkResult DiveRuntimeLayer::CreateImage(PFN_vkCreateImage pfn, VkDevice device,
     return pfn(device, pCreateInfo, pAllocator, pImage);
 }
 
+VkResult DiveRuntimeLayer::CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines pfn,
+                                                   VkDevice device, VkPipelineCache pipelineCache,
+                                                   uint32_t createInfoCount,
+                                                   const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                                   const VkAllocationCallbacks* pAllocator,
+                                                   VkPipeline* pPipelines)
+{
+    VkResult result =
+        pfn(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+    if (result == VK_SUCCESS)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+        for (uint32_t i = 0; i < createInfoCount; ++i)
+        {
+            bool has_alpha = false;
+            if (pCreateInfos[i].pColorBlendState)
+            {
+                for (uint32_t j = 0; j < pCreateInfos[i].pColorBlendState->attachmentCount; ++j)
+                {
+                    if (pCreateInfos[i].pColorBlendState->pAttachments[j].blendEnable == VK_TRUE)
+                    {
+                        has_alpha = true;
+                        break;
+                    }
+                }
+            }
+
+            Network::PSOInfo info{.pipeline_handle = reinterpret_cast<uint64_t>(pPipelines[i]),
+                                  .has_alpha_blend = has_alpha,
+                                  .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque"};
+            m_live_psos[pPipelines[i]] = info;
+        }
+    }
+    return result;
+}
+
+void DiveRuntimeLayer::DestroyPipeline(PFN_vkDestroyPipeline pfn, VkDevice device,
+                                       VkPipeline pipeline, const VkAllocationCallbacks* pAllocator)
+{
+    {
+        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+        m_live_psos.erase(pipeline);
+    }
+    pfn(device, pipeline, pAllocator);
+}
+
+VkResult DiveRuntimeLayer::SetDebugUtilsObjectNameEXT(
+    PFN_vkSetDebugUtilsObjectNameEXT pfn, VkDevice device,
+    const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+    if (pNameInfo && pNameInfo->objectType == VK_OBJECT_TYPE_PIPELINE && pNameInfo->pObjectName)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+        VkPipeline pipeline = (VkPipeline)pNameInfo->objectHandle;
+        if (m_live_psos.find(pipeline) != m_live_psos.end())
+        {
+            m_live_psos[pipeline].name = pNameInfo->pObjectName;
+        }
+    }
+    if (pfn)
+    {
+        return pfn(device, pNameInfo);
+    }
+    return VK_SUCCESS;
+}
+
+void DiveRuntimeLayer::CmdBindPipeline(PFN_vkCmdBindPipeline pfn, VkCommandBuffer commandBuffer,
+                                       VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
+{
+    if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+    {
+        bool has_alpha = false;
+        {
+            // Use a shared (read-only) lock here to allow multithreaded command recording
+            // without contention. This populates the lock-free thread_local cache
+            // (sCmdBufferCurrentPipelineHasAlpha) used by the ultra-hot CmdDraw paths.
+            std::shared_lock<std::shared_mutex> lock(m_pso_mutex);
+            if (auto it = m_live_psos.find(pipeline); it != m_live_psos.end())
+            {
+                has_alpha = it->second.has_alpha_blend;
+            }
+        }
+        sCmdBufferCurrentPipelineHasAlpha[commandBuffer] = has_alpha;
+    }
+    pfn(commandBuffer, pipelineBindPoint, pipeline);
+}
+
 void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
                                uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
                                uint32_t firstInstance)
 {
-    if (m_active_filter_config.filter_by_vertex_count &&
-        vertexCount == m_active_filter_config.target_vertex_count)
+    if (ShouldFilterDrawCall(commandBuffer, vertexCount, std::nullopt, instanceCount))
     {
         return;
     }
-    if (m_active_filter_config.filter_by_instance_count &&
-        instanceCount == m_active_filter_config.target_instance_count)
-    {
-        return;
-    }
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (CheckAndIncrementDrawcallCount())
     {
         return;
     }
@@ -135,17 +227,11 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
-    if (m_active_filter_config.filter_by_index_count &&
-        indexCount == m_active_filter_config.target_index_count)
+    if (ShouldFilterDrawCall(commandBuffer, std::nullopt, indexCount, instanceCount))
     {
         return;
     }
-    if (m_active_filter_config.filter_by_instance_count &&
-        instanceCount == m_active_filter_config.target_instance_count)
-    {
-        return;
-    }
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (CheckAndIncrementDrawcallCount())
     {
         return;
     }
@@ -169,14 +255,18 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
         return;
     }
 
-    return pfn(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    pfn(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
 void DiveRuntimeLayer::CmdDrawIndirect(PFN_vkCmdDrawIndirect pfn, VkCommandBuffer commandBuffer,
                                        VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
                                        uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
+    {
+        return;
+    }
+    if (CheckAndIncrementDrawcallCount())
     {
         return;
     }
@@ -189,7 +279,11 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirect(PFN_vkCmdDrawIndexedIndirect pfn,
                                               VkDeviceSize offset, uint32_t drawCount,
                                               uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
+    {
+        return;
+    }
+    if (CheckAndIncrementDrawcallCount())
     {
         return;
     }
@@ -203,10 +297,15 @@ void DiveRuntimeLayer::CmdDrawIndirectCount(PFN_vkCmdDrawIndirectCount pfn,
                                             VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
                                             uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
     {
         return;
     }
+    if (CheckAndIncrementDrawcallCount())
+    {
+        return;
+    }
+
     pfn(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
 }
 
@@ -216,10 +315,15 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirectCount(PFN_vkCmdDrawIndexedIndirectC
                                                    VkDeviceSize countBufferOffset,
                                                    uint32_t maxDrawCount, uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
     {
         return;
     }
+    if (CheckAndIncrementDrawcallCount())
+    {
+        return;
+    }
+
     pfn(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
 }
 
@@ -227,10 +331,15 @@ void DiveRuntimeLayer::CmdDrawMeshTasksEXT(PFN_vkCmdDrawMeshTasksEXT pfn,
                                            VkCommandBuffer commandBuffer, uint32_t groupCountX,
                                            uint32_t groupCountY, uint32_t groupCountZ)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
     {
         return;
     }
+    if (CheckAndIncrementDrawcallCount())
+    {
+        return;
+    }
+
     pfn(commandBuffer, groupCountX, groupCountY, groupCountZ);
 }
 
@@ -239,10 +348,15 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectEXT(PFN_vkCmdDrawMeshTasksIndirec
                                                    VkDeviceSize offset, uint32_t drawCount,
                                                    uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
     {
         return;
     }
+    if (CheckAndIncrementDrawcallCount())
+    {
+        return;
+    }
+
     pfn(commandBuffer, buffer, offset, drawCount, stride);
 }
 
@@ -253,10 +367,15 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectCountEXT(PFN_vkCmdDrawMeshTasksIn
                                                         VkDeviceSize countBufferOffset,
                                                         uint32_t maxDrawCount, uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
+    if (ShouldFilterDrawCall(commandBuffer))
     {
         return;
     }
+    if (CheckAndIncrementDrawcallCount())
+    {
+        return;
+    }
+
     pfn(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
 }
 
@@ -379,6 +498,12 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
+    if (sCmdBufferCurrentPipelineHasAlpha.size() > kMaxConcurrentCBs)
+    {
+        sCmdBufferCurrentPipelineHasAlpha.clear();
+    }
+    sCmdBufferCurrentPipelineHasAlpha[commandBuffer] = false;
+
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)
     {
@@ -665,16 +790,59 @@ void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
     }
 }
 
-bool DiveRuntimeLayer::CheckAndIncrementDrawcallCount(const Network::DrawcallFilterConfig& config)
+std::vector<Network::PSOInfo> DiveRuntimeLayer::GetLivePSOs()
 {
-    if (!config.enable_drawcall_limit)
+    std::vector<Network::PSOInfo> result;
+    std::shared_lock<std::shared_mutex> lock(m_pso_mutex);
+    result.reserve(m_live_psos.size());
+    for (const auto& [pipeline, data] : m_live_psos)
+    {
+        result.push_back(data);
+    }
+    return result;
+}
+
+bool DiveRuntimeLayer::CheckAndIncrementDrawcallCount()
+{
+    if (!m_active_filter_config.enable_drawcall_limit)
     {
         return false;
     }
-    if (m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed) >= config.max_drawcalls)
+    if (m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed) >=
+        m_active_filter_config.max_drawcalls)
     {
         return true;
     }
+    return false;
+}
+
+bool DiveRuntimeLayer::ShouldFilterDrawCall(VkCommandBuffer command_buffer,
+                                            std::optional<uint32_t> vertex_count,
+                                            std::optional<uint32_t> index_count,
+                                            std::optional<uint32_t> instance_count) const
+{
+    if (vertex_count.has_value() && m_active_filter_config.filter_by_vertex_count &&
+        vertex_count.value() == m_active_filter_config.target_vertex_count)
+    {
+        return true;
+    }
+    if (index_count.has_value() && m_active_filter_config.filter_by_index_count &&
+        index_count.value() == m_active_filter_config.target_index_count)
+    {
+        return true;
+    }
+    if (instance_count.has_value() && m_active_filter_config.filter_by_instance_count &&
+        instance_count.value() == m_active_filter_config.target_instance_count)
+    {
+        return true;
+    }
+
+    if (m_active_filter_config.filter_alpha_blended &&
+        sCmdBufferCurrentPipelineHasAlpha[command_buffer])
+    {
+        return true;
+    }
+
     return false;
 }
 

@@ -46,6 +46,17 @@ struct DrawcallFilterConfig
     // Drawcall limit
     bool enable_drawcall_limit = false;
     uint32_t max_drawcalls = 0;
+    // Alpha Blending Filter
+    bool filter_alpha_blended = false;
+};
+
+struct PSOInfo
+{
+    // Cast VkPipeline to uint64_t for the network
+    uint64_t pipeline_handle;
+
+    bool has_alpha_blend;
+    std::string name;
 };
 
 }  // namespace Network

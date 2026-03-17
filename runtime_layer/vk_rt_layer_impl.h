@@ -25,6 +25,7 @@ limitations under the License.
 #include <limits>
 #include <mutex>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <shared_mutex>
 #include <unordered_map>
@@ -48,6 +49,21 @@ class DiveRuntimeLayer
     VkResult CreateImage(PFN_vkCreateImage pfn, VkDevice device,
                          const VkImageCreateInfo* pCreateInfo,
                          const VkAllocationCallbacks* pAllocator, VkImage* pImage);
+
+    VkResult CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines pfn, VkDevice device,
+                                     VkPipelineCache pipelineCache, uint32_t createInfoCount,
+                                     const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                     const VkAllocationCallbacks* pAllocator,
+                                     VkPipeline* pPipelines);
+
+    void DestroyPipeline(PFN_vkDestroyPipeline pfn, VkDevice device, VkPipeline pipeline,
+                         const VkAllocationCallbacks* pAllocator);
+
+    void CmdBindPipeline(PFN_vkCmdBindPipeline pfn, VkCommandBuffer commandBuffer,
+                         VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline);
+
+    VkResult SetDebugUtilsObjectNameEXT(PFN_vkSetDebugUtilsObjectNameEXT pfn, VkDevice device,
+                                        const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
 
     void CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer, uint32_t vertexCount,
                  uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
@@ -168,8 +184,15 @@ class DiveRuntimeLayer
 
     void ProcessFrameBoundaryTasks();
 
+    std::vector<Network::PSOInfo> GetLivePSOs();
+
  private:
-    bool CheckAndIncrementDrawcallCount(const Network::DrawcallFilterConfig& config);
+    bool CheckAndIncrementDrawcallCount();
+
+    bool ShouldFilterDrawCall(VkCommandBuffer command_buffer,
+                              std::optional<uint32_t> vertex_count = std::nullopt,
+                              std::optional<uint32_t> index_count = std::nullopt,
+                              std::optional<uint32_t> instance_count = std::nullopt) const;
 
     Dive::GPUTime m_gpu_time;
     Dive::FrameBoundaryDetector m_boundary_detector;
@@ -195,6 +218,16 @@ class DiveRuntimeLayer
 
     // Global drawcall counter.
     std::atomic<uint32_t> m_global_drawcall_counter{0};
+
+    // Pipeline State Object (PSO) state tracking.
+    // Performance Note: std::unique_lock (exclusive write) is strictly limited to
+    // infrequent pipeline lifecycle events (CreateGraphicsPipelines, DestroyPipeline,
+    // and SetDebugUtilsObjectNameEXT).
+    // Command recording paths (CmdBindPipeline) use std::shared_lock (concurrent read)
+    // to prevent blocking multiple threads recording command buffers simultaneously.
+    // The hottest paths (CmdDraw*) do not touch this mutex at all.
+    std::shared_mutex m_pso_mutex;
+    std::unordered_map<VkPipeline, Network::PSOInfo> m_live_psos;
 };
 
 }  // namespace DiveLayer

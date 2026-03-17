@@ -33,19 +33,23 @@ def parse_args():
         description='This script automates the standard build process for Dive Device Libraries',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        "--dive-release-type", 
-        default="dev", 
+        "--dive-release-type",
+        default="dev",
         help="Description string for Device Libraries version info")
     parser.add_argument(
-        "--build-type", 
-        type=BuildType, 
-        default=BuildType.DEBUG, 
+        "--build-type",
+        type=BuildType,
+        default=BuildType.DEBUG,
         choices=[str(build_type) for build_type in BuildType],
         help="Build type for Dive libraries (excluding GFXR gradle build which is always Debug)")
     parser.add_argument(
-        "--clean-build", 
+        "--clean-build",
         action="store_true",
         help="Clean device build folders before rebuilding")
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="Build is part of continuous integration")
     return parser.parse_args()
 
 
@@ -62,7 +66,7 @@ def main(args):
     if "ANDROID_NDK_HOME" not in os.environ:
         raise Exception("ANDROID_NDK_HOME env var must be set")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
-    
+
     print("\nChecking cmake...")
     cmake_exec = shutil.which("cmake")
     assert(cmake_exec is not None)
@@ -84,7 +88,7 @@ def main(args):
 
 
     print("\nGenerating build files with cmake...")
-    cmd = [cmake_exec, ".", 
+    cmd = [cmake_exec, ".",
         f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
         "-GNinja Multi-Config",
         "-Bbuild/device",
@@ -95,6 +99,8 @@ def main(args):
         "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
         f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
     ]
+    if args.ci:
+        cmd.append("-DDIVE_GFXR_GRADLE_CONSOLE=plain")
     dive.echo_and_run(cmd)
 
     print("\nBuilding with ninja...")

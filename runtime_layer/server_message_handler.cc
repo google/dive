@@ -62,7 +62,20 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
                 !status.ok())
             {
                 LOG(ERROR) << "Send DrawcallFilterConfigResponse failed: " << status.message();
-                return;
+            }
+            return;
+        }
+        case Network::MessageType::LIVE_PSOS_REQUEST:
+        {
+            LOG(INFO) << "Message received: LivePSOsRequest";
+            std::vector<Network::PSOInfo> live_psos = sDiveRuntimeLayer.GetLivePSOs();
+
+            Network::LivePSOsResponse response;
+            response.SetPSOs(live_psos);
+            if (absl::Status status = Network::SendSocketMessage(client_conn, response);
+                !status.ok())
+            {
+                LOG(ERROR) << "Send LivePSOsResponse failed: " << status.message();
             }
             return;
         }

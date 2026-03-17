@@ -34,6 +34,18 @@ struct DrawcallFilterConfig
     // Instance Count (for vkCmdDraw and vkCmdDrawIndexed)
     bool filter_by_instance_count = false;
     uint32_t target_instance_count = 0;
+
+    // Alpha Blending Filter
+    bool filter_alpha_blended = false;
+};
+
+struct PSOInfo
+{
+    // Cast VkPipeline to uint64_t for the network
+    uint64_t pipeline_handle;
+
+    bool has_alpha_blend;
+    std::string name;
 };
 
 }  // namespace Network

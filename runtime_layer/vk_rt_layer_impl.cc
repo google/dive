@@ -50,6 +50,16 @@ static size_t sTotalIndexCounter = 0;
 static constexpr uint32_t kDrawcallCountLimit = 300;
 static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 
+// Because Vulkan guarantees that a specific VkCommandBuffer is only recorded by a single CPU thread
+// at a time, a thread_local map is mathematically guaranteed to never experience a data race. It
+// requires absolutely no mutexes.
+// This map exists independently on every CPU core. No locks required!
+static thread_local std::unordered_map<VkCommandBuffer, bool> sCommandBufferHasAlpha;
+
+// The maximum number of command buffers that can be tracked simultaneously by the local thread.
+// It is used to prevent stale data for sCommandBufferHasAlpha.
+static constexpr uint32_t kMaxConcurrentCBs = 512;
+
 // DiveRuntimeLayer
 DiveRuntimeLayer::DiveRuntimeLayer() : m_device_proc_addr(nullptr) {}
 
@@ -108,6 +118,90 @@ VkResult DiveRuntimeLayer::CreateImage(PFN_vkCreateImage pfn, VkDevice device,
     return pfn(device, pCreateInfo, pAllocator, pImage);
 }
 
+VkResult DiveRuntimeLayer::CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines pfn,
+                                                   VkDevice device, VkPipelineCache pipelineCache,
+                                                   uint32_t createInfoCount,
+                                                   const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                                   const VkAllocationCallbacks* pAllocator,
+                                                   VkPipeline* pPipelines)
+{
+    VkResult result =
+        pfn(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+    if (result == VK_SUCCESS)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+        for (uint32_t i = 0; i < createInfoCount; ++i)
+        {
+            bool has_alpha = false;
+            if (pCreateInfos[i].pColorBlendState)
+            {
+                for (uint32_t j = 0; j < pCreateInfos[i].pColorBlendState->attachmentCount; ++j)
+                {
+                    if (pCreateInfos[i].pColorBlendState->pAttachments[j].blendEnable == VK_TRUE)
+                    {
+                        has_alpha = true;
+                        break;
+                    }
+                }
+            }
+
+            Network::PSOInfo info{.pipeline_handle = reinterpret_cast<uint64_t>(pPipelines[i]),
+                                  .has_alpha_blend = has_alpha,
+                                  .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque"};
+            m_live_psos[pPipelines[i]] = info;
+        }
+    }
+    return result;
+}
+
+void DiveRuntimeLayer::DestroyPipeline(PFN_vkDestroyPipeline pfn, VkDevice device,
+                                       VkPipeline pipeline, const VkAllocationCallbacks* pAllocator)
+{
+    {
+        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+        m_live_psos.erase(pipeline);
+    }
+    pfn(device, pipeline, pAllocator);
+}
+
+VkResult DiveRuntimeLayer::SetDebugUtilsObjectNameEXT(
+    PFN_vkSetDebugUtilsObjectNameEXT pfn, VkDevice device,
+    const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+    if (pNameInfo && pNameInfo->objectType == VK_OBJECT_TYPE_PIPELINE && pNameInfo->pObjectName)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+        VkPipeline pipeline = (VkPipeline)pNameInfo->objectHandle;
+        if (m_live_psos.find(pipeline) != m_live_psos.end())
+        {
+            m_live_psos[pipeline].name = pNameInfo->pObjectName;
+        }
+    }
+    if (pfn)
+    {
+        return pfn(device, pNameInfo);
+    }
+    return VK_SUCCESS;
+}
+
+void DiveRuntimeLayer::CmdBindPipeline(PFN_vkCmdBindPipeline pfn, VkCommandBuffer commandBuffer,
+                                       VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
+{
+    if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+    {
+        bool has_alpha = false;
+        {
+            std::shared_lock<std::shared_mutex> lock(m_pso_mutex);
+            if (auto it = m_live_psos.find(pipeline); it != m_live_psos.end())
+            {
+                has_alpha = it->second.has_alpha_blend;
+            }
+        }
+        sCommandBufferHasAlpha[commandBuffer] = has_alpha;
+    }
+    pfn(commandBuffer, pipelineBindPoint, pipeline);
+}
+
 void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
                                uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
                                uint32_t firstInstance)
@@ -123,6 +217,10 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
         return;
     }
     if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    {
+        return;
+    }
+    if (config.filter_alpha_blended && sCommandBufferHasAlpha[commandBuffer])
     {
         return;
     }
@@ -146,6 +244,10 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
         return;
     }
     if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    {
+        return;
+    }
+    if (config.filter_alpha_blended && sCommandBufferHasAlpha[commandBuffer])
     {
         return;
     }
@@ -283,6 +385,12 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
+    if (sCommandBufferHasAlpha.size() > kMaxConcurrentCBs)
+    {
+        sCommandBufferHasAlpha.clear();
+    }
+    sCommandBufferHasAlpha[commandBuffer] = false;
+
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)
     {
@@ -544,6 +652,18 @@ void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
     {
         task();
     }
+}
+
+std::vector<Network::PSOInfo> DiveRuntimeLayer::GetLivePSOs()
+{
+    std::vector<Network::PSOInfo> result;
+    std::shared_lock<std::shared_mutex> lock(m_pso_mutex);
+    result.reserve(m_live_psos.size());
+    for (const auto& [pipeline, data] : m_live_psos)
+    {
+        result.push_back(data);
+    }
+    return result;
 }
 
 }  // namespace DiveLayer

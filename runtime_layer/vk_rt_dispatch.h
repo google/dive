@@ -35,6 +35,10 @@ struct DeviceDispatchTable
     PFN_vkGetDeviceProcAddr pfn_get_device_proc_addr = nullptr;
     PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
     PFN_vkCreateImage CreateImage = nullptr;
+    PFN_vkCreateGraphicsPipelines CreateGraphicsPipelines = nullptr;
+    PFN_vkDestroyPipeline DestroyPipeline = nullptr;
+    PFN_vkCmdBindPipeline CmdBindPipeline = nullptr;
+    PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectNameEXT = nullptr;
     PFN_vkCmdDraw CmdDraw = nullptr;
     PFN_vkCmdDrawIndexed CmdDrawIndexed = nullptr;
     PFN_vkCmdResetQueryPool CmdResetQueryPool = nullptr;

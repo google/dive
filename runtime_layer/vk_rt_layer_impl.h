@@ -48,6 +48,21 @@ class DiveRuntimeLayer
                          const VkImageCreateInfo* pCreateInfo,
                          const VkAllocationCallbacks* pAllocator, VkImage* pImage);
 
+    VkResult CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines pfn, VkDevice device,
+                                     VkPipelineCache pipelineCache, uint32_t createInfoCount,
+                                     const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                     const VkAllocationCallbacks* pAllocator,
+                                     VkPipeline* pPipelines);
+
+    void DestroyPipeline(PFN_vkDestroyPipeline pfn, VkDevice device, VkPipeline pipeline,
+                         const VkAllocationCallbacks* pAllocator);
+
+    void CmdBindPipeline(PFN_vkCmdBindPipeline pfn, VkCommandBuffer commandBuffer,
+                         VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline);
+
+    VkResult SetDebugUtilsObjectNameEXT(PFN_vkSetDebugUtilsObjectNameEXT pfn, VkDevice device,
+                                        const VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+
     void CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer, uint32_t vertexCount,
                  uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
 
@@ -136,6 +151,8 @@ class DiveRuntimeLayer
 
     void ProcessFrameBoundaryTasks();
 
+    std::vector<Network::PSOInfo> GetLivePSOs();
+
  private:
     Dive::GPUTime m_gpu_time;
     PFN_vkGetDeviceProcAddr m_device_proc_addr = nullptr;
@@ -155,6 +172,10 @@ class DiveRuntimeLayer
     // Frame boundary tasks to be executed at the end of a frame.
     std::mutex m_task_mutex;
     std::vector<std::function<void()>> m_frame_boundary_tasks;
+
+    // Pipeline State Object (PSO) state tracking.
+    std::shared_mutex m_pso_mutex;
+    std::unordered_map<VkPipeline, Network::PSOInfo> m_live_psos;
 };
 
 }  // namespace DiveLayer

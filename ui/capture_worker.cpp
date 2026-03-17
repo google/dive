@@ -17,6 +17,7 @@
 #include "capture_worker.h"
 
 #include <QDebug>
+#include <format>
 
 #include "absl/strings/str_cat.h"
 #include "capture_service/device_mgr.h"

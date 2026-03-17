@@ -18,8 +18,8 @@
 
 #include <QDialog>
 #include <QSortFilterProxyModel>
-#include <QThread>
 #include <QStringList>
+#include <QThread>
 #include <cstdint>
 #include <string>
 

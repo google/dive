@@ -267,6 +267,14 @@ if(DIVE_BUILD_WITH_SANITIZER AND NOT MSVC)
         ${PROJECT_NAME}
         PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
     )
+    target_compile_options(
+        ${PROJECT_NAME}_lib
+        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+    )
+    target_link_options(
+        ${PROJECT_NAME}_lib
+        PRIVATE $<$<CONFIG:Debug>:-fsanitize=address,undefined>
+    )
 endif()
 
 # For release builds, build Dive UI as WIN32 GUI application instead of a console application.

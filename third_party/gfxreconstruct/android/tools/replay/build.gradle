@@ -44,6 +44,9 @@ android {
     androidResources {
         ignoreAssetsPattern "XrLayer_gfxreconstruct.json"
     }
+    packagingOptions {
+        doNotStrip "**/*/*.so"
+    }
 }
 
 dependencies {

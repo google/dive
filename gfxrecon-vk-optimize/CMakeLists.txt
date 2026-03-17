@@ -1,0 +1,18 @@
+add_executable(
+    gfxrecon-vk-optimize
+    find_unreferenced_blocks.cc
+    find_unsubmitted_command_buffers.cc
+    main.cc
+    process_file.cc
+)
+target_link_libraries(
+    gfxrecon-vk-optimize
+    PRIVATE
+        gfxrecon_decode
+        gfxrecon_util
+        absl::status
+        absl::strings
+        absl::flags_parse
+        absl::flags_usage
+        dive_core
+)

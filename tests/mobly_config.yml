@@ -1,0 +1,4 @@
+TestBeds:
+  - Name: DiveTestBed
+    Controllers:
+        AndroidDevice: '*'

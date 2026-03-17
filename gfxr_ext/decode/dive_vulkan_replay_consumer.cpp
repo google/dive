@@ -483,6 +483,26 @@ void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
         GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
         gpu_time_stats_csv_str_ = gpu_time_.GetStatsCSVString();
     }
+
+    /********************************************************************************************/
+    // Fix for VUID-vkQueueSubmit-fence-00064
+    // This error occurs when we try to use a VkFence in vkQueueSubmit while that fence is already
+    // active (submitted but not yet signaled). By calling vkDeviceWaitIdle, we force the CPU to
+    // wait until the GPU is completely finished with everything. Once the GPU is idle, that fence
+    // is guaranteed to be signaled.
+
+    // This also fixes VUID-vkQueueSubmit-pSignalSemaphores-00067
+    // This error is because without vkDeviceWaitIdle, the replay attempts to re-signal the
+    // semaphore for the image while the previous iteration's presentation of this image is still
+    // pending in the driver.
+
+    // TODO(wangra): vkDeviceWaitIdle might be too heavy as it will flush all gpu caches. this might
+    // have performance impact. Maybe we should consider waiting for VkFence
+    if (!gpu_time_.IsEnabled())
+    {
+        pfn_vkDeviceWaitIdle_(device_);
+    }
+    /********************************************************************************************/
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue2(
@@ -1012,6 +1032,40 @@ void DiveVulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
 #endif
     VulkanReplayConsumer::ProcessCreateHardwareBufferCommand(
         device_id, memory_id, buffer_id, format, width, height, stride, usage, layers, plane_info);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCmdPipelineBarrier(
+    const ApiCallInfo& call_info, format::HandleId commandBuffer, VkPipelineStageFlags srcStageMask,
+    VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags,
+    uint32_t memoryBarrierCount, StructPointerDecoder<Decoded_VkMemoryBarrier>* pMemoryBarriers,
+    uint32_t bufferMemoryBarrierCount,
+    StructPointerDecoder<Decoded_VkBufferMemoryBarrier>* pBufferMemoryBarriers,
+    uint32_t imageMemoryBarrierCount,
+    StructPointerDecoder<Decoded_VkImageMemoryBarrier>* pImageMemoryBarriers)
+{
+    // Fix for VUID-vkCmdDraw-None-09600:
+    // Captured traces assume swapchain images are in PRESENT_SRC_KHR from a previous
+    // (unrecorded) frame. In replay, these images start as UNDEFINED. Forcing
+    // oldLayout to UNDEFINED is spec-compliant and prevents layout mismatch errors.
+    if (imageMemoryBarrierCount > 0 && pImageMemoryBarriers != nullptr)
+    {
+        VkImageMemoryBarrier* image_barriers = pImageMemoryBarriers->GetPointer();
+        if (image_barriers != nullptr)
+        {
+            for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i)
+            {
+                if (image_barriers[i].oldLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                {
+                    image_barriers[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                }
+            }
+        }
+    }
+
+    VulkanReplayConsumer::Process_vkCmdPipelineBarrier(
+        call_info, commandBuffer, srcStageMask, dstStageMask, dependencyFlags, memoryBarrierCount,
+        pMemoryBarriers, bufferMemoryBarrierCount, pBufferMemoryBarriers, imageMemoryBarrierCount,
+        pImageMemoryBarriers);
 }
 
 GFXRECON_END_NAMESPACE(decode)

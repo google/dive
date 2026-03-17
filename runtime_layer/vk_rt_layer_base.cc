@@ -259,6 +259,18 @@ VkResult DiveInterceptCreateImage(VkDevice device, const VkImageCreateInfo* pCre
     return sDiveRuntimeLayer.CreateImage(pfn, device, pCreateInfo, pAllocator, pImage);
 }
 
+void DiveInterceptCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount,
+                          uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+{
+    PFN_vkCmdDraw pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+
+    pfn = layer_data->dispatch_table.CmdDraw;
+    return sDiveRuntimeLayer.CmdDraw(pfn, commandBuffer, vertexCount, instanceCount, firstVertex,
+                                     firstInstance);
+}
+
 void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCount,
                                  uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset,
                                  uint32_t firstInstance)
@@ -817,6 +829,7 @@ extern "C"
         if (0 == strcmp(func, "vkQueuePresentKHR"))
             return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
         if (0 == strcmp(func, "vkCreateImage")) return (PFN_vkVoidFunction)DiveInterceptCreateImage;
+        if (0 == strcmp(func, "vkCmdDraw")) return (PFN_vkVoidFunction)DiveInterceptCmdDraw;
         if (0 == strcmp(func, "vkCmdDrawIndexed"))
             return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
         if (0 == strcmp(func, "vkCmdResetQueryPool"))

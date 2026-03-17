@@ -21,13 +21,17 @@ limitations under the License.
 
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <limits>
+#include <mutex>
 #include <numeric>
 #include <set>
+#include <shared_mutex>
 #include <unordered_map>
 #include <vector>
 
 #include "gpu_time.h"
+#include "network/drawcall_filter_config.h"
 
 namespace DiveLayer
 {
@@ -43,6 +47,9 @@ class DiveRuntimeLayer
     VkResult CreateImage(PFN_vkCreateImage pfn, VkDevice device,
                          const VkImageCreateInfo* pCreateInfo,
                          const VkAllocationCallbacks* pAllocator, VkImage* pImage);
+
+    void CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer, uint32_t vertexCount,
+                 uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
 
     void CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer commandBuffer,
                         uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex,
@@ -119,6 +126,16 @@ class DiveRuntimeLayer
     void CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandBuffer commandBuffer,
                            const VkSubpassEndInfo* pSubpassEndInfo);
 
+    void UpdateFilterConfig(const Network::DrawcallFilterConfig& config)
+    {
+        std::unique_lock lock(m_config_mutex);
+        m_filter_config = config;
+    }
+
+    void EnqueueFrameBoundaryTask(std::function<void()> task);
+
+    void ProcessFrameBoundaryTasks();
+
  private:
     Dive::GPUTime m_gpu_time;
     PFN_vkGetDeviceProcAddr m_device_proc_addr = nullptr;
@@ -130,6 +147,14 @@ class DiveRuntimeLayer
     PFN_vkDeviceWaitIdle m_pfn_vkDeviceWaitIdle = nullptr;
     PFN_vkGetQueryPoolResults m_pfn_vkGetQueryPoolResults = nullptr;
     PFN_vkCmdWriteTimestamp m_pfn_vkCmdWriteTimestamp = nullptr;
+
+    // Configuration for drawcall filtering.
+    std::shared_mutex m_config_mutex;
+    Network::DrawcallFilterConfig m_filter_config;
+
+    // Frame boundary tasks to be executed at the end of a frame.
+    std::mutex m_task_mutex;
+    std::vector<std::function<void()>> m_frame_boundary_tasks;
 };
 
 }  // namespace DiveLayer

@@ -368,6 +368,51 @@ absl::Status TcpClient::RemoveFile(const std::string& remote_file_path)
     return Dive::OkStatus();
 }
 
+absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& config)
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return Dive::FailedPreconditionError("SendDrawcallFilterConfig: Client is not connected.");
+    }
+    DrawcallFilterConfigRequest request;
+    request.SetFilterByVertexCount(config.filter_by_vertex_count);
+    request.SetFilterByIndexCount(config.filter_by_index_count);
+    request.SetFilterByInstanceCount(config.filter_by_instance_count);
+    request.SetVertexCount(config.target_vertex_count);
+    request.SetIndexCount(config.target_index_count);
+    request.SetInstanceCount(config.target_instance_count);
+
+    absl::Status status = SendSocketMessage(m_connection.get(), request);
+    if (!status.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(status, "SendDrawcallFilterConfig: SendSocketMessage fail"));
+    }
+
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
+    if (!receive.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(receive.status(),
+                                    "SendDrawcallFilterConfig: ReceiveSocketMessage fail"));
+    }
+
+    std::unique_ptr<ISerializable> response = *std::move(receive);
+    if (response->GetMessageType() != MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE)
+    {
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "SendDrawcallFilterConfig: Unexpected message type in response (Expected: ",
+            MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE, ", Got: ", response->GetMessageType(),
+            ")."));
+    }
+    std::cout << "Client: SendDrawcallFilterConfig successful." << std::endl;
+    return Dive::OkStatus();
+}
+
 absl::Status TcpClient::PingServer()
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);

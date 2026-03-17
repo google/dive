@@ -657,6 +657,7 @@ void TraceDialog::OnTraceClicked()
 
     workerThread->SetTargetCaptureDir(
         m_capture_file_local_root_directory_input_box->text().toStdString());
+    workerThread->SetPackageName(m_cur_pkg.toStdString());
     connect(workerThread, &CaptureWorker::CaptureAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &CaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &CaptureWorker::finished, progress_bar, &QObject::deleteLater);
@@ -681,10 +682,7 @@ void TraceDialog::OnDevListRefresh() { UpdateDeviceList(); }
 
 void TraceDialog::OnAppListRefresh() { UpdatePackageList(); }
 
-void TraceDialog::OnPackageListSet(QStringList package_list)
-{
-    m_pkg_list = package_list;
-}
+void TraceDialog::OnPackageListSet(QStringList package_list) { m_pkg_list = package_list; }
 
 void TraceDialog::UpdatePackageList()
 {

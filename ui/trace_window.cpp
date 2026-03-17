@@ -429,9 +429,9 @@ void TraceDialog::OnPackageSelected(const QString& s)
     }
 
     QString prev_pkg = m_cur_pkg;
-    if (m_cur_pkg.toStdString() != m_pkg_list[cur_index])
+    if (m_cur_pkg != m_pkg_list[cur_index])
     {
-        m_cur_pkg = QString::fromStdString(m_pkg_list[cur_index]);
+        m_cur_pkg = m_pkg_list[cur_index];
     }
     m_run_button->setEnabled(true);
     m_cmd_input_box->setText(m_cur_pkg);
@@ -680,10 +680,7 @@ void TraceDialog::OnDevListRefresh() { UpdateDeviceList(); }
 
 void TraceDialog::OnAppListRefresh() { UpdatePackageList(); }
 
-void TraceDialog::OnPackageListSet(QList<std::string> package_list)
-{
-    m_pkg_list = std::vector<std::string>(package_list.begin(), package_list.end());
-}
+void TraceDialog::OnPackageListSet(QStringList package_list) { m_pkg_list = package_list; }
 
 void TraceDialog::UpdatePackageList()
 {
@@ -703,19 +700,22 @@ void TraceDialog::UpdatePackageList()
         ShowMessage(QString::fromStdString(err_msg));
         return;
     }
-    m_pkg_list = *ret;
+
+    m_pkg_list.clear();
+    for (const auto& pkg : *ret)
+    {
+        m_pkg_list.append(QString::fromStdString(pkg));
+    }
 
     // Provide the package list to any listeners that may need it.
-    QList<std::string> package_list_qt;
-    std::copy(m_pkg_list.begin(), m_pkg_list.end(), std::back_inserter(package_list_qt));
-    emit PackageListAvailable(m_gfxr_capture, package_list_qt);
+    emit PackageListAvailable(m_gfxr_capture, m_pkg_list);
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
-    for (size_t i = 0; i < m_pkg_list.size(); i++)
+    for (const QString& pkg : m_pkg_list)
     {
-        QStandardItem* item = new QStandardItem(m_pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(pkg);
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);

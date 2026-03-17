@@ -284,6 +284,74 @@ void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCo
                                             firstIndex, vertexOffset, firstInstance);
 }
 
+void DiveInterceptCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                  VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    PFN_vkCmdDrawIndirect pfn = nullptr;
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+    pfn = layer_data->dispatch_table.CmdDrawIndirect;
+    return sDiveRuntimeLayer.CmdDrawIndirect(pfn, commandBuffer, buffer, offset, drawCount, stride);
+}
+
+void DiveInterceptCmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                         VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    PFN_vkCmdDrawIndexedIndirect pfn = nullptr;
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+    pfn = layer_data->dispatch_table.CmdDrawIndexedIndirect;
+    return sDiveRuntimeLayer.CmdDrawIndexedIndirect(pfn, commandBuffer, buffer, offset, drawCount,
+                                                    stride);
+}
+
+void DiveInterceptCmdDrawIndirectCount(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                       VkDeviceSize offset, VkBuffer countBuffer,
+                                       VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
+                                       uint32_t stride)
+{
+    auto dt = GetDeviceLayerData(DataKey(commandBuffer))->dispatch_table;
+    sDiveRuntimeLayer.CmdDrawIndirectCount(dt.CmdDrawIndirectCount, commandBuffer, buffer, offset,
+                                           countBuffer, countBufferOffset, maxDrawCount, stride);
+}
+
+void DiveInterceptCmdDrawIndexedIndirectCount(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                              VkDeviceSize offset, VkBuffer countBuffer,
+                                              VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
+                                              uint32_t stride)
+{
+    auto dt = GetDeviceLayerData(DataKey(commandBuffer))->dispatch_table;
+    sDiveRuntimeLayer.CmdDrawIndexedIndirectCount(dt.CmdDrawIndexedIndirectCount, commandBuffer,
+                                                  buffer, offset, countBuffer, countBufferOffset,
+                                                  maxDrawCount, stride);
+}
+
+void DiveInterceptCmdDrawMeshTasksEXT(VkCommandBuffer commandBuffer, uint32_t groupCountX,
+                                      uint32_t groupCountY, uint32_t groupCountZ)
+{
+    auto dt = GetDeviceLayerData(DataKey(commandBuffer))->dispatch_table;
+    sDiveRuntimeLayer.CmdDrawMeshTasksEXT(dt.CmdDrawMeshTasksEXT, commandBuffer, groupCountX,
+                                          groupCountY, groupCountZ);
+}
+
+void DiveInterceptCmdDrawMeshTasksIndirectEXT(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                              VkDeviceSize offset, uint32_t drawCount,
+                                              uint32_t stride)
+{
+    auto dt = GetDeviceLayerData(DataKey(commandBuffer))->dispatch_table;
+    sDiveRuntimeLayer.CmdDrawMeshTasksIndirectEXT(dt.CmdDrawMeshTasksIndirectEXT, commandBuffer,
+                                                  buffer, offset, drawCount, stride);
+}
+
+void DiveInterceptCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                                   VkDeviceSize offset, VkBuffer countBuffer,
+                                                   VkDeviceSize countBufferOffset,
+                                                   uint32_t maxDrawCount, uint32_t stride)
+{
+    auto dt = GetDeviceLayerData(DataKey(commandBuffer))->dispatch_table;
+    sDiveRuntimeLayer.CmdDrawMeshTasksIndirectCountEXT(dt.CmdDrawMeshTasksIndirectCountEXT,
+                                                       commandBuffer, buffer, offset, countBuffer,
+                                                       countBufferOffset, maxDrawCount, stride);
+}
+
 void DiveInterceptCmdResetQueryPool(VkCommandBuffer commandBuffer, VkQueryPool queryPool,
                                     uint32_t firstQuery, uint32_t queryCount)
 {
@@ -832,6 +900,27 @@ extern "C"
         if (0 == strcmp(func, "vkCmdDraw")) return (PFN_vkVoidFunction)DiveInterceptCmdDraw;
         if (0 == strcmp(func, "vkCmdDrawIndexed"))
             return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
+        if (0 == strcmp(func, "vkCmdDrawIndirect"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndirect;
+        if (0 == strcmp(func, "vkCmdDrawIndexedIndirect"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexedIndirect;
+
+        // Indirect Counts (Support both core and KHR queries)
+        if (0 == strcmp(func, "vkCmdDrawIndirectCount") ||
+            0 == strcmp(func, "vkCmdDrawIndirectCountKHR"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndirectCount;
+        if (0 == strcmp(func, "vkCmdDrawIndexedIndirectCount") ||
+            0 == strcmp(func, "vkCmdDrawIndexedIndirectCountKHR"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexedIndirectCount;
+
+        // Mesh Shaders
+        if (0 == strcmp(func, "vkCmdDrawMeshTasksEXT"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawMeshTasksEXT;
+        if (0 == strcmp(func, "vkCmdDrawMeshTasksIndirectEXT"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawMeshTasksIndirectEXT;
+        if (0 == strcmp(func, "vkCmdDrawMeshTasksIndirectCountEXT"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdDrawMeshTasksIndirectCountEXT;
+
         if (0 == strcmp(func, "vkCmdResetQueryPool"))
             return (PFN_vkVoidFunction)DiveInterceptCmdResetQueryPool;
         if (0 == strcmp(func, "vkCmdWriteTimestamp"))

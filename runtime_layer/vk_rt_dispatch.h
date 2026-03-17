@@ -37,6 +37,10 @@ struct DeviceDispatchTable
     PFN_vkCreateImage CreateImage = nullptr;
     PFN_vkCmdDraw CmdDraw = nullptr;
     PFN_vkCmdDrawIndexed CmdDrawIndexed = nullptr;
+    PFN_vkCmdDrawIndirect CmdDrawIndirect = nullptr;
+    PFN_vkCmdDrawIndexedIndirect CmdDrawIndexedIndirect = nullptr;
+    PFN_vkCmdDrawIndirectCount CmdDrawIndirectCount = nullptr;
+    PFN_vkCmdDrawIndexedIndirectCount CmdDrawIndexedIndirectCount = nullptr;
     PFN_vkCmdResetQueryPool CmdResetQueryPool = nullptr;
     PFN_vkCmdWriteTimestamp CmdWriteTimestamp = nullptr;
     PFN_vkGetQueryPoolResults GetQueryPoolResults = nullptr;
@@ -56,6 +60,11 @@ struct DeviceDispatchTable
     PFN_vkCmdEndRenderPass CmdEndRenderPass = nullptr;
     PFN_vkCmdBeginRenderPass2 CmdBeginRenderPass2 = nullptr;
     PFN_vkCmdEndRenderPass2 CmdEndRenderPass2 = nullptr;
+
+    // Mesh Shader Extensions
+    PFN_vkCmdDrawMeshTasksEXT CmdDrawMeshTasksEXT = nullptr;
+    PFN_vkCmdDrawMeshTasksIndirectEXT CmdDrawMeshTasksIndirectEXT = nullptr;
+    PFN_vkCmdDrawMeshTasksIndirectCountEXT CmdDrawMeshTasksIndirectCountEXT = nullptr;
 };
 
 void InitInstanceDispatchTable(VkInstance instance, PFN_vkGetInstanceProcAddr pa,

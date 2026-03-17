@@ -55,6 +55,37 @@ class DiveRuntimeLayer
                         uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex,
                         int32_t vertexOffset, uint32_t firstInstance);
 
+    void CmdDrawIndirect(PFN_vkCmdDrawIndirect pfn, VkCommandBuffer commandBuffer, VkBuffer buffer,
+                         VkDeviceSize offset, uint32_t drawCount, uint32_t stride);
+
+    void CmdDrawIndexedIndirect(PFN_vkCmdDrawIndexedIndirect pfn, VkCommandBuffer commandBuffer,
+                                VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
+                                uint32_t stride);
+
+    void CmdDrawIndirectCount(PFN_vkCmdDrawIndirectCount pfn, VkCommandBuffer commandBuffer,
+                              VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer,
+                              VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
+                              uint32_t stride);
+
+    void CmdDrawIndexedIndirectCount(PFN_vkCmdDrawIndexedIndirectCount pfn,
+                                     VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                     VkDeviceSize offset, VkBuffer countBuffer,
+                                     VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
+                                     uint32_t stride);
+
+    void CmdDrawMeshTasksEXT(PFN_vkCmdDrawMeshTasksEXT pfn, VkCommandBuffer commandBuffer,
+                             uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+
+    void CmdDrawMeshTasksIndirectEXT(PFN_vkCmdDrawMeshTasksIndirectEXT pfn,
+                                     VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                     VkDeviceSize offset, uint32_t drawCount, uint32_t stride);
+
+    void CmdDrawMeshTasksIndirectCountEXT(PFN_vkCmdDrawMeshTasksIndirectCountEXT pfn,
+                                          VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                          VkDeviceSize offset, VkBuffer countBuffer,
+                                          VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
+                                          uint32_t stride);
+
     void CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn, VkCommandBuffer commandBuffer,
                            VkQueryPool queryPool, uint32_t firstQuery, uint32_t queryCount);
 
@@ -137,6 +168,8 @@ class DiveRuntimeLayer
     void ProcessFrameBoundaryTasks();
 
  private:
+    bool CheckAndIncrementDrawcallCount(const Network::DrawcallFilterConfig& config);
+
     Dive::GPUTime m_gpu_time;
     PFN_vkGetDeviceProcAddr m_device_proc_addr = nullptr;
 

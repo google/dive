@@ -126,14 +126,9 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
     {
         return;
     }
-    if (config.enable_drawcall_limit)
+    if (CheckAndIncrementDrawcallCount(config))
     {
-        uint32_t current_count = m_global_drawcall_counter.load(std::memory_order_relaxed);
-        if (current_count >= config.max_drawcalls)
-        {
-            return;
-        }
-        m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed);
+        return;
     }
 
     pfn(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
@@ -158,14 +153,9 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
     {
         return;
     }
-    if (config.enable_drawcall_limit)
+    if (CheckAndIncrementDrawcallCount(config))
     {
-        uint32_t current_count = m_global_drawcall_counter.load(std::memory_order_relaxed);
-        if (current_count >= config.max_drawcalls)
-        {
-            return;
-        }
-        m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed);
+        return;
     }
 
     //  Disable drawcalls with N index count
@@ -188,6 +178,131 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
     }
 
     return pfn(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void DiveRuntimeLayer::CmdDrawIndirect(PFN_vkCmdDrawIndirect pfn, VkCommandBuffer commandBuffer,
+                                       VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
+                                       uint32_t stride)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+
+    pfn(commandBuffer, buffer, offset, drawCount, stride);
+}
+
+void DiveRuntimeLayer::CmdDrawIndexedIndirect(PFN_vkCmdDrawIndexedIndirect pfn,
+                                              VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                              VkDeviceSize offset, uint32_t drawCount,
+                                              uint32_t stride)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+
+    pfn(commandBuffer, buffer, offset, drawCount, stride);
+}
+
+void DiveRuntimeLayer::CmdDrawIndirectCount(PFN_vkCmdDrawIndirectCount pfn,
+                                            VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                            VkDeviceSize offset, VkBuffer countBuffer,
+                                            VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
+                                            uint32_t stride)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+    pfn(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+}
+
+void DiveRuntimeLayer::CmdDrawIndexedIndirectCount(PFN_vkCmdDrawIndexedIndirectCount pfn,
+                                                   VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                                   VkDeviceSize offset, VkBuffer countBuffer,
+                                                   VkDeviceSize countBufferOffset,
+                                                   uint32_t maxDrawCount, uint32_t stride)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+    pfn(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+}
+
+void DiveRuntimeLayer::CmdDrawMeshTasksEXT(PFN_vkCmdDrawMeshTasksEXT pfn,
+                                           VkCommandBuffer commandBuffer, uint32_t groupCountX,
+                                           uint32_t groupCountY, uint32_t groupCountZ)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+    pfn(commandBuffer, groupCountX, groupCountY, groupCountZ);
+}
+
+void DiveRuntimeLayer::CmdDrawMeshTasksIndirectEXT(PFN_vkCmdDrawMeshTasksIndirectEXT pfn,
+                                                   VkCommandBuffer commandBuffer, VkBuffer buffer,
+                                                   VkDeviceSize offset, uint32_t drawCount,
+                                                   uint32_t stride)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+    pfn(commandBuffer, buffer, offset, drawCount, stride);
+}
+
+void DiveRuntimeLayer::CmdDrawMeshTasksIndirectCountEXT(PFN_vkCmdDrawMeshTasksIndirectCountEXT pfn,
+                                                        VkCommandBuffer commandBuffer,
+                                                        VkBuffer buffer, VkDeviceSize offset,
+                                                        VkBuffer countBuffer,
+                                                        VkDeviceSize countBufferOffset,
+                                                        uint32_t maxDrawCount, uint32_t stride)
+{
+    Network::DrawcallFilterConfig config;
+    {
+        std::shared_lock lock(m_config_mutex);
+        config = m_filter_config;
+    }
+    if (CheckAndIncrementDrawcallCount(config))
+    {
+        return;
+    }
+    pfn(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
 }
 
 void DiveRuntimeLayer::CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn, VkCommandBuffer commandBuffer,
@@ -564,6 +679,22 @@ void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
     {
         task();
     }
+}
+
+bool DiveRuntimeLayer::CheckAndIncrementDrawcallCount(const Network::DrawcallFilterConfig& config)
+{
+    if (!config.enable_drawcall_limit)
+    {
+        return false;
+    }
+
+    if (m_global_drawcall_counter.load(std::memory_order_relaxed) >= config.max_drawcalls)
+    {
+        return true;
+    }
+
+    m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed);
+    return false;
 }
 
 }  // namespace DiveLayer

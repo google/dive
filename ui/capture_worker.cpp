@@ -134,10 +134,17 @@ void CaptureWorker::run()
 
     if (absl::Status remove_status = client.RemoveFile(*capture_file_path); !remove_status.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to remove PM4 capture on device, error: ",
-                                           remove_status.message());
-        qDebug() << err_msg.c_str();
-        emit ShowMessage(QString::fromStdString(err_msg));
+        qDebug() << "Failed to remove PM4 capture via socket: " << remove_status.message().data();
+        qDebug() << "Falling back to adb to remove the capture file...";
+
+        std::string rm_cmd = absl::StrFormat("shell rm -f \"%s\"", *capture_file_path);
+        if (absl::Status adb_status = device->Adb().Run(rm_cmd); !adb_status.ok())
+        {
+            std::string err_msg = absl::StrFormat(
+                "Failed to remove PM4 capture on device, error: %s", adb_status.message());
+            qDebug() << err_msg.c_str();
+            emit ShowMessage(QString::fromStdString(err_msg));
+        }
     }
 
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

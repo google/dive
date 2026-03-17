@@ -29,11 +29,17 @@ void WriteBoolToBuffer(bool value, Buffer& dest);
 // Helper to write a uint32_t to a buffer.
 void WriteUint32ToBuffer(uint32_t value, Buffer& dest);
 
+// Helper to write an uint64_t to a buffer.
+void WriteUint64ToBuffer(uint64_t value, Buffer& dest);
+
 // Helper to write a string (length + data) to the buffer.
 void WriteStringToBuffer(const std::string& str, Buffer& dest);
 
 // Helper to read a uint32_t from a buffer.
 absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset);
+
+// Helper to read a uint64_t from a buffer.
+absl::StatusOr<uint64_t> ReadUint64FromBuffer(const Buffer& src, size_t& offset);
 
 // Helper to read a string (length + data) from the buffer.
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset);
@@ -183,8 +189,8 @@ class DownloadFileResponse : public ISerializable
     const std::string& GetFilePath() const { return m_file_path; }
     void SetFilePath(std::string file_path) { m_file_path = std::move(file_path); }
 
-    const std::string& GetFileSizeStr() const { return m_file_size_str; }
-    void SetFileSizeStr(std::string file_size_str) { m_file_size_str = std::move(file_size_str); }
+    uint64_t GetFileSize() const { return m_file_size; }
+    void SetFileSize(uint64_t file_size) { m_file_size = file_size; }
 
  private:
     // Flag indicating whether the requested file was found on the server.
@@ -194,9 +200,8 @@ class DownloadFileResponse : public ISerializable
     // The local path where the downloaded file has been saved on the server.
     // It can be the same as the requested file path from client.
     std::string m_file_path;
-    // A string representation of the downloaded file's size.
-    // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
-    std::string m_file_size_str;
+    // The downloaded file's size.
+    uint64_t m_file_size;
 };
 
 // FileSizeRequest uses the string message as the file path for which we want to determine the size.
@@ -221,17 +226,16 @@ class FileSizeResponse : public ISerializable
     const std::string& GetErrorReason() const { return m_error_reason; }
     void SetErrorReason(std::string error_reason) { m_error_reason = std::move(error_reason); }
 
-    const std::string& GetFileSizeStr() const { return m_file_size_str; }
-    void SetFileSizeStr(std::string file_size_str) { m_file_size_str = std::move(file_size_str); }
+    uint64_t GetFileSize() const { return m_file_size; }
+    void SetFileSize(uint64_t file_size) { m_file_size = file_size; }
 
  private:
     // Flag indicating whether the file was found on the server.
     bool m_found = false;
     // A description of the error. Empty if successful.
     std::string m_error_reason;
-    // A string representation of the downloaded file's size.
-    // It avoids to use uint64_t which requires custom implementation for htonll/ntohll.
-    std::string m_file_size_str;
+    // The downloaded file's size.
+    uint64_t m_file_size;
 };
 
 class DrawcallFilterConfigRequest : public ISerializable

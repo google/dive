@@ -50,7 +50,7 @@ absl::Status DownloadFile(Network::DownloadFileRequest* request,
         {
             response.SetFound(true);
             response.SetFilePath(file_path);
-            response.SetFileSizeStr(std::to_string(file_size));
+            response.SetFileSize(file_size);
         }
         else
         {
@@ -88,7 +88,7 @@ absl::Status GetFileSize(Network::FileSizeRequest* request, Network::SocketConne
         if (auto file_size = std::filesystem::file_size(file_path, ec); !ec)
         {
             response.SetFound(true);
-            response.SetFileSizeStr(std::to_string(file_size));
+            response.SetFileSize(file_size);
         }
         else
         {

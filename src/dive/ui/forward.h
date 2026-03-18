@@ -28,6 +28,7 @@ class QGroupBox;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
+class QListView;
 class QPlainTextEdit;
 class QProgressDialog;
 class QPushButton;

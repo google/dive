@@ -149,6 +149,8 @@ WhatIfConfigureDialog::WhatIfConfigureDialog(QWidget* parent) : DeviceDialog(par
     main_layout->addLayout(CreateButtonLayout());
     setLayout(main_layout);
 
+    main_layout->setSizeConstraint(QLayout::SetFixedSize);
+
     m_command_box->setEnabled(false);
 
     SetupConnections();
@@ -699,6 +701,6 @@ void WhatIfConfigureDialog::SetDrawCallFilterSpinnerVisibility(DrawCallFilterSpi
 //--------------------------------------------------------------------------------------------------
 void WhatIfConfigureDialog::closeEvent(QCloseEvent* event)
 {
+    ResetDialog();
     event->accept();
-    return;
 }

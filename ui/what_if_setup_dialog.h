@@ -45,13 +45,11 @@ class WhatIfSetupDialog : public DeviceDialog
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void EnableWhatIfTypeButtons(bool enable);
+    void EnableModificationOptions(bool enable);
 
  protected:
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent* event) override;
-
- public slots:
-    void OnStopRuntimeWhatIf();
 
  private slots:
     void OnAppListRefresh();
@@ -63,15 +61,17 @@ class WhatIfSetupDialog : public DeviceDialog
     void ShowMessage(const QString& message) override;
 
  signals:
-    void RuntimeWhatIfEnabled(const QString& package_name, bool is_runtime_what_if_enabled);
+    void AddModification();
 
  private:
     void ResetDialog();
     absl::Status StartPackage(Dive::AndroidDevice* device, const std::string& app_type);
-    void StopPackage();
+    absl::Status StopPackage();
 
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
+
+    void SetupConnections();
 
     // --- Layout Creation ---
     QVBoxLayout* CreateHeaderLayout();
@@ -79,8 +79,10 @@ class WhatIfSetupDialog : public DeviceDialog
     void InitializeRuntimeOptions();
     void InitializeReplayOptions();
     QHBoxLayout* CreateButtonLayout();
+    QVBoxLayout* InitializeModificationListOptions();
 
     // --- What-If Type Section ---
+    QButtonGroup* m_what_if_type_button_group = nullptr;
     QRadioButton* m_runtime_what_if_type_button = nullptr;
     QRadioButton* m_replay_what_if_type_button = nullptr;
 
@@ -88,7 +90,11 @@ class WhatIfSetupDialog : public DeviceDialog
     QWidget* m_runtime_options_widget = nullptr;
     QWidget* m_replay_options_widget = nullptr;
 
+    // --- Device Section ---
+    QPushButton* m_device_refresh_button = nullptr;
+
     // --- Package Section ---
+    QSortFilterProxyModel* m_filter_model = nullptr;
     QStandardItemModel* m_pkg_model = nullptr;
     QComboBox* m_pkg_box = nullptr;
     QPushButton* m_pkg_refresh_button = nullptr;
@@ -100,8 +106,15 @@ class WhatIfSetupDialog : public DeviceDialog
     WhatIfAppTypeFilterModel* m_app_type_filter_model = nullptr;
     QComboBox* m_app_type_box = nullptr;
 
-    // --- Start Button ---
+    // --- Setup Buttons ---
     QPushButton* m_start_application_button = nullptr;
+    QPushButton* m_end_session_button = nullptr;
+
+    // --- Modification List Section ---
+    QListView* m_mod_list_view = nullptr;
+    QPushButton* m_add_modification_button = nullptr;
+    QPushButton* m_delete_modification_button = nullptr;
+    QPushButton* m_test_modification_button = nullptr;
 
     // Runtime data that needs to be accessed across different methods
     struct RuntimeData

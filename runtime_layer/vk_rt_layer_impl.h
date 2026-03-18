@@ -30,6 +30,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "frame_boundary_detector.h"
 #include "gpu_time.h"
 #include "network/drawcall_filter_config.h"
 
@@ -160,7 +161,7 @@ class DiveRuntimeLayer
     void UpdateFilterConfig(const Network::DrawcallFilterConfig& config)
     {
         std::unique_lock lock(m_config_mutex);
-        m_filter_config = config;
+        m_pending_filter_config = config;
     }
 
     void EnqueueFrameBoundaryTask(std::function<void()> task);
@@ -171,6 +172,8 @@ class DiveRuntimeLayer
     bool CheckAndIncrementDrawcallCount(const Network::DrawcallFilterConfig& config);
 
     Dive::GPUTime m_gpu_time;
+    Dive::FrameBoundaryDetector m_boundary_detector;
+
     PFN_vkGetDeviceProcAddr m_device_proc_addr = nullptr;
 
     // Cache all vk function pointers
@@ -182,8 +185,9 @@ class DiveRuntimeLayer
     PFN_vkCmdWriteTimestamp m_pfn_vkCmdWriteTimestamp = nullptr;
 
     // Configuration for drawcall filtering.
-    std::shared_mutex m_config_mutex;
-    Network::DrawcallFilterConfig m_filter_config;
+    std::mutex m_config_mutex;
+    Network::DrawcallFilterConfig m_pending_filter_config;
+    Network::DrawcallFilterConfig m_active_filter_config;
 
     // Frame boundary tasks to be executed at the end of a frame.
     std::mutex m_task_mutex;

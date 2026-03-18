@@ -267,8 +267,8 @@ void DiveInterceptCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount,
     auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
 
     pfn = layer_data->dispatch_table.CmdDraw;
-    return sDiveRuntimeLayer.CmdDraw(pfn, commandBuffer, vertexCount, instanceCount, firstVertex,
-                                     firstInstance);
+    sDiveRuntimeLayer.CmdDraw(pfn, commandBuffer, vertexCount, instanceCount, firstVertex,
+                              firstInstance);
 }
 
 void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCount,
@@ -280,8 +280,8 @@ void DiveInterceptCmdDrawIndexed(VkCommandBuffer commandBuffer, uint32_t indexCo
     auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
 
     pfn = layer_data->dispatch_table.CmdDrawIndexed;
-    return sDiveRuntimeLayer.CmdDrawIndexed(pfn, commandBuffer, indexCount, instanceCount,
-                                            firstIndex, vertexOffset, firstInstance);
+    sDiveRuntimeLayer.CmdDrawIndexed(pfn, commandBuffer, indexCount, instanceCount, firstIndex,
+                                     vertexOffset, firstInstance);
 }
 
 void DiveInterceptCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer,
@@ -290,7 +290,7 @@ void DiveInterceptCmdDrawIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer
     PFN_vkCmdDrawIndirect pfn = nullptr;
     auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
     pfn = layer_data->dispatch_table.CmdDrawIndirect;
-    return sDiveRuntimeLayer.CmdDrawIndirect(pfn, commandBuffer, buffer, offset, drawCount, stride);
+    sDiveRuntimeLayer.CmdDrawIndirect(pfn, commandBuffer, buffer, offset, drawCount, stride);
 }
 
 void DiveInterceptCmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, VkBuffer buffer,
@@ -299,8 +299,7 @@ void DiveInterceptCmdDrawIndexedIndirect(VkCommandBuffer commandBuffer, VkBuffer
     PFN_vkCmdDrawIndexedIndirect pfn = nullptr;
     auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
     pfn = layer_data->dispatch_table.CmdDrawIndexedIndirect;
-    return sDiveRuntimeLayer.CmdDrawIndexedIndirect(pfn, commandBuffer, buffer, offset, drawCount,
-                                                    stride);
+    sDiveRuntimeLayer.CmdDrawIndexedIndirect(pfn, commandBuffer, buffer, offset, drawCount, stride);
 }
 
 void DiveInterceptCmdDrawIndirectCount(VkCommandBuffer commandBuffer, VkBuffer buffer,

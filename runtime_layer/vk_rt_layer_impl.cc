@@ -50,12 +50,6 @@ static size_t sTotalIndexCounter = 0;
 static constexpr uint32_t kDrawcallCountLimit = 300;
 static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 
-// We snapshot the global m_filter_config into this thread-local variable during
-// vkBeginCommandBuffer. Because Vulkan guarantees a command buffer is only recorded
-// by a single thread at a time, this allows us to completely eliminate mutex locks
-// from drawcall paths (CmdDraw, CmdDrawIndirect, etc.).
-static thread_local Network::DrawcallFilterConfig sLocalFilterConfig;
-
 // DiveRuntimeLayer
 DiveRuntimeLayer::DiveRuntimeLayer() : m_device_proc_addr(nullptr) {}
 
@@ -118,17 +112,17 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
                                uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
                                uint32_t firstInstance)
 {
-    if (sLocalFilterConfig.filter_by_vertex_count &&
-        vertexCount == sLocalFilterConfig.target_vertex_count)
+    if (m_active_filter_config.filter_by_vertex_count &&
+        vertexCount == m_active_filter_config.target_vertex_count)
     {
         return;
     }
-    if (sLocalFilterConfig.filter_by_instance_count &&
-        instanceCount == sLocalFilterConfig.target_instance_count)
+    if (m_active_filter_config.filter_by_instance_count &&
+        instanceCount == m_active_filter_config.target_instance_count)
     {
         return;
     }
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -141,17 +135,17 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
-    if (sLocalFilterConfig.filter_by_index_count &&
-        indexCount == sLocalFilterConfig.target_index_count)
+    if (m_active_filter_config.filter_by_index_count &&
+        indexCount == m_active_filter_config.target_index_count)
     {
         return;
     }
-    if (sLocalFilterConfig.filter_by_instance_count &&
-        instanceCount == sLocalFilterConfig.target_instance_count)
+    if (m_active_filter_config.filter_by_instance_count &&
+        instanceCount == m_active_filter_config.target_instance_count)
     {
         return;
     }
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -182,7 +176,7 @@ void DiveRuntimeLayer::CmdDrawIndirect(PFN_vkCmdDrawIndirect pfn, VkCommandBuffe
                                        VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
                                        uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -195,7 +189,7 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirect(PFN_vkCmdDrawIndexedIndirect pfn,
                                               VkDeviceSize offset, uint32_t drawCount,
                                               uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -209,7 +203,7 @@ void DiveRuntimeLayer::CmdDrawIndirectCount(PFN_vkCmdDrawIndirectCount pfn,
                                             VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
                                             uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -222,7 +216,7 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirectCount(PFN_vkCmdDrawIndexedIndirectC
                                                    VkDeviceSize countBufferOffset,
                                                    uint32_t maxDrawCount, uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -233,7 +227,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksEXT(PFN_vkCmdDrawMeshTasksEXT pfn,
                                            VkCommandBuffer commandBuffer, uint32_t groupCountX,
                                            uint32_t groupCountY, uint32_t groupCountZ)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -245,7 +239,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectEXT(PFN_vkCmdDrawMeshTasksIndirec
                                                    VkDeviceSize offset, uint32_t drawCount,
                                                    uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -259,7 +253,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectCountEXT(PFN_vkCmdDrawMeshTasksIn
                                                         VkDeviceSize countBufferOffset,
                                                         uint32_t maxDrawCount, uint32_t stride)
 {
-    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
+    if (CheckAndIncrementDrawcallCount(m_active_filter_config))
     {
         return;
     }
@@ -324,6 +318,8 @@ VkResult DiveRuntimeLayer::AllocateCommandBuffers(PFN_vkAllocateCommandBuffers p
         return result;
     }
 
+    m_boundary_detector.OnAllocateCommandBuffers(pAllocateInfo, pCommandBuffers);
+
     Dive::GPUTime::GpuTimeStatus status =
         m_gpu_time.OnAllocateCommandBuffers(pAllocateInfo, pCommandBuffers);
     if (!status.success)
@@ -338,19 +334,23 @@ void DiveRuntimeLayer::FreeCommandBuffers(PFN_vkFreeCommandBuffers pfn, VkDevice
                                           VkCommandPool commandPool, uint32_t commandBufferCount,
                                           const VkCommandBuffer* pCommandBuffers)
 {
+    m_boundary_detector.OnFreeCommandBuffers(commandBufferCount, pCommandBuffers);
+
     Dive::GPUTime::GpuTimeStatus status =
         m_gpu_time.OnFreeCommandBuffers(commandBufferCount, pCommandBuffers);
     if (!status.success)
     {
         LOGE("%s", status.message.c_str());
     }
-    return pfn(device, commandPool, commandBufferCount, pCommandBuffers);
+    pfn(device, commandPool, commandBufferCount, pCommandBuffers);
 }
 
 VkResult DiveRuntimeLayer::ResetCommandBuffer(PFN_vkResetCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               VkCommandBufferResetFlags flags)
 {
+    m_boundary_detector.OnResetCommandBuffer(commandBuffer);
+
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnResetCommandBuffer(commandBuffer);
     if (!status.success)
     {
@@ -364,6 +364,8 @@ VkResult DiveRuntimeLayer::ResetCommandPool(PFN_vkResetCommandPool pfn, VkDevice
                                             VkCommandPool commandPool,
                                             VkCommandPoolResetFlags flags)
 {
+    m_boundary_detector.OnResetCommandPool(commandPool);
+
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnResetCommandPool(commandPool);
     if (!status.success)
     {
@@ -377,12 +379,6 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
-    // Snapshot the filter config.
-    {
-        std::shared_lock lock(m_config_mutex);
-        sLocalFilterConfig = m_filter_config;
-    }
-
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)
     {
@@ -505,27 +501,36 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit pfn, VkQueue queue, uin
         return result;
     }
 
-    auto submit_status =
-        m_gpu_time.OnQueueSubmit(submitCount, pSubmits, m_pfn_vkDeviceWaitIdle,
-                                 m_pfn_vkResetQueryPool, m_pfn_vkGetQueryPoolResults);
-    if (!submit_status.gpu_time_status.success)
+    if (sEnableGPUTiming)
     {
-        if (submit_status.contains_frame_boundary)
+        auto submit_status =
+            m_gpu_time.OnQueueSubmit(submitCount, pSubmits, m_pfn_vkDeviceWaitIdle,
+                                     m_pfn_vkResetQueryPool, m_pfn_vkGetQueryPoolResults);
+        if (!submit_status.gpu_time_status.success)
         {
-            LOGE("Frame Boundary!");
+            if (submit_status.contains_frame_boundary)
+            {
+                LOGE("Frame Boundary!");
+            }
+            LOGE("%s", submit_status.gpu_time_status.message.c_str());
         }
-        LOGE("%s", submit_status.gpu_time_status.message.c_str());
-    }
-    else
-    {
-        if (submit_status.contains_frame_boundary)
+        else
         {
-            LOGI("%s", m_gpu_time.GetStatsString().c_str());
+            if (submit_status.contains_frame_boundary)
+            {
+                LOGI("%s", m_gpu_time.GetStatsString().c_str());
+            }
         }
     }
 
-    // Process frame boundary tasks for OpenXR apps.
-    ProcessFrameBoundaryTasks();
+    bool is_frame_boundary = m_boundary_detector.ContainsFrameBoundary(submitCount, pSubmits);
+    if (is_frame_boundary)
+    {
+        m_boundary_detector.ConsumeBoundaries(submitCount, pSubmits);
+
+        // Process frame boundary tasks for OpenXR apps.
+        ProcessFrameBoundaryTasks();
+    }
 
     return result;
 }
@@ -558,6 +563,13 @@ void DiveRuntimeLayer::CmdInsertDebugUtilsLabel(PFN_vkCmdInsertDebugUtilsLabelEX
                                                 const VkDebugUtilsLabelEXT* pLabelInfo)
 {
     pfn(commandBuffer, pLabelInfo);
+
+    if (Dive::FrameBoundaryDetector::BoundaryStatus status =
+            m_boundary_detector.MarkBoundary(commandBuffer, pLabelInfo);
+        !status.success)
+    {
+        LOGE("%s", status.message.c_str());
+    }
 
     Dive::GPUTime::GpuTimeStatus status =
         m_gpu_time.OnCmdInsertDebugUtilsLabelEXT(commandBuffer, pLabelInfo);
@@ -629,6 +641,11 @@ void DiveRuntimeLayer::EnqueueFrameBoundaryTask(std::function<void()> task)
 
 void DiveRuntimeLayer::ProcessFrameBoundaryTasks()
 {
+    {
+        std::lock_guard<std::mutex> lock(m_config_mutex);
+        m_active_filter_config = m_pending_filter_config;
+    }
+
     m_global_drawcall_counter.store(0, std::memory_order_relaxed);
 
     std::vector<std::function<void()>> tasks_to_run;

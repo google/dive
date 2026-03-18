@@ -39,6 +39,9 @@ void CaptureWorker::SetTargetCaptureDir(const std::string& host_root_dir)
 }
 
 //--------------------------------------------------------------------------------------------------
+void CaptureWorker::SetPackageName(std::string_view package_name) { m_package_name = package_name; }
+
+//--------------------------------------------------------------------------------------------------
 void CaptureWorker::run()
 {
     auto device = Dive::GetDeviceManager().GetDevice();
@@ -50,8 +53,7 @@ void CaptureWorker::run()
         return;
     }
 
-    auto app = device->GetCurrentApplication();
-    if (app == nullptr || !app->IsRunning())
+    if (!device->IsProcessRunning(m_package_name))
     {
         std::string err_msg = "Application is not running, possibly crashed.";
         qDebug() << err_msg.c_str();

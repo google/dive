@@ -655,6 +655,7 @@ void TraceDialog::OnTraceClicked()
 
     workerThread->SetTargetCaptureDir(
         m_capture_file_local_root_directory_input_box->text().toStdString());
+    workerThread->SetPackageName(m_cur_pkg.toStdString());
     connect(workerThread, &CaptureWorker::CaptureAvailable, this, &TraceDialog::OnTraceAvailable);
     connect(workerThread, &CaptureWorker::finished, workerThread, &QObject::deleteLater);
     connect(workerThread, &CaptureWorker::finished, progress_bar, &QObject::deleteLater);

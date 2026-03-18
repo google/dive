@@ -54,10 +54,11 @@ static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 // at a time, a thread_local map is mathematically guaranteed to never experience a data race. It
 // requires absolutely no mutexes.
 // This map exists independently on every CPU core. No locks required!
-static thread_local std::unordered_map<VkCommandBuffer, bool> sCommandBufferHasAlpha;
+// Also, this keeps track of the current pipeline alpha state.
+static thread_local std::unordered_map<VkCommandBuffer, bool> sCmdBufferCurrentPipelineHasAlpha;
 
 // The maximum number of command buffers that can be tracked simultaneously by the local thread.
-// It is used to prevent stale data for sCommandBufferHasAlpha.
+// It is used to prevent stale data for sCmdBufferCurrentPipelineHasAlpha.
 static constexpr uint32_t kMaxConcurrentCBs = 512;
 
 // DiveRuntimeLayer
@@ -197,7 +198,7 @@ void DiveRuntimeLayer::CmdBindPipeline(PFN_vkCmdBindPipeline pfn, VkCommandBuffe
                 has_alpha = it->second.has_alpha_blend;
             }
         }
-        sCommandBufferHasAlpha[commandBuffer] = has_alpha;
+        sCmdBufferCurrentPipelineHasAlpha[commandBuffer] = has_alpha;
     }
     pfn(commandBuffer, pipelineBindPoint, pipeline);
 }
@@ -220,7 +221,7 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
     {
         return;
     }
-    if (config.filter_alpha_blended && sCommandBufferHasAlpha[commandBuffer])
+    if (config.filter_alpha_blended && sCmdBufferCurrentPipelineHasAlpha[commandBuffer])
     {
         return;
     }
@@ -247,7 +248,7 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
     {
         return;
     }
-    if (config.filter_alpha_blended && sCommandBufferHasAlpha[commandBuffer])
+    if (config.filter_alpha_blended && sCmdBufferCurrentPipelineHasAlpha[commandBuffer])
     {
         return;
     }
@@ -385,11 +386,11 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
-    if (sCommandBufferHasAlpha.size() > kMaxConcurrentCBs)
+    if (sCmdBufferCurrentPipelineHasAlpha.size() > kMaxConcurrentCBs)
     {
-        sCommandBufferHasAlpha.clear();
+        sCmdBufferCurrentPipelineHasAlpha.clear();
     }
-    sCommandBufferHasAlpha[commandBuffer] = false;
+    sCmdBufferCurrentPipelineHasAlpha[commandBuffer] = false;
 
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)

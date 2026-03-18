@@ -50,6 +50,12 @@ static size_t sTotalIndexCounter = 0;
 static constexpr uint32_t kDrawcallCountLimit = 300;
 static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 
+// We snapshot the global m_filter_config into this thread-local variable during
+// vkBeginCommandBuffer. Because Vulkan guarantees a command buffer is only recorded
+// by a single thread at a time, this allows us to completely eliminate mutex locks
+// from drawcall paths (CmdDraw, CmdDrawIndirect, etc.).
+static thread_local Network::DrawcallFilterConfig sLocalFilterConfig;
+
 // DiveRuntimeLayer
 DiveRuntimeLayer::DiveRuntimeLayer() : m_device_proc_addr(nullptr) {}
 
@@ -112,21 +118,17 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
                                uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
                                uint32_t firstInstance)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-
-    if (config.filter_by_vertex_count && vertexCount == config.target_vertex_count)
+    if (sLocalFilterConfig.filter_by_vertex_count &&
+        vertexCount == sLocalFilterConfig.target_vertex_count)
     {
         return;
     }
-    if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    if (sLocalFilterConfig.filter_by_instance_count &&
+        instanceCount == sLocalFilterConfig.target_instance_count)
     {
         return;
     }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -139,21 +141,17 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-
-    if (config.filter_by_index_count && indexCount == config.target_index_count)
+    if (sLocalFilterConfig.filter_by_index_count &&
+        indexCount == sLocalFilterConfig.target_index_count)
     {
         return;
     }
-    if (config.filter_by_instance_count && instanceCount == config.target_instance_count)
+    if (sLocalFilterConfig.filter_by_instance_count &&
+        instanceCount == sLocalFilterConfig.target_instance_count)
     {
         return;
     }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -184,13 +182,7 @@ void DiveRuntimeLayer::CmdDrawIndirect(PFN_vkCmdDrawIndirect pfn, VkCommandBuffe
                                        VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
                                        uint32_t stride)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -203,13 +195,7 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirect(PFN_vkCmdDrawIndexedIndirect pfn,
                                               VkDeviceSize offset, uint32_t drawCount,
                                               uint32_t stride)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -223,12 +209,7 @@ void DiveRuntimeLayer::CmdDrawIndirectCount(PFN_vkCmdDrawIndirectCount pfn,
                                             VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
                                             uint32_t stride)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -241,12 +222,7 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirectCount(PFN_vkCmdDrawIndexedIndirectC
                                                    VkDeviceSize countBufferOffset,
                                                    uint32_t maxDrawCount, uint32_t stride)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -257,12 +233,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksEXT(PFN_vkCmdDrawMeshTasksEXT pfn,
                                            VkCommandBuffer commandBuffer, uint32_t groupCountX,
                                            uint32_t groupCountY, uint32_t groupCountZ)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -274,12 +245,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectEXT(PFN_vkCmdDrawMeshTasksIndirec
                                                    VkDeviceSize offset, uint32_t drawCount,
                                                    uint32_t stride)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -293,12 +259,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectCountEXT(PFN_vkCmdDrawMeshTasksIn
                                                         VkDeviceSize countBufferOffset,
                                                         uint32_t maxDrawCount, uint32_t stride)
 {
-    Network::DrawcallFilterConfig config;
-    {
-        std::shared_lock lock(m_config_mutex);
-        config = m_filter_config;
-    }
-    if (CheckAndIncrementDrawcallCount(config))
+    if (CheckAndIncrementDrawcallCount(sLocalFilterConfig))
     {
         return;
     }
@@ -416,6 +377,12 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
+    // Snapshot the filter config.
+    {
+        std::shared_lock lock(m_config_mutex);
+        sLocalFilterConfig = m_filter_config;
+    }
+
     VkResult result = pfn(commandBuffer, pBeginInfo);
     if (sEnableDrawcallReport)
     {

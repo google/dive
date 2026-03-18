@@ -32,7 +32,7 @@ class CaptureWorker : public QThread
     // Appends/increments the numerical suffix "_#" to target_capture_path for a fresh directory, if
     // the directory already exists
     void SetTargetCaptureDir(const std::string& host_root_dir);
-    void SetPackageName(const std::string& package_name);
+    void SetPackageName(std::string_view package_name);
  signals:
     void CaptureAvailable(const QString&);
     void DownloadedSize(qlonglong size, qlonglong total_size);

@@ -39,10 +39,7 @@ void CaptureWorker::SetTargetCaptureDir(const std::string& host_root_dir)
 }
 
 //--------------------------------------------------------------------------------------------------
-void CaptureWorker::SetPackageName(const std::string& package_name)
-{
-    m_package_name = package_name;
-}
+void CaptureWorker::SetPackageName(std::string_view package_name) { m_package_name = package_name; }
 
 //--------------------------------------------------------------------------------------------------
 void CaptureWorker::run()

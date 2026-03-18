@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "android_application.h"
 
+#include <filesystem>
+
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
@@ -695,8 +697,10 @@ absl::Status VulkanCliApplication::GfxrSetup()
 
     std::string gfxr_capture_directory = absl::StrCat(
         Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/", m_gfxr_capture_file_directory);
+    std::string command_filename = std::filesystem::path(m_command).filename().string();
     std::string capture_file_location =
-        absl::StrCat(gfxr_capture_directory, "/", m_command, ".gfxr");
+        absl::StrCat(gfxr_capture_directory, "/", command_filename, ".gfxr");
+
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
     RETURN_IF_ERROR(
         m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file " + capture_file_location));

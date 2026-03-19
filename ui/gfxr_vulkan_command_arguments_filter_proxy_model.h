@@ -38,6 +38,5 @@ class GfxrVulkanCommandArgumentsFilterProxyModel : public QSortFilterProxyModel
     bool IsDescendant(const QModelIndex& potentialDescendant,
                       const QModelIndex& potentialAncestor) const;
 
-    const Dive::CommandHierarchy* m_command_hierarchy;
-    int m_filterFunctionNodeIndex;
+    const Dive::CommandHierarchy* m_command_hierarchy = nullptr;
 };

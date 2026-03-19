@@ -126,7 +126,7 @@ QModelIndex CommandModel::index(int row, int column, const QModelIndex& parent) 
 {
     if (!hasIndex(row, column, parent)) return QModelIndex();
 
-    uint64_t node_index;
+    uint64_t node_index = 0;
     if (!parent.isValid())
     {
         // Root level in the model, which is actually one-level down in the topology, since the root
@@ -162,7 +162,7 @@ int CommandModel::rowCount(const QModelIndex& parent) const
     if (parent.column() > 0) return 0;
     if (m_topology_ptr == nullptr || m_topology_ptr->GetNumNodes() == 0) return 0;
 
-    uint64_t parent_node_index;
+    uint64_t parent_node_index = 0;
     if (!parent.isValid())  // Root level
         parent_node_index = Dive::Topology::kRootNodeIndex;
     else

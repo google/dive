@@ -682,7 +682,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex& index)
 {
     // Determine which node it is, and emit this signal
     const Dive::CommandHierarchy& command_hierarchy = m_data_core->GetCommandHierarchy();
-    uint64_t selected_item_node_index;
+    uint64_t selected_item_node_index = 0;
 
     if (m_gfxr_capture_loaded)
     {
@@ -709,7 +709,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex& index)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnFilterModeChange(const QString& filter_mode)
 {
-    DiveFilterModel::FilterMode new_mode;
+    DiveFilterModel::FilterMode new_mode = DiveFilterModel::kNone;
 
     if (filter_mode == kFilterStrings[DiveFilterModel::kNone])
     {
@@ -726,10 +726,6 @@ void MainWindow::OnFilterModeChange(const QString& filter_mode)
     else if (filter_mode == kFilterStrings[DiveFilterModel::kBinningAndFirstTilePass])
     {
         new_mode = DiveFilterModel::kBinningAndFirstTilePass;
-    }
-    else
-    {
-        new_mode = DiveFilterModel::kNone;
     }
 
     if (m_filter_model)
@@ -1503,8 +1499,8 @@ void MainWindow::OnSearchTrigger()
 
     int current_index = m_tab_widget->currentIndex();
     QWidget* current_tab = m_tab_widget->widget(current_index);
-    SearchBar* tab_wiget_search_bar;
-    QPushButton* tab_wiget_search_button;
+    SearchBar* tab_wiget_search_bar = nullptr;
+    QPushButton* tab_wiget_search_button = nullptr;
 
     if (current_index == m_tabs.command)
     {
@@ -2913,7 +2909,7 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
     QModelIndex gfxr_draw_call_index_from_source =
         FindSourceIndexFromNode(gfxr_source_model, gfxr_draw_call_indices.at(row_index));
     QModelIndex proxy_index;
-    QItemSelectionModel* selection_model;
+    QItemSelectionModel* selection_model = nullptr;
     QItemSelectionModel::SelectionFlags flags;
     if (gfxr_draw_call_index_from_source.isValid())
     {

@@ -331,10 +331,7 @@ absl::StatusOr<std::unique_ptr<AndroidDevice>> AndroidDevice::Create(const std::
 
 AndroidDevice::AndroidDevice(const std::string& serial)
     : m_serial(serial),
-      m_adb(serial),
-      m_gfxr_enabled(false),
-      m_runtime_what_if_enabled(false),
-      m_port(kFirstPort)
+      m_adb(serial)
 {
     CleanupDevice().IgnoreError();
 }

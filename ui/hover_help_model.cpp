@@ -84,7 +84,7 @@ void HoverHelp::SetCurItem(Item item, uint32_t param1, uint32_t param2, uint32_t
         break;
 
     std::string cur_string;
-    int64_t cur_string_size;
+    int64_t cur_string_size = 0;
     const char* kShaderStageNames[Dive::kShaderStageCount] = {
         "Cs",  // kShaderStageCs
         "Gs",  // kShaderStageGs

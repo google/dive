@@ -22,6 +22,7 @@
 #include <QDebug>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListView>
@@ -39,7 +40,10 @@
 #include "absl/strings/str_format.h"
 #include "application_controller.h"
 #include "capture_service/device_mgr.h"
+#include "device_dialog.h"
 #include "dive/common/app_types.h"
+#include "network/drawcall_filter_config.h"
+#include "network/tcp_client.h"
 
 namespace
 {
@@ -144,6 +148,10 @@ void WhatIfSetupDialog::SetupConnections()
     QObject::connect(m_end_session_button, &QPushButton::clicked, this, &QWidget::close);
     QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
                      &WhatIfSetupDialog::AddModification);
+    QObject::connect(m_test_modification_button, &QPushButton::clicked, this,
+                     &WhatIfSetupDialog::OnTestModifications);
+    QObject::connect(m_delete_modification_button, &QPushButton::clicked, this,
+                     &WhatIfSetupDialog::OnDeleteModifications);
 }
 
 QVBoxLayout* WhatIfSetupDialog::InitializeModificationListOptions()
@@ -168,7 +176,9 @@ QVBoxLayout* WhatIfSetupDialog::InitializeModificationListOptions()
     m_add_modification_button = new QPushButton(tr(kAddModifications.data()));
     m_add_modification_button->setEnabled(false);
 
-    m_mod_list_view = new QListView();
+    m_modification_list_view = new QListView();
+    m_modification_list_model = new QStandardItemModel(this);
+    m_modification_list_view->setModel(m_modification_list_model);
 
     QHBoxLayout* bottom_layout = new QHBoxLayout();
     bottom_layout->addStretch();
@@ -183,7 +193,7 @@ QVBoxLayout* WhatIfSetupDialog::InitializeModificationListOptions()
     layout->addLayout(header_layout);
     layout->addWidget(mod_list_subtitle);
     layout->addWidget(m_add_modification_button, 0, Qt::AlignRight);
-    layout->addWidget(m_mod_list_view);
+    layout->addWidget(m_modification_list_view);
     layout->addLayout(bottom_layout);
 
     return layout;
@@ -629,6 +639,11 @@ void WhatIfSetupDialog::closeEvent(QCloseEvent* event)
         return;
     }
 
+    if (m_modification_list_model)
+    {
+        m_modification_list_model->clear();
+    }
+
     m_runtime_what_if_type_button->setChecked(true);
     OnWhatIfTypeChanged(kRuntimeWhatIfButtonId);
 
@@ -646,4 +661,203 @@ void WhatIfSetupDialog::showEvent(QShowEvent* event)
     }
 
     m_start_application_button->setEnabled(!m_runtime_data.cur_pkg.isEmpty());
+}
+
+void WhatIfSetupDialog::OnAddModificationToList(const Dive::WhatIfModification& modification)
+{
+    if (m_modification_list_model)
+    {
+        QStandardItem* item = new QStandardItem(modification.ui_text);
+        item->setCheckable(true);
+        item->setCheckState(Qt::Checked);
+        item->setData(QVariant::fromValue(modification), Qt::UserRole + 1);
+        m_modification_list_model->insertRow(0, item);
+    }
+}
+
+absl::Status WhatIfSetupDialog::SyncActiveModifications()
+{
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    if (!device)
+    {
+        return absl::FailedPreconditionError("No device connected.");
+    }
+
+    Dive::AndroidApplication* cur_app = device->GetCurrentApplication();
+    if (!cur_app || !cur_app->IsRunning())
+    {
+        return absl::FailedPreconditionError("Application is not running.");
+    }
+
+    Network::TcpClient client;
+    const std::string host = "127.0.0.1";
+    int port = device->Port();
+    auto status = client.Connect(host, port);
+    if (!status.ok())
+    {
+        std::string err_msg(status.message());
+        qDebug() << "Connection failed: " << err_msg.c_str();
+        return status;
+    }
+
+    Network::DrawcallFilterConfig drawcall_config;
+
+    if (m_modification_list_model)
+    {
+        for (int i = 0; i < m_modification_list_model->rowCount(); i++)
+        {
+            QStandardItem* item =
+                m_modification_list_model->itemFromIndex(m_modification_list_model->index(i, 0));
+            if (item && item->checkState() == Qt::Checked)
+            {
+                Dive::WhatIfModification modification =
+                    item->data(Qt::UserRole + 1).value<Dive::WhatIfModification>();
+                switch (modification.type)
+                {
+                    case Dive::WhatIfType::kDrawCallDisabled:
+                    {
+                        if (modification.draw_call_filters.has_value())
+                        {
+                            if (modification.draw_call_filters->vertex_count > 0)
+                            {
+                                drawcall_config.filter_by_vertex_count = true;
+                                drawcall_config.target_vertex_count =
+                                    modification.draw_call_filters->vertex_count;
+                            }
+                            if (modification.draw_call_filters->index_count > 0)
+                            {
+                                drawcall_config.filter_by_index_count = true;
+                                drawcall_config.target_index_count =
+                                    modification.draw_call_filters->index_count;
+                            }
+                            if (modification.draw_call_filters->instance_count > 0)
+                            {
+                                drawcall_config.filter_by_instance_count = true;
+                                drawcall_config.target_instance_count =
+                                    modification.draw_call_filters->instance_count;
+                            }
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    absl::Status send_draw_call_filtering_status = client.SendDrawcallFilterConfig(drawcall_config);
+    if (!send_draw_call_filtering_status.ok())
+    {
+        std::string err_msg(send_draw_call_filtering_status.message());
+        qDebug() << "Failed to send draw call filters: " << err_msg.c_str();
+        return send_draw_call_filtering_status;
+    }
+
+    return absl::OkStatus();
+}
+
+void WhatIfSetupDialog::OnTestModifications()
+{
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    if (!device)
+    {
+        ShowMessage(QString("No device connected."));
+        ResetDialog();
+        return;
+    }
+
+    Dive::AndroidApplication* cur_app = device->GetCurrentApplication();
+    if (!cur_app || !cur_app->IsRunning())
+    {
+        ShowMessage(
+            QString("Application is not running. Please start the application before testing "
+                    "modifications."));
+        ResetDialog();
+        return;
+    }
+
+    bool any_item_selected = false;
+    if (m_modification_list_model)
+    {
+        for (int i = 0; i < m_modification_list_model->rowCount(); ++i)
+        {
+            QModelIndex index = m_modification_list_model->index(i, 0);
+            QStandardItem* item = m_modification_list_model->itemFromIndex(index);
+            if (item && item->checkState() == Qt::Checked)
+            {
+                any_item_selected = true;
+                break;
+            }
+        }
+    }
+
+    if (!any_item_selected)
+    {
+        ShowMessage("Please check the modification(s) you wish to test.");
+        return;
+    }
+
+    absl::Status status = SyncActiveModifications();
+    if (!status.ok())
+    {
+        ShowMessage(QString::fromStdString(std::string(status.message())));
+        return;
+    }
+
+    ShowMessage(QString("Modification(s) successfully applied."));
+}
+
+void WhatIfSetupDialog::OnDeleteModifications()
+{
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    if (!device)
+    {
+        ShowMessage(QString("No device connected."));
+        ResetDialog();
+        return;
+    }
+
+    Dive::AndroidApplication* cur_app = device->GetCurrentApplication();
+    if (!cur_app || !cur_app->IsRunning())
+    {
+        ShowMessage(
+            QString("Application is not running. Please start the application before deleting "
+                    "modifications."));
+        ResetDialog();
+        return;
+    }
+
+    if (!m_modification_list_model || !m_modification_list_view)
+    {
+        return;
+    }
+
+    bool any_item_selected = false;
+
+    for (int i = m_modification_list_model->rowCount() - 1; i >= 0; --i)
+    {
+        QModelIndex index = m_modification_list_model->index(i, 0);
+        QStandardItem* item = m_modification_list_model->itemFromIndex(index);
+        if (item && item->checkState() == Qt::Checked)
+        {
+            any_item_selected = true;
+            m_modification_list_model->removeRow(i);
+        }
+    }
+
+    if (!any_item_selected)
+    {
+        ShowMessage("Please check the modification(s) you wish to delete.");
+        return;
+    }
+
+    absl::Status status = SyncActiveModifications();
+    if (!status.ok())
+    {
+        ShowMessage(QString::fromStdString(std::string(status.message())));
+        return;
+    }
+
+    ShowMessage(QString("Modification(s) successfully deleted."));
 }

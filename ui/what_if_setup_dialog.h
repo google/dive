@@ -18,6 +18,7 @@
 #include "absl/status/status.h"
 #include "device_dialog.h"
 #include "dive/ui/forward.h"
+#include "dive/ui/types/what_if_modification.h"
 
 class WhatIfAppTypeFilterModel : public QSortFilterProxyModel
 {
@@ -51,6 +52,11 @@ class WhatIfSetupDialog : public DeviceDialog
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent* event) override;
 
+ public slots:
+    void OnAddModificationToList(const Dive::WhatIfModification& modification);
+    void OnTestModifications();
+    void OnDeleteModifications();
+
  private slots:
     void OnAppListRefresh();
     void OnDevListRefresh();
@@ -72,6 +78,8 @@ class WhatIfSetupDialog : public DeviceDialog
     void OnDeviceSelectionCleared() override;
 
     void SetupConnections();
+
+    absl::Status SyncActiveModifications();
 
     // --- Layout Creation ---
     QVBoxLayout* CreateHeaderLayout();
@@ -111,7 +119,8 @@ class WhatIfSetupDialog : public DeviceDialog
     QPushButton* m_end_session_button = nullptr;
 
     // --- Modification List Section ---
-    QListView* m_mod_list_view = nullptr;
+    QListView* m_modification_list_view = nullptr;
+    QStandardItemModel* m_modification_list_model = nullptr;
     QPushButton* m_add_modification_button = nullptr;
     QPushButton* m_delete_modification_button = nullptr;
     QPushButton* m_test_modification_button = nullptr;

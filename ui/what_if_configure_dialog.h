@@ -13,8 +13,15 @@
 
 #pragma once
 
+#include <QString>
+#include <QStringList>
+#include <QVariant>
+#include <optional>
+
 #include "device_dialog.h"
+#include "dive/common/what_if_modification_types.h"
 #include "dive/ui/forward.h"
+#include "dive/ui/types/what_if_modification.h"
 
 // Event filter to keep a QComboBox popup open when checking/unchecking items.
 class MultiCheckComboBoxEventFilter : public QObject
@@ -67,7 +74,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     void OnConfigValuesChanged();
 
  signals:
-    void AddModification(const QString& modification_type_short_name);
+    void AddModification(const Dive::WhatIfModification& modification);
 
  private:
     // Contains the filter widgets for a draw call filter (e.g. index count, vertex count)

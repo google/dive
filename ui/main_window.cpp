@@ -566,6 +566,8 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
                      &MainWindow::OnAddWhatIfModification);
     QObject::connect(m_what_if_setup_dig, &QDialog::rejected, m_what_if_configure_dig,
                      &QWidget::close);
+    QObject::connect(m_what_if_configure_dig, &WhatIfConfigureDialog::AddModification,
+                     m_what_if_setup_dig, &WhatIfSetupDialog::OnAddModificationToList);
 
     CreateActions();
     CreateMenus();

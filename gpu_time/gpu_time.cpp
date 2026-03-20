@@ -433,6 +433,8 @@ GPUTime::GpuTimeStatus GPUTime::OnDestroyCommandPool(VkCommandPool command_pool)
 GPUTime::GpuTimeStatus GPUTime::OnAllocateCommandBuffers(
     const VkCommandBufferAllocateInfo* allocate_info_ptr, VkCommandBuffer* command_buffers_ptr)
 {
+    m_boundary_detector.OnAllocateCommandBuffers(allocate_info_ptr, command_buffers_ptr);
+
     // The cache should not contain secondary command buffers
     if (allocate_info_ptr->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
@@ -458,9 +460,13 @@ GPUTime::GpuTimeStatus GPUTime::OnAllocateCommandBuffers(
             return GPUTime::GpuTimeStatus{"Exceeded maximum number of query slots.", false};
         }
 
-        m_cmds.insert(
-            {command_buffers_ptr[i],
-             {{}, allocate_info_ptr->commandPool, begin_slot, end_slot, false, false, false}});
+        m_cmds.insert({command_buffers_ptr[i],
+                       {.renderpass_slots = {},
+                        .pool = allocate_info_ptr->commandPool,
+                        .begin_timestamp_offset = begin_slot,
+                        .end_timestamp_offset = end_slot,
+                        .usage_one_submit = false,
+                        .reusable = false}});
     }
     return GPUTime::GpuTimeStatus();
 }
@@ -468,6 +474,8 @@ GPUTime::GpuTimeStatus GPUTime::OnAllocateCommandBuffers(
 GPUTime::GpuTimeStatus GPUTime::OnFreeCommandBuffers(uint32_t command_buffer_count,
                                                      const VkCommandBuffer* command_buffers_ptr)
 {
+    m_boundary_detector.OnFreeCommandBuffers(command_buffer_count, command_buffers_ptr);
+
     for (uint32_t i = 0; i < command_buffer_count; ++i)
     {
         if (m_cmds.find(command_buffers_ptr[i]) == m_cmds.end())
@@ -485,6 +493,8 @@ GPUTime::GpuTimeStatus GPUTime::OnFreeCommandBuffers(uint32_t command_buffer_cou
 
 GPUTime::GpuTimeStatus GPUTime::OnResetCommandBuffer(VkCommandBuffer command_buffer)
 {
+    m_boundary_detector.OnResetCommandBuffer(command_buffer);
+
     if (m_cmds.find(command_buffer) == m_cmds.end())
     {
         // The cache doesn't contain secondary command buffers
@@ -496,6 +506,8 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandBuffer(VkCommandBuffer command_buf
 
 GPUTime::GpuTimeStatus GPUTime::OnResetCommandPool(VkCommandPool command_pool)
 {
+    m_boundary_detector.OnResetCommandPool(command_pool);
+
     for (auto& cmd : m_cmds)
     {
         if (cmd.second.pool == command_pool)
@@ -801,7 +813,7 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t submit_count, const VkSubm
         return {GPUTime::GpuTimeStatus(), false};
     }
 
-    bool is_frame_boundary = false;
+    bool is_frame_boundary = m_boundary_detector.ContainsFrameBoundary(submit_count, submits_ptr);
 
     if ((submits_ptr != nullptr) && (submits_ptr->pCommandBuffers != nullptr))
     {
@@ -826,12 +838,8 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t submit_count, const VkSubm
                     m_valid_frame = false;
                     std::stringstream ss;
                     ss << static_cast<void*>(cmd) << " Reusable cmd is not supported!";
-                    return {GPUTime::GpuTimeStatus{ss.str(), false}, m_cmds[cmd].is_frameboundary};
-                }
-
-                if (m_cmds[cmd].is_frameboundary)
-                {
-                    is_frame_boundary = true;
+                    return {GPUTime::GpuTimeStatus{ss.str(), false},
+                            m_boundary_detector.IsFrameBoundary(cmd)};
                 }
 
                 // Check the case where the same primary cmd buffer is reused within a frame
@@ -855,6 +863,8 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t submit_count, const VkSubm
 
     if (is_frame_boundary)
     {
+        m_boundary_detector.ConsumeBoundaries(submit_count, submits_ptr);
+
         GPUTime::GpuTimeStatus update_status =
             OnFrameBoundary(pfn_device_wait_idle, pfn_reset_query_pool, pfn_get_query_pool_results);
 
@@ -893,22 +903,11 @@ GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue(VkQueue* pQueue)
 GPUTime::GpuTimeStatus GPUTime::OnCmdInsertDebugUtilsLabelEXT(
     VkCommandBuffer command_buffer, const VkDebugUtilsLabelEXT* label_info_ptr)
 {
-    if (label_info_ptr == nullptr || label_info_ptr->pLabelName == nullptr)
+    if (FrameBoundaryDetector::BoundaryStatus status =
+            m_boundary_detector.MarkBoundary(command_buffer, label_info_ptr);
+        !status.success)
     {
-        return GPUTime::GpuTimeStatus{"label_info_ptr cannot be nullptr!", false};
-    }
-
-    if (strcmp(kVulkanVrFrameDelimiterString, label_info_ptr->pLabelName) == 0)
-    {
-        // the Frame boundary should be always in a primary command buffer
-        if (m_cmds.find(command_buffer) == m_cmds.end())
-        {
-            m_valid_frame = false;
-            std::stringstream ss;
-            ss << static_cast<void*>(command_buffer) << " is not in the cmd cache!";
-            return GPUTime::GpuTimeStatus{ss.str(), false};
-        }
-        m_cmds[command_buffer].is_frameboundary = true;
+        return GPUTime::GpuTimeStatus{.message = status.message, .success = false};
     }
     return GPUTime::GpuTimeStatus();
 }

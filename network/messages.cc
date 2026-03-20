@@ -203,9 +203,11 @@ absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
     WriteUint32ToBuffer(m_vertex_count, dest);
     WriteUint32ToBuffer(m_index_count, dest);
     WriteUint32ToBuffer(m_instance_count, dest);
+    WriteUint32ToBuffer(m_max_drawcalls, dest);
     WriteBoolToBuffer(m_filter_by_vertex_count, dest);
     WriteBoolToBuffer(m_filter_by_index_count, dest);
     WriteBoolToBuffer(m_filter_by_instance_count, dest);
+    WriteBoolToBuffer(m_enable_drawcall_limit, dest);
     return Dive::OkStatus();
 }
 
@@ -215,9 +217,11 @@ absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_vertex_count, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_index_count, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_instance_count, ReadUint32FromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_max_drawcalls, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_filter_by_vertex_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_filter_by_index_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_filter_by_instance_count, ReadBoolFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_enable_drawcall_limit, ReadBoolFromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("DrawcallFilteringRequest has unexpected trailing data.");

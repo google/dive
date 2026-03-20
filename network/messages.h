@@ -259,6 +259,9 @@ class DrawcallFilterConfigRequest : public ISerializable
     uint32_t GetInstanceCount() const { return m_instance_count; }
     void SetInstanceCount(uint32_t count) { m_instance_count = count; }
 
+    uint32_t GetMaxDrawcalls() const { return m_max_drawcalls; }
+    void SetMaxDrawcalls(uint32_t val) { m_max_drawcalls = val; }
+
     bool GetFilterByVertexCount() const { return m_filter_by_vertex_count; }
     void SetFilterByVertexCount(bool filter) { m_filter_by_vertex_count = filter; }
 
@@ -268,13 +271,18 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool GetFilterByInstanceCount() const { return m_filter_by_instance_count; }
     void SetFilterByInstanceCount(bool filter) { m_filter_by_instance_count = filter; }
 
+    bool GetEnableDrawcallLimit() const { return m_enable_drawcall_limit; }
+    void SetEnableDrawcallLimit(bool enable) { m_enable_drawcall_limit = enable; }
+
  private:
     uint32_t m_vertex_count = 0;
     uint32_t m_index_count = 0;
     uint32_t m_instance_count = 0;
+    uint32_t m_max_drawcalls = 0;
     bool m_filter_by_vertex_count = false;
     bool m_filter_by_index_count = false;
     bool m_filter_by_instance_count = false;
+    bool m_enable_drawcall_limit = false;
 };
 
 class DrawcallFilterConfigResponse : public EmptyMessage

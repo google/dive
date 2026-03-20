@@ -21,6 +21,14 @@ limitations under the License.
 namespace Network
 {
 
+// ==============================================================================================
+// DRAWCALL FILTERING LIMITATION
+// ==============================================================================================
+// The drawcall filtering and limiting logic operates during command buffer recording
+// (intercepting vkCmdDraw* calls), not during execution (vkQueueSubmit).
+// Because of this, the drawcall limit will NOT apply to "pre-recorded" command buffers
+// (buffers that are recorded once during initialization and submitted multiple times).
+// It only successfully filters command buffers that are built dynamically every frame.
 struct DrawcallFilterConfig
 {
     // Vertex Count (for vkCmdDraw)
@@ -34,6 +42,10 @@ struct DrawcallFilterConfig
     // Instance Count (for vkCmdDraw and vkCmdDrawIndexed)
     bool filter_by_instance_count = false;
     uint32_t target_instance_count = 0;
+
+    // Drawcall limit
+    bool enable_drawcall_limit = false;
+    uint32_t max_drawcalls = 0;
 };
 
 }  // namespace Network

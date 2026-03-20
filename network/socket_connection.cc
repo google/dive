@@ -90,10 +90,11 @@ absl::Status SocketConnection::BindAndListenOnUnixDomain(const std::string& serv
     }
 
     /// Bind and listen on a Unix (Local) Domain with abstract namespace.
-    sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
+    sockaddr_un addr{
+        .sun_family = AF_UNIX,
+        .sun_path = {},
+    };
     // first char is '\0'
-    addr.sun_path[0] = '\0';
     strncpy(addr.sun_path + 1, server_address.c_str(), server_address.size() + 1);
 
     int ret = ::bind(m_socket, (sockaddr*)&addr,
@@ -128,10 +129,7 @@ absl::StatusOr<std::unique_ptr<SocketConnection>> SocketConnection::Accept()
     {
         return Dive::FailedPreconditionError("Accept: Socket not created or not listening.");
     }
-    pollfd pfd;
-    pfd.fd = m_socket;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
+    pollfd pfd{.fd = m_socket, .events = POLLIN, .revents = 0};
     int ret = poll(&pfd, 1, m_accept_timout_ms);
     if (ret < 0)
     {
@@ -223,7 +221,7 @@ absl::Status SocketConnection::Send(const uint8_t* data, size_t size)
     size_t total_sent = 0;
     while (total_sent < size)
     {
-        ssize_t sent;
+        ssize_t sent = 0;
 #ifdef WIN32
         sent = ::send(static_cast<SOCKET>(m_socket), (const char*)data + total_sent,
                       (int)(size - total_sent), 0);
@@ -316,10 +314,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
             return Dive::DeadlineExceededError("Recv: Timed out waiting for data.");
         }
 #else
-        struct pollfd pfd;
-        pfd.fd = m_socket;
-        pfd.events = POLLIN;
-        pfd.revents = 0;
+        pollfd pfd{.fd = m_socket, .events = POLLIN, .revents = 0};
 
         int ret = poll(&pfd, 1, timeout_ms);
         if (ret < 0)
@@ -337,7 +332,7 @@ absl::StatusOr<size_t> SocketConnection::Recv(uint8_t* data, size_t size, int ti
 #endif
 
         // Data is available to perform the actual recv.
-        ssize_t received;
+        ssize_t received = 0;
 #ifdef WIN32
         received =
             ::recv(static_cast<SOCKET>(m_socket), reinterpret_cast<char*>(data) + total_received,

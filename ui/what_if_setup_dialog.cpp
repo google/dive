@@ -833,7 +833,7 @@ void WhatIfSetupDialog::OnDeleteModifications()
         return;
     }
 
-    bool any_item_selected = false;
+    std::vector<int> rows_to_delete;
 
     for (int i = m_modification_list_model->rowCount() - 1; i >= 0; --i)
     {
@@ -841,12 +841,13 @@ void WhatIfSetupDialog::OnDeleteModifications()
         QStandardItem* item = m_modification_list_model->itemFromIndex(index);
         if (item && item->checkState() == Qt::Checked)
         {
-            any_item_selected = true;
-            m_modification_list_model->removeRow(i);
+            rows_to_delete.push_back(i);
+            // Temporarily uncheck so they aren't included in the sync
+            item->setCheckState(Qt::Unchecked);
         }
     }
 
-    if (!any_item_selected)
+    if (rows_to_delete.empty())
     {
         ShowMessage("Please check the modification(s) you wish to delete.");
         return;
@@ -855,8 +856,24 @@ void WhatIfSetupDialog::OnDeleteModifications()
     absl::Status status = SyncActiveModifications();
     if (!status.ok())
     {
+        // Revert check state if the sync failed
+        for (int i : rows_to_delete)
+        {
+            QModelIndex index = m_modification_list_model->index(i, 0);
+            QStandardItem* item = m_modification_list_model->itemFromIndex(index);
+            if (item)
+            {
+                item->setCheckState(Qt::Checked);
+            }
+        }
         ShowMessage(QString::fromStdString(std::string(status.message())));
         return;
+    }
+
+    // Now safely remove the rows since the sync was successful
+    for (int i : rows_to_delete)
+    {
+        m_modification_list_model->removeRow(i);
     }
 
     ShowMessage(QString("Modification(s) successfully deleted."));

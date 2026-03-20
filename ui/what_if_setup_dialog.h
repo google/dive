@@ -19,6 +19,7 @@
 #include "device_dialog.h"
 #include "dive/ui/forward.h"
 #include "dive/ui/types/what_if_modification.h"
+#include "network/tcp_client.h"
 
 class WhatIfAppTypeFilterModel : public QSortFilterProxyModel
 {
@@ -135,4 +136,6 @@ class WhatIfSetupDialog : public DeviceDialog
     };
 
     RuntimeData m_runtime_data;
+
+    std::unique_ptr<Network::TcpClient> m_tcp_client;
 };

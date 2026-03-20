@@ -18,9 +18,10 @@ set -ex
 
 readonly DIVE_ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 readonly GIT_DIFF_BASE="${GIT_DIFF_BASE:="origin/main"}"
+readonly HOST_BUILD_DIR="${DIVE_ROOT}/build/host"
 
-if [[ ! -d "${DIVE_ROOT}/build" ]]; then
-    echo "Build directory ${DIVE_ROOT}/build not found"
+if [[ ! -d "${HOST_BUILD_DIR}" ]]; then
+    echo "Build directory ${HOST_BUILD_DIR} not found"
     exit
 fi
 
@@ -33,5 +34,5 @@ pushd "${DIVE_ROOT}"
   git diff "${GIT_DIFF_BASE}" --name-only --diff-filter=ACMR -- \
     | grep -E "\.(c|cpp|h|hpp|cc)$" | grep -E -v '^third_party/*' \
     | grep -E -v '^prebuild/*' \
-    | xargs -r clang-tidy -p build
+    | xargs -r clang-tidy -p "${HOST_BUILD_DIR}"
 popd

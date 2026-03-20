@@ -298,7 +298,8 @@ class MainWindow : public QMainWindow
     // Overlay to be displayed while capture
     OverlayHelper* m_overlay = nullptr;
 
-    GfxrVulkanCommandArgumentsFilterProxyModel* m_gfxr_vulkan_commands_arguments_filter_proxy_model = nullptr;
+    GfxrVulkanCommandArgumentsFilterProxyModel*
+        m_gfxr_vulkan_commands_arguments_filter_proxy_model = nullptr;
     std::unique_ptr<Dive::AvailableMetrics> m_available_metrics;
     std::unique_ptr<Dive::CaptureStats> m_capture_stats;
 

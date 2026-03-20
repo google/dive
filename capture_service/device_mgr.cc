@@ -329,9 +329,7 @@ absl::StatusOr<std::unique_ptr<AndroidDevice>> AndroidDevice::Create(const std::
     return device;
 }
 
-AndroidDevice::AndroidDevice(const std::string& serial)
-    : m_serial(serial),
-      m_adb(serial)
+AndroidDevice::AndroidDevice(const std::string& serial) : m_serial(serial), m_adb(serial)
 {
     CleanupDevice().IgnoreError();
 }

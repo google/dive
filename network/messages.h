@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include "dive/common/status.h"
+#include "drawcall_filter_config.h"
 #include "serializable.h"
 #include "socket_connection.h"
 
@@ -63,6 +64,8 @@ enum class MessageType : uint32_t
     REMOVE_FILE_RESPONSE = 12,
     DRAWCALL_FILTER_CONFIG_REQUEST = 13,
     DRAWCALL_FILTER_CONFIG_RESPONSE = 14,
+    LIVE_PSOS_REQUEST = 15,
+    LIVE_PSOS_RESPONSE = 16,
 };
 
 class HandshakeMessage : public ISerializable
@@ -284,6 +287,26 @@ class DrawcallFilterConfigResponse : public EmptyMessage
     {
         return MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE;
     }
+};
+
+class LivePSOsRequest : public EmptyMessage
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::LIVE_PSOS_REQUEST; }
+};
+
+class LivePSOsResponse : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::LIVE_PSOS_RESPONSE; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    const std::vector<PSOInfo>& GetPSOs() const { return m_psos; }
+    void SetPSOs(std::vector<PSOInfo> psos) { m_psos = std::move(psos); }
+
+ private:
+    std::vector<PSOInfo> m_psos;
 };
 
 // Message Helper Functions (TLV Framing).

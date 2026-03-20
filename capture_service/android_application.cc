@@ -135,9 +135,7 @@ AndroidApplication::AndroidApplication(AndroidDevice& dev, std::string package,
     : m_dev(dev),
       m_package(std::move(package)),
       m_type(type),
-      m_command_args(std::move(command_args)),
-      m_started(false),
-      m_is_debuggable(false)
+      m_command_args(std::move(command_args))
 {
 }
 

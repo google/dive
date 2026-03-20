@@ -162,12 +162,10 @@ class TraceDialog : public DeviceDialog
     QPushButton* m_capture_button;
     QPushButton* m_run_button;
     QPushButton* m_gfxr_capture_button;
-    QPushButton* m_gfxr_retrieve_button;
     QHBoxLayout* m_button_layout;
 
     QHBoxLayout* m_cmd_layout;
     QLabel* m_file_label;
-    QPushButton* m_open_button;
     QLineEdit* m_cmd_input_box;
 
     QHBoxLayout* m_args_layout;

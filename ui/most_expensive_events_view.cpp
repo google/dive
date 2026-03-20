@@ -58,7 +58,7 @@ class EventWidgetItem : public QTreeWidgetItem
             // 1,000), the suffix (eg. "cycle"), and compare the resulting double
             QLocale c(QLocale::system());
 
-            bool ok;
+            bool ok = false;
             double left = c.toDouble(text(column).remove(QRegExp("\\s*\\D+$")), &ok);
             DIVE_ASSERT(ok);
             double right = c.toDouble(other.text(column).remove(QRegExp("\\s*\\D+$")), &ok);

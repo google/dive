@@ -57,7 +57,8 @@ void GfxrVulkanCommandFilter::Reset() { setCurrentIndex(kDefaultGfxrVulkanComman
 //--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandFilter::OnFilterGfxrVulkanCommandChange(const QString& filter_mode)
 {
-    GfxrVulkanCommandFilterProxyModel::FilterMode new_filter;
+    GfxrVulkanCommandFilterProxyModel::FilterMode new_filter =
+        GfxrVulkanCommandFilterProxyModel::kNone;
 
     if (filter_mode == kGfxrVulkanCommandFilterStrings[GfxrVulkanCommandFilterProxyModel::kNone])
     {

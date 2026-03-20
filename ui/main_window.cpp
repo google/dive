@@ -592,6 +592,16 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
 MainWindow::~MainWindow() {}
 
 //--------------------------------------------------------------------------------------------------
+TraceDialog& MainWindow::GetTraceDialog()
+{
+    DIVE_ASSERT(m_trace_dig);
+    return *m_trace_dig;
+}
+
+//--------------------------------------------------------------------------------------------------
+ProgressTrackerCallback& MainWindow::GetProgressTracker() { return m_progress_tracker; }
+
+//--------------------------------------------------------------------------------------------------
 void MainWindow::OnTraceAvailable(const QString& path)
 {
     qDebug() << "Trace is at " << path;

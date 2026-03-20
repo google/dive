@@ -41,5 +41,5 @@ class MiscStatsModel : public QAbstractItemModel
  private:
     QStringList m_headers;
     int m_column_count = 0;
-    std::array<uint64_t, Dive::Stats::kNumStats> m_stats_list;
+    std::array<uint64_t, Dive::Stats::kNumStats> m_stats_list{};
 };

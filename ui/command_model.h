@@ -78,6 +78,6 @@ class CommandModel : public QAbstractItemModel
     void BuildNodeLookup(const QModelIndex& parent = QModelIndex()) const;
 
     const Dive::CommandHierarchy& m_command_hierarchy;
-    const Dive::SharedNodeTopology* m_topology_ptr;
+    const Dive::SharedNodeTopology* m_topology_ptr = nullptr;
     mutable std::vector<QPersistentModelIndex> m_node_lookup;
 };

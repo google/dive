@@ -43,7 +43,6 @@
 #include "device_dialog.h"
 #include "dive/common/app_types.h"
 #include "network/drawcall_filter_config.h"
-#include "network/tcp_client.h"
 
 namespace
 {
@@ -408,6 +407,7 @@ void WhatIfSetupDialog::ResetDialog()
     EnableModificationOptions(false);
 
     EnableWhatIfTypeButtons(true);
+    m_tcp_client.reset();
 }
 
 absl::Status WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device,
@@ -689,15 +689,19 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
         return absl::FailedPreconditionError("Application is not running.");
     }
 
-    Network::TcpClient client;
-    const std::string host = "127.0.0.1";
-    int port = device->Port();
-    auto status = client.Connect(host, port);
-    if (!status.ok())
+    if (!m_tcp_client)
     {
-        std::string err_msg(status.message());
-        qDebug() << "Connection failed: " << err_msg.c_str();
-        return status;
+        m_tcp_client = std::make_unique<Network::TcpClient>();
+        const std::string host = "127.0.0.1";
+        int port = device->Port();
+        auto status = m_tcp_client->Connect(host, port);
+        if (!status.ok())
+        {
+            std::string err_msg(status.message());
+            qDebug() << "Connection failed: " << err_msg.c_str();
+            m_tcp_client.reset();
+            return status;
+        }
     }
 
     Network::DrawcallFilterConfig drawcall_config;
@@ -746,7 +750,8 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
         }
     }
 
-    absl::Status send_draw_call_filtering_status = client.SendDrawcallFilterConfig(drawcall_config);
+    absl::Status send_draw_call_filtering_status =
+        m_tcp_client->SendDrawcallFilterConfig(drawcall_config);
     if (!send_draw_call_filtering_status.ok())
     {
         std::string err_msg(send_draw_call_filtering_status.message());

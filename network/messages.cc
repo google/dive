@@ -63,7 +63,7 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
     {
         return Dive::InvalidArgumentError("Buffer too small to read an uint32_t.");
     }
-    uint32_t net_val;
+    uint32_t net_val = 0;
     std::memcpy(&net_val, src.data() + offset, sizeof(uint32_t));
     offset += sizeof(uint32_t);
     return ntohl(net_val);
@@ -71,7 +71,7 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
 
 absl::StatusOr<uint64_t> ReadUint64FromBuffer(const Buffer& src, size_t& offset)
 {
-    uint32_t high, low;
+    uint32_t high = 0, low = 0;
     ASSIGN_OR_RETURN(high, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(low, ReadUint32FromBuffer(src, offset));
     return (static_cast<uint64_t>(high) << 32) | low;
@@ -79,7 +79,7 @@ absl::StatusOr<uint64_t> ReadUint64FromBuffer(const Buffer& src, size_t& offset)
 
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset)
 {
-    uint32_t len;
+    uint32_t len = 0;
     ASSIGN_OR_RETURN(len, ReadUint32FromBuffer(src, offset));
     if (src.size() < offset + len)
     {
@@ -273,7 +273,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     }
 
     // Parse header.
-    uint32_t net_type, net_length;
+    uint32_t net_type = 0, net_length = 0;
     std::memcpy(&net_type, header_buffer, sizeof(uint32_t));
     std::memcpy(&net_length, header_buffer + sizeof(uint32_t), sizeof(uint32_t));
     uint32_t type = ntohl(net_type);

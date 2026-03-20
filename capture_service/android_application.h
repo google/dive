@@ -97,7 +97,7 @@ class AndroidApplication
     bool m_started;
 
     bool m_gfxr_enabled;
-    bool m_runtime_what_if_enabled;
+    bool m_runtime_what_if_enabled = false;
 };
 
 class VulkanApplication : public AndroidApplication

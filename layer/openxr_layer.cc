@@ -49,14 +49,14 @@ const char kDiveXrLayerName[] = "XR_APILAYER_dive";
 
 struct XrInstanceData
 {
-    XrInstance instance;
-    XrGeneratedDispatchTable dispatch_table;
+    XrInstance instance = XR_NULL_HANDLE;
+    XrGeneratedDispatchTable dispatch_table{};
 };
 
 struct XrSessionData
 {
-    XrSession session;
-    XrGeneratedDispatchTable dispatch_table;
+    XrSession session = XR_NULL_HANDLE;
+    XrGeneratedDispatchTable dispatch_table{};
 };
 
 static thread_local XrInstanceData* last_used_xr_instance_data = nullptr;

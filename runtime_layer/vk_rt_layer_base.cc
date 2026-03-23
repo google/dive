@@ -122,13 +122,13 @@ DiveRuntimeLayer sDiveRuntimeLayer;
 // These are created and initialized in vkCreateInstance and vkCreateDevice.
 struct InstanceData
 {
-    VkInstance instance;
+    VkInstance instance = VK_NULL_HANDLE;
     InstanceDispatchTable dispatch_table;
 };
 
 struct DeviceData
 {
-    VkDevice device;
+    VkDevice device = VK_NULL_HANDLE;
     DeviceDispatchTable dispatch_table;
 };
 

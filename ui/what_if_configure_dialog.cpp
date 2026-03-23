@@ -378,32 +378,32 @@ void WhatIfConfigureDialog::SetupConnections()
                      &WhatIfConfigureDialog::OnConfigValuesChanged);
 
     QObject::connect(m_index_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     this, &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_vertex_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     this, &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_instance_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     this, &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_draw_count_filter.spin_box, QOverload<int>::of(&QSpinBox::valueChanged),
-                     this, &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     this, &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_draw_call_pso_property_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_draw_call_render_pass_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_render_pass_command_buffer_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_render_pass_render_pass_type_filter_box,
                      QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     &WhatIfConfigureDialog::OnConfigValuesChanged);
+                     &WhatIfConfigureDialog::UpdateAddModificationButtonState);
 
     QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
                      &WhatIfConfigureDialog::OnAddModificationClicked);
@@ -473,7 +473,7 @@ void WhatIfConfigureDialog::OnFlagModelChanged(const QModelIndex& topLeft,
 {
     if (roles.isEmpty() || roles.contains(Qt::CheckStateRole))
     {
-        OnConfigValuesChanged();
+        UpdateAddModificationButtonState();
     }
 }
 

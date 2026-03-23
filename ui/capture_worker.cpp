@@ -39,6 +39,9 @@ void CaptureWorker::SetTargetCaptureDir(const std::string& host_root_dir)
 }
 
 //--------------------------------------------------------------------------------------------------
+void CaptureWorker::SetPackageName(std::string_view package_name) { m_package_name = package_name; }
+
+//--------------------------------------------------------------------------------------------------
 void CaptureWorker::run()
 {
     auto device = Dive::GetDeviceManager().GetDevice();
@@ -50,8 +53,7 @@ void CaptureWorker::run()
         return;
     }
 
-    auto app = device->GetCurrentApplication();
-    if (app == nullptr || !app->IsRunning())
+    if (!device->IsProcessRunning(m_package_name))
     {
         std::string err_msg = "Application is not running, possibly crashed.";
         qDebug() << err_msg.c_str();
@@ -132,10 +134,17 @@ void CaptureWorker::run()
 
     if (absl::Status remove_status = client.RemoveFile(*capture_file_path); !remove_status.ok())
     {
-        std::string err_msg = absl::StrCat("Failed to remove PM4 capture on device, error: ",
-                                           remove_status.message());
-        qDebug() << err_msg.c_str();
-        emit ShowMessage(QString::fromStdString(err_msg));
+        qDebug() << "Failed to remove PM4 capture via socket: " << remove_status.message().data();
+        qDebug() << "Falling back to adb to remove the capture file...";
+
+        std::string rm_cmd = absl::StrFormat("shell rm -f \"%s\"", *capture_file_path);
+        if (absl::Status adb_status = device->Adb().Run(rm_cmd); !adb_status.ok())
+        {
+            std::string err_msg = absl::StrFormat(
+                "Failed to remove PM4 capture on device, error: %s", adb_status.message());
+            qDebug() << err_msg.c_str();
+            emit ShowMessage(QString::fromStdString(err_msg));
+        }
     }
 
     int64_t time_used_to_load_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -34,6 +34,12 @@ void WriteUint32ToBuffer(uint32_t value, Buffer& dest)
     dest.insert(dest.end(), p_val, p_val + sizeof(uint32_t));
 }
 
+void WriteUint64ToBuffer(uint64_t value, Buffer& dest)
+{
+    WriteUint32ToBuffer(static_cast<uint32_t>(value >> 32), dest);
+    WriteUint32ToBuffer(static_cast<uint32_t>(value & 0xFFFFFFFF), dest);
+}
+
 void WriteStringToBuffer(const std::string& str, Buffer& dest)
 {
     WriteUint32ToBuffer(static_cast<uint32_t>(str.length()), dest);
@@ -57,15 +63,23 @@ absl::StatusOr<uint32_t> ReadUint32FromBuffer(const Buffer& src, size_t& offset)
     {
         return Dive::InvalidArgumentError("Buffer too small to read an uint32_t.");
     }
-    uint32_t net_val;
+    uint32_t net_val = 0;
     std::memcpy(&net_val, src.data() + offset, sizeof(uint32_t));
     offset += sizeof(uint32_t);
     return ntohl(net_val);
 }
 
+absl::StatusOr<uint64_t> ReadUint64FromBuffer(const Buffer& src, size_t& offset)
+{
+    uint32_t high = 0, low = 0;
+    ASSIGN_OR_RETURN(high, ReadUint32FromBuffer(src, offset));
+    ASSIGN_OR_RETURN(low, ReadUint32FromBuffer(src, offset));
+    return (static_cast<uint64_t>(high) << 32) | low;
+}
+
 absl::StatusOr<std::string> ReadStringFromBuffer(const Buffer& src, size_t& offset)
 {
-    uint32_t len;
+    uint32_t len = 0;
     ASSIGN_OR_RETURN(len, ReadUint32FromBuffer(src, offset));
     if (src.size() < offset + len)
     {
@@ -141,7 +155,7 @@ absl::Status DownloadFileResponse::Serialize(Buffer& dest) const
     WriteBoolToBuffer(m_found, dest);
     WriteStringToBuffer(m_error_reason, dest);
     WriteStringToBuffer(m_file_path, dest);
-    WriteStringToBuffer(m_file_size_str, dest);
+    WriteUint64ToBuffer(m_file_size, dest);
 
     return Dive::OkStatus();
 }
@@ -152,7 +166,7 @@ absl::Status DownloadFileResponse::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_found, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_file_path, ReadStringFromBuffer(src, offset));
-    ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_size, ReadUint64FromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("Message has unexpected trailing data.");
@@ -165,7 +179,7 @@ absl::Status FileSizeResponse::Serialize(Buffer& dest) const
     dest.clear();
     WriteBoolToBuffer(m_found, dest);
     WriteStringToBuffer(m_error_reason, dest);
-    WriteStringToBuffer(m_file_size_str, dest);
+    WriteUint64ToBuffer(m_file_size, dest);
 
     return Dive::OkStatus();
 }
@@ -175,7 +189,7 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
     size_t offset = 0;
     ASSIGN_OR_RETURN(m_found, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_error_reason, ReadStringFromBuffer(src, offset));
-    ASSIGN_OR_RETURN(m_file_size_str, ReadStringFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_file_size, ReadUint64FromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("Message has unexpected trailing data.");
@@ -263,7 +277,7 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
     }
 
     // Parse header.
-    uint32_t net_type, net_length;
+    uint32_t net_type = 0, net_length = 0;
     std::memcpy(&net_type, header_buffer, sizeof(uint32_t));
     std::memcpy(&net_length, header_buffer + sizeof(uint32_t), sizeof(uint32_t));
     uint32_t type = ntohl(net_type);

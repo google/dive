@@ -68,6 +68,33 @@ TEST(MessagesTest, WriteAndReadUint32)
     ASSERT_EQ(write_value, *read_value);
 }
 
+TEST(MessagesTest, WriteAndReadUint64)
+{
+    Network::Buffer buf;
+    uint64_t write_value = 123456703;
+    Network::WriteUint64ToBuffer(write_value, buf);
+    size_t offset = 0;
+    auto read_value = Network::ReadUint64FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value.ok());
+    ASSERT_EQ(write_value, *read_value);
+
+    buf.clear();
+    write_value = 0;
+    Network::WriteUint64ToBuffer(write_value, buf);
+    offset = 0;
+    read_value = Network::ReadUint64FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value.ok());
+    ASSERT_EQ(write_value, *read_value);
+
+    buf.clear();
+    write_value = std::numeric_limits<uint64_t>::max();
+    Network::WriteUint64ToBuffer(write_value, buf);
+    offset = 0;
+    read_value = Network::ReadUint64FromBuffer(buf, offset);
+    ASSERT_TRUE(read_value.ok());
+    ASSERT_EQ(write_value, *read_value);
+}
+
 TEST(MessagesTest, WriteAndReadString)
 {
     Network::Buffer buf;
@@ -161,7 +188,7 @@ TEST(MessagesTest, DownloadFileMessage)
     res_serialize.SetFound(false);
     res_serialize.SetErrorReason("File not found!");
     res_serialize.SetFilePath("/sdcard/captures/other_capture_0456.rd");
-    res_serialize.SetFileSizeStr("234512340012367880000000000000");
+    res_serialize.SetFileSize(std::numeric_limits<uint64_t>::max());
     buf.clear();
     status = res_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
@@ -173,7 +200,7 @@ TEST(MessagesTest, DownloadFileMessage)
     ASSERT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
     ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
     ASSERT_EQ(res_serialize.GetFilePath(), res_deserialize.GetFilePath());
-    ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
+    ASSERT_EQ(res_serialize.GetFileSize(), res_deserialize.GetFileSize());
 }
 
 TEST(MessagesTest, FileSizeMessage)
@@ -193,7 +220,7 @@ TEST(MessagesTest, FileSizeMessage)
     Network::FileSizeResponse res_serialize;
     res_serialize.SetFound(false);
     res_serialize.SetErrorReason("File not found!");
-    res_serialize.SetFileSizeStr("256000000000000");
+    res_serialize.SetFileSize(std::numeric_limits<uint64_t>::max());
     buf.clear();
     status = res_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
@@ -204,7 +231,7 @@ TEST(MessagesTest, FileSizeMessage)
     ASSERT_EQ(res_deserialize.GetMessageType(), Network::MessageType::FILE_SIZE_RESPONSE);
     ASSERT_EQ(res_serialize.GetFound(), res_deserialize.GetFound());
     ASSERT_EQ(res_serialize.GetErrorReason(), res_deserialize.GetErrorReason());
-    ASSERT_EQ(res_serialize.GetFileSizeStr(), res_deserialize.GetFileSizeStr());
+    ASSERT_EQ(res_serialize.GetFileSize(), res_deserialize.GetFileSize());
 }
 
 TEST(MessagesTest, RemoveFileRequest)

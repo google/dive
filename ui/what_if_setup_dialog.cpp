@@ -20,9 +20,11 @@
 #include <QComboBox>
 #include <QCompleter>
 #include <QDebug>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRadioButton>
@@ -50,7 +52,10 @@ constexpr int kReplayWhatIfButtonId = 2;
 
 constexpr std::string_view kStartApplication = "&Start Application";
 constexpr std::string_view kStopApplication = "&Stop Application";
-constexpr std::string_view kDismiss = "&Dismiss";
+constexpr std::string_view kEndSession = "&End Optimization Session";
+constexpr std::string_view kAddModifications = "&Add Modifications";
+constexpr std::string_view kDeleteModifications = "&Delete Modifications";
+constexpr std::string_view kTestModifications = "&Test Modifications";
 }  // namespace
 
 // =================================================================================================
@@ -83,26 +88,105 @@ WhatIfSetupDialog::WhatIfSetupDialog(QWidget* parent) : DeviceDialog(parent)
 
     setWindowTitle("What-Ifs");
 
-    QVBoxLayout* main_layout = new QVBoxLayout(this);
+    QHBoxLayout* root_layout = new QHBoxLayout(this);
+
+    QVBoxLayout* left_layout = new QVBoxLayout();
 
     // --- Header Section ---
-    main_layout->addLayout(CreateHeaderLayout());
-    main_layout->addSpacing(15);
+    left_layout->addLayout(CreateHeaderLayout());
+    left_layout->addSpacing(15);
 
     // --- Radio Button Group Section ---
-    main_layout->addLayout(CreateRadioButtonLayout());
-    main_layout->addSpacing(15);
+    left_layout->addLayout(CreateRadioButtonLayout());
+    left_layout->addSpacing(15);
 
     // --- Options Section ---
     InitializeRuntimeOptions();
-    main_layout->addWidget(m_runtime_options_widget);
+    left_layout->addWidget(m_runtime_options_widget);
     InitializeReplayOptions();
-    main_layout->addWidget(m_replay_options_widget);
+    left_layout->addWidget(m_replay_options_widget);
 
     // --- Button Section ---
-    main_layout->addStretch();
-    main_layout->addLayout(CreateButtonLayout());
-    setLayout(main_layout);
+    left_layout->addStretch();
+    left_layout->addLayout(CreateButtonLayout());
+
+    // --- Modification List Section ---
+    QVBoxLayout* right_layout = InitializeModificationListOptions();
+
+    QFrame* separator = new QFrame();
+    separator->setFrameShape(QFrame::VLine);
+    separator->setFrameShadow(QFrame::Sunken);
+
+    // Add both sections to the root layout
+    root_layout->addLayout(left_layout, 1);
+    root_layout->addWidget(separator);
+    root_layout->addLayout(right_layout, 1);
+
+    SetupConnections();
+}
+
+void WhatIfSetupDialog::SetupConnections()
+{
+    QObject::connect(m_what_if_type_button_group, QOverload<int>::of(&QButtonGroup::buttonClicked),
+                     this, &WhatIfSetupDialog::OnWhatIfTypeChanged);
+    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnDeviceSelectionChanged(const QString&)));
+    QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
+                     &WhatIfSetupDialog::OnDevListRefresh);
+    QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
+                     SLOT(OnPackageSelected(const QString&)));
+    QObject::connect(m_pkg_box->lineEdit(), &QLineEdit::textEdited, m_filter_model,
+                     &QSortFilterProxyModel::setFilterFixedString);
+    QObject::connect(m_args_input_box, &QLineEdit::textEdited, this,
+                     &WhatIfSetupDialog::OnInputArgs);
+    QObject::connect(m_start_application_button, &QPushButton::clicked, this,
+                     &WhatIfSetupDialog::OnStartClicked);
+    QObject::connect(m_end_session_button, &QPushButton::clicked, this, &QWidget::close);
+    QObject::connect(m_add_modification_button, &QPushButton::clicked, this,
+                     &WhatIfSetupDialog::AddModification);
+}
+
+QVBoxLayout* WhatIfSetupDialog::InitializeModificationListOptions()
+{
+    QVBoxLayout* layout = new QVBoxLayout();
+
+    QHBoxLayout* header_layout = new QHBoxLayout();
+    QLabel* mod_list_title = new QLabel(tr("Modification List"));
+    QFont mod_title_font = mod_list_title->font();
+    mod_title_font.setBold(true);
+    mod_title_font.setPointSize(mod_title_font.pointSize() + 2);
+    mod_list_title->setFont(mod_title_font);
+
+    header_layout->addWidget(mod_list_title);
+    header_layout->addStretch();
+
+    QLabel* mod_list_subtitle =
+        new QLabel(tr("List of currently modifications that may impact the rendering of the "
+                      "currently running application"));
+    mod_list_subtitle->setWordWrap(true);
+
+    m_add_modification_button = new QPushButton(tr(kAddModifications.data()));
+    m_add_modification_button->setEnabled(false);
+
+    m_mod_list_view = new QListView();
+
+    QHBoxLayout* bottom_layout = new QHBoxLayout();
+    bottom_layout->addStretch();
+    m_delete_modification_button = new QPushButton(tr(kDeleteModifications.data()));
+    m_delete_modification_button->setEnabled(false);
+    m_test_modification_button = new QPushButton(tr(kTestModifications.data()));
+    m_test_modification_button->setEnabled(false);
+    bottom_layout->addWidget(m_delete_modification_button);
+    bottom_layout->addWidget(m_test_modification_button);
+    bottom_layout->addStretch();
+
+    layout->addLayout(header_layout);
+    layout->addWidget(mod_list_subtitle);
+    layout->addWidget(m_add_modification_button, 0, Qt::AlignRight);
+    layout->addWidget(m_mod_list_view);
+    layout->addLayout(bottom_layout);
+
+    return layout;
 }
 
 QVBoxLayout* WhatIfSetupDialog::CreateHeaderLayout()
@@ -130,7 +214,7 @@ QVBoxLayout* WhatIfSetupDialog::CreateRadioButtonLayout()
 {
     QVBoxLayout* layout = new QVBoxLayout();
     // --- Radio Button Group Section ---
-    QButtonGroup* what_if_type_button_group = new QButtonGroup(this);
+    m_what_if_type_button_group = new QButtonGroup(this);
 
     m_runtime_what_if_type_button = new QRadioButton(tr("In a Running Application"));
     m_runtime_what_if_type_button->setChecked(true);
@@ -147,11 +231,8 @@ QVBoxLayout* WhatIfSetupDialog::CreateRadioButtonLayout()
     replay_what_if_type_label->setWordWrap(true);
     replay_what_if_type_label->setContentsMargins(25, 0, 0, 10);
 
-    what_if_type_button_group->addButton(m_runtime_what_if_type_button, kRuntimeWhatIfButtonId);
-    what_if_type_button_group->addButton(m_replay_what_if_type_button, kReplayWhatIfButtonId);
-
-    QObject::connect(what_if_type_button_group, QOverload<int>::of(&QButtonGroup::buttonClicked),
-                     this, &WhatIfSetupDialog::OnWhatIfTypeChanged);
+    m_what_if_type_button_group->addButton(m_runtime_what_if_type_button, kRuntimeWhatIfButtonId);
+    m_what_if_type_button_group->addButton(m_replay_what_if_type_button, kReplayWhatIfButtonId);
 
     layout->addWidget(m_runtime_what_if_type_button);
     layout->addWidget(runtime_what_if_type_label);
@@ -172,10 +253,10 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
     QLabel* device_label = new QLabel(tr("Device:"));
     m_device_box = new QComboBox();
     m_device_box->setModel(m_device_model);
-    QPushButton* device_refresh_button = new QPushButton(tr("&Refresh"));
+    m_device_refresh_button = new QPushButton(tr("&Refresh"));
     settings_grid->addWidget(device_label, 0, 0, Qt::AlignRight);
     settings_grid->addWidget(m_device_box, 0, 1);
-    settings_grid->addWidget(device_refresh_button, 0, 2);
+    settings_grid->addWidget(m_device_refresh_button, 0, 2);
 
     // Package Selection
     m_pkg_model = new QStandardItemModel();
@@ -184,10 +265,10 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
     m_pkg_box = new QComboBox();
     m_pkg_box->setModel(m_pkg_model);
     m_pkg_box->setEditable(true);
-    QSortFilterProxyModel* filter_model = new QSortFilterProxyModel(m_pkg_box);
-    filter_model->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    filter_model->setSourceModel(m_pkg_box->model());
-    QCompleter* completer = new QCompleter(filter_model, m_pkg_box);
+    m_filter_model = new QSortFilterProxyModel(m_pkg_box);
+    m_filter_model->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_filter_model->setSourceModel(m_pkg_box->model());
+    QCompleter* completer = new QCompleter(m_filter_model, m_pkg_box);
     completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     m_pkg_box->setCompleter(completer);
     m_pkg_refresh_button = new QPushButton(tr("&Refresh"));
@@ -216,17 +297,6 @@ void WhatIfSetupDialog::InitializeRuntimeOptions()
     m_app_type_box->setModel(m_app_type_filter_model);
     settings_grid->addWidget(app_type_label, 3, 0, Qt::AlignRight);
     settings_grid->addWidget(m_app_type_box, 3, 1, 1, 2);
-
-    QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
-                     SLOT(OnDeviceSelectionChanged(const QString&)));
-    QObject::connect(device_refresh_button, &QPushButton::clicked, this,
-                     &WhatIfSetupDialog::OnDevListRefresh);
-    QObject::connect(m_pkg_box, SIGNAL(currentIndexChanged(const QString&)), this,
-                     SLOT(OnPackageSelected(const QString&)));
-    QObject::connect(m_pkg_box->lineEdit(), &QLineEdit::textEdited, filter_model,
-                     &QSortFilterProxyModel::setFilterFixedString);
-    QObject::connect(m_args_input_box, &QLineEdit::textEdited, this,
-                     &WhatIfSetupDialog::OnInputArgs);
 }
 
 void WhatIfSetupDialog::InitializeReplayOptions() { m_replay_options_widget = new QWidget(this); }
@@ -234,16 +304,12 @@ void WhatIfSetupDialog::InitializeReplayOptions() { m_replay_options_widget = ne
 QHBoxLayout* WhatIfSetupDialog::CreateButtonLayout()
 {
     QHBoxLayout* button_layout = new QHBoxLayout();
-    QPushButton* dismiss_button = new QPushButton(tr(kDismiss.data()), this);
+    m_end_session_button = new QPushButton(tr(kEndSession.data()), this);
     m_start_application_button = new QPushButton(kStartApplication.data(), this);
     m_start_application_button->setEnabled(false);
-    button_layout->addWidget(dismiss_button);
+    button_layout->addWidget(m_end_session_button);
     button_layout->addWidget(m_start_application_button);
 
-    QObject::connect(m_start_application_button, &QPushButton::clicked, this,
-                     &WhatIfSetupDialog::OnStartClicked);
-
-    QObject::connect(dismiss_button, &QPushButton::clicked, this, &QDialog::reject);
     return button_layout;
 }
 
@@ -256,6 +322,13 @@ WhatIfSetupDialog::~WhatIfSetupDialog()
 void WhatIfSetupDialog::EnableWhatIfTypeButtons(bool enable)
 {
     m_runtime_what_if_type_button->setEnabled(enable);
+}
+
+void WhatIfSetupDialog::EnableModificationOptions(bool enable)
+{
+    m_add_modification_button->setEnabled(enable);
+    m_delete_modification_button->setEnabled(enable);
+    m_test_modification_button->setEnabled(enable);
 }
 
 void WhatIfSetupDialog::UpdatePackageList()
@@ -279,14 +352,18 @@ void WhatIfSetupDialog::UpdatePackageList()
         return;
     }
 
-    m_runtime_data.pkg_list = *package_list;
+    m_runtime_data.pkg_list.clear();
+    for (const auto& pkg : *package_list)
+    {
+        m_runtime_data.pkg_list.append(QString::fromStdString(pkg));
+    }
 
     const QSignalBlocker blocker(
         m_pkg_box);  // Do not emit index changed event when update the model
     m_pkg_model->clear();
-    for (size_t i = 0; i < m_runtime_data.pkg_list.size(); i++)
+    for (const QString& pkg : m_runtime_data.pkg_list)
     {
-        QStandardItem* item = new QStandardItem(m_runtime_data.pkg_list[i].c_str());
+        QStandardItem* item = new QStandardItem(pkg);
         m_pkg_model->appendRow(item);
     }
     m_pkg_box->setCurrentIndex(-1);
@@ -318,6 +395,7 @@ void WhatIfSetupDialog::ResetDialog()
     m_pkg_model->clear();
     m_start_application_button->setEnabled(false);
     m_start_application_button->setText(kStartApplication.data());
+    EnableModificationOptions(false);
 
     EnableWhatIfTypeButtons(true);
 }
@@ -406,25 +484,24 @@ absl::Status WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device,
     m_start_application_button->setDisabled(false);
     m_start_application_button->setText(kStopApplication.data());
 
-    emit RuntimeWhatIfEnabled(m_runtime_data.cur_pkg, true);
     return absl::OkStatus();
 }
 
-void WhatIfSetupDialog::StopPackage()
+absl::Status WhatIfSetupDialog::StopPackage()
 {
     Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
     Dive::AndroidApplication* cur_app = device ? device->GetCurrentApplication() : nullptr;
 
     if (!device || !cur_app || !cur_app->IsRunning())
     {
-        emit RuntimeWhatIfEnabled("None", false);
         ResetDialog();
-        return;
+        return absl::OkStatus();
     }
 
     device->StopApp().IgnoreError();
 
-    if (absl::Status status = cur_app->Cleanup(); !status.ok())
+    absl::Status status = cur_app->Cleanup();
+    if (!status.ok())
     {
         qDebug() << "Failed to cleanup application: " << status.ToString().c_str();
         ShowMessage(QString::fromStdString(
@@ -433,15 +510,13 @@ void WhatIfSetupDialog::StopPackage()
         // Exit without resetting UI if it's a specific precondition failure
         if (status.code() == absl::StatusCode::kFailedPrecondition)
         {
-            return;
+            return status;
         }
     }
 
-    emit RuntimeWhatIfEnabled("None", false);
     ResetDialog();
+    return status;
 }
-
-void WhatIfSetupDialog::OnStopRuntimeWhatIf() { StopPackage(); }
 
 void WhatIfSetupDialog::OnAppListRefresh() { UpdatePackageList(); }
 
@@ -461,9 +536,9 @@ void WhatIfSetupDialog::OnPackageSelected(const QString& s)
     {
         return;
     }
-    if (m_runtime_data.cur_pkg.toStdString() != m_runtime_data.pkg_list[cur_index])
+    if (m_runtime_data.cur_pkg != m_runtime_data.pkg_list[cur_index])
     {
-        m_runtime_data.cur_pkg = m_runtime_data.pkg_list[cur_index].c_str();
+        m_runtime_data.cur_pkg = m_runtime_data.pkg_list[cur_index];
         qDebug() << "Current package set to: " << m_runtime_data.cur_pkg.toStdString().c_str();
     }
     m_start_application_button->setEnabled(true);
@@ -506,7 +581,11 @@ void WhatIfSetupDialog::OnStartClicked()
     {
         qDebug() << "Stop Application clicked for package: "
                  << m_runtime_data.cur_pkg.toStdString().c_str();
-        StopPackage();
+        absl::Status status = StopPackage();
+        if (!status.ok())
+        {
+            qDebug() << std::string(status.message()).c_str();
+        }
         return;
     }
 
@@ -520,7 +599,10 @@ void WhatIfSetupDialog::OnStartClicked()
         m_start_application_button->setDisabled(false);
         m_start_application_button->setText(kStartApplication.data());
         EnableWhatIfTypeButtons(true);
+        return;
     }
+
+    EnableModificationOptions(true);
 }
 
 void WhatIfSetupDialog::OnWhatIfTypeChanged(int button_id)
@@ -539,21 +621,18 @@ void WhatIfSetupDialog::OnWhatIfTypeChanged(int button_id)
 
 void WhatIfSetupDialog::closeEvent(QCloseEvent* event)
 {
-    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
-    Dive::AndroidApplication* cur_app = device ? device->GetCurrentApplication() : nullptr;
-
-    bool no_application_currently_running_on_device =
-        (device == nullptr) || (cur_app == nullptr) || !cur_app->IsRunning();
-
-    if (no_application_currently_running_on_device)
+    absl::Status status = StopPackage();
+    if (status.code() == absl::StatusCode::kFailedPrecondition)
     {
-        EnableWhatIfTypeButtons(true);
-        m_runtime_what_if_type_button->setChecked(true);
-        OnWhatIfTypeChanged(kRuntimeWhatIfButtonId);
-        m_start_application_button->setText(kStartApplication.data());
+        // Prevent the dialog from closing so the user can read the error message
+        event->ignore();
+        return;
     }
 
-    event->accept();
+    m_runtime_what_if_type_button->setChecked(true);
+    OnWhatIfTypeChanged(kRuntimeWhatIfButtonId);
+
+    QDialog::closeEvent(event);
 }
 
 void WhatIfSetupDialog::showEvent(QShowEvent* event)

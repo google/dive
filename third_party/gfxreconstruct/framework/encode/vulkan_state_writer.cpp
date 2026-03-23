@@ -120,6 +120,12 @@ uint64_t VulkanStateWriter::WriteAssets(const VulkanStateTable& state_table)
 
 uint64_t VulkanStateWriter::WriteState(const VulkanStateTable& state_table, uint64_t frame_number)
 {
+    // GOOGLE: Each capture file should have its own asset file. Ensure each asset file has a complete copy of state.
+    state_table.VisitWrappers([](vulkan_wrappers::BufferWrapper* buffer_wrapper) { buffer_wrapper->dirty = true; });
+    state_table.VisitWrappers([](vulkan_wrappers::ImageWrapper* image_wrapper) { image_wrapper->dirty = true; });
+    state_table.VisitWrappers(
+        [](vulkan_wrappers::DescriptorSetWrapper* descriptor_set_wrapper) { descriptor_set_wrapper->dirty = true; });
+
     // clang-format off
     blocks_written_ = 0;
 

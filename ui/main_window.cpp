@@ -213,8 +213,6 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
     {
         QVBoxLayout* left_vertical_layout = new QVBoxLayout();
 
-        SetupRuntimeWhatIfHeader();
-
         QFrame* text_combo_box_frame = new QFrame();
 
         QHBoxLayout* text_combo_box_layout = new QHBoxLayout();
@@ -330,7 +328,6 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
             expand_to_lvl_layout->addWidget(expand_to_lvl_button);
         expand_to_lvl_layout->addStretch();
 
-        left_vertical_layout->addWidget(m_runtime_what_if_header.container);
         left_vertical_layout->addWidget(m_event_search_bar);
         left_vertical_layout->addWidget(text_combo_box_frame);
         left_vertical_layout->addWidget(m_command_hierarchy_view);
@@ -565,12 +562,10 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
                      &DiveTreeView::OnFilterModeChanged);
 
     // What-If connections
-    QObject::connect(m_what_if_setup_dig, &WhatIfSetupDialog::RuntimeWhatIfEnabled, this,
-                     &MainWindow::OnWhatIfRuntimeEnabled);
-    QObject::connect(m_runtime_what_if_header.stop_app_button, &QPushButton::clicked,
-                     m_what_if_setup_dig, &WhatIfSetupDialog::OnStopRuntimeWhatIf);
-    QObject::connect(m_runtime_what_if_header.configure_button, &QPushButton::clicked, this,
-                     &MainWindow::OnConfigureWhatIfModification);
+    QObject::connect(m_what_if_setup_dig, &WhatIfSetupDialog::AddModification, this,
+                     &MainWindow::OnAddWhatIfModification);
+    QObject::connect(m_what_if_setup_dig, &QDialog::rejected, m_what_if_configure_dig,
+                     &QWidget::close);
 
     CreateActions();
     CreateMenus();
@@ -687,7 +682,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex& index)
 {
     // Determine which node it is, and emit this signal
     const Dive::CommandHierarchy& command_hierarchy = m_data_core->GetCommandHierarchy();
-    uint64_t selected_item_node_index;
+    uint64_t selected_item_node_index = 0;
 
     if (m_gfxr_capture_loaded)
     {
@@ -714,7 +709,7 @@ void MainWindow::OnSelectionChanged(const QModelIndex& index)
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnFilterModeChange(const QString& filter_mode)
 {
-    DiveFilterModel::FilterMode new_mode;
+    DiveFilterModel::FilterMode new_mode = DiveFilterModel::kNone;
 
     if (filter_mode == kFilterStrings[DiveFilterModel::kNone])
     {
@@ -731,10 +726,6 @@ void MainWindow::OnFilterModeChange(const QString& filter_mode)
     else if (filter_mode == kFilterStrings[DiveFilterModel::kBinningAndFirstTilePass])
     {
         new_mode = DiveFilterModel::kBinningAndFirstTilePass;
-    }
-    else
-    {
-        new_mode = DiveFilterModel::kNone;
     }
 
     if (m_filter_model)
@@ -1260,23 +1251,7 @@ void MainWindow::OnWhatIfSetupTrigger()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnWhatIfRuntimeEnabled(const QString& package_name,
-                                        bool is_runtime_what_if_enabled)
-{
-    if (is_runtime_what_if_enabled)
-    {
-        m_runtime_what_if_header.app_name_label->setText(package_name);
-        m_runtime_what_if_header.container->show();
-    }
-    else
-    {
-        m_runtime_what_if_header.app_name_label->setText("None");
-        m_runtime_what_if_header.container->hide();
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::OnConfigureWhatIfModification() { m_what_if_configure_dig->show(); }
+void MainWindow::OnAddWhatIfModification() { m_what_if_configure_dig->show(); }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnExpandToLevel()
@@ -1524,8 +1499,8 @@ void MainWindow::OnSearchTrigger()
 
     int current_index = m_tab_widget->currentIndex();
     QWidget* current_tab = m_tab_widget->widget(current_index);
-    SearchBar* tab_wiget_search_bar;
-    QPushButton* tab_wiget_search_button;
+    SearchBar* tab_wiget_search_bar = nullptr;
+    QPushButton* tab_wiget_search_button = nullptr;
 
     if (current_index == m_tabs.command)
     {
@@ -2934,7 +2909,7 @@ void MainWindow::OnCounterSelected(uint64_t row_index)
     QModelIndex gfxr_draw_call_index_from_source =
         FindSourceIndexFromNode(gfxr_source_model, gfxr_draw_call_indices.at(row_index));
     QModelIndex proxy_index;
-    QItemSelectionModel* selection_model;
+    QItemSelectionModel* selection_model = nullptr;
     QItemSelectionModel::SelectionFlags flags;
     if (gfxr_draw_call_index_from_source.isValid())
     {
@@ -3103,24 +3078,4 @@ void MainWindow::OnGpuTimingDataSelected(uint64_t node_index)
 
         m_command_hierarchy_view->viewport()->update();
     }
-}
-
-//--------------------------------------------------------------------------------------------------
-void MainWindow::SetupRuntimeWhatIfHeader()
-{
-    QHBoxLayout* what_ifs_layout = new QHBoxLayout();
-    m_runtime_what_if_header.container = new QWidget();
-    m_runtime_what_if_header.container->setLayout(what_ifs_layout);
-    QLabel* what_if_info_label = new QLabel(tr("What-If Analysis:"));
-    m_runtime_what_if_header.configure_button = new QPushButton(tr("Configure"));
-    m_runtime_what_if_header.stop_app_button = new QPushButton(tr("Stop Application"));
-    QLabel* what_if_runtime_what_if_application_label = new QLabel(tr("Current Application: "));
-    m_runtime_what_if_header.app_name_label = new QLabel(tr("None"));
-    what_ifs_layout->addWidget(what_if_info_label);
-    what_ifs_layout->addWidget(m_runtime_what_if_header.configure_button);
-    what_ifs_layout->addWidget(m_runtime_what_if_header.stop_app_button);
-    what_ifs_layout->addStretch(1);
-    what_ifs_layout->addWidget(what_if_runtime_what_if_application_label);
-    what_ifs_layout->addWidget(m_runtime_what_if_header.app_name_label);
-    m_runtime_what_if_header.container->hide();
 }

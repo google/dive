@@ -80,7 +80,7 @@ class TraceDialog : public DeviceDialog
     void ResetTraceDialogOnAppStop();
 
  public slots:
-    void OnPackageListSet(QList<std::string> package_list);
+    void OnPackageListSet(QStringList package_list);
     void OnStartPackage();
     void OnStopPackage();
 
@@ -109,7 +109,7 @@ class TraceDialog : public DeviceDialog
  signals:
     void TraceAvailable(const QString&);
     void PackageSelected(const QString& curr_package_name, const QString& prev_package_name);
-    void PackageListAvailable(bool gfrx_capture_enabled, QList<std::string> package_list);
+    void PackageListAvailable(bool gfrx_capture_enabled, QStringList package_list);
     void StartPackageClicked(const QString& capture_dir = "", bool gfrx_capture_enabled = false);
     void StopPackageClicked(bool gfrx_capture_enabled = false);
     void CloseDialog(bool gfrx_capture_enabled);
@@ -162,12 +162,10 @@ class TraceDialog : public DeviceDialog
     QPushButton* m_capture_button;
     QPushButton* m_run_button;
     QPushButton* m_gfxr_capture_button;
-    QPushButton* m_gfxr_retrieve_button;
     QHBoxLayout* m_button_layout;
 
     QHBoxLayout* m_cmd_layout;
     QLabel* m_file_label;
-    QPushButton* m_open_button;
     QLineEdit* m_cmd_input_box;
 
     QHBoxLayout* m_args_layout;
@@ -181,7 +179,7 @@ class TraceDialog : public DeviceDialog
     QLineEdit* m_capture_file_local_root_directory_input_box;
 
     QVBoxLayout* m_main_layout;
-    std::vector<std::string> m_pkg_list;
+    QStringList m_pkg_list;
     QString m_cur_pkg;
     std::string m_executable;
     std::string m_command_args;

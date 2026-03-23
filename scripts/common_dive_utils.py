@@ -36,13 +36,13 @@ def get_dive_root() -> pathlib.Path:
     else:
         print("Predicting DIVE_ROOT_PATH")
         dive_root = pathlib.Path(__file__).parent.parent.resolve()
-    
+
     print(f"DIVE_ROOT_PATH={dive_root}")
     return pathlib.Path(dive_root)
 
 
 def echo_and_run(cmd):
-    print(f"\n> {" ".join(cmd)}")
+    print(f"\n> {' '.join(cmd)}")
     subprocess.run(cmd, check=True, text=True)
 
 

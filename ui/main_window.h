@@ -74,9 +74,8 @@ class MainWindow : public QMainWindow
     void OnPendingPerfCounterResults(const QString& file_name);
     void OnPendingGpuTimingResults(const QString& file_name);
     void OnPendingScreenshot(const QString& file_name);
-    void OnConfigureWhatIfModification();
+    void OnAddWhatIfModification();
     void OnWhatIfSetupTrigger();
-    void OnWhatIfRuntimeEnabled(const QString& package_name, bool is_runtime_what_if_enabled);
 
  private slots:
     void OnCommandViewModeChange(const QString& string);
@@ -155,15 +154,6 @@ class MainWindow : public QMainWindow
     void ResetVerticalScroll(const DiveTreeView& tree_view);
     void ClearViewModelSelection(DiveTreeView& tree_view, bool should_clear_tab);
     void CorrelateCounter(const QModelIndex& index, bool called_from_gfxr_view);
-    void SetupRuntimeWhatIfHeader();
-
-    struct RuntimeWhatIfHeader
-    {
-        QWidget* container = nullptr;
-        QPushButton* configure_button = nullptr;
-        QPushButton* stop_app_button = nullptr;
-        QLabel* app_name_label = nullptr;
-    };
 
     std::optional<uint64_t> GetDrawCallIndexFromProxyIndex(
         const QModelIndex& proxy_index, const QAbstractProxyModel& proxy_model,
@@ -171,28 +161,28 @@ class MainWindow : public QMainWindow
 
     ApplicationController& m_controller;
 
-    QMenu* m_file_menu;
-    QMenu* m_recent_captures_menu;
-    QAction* m_open_action;
-    QAction* m_save_action;
-    QAction* m_save_as_action;
-    QAction* m_exit_action;
-    QMenu* m_capture_menu;
-    QAction* m_capture_action;
-    QAction* m_capture_delay_action;
-    QAction* m_capture_setting_action;
-    QMenu* m_analyze_menu;
-    QAction* m_analyze_action;
-    QMenu* m_what_if_menu;
-    QAction* m_what_if_setup_action;
-    QMenu* m_help_menu;
-    QAction* m_about_action;
-    QAction* m_shortcuts_action;
-    QToolBar* m_file_tool_bar;
-    TraceDialog* m_trace_dig;
-    AnalyzeDialog* m_analyze_dig;
-    WhatIfSetupDialog* m_what_if_setup_dig;
-    WhatIfConfigureDialog* m_what_if_configure_dig;
+    QMenu* m_file_menu = nullptr;
+    QMenu* m_recent_captures_menu = nullptr;
+    QAction* m_open_action = nullptr;
+    QAction* m_save_action = nullptr;
+    QAction* m_save_as_action = nullptr;
+    QAction* m_exit_action = nullptr;
+    QMenu* m_capture_menu = nullptr;
+    QAction* m_capture_action = nullptr;
+    QAction* m_capture_delay_action = nullptr;
+    QAction* m_capture_setting_action = nullptr;
+    QMenu* m_analyze_menu = nullptr;
+    QAction* m_analyze_action = nullptr;
+    QMenu* m_what_if_menu = nullptr;
+    QAction* m_what_if_setup_action = nullptr;
+    QMenu* m_help_menu = nullptr;
+    QAction* m_about_action = nullptr;
+    QAction* m_shortcuts_action = nullptr;
+    QToolBar* m_file_tool_bar = nullptr;
+    TraceDialog* m_trace_dig = nullptr;
+    AnalyzeDialog* m_analyze_dig = nullptr;
+    WhatIfSetupDialog* m_what_if_setup_dig = nullptr;
+    WhatIfConfigureDialog* m_what_if_configure_dig = nullptr;
     ErrorDialog* m_error_dialog = nullptr;
 
     std::array<QAction*, 3> m_recent_file_actions = {};
@@ -207,39 +197,38 @@ class MainWindow : public QMainWindow
     Dive::LogConsole m_log_console;
     Dive::LogCompound m_log_compound;
 
-    QStatusBar* m_status_bar;
+    QStatusBar* m_status_bar = nullptr;
 
     // Left pane
-    QGroupBox* m_left_group_box;
-    QString m_prev_command_view_mode;
-    DiveTreeView* m_command_hierarchy_view;
-    CommandModel* m_command_hierarchy_model;
-    QPushButton* m_search_trigger_button;
+    QGroupBox* m_left_group_box = nullptr;
+    QString m_prev_command_view_mode = nullptr;
+    DiveTreeView* m_command_hierarchy_view = nullptr;
+    CommandModel* m_command_hierarchy_model = nullptr;
+    QPushButton* m_search_trigger_button = nullptr;
     SearchBar* m_event_search_bar = nullptr;
-    RuntimeWhatIfHeader m_runtime_what_if_header = {};
 
-    TreeViewComboBox* m_view_mode_combo_box;
-    TreeViewComboBox* m_filter_mode_combo_box;
-    GfxrVulkanCommandFilter* m_filter_gfxr_commands_combo_box;
-    QPushButton* m_prev_event_button;
-    QPushButton* m_next_event_button;
+    TreeViewComboBox* m_view_mode_combo_box = nullptr;
+    TreeViewComboBox* m_filter_mode_combo_box = nullptr;
+    GfxrVulkanCommandFilter* m_filter_gfxr_commands_combo_box = nullptr;
+    QPushButton* m_prev_event_button = nullptr;
+    QPushButton* m_next_event_button = nullptr;
     QList<QPushButton*> m_expand_to_lvl_buttons;
-    GfxrVulkanCommandFilterProxyModel* m_gfxr_vulkan_commands_filter_proxy_model;
-    GfxrVulkanCommandModel* m_gfxr_vulkan_command_hierarchy_model;
-    PerfCounterModel* m_perf_counter_model;
-    GpuTimingModel* m_gpu_timing_model;
+    GfxrVulkanCommandFilterProxyModel* m_gfxr_vulkan_commands_filter_proxy_model = nullptr;
+    GfxrVulkanCommandModel* m_gfxr_vulkan_command_hierarchy_model = nullptr;
+    PerfCounterModel* m_perf_counter_model = nullptr;
+    GpuTimingModel* m_gpu_timing_model = nullptr;
 
     // Middle pane
-    QGroupBox* m_middle_group_box;
-    DiveTreeView* m_pm4_command_hierarchy_view;
-    QPushButton* m_pm4_search_trigger_button;
+    QGroupBox* m_middle_group_box = nullptr;
+    DiveTreeView* m_pm4_command_hierarchy_view = nullptr;
+    QPushButton* m_pm4_search_trigger_button = nullptr;
     SearchBar* m_pm4_event_search_bar = nullptr;
-    QPushButton* m_pm4_prev_event_button;
-    QPushButton* m_pm4_next_event_button;
+    QPushButton* m_pm4_prev_event_button = nullptr;
+    QPushButton* m_pm4_next_event_button = nullptr;
     QList<QPushButton*> m_pm4_expand_to_lvl_buttons;
 
-    TreeViewComboBox* m_pm4_view_mode_combo_box;
-    TreeViewComboBox* m_pm4_filter_mode_combo_box;
+    TreeViewComboBox* m_pm4_view_mode_combo_box = nullptr;
+    TreeViewComboBox* m_pm4_filter_mode_combo_box = nullptr;
 
     struct TabMaskBits
     {
@@ -287,15 +276,15 @@ class MainWindow : public QMainWindow
     PerfCounterTabView* m_perf_counter_tab_view = nullptr;
     GpuTimingTabView* m_gpu_timing_tab_view = nullptr;
     FrameTabView* m_frame_tab_view = nullptr;
-    TextFileView* m_text_file_view;
+    TextFileView* m_text_file_view = nullptr;
     TabIndices m_tabs;
     bool m_tabs_updating = false;
 
-    DiveFilterModel* m_filter_model;
+    DiveFilterModel* m_filter_model = nullptr;
 
     // Side pane
-    PropertyPanel* m_property_panel;
-    HoverHelp* m_hover_help;
+    PropertyPanel* m_property_panel = nullptr;
+    HoverHelp* m_hover_help = nullptr;
 
     std::string m_unsaved_capture_path;
     bool m_capture_saved = false;
@@ -304,12 +293,13 @@ class MainWindow : public QMainWindow
     bool m_gfxr_capture_loaded = false;
     bool m_correlated_capture_loaded = false;
 
-    EventSelection* m_event_selection;
+    EventSelection* m_event_selection = nullptr;
 
     // Overlay to be displayed while capture
-    OverlayHelper* m_overlay;
+    OverlayHelper* m_overlay = nullptr;
 
-    GfxrVulkanCommandArgumentsFilterProxyModel* m_gfxr_vulkan_commands_arguments_filter_proxy_model;
+    GfxrVulkanCommandArgumentsFilterProxyModel*
+        m_gfxr_vulkan_commands_arguments_filter_proxy_model = nullptr;
     std::unique_ptr<Dive::AvailableMetrics> m_available_metrics;
     std::unique_ptr<Dive::CaptureStats> m_capture_stats;
 

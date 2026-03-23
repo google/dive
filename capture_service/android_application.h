@@ -88,16 +88,16 @@ class AndroidApplication
 
     AndroidDevice& m_dev;
     std::string m_package;
-    ApplicationType m_type;
+    ApplicationType m_type = ApplicationType::UNKNOWN;
     std::string m_main_activity;
     std::string m_command_args;
 
     std::string m_gfxr_capture_file_directory;
-    bool m_is_debuggable;
-    bool m_started;
+    bool m_is_debuggable = false;
+    bool m_started = false;
 
-    bool m_gfxr_enabled;
-    bool m_runtime_what_if_enabled;
+    bool m_gfxr_enabled = false;
+    bool m_runtime_what_if_enabled = false;
 };
 
 class VulkanApplication : public AndroidApplication

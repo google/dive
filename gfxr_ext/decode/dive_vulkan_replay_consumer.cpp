@@ -483,6 +483,26 @@ void DiveVulkanReplayConsumer::Process_vkQueuePresentKHR(
         GFXRECON_LOG_INFO(gpu_time_.GetStatsString().c_str());
         gpu_time_stats_csv_str_ = gpu_time_.GetStatsCSVString();
     }
+
+    /********************************************************************************************/
+    // Fix for VUID-vkQueueSubmit-fence-00064
+    // This error occurs when we try to use a VkFence in vkQueueSubmit while that fence is already
+    // active (submitted but not yet signaled). By calling vkDeviceWaitIdle, we force the CPU to
+    // wait until the GPU is completely finished with everything. Once the GPU is idle, that fence
+    // is guaranteed to be signaled.
+
+    // This also fixes VUID-vkQueueSubmit-pSignalSemaphores-00067
+    // This error is because without vkDeviceWaitIdle, the replay attempts to re-signal the
+    // semaphore for the image while the previous iteration's presentation of this image is still
+    // pending in the driver.
+
+    // TODO(wangra): vkDeviceWaitIdle might be too heavy as it will flush all gpu caches. this might
+    // have performance impact. Maybe we should consider waiting for VkFence
+    if (!gpu_time_.IsEnabled())
+    {
+        pfn_vkDeviceWaitIdle_(device_);
+    }
+    /********************************************************************************************/
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetDeviceQueue2(

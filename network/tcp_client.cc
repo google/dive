@@ -176,7 +176,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
 
     std::cout << "Client: Requesting to download file from server '" << remote_file_path << "' to '"
               << local_save_path << "'." << std::endl;
-    auto send_status = SendSocketMessage(m_connection.get(), download_request);
+    absl::Status send_status = SendSocketMessage(m_connection.get(), download_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
@@ -185,7 +185,8 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
                                                                "SendSocketMessage fail"));
     }
 
-    auto receive = ReceiveSocketMessage(m_connection.get());
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
@@ -194,7 +195,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
                                                                "ReceiveSocketMessage fail"));
     }
 
-    auto response = *std::move(receive);
+    std::unique_ptr<ISerializable> response = *std::move(receive);
     if (response->GetMessageType() != MessageType::DOWNLOAD_FILE_RESPONSE)
     {
         return Dive::FailedPreconditionError(absl::StrCat(
@@ -203,13 +204,7 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
             MessageType::DOWNLOAD_FILE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
-    auto* download_response = dynamic_cast<DownloadFileResponse*>(response.get());
-    if (!download_response)
-    {
-        return Dive::InternalError(
-            "DownloadFileFromServer: Failed to cast received message to DownloadFileResponse.");
-    }
-
+    DownloadFileResponse* download_response = static_cast<DownloadFileResponse*>(response.get());
     if (!download_response->GetFound())
     {
         return Dive::NotFoundError(
@@ -217,21 +212,12 @@ absl::Status TcpClient::DownloadFileFromServer(const std::string& remote_file_pa
                          download_response->GetErrorReason()));
     }
 
-    std::cout << "Client: Server offering file (size = " << download_response->GetFileSizeStr()
+    size_t file_size = download_response->GetFileSize();
+    std::cout << "Client: Server offering file (size = " << file_size
               << " bytes). Starting download." << std::endl;
-    size_t file_size = 0;
-    try
-    {
-        file_size = std::stoull(download_response->GetFileSizeStr());
-    }
-    catch (const std::exception& e)
-    {
-        return Dive::InvalidArgumentError(
-            absl::StrCat("DownloadFileFromServer: Invalid file size from server: '",
-                         download_response->GetFileSizeStr(), "'. Message error: ", e.what()));
-    }
 
-    auto recv_status = m_connection->ReceiveFile(local_save_path, file_size, progress_callback);
+    absl::Status recv_status =
+        m_connection->ReceiveFile(local_save_path, file_size, progress_callback);
     if (!recv_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
@@ -256,7 +242,7 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
     FileSizeRequest file_size_request;
     file_size_request.SetString(remote_file_path);
     std::cout << "Client: Requesting file size of " << remote_file_path << std::endl;
-    auto send_status = SendSocketMessage(m_connection.get(), file_size_request);
+    absl::Status send_status = SendSocketMessage(m_connection.get(), file_size_request);
     if (!send_status.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
@@ -265,7 +251,8 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
                                                                "SendSocketMessage fail"));
     }
 
-    auto receive = ReceiveSocketMessage(m_connection.get());
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
     if (!receive.ok())
     {
         return SetStatusAndReturnError(ClientStatus::CONNECTION_FAILED,
@@ -274,7 +261,7 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
                                                                "ReceiveSocketMessage fail"));
     }
 
-    auto response = *std::move(receive);
+    std::unique_ptr<ISerializable> response = *std::move(receive);
     if (response->GetMessageType() != MessageType::FILE_SIZE_RESPONSE)
     {
         return Dive::FailedPreconditionError(absl::StrCat(
@@ -283,12 +270,7 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
             MessageType::FILE_SIZE_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
-    auto* file_size_response = dynamic_cast<FileSizeResponse*>(response.get());
-    if (!file_size_response)
-    {
-        return Dive::InternalError(
-            "GetCaptureFileSize: Failed to cast received message to FileSizeResponse.");
-    }
+    FileSizeResponse* file_size_response = static_cast<FileSizeResponse*>(response.get());
     if (!file_size_response->GetFound())
     {
         return Dive::NotFoundError(
@@ -296,18 +278,7 @@ absl::StatusOr<size_t> TcpClient::GetCaptureFileSize(const std::string& remote_f
                          file_size_response->GetErrorReason()));
     }
 
-    size_t file_size = 0;
-    try
-    {
-        file_size = std::stoull(file_size_response->GetFileSizeStr());
-    }
-    catch (const std::exception& e)
-    {
-        return Dive::InvalidArgumentError(
-            absl::StrCat("GetCaptureFileSize: Invalid file size from server: '",
-                         file_size_response->GetFileSizeStr(), "'. Message error: ", e.what()));
-    }
-    return file_size;
+    return file_size_response->GetFileSize();
 }
 
 absl::Status TcpClient::RemoveFile(const std::string& remote_file_path)

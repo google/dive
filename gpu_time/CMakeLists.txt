@@ -18,7 +18,14 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 # Since this might be included from GFXR build, ensure Vulkan::Headers is defined
 include(../cmake/vulkan.cmake)
 
-add_library(gpu_time STATIC gpu_time.cpp gpu_time.h)
+add_library(
+    gpu_time
+    STATIC
+    gpu_time.cpp
+    gpu_time.h
+    frame_boundary_detector.cpp
+    frame_boundary_detector.h
+)
 target_link_libraries(gpu_time PUBLIC Vulkan::Headers)
 
 # This is to fix build on Linux
@@ -27,9 +34,20 @@ set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)
 if(NOT ANDROID)
     enable_testing()
     include(GoogleTest)
+
     add_executable(gpu_time_test gpu_time_test.cpp)
     target_link_libraries(gpu_time_test PRIVATE gpu_time gtest gtest_main gmock)
     gtest_discover_tests(gpu_time_test)
+
+    add_executable(
+        frame_boundary_detector_test
+        frame_boundary_detector_test.cpp
+    )
+    target_link_libraries(
+        frame_boundary_detector_test
+        PRIVATE gpu_time gtest gtest_main gmock
+    )
+    gtest_discover_tests(frame_boundary_detector_test)
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

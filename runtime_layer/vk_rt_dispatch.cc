@@ -43,6 +43,27 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->CreateImage = (PFN_vkCreateImage)pa(device, "vkCreateImage");
     dt->CmdDraw = (PFN_vkCmdDraw)pa(device, "vkCmdDraw");
     dt->CmdDrawIndexed = (PFN_vkCmdDrawIndexed)pa(device, "vkCmdDrawIndexed");
+    dt->CmdDrawIndirect = (PFN_vkCmdDrawIndirect)pa(device, "vkCmdDrawIndirect");
+    dt->CmdDrawIndexedIndirect =
+        (PFN_vkCmdDrawIndexedIndirect)pa(device, "vkCmdDrawIndexedIndirect");
+
+    // Indirect Count (Try Core 1.2 first, fallback to KHR extension)
+    dt->CmdDrawIndirectCount = (PFN_vkCmdDrawIndirectCount)pa(device, "vkCmdDrawIndirectCount");
+    if (!dt->CmdDrawIndirectCount)
+    {
+        dt->CmdDrawIndirectCount =
+            (PFN_vkCmdDrawIndirectCount)pa(device, "vkCmdDrawIndirectCountKHR");
+    }
+
+    // Indirect Count (Try Core 1.2 first, fallback to KHR extension)
+    dt->CmdDrawIndexedIndirectCount =
+        (PFN_vkCmdDrawIndexedIndirectCount)pa(device, "vkCmdDrawIndexedIndirectCount");
+    if (!dt->CmdDrawIndexedIndirectCount)
+    {
+        dt->CmdDrawIndexedIndirectCount =
+            (PFN_vkCmdDrawIndexedIndirectCount)pa(device, "vkCmdDrawIndexedIndirectCountKHR");
+    }
+
     dt->CmdResetQueryPool = (PFN_vkCmdResetQueryPool)pa(device, "vkCmdResetQueryPool");
     dt->CmdWriteTimestamp = (PFN_vkCmdWriteTimestamp)pa(device, "vkCmdWriteTimestamp");
     dt->GetQueryPoolResults = (PFN_vkGetQueryPoolResults)pa(device, "vkGetQueryPoolResults");
@@ -65,6 +86,13 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->CmdEndRenderPass = (PFN_vkCmdEndRenderPass)pa(device, "vkCmdEndRenderPass");
     dt->CmdBeginRenderPass2 = (PFN_vkCmdBeginRenderPass2)pa(device, "vkCmdBeginRenderPass2");
     dt->CmdEndRenderPass2 = (PFN_vkCmdEndRenderPass2)pa(device, "vkCmdEndRenderPass2");
+
+    // Mesh Shaders
+    dt->CmdDrawMeshTasksEXT = (PFN_vkCmdDrawMeshTasksEXT)pa(device, "vkCmdDrawMeshTasksEXT");
+    dt->CmdDrawMeshTasksIndirectEXT =
+        (PFN_vkCmdDrawMeshTasksIndirectEXT)pa(device, "vkCmdDrawMeshTasksIndirectEXT");
+    dt->CmdDrawMeshTasksIndirectCountEXT =
+        (PFN_vkCmdDrawMeshTasksIndirectCountEXT)pa(device, "vkCmdDrawMeshTasksIndirectCountEXT");
 }
 
 }  // namespace DiveLayer

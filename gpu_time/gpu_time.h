@@ -26,6 +26,8 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "frame_boundary_detector.h"
+
 namespace Dive
 {
 
@@ -37,7 +39,8 @@ class GPUTime
 {
  public:
     static constexpr const char* kVulkanVrFrameDelimiterString =
-        "vr-marker,frame_end,type,application";
+        FrameBoundaryDetector::kVulkanVrFrameDelimiterString;
+
     struct GpuTimeStatus
     {
         std::string message;
@@ -203,7 +206,6 @@ class GPUTime
             // Do not reset the timestamp offset since it is used for cases like
             // - usage_one_submit
             // - OnResetCommandBuffer
-            is_frameboundary = false;
             usage_one_submit = false;
             reusable = false;
         }
@@ -213,7 +215,6 @@ class GPUTime
         VkCommandPool pool = VK_NULL_HANDLE;
         uint32_t begin_timestamp_offset = kInvalidTimeStampOffset;
         uint32_t end_timestamp_offset = kInvalidTimeStampOffset;
-        bool is_frameboundary = false;
         bool usage_one_submit = false;
         bool reusable = false;
     };
@@ -227,6 +228,8 @@ class GPUTime
                                   PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
     GpuTimeStatus EndRenderPass(VkCommandBuffer command_buffer,
                                 PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+
+    FrameBoundaryDetector m_boundary_detector;
 
     // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
     uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];

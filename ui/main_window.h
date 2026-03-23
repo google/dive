@@ -17,6 +17,13 @@
 #pragma once
 
 #include <QMainWindow>
+#if defined(_MSC_VER)
+#ifdef DIVE_UI_LIB_BUILD
+#pragma message("Compiling main_window.h with DIVE_UI_LIB_BUILD defined")
+#else
+#pragma message("Compiling main_window.h without DIVE_UI_LIB_BUILD defined")
+#endif
+#endif
 #include <array>
 #include <functional>
 #include <memory>
@@ -26,9 +33,10 @@
 #include "dive/ui/forward.h"
 #include "dive_core/cross_ref.h"
 #include "dive_core/log.h"
+#include "dive_ui_lib_export.h"
 #include "ui/progress_tracker_callback.h"
 
-class MainWindow : public QMainWindow
+class DIVE_UI_LIB_EXPORT MainWindow : public QMainWindow
 {
     Q_OBJECT
 

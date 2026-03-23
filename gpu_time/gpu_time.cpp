@@ -863,7 +863,7 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t submit_count, const VkSubm
 
     if (is_frame_boundary)
     {
-        m_boundary_detector.ConsumeBoundaries(submit_count, submits_ptr);
+        m_boundary_detector.ClearBoundaryFlags(submit_count, submits_ptr);
 
         GPUTime::GpuTimeStatus update_status =
             OnFrameBoundary(pfn_device_wait_idle, pfn_reset_query_pool, pfn_get_query_pool_results);

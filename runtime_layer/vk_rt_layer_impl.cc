@@ -526,7 +526,7 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit pfn, VkQueue queue, uin
     bool is_frame_boundary = m_boundary_detector.ContainsFrameBoundary(submitCount, pSubmits);
     if (is_frame_boundary)
     {
-        m_boundary_detector.ConsumeBoundaries(submitCount, pSubmits);
+        m_boundary_detector.ClearBoundaryFlags(submitCount, pSubmits);
 
         // Process frame boundary tasks for OpenXR apps.
         ProcessFrameBoundaryTasks();
@@ -671,13 +671,10 @@ bool DiveRuntimeLayer::CheckAndIncrementDrawcallCount(const Network::DrawcallFil
     {
         return false;
     }
-
-    if (m_global_drawcall_counter.load(std::memory_order_relaxed) >= config.max_drawcalls)
+    if (m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed) >= config.max_drawcalls)
     {
         return true;
     }
-
-    m_global_drawcall_counter.fetch_add(1, std::memory_order_relaxed);
     return false;
 }
 

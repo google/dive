@@ -157,7 +157,7 @@ TEST_F(FrameBoundaryDetectorTest, ResetCommandPoolClearsFlagsForPoolOnly)
     EXPECT_TRUE(detector.IsFrameBoundary(MOCK_CMD_2));
 }
 
-TEST_F(FrameBoundaryDetectorTest, ContainsAndConsumeBoundaries)
+TEST_F(FrameBoundaryDetectorTest, ContainsAndClearBoundaryFlags)
 {
     AllocateCmd(MOCK_CMD_1, MOCK_POOL_1);
     AllocateCmd(MOCK_CMD_2, MOCK_POOL_1);
@@ -178,7 +178,7 @@ TEST_F(FrameBoundaryDetectorTest, ContainsAndConsumeBoundaries)
     EXPECT_TRUE(detector.IsFrameBoundary(MOCK_CMD_2));
 
     // Consume the boundaries (Write)
-    detector.ConsumeBoundaries(1, &submit_info);
+    detector.ClearBoundaryFlags(1, &submit_info);
 
     // Verify it was consumed
     EXPECT_FALSE(detector.ContainsFrameBoundary(1, &submit_info));

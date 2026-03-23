@@ -18,6 +18,8 @@ limitations under the License.
 
 #include <vulkan/vulkan_core.h>
 
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 
@@ -53,7 +55,7 @@ class FrameBoundaryDetector
 
     bool IsFrameBoundary(VkCommandBuffer command_buffer) const;
 
-    void ConsumeBoundaries(uint32_t submit_count, const VkSubmitInfo* submits_ptr);
+    void ClearBoundaryFlags(uint32_t submit_count, const VkSubmitInfo* submits_ptr);
 
  private:
     struct CommandBufferInfo
@@ -62,6 +64,7 @@ class FrameBoundaryDetector
         bool is_frameboundary = false;
     };
 
+    mutable std::shared_mutex m_mutex;
     std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
 };
 

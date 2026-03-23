@@ -35,6 +35,7 @@ void FrameBoundaryDetector::OnAllocateCommandBuffers(
         return;
     }
 
+    std::unique_lock lock(m_mutex);
     for (uint32_t i = 0; i < allocate_info_ptr->commandBufferCount; ++i)
     {
         m_cmds[command_buffers_ptr[i]] = {.pool = allocate_info_ptr->commandPool,
@@ -50,6 +51,7 @@ void FrameBoundaryDetector::OnFreeCommandBuffers(uint32_t command_buffer_count,
         return;
     }
 
+    std::unique_lock lock(m_mutex);
     for (uint32_t i = 0; i < command_buffer_count; ++i)
     {
         m_cmds.erase(command_buffers_ptr[i]);
@@ -58,6 +60,7 @@ void FrameBoundaryDetector::OnFreeCommandBuffers(uint32_t command_buffer_count,
 
 void FrameBoundaryDetector::OnResetCommandBuffer(VkCommandBuffer command_buffer)
 {
+    std::shared_lock lock(m_mutex);
     if (auto it = m_cmds.find(command_buffer); it != m_cmds.end())
     {
         it->second.is_frameboundary = false;
@@ -66,6 +69,7 @@ void FrameBoundaryDetector::OnResetCommandBuffer(VkCommandBuffer command_buffer)
 
 void FrameBoundaryDetector::OnResetCommandPool(VkCommandPool command_pool)
 {
+    std::shared_lock lock(m_mutex);
     for (auto& [cmd, info] : m_cmds)
     {
         if (info.pool == command_pool)
@@ -86,6 +90,7 @@ FrameBoundaryDetector::BoundaryStatus FrameBoundaryDetector::MarkBoundary(
 
     if (strcmp(kVulkanVrFrameDelimiterString, label_info_ptr->pLabelName) == 0)
     {
+        std::shared_lock lock(m_mutex);
         auto it = m_cmds.find(command_buffer);
         if (it != m_cmds.end())
         {
@@ -112,6 +117,7 @@ bool FrameBoundaryDetector::ContainsFrameBoundary(uint32_t submit_count,
         return false;
     }
 
+    std::shared_lock lock(m_mutex);
     for (uint32_t i = 0; i < submit_count; ++i)
     {
         if (submits_ptr[i].pCommandBuffers == nullptr)
@@ -121,7 +127,8 @@ bool FrameBoundaryDetector::ContainsFrameBoundary(uint32_t submit_count,
 
         for (uint32_t c = 0; c < submits_ptr[i].commandBufferCount; ++c)
         {
-            if (IsFrameBoundary(submits_ptr[i].pCommandBuffers[c]))
+            if (auto it = m_cmds.find(submits_ptr[i].pCommandBuffers[c]);
+                it != m_cmds.end() && it->second.is_frameboundary)
             {
                 return true;
             }
@@ -132,6 +139,7 @@ bool FrameBoundaryDetector::ContainsFrameBoundary(uint32_t submit_count,
 
 bool FrameBoundaryDetector::IsFrameBoundary(VkCommandBuffer command_buffer) const
 {
+    std::shared_lock lock(m_mutex);
     if (auto it = m_cmds.find(command_buffer); it != m_cmds.end())
     {
         return it->second.is_frameboundary;
@@ -139,14 +147,15 @@ bool FrameBoundaryDetector::IsFrameBoundary(VkCommandBuffer command_buffer) cons
     return false;
 }
 
-void FrameBoundaryDetector::ConsumeBoundaries(uint32_t submit_count,
-                                              const VkSubmitInfo* submits_ptr)
+void FrameBoundaryDetector::ClearBoundaryFlags(uint32_t submit_count,
+                                               const VkSubmitInfo* submits_ptr)
 {
     if (submits_ptr == nullptr)
     {
         return;
     }
 
+    std::shared_lock lock(m_mutex);
     for (uint32_t i = 0; i < submit_count; ++i)
     {
         if (submits_ptr[i].pCommandBuffers == nullptr)

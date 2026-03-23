@@ -20,6 +20,7 @@
 
 #include "dive/ui/types/context.h"
 #include "dive/ui/types/file_path.h"
+#include "dive/ui/types/what_if_modification.h"
 #include "ui/capture_file_manager.h"
 
 namespace Dive
@@ -30,6 +31,7 @@ void RegisterCustomMetaType()
     qRegisterMetaType<Dive::Context>();
     qRegisterMetaType<Dive::FilePath>();
     qRegisterMetaType<Dive::ComponentFilePaths>();
+    qRegisterMetaType<Dive::WhatIfModification>();
 
     CaptureFileManager::RegisterCustomMetaType();
 }

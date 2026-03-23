@@ -27,6 +27,7 @@ add_library(
     types/context.h
     types/file_path.h
     types/impl_pointer.h
+    types/what_if_modification.h
     utils/debug_utils.h
     # Sources:
     components/overlay/overlay.cpp

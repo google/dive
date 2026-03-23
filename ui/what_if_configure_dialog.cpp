@@ -460,7 +460,105 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
 
     const auto& modification_type_info = Dive::kWhatIfTypeInfos[modification_type_index];
 
-    emit AddModification(modification_type_info.ui_name_short.data());
+    QStringList filter_strings;
+    Dive::WhatIfModification modification;
+    modification.type = modification_type_info.type;
+    modification.command = m_command_box->currentText();
+
+    switch (modification_type_info.type)
+    {
+        case Dive::WhatIfType::kDrawCallDisabled:
+        {
+            Dive::DrawCallFilters draw_call_filters;
+            if (m_index_count_filter.spin_box->value() > 0)
+            {
+                draw_call_filters.index_count = m_index_count_filter.spin_box->value();
+                filter_strings << QString("Index Count: %1").arg(draw_call_filters.index_count);
+            }
+            if (m_vertex_count_filter.spin_box->value() > 0)
+            {
+                draw_call_filters.vertex_count = m_vertex_count_filter.spin_box->value();
+                filter_strings << QString("Vertex Count: %1").arg(draw_call_filters.vertex_count);
+            }
+            if (m_instance_count_filter.spin_box->value() > 0)
+            {
+                draw_call_filters.instance_count = m_instance_count_filter.spin_box->value();
+                filter_strings
+                    << QString("Instance Count: %1").arg(draw_call_filters.instance_count);
+            }
+            if (m_draw_count_filter.spin_box->value() > 0)
+            {
+                draw_call_filters.draw_count = m_draw_count_filter.spin_box->value();
+                filter_strings << QString("Draw Count: %1").arg(draw_call_filters.draw_count);
+            }
+            if (m_draw_call_pso_property_filter_box->currentIndex() > 0)
+            {
+                draw_call_filters.pso_property = m_draw_call_pso_property_filter_box->currentText();
+                filter_strings << QString("PSO Property: %1").arg(draw_call_filters.pso_property);
+            }
+            if (m_draw_call_render_pass_filter_box->currentIndex() > 0)
+            {
+                draw_call_filters.render_pass = m_draw_call_render_pass_filter_box->currentText();
+                filter_strings << QString("Render Pass: %1").arg(draw_call_filters.render_pass);
+            }
+            modification.draw_call_filters = draw_call_filters;
+            break;
+        }
+        case Dive::WhatIfType::kImageCreationFlagRemoved:
+        {
+            QStringList flags;
+            for (int i = 1; i < m_flag_model->rowCount(); ++i)
+            {
+                QStandardItem* item = m_flag_model->item(i);
+                if (item && item->isCheckable() && item->checkState() == Qt::Checked)
+                {
+                    flags << item->text();
+                }
+            }
+            if (!flags.isEmpty())
+            {
+                modification.flags = flags;
+                filter_strings << QString("Flags: %1").arg(flags.join(", "));
+            }
+            break;
+        }
+        case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
+        case Dive::WhatIfType::kRenderPassScissorOverridden:
+        {
+            Dive::RenderPassFilters render_pass_filters;
+            if (m_render_pass_command_buffer_filter_box->currentIndex() > 0)
+            {
+                render_pass_filters.command_buffer =
+                    m_render_pass_command_buffer_filter_box->currentText();
+                filter_strings
+                    << QString("Command Buffer: %1").arg(render_pass_filters.command_buffer);
+            }
+            if (m_render_pass_render_pass_type_filter_box->currentIndex() > 0)
+            {
+                render_pass_filters.render_pass_type =
+                    m_render_pass_render_pass_type_filter_box->currentText();
+                filter_strings << QString("Type: %1").arg(render_pass_filters.render_pass_type);
+            }
+            modification.render_pass_filters = render_pass_filters;
+            break;
+        }
+        case Dive::WhatIfType::kAnisotropicFilterDisabled:
+            break;
+        default:
+            break;
+    }
+
+    QString modification_string =
+        QString::fromUtf8(modification_type_info.ui_name_short.data(),
+                          static_cast<int>(modification_type_info.ui_name_short.size()));
+    if (!filter_strings.isEmpty())
+    {
+        modification_string += " (" + filter_strings.join(", ") + ")";
+    }
+
+    modification.ui_text = modification_string;
+
+    emit AddModification(modification);
 
     ShowMessage(QString::fromStdString(absl::StrCat("\"", modification_type_info.ui_name_short,
                                                     "\"", " modification added successfully")));

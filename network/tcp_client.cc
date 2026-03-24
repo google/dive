@@ -355,6 +355,7 @@ absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& con
     request.SetIndexCount(config.target_index_count);
     request.SetInstanceCount(config.target_instance_count);
     request.SetEnableDrawcallLimit(config.enable_drawcall_limit);
+    request.SetFilterByAlphaBlended(config.filter_by_alpha_blended);
 
     absl::Status status = SendSocketMessage(m_connection.get(), request);
     if (!status.ok())

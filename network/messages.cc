@@ -208,6 +208,7 @@ absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
     WriteBoolToBuffer(m_filter_by_index_count, dest);
     WriteBoolToBuffer(m_filter_by_instance_count, dest);
     WriteBoolToBuffer(m_enable_drawcall_limit, dest);
+    WriteBoolToBuffer(m_filter_by_alpha_blended, dest);
     return Dive::OkStatus();
 }
 
@@ -222,6 +223,7 @@ absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_filter_by_index_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_filter_by_instance_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_enable_drawcall_limit, ReadBoolFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_filter_by_alpha_blended, ReadBoolFromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("DrawcallFilteringRequest has unexpected trailing data.");

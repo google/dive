@@ -294,6 +294,8 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     req_serialize.SetFilterByIndexCount(false);
     req_serialize.SetFilterByInstanceCount(true);
     req_serialize.SetEnableDrawcallLimit(true);
+    req_serialize.SetFilterByAlphaBlended(true);
+
     Network::Buffer buf;
     absl::Status status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
@@ -312,6 +314,7 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     ASSERT_EQ(req_serialize.GetFilterByIndexCount(), req_deserialize.GetFilterByIndexCount());
     ASSERT_EQ(req_serialize.GetFilterByInstanceCount(), req_deserialize.GetFilterByInstanceCount());
     ASSERT_EQ(req_serialize.GetEnableDrawcallLimit(), req_deserialize.GetEnableDrawcallLimit());
+    ASSERT_EQ(req_serialize.GetFilterByAlphaBlended(), req_deserialize.GetFilterByAlphaBlended());
 }
 
 TEST(MessagesTest, DrawcallFilterConfigResponse)

@@ -55,6 +55,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             config.filter_by_index_count = request->GetFilterByIndexCount();
             config.filter_by_instance_count = request->GetFilterByInstanceCount();
             config.enable_drawcall_limit = request->GetEnableDrawcallLimit();
+            config.filter_by_alpha_blended = request->GetFilterByAlphaBlended();
 
             sDiveRuntimeLayer.EnqueueFrameBoundaryTask(
                 [config]() { sDiveRuntimeLayer.UpdateFilterConfig(config); });

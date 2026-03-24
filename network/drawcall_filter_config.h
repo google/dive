@@ -46,8 +46,9 @@ struct DrawcallFilterConfig
     // Drawcall limit
     bool enable_drawcall_limit = false;
     uint32_t max_drawcalls = 0;
+
     // Alpha Blending Filter
-    bool filter_alpha_blended = false;
+    bool filter_by_alpha_blended = false;
 };
 
 struct PSOInfo

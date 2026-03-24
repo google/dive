@@ -277,6 +277,9 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool GetEnableDrawcallLimit() const { return m_enable_drawcall_limit; }
     void SetEnableDrawcallLimit(bool enable) { m_enable_drawcall_limit = enable; }
 
+    bool GetFilterByAlphaBlended() const { return m_filter_by_alpha_blended; }
+    void SetFilterByAlphaBlended(bool filter) { m_filter_by_alpha_blended = filter; }
+
  private:
     uint32_t m_vertex_count = 0;
     uint32_t m_index_count = 0;
@@ -286,6 +289,7 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool m_filter_by_index_count = false;
     bool m_filter_by_instance_count = false;
     bool m_enable_drawcall_limit = false;
+    bool m_filter_by_alpha_blended = false;
 };
 
 class DrawcallFilterConfigResponse : public EmptyMessage

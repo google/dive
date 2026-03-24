@@ -837,7 +837,7 @@ bool DiveRuntimeLayer::ShouldFilterDrawCall(VkCommandBuffer command_buffer,
         return true;
     }
 
-    if (m_active_filter_config.filter_alpha_blended)
+    if (m_active_filter_config.filter_by_alpha_blended)
     {
         if (auto it = sCmdBufferCurrentPipelineHasAlpha.find(command_buffer);
             it != sCmdBufferCurrentPipelineHasAlpha.end() && it->second)

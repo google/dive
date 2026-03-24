@@ -31,6 +31,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "frame_boundary_detector.h"
 #include "gpu_time.h"
 #include "network/drawcall_filter_config.h"
@@ -227,7 +228,7 @@ class DiveRuntimeLayer
     // to prevent blocking multiple threads recording command buffers simultaneously.
     // The hottest paths (CmdDraw*) do not touch this mutex at all.
     std::shared_mutex m_pso_mutex;
-    std::unordered_map<VkPipeline, Network::PSOInfo> m_live_psos;
+    absl::flat_hash_map<VkPipeline, Network::PSOInfo> m_live_psos;
 };
 
 }  // namespace DiveLayer

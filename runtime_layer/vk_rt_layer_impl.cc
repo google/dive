@@ -55,7 +55,7 @@ static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 // requires absolutely no mutexes.
 // This map exists independently on every CPU core. No locks required!
 // Also, this keeps track of the current pipeline alpha state.
-static thread_local std::unordered_map<VkCommandBuffer, bool> sCmdBufferCurrentPipelineHasAlpha;
+static thread_local absl::flat_hash_map<VkCommandBuffer, bool> sCmdBufferCurrentPipelineHasAlpha;
 
 // The maximum number of command buffers that can be tracked simultaneously by the local thread.
 // It is used to prevent stale data for sCmdBufferCurrentPipelineHasAlpha.
@@ -173,9 +173,9 @@ VkResult DiveRuntimeLayer::SetDebugUtilsObjectNameEXT(
     {
         std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
         VkPipeline pipeline = (VkPipeline)pNameInfo->objectHandle;
-        if (m_live_psos.find(pipeline) != m_live_psos.end())
+        if (auto it = m_live_psos.find(pipeline); it != m_live_psos.end())
         {
-            m_live_psos[pipeline].name = pNameInfo->pObjectName;
+            it->second.name = pNameInfo->pObjectName;
         }
     }
     if (pfn)

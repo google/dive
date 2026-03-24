@@ -51,6 +51,7 @@ target_link_libraries(
     Vulkan::Headers
     network
     absl::log
+    absl::flat_hash_map
 )
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)

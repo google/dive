@@ -57,10 +57,6 @@ static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 // Also, this keeps track of the current pipeline alpha state.
 static thread_local absl::flat_hash_map<VkCommandBuffer, bool> sCmdBufferCurrentPipelineHasAlpha;
 
-// The maximum number of command buffers that can be tracked simultaneously by the local thread.
-// It is used to prevent stale data for sCmdBufferCurrentPipelineHasAlpha.
-static constexpr uint32_t kMaxConcurrentCBs = 512;
-
 // DiveRuntimeLayer
 DiveRuntimeLayer::DiveRuntimeLayer() : m_device_proc_addr(nullptr) {}
 
@@ -499,10 +495,6 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               const VkCommandBufferBeginInfo* pBeginInfo)
 {
-    if (sCmdBufferCurrentPipelineHasAlpha.size() > kMaxConcurrentCBs)
-    {
-        sCmdBufferCurrentPipelineHasAlpha.clear();
-    }
     sCmdBufferCurrentPipelineHasAlpha[commandBuffer] = false;
 
     VkResult result = pfn(commandBuffer, pBeginInfo);
@@ -528,6 +520,8 @@ VkResult DiveRuntimeLayer::BeginCommandBuffer(PFN_vkBeginCommandBuffer pfn,
 VkResult DiveRuntimeLayer::EndCommandBuffer(PFN_vkEndCommandBuffer pfn,
                                             VkCommandBuffer commandBuffer)
 {
+    sCmdBufferCurrentPipelineHasAlpha.erase(commandBuffer);
+
     Dive::GPUTime::GpuTimeStatus status =
         m_gpu_time.OnEndCommandBuffer(commandBuffer, m_pfn_vkCmdWriteTimestamp);
     if (!status.success)

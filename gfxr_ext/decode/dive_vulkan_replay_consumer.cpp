@@ -974,7 +974,7 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
     }
     fds_to_close_at_frame_end_.clear();
 
-    // Remove the node before processing since running actions may try to erase themslves. This
+    // Remove the node before processing since running actions may try to erase themselves. This
     // would cause iterators to become invalid and the program to not work as expected.
     while (!frame_end_actions_.empty())
     {

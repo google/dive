@@ -136,7 +136,7 @@ class AndroidDevice
     void EnableRuntimeWhatIf(bool enable_runtime_what_if);
     bool IsProcessRunning(absl::string_view process_name) const;
     bool FileExists(const std::string& file_path);
-    absl::Status IsAppRunningOnForeground(const std::string& package_name);
+    absl::Status IsAppRunningOnForeground(const std::string& target_name);
 
     enum class PackageListOptions
     {

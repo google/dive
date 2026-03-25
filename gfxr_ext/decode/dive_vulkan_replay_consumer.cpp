@@ -371,13 +371,14 @@ void DiveVulkanReplayConsumer::Process_vkBeginCommandBuffer(
     if (setup_finished_)
     {
         frame_end_actions_.insert({commandBuffer, [this, commandBuffer]() {
-                                       // call_info is largely for diagnostic
-                                       // purposes; use something obviously out of
-                                       // sequence to indicate that this is not part
-                                       // of the replay file.
-                                       Process_vkEndCommandBuffer(ApiCallInfo{},
-                                                                  /*returnValue=*/VK_SUCCESS,
-                                                                  commandBuffer);
+                                       // call_info is logged if this fails. Don't try to pretend
+                                       // that we're from the capture file.
+                                       //
+                                       // Note that Process_vkCreateCommandPool forces all command
+                                       // pools to support Reset.
+                                       Process_vkResetCommandBuffer(ApiCallInfo{},
+                                                                    /*returnValue=*/VK_SUCCESS,
+                                                                    commandBuffer, /*flags=*/0);
                                    }});
     }
 

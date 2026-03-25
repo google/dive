@@ -31,33 +31,24 @@ namespace Network
 // It only successfully filters command buffers that are built dynamically every frame.
 struct DrawcallFilterConfig
 {
-    // Vertex Count (for vkCmdDraw)
-    bool filter_by_vertex_count = false;
     uint32_t target_vertex_count = 0;
-
-    // Index Count (for vkCmdDrawIndexed)
-    bool filter_by_index_count = false;
     uint32_t target_index_count = 0;
-
-    // Instance Count (for vkCmdDraw and vkCmdDrawIndexed)
-    bool filter_by_instance_count = false;
     uint32_t target_instance_count = 0;
-
-    // Drawcall limit
-    bool enable_drawcall_limit = false;
     uint32_t max_drawcalls = 0;
 
-    // Alpha Blending Filter
+    bool filter_by_vertex_count = false;
+    bool filter_by_index_count = false;
+    bool filter_by_instance_count = false;
+    bool enable_drawcall_limit = false;
     bool filter_by_alpha_blended = false;
 };
 
 struct PSOInfo
 {
+    std::string name;
     // Cast VkPipeline to uint64_t for the network
     uint64_t pipeline_handle;
-
     bool has_alpha_blend;
-    std::string name;
 };
 
 }  // namespace Network

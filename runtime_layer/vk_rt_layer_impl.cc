@@ -145,9 +145,11 @@ VkResult DiveRuntimeLayer::CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines
                     }
                 }
             }
-            Network::PSOInfo info{.pipeline_handle = reinterpret_cast<uint64_t>(pPipelines[i]),
-                                  .has_alpha_blend = has_alpha,
-                                  .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque"};
+            Network::PSOInfo info{
+                .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque",
+                .pipeline_handle = reinterpret_cast<uint64_t>(pPipelines[i]),
+                .has_alpha_blend = has_alpha,
+            };
             m_live_psos[pPipelines[i]] = info;
         }
     }

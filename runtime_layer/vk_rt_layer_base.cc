@@ -259,6 +259,42 @@ VkResult DiveInterceptCreateImage(VkDevice device, const VkImageCreateInfo* pCre
     return sDiveRuntimeLayer.CreateImage(pfn, device, pCreateInfo, pAllocator, pImage);
 }
 
+VkResult DiveInterceptCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache,
+                                              uint32_t createInfoCount,
+                                              const VkGraphicsPipelineCreateInfo* pCreateInfos,
+                                              const VkAllocationCallbacks* pAllocator,
+                                              VkPipeline* pPipelines)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+    return sDiveRuntimeLayer.CreateGraphicsPipelines(
+        layer_data->dispatch_table.CreateGraphicsPipelines, device, pipelineCache, createInfoCount,
+        pCreateInfos, pAllocator, pPipelines);
+}
+
+void DiveInterceptDestroyPipeline(VkDevice device, VkPipeline pipeline,
+                                  const VkAllocationCallbacks* pAllocator)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+    sDiveRuntimeLayer.DestroyPipeline(layer_data->dispatch_table.DestroyPipeline, device, pipeline,
+                                      pAllocator);
+}
+
+void DiveInterceptCmdBindPipeline(VkCommandBuffer commandBuffer,
+                                  VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+    sDiveRuntimeLayer.CmdBindPipeline(layer_data->dispatch_table.CmdBindPipeline, commandBuffer,
+                                      pipelineBindPoint, pipeline);
+}
+
+VkResult DiveInterceptSetDebugUtilsObjectNameEXT(VkDevice device,
+                                                 const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+    return sDiveRuntimeLayer.SetDebugUtilsObjectNameEXT(
+        layer_data->dispatch_table.SetDebugUtilsObjectNameEXT, device, pNameInfo);
+}
+
 void DiveInterceptCmdDraw(VkCommandBuffer commandBuffer, uint32_t vertexCount,
                           uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
 {
@@ -453,6 +489,17 @@ VkResult DiveInterceptResetCommandBuffer(VkCommandBuffer commandBuffer,
 
     pfn = layer_data->dispatch_table.ResetCommandBuffer;
     return sDiveRuntimeLayer.ResetCommandBuffer(pfn, commandBuffer, flags);
+}
+
+VkResult DiveInterceptResetCommandPool(VkDevice device, VkCommandPool commandPool,
+                                       VkCommandPoolResetFlags flags)
+{
+    PFN_vkResetCommandPool pfn = nullptr;
+
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+
+    pfn = layer_data->dispatch_table.ResetCommandPool;
+    return sDiveRuntimeLayer.ResetCommandPool(pfn, device, commandPool, flags);
 }
 
 VkResult DiveInterceptBeginCommandBuffer(VkCommandBuffer commandBuffer,
@@ -916,6 +963,14 @@ extern "C"
         if (0 == strcmp(func, "vkQueuePresentKHR"))
             return (PFN_vkVoidFunction)DiveInterceptQueuePresentKHR;
         if (0 == strcmp(func, "vkCreateImage")) return (PFN_vkVoidFunction)DiveInterceptCreateImage;
+        if (0 == strcmp(func, "vkCreateGraphicsPipelines"))
+            return (PFN_vkVoidFunction)DiveInterceptCreateGraphicsPipelines;
+        if (0 == strcmp(func, "vkDestroyPipeline"))
+            return (PFN_vkVoidFunction)DiveInterceptDestroyPipeline;
+        if (0 == strcmp(func, "vkCmdBindPipeline"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdBindPipeline;
+        if (0 == strcmp(func, "vkSetDebugUtilsObjectNameEXT"))
+            return (PFN_vkVoidFunction)DiveInterceptSetDebugUtilsObjectNameEXT;
         if (0 == strcmp(func, "vkCmdDraw")) return (PFN_vkVoidFunction)DiveInterceptCmdDraw;
         if (0 == strcmp(func, "vkCmdDrawIndexed"))
             return (PFN_vkVoidFunction)DiveInterceptCmdDrawIndexed;
@@ -956,6 +1011,8 @@ extern "C"
             return (PFN_vkVoidFunction)DiveInterceptBeginCommandBuffer;
         if (0 == strcmp(func, "vkResetCommandBuffer"))
             return (PFN_vkVoidFunction)DiveInterceptResetCommandBuffer;
+        if (0 == strcmp(func, "vkResetCommandPool"))
+            return (PFN_vkVoidFunction)DiveInterceptResetCommandPool;
         if (0 == strcmp(func, "vkEndCommandBuffer"))
             return (PFN_vkVoidFunction)DiveInterceptEndCommandBuffer;
         if (0 == strcmp(func, "vkAcquireNextImageKHR"))

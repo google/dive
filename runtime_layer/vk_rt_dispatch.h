@@ -52,6 +52,7 @@ struct DeviceDispatchTable
     PFN_vkAllocateCommandBuffers AllocateCommandBuffers = nullptr;
     PFN_vkFreeCommandBuffers FreeCommandBuffers = nullptr;
     PFN_vkResetCommandBuffer ResetCommandBuffer = nullptr;
+    PFN_vkResetCommandPool ResetCommandPool = nullptr;
     PFN_vkBeginCommandBuffer BeginCommandBuffer = nullptr;
     PFN_vkEndCommandBuffer EndCommandBuffer = nullptr;
     PFN_vkAcquireNextImageKHR AcquireNextImageKHR = nullptr;

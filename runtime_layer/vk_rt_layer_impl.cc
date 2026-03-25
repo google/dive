@@ -145,7 +145,6 @@ VkResult DiveRuntimeLayer::CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines
                     }
                 }
             }
-
             Network::PSOInfo info{.pipeline_handle = reinterpret_cast<uint64_t>(pPipelines[i]),
                                   .has_alpha_blend = has_alpha,
                                   .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque"};
@@ -651,8 +650,6 @@ VkResult DiveRuntimeLayer::QueueSubmit(PFN_vkQueueSubmit pfn, VkQueue queue, uin
     bool is_frame_boundary = m_boundary_detector.ContainsFrameBoundary(submitCount, pSubmits);
     if (is_frame_boundary)
     {
-        m_boundary_detector.ClearBoundaryFlags(submitCount, pSubmits);
-
         // Process frame boundary tasks for OpenXR apps.
         ProcessFrameBoundaryTasks();
     }

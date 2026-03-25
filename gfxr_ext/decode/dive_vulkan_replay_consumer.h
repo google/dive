@@ -183,6 +183,26 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         const ApiCallInfo& call_info, format::HandleId device, format::HandleId imageView,
         StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
+    void Process_vkCreateBuffer(const ApiCallInfo& call_info, VkResult returnValue,
+                                format::HandleId device,
+                                StructPointerDecoder<Decoded_VkBufferCreateInfo>* pCreateInfo,
+                                StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                HandlePointerDecoder<VkBuffer>* pBuffer) override;
+
+    void Process_vkDestroyBuffer(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId buffer,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
+    void Process_vkCreateBufferView(
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+        StructPointerDecoder<Decoded_VkBufferViewCreateInfo>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkBufferView>* pView) override;
+
+    void Process_vkDestroyBufferView(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId bufferView,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 

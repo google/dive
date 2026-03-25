@@ -244,9 +244,19 @@ if(MSVC)
     target_compile_definitions(${PROJECT_NAME}_lib PRIVATE QT_DLL)
 endif()
 
+#set_target_properties(
+#    ${PROJECT_NAME}
+#    PROPERTIES INSTALL_RPATH "${DIVE_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+#)
+
 set_target_properties(
     ${PROJECT_NAME}
-    PROPERTIES INSTALL_RPATH "${DIVE_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+    PROPERTIES
+        INSTALL_RPATH "${DIVE_RPATH}"
+        BUILD_WITH_INSTALL_RPATH
+            FALSE # This is the default, but good to be explicit
+        SKIP_BUILD_RPATH
+            FALSE # Ensure CMake adds absolute paths for the build tree
 )
 
 target_include_directories(

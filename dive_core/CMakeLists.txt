@@ -31,6 +31,7 @@ if(MSVC)
 endif() # MSVC
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(DIVE_CORE_GENERATED_FILE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
@@ -156,7 +157,7 @@ endif() # NOT MSVC AND NOT APPLE
 
 add_library(
     ${PROJECT_NAME}
-    STATIC
+    SHARED
     # Platform specific:
     $<$<PLATFORM_ID:Windows>:event_state.natvis>
     # Generated
@@ -219,6 +220,32 @@ add_library(
     stl_replacement.h
     struct_of_arrays.h
 )
+
+if(APPLE)
+    set(DIVE_RPATH "@executable_path/../Frameworks")
+else()
+    set(DIVE_RPATH "$ORIGIN")
+endif()
+
+set_target_properties(
+    ${PROJECT_NAME}
+    PROPERTIES
+        CXX_VISIBILITY_PRESET default
+        VISIBILITY_INLINES_HIDDEN OFF
+        INSTALL_NAME_DIR "@rpath"
+        BUILD_WITH_INSTALL_RPATH FALSE
+        INSTALL_RPATH "${DIVE_RPATH}"
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
+if(APPLE)
+    install(
+        TARGETS ${PROJECT_NAME}
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
+    )
+endif()
+
+install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DEST_HOST}")
 
 add_dependencies(${PROJECT_NAME} pm4_info)
 add_dependencies(${PROJECT_NAME} adreno_header)

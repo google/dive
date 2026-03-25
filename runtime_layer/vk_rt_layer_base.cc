@@ -963,7 +963,7 @@ extern "C"
         if (0 == strcmp(func, "vkQueueSubmit")) return (PFN_vkVoidFunction)DiveInterceptQueueSubmit;
         if (0 == strcmp(func, "vkGetDeviceQueue2"))
             return (PFN_vkVoidFunction)DiveInterceptGetDeviceQueue2;
-        if (0 == strcmp(func, "vkEndGetDeviceQueue"))
+        if (0 == strcmp(func, "vkGetDeviceQueue"))
             return (PFN_vkVoidFunction)DiveInterceptGetDeviceQueue;
         if (0 == strcmp(func, "vkDestroyDevice"))
             return (PFN_vkVoidFunction)&DiveInterceptDestroyDevice;

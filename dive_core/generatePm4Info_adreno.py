@@ -935,11 +935,21 @@ def outputFunctionsCpp(pm4_info_file):
   pm4_info_file.writelines('''
 const char *GetOpCodeString(uint32_t op_code)
 {
+    if (op_code >= g_sOpCodeToString.size())
+    {
+        return "UNKNOWN_OPCODE";
+    }
+
     return g_sOpCodeToString[op_code];
 }
 
 const RegInfo *GetRegInfo(uint32_t reg)
 {
+    if (reg >= g_sRegInfo.size())
+    {
+        return nullptr;
+    }
+
     // check without variant as key
     if (g_sRegInfo[reg].m_name == nullptr)
     {
@@ -1008,6 +1018,11 @@ const char *GetEnumString(uint32_t enum_handle, uint32_t val)
 
 const PacketInfo *GetPacketInfo(uint32_t op_code)
 {
+    if (op_code >= g_sPacketInfo.size())
+    {
+        return nullptr;
+    }
+
     // check without variant as key
     if (g_sPacketInfo[op_code].m_name == nullptr)
     {
@@ -1026,6 +1041,11 @@ const PacketInfo *GetPacketInfo(uint32_t op_code)
 
 const PacketInfo *GetPacketInfo(uint32_t op_code, const char *name)
 {
+    if (op_code >= g_sPacketInfo.size())
+    {
+        return nullptr;
+    }
+
     if (g_sPacketInfo[op_code].m_name == nullptr)
         return nullptr;
     if (strcmp(g_sPacketInfo[op_code].m_name, name) == 0)

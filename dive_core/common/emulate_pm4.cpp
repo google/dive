@@ -286,6 +286,10 @@ bool EmulateStateTracker::IsRegSet(uint32_t offset) const
 //--------------------------------------------------------------------------------------------------
 bool EmulateStateTracker::IsRegSet(uint32_t offset, ShaderEnableBit shader_enable_bit) const
 {
+    if (offset == kInvalidRegOffset)
+    {
+        return false;
+    }
     uint32_t index = static_cast<uint32_t>(shader_enable_bit);
     uint8_t is_reg_set = (m_reg_is_set[index][offset / 8] & (1 << (offset % 8)));
     return static_cast<bool>(is_reg_set);

@@ -14,11 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <mutex>
 #include <vector>
 
+#include "absl/base/no_destructor.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/str_format.h"
 #include "dive/log/log_utils.h"
 #include "dive/os/command_utils.h"
 
@@ -30,6 +33,11 @@ limitations under the License.
 namespace Dive
 {
 
+// Global mutex to serialize handle inheritance in Windows.
+// This prevents concurrent RunCommand calls from accidentally
+// inheriting each other's open pipe handles.
+static absl::NoDestructor<std::mutex> process_mutex;
+
 absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
     LogCommand(command);
@@ -40,6 +48,17 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     HANDLE hChildStdOutWr = NULL;
     HANDLE hChildStdErrRd = NULL;
     HANDLE hChildStdErrWr = NULL;
+
+    absl::Cleanup cleanup_read_handles = [&hChildStdOutRd, &hChildStdErrRd] {
+        if (hChildStdOutRd)
+        {
+            CloseHandle(hChildStdOutRd);
+        }
+        if (hChildStdErrRd)
+        {
+            CloseHandle(hChildStdErrRd);
+        }
+    };
 
     SECURITY_ATTRIBUTES sa;
     STARTUPINFO si;
@@ -53,63 +72,72 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = NULL;
 
-    if (!CreatePipe(&hChildStdOutRd, &hChildStdOutWr, &sa, 0))
-    {
-        err_msg = "Create pipe to read stdout failed.";
-        return absl::InternalError(err_msg);
-    }
-    if (!SetHandleInformation(hChildStdOutRd, HANDLE_FLAG_INHERIT, 0))
-    {
-        err_msg = "SetHandleInformation for stdout failed.";
-        return absl::InternalError(err_msg);
-    }
-    if (!CreatePipe(&hChildStdErrRd, &hChildStdErrWr, &sa, 0))
-    {
-        err_msg = "CreatePipe for stderr failed.";
-        return absl::InternalError(err_msg);
-    }
-    if (!SetHandleInformation(hChildStdErrRd, HANDLE_FLAG_INHERIT, 0))
-    {
-        err_msg = "SetHandleInformation for stdout failed.";
-        return absl::InternalError(err_msg);
-    }
-
-    si.cb = sizeof(si);
-    si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.hStdOutput = hChildStdOutWr;
-    si.hStdError = hChildStdErrWr;
-    si.wShowWindow = SW_HIDE;
-
     int len = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, NULL, 0);
     std::vector<wchar_t> cmd(len);
 
     int res = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, cmd.data(), len);
     if (res == 0)
     {
-        err_msg = "Failed to convert std::string to utf-8 string.";
-        return absl::InternalError(err_msg);
+        return absl::InternalError("Failed to convert std::string to utf-8 string.");
     }
 
-    bool bSuccess = CreateProcessW(NULL,
-                                   cmd.data(),  // command line
-                                   NULL,        // process security attributes
-                                   NULL,        // primary thread security attributes
-                                   TRUE,        // handles are inherited
-                                   CREATE_UNICODE_ENVIRONMENT,  // creation flags
-                                   NULL,                        // use parent's environment
-                                   NULL,                        // use parent's current directory
-                                   &si,                         // STARTUPINFO pointer
-                                   &pi);                        // receives PROCESS_INFORMATION
+    bool bSuccess = false;
+
+    {
+        // We use a global mutex to serialize pipe creation and process launching. Because
+        // CreateProcessW is called with bInheritHandles = TRUE, it inherits all inheritable handles
+        // currently open in the entire parent process. If multiple threads create pipes
+        // concurrently, a long-running child process can accidentally inherit a sibling thread's
+        // pipe. This prevents the OS from sending an EOF signal when the sibling process dies,
+        // causing ReadFile to hang indefinitely and freeze the host UI. The mutex prevents this
+        // handle leak.
+        std::lock_guard<std::mutex> lock(*process_mutex);
+
+        if (!CreatePipe(&hChildStdOutRd, &hChildStdOutWr, &sa, 0))
+        {
+            return absl::InternalError("Create pipe to read stdout failed.");
+        }
+
+        absl::Cleanup cleanup_stdout_write = [hChildStdOutWr] { CloseHandle(hChildStdOutWr); };
+
+        if (!SetHandleInformation(hChildStdOutRd, HANDLE_FLAG_INHERIT, 0))
+        {
+            return absl::InternalError("SetHandleInformation for stdout failed.");
+        }
+
+        if (!CreatePipe(&hChildStdErrRd, &hChildStdErrWr, &sa, 0))
+        {
+            return absl::InternalError("CreatePipe for stderr failed.");
+        }
+
+        absl::Cleanup cleanup_stderr_write = [hChildStdErrWr] { CloseHandle(hChildStdErrWr); };
+
+        if (!SetHandleInformation(hChildStdErrRd, HANDLE_FLAG_INHERIT, 0))
+        {
+            return absl::InternalError("SetHandleInformation for stderr failed.");
+        }
+
+        si.cb = sizeof(si);
+        si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        si.hStdOutput = hChildStdOutWr;
+        si.hStdError = hChildStdErrWr;
+        si.wShowWindow = SW_HIDE;
+
+        bSuccess = CreateProcessW(NULL,
+                                  cmd.data(),                  // command line
+                                  NULL,                        // process security attributes
+                                  NULL,                        // primary thread security attributes
+                                  TRUE,                        // handles are inherited
+                                  CREATE_UNICODE_ENVIRONMENT,  // creation flags
+                                  NULL,                        // use parent's environment
+                                  NULL,                        // use parent's current directory
+                                  &si,                         // STARTUPINFO pointer
+                                  &pi);                        // receives PROCESS_INFORMATION
+    }
 
     if (!bSuccess)
     {
-        err_msg = absl::StrFormat("Error create process %d", GetLastError());
-        return absl::InternalError(err_msg);
-    }
-    else
-    {
-        CloseHandle(hChildStdOutWr);
-        CloseHandle(hChildStdErrWr);
+        return absl::InternalError(absl::StrFormat("Error create process %d", GetLastError()));
     }
 
     BOOL success = FALSE;
@@ -120,7 +148,10 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     {
         success = ReadFile(hChildStdOutRd, buf, sizeof(buf), &dwOutputRead, NULL);
         output += std::string(buf, dwOutputRead);
-        if (!success && !dwOutputRead) break;
+        if (!success && !dwOutputRead)
+        {
+            break;
+        }
     }
     output = absl::StripAsciiWhitespace(output);
 
@@ -129,12 +160,12 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
         success = ReadFile(hChildStdErrRd, buf, sizeof(buf), &dwErrorRead, NULL);
         output += std::string(buf, dwErrorRead);
 
-        if (!success && !dwErrorRead) break;
+        if (!success && !dwErrorRead)
+        {
+            break;
+        }
     }
     output = absl::StripAsciiWhitespace(output);
-
-    CloseHandle(hChildStdOutRd);
-    CloseHandle(hChildStdErrRd);
 
     WaitForSingleObject(pi.hProcess, INFINITE);
     int ret = 0;

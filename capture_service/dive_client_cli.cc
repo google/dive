@@ -376,7 +376,8 @@ absl::Status TriggerPm4Capture(const CommandContext& ctx)
     {
         return Dive::FailedPreconditionError("No device selected, can't capture.");
     }
-    if (absl::Status ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
+
+    if (absl::Status ret = device->GetCurrentApplication()->IsAppRunningOnForeground(); !ret.ok())
     {
         return Dive::StatusWithContext(ret, "Device check failed");
     }
@@ -595,7 +596,8 @@ absl::StatusOr<GfxrCaptureControlFlow> TriggerGfxrCapture(
     {
         return Dive::FailedPreconditionError("No device selected, can't capture.");
     }
-    if (absl::Status ret = device->IsAppRunningOnForeground(ctx.options.package); !ret.ok())
+
+    if (absl::Status ret = device->GetCurrentApplication()->IsAppRunningOnForeground(); !ret.ok())
     {
         return Dive::StatusWithContext(ret, "Device check failed");
     }

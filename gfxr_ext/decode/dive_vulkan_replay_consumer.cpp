@@ -292,6 +292,9 @@ void DiveVulkanReplayConsumer::Process_vkFreeCommandBuffers(
     const ApiCallInfo& call_info, format::HandleId device, format::HandleId commandPool,
     uint32_t commandBufferCount, HandlePointerDecoder<VkCommandBuffer>* pCommandBuffers)
 {
+    MapHandles<VulkanCommandBufferInfo>(pCommandBuffers, commandBufferCount,
+                                        &CommonObjectInfoTable::GetVkCommandBufferInfo);
+
     Dive::GPUTime::GpuTimeStatus status =
         gpu_time_.OnFreeCommandBuffers(commandBufferCount, pCommandBuffers->GetHandlePointer());
     if (!status.success)

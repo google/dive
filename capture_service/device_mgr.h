@@ -136,7 +136,7 @@ class AndroidDevice
     void EnableRuntimeWhatIf(bool enable_runtime_what_if);
     bool IsProcessRunning(absl::string_view process_name) const;
     bool FileExists(const std::string& file_path);
-    absl::Status IsAppRunningOnForeground(const std::string& package_name);
+    absl::Status IsAppRunningOnForeground(const std::string& target_name);
 
     enum class PackageListOptions
     {
@@ -207,14 +207,14 @@ class AndroidDevice
     // Check if the device is unlocked
     absl::Status CheckDeviceUnlocked();
 
+    absl::Status CheckShellOutput(const std::string& command, const std::string& expected,
+                                  const std::string& error_msg);
+
  private:
     explicit AndroidDevice(const std::string& serial);
 
     // The ABI must be consistent between the connected device and the Dive device resources
     absl::Status CheckAbi();
-
-    absl::Status CheckShellOutput(const std::string& command, const std::string& expected,
-                                  const std::string& error_msg);
 
     const std::string m_serial;
     DeviceInfo m_dev_info;

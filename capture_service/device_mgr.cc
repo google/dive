@@ -1334,35 +1334,13 @@ absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& target_n
                                 "SurfaceFlinger is not responding.");
     }
 
-    // If the target name contains '/', it's a file path, not an Android APK.
-    // Headless CLI apps don't have UI activities, so we just check if the process is alive.
-    if (absl::StrContains(target_name, "/"))
+    if (m_app)
     {
-        if (IsProcessRunning(target_name))
-        {
-            return absl::OkStatus();
-        }
-        else
-        {
-            return absl::FailedPreconditionError(
-                absl::StrFormat("The native executable '%s' is not running.", target_name));
-        }
+        return m_app->IsAppRunningOnForeground();
     }
 
-    std::string cmd = absl::StrFormat(
-        "dumpsys activity activities 2>/dev/null | "
-        "awk '/%s/ && /visible=true/ && /visibleRequested=true/ {found=1; exit} "
-        "END {print found+0}'",
-        target_name);
-
-    return CheckShellOutput(
-        cmd, "1",
-        absl::StrFormat(
-            "The application '%s' is not fully visible or active. The device might be locked, "
-            "asleep, or the "
-            "app is running in the background. Please ensure the device is unlocked and "
-            "the app is running in the foreground on screen, then try again.",
-            target_name));
+    return absl::FailedPreconditionError(
+        "No application is currently setup to check foreground status.");
 }
 
 absl::Status AndroidDevice::PinGpuClock(uint32_t freq_mhz) const

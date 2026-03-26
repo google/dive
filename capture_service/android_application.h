@@ -67,6 +67,7 @@ class AndroidApplication
     bool IsDebuggable() const { return m_is_debuggable; }
     bool IsStarted() const { return m_started; }
     virtual bool IsRunning() const;
+    virtual absl::Status IsAppRunningOnForeground() const;
     void SetGfxrEnabled(bool enable);
     void SetRuntimeWhatIfEnabled(bool enable);
     absl::Status RuntimeWhatIfSetup();
@@ -158,11 +159,13 @@ class VulkanCliApplication : public AndroidApplication
     absl::Status Start() override;
     absl::Status Stop() override;
     bool IsRunning() const override;
+    absl::Status IsAppRunningOnForeground() const override;
     absl::Status GfxrSetup() override;
 
  private:
     absl::Status Pm4CaptureSetup() override;
     absl::Status Pm4CaptureCleanup() override;
+    absl::Status WaitForProcessToStart();
     std::string m_command;
     std::string m_pid;
 };

@@ -207,14 +207,14 @@ class AndroidDevice
     // Check if the device is unlocked
     absl::Status CheckDeviceUnlocked();
 
+    absl::Status CheckShellOutput(const std::string& command, const std::string& expected,
+                                  const std::string& error_msg);
+
  private:
     explicit AndroidDevice(const std::string& serial);
 
     // The ABI must be consistent between the connected device and the Dive device resources
     absl::Status CheckAbi();
-
-    absl::Status CheckShellOutput(const std::string& command, const std::string& expected,
-                                  const std::string& error_msg);
 
     const std::string m_serial;
     DeviceInfo m_dev_info;

@@ -16,9 +16,7 @@ limitations under the License.
 
 #include "android_application.h"
 
-#include <chrono>
 #include <filesystem>
-#include <thread>
 
 #include "absl/log/log.h"
 #include "absl/status/status.h"
@@ -27,6 +25,8 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "common/macros.h"
 #include "constants.h"
 #include "device_mgr.h"
@@ -205,6 +205,23 @@ absl::Status AndroidApplication::Stop()
 }
 
 bool AndroidApplication::IsRunning() const { return m_dev.IsProcessRunning(m_package); }
+
+absl::Status AndroidApplication::IsAppRunningOnForeground() const
+{
+    std::string cmd = absl::StrFormat(
+        "dumpsys activity activities 2>/dev/null | "
+        "awk '/%s/ && /visible=true/ && /visibleRequested=true/ {found=1; exit} "
+        "END {print found+0}'",
+        m_package);
+
+    return m_dev.CheckShellOutput(
+        cmd, "1",
+        absl::StrFormat(
+            "The application '%s' is not fully visible or active. The device might be locked, "
+            "asleep, or the app is running in the background. Please ensure the device is "
+            "unlocked and the app is running in the foreground on screen, then try again.",
+            m_package));
+}
 
 VulkanApplication::VulkanApplication(AndroidDevice& dev, std::string package,
                                      std::string command_args)
@@ -658,6 +675,26 @@ absl::Status VulkanCliApplication::Cleanup()
     return absl::OkStatus();
 }
 
+absl::Status VulkanCliApplication::WaitForProcessToStart()
+{
+    constexpr int kMaxRetries = 20;
+    constexpr absl::Duration kRetryDelay = absl::Milliseconds(100);
+
+    for (int i = 0; i < kMaxRetries; ++i)
+    {
+        auto pid_result = m_dev.Adb().RunAndGetResult("shell pidof " + m_command);
+        if (pid_result.ok() && !absl::StripAsciiWhitespace(*pid_result).empty())
+        {
+            m_pid = *pid_result;
+            return absl::OkStatus();
+        }
+        absl::SleepFor(kRetryDelay);
+    }
+
+    return absl::NotFoundError(
+        absl::StrCat("Failed to find process ID for ", m_command, " after timeout."));
+}
+
 absl::Status VulkanCliApplication::Start()
 {
     std::string cmd;
@@ -673,30 +710,7 @@ absl::Status VulkanCliApplication::Start()
     }
 
     RETURN_IF_ERROR(m_dev.Adb().RunCommandBackground(cmd));
-
-    // The Android OS takes a few milliseconds to spawn the background process.
-    // Use a short polling loop so "pidof" doesn't fail if it checks too fast.
-    const int max_retries = 20;
-    const auto retry_delay = std::chrono::milliseconds(100);
-    bool process_found = false;
-
-    for (int i = 0; i < max_retries; ++i)
-    {
-        auto pid_result = m_dev.Adb().RunAndGetResult("shell pidof " + m_command);
-        if (pid_result.ok() && !absl::StripAsciiWhitespace(*pid_result).empty())
-        {
-            m_pid = *pid_result;
-            process_found = true;
-            break;
-        }
-        std::this_thread::sleep_for(retry_delay);
-    }
-
-    if (!process_found)
-    {
-        return absl::NotFoundError(
-            absl::StrCat("Failed to find process ID for ", m_command, " after timeout."));
-    }
+    RETURN_IF_ERROR(WaitForProcessToStart());
 
     m_started = true;
     return absl::OkStatus();
@@ -734,6 +748,17 @@ absl::Status VulkanCliApplication::GfxrSetup()
     LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " ended";
     return absl::OkStatus();
 }
+
 bool VulkanCliApplication::IsRunning() const { return m_dev.IsProcessRunning(m_command); }
+
+absl::Status VulkanCliApplication::IsAppRunningOnForeground() const
+{
+    if (IsRunning())
+    {
+        return absl::OkStatus();
+    }
+    return absl::FailedPreconditionError(
+        absl::StrFormat("The native executable '%s' is not running.", m_command));
+}
 
 }  // namespace Dive

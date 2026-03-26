@@ -17,9 +17,11 @@ limitations under the License.
 #include <mutex>
 #include <vector>
 
+#include "absl/base/no_destructor.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/str_format.h"
 #include "dive/log/log_utils.h"
 #include "dive/os/command_utils.h"
 
@@ -34,7 +36,7 @@ namespace Dive
 // Global mutex to serialize handle inheritance in Windows.
 // This prevents concurrent RunCommand calls from accidentally
 // inheriting each other's open pipe handles.
-static std::mutex g_process_mutex;
+static absl::NoDestructor<std::mutex> process_mutex;
 
 absl::StatusOr<std::string> RunCommand(const std::string& command)
 {
@@ -79,7 +81,7 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
         // pipe. This prevents the OS from sending an EOF signal when the sibling process dies,
         // causing ReadFile to hang indefinitely and freeze the host UI. The mutex prevents this
         // handle leak.
-        std::lock_guard<std::mutex> lock(g_process_mutex);
+        std::lock_guard<std::mutex> lock(*process_mutex);
 
         if (!CreatePipe(&hChildStdOutRd, &hChildStdOutWr, &sa, 0))
         {
@@ -88,16 +90,24 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
         }
         if (!SetHandleInformation(hChildStdOutRd, HANDLE_FLAG_INHERIT, 0))
         {
+            CloseHandle(hChildStdOutRd);
+            CloseHandle(hChildStdOutWr);
             err_msg = "SetHandleInformation for stdout failed.";
             return absl::InternalError(err_msg);
         }
         if (!CreatePipe(&hChildStdErrRd, &hChildStdErrWr, &sa, 0))
         {
+            CloseHandle(hChildStdOutRd);
+            CloseHandle(hChildStdOutWr);
             err_msg = "CreatePipe for stderr failed.";
             return absl::InternalError(err_msg);
         }
         if (!SetHandleInformation(hChildStdErrRd, HANDLE_FLAG_INHERIT, 0))
         {
+            CloseHandle(hChildStdOutRd);
+            CloseHandle(hChildStdOutWr);
+            CloseHandle(hChildStdErrRd);
+            CloseHandle(hChildStdErrWr);
             err_msg = "SetHandleInformation for stderr failed.";
             return absl::InternalError(err_msg);
         }
@@ -131,6 +141,13 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
 
     if (!bSuccess)
     {
+        // If CreateProcessW failed, the pipes were successfully created but
+        // will never be used. Close the remaining handles to prevent a leak.
+        CloseHandle(hChildStdOutRd);
+        CloseHandle(hChildStdOutWr);
+        CloseHandle(hChildStdErrRd);
+        CloseHandle(hChildStdErrWr);
+
         err_msg = absl::StrFormat("Error create process %d", GetLastError());
         return absl::InternalError(err_msg);
     }

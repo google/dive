@@ -141,9 +141,8 @@ VkResult DiveRuntimeLayer::CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines
                     }
                 }
             }
-            Network::PSOInfo info{
+            TrackedPSO info{
                 .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque",
-                .pipeline_handle = reinterpret_cast<uint64_t>(pPipelines[i]),
                 .has_alpha_blend = has_alpha,
             };
             m_live_psos[pPipelines[i]] = info;
@@ -788,9 +787,11 @@ std::vector<Network::PSOInfo> DiveRuntimeLayer::GetLivePSOs()
     std::vector<Network::PSOInfo> result;
     std::shared_lock<std::shared_mutex> lock(m_pso_mutex);
     result.reserve(m_live_psos.size());
-    for (const auto& [pipeline, data] : m_live_psos)
+    for (const auto& [pipeline, state] : m_live_psos)
     {
-        result.push_back(data);
+        result.push_back(Network::PSOInfo{.name = state.name,
+                                          .pipeline_handle = reinterpret_cast<uint64_t>(pipeline),
+                                          .has_alpha_blend = state.has_alpha_blend});
     }
     return result;
 }

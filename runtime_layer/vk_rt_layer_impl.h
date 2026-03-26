@@ -41,6 +41,12 @@ namespace DiveLayer
 class DiveRuntimeLayer
 {
  public:
+    struct TrackedPSO
+    {
+        std::string name;
+        bool has_alpha_blend;
+    };
+
     DiveRuntimeLayer();
     ~DiveRuntimeLayer();
     VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
@@ -226,7 +232,7 @@ class DiveRuntimeLayer
     // to prevent blocking multiple threads recording command buffers simultaneously.
     // The hottest paths (CmdDraw*) do not touch this mutex at all.
     std::shared_mutex m_pso_mutex;
-    absl::flat_hash_map<VkPipeline, Network::PSOInfo> m_live_psos;
+    absl::flat_hash_map<VkPipeline, TrackedPSO> m_live_psos;
 };
 
 }  // namespace DiveLayer

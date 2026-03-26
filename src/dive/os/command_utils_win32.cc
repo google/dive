@@ -49,6 +49,17 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     HANDLE hChildStdErrRd = NULL;
     HANDLE hChildStdErrWr = NULL;
 
+    absl::Cleanup cleanup_read_handles = [&hChildStdOutRd, &hChildStdErrRd] {
+        if (hChildStdOutRd)
+        {
+            CloseHandle(hChildStdOutRd);
+        }
+        if (hChildStdErrRd)
+        {
+            CloseHandle(hChildStdErrRd);
+        }
+    };
+
     SECURITY_ATTRIBUTES sa;
     STARTUPINFO si;
     PROCESS_INFORMATION pi;
@@ -67,8 +78,7 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     int res = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, cmd.data(), len);
     if (res == 0)
     {
-        err_msg = "Failed to convert std::string to utf-8 string.";
-        return absl::InternalError(err_msg);
+        return absl::InternalError("Failed to convert std::string to utf-8 string.");
     }
 
     bool bSuccess = false;
@@ -85,31 +95,26 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
 
         if (!CreatePipe(&hChildStdOutRd, &hChildStdOutWr, &sa, 0))
         {
-            err_msg = "Create pipe to read stdout failed.";
-            return absl::InternalError(err_msg);
+            return absl::InternalError("Create pipe to read stdout failed.");
         }
+
+        absl::Cleanup cleanup_stdout_write = [hChildStdOutWr] { CloseHandle(hChildStdOutWr); };
+
         if (!SetHandleInformation(hChildStdOutRd, HANDLE_FLAG_INHERIT, 0))
         {
-            CloseHandle(hChildStdOutRd);
-            CloseHandle(hChildStdOutWr);
-            err_msg = "SetHandleInformation for stdout failed.";
-            return absl::InternalError(err_msg);
+            return absl::InternalError("SetHandleInformation for stdout failed.");
         }
+
         if (!CreatePipe(&hChildStdErrRd, &hChildStdErrWr, &sa, 0))
         {
-            CloseHandle(hChildStdOutRd);
-            CloseHandle(hChildStdOutWr);
-            err_msg = "CreatePipe for stderr failed.";
-            return absl::InternalError(err_msg);
+            return absl::InternalError("CreatePipe for stderr failed.");
         }
+
+        absl::Cleanup cleanup_stderr_write = [hChildStdErrWr] { CloseHandle(hChildStdErrWr); };
+
         if (!SetHandleInformation(hChildStdErrRd, HANDLE_FLAG_INHERIT, 0))
         {
-            CloseHandle(hChildStdOutRd);
-            CloseHandle(hChildStdOutWr);
-            CloseHandle(hChildStdErrRd);
-            CloseHandle(hChildStdErrWr);
-            err_msg = "SetHandleInformation for stderr failed.";
-            return absl::InternalError(err_msg);
+            return absl::InternalError("SetHandleInformation for stderr failed.");
         }
 
         si.cb = sizeof(si);
@@ -128,28 +133,11 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
                                   NULL,                        // use parent's current directory
                                   &si,                         // STARTUPINFO pointer
                                   &pi);                        // receives PROCESS_INFORMATION
-
-        if (bSuccess)
-        {
-            // Close the write ends in the parent process IMMEDIATELY after
-            // the child is created. This ensures the child is the only process
-            // holding the write handles, and prevents other threads from inheriting them.
-            CloseHandle(hChildStdOutWr);
-            CloseHandle(hChildStdErrWr);
-        }
     }
 
     if (!bSuccess)
     {
-        // If CreateProcessW failed, the pipes were successfully created but
-        // will never be used. Close the remaining handles to prevent a leak.
-        CloseHandle(hChildStdOutRd);
-        CloseHandle(hChildStdOutWr);
-        CloseHandle(hChildStdErrRd);
-        CloseHandle(hChildStdErrWr);
-
-        err_msg = absl::StrFormat("Error create process %d", GetLastError());
-        return absl::InternalError(err_msg);
+        return absl::InternalError(absl::StrFormat("Error create process %d", GetLastError()));
     }
 
     BOOL success = FALSE;
@@ -160,7 +148,10 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
     {
         success = ReadFile(hChildStdOutRd, buf, sizeof(buf), &dwOutputRead, NULL);
         output += std::string(buf, dwOutputRead);
-        if (!success && !dwOutputRead) break;
+        if (!success && !dwOutputRead)
+        {
+            break;
+        }
     }
     output = absl::StripAsciiWhitespace(output);
 
@@ -169,12 +160,12 @@ absl::StatusOr<std::string> RunCommand(const std::string& command)
         success = ReadFile(hChildStdErrRd, buf, sizeof(buf), &dwErrorRead, NULL);
         output += std::string(buf, dwErrorRead);
 
-        if (!success && !dwErrorRead) break;
+        if (!success && !dwErrorRead)
+        {
+            break;
+        }
     }
     output = absl::StripAsciiWhitespace(output);
-
-    CloseHandle(hChildStdOutRd);
-    CloseHandle(hChildStdErrRd);
 
     WaitForSingleObject(pi.hProcess, INFINITE);
     int ret = 0;

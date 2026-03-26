@@ -207,7 +207,7 @@ void DiveRuntimeLayer::CmdDraw(PFN_vkCmdDraw pfn, VkCommandBuffer commandBuffer,
                                uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
                                uint32_t firstInstance)
 {
-    if (ShouldFilterDrawCall(commandBuffer, vertexCount, std::nullopt, instanceCount))
+    if (ShouldFilterDrawCall<true, false, true>(commandBuffer, vertexCount, 0, instanceCount))
     {
         return;
     }
@@ -224,7 +224,7 @@ void DiveRuntimeLayer::CmdDrawIndexed(PFN_vkCmdDrawIndexed pfn, VkCommandBuffer 
                                       uint32_t firstIndex, int32_t vertexOffset,
                                       uint32_t firstInstance)
 {
-    if (ShouldFilterDrawCall(commandBuffer, std::nullopt, indexCount, instanceCount))
+    if (ShouldFilterDrawCall<false, true, true>(commandBuffer, 0, indexCount, instanceCount))
     {
         return;
     }
@@ -259,7 +259,7 @@ void DiveRuntimeLayer::CmdDrawIndirect(PFN_vkCmdDrawIndirect pfn, VkCommandBuffe
                                        VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
                                        uint32_t stride)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -276,7 +276,7 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirect(PFN_vkCmdDrawIndexedIndirect pfn,
                                               VkDeviceSize offset, uint32_t drawCount,
                                               uint32_t stride)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -294,7 +294,7 @@ void DiveRuntimeLayer::CmdDrawIndirectCount(PFN_vkCmdDrawIndirectCount pfn,
                                             VkDeviceSize countBufferOffset, uint32_t maxDrawCount,
                                             uint32_t stride)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -312,7 +312,7 @@ void DiveRuntimeLayer::CmdDrawIndexedIndirectCount(PFN_vkCmdDrawIndexedIndirectC
                                                    VkDeviceSize countBufferOffset,
                                                    uint32_t maxDrawCount, uint32_t stride)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -328,7 +328,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksEXT(PFN_vkCmdDrawMeshTasksEXT pfn,
                                            VkCommandBuffer commandBuffer, uint32_t groupCountX,
                                            uint32_t groupCountY, uint32_t groupCountZ)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -345,7 +345,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectEXT(PFN_vkCmdDrawMeshTasksIndirec
                                                    VkDeviceSize offset, uint32_t drawCount,
                                                    uint32_t stride)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -364,7 +364,7 @@ void DiveRuntimeLayer::CmdDrawMeshTasksIndirectCountEXT(PFN_vkCmdDrawMeshTasksIn
                                                         VkDeviceSize countBufferOffset,
                                                         uint32_t maxDrawCount, uint32_t stride)
 {
-    if (ShouldFilterDrawCall(commandBuffer))
+    if (ShouldFilterDrawCall<false, false, false>(commandBuffer))
     {
         return;
     }
@@ -809,25 +809,35 @@ bool DiveRuntimeLayer::CheckAndIncrementDrawcallCount()
     return false;
 }
 
-bool DiveRuntimeLayer::ShouldFilterDrawCall(VkCommandBuffer command_buffer,
-                                            std::optional<uint32_t> vertex_count,
-                                            std::optional<uint32_t> index_count,
-                                            std::optional<uint32_t> instance_count) const
+template <bool HasVertex, bool HasIndex, bool HasInstance>
+bool DiveRuntimeLayer::ShouldFilterDrawCall(VkCommandBuffer command_buffer, uint32_t vertex_count,
+                                            uint32_t index_count, uint32_t instance_count) const
 {
-    if (vertex_count.has_value() && m_active_filter_config.filter_by_vertex_count &&
-        vertex_count.value() == m_active_filter_config.target_vertex_count)
+    if constexpr (HasVertex)
     {
-        return true;
+        if (m_active_filter_config.filter_by_vertex_count &&
+            vertex_count == m_active_filter_config.target_vertex_count)
+        {
+            return true;
+        }
     }
-    if (index_count.has_value() && m_active_filter_config.filter_by_index_count &&
-        index_count.value() == m_active_filter_config.target_index_count)
+
+    if constexpr (HasIndex)
     {
-        return true;
+        if (m_active_filter_config.filter_by_index_count &&
+            index_count == m_active_filter_config.target_index_count)
+        {
+            return true;
+        }
     }
-    if (instance_count.has_value() && m_active_filter_config.filter_by_instance_count &&
-        instance_count.value() == m_active_filter_config.target_instance_count)
+
+    if constexpr (HasInstance)
     {
-        return true;
+        if (m_active_filter_config.filter_by_instance_count &&
+            instance_count == m_active_filter_config.target_instance_count)
+        {
+            return true;
+        }
     }
 
     if (m_active_filter_config.filter_by_alpha_blended)

@@ -25,7 +25,6 @@ limitations under the License.
 #include <limits>
 #include <mutex>
 #include <numeric>
-#include <optional>
 #include <set>
 #include <shared_mutex>
 #include <unordered_map>
@@ -190,10 +189,9 @@ class DiveRuntimeLayer
  private:
     bool CheckAndIncrementDrawcallCount();
 
-    bool ShouldFilterDrawCall(VkCommandBuffer command_buffer,
-                              std::optional<uint32_t> vertex_count = std::nullopt,
-                              std::optional<uint32_t> index_count = std::nullopt,
-                              std::optional<uint32_t> instance_count = std::nullopt) const;
+    template <bool HasVertex, bool HasIndex, bool HasInstance>
+    bool ShouldFilterDrawCall(VkCommandBuffer command_buffer, uint32_t vertex_count = 0,
+                              uint32_t index_count = 0, uint32_t instance_count = 0) const;
 
     Dive::GPUTime m_gpu_time;
     Dive::FrameBoundaryDetector m_boundary_detector;

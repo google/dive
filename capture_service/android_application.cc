@@ -661,53 +661,20 @@ absl::Status VulkanCliApplication::Cleanup()
 absl::Status VulkanCliApplication::Start()
 {
     std::string cmd;
-
-    // We wrap the command in (...) and redirect all I/O to /dev/null with "&" to fully detach the
-    // process on the Android device.
-    //
-    // If we don't do this, the host "adb" process keeps its stdout/stderr pipes open until the CLI
-    // app finishes. This inherited pipe leak causes the host's UI thread to freeze, as it gets
-    // stuck waiting for an EOF (End of File) signal that won't arrive until the app exits
-    // naturally.
-    //
-    // - ( ... ): Wrapping a command in parentheses tells the Android OS to spawn a completely
-    // separate, isolated child shell (a subshell) to run the command. This helps group the commands
-    // and their redirections together safely.
-    //
-    // - </dev/null: This tells the process to read its input from /dev/null. If the app
-    // accidentally expects user input, it would normally pause and wait forever. Reading from the
-    // /dev/null immediately sends an "End of File" signal, ensuring the process never
-    // hangs waiting for a keyboard press.
-    //
-    // - >/dev/null: This takes all the normal text the benchmark would normally print to the
-    // console and throws it directly into the /dev/null. This breaks the connection to the OS pipe
-    // that the C++ adb process is listening to. Because the output is thrown away, the C++ thread
-    // knows it has nothing to wait for.
-    //
-    // - 2>&1: Redirect output 2 (errors) to wherever output 1 (normal text) is currently going.
-    // Since we just pointed output 1 to the /dev/null, this forces all crash logs and errors into
-    // the /dev/null as well. It guarantees absolutely zero text data is sent back through the ADB
-    // pipe.
-    //
-    // - &: Placed at the very end to tell the Android OS to start the subshell but don't wait for
-    // it to finish.
     if (m_gfxr_enabled)
     {
-        cmd = absl::StrFormat("shell \"(%s %s </dev/null >/dev/null 2>&1 &)\"", m_command,
-                              m_command_args);
+        cmd = absl::StrFormat("shell %s %s", m_command, m_command_args);
     }
     else
     {
-        cmd = absl::StrFormat("shell \"(LD_PRELOAD=%s/%s %s %s </dev/null >/dev/null 2>&1 &)\"",
-                              Dive::DeviceResourcesConstants::kDeployFolderPath,
-                              Dive::DeviceResourcesConstants::kWrapLibName, m_command,
-                              m_command_args);
+        cmd = absl::StrFormat(
+            "shell LD_PRELOAD=%s/%s %s %s", Dive::DeviceResourcesConstants::kDeployFolderPath,
+            Dive::DeviceResourcesConstants::kWrapLibName, m_command, m_command_args);
     }
 
-    // Because the shell command is detached, this executes and returns instantly.
     RETURN_IF_ERROR(m_dev.Adb().RunCommandBackground(cmd));
 
-    // The Android OS takes a few milliseconds to spawn the detached background process.
+    // The Android OS takes a few milliseconds to spawn the background process.
     // Use a short polling loop so "pidof" doesn't fail if it checks too fast.
     const int max_retries = 20;
     const auto retry_delay = std::chrono::milliseconds(100);

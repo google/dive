@@ -1334,9 +1334,9 @@ absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& target_n
                                 "SurfaceFlinger is not responding.");
     }
 
-    // If the target name starts with a '/', it's a file path, not an Android APK.
+    // If the target name contains '/', it's a file path, not an Android APK.
     // Headless CLI apps don't have UI activities, so we just check if the process is alive.
-    if (absl::StartsWith(target_name, "/"))
+    if (absl::StrContains(target_name, "/"))
     {
         if (IsProcessRunning(target_name))
         {

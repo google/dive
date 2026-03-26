@@ -46,15 +46,17 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         {
             LOG(INFO) << "Message received: DrawcallFilterConfigRequest";
             auto* request = static_cast<Network::DrawcallFilterConfigRequest*>(message.get());
-            Network::DrawcallFilterConfig config;
-            config.target_vertex_count = request->GetVertexCount();
-            config.target_index_count = request->GetIndexCount();
-            config.target_instance_count = request->GetInstanceCount();
-            config.max_drawcalls = request->GetMaxDrawcalls();
-            config.filter_by_vertex_count = request->GetFilterByVertexCount();
-            config.filter_by_index_count = request->GetFilterByIndexCount();
-            config.filter_by_instance_count = request->GetFilterByInstanceCount();
-            config.enable_drawcall_limit = request->GetEnableDrawcallLimit();
+            Network::DrawcallFilterConfig config{
+                .target_vertex_count = request->GetVertexCount(),
+                .target_index_count = request->GetIndexCount(),
+                .target_instance_count = request->GetInstanceCount(),
+                .max_drawcalls = request->GetMaxDrawcalls(),
+                .filter_by_vertex_count = request->GetFilterByVertexCount(),
+                .filter_by_index_count = request->GetFilterByIndexCount(),
+                .filter_by_instance_count = request->GetFilterByInstanceCount(),
+                .enable_drawcall_limit = request->GetEnableDrawcallLimit(),
+                .filter_by_alpha_blended = request->GetFilterByAlphaBlended(),
+            };
 
             sDiveRuntimeLayer.EnqueueFrameBoundaryTask(
                 [config]() { sDiveRuntimeLayer.UpdateFilterConfig(config); });
@@ -64,7 +66,20 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
                 !status.ok())
             {
                 LOG(ERROR) << "Send DrawcallFilterConfigResponse failed: " << status.message();
-                return;
+            }
+            return;
+        }
+        case Network::MessageType::LIVE_PSOS_REQUEST:
+        {
+            LOG(INFO) << "Message received: LivePSOsRequest";
+            std::vector<Network::PSOInfo> live_psos = sDiveRuntimeLayer.GetLivePSOs();
+
+            Network::LivePSOsResponse response;
+            response.SetPSOs(live_psos);
+            if (absl::Status status = Network::SendSocketMessage(client_conn, response);
+                !status.ok())
+            {
+                LOG(ERROR) << "Send LivePSOsResponse failed: " << status.message();
             }
             return;
         }

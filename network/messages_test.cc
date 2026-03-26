@@ -22,6 +22,7 @@ limitations under the License.
 #include <limits>
 
 #include "absl/status/status_matchers.h"
+#include "drawcall_filter_config.h"
 
 namespace
 {
@@ -293,6 +294,8 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     req_serialize.SetFilterByIndexCount(false);
     req_serialize.SetFilterByInstanceCount(true);
     req_serialize.SetEnableDrawcallLimit(true);
+    req_serialize.SetFilterByAlphaBlended(true);
+
     Network::Buffer buf;
     absl::Status status = req_serialize.Serialize(buf);
     ASSERT_TRUE(status.ok());
@@ -311,6 +314,7 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     ASSERT_EQ(req_serialize.GetFilterByIndexCount(), req_deserialize.GetFilterByIndexCount());
     ASSERT_EQ(req_serialize.GetFilterByInstanceCount(), req_deserialize.GetFilterByInstanceCount());
     ASSERT_EQ(req_serialize.GetEnableDrawcallLimit(), req_deserialize.GetEnableDrawcallLimit());
+    ASSERT_EQ(req_serialize.GetFilterByAlphaBlended(), req_deserialize.GetFilterByAlphaBlended());
 }
 
 TEST(MessagesTest, DrawcallFilterConfigResponse)
@@ -323,6 +327,47 @@ TEST(MessagesTest, DrawcallFilterConfigResponse)
 
     status = res.Deserialize(buf);
     ASSERT_TRUE(status.ok());
+}
+
+TEST(MessagesTest, LivePSOsRequest)
+{
+    Network::LivePSOsRequest req;
+    Network::Buffer buf;
+    absl::Status status = req.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req.GetMessageType(), Network::MessageType::LIVE_PSOS_REQUEST);
+
+    status = req.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+}
+
+TEST(MessagesTest, LivePSOsResponse)
+{
+    Network::LivePSOsResponse res_serialize;
+    std::vector<Network::PSOInfo> mock_psos;
+    mock_psos.push_back({"PSO_alpha_blend_enabled", 123456789012345ULL, true});
+    mock_psos.push_back({"MyCustomEngineOpaqueMaterial", 987654321098765ULL, false});
+    res_serialize.SetPSOs(mock_psos);
+
+    Network::Buffer buf;
+    absl::Status status = res_serialize.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::LIVE_PSOS_RESPONSE);
+
+    Network::LivePSOsResponse res_deserialize;
+    status = res_deserialize.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+
+    const auto& deserialized_psos = res_deserialize.GetPSOs();
+    ASSERT_EQ(deserialized_psos.size(), 2);
+
+    ASSERT_EQ(deserialized_psos[0].name, "PSO_alpha_blend_enabled");
+    ASSERT_EQ(deserialized_psos[0].pipeline_handle, 123456789012345ULL);
+    ASSERT_EQ(deserialized_psos[0].has_alpha_blend, true);
+
+    ASSERT_EQ(deserialized_psos[1].name, "MyCustomEngineOpaqueMaterial");
+    ASSERT_EQ(deserialized_psos[1].pipeline_handle, 987654321098765ULL);
+    ASSERT_EQ(deserialized_psos[1].has_alpha_blend, false);
 }
 
 }  // namespace

@@ -413,7 +413,6 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
 }
 
-// Test that OnBeginCommandBuffer does not crash when called with a command buffer not in the cache.
 TEST(GPUTimeTest, BeginCommandBufferForUnknownCmdDoesNotCrash)
 {
     GPUTime gpu_time;
@@ -423,13 +422,13 @@ TEST(GPUTimeTest, BeginCommandBufferForUnknownCmdDoesNotCrash)
     VkCommandBuffer unknown_cmd = reinterpret_cast<VkCommandBuffer>(0xdeadbeef);
 
     // This should return success (meaning it handled it gracefully) or at least not crash.
+    // This is a legitimate case for secondary command buffers
     ASSERT_TRUE(gpu_time.OnBeginCommandBuffer(unknown_cmd, 0, MockCmdWriteTimestamp).success);
 
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
 }
 
-// Test that UpdateFrameMetrics does not crash when some command buffers have invalid slots.
-TEST(GPUTimeTest, ExceedMaxQuerySlotsDoesNotCrash)
+TEST(GPUTimeTest, UpdateFrameMetricsExceedMaxQuerySlotsDoesNotCrash)
 {
     GPUTime gpu_time;
     gpu_time.SetEnable(true);
@@ -438,30 +437,34 @@ TEST(GPUTimeTest, ExceedMaxQuerySlotsDoesNotCrash)
     // Allocate many command buffers to exceed slots.
     // kTotalSlots is now 64x128 = 8192. Each allocation takes 2 slots.
     // So we need > 4096 command buffers.
-    constexpr uint32_t num_cmds = 5000;
-    constexpr uintptr_t cmd_ptr_start_addr = 0x1000;
+    constexpr uint32_t kCommandBufferCount = 5000;
+    constexpr uintptr_t kFakeCommandBufferStartAddress = 0x1000;
     std::vector<VkCommandBuffer> cmds;
-    for (uint32_t i = 0; i < num_cmds; ++i)
+    VkCommandBuffer failed_cmd = VK_NULL_HANDLE;
+
+    for (uint32_t i = 0; i < kCommandBufferCount; ++i)
     {
-        VkCommandBuffer cmd =
-            reinterpret_cast<VkCommandBuffer>(static_cast<uintptr_t>(cmd_ptr_start_addr + i));
+        auto cmd = reinterpret_cast<VkCommandBuffer>(
+            static_cast<uintptr_t>(kFakeCommandBufferStartAddress + i));
         VkCommandBufferAllocateInfo alloc_info = {};
         alloc_info.commandPool = MOCK_COMMAND_POOL;
         alloc_info.commandBufferCount = 1;
 
-        auto status = gpu_time.OnAllocateCommandBuffers(&alloc_info, &cmd);
-        if (status.success)
+        if (gpu_time.OnAllocateCommandBuffers(&alloc_info, &cmd).success)
         {
             cmds.push_back(cmd);
+        }
+        else if (failed_cmd == VK_NULL_HANDLE)
+        {
+            failed_cmd = cmd;
         }
     }
 
     // Some should have failed allocation.
-    ASSERT_LT(cmds.size(), num_cmds);
+    ASSERT_LT(cmds.size(), kCommandBufferCount);
+    ASSERT_NE(failed_cmd, VK_NULL_HANDLE);
 
     // Try to use one of the failed ones in OnBeginCommandBuffer.
-    VkCommandBuffer failed_cmd = reinterpret_cast<VkCommandBuffer>(
-        static_cast<uintptr_t>(cmd_ptr_start_addr + num_cmds - 1));
     ASSERT_TRUE(gpu_time.OnBeginCommandBuffer(failed_cmd, 0, MockCmdWriteTimestamp).success);
 
     // Mark a frame boundary with a VALID command buffer.

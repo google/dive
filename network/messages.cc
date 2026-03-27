@@ -208,6 +208,7 @@ absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
     WriteBoolToBuffer(m_filter_by_index_count, dest);
     WriteBoolToBuffer(m_filter_by_instance_count, dest);
     WriteBoolToBuffer(m_enable_drawcall_limit, dest);
+    WriteBoolToBuffer(m_filter_by_alpha_blended, dest);
     return Dive::OkStatus();
 }
 
@@ -222,9 +223,47 @@ absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_filter_by_index_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_filter_by_instance_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_enable_drawcall_limit, ReadBoolFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_filter_by_alpha_blended, ReadBoolFromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("DrawcallFilteringRequest has unexpected trailing data.");
+    }
+    return Dive::OkStatus();
+}
+
+absl::Status LivePSOsResponse::Serialize(Buffer& dest) const
+{
+    dest.clear();
+    WriteUint32ToBuffer(static_cast<uint32_t>(m_psos.size()), dest);
+    for (const auto& pso : m_psos)
+    {
+        WriteUint64ToBuffer(pso.pipeline_handle, dest);
+        WriteBoolToBuffer(pso.has_alpha_blend, dest);
+        WriteStringToBuffer(pso.name, dest);
+    }
+    return Dive::OkStatus();
+}
+
+absl::Status LivePSOsResponse::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+    uint32_t count;
+    ASSIGN_OR_RETURN(count, ReadUint32FromBuffer(src, offset));
+
+    m_psos.clear();
+    m_psos.reserve(count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        PSOInfo pso;
+        ASSIGN_OR_RETURN(pso.pipeline_handle, ReadUint64FromBuffer(src, offset));
+        ASSIGN_OR_RETURN(pso.has_alpha_blend, ReadBoolFromBuffer(src, offset));
+        ASSIGN_OR_RETURN(pso.name, ReadStringFromBuffer(src, offset));
+        m_psos.push_back(std::move(pso));
+    }
+
+    if (offset != src.size())
+    {
+        return Dive::InvalidArgumentError("LivePSOsResponse has unexpected trailing data.");
     }
     return Dive::OkStatus();
 }
@@ -343,6 +382,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
             break;
         case MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE:
             message = std::make_unique<DrawcallFilterConfigResponse>();
+            break;
+        case MessageType::LIVE_PSOS_REQUEST:
+            message = std::make_unique<LivePSOsRequest>();
+            break;
+        case MessageType::LIVE_PSOS_RESPONSE:
+            message = std::make_unique<LivePSOsResponse>();
             break;
         default:
             conn->Close();

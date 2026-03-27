@@ -1326,28 +1326,21 @@ absl::Status AndroidDevice::CheckShellOutput(const std::string& command,
     return absl::OkStatus();
 }
 
-absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& package_name)
+absl::Status AndroidDevice::IsAppRunningOnForeground(const std::string& target_name)
 {
-    if (package_name == "surfaceflinger")
+    if (target_name == "surfaceflinger")
     {
         return CheckShellOutput("service check SurfaceFlinger", "Service SurfaceFlinger: found",
                                 "SurfaceFlinger is not responding.");
     }
 
-    std::string cmd = absl::StrFormat(
-        "dumpsys activity activities 2>/dev/null | "
-        "awk '/%s/ && /visible=true/ && /visibleRequested=true/ {found=1; exit} "
-        "END {print found+0}'",
-        package_name);
+    if (m_app)
+    {
+        return m_app->IsAppRunningOnForeground();
+    }
 
-    return CheckShellOutput(
-        cmd, "1",
-        absl::StrFormat(
-            "The application '%s' is not fully visible or active. The device might be locked, "
-            "asleep, or the "
-            "app is running in the background. Please ensure the device is unlocked and "
-            "the app is running in the foreground on screen, then try again.",
-            package_name));
+    return absl::FailedPreconditionError(
+        "No application is currently setup to check foreground status.");
 }
 
 absl::Status AndroidDevice::PinGpuClock(uint32_t freq_mhz) const

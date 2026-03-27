@@ -41,6 +41,12 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->pfn_get_device_proc_addr = pa;
     dt->QueuePresentKHR = (PFN_vkQueuePresentKHR)pa(device, "vkQueuePresentKHR");
     dt->CreateImage = (PFN_vkCreateImage)pa(device, "vkCreateImage");
+    dt->CreateGraphicsPipelines =
+        (PFN_vkCreateGraphicsPipelines)pa(device, "vkCreateGraphicsPipelines");
+    dt->DestroyPipeline = (PFN_vkDestroyPipeline)pa(device, "vkDestroyPipeline");
+    dt->CmdBindPipeline = (PFN_vkCmdBindPipeline)pa(device, "vkCmdBindPipeline");
+    dt->SetDebugUtilsObjectNameEXT =
+        (PFN_vkSetDebugUtilsObjectNameEXT)pa(device, "vkSetDebugUtilsObjectNameEXT");
     dt->CmdDraw = (PFN_vkCmdDraw)pa(device, "vkCmdDraw");
     dt->CmdDrawIndexed = (PFN_vkCmdDrawIndexed)pa(device, "vkCmdDrawIndexed");
     dt->CmdDrawIndirect = (PFN_vkCmdDrawIndirect)pa(device, "vkCmdDrawIndirect");
@@ -72,6 +78,7 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
         (PFN_vkAllocateCommandBuffers)pa(device, "vkAllocateCommandBuffers");
     dt->FreeCommandBuffers = (PFN_vkFreeCommandBuffers)pa(device, "vkFreeCommandBuffers");
     dt->ResetCommandBuffer = (PFN_vkResetCommandBuffer)pa(device, "vkResetCommandBuffer");
+    dt->ResetCommandPool = (PFN_vkResetCommandPool)pa(device, "vkResetCommandPool");
     dt->BeginCommandBuffer = (PFN_vkBeginCommandBuffer)pa(device, "vkBeginCommandBuffer");
     dt->EndCommandBuffer = (PFN_vkEndCommandBuffer)pa(device, "vkEndCommandBuffer");
     dt->AcquireNextImageKHR = (PFN_vkAcquireNextImageKHR)pa(device, "vkAcquireNextImageKHR");

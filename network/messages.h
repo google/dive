@@ -17,6 +17,7 @@ limitations under the License.
 #pragma once
 
 #include "dive/common/status.h"
+#include "drawcall_filter_config.h"
 #include "serializable.h"
 #include "socket_connection.h"
 
@@ -63,6 +64,8 @@ enum class MessageType : uint32_t
     REMOVE_FILE_RESPONSE = 12,
     DRAWCALL_FILTER_CONFIG_REQUEST = 13,
     DRAWCALL_FILTER_CONFIG_RESPONSE = 14,
+    LIVE_PSOS_REQUEST = 15,
+    LIVE_PSOS_RESPONSE = 16,
 };
 
 class HandshakeMessage : public ISerializable
@@ -274,6 +277,9 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool GetEnableDrawcallLimit() const { return m_enable_drawcall_limit; }
     void SetEnableDrawcallLimit(bool enable) { m_enable_drawcall_limit = enable; }
 
+    bool GetFilterByAlphaBlended() const { return m_filter_by_alpha_blended; }
+    void SetFilterByAlphaBlended(bool filter) { m_filter_by_alpha_blended = filter; }
+
  private:
     uint32_t m_vertex_count = 0;
     uint32_t m_index_count = 0;
@@ -283,6 +289,7 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool m_filter_by_index_count = false;
     bool m_filter_by_instance_count = false;
     bool m_enable_drawcall_limit = false;
+    bool m_filter_by_alpha_blended = false;
 };
 
 class DrawcallFilterConfigResponse : public EmptyMessage
@@ -292,6 +299,26 @@ class DrawcallFilterConfigResponse : public EmptyMessage
     {
         return MessageType::DRAWCALL_FILTER_CONFIG_RESPONSE;
     }
+};
+
+class LivePSOsRequest : public EmptyMessage
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::LIVE_PSOS_REQUEST; }
+};
+
+class LivePSOsResponse : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::LIVE_PSOS_RESPONSE; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    const std::vector<PSOInfo>& GetPSOs() const { return m_psos; }
+    void SetPSOs(std::vector<PSOInfo> psos) { m_psos = std::move(psos); }
+
+ private:
+    std::vector<PSOInfo> m_psos;
 };
 
 // Message Helper Functions (TLV Framing).

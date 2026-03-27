@@ -72,6 +72,9 @@ class TcpClient
     // Sends a drawcall filter configuration request to the server.
     absl::Status SendDrawcallFilterConfig(const DrawcallFilterConfig& config);
 
+    // Requests the list of live PSOs from the server.
+    absl::StatusOr<std::vector<PSOInfo>> GetLivePSOs();
+
  private:
     // Performs a ping-pong check with the server.
     absl::Status PingServer();

@@ -355,6 +355,7 @@ absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& con
     request.SetIndexCount(config.target_index_count);
     request.SetInstanceCount(config.target_instance_count);
     request.SetEnableDrawcallLimit(config.enable_drawcall_limit);
+    request.SetFilterByAlphaBlended(config.filter_by_alpha_blended);
 
     absl::Status status = SendSocketMessage(m_connection.get(), request);
     if (!status.ok())
@@ -384,6 +385,44 @@ absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& con
     }
     std::cout << "Client: SendDrawcallFilterConfig successful." << std::endl;
     return Dive::OkStatus();
+}
+
+absl::StatusOr<std::vector<PSOInfo>> TcpClient::GetLivePSOs()
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return Dive::FailedPreconditionError("GetLivePSOs: Client not connected.");
+    }
+
+    LivePSOsRequest request;
+    absl::Status send_status = SendSocketMessage(m_connection.get(), request);
+    if (!send_status.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(send_status, "GetLivePSOs: SendSocketMessage fail"));
+    }
+
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
+    if (!receive.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(receive.status(), "GetLivePSOs: ReceiveSocketMessage fail"));
+    }
+
+    std::unique_ptr<ISerializable> response = *std::move(receive);
+    if (response->GetMessageType() != MessageType::LIVE_PSOS_RESPONSE)
+    {
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "GetLivePSOs: Unexpected message type in response (Expected: ",
+            MessageType::LIVE_PSOS_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
+    }
+
+    LivePSOsResponse* pso_response = static_cast<LivePSOsResponse*>(response.get());
+    return pso_response->GetPSOs();
 }
 
 absl::Status TcpClient::PingServer()

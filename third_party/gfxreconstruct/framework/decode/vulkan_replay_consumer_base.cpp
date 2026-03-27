@@ -6267,8 +6267,17 @@ VulkanReplayConsumerBase::OverrideCreateImage(PFN_vkCreateImage                 
 
         if (loading_trim_state_)
         {
-            // ensure image-initialization can copy
-            modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            // GOOGLE: Avoid VUID-vkCmdCopyBufferToImage-dstImage-07969. If subsampled, use PixelShaderImageCopy instead
+            // of vkCmdCopyBufferToImage in VulkanResourceInitializer::InitializeImage during InitImageCommand.
+            if ((modified_create_info.flags & VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT) == 0)
+            {
+                // ensure image-initialization can copy
+                modified_create_info.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            }
+            else
+            {
+                GFXRECON_LOG_DEBUG("Spec does not allow transfer to subsampled image ID %" PRIu64, capture_id);
+            }
         }
     }
 

@@ -75,6 +75,9 @@ class TcpClient
     // Requests the list of live PSOs from the server.
     absl::StatusOr<std::vector<PSOInfo>> GetLivePSOs();
 
+    // Requests the list of live render passes from the server.
+    absl::StatusOr<std::vector<RenderPassInfo>> GetLiveRenderPasses();
+
  private:
     // Performs a ping-pong check with the server.
     absl::Status PingServer();

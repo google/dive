@@ -66,6 +66,8 @@ enum class MessageType : uint32_t
     DRAWCALL_FILTER_CONFIG_RESPONSE = 14,
     LIVE_PSOS_REQUEST = 15,
     LIVE_PSOS_RESPONSE = 16,
+    LIVE_RENDER_PASSES_REQUEST = 17,
+    LIVE_RENDER_PASSES_RESPONSE = 18,
 };
 
 class HandshakeMessage : public ISerializable
@@ -253,6 +255,9 @@ class DrawcallFilterConfigRequest : public ISerializable
 
     absl::Status Deserialize(const Buffer& src) override;
 
+    const std::string& GetTargetRenderPassName() const { return m_target_render_pass_name; }
+    void SetTargetRenderPassName(const std::string& name) { m_target_render_pass_name = name; }
+
     uint32_t GetVertexCount() const { return m_vertex_count; }
     void SetVertexCount(uint32_t count) { m_vertex_count = count; }
 
@@ -280,7 +285,11 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool GetFilterByAlphaBlended() const { return m_filter_by_alpha_blended; }
     void SetFilterByAlphaBlended(bool filter) { m_filter_by_alpha_blended = filter; }
 
+    bool GetFilterByRenderPass() const { return m_filter_by_render_pass; }
+    void SetFilterByRenderPass(bool filter) { m_filter_by_render_pass = filter; }
+
  private:
+    std::string m_target_render_pass_name;
     uint32_t m_vertex_count = 0;
     uint32_t m_index_count = 0;
     uint32_t m_instance_count = 0;
@@ -290,6 +299,7 @@ class DrawcallFilterConfigRequest : public ISerializable
     bool m_filter_by_instance_count = false;
     bool m_enable_drawcall_limit = false;
     bool m_filter_by_alpha_blended = false;
+    bool m_filter_by_render_pass = false;
 };
 
 class DrawcallFilterConfigResponse : public EmptyMessage
@@ -319,6 +329,26 @@ class LivePSOsResponse : public ISerializable
 
  private:
     std::vector<PSOInfo> m_psos;
+};
+
+class LiveRenderPassesRequest : public EmptyMessage
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::LIVE_RENDER_PASSES_REQUEST; }
+};
+
+class LiveRenderPassesResponse : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::LIVE_RENDER_PASSES_RESPONSE; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    const std::vector<RenderPassInfo>& GetRenderPasses() const { return m_rps; }
+    void SetRenderPasses(std::vector<RenderPassInfo> rps) { m_rps = std::move(rps); }
+
+ private:
+    std::vector<RenderPassInfo> m_rps;
 };
 
 // Message Helper Functions (TLV Framing).

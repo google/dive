@@ -420,6 +420,9 @@ GPUTime::GpuTimeStatus GPUTime::OnDestroyCommandPool(VkCommandPool command_pool)
     {
         if (it->second.pool == command_pool)
         {
+            m_timestamp_allocator.FreeSlots(
+                {it->second.begin_timestamp_offset, it->second.end_timestamp_offset});
+            RemoveCmdFromFrameCache(it->first);
             it = m_cmds.erase(it);
         }
         else
@@ -526,14 +529,15 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(
     {
         return GPUTime::GpuTimeStatus();
     }
-    m_timestamp_allocator.FreeSlots(m_cmds[command_buffer].renderpass_slots);
-    m_cmds[command_buffer].renderpass_slots.clear();
 
     if (m_cmds.find(command_buffer) == m_cmds.end())
     {
         // We do not insert timestamps into secondary command buffers
         return GPUTime::GpuTimeStatus();
     }
+
+    m_timestamp_allocator.FreeSlots(m_cmds[command_buffer].renderpass_slots);
+    m_cmds[command_buffer].renderpass_slots.clear();
 
     if (m_cmds[command_buffer].usage_one_submit)
     {
@@ -631,6 +635,13 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
                     {
                         const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
                         const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
+
+                        if (begin_timestamp_offset == TimeStampSlotAllocator::kInvalidIndex ||
+                            end_timestamp_offset == TimeStampSlotAllocator::kInvalidIndex)
+                        {
+                            continue;
+                        }
+
                         uint64_t availability_end =
                             m_timestamps_with_availability[end_timestamp_offset * 2 + 1];
                         uint64_t availability_begin =
@@ -673,10 +684,18 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
                     const uint32_t begin_timestamp_offset = m_cmds[cmd].begin_timestamp_offset;
                     const uint32_t end_timestamp_offset = m_cmds[cmd].end_timestamp_offset;
 
-                    uint64_t availability_end =
-                        m_timestamps_with_availability[end_timestamp_offset * 2 + 1];
-                    uint64_t availability_begin =
-                        m_timestamps_with_availability[begin_timestamp_offset * 2 + 1];
+                    uint64_t availability_end = 0;
+                    uint64_t availability_begin = 0;
+
+                    if (begin_timestamp_offset != TimeStampSlotAllocator::kInvalidIndex &&
+                        end_timestamp_offset != TimeStampSlotAllocator::kInvalidIndex)
+                    {
+                        availability_end =
+                            m_timestamps_with_availability[end_timestamp_offset * 2 + 1];
+                        availability_begin =
+                            m_timestamps_with_availability[begin_timestamp_offset * 2 + 1];
+                    }
+
                     ss << std::to_string(cmd_index);
                     if ((availability_begin == 0) || (availability_end == 0))
                     {
@@ -712,6 +731,12 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
 
     auto GetTimeDuration = [&](uint32_t begin_offset, uint32_t end_offset,
                                uint64_t timestamps_with_availability[]) -> std::optional<double> {
+        if (begin_offset == TimeStampSlotAllocator::kInvalidIndex ||
+            end_offset == TimeStampSlotAllocator::kInvalidIndex)
+        {
+            return std::nullopt;
+        }
+
         uint64_t availability_end = timestamps_with_availability[end_offset * 2 + 1];
         uint64_t availability_begin = timestamps_with_availability[begin_offset * 2 + 1];
 
@@ -795,6 +820,10 @@ GPUTime::GpuTimeStatus GPUTime::UpdateFrameMetrics(
 
 void GPUTime::RemoveCmdFromFrameCache(VkCommandBuffer cmd)
 {
+    if (m_cmds.find(cmd) == m_cmds.end())
+    {
+        return;
+    }
     // Free any slots that were used for render pass timings within this command buffer
     m_timestamp_allocator.FreeSlots(m_cmds[cmd].renderpass_slots);
     m_cmds[cmd].renderpass_slots.clear();
@@ -951,7 +980,7 @@ void GPUTime::ClearFrameCache() { m_frame_cmds.clear(); }
 GPUTime::GpuTimeStatus GPUTime::BeginRenderPass(VkCommandBuffer command_buffer,
                                                 PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
 {
-    if (!m_enable)
+    if (!m_enable || (m_cmds.find(command_buffer) == m_cmds.end()))
     {
         return GPUTime::GpuTimeStatus();
     }
@@ -964,7 +993,7 @@ GPUTime::GpuTimeStatus GPUTime::BeginRenderPass(VkCommandBuffer command_buffer,
 GPUTime::GpuTimeStatus GPUTime::EndRenderPass(VkCommandBuffer command_buffer,
                                               PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
 {
-    if (!m_enable)
+    if (!m_enable || (m_cmds.find(command_buffer) == m_cmds.end()))
     {
         return GPUTime::GpuTimeStatus();
     }

@@ -99,6 +99,21 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             }
             return;
         }
+        case Network::MessageType::DISABLE_TIMESTAMP_REQUEST:
+        {
+            LOG(INFO) << "Message received: DisableTimestampRequest";
+            auto* request = static_cast<Network::DisableTimestampRequest*>(message.get());
+
+            sDiveRuntimeLayer.SetDisableTimestamp(request->GetDisableTimestamp());
+
+            Network::DisableTimestampResponse response;
+            if (absl::Status status = Network::SendSocketMessage(client_conn, response);
+                !status.ok())
+            {
+                LOG(ERROR) << "Send DisableTimestampResponse failed: " << status.message();
+            }
+            return;
+        }
         default:
         {
             Network::BaseMessageHandler::HandleMessage(std::move(message), client_conn);

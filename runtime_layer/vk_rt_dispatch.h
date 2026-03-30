@@ -68,6 +68,9 @@ struct DeviceDispatchTable
     PFN_vkCmdBeginRenderPass2 CmdBeginRenderPass2 = nullptr;
     PFN_vkCmdEndRenderPass2 CmdEndRenderPass2 = nullptr;
     PFN_vkDestroyRenderPass DestroyRenderPass = nullptr;
+    PFN_vkCreateQueryPool CreateQueryPool = nullptr;
+    PFN_vkDestroyQueryPool DestroyQueryPool = nullptr;
+    PFN_vkCmdCopyQueryPoolResults CmdCopyQueryPoolResults = nullptr;
 
     // Mesh Shader Extensions
     PFN_vkCmdDrawMeshTasksEXT CmdDrawMeshTasksEXT = nullptr;

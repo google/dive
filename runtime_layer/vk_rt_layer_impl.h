@@ -31,6 +31,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "frame_boundary_detector.h"
 #include "gpu_time.h"
 #include "network/drawcall_filter_config.h"
@@ -196,6 +197,18 @@ class DiveRuntimeLayer
     void DestroyRenderPass(PFN_vkDestroyRenderPass pfn, VkDevice device, VkRenderPass renderPass,
                            const VkAllocationCallbacks* pAllocator);
 
+    VkResult CreateQueryPool(PFN_vkCreateQueryPool pfn, VkDevice device,
+                             const VkQueryPoolCreateInfo* pCreateInfo,
+                             const VkAllocationCallbacks* pAllocator, VkQueryPool* pQueryPool);
+
+    void DestroyQueryPool(PFN_vkDestroyQueryPool pfn, VkDevice device, VkQueryPool queryPool,
+                          const VkAllocationCallbacks* pAllocator);
+
+    void CmdCopyQueryPoolResults(PFN_vkCmdCopyQueryPoolResults pfn, VkCommandBuffer commandBuffer,
+                                 VkQueryPool queryPool, uint32_t firstQuery, uint32_t queryCount,
+                                 VkBuffer dstBuffer, VkDeviceSize dstOffset, VkDeviceSize stride,
+                                 VkQueryResultFlags flags);
+
     void UpdateFilterConfig(const Network::DrawcallFilterConfig& config)
     {
         std::unique_lock lock(m_config_mutex);
@@ -210,12 +223,25 @@ class DiveRuntimeLayer
 
     std::vector<Network::RenderPassInfo> GetLiveRenderPasses();
 
+    void SetDisableTimestamp(bool disable)
+    {
+        m_disable_timestamp.store(disable, std::memory_order_relaxed);
+    }
+
  private:
     bool CheckAndIncrementDrawcallCount();
 
     template <bool HasVertex, bool HasIndex, bool HasInstance>
     bool ShouldFilterDrawCall(VkCommandBuffer command_buffer, uint32_t vertex_count = 0,
                               uint32_t index_count = 0, uint32_t instance_count = 0) const;
+
+    bool IsTimestampDisabled() const { return m_disable_timestamp.load(std::memory_order_relaxed); }
+
+    bool IsTimestampQueryPool(VkQueryPool pool)
+    {
+        std::lock_guard<std::mutex> lock(m_query_pool_mutex);
+        return m_timestamp_query_pools.contains(pool);
+    }
 
     Dive::GPUTime m_gpu_time;
     Dive::FrameBoundaryDetector m_boundary_detector;
@@ -252,8 +278,13 @@ class DiveRuntimeLayer
     std::shared_mutex m_pso_mutex;
     absl::flat_hash_map<VkPipeline, TrackedPSO> m_live_psos;
 
-    mutable std::shared_mutex m_rp_mutex;
+    std::shared_mutex m_rp_mutex;
     absl::flat_hash_map<VkRenderPass, TrackedRenderPass> m_render_passes;
+
+    std::atomic<bool> m_disable_timestamp{false};
+    std::mutex m_query_pool_mutex;
+    absl::flat_hash_set<VkQueryPool> m_timestamp_query_pools;
+    std::atomic<uint64_t> m_synthetic_timestamp{1};
 };
 
 }  // namespace DiveLayer

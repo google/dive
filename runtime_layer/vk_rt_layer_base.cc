@@ -762,6 +762,34 @@ void DiveInterceptDestroyRenderPass(VkDevice device, VkRenderPass renderPass,
                                         renderPass, pAllocator);
 }
 
+VkResult DiveInterceptCreateQueryPool(VkDevice device, const VkQueryPoolCreateInfo* pCreateInfo,
+                                      const VkAllocationCallbacks* pAllocator,
+                                      VkQueryPool* pQueryPool)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+    return sDiveRuntimeLayer.CreateQueryPool(layer_data->dispatch_table.CreateQueryPool, device,
+                                             pCreateInfo, pAllocator, pQueryPool);
+}
+
+void DiveInterceptDestroyQueryPool(VkDevice device, VkQueryPool queryPool,
+                                   const VkAllocationCallbacks* pAllocator)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(device));
+    sDiveRuntimeLayer.DestroyQueryPool(layer_data->dispatch_table.DestroyQueryPool, device,
+                                       queryPool, pAllocator);
+}
+
+void DiveInterceptCmdCopyQueryPoolResults(VkCommandBuffer commandBuffer, VkQueryPool queryPool,
+                                          uint32_t firstQuery, uint32_t queryCount,
+                                          VkBuffer dstBuffer, VkDeviceSize dstOffset,
+                                          VkDeviceSize stride, VkQueryResultFlags flags)
+{
+    auto layer_data = GetDeviceLayerData(DataKey(commandBuffer));
+    sDiveRuntimeLayer.CmdCopyQueryPoolResults(layer_data->dispatch_table.CmdCopyQueryPoolResults,
+                                              commandBuffer, queryPool, firstQuery, queryCount,
+                                              dstBuffer, dstOffset, stride, flags);
+}
+
 extern "C"
 {
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateInstanceLayerProperties(
@@ -1066,6 +1094,13 @@ extern "C"
             return (PFN_vkVoidFunction)&DiveInterceptCmdEndRenderPass2;
         if (0 == strcmp(func, "vkDestroyRenderPass"))
             return (PFN_vkVoidFunction)DiveInterceptDestroyRenderPass;
+
+        if (0 == strcmp(func, "vkCreateQueryPool"))
+            return (PFN_vkVoidFunction)DiveInterceptCreateQueryPool;
+        if (0 == strcmp(func, "vkDestroyQueryPool"))
+            return (PFN_vkVoidFunction)DiveInterceptDestroyQueryPool;
+        if (0 == strcmp(func, "vkCmdCopyQueryPoolResults"))
+            return (PFN_vkVoidFunction)DiveInterceptCmdCopyQueryPoolResults;
 
         auto layer_data = GetDeviceLayerData(DataKey(dev));
         return layer_data->dispatch_table.pfn_get_device_proc_addr(dev, func);

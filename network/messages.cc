@@ -307,6 +307,24 @@ absl::Status LiveRenderPassesResponse::Deserialize(const Buffer& src)
     return Dive::OkStatus();
 }
 
+absl::Status DisableTimestampRequest::Serialize(Buffer& dest) const
+{
+    dest.clear();
+    WriteBoolToBuffer(m_disable, dest);
+    return Dive::OkStatus();
+}
+
+absl::Status DisableTimestampRequest::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+    ASSIGN_OR_RETURN(m_disable, ReadBoolFromBuffer(src, offset));
+    if (offset != src.size())
+    {
+        return Dive::InvalidArgumentError("DisableTimestampRequest has unexpected trailing data.");
+    }
+    return Dive::OkStatus();
+}
+
 absl::Status ReceiveBuffer(SocketConnection* conn, uint8_t* buffer, size_t size, int timeout_ms)
 {
     if (!conn)
@@ -433,6 +451,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
             break;
         case MessageType::LIVE_RENDER_PASSES_RESPONSE:
             message = std::make_unique<LiveRenderPassesResponse>();
+            break;
+        case MessageType::DISABLE_TIMESTAMP_REQUEST:
+            message = std::make_unique<DisableTimestampRequest>();
+            break;
+        case MessageType::DISABLE_TIMESTAMP_RESPONSE:
+            message = std::make_unique<DisableTimestampResponse>();
             break;
         default:
             conn->Close();

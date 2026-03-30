@@ -102,6 +102,11 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
 
     dt->DestroyRenderPass = (PFN_vkDestroyRenderPass)pa(device, "vkDestroyRenderPass");
 
+    dt->CreateQueryPool = (PFN_vkCreateQueryPool)pa(device, "vkCreateQueryPool");
+    dt->DestroyQueryPool = (PFN_vkDestroyQueryPool)pa(device, "vkDestroyQueryPool");
+    dt->CmdCopyQueryPoolResults =
+        (PFN_vkCmdCopyQueryPoolResults)pa(device, "vkCmdCopyQueryPoolResults");
+
     // Mesh Shaders
     dt->CmdDrawMeshTasksEXT = (PFN_vkCmdDrawMeshTasksEXT)pa(device, "vkCmdDrawMeshTasksEXT");
     dt->CmdDrawMeshTasksIndirectEXT =

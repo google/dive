@@ -183,6 +183,26 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         const ApiCallInfo& call_info, format::HandleId device, format::HandleId imageView,
         StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
 
+    void Process_vkCreateBuffer(const ApiCallInfo& call_info, VkResult returnValue,
+                                format::HandleId device,
+                                StructPointerDecoder<Decoded_VkBufferCreateInfo>* pCreateInfo,
+                                StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+                                HandlePointerDecoder<VkBuffer>* pBuffer) override;
+
+    void Process_vkDestroyBuffer(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId buffer,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
+    void Process_vkCreateBufferView(
+        const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+        StructPointerDecoder<Decoded_VkBufferViewCreateInfo>* pCreateInfo,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+        HandlePointerDecoder<VkBufferView>* pView) override;
+
+    void Process_vkDestroyBufferView(
+        const ApiCallInfo& call_info, format::HandleId device, format::HandleId bufferView,
+        StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator) override;
+
     void ProcessStateEndMarker(uint64_t frame_number) override;
     void ProcessFrameEndMarker(uint64_t frame_number) override;
 
@@ -230,13 +250,12 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // avoid leaking. The key is the FD stored in the capture file. The value is the FD made during
     // replay. We need to track both since vkImportFenceFdKHR uses the former.
     std::unordered_map<int, int> fds_to_close_at_frame_end_;
-    // Track objects that are created in the frame loop that must be destroyed at the end of the
-    // frame to prevent leaking. Based on how the application manages rendering and how GFXR capture
-    // works, we might get captures that straddle frames. This typically results in vkCreate calls
-    // that lack vkDestroy calls. For these cases, we can track and free objects so that they are
-    // not leaked.
-    std::unordered_map<format::HandleId, absl::AnyInvocable<void()>>
-        objects_to_destroy_at_frame_end_;
+    // Track operations that should be performed at the end of a frame loop to prevent unbalanced
+    // calls. E.g. a create without a destroy, a begin without an end. Based on how the application
+    // manages rendering and how GFXR capture works, we might get captures that straddle frames.
+    // This typically results in vkCreate calls that lack vkDestroy calls. For these cases, we can
+    // track and free objects so that they are not leaked.
+    std::unordered_map<format::HandleId, absl::AnyInvocable<void()>> frame_end_actions_;
     Dive::GPUTime gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";

@@ -284,7 +284,7 @@ void DiveVulkanReplayConsumer::Process_vkAllocateCommandBuffers(
         pAllocateInfo->GetPointer(), pCommandBuffers->GetHandlePointer());
     if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message.c_str());
+        GFXRECON_LOG_FATAL(status.message.c_str());
     }
 }
 
@@ -370,6 +370,21 @@ void DiveVulkanReplayConsumer::Process_vkBeginCommandBuffer(
 {
     VulkanReplayConsumer::Process_vkBeginCommandBuffer(call_info, returnValue, commandBuffer,
                                                        pBeginInfo);
+
+    if (setup_finished_)
+    {
+        frame_end_actions_.insert({commandBuffer, [this, commandBuffer]() {
+                                       // call_info is logged if this fails. Don't try to pretend
+                                       // that we're from the capture file.
+                                       //
+                                       // Note that Process_vkCreateCommandPool forces all command
+                                       // pools to support Reset.
+                                       Process_vkResetCommandBuffer(ApiCallInfo{},
+                                                                    /*returnValue=*/VK_SUCCESS,
+                                                                    commandBuffer, /*flags=*/0);
+                                   }});
+    }
+
     VkCommandBuffer in_commandBuffer = MapHandle<VulkanCommandBufferInfo>(
         commandBuffer, &CommonObjectInfoTable::GetVkCommandBufferInfo);
 
@@ -396,6 +411,11 @@ void DiveVulkanReplayConsumer::Process_vkEndCommandBuffer(const ApiCallInfo& cal
     }
 
     VulkanReplayConsumer::Process_vkEndCommandBuffer(call_info, returnValue, commandBuffer);
+
+    if (setup_finished_)
+    {
+        frame_end_actions_.erase(commandBuffer);
+    }
 }
 
 void DiveVulkanReplayConsumer::Process_vkQueueSubmit(
@@ -694,7 +714,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateFence(
     }
     else
     {
-        objects_to_destroy_at_frame_end_.insert(
+        frame_end_actions_.insert(
             {fence_id, [this, fence_id]() {
                  VulkanFenceInfo* fence_info = GetObjectInfoTable().GetVkFenceInfo(fence_id);
                  GFXRECON_ASSERT(fence_info != nullptr);
@@ -726,7 +746,7 @@ void DiveVulkanReplayConsumer::Process_vkDestroyFence(
 
         if (setup_finished_)
         {
-            objects_to_destroy_at_frame_end_.erase(fence);
+            frame_end_actions_.erase(fence);
         }
     }
 }
@@ -824,7 +844,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateImage(
     if (setup_finished_)
     {
         format::HandleId image = *pImage->GetPointer();
-        objects_to_destroy_at_frame_end_.insert(
+        frame_end_actions_.insert(
             {image, [this, image]() {
                  VulkanImageInfo* image_info = GetObjectInfoTable().GetVkImageInfo(image);
                  GFXRECON_ASSERT(image_info != nullptr);
@@ -854,7 +874,7 @@ void DiveVulkanReplayConsumer::Process_vkDestroyImage(
 {
     if (setup_finished_)
     {
-        objects_to_destroy_at_frame_end_.erase(image);
+        frame_end_actions_.erase(image);
     }
     VulkanReplayConsumer::Process_vkDestroyImage(call_info, device, image, pAllocator);
 }
@@ -868,7 +888,7 @@ void DiveVulkanReplayConsumer::Process_vkCreateImageView(
     if (setup_finished_)
     {
         format::HandleId image_view = *pView->GetPointer();
-        objects_to_destroy_at_frame_end_.insert(
+        frame_end_actions_.insert(
             {image_view, [this, image_view]() {
                  VulkanImageViewInfo* image_view_info =
                      GetObjectInfoTable().GetVkImageViewInfo(image_view);
@@ -895,9 +915,76 @@ void DiveVulkanReplayConsumer::Process_vkDestroyImageView(
 {
     if (setup_finished_)
     {
-        objects_to_destroy_at_frame_end_.erase(imageView);
+        frame_end_actions_.erase(imageView);
     }
     VulkanReplayConsumer::Process_vkDestroyImageView(call_info, device, imageView, pAllocator);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCreateBuffer(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkBufferCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkBuffer>* pBuffer)
+{
+    VulkanReplayConsumer::Process_vkCreateBuffer(call_info, returnValue, device, pCreateInfo,
+                                                 pAllocator, pBuffer);
+
+    if (setup_finished_)
+    {
+        format::HandleId buffer = *pBuffer->GetPointer();
+        frame_end_actions_.insert({buffer, [this, buffer, device]() {
+                                       // pAllocator is currently unused by replay. We can't capture
+                                       // pAllocator from the calling scope since the memory will be
+                                       // destroyed shortly after the calling scope returns.
+                                       Process_vkDestroyBuffer(ApiCallInfo{}, device, buffer,
+                                                               /*pAllocator=*/nullptr);
+                                   }});
+    }
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyBuffer(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId buffer,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    if (setup_finished_)
+    {
+        frame_end_actions_.erase(buffer);
+    }
+    VulkanReplayConsumer::Process_vkDestroyBuffer(call_info, device, buffer, pAllocator);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCreateBufferView(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkBufferViewCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkBufferView>* pView)
+{
+    VulkanReplayConsumer::Process_vkCreateBufferView(call_info, returnValue, device, pCreateInfo,
+                                                     pAllocator, pView);
+
+    if (setup_finished_)
+    {
+        format::HandleId buffer_view = *pView->GetPointer();
+        frame_end_actions_.insert({buffer_view, [this, buffer_view, device]() {
+                                       // pAllocator is currently unused by replay. We can't capture
+                                       // pAllocator from the calling scope since the memory will be
+                                       // destroyed shortly after the calling scope returns.
+                                       Process_vkDestroyBufferView(ApiCallInfo{}, device,
+                                                                   buffer_view,
+                                                                   /*pAllocator=*/nullptr);
+                                   }});
+    }
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyBufferView(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId bufferView,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    if (setup_finished_)
+    {
+        frame_end_actions_.erase(bufferView);
+    }
+    VulkanReplayConsumer::Process_vkDestroyBufferView(call_info, device, bufferView, pAllocator);
 }
 
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
@@ -958,11 +1045,13 @@ void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
     }
     fds_to_close_at_frame_end_.clear();
 
-    for (auto& [unused, destroy_object] : objects_to_destroy_at_frame_end_)
+    // Remove the node before processing since running actions may try to erase themselves. This
+    // would cause iterators to become invalid and the program to not work as expected.
+    while (!frame_end_actions_.empty())
     {
-        destroy_object();
+        auto node_handle = frame_end_actions_.extract(frame_end_actions_.begin());
+        node_handle.mapped()();
     }
-    objects_to_destroy_at_frame_end_.clear();
 }
 
 void DiveVulkanReplayConsumer::Process_vkGetFenceFdKHR(

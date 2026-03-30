@@ -284,7 +284,7 @@ void DiveVulkanReplayConsumer::Process_vkAllocateCommandBuffers(
         pAllocateInfo->GetPointer(), pCommandBuffers->GetHandlePointer());
     if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message.c_str());
+        GFXRECON_LOG_FATAL(status.message.c_str());
     }
 }
 
@@ -883,6 +883,73 @@ void DiveVulkanReplayConsumer::Process_vkDestroyImageView(
         frame_end_actions_.erase(imageView);
     }
     VulkanReplayConsumer::Process_vkDestroyImageView(call_info, device, imageView, pAllocator);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCreateBuffer(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkBufferCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkBuffer>* pBuffer)
+{
+    VulkanReplayConsumer::Process_vkCreateBuffer(call_info, returnValue, device, pCreateInfo,
+                                                 pAllocator, pBuffer);
+
+    if (setup_finished_)
+    {
+        format::HandleId buffer = *pBuffer->GetPointer();
+        frame_end_actions_.insert({buffer, [this, buffer, device]() {
+                                       // pAllocator is currently unused by replay. We can't capture
+                                       // pAllocator from the calling scope since the memory will be
+                                       // destroyed shortly after the calling scope returns.
+                                       Process_vkDestroyBuffer(ApiCallInfo{}, device, buffer,
+                                                               /*pAllocator=*/nullptr);
+                                   }});
+    }
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyBuffer(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId buffer,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    if (setup_finished_)
+    {
+        frame_end_actions_.erase(buffer);
+    }
+    VulkanReplayConsumer::Process_vkDestroyBuffer(call_info, device, buffer, pAllocator);
+}
+
+void DiveVulkanReplayConsumer::Process_vkCreateBufferView(
+    const ApiCallInfo& call_info, VkResult returnValue, format::HandleId device,
+    StructPointerDecoder<Decoded_VkBufferViewCreateInfo>* pCreateInfo,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator,
+    HandlePointerDecoder<VkBufferView>* pView)
+{
+    VulkanReplayConsumer::Process_vkCreateBufferView(call_info, returnValue, device, pCreateInfo,
+                                                     pAllocator, pView);
+
+    if (setup_finished_)
+    {
+        format::HandleId buffer_view = *pView->GetPointer();
+        frame_end_actions_.insert({buffer_view, [this, buffer_view, device]() {
+                                       // pAllocator is currently unused by replay. We can't capture
+                                       // pAllocator from the calling scope since the memory will be
+                                       // destroyed shortly after the calling scope returns.
+                                       Process_vkDestroyBufferView(ApiCallInfo{}, device,
+                                                                   buffer_view,
+                                                                   /*pAllocator=*/nullptr);
+                                   }});
+    }
+}
+
+void DiveVulkanReplayConsumer::Process_vkDestroyBufferView(
+    const ApiCallInfo& call_info, format::HandleId device, format::HandleId bufferView,
+    StructPointerDecoder<Decoded_VkAllocationCallbacks>* pAllocator)
+{
+    if (setup_finished_)
+    {
+        frame_end_actions_.erase(bufferView);
+    }
+    VulkanReplayConsumer::Process_vkDestroyBufferView(call_info, device, bufferView, pAllocator);
 }
 
 void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)

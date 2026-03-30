@@ -356,6 +356,8 @@ absl::Status TcpClient::SendDrawcallFilterConfig(const DrawcallFilterConfig& con
     request.SetInstanceCount(config.target_instance_count);
     request.SetEnableDrawcallLimit(config.enable_drawcall_limit);
     request.SetFilterByAlphaBlended(config.filter_by_alpha_blended);
+    request.SetFilterByRenderPass(config.filter_by_render_pass);
+    request.SetTargetRenderPassName(config.target_render_pass_name);
 
     absl::Status status = SendSocketMessage(m_connection.get(), request);
     if (!status.ok())
@@ -421,8 +423,45 @@ absl::StatusOr<std::vector<PSOInfo>> TcpClient::GetLivePSOs()
             MessageType::LIVE_PSOS_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
-    LivePSOsResponse* pso_response = static_cast<LivePSOsResponse*>(response.get());
-    return pso_response->GetPSOs();
+    return static_cast<LivePSOsResponse*>(response.get())->TakePSOs();
+}
+
+absl::StatusOr<std::vector<RenderPassInfo>> TcpClient::GetLiveRenderPasses()
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return Dive::FailedPreconditionError("GetLiveRenderPasses: Client not connected.");
+    }
+
+    LiveRenderPassesRequest request;
+    absl::Status send_status = SendSocketMessage(m_connection.get(), request);
+    if (!send_status.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(send_status, "GetLiveRenderPasses: SendSocketMessage fail"));
+    }
+
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
+    if (!receive.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(receive.status(),
+                                    "GetLiveRenderPasses: ReceiveSocketMessage fail"));
+    }
+
+    std::unique_ptr<ISerializable> response = *std::move(receive);
+    if (response->GetMessageType() != MessageType::LIVE_RENDER_PASSES_RESPONSE)
+    {
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "GetLiveRenderPasses: Unexpected message type in response (Expected: ",
+            MessageType::LIVE_RENDER_PASSES_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
+    }
+
+    return static_cast<LiveRenderPassesResponse*>(response.get())->TakeRenderPasses();
 }
 
 absl::Status TcpClient::PingServer()

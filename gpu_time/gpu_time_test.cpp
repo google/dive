@@ -413,5 +413,79 @@ TEST(GPUTimeTest, MultipleFramesUpdateMetricsCorrectly)
     ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
 }
 
+TEST(GPUTimeTest, BeginCommandBufferForUnknownCmdDoesNotCrash)
+{
+    GPUTime gpu_time;
+    gpu_time.SetEnable(true);
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
+
+    VkCommandBuffer unknown_cmd = reinterpret_cast<VkCommandBuffer>(0xdeadbeef);
+
+    // This should return success (meaning it handled it gracefully) or at least not crash.
+    // This is a legitimate case for secondary command buffers
+    ASSERT_TRUE(gpu_time.OnBeginCommandBuffer(unknown_cmd, 0, MockCmdWriteTimestamp).success);
+
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
+}
+
+TEST(GPUTimeTest, UpdateFrameMetricsExceedMaxQuerySlotsDoesNotCrash)
+{
+    GPUTime gpu_time;
+    gpu_time.SetEnable(true);
+    ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
+
+    // Allocate many command buffers to exceed slots.
+    // kTotalSlots is now 64x128 = 8192. Each allocation takes 2 slots.
+    // So we need > 4096 command buffers.
+    constexpr uint32_t kCommandBufferCount = 5000;
+    constexpr uintptr_t kFakeCommandBufferStartAddress = 0x1000;
+    std::vector<VkCommandBuffer> cmds;
+    VkCommandBuffer failed_cmd = VK_NULL_HANDLE;
+
+    for (uint32_t i = 0; i < kCommandBufferCount; ++i)
+    {
+        auto cmd = reinterpret_cast<VkCommandBuffer>(
+            static_cast<uintptr_t>(kFakeCommandBufferStartAddress + i));
+        VkCommandBufferAllocateInfo alloc_info = {};
+        alloc_info.commandPool = MOCK_COMMAND_POOL;
+        alloc_info.commandBufferCount = 1;
+
+        if (gpu_time.OnAllocateCommandBuffers(&alloc_info, &cmd).success)
+        {
+            cmds.push_back(cmd);
+        }
+        else if (failed_cmd == VK_NULL_HANDLE)
+        {
+            failed_cmd = cmd;
+        }
+    }
+
+    // Some should have failed allocation.
+    ASSERT_LT(cmds.size(), kCommandBufferCount);
+    ASSERT_NE(failed_cmd, VK_NULL_HANDLE);
+
+    // Try to use one of the failed ones in OnBeginCommandBuffer.
+    ASSERT_TRUE(gpu_time.OnBeginCommandBuffer(failed_cmd, 0, MockCmdWriteTimestamp).success);
+
+    // Mark a frame boundary with a VALID command buffer.
+    VkDebugUtilsLabelEXT label = {};
+    label.pLabelName = GPUTime::kVulkanVrFrameDelimiterString;
+    gpu_time.OnCmdInsertDebugUtilsLabelEXT(cmds.back(), &label);
+
+    // Submit some valid ones and the failed one.
+    std::vector<VkCommandBuffer> submit_cmds = cmds;
+    submit_cmds.push_back(failed_cmd);
+
+    VkSubmitInfo submit_info = {};
+    submit_info.commandBufferCount = static_cast<uint32_t>(submit_cmds.size());
+    submit_info.pCommandBuffers = submit_cmds.data();
+
+    // This calls UpdateFrameMetrics. It should not crash.
+    gpu_time.OnQueueSubmit(1, &submit_info, MockDeviceWaitIdle, MockResetQueryPool,
+                           MockGetQueryPoolResults);
+
+    ASSERT_NO_FATAL_FAILURE(DestroyGPUTime(gpu_time));
+}
+
 }  // namespace
 }  // namespace Dive

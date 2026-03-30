@@ -423,8 +423,7 @@ absl::StatusOr<std::vector<PSOInfo>> TcpClient::GetLivePSOs()
             MessageType::LIVE_PSOS_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
-    LivePSOsResponse* pso_response = static_cast<LivePSOsResponse*>(response.get());
-    return pso_response->GetPSOs();
+    return static_cast<LivePSOsResponse*>(response.get())->TakePSOs();
 }
 
 absl::StatusOr<std::vector<RenderPassInfo>> TcpClient::GetLiveRenderPasses()
@@ -462,7 +461,7 @@ absl::StatusOr<std::vector<RenderPassInfo>> TcpClient::GetLiveRenderPasses()
             MessageType::LIVE_RENDER_PASSES_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
-    return static_cast<LiveRenderPassesResponse*>(response.get())->GetRenderPasses();
+    return static_cast<LiveRenderPassesResponse*>(response.get())->TakeRenderPasses();
 }
 
 absl::Status TcpClient::PingServer()

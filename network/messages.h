@@ -325,6 +325,7 @@ class LivePSOsResponse : public ISerializable
     absl::Status Deserialize(const Buffer& src) override;
 
     const std::vector<PSOInfo>& GetPSOs() const { return m_psos; }
+    std::vector<PSOInfo> TakePSOs() { return std::move(m_psos); }
     void SetPSOs(std::vector<PSOInfo> psos) { m_psos = std::move(psos); }
 
  private:
@@ -345,6 +346,7 @@ class LiveRenderPassesResponse : public ISerializable
     absl::Status Deserialize(const Buffer& src) override;
 
     const std::vector<RenderPassInfo>& GetRenderPasses() const { return m_rps; }
+    std::vector<RenderPassInfo> TakeRenderPasses() { return std::move(m_rps); }
     void SetRenderPasses(std::vector<RenderPassInfo> rps) { m_rps = std::move(rps); }
 
  private:

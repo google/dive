@@ -714,21 +714,11 @@ void DiveVulkanReplayConsumer::Process_vkCreateFence(
     }
     else
     {
-        frame_end_actions_.insert(
-            {fence_id, [this, fence_id]() {
-                 VulkanFenceInfo* fence_info = GetObjectInfoTable().GetVkFenceInfo(fence_id);
-                 GFXRECON_ASSERT(fence_info != nullptr);
-
-                 VkDevice device = MapHandle<VulkanDeviceInfo>(
-                     fence_info->parent_id, &CommonObjectInfoTable::GetVkDeviceInfo);
-                 GFXRECON_ASSERT(device != VK_NULL_HANDLE);
-
-                 // From GetAllocationCallbacks: "Replay does not currently attempt emulate the
-                 // captured application's use of VkAllocationCallbacks.""
-                 GetDeviceTable(device)->DestroyFence(device, fence_info->handle,
-                                                      /*pAllocator=*/nullptr);
-                 RemoveHandle(fence_id, &CommonObjectInfoTable::RemoveVkFenceInfo);
-             }});
+        frame_end_actions_.insert({fence_id, [this, fence_id, device]() {
+                                       // Replay ignores pAllocator and call_info
+                                       Process_vkDestroyFence(ApiCallInfo{}, device, fence_id,
+                                                              /*pAllocator=*/nullptr);
+                                   }});
     }
 }
 
@@ -844,25 +834,11 @@ void DiveVulkanReplayConsumer::Process_vkCreateImage(
     if (setup_finished_)
     {
         format::HandleId image = *pImage->GetPointer();
-        frame_end_actions_.insert(
-            {image, [this, image]() {
-                 VulkanImageInfo* image_info = GetObjectInfoTable().GetVkImageInfo(image);
-                 GFXRECON_ASSERT(image_info != nullptr);
-
-                 VulkanDeviceInfo* device_info =
-                     GetObjectInfoTable().GetVkDeviceInfo(image_info->parent_id);
-                 GFXRECON_ASSERT(device_info != nullptr);
-
-                 // GFXR does extra book-keeping so can't just vkDestroyImage. This code was
-                 // distilled from VulkanReplayConsumer::Process_vkDestroyImage.
-
-                 // From GetAllocationCallbacks: "Replay does not currently attempt emulate the
-                 // captured application's use of VkAllocationCallbacks."
-                 device_info->allocator->DestroyImage(image_info->handle,
-                                                      /*allocation_callbacks=*/nullptr,
-                                                      image_info->allocator_data);
-                 RemoveHandle(image, &CommonObjectInfoTable::RemoveVkImageInfo);
-             }});
+        frame_end_actions_.insert({image, [this, image, device]() {
+                                       // Replay ignores pAllocator and call_info
+                                       Process_vkDestroyImage(ApiCallInfo{}, device, image,
+                                                              /*pAllocator=*/nullptr);
+                                   }});
     }
     VulkanReplayConsumer::Process_vkCreateImage(call_info, returnValue, device, pCreateInfo,
                                                 pAllocator, pImage);
@@ -888,22 +864,11 @@ void DiveVulkanReplayConsumer::Process_vkCreateImageView(
     if (setup_finished_)
     {
         format::HandleId image_view = *pView->GetPointer();
-        frame_end_actions_.insert(
-            {image_view, [this, image_view]() {
-                 VulkanImageViewInfo* image_view_info =
-                     GetObjectInfoTable().GetVkImageViewInfo(image_view);
-                 GFXRECON_ASSERT(image_view_info != nullptr);
-
-                 VkDevice device = MapHandle<VulkanDeviceInfo>(
-                     image_view_info->parent_id, &CommonObjectInfoTable::GetVkDeviceInfo);
-                 GFXRECON_ASSERT(device != VK_NULL_HANDLE);
-
-                 // From GetAllocationCallbacks: "Replay does not currently attempt emulate the
-                 // captured application's use of VkAllocationCallbacks.""
-                 GetDeviceTable(device)->DestroyImageView(device, image_view_info->handle,
-                                                          /*pAllocator=*/nullptr);
-                 RemoveHandle(image_view, &CommonObjectInfoTable::RemoveVkImageViewInfo);
-             }});
+        frame_end_actions_.insert({image_view, [this, image_view, device]() {
+                                       // Replay ignores pAllocator and call_info
+                                       Process_vkDestroyImageView(ApiCallInfo{}, device, image_view,
+                                                                  /*pAllocator=*/nullptr);
+                                   }});
     }
     VulkanReplayConsumer::Process_vkCreateImageView(call_info, returnValue, device, pCreateInfo,
                                                     pAllocator, pView);

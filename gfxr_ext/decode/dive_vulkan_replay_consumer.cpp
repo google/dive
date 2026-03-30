@@ -284,7 +284,7 @@ void DiveVulkanReplayConsumer::Process_vkAllocateCommandBuffers(
         pAllocateInfo->GetPointer(), pCommandBuffers->GetHandlePointer());
     if (!status.success)
     {
-        GFXRECON_LOG_ERROR(status.message.c_str());
+        GFXRECON_LOG_FATAL(status.message.c_str());
     }
 }
 

@@ -89,10 +89,18 @@ void InitDeviceDispatchTable(VkDevice device, PFN_vkGetDeviceProcAddr pa, Device
     dt->CmdInsertDebugUtilsLabel =
         (PFN_vkCmdInsertDebugUtilsLabelEXT)pa(device, "vkCmdInsertDebugUtilsLabelEXT");
 
+    dt->CreateRenderPass = (PFN_vkCreateRenderPass)pa(device, "vkCreateRenderPass");
     dt->CmdBeginRenderPass = (PFN_vkCmdBeginRenderPass)pa(device, "vkCmdBeginRenderPass");
     dt->CmdEndRenderPass = (PFN_vkCmdEndRenderPass)pa(device, "vkCmdEndRenderPass");
+    dt->CreateRenderPass2 = (PFN_vkCreateRenderPass2)pa(device, "vkCreateRenderPass2");
+    if (!dt->CreateRenderPass2)
+    {
+        dt->CreateRenderPass2 = (PFN_vkCreateRenderPass2)pa(device, "vkCreateRenderPass2KHR");
+    }
     dt->CmdBeginRenderPass2 = (PFN_vkCmdBeginRenderPass2)pa(device, "vkCmdBeginRenderPass2");
     dt->CmdEndRenderPass2 = (PFN_vkCmdEndRenderPass2)pa(device, "vkCmdEndRenderPass2");
+
+    dt->DestroyRenderPass = (PFN_vkDestroyRenderPass)pa(device, "vkDestroyRenderPass");
 
     // Mesh Shaders
     dt->CmdDrawMeshTasksEXT = (PFN_vkCmdDrawMeshTasksEXT)pa(device, "vkCmdDrawMeshTasksEXT");

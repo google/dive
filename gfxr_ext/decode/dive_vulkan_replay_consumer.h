@@ -230,13 +230,12 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // avoid leaking. The key is the FD stored in the capture file. The value is the FD made during
     // replay. We need to track both since vkImportFenceFdKHR uses the former.
     std::unordered_map<int, int> fds_to_close_at_frame_end_;
-    // Track objects that are created in the frame loop that must be destroyed at the end of the
-    // frame to prevent leaking. Based on how the application manages rendering and how GFXR capture
-    // works, we might get captures that straddle frames. This typically results in vkCreate calls
-    // that lack vkDestroy calls. For these cases, we can track and free objects so that they are
-    // not leaked.
-    std::unordered_map<format::HandleId, absl::AnyInvocable<void()>>
-        objects_to_destroy_at_frame_end_;
+    // Track operations that should be performed at the end of a frame loop to prevent unbalanced
+    // calls. E.g. a create without a destroy, a begin without an end. Based on how the application
+    // manages rendering and how GFXR capture works, we might get captures that straddle frames.
+    // This typically results in vkCreate calls that lack vkDestroy calls. For these cases, we can
+    // track and free objects so that they are not leaked.
+    std::unordered_map<format::HandleId, absl::AnyInvocable<void()>> frame_end_actions_;
     Dive::GPUTime gpu_time_ = {};
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";

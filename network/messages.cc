@@ -200,6 +200,7 @@ absl::Status FileSizeResponse::Deserialize(const Buffer& src)
 absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
 {
     dest.clear();
+    WriteStringToBuffer(m_target_render_pass_name, dest);
     WriteUint32ToBuffer(m_vertex_count, dest);
     WriteUint32ToBuffer(m_index_count, dest);
     WriteUint32ToBuffer(m_instance_count, dest);
@@ -209,12 +210,14 @@ absl::Status DrawcallFilterConfigRequest::Serialize(Buffer& dest) const
     WriteBoolToBuffer(m_filter_by_instance_count, dest);
     WriteBoolToBuffer(m_enable_drawcall_limit, dest);
     WriteBoolToBuffer(m_filter_by_alpha_blended, dest);
+    WriteBoolToBuffer(m_filter_by_render_pass, dest);
     return Dive::OkStatus();
 }
 
 absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
+    ASSIGN_OR_RETURN(m_target_render_pass_name, ReadStringFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_vertex_count, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_index_count, ReadUint32FromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_instance_count, ReadUint32FromBuffer(src, offset));
@@ -224,6 +227,7 @@ absl::Status DrawcallFilterConfigRequest::Deserialize(const Buffer& src)
     ASSIGN_OR_RETURN(m_filter_by_instance_count, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_enable_drawcall_limit, ReadBoolFromBuffer(src, offset));
     ASSIGN_OR_RETURN(m_filter_by_alpha_blended, ReadBoolFromBuffer(src, offset));
+    ASSIGN_OR_RETURN(m_filter_by_render_pass, ReadBoolFromBuffer(src, offset));
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("DrawcallFilteringRequest has unexpected trailing data.");
@@ -237,9 +241,9 @@ absl::Status LivePSOsResponse::Serialize(Buffer& dest) const
     WriteUint32ToBuffer(static_cast<uint32_t>(m_psos.size()), dest);
     for (const auto& pso : m_psos)
     {
+        WriteStringToBuffer(pso.name, dest);
         WriteUint64ToBuffer(pso.pipeline_handle, dest);
         WriteBoolToBuffer(pso.has_alpha_blend, dest);
-        WriteStringToBuffer(pso.name, dest);
     }
     return Dive::OkStatus();
 }
@@ -255,15 +259,50 @@ absl::Status LivePSOsResponse::Deserialize(const Buffer& src)
     for (uint32_t i = 0; i < count; ++i)
     {
         PSOInfo pso;
+        ASSIGN_OR_RETURN(pso.name, ReadStringFromBuffer(src, offset));
         ASSIGN_OR_RETURN(pso.pipeline_handle, ReadUint64FromBuffer(src, offset));
         ASSIGN_OR_RETURN(pso.has_alpha_blend, ReadBoolFromBuffer(src, offset));
-        ASSIGN_OR_RETURN(pso.name, ReadStringFromBuffer(src, offset));
         m_psos.push_back(std::move(pso));
     }
 
     if (offset != src.size())
     {
         return Dive::InvalidArgumentError("LivePSOsResponse has unexpected trailing data.");
+    }
+    return Dive::OkStatus();
+}
+
+absl::Status LiveRenderPassesResponse::Serialize(Buffer& dest) const
+{
+    dest.clear();
+    WriteUint32ToBuffer(static_cast<uint32_t>(m_rps.size()), dest);
+    for (const auto& rp : m_rps)
+    {
+        WriteStringToBuffer(rp.name, dest);
+        WriteUint64ToBuffer(rp.render_pass_handle, dest);
+    }
+    return Dive::OkStatus();
+}
+
+absl::Status LiveRenderPassesResponse::Deserialize(const Buffer& src)
+{
+    size_t offset = 0;
+    uint32_t count;
+    ASSIGN_OR_RETURN(count, ReadUint32FromBuffer(src, offset));
+
+    m_rps.clear();
+    m_rps.reserve(count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        RenderPassInfo rp;
+        ASSIGN_OR_RETURN(rp.name, ReadStringFromBuffer(src, offset));
+        ASSIGN_OR_RETURN(rp.render_pass_handle, ReadUint64FromBuffer(src, offset));
+        m_rps.push_back(std::move(rp));
+    }
+
+    if (offset != src.size())
+    {
+        return Dive::InvalidArgumentError("LiveRenderPassesResponse has unexpected trailing data.");
     }
     return Dive::OkStatus();
 }
@@ -388,6 +427,12 @@ absl::StatusOr<std::unique_ptr<ISerializable>> ReceiveSocketMessage(SocketConnec
             break;
         case MessageType::LIVE_PSOS_RESPONSE:
             message = std::make_unique<LivePSOsResponse>();
+            break;
+        case MessageType::LIVE_RENDER_PASSES_REQUEST:
+            message = std::make_unique<LiveRenderPassesRequest>();
+            break;
+        case MessageType::LIVE_RENDER_PASSES_RESPONSE:
+            message = std::make_unique<LiveRenderPassesResponse>();
             break;
         default:
             conn->Close();

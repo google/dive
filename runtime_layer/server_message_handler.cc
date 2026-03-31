@@ -47,6 +47,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
             LOG(INFO) << "Message received: DrawcallFilterConfigRequest";
             auto* request = static_cast<Network::DrawcallFilterConfigRequest*>(message.get());
             Network::DrawcallFilterConfig config{
+                .target_render_pass_name = request->GetTargetRenderPassName(),
                 .target_vertex_count = request->GetVertexCount(),
                 .target_index_count = request->GetIndexCount(),
                 .target_instance_count = request->GetInstanceCount(),
@@ -56,6 +57,7 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
                 .filter_by_instance_count = request->GetFilterByInstanceCount(),
                 .enable_drawcall_limit = request->GetEnableDrawcallLimit(),
                 .filter_by_alpha_blended = request->GetFilterByAlphaBlended(),
+                .filter_by_render_pass = request->GetFilterByRenderPass(),
             };
 
             sDiveRuntimeLayer.EnqueueFrameBoundaryTask(
@@ -80,6 +82,20 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
                 !status.ok())
             {
                 LOG(ERROR) << "Send LivePSOsResponse failed: " << status.message();
+            }
+            return;
+        }
+        case Network::MessageType::LIVE_RENDER_PASSES_REQUEST:
+        {
+            LOG(INFO) << "Message received: LiveRenderPassesRequest";
+            std::vector<Network::RenderPassInfo> live_rps = sDiveRuntimeLayer.GetLiveRenderPasses();
+
+            Network::LiveRenderPassesResponse response;
+            response.SetRenderPasses(live_rps);
+            if (absl::Status status = Network::SendSocketMessage(client_conn, response);
+                !status.ok())
+            {
+                LOG(ERROR) << "Send LiveRenderPassesResponse failed: " << status.message();
             }
             return;
         }

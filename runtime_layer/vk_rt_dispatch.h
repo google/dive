@@ -61,10 +61,13 @@ struct DeviceDispatchTable
     PFN_vkGetDeviceQueue GetDeviceQueue = nullptr;
     PFN_vkDestroyDevice DestroyDevice = nullptr;
     PFN_vkCmdInsertDebugUtilsLabelEXT CmdInsertDebugUtilsLabel = nullptr;
+    PFN_vkCreateRenderPass CreateRenderPass = nullptr;
     PFN_vkCmdBeginRenderPass CmdBeginRenderPass = nullptr;
     PFN_vkCmdEndRenderPass CmdEndRenderPass = nullptr;
+    PFN_vkCreateRenderPass2 CreateRenderPass2 = nullptr;
     PFN_vkCmdBeginRenderPass2 CmdBeginRenderPass2 = nullptr;
     PFN_vkCmdEndRenderPass2 CmdEndRenderPass2 = nullptr;
+    PFN_vkDestroyRenderPass DestroyRenderPass = nullptr;
 
     // Mesh Shader Extensions
     PFN_vkCmdDrawMeshTasksEXT CmdDrawMeshTasksEXT = nullptr;

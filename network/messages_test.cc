@@ -286,6 +286,7 @@ TEST(MessagesTest, RemoveFileResponseFailure)
 TEST(MessagesTest, DrawcallFilterConfigRequest)
 {
     Network::DrawcallFilterConfigRequest req_serialize;
+    req_serialize.SetTargetRenderPassName("ShadowMapPass");
     req_serialize.SetVertexCount(100);
     req_serialize.SetIndexCount(200);
     req_serialize.SetInstanceCount(5);
@@ -295,6 +296,7 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     req_serialize.SetFilterByInstanceCount(true);
     req_serialize.SetEnableDrawcallLimit(true);
     req_serialize.SetFilterByAlphaBlended(true);
+    req_serialize.SetFilterByRenderPass(true);
 
     Network::Buffer buf;
     absl::Status status = req_serialize.Serialize(buf);
@@ -306,6 +308,7 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     ASSERT_TRUE(status.ok());
     ASSERT_EQ(req_deserialize.GetMessageType(),
               Network::MessageType::DRAWCALL_FILTER_CONFIG_REQUEST);
+    ASSERT_EQ(req_serialize.GetTargetRenderPassName(), req_deserialize.GetTargetRenderPassName());
     ASSERT_EQ(req_serialize.GetVertexCount(), req_deserialize.GetVertexCount());
     ASSERT_EQ(req_serialize.GetIndexCount(), req_deserialize.GetIndexCount());
     ASSERT_EQ(req_serialize.GetInstanceCount(), req_deserialize.GetInstanceCount());
@@ -315,6 +318,7 @@ TEST(MessagesTest, DrawcallFilterConfigRequest)
     ASSERT_EQ(req_serialize.GetFilterByInstanceCount(), req_deserialize.GetFilterByInstanceCount());
     ASSERT_EQ(req_serialize.GetEnableDrawcallLimit(), req_deserialize.GetEnableDrawcallLimit());
     ASSERT_EQ(req_serialize.GetFilterByAlphaBlended(), req_deserialize.GetFilterByAlphaBlended());
+    ASSERT_EQ(req_serialize.GetFilterByRenderPass(), req_deserialize.GetFilterByRenderPass());
 }
 
 TEST(MessagesTest, DrawcallFilterConfigResponse)
@@ -368,6 +372,45 @@ TEST(MessagesTest, LivePSOsResponse)
     ASSERT_EQ(deserialized_psos[1].name, "MyCustomEngineOpaqueMaterial");
     ASSERT_EQ(deserialized_psos[1].pipeline_handle, 987654321098765ULL);
     ASSERT_EQ(deserialized_psos[1].has_alpha_blend, false);
+}
+
+TEST(MessagesTest, LiveRenderPassesRequest)
+{
+    Network::LiveRenderPassesRequest req;
+    Network::Buffer buf;
+    absl::Status status = req.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(req.GetMessageType(), Network::MessageType::LIVE_RENDER_PASSES_REQUEST);
+
+    status = req.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+}
+
+TEST(MessagesTest, LiveRenderPassesResponse)
+{
+    Network::LiveRenderPassesResponse res_serialize;
+    std::vector<Network::RenderPassInfo> mock_rps;
+    mock_rps.push_back({"ShadowPass", 0x12345678});
+    mock_rps.push_back({"MainForwardPass", 0x87654321});
+    res_serialize.SetRenderPasses(mock_rps);
+
+    Network::Buffer buf;
+    absl::Status status = res_serialize.Serialize(buf);
+    ASSERT_TRUE(status.ok());
+    ASSERT_EQ(res_serialize.GetMessageType(), Network::MessageType::LIVE_RENDER_PASSES_RESPONSE);
+
+    Network::LiveRenderPassesResponse res_deserialize;
+    status = res_deserialize.Deserialize(buf);
+    ASSERT_TRUE(status.ok());
+
+    const auto& deserialized_rps = res_deserialize.GetRenderPasses();
+    ASSERT_EQ(deserialized_rps.size(), 2);
+
+    ASSERT_EQ(deserialized_rps[0].render_pass_handle, 0x12345678);
+    ASSERT_EQ(deserialized_rps[0].name, "ShadowPass");
+
+    ASSERT_EQ(deserialized_rps[1].render_pass_handle, 0x87654321);
+    ASSERT_EQ(deserialized_rps[1].name, "MainForwardPass");
 }
 
 }  // namespace

@@ -31,6 +31,8 @@ namespace Network
 // It only successfully filters command buffers that are built dynamically every frame.
 struct DrawcallFilterConfig
 {
+    std::string target_render_pass_name;
+
     uint32_t target_vertex_count = 0;
     uint32_t target_index_count = 0;
     uint32_t target_instance_count = 0;
@@ -41,6 +43,7 @@ struct DrawcallFilterConfig
     bool filter_by_instance_count = false;
     bool enable_drawcall_limit = false;
     bool filter_by_alpha_blended = false;
+    bool filter_by_render_pass = false;
 };
 
 struct PSOInfo
@@ -49,6 +52,13 @@ struct PSOInfo
     // Cast VkPipeline to uint64_t for the network
     uint64_t pipeline_handle;
     bool has_alpha_blend;
+};
+
+struct RenderPassInfo
+{
+    std::string name;
+    // Cast VkRenderPass to uint64_t for the network
+    uint64_t render_pass_handle;
 };
 
 }  // namespace Network

@@ -47,6 +47,11 @@ class DiveRuntimeLayer
         bool has_alpha_blend;
     };
 
+    struct TrackedRenderPass
+    {
+        std::string name;
+    };
+
     DiveRuntimeLayer();
     ~DiveRuntimeLayer();
     VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
@@ -167,11 +172,19 @@ class DiveRuntimeLayer
                                   VkCommandBuffer commandBuffer,
                                   const VkDebugUtilsLabelEXT* pLabelInfo);
 
+    VkResult CreateRenderPass(PFN_vkCreateRenderPass pfn, VkDevice device,
+                              const VkRenderPassCreateInfo* pCreateInfo,
+                              const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass);
+
     void CmdBeginRenderPass(PFN_vkCmdBeginRenderPass pfn, VkCommandBuffer commandBuffer,
                             const VkRenderPassBeginInfo* pRenderPassBegin,
                             VkSubpassContents contents);
 
     void CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuffer commandBuffer);
+
+    VkResult CreateRenderPass2(PFN_vkCreateRenderPass2 pfn, VkDevice device,
+                               const VkRenderPassCreateInfo2* pCreateInfo,
+                               const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass);
 
     void CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2 pfn, VkCommandBuffer commandBuffer,
                              const VkRenderPassBeginInfo* pRenderPassBegin,
@@ -179,6 +192,9 @@ class DiveRuntimeLayer
 
     void CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandBuffer commandBuffer,
                            const VkSubpassEndInfo* pSubpassEndInfo);
+
+    void DestroyRenderPass(PFN_vkDestroyRenderPass pfn, VkDevice device, VkRenderPass renderPass,
+                           const VkAllocationCallbacks* pAllocator);
 
     void UpdateFilterConfig(const Network::DrawcallFilterConfig& config)
     {
@@ -191,6 +207,8 @@ class DiveRuntimeLayer
     void ProcessFrameBoundaryTasks();
 
     std::vector<Network::PSOInfo> GetLivePSOs();
+
+    std::vector<Network::RenderPassInfo> GetLiveRenderPasses();
 
  private:
     bool CheckAndIncrementDrawcallCount();
@@ -233,6 +251,9 @@ class DiveRuntimeLayer
     // The hottest paths (CmdDraw*) do not touch this mutex at all.
     std::shared_mutex m_pso_mutex;
     absl::flat_hash_map<VkPipeline, TrackedPSO> m_live_psos;
+
+    mutable std::shared_mutex m_rp_mutex;
+    absl::flat_hash_map<VkRenderPass, TrackedRenderPass> m_render_passes;
 };
 
 }  // namespace DiveLayer

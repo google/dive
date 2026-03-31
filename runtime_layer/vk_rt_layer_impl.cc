@@ -57,6 +57,10 @@ static constexpr uint32_t kVisibilityMaskIndexCount = 42;
 // Also, this keeps track of the current pipeline alpha state.
 static thread_local absl::flat_hash_map<VkCommandBuffer, bool> sCmdBufferCurrentPipelineHasAlpha;
 
+static thread_local absl::flat_hash_map<VkCommandBuffer, bool> sCmdBufferInFilteredRenderPass;
+static thread_local absl::flat_hash_map<VkCommandPool, std::vector<VkCommandBuffer>>
+    sCommandPoolBuffers;
+
 // DiveRuntimeLayer
 DiveRuntimeLayer::DiveRuntimeLayer() : m_device_proc_addr(nullptr) {}
 
@@ -165,15 +169,28 @@ VkResult DiveRuntimeLayer::SetDebugUtilsObjectNameEXT(
     PFN_vkSetDebugUtilsObjectNameEXT pfn, VkDevice device,
     const VkDebugUtilsObjectNameInfoEXT* pNameInfo)
 {
-    if (pNameInfo && pNameInfo->objectType == VK_OBJECT_TYPE_PIPELINE && pNameInfo->pObjectName)
+    if (pNameInfo && pNameInfo->pObjectName)
     {
-        std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
-        VkPipeline pipeline = (VkPipeline)pNameInfo->objectHandle;
-        if (auto it = m_live_psos.find(pipeline); it != m_live_psos.end())
+        if (pNameInfo->objectType == VK_OBJECT_TYPE_PIPELINE)
         {
-            it->second.name = pNameInfo->pObjectName;
+            std::unique_lock<std::shared_mutex> lock(m_pso_mutex);
+            VkPipeline pipeline = (VkPipeline)pNameInfo->objectHandle;
+            if (auto it = m_live_psos.find(pipeline); it != m_live_psos.end())
+            {
+                it->second.name = pNameInfo->pObjectName;
+            }
+        }
+        else if (pNameInfo->objectType == VK_OBJECT_TYPE_RENDER_PASS)
+        {
+            std::unique_lock<std::shared_mutex> lock(m_rp_mutex);
+            VkRenderPass rp = (VkRenderPass)pNameInfo->objectHandle;
+            if (auto it = m_render_passes.find(rp); it != m_render_passes.end())
+            {
+                it->second.name = pNameInfo->pObjectName;
+            }
         }
     }
+
     if (pfn)
     {
         return pfn(device, pNameInfo);
@@ -414,6 +431,16 @@ void DiveRuntimeLayer::DestroyCommandPool(PFN_vkDestroyCommandPool pfn, VkDevice
                                           VkCommandPool commandPool,
                                           const VkAllocationCallbacks* pAllocator)
 {
+    if (auto it = sCommandPoolBuffers.find(commandPool); it != sCommandPoolBuffers.end())
+    {
+        for (VkCommandBuffer cb : it->second)
+        {
+            sCmdBufferCurrentPipelineHasAlpha.erase(cb);
+            sCmdBufferInFilteredRenderPass.erase(cb);
+        }
+        sCommandPoolBuffers.erase(it);
+    }
+
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnDestroyCommandPool(commandPool);
     if (!status.success)
     {
@@ -433,6 +460,11 @@ VkResult DiveRuntimeLayer::AllocateCommandBuffers(PFN_vkAllocateCommandBuffers p
         return result;
     }
 
+    for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i)
+    {
+        sCommandPoolBuffers[pAllocateInfo->commandPool].push_back(pCommandBuffers[i]);
+    }
+
     m_boundary_detector.OnAllocateCommandBuffers(pAllocateInfo, pCommandBuffers);
 
     Dive::GPUTime::GpuTimeStatus status =
@@ -449,6 +481,12 @@ void DiveRuntimeLayer::FreeCommandBuffers(PFN_vkFreeCommandBuffers pfn, VkDevice
                                           VkCommandPool commandPool, uint32_t commandBufferCount,
                                           const VkCommandBuffer* pCommandBuffers)
 {
+    for (uint32_t i = 0; i < commandBufferCount; ++i)
+    {
+        sCmdBufferCurrentPipelineHasAlpha.erase(pCommandBuffers[i]);
+        sCmdBufferInFilteredRenderPass.erase(pCommandBuffers[i]);
+    }
+
     m_boundary_detector.OnFreeCommandBuffers(commandBufferCount, pCommandBuffers);
 
     Dive::GPUTime::GpuTimeStatus status =
@@ -464,6 +502,9 @@ VkResult DiveRuntimeLayer::ResetCommandBuffer(PFN_vkResetCommandBuffer pfn,
                                               VkCommandBuffer commandBuffer,
                                               VkCommandBufferResetFlags flags)
 {
+    sCmdBufferCurrentPipelineHasAlpha.erase(commandBuffer);
+    sCmdBufferInFilteredRenderPass.erase(commandBuffer);
+
     m_boundary_detector.OnResetCommandBuffer(commandBuffer);
 
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnResetCommandBuffer(commandBuffer);
@@ -479,6 +520,15 @@ VkResult DiveRuntimeLayer::ResetCommandPool(PFN_vkResetCommandPool pfn, VkDevice
                                             VkCommandPool commandPool,
                                             VkCommandPoolResetFlags flags)
 {
+    if (auto it = sCommandPoolBuffers.find(commandPool); it != sCommandPoolBuffers.end())
+    {
+        for (VkCommandBuffer cb : it->second)
+        {
+            sCmdBufferCurrentPipelineHasAlpha.erase(cb);
+            sCmdBufferInFilteredRenderPass.erase(cb);
+        }
+    }
+
     m_boundary_detector.OnResetCommandPool(commandPool);
 
     Dive::GPUTime::GpuTimeStatus status = m_gpu_time.OnResetCommandPool(commandPool);
@@ -696,11 +746,40 @@ void DiveRuntimeLayer::CmdInsertDebugUtilsLabel(PFN_vkCmdInsertDebugUtilsLabelEX
     }
 }
 
+VkResult DiveRuntimeLayer::CreateRenderPass(PFN_vkCreateRenderPass pfn, VkDevice device,
+                                            const VkRenderPassCreateInfo* pCreateInfo,
+                                            const VkAllocationCallbacks* pAllocator,
+                                            VkRenderPass* pRenderPass)
+{
+    VkResult result = pfn(device, pCreateInfo, pAllocator, pRenderPass);
+    if (result == VK_SUCCESS)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_rp_mutex);
+        TrackedRenderPass info{
+            .name = "Unnamed RenderPass",
+        };
+        m_render_passes[*pRenderPass] = info;
+    }
+    return result;
+}
+
 void DiveRuntimeLayer::CmdBeginRenderPass(PFN_vkCmdBeginRenderPass pfn,
                                           VkCommandBuffer commandBuffer,
                                           const VkRenderPassBeginInfo* pRenderPassBegin,
                                           VkSubpassContents contents)
 {
+    bool is_filtered = false;
+    if (m_active_filter_config.filter_by_render_pass)
+    {
+        std::shared_lock<std::shared_mutex> lock(m_rp_mutex);
+        if (auto it = m_render_passes.find(pRenderPassBegin->renderPass);
+            it != m_render_passes.end())
+        {
+            is_filtered = (it->second.name == m_active_filter_config.target_render_pass_name);
+        }
+    }
+    sCmdBufferInFilteredRenderPass[commandBuffer] = is_filtered;
+
     Dive::GPUTime::GpuTimeStatus status =
         m_gpu_time.OnCmdBeginRenderPass(commandBuffer, m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
@@ -713,6 +792,8 @@ void DiveRuntimeLayer::CmdBeginRenderPass(PFN_vkCmdBeginRenderPass pfn,
 
 void DiveRuntimeLayer::CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuffer commandBuffer)
 {
+    sCmdBufferInFilteredRenderPass[commandBuffer] = false;
+
     pfn(commandBuffer);
 
     Dive::GPUTime::GpuTimeStatus status =
@@ -723,11 +804,40 @@ void DiveRuntimeLayer::CmdEndRenderPass(PFN_vkCmdEndRenderPass pfn, VkCommandBuf
     }
 }
 
+VkResult DiveRuntimeLayer::CreateRenderPass2(PFN_vkCreateRenderPass2 pfn, VkDevice device,
+                                             const VkRenderPassCreateInfo2* pCreateInfo,
+                                             const VkAllocationCallbacks* pAllocator,
+                                             VkRenderPass* pRenderPass)
+{
+    VkResult result = pfn(device, pCreateInfo, pAllocator, pRenderPass);
+    if (result == VK_SUCCESS)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_rp_mutex);
+        TrackedRenderPass info{
+            .name = "Unnamed RenderPass",
+        };
+        m_render_passes[*pRenderPass] = info;
+    }
+    return result;
+}
+
 void DiveRuntimeLayer::CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2 pfn,
                                            VkCommandBuffer commandBuffer,
                                            const VkRenderPassBeginInfo* pRenderPassBegin,
                                            const VkSubpassBeginInfo* pSubpassBeginInfo)
 {
+    bool is_filtered = false;
+    if (m_active_filter_config.filter_by_render_pass)
+    {
+        std::shared_lock<std::shared_mutex> lock(m_rp_mutex);
+        if (auto it = m_render_passes.find(pRenderPassBegin->renderPass);
+            it != m_render_passes.end())
+        {
+            is_filtered = (it->second.name == m_active_filter_config.target_render_pass_name);
+        }
+    }
+    sCmdBufferInFilteredRenderPass[commandBuffer] = is_filtered;
+
     Dive::GPUTime::GpuTimeStatus status =
         m_gpu_time.OnCmdBeginRenderPass2(commandBuffer, m_pfn_vkCmdWriteTimestamp);
     if (!status.success)
@@ -740,6 +850,8 @@ void DiveRuntimeLayer::CmdBeginRenderPass2(PFN_vkCmdBeginRenderPass2 pfn,
 void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandBuffer commandBuffer,
                                          const VkSubpassEndInfo* pSubpassEndInfo)
 {
+    sCmdBufferInFilteredRenderPass[commandBuffer] = false;
+
     pfn(commandBuffer, pSubpassEndInfo);
 
     Dive::GPUTime::GpuTimeStatus status =
@@ -748,6 +860,17 @@ void DiveRuntimeLayer::CmdEndRenderPass2(PFN_vkCmdEndRenderPass2 pfn, VkCommandB
     {
         LOGE("%s", status.message.c_str());
     }
+}
+
+void DiveRuntimeLayer::DestroyRenderPass(PFN_vkDestroyRenderPass pfn, VkDevice device,
+                                         VkRenderPass renderPass,
+                                         const VkAllocationCallbacks* pAllocator)
+{
+    {
+        std::unique_lock<std::shared_mutex> lock(m_rp_mutex);
+        m_render_passes.erase(renderPass);
+    }
+    pfn(device, renderPass, pAllocator);
 }
 
 void DiveRuntimeLayer::EnqueueFrameBoundaryTask(std::function<void()> task)
@@ -789,9 +912,26 @@ std::vector<Network::PSOInfo> DiveRuntimeLayer::GetLivePSOs()
     result.reserve(m_live_psos.size());
     for (const auto& [pipeline, state] : m_live_psos)
     {
-        result.push_back(Network::PSOInfo{.name = state.name,
-                                          .pipeline_handle = reinterpret_cast<uint64_t>(pipeline),
-                                          .has_alpha_blend = state.has_alpha_blend});
+        result.push_back(Network::PSOInfo{
+            .name = state.name,
+            .pipeline_handle = reinterpret_cast<uint64_t>(pipeline),
+            .has_alpha_blend = state.has_alpha_blend,
+        });
+    }
+    return result;
+}
+
+std::vector<Network::RenderPassInfo> DiveRuntimeLayer::GetLiveRenderPasses()
+{
+    std::vector<Network::RenderPassInfo> result;
+    std::shared_lock<std::shared_mutex> lock(m_rp_mutex);
+    result.reserve(m_render_passes.size());
+    for (const auto& [rp, state] : m_render_passes)
+    {
+        result.push_back(Network::RenderPassInfo{
+            .name = state.name,
+            .render_pass_handle = reinterpret_cast<uint64_t>(rp),
+        });
     }
     return result;
 }
@@ -845,6 +985,15 @@ bool DiveRuntimeLayer::ShouldFilterDrawCall(VkCommandBuffer command_buffer, uint
     {
         if (auto it = sCmdBufferCurrentPipelineHasAlpha.find(command_buffer);
             it != sCmdBufferCurrentPipelineHasAlpha.end() && it->second)
+        {
+            return true;
+        }
+    }
+
+    if (m_active_filter_config.filter_by_render_pass)
+    {
+        if (auto it = sCmdBufferInFilteredRenderPass.find(command_buffer);
+            it != sCmdBufferInFilteredRenderPass.end() && it->second)
         {
             return true;
         }

@@ -49,6 +49,8 @@ class WhatIfSetupDialog : public DeviceDialog
     void EnableWhatIfTypeButtons(bool enable);
     void EnableModificationOptions(bool enable);
 
+    Network::TcpClient* GetConnectedTcpClient();
+
  protected:
     void closeEvent(QCloseEvent* event) override;
     void showEvent(QShowEvent* event) override;

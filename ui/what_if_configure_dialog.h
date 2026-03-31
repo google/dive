@@ -22,6 +22,7 @@
 #include "dive/common/what_if_modification_types.h"
 #include "dive/ui/forward.h"
 #include "dive/ui/types/what_if_modification.h"
+#include "network/tcp_client.h"
 
 // Event filter to keep a QComboBox popup open when checking/unchecking items.
 class MultiCheckComboBoxEventFilter : public QObject
@@ -59,15 +60,20 @@ class WhatIfConfigureDialog : public DeviceDialog
     QHBoxLayout* CreateButtonLayout();
     void SetupConnections();
 
+    void SetTcpClient(Network::TcpClient* tcp_client);
+
  protected:
     void closeEvent(QCloseEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
  private slots:
     void ResetDialog();
     void ShowMessage(const QString& message) override;
     void OnAddModificationClicked();
-    void OnFlagModelChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight,
-                            const QVector<int>& roles);
+    // Updates the add modification button's enabled state when an item from a
+    // MultiCheckComboBoxEventFilter model is checked/unchecked.
+    void OnItemCheckStateChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight,
+                                 const QVector<int>& roles);
     // Updates the command list and UI visibility when the modification type changes
     void OnWhatIfModificationTypeChanged(int index);
     // Central slot to handle any configuration value change
@@ -77,6 +83,7 @@ class WhatIfConfigureDialog : public DeviceDialog
     void AddModification(const Dive::WhatIfModification& modification);
 
  private:
+    void PopulateLiveFilters();
     // Contains the filter widgets for a draw call filter (e.g. index count, vertex count)
     struct DrawCallFilterSpinner
     {
@@ -116,8 +123,10 @@ class WhatIfConfigureDialog : public DeviceDialog
     DrawCallFilterSpinner m_draw_count_filter;
 
     QComboBox* m_draw_call_pso_property_filter_box = nullptr;
+    QStandardItemModel* m_draw_call_pso_property_filter_model = nullptr;
 
     QComboBox* m_draw_call_render_pass_filter_box = nullptr;
+    QStandardItemModel* m_draw_call_render_pass_filter_model = nullptr;
 
     // --- Render Pass Filters ---
     QWidget* m_render_pass_filters_container = nullptr;
@@ -135,4 +144,6 @@ class WhatIfConfigureDialog : public DeviceDialog
     // --- Button Section ---
     QPushButton* m_add_modification_button = nullptr;
     QPushButton* m_dismiss_button = nullptr;
+
+    Network::TcpClient* m_tcp_client = nullptr;
 };

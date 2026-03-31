@@ -260,25 +260,31 @@ QWidget* WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
     QLabel* draw_call_pso_property_filter_label =
         new QLabel(tr("Pipeline State Object (PSO) Property:"));
     m_draw_call_pso_property_filter_box = new QComboBox();
-    QStandardItemModel* draw_call_pso_property_filter_model = new QStandardItemModel();
+    MultiCheckComboBoxEventFilter* pso_filter =
+        new MultiCheckComboBoxEventFilter(m_draw_call_pso_property_filter_box);
+    m_draw_call_pso_property_filter_box->view()->viewport()->installEventFilter(pso_filter);
+    m_draw_call_pso_property_filter_model = new QStandardItemModel();
     QStandardItem* draw_call_pso_property_filter_placeholder =
-        new QStandardItem("Select a PSO property");
+        new QStandardItem("Select PSO propert(y/ies)");
     draw_call_pso_property_filter_placeholder->setFlags(
         draw_call_pso_property_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    draw_call_pso_property_filter_model->appendRow(draw_call_pso_property_filter_placeholder);
-    m_draw_call_pso_property_filter_box->setModel(draw_call_pso_property_filter_model);
+    m_draw_call_pso_property_filter_model->appendRow(draw_call_pso_property_filter_placeholder);
+    m_draw_call_pso_property_filter_box->setModel(m_draw_call_pso_property_filter_model);
     draw_call_filter_layout->addWidget(draw_call_pso_property_filter_label, 2, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_draw_call_pso_property_filter_box, 2, 2);
 
     QLabel* draw_call_render_pass_filter_label = new QLabel(tr("Render Pass:"));
     m_draw_call_render_pass_filter_box = new QComboBox();
-    QStandardItemModel* draw_call_render_pass_filter_model = new QStandardItemModel();
+    MultiCheckComboBoxEventFilter* rp_filter =
+        new MultiCheckComboBoxEventFilter(m_draw_call_render_pass_filter_box);
+    m_draw_call_render_pass_filter_box->view()->viewport()->installEventFilter(rp_filter);
+    m_draw_call_render_pass_filter_model = new QStandardItemModel();
     QStandardItem* render_pass_render_pass_filter_placeholder =
-        new QStandardItem("Select a render pass");
+        new QStandardItem("Select render pass(es)");
     render_pass_render_pass_filter_placeholder->setFlags(
         render_pass_render_pass_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
-    draw_call_render_pass_filter_model->appendRow(render_pass_render_pass_filter_placeholder);
-    m_draw_call_render_pass_filter_box->setModel(draw_call_render_pass_filter_model);
+    m_draw_call_render_pass_filter_model->appendRow(render_pass_render_pass_filter_placeholder);
+    m_draw_call_render_pass_filter_box->setModel(m_draw_call_render_pass_filter_model);
     draw_call_filter_layout->addWidget(draw_call_render_pass_filter_label, 3, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_draw_call_render_pass_filter_box, 3, 2);
     return container;
@@ -414,7 +420,11 @@ void WhatIfConfigureDialog::SetupConnections()
 
     // Connect flag model dataChanged for check state changes
     QObject::connect(m_flag_model, &QStandardItemModel::dataChanged, this,
-                     &WhatIfConfigureDialog::OnFlagModelChanged);
+                     &WhatIfConfigureDialog::OnItemCheckStateChanged);
+    QObject::connect(m_draw_call_pso_property_filter_model, &QStandardItemModel::dataChanged, this,
+                     &WhatIfConfigureDialog::OnItemCheckStateChanged);
+    QObject::connect(m_draw_call_render_pass_filter_model, &QStandardItemModel::dataChanged, this,
+                     &WhatIfConfigureDialog::OnItemCheckStateChanged);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -491,15 +501,41 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
                 draw_call_filters.draw_count = m_draw_count_filter.spin_box->value();
                 filter_strings << QString("Draw Count: %1").arg(draw_call_filters.draw_count);
             }
-            if (m_draw_call_pso_property_filter_box->currentIndex() > 0)
+            QStringList psos;
+            if (QStandardItemModel* pso_model =
+                    static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
             {
-                draw_call_filters.pso_property = m_draw_call_pso_property_filter_box->currentText();
-                filter_strings << QString("PSO Property: %1").arg(draw_call_filters.pso_property);
+                for (int i = 1; i < pso_model->rowCount(); ++i)
+                {
+                    QStandardItem* item = pso_model->item(i);
+                    if (item && item->isCheckable() && item->checkState() == Qt::Checked)
+                    {
+                        psos << item->text();
+                    }
+                }
             }
-            if (m_draw_call_render_pass_filter_box->currentIndex() > 0)
+            if (!psos.isEmpty())
             {
-                draw_call_filters.render_pass = m_draw_call_render_pass_filter_box->currentText();
-                filter_strings << QString("Render Pass: %1").arg(draw_call_filters.render_pass);
+                draw_call_filters.pso_property = psos.join(", ");
+                filter_strings << QString("PSO Properties: %1").arg(psos.join(", "));
+            }
+            QStringList rps;
+            if (QStandardItemModel* rp_model =
+                    static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
+            {
+                for (int i = 1; i < rp_model->rowCount(); ++i)
+                {
+                    QStandardItem* item = rp_model->item(i);
+                    if (item && item->isCheckable() && item->checkState() == Qt::Checked)
+                    {
+                        rps << item->text();
+                    }
+                }
+            }
+            if (!rps.isEmpty())
+            {
+                draw_call_filters.render_pass = rps.join(", ");
+                filter_strings << QString("Render Passes: %1").arg(rps.join(", "));
             }
             modification.draw_call_filters = draw_call_filters;
             break;
@@ -565,9 +601,9 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::OnFlagModelChanged(const QModelIndex& topLeft,
-                                               const QModelIndex& bottomRight,
-                                               const QVector<int>& roles)
+void WhatIfConfigureDialog::OnItemCheckStateChanged(const QModelIndex& topLeft,
+                                                    const QModelIndex& bottomRight,
+                                                    const QVector<int>& roles)
 {
     if (roles.isEmpty() || roles.contains(Qt::CheckStateRole))
     {
@@ -593,12 +629,36 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
     {
         case Dive::WhatIfType::kDrawCallDisabled:
         {
+            bool has_pso = false;
+            if (QStandardItemModel* pso_model =
+                    static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
+            {
+                for (int i = 1; i < pso_model->rowCount(); ++i)
+                {
+                    if (pso_model->item(i) && pso_model->item(i)->checkState() == Qt::Checked)
+                    {
+                        has_pso = true;
+                        break;
+                    }
+                }
+            }
+            bool has_rp = false;
+            if (QStandardItemModel* rp_model =
+                    static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
+            {
+                for (int i = 1; i < rp_model->rowCount(); ++i)
+                {
+                    if (rp_model->item(i) && rp_model->item(i)->checkState() == Qt::Checked)
+                    {
+                        has_rp = true;
+                        break;
+                    }
+                }
+            }
             if (m_index_count_filter.spin_box->value() == 0 &&
                 m_vertex_count_filter.spin_box->value() == 0 &&
                 m_instance_count_filter.spin_box->value() == 0 &&
-                m_draw_count_filter.spin_box->value() == 0 &&
-                m_draw_call_pso_property_filter_box->currentIndex() == 0 &&
-                m_draw_call_render_pass_filter_box->currentIndex() == 0)
+                m_draw_count_filter.spin_box->value() == 0 && !has_pso && !has_rp)
             {
                 m_add_modification_button->setEnabled(false);
                 return;
@@ -767,7 +827,31 @@ void WhatIfConfigureDialog::ResetDrawCallFilters()
     m_vertex_count_filter.spin_box->setValue(0);
 
     m_draw_call_pso_property_filter_box->setCurrentIndex(0);
+    if (QStandardItemModel* pso_model =
+            static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
+    {
+        for (int i = 1; i < pso_model->rowCount(); ++i)
+        {
+            QStandardItem* item = pso_model->item(i);
+            if (item && item->isCheckable())
+            {
+                item->setCheckState(Qt::Unchecked);
+            }
+        }
+    }
     m_draw_call_render_pass_filter_box->setCurrentIndex(0);
+    if (QStandardItemModel* rp_model =
+            static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
+    {
+        for (int i = 1; i < rp_model->rowCount(); ++i)
+        {
+            QStandardItem* item = rp_model->item(i);
+            if (item && item->isCheckable())
+            {
+                item->setCheckState(Qt::Unchecked);
+            }
+        }
+    }
 }
 
 void WhatIfConfigureDialog::HideDrawCallFilters()
@@ -801,4 +885,88 @@ void WhatIfConfigureDialog::closeEvent(QCloseEvent* event)
 {
     ResetDialog();
     event->accept();
+}
+
+void WhatIfConfigureDialog::SetTcpClient(Network::TcpClient* tcp_client)
+{
+    m_tcp_client = tcp_client;
+}
+
+void WhatIfConfigureDialog::showEvent(QShowEvent* event)
+{
+    QDialog::showEvent(event);
+    PopulateLiveFilters();
+}
+
+void WhatIfConfigureDialog::PopulateLiveFilters()
+{
+    if (!m_tcp_client || !m_tcp_client->IsConnected())
+    {
+        qDebug() << "Client not set or not connected.";
+        return;
+    }
+
+    bool has_error = false;
+    QString error_msg = tr("Failed to retrieve live data from the application:\n");
+
+    // Populate Live PSOs
+    auto psos = m_tcp_client->GetLivePSOs();
+    if (psos.ok())
+    {
+        QStandardItemModel* pso_model =
+            static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model());
+        // Clear any existing elements but keep the placeholder at index 0
+        if (pso_model->rowCount() > 1)
+        {
+            pso_model->removeRows(1, pso_model->rowCount() - 1);
+        }
+        for (const auto& pso : *psos)
+        {
+            QStandardItem* item = new QStandardItem(QString::fromStdString(pso.name));
+            item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+            item->setCheckable(true);
+            item->setCheckState(Qt::Unchecked);
+            pso_model->appendRow(item);
+        }
+    }
+    else
+    {
+        has_error = true;
+        error_msg += QString("• PSOs: %1\n")
+                         .arg(QString::fromStdString(std::string(psos.status().message())));
+    }
+
+    // Populate Live Render Passes
+    auto render_passes = m_tcp_client->GetLiveRenderPasses();
+    if (render_passes.ok())
+    {
+        QStandardItemModel* rp_model =
+            static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model());
+        // Clear any existing elements but keep the placeholder at index 0
+        if (rp_model->rowCount() > 1)
+        {
+            rp_model->removeRows(1, rp_model->rowCount() - 1);
+        }
+        for (const auto& rp : *render_passes)
+        {
+            QStandardItem* item = new QStandardItem(QString::fromStdString(rp.name));
+            item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+            item->setCheckable(true);
+            item->setCheckState(Qt::Unchecked);
+            rp_model->appendRow(item);
+        }
+    }
+    else
+    {
+        has_error = true;
+        error_msg +=
+            QString("• Render Passes: %1\n")
+                .arg(QString::fromStdString(std::string(render_passes.status().message())));
+    }
+
+    if (has_error)
+    {
+        qDebug() << error_msg;
+        ShowMessage(error_msg.trimmed());
+    }
 }

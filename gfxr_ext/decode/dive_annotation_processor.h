@@ -21,8 +21,6 @@
 #include "util/defines.h"
 #include "util/platform.h"
 
-struct ApiCallInfo;
-
 // The DiveAnnotationProcessor is used by the VulkanExportDiveConsumer on each WriteBlockEnd call
 // made when processing the vulkan commands. WriteBlockEnd is called passing the function data
 // (name, command buffer index, args) and then DiveAnnotationProcessor converts the data to

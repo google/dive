@@ -829,8 +829,11 @@ static absl::Status Optimize(const std::filesystem::path& gfxr_file)
     // Add block to capture file
     //
 
+    // Load the backup since we want to overwrite the original. GfxrCaptureData wasn't designed to
+    // write to the file that it has loaded.
     Dive::GfxrCaptureData capture_data;
-    if (capture_data.LoadCaptureFile(gfxr_file.string()) != Dive::CaptureData::LoadResult::kSuccess)
+    if (capture_data.LoadCaptureFile(backup_gfxr.string()) !=
+        Dive::CaptureData::LoadResult::kSuccess)
     {
         return absl::UnknownError("GfxrCaptureData::LoadCaptureFile failed");
     }
@@ -861,12 +864,16 @@ static absl::Status Optimize(const std::filesystem::path& gfxr_file)
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::ReplayImpl(const ReplayConfig& config)
 {
+    // Modify the original file since all the logic here uses m_local_capture_files
     if (absl::Status status = Optimize(m_local_capture_files.gfxr); !status.ok())
     {
         UpdateReplayStatus(ReplayStatusUpdateCode::kSetupDeviceFailure,
                            std::string(status.message()));
         return;
     }
+
+    // UpdateReplayStatus(ReplayStatusUpdateCode::kSetupDeviceFailure, "LOL");
+    // return;
 
     Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
     auto device = device_manager.GetDevice();

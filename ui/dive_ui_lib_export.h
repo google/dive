@@ -14,8 +14,7 @@
  limitations under the License.
 */
 
-#ifndef UI_DIVE_UI_LIB_EXPORT_H_
-#define UI_DIVE_UI_LIB_EXPORT_H_
+#pragma once
 
 #if defined(_MSC_VER)
 // Check if we are building the DLL (DIVE_UI_LIB_BUILD is defined)
@@ -28,5 +27,3 @@
 // On other platforms, this macro does nothing
 #define DIVE_UI_LIB_EXPORT
 #endif
-
-#endif  // UI_DIVE_UI_LIB_EXPORT_H_

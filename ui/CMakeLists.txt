@@ -49,7 +49,7 @@ if(APPLE)
 endif()
 
 add_library(
-    ${PROJECT_NAME}_lib
+    dive_ui_lib
     SHARED
     # Dive Gui Source:
     about_window.cpp
@@ -167,7 +167,7 @@ add_library(
 )
 
 target_link_libraries(
-    ${PROJECT_NAME}_lib
+    dive_ui_lib
     PUBLIC
         Qt5::Widgets
         dive_core
@@ -194,11 +194,8 @@ target_link_libraries(
 )
 
 if(MSVC)
-    target_compile_definitions(${PROJECT_NAME}_lib PRIVATE DIVE_UI_LIB_BUILD)
-    message(
-        STATUS
-        "MSVC build: Defining DIVE_UI_LIB_BUILD for ${PROJECT_NAME}_lib"
-    )
+    target_compile_definitions(dive_ui_lib PRIVATE DIVE_UI_LIB_BUILD)
+    message(STATUS "MSVC build: Defining DIVE_UI_LIB_BUILD for dive_ui_lib")
 endif()
 
 if(APPLE)
@@ -208,7 +205,7 @@ else()
 endif()
 
 set_target_properties(
-    ${PROJECT_NAME}_lib
+    dive_ui_lib
     PROPERTIES
         CXX_VISIBILITY_PRESET default
         VISIBILITY_INLINES_HIDDEN OFF
@@ -219,10 +216,10 @@ set_target_properties(
         WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
-target_compile_definitions(${PROJECT_NAME}_lib PRIVATE QT_VISIBILITY_AVAILABLE)
+target_compile_definitions(dive_ui_lib PRIVATE QT_VISIBILITY_AVAILABLE)
 
 target_include_directories(
-    ${PROJECT_NAME}_lib
+    dive_ui_lib
     PUBLIC "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/src"
 )
 
@@ -241,7 +238,7 @@ add_executable(
 if(MSVC)
     # This helps the linker resolve the staticMetaObject for Qt classes in DLLs
     target_compile_definitions(${PROJECT_NAME} PRIVATE QT_DLL)
-    target_compile_definitions(${PROJECT_NAME}_lib PRIVATE QT_DLL)
+    target_compile_definitions(dive_ui_lib PRIVATE QT_DLL)
 endif()
 
 set_target_properties(
@@ -281,7 +278,7 @@ endif()
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
-        ${PROJECT_NAME}_lib
+        dive_ui_lib
         Qt5::Widgets
         absl::failure_signal_handler
         absl::symbolize
@@ -373,16 +370,16 @@ endif()
 
 if(APPLE)
     install(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_lib
+        TARGETS ${PROJECT_NAME} dive_ui_lib
         BUNDLE DESTINATION "${DIVE_INSTALL_DEST_HOST}"
     )
     install(
-        TARGETS ${PROJECT_NAME}_lib
+        TARGETS dive_ui_lib
         DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
     )
 else()
     install(
-        TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_lib
+        TARGETS ${PROJECT_NAME} dive_ui_lib
         DESTINATION "${DIVE_INSTALL_DEST_HOST}"
     )
 endif()

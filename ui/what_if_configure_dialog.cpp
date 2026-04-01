@@ -42,6 +42,11 @@ namespace
 constexpr int kNumImageCreationFlags = 2;
 constexpr int kNumRenderPassTypes = 4;
 
+constexpr int kPlaceHolderItemIndex = 0;
+// Index 0 is reserved for non-selectable placeholder items in comboboxes. Valid, selectable items
+// start at index 1.
+constexpr int kFirstValidItemIndex = 1;
+
 constexpr std::string_view kFrameTitleStrings[kNumImageCreationFlags] = {
     "VK_IMAGE_CREATE_FRAGMENT_DENSITY_MAP_OFFSET_BIT_QCOM", "VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT"};
 
@@ -257,15 +262,14 @@ QWidget* WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
     draw_call_filter_layout->addWidget(m_draw_count_filter.label, 1, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_draw_count_filter.spin_box, 1, 2);
 
-    QLabel* draw_call_pso_property_filter_label =
-        new QLabel(tr("Pipeline State Object (PSO) Property:"));
+    QLabel* draw_call_pso_property_filter_label = new QLabel(tr("Pipeline:"));
     m_draw_call_pso_property_filter_box = new QComboBox();
     MultiCheckComboBoxEventFilter* pso_filter =
         new MultiCheckComboBoxEventFilter(m_draw_call_pso_property_filter_box);
     m_draw_call_pso_property_filter_box->view()->viewport()->installEventFilter(pso_filter);
     m_draw_call_pso_property_filter_model = new QStandardItemModel();
     QStandardItem* draw_call_pso_property_filter_placeholder =
-        new QStandardItem("Select PSO propert(y/ies)");
+        new QStandardItem("Select Pipeline(s)");
     draw_call_pso_property_filter_placeholder->setFlags(
         draw_call_pso_property_filter_placeholder->flags() & ~Qt::ItemIsSelectable);
     m_draw_call_pso_property_filter_model->appendRow(draw_call_pso_property_filter_placeholder);
@@ -437,13 +441,13 @@ WhatIfConfigureDialog::~WhatIfConfigureDialog()
 //--------------------------------------------------------------------------------------------------
 void WhatIfConfigureDialog::ResetDialog()
 {
-    m_type_box->setCurrentIndex(-1);
-    m_render_pass_command_buffer_filter_box->setCurrentIndex(-1);
-    m_render_pass_render_pass_type_filter_box->setCurrentIndex(-1);
+    m_type_box->setCurrentIndex(kPlaceHolderItemIndex);
+    m_render_pass_command_buffer_filter_box->setCurrentIndex(kPlaceHolderItemIndex);
+    m_render_pass_render_pass_type_filter_box->setCurrentIndex(kPlaceHolderItemIndex);
     ResetDrawCallFilters();
 
     // Reset flag checkboxes
-    for (int i = 1; i < m_flag_model->rowCount(); ++i)
+    for (int i = kFirstValidItemIndex; i < m_flag_model->rowCount(); ++i)
     {
         QStandardItem* item = m_flag_model->item(i);
         if (item && item->isCheckable())
@@ -503,9 +507,9 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
             }
             QStringList psos;
             if (QStandardItemModel* pso_model =
-                    static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
+                    qobject_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
             {
-                for (int i = 1; i < pso_model->rowCount(); ++i)
+                for (int i = kFirstValidItemIndex; i < pso_model->rowCount(); ++i)
                 {
                     QStandardItem* item = pso_model->item(i);
                     if (item && item->isCheckable() && item->checkState() == Qt::Checked)
@@ -521,9 +525,9 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
             }
             QStringList rps;
             if (QStandardItemModel* rp_model =
-                    static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
+                    qobject_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
             {
-                for (int i = 1; i < rp_model->rowCount(); ++i)
+                for (int i = kFirstValidItemIndex; i < rp_model->rowCount(); ++i)
                 {
                     QStandardItem* item = rp_model->item(i);
                     if (item && item->isCheckable() && item->checkState() == Qt::Checked)
@@ -543,7 +547,7 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
         case Dive::WhatIfType::kImageCreationFlagRemoved:
         {
             QStringList flags;
-            for (int i = 1; i < m_flag_model->rowCount(); ++i)
+            for (int i = kFirstValidItemIndex; i < m_flag_model->rowCount(); ++i)
             {
                 QStandardItem* item = m_flag_model->item(i);
                 if (item && item->isCheckable() && item->checkState() == Qt::Checked)
@@ -562,14 +566,14 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
         case Dive::WhatIfType::kRenderPassScissorOverridden:
         {
             Dive::RenderPassFilters render_pass_filters;
-            if (m_render_pass_command_buffer_filter_box->currentIndex() > 0)
+            if (m_render_pass_command_buffer_filter_box->currentIndex() > kPlaceHolderItemIndex)
             {
                 render_pass_filters.command_buffer =
                     m_render_pass_command_buffer_filter_box->currentText();
                 filter_strings
                     << QString("Command Buffer: %1").arg(render_pass_filters.command_buffer);
             }
-            if (m_render_pass_render_pass_type_filter_box->currentIndex() > 0)
+            if (m_render_pass_render_pass_type_filter_box->currentIndex() > kPlaceHolderItemIndex)
             {
                 render_pass_filters.render_pass_type =
                     m_render_pass_render_pass_type_filter_box->currentText();
@@ -631,9 +635,9 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
         {
             bool has_pso = false;
             if (QStandardItemModel* pso_model =
-                    static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
+                    qobject_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
             {
-                for (int i = 1; i < pso_model->rowCount(); ++i)
+                for (int i = kFirstValidItemIndex; i < pso_model->rowCount(); ++i)
                 {
                     if (pso_model->item(i) && pso_model->item(i)->checkState() == Qt::Checked)
                     {
@@ -644,9 +648,9 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
             }
             bool has_rp = false;
             if (QStandardItemModel* rp_model =
-                    static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
+                    qobject_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
             {
-                for (int i = 1; i < rp_model->rowCount(); ++i)
+                for (int i = kFirstValidItemIndex; i < rp_model->rowCount(); ++i)
                 {
                     if (rp_model->item(i) && rp_model->item(i)->checkState() == Qt::Checked)
                     {
@@ -667,8 +671,7 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
         }
         case Dive::WhatIfType::kImageCreationFlagRemoved:
         {
-            // Iterate through the model items, skipping the placeholder at index 0
-            for (int i = 1; i < m_flag_model->rowCount(); ++i)
+            for (int i = kFirstValidItemIndex; i < m_flag_model->rowCount(); ++i)
             {
                 QStandardItem* item = m_flag_model->item(i);
                 if (item && item->isCheckable() && item->checkState() == Qt::Checked)
@@ -683,8 +686,8 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
         case Dive::WhatIfType::kRenderPassLoadStoreOpOverridden:
         case Dive::WhatIfType::kRenderPassScissorOverridden:
         {
-            if (m_render_pass_command_buffer_filter_box->currentIndex() == 0 &&
-                m_render_pass_render_pass_type_filter_box->currentIndex() == 0)
+            if (m_render_pass_command_buffer_filter_box->currentIndex() == kPlaceHolderItemIndex &&
+                m_render_pass_render_pass_type_filter_box->currentIndex() == kPlaceHolderItemIndex)
             {
                 m_add_modification_button->setEnabled(false);
                 return;
@@ -794,7 +797,7 @@ void WhatIfConfigureDialog::OnWhatIfModificationTypeChanged(int index)
         m_command_box->setEnabled(true);
         if (m_command_model->rowCount() > 0)
         {
-            m_command_box->setCurrentIndex(0);
+            m_command_box->setCurrentIndex(kPlaceHolderItemIndex);
         }
     }
     else
@@ -826,11 +829,11 @@ void WhatIfConfigureDialog::ResetDrawCallFilters()
     m_instance_count_filter.spin_box->setValue(0);
     m_vertex_count_filter.spin_box->setValue(0);
 
-    m_draw_call_pso_property_filter_box->setCurrentIndex(0);
+    m_draw_call_pso_property_filter_box->setCurrentIndex(kPlaceHolderItemIndex);
     if (QStandardItemModel* pso_model =
-            static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
+            qobject_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model()))
     {
-        for (int i = 1; i < pso_model->rowCount(); ++i)
+        for (int i = kFirstValidItemIndex; i < pso_model->rowCount(); ++i)
         {
             QStandardItem* item = pso_model->item(i);
             if (item && item->isCheckable())
@@ -839,11 +842,11 @@ void WhatIfConfigureDialog::ResetDrawCallFilters()
             }
         }
     }
-    m_draw_call_render_pass_filter_box->setCurrentIndex(0);
+    m_draw_call_render_pass_filter_box->setCurrentIndex(kPlaceHolderItemIndex);
     if (QStandardItemModel* rp_model =
-            static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
+            qobject_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model()))
     {
-        for (int i = 1; i < rp_model->rowCount(); ++i)
+        for (int i = kFirstValidItemIndex; i < rp_model->rowCount(); ++i)
         {
             QStandardItem* item = rp_model->item(i);
             if (item && item->isCheckable())
@@ -914,19 +917,22 @@ void WhatIfConfigureDialog::PopulateLiveFilters()
     if (psos.ok())
     {
         QStandardItemModel* pso_model =
-            static_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model());
-        // Clear any existing elements but keep the placeholder at index 0
-        if (pso_model->rowCount() > 1)
+            qobject_cast<QStandardItemModel*>(m_draw_call_pso_property_filter_box->model());
+        if (pso_model)
         {
-            pso_model->removeRows(1, pso_model->rowCount() - 1);
-        }
-        for (const auto& pso : *psos)
-        {
-            QStandardItem* item = new QStandardItem(QString::fromStdString(pso.name));
-            item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
-            item->setCheckable(true);
-            item->setCheckState(Qt::Unchecked);
-            pso_model->appendRow(item);
+            // Clear any existing elements but keep the placeholder at index 0
+            if (pso_model->rowCount() > 1)
+            {
+                pso_model->removeRows(1, pso_model->rowCount() - 1);
+            }
+            for (const auto& pso : *psos)
+            {
+                QStandardItem* item = new QStandardItem(QString::fromStdString(pso.name));
+                item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+                item->setCheckable(true);
+                item->setCheckState(Qt::Unchecked);
+                pso_model->appendRow(item);
+            }
         }
     }
     else
@@ -941,19 +947,22 @@ void WhatIfConfigureDialog::PopulateLiveFilters()
     if (render_passes.ok())
     {
         QStandardItemModel* rp_model =
-            static_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model());
-        // Clear any existing elements but keep the placeholder at index 0
-        if (rp_model->rowCount() > 1)
+            qobject_cast<QStandardItemModel*>(m_draw_call_render_pass_filter_box->model());
+        if (rp_model)
         {
-            rp_model->removeRows(1, rp_model->rowCount() - 1);
-        }
-        for (const auto& rp : *render_passes)
-        {
-            QStandardItem* item = new QStandardItem(QString::fromStdString(rp.name));
-            item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
-            item->setCheckable(true);
-            item->setCheckState(Qt::Unchecked);
-            rp_model->appendRow(item);
+            // Clear any existing elements but keep the placeholder at index 0
+            if (rp_model->rowCount() > 1)
+            {
+                rp_model->removeRows(1, rp_model->rowCount() - 1);
+            }
+            for (const auto& rp : *render_passes)
+            {
+                QStandardItem* item = new QStandardItem(QString::fromStdString(rp.name));
+                item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+                item->setCheckable(true);
+                item->setCheckState(Qt::Unchecked);
+                rp_model->appendRow(item);
+            }
         }
     }
     else

@@ -235,12 +235,6 @@ add_executable(
     main.cpp
 )
 
-if(MSVC)
-    # This helps the linker resolve the staticMetaObject for Qt classes in DLLs
-    target_compile_definitions(${PROJECT_NAME} PRIVATE QT_DLL)
-    target_compile_definitions(dive_ui_lib PRIVATE QT_DLL)
-endif()
-
 set_target_properties(
     ${PROJECT_NAME}
     PROPERTIES INSTALL_RPATH "${DIVE_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE

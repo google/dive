@@ -427,16 +427,18 @@ VkResult DiveRuntimeLayer::GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn, Vk
     if (IsTimestampDisabled() && IsTimestampQueryPool(queryPool))
     {
         uint8_t* ptr = static_cast<uint8_t*>(pData);
+        const bool is_64_bit = (flags & VK_QUERY_RESULT_64_BIT);
+        const bool has_availability = (flags & VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
         for (uint32_t i = 0; i < queryCount; ++i)
         {
             // Inject synthetic values so app logic doesn't hang
             uint64_t mock_val = m_synthetic_timestamp.fetch_add(kSyntheticTimestampIncrement,
                                                                 std::memory_order_relaxed);
-            if (flags & VK_QUERY_RESULT_64_BIT)
+            if (is_64_bit)
             {
                 uint64_t* out = reinterpret_cast<uint64_t*>(ptr);
                 out[0] = mock_val;
-                if (flags & VK_QUERY_RESULT_WITH_AVAILABILITY_BIT)
+                if (has_availability)
                 {
                     out[1] = 1;
                 }
@@ -445,7 +447,7 @@ VkResult DiveRuntimeLayer::GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn, Vk
             {
                 uint32_t* out = reinterpret_cast<uint32_t*>(ptr);
                 out[0] = static_cast<uint32_t>(mock_val);
-                if (flags & VK_QUERY_RESULT_WITH_AVAILABILITY_BIT)
+                if (has_availability)
                 {
                     out[1] = 1;
                 }
@@ -912,7 +914,7 @@ VkResult DiveRuntimeLayer::CreateQueryPool(PFN_vkCreateQueryPool pfn, VkDevice d
     VkResult result = pfn(device, pCreateInfo, pAllocator, pQueryPool);
     if (result == VK_SUCCESS && pCreateInfo->queryType == VK_QUERY_TYPE_TIMESTAMP)
     {
-        std::lock_guard<std::mutex> lock(m_query_pool_mutex);
+        std::unique_lock<std::shared_mutex> lock(m_query_pool_mutex);
         m_timestamp_query_pools.insert(*pQueryPool);
     }
     return result;
@@ -923,7 +925,7 @@ void DiveRuntimeLayer::DestroyQueryPool(PFN_vkDestroyQueryPool pfn, VkDevice dev
                                         const VkAllocationCallbacks* pAllocator)
 {
     {
-        std::lock_guard<std::mutex> lock(m_query_pool_mutex);
+        std::unique_lock<std::shared_mutex> lock(m_query_pool_mutex);
         m_timestamp_query_pools.erase(queryPool);
     }
     if (pfn)
@@ -940,6 +942,9 @@ void DiveRuntimeLayer::CmdCopyQueryPoolResults(PFN_vkCmdCopyQueryPoolResults pfn
 {
     if (IsTimestampDisabled() && IsTimestampQueryPool(queryPool))
     {
+        LOGW(
+            "vkCmdCopyQueryPoolResults skipped. Destination buffer will contain uninitialized "
+            "data!");
         return;
     }
     pfn(commandBuffer, queryPool, firstQuery, queryCount, dstBuffer, dstOffset, stride, flags);

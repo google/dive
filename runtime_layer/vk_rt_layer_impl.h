@@ -239,7 +239,7 @@ class DiveRuntimeLayer
 
     bool IsTimestampQueryPool(VkQueryPool pool)
     {
-        std::lock_guard<std::mutex> lock(m_query_pool_mutex);
+        std::shared_lock<std::shared_mutex> lock(m_query_pool_mutex);
         return m_timestamp_query_pools.contains(pool);
     }
 
@@ -282,7 +282,7 @@ class DiveRuntimeLayer
     absl::flat_hash_map<VkRenderPass, TrackedRenderPass> m_render_passes;
 
     std::atomic<bool> m_disable_timestamp{false};
-    std::mutex m_query_pool_mutex;
+    std::shared_mutex m_query_pool_mutex;
     absl::flat_hash_set<VkQueryPool> m_timestamp_query_pools;
     std::atomic<uint64_t> m_synthetic_timestamp{1};
 };

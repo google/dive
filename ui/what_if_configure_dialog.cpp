@@ -927,7 +927,16 @@ void WhatIfConfigureDialog::PopulateLiveFilters()
             }
             for (const auto& pso : *psos)
             {
-                QStandardItem* item = new QStandardItem(QString::fromStdString(pso.name));
+                QString display_name = QString::fromStdString(pso.name);
+                if (display_name.startsWith("PSO_"))
+                {
+                    display_name.remove(0, 4);
+                    if (!display_name.isEmpty())
+                    {
+                        display_name[0] = display_name[0].toUpper();
+                    }
+                }
+                QStandardItem* item = new QStandardItem(display_name);
                 item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
                 item->setCheckable(true);
                 item->setCheckState(Qt::Unchecked);

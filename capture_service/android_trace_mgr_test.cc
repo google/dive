@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "android_trace_mgr.h"
+
 #include "absl/time/time.h"
 #include "gtest/gtest.h"
-#include "trace_mgr.h"
 
 // AndroidTraceManager uses these functions to talk with libwrap. They must be defined at link time.
 // In the future, we might be able to use them to assert state.
@@ -33,42 +34,47 @@ namespace
 
 TEST(AndroidTraceManagerTest, OnFrameBoundaryDetectedTraceByFrameForOneFrame)
 {
-    AndroidTraceManager android_trace_manager;
-    android_trace_manager.SetNumFrameToTrace(1);
-    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Idle);
+    AndroidTraceManager::TraceByFrameConfig config = {};
+    config.total_frames = 1;
+    AndroidTraceManager android_trace_manager(config);
 
-    // Calling TriggerTrace now would cause a duration-based trace since no frame boundaries have
-    // been detected. Provide a frame boundary so we use a frame-based trace.
+    EXPECT_EQ(android_trace_manager.GetState(), AndroidTraceManager::TraceState::Idle);
+
+    // Simulating frame loop 0
     android_trace_manager.OnNewFrame();
 
     // This request to trace will be deferred until the next frame boundary.
     android_trace_manager.TriggerTrace();
-    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Triggered);
+    EXPECT_EQ(android_trace_manager.GetState(), AndroidTraceManager::TraceState::Triggered);
     // Can detect that a frame-based trace was chosen based on the trace file path. Duration-based
     // is trace-XXXX.rd instead.
     EXPECT_EQ(android_trace_manager.GetTraceFilePath(), "/sdcard/Download/trace-frame-0001.rd");
 
+    // Simulating frame loop 1
     // We should start tracing on this frame boundary
     android_trace_manager.OnNewFrame();
-    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Tracing);
+    EXPECT_EQ(android_trace_manager.GetState(), AndroidTraceManager::TraceState::Tracing);
 
+    // Simulating frame loop 2
     // We should stop tracing on this frame boundary
     android_trace_manager.OnNewFrame();
-    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Finished);
+    EXPECT_EQ(android_trace_manager.GetState(), AndroidTraceManager::TraceState::Finished);
 }
 
 TEST(AndroidTraceManagerTest, TraceByDurationTransistionsToFinishAndUsesByDurationFileName)
 {
     // TODO: b/462154186 - Never sleep in tests.
-    AndroidTraceManager android_trace_manager(absl::Milliseconds(1));
-    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Idle);
+    AndroidTraceManager::TraceByDurationConfig config = {};
+    config.trace_duration = absl::Milliseconds(1);
+    AndroidTraceManager android_trace_manager(config);
+    EXPECT_EQ(android_trace_manager.GetState(), AndroidTraceManager::TraceState::Idle);
 
-    // Trace by duration since OnNewFrame is not called.
     android_trace_manager.TriggerTrace();
+
     // Unlike trace by frame, all states transitions occur during TriggerTrace.
-    EXPECT_EQ(android_trace_manager.GetState(), TraceState::Finished);
+    EXPECT_EQ(android_trace_manager.GetState(), AndroidTraceManager::TraceState::Finished);
     // Can detect trace by duration based on the trace file path.
-    EXPECT_EQ(android_trace_manager.GetTraceFilePath(), "/sdcard/Download/trace-0001.rd");
+    EXPECT_EQ(android_trace_manager.GetTraceFilePath(), "/sdcard/Download/trace-0000.rd");
 }
 
 }  // namespace

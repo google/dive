@@ -24,7 +24,7 @@ limitations under the License.
 #include <cstring>
 #include <thread>
 
-#include "capture_service/server.h"
+#include "capture_service/pm4_capture_service.h"
 #include "common/log.h"
 
 namespace
@@ -81,7 +81,8 @@ struct InitServer
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
                 LOGI("Dive layer loaded.");
-                Dive::ServerMain();
+                int res = Dive::RunPm4DirectCaptureServer();
+                LOGI("RunPm4DirectCaptureServer: %d", res);
             });
         }
     }

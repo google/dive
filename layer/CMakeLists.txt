@@ -24,7 +24,6 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 project(diveCaptureLayer)
 
 set(CMAKE_CXX_STANDARD 20)
-set(target_name VkLayer_dive)
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
@@ -32,7 +31,7 @@ include_directories(
 )
 
 add_library(
-    ${target_name}
+    VkLayer_dive
     SHARED
     layer_common.h
     layer_common.cc
@@ -47,7 +46,7 @@ add_library(
 
 add_definitions(-DLAYERNAME=Dive)
 
-set(TARGET_LINK_LIBS PRIVATE dive_legacy_includes service)
+set(TARGET_LINK_LIBS PRIVATE dive_legacy_includes trace_mgr pm4_capture_service)
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 list(
@@ -64,33 +63,25 @@ list(
     wrap
 )
 
-target_link_libraries(
-    ${target_name}
-    ${TARGET_LINK_LIBS}
-    PRIVATE Vulkan::Headers
-)
-target_link_directories(
-    ${target_name}
-    PRIVATE ${CMAKE_SOURCE_DIR}/capture_service
-)
+target_link_libraries(VkLayer_dive ${TARGET_LINK_LIBS} PRIVATE Vulkan::Headers)
 
 if($<CONFIG:Release>)
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
+    set_target_properties(VkLayer_dive PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
 if(MSVC)
     # 4100: unreferenced formal parameter
     # 4201: prevent nameless struct/union
-    target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
+    target_compile_options(VkLayer_dive PRIVATE /W4 /WX /wd4100 /wd4201)
 else()
     target_compile_options(
-        ${target_name}
+        VkLayer_dive
         PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
     )
 endif()
 
 set_target_properties(
-    ${target_name}
+    VkLayer_dive
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 configure_file(
@@ -98,37 +89,36 @@ configure_file(
     "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json"
     COPYONLY
 )
-install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+install(TARGETS VkLayer_dive DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
 install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
     DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
 )
 
-set(target_name XrApiLayer_dive)
 set(XR_LAYER_SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
     "${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/xr_generated_dispatch_table.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
 )
 
-add_library(${target_name} SHARED ${XR_LAYER_SRC_FILES})
+add_library(XrApiLayer_dive SHARED ${XR_LAYER_SRC_FILES})
 set_target_properties(
-    ${target_name}
+    XrApiLayer_dive
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 target_include_directories(
-    ${target_name}
+    XrApiLayer_dive
     PUBLIC
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/include
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
 )
 if($<CONFIG:Release>)
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
+    set_target_properties(XrApiLayer_dive PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
-target_link_libraries(${target_name} ${TARGET_LINK_LIBS})
+target_link_libraries(XrApiLayer_dive ${TARGET_LINK_LIBS})
 
-install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+install(TARGETS XrApiLayer_dive DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
 install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
     DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"

@@ -19,29 +19,20 @@ limitations under the License.
 #include <cstdint>
 #include <string>
 
-#include "absl/base/thread_annotations.h"
-#include "absl/synchronization/mutex.h"
-#include "absl/time/time.h"
-
 namespace Dive
 {
-
-enum class TraceState
-{
-    Idle,
-    Triggered,
-    Tracing,
-    Finished,
-    Unknown,
-};
 
 class TraceManager
 {
  public:
-    TraceManager();
+    // Useful when the TraceManager receives communication independent of the frame loop, useful for
+    // testing.
     virtual void TriggerTrace() {}
-    virtual void OnNewFrame() {}
     virtual void WaitForTraceDone() {}
+
+    // Useful for when the TraceManager receives communication once per frame, the more common
+    // method.
+    virtual void OnNewFrame() {}
 
     inline const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     inline void SetTraceFilePath(std::string trace_file_path)
@@ -49,48 +40,8 @@ class TraceManager
         m_trace_file_path = std::move(trace_file_path);
     }
 
-    inline uint32_t GetNumFrameToTrace() const { return m_num_frame_to_trace; }
-    inline void SetNumFrameToTrace(uint32_t num_frame_to_trace)
-    {
-        m_num_frame_to_trace = num_frame_to_trace;
-    }
-
  private:
     std::string m_trace_file_path;
-    uint32_t m_num_frame_to_trace;
 };
-
-class AndroidTraceManager : public TraceManager
-{
- public:
-    // `trace_duration` is ignored during trace by frame.
-    explicit AndroidTraceManager(absl::Duration trace_duration = absl::Seconds(3));
-
-    void TriggerTrace() override;
-    void OnNewFrame() override;
-    void WaitForTraceDone() override;
-
-    TraceState GetState() ABSL_LOCKS_EXCLUDED(m_state_lock)
-    {
-        absl::MutexLock lock(&m_state_lock);
-        return m_state;
-    }
-
- private:
-    void TraceByFrame();
-    void TraceByDuration();
-    bool ShouldStartTrace() const;
-    bool ShouldStopTrace() const;
-    void OnTraceStart();
-    void OnTraceStop();
-    absl::Mutex m_state_lock;
-    TraceState m_state ABSL_GUARDED_BY(m_state_lock) = TraceState::Idle;
-    uint32_t m_frame_num = 0;
-    uint32_t m_trace_start_frame = 0;
-    uint32_t m_trace_num = 0;
-    absl::Duration m_trace_duration;
-};
-
-TraceManager& GetTraceMgr();
 
 }  // namespace Dive

@@ -27,7 +27,7 @@ limitations under the License.
 #include <string>
 #include <unordered_map>
 
-#include "capture_service/trace_mgr.h"
+#include "capture_service/android_trace_mgr.h"
 #include "layer_common.h"
 
 #if defined __ANDROID__
@@ -76,7 +76,7 @@ EGLAPI EGLBoolean EGLAPIENTRY glesLayer_eglSwapBuffers(EGLDisplay display, EGLSu
     PFNEGLSWAPBUFFERSPROC next = reinterpret_cast<PFNEGLSWAPBUFFERSPROC>(entry);
 
     auto ret = next(display, surface);
-    Dive::GetTraceMgr().OnNewFrame();
+    Dive::GetDefaultFrameConfigAndroidTraceManager().OnNewFrame();
     return ret;
 }
 

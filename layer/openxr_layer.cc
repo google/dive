@@ -23,7 +23,7 @@ limitations under the License.
 #include <string>
 #include <unordered_map>
 
-#include "capture_service/trace_mgr.h"
+#include "capture_service/android_trace_mgr.h"
 #include "common/log.h"
 #include "layer_common.h"
 #include "openxr/openxr_loader_negotiation.h"
@@ -112,7 +112,8 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrEndFrame(XrSession session,
     {
         LOGE("sess_data is null in ApiDiveLayerXrEndFrame\n");
     }
-    Dive::GetTraceMgr().OnNewFrame();
+
+    Dive::GetDefaultFrameConfigAndroidTraceManager().OnNewFrame();
 
     return result;
 }

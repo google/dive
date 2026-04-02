@@ -83,7 +83,7 @@ bool WriterBlockVisitor::Visit(const DiveModificationBlock& block)
         GFXRECON_LOG_ERROR("WriterBlockVisitor encountered empty modification block");
         return false;
     }
-    if (!util::platform::FileWrite(block.blob_ptr_.get(), block.blob_ptr_->size(), new_file_ptr_))
+    if (!util::platform::FileWrite(block.blob_ptr_->data(), block.blob_ptr_->size(), new_file_ptr_))
     {
         GFXRECON_LOG_ERROR("Writing modified block, could not write to new file");
         return false;

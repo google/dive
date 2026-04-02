@@ -521,7 +521,7 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
             if (!psos.isEmpty())
             {
                 draw_call_filters.pso_property = psos.join(", ");
-                filter_strings << QString("PSO Properties: %1").arg(psos.join(", "));
+                filter_strings << QString("Pipelines: %1").arg(psos.join(", "));
             }
             QStringList rps;
             if (QStandardItemModel* rp_model =
@@ -938,7 +938,7 @@ void WhatIfConfigureDialog::PopulateLiveFilters()
     else
     {
         has_error = true;
-        error_msg += QString("• PSOs: %1\n")
+        error_msg += QString("• Pipelines: %1\n")
                          .arg(QString::fromStdString(std::string(psos.status().message())));
     }
 

@@ -349,7 +349,7 @@ TEST(MessagesTest, LivePSOsResponse)
 {
     Network::LivePSOsResponse res_serialize;
     std::vector<Network::PSOInfo> mock_psos;
-    mock_psos.push_back({"PSO_alpha_blend_enabled", 123456789012345ULL, true});
+    mock_psos.push_back({"Alpha_blend_enabled", 123456789012345ULL, true});
     mock_psos.push_back({"MyCustomEngineOpaqueMaterial", 987654321098765ULL, false});
     res_serialize.SetPSOs(mock_psos);
 
@@ -365,7 +365,7 @@ TEST(MessagesTest, LivePSOsResponse)
     const auto& deserialized_psos = res_deserialize.GetPSOs();
     ASSERT_EQ(deserialized_psos.size(), 2);
 
-    ASSERT_EQ(deserialized_psos[0].name, "PSO_alpha_blend_enabled");
+    ASSERT_EQ(deserialized_psos[0].name, "Alpha_blend_enabled");
     ASSERT_EQ(deserialized_psos[0].pipeline_handle, 123456789012345ULL);
     ASSERT_EQ(deserialized_psos[0].has_alpha_blend, true);
 

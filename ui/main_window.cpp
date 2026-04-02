@@ -511,7 +511,7 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
     m_trace_dig = new TraceDialog(m_controller, this);
     m_analyze_dig = new AnalyzeDialog(m_controller, m_available_metrics.get(), this);
     m_what_if_setup_dig = new WhatIfSetupDialog(this);
-    m_what_if_configure_dig = new WhatIfConfigureDialog(this);
+    m_what_if_configure_dig = new WhatIfConfigureDialog(m_what_if_setup_dig);
 
     m_overlay = new OverlayHelper(this);
     m_overlay->Initialize(horizontal_splitter);
@@ -1263,7 +1263,11 @@ void MainWindow::OnWhatIfSetupTrigger()
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnAddWhatIfModification() { m_what_if_configure_dig->show(); }
+void MainWindow::OnAddWhatIfModification()
+{
+    m_what_if_configure_dig->SetTcpClient(m_what_if_setup_dig->GetConnectedTcpClient());
+    m_what_if_configure_dig->show();
+}
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnExpandToLevel()

@@ -151,7 +151,7 @@ VkResult DiveRuntimeLayer::CreateGraphicsPipelines(PFN_vkCreateGraphicsPipelines
                 }
             }
             TrackedPSO info{
-                .name = has_alpha ? "PSO_alpha_blend_enabled" : "PSO_opaque",
+                .name = has_alpha ? "Alpha_blend_enabled" : "Opaque",
                 .has_alpha_blend = has_alpha,
             };
             m_live_psos[pPipelines[i]] = info;

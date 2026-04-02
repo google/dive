@@ -42,13 +42,18 @@ static bool sEnableDrawcallFilter = false;
 static bool sEnableGPUTiming = false;
 static bool sRemoveImageFlagFDMOffset = false;
 static bool sRemoveImageFlagSubSampled = false;
-static bool sDisableTimestamp = false;
 
 static uint32_t sDrawcallCounter = 0;
 static size_t sTotalIndexCounter = 0;
 
 static constexpr uint32_t kDrawcallCountLimit = 300;
 static constexpr uint32_t kVisibilityMaskIndexCount = 42;
+
+// The amount of synthetic "ticks" to advance the fake Vulkan clock
+// every time an application reads a disabled timestamp.
+// 1000 provides a safe, non-zero duration that prevents divide-by-zero
+// crashes, while remaining small enough to prevent watchdog timeouts.
+static constexpr uint64_t kSyntheticTimestampIncrement = 1000;
 
 // Because Vulkan guarantees that a specific VkCommandBuffer is only recorded by a single CPU thread
 // at a time, a thread_local map is mathematically guaranteed to never experience a data race. It
@@ -396,7 +401,7 @@ void DiveRuntimeLayer::CmdResetQueryPool(PFN_vkCmdResetQueryPool pfn, VkCommandB
                                          VkQueryPool queryPool, uint32_t firstQuery,
                                          uint32_t queryCount)
 {
-    if (sDisableTimestamp)
+    if (IsTimestampDisabled() && IsTimestampQueryPool(queryPool))
     {
         return;
     }
@@ -407,7 +412,7 @@ void DiveRuntimeLayer::CmdWriteTimestamp(PFN_vkCmdWriteTimestamp pfn, VkCommandB
                                          VkPipelineStageFlagBits pipelineStage,
                                          VkQueryPool queryPool, uint32_t query)
 {
-    if (sDisableTimestamp)
+    if (IsTimestampDisabled() && IsTimestampQueryPool(queryPool))
     {
         return;
     }
@@ -419,8 +424,36 @@ VkResult DiveRuntimeLayer::GetQueryPoolResults(PFN_vkGetQueryPoolResults pfn, Vk
                                                uint32_t queryCount, size_t dataSize, void* pData,
                                                VkDeviceSize stride, VkQueryResultFlags flags)
 {
-    if (sDisableTimestamp)
+    if (IsTimestampDisabled() && IsTimestampQueryPool(queryPool))
     {
+        uint8_t* ptr = static_cast<uint8_t*>(pData);
+        const bool is_64_bit = (flags & VK_QUERY_RESULT_64_BIT);
+        const bool has_availability = (flags & VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+        for (uint32_t i = 0; i < queryCount; ++i)
+        {
+            // Inject synthetic values so app logic doesn't hang
+            uint64_t mock_val = m_synthetic_timestamp.fetch_add(kSyntheticTimestampIncrement,
+                                                                std::memory_order_relaxed);
+            if (is_64_bit)
+            {
+                uint64_t* out = reinterpret_cast<uint64_t*>(ptr);
+                out[0] = mock_val;
+                if (has_availability)
+                {
+                    out[1] = 1;
+                }
+            }
+            else
+            {
+                uint32_t* out = reinterpret_cast<uint32_t*>(ptr);
+                out[0] = static_cast<uint32_t>(mock_val);
+                if (has_availability)
+                {
+                    out[1] = 1;
+                }
+            }
+            ptr += stride;
+        }
         return VK_SUCCESS;
     }
 
@@ -871,6 +904,50 @@ void DiveRuntimeLayer::DestroyRenderPass(PFN_vkDestroyRenderPass pfn, VkDevice d
         m_render_passes.erase(renderPass);
     }
     pfn(device, renderPass, pAllocator);
+}
+
+VkResult DiveRuntimeLayer::CreateQueryPool(PFN_vkCreateQueryPool pfn, VkDevice device,
+                                           const VkQueryPoolCreateInfo* pCreateInfo,
+                                           const VkAllocationCallbacks* pAllocator,
+                                           VkQueryPool* pQueryPool)
+{
+    VkResult result = pfn(device, pCreateInfo, pAllocator, pQueryPool);
+    if (result == VK_SUCCESS && pCreateInfo->queryType == VK_QUERY_TYPE_TIMESTAMP)
+    {
+        std::unique_lock<std::shared_mutex> lock(m_query_pool_mutex);
+        m_timestamp_query_pools.insert(*pQueryPool);
+    }
+    return result;
+}
+
+void DiveRuntimeLayer::DestroyQueryPool(PFN_vkDestroyQueryPool pfn, VkDevice device,
+                                        VkQueryPool queryPool,
+                                        const VkAllocationCallbacks* pAllocator)
+{
+    {
+        std::unique_lock<std::shared_mutex> lock(m_query_pool_mutex);
+        m_timestamp_query_pools.erase(queryPool);
+    }
+    if (pfn)
+    {
+        pfn(device, queryPool, pAllocator);
+    }
+}
+
+void DiveRuntimeLayer::CmdCopyQueryPoolResults(PFN_vkCmdCopyQueryPoolResults pfn,
+                                               VkCommandBuffer commandBuffer, VkQueryPool queryPool,
+                                               uint32_t firstQuery, uint32_t queryCount,
+                                               VkBuffer dstBuffer, VkDeviceSize dstOffset,
+                                               VkDeviceSize stride, VkQueryResultFlags flags)
+{
+    if (IsTimestampDisabled() && IsTimestampQueryPool(queryPool))
+    {
+        LOGW(
+            "vkCmdCopyQueryPoolResults skipped. Destination buffer will contain uninitialized "
+            "data!");
+        return;
+    }
+    pfn(commandBuffer, queryPool, firstQuery, queryCount, dstBuffer, dstOffset, stride, flags);
 }
 
 void DiveRuntimeLayer::EnqueueFrameBoundaryTask(std::function<void()> task)

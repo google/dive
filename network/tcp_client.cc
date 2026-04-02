@@ -464,6 +464,46 @@ absl::StatusOr<std::vector<RenderPassInfo>> TcpClient::GetLiveRenderPasses()
     return static_cast<LiveRenderPassesResponse*>(response.get())->TakeRenderPasses();
 }
 
+absl::Status TcpClient::SendDisableTimestamp(bool disable)
+{
+    std::lock_guard<std::mutex> lock(m_connection_mutex);
+    if (!IsConnected())
+    {
+        return Dive::FailedPreconditionError("SendDisableTimestamp: Client is not connected.");
+    }
+
+    DisableTimestampRequest request;
+    request.SetDisableTimestamp(disable);
+
+    absl::Status status = SendSocketMessage(m_connection.get(), request);
+    if (!status.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(status, "SendDisableTimestamp: SendSocketMessage fail"));
+    }
+
+    absl::StatusOr<std::unique_ptr<ISerializable>> receive =
+        ReceiveSocketMessage(m_connection.get());
+    if (!receive.ok())
+    {
+        return SetStatusAndReturnError(
+            ClientStatus::CONNECTION_FAILED,
+            Dive::StatusWithContext(receive.status(),
+                                    "SendDisableTimestamp: ReceiveSocketMessage fail"));
+    }
+
+    std::unique_ptr<ISerializable> response = *std::move(receive);
+    if (response->GetMessageType() != MessageType::DISABLE_TIMESTAMP_RESPONSE)
+    {
+        return Dive::FailedPreconditionError(absl::StrCat(
+            "SendDisableTimestamp: Unexpected message type in response (Expected: ",
+            MessageType::DISABLE_TIMESTAMP_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
+    }
+
+    return Dive::OkStatus();
+}
+
 absl::Status TcpClient::PingServer()
 {
     std::lock_guard<std::mutex> lock(m_connection_mutex);

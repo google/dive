@@ -68,6 +68,8 @@ enum class MessageType : uint32_t
     LIVE_PSOS_RESPONSE = 16,
     LIVE_RENDER_PASSES_REQUEST = 17,
     LIVE_RENDER_PASSES_RESPONSE = 18,
+    DISABLE_TIMESTAMP_REQUEST = 19,
+    DISABLE_TIMESTAMP_RESPONSE = 20,
 };
 
 class HandshakeMessage : public ISerializable
@@ -351,6 +353,26 @@ class LiveRenderPassesResponse : public ISerializable
 
  private:
     std::vector<RenderPassInfo> m_rps;
+};
+
+class DisableTimestampRequest : public ISerializable
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::DISABLE_TIMESTAMP_REQUEST; }
+    absl::Status Serialize(Buffer& dest) const override;
+    absl::Status Deserialize(const Buffer& src) override;
+
+    bool GetDisableTimestamp() const { return m_disable; }
+    void SetDisableTimestamp(bool disable) { m_disable = disable; }
+
+ private:
+    bool m_disable = false;
+};
+
+class DisableTimestampResponse : public EmptyMessage
+{
+ public:
+    MessageType GetMessageType() const override { return MessageType::DISABLE_TIMESTAMP_RESPONSE; }
 };
 
 // Message Helper Functions (TLV Framing).

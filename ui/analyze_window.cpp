@@ -45,9 +45,22 @@
 #include "application_controller.h"
 #include "capture_service/constants.h"
 #include "capture_service/device_mgr.h"
+#include "cli/format_output.h"
+#include "decode/api_decoder.h"
+#include "decode/file_processor.h"
+#include "decode/vulkan_object_info.h"
 #include "dive/common/macros.h"
 #include "dive/ui/components/overlay/overlay.h"
 #include "dive/ui/components/settings/settings.h"
+#include "dive_core/capture_data.h"
+#include "dive_core/gfxr_capture_data.h"
+#include "encode/parameter_buffer.h"
+#include "encode/parameter_encoder.h"
+#include "encode/vulkan_handle_wrappers.h"
+#include "format/format.h"
+#include "generated/generated_vulkan_consumer.h"
+#include "generated/generated_vulkan_decoder.h"
+#include "gfxr_ext/decode/dive_block_data.h"
 #include "ui/application_controller.h"
 
 namespace
@@ -696,9 +709,172 @@ void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std:
     ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(message));
 }
 
+static absl::Status Optimize(const std::filesystem::path& gfxr_file)
+{
+    //
+    // Make a backup of the original.
+    //
+
+    auto backup_gfxr = std::filesystem::path(gfxr_file).replace_extension("bkup.gfxr");
+    if (!std::filesystem::exists(backup_gfxr))
+    {
+        if (!std::filesystem::copy_file(gfxr_file, backup_gfxr))
+        {
+            return absl::UnknownError("Failed to copy file");
+        }
+    }
+
+    //
+    // Find optimizations/bugs
+    //
+
+    gfxrecon::decode::FileProcessor file_processor;
+    if (!file_processor.Initialize(gfxr_file))
+    {
+        return absl::UnknownError("FileProcessor::Initialize failed");
+    }
+
+    gfxrecon::decode::VulkanDecoder decoder;
+    file_processor.AddDecoder(&decoder);
+
+    class MyConsumer : public gfxrecon::decode::VulkanConsumer
+    {
+     public:
+        explicit MyConsumer(gfxrecon::decode::FileProcessor& file_processor)
+            : file_processor_(&file_processor)
+        {
+        }
+
+        void Process_vkGetDeviceQueue(
+            const gfxrecon::decode::ApiCallInfo& call_info, gfxrecon::format::HandleId device,
+            uint32_t queueFamilyIndex, uint32_t queueIndex,
+            gfxrecon::decode::HandlePointerDecoder<VkQueue>* pQueue) override
+        {
+            // TODO: not guaranteed to work since GFXR uses sentinels for some commands that it
+            // inserts
+            if (!queue.has_value())
+            {
+                queue = *pQueue->GetPointer();
+            }
+        }
+
+        void ProcessFrameEndMarker(uint64_t frame_number) override
+        {
+            frame_end_block_index = file_processor_->GetCurrentBlockIndex();
+        }
+
+        // TODO: don't make public :)
+        std::optional<gfxrecon::format::HandleId> queue;
+        std::optional<uint64_t> frame_end_block_index;
+
+     private:
+        gfxrecon::decode::FileProcessor* file_processor_ = nullptr;
+    } consumer(file_processor);
+    decoder.AddConsumer(&consumer);
+
+    if (!file_processor.ProcessAllFrames())
+    {
+        return absl::UnknownError("FileProcessor::ProcessAllFrames failed");
+    }
+    if (!consumer.frame_end_block_index.has_value())
+    {
+        return absl::UnknownError("No frame end marker");
+    }
+    if (!consumer.queue.has_value())
+    {
+        return absl::UnknownError("No queue");
+    }
+
+    //
+    // Make a new block
+    //
+
+    // A block is a:
+    // - fixed-size header (e.g. FunctionCallHeader), followed by a
+    // - variable-sized parameter encoding
+    //
+    // The parameters are encoded in a specific order. See generated_vulkan_api_call_encoders.cpp or
+    // VulkanDecoder::Decode_*
+
+    gfxrecon::encode::ParameterBuffer parameter_buffer;
+    gfxrecon::encode::ParameterEncoder parameter_encoder(&parameter_buffer);
+
+    // Reserve space for block header. We can fill in everything now except block size.
+    parameter_buffer.ClearWithHeader(sizeof(gfxrecon::format::FunctionCallHeader));
+    auto& header =
+        *reinterpret_cast<gfxrecon::format::FunctionCallHeader*>(parameter_buffer.GetHeaderData());
+
+    header = {
+        .block_header =
+            {
+                // Will fill in later
+                .size = 0,
+                // Don't use compressed because more work
+                .type = gfxrecon::format::kFunctionCallBlock,
+            },
+        .api_call_id = gfxrecon::format::ApiCallId::ApiCall_vkQueueWaitIdle,
+        .thread_id = 0,  // TODO is this useful?
+    };
+
+    parameter_encoder.EncodeHandleIdValue(*consumer.queue);
+    parameter_encoder.EncodeEnumValue(VK_SUCCESS);
+
+    size_t parameter_buffer_size =
+        parameter_buffer.GetHeaderDataSize() + parameter_buffer.GetDataSize();
+
+    // The block header size includes everything after BlockHeader
+    header.block_header.size = parameter_buffer_size - sizeof(gfxrecon::format::BlockHeader);
+
+    //
+    // Add block to capture file
+    //
+
+    // Load the backup since we want to overwrite the original. GfxrCaptureData wasn't designed to
+    // write to the file that it has loaded.
+    Dive::GfxrCaptureData capture_data;
+    if (capture_data.LoadCaptureFile(backup_gfxr.string()) !=
+        Dive::CaptureData::LoadResult::kSuccess)
+    {
+        return absl::UnknownError("GfxrCaptureData::LoadCaptureFile failed");
+    }
+
+    std::shared_ptr<gfxrecon::decode::DiveBlockData> block_data = capture_data.GetMutableGfxrData();
+
+    auto blob = std::make_shared<std::vector<char>>();
+    blob->reserve(parameter_buffer_size);
+
+    const auto* header_char_data = reinterpret_cast<const char*>(parameter_buffer.GetHeaderData());
+    blob->insert(blob->end(), header_char_data,
+                 header_char_data + parameter_buffer.GetHeaderDataSize());
+
+    const auto* data_char_data = reinterpret_cast<const char*>(parameter_buffer.GetData());
+    blob->insert(blob->end(), data_char_data, data_char_data + parameter_buffer.GetDataSize());
+    // Secondary of -1 means "add the block before"
+    block_data->AddModification(*consumer.frame_end_block_index, /*secondary_id=*/-1,
+                                std::move(blob));
+
+    if (!capture_data.WriteModifiedGfxrFile(gfxr_file.string().c_str()))
+    {
+        return absl::UnknownError("Failed to write modifications");
+    }
+
+    return absl::OkStatus();
+}
+
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::ReplayImpl(const ReplayConfig& config)
 {
+    // Modify the original file since all the logic here uses m_local_capture_files
+    if (absl::Status status = Optimize(m_local_capture_files.gfxr); !status.ok())
+    {
+        UpdateReplayStatus(ReplayStatusUpdateCode::kSetupDeviceFailure,
+                           std::string(status.message()));
+        return;
+    }
+
+    // UpdateReplayStatus(ReplayStatusUpdateCode::kSetupDeviceFailure, "LOL");
+    // return;
+
     Dive::DeviceManager& device_manager = Dive::GetDeviceManager();
     auto device = device_manager.GetDevice();
 

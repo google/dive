@@ -22,6 +22,7 @@ endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
 # For each new plugin, you can add an add_subdirectory call here.
+add_subdirectory(automated_test)
 add_subdirectory(plugin_sample)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

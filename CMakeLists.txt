@@ -149,11 +149,27 @@ if(NOT ANDROID)
     # Include gtest before Abseil so we can use ABSL_BUILD_TEST_HELPERS for status_matchers
     # Ask gtest to use /MD or /MDd since it matches the CMake defaults that we use.
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # In order to use gtest in the automated UI testing plugin, it needs to be compiled with
+    # position independent code. Given that this is a testing library, this shouldn't impact the
+    # released target.
+    # TODO: This should be GCC/Clang only
+    set(OLD_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    set(OLD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+        if(NOT "${CMAKE_CXX_FLAGS}" MATCHES "-fPIC")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+        endif()
+        if(NOT "${CMAKE_C_FLAGS}" MATCHES "-fPIC")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+        endif()
+    endif()
     message(CHECK_START "Generate build files for third_party/googletest")
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
     add_subdirectory(third_party/googletest)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
+    set(CMAKE_C_FLAGS "${OLD_CMAKE_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${OLD_CMAKE_CXX_FLAGS}")
 
     # For highly parallelized builds, performing test dicovery (running a test with --gtest_list_tests) during the build may time out.
     # The high CPU load is likely starving program execution of resources.

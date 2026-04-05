@@ -806,8 +806,15 @@ bool CommandHierarchyCreator::OnIbStart(uint32_t submit_index, uint32_t ib_index
                 break;
             }
         }
-        DIVE_ASSERT(group_index != UINT64_MAX);
-        m_shared_node_ib_parent_stack[m_cur_ib_level] = group_index;
+
+        if (group_index != UINT64_MAX)
+        {
+            m_shared_node_ib_parent_stack[m_cur_ib_level] = group_index;
+        }
+        else if (m_cur_ib_packet_node_index != UINT64_MAX)
+        {
+            m_shared_node_ib_parent_stack[m_cur_ib_level] = m_cur_ib_packet_node_index;
+        }
     }
 
     if (ib_info.m_skip) ib_string_stream << ", NOT CAPTURED";
@@ -1289,11 +1296,12 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager& mem_manage
                                         header.type7.opcode != CP_LOAD_STATE6_FRAG);
 
             const PacketInfo* packet_info_ptr = GetPacketInfo(header.type7.opcode);
-            DIVE_ASSERT(packet_info_ptr != nullptr);
-            AppendPacketFieldNodes(mem_manager, submit_index,
-                                   va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
-                                   header.type7.count, append_extra_dwords, packet_info_ptr,
-                                   packet_node_index);
+            if (packet_info_ptr != nullptr)
+            {
+                AppendPacketFieldNodes(mem_manager, submit_index, va_addr + sizeof(Pm4Type7Header),
+                                       header.type7.count, append_extra_dwords, packet_info_ptr,
+                                       packet_node_index);
+            }
         }
         return packet_node_index;
     }
@@ -1921,17 +1929,34 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager& m
     uint32_t total_size_bytes = (header.type7.count * sizeof(uint32_t));
     uint32_t per_element_size = sizeof(PM4_CP_SET_DRAW_STATE::ARRAY_ELEMENT);
     uint32_t array_size = total_size_bytes / per_element_size;
-    DIVE_ASSERT(total_size_bytes % per_element_size == 0);
-    DIVE_ASSERT(children.size() == array_size);
+
+    if (total_size_bytes % per_element_size != 0)
+    {
+        return;
+    }
+
+    uint32_t safe_limit = array_size;
+
+    // Don't exceed the number of UI nodes
+    if (safe_limit > static_cast<uint32_t>(children.size()))
+    {
+        safe_limit = static_cast<uint32_t>(children.size());
+    }
+
+    // Don't exceed the fixed cache size
+    if (safe_limit > EmulatePM4::kMaxPendingIbs)
+    {
+        safe_limit = EmulatePM4::kMaxPendingIbs;
+    }
 
     // Cache group node index and address
-    for (uint32_t i = 0; i < array_size; ++i)
+    for (uint32_t i = 0; i < safe_limit; ++i)
     {
         m_group_info[i].m_group_node_index = children[i];
         m_group_info[i].m_group_addr = packet.ARRAY[i].ADDR;
     }
 
-    m_group_info_size = array_size;
+    m_group_info_size = safe_limit;
 }
 
 //--------------------------------------------------------------------------------------------------

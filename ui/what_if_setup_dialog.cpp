@@ -675,6 +675,49 @@ void WhatIfSetupDialog::OnAddModificationToList(const Dive::WhatIfModification& 
     }
 }
 
+Network::TcpClient* WhatIfSetupDialog::GetConnectedTcpClient()
+{
+    Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
+    if (!device)
+    {
+        qDebug() << "GetConnectedTcpClient: No device connected.";
+        ShowMessage(tr("Cannot connect to TCP server: No device connected."));
+        return nullptr;
+    }
+
+    if (!m_tcp_client)
+    {
+        qDebug() << "GetConnectedTcpClient: TCP client not initialized. Creating new instance.";
+        m_tcp_client = std::make_unique<Network::TcpClient>();
+    }
+
+    if (!m_tcp_client->IsConnected())
+    {
+        const std::string host = "127.0.0.1";
+        int port = device->Port();
+        qDebug() << "GetConnectedTcpClient: Client not connected. Attempting to connect to"
+                 << host.c_str() << ":" << port;
+        auto status = m_tcp_client->Connect(host, port);
+        if (!status.ok())
+        {
+            std::string err_msg = absl::StrFormat(
+                "Failed to connect to the application's TCP server at %s:%d.Error: %s", host, port,
+                status.message());
+            qDebug() << "GetConnectedTcpClient:" << err_msg.c_str();
+            ShowMessage(QString::fromStdString(err_msg));
+            m_tcp_client.reset();
+            return nullptr;
+        }
+        qDebug() << "GetConnectedTcpClient: Successfully connected to" << host.c_str() << ":"
+                 << port;
+    }
+    else
+    {
+        qDebug() << "GetConnectedTcpClient: TCP client is already connected.";
+    }
+    return m_tcp_client.get();
+}
+
 absl::Status WhatIfSetupDialog::SyncActiveModifications()
 {
     Dive::AndroidDevice* device = Dive::GetDeviceManager().GetDevice();
@@ -689,19 +732,11 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
         return absl::FailedPreconditionError("Application is not running.");
     }
 
-    if (!m_tcp_client)
+    Network::TcpClient* tcp_client = GetConnectedTcpClient();
+    if (!tcp_client)
     {
-        m_tcp_client = std::make_unique<Network::TcpClient>();
-        const std::string host = "127.0.0.1";
-        int port = device->Port();
-        auto status = m_tcp_client->Connect(host, port);
-        if (!status.ok())
-        {
-            std::string err_msg(status.message());
-            qDebug() << "Connection failed: " << err_msg.c_str();
-            m_tcp_client.reset();
-            return status;
-        }
+        // Return an empty CancelledError to indicate the error was already handled/logged
+        return absl::CancelledError("");
     }
 
     Network::DrawcallFilterConfig drawcall_config;
@@ -751,7 +786,7 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
     }
 
     absl::Status send_draw_call_filtering_status =
-        m_tcp_client->SendDrawcallFilterConfig(drawcall_config);
+        tcp_client->SendDrawcallFilterConfig(drawcall_config);
     if (!send_draw_call_filtering_status.ok())
     {
         std::string err_msg(send_draw_call_filtering_status.message());
@@ -806,7 +841,10 @@ void WhatIfSetupDialog::OnTestModifications()
     absl::Status status = SyncActiveModifications();
     if (!status.ok())
     {
-        ShowMessage(QString::fromStdString(std::string(status.message())));
+        if (!status.message().empty())
+        {
+            ShowMessage(QString::fromStdString(std::string(status.message())));
+        }
         return;
     }
 
@@ -871,7 +909,10 @@ void WhatIfSetupDialog::OnDeleteModifications()
                 item->setCheckState(Qt::Checked);
             }
         }
-        ShowMessage(QString::fromStdString(std::string(status.message())));
+        if (!status.message().empty())
+        {
+            ShowMessage(QString::fromStdString(std::string(status.message())));
+        }
         return;
     }
 

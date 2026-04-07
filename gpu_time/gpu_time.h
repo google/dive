@@ -21,7 +21,9 @@ limitations under the License.
 #include <atomic>
 #include <deque>
 #include <limits>
+#include <mutex>
 #include <set>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -135,14 +137,24 @@ class GPUTime
         double max = std::numeric_limits<double>::lowest();
         double stddev = 0.0;
     };
-    Stats GetFrameTimeStats() const { return m_metrics.GetFrameTimeStats(); }
-    Stats GetFrameCmdTimeStats(size_t index) const { return m_metrics.GetFrameCmdTimeStats(index); }
+    Stats GetFrameTimeStats() const
+    {
+        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        return m_metrics.GetFrameTimeStats();
+    }
+    Stats GetFrameCmdTimeStats(size_t index) const
+    {
+        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        return m_metrics.GetFrameCmdTimeStats(index);
+    }
     Stats GetFrameRenderPassTimeStats(size_t index) const
     {
+        std::shared_lock<std::shared_mutex> lock(m_mutex);
         return m_metrics.GetFrameRenderPassTimeStats(index);
     }
     size_t GetCmdRenderPassCount(size_t index) const
     {
+        std::shared_lock<std::shared_mutex> lock(m_mutex);
         return m_metrics.GetCmdRenderPassCount(index);
     }
     std::string GetStatsString() const;
@@ -236,6 +248,7 @@ class GPUTime
     FrameMetrics m_metrics;
 
     std::set<VkQueue> m_queues;
+    mutable std::shared_mutex m_mutex;
     std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
     std::vector<VkCommandBuffer> m_frame_cmds;
     TimeStampSlotAllocator m_timestamp_allocator;
@@ -247,7 +260,7 @@ class GPUTime
     uint64_t m_frame_index = 0;
     float m_timestamp_period = 0.0f;
     bool m_valid_frame = true;
-    bool m_enable = false;
+    std::atomic<bool> m_enable = false;
 };
 
 }  // namespace Dive

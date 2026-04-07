@@ -21,8 +21,9 @@
 
 #include "dive/ui/forward.h"
 #include "dive/ui/types/impl_pointer.h"
+#include "dive_ui_lib_export.h"
 
-class DiveApplication : public QApplication
+class DIVE_UI_LIB_EXPORT DiveApplication : public QApplication
 {
     Q_OBJECT
  public:

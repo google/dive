@@ -213,7 +213,6 @@ set_target_properties(
         INSTALL_NAME_DIR "@rpath"
         BUILD_WITH_INSTALL_RPATH TRUE
         INSTALL_RPATH "${DIVE_RPATH}"
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
 target_compile_definitions(dive_ui_lib PRIVATE QT_VISIBILITY_AVAILABLE)

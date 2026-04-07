@@ -48,11 +48,18 @@ struct WhatIfTypeInfo
     std::span<const std::string_view> supported_commands;
 };
 
-inline constexpr std::array<WhatIfTypeInfo, 6> kWhatIfTypeInfos = {{
+inline constexpr std::array<WhatIfTypeInfo, 2> kWhatIfTypeInfos = {{
     {.type = WhatIfType::kDrawCallDisabled,
      .ui_name = "Draw calls were disabled",
      .ui_name_short = "Disable Draw Calls",
      .supported_commands = WhatIf::kDrawCmds},
+    {.type = WhatIfType::kTimestampsDisabled,
+     .ui_name = "Timestamps were disabled",
+     .ui_name_short = "Disable Timestamps",
+     .supported_commands = WhatIf::kTimestampCmds},
+    // TODO(b/500422580): Enable additional runtime what-if features once implemented in the dive
+    // runtime layer.
+    /*
     {.type = WhatIfType::kImageCreationFlagRemoved,
      .ui_name = "Image creation flags were removed",
      .ui_name_short = "Remove Image Flags",
@@ -68,11 +75,7 @@ inline constexpr std::array<WhatIfTypeInfo, 6> kWhatIfTypeInfos = {{
     {.type = WhatIfType::kAnisotropicFilterDisabled,
      .ui_name = "Anisotropic filters were disabled",
      .ui_name_short = "Disable Anisotropic Filters",
-     .supported_commands = WhatIf::kSamplerCmds},
-    {.type = WhatIfType::kTimestampsDisabled,
-     .ui_name = "Timestamps were disabled",
-     .ui_name_short = "Disable Timestamps",
-     .supported_commands = WhatIf::kTimestampCmds},
+     .supported_commands = WhatIf::kSamplerCmds},*/
 }};
 
 }  // namespace Dive

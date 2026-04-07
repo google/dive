@@ -26,6 +26,8 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
+#include "absl/synchronization/mutex.h"
 #include "frame_boundary_detector.h"
 
 namespace Dive
@@ -71,40 +73,48 @@ class GPUTime
                                  float timestamp_period,
                                  PFN_vkCreateQueryPool pfn_create_query_pool,
                                  PFN_vkResetQueryPool pfn_reset_query_pool,
-                                 PFN_vkDestroyQueryPool pfn_destroy_query_pool);
+                                 PFN_vkDestroyQueryPool pfn_destroy_query_pool)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
-    GpuTimeStatus OnDestroyDevice(VkDevice device, PFN_vkQueueWaitIdle pfn_queue_wait_idle);
+    GpuTimeStatus OnDestroyDevice(VkDevice device, PFN_vkQueueWaitIdle pfn_queue_wait_idle)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
-    GpuTimeStatus OnDestroyCommandPool(VkCommandPool command_pool);
+    GpuTimeStatus OnDestroyCommandPool(VkCommandPool command_pool) ABSL_LOCKS_EXCLUDED(m_mutex);
 
     GpuTimeStatus OnAllocateCommandBuffers(const VkCommandBufferAllocateInfo* allocate_info_ptr,
-                                           VkCommandBuffer* command_buffers_ptr);
+                                           VkCommandBuffer* command_buffers_ptr)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
     GpuTimeStatus OnFreeCommandBuffers(uint32_t command_buffer_count,
-                                       const VkCommandBuffer* command_buffers_ptr);
+                                       const VkCommandBuffer* command_buffers_ptr)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
-    GpuTimeStatus OnResetCommandBuffer(VkCommandBuffer command_buffer);
+    GpuTimeStatus OnResetCommandBuffer(VkCommandBuffer command_buffer) ABSL_LOCKS_EXCLUDED(m_mutex);
 
-    GpuTimeStatus OnResetCommandPool(VkCommandPool command_pool);
+    GpuTimeStatus OnResetCommandPool(VkCommandPool command_pool) ABSL_LOCKS_EXCLUDED(m_mutex);
 
     GpuTimeStatus OnBeginCommandBuffer(VkCommandBuffer command_buffer,
                                        VkCommandBufferUsageFlags flags,
-                                       PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+                                       PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
     GpuTimeStatus OnEndCommandBuffer(VkCommandBuffer command_buffer,
-                                     PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+                                     PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
     SubmitStatus OnQueueSubmit(uint32_t submit_count, const VkSubmitInfo* submits_ptr,
                                PFN_vkDeviceWaitIdle pfn_device_wait_idle,
                                PFN_vkResetQueryPool pfn_reset_query_pool,
-                               PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
+                               PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
     GpuTimeStatus OnQueuePresent(PFN_vkDeviceWaitIdle pfn_device_wait_idle,
                                  PFN_vkResetQueryPool pfn_reset_query_pool,
-                                 PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
+                                 PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
-    GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue);
-    GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue);
+    GpuTimeStatus OnGetDeviceQueue2(VkQueue* pQueue) ABSL_LOCKS_EXCLUDED(m_mutex);
+    GpuTimeStatus OnGetDeviceQueue(VkQueue* pQueue) ABSL_LOCKS_EXCLUDED(m_mutex);
 
     GpuTimeStatus OnCmdInsertDebugUtilsLabelEXT(VkCommandBuffer command_buffer,
                                                 const VkDebugUtilsLabelEXT* label_info_ptr);
@@ -135,21 +145,31 @@ class GPUTime
         double max = std::numeric_limits<double>::lowest();
         double stddev = 0.0;
     };
-    Stats GetFrameTimeStats() const { return m_metrics.GetFrameTimeStats(); }
-    Stats GetFrameCmdTimeStats(size_t index) const { return m_metrics.GetFrameCmdTimeStats(index); }
-    Stats GetFrameRenderPassTimeStats(size_t index) const
+    Stats GetFrameTimeStats() const ABSL_LOCKS_EXCLUDED(m_mutex)
     {
+        absl::MutexLock lock(&m_mutex);
+        return m_metrics.GetFrameTimeStats();
+    }
+    Stats GetFrameCmdTimeStats(size_t index) const ABSL_LOCKS_EXCLUDED(m_mutex)
+    {
+        absl::MutexLock lock(&m_mutex);
+        return m_metrics.GetFrameCmdTimeStats(index);
+    }
+    Stats GetFrameRenderPassTimeStats(size_t index) const ABSL_LOCKS_EXCLUDED(m_mutex)
+    {
+        absl::MutexLock lock(&m_mutex);
         return m_metrics.GetFrameRenderPassTimeStats(index);
     }
-    size_t GetCmdRenderPassCount(size_t index) const
+    size_t GetCmdRenderPassCount(size_t index) const ABSL_LOCKS_EXCLUDED(m_mutex)
     {
+        absl::MutexLock lock(&m_mutex);
         return m_metrics.GetCmdRenderPassCount(index);
     }
-    std::string GetStatsString() const;
+    std::string GetStatsString() const ABSL_LOCKS_EXCLUDED(m_mutex);
     // Gives a CSV format string representing the GPU timing data for objects in the current frame
     // Type, id, mean [ms], median [ms]
-    std::string GetStatsCSVString() const;
-    void ClearFrameCache();
+    std::string GetStatsCSVString() const ABSL_LOCKS_EXCLUDED(m_mutex);
+    void ClearFrameCache() ABSL_LOCKS_EXCLUDED(m_mutex);
 
  private:
     class FrameMetrics
@@ -219,35 +239,48 @@ class GPUTime
         bool reusable = false;
     };
 
-    GpuTimeStatus OnFrameBoundary(PFN_vkDeviceWaitIdle pfn_device_wait_idle,
-                                  PFN_vkResetQueryPool pfn_reset_query_pool,
-                                  PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
-    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
-    void RemoveCmdFromFrameCache(VkCommandBuffer cmd);
+    GpuTimeStatus OnFrameBoundary(PFN_vkResetQueryPool pfn_reset_query_pool,
+                                  PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
+    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
+    void RemoveCmdFromFrameCache(VkCommandBuffer cmd) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
     GpuTimeStatus BeginRenderPass(VkCommandBuffer command_buffer,
-                                  PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+                                  PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
+
     GpuTimeStatus EndRenderPass(VkCommandBuffer command_buffer,
-                                PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+                                PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+        ABSL_LOCKS_EXCLUDED(m_mutex);
 
     FrameBoundaryDetector m_boundary_detector;
 
+    mutable absl::Mutex m_mutex;
+
     // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
-    uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2]{};
-    FrameMetrics m_metrics;
+    uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots *
+                                            2] ABSL_GUARDED_BY(m_mutex) = {};
+    FrameMetrics m_metrics ABSL_GUARDED_BY(m_mutex);
+    std::set<VkQueue> m_queues ABSL_GUARDED_BY(m_mutex);
+    std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds ABSL_GUARDED_BY(m_mutex);
+    std::vector<VkCommandBuffer> m_frame_cmds ABSL_GUARDED_BY(m_mutex);
+    TimeStampSlotAllocator m_timestamp_allocator ABSL_GUARDED_BY(m_mutex);
 
-    std::set<VkQueue> m_queues;
-    std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
-    std::vector<VkCommandBuffer> m_frame_cmds;
-    TimeStampSlotAllocator m_timestamp_allocator;
-
+    // The following variables are initialized once during OnCreateDevice and are not
+    // expected to be modified in a multi-threaded context. Therefore, they do not
+    // require mutex protection.
     VkDevice m_device = VK_NULL_HANDLE;
     const VkAllocationCallbacks* m_allocator = nullptr;
     VkQueryPool m_query_pool = VK_NULL_HANDLE;
     PFN_vkDestroyQueryPool m_destroy_query_pool = nullptr;
-    uint64_t m_frame_index = 0;
     float m_timestamp_period = 0.0f;
-    bool m_valid_frame = true;
-    bool m_enable = false;
+
+    uint64_t m_frame_index ABSL_GUARDED_BY(m_mutex) = 0;
+    bool m_valid_frame ABSL_GUARDED_BY(m_mutex) = true;
+    std::atomic<bool> m_enable = false;
 };
 
 }  // namespace Dive

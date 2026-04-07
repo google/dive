@@ -26,7 +26,7 @@ add_library(
     frame_boundary_detector.cpp
     frame_boundary_detector.h
 )
-target_link_libraries(gpu_time PUBLIC Vulkan::Headers)
+target_link_libraries(gpu_time PUBLIC Vulkan::Headers absl::synchronization)
 
 # This is to fix build on Linux
 set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -48,6 +48,27 @@ if(NOT ANDROID)
         PRIVATE gpu_time gtest gtest_main gmock
     )
     gtest_discover_tests(frame_boundary_detector_test)
+
+    # Search for the benchmark library without forcing it as a requirement
+    find_package(benchmark QUIET)
+
+    if(benchmark_FOUND)
+        # Create the benchmark target but exclude it from the default build
+        add_executable(
+            gpu_time_benchmark
+            EXCLUDE_FROM_ALL
+            gpu_time_benchmark.cpp
+        )
+        target_link_libraries(
+            gpu_time_benchmark
+            PRIVATE gpu_time benchmark::benchmark benchmark::benchmark_main
+        )
+    else()
+        message(
+            STATUS
+            "Google Benchmark not found; skipping gpu_time_benchmark target."
+        )
+    endif()
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

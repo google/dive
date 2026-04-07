@@ -73,6 +73,7 @@ jobs:
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DDIVE_BUILD_WITH_CRASHPAD=OFF \
             -Bbuild/host .
         env:
           INPUTS_CC: ${{ inputs.cc }}

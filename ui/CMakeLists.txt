@@ -49,7 +49,7 @@ if(APPLE)
 endif()
 
 add_library(
-    dive_ui_lib
+    dive_gui_lib
     SHARED
     # Dive Gui Source:
     about_window.cpp
@@ -167,7 +167,7 @@ add_library(
 )
 
 target_link_libraries(
-    dive_ui_lib
+    dive_gui_lib
     PUBLIC
         Qt5::Widgets
         dive_core
@@ -194,8 +194,8 @@ target_link_libraries(
 )
 
 if(MSVC)
-    target_compile_definitions(dive_ui_lib PRIVATE DIVE_UI_LIB_BUILD)
-    message(STATUS "MSVC build: Defining DIVE_UI_LIB_BUILD for dive_ui_lib")
+    target_compile_definitions(dive_gui_lib PRIVATE DIVE_UI_LIB_BUILD)
+    message(STATUS "MSVC build: Defining DIVE_UI_LIB_BUILD for dive_gui_lib")
 endif()
 
 if(APPLE)
@@ -204,22 +204,24 @@ else()
     set(DIVE_RPATH "$ORIGIN")
 endif()
 
+# dive_gui_lib is a shared library, so default
+# visibility is set and hiding inlines is disabled to ensure that Qt's meta-object system
+# and dynamic_cast work correctly within this new shared library.
 set_target_properties(
-    dive_ui_lib
+    dive_gui_lib
     PROPERTIES
         CXX_VISIBILITY_PRESET default
         VISIBILITY_INLINES_HIDDEN OFF
-        OUTPUT_NAME "dive_ui_lib"
         INSTALL_NAME_DIR "@rpath"
         BUILD_WITH_INSTALL_RPATH TRUE
         INSTALL_RPATH "${DIVE_RPATH}"
 )
 
-target_compile_definitions(dive_ui_lib PRIVATE QT_VISIBILITY_AVAILABLE)
+target_compile_definitions(dive_gui_lib PRIVATE QT_VISIBILITY_AVAILABLE)
 
 target_include_directories(
-    dive_ui_lib
-    PUBLIC "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/src"
+    dive_gui_lib
+    PUBLIC "${dive_SOURCE_DIR}" "${dive_BINARY_DIR}"
 )
 
 add_executable(
@@ -242,9 +244,9 @@ set_target_properties(
 target_include_directories(
     ${PROJECT_NAME}
     PUBLIC
-        "${CMAKE_SOURCE_DIR}"
-        # Include CMAKE_BINARY_DIR for generated files.
-        "${CMAKE_BINARY_DIR}"
+        "${dive_SOURCE_DIR}"
+        # Include dive_BINARY_DIR for generated files.
+        "${dive_BINARY_DIR}"
 )
 
 # Enable asan and ubsan
@@ -271,7 +273,7 @@ endif()
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
-        dive_ui_lib
+        dive_gui_lib
         Qt5::Widgets
         absl::failure_signal_handler
         absl::symbolize
@@ -363,16 +365,16 @@ endif()
 
 if(APPLE)
     install(
-        TARGETS ${PROJECT_NAME} dive_ui_lib
+        TARGETS ${PROJECT_NAME}
         BUNDLE DESTINATION "${DIVE_INSTALL_DEST_HOST}"
     )
     install(
-        TARGETS dive_ui_lib
+        TARGETS dive_gui_lib
         DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
     )
 else()
     install(
-        TARGETS ${PROJECT_NAME} dive_ui_lib
+        TARGETS ${PROJECT_NAME} dive_gui_lib
         DESTINATION "${DIVE_INSTALL_DEST_HOST}"
     )
 endif()

@@ -905,7 +905,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
 		const uint32_t shift_bits = 32 - kGPUVariantsBits;
 		uint32_t gpu_variants = reg.first << shift_bits >> shift_bits;
 		uint32_t reg_offset = reg.first >> kGPUVariantsBits;
-    g_sRegNameToIndex[name] = reg_offset;
+		g_sRegNameToIndex[name] = reg_offset;
 		if (gpu_variants != 0)
 		{
 			uint32_t bit_offset = 0;

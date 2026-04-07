@@ -15,6 +15,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+          persist-credentials: false
+      - name: Unset global git credential helpers
+        shell: bash
+        run: |
+          git config --global --unset-all credential.helper || true
+          git config --system --unset-all credential.helper || true
       - uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
         with:
           version: 5.15.2

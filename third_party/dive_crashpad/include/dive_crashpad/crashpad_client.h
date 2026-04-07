@@ -23,6 +23,18 @@
 namespace Dive
 {
 
+#if defined(_MSC_VER)
+// Check if we are building the DLL (DIVE_CRASHPAD_LIB_BUILD is defined)
+#ifdef DIVE_CRASHPAD_LIB_BUILD
+#define DIVE_CRASHPAD_LIB_EXPORT __declspec(dllexport)
+#else
+#define DIVE_CRASHPAD_LIB_EXPORT __declspec(dllimport)
+#endif
+#else
+#define DIVE_CRASHPAD_LIB_EXPORT __attribute__((visibility("default")))
+#endif
+
+DIVE_CRASHPAD_LIB_EXPORT
 absl::Status InitializeCrashpad(const std::string& product_name);
 
 }  // namespace Dive

@@ -16,9 +16,6 @@
 
 # Crashpad is only used in RelWithDebInfo builds when DIVE_BUILD_WITH_CRASHPAD is enabled.
 # Otherwise, absl failure signal handler is used.
-set(USE_CRASHPAD_CONDITION
-    $<AND:$<CONFIG:RelWithDebInfo>,$<BOOL:${DIVE_BUILD_WITH_CRASHPAD}>>
-)
 
 add_library(crash_report STATIC)
 
@@ -27,8 +24,7 @@ target_sources(
     PRIVATE
         absl_crash_handler.h
         crash_report.h
-        $<$<BOOL:${USE_CRASHPAD_CONDITION}>:crash_report_crashpad.cpp>
-        $<$<NOT:${USE_CRASHPAD_CONDITION}>:crash_report_absl.cpp>
+        crash_report.cpp
 )
 
 target_link_libraries(
@@ -39,5 +35,21 @@ target_link_libraries(
         absl::symbolize
         absl::failure_signal_handler
         absl::strings
-        $<$<BOOL:${USE_CRASHPAD_CONDITION}>:dive_crashpad>
+        dive_crashpad
 )
+
+if(APPLE)
+    install(
+        TARGETS dive_crashpad
+        BUNDLE DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+    )
+    install(
+        TARGETS dive_crashpad
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
+    )
+else()
+    install(
+        TARGETS dive_crashpad
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+    )
+endif()

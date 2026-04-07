@@ -697,7 +697,6 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
         case Dive::WhatIfType::kAnisotropicFilterDisabled:
             break;
         case Dive::WhatIfType::kTimestampsDisabled:
-            qDebug() << modification_type_info.ui_name.data();
             break;
         default:
             qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,
@@ -772,7 +771,6 @@ void WhatIfConfigureDialog::UpdateVisibility()
             m_modification_warning_label->show();
             break;
         case Dive::WhatIfType::kTimestampsDisabled:
-            qDebug() << modification_type_info.ui_name.data();
             break;
         default:
             qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,

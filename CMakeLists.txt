@@ -41,7 +41,7 @@ set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 
-option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" ON)
+option(DIVE_BUILD_WITH_CRASHPAD "Build Dive with Crashpad" OFF)
 
 option(UPLOAD_DEBUG_SYMBOLS "Enable uploading debug symbols to Crashpad" OFF)
 if(UPLOAD_DEBUG_SYMBOLS)

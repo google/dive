@@ -566,7 +566,17 @@ void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_st
     // Check if viewport is set. Up to 16 of them can be set.
     uint32_t viewport_id = 0;
     uint32_t viewport_reg_start = GetRegOffsetByName("GRAS_CL_VIEWPORT0_XOFFSET");
-    DIVE_ASSERT(viewport_reg_start != kInvalidRegOffset);
+    if (viewport_reg_start == kInvalidRegOffset)
+    {
+        static bool logged_once = false;
+        if (!logged_once)
+        {
+            fprintf(stderr,
+                    "Warning: GRAS_CL_VIEWPORT0_XOFFSET not found. Skipping viewport metadata.\n");
+            logged_once = true;
+        }
+        return;
+    }
     while (viewport_id < 16 && m_state_tracker.IsRegSet(viewport_reg_start + 6 * viewport_id))
     {
         GRAS_CL_VIEWPORT_XOFFSET xOffset;
@@ -838,9 +848,12 @@ void CaptureMetadataCreator::FillDepthState(EventStateInfo::Iterator event_state
 //--------------------------------------------------------------------------------------------------
 void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_state_it)
 {
-    uint32_t rt_id = 0;
     uint32_t rb_mrt_ctl_reg_start = GetRegOffsetByName("RB_MRT0_CONTROL");
-    DIVE_ASSERT(rb_mrt_ctl_reg_start != kInvalidRegOffset);
+    if (rb_mrt_ctl_reg_start == kInvalidRegOffset)
+    {
+        return;
+    }
+    uint32_t rt_id = 0;
     constexpr uint32_t kElemCount = 8;
     while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_ctl_reg_start + kElemCount * rt_id))
     {
@@ -1042,7 +1055,10 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
     uint32_t rt_id = 0;
     constexpr uint32_t kElemCount = 8;
     uint32_t rb_mrt_buf_info_reg_start = GetRegOffsetByName("RB_MRT0_BUF_INFO");
-    DIVE_ASSERT(rb_mrt_buf_info_reg_start != kInvalidRegOffset);
+    if (rb_mrt_buf_info_reg_start == kInvalidRegOffset)
+    {
+        return;
+    }
     while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_buf_info_reg_start + kElemCount * rt_id))
     {
         RB_MRT_BUF_INFO rb_mrt_buf_info;

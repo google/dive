@@ -264,6 +264,8 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     QObject::connect(this, &TraceDialog::StopPackageClicked, this, &TraceDialog::OnStopPackage);
 
     OnCaptureTypeChanged(kGfxrCaptureButtonId);
+    QObject::connect(this, &TraceDialog::StartPackageClicked, this, &TraceDialog::OnStartPackage);
+    QObject::connect(this, &TraceDialog::StopPackageClicked, this, &TraceDialog::OnStopPackage);
 }
 
 TraceDialog::~TraceDialog()
@@ -672,7 +674,6 @@ void TraceDialog::OnTraceClicked()
     connect(workerThread, &CaptureWorker::UpdateProgressDialog, progress_bar,
             &QProgressDialog::setLabelText);
     workerThread->start();
-    std::cout << "OnTraceClicked done " << std::endl;
 }
 
 void TraceDialog::OnTraceAvailable(QString const& trace_path) { emit TraceAvailable(trace_path); }

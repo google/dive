@@ -975,6 +975,34 @@ std::string AbslUnparseFlag(GfxrReplayOptions run_type)
     }
 }
 
+bool AbslParseFlag(absl::string_view text, GfxrCaptureSettings::EndPoint* end_point,
+                   std::string* error)
+{
+    if (text == "frame")
+    {
+        *end_point = GfxrCaptureSettings::EndPoint::kFrame;
+        return true;
+    }
+    if (text == "queue_submit")
+    {
+        *end_point = GfxrCaptureSettings::EndPoint::kQueueSubmit;
+        return true;
+    }
+    *error = "unknown value for enumeration";
+    return false;
+}
+
+std::string AbslUnparseFlag(GfxrCaptureSettings::EndPoint end_point)
+{
+    switch (end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            return "frame";
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            return "kQueueSubmit";
+    }
+}
+
 }  // namespace Dive
 
 ABSL_FLAG(Command, command, Command::kNone, GenerateCommandFlagHelp());
@@ -1005,6 +1033,12 @@ ABSL_FLAG(
     "not provided:\n"
     "\t--comamnd pm4_capture : wait for 5 seconds\n"
     "\t--command gfxr_capture : wait for user input");
+
+ABSL_FLAG(Dive::GfxrCaptureSettings::EndPoint, gfxr_capture_end,
+          Dive::GfxrCaptureSettings::EndPoint::kFrame,
+          "(Only for --command gfxr_capture) What unit of the application is captured:\n"
+          "\tframe       : The capture ends when a full frame is processed.\n"
+          "\tqueue_submit: The capture ends at the next queue submit.\n");
 
 ABSL_FLAG(std::string, gfxr_replay_file_path, "",
           "The full path to the .gfxr capture file located on the Android device to be replayed.");
@@ -1059,6 +1093,7 @@ int main(int argc, char* argv[])
             {
                 .capture_file_directory =
                     Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName,
+                .end_point = absl::GetFlag(FLAGS_gfxr_capture_end),
             },
         .replay_settings =
             {

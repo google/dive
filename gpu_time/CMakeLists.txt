@@ -35,6 +35,9 @@ if(NOT ANDROID)
     enable_testing()
     include(GoogleTest)
 
+    # Google benchmark library
+    # find_package(benchmark REQUIRED)
+
     add_executable(gpu_time_test gpu_time_test.cpp)
     target_link_libraries(gpu_time_test PRIVATE gpu_time gtest gtest_main gmock)
     gtest_discover_tests(gpu_time_test)
@@ -48,6 +51,12 @@ if(NOT ANDROID)
         PRIVATE gpu_time gtest gtest_main gmock
     )
     gtest_discover_tests(frame_boundary_detector_test)
+
+    # add_executable(gpu_time_benchmark gpu_time_benchmark.cpp)
+    # target_link_libraries(
+    #     gpu_time_benchmark
+    #     PRIVATE gpu_time benchmark::benchmark benchmark::benchmark_main
+    # )
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

@@ -60,7 +60,7 @@ jobs:
             --actions all_device \
             --build-type ${INPUTS_BUILD_TYPE} \
             --ci \
-            --host-build-additional-flags "\
+            --host-configure-additional-flags "\
               -DCMAKE_C_COMPILER_LAUNCHER=ccache \
               -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
         env:

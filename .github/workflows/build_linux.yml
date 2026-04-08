@@ -70,7 +70,7 @@ jobs:
             --actions configure_host,build_host,install_host \
             --build-type ${INPUTS_BUILD_TYPE} \
             --ci \
-            --host-build-additional-flags "\
+            --host-configure-additional-flags "\
               -DDIVE_BUILD_WITH_CRASHPAD=OFF \
               -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${INPUTS_CC} \
               -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \

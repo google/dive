@@ -31,7 +31,7 @@ jobs:
             --build-type $env:INPUTS_BUILD_TYPE `
             --build-with-cmake `
             --ci `
-            --host-build-additional-flags "`
+            --host-configure-additional-flags "`
               -DDIVE_BUILD_WITH_CRASHPAD=OFF"
         env:
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}

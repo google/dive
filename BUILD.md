@@ -102,7 +102,7 @@ python scripts/build.py
     1. `python scripts/build.py --actions configure_host`
     1. Open Visual Studio UI and build target ALL_BUILD
     1. `python scripts/build.py --actions ...` Specify all the following actions after the action "build_host"
-* To build with Crashpad, specify `--build-type RelWithDebInfo`. In case the default is Crashpad off, specify additionally `--host-build-additional-flags "-DDIVE_BUILD_WITH_CRASHPAD=ON"`
+* To build with Crashpad, specify `--build-type RelWithDebInfo`. In case the default is Crashpad off, specify additionally `--host-configure-additional-flags "-DDIVE_BUILD_WITH_CRASHPAD=ON"`
 * Gradle build
     * Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
     * Delete GFXR build folders for a clean build

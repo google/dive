@@ -64,33 +64,25 @@ jobs:
           key: ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ inputs.cc }}-${{ inputs.build_type }}-ccache-continuous-
-      - name: Generate build files with cmake
-        run: |
-          cmake \
-            -G "Ninja Multi-Config" \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${INPUTS_CC} \
-            -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DDIVE_BUILD_WITH_CRASHPAD=OFF \
-            -Bbuild/host .
-        env:
-          INPUTS_CC: ${{ inputs.cc }}
-          INPUTS_CXX: ${{ inputs.cxx }}
       - name: Build Dive host tools with ninja with ${{ inputs.cc }}
         run: |
-          ninja -C build/host -f build-${INPUTS_BUILD_TYPE}.ninja
+          python -u scripts/build.py \
+            --actions configure_host,build_host,install_host \
+            --build-type ${INPUTS_BUILD_TYPE} \
+            --ci \
+            --host-build-additional-flags "\
+              -DDIVE_BUILD_WITH_CRASHPAD=OFF \
+              -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${INPUTS_CC} \
+              -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
         env:
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
+          INPUTS_CC: ${{ inputs.cc }}
+          INPUTS_CXX: ${{ inputs.cxx }}
       - name: Ninja log
         run: |
           cat build/host/.ninja_log
-      - name: Produce install artifacts
-        run: |
-          cmake --install build/host --prefix build/pkg --config ${INPUTS_BUILD_TYPE}
-        env:
-          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &

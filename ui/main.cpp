@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+#include "ui/main.h"
+
 #include <fcntl.h>
 
 #include <QApplication>
@@ -155,7 +157,7 @@ bool ExecuteScenario(std::string_view scenario, MainWindow* main_window)
 }
 
 //--------------------------------------------------------------------------------------------------
-int main(int argc, char* argv[])
+int DiveGuiMain(int argc, char* argv[])
 {
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);

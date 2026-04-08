@@ -114,6 +114,8 @@ add_library(
     dive_ui_lib_export.h
     main_window.cpp
     main_window.h
+    main.cpp
+    main.h
     misc_stats_model.cpp
     misc_stats_model.h
     misc_stats_tab_view.cpp
@@ -168,8 +170,8 @@ add_library(
 
 target_link_libraries(
     dive_gui_lib
-    PUBLIC
-        Qt5::Widgets
+    PUBLIC Qt5::Widgets
+    PRIVATE
         dive_core
         dive_lib_os
         device_mgr
@@ -177,7 +179,7 @@ target_link_libraries(
         absl::status
         absl::statusor
         absl::strings
-    PRIVATE
+        crash_report
         network
         dive_lib_ui
         dive_plugin_loader
@@ -233,7 +235,7 @@ add_executable(
     # MacOS icon
     $<$<PLATFORM_ID:Darwin>:dive.icns>
     # Entry point:
-    main.cpp
+    main_exe.cpp
 )
 
 set_target_properties(
@@ -270,15 +272,7 @@ if(MSVC)
     )
 endif()
 
-target_link_libraries(
-    ${PROJECT_NAME}
-    PRIVATE
-        dive_gui_lib
-        Qt5::Widgets
-        absl::failure_signal_handler
-        absl::symbolize
-        crash_report
-)
+target_link_libraries(${PROJECT_NAME} PRIVATE dive_gui_lib dive_build_defs)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)

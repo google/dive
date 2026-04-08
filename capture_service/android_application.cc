@@ -33,6 +33,7 @@ limitations under the License.
 #include "device_mgr.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
+#include "os/command_utils.h"
 
 namespace Dive
 {
@@ -164,6 +165,8 @@ absl::Status AndroidApplication::Cleanup()
             m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
             m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(m_dev.Adb().Run(
+            "shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end \\\"\\\""));
         if (!m_package.empty())
         {
             RETURN_IF_ERROR(m_dev.Adb().Run(
@@ -505,6 +508,19 @@ absl::Status AndroidApplication::GfxrSetup()
     // capture_android_trigger must be set in order for GFXR to listen for triggers.
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
 
+    AdbSession& adb = m_dev.Adb();
+    switch (m_gfxr_capture_settings->end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end false"));
+            break;
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end true"));
+            break;
+    }
+
     LOG(INFO) << "AndroidApplication::GfxrSetup() package " << m_package << " done";
     return absl::OkStatus();
 }
@@ -769,6 +785,19 @@ absl::Status VulkanCliApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
+
+    AdbSession& adb = m_dev.Adb();
+    switch (m_gfxr_capture_settings->end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end false"));
+            break;
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end true"));
+            break;
+    }
     LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " ended";
     return absl::OkStatus();
 }

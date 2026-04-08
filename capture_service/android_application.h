@@ -52,6 +52,11 @@ class AndroidDevice;
 struct GfxrCaptureSettings
 {
     std::string capture_file_directory;
+    enum class EndPoint
+    {
+        kFrame,
+        kQueueSubmit,
+    } end_point = EndPoint::kFrame;
 };
 
 class AndroidApplication

@@ -178,6 +178,9 @@ class TraceDialog : public DeviceDialog
 
     QLineEdit* m_capture_file_local_root_directory_input_box;
 
+    QWidget* m_gfxr_capture_end_point_container = nullptr;
+    QButtonGroup* m_gfxr_capture_end_point_button_group = nullptr;
+
     QVBoxLayout* m_main_layout;
     QStringList m_pkg_list;
     QString m_cur_pkg;

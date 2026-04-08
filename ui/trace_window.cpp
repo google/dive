@@ -62,11 +62,34 @@
 namespace
 {
 
+using Dive::GfxrCaptureSettings;
+
 constexpr size_t kNumGfxrCaptureAppTypes =
     std::count_if(Dive::kAppTypeInfos.begin(), Dive::kAppTypeInfos.end(),
                   [](const Dive::AppTypeInfo& info) { return info.is_gfxr_capture_supported; });
 const int kGfxrCaptureButtonId = 1;
 const int kPm4CaptureButtonId = 2;
+
+const char* ToString(GfxrCaptureSettings::EndPoint end_point)
+{
+    switch (end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            return "Frame";
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            return "Queue Submit";
+    }
+
+    return "<unknown GfxrCaptureSettings::EndPoint>";
+}
+
+QRadioButton* CreateRadioButtonForEnum(GfxrCaptureSettings::EndPoint end_point, QButtonGroup& group)
+{
+    auto* button = new QRadioButton(QObject::tr(ToString(end_point)));
+    group.addButton(button, static_cast<int>(end_point));
+    return button;
+}
+
 }  // namespace
 
 // =================================================================================================
@@ -213,6 +236,23 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     capture_file_local_directory_layout->addWidget(capture_file_local_directory_label);
     capture_file_local_directory_layout->addWidget(m_capture_file_local_root_directory_input_box);
 
+    m_gfxr_capture_end_point_container = new QWidget(this);
+    m_gfxr_capture_end_point_button_group = new QButtonGroup(this);
+    auto* gfxr_capture_end_point_layout = new QHBoxLayout();
+    auto* gfxr_capture_end_point_frame_button = CreateRadioButtonForEnum(
+        GfxrCaptureSettings::EndPoint::kFrame, *m_gfxr_capture_end_point_button_group);
+    gfxr_capture_end_point_frame_button->setChecked(true);
+    CreateRadioButtonForEnum(GfxrCaptureSettings::EndPoint::kQueueSubmit,
+                             *m_gfxr_capture_end_point_button_group);
+    gfxr_capture_end_point_layout->addWidget(new QLabel("Capture End Point:", this));
+    for (QAbstractButton* button : m_gfxr_capture_end_point_button_group->buttons())
+    {
+        gfxr_capture_end_point_layout->addWidget(button);
+    }
+    gfxr_capture_end_point_layout->addStretch(1);
+    gfxr_capture_end_point_layout->setContentsMargins({0, 0, 0, 0});
+    m_gfxr_capture_end_point_container->setLayout(gfxr_capture_end_point_layout);
+
     m_button_layout->addWidget(m_run_button);
     m_button_layout->addWidget(m_capture_button);
     m_button_layout->addWidget(m_gfxr_capture_button);
@@ -224,6 +264,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent)
     m_main_layout->addLayout(m_capture_warning_layout);
     m_main_layout->addLayout(m_pkg_layout);
     m_main_layout->addLayout(m_gfxr_capture_file_directory_layout);
+    m_main_layout->addWidget(m_gfxr_capture_end_point_container);
     m_main_layout->addLayout(capture_file_local_directory_layout);
     m_main_layout->addLayout(m_args_layout);
 
@@ -566,6 +607,8 @@ void TraceDialog::OnStartPackage()
         m_gfxr_capture ? std::make_optional(Dive::GfxrCaptureSettings{
                              .capture_file_directory =
                                  m_gfxr_capture_file_directory_input_box->text().toStdString(),
+                             .end_point = static_cast<Dive::GfxrCaptureSettings::EndPoint>(
+                                 m_gfxr_capture_end_point_button_group->checkedId()),
                          })
                        : std::nullopt);
     absl::Status ret = device->SetupDevice();
@@ -767,6 +810,7 @@ void TraceDialog::ShowGfxrFields()
     m_gfxr_capture_button->show();
     m_gfxr_capture_file_on_device_directory_label->show();
     m_gfxr_capture_file_directory_input_box->show();
+    m_gfxr_capture_end_point_container->show();
 }
 
 void TraceDialog::HideGfxrFields()
@@ -776,6 +820,7 @@ void TraceDialog::HideGfxrFields()
     m_gfxr_capture_button->hide();
     m_gfxr_capture_file_on_device_directory_label->hide();
     m_gfxr_capture_file_directory_input_box->hide();
+    m_gfxr_capture_end_point_container->hide();
 }
 
 void TraceDialog::EnableDialogInputs(bool enable)

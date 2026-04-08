@@ -696,6 +696,8 @@ void WhatIfConfigureDialog::UpdateAddModificationButtonState()
         }
         case Dive::WhatIfType::kAnisotropicFilterDisabled:
             break;
+        case Dive::WhatIfType::kTimestampsDisabled:
+            break;
         default:
             qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,
                                      " is unimplemented/unsupported")
@@ -767,6 +769,8 @@ void WhatIfConfigureDialog::UpdateVisibility()
             break;
         case Dive::WhatIfType::kAnisotropicFilterDisabled:
             m_modification_warning_label->show();
+            break;
+        case Dive::WhatIfType::kTimestampsDisabled:
             break;
         default:
             qDebug() << absl::StrCat("The case ", modification_type_info.ui_name,

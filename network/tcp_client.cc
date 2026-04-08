@@ -501,6 +501,7 @@ absl::Status TcpClient::SendDisableTimestamp(bool disable)
             MessageType::DISABLE_TIMESTAMP_RESPONSE, ", Got: ", response->GetMessageType(), ")."));
     }
 
+    std::cout << "Client: SendDisableTimestamp successful." << std::endl;
     return Dive::OkStatus();
 }
 

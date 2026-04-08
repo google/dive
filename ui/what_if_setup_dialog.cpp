@@ -740,6 +740,7 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
     }
 
     Network::DrawcallFilterConfig drawcall_config;
+    bool disable_timestamps = false;
 
     if (m_modification_list_model)
     {
@@ -778,6 +779,11 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
                         }
                         break;
                     }
+                    case Dive::WhatIfType::kTimestampsDisabled:
+                    {
+                        disable_timestamps = true;
+                        break;
+                    }
                     default:
                         break;
                 }
@@ -792,6 +798,15 @@ absl::Status WhatIfSetupDialog::SyncActiveModifications()
         std::string err_msg(send_draw_call_filtering_status.message());
         qDebug() << "Failed to send draw call filters: " << err_msg.c_str();
         return send_draw_call_filtering_status;
+    }
+
+    absl::Status send_disable_timestamp_status =
+        tcp_client->SendDisableTimestamp(disable_timestamps);
+    if (!send_disable_timestamp_status.ok())
+    {
+        std::string err_msg(send_disable_timestamp_status.message());
+        qDebug() << "Failed to send disable timestamp config: " << err_msg.c_str();
+        return send_disable_timestamp_status;
     }
 
     return absl::OkStatus();

@@ -139,22 +139,22 @@ class GPUTime
     };
     Stats GetFrameTimeStats() const
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock lock(m_mutex);
         return m_metrics.GetFrameTimeStats();
     }
     Stats GetFrameCmdTimeStats(size_t index) const
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock lock(m_mutex);
         return m_metrics.GetFrameCmdTimeStats(index);
     }
     Stats GetFrameRenderPassTimeStats(size_t index) const
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock lock(m_mutex);
         return m_metrics.GetFrameRenderPassTimeStats(index);
     }
     size_t GetCmdRenderPassCount(size_t index) const
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock lock(m_mutex);
         return m_metrics.GetCmdRenderPassCount(index);
     }
     std::string GetStatsString() const;
@@ -231,8 +231,7 @@ class GPUTime
         bool reusable = false;
     };
 
-    GpuTimeStatus OnFrameBoundary(PFN_vkDeviceWaitIdle pfn_device_wait_idle,
-                                  PFN_vkResetQueryPool pfn_reset_query_pool,
+    GpuTimeStatus OnFrameBoundary(PFN_vkResetQueryPool pfn_reset_query_pool,
                                   PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
     GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
     void RemoveCmdFromFrameCache(VkCommandBuffer cmd);
@@ -248,7 +247,7 @@ class GPUTime
     FrameMetrics m_metrics;
 
     std::set<VkQueue> m_queues;
-    mutable std::shared_mutex m_mutex;
+    mutable std::mutex m_mutex;
     std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
     std::vector<VkCommandBuffer> m_frame_cmds;
     TimeStampSlotAllocator m_timestamp_allocator;

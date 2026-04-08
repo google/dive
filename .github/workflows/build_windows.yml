@@ -23,21 +23,16 @@ jobs:
       - name: Install Dive dependencies
         run: |
           python3 -m pip install mako
-      - name: Generate build files with cmake
-        run: |
-          cmake `
-            -G "Visual Studio 17 2022" `
-            -A x64 `
-            -DDIVE_BUILD_WITH_CRASHPAD=OFF `
-            -Bbuild/host .
+      # TODO: b/484082504 - Remove --build-with-cmake, need to ensure msbuild is on the Path on this runner first
       - name: Build Dive host tools with VS 2022
         run: |
-          cmake --build build/host --config $env:INPUTS_BUILD_TYPE
-        env:
-          INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
-      - name: Produce install artifacts
-        run: |
-          cmake --install build/host --prefix build/pkg --config $env:INPUTS_BUILD_TYPE
+          python3 -u scripts/build.py `
+            --actions configure_host,build_host,install_host `
+            --build-type $env:INPUTS_BUILD_TYPE `
+            --build-with-cmake `
+            --ci `
+            --host-build-additional-flags "`
+              -DDIVE_BUILD_WITH_CRASHPAD=OFF"
         env:
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: Run tests

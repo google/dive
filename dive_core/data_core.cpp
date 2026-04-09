@@ -347,7 +347,9 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager& mem_manager, uint32_
     if (Util::IsEvent(mem_manager, submit_index, va_addr, type7_header->opcode, m_state_tracker))
     {
         // Add a new event to the EventInfo metadata array
-        EventInfo event_info = {};
+        m_capture_metadata.m_event_info.push_back(EventInfo{});
+
+        EventInfo& event_info = m_capture_metadata.m_event_info.back();
         event_info.m_submit_index = submit_index;
         event_info.m_type = Util::GetEventType(mem_manager, submit_index, va_addr,
                                                type7_header->opcode, m_state_tracker);
@@ -388,8 +390,6 @@ bool CaptureMetadataCreator::OnPacket(const IMemoryManager& mem_manager, uint32_
         {
             FillResolveOrClearEventStateInfo(it);
         }
-
-        m_capture_metadata.m_event_info.push_back(event_info);
     }
     return true;
 }

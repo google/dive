@@ -15,7 +15,13 @@
 */
 
 #pragma once
-
+#if defined(_MSC_VER)
+#ifdef DIVE_UI_LIB_BUILD
+#pragma message("Compiling main.h with DIVE_UI_LIB_BUILD defined")
+#else
+#pragma message("Compiling main.h without DIVE_UI_LIB_BUILD defined")
+#endif
+#endif
 #include "dive_ui_lib_export.h"
 
 DIVE_UI_LIB_EXPORT int DiveGuiMain(int argc, char** argv);

@@ -19,11 +19,10 @@
 #include <QObject>
 
 #include "dive/ui/types/impl_pointer.h"
-#include "dive_ui_lib_export.h"
 
 class MainWindow;
 
-class DIVE_UI_LIB_EXPORT ApplicationController : public QObject
+class ApplicationController : public QObject
 {
     Q_OBJECT
  public:

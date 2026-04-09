@@ -16,11 +16,9 @@
 
 #pragma once
 
-#include "dive_ui_lib_export.h"
-
 namespace Dive
 {
 
-DIVE_UI_LIB_EXPORT void RegisterCustomMetaType();
+void RegisterCustomMetaType();
 
 }

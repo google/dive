@@ -203,9 +203,8 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   parseEnumInfo(enum_index_dict, enum_list, registers_et_root)
 
   pm4_info_file.writelines('''
-void Pm4InfoInit()
+static int Pm4InfoInitImpl()
 {
-    if (!g_sRegInfo.empty()) return;
 ''')
   outputOpcodes(pm4_info_file, opcode_dict)
   pm4_info_file.write('\n')
@@ -214,7 +213,16 @@ void Pm4InfoInit()
   outputEnums(pm4_info_file, enum_list)
   pm4_info_file.write('\n')
   outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_dict)
-  pm4_info_file.write('}\n')
+  pm4_info_file.writelines('''
+    return 0;
+}
+
+void Pm4InfoInit()
+{
+    static int initialized = Pm4InfoInitImpl();
+    (void)initialized;
+}
+''')
   return
 
 valid_opcodes = {}

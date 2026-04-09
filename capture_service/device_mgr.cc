@@ -540,7 +540,7 @@ absl::Status AndroidDevice::SetupDevice()
 
     RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kWrapLibName));
 
-    if (!m_gfxr_enabled)
+    if (!m_gfxr_capture_settings)
     {
         RETURN_IF_ERROR(RequestRootAccess());
         RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kVkLayerLibName));
@@ -645,8 +645,7 @@ absl::Status AndroidDevice::CleanupPackageProperties(const std::string& package)
 }
 
 absl::Status AndroidDevice::SetupApp(const std::string& package, const ApplicationType type,
-                                     const std::string& command_args,
-                                     const std::string& gfxr_capture_directory)
+                                     const std::string& command_args)
 {
     if (type == ApplicationType::VULKAN_APK)
     {
@@ -659,7 +658,7 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
     else if (type == ApplicationType::OPENXR_APK)
     {
         m_app = std::make_unique<OpenXRApplication>(*this, package, command_args);
-        if (m_gfxr_enabled)
+        if (m_gfxr_capture_settings)
         {
             // Need root to set openxr.enable_frame_delimiter
             // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
@@ -674,15 +673,8 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
     {
         return absl::InternalError("Failed allocate memory for AndroidApplication");
     }
-    if (m_gfxr_enabled)
-    {
-        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
-        m_app->SetGfxrEnabled(true);
-    }
-    else
-    {
-        m_app->SetGfxrEnabled(false);
-    }
+
+    m_app->SetGfxrCaptureSettings(m_gfxr_capture_settings);
 
     if (m_runtime_what_if_enabled)
     {
@@ -692,8 +684,7 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
 }
 
 absl::Status AndroidDevice::SetupApp(const std::string& command, const std::string& command_args,
-                                     const ApplicationType type,
-                                     const std::string& gfxr_capture_directory)
+                                     const ApplicationType type)
 {
     CHECK(type == ApplicationType::VULKAN_CLI) << "Must be VULKAN_CLI type";
     m_app = std::make_unique<VulkanCliApplication>(*this, command, command_args);
@@ -704,15 +695,7 @@ absl::Status AndroidDevice::SetupApp(const std::string& command, const std::stri
     }
 
     RETURN_IF_ERROR(RequestRootAccess());
-    if (m_gfxr_enabled)
-    {
-        m_app->SetGfxrCaptureFileDirectory(gfxr_capture_directory);
-        m_app->SetGfxrEnabled(true);
-    }
-    else
-    {
-        m_app->SetGfxrEnabled(false);
-    }
+    m_app->SetGfxrCaptureSettings(m_gfxr_capture_settings);
 
     return m_app->Setup();
 }
@@ -1279,7 +1262,10 @@ absl::Status AndroidDevice::RetrieveFile(const std::string& remote_file_path,
     return Adb().Run(absl::StrFormat("shell rm -rf %s", remote_file_path));
 }
 
-void AndroidDevice::EnableGfxr(bool enable_gfxr) { m_gfxr_enabled = enable_gfxr; }
+void AndroidDevice::SetGfxrCaptureSettings(std::optional<GfxrCaptureSettings> settings)
+{
+    m_gfxr_capture_settings = std::move(settings);
+}
 
 void AndroidDevice::EnableRuntimeWhatIf(bool enable_runtime_what_if)
 {

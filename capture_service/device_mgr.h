@@ -132,7 +132,8 @@ class AndroidDevice
     // Cleanup properties related to a specific package
     absl::Status CleanupPackageProperties(const std::string& package);
 
-    void EnableGfxr(bool enable_gfxr);
+    // nullopt means no GFXR capture will take place.
+    void SetGfxrCaptureSettings(std::optional<GfxrCaptureSettings> settings);
     void EnableRuntimeWhatIf(bool enable_runtime_what_if);
     bool IsProcessRunning(absl::string_view process_name) const;
     bool FileExists(const std::string& file_path);
@@ -149,10 +150,9 @@ class AndroidDevice
         PackageListOptions option = PackageListOptions::kAll) const;
     std::string GetDeviceDisplayName() const;
     absl::Status SetupApp(const std::string& package, const ApplicationType type,
-                          const std::string& command_args,
-                          const std::string& gfxr_capture_directory);
+                          const std::string& command_args);
     absl::Status SetupApp(const std::string& binary, const std::string& args,
-                          const ApplicationType type, const std::string& gfxr_capture_directory);
+                          const ApplicationType type);
 
     absl::Status CleanupApp();
     absl::Status StartApp();
@@ -221,7 +221,7 @@ class AndroidDevice
     AdbSession m_adb;
     DeviceState m_original_state;
     std::unique_ptr<AndroidApplication> m_app;
-    bool m_gfxr_enabled = false;
+    std::optional<GfxrCaptureSettings> m_gfxr_capture_settings;
     bool m_runtime_what_if_enabled = false;
     int m_port = kFirstPort;
 };

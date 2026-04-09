@@ -21,13 +21,12 @@ limitations under the License.
 #include <atomic>
 #include <deque>
 #include <limits>
-#include <mutex>
 #include <set>
-#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "absl/synchronization/mutex.h"
 #include "frame_boundary_detector.h"
 
 namespace Dive
@@ -139,22 +138,22 @@ class GPUTime
     };
     Stats GetFrameTimeStats() const
     {
-        std::unique_lock lock(m_mutex);
+        absl::MutexLock lock(&m_mutex);
         return m_metrics.GetFrameTimeStats();
     }
     Stats GetFrameCmdTimeStats(size_t index) const
     {
-        std::unique_lock lock(m_mutex);
+        absl::MutexLock lock(&m_mutex);
         return m_metrics.GetFrameCmdTimeStats(index);
     }
     Stats GetFrameRenderPassTimeStats(size_t index) const
     {
-        std::unique_lock lock(m_mutex);
+        absl::MutexLock lock(&m_mutex);
         return m_metrics.GetFrameRenderPassTimeStats(index);
     }
     size_t GetCmdRenderPassCount(size_t index) const
     {
-        std::unique_lock lock(m_mutex);
+        absl::MutexLock lock(&m_mutex);
         return m_metrics.GetCmdRenderPassCount(index);
     }
     std::string GetStatsString() const;
@@ -232,29 +231,38 @@ class GPUTime
     };
 
     GpuTimeStatus OnFrameBoundary(PFN_vkResetQueryPool pfn_reset_query_pool,
-                                  PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
-    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results);
-    void RemoveCmdFromFrameCache(VkCommandBuffer cmd);
+                                  PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
+    GpuTimeStatus UpdateFrameMetrics(PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
+    void RemoveCmdFromFrameCache(VkCommandBuffer cmd) ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
     GpuTimeStatus BeginRenderPass(VkCommandBuffer command_buffer,
-                                  PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+                                  PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
+
     GpuTimeStatus EndRenderPass(VkCommandBuffer command_buffer,
-                                PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp);
+                                PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
+        ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_mutex);
 
     FrameBoundaryDetector m_boundary_detector;
 
     // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
     uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];
-    FrameMetrics m_metrics;
 
-    std::set<VkQueue> m_queues;
-    mutable std::mutex m_mutex;
-    std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds;
-    std::vector<VkCommandBuffer> m_frame_cmds;
-    TimeStampSlotAllocator m_timestamp_allocator;
+    mutable absl::Mutex m_mutex;
+
+    FrameMetrics m_metrics ABSL_GUARDED_BY(m_mutex);
+    std::set<VkQueue> m_queues ABSL_GUARDED_BY(m_mutex);
+    std::unordered_map<VkCommandBuffer, CommandBufferInfo> m_cmds ABSL_GUARDED_BY(m_mutex);
+    std::vector<VkCommandBuffer> m_frame_cmds ABSL_GUARDED_BY(m_mutex);
+    TimeStampSlotAllocator m_timestamp_allocator ABSL_GUARDED_BY(m_mutex);
 
     VkDevice m_device = VK_NULL_HANDLE;
-    const VkAllocationCallbacks* m_allocator = nullptr;
-    VkQueryPool m_query_pool = VK_NULL_HANDLE;
+    const VkAllocationCallbacks* m_allocator ABSL_GUARDED_BY(m_mutex) = nullptr;
+    VkQueryPool m_query_pool ABSL_GUARDED_BY(m_mutex) = VK_NULL_HANDLE;
     PFN_vkDestroyQueryPool m_destroy_query_pool = nullptr;
     uint64_t m_frame_index = 0;
     float m_timestamp_period = 0.0f;

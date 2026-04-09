@@ -26,7 +26,7 @@ add_library(
     frame_boundary_detector.cpp
     frame_boundary_detector.h
 )
-target_link_libraries(gpu_time PUBLIC Vulkan::Headers)
+target_link_libraries(gpu_time PUBLIC Vulkan::Headers absl::synchronization)
 
 # This is to fix build on Linux
 set_property(TARGET gpu_time PROPERTY POSITION_INDEPENDENT_CODE ON)

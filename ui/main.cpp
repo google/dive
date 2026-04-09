@@ -157,7 +157,7 @@ bool ExecuteScenario(std::string_view scenario, MainWindow* main_window)
 }
 
 //--------------------------------------------------------------------------------------------------
-int DiveGuiMain(int argc, char* argv[])
+int DiveGuiMain(int argc, char** argv)
 {
     Dive::AttachToTerminalOutputIfAvailable();
     std::vector<char*> positional_args = SetupFlags(argc, argv);

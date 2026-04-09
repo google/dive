@@ -25,5 +25,5 @@
 #endif
 #else
 // On other platforms, this macro does nothing
-#define DIVE_UI_LIB_EXPORT
+#define DIVE_UI_LIB_EXPORT __attribute__((visibility("default")))
 #endif

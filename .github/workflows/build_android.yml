@@ -35,6 +35,7 @@ jobs:
           sudo apt-get update --yes
           sudo apt-get install --yes \
             ccache \
+            clang-tidy \
             cmake \
             libxcb-glx0-dev \
             ninja-build \
@@ -76,7 +77,7 @@ jobs:
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
       - name: Run clang-tidy on changes
         run: |
-          git diff -U0 origin/main -- | clang-tidy-diff -p build/device -config-file .clang-tidy-ci
+          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | clang-tidy-diff -p build/device -config-file .clang-tidy-ci
       - name: Build lib with NDK
         run: |
           ninja -C build/device -f build-${INPUTS_BUILD_TYPE}.ninja

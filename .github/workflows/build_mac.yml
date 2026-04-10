@@ -34,6 +34,10 @@ jobs:
       - name: Install Dive dependencies
         run: |
           python3 -m pip install --break-system-packages mako
+      - name: Install presubmit check dependencies
+        run: |
+          brew install llvm
+          echo "PATH=$(brew --prefix llvm)/bin:$PATH" >> $GITHUB_ENV
       - name: (ccache) Install via Homebrew
         run: brew install ccache
       - name: (ccache) Clear stats
@@ -58,7 +62,7 @@ jobs:
             -Bbuild/host .
       - name: Run clang-tidy on changes
         run: |
-          git diff -U0 origin/main -- | clang-tidy-diff -p build/device -config-file .clang-tidy-ci
+          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | clang-tidy-diff -p build/host -config-file .clang-tidy-ci
       - name: Build Dive host tools with ninja
         run: |
           time ninja -C build/host -d stats -f build-${INPUTS_BUILD_TYPE}.ninja

@@ -23,6 +23,10 @@ jobs:
       - name: Install Dive dependencies
         run: |
           python3 -m pip install mako
+      - name: Install presubmit check dependencies
+        run: |
+          choco install llvm -y
+          clang-tidy --version
       - name: Generate build files with cmake
         run: |
           cmake `
@@ -32,7 +36,7 @@ jobs:
             -Bbuild/host .
       - name: Run clang-tidy on changes
         run: |
-          git diff -U0 origin/main -- | clang-tidy-diff -p build/device -config-file .clang-tidy-ci
+          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | clang-tidy-diff -p build/device -config-file .clang-tidy-ci
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build/host --config $env:INPUTS_BUILD_TYPE

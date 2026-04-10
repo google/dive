@@ -62,6 +62,7 @@ jobs:
             -Bbuild/host .
       - name: Run clang-tidy on changes
         run: |
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
           git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | clang-tidy-diff -p build/host -config-file .clang-tidy-ci
       - name: Build Dive host tools with ninja
         run: |

@@ -41,6 +41,7 @@
 #include <QVBoxLayout>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -466,27 +467,25 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
         m_gfxr_capture_button->setEnabled(true);
     }
 
-    const std::string capture_dir = m_gfxr_capture_file_directory_input_box->text().toStdString();
-
     if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_OpenXR)]
                         .ui_name.data() ||
         app_type ==
             Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_OpenXR)].ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg.toStdString(), Dive::ApplicationType::OPENXR_APK,
-                               m_command_args, capture_dir);
+                               m_command_args);
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
                              .ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg.toStdString(), Dive::ApplicationType::VULKAN_APK,
-                               m_command_args, capture_dir);
+                               m_command_args);
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kGLES_Non_OpenXR)]
                              .ui_name.data())
     {
         ret = device->SetupApp(m_cur_pkg.toStdString(), Dive::ApplicationType::GLES_APK,
-                               m_command_args, capture_dir);
+                               m_command_args);
     }
     else if (app_type ==
              Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
@@ -501,8 +500,7 @@ bool TraceDialog::StartPackage(Dive::AndroidDevice* device, const std::string& a
             return false;
         }
         qDebug() << "exe: " << m_executable.c_str() << " args: " << m_command_args.c_str();
-        ret = device->SetupApp(m_executable, m_command_args, Dive::ApplicationType::VULKAN_CLI,
-                               capture_dir);
+        ret = device->SetupApp(m_executable, m_command_args, Dive::ApplicationType::VULKAN_CLI);
     }
     if (!ret.ok())
     {
@@ -564,7 +562,12 @@ void TraceDialog::OnStartPackage()
         ResetTraceDialogOnAppStop();
         return;
     }
-    device->EnableGfxr(m_gfxr_capture);
+    device->SetGfxrCaptureSettings(
+        m_gfxr_capture ? std::make_optional(Dive::GfxrCaptureSettings{
+                             .capture_file_directory =
+                                 m_gfxr_capture_file_directory_input_box->text().toStdString(),
+                         })
+                       : std::nullopt);
     absl::Status ret = device->SetupDevice();
     if (!ret.ok())
     {

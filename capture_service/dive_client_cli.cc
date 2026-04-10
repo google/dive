@@ -71,6 +71,7 @@ struct GlobalOptions
     std::string download_dir;
     std::optional<absl::Duration> trigger_capture_after;
 
+    Dive::GfxrCaptureSettings capture_settings;
     Dive::GfxrReplaySettings replay_settings;
 };
 
@@ -320,7 +321,8 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
         return Dive::FailedPreconditionError(
             "No device selected. Did you provide --device serial?");
     }
-    device->EnableGfxr(enable_gfxr);
+    device->SetGfxrCaptureSettings(enable_gfxr ? std::make_optional(ctx.options.capture_settings)
+                                               : std::nullopt);
 
     absl::Status ret;
 
@@ -328,28 +330,23 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
     {
         case Dive::AppType::kVulkan_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::OPENXR_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         case Dive::AppType::kVulkan_Non_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::VULKAN_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         case Dive::AppType::kVulkanCLI_Non_OpenXR:
             ret = device->SetupApp(ctx.options.vulkan_command, ctx.options.vulkan_command_args,
-                                   Dive::ApplicationType::VULKAN_CLI,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   Dive::ApplicationType::VULKAN_CLI);
             break;
         case Dive::AppType::kGLES_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::OPENXR_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         case Dive::AppType::kGLES_Non_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::GLES_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         default:
             return Dive::InvalidArgumentError("Unknown application type.");
@@ -1058,6 +1055,11 @@ int main(int argc, char* argv[])
         .app_type = absl::GetFlag(FLAGS_type),
         .download_dir = absl::GetFlag(FLAGS_download_dir),
         .trigger_capture_after = absl::GetFlag(FLAGS_trigger_capture_after),
+        .capture_settings =
+            {
+                .capture_file_directory =
+                    Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName,
+            },
         .replay_settings =
             {
                 .remote_capture_path = absl::GetFlag(FLAGS_gfxr_replay_file_path),

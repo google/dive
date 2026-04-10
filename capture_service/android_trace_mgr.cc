@@ -122,8 +122,8 @@ void AndroidTraceManager::WaitForTraceDone()
 {
     // TODO(renfeng): add timeout.
     m_state_lock.Lock();
-    auto capture_done = [this] { return m_state == TraceState::Finished; };
-    m_state_lock.Await(absl::Condition(&capture_done));
+    m_state_lock.Await(absl::Condition(
+        +[](TraceState* state) { return *state == TraceState::Finished; }, &m_state));
     m_state_lock.Unlock();
 }
 

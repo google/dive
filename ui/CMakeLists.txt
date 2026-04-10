@@ -48,16 +48,9 @@ if(APPLE)
     )
 endif()
 
-add_executable(
-    ${PROJECT_NAME}
-    # Qt
-    resources.qrc
-    # Add resource files for Windows build (for version information)
-    $<$<PLATFORM_ID:Windows>:version.rc>
-    # MacOS icon
-    $<$<PLATFORM_ID:Darwin>:dive.icns>
-    # Entry point:
-    main.cpp
+add_library(
+    dive_gui_lib
+    SHARED
     # Dive Gui Source:
     about_window.cpp
     about_window.h
@@ -118,8 +111,11 @@ add_executable(
     gui_constants.h
     hover_help_model.cpp
     hover_help_model.h
+    dive_ui_lib_export.h
     main_window.cpp
     main_window.h
+    main.cpp
+    main.h
     misc_stats_model.cpp
     misc_stats_model.h
     misc_stats_tab_view.cpp
@@ -172,12 +168,87 @@ add_executable(
     what_if_setup_dialog.h
 )
 
+target_link_libraries(
+    dive_gui_lib
+    PUBLIC Qt5::Widgets
+    PRIVATE
+        dive_core
+        dive_lib_os
+        device_mgr
+        absl::span
+        absl::status
+        absl::statusor
+        absl::strings
+        crash_report
+        network
+        dive_lib_ui
+        dive_plugin_loader
+        component_files
+        dive_device_resources
+        version_info
+        dive_build_defs
+        dive_lib_trace_stats
+        dive_src_includes
+        absl::flags
+        absl::flags_parse
+        absl::failure_signal_handler
+        absl::symbolize
+)
+
+if(MSVC)
+    target_compile_definitions(dive_gui_lib PRIVATE DIVE_UI_LIB_BUILD)
+    message(STATUS "MSVC build: Defining DIVE_UI_LIB_BUILD for dive_gui_lib")
+endif()
+
+if(APPLE)
+    set(DIVE_RPATH "@executable_path/../Frameworks")
+else()
+    set(DIVE_RPATH "$ORIGIN")
+endif()
+
+# dive_gui_lib is a shared library, so default
+# visibility is set and hiding inlines is disabled to ensure that Qt's meta-object system
+# and dynamic_cast work correctly within this new shared library.
+set_target_properties(
+    dive_gui_lib
+    PROPERTIES
+        CXX_VISIBILITY_PRESET default
+        VISIBILITY_INLINES_HIDDEN OFF
+        INSTALL_NAME_DIR "@rpath"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${DIVE_RPATH}"
+)
+
+target_compile_definitions(dive_gui_lib PRIVATE QT_VISIBILITY_AVAILABLE)
+
+target_include_directories(
+    dive_gui_lib
+    PUBLIC "${dive_SOURCE_DIR}" "${dive_BINARY_DIR}"
+)
+
+add_executable(
+    ${PROJECT_NAME}
+    # Qt
+    resources.qrc
+    # Add resource files for Windows build (for version information)
+    $<$<PLATFORM_ID:Windows>:version.rc>
+    # MacOS icon
+    $<$<PLATFORM_ID:Darwin>:dive.icns>
+    # Entry point:
+    main_exe.cpp
+)
+
+set_target_properties(
+    ${PROJECT_NAME}
+    PROPERTIES INSTALL_RPATH "${DIVE_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+)
+
 target_include_directories(
     ${PROJECT_NAME}
     PUBLIC
-        "${CMAKE_SOURCE_DIR}"
-        # Include CMAKE_BINARY_DIR for generated files.
-        "${CMAKE_BINARY_DIR}"
+        "${dive_SOURCE_DIR}"
+        # Include dive_BINARY_DIR for generated files.
+        "${dive_BINARY_DIR}"
 )
 
 # Enable asan and ubsan
@@ -201,29 +272,7 @@ if(MSVC)
     )
 endif()
 
-target_link_libraries(
-    ${PROJECT_NAME}
-    Qt5::Widgets
-    Qt5::Svg
-    absl::flags
-    absl::flags_parse
-    absl::failure_signal_handler
-    absl::span
-    absl::symbolize
-    network
-    dive_core
-    dive_lib_os
-    dive_lib_ui
-    device_mgr
-    dive_plugin_loader
-    component_files
-    dive_device_resources
-    version_info
-    dive_build_defs
-    dive_lib_trace_stats
-    dive_src_includes
-    crash_report
-)
+target_link_libraries(${PROJECT_NAME} PRIVATE dive_gui_lib dive_build_defs)
 
 # std::filesystem needs to link with libstdc++fs for g++ before 9.0
 if(CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
@@ -313,8 +362,15 @@ if(APPLE)
         TARGETS ${PROJECT_NAME}
         BUNDLE DESTINATION "${DIVE_INSTALL_DEST_HOST}"
     )
+    install(
+        TARGETS dive_gui_lib
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
+    )
 else()
-    install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+    install(
+        TARGETS ${PROJECT_NAME} dive_gui_lib
+        DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+    )
 endif()
 
 install(

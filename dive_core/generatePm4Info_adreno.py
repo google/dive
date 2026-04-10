@@ -203,13 +203,8 @@ def outputPm4InfoInitFunc(pm4_info_file, registers_et_root, opcode_dict):
   parseEnumInfo(enum_index_dict, enum_list, registers_et_root)
 
   pm4_info_file.writelines('''
-void Pm4InfoInit()
+static int Pm4InfoInitImpl()
 {
-    assert(g_sOpCodeToString.empty());
-    assert(g_sRegInfo.empty());
-    assert(g_sEnumReflection.empty());
-    assert(g_sPacketInfo.empty());
-    assert(g_sPacketInfoVariant.empty());
 ''')
   outputOpcodes(pm4_info_file, opcode_dict)
   pm4_info_file.write('\n')
@@ -218,7 +213,16 @@ void Pm4InfoInit()
   outputEnums(pm4_info_file, enum_list)
   pm4_info_file.write('\n')
   outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_dict)
-  pm4_info_file.write('}\n')
+  pm4_info_file.writelines('''
+    return 0;
+}
+
+void Pm4InfoInit()
+{
+    static int initialized = Pm4InfoInitImpl();
+    (void)initialized;
+}
+''')
   return
 
 valid_opcodes = {}
@@ -909,6 +913,7 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
 		const uint32_t shift_bits = 32 - kGPUVariantsBits;
 		uint32_t gpu_variants = reg.first << shift_bits >> shift_bits;
 		uint32_t reg_offset = reg.first >> kGPUVariantsBits;
+		g_sRegNameToIndex[name] = reg_offset;
 		if (gpu_variants != 0)
 		{
 			uint32_t bit_offset = 0;
@@ -923,10 +928,6 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
 				++bit_offset;
 			}
 		}
-		else
-		{
-			g_sRegNameToIndex[name] = reg_offset;
-		}
 	}\n''')
 
 # ---------------------------------------------------------------------------------------
@@ -935,11 +936,14 @@ def outputFunctionsCpp(pm4_info_file):
   pm4_info_file.writelines('''
 const char *GetOpCodeString(uint32_t op_code)
 {
+    Pm4InfoInit();
     return g_sOpCodeToString[op_code];
 }
 
 const RegInfo *GetRegInfo(uint32_t reg)
 {
+    Pm4InfoInit();
+
     // check without variant as key
     if (g_sRegInfo[reg].m_name == nullptr)
     {
@@ -982,7 +986,13 @@ const RegField *GetRegFieldByName(const char *name, const RegInfo *info)
 
 uint32_t GetRegOffsetByName(const char *name)
 {
-    DIVE_ASSERT(g_sGPU_variant != kGPUVariantNone);
+    Pm4InfoInit();
+
+    if (g_sGPU_variant == kGPUVariantNone) 
+    {
+        return kInvalidRegOffset;
+    }
+
     std::string str = std::string(name);
     auto i = g_sRegNameToIndex.find(str);
     if (i == g_sRegNameToIndex.end())

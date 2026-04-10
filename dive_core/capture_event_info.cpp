@@ -457,7 +457,9 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager& mem_manager,
 
     if (packet.bitfields0.PRIM_TYPE == DI_PT_RECTLIST)
     {
-        DIVE_ASSERT(packet.bitfields2.NUM_INDICES == 2);
+        // The driver can batch multiple rectangles for MSAA/subsampled clears and resolves.
+        // Each rectangle requires 2 indices.
+        DIVE_ASSERT(packet.bitfields2.NUM_INDICES > 0 && packet.bitfields2.NUM_INDICES % 2 == 0);
         return true;
     }
 

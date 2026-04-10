@@ -74,7 +74,7 @@ jobs:
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${INPUTS_CC} \
             -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \
-            -DCMAKE_CXX_FLAGS="${INPUTS_CXX_FLAGS}"
+            -DCMAKE_CXX_FLAGS="${INPUTS_CXX_FLAGS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DDIVE_BUILD_WITH_CRASHPAD=OFF \

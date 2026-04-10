@@ -24,6 +24,6 @@
 #define DIVE_UI_LIB_EXPORT __declspec(dllimport)
 #endif
 #else
-// On other platforms, this macro does nothing
+// On other platforms, ensure the symbol is visible
 #define DIVE_UI_LIB_EXPORT __attribute__((visibility("default")))
 #endif

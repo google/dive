@@ -12,6 +12,9 @@ on:
       cxx:
         required: true
         type: string
+      cxx_flags:
+        required: true
+        type: string
       restore_cache:
         required: true
         type: boolean

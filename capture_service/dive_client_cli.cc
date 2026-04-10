@@ -975,15 +975,18 @@ std::string AbslUnparseFlag(GfxrReplayOptions run_type)
     }
 }
 
+constexpr std::string_view kCaptureEndPointFrameValue = "frame";
+constexpr std::string_view kCaptureEndPointQueueSubmitValue = "queue_submit";
+
 bool AbslParseFlag(absl::string_view text, GfxrCaptureSettings::EndPoint* end_point,
                    std::string* error)
 {
-    if (text == "frame")
+    if (text == kCaptureEndPointFrameValue)
     {
         *end_point = GfxrCaptureSettings::EndPoint::kFrame;
         return true;
     }
-    if (text == "queue_submit")
+    if (text == kCaptureEndPointQueueSubmitValue)
     {
         *end_point = GfxrCaptureSettings::EndPoint::kQueueSubmit;
         return true;
@@ -997,10 +1000,11 @@ std::string AbslUnparseFlag(GfxrCaptureSettings::EndPoint end_point)
     switch (end_point)
     {
         case GfxrCaptureSettings::EndPoint::kFrame:
-            return "frame";
+            return std::string(kCaptureEndPointFrameValue);
         case GfxrCaptureSettings::EndPoint::kQueueSubmit:
-            return "kQueueSubmit";
+            return std::string(kCaptureEndPointQueueSubmitValue);
     }
+    return absl::StrCat(end_point);
 }
 
 }  // namespace Dive

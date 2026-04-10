@@ -30,6 +30,9 @@ jobs:
             -A x64 `
             -DDIVE_BUILD_WITH_CRASHPAD=OFF `
             -Bbuild/host .
+      - name: Run clang-tidy on changes
+        run: |
+          python scripts/run-clang-tidy-on-git-diff.py -p build/host -config-file .clang-tidy-ci
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build/host --config $env:INPUTS_BUILD_TYPE

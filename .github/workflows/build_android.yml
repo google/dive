@@ -74,6 +74,9 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           JAVA_HOME: ${{ steps.setup-java.outputs.java-home }}
+      - name: Run clang-tidy on changes
+        run: |
+          python scripts/run-clang-tidy-on-git-diff.py -p build/device -config-file .clang-tidy-ci
       - name: Build lib with NDK
         run: |
           ninja -C build/device -f build-${INPUTS_BUILD_TYPE}.ninja

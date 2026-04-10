@@ -1,0 +1,14 @@
+# https://clang.llvm.org/extra/clang-tidy/
+# CI uses a smaller list so that the checks run faster.
+
+---
+
+Checks:
+  - "-*"
+  - "cppcoreguidelines-init-variables"
+  - "cppcoreguidelines-pro-type-member-init"
+  - "readability-redundant-member-init"
+
+WarningsAsErrors: "*"
+HeaderFilterRegex: ".*"
+ExcludeHeaderFilterRegex: "third_party/.*|prebuilt/.*"

@@ -20,6 +20,27 @@ import subprocess
 import sys
 import timeit
 
+SOURCE_DIRS = frozenset(
+    (
+        "capture_service",
+        "cli",
+        "dive_core",
+        "gfxr_dump_resources",
+        "gfxr_ext",
+        "gpu_time",
+        "host_cli",
+        "layer",
+        "lrz_validator",
+        "network",
+        "plugins",
+        "runtime_layer",
+        "src",
+        "tests",
+        "trace_stats",
+        "ui",
+    )
+)
+
 
 def check_python_version():
     assert sys.version_info >= (3, 9)

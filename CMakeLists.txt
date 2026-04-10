@@ -76,6 +76,7 @@ set(INSTALL_GTEST OFF)
 # Ignore Qt5.15 deprecations.
 # TODO(b/463357129): evaluate if this add_definitions() follows cmake best practices
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050eff)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ------------------------------------------------------------------------------
 # Determining version info
@@ -229,10 +230,8 @@ else()
     add_subdirectory(lrz_validator)
     add_subdirectory(network)
     add_subdirectory(plugins)
+    add_subdirectory(third_party/dive_crashpad)
     add_subdirectory(src)
-    if(DIVE_BUILD_WITH_CRASHPAD)
-        add_subdirectory(third_party/dive_crashpad)
-    endif()
     add_subdirectory(trace_stats)
     add_subdirectory(ui)
 endif()

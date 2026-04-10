@@ -346,6 +346,17 @@ if(DIVE_BUILD_WITH_CRASHPAD)
     )
 endif()
 
+if(APPLE)
+    set(DIVE_RPATH "@executable_path/../Frameworks")
+else()
+    set(DIVE_RPATH "$ORIGIN")
+endif()
+
+set_target_properties(
+    ${PROJECT_NAME}
+    PROPERTIES INSTALL_RPATH "${DIVE_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+)
+
 if(DIVE_BUILD_WITH_CRASHPAD AND UPLOAD_DEBUG_SYMBOLS)
     upload_debug_symbols(${PROJECT_NAME})
 endif()

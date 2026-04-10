@@ -15,15 +15,15 @@
 */
 
 #include "absl/log/log.h"
-#include "crashpad_client.h"
+#include "crashpad_client_impl.h"
 
 namespace Dive
 {
 
-absl::Status InitializeCrashpad(const std::string& product_name)
+absl::Status InitializeCrashpadImpl(const std::string& product_name)
 {
     LOG(INFO) << "[Crash Report] Crashpad is intentionally disabled in this configuration.";
-    return absl::OkStatus();
+    return absl::UnavailableError("Dive crashpad reporting is disabled.");
 }
 
 }  // namespace Dive

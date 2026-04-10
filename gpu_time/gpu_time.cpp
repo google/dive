@@ -279,7 +279,8 @@ size_t GPUTime::FrameMetrics::GetCmdRenderPassCount(size_t index) const
 
 std::string GPUTime::GetStatsString() const
 {
-    const Stats& stats = GetFrameTimeStats();
+    absl::MutexLock lock(&m_mutex);
+    const Stats stats = m_metrics.GetFrameTimeStats();
     std::stringstream ss;
     ss << "FrameMetrics:\n";
 
@@ -295,14 +296,14 @@ std::string GPUTime::GetStatsString() const
     size_t cmd_count = m_metrics.GetFrameCmdCount();
     for (size_t i = 0; i < cmd_count; ++i)
     {
-        const Stats& cmd_stats = GetFrameCmdTimeStats(i);
+        const Stats cmd_stats = m_metrics.GetFrameCmdTimeStats(i);
         ss << "\tCommandBuffer" << i << ": \n";
         PopulateStatsString(ss, cmd_stats, 1);
 
-        size_t renderpass_count = GetCmdRenderPassCount(i);
+        size_t renderpass_count = m_metrics.GetCmdRenderPassCount(i);
         for (size_t j = 0; j < renderpass_count; ++j)
         {
-            const Stats& renderpass_stats = GetFrameRenderPassTimeStats(renderpass_index);
+            const Stats renderpass_stats = m_metrics.GetFrameRenderPassTimeStats(renderpass_index);
             ss << "\t\tRenderPass" << renderpass_index << ": \n";
             PopulateStatsString(ss, renderpass_stats, 2);
             renderpass_index++;
@@ -316,7 +317,8 @@ std::string GPUTime::GetStatsString() const
 
 std::string GPUTime::GetStatsCSVString() const
 {
-    const Stats& stats = GetFrameTimeStats();
+    absl::MutexLock lock(&m_mutex);
+    const Stats stats = m_metrics.GetFrameTimeStats();
     std::stringstream ss;
 
     ss << std::fixed << std::setprecision(3) << "Frame," << std::to_string(m_frame_index) << ","
@@ -326,14 +328,14 @@ std::string GPUTime::GetStatsCSVString() const
     size_t cmd_count = m_metrics.GetFrameCmdCount();
     for (size_t cmd_index = 0; cmd_index < cmd_count; ++cmd_index)
     {
-        const Stats& cmd_stats = GetFrameCmdTimeStats(cmd_index);
+        const Stats cmd_stats = m_metrics.GetFrameCmdTimeStats(cmd_index);
         ss << std::fixed << std::setprecision(3) << "CommandBuffer," << std::to_string(cmd_index)
            << "," << cmd_stats.average << "," << cmd_stats.median << "\n";
 
-        size_t rp_count = GetCmdRenderPassCount(cmd_index);
+        size_t rp_count = m_metrics.GetCmdRenderPassCount(cmd_index);
         for (size_t j = 0; j < rp_count; ++j)
         {
-            const Stats& rp_stats = GetFrameRenderPassTimeStats(rp_index);
+            const Stats rp_stats = m_metrics.GetFrameRenderPassTimeStats(rp_index);
             ss << std::fixed << std::setprecision(3) << "RenderPass," << std::to_string(rp_index)
                << "," << rp_stats.average << "," << rp_stats.median << "\n";
             rp_index++;
@@ -388,6 +390,7 @@ GPUTime::GpuTimeStatus GPUTime::OnDestroyDevice(VkDevice device,
 
     if ((m_device != VK_NULL_HANDLE) && (m_query_pool != VK_NULL_HANDLE))
     {
+        absl::MutexLock lock(&m_mutex);
         if (m_queues.empty())
         {
             return GPUTime::GpuTimeStatus{"vk queue is empty!"};
@@ -415,6 +418,7 @@ GPUTime::GpuTimeStatus GPUTime::OnDestroyCommandPool(VkCommandPool command_pool)
         return GPUTime::GpuTimeStatus();
     }
 
+    absl::MutexLock lock(&m_mutex);
     auto it = m_cmds.begin();
     while (it != m_cmds.end())
     {
@@ -447,6 +451,7 @@ GPUTime::GpuTimeStatus GPUTime::OnAllocateCommandBuffers(
         return GPUTime::GpuTimeStatus();
     }
 
+    absl::MutexLock lock(&m_mutex);
     for (uint32_t i = 0; i < allocate_info_ptr->commandBufferCount; ++i)
     {
         if (m_cmds.find(command_buffers_ptr[i]) != m_cmds.end())
@@ -482,6 +487,7 @@ GPUTime::GpuTimeStatus GPUTime::OnFreeCommandBuffers(uint32_t command_buffer_cou
 {
     m_boundary_detector.OnFreeCommandBuffers(command_buffer_count, command_buffers_ptr);
 
+    absl::MutexLock lock(&m_mutex);
     for (uint32_t i = 0; i < command_buffer_count; ++i)
     {
         if (m_cmds.find(command_buffers_ptr[i]) == m_cmds.end())
@@ -501,6 +507,7 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandBuffer(VkCommandBuffer command_buf
 {
     m_boundary_detector.OnResetCommandBuffer(command_buffer);
 
+    absl::MutexLock lock(&m_mutex);
     if (m_cmds.find(command_buffer) == m_cmds.end())
     {
         // The cache doesn't contain secondary command buffers
@@ -514,6 +521,7 @@ GPUTime::GpuTimeStatus GPUTime::OnResetCommandPool(VkCommandPool command_pool)
 {
     m_boundary_detector.OnResetCommandPool(command_pool);
 
+    absl::MutexLock lock(&m_mutex);
     for (auto& cmd : m_cmds)
     {
         if (cmd.second.pool == command_pool)
@@ -533,6 +541,7 @@ GPUTime::GpuTimeStatus GPUTime::OnBeginCommandBuffer(
         return GPUTime::GpuTimeStatus();
     }
 
+    absl::MutexLock lock(&m_mutex);
     auto iter = m_cmds.find(command_buffer);
     if (iter == m_cmds.end())
     {
@@ -567,6 +576,7 @@ GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer command_buffe
         return GPUTime::GpuTimeStatus();
     }
 
+    absl::MutexLock lock(&m_mutex);
     auto iter = m_cmds.find(command_buffer);
     if (iter == m_cmds.end())
     {
@@ -582,12 +592,8 @@ GPUTime::GpuTimeStatus GPUTime::OnEndCommandBuffer(VkCommandBuffer command_buffe
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnFrameBoundary(
-    PFN_vkDeviceWaitIdle pfn_device_wait_idle, PFN_vkResetQueryPool pfn_reset_query_pool,
-    PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
+    PFN_vkResetQueryPool pfn_reset_query_pool, PFN_vkGetQueryPoolResults pfn_get_query_pool_results)
 {
-    //  force sync to make sure the gpu is done with this frame
-    pfn_device_wait_idle(m_device);
-
     GPUTime::GpuTimeStatus update_status;
     if (m_valid_frame)
     {
@@ -857,6 +863,7 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t submit_count, const VkSubm
 
     if ((submits_ptr != nullptr) && (submits_ptr->pCommandBuffers != nullptr))
     {
+        absl::MutexLock lock(&m_mutex);
         for (uint32_t i = 0; i < submit_count; i++)
         {
             uint32_t num_command_buffers = submits_ptr[i].commandBufferCount;
@@ -903,8 +910,12 @@ GPUTime::SubmitStatus GPUTime::OnQueueSubmit(uint32_t submit_count, const VkSubm
 
     if (is_frame_boundary)
     {
+        //  force sync to make sure the gpu is done with this frame
+        pfn_device_wait_idle(m_device);
+
+        absl::MutexLock lock(&m_mutex);
         GPUTime::GpuTimeStatus update_status =
-            OnFrameBoundary(pfn_device_wait_idle, pfn_reset_query_pool, pfn_get_query_pool_results);
+            OnFrameBoundary(pfn_reset_query_pool, pfn_get_query_pool_results);
 
         if (!update_status.success)
         {
@@ -922,18 +933,23 @@ GPUTime::GpuTimeStatus GPUTime::OnQueuePresent(PFN_vkDeviceWaitIdle pfn_device_w
     {
         return GPUTime::GpuTimeStatus();
     }
+    //  force sync to make sure the gpu is done with this frame
+    pfn_device_wait_idle(m_device);
 
-    return OnFrameBoundary(pfn_device_wait_idle, pfn_reset_query_pool, pfn_get_query_pool_results);
+    absl::MutexLock lock(&m_mutex);
+    return OnFrameBoundary(pfn_reset_query_pool, pfn_get_query_pool_results);
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue2(VkQueue* pQueue)
 {
+    absl::MutexLock lock(&m_mutex);
     m_queues.insert(*pQueue);
     return GPUTime::GpuTimeStatus();
 }
 
 GPUTime::GpuTimeStatus GPUTime::OnGetDeviceQueue(VkQueue* pQueue)
 {
+    absl::MutexLock lock(&m_mutex);
     m_queues.insert(*pQueue);
     return GPUTime::GpuTimeStatus();
 }
@@ -986,7 +1002,11 @@ GPUTime::GpuTimeStatus GPUTime::OnCmdEndRenderPass2KHR(
     return EndRenderPass(command_buffer, pfn_cmd_write_timestamp);
 }
 
-void GPUTime::ClearFrameCache() { m_frame_cmds.clear(); }
+void GPUTime::ClearFrameCache()
+{
+    absl::MutexLock lock(&m_mutex);
+    m_frame_cmds.clear();
+}
 
 GPUTime::GpuTimeStatus GPUTime::BeginRenderPass(VkCommandBuffer command_buffer,
                                                 PFN_vkCmdWriteTimestamp pfn_cmd_write_timestamp)
@@ -996,6 +1016,7 @@ GPUTime::GpuTimeStatus GPUTime::BeginRenderPass(VkCommandBuffer command_buffer,
         return GPUTime::GpuTimeStatus();
     }
 
+    absl::MutexLock lock(&m_mutex);
     auto iter = m_cmds.find(command_buffer);
     if (iter == m_cmds.end())
     {
@@ -1018,6 +1039,7 @@ GPUTime::GpuTimeStatus GPUTime::EndRenderPass(VkCommandBuffer command_buffer,
         return GPUTime::GpuTimeStatus();
     }
 
+    absl::MutexLock lock(&m_mutex);
     auto iter = m_cmds.find(command_buffer);
     if (iter == m_cmds.end())
     {

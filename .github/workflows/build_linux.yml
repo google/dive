@@ -47,6 +47,7 @@ jobs:
           sudo apt-get install --yes \
             ccache \
             cmake \
+            clang-tidy \
             ${INPUTS_CC} \
             libsystemd-dev \
             libbsd-dev \
@@ -83,6 +84,10 @@ jobs:
           INPUTS_CC: ${{ inputs.cc }}
           INPUTS_CXX: ${{ inputs.cxx }}
           INPUTS_CXX_FLAGS: ${{ inputs.cxx_flags }}
+      - name: Run clang-tidy on changes
+        run: |
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | clang-tidy-diff -p build/host -config-file .clang-tidy-ci
       - name: Build Dive host tools with ninja with ${{ inputs.cc }}
         run: |
           ninja -C build/host -f build-${INPUTS_BUILD_TYPE}.ninja

@@ -1,0 +1,11 @@
+# https://clang.llvm.org/extra/clang-tidy/
+# CI uses a smaller list so that the checks run faster.
+
+---
+
+Checks:
+  - "-*"
+  - "cppcoreguidelines-init-variables"
+  - "cppcoreguidelines-pro-type-member-init"
+
+WarningsAsErrors: "*"

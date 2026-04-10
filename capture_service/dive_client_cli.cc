@@ -71,6 +71,7 @@ struct GlobalOptions
     std::string download_dir;
     std::optional<absl::Duration> trigger_capture_after;
 
+    Dive::GfxrCaptureSettings capture_settings;
     Dive::GfxrReplaySettings replay_settings;
 };
 
@@ -320,7 +321,8 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
         return Dive::FailedPreconditionError(
             "No device selected. Did you provide --device serial?");
     }
-    device->EnableGfxr(enable_gfxr);
+    device->SetGfxrCaptureSettings(enable_gfxr ? std::make_optional(ctx.options.capture_settings)
+                                               : std::nullopt);
 
     absl::Status ret;
 
@@ -328,28 +330,23 @@ absl::Status InternalRunPackage(const CommandContext& ctx, bool enable_gfxr)
     {
         case Dive::AppType::kVulkan_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::OPENXR_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         case Dive::AppType::kVulkan_Non_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::VULKAN_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         case Dive::AppType::kVulkanCLI_Non_OpenXR:
             ret = device->SetupApp(ctx.options.vulkan_command, ctx.options.vulkan_command_args,
-                                   Dive::ApplicationType::VULKAN_CLI,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   Dive::ApplicationType::VULKAN_CLI);
             break;
         case Dive::AppType::kGLES_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::OPENXR_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         case Dive::AppType::kGLES_Non_OpenXR:
             ret = device->SetupApp(ctx.options.package, Dive::ApplicationType::GLES_APK,
-                                   ctx.options.vulkan_command_args,
-                                   Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName);
+                                   ctx.options.vulkan_command_args);
             break;
         default:
             return Dive::InvalidArgumentError("Unknown application type.");
@@ -978,6 +975,38 @@ std::string AbslUnparseFlag(GfxrReplayOptions run_type)
     }
 }
 
+constexpr std::string_view kCaptureEndPointFrameValue = "frame";
+constexpr std::string_view kCaptureEndPointQueueSubmitValue = "queue_submit";
+
+bool AbslParseFlag(absl::string_view text, GfxrCaptureSettings::EndPoint* end_point,
+                   std::string* error)
+{
+    if (text == kCaptureEndPointFrameValue)
+    {
+        *end_point = GfxrCaptureSettings::EndPoint::kFrame;
+        return true;
+    }
+    if (text == kCaptureEndPointQueueSubmitValue)
+    {
+        *end_point = GfxrCaptureSettings::EndPoint::kQueueSubmit;
+        return true;
+    }
+    *error = "unknown value for enumeration";
+    return false;
+}
+
+std::string AbslUnparseFlag(GfxrCaptureSettings::EndPoint end_point)
+{
+    switch (end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            return std::string(kCaptureEndPointFrameValue);
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            return std::string(kCaptureEndPointQueueSubmitValue);
+    }
+    return absl::StrCat(end_point);
+}
+
 }  // namespace Dive
 
 ABSL_FLAG(Command, command, Command::kNone, GenerateCommandFlagHelp());
@@ -1008,6 +1037,12 @@ ABSL_FLAG(
     "not provided:\n"
     "\t--comamnd pm4_capture : wait for 5 seconds\n"
     "\t--command gfxr_capture : wait for user input");
+
+ABSL_FLAG(Dive::GfxrCaptureSettings::EndPoint, gfxr_capture_end,
+          Dive::GfxrCaptureSettings::EndPoint::kFrame,
+          "(Only for --command gfxr_capture) What unit of the application is captured:\n"
+          "\tframe       : The capture ends when a full frame is processed.\n"
+          "\tqueue_submit: The capture ends at the next queue submit.\n");
 
 ABSL_FLAG(std::string, gfxr_replay_file_path, "",
           "The full path to the .gfxr capture file located on the Android device to be replayed.");
@@ -1058,6 +1093,12 @@ int main(int argc, char* argv[])
         .app_type = absl::GetFlag(FLAGS_type),
         .download_dir = absl::GetFlag(FLAGS_download_dir),
         .trigger_capture_after = absl::GetFlag(FLAGS_trigger_capture_after),
+        .capture_settings =
+            {
+                .capture_file_directory =
+                    Dive::DeviceResourcesConstants::kDeviceStagingDirectoryName,
+                .end_point = absl::GetFlag(FLAGS_gfxr_capture_end),
+            },
         .replay_settings =
             {
                 .remote_capture_path = absl::GetFlag(FLAGS_gfxr_replay_file_path),

@@ -28,8 +28,7 @@ else()
 endif()
 
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
-# Group both cc files in the same target since the public header trace_mgr.h declares both.
-add_library(trace_mgr android_trace_mgr.cc trace_mgr.cc)
+add_library(trace_mgr android_trace_mgr.cc android_trace_mgr.h trace_mgr.h)
 target_link_libraries(
     trace_mgr
     PUBLIC
@@ -41,40 +40,33 @@ target_link_libraries(
         absl::strings
         absl::log
 )
+target_include_directories(trace_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 if(ANDROID)
-    add_library(service service.cc)
-else()
-    add_library(service service.cc trace_mgr.cc)
-endif()
-target_include_directories(service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(
-    service
-    PRIVATE
-        network
-        absl::flags
-        absl::flags_parse
-        absl::log
-        trace_mgr
-        command_utils
-)
-set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
+    add_library(pm4_capture_service pm4_capture_service.cc)
 
-add_executable(server server.cc)
+    target_include_directories(
+        pm4_capture_service
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
 
-target_link_libraries(
-    server
-    PRIVATE
-        service
-        absl::flags
-        absl::flags_parse
-        absl::log
-        dive_log
-        dive_src_includes
-)
+    target_link_libraries(
+        pm4_capture_service
+        PRIVATE
+            network
+            absl::flags
+            absl::flags_parse
+            absl::log
+            trace_mgr
+            command_utils
+    )
 
-if(ANDROID)
-    target_link_libraries(service PRIVATE wrap)
+    set_property(
+        TARGET pm4_capture_service
+        PROPERTY POSITION_INDEPENDENT_CODE 1
+    )
+
+    target_link_libraries(pm4_capture_service PRIVATE wrap)
 else()
     add_library(device_mgr device_mgr.cc android_application.cc)
     target_include_directories(
@@ -169,6 +161,10 @@ else()
 
     add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
     target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)
+    target_include_directories(
+        android_trace_mgr_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
     gtest_discover_tests(android_trace_mgr_test)
 endif()
 

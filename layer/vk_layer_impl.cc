@@ -24,7 +24,7 @@ limitations under the License.
 
 #include <vulkan/vulkan_core.h>
 
-#include "capture_service/trace_mgr.h"
+#include "capture_service/android_trace_mgr.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 namespace DiveLayer
@@ -34,7 +34,7 @@ VkResult QueuePresentKHR(PFN_vkQueuePresentKHR pfn, VkQueue queue,
                          const VkPresentInfoKHR* pPresentInfo)
 {
     VkResult ret = pfn(queue, pPresentInfo);
-    Dive::GetTraceMgr().OnNewFrame();
+    Dive::GetDefaultFrameConfigAndroidTraceManager().OnNewFrame();
     return ret;
 }
 

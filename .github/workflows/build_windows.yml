@@ -27,6 +27,7 @@ jobs:
         run: |
           choco install llvm -y
           clang-tidy --version
+          choco locate llvm
       - name: Generate build files with cmake
         run: |
           cmake `
@@ -37,7 +38,8 @@ jobs:
       - name: Run clang-tidy on changes
         run: |
           git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | clang-tidy-diff -p build/device -config-file .clang-tidy-ci
+          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" --
+          git diff -U0 "${{ github.event.pull_request.base.sha }}..${{ github.sha }}" -- | python3 "$(choco locate llvm)/share/clang-tidy-diff.py" -p build/device -config-file .clang-tidy-ci
       - name: Build Dive host tools with VS 2022
         run: |
           cmake --build build/host --config $env:INPUTS_BUILD_TYPE

@@ -92,7 +92,11 @@ void CaptureFileManager::OnGatherTraceStatsDone()
     m_working = false;
     if (!m_pending_request)
     {
-        TraceStatsUpdated();
+        emit TraceStatsUpdated();
+    }
+    else
+    {
+        StartLoadFile();
     }
 }
 
@@ -306,7 +310,7 @@ void CaptureFileManager::GatherTraceStats()
     m_working = true;
     QMetaObject::invokeMethod(m_worker, [this, context = m_capture_file_context]() {
         GatherTraceStatsImpl(context);
-        GatherTraceStatsDone();
+        emit GatherTraceStatsDone();
     });
 }
 

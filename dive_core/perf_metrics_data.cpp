@@ -13,6 +13,8 @@
 
 #include "dive_core/perf_metrics_data.h"
 
+#include <math.h>
+
 #include <array>
 #include <cctype>
 #include <cerrno>
@@ -195,7 +197,7 @@ bool ParseMetrics(const std::vector<std::string>& fields,
             return false;
         }
 
-        double value;
+        double value = NAN;
         if (!StringUtils::SafeConvertFromString(value_str, value))
         {
             return false;
@@ -646,7 +648,7 @@ void PerfMetricsDataProvider::Analyze(const CommandHierarchy* command_hierarchy)
     // Value: {vector of metric sums, count of records}
     struct MetricSumWithRecordCount
     {
-        std::vector<double> m_metric_sums{};
+        std::vector<double> m_metric_sums;
         uint32_t m_record_count = 0;
     };
 

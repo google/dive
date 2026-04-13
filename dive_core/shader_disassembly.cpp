@@ -117,7 +117,7 @@ void Disassembly::Disassemble() const
         DIVE_VERIFY(
             m_mem_manager.RetrieveMemoryData(data_ptr, m_submit_index, m_address, max_size));
 
-        struct shader_stats stats;
+        struct shader_stats stats = {};
         std::string disasm = DisassembleA3XX(data_ptr, max_size, &stats, PRINT_RAW);
         std::istringstream disasm_istr(disasm);
         unsigned opc_cat = 0;

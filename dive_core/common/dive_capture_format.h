@@ -110,12 +110,12 @@ enum class QueueType : uint8_t {
 //--------------------------------------------------------------------------------------------------
 struct BlockInfo
 {
-    BlockType m_block_type;
+    BlockType m_block_type = BlockType::kCapture;
 
     // The number of bytes that follow this header.
-    uint64_t m_data_size;
+    uint64_t m_data_size{};
 
-    BlockInfo() {}
+    BlockInfo() = default;
     BlockInfo(BlockType type, uint64_t data_size) : m_block_type(type), m_data_size(data_size) {}
 };
 
@@ -131,25 +131,25 @@ struct CaptureDataHeader
     uint16_t    m_major_version  = kCaptureMajorVersion;
     uint16_t    m_minor_version  = kCaptureMinorVersion;
     uint16_t    m_revision       = kCaptureRevision;
-    CaptureType m_capture_type;
-    uint32_t    m_pal_version;
+    CaptureType m_capture_type = CaptureType::kSingleFrame;
+    uint32_t    m_pal_version{};
 
-    uint32_t    m_capture_pm4           : 1;
-    uint32_t    m_capture_sqtt          : 1;
-    uint32_t    m_capture_spm           : 1;
-    uint32_t    m_defer_capture         : 1;
-    uint32_t    m_enable_inst_trace     : 1;
-    uint32_t    m_reset_memory_tracker  : 1;
+    uint32_t    m_capture_pm4           : 1{};
+    uint32_t    m_capture_sqtt          : 1{};
+    uint32_t    m_capture_spm           : 1{};
+    uint32_t    m_defer_capture         : 1{};
+    uint32_t    m_enable_inst_trace     : 1{};
+    uint32_t    m_reset_memory_tracker  : 1{};
     uint32_t                            : 26;
 
     // GPU device ID and revision
-    uint16_t    m_device_id;
-    uint16_t    m_device_revision;
+    uint16_t    m_device_id{};
+    uint16_t    m_device_revision{};
 
     // Reserve some DWORDs for possible future enhancements without breaking forward compatibility
-    uint32_t    m_reserved0;
-    uint32_t    m_reserved1;
-    uint32_t    m_reserved2;
+    uint32_t    m_reserved0{};
+    uint32_t    m_reserved1{};
+    uint32_t    m_reserved2{};
 
     // ... Followed by the rest of the capture
 };

@@ -100,7 +100,7 @@ int FileReader::Open()
         std::cerr << "error archive_read_open_filename: " << archive_error_string(m_handle.get());
         return ret;
     }
-    struct archive_entry* entry;
+    struct archive_entry* entry = nullptr;
     ret = archive_read_next_header(m_handle.get(), &entry);
     if (ret != ARCHIVE_OK)
     {
@@ -205,7 +205,7 @@ MemoryManager::~MemoryManager()
 //--------------------------------------------------------------------------------------------------
 void MemoryManager::AddMemoryBlock(uint32_t submit_index, uint64_t va_addr, MemoryData&& data)
 {
-    MemoryBlock mem_block;
+    MemoryBlock mem_block{};
     mem_block.m_submit_index = submit_index;
     mem_block.m_va_addr = va_addr;
     mem_block.m_data_size = data.m_data_size;
@@ -550,22 +550,21 @@ void SubmitInfo::AppendIb(const IndirectBufferInfo& ib) { m_ibs.push_back(ib); }
 // =================================================================================================
 // Present Info
 // =================================================================================================
-PresentInfo::PresentInfo() { m_valid_data = false; }
 
 //--------------------------------------------------------------------------------------------------
 PresentInfo::PresentInfo(EngineType engine_type, QueueType queue_type, uint32_t submit_index,
                          bool full_screen, uint64_t addr, uint64_t size, uint32_t vk_format,
                          uint32_t vk_color_space)
+    : m_valid_data(true),
+      m_submit_index(submit_index),
+      m_engine_type(engine_type),
+      m_queue_type(queue_type),
+      m_full_screen(full_screen),
+      m_addr(addr),
+      m_size(size),
+      m_vk_format(vk_format),
+      m_vk_color_space(vk_color_space)
 {
-    m_valid_data = true;
-    m_engine_type = engine_type;
-    m_queue_type = queue_type;
-    m_submit_index = submit_index;
-    m_full_screen = full_screen;
-    m_addr = addr;
-    m_size = size;
-    m_vk_format = vk_format;
-    m_vk_color_space = vk_color_space;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -707,7 +706,6 @@ const std::map<std::string, uint32_t>& RegisterInfo::GetRegisters() const { retu
 // =================================================================================================
 // Pm4CaptureData
 // =================================================================================================
-Pm4CaptureData::Pm4CaptureData() : m_progress_tracker(NULL) {}
 
 //--------------------------------------------------------------------------------------------------
 Pm4CaptureData::Pm4CaptureData(ProgressTracker* progress_tracker)
@@ -871,7 +869,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader& capture_fil
         uint32_t m_data_size;
     };
 
-    BlockInfo block_info;
+    BlockInfo block_info{};
     uint64_t cur_gpu_addr = UINT64_MAX;
     uint32_t cur_size = UINT32_MAX;
     bool is_new_submit = false;
@@ -948,7 +946,7 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader& capture_fil
                 if ((GetGPUID() == 0) || (GetGPUVariantType() == kGPUVariantNone))
                 {
                     DIVE_ASSERT(block_info.m_data_size == 8);
-                    fd_dev_id dev_id;
+                    fd_dev_id dev_id{};
                     capture_file.Read(reinterpret_cast<char*>(&dev_id.chip_id),
                                       block_info.m_data_size);
                     dev_id.gpu_id = 0;
@@ -1068,7 +1066,7 @@ bool Pm4CaptureData::LoadCapture(std::istream& capture_file, const CaptureDataHe
 //--------------------------------------------------------------------------------------------------
 bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream& capture_file)
 {
-    MemoryAllocationsDataHeader memory_allocations_header;
+    MemoryAllocationsDataHeader memory_allocations_header{};
     if (!capture_file.read((char*)&memory_allocations_header, sizeof(memory_allocations_header)))
         return false;
     if (memory_allocations_header.m_num_allocations > kMaxNumMemAlloc) return false;
@@ -1090,17 +1088,17 @@ bool Pm4CaptureData::LoadMemoryAllocBlock(std::istream& capture_file)
 //--------------------------------------------------------------------------------------------------
 bool Pm4CaptureData::LoadSubmitBlock(std::istream& capture_file)
 {
-    SubmitDataHeader submit_data_header;
+    SubmitDataHeader submit_data_header{};
     if (!capture_file.read((char*)&submit_data_header, sizeof(submit_data_header))) return false;
 
     // Load the ib info
     DiveVector<IndirectBufferInfo> ibs;
     for (uint32_t ib = 0; ib < submit_data_header.m_num_ibs; ++ib)
     {
-        IndirectBufferData ib_data;
+        IndirectBufferData ib_data{};
         if (!capture_file.read((char*)&ib_data, sizeof(ib_data))) return false;
 
-        IndirectBufferInfo ib_info;
+        IndirectBufferInfo ib_info{};
         ib_info.m_va_addr = ib_data.m_va_addr;
         ib_info.m_size_in_dwords = ib_data.m_size_in_dwords;
         ib_info.m_skip = false;
@@ -1117,12 +1115,12 @@ bool Pm4CaptureData::LoadSubmitBlock(std::istream& capture_file)
 //--------------------------------------------------------------------------------------------------
 bool Pm4CaptureData::LoadMemoryBlock(std::istream& capture_file)
 {
-    MemoryRawDataHeader memory_raw_data_header;
+    MemoryRawDataHeader memory_raw_data_header{};
     if (!capture_file.read((char*)&memory_raw_data_header, sizeof(memory_raw_data_header)))
         return false;
 
     if (memory_raw_data_header.m_size_in_bytes > kMaxMemAllocSize) return false;
-    MemoryData raw_memory;
+    MemoryData raw_memory{};
     raw_memory.m_data_size = memory_raw_data_header.m_size_in_bytes;
     raw_memory.m_data_ptr = new uint8_t[raw_memory.m_data_size];
     if (!capture_file.read((char*)raw_memory.m_data_ptr, memory_raw_data_header.m_size_in_bytes))
@@ -1140,7 +1138,7 @@ bool Pm4CaptureData::LoadMemoryBlock(std::istream& capture_file)
 //--------------------------------------------------------------------------------------------------
 bool Pm4CaptureData::LoadPresentBlock(std::istream& capture_file)
 {
-    PresentData present_data;
+    PresentData present_data{};
     if (!capture_file.read((char*)&present_data, sizeof(present_data))) return false;
 
     uint32_t submit_index = (uint32_t)(m_submits.size() - 1);
@@ -1162,7 +1160,7 @@ bool Pm4CaptureData::LoadPresentBlock(std::istream& capture_file)
 //--------------------------------------------------------------------------------------------------
 bool Pm4CaptureData::LoadTextBlock(std::istream& capture_file)
 {
-    TextBlockHeader text_header;
+    TextBlockHeader text_header{};
 
     if (!capture_file.read((char*)&text_header, sizeof(text_header))) return false;
 
@@ -1189,7 +1187,7 @@ bool Pm4CaptureData::LoadWaveStateBlock(std::istream& capture_file,
     assert(m_waves.GetWaves().size() == 0);
 
     // Read chunk header
-    WaveStateBlockHeader wave_header;
+    WaveStateBlockHeader wave_header{};
 
     if (!capture_file.read((char*)&wave_header, sizeof(wave_header))) return false;
 
@@ -1197,7 +1195,7 @@ bool Pm4CaptureData::LoadWaveStateBlock(std::istream& capture_file,
     if (wave_header.m_num_waves > kMaxNumWavesPerBlock) return false;
     for (uint32_t i = 0; i < wave_header.m_num_waves; ++i)
     {
-        Dive::WaveState state;
+        Dive::WaveState state{};
         if (!capture_file.read((char*)&state, sizeof(state))) return false;
 
         assert(state.num_threads == 64);
@@ -1252,7 +1250,7 @@ bool Pm4CaptureData::LoadRegisterBlock(std::istream& capture_file)
     assert(m_registers.GetRegisters().size() == 0);
 
     // Read chunk header
-    RegisterBlockHeader reg_header;
+    RegisterBlockHeader reg_header{};
 
     if (!capture_file.read((char*)&reg_header, sizeof(reg_header))) return false;
 
@@ -1262,7 +1260,7 @@ bool Pm4CaptureData::LoadRegisterBlock(std::istream& capture_file)
         std::string name;
         if (!std::getline(capture_file, name, '\0')) return false;
 
-        uint32_t value;
+        uint32_t value = 0;
         if (!capture_file.read((char*)&value, sizeof(uint32_t))) return false;
 
         regs.emplace(name, value);
@@ -1280,7 +1278,7 @@ bool Pm4CaptureData::LoadGpuAddressAndSize(FileReader& capture_file, uint32_t bl
 {
     assert(block_size >= 2 * sizeof(uint32_t));
 
-    uint32_t dword;
+    uint32_t dword = 0;
     if (!capture_file.Read((char*)&dword, sizeof(uint32_t))) return false;
     *gpu_addr = dword;
     if (!capture_file.Read((char*)&dword, sizeof(uint32_t))) return false;
@@ -1299,7 +1297,7 @@ bool Pm4CaptureData::LoadGpuAddressAndSize(FileReader& capture_file, uint32_t bl
 bool Pm4CaptureData::LoadMemoryBlockAdreno(FileReader& capture_file, uint64_t gpu_addr,
                                            uint32_t size)
 {
-    MemoryData raw_memory;
+    MemoryData raw_memory{};
     raw_memory.m_data_size = size;
     raw_memory.m_data_ptr = new uint8_t[raw_memory.m_data_size];
     if (!capture_file.Read((char*)raw_memory.m_data_ptr, size))
@@ -1318,11 +1316,11 @@ bool Pm4CaptureData::LoadMemoryBlockAdreno(FileReader& capture_file, uint64_t gp
 bool Pm4CaptureData::LoadCmdStreamBlockAdreno(FileReader& capture_file, uint32_t block_size,
                                               bool create_new_submit, bool skip_commands)
 {
-    uint64_t gpu_addr;
-    uint32_t size_in_dwords;
+    uint64_t gpu_addr = 0;
+    uint32_t size_in_dwords = 0;
     if (!LoadGpuAddressAndSize(capture_file, block_size, &gpu_addr, &size_in_dwords)) return false;
 
-    IndirectBufferInfo ib_info;
+    IndirectBufferInfo ib_info{};
     ib_info.m_va_addr = gpu_addr;
     ib_info.m_size_in_dwords = size_in_dwords;
     ib_info.m_skip = skip_commands;

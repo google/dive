@@ -22,6 +22,7 @@
 #include "capture_data.h"
 #include "common.h"
 #include "dive_core/common/emulate_pm4.h"
+#include "dive_core/common/gpudefs.h"
 #include "shader_disassembly.h"
 
 namespace Dive
@@ -79,19 +80,19 @@ struct BufferInfo
 {
     uint64_t m_addr;
     uint64_t m_size;
-    Dive::Legacy::BUF_DATA_FORMAT m_data_format;
-    Dive::Legacy::BUF_NUM_FORMAT m_num_format;
-    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_x;
-    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_y;
-    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_z;
-    Dive::Legacy::SQ_SEL_XYZW01 m_dst_sel_w;
+    Legacy::BUF_DATA_FORMAT m_data_format;
+    Legacy::BUF_NUM_FORMAT m_num_format;
+    Legacy::SQ_SEL_XYZW01 m_dst_sel_x;
+    Legacy::SQ_SEL_XYZW01 m_dst_sel_y;
+    Legacy::SQ_SEL_XYZW01 m_dst_sel_z;
+    Legacy::SQ_SEL_XYZW01 m_dst_sel_w;
 };
 
 struct ShaderReference
 {
     uint32_t m_shader_index = UINT32_MAX;
-    ShaderStage m_stage;
-    uint32_t m_enable_mask;
+    ShaderStage m_stage = ShaderStage::kShaderStageCs;
+    uint32_t m_enable_mask{};
 
     // To support std::set, if needed
     bool operator<(const ShaderReference& other) const

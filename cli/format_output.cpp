@@ -305,7 +305,7 @@ LoadResult PrintBlock(std::ostream& out, std::istream& capture_file, const std::
         break;
         case BlockType::kMemoryRaw:
         {
-            MemoryRawDataHeader memory_raw_data_header;
+            MemoryRawDataHeader memory_raw_data_header{};
             if (!capture_file.read((char*)&memory_raw_data_header, sizeof(memory_raw_data_header)))
                 return LoadResult::kFileIoError;
 
@@ -326,7 +326,7 @@ LoadResult PrintBlock(std::ostream& out, std::istream& capture_file, const std::
 
         case BlockType::kText:
         {
-            TextBlockHeader text_header;
+            TextBlockHeader text_header{};
             if (!capture_file.read((char*)&text_header, sizeof(text_header)))
                 return LoadResult::kFileIoError;
 

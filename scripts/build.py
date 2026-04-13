@@ -31,11 +31,11 @@ NINJA_MULTI_CONFIG_NAME = "Ninja Multi-Config"
 
 # TODO: b/484082504 - Add more stages for packaging and deploying (incorporate scripts/deploy_mac_bundle.py)
 class ActionType(enum.StrEnum):
+    COPY_PLUGINS = "copy_plugins"       # copy external plugins into pkg dir
     CONFIGURE_HOST = "configure_host"
     BUILD_HOST = "build_host"           # separated to make VS builds using the UI easy
     INSTALL_HOST = "install_host"
     ALL_DEVICE = "all_device"           # configure, build, and install device libraries
-
 
 class BuildType(enum.StrEnum):
     DEBUG = "Debug"
@@ -160,6 +160,18 @@ def check_environment(args):
     if (platform.system() == "Windows") and (args.build_via_generator):
         cmd = [args.msbuild_exec, "--version"]
         dive.echo_and_run(cmd)
+
+
+def copy_plugins(args):
+    """Implementing ActionType.COPY_PLUGINS stage
+    """
+    if args.clean_build:
+        if os.path.exists(f"{args.root_build_dir}/pkg/plugins"):
+            print("\nClearing plugins folders...")
+            shutil.rmtree(f"{args.root_build_dir}/pkg/plugins")
+
+    print("\nCopying over external plugins...")
+    shutil.copytree("plugins/external", f"{args.root_build_dir}/pkg/plugins/", dirs_exist_ok=True)
 
 
 def configure_host(args):
@@ -305,6 +317,9 @@ def main():
             print(f"\nChecking build environment...")
             check_environment(args)
 
+        if ActionType.COPY_PLUGINS in actions:
+            with dive.Timer(ActionType.COPY_PLUGINS):
+                copy_plugins(args)
         if ActionType.CONFIGURE_HOST in actions:
             with dive.Timer(ActionType.CONFIGURE_HOST):
                 configure_host(args)
@@ -317,8 +332,6 @@ def main():
         if ActionType.ALL_DEVICE in actions:
             with dive.Timer(ActionType.ALL_DEVICE):
                 all_device(args)
-
-    print(f"\nTIP: Remember to place plugins in build/pkg/plugins")
 
 
 if __name__ == "__main__":

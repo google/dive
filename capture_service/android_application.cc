@@ -180,7 +180,7 @@ absl::Status AndroidApplication::Cleanup()
     m_dev.Adb().Run("shell settings delete global gpu_debug_layers").IgnoreError();
     m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
     m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
-    
+
     // Clean up layer folder used by CLI since it impacts all Vulkan applications.
     AdbSession& adb = m_dev.Adb();
     adb.Run(absl::StrFormat("shell rm -rf -- %s",

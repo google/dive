@@ -101,6 +101,8 @@ This will run the default (entire) build process except for:
 TODO: b/484082504 - Add more stages for packaging and deploying to the unified build script
 
 ```sh
+# TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+
 python scripts/build.py
 ```
 

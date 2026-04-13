@@ -23,13 +23,12 @@ jobs:
       - name: Install Dive dependencies
         run: |
           python3 -m pip install mako
-      # TODO: b/484082504 - Remove --build-with-cmake, need to ensure msbuild is on the Path on this runner first
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
       - name: Build Dive host tools with VS 2022
         run: |
           python3 -u scripts/build.py `
             --actions configure_host,build_host,install_host `
             --build-type $env:INPUTS_BUILD_TYPE `
-            --build-with-cmake `
             --ci `
             --host-configure-additional-flags "`
               -DDIVE_BUILD_WITH_CRASHPAD=OFF"

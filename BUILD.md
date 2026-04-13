@@ -91,20 +91,38 @@ export DIVE_ROOT_PATH=~/src/dive
 
 # Building Dive
 
-## Host and Device libraries
+## Host and Device Libraries
 
-```
+This will run the default (entire) build process except for:
+* Placing external (to this repo) plugins in the appropriate folder `build/pkg/plugins/`
+* On macOS, for Debug builds, you will still need to make the app bundle and sign it
+* Cross-platform release process
+
+TODO: b/484082504 - Add more stages for packaging and deploying to the unified build script
+
+```sh
 python scripts/build.py
 ```
 
-## Troubleshooting Tips
-* To use Visual Studio UI for the host build, split the build process like so:
-    1. `python scripts/build.py --actions configure_host`
-    1. Open Visual Studio UI and build target ALL_BUILD
-    1. `python scripts/build.py --actions ...` Specify all the following actions after the action "build_host"
+### Custom Building Tips
+
+* On Windows, using the Visual Studio UI for the host build can be clearer than building it on the command line. To do that, split the build process like so:
+    1. Generate the Visual Studio Solution
+        ```bat
+        python scripts/build.py --actions configure_host
+        ```
+    1. Compile manually in Visual Studio (same as `python scripts/build.py --actions build_host`)
+        * Open Visual Studio UI and build target ALL_BUILD
+    1. Finish the other steps in the build process by specifying all the following actions after "build_host"
+        ```bat
+        REM Tip: Use flag `--list-actions` to see an up-to-date list of all the available actions
+        python scripts/build.py --actions install_host,all_device,< the rest... >
+        ``` 
 * To build with Crashpad, specify `--build-type RelWithDebInfo`. In case the default is Crashpad off, specify additionally `--host-configure-additional-flags "-DDIVE_BUILD_WITH_CRASHPAD=ON"`
-* Gradle build
-    * Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
+
+### Troubleshooting Tips
+* If the GFXR Gradle build is failing:
+    * Try opening the gradle project at `third_party/gfxreconstruct/android` with Android Studio UI. Make recommended changes to the project and try building from there.
     * Delete GFXR build folders for a clean build
         * `third_party/gfxreconstruct/android/layer/.cxx`
         * `third_party/gfxreconstruct/android/layer/build`

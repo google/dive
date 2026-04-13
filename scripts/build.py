@@ -17,7 +17,6 @@
 import argparse
 import common_dive_utils as dive
 import enum
-import mako # Not used in this script directly, but imported to check as it's a prerequisite
 import os
 import platform
 import shutil

@@ -165,15 +165,13 @@ def check_environment(args):
 
 
 def clean_build(args):
-    """Delete args.root_build_dir
-    """
-    if os.path.exists(f"{args.root_build_dir}"):
+    if os.path.exists(args.root_build_dir):
         print("\nClearing build folder...")
-        shutil.rmtree(f"{args.root_build_dir}")
+        shutil.rmtree(args.root_build_dir)
 
 
 def copy_plugins(args):
-    """Implementing ActionType.COPY_PLUGINS stage
+    """Implements ActionType.COPY_PLUGINS stage
     """
     if not os.path.exists(EXTERNAL_PLUGINS_DIR):
         print(f"\nDir {EXTERNAL_PLUGINS_DIR} does not exist, skipping")

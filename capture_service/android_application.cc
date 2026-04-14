@@ -187,13 +187,6 @@ absl::Status AndroidApplication::Cleanup()
     adb.Run(absl::StrFormat("shell rm -rf -- %s",
                             Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath))
         .IgnoreError();
-    adb.Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")).IgnoreError();s
-
-    // Clean up layer folder used by CLI since it impacts all Vulkan applications.
-    AdbSession& adb = m_dev.Adb();
-    adb.Run(absl::StrFormat("shell rm -rf -- %s",
-                            Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath))
-        .IgnoreError();
     adb.Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")).IgnoreError();
 
     m_gfxr_capture_settings = {};

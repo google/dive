@@ -181,6 +181,13 @@ absl::Status AndroidApplication::Cleanup()
     m_dev.Adb().Run("shell settings delete global gpu_debug_layer_app").IgnoreError();
     m_dev.Adb().Run("shell settings delete global gpu_debug_layers_gles").IgnoreError();
 
+    // Clean up layer folder used by CLI since it impacts all Vulkan applications.
+    AdbSession& adb = m_dev.Adb();
+    adb.Run(absl::StrFormat("shell rm -rf -- %s",
+                            Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath))
+        .IgnoreError();
+    adb.Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")).IgnoreError();
+
     m_gfxr_enabled = false;
     m_runtime_what_if_enabled = false;
     LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " ended";
@@ -667,23 +674,6 @@ absl::Status VulkanCliApplication::Pm4CaptureSetup()
         /*target_dir=*/Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath));
     RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkLayerName)));
-    return absl::OkStatus();
-}
-
-absl::Status VulkanCliApplication::Pm4CaptureCleanup() { return absl::OkStatus(); }
-
-absl::Status VulkanCliApplication::Cleanup()
-{
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
-        "shell rm -fr %s", Dive::DeviceResourcesConstants::kDeployVulkanGlobalFolderPath)));
-    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")));
-
-    auto status = AndroidApplication::Cleanup();
-    if (!status.ok())
-    {
-        return status;
-    }
-
     return absl::OkStatus();
 }
 

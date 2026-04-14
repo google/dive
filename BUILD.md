@@ -91,93 +91,40 @@ export DIVE_ROOT_PATH=~/src/dive
 
 # Building Dive
 
-## Crashpad
+## Host and Device Libraries
 
-To build with Crashpad, ensure the CMake flag "DIVE_BUILD_WITH_CRASHPAD=ON" and the build type is "RelWithDebInfo".
+This will run the default (entire) build process except for:
+* Placing external (to this repo) plugins in the appropriate folder `build/pkg/plugins/`
+* On macOS, for Debug builds, you will still need to make the app bundle and sign it
+* Cross-platform release process
 
-## Dive Host Tools
-
-### Linux and MacOS
-
-1. Configure
-    ```sh
-    # Assumes python is on the path
-
-    cd $DIVE_ROOT_PATH
-    rm -rf build/host
-    rm -rf build/pkg/host
-
-    cmake . -G "Ninja Multi-Config" -Bbuild/host
-    ```
-1. Build with one of the following methods:
-    * Build directly with ninja
-        ```sh
-        ninja -C build/host -f build-Debug.ninja
-        ```
-    * Build using cmake
-        ```sh
-        cmake --build build/host --config=Debug
-        ```
-    You can specify the build type for release as well by replacing "Debug" with "Release" or "RelWithDebInfo" instead.
-1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
-    ```sh
-    cmake --install build/host --prefix build/pkg --config Debug
-    ```
-
-If you want to build a GFXR tool like `gfxrecon-convert`:
-
-```
-cmake --build build/host --target third_party/gfxreconstruct/tools/convert/gfxrecon-convert
-```
-
-### Windows
-
-1. Configure
-    ```bat
-    REM Assumes python is on the path
-
-    cd %DIVE_ROOT_PATH%
-    rmdir /s build\host
-    rmdir /s build\pkg\host
-
-    cmake . -G "Visual Studio 17 2022" -Bbuild/host
-    ```
-1. Build with one of the following methods:
-    * Build with Visual Studio by opening `dive.sln` using IDE and selecting the appropriate build type
-    * Build using cmake:
-        ```bat
-        cmake --build build/host --config=Debug
-        ```
-    You can specify other build types as well
-    with `--config=<Debug/Release/RelWithDebInfo/MinSizeRel>` instead.
-1.  Install (the prefix must be coordinated with that of the [device resources](#dive-device-resources))
-    ```bat
-    cmake --install build/host --prefix build/pkg --config Debug
-    ```
-
-If you want to build a GFXR tool like `gfxrecon-convert`:
-
-```
-cmake --build build/host --target gfxrecon-convert
-```
-
-## Dive Device Resources
-
-Warning: We only support "Debug" for the gradle build for GFXR portion, so it will be hardcoded and not depend on the build type specified in the script.
-
-Modify the script if necessary to provide the appropriate `ANDROID_ABI` depending on your device.
-
-TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+TODO: b/484082504 - Add more stages for packaging and deploying to the unified build script
 
 ```sh
-python scripts/build_android.py
+# TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+
+python scripts/build.py
 ```
 
-The script will build and install the device resources at `$DIVE_ROOT_PATH/build/pkg/device`
+### Custom Building Tips
+
+* On Windows, using the Visual Studio UI for the host build can be clearer than building it on the command line. To do that, split the build process like so:
+    1. Generate the Visual Studio Solution
+        ```bat
+        python scripts/build.py --actions configure_host
+        ```
+    1. Compile manually in Visual Studio (same as `python scripts/build.py --actions build_host`)
+        * Open Visual Studio UI and build target ALL_BUILD
+    1. Finish the other steps in the build process by specifying all the following actions after "build_host"
+        ```bat
+        REM Tip: Use flag `--list-actions` to see an up-to-date list of all the available actions
+        python scripts/build.py --actions install_host,all_device,< the rest... >
+        ``` 
+* To build with Crashpad, specify `--build-type RelWithDebInfo`. In case the default is Crashpad off, specify additionally `--host-configure-additional-flags "-DDIVE_BUILD_WITH_CRASHPAD=ON"`
 
 ### Troubleshooting Tips
-* Gradle build
-    * Open the gradle project at `third_party/gfxreconstruct/android` in Android Studio and try making recommended changes to the project and building from there.
+* If the GFXR Gradle build is failing:
+    * Try opening the gradle project at `third_party/gfxreconstruct/android` with Android Studio UI. Make recommended changes to the project and try building from there.
     * Delete GFXR build folders for a clean build
         * `third_party/gfxreconstruct/android/layer/.cxx`
         * `third_party/gfxreconstruct/android/layer/build`

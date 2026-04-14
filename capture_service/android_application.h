@@ -153,9 +153,6 @@ class VulkanCliApplication : public AndroidApplication
     ~VulkanCliApplication() override;
     absl::Status Setup() override;
 
-    // Cleanup for device properties and settings related to a Vulkan CLI application
-    absl::Status Cleanup() override;
-
     absl::Status Start() override;
     absl::Status Stop() override;
     bool IsRunning() const override;
@@ -164,7 +161,6 @@ class VulkanCliApplication : public AndroidApplication
 
  private:
     absl::Status Pm4CaptureSetup() override;
-    absl::Status Pm4CaptureCleanup() override;
     absl::Status WaitForProcessToStart();
     std::string m_command;
     std::string m_pid;

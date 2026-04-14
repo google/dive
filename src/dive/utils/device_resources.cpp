@@ -78,11 +78,11 @@ absl::StatusOr<std::filesystem::path> ResolvePluginsDir()
     std::filesystem::path base_dir_installed = "..";
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
         // Apple bundle
         base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES /
             CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
         // For launching host tool from Windows VS debugger, assuming other parts were installed
         // under pkg/
         dive_build_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
@@ -124,10 +124,10 @@ absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
     std::filesystem::path base_dir_installed = "..";
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
         // Apple bundle
         base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES,
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
         // For launching host tool from Windows VS debugger, assuming other parts were installed
         // under pkg/
         dive_build_root_dev / "pkg" / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
@@ -143,12 +143,12 @@ absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
     std::filesystem::path base_dir_installed = "..";
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR /
-            CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
         // Apple bundle
         base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES /
             CMAKE_GENERATED_PLUGINS_PARENT_DIR / CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
+        // Most platforms
+        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR /
+            CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
         // For launching host tool from Windows VS debugger, assuming other parts were installed
         // under pkg/
         dive_build_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR /

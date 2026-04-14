@@ -1,0 +1,27 @@
+/*
+ Copyright 2026 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
+
+#pragma once
+#if defined(_MSC_VER)
+#ifdef DIVE_UI_LIB_BUILD
+#pragma message("Compiling main.h with DIVE_UI_LIB_BUILD defined")
+#else
+#pragma message("Compiling main.h without DIVE_UI_LIB_BUILD defined")
+#endif
+#endif
+#include "dive_ui_lib_export.h"
+
+DIVE_UI_LIB_EXPORT int DiveGuiMain(int argc, char** argv);

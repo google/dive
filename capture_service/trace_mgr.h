@@ -66,9 +66,9 @@ class AndroidTraceManager : public TraceManager
     // `trace_duration` is ignored during trace by frame.
     explicit AndroidTraceManager(absl::Duration trace_duration = absl::Seconds(3));
 
-    void TriggerTrace() override;
-    void OnNewFrame() override;
-    void WaitForTraceDone() override;
+    void TriggerTrace() override ABSL_LOCKS_EXCLUDED(m_state_lock);
+    void OnNewFrame() override ABSL_LOCKS_EXCLUDED(m_state_lock);
+    void WaitForTraceDone() override ABSL_LOCKS_EXCLUDED(m_state_lock);
 
     TraceState GetState() ABSL_LOCKS_EXCLUDED(m_state_lock)
     {
@@ -77,12 +77,12 @@ class AndroidTraceManager : public TraceManager
     }
 
  private:
-    void TraceByFrame();
-    void TraceByDuration();
-    bool ShouldStartTrace() const;
-    bool ShouldStopTrace() const;
-    void OnTraceStart();
-    void OnTraceStop();
+    void TraceByFrame() ABSL_LOCKS_EXCLUDED(m_state_lock);
+    void TraceByDuration() ABSL_LOCKS_EXCLUDED(m_state_lock);
+    bool ShouldStartTrace() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);
+    bool ShouldStopTrace() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);
+    void OnTraceStart() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);
+    void OnTraceStop() ABSL_EXCLUSIVE_LOCKS_REQUIRED(m_state_lock);
     absl::Mutex m_state_lock;
     TraceState m_state ABSL_GUARDED_BY(m_state_lock) = TraceState::Idle;
     uint32_t m_frame_num = 0;

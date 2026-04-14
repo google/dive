@@ -31,10 +31,10 @@ def get_dive_root() -> pathlib.Path:
         2. Relative position to this script
     """
     if "DIVE_ROOT_PATH" in os.environ:
-        print("Found DIVE_ROOT_PATH in environment variables")
+        print("\nFound DIVE_ROOT_PATH in environment variables")
         dive_root = os.environ["DIVE_ROOT_PATH"]
     else:
-        print("Predicting DIVE_ROOT_PATH")
+        print("\nPredicting DIVE_ROOT_PATH")
         dive_root = pathlib.Path(__file__).parent.parent.resolve()
 
     print(f"DIVE_ROOT_PATH={dive_root}")
@@ -47,10 +47,15 @@ def echo_and_run(cmd):
 
 
 class Timer:
+    def __init__(self, name="unnamed"):
+        self._name = name
+
     def __enter__(self):
         self._start = timeit.default_timer()
+        print(f"\nSTARTING TIMER: {self._name}")
 
     def __exit__(self, type, value, traceback):
         end = timeit.default_timer()
         elapsed_time = end - self._start
-        print(f"\nTime Elapsed: {elapsed_time:.3f}s")
+        print(f"\nENDING TIMER: {self._name}")
+        print(f"Time Elapsed: {elapsed_time:.3f}s")

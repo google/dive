@@ -39,6 +39,7 @@
 #include "generated/generated_vulkan_dispatch_table.h"
 #include "util/defines.h"
 
+#include "util/platform.h"
 #include "vulkan/vulkan.h"
 #include "vulkan/vulkan_core.h"
 
@@ -1083,21 +1084,31 @@ class VulkanCaptureManager : public ApiCaptureManager
             }
         }
 
-        // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
-        for (uint32_t i = 0; i < submitCount; ++i)
+        // GOOGLE: Treat queue submit as frame end. This allow triggered trim capture to work on more applications (e.g.
+        // ones that don't present like benchmarks)
+        if (IsQueueSubmitFrameEnd())
         {
-            if (CheckPNextChainForFrameBoundary(current_lock, reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            EndFrame(current_lock);
+        }
+        else
+        {
+            // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
+            for (uint32_t i = 0; i < submitCount; ++i)
             {
-                break;
-            }
-
-            for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; ++j)
-            {
-                auto cmd_buffer_wrapper =
-                    vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(pSubmits[i].pCommandBuffers[j]);
-                if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
+                if (CheckPNextChainForFrameBoundary(current_lock,
+                                                    reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
                 {
                     break;
+                }
+
+                for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; ++j)
+                {
+                    auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
+                        pSubmits[i].pCommandBuffers[j]);
+                    if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -1127,21 +1138,31 @@ class VulkanCaptureManager : public ApiCaptureManager
             }
         }
 
-        // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
-        for (uint32_t i = 0; i < submitCount; ++i)
+        // GOOGLE: Treat queue submit as frame end. This allow triggered trim capture to work on more applications (e.g.
+        // ones that don't present like benchmarks)
+        if (IsQueueSubmitFrameEnd())
         {
-            if (CheckPNextChainForFrameBoundary(current_lock, reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
+            EndFrame(current_lock);
+        }
+        else
+        {
+            // Check whether this queue submission contains a command buffer that should be treated as a frame boundary.
+            for (uint32_t i = 0; i < submitCount; ++i)
             {
-                break;
-            }
-
-            for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j)
-            {
-                auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
-                    pSubmits[i].pCommandBufferInfos[j].commandBuffer);
-                if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
+                if (CheckPNextChainForFrameBoundary(current_lock,
+                                                    reinterpret_cast<const VkBaseInStructure*>(pSubmits + i)))
                 {
                     break;
+                }
+
+                for (uint32_t j = 0; j < pSubmits[i].commandBufferInfoCount; ++j)
+                {
+                    auto cmd_buffer_wrapper = vulkan_wrappers::GetWrapper<vulkan_wrappers::CommandBufferWrapper>(
+                        pSubmits[i].pCommandBufferInfos[j].commandBuffer);
+                    if (CheckCommandBufferWrapperForFrameBoundary(current_lock, cmd_buffer_wrapper))
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -1824,6 +1845,20 @@ class VulkanCaptureManager : public ApiCaptureManager
 
     bool CheckPNextChainForFrameBoundary(std::shared_lock<CommonCaptureManager::ApiCallMutexT>& current_lock,
                                          const VkBaseInStructure*                               current);
+
+    // GOOGLE: Treat queue submit as frame end. This allow triggered trim capture to work on more applications (e.g.
+    // ones that don't present like benchmarks)
+    bool IsQueueSubmitFrameEnd()
+    {
+        // TODO: Implement for desktop
+#if defined(__ANDROID__)
+        static bool is_queue_submit_frame_end =
+            gfxrecon::util::ParseBoolString(util::platform::GetEnv("debug.gfxrecon.capture_queue_submit_is_frame_end"),
+                                            /*default_value=*/false);
+        return is_queue_submit_frame_end;
+#endif
+        return false;
+    }
 
   private:
     void QueueSubmitWriteFillMemoryCmd();

@@ -24,14 +24,17 @@ jobs:
           - build_type: RelWithDebInfo
             cc: gcc-14
             cxx: g++-14
+            cxx_flags: ""
           - build_type: RelWithDebInfo
             cc: clang-19
             cxx: clang++-19
+            cxx_flags: "-Wthread-safety"
     uses: ./.github/workflows/build_linux.yml
     with:
       build_type: ${{ matrix.build_type }}
       cc: ${{ matrix.cc }}
       cxx: ${{ matrix.cxx }}
+      cxx_flags: ${{ matrix.cxx_flags }}
       restore_cache: true
       upload_cache: false
 

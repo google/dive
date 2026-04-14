@@ -60,9 +60,9 @@ def parse_args():
         choices=[x for x in BuildType],
         help="Build type for Dive (excluding GFXR gradle build which is always Debug)")
     parser.add_argument(
-        "--build-with-cmake",
+        "--build-via-generator",
         action="store_true",
-        help="Perform the build step by invoking cmake rather than the generator")
+        help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform")
     parser.add_argument(
         "--bypass-prereq-checks",
         action="store_true",
@@ -157,7 +157,7 @@ def check_environment(args):
     cmd = [args.ninja_exec, "--version"]
     dive.echo_and_run(cmd)
 
-    if (platform.system() == "Windows") and (not args.build_with_cmake):
+    if (platform.system() == "Windows") and (args.build_via_generator):
         cmd = [args.msbuild_exec, "--version"]
         dive.echo_and_run(cmd)
 
@@ -195,7 +195,7 @@ def configure_host(args):
 def build_host(args):
     """Implementing ActionType.BUILD_HOST stage
     """
-    if args.build_with_cmake:
+    if not args.build_via_generator:
         print("\nBuilding host libraries by invoking cmake...")
         cmd = [args.cmake_exec,
                "--build", f"{args.root_build_dir}/host",

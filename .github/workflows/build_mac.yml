@@ -51,6 +51,7 @@ jobs:
           python -u scripts/build.py \
             --actions configure_host,build_host,install_host \
             --build-type ${INPUTS_BUILD_TYPE} \
+            --build-via-generator \
             --ci \
             --host-configure-additional-flags "\
               -DDIVE_BUILD_WITH_CRASHPAD=OFF \

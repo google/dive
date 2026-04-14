@@ -20,6 +20,7 @@ import enum
 import os
 import platform
 import shutil
+import subprocess
 
 
 # GLOBAL CONSTANTS
@@ -42,6 +43,37 @@ class BuildType(enum.StrEnum):
     REL_WITH_DEB_INFO = "RelWithDebInfo"
     RELEASE = "Release"
 
+
+def find_msbuild():
+    if platform.system() != "Windows":
+        return "msbuild"
+    
+    msbuild = shutil.which("msbuild")
+    if msbuild:
+        return msbuild
+
+    # Try finding vswhere.exe if it is in PATH
+    vswhere_path = shutil.which("vswhere.exe")
+    if not vswhere_path:
+        # If not in PATH, check the standard installer directory
+        program_files_x86 = os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")
+        vswhere_path = os.path.join(program_files_x86, "Microsoft Visual Studio", "Installer", "vswhere.exe")
+    
+    if os.path.exists(vswhere_path):
+        try:
+            # -latest: Use the latest version
+            # -requires Microsoft.Component.MSBuild: Ensure MSBuild is installed
+            # -find MSBuild\**\Bin\MSBuild.exe: Locate the executable
+            res = subprocess.check_output([vswhere_path, "-latest", "-requires", 
+                                           "Microsoft.Component.MSBuild", "-find", 
+                                           "MSBuild\\**\\Bin\\MSBuild.exe"], 
+                                          text=True).strip()
+            if res and os.path.exists(res):
+                return res
+        except subprocess.CalledProcessError:
+            pass
+            
+    return "msbuild"
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -93,7 +125,7 @@ def parse_args():
         help="Build is part of continuous integration")
     parser.add_argument(
         "--msbuild-exec",
-        default="msbuild",
+        default=find_msbuild(),
         help="The name of the Microsoft Build Engine executable on the path")
     parser.add_argument(
         "--ninja-exec",
@@ -156,8 +188,13 @@ def check_environment(args):
     dive.echo_and_run(cmd)
 
     if (platform.system() == "Windows") and (not args.build_with_cmake):
-        cmd = [args.msbuild_exec, "--version"]
-        dive.echo_and_run(cmd)
+        try:
+            cmd = [args.msbuild_exec, "--version"]
+            dive.echo_and_run(cmd)
+        except FileNotFoundError:
+            raise Exception(f"\nError: Could not find MSBuild executable at '{args.msbuild_exec}'.\n"
+                            "Please ensure it is in your PATH, run from a Visual Studio "
+                            "Developer Command Prompt, or specify the path using --msbuild-exec.")
 
 
 def configure_host(args):

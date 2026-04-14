@@ -173,7 +173,7 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
     }
     else
     {
-        NodeType node_type;
+        NodeType node_type = NodeType::kGfxrVulkanCommandNode;
         if (vulkan_cmd_name.find("vkCmdCopyBuffer") != std::string::npos)
         {
             node_type = NodeType::kGfxrVulkanCopyBufferCommandNode;
@@ -193,10 +193,6 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
         else if (vulkan_cmd_name.find("vkCmdResolveImage") != std::string::npos)
         {
             node_type = NodeType::kGfxrVulkanResolveImageCommandNode;
-        }
-        else
-        {
-            node_type = NodeType::kGfxrVulkanCommandNode;
         }
 
         uint64_t vk_cmd_index = AddNode(node_type, vk_cmd_string_stream.str());

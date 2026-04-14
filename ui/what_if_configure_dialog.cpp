@@ -36,6 +36,7 @@
 #include "application_controller.h"
 #include "capture_service/device_mgr.h"
 #include "dive/common/what_if_modification_types.h"
+#include "network/tcp_client.h"
 
 namespace
 {

@@ -251,7 +251,7 @@ absl::Status LivePSOsResponse::Serialize(Buffer& dest) const
 absl::Status LivePSOsResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-    uint32_t count;
+    uint32_t count = 0;
     ASSIGN_OR_RETURN(count, ReadUint32FromBuffer(src, offset));
 
     m_psos.clear();
@@ -287,7 +287,7 @@ absl::Status LiveRenderPassesResponse::Serialize(Buffer& dest) const
 absl::Status LiveRenderPassesResponse::Deserialize(const Buffer& src)
 {
     size_t offset = 0;
-    uint32_t count;
+    uint32_t count = 0;
     ASSIGN_OR_RETURN(count, ReadUint32FromBuffer(src, offset));
 
     m_rps.clear();

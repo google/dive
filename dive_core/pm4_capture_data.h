@@ -58,7 +58,7 @@ class MemoryAllocationInfo
  private:
     struct SubmitAllocations
     {
-        uint32_t m_submit_index;
+        uint32_t m_submit_index{};
         DiveVector<MemoryAllocationData> m_allocations;
     };
 
@@ -167,7 +167,7 @@ class SubmitInfo
 class PresentInfo
 {
  public:
-    PresentInfo();
+    PresentInfo() = default;
     PresentInfo(EngineType engine_type, QueueType queue_type, uint32_t submit_index,
                 bool full_screen, uint64_t addr, uint64_t size, uint32_t vk_format,
                 uint32_t vk_color_space);
@@ -182,15 +182,15 @@ class PresentInfo
     uint32_t GetSurfaceVkColorSpaceKHR() const;
 
  private:
-    bool m_valid_data;
-    uint32_t m_submit_index;  // After what index in CaptureData::m_submits was there a present
-    EngineType m_engine_type;
-    QueueType m_queue_type;
-    bool m_full_screen;
-    uint64_t m_addr;
-    uint64_t m_size;
-    uint32_t m_vk_format;       // VkFormat of the presented surface
-    uint32_t m_vk_color_space;  // VkColorSpaceKHR of the presented surface
+    bool m_valid_data{};
+    uint32_t m_submit_index{};  // After what index in CaptureData::m_submits was there a present
+    EngineType m_engine_type = EngineType::kNone;
+    QueueType m_queue_type = QueueType::kNone;
+    bool m_full_screen{};
+    uint64_t m_addr{};
+    uint64_t m_size{};
+    uint32_t m_vk_format{};       // VkFormat of the presented surface
+    uint32_t m_vk_color_space{};  // VkColorSpaceKHR of the presented surface
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -214,16 +214,16 @@ class TextInfo
 class WaveStateInfo
 {
  public:
-    WaveStateInfo(const Dive::WaveState& state, DiveVector<uint32_t>&& sgprs,
+    WaveStateInfo(const WaveState& state, DiveVector<uint32_t>&& sgprs,
                   DiveVector<uint32_t>&& vgprs, DiveVector<uint32_t>&& ttmps);
 
-    const Dive::WaveState& GetState() const;
+    const WaveState& GetState() const;
     const DiveVector<uint32_t>& GetSGPRs() const;
     const DiveVector<uint32_t>& GetVGPRs() const;
     const DiveVector<uint32_t>& GetTTMPs() const;
 
  private:
-    Dive::WaveState m_state;
+    WaveState m_state{};
     DiveVector<uint32_t> m_sgprs;
     DiveVector<uint32_t> m_vgprs;
     DiveVector<uint32_t> m_ttmps;
@@ -273,7 +273,7 @@ class FileReader
 class Pm4CaptureData : public CaptureData
 {
  public:
-    Pm4CaptureData();
+    Pm4CaptureData() = default;
     Pm4CaptureData(ProgressTracker* progress_tracker);
     virtual ~Pm4CaptureData() = default;
 
@@ -321,14 +321,14 @@ class Pm4CaptureData : public CaptureData
 
     void Finalize(const CaptureDataHeader& data_header);
 
-    CaptureDataHeader::CaptureType m_capture_type;
+    CaptureDataHeader::CaptureType m_capture_type = CaptureDataHeader::CaptureType::kSingleFrame;
     DiveVector<SubmitInfo> m_submits;
     DiveVector<PresentInfo> m_presents;  // More than 1 if multi-frame capture
     DiveVector<TextInfo> m_text;
     WaveInfo m_waves;
     RegisterInfo m_registers;
     MemoryManager m_memory;
-    ProgressTracker* m_progress_tracker;
+    ProgressTracker* m_progress_tracker = nullptr;
     std::string m_cur_capture_file;
     CaptureDataHeader m_data_header;
 };

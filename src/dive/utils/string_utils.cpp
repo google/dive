@@ -118,7 +118,7 @@ bool GetTrimmedField(std::stringstream& ss, std::string& field, char delimiter)
         return false;
     }
 
-    char c;
+    char c = 0;
     bool in_quotes = false;
     if (ss.peek() == '"')
     {

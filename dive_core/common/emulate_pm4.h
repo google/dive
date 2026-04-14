@@ -157,8 +157,8 @@ class EmulateStateTracker
 
  private:
     static constexpr size_t kNumRegs = 0xffff + 1;
-    uint32_t m_reg[kShaderEnableBitCount][kNumRegs];
-    uint8_t m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1];
+    uint32_t m_reg[kShaderEnableBitCount][kNumRegs]{};
+    uint8_t m_reg_is_set[kShaderEnableBitCount][(kNumRegs / 8) + 1]{};
     uint32_t m_enable_mask = (1u << kShaderEnableBitCount) - 1;
     DiveVector<uint32_t> m_enable_mask_stack;
     std::optional<ShaderEnableBit> m_shader_enable_bit = std::nullopt;

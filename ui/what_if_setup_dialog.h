@@ -134,7 +134,8 @@ class WhatIfSetupDialog : public DeviceDialog
         QStringList pkg_list;
         QString cur_pkg;
         std::string command_args;
-        Dive::AndroidDevice::PackageListOptions pkg_list_options;
+        Dive::AndroidDevice::PackageListOptions pkg_list_options =
+            Dive::AndroidDevice::PackageListOptions::kAll;
     };
 
     RuntimeData m_runtime_data;

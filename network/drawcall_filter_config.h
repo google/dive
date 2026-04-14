@@ -50,15 +50,15 @@ struct PSOInfo
 {
     std::string name;
     // Cast VkPipeline to uint64_t for the network
-    uint64_t pipeline_handle;
-    bool has_alpha_blend;
+    uint64_t pipeline_handle{};
+    bool has_alpha_blend{};
 };
 
 struct RenderPassInfo
 {
     std::string name;
     // Cast VkRenderPass to uint64_t for the network
-    uint64_t render_pass_handle;
+    uint64_t render_pass_handle{};
 };
 
 }  // namespace Network

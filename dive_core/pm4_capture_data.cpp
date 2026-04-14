@@ -596,56 +596,6 @@ uint32_t PresentInfo::GetSurfaceVkFormat() const { return m_vk_format; }
 uint32_t PresentInfo::GetSurfaceVkColorSpaceKHR() const { return m_vk_color_space; }
 
 // =================================================================================================
-// RingInfo
-// =================================================================================================
-RingInfo::RingInfo(QueueType queue_type, uint32_t queue_index, uint64_t ring_base_addr,
-                   uint32_t ring_full_size, uint64_t ring_capture_addr, uint32_t ring_capture_size,
-                   uint64_t hang_ib_addr, uint64_t hang_size_left, uint64_t fence_signaled_addr,
-                   uint64_t fence_emitted_addr)
-{
-    m_queue_type = queue_type;
-    m_queue_index = queue_index;
-    m_ring_base_addr = ring_base_addr;
-    m_ring_full_size = ring_full_size;
-    m_ring_capture_addr = ring_capture_addr;
-    m_ring_capture_size = ring_capture_size;
-    m_hang_ib_addr = hang_ib_addr;
-    m_hang_size_left = hang_size_left;
-    m_fence_signaled_addr = fence_signaled_addr;
-    m_fence_emitted_addr = fence_emitted_addr;
-}
-
-//--------------------------------------------------------------------------------------------------
-QueueType RingInfo::GetQueueType() const { return m_queue_type; }
-
-//--------------------------------------------------------------------------------------------------
-uint32_t RingInfo::GetQueueIndex() const { return m_queue_index; }
-
-//--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetRingBaseAddress() const { return m_ring_base_addr; }
-
-//--------------------------------------------------------------------------------------------------
-uint32_t RingInfo::GetRingSize() const { return m_ring_full_size; }
-
-//--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetRingCaptureAddress() const { return m_ring_capture_addr; }
-
-//--------------------------------------------------------------------------------------------------
-uint32_t RingInfo::GetRingCaptureSize() const { return m_ring_capture_size; }
-
-//--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetHungIbAddress() const { return m_hang_ib_addr; }
-
-//--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetHungSizeLeft() const { return m_hang_size_left; }
-
-//--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetEmittedFenceAddress() const { return m_fence_emitted_addr; }
-
-//--------------------------------------------------------------------------------------------------
-uint64_t RingInfo::GetSignaledFenceAddress() const { return m_fence_signaled_addr; }
-
-// =================================================================================================
 // TextInfo
 // =================================================================================================
 TextInfo::TextInfo(std::string name, uint64_t size, DiveVector<char>&& text)
@@ -993,15 +943,6 @@ uint32_t Pm4CaptureData::GetNumPresents() const { return (uint32_t)m_presents.si
 const PresentInfo& Pm4CaptureData::GetPresentInfo(uint32_t present_index) const
 {
     return m_presents[present_index];
-}
-
-//--------------------------------------------------------------------------------------------------
-uint32_t Pm4CaptureData::GetNumRings() const { return (uint32_t)m_rings.size(); }
-
-//--------------------------------------------------------------------------------------------------
-const RingInfo& Pm4CaptureData::GetRingInfo(uint32_t ring_index) const
-{
-    return m_rings[ring_index];
 }
 
 //--------------------------------------------------------------------------------------------------

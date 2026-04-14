@@ -149,31 +149,19 @@ bool IsPossibleBlock(const BlockInfo& info)
     switch (info.m_block_type)
     {
         case BlockType::kCapture:
-            return true;
         case BlockType::kMemoryAlloc:
-            return true;
         case BlockType::kSubmit:
-            return true;
         case BlockType::kMemoryRaw:
-            return true;
         case BlockType::kRgp:
-            return true;
         case BlockType::kPresent:
-            return true;
-        case BlockType::kRing:
-            return true;
         case BlockType::kText:
-            return true;
         case BlockType::kRegisters:
-            return true;
         case BlockType::kWaveState:
-            return true;
         case BlockType::kVulkanMetadata:
             return true;
         default:
-            break;
+            return false;
     }
-    return false;
 }
 
 LoadResult DiscoverBlocks(std::ostream& out, std::istream& capture_file)

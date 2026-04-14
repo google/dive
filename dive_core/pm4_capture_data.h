@@ -194,41 +194,6 @@ class PresentInfo
 };
 
 //--------------------------------------------------------------------------------------------------
-class RingInfo
-{
- public:
-    RingInfo(QueueType queue_type, uint32_t queue_index, uint64_t ring_base_addr,
-             uint32_t ring_full_size, uint64_t ring_capture_start_addr, uint32_t ring_capture_size,
-             uint64_t hang_ib_addr, uint64_t hang_size_left, uint64_t fence_signaled_addr,
-             uint64_t fence_emitted_addr);
-
-    RingInfo() {}
-
-    QueueType GetQueueType() const;
-    uint32_t GetQueueIndex() const;
-    uint64_t GetRingBaseAddress() const;
-    uint32_t GetRingSize() const;
-    uint64_t GetRingCaptureAddress() const;
-    uint32_t GetRingCaptureSize() const;
-    uint64_t GetHungIbAddress() const;
-    uint64_t GetHungSizeLeft() const;
-    uint64_t GetEmittedFenceAddress() const;
-    uint64_t GetSignaledFenceAddress() const;
-
- private:
-    QueueType m_queue_type;
-    uint32_t m_queue_index;
-    uint64_t m_ring_base_addr;
-    uint32_t m_ring_full_size;
-    uint64_t m_ring_capture_addr;
-    uint32_t m_ring_capture_size;
-    uint64_t m_hang_ib_addr;
-    uint64_t m_hang_size_left;
-    uint64_t m_fence_signaled_addr;
-    uint64_t m_fence_emitted_addr;
-};
-
-//--------------------------------------------------------------------------------------------------
 class TextInfo
 {
  public:
@@ -320,8 +285,6 @@ class Pm4CaptureData : public CaptureData
     const SubmitInfo& GetSubmitInfo(uint32_t submit_index) const;
     uint32_t GetNumPresents() const;
     const PresentInfo& GetPresentInfo(uint32_t present_index) const;
-    uint32_t GetNumRings() const;
-    const RingInfo& GetRingInfo(uint32_t ring_index) const;
     const WaveInfo& GetWaveInfo() const;
     const RegisterInfo& GetRegisterInfo() const;
     inline uint32_t GetNumText() const { return (uint32_t)m_text.size(); }
@@ -361,7 +324,6 @@ class Pm4CaptureData : public CaptureData
     CaptureDataHeader::CaptureType m_capture_type;
     DiveVector<SubmitInfo> m_submits;
     DiveVector<PresentInfo> m_presents;  // More than 1 if multi-frame capture
-    DiveVector<RingInfo> m_rings;
     DiveVector<TextInfo> m_text;
     WaveInfo m_waves;
     RegisterInfo m_registers;

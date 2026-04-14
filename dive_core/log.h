@@ -62,12 +62,12 @@ class ILog
  public:
     struct LogEntry
     {
-        LogType m_type;
-        LogCategory m_cat;
-        LogCode m_code;
+        LogType m_type = LogType::kInfo;
+        LogCategory m_cat = LogCategory::kGeneric;
+        LogCode m_code = LogCode::kUnspecified;
         CrossRef m_ref;
-        const char* m_file;
-        int m_line;
+        const char* m_file{};
+        int m_line{};
         std::string m_short_desc;
         std::string m_long_desc;
     };

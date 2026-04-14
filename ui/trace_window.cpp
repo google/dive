@@ -55,7 +55,6 @@
 #include "dive/common/app_types.h"
 #include "dive/utils/device_resources.h"
 #include "gfxr_capture_worker.h"
-#include "network/tcp_client.h"
 #include "utils/component_files.h"
 
 namespace

@@ -235,7 +235,7 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
         kUnsignaled,
         kSignaled
     };
-    std::unordered_map<VkFence, FenceStatus> fence_initial_status_ = {};
+    std::unordered_map<VkFence, FenceStatus> fence_initial_status_;
     // This queue is only used for signaling the fences, could be any queue
     VkQueue fence_signal_queue_ = VK_NULL_HANDLE;
     // The deferred release list keeps resources that are created in the "setup phase"
@@ -243,7 +243,7 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // For trimmed captures, all resources that are not released within the frame are released by
     // FreeAllLiveObjects in VulkanReplayConsumerBase::~VulkanReplayConsumerBase()
     // So there is no need to manually release those resources
-    std::vector<format::HandleId> deferred_release_list_ = {};
+    std::vector<format::HandleId> deferred_release_list_;
     // Fences that have been created with VkExportFenceCreateInfo.
     std::unordered_set<format::HandleId> exportable_fences_;
     // File descriptors made during the frame loop that should be closed at the end of the frame to
@@ -256,7 +256,7 @@ class DiveVulkanReplayConsumer : public VulkanReplayConsumer
     // This typically results in vkCreate calls that lack vkDestroy calls. For these cases, we can
     // track and free objects so that they are not leaked.
     std::unordered_map<format::HandleId, absl::AnyInvocable<void()>> frame_end_actions_;
-    Dive::GPUTime gpu_time_ = {};
+    Dive::GPUTime gpu_time_;
     std::string gpu_time_stats_csv_header_str_ = "Type,Id,Mean [ms],Median [ms]\n";
     std::string gpu_time_stats_csv_str_ = "";
     VkDevice device_ = VK_NULL_HANDLE;

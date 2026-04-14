@@ -297,7 +297,7 @@ QSize DiveTreeViewDelegate::sizeHint(const QStyleOptionViewItem& option,
 // DiveTreeView
 // =================================================================================================
 DiveTreeView::DiveTreeView(const Dive::CommandHierarchy& command_hierarchy, QWidget* parent)
-    : QTreeView(parent), m_command_hierarchy(command_hierarchy), m_curr_node_selected(QModelIndex())
+    : QTreeView(parent), m_command_hierarchy(command_hierarchy)
 {
     setHorizontalScrollBar(new QScrollBar);
     horizontalScrollBar()->setEnabled(true);

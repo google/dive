@@ -46,14 +46,14 @@ class ShaderInstruction
 
  private:
     // The raw opcode from the instruction
-    uint32_t m_opcode;
+    uint32_t m_opcode{};
     // NOTE: For now we're not including operands, because we have no use
     // for them, and there are different kinds to be kept track of. But
     // we do need the immediate value in case of a branch.
-    uint64_t m_flags;
+    uint64_t m_flags{};
     uint32_t m_immediate = UINT32_MAX;
 
-    uint64_t m_address;
+    uint64_t m_address{};
 };
 
 class Disassembly
@@ -84,7 +84,7 @@ class Disassembly
         std::string m_listing;
         std::vector<std::string> m_instructions_text;
         std::vector<uint64_t> m_instructions_raw;
-        uint32_t m_gpr_count;
+        uint32_t m_gpr_count{};
     };
 
     void Disassemble() const;

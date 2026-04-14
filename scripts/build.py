@@ -23,6 +23,8 @@ import shutil
 
 
 # GLOBAL CONSTANTS
+# Dive directory structure relative to root Dive dir
+EXTERNAL_PLUGINS_DIR = "plugins/external"
 # Build directory structure relative to --root-build-dir
 PKG_DIR = "pkg"
 # CMake generator names
@@ -74,7 +76,7 @@ def parse_args():
     parser.add_argument(
         "--clean-build",
         action="store_true",
-        help="Attempt to clean relevant build folders before repopulating")
+        help="Attempt to clean the entire build folder before building")
     parser.add_argument(
         "--cmake-exec",
         default="cmake",
@@ -162,26 +164,29 @@ def check_environment(args):
         dive.echo_and_run(cmd)
 
 
+def clean_build(args):
+    """Delete args.root_build_dir
+    """
+    if os.path.exists(f"{args.root_build_dir}"):
+        print("\nClearing build folder...")
+        shutil.rmtree(f"{args.root_build_dir}")
+
+
 def copy_plugins(args):
     """Implementing ActionType.COPY_PLUGINS stage
     """
-    if args.clean_build:
-        if os.path.exists(f"{args.root_build_dir}/pkg/plugins"):
-            print("\nClearing plugins folders...")
-            shutil.rmtree(f"{args.root_build_dir}/pkg/plugins")
+    if not os.path.exists(EXTERNAL_PLUGINS_DIR):
+        print(f"\nDir {EXTERNAL_PLUGINS_DIR} does not exist, skipping")
+        return
 
     print("\nCopying over external plugins...")
-    shutil.copytree("plugins/external", f"{args.root_build_dir}/pkg/plugins/", dirs_exist_ok=True)
+    print(os.listdir(EXTERNAL_PLUGINS_DIR))
+    shutil.copytree(EXTERNAL_PLUGINS_DIR, f"{args.root_build_dir}/pkg/plugins/", dirs_exist_ok=True)
 
 
 def configure_host(args):
     """Implementing ActionType.CONFIGURE_HOST stage
     """
-    if args.clean_build:
-        if os.path.exists(f"{args.root_build_dir}/host"):
-            print("\nClearing host build folders...")
-            shutil.rmtree(f"{args.root_build_dir}/host")
-
     print("\nGenerating build files with cmake...")
     if platform.system() in ["Linux", "Darwin"]:
         cmd = [args.cmake_exec, ".",
@@ -253,11 +258,6 @@ def install_host(args):
 def all_device(args):
     """Implementing ActionType.ALL_DEVICE stage
     """
-    if args.clean_build:
-        if os.path.exists(f"{args.root_build_dir}/device"):
-            print("\nClearing device build folders...")
-            shutil.rmtree(f"{args.root_build_dir}/device")
-
     print("\nGenerating build files with cmake...")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
     cmd = [args.cmake_exec, ".",
@@ -316,7 +316,8 @@ def main():
         if not args.bypass_prereq_checks:
             print(f"\nChecking build environment...")
             check_environment(args)
-
+        if args.clean_build:
+            clean_build(args)
         if ActionType.COPY_PLUGINS in actions:
             with dive.Timer(ActionType.COPY_PLUGINS):
                 copy_plugins(args)

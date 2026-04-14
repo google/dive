@@ -114,7 +114,7 @@ class ThreadPool
         }
     }
 
-    bool m_running;
+    bool m_running{};
     std::mutex m_mutex;
     std::deque<std::thread> m_workers;
     std::deque<std::function<void()>> m_tasks;
@@ -293,7 +293,7 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
             {
                 if (event_state_it->IsViewportSet(v))
                 {
-                    Viewport viewport;
+                    Viewport viewport{};
                     viewport.m_vk_viewport = event_state_it->Viewport(v);
                     capture_stats.m_viewports.insert(viewport);
                 }
@@ -303,7 +303,7 @@ void TraceStats::GatherTraceStats(const Dive::Context& context,
                 event_state_it->IsWindowScissorTLYSet() &&
                 event_state_it->IsWindowScissorBRXSet() && event_state_it->IsWindowScissorBRYSet())
             {
-                WindowScissor window_scissor;
+                WindowScissor window_scissor{};
                 window_scissor.m_tl_x = event_state_it->WindowScissorTLX();
                 window_scissor.m_tl_y = event_state_it->WindowScissorTLY();
                 window_scissor.m_br_x = event_state_it->WindowScissorBRX();

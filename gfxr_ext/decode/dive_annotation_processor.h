@@ -36,7 +36,7 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
         {
         }
 
-        nlohmann::ordered_json args = {};
+        nlohmann::ordered_json args;
         std::string name = "";
         uint32_t index = 0;
     };
@@ -47,9 +47,9 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 
         // Keeps all the vk commands that come before this submit and that are not associated with
         // any command buffer
-        std::vector<VulkanCommandInfo> none_cmd_vk_commands = {};
+        std::vector<VulkanCommandInfo> none_cmd_vk_commands;
         // Keep handles of all command buffers that is submitted by this submission
-        std::vector<uint64_t> vk_command_buffer_handles = {};
+        std::vector<uint64_t> vk_command_buffer_handles;
         std::string name = "";
     };
 
@@ -58,7 +58,7 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
         // Total draw count for a single command buffer
         uint64_t begin_command_buffer_draw_call_count = 0;
         // Total draw counts for renderpasses in a single command buffer
-        std::vector<uint64_t> render_pass_draw_call_counts = {};
+        std::vector<uint64_t> render_pass_draw_call_counts;
     };
 
     DiveAnnotationProcessor() {}
@@ -85,9 +85,9 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
 
  private:
     // This is a per submit cache that keeps all vk commands that are not in any command buffer
-    std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache = {};
+    std::vector<VulkanCommandInfo> m_none_cmd_vk_commands_per_submit_cache;
     // Use command buffer handle as the key to accociate with vk commands
-    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache = {};
-    std::unordered_map<uint64_t, DrawCallCounts> m_draw_call_counts_map = {};
-    std::vector<std::unique_ptr<SubmitInfo>> m_submits = {};
+    std::unordered_map<uint64_t, std::vector<VulkanCommandInfo>> m_cmd_vk_commands_cache;
+    std::unordered_map<uint64_t, DrawCallCounts> m_draw_call_counts_map;
+    std::vector<std::unique_ptr<SubmitInfo>> m_submits;
 };

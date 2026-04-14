@@ -946,6 +946,7 @@ void MainWindow::OnGfxrFileLoaded()
 void MainWindow::StartTraceStats()
 {
     *m_capture_stats = {};
+    m_overview_tab_view->setProperty("is_loading", true);
     m_overview_tab_view->LoadStatistics();
     m_capture_manager->GatherTraceStats();
 }
@@ -953,6 +954,7 @@ void MainWindow::StartTraceStats()
 void MainWindow::OnTraceStatsUpdated()
 {
     m_capture_manager->FillCaptureStatsResult(*m_capture_stats);
+    m_overview_tab_view->setProperty("is_loading", false);
     m_overview_tab_view->LoadStatistics();
 }
 

@@ -149,31 +149,19 @@ bool IsPossibleBlock(const BlockInfo& info)
     switch (info.m_block_type)
     {
         case BlockType::kCapture:
-            return true;
         case BlockType::kMemoryAlloc:
-            return true;
         case BlockType::kSubmit:
-            return true;
         case BlockType::kMemoryRaw:
-            return true;
         case BlockType::kRgp:
-            return true;
         case BlockType::kPresent:
-            return true;
-        case BlockType::kRing:
-            return true;
         case BlockType::kText:
-            return true;
         case BlockType::kRegisters:
-            return true;
         case BlockType::kWaveState:
-            return true;
         case BlockType::kVulkanMetadata:
             return true;
         default:
-            break;
+            return false;
     }
-    return false;
 }
 
 LoadResult DiscoverBlocks(std::ostream& out, std::istream& capture_file)
@@ -305,7 +293,7 @@ LoadResult PrintBlock(std::ostream& out, std::istream& capture_file, const std::
         break;
         case BlockType::kMemoryRaw:
         {
-            MemoryRawDataHeader memory_raw_data_header;
+            MemoryRawDataHeader memory_raw_data_header{};
             if (!capture_file.read((char*)&memory_raw_data_header, sizeof(memory_raw_data_header)))
                 return LoadResult::kFileIoError;
 
@@ -326,7 +314,7 @@ LoadResult PrintBlock(std::ostream& out, std::istream& capture_file, const std::
 
         case BlockType::kText:
         {
-            TextBlockHeader text_header;
+            TextBlockHeader text_header{};
             if (!capture_file.read((char*)&text_header, sizeof(text_header)))
                 return LoadResult::kFileIoError;
 

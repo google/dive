@@ -68,5 +68,5 @@ class GpuTimingTabView : public QWidget
     // row in the GPU timing data
     //
     // The Qt index of all events for which there is GPU timing data
-    std::vector<uint64_t> m_timed_event_indices = {};
+    std::vector<uint64_t> m_timed_event_indices;
 };

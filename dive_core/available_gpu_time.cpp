@@ -225,8 +225,8 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
 
     // TODO(b/443122531): Improve integer and float parsing here, this has edge cases that aren't
     // covered
-    uint32_t id;
-    Stats stats;
+    uint32_t id = 0;
+    Stats stats{};
     try
     {
         id = static_cast<uint32_t>(std::stoi(fields[1]));
@@ -260,7 +260,7 @@ bool AvailableGpuTiming::LoadLine(uint32_t row, const std::string& line)
         return false;
     }
 
-    Entry entry;
+    Entry entry{};
     ObjectType object_type = GetObjectType(fields[0]);
     if (object_type == ObjectType::nObjectTypes)
     {

@@ -54,7 +54,7 @@ class TestBlockVisitor : public BlockVisitor
     std::vector<std::string> GetTraversedPathString();
 
  private:
-    std::vector<std::string> traversed_ = {};
+    std::vector<std::string> traversed_;
 };
 
 // A visitor that writes out a IDiveBlock into a provided file new_file_ptr_
@@ -135,9 +135,9 @@ class DiveBlockData
 
  private:
     // Info for the blocks in the original GFXR file
-    std::vector<std::shared_ptr<DiveOriginalBlock>> original_blocks_map_ =
-        {};  // Starting block index of 0
-    DiveOriginalBlock original_header_block_ = {};
+    std::vector<std::shared_ptr<DiveOriginalBlock>>
+        original_blocks_map_;  // Starting block index of 0
+    DiveOriginalBlock original_header_block_;
     bool original_blocks_map_locked_ = false;
 
     // Info for modifications
@@ -152,7 +152,7 @@ class DiveBlockData
     // nullptr.
     //
     // Each modification has an unique pair of primary_id and secondary_id.
-    std::map<uint32_t, std::map<int32_t, std::shared_ptr<IDiveBlock>>> modifications_map_ = {};
+    std::map<uint32_t, std::map<int32_t, std::shared_ptr<IDiveBlock>>> modifications_map_;
 };
 
 GFXRECON_END_NAMESPACE(decode)

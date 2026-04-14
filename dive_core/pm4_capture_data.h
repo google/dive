@@ -58,7 +58,7 @@ class MemoryAllocationInfo
  private:
     struct SubmitAllocations
     {
-        uint32_t m_submit_index;
+        uint32_t m_submit_index{};
         DiveVector<MemoryAllocationData> m_allocations;
     };
 
@@ -167,7 +167,7 @@ class SubmitInfo
 class PresentInfo
 {
  public:
-    PresentInfo();
+    PresentInfo() = default;
     PresentInfo(EngineType engine_type, QueueType queue_type, uint32_t submit_index,
                 bool full_screen, uint64_t addr, uint64_t size, uint32_t vk_format,
                 uint32_t vk_color_space);
@@ -182,50 +182,15 @@ class PresentInfo
     uint32_t GetSurfaceVkColorSpaceKHR() const;
 
  private:
-    bool m_valid_data;
-    uint32_t m_submit_index;  // After what index in CaptureData::m_submits was there a present
-    EngineType m_engine_type;
-    QueueType m_queue_type;
-    bool m_full_screen;
-    uint64_t m_addr;
-    uint64_t m_size;
-    uint32_t m_vk_format;       // VkFormat of the presented surface
-    uint32_t m_vk_color_space;  // VkColorSpaceKHR of the presented surface
-};
-
-//--------------------------------------------------------------------------------------------------
-class RingInfo
-{
- public:
-    RingInfo(QueueType queue_type, uint32_t queue_index, uint64_t ring_base_addr,
-             uint32_t ring_full_size, uint64_t ring_capture_start_addr, uint32_t ring_capture_size,
-             uint64_t hang_ib_addr, uint64_t hang_size_left, uint64_t fence_signaled_addr,
-             uint64_t fence_emitted_addr);
-
-    RingInfo() {}
-
-    QueueType GetQueueType() const;
-    uint32_t GetQueueIndex() const;
-    uint64_t GetRingBaseAddress() const;
-    uint32_t GetRingSize() const;
-    uint64_t GetRingCaptureAddress() const;
-    uint32_t GetRingCaptureSize() const;
-    uint64_t GetHungIbAddress() const;
-    uint64_t GetHungSizeLeft() const;
-    uint64_t GetEmittedFenceAddress() const;
-    uint64_t GetSignaledFenceAddress() const;
-
- private:
-    QueueType m_queue_type;
-    uint32_t m_queue_index;
-    uint64_t m_ring_base_addr;
-    uint32_t m_ring_full_size;
-    uint64_t m_ring_capture_addr;
-    uint32_t m_ring_capture_size;
-    uint64_t m_hang_ib_addr;
-    uint64_t m_hang_size_left;
-    uint64_t m_fence_signaled_addr;
-    uint64_t m_fence_emitted_addr;
+    bool m_valid_data{};
+    uint32_t m_submit_index{};  // After what index in CaptureData::m_submits was there a present
+    EngineType m_engine_type = EngineType::kNone;
+    QueueType m_queue_type = QueueType::kNone;
+    bool m_full_screen{};
+    uint64_t m_addr{};
+    uint64_t m_size{};
+    uint32_t m_vk_format{};       // VkFormat of the presented surface
+    uint32_t m_vk_color_space{};  // VkColorSpaceKHR of the presented surface
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -249,16 +214,16 @@ class TextInfo
 class WaveStateInfo
 {
  public:
-    WaveStateInfo(const Dive::WaveState& state, DiveVector<uint32_t>&& sgprs,
+    WaveStateInfo(const WaveState& state, DiveVector<uint32_t>&& sgprs,
                   DiveVector<uint32_t>&& vgprs, DiveVector<uint32_t>&& ttmps);
 
-    const Dive::WaveState& GetState() const;
+    const WaveState& GetState() const;
     const DiveVector<uint32_t>& GetSGPRs() const;
     const DiveVector<uint32_t>& GetVGPRs() const;
     const DiveVector<uint32_t>& GetTTMPs() const;
 
  private:
-    Dive::WaveState m_state;
+    WaveState m_state{};
     DiveVector<uint32_t> m_sgprs;
     DiveVector<uint32_t> m_vgprs;
     DiveVector<uint32_t> m_ttmps;
@@ -308,7 +273,7 @@ class FileReader
 class Pm4CaptureData : public CaptureData
 {
  public:
-    Pm4CaptureData();
+    Pm4CaptureData() = default;
     Pm4CaptureData(ProgressTracker* progress_tracker);
     virtual ~Pm4CaptureData() = default;
 
@@ -320,8 +285,6 @@ class Pm4CaptureData : public CaptureData
     const SubmitInfo& GetSubmitInfo(uint32_t submit_index) const;
     uint32_t GetNumPresents() const;
     const PresentInfo& GetPresentInfo(uint32_t present_index) const;
-    uint32_t GetNumRings() const;
-    const RingInfo& GetRingInfo(uint32_t ring_index) const;
     const WaveInfo& GetWaveInfo() const;
     const RegisterInfo& GetRegisterInfo() const;
     inline uint32_t GetNumText() const { return (uint32_t)m_text.size(); }
@@ -358,15 +321,14 @@ class Pm4CaptureData : public CaptureData
 
     void Finalize(const CaptureDataHeader& data_header);
 
-    CaptureDataHeader::CaptureType m_capture_type;
+    CaptureDataHeader::CaptureType m_capture_type = CaptureDataHeader::CaptureType::kSingleFrame;
     DiveVector<SubmitInfo> m_submits;
     DiveVector<PresentInfo> m_presents;  // More than 1 if multi-frame capture
-    DiveVector<RingInfo> m_rings;
     DiveVector<TextInfo> m_text;
     WaveInfo m_waves;
     RegisterInfo m_registers;
     MemoryManager m_memory;
-    ProgressTracker* m_progress_tracker;
+    ProgressTracker* m_progress_tracker = nullptr;
     std::string m_cur_capture_file;
     CaptureDataHeader m_data_header;
 };

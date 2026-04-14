@@ -55,7 +55,7 @@ SyncType GetSyncType(const IMemoryManager& mem_manager, uint32_t submit_index, u
     // The event field is in the same location with either packet type
     if (opcode == CP_EVENT_WRITE7)
     {
-        PM4_CP_EVENT_WRITE packet;
+        PM4_CP_EVENT_WRITE packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, addr, sizeof(packet)));
         SyncType type = SyncType::kNone;
 
@@ -64,7 +64,7 @@ SyncType GetSyncType(const IMemoryManager& mem_manager, uint32_t submit_index, u
             uint32_t rb_resolve_operation_offset = GetRegOffsetByName("RB_RESOLVE_OPERATION");
             if (state_tracker.IsRegSet(rb_resolve_operation_offset))
             {
-                RB_RESOLVE_OPERATION rb_resolve_operation;
+                RB_RESOLVE_OPERATION rb_resolve_operation{};
                 rb_resolve_operation.u32All =
                     state_tracker.GetRegValue(rb_resolve_operation_offset);
                 switch (rb_resolve_operation.bitfields.TYPE)
@@ -202,13 +202,13 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
 
     if (opcode == CP_DRAW_INDX)
     {
-        PM4_CP_DRAW_INDX packet;
+        PM4_CP_DRAW_INDX packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
     else if (opcode == CP_DRAW_INDX)
     {
-        PM4_CP_DRAW_INDX packet;
+        PM4_CP_DRAW_INDX packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawIndexOffset(NumIndices:" << packet.bitfields2.NUM_INDICES << ")";
     }
@@ -217,7 +217,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
         // This packet is used for indexed and non-indexed draws.
         // Non-indexed draws do not need to fill out entire packet
         // Note: header.count only includes payload and doesn't include header, hence the + 1
-        PM4_CP_DRAW_INDX_OFFSET packet;
+        PM4_CP_DRAW_INDX_OFFSET packet{};
         uint32_t header_and_body_dword_count = header.count + 1;
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                    header_and_body_dword_count * sizeof(uint32_t)));
@@ -243,7 +243,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     }
     else if (opcode == CP_DRAW_INDIRECT)
     {
-        PM4_CP_DRAW_INDIRECT packet;
+        PM4_CP_DRAW_INDIRECT packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         uint64_t addr = ((uint64_t)packet.bitfields2.INDIRECT_HI << 32) |
                         (uint64_t)packet.bitfields1.INDIRECT_LO;
@@ -252,7 +252,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     }
     else if (opcode == CP_DRAW_INDX_INDIRECT)
     {
-        PM4_CP_DRAW_INDX_INDIRECT packet;
+        PM4_CP_DRAW_INDX_INDIRECT packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         uint64_t index_base_addr = ((uint64_t)packet.bitfields2.INDX_BASE_HI << 32) |
                                    (uint64_t)packet.bitfields1.INDX_BASE_LO;
@@ -265,7 +265,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     }
     else if (opcode == CP_DRAW_INDIRECT_MULTI)
     {
-        PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL base_packet;
+        PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_OP_NORMAL base_packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&base_packet, submit_index, va_addr,
                                                    sizeof(base_packet)));
         if (base_packet.bitfields1.OPCODE == INDIRECT_OP_NORMAL)
@@ -279,7 +279,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
         }
         else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDEXED)
         {
-            PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet;
+            PM4_CP_DRAW_INDIRECT_MULTI_INDEXED packet{};
             DIVE_VERIFY(
                 mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndexed("
@@ -292,7 +292,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
         }
         else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT)
         {
-            PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet;
+            PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT packet{};
             DIVE_VERIFY(
                 mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirect("
@@ -304,7 +304,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
         }
         else if (base_packet.bitfields1.OPCODE == INDIRECT_OP_INDIRECT_COUNT_INDEXED)
         {
-            PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet;
+            PM4_CP_DRAW_INDIRECT_MULTI_INDIRECT_INDEXED packet{};
             DIVE_VERIFY(
                 mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
             string_stream << "DrawIndirectMultiIndirectIndexed("
@@ -320,7 +320,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     else if (opcode == CP_DRAW_AUTO)
     {
         // vkCmdDrawIndirectByteCountEXT
-        PM4_CP_DRAW_AUTO packet;
+        PM4_CP_DRAW_AUTO packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         string_stream << "DrawAuto("
                       << "NumInstances:" << packet.bitfields1.NUM_INSTANCES << ","
@@ -328,7 +328,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     }
     else if (opcode == CP_EXEC_CS_INDIRECT)
     {
-        PM4_CP_EXEC_CS_INDIRECT packet;
+        PM4_CP_EXEC_CS_INDIRECT packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         string_stream << "ExecCsIndirect(x:" << packet.bitfields2.LOCALSIZEX << ","
                       << "y:" << packet.bitfields2.LOCALSIZEY << ","
@@ -337,7 +337,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     }
     else if (opcode == CP_EXEC_CS)
     {
-        PM4_CP_EXEC_CS packet;
+        PM4_CP_EXEC_CS packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         string_stream << "ExecCsIndirect(x:" << packet.bitfields1.NGROUPS_X << ","
                       << "y:" << packet.bitfields2.NGROUPS_Y << ","
@@ -345,7 +345,7 @@ std::string Util::GetEventString(const IMemoryManager& mem_manager, uint32_t sub
     }
     else if (opcode == CP_BLIT)
     {
-        PM4_CP_BLIT packet;
+        PM4_CP_BLIT packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                    (header.count + 1) * sizeof(uint32_t)));
         std::string op;
@@ -450,7 +450,7 @@ bool Util::ShouldIgnoreEventDuringCorrelation(const IMemoryManager& mem_manager,
     // blit.
     if (header.opcode != CP_DRAW_INDX_OFFSET) return false;
 
-    PM4_CP_DRAW_INDX_OFFSET packet;
+    PM4_CP_DRAW_INDX_OFFSET packet{};
     uint32_t header_and_body_dword_count = header.count + 1;
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                header_and_body_dword_count * sizeof(uint32_t)));
@@ -479,7 +479,7 @@ uint32_t Util::GetIndexCount(const IMemoryManager& mem_manager, uint32_t submit_
 
     if (header.opcode == CP_DRAW_INDX)
     {
-        PM4_CP_DRAW_INDX packet;
+        PM4_CP_DRAW_INDX packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)))
         index_count = packet.bitfields2.NUM_INDICES;
     }
@@ -488,7 +488,7 @@ uint32_t Util::GetIndexCount(const IMemoryManager& mem_manager, uint32_t submit_
         // This packet is used for indexed and non-indexed draws.
         // Non-indexed draws do not need to fill out entire packet
         // Note: header.count only includes payload and doesn't include header, hence the + 1
-        PM4_CP_DRAW_INDX_OFFSET packet;
+        PM4_CP_DRAW_INDX_OFFSET packet{};
         uint32_t header_and_body_dword_count = header.count + 1;
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                    header_and_body_dword_count * sizeof(uint32_t)));
@@ -510,7 +510,7 @@ std::optional<VkPrimitiveTopology> Util::GetTopology(const IMemoryManager& mem_m
     uint64_t prim_dword_addr = va_addr + sizeof(header);
     if (header.opcode == CP_DRAW_INDX) prim_dword_addr += sizeof(uint32_t);  // 2nd dword
 
-    uint32_t prim_dword;
+    uint32_t prim_dword = 0;
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&prim_dword, submit_index, prim_dword_addr,
                                                sizeof(prim_dword)));
     pc_di_primtype gpu_type = static_cast<pc_di_primtype>(prim_dword & 0x3f);

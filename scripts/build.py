@@ -60,9 +60,9 @@ def parse_args():
         choices=[x for x in BuildType],
         help="Build type for Dive (excluding GFXR gradle build which is always Debug)")
     parser.add_argument(
-        "--build-with-cmake",
+        "--build-via-generator",
         action="store_true",
-        help="Perform the build step by invoking cmake rather than the generator")
+        help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform")
     parser.add_argument(
         "--bypass-prereq-checks",
         action="store_true",
@@ -121,25 +121,27 @@ def list_actions():
 def parse_actions(lis):
     """Parses lis and returns a list of valid ActionType actions
     """
+    allowed_actions = [str(x) for x in ActionType]
     actions = []
     if lis:
         comma_separated = lis.split(",")
         for action in comma_separated:
-            if action not in ActionType:
+            if action not in allowed_actions:
                 raise Exception(f"Invalid action specified: '{action}', refer "
-                "to --list-actions for the valid list OR leave blank to run all")
+                                "to --list-actions for the valid list OR leave blank to run all")
             actions.append(action)
     else:
         actions = [x for x in ActionType]
 
-    print(f"\nQueued actions, not listed in order: {", ".join(actions)}")
+    str_actions = ", ".join(actions)
+    print(f"\nQueued actions, not listed in order: {str_actions}")
 
     return actions
 
 
 def check_environment(args):
-    """Checks for env vars and executables that will be used by this script. 
-    Can be disabled with --bypass-prereq-checks 
+    """Checks for env vars and executables that will be used by this script.
+    Can be disabled with --bypass-prereq-checks
     """
     if args.build_type != "Debug":
         print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
@@ -155,7 +157,7 @@ def check_environment(args):
     cmd = [args.ninja_exec, "--version"]
     dive.echo_and_run(cmd)
 
-    if (platform.system() == "Windows") and (not args.build_with_cmake):
+    if (platform.system() == "Windows") and (args.build_via_generator):
         cmd = [args.msbuild_exec, "--version"]
         dive.echo_and_run(cmd)
 
@@ -171,16 +173,16 @@ def configure_host(args):
     print("\nGenerating build files with cmake...")
     if platform.system() in ["Linux", "Darwin"]:
         cmd = [args.cmake_exec, ".",
-        f'-G{NINJA_MULTI_CONFIG_NAME}',
-        f"-B{args.root_build_dir}/host",
-        f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
-        ]
+               f'-G{NINJA_MULTI_CONFIG_NAME}',
+               f"-B{args.root_build_dir}/host",
+               f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+               ]
     elif platform.system() == "Windows":
         cmd = [args.cmake_exec, ".",
-        f"-G{args.visual_studio_name}",
-        f"-B{args.root_build_dir}/host",
-        f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
-        ]
+               f"-G{args.visual_studio_name}",
+               f"-B{args.root_build_dir}/host",
+               f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+               ]
     else:
         raise Exception(f"Unrecognized platform: {platform.system()}")
     if args.host_configure_additional_flags:
@@ -193,25 +195,25 @@ def configure_host(args):
 def build_host(args):
     """Implementing ActionType.BUILD_HOST stage
     """
-    if args.build_with_cmake:
+    if not args.build_via_generator:
         print("\nBuilding host libraries by invoking cmake...")
         cmd = [args.cmake_exec,
-            "--build", f"{args.root_build_dir}/host",
-            "--config", f"{args.build_type}"
-        ]
+               "--build", f"{args.root_build_dir}/host",
+               "--config", f"{args.build_type}"
+               ]
     elif platform.system() in ["Linux", "Darwin"]:
         print("\nBuilding host libraries by invoking Ninja...")
-        cmd = [args.ninja_exec, 
-        "-f", f"build-{args.build_type}.ninja",
-        "-C", f"{args.root_build_dir}/host"
-        ]
+        cmd = [args.ninja_exec,
+               "-f", f"build-{args.build_type}.ninja",
+               "-C", f"{args.root_build_dir}/host"
+               ]
     elif platform.system() == "Windows":
         print("\nBuilding host libraries by invoking Visual Studio...")
         cmd = [args.msbuild_exec, f"{args.root_build_dir}/host/ALL_BUILD.vcxproj",
-        "-maxCpuCount",
-        "-t:Rebuild",
-        f"-p:Configuration={args.build_type}"
-        ]
+               "-maxCpuCount",
+               "-t:Rebuild",
+               f"-p:Configuration={args.build_type}"
+               ]
     else:
         raise Exception(f"Unrecognized platform: {platform.system()}")
     dive.echo_and_run(cmd)
@@ -220,19 +222,19 @@ def build_host(args):
 def install_host(args):
     """Implementing ActionType.INSTALL_HOST stage
     """
-    # TODO: b/482108095 - This must be done regardless of clean build because 
-    # install folders are re-used between different build types and the 
+    # TODO: b/482108095 - This must be done regardless of clean build because
+    # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
     if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host"):
         print("\nClearing host pkg folders...")
         shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host")
-    
+
     print("\nInstalling with cmake...")
     cmd = [args.cmake_exec,
-        "--install", f"{args.root_build_dir}/host",
-        "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
-        "--config", f"{args.build_type}"
-    ]
+           "--install", f"{args.root_build_dir}/host",
+           "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
+           "--config", f"{args.build_type}"
+           ]
     dive.echo_and_run(cmd)
 
 
@@ -247,29 +249,29 @@ def all_device(args):
     print("\nGenerating build files with cmake...")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
     cmd = [args.cmake_exec, ".",
-        f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
-        f"-G{NINJA_MULTI_CONFIG_NAME}",
-        f"-B{args.root_build_dir}/device",
-        "-DCMAKE_SYSTEM_NAME=Android",
-        "-DANDROID_ABI=arm64-v8a",
-        "-DANDROID_PLATFORM=android-26",
-        "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
-        "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
-        f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
-    ]
+           f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
+           f"-G{NINJA_MULTI_CONFIG_NAME}",
+           f"-B{args.root_build_dir}/device",
+           "-DCMAKE_SYSTEM_NAME=Android",
+           "-DANDROID_ABI=arm64-v8a",
+           "-DANDROID_PLATFORM=android-26",
+           "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
+           "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
+           f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+           ]
     if args.ci:
         cmd.append("-DDIVE_GFXR_GRADLE_CONSOLE=plain")
     dive.echo_and_run(cmd)
 
     print("\nBuilding with ninja...")
     cmd = [args.ninja_exec,
-        "-C", f"{args.root_build_dir}/device",
-        "-f", f"build-{args.build_type}.ninja"
-    ]
+           "-C", f"{args.root_build_dir}/device",
+           "-f", f"build-{args.build_type}.ninja"
+           ]
     dive.echo_and_run(cmd)
 
-    # TODO: b/482108095 - This must be done regardless of clean build because 
-    # install folders are re-used between different build types and the 
+    # TODO: b/482108095 - This must be done regardless of clean build because
+    # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
     if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/device"):
         print("\nClearing install folder...")
@@ -277,10 +279,10 @@ def all_device(args):
 
     print("\nInstalling with cmake...")
     cmd = [args.cmake_exec,
-        "--install", f"{args.root_build_dir}/device",
-        "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
-        "--config", f"{args.build_type}"
-    ]
+           "--install", f"{args.root_build_dir}/device",
+           "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
+           "--config", f"{args.build_type}"
+           ]
     dive.echo_and_run(cmd)
 
 

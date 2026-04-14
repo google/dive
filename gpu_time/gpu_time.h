@@ -195,7 +195,7 @@ class GPUTime
         void FreeSlots(const std::vector<uint32_t>& slots);
 
      private:
-        std::atomic<size_t> m_masks[kNumBlocks];
+        std::atomic<size_t> m_masks[kNumBlocks]{};
         std::atomic<uint32_t> m_cur = 0;
     };
 
@@ -232,7 +232,7 @@ class GPUTime
     FrameBoundaryDetector m_boundary_detector;
 
     // Keep the timestamp results *2 for VK_QUERY_RESULT_WITH_AVAILABILITY_BIT
-    uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2];
+    uint64_t m_timestamps_with_availability[TimeStampSlotAllocator::kTotalSlots * 2]{};
     FrameMetrics m_metrics;
 
     std::set<VkQueue> m_queues;

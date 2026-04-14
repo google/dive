@@ -40,7 +40,6 @@ enum class ClientStatus
 class TcpClient
 {
  public:
-    TcpClient();
     ~TcpClient();
 
     // Connects to the server and performs the handshake.
@@ -103,7 +102,7 @@ class TcpClient
 
     std::unique_ptr<SocketConnection> m_connection;
     std::mutex m_connection_mutex;
-    ClientStatus m_status;
+    ClientStatus m_status = ClientStatus::DISCONNECTED;
     mutable std::mutex m_status_mutex;
 
     // KeepAlive is used to check the connection with the server periodically via a ping-pong
@@ -111,10 +110,9 @@ class TcpClient
     struct KeepAlive
     {
         std::thread thread;
-        std::atomic<bool> running;
+        std::atomic<bool> running{false};
         std::mutex mutex;
         std::condition_variable cv;
-        uint32_t interval_sec;
     } m_keep_alive;
 };
 

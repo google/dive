@@ -48,7 +48,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager& mem_manager, uint32_t s
 {
     if (header.type == 7 && header.type7.opcode == CP_SET_MARKER)
     {
-        PM4_CP_SET_MARKER packet;
+        PM4_CP_SET_MARKER packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
         DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
@@ -106,7 +106,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager& mem_manager, uint32_t s
                 uint32_t m_reg_offset;
                 uint32_t m_reg_value;
             };
-            RegPair reg_pair;
+            RegPair reg_pair{};
             uint64_t pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
             DIVE_VERIFY(mem_manager.RetrieveMemoryData(&reg_pair, submit_index, pair_addr,
                                                        sizeof(reg_pair)));
@@ -116,7 +116,7 @@ bool EmulateStateTracker::OnPacket(const IMemoryManager& mem_manager, uint32_t s
             const RegInfo* reg_info_ptr = GetRegInfo(reg_pair.m_reg_offset);
             if (reg_info_ptr && reg_info_ptr->m_is_64_bit)
             {
-                RegPair new_reg_pair;
+                RegPair new_reg_pair{};
                 uint64_t new_pair_addr = va_addr + sizeof(header) + dword * sizeof(uint32_t);
                 DIVE_VERIFY(mem_manager.RetrieveMemoryData(&new_reg_pair, submit_index,
                                                            new_pair_addr, sizeof(new_reg_pair)));
@@ -302,7 +302,7 @@ bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase& callbacks, const IMemoryMan
                                const IndirectBufferInfo* ib_ptr)
 {
     // Used to keep track of progress of emulation so far
-    EmulateState emu_state;
+    EmulateState emu_state{};
     emu_state.m_submit_index = submit_index;
     emu_state.m_top_of_stack = IbLevel::kPrimaryRing;
     EmulateState::IbStack* primary_ring = &emu_state.m_ib_stack[IbLevel::kPrimaryRing];
@@ -332,7 +332,7 @@ bool EmulatePM4::ExecuteSubmit(EmulateCallbacksBase& callbacks, const IMemoryMan
         // Callbacks + advance
         EmulateState::IbStack* cur_ib_level = &emu_state.m_ib_stack[emu_state.m_top_of_stack];
 
-        Pm4Header header;
+        Pm4Header header{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&header, emu_state.m_submit_index,
                                                    cur_ib_level->m_cur_va, sizeof(Pm4Header)));
 
@@ -368,7 +368,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
                              header.type7.opcode == CP_INDIRECT_BUFFER_PFD ||
                              header.type7.opcode == CP_INDIRECT_BUFFER_CHAIN))
     {
-        PM4_CP_INDIRECT_BUFFER ib_packet;
+        PM4_CP_INDIRECT_BUFFER ib_packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&ib_packet, emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
                                                    sizeof(PM4_CP_INDIRECT_BUFFER)));
@@ -390,7 +390,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
         // For simplicity sake, treat CP_SET_AMBLE essentially as a
         // CALL (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
-        PM4_CP_SET_AMBLE packet;
+        PM4_CP_SET_AMBLE packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
                                                    (header.type7.count + 1) * sizeof(uint32_t)));
@@ -416,7 +416,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
         // For simplicity sake, treat CP_SET_DRAW_STATE essentially as multiple
         // CALLs (i.e. jump to the next IB level), although the hardware probably
         // doesn't do that.
-        PM4_CP_SET_DRAW_STATE packet;
+        PM4_CP_SET_DRAW_STATE packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
                                                    (header.type7.count + 1) * sizeof(uint32_t)));
@@ -450,7 +450,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
     }
     else if ((header.type == 7) && (header.type7.opcode == CP_START_BIN))
     {
-        PM4_CP_START_BIN packet;
+        PM4_CP_START_BIN packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
                                                    sizeof(PM4_CP_START_BIN)));
@@ -481,7 +481,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
         uint32_t common_block_dword_size = UINT32_MAX;
         while (true)
         {
-            Pm4Header temp_header;
+            Pm4Header temp_header{};
             DIVE_VERIFY(mem_manager.RetrieveMemoryData(&temp_header, emu_state_ptr->m_submit_index,
                                                        temp_va, sizeof(Pm4Header)));
             if (temp_header.type == 7 && temp_header.type7.opcode == CP_END_BIN)
@@ -529,7 +529,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
         // draw call, skipping buffers with non - visible draw calls.
         // if CP_START_BIN/CP_END_BIN are used, and CP_FIXED_STRIDE_DRAW_TABLE is used for
         // drawcalls, it will be in the Common_block
-        PM4_CP_FIXED_STRIDE_DRAW_TABLE packet;
+        PM4_CP_FIXED_STRIDE_DRAW_TABLE packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, emu_state_ptr->m_submit_index,
                                                    emu_state_ptr->GetCurIb()->m_cur_va,
                                                    sizeof(PM4_CP_FIXED_STRIDE_DRAW_TABLE)));
@@ -653,7 +653,7 @@ bool EmulatePM4::AdvanceToQueuedIB(const IMemoryManager& mem_manager, EmulateSta
 
     // Start-Ib Callback
     {
-        IndirectBufferInfo call_chain_ib_info;
+        IndirectBufferInfo call_chain_ib_info{};
         call_chain_ib_info.m_va_addr = cur_ib_level->m_cur_va;
         call_chain_ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
         call_chain_ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;
@@ -701,7 +701,7 @@ bool EmulatePM4::AdvanceOutOfIB(EmulateState* emu_state, EmulateCallbacksBase& c
 
     emu_state->m_top_of_stack = (IbLevel)(emu_state->m_top_of_stack - 1);
 
-    IndirectBufferInfo ib_info;
+    IndirectBufferInfo ib_info{};
     ib_info.m_va_addr = cur_ib_level->m_cur_ib_addr;
     ib_info.m_size_in_dwords = cur_ib_level->m_cur_ib_size_in_dwords;
     ib_info.m_ib_level = (uint8_t)emu_state->m_top_of_stack;

@@ -130,10 +130,10 @@ class AvailableGpuTiming
     void Validate();
 
     // Preserved row order from file
-    std::vector<Entry> m_ordered_entries = {};
+    std::vector<Entry> m_ordered_entries;
 
     // Statistics from file, indexed by ObjectType
-    std::vector<std::vector<Stats>> m_stats = {};
+    std::vector<std::vector<Stats>> m_stats;
 
     uint32_t m_total_frames = 0;  // The number of frames the statistics were collected from
     bool m_loaded = false;        // If true, prevent further loading

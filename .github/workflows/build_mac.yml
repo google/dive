@@ -68,7 +68,7 @@ jobs:
       - name: Run clang-tidy on changes
         run: |
           git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-          python3 scripts/dive-run-clang-tidy.py --run_clang_tidy run-clang-tidy-19 --config_file .clang-tidy-ci git_diff "${{ github.sha }}..${{ github.event.pull_request.base.sha }}"
+          python3 scripts/dive-run-clang-tidy.py --run_clang_tidy run-clang-tidy-19 --config_file .clang-tidy-ci git_diff "${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
       - name: Put files in app bundle
         run: |
           python scripts/deploy_mac_bundle.py --no-device-libraries --no-sign

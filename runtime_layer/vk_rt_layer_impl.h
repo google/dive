@@ -45,7 +45,7 @@ class DiveRuntimeLayer
     struct TrackedPSO
     {
         std::string name;
-        bool has_alpha_blend;
+        bool has_alpha_blend{};
     };
 
     struct TrackedRenderPass

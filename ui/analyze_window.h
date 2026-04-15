@@ -54,7 +54,7 @@ class AnalyzeDialog : public DeviceDialog
     struct CsvItem
     {
         QString id;
-        Dive::MetricType type;
+        Dive::MetricType type = Dive::MetricType::kUnknown;
         QString key;
         QString name;
         QString description;

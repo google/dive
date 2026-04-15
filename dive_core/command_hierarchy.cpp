@@ -716,7 +716,7 @@ bool CommandHierarchyCreator::CreateTrees(EngineType engine_type, QueueType queu
     m_num_events = 0;
     m_flatten_chain_nodes = false;
 
-    Dive::IndirectBufferInfo ib_info;
+    Dive::IndirectBufferInfo ib_info{};
     ib_info.m_va_addr = 0x0;
     ib_info.m_size_in_dwords = size_in_dwords;
     ib_info.m_skip = false;
@@ -906,8 +906,7 @@ bool CommandHierarchyCreator::OnIbEnd(uint32_t submit_index, uint32_t ib_index,
     // Note: This callback is only called for the last CHAIN of a series of daisy-CHAIN IBs,
     // because the emulator does not keep track of IBs in an internal stack. So start by
     // popping all consecutive CHAIN IBs
-    IbType type;
-    type = m_command_hierarchy.GetIbNodeType(m_ib_stack.back());
+    IbType type = m_command_hierarchy.GetIbNodeType(m_ib_stack.back());
     while (!m_ib_stack.empty() && type == IbType::kChain)
     {
         m_ib_stack.pop_back();
@@ -1038,7 +1037,7 @@ bool CommandHierarchyCreator::OnPacket(const IMemoryManager& mem_manager, uint32
     }
     else if (opcode == CP_SET_MARKER)
     {
-        PM4_CP_SET_MARKER packet;
+        PM4_CP_SET_MARKER packet{};
         DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
         // as mentioned in adreno_pm4.xml, only b0-b3 are considered when b8 is not set
         DIVE_ASSERT((packet.u32All0 & 0x100) == 0);
@@ -1336,7 +1335,7 @@ void OutputValue(std::ostringstream& string_stream, ValueType type, uint64_t val
         {
             int32_t s;
             uint32_t u;
-        } union_val;
+        } union_val{};
         // Non-address types are always 32-bit
         DIVE_ASSERT(value <= UINT32_MAX);
         union_val.u = (uint32_t)value;
@@ -1349,7 +1348,7 @@ void OutputValue(std::ostringstream& string_stream, ValueType type, uint64_t val
         {
             float f;
             uint32_t i;
-        } union_val;
+        } union_val{};
         // If it's a float, it's not 64-bit wide. So typecast should be ok
         DIVE_ASSERT(value <= UINT32_MAX);
         union_val.i = (uint32_t)value;
@@ -1481,7 +1480,7 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager& mem_manager,
             uint32_t m_reg_offset;
             uint32_t m_reg_value;
         };
-        RegPair reg_pair;
+        RegPair reg_pair{};
         uint64_t pair_addr = va_addr + dword * sizeof(uint32_t);
         DIVE_VERIFY(
             mem_manager.RetrieveMemoryData(&reg_pair, submit_index, pair_addr, sizeof(reg_pair)));
@@ -1497,7 +1496,7 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager& mem_manager,
         uint64_t reg_value = reg_pair.m_reg_value;
         if (reg_info_ptr->m_is_64_bit)
         {
-            RegPair new_reg_pair;
+            RegPair new_reg_pair{};
             uint64_t new_pair_addr = va_addr + dword * sizeof(uint32_t);
             DIVE_VERIFY(mem_manager.RetrieveMemoryData(&new_reg_pair, submit_index, new_pair_addr,
                                                        sizeof(new_reg_pair)));
@@ -1730,7 +1729,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager&
                                                            uint32_t submit_index, uint64_t va_addr,
                                                            uint64_t packet_node_index)
 {
-    PM4_CP_LOAD_STATE6 packet;
+    PM4_CP_LOAD_STATE6 packet{};
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
 
     enum class StateBlockCat
@@ -1739,7 +1738,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager&
         kShader,
         kUAV
     };
-    StateBlockCat cat;
+    StateBlockCat cat = StateBlockCat::kTex;
     const bool is_compute = (packet.bitfields0.STATE_BLOCK == SB6_CS_TEX) ||
                             (packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER) ||
                             (packet.bitfields0.STATE_BLOCK == SB6_CS_UAV);
@@ -1767,7 +1766,6 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager&
             break;
         default:
             DIVE_ASSERT(false);
-            cat = StateBlockCat::kTex;
     }
 
     uint64_t ext_src_addr = 0;
@@ -1879,7 +1877,7 @@ void CommandHierarchyCreator::AppendMemRegNodes(const IMemoryManager& mem_manage
                                                 uint32_t submit_index, uint64_t va_addr,
                                                 uint64_t packet_node_index)
 {
-    PM4_CP_MEM_TO_REG packet;
+    PM4_CP_MEM_TO_REG packet{};
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr, sizeof(packet)));
 
     // Add base register name
@@ -1913,7 +1911,7 @@ void CommandHierarchyCreator::CacheSetDrawStateGroupInfo(const IMemoryManager& m
         m_node_children[CommandHierarchy::kSubmitTopology][kSingleParentNodeChildren][index];
 
     // Obtain the address of each of the children group IBs
-    PM4_CP_SET_DRAW_STATE packet;
+    PM4_CP_SET_DRAW_STATE packet{};
     DIVE_VERIFY(mem_manager.RetrieveMemoryData(&packet, submit_index, va_addr,
                                                (header.type7.count + 1) * sizeof(uint32_t)));
 

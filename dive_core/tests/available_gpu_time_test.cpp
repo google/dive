@@ -80,17 +80,11 @@ TEST(AvailableGpuTiming, GetObjectTypeString_Fail)
 TEST(AvailableGpuTiming, GetObjectType_Pass)
 {
     AvailableGpuTiming g;
-    AvailableGpuTiming::ObjectType output;
     EXPECT_FALSE(g.IsValid());
 
-    output = g.GetObjectType("Frame");
-    EXPECT_EQ(output, AvailableGpuTiming::ObjectType::kFrame);
-
-    output = g.GetObjectType("CommandBuffer");
-    EXPECT_EQ(output, AvailableGpuTiming::ObjectType::kCommandBuffer);
-
-    output = g.GetObjectType("RenderPass");
-    EXPECT_EQ(output, AvailableGpuTiming::ObjectType::kRenderPass);
+    EXPECT_EQ(g.GetObjectType("Frame"), AvailableGpuTiming::ObjectType::kFrame);
+    EXPECT_EQ(g.GetObjectType("CommandBuffer"), AvailableGpuTiming::ObjectType::kCommandBuffer);
+    EXPECT_EQ(g.GetObjectType("RenderPass"), AvailableGpuTiming::ObjectType::kRenderPass);
 
     EXPECT_FALSE(g.IsValid());
 }
@@ -98,17 +92,11 @@ TEST(AvailableGpuTiming, GetObjectType_Pass)
 TEST(AvailableGpuTiming, GetObjectType_Fail)
 {
     AvailableGpuTiming g;
-    AvailableGpuTiming::ObjectType output;
     EXPECT_FALSE(g.IsValid());
 
-    output = g.GetObjectType("nObjectTypes");
-    EXPECT_EQ(output, AvailableGpuTiming::ObjectType::nObjectTypes);
-
-    output = g.GetObjectType("");
-    EXPECT_EQ(output, AvailableGpuTiming::ObjectType::nObjectTypes);
-
-    output = g.GetObjectType("2389sdjk");
-    EXPECT_EQ(output, AvailableGpuTiming::ObjectType::nObjectTypes);
+    EXPECT_EQ(g.GetObjectType("nObjectTypes"), AvailableGpuTiming::ObjectType::nObjectTypes);
+    EXPECT_EQ(g.GetObjectType(""), AvailableGpuTiming::ObjectType::nObjectTypes);
+    EXPECT_EQ(g.GetObjectType("2389sdjk"), AvailableGpuTiming::ObjectType::nObjectTypes);
 
     EXPECT_FALSE(g.IsValid());
 }

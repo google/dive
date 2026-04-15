@@ -52,7 +52,7 @@ struct CaptureMetadata
     EventStateInfo m_event_state;
 
     // Information about the submits in this capture
-    uint64_t m_num_pm4_packets;
+    uint64_t m_num_pm4_packets{};
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ struct CaptureMetadata
 class DataCore
 {
  protected:
-    ProgressTracker* m_progress_tracker;
+    ProgressTracker* m_progress_tracker{};
 
  public:
     DataCore() = default;

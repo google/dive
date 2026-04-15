@@ -1,12 +1,19 @@
 """Runs clang-tidy on the Dive codebase."""
 
 import argparse
-import shutil
+import enum
 import pathlib
 import subprocess
+import shutil
 import sys
 
 import common_dive_utils as dive
+
+
+class FilesChoice(enum.StrEnum):
+    ALL = enum.auto()
+    GIT_DIFF = enum.auto()
+    SPECIFIC = enum.auto()
 
 
 def find_program(candidate: str) -> pathlib.Path | None:
@@ -19,6 +26,24 @@ def find_program(candidate: str) -> pathlib.Path | None:
         return candidate_path
 
     raise argparse.ArgumentTypeError(f"Can't find program: {candidate}")
+
+
+def git_diff(git: pathlib.Path) -> list[str]:
+    return (
+        subprocess.check_output(
+            [
+                str(git),
+                "diff",
+                "--diff-filter=ACMR",
+                "--name-only",
+                "origin/main..HEAD",
+                "--",
+            ],
+            text=True,
+        )
+        .strip()
+        .splitlines()
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,20 +87,36 @@ def parse_args() -> argparse.Namespace:
         help="Automatically fix issues that are found. Same as clang-tidy -fix.",
     )
     parser.add_argument(
-        "files",
+        "--files",
+        type=FilesChoice,
+        choices=[x for x in FilesChoice],
+        default=FilesChoice.GIT_DIFF,
+        help="Which files to run clang-tidy on.",
+    )
+    parser.add_argument(
+        "specific_files",
         nargs="*",
-        help="Optional list of files to analyze. Defaults to entire Dive codebase.",
+        help="With `--files specific`, these files will be analyzed with clang-tidy.",
     )
     return parser.parse_args()
 
 
 def main(args: argparse.Namespace):
-    print(args.run_clang_tidy)
-    print(args.git)
-
     dive_root = dive.get_dive_root()
     source_filter = "|".join([f"{str(dive_root)}/{dir}/.*" for dir in dive.SOURCE_DIRS])
     # NOTE: This script doesn't filter on arg.files since run-clang-tidy does that for us.
+
+    def choose_files() -> list[str]:
+        match args.files:
+            case FilesChoice.ALL:
+                return []
+            case FilesChoice.GIT_DIFF:
+                return git_diff(args.git)
+            case FilesChoice.SPECIFIC:
+                # TODO: raise error if specific_files is empty
+                return args.specific_files
+            case _:
+                raise NotImplementedError(f"Unknown --files option: {args.files}")
 
     def execute_run_clang_tidy(build_dir: pathlib.Path) -> int:
         return subprocess.run(
@@ -89,7 +130,7 @@ def main(args: argparse.Namespace):
             ]
             + (["-fix"] if args.fix else [])
             + (["-config-file", str(args.config_file)] if args.config_file else [])
-            + (args.files if args.files else [])
+            + choose_files()
         ).returncode
 
     returncodes: list[int] = []

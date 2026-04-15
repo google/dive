@@ -98,7 +98,17 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         help="With `--files specific`, these files will be analyzed with clang-tidy.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.files == FilesChoice.SPECIFIC and not args.specific_files:
+        raise ValueError(f"--files specific requires files to be provided")
+
+    if args.files != FilesChoice.SPECIFIC and args.specific_files:
+        raise ValueError(
+            f"Use --files specific to analyze the provided files: {' '.join(args.specific_files)}"
+        )
+
+    return args
 
 
 def main(args: argparse.Namespace):
@@ -113,7 +123,6 @@ def main(args: argparse.Namespace):
             case FilesChoice.GIT_DIFF:
                 return git_diff(args.git)
             case FilesChoice.SPECIFIC:
-                # TODO: raise error if specific_files is empty
                 return args.specific_files
             case _:
                 raise NotImplementedError(f"Unknown --files option: {args.files}")

@@ -32,23 +32,23 @@ struct DrawCallFilters
     int vertex_count = 0;
     int instance_count = 0;
     int draw_count = 0;
-    QString pso_property = {};
-    QString render_pass = {};
+    QString pso_property;
+    QString render_pass;
 };
 
 struct RenderPassFilters
 {
-    QString command_buffer = {};
-    QString render_pass_type = {};
+    QString command_buffer;
+    QString render_pass_type;
 };
 
 struct WhatIfModification
 {
-    QString ui_text = {};
+    QString ui_text;
     Dive::WhatIfType type = {};
-    QString command = {};
+    QString command;
 
-    QStringList flags = {};
+    QStringList flags;
     std::optional<DrawCallFilters> draw_call_filters = std::nullopt;
     std::optional<RenderPassFilters> render_pass_filters = std::nullopt;
 };

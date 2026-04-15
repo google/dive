@@ -72,6 +72,7 @@ struct GlobalOptions
     std::optional<absl::Duration> trigger_capture_after;
 
     Dive::GfxrCaptureSettings capture_settings;
+
     Dive::GfxrReplaySettings replay_settings;
 };
 

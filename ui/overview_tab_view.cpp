@@ -20,8 +20,10 @@
 #include <qobject.h>
 
 #include <QApplication>
+#include <QLabel>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include <QVariant>
 
 #include "dive_core/data_core.h"
 #include "draw_dispatch_stats_tab_view.h"
@@ -53,7 +55,16 @@ OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& capture_metadata,
     m_tile_statistics_view_tab_index = m_tab_widget->addTab(m_tile_statistics_view, "Tile Stats");
     m_misc_statistics_view_tab_index = m_tab_widget->addTab(m_misc_statistics_view, "Misc Stats");
 
+    QLabel* loading_label = new QLabel(tr("Gathering Trace Stats..."));
+    loading_label->setObjectName("loading_label");
+    loading_label->setAlignment(Qt::AlignCenter);
+    QFont font = loading_label->font();
+    font.setPointSize(16);
+    loading_label->setFont(font);
+    loading_label->hide();
+
     QVBoxLayout* main_layout = new QVBoxLayout();
+    main_layout->addWidget(loading_label);
     main_layout->addWidget(m_tab_widget);
     setLayout(main_layout);
 
@@ -64,9 +75,20 @@ OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& capture_metadata,
 // --------------------------------------------------------------------------------------------------
 void OverviewTabView::LoadStatistics()
 {
-    m_tile_statistics_view->LoadStatistics();
-    m_draw_dispatch_statistics_view->LoadStatistics();
-    m_misc_statistics_view->LoadStatistics();
+    bool is_loading = property("is_loading").toBool();
+    QLabel* loading_label = findChild<QLabel*>("loading_label");
+    if (loading_label)
+    {
+        loading_label->setVisible(is_loading);
+        m_tab_widget->setVisible(!is_loading);
+    }
+
+    if (!is_loading)
+    {
+        m_tile_statistics_view->LoadStatistics();
+        m_draw_dispatch_statistics_view->LoadStatistics();
+        m_misc_statistics_view->LoadStatistics();
+    }
 }
 
 // --------------------------------------------------------------------------------------------------

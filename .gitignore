@@ -16,6 +16,7 @@ third_party/dive_crashpad/prebuilt
 
 # Build-related directories
 build/
+plugins/external/
 third_party/freedreno/libs/
 third_party/freedreno/obj
 .gradle/

@@ -116,7 +116,7 @@ class MainWindow : public QMainWindow
     struct LastRequest
     {
         std::string file_name;
-        bool is_temp_file;
+        bool is_temp_file{};
     };
     enum class CorrelationTarget
     {

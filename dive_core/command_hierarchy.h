@@ -562,7 +562,7 @@ class CommandHierarchyCreator : public EmulateCallbacksBase
     // Need a stack because IBs and pass/events can be stacked
     DiveVector<uint64_t> m_start_node_stack[CommandHierarchy::kTopologyTypeCount];
 
-    uint64_t m_last_added_node_index;
+    uint64_t m_last_added_node_index{};
 
     uint64_t m_cur_submit_node_index = 0;     // Current submit node being processed
     uint64_t m_cur_ib_packet_node_index = 0;  // Current ib packet node being processed

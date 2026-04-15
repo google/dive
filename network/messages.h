@@ -84,8 +84,8 @@ class HandshakeMessage : public ISerializable
     void SetMinorVersion(uint32_t minor) { m_minor_version = minor; }
 
  private:
-    uint32_t m_major_version;
-    uint32_t m_minor_version;
+    uint32_t m_major_version{};
+    uint32_t m_minor_version{};
 };
 
 class EmptyMessage : public ISerializable
@@ -208,7 +208,7 @@ class DownloadFileResponse : public ISerializable
     // It can be the same as the requested file path from client.
     std::string m_file_path;
     // The downloaded file's size.
-    uint64_t m_file_size;
+    uint64_t m_file_size{};
 };
 
 // FileSizeRequest uses the string message as the file path for which we want to determine the size.
@@ -242,7 +242,7 @@ class FileSizeResponse : public ISerializable
     // A description of the error. Empty if successful.
     std::string m_error_reason;
     // The downloaded file's size.
-    uint64_t m_file_size;
+    uint64_t m_file_size{};
 };
 
 class DrawcallFilterConfigRequest : public ISerializable

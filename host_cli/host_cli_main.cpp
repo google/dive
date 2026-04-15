@@ -49,7 +49,7 @@ struct ValidatedFlags
 {
     bool input_gfxr_file = false;
     bool output_gfxr_file = false;
-    std::vector<int> delete_block_ids = {};
+    std::vector<int> delete_block_ids;
 };
 
 absl::StatusOr<ValidatedFlags> ValidateFlags()

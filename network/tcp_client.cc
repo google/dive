@@ -31,12 +31,6 @@ constexpr uint32_t kHandshakeMinorVersion = 0;
 namespace Network
 {
 
-TcpClient::TcpClient() : m_status(ClientStatus::DISCONNECTED)
-{
-    m_keep_alive.running = false;
-    m_keep_alive.interval_sec = kKeepAliveIntervalSec;
-}
-
 TcpClient::~TcpClient() { Disconnect(); }
 
 absl::Status TcpClient::Connect(const std::string& host, int port)
@@ -629,7 +623,7 @@ absl::Status TcpClient::StartKeepAlive()
     m_keep_alive.running.store(true);
     m_keep_alive.thread = std::thread(&TcpClient::KeepAliveLoop, this);
 
-    std::cout << "Client: Keep-alive thread started. Interval: " << m_keep_alive.interval_sec
+    std::cout << "Client: Keep-alive thread started. Interval: " << kKeepAliveIntervalSec
               << " s, Ping Timeout: " << kPingTimeoutMs << " ms." << std::endl;
     return Dive::OkStatus();
 }
@@ -639,7 +633,7 @@ void TcpClient::KeepAliveLoop()
     while (m_keep_alive.running.load())
     {
         std::unique_lock<std::mutex> lk(m_keep_alive.mutex);
-        if (m_keep_alive.cv.wait_for(lk, std::chrono::seconds(m_keep_alive.interval_sec),
+        if (m_keep_alive.cv.wait_for(lk, std::chrono::seconds(kKeepAliveIntervalSec),
                                      [this] { return !m_keep_alive.running.load(); }))
         {
             std::cout << "KeepAliveLoop: Client Keep-Alive Thread: Stop signaled via CV."

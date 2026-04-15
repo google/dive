@@ -129,7 +129,7 @@ def parse_args() -> argparse.Namespace:
 def main(args: argparse.Namespace):
     dive_root = dive.get_dive_root()
     source_filter = "|".join([f"{str(dive_root)}/{dir}/.*" for dir in dive.SOURCE_DIRS])
-    # NOTE: This script doesn't filter on arg.files since run-clang-tidy does that for us.
+    # NOTE: run-clang-tidy uses source_filter to filter chosen files so we don't have to
 
     print(args)
 

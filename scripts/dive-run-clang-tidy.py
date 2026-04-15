@@ -10,10 +10,10 @@ import sys
 import common_dive_utils as dive
 
 
-class FilesChoice(enum.StrEnum):
+class Commands(enum.StrEnum):
     ALL = enum.auto()
     GIT_DIFF = enum.auto()
-    SPECIFIC = enum.auto()
+    FILES = enum.auto()
 
 
 def find_program(candidate: str) -> pathlib.Path | None:
@@ -28,22 +28,22 @@ def find_program(candidate: str) -> pathlib.Path | None:
     raise argparse.ArgumentTypeError(f"Can't find program: {candidate}")
 
 
-def git_diff(git: pathlib.Path) -> list[str]:
-    return (
-        subprocess.check_output(
-            [
-                str(git),
-                "diff",
-                "--diff-filter=ACMR",
-                "--name-only",
-                "origin/main..HEAD",
-                "--",
-            ],
-            text=True,
+def git_diff(git: pathlib.Path, commit: str) -> list[str]:
+    command = [
+        str(git),
+        "diff",
+        "--diff-filter=ACMR",
+        "--name-only",
+        commit,
+        "--",
+    ]
+    process = subprocess.run(command, text=True, capture_output=True)
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"Command failed: {command}.\nstdout: {process.stdout}\nstderr: {process.stderr}"
         )
-        .strip()
-        .splitlines()
-    )
+
+    return process.stdout.strip().splitlines()
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,17 +52,46 @@ def parse_args() -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser(
+        str(Commands.ALL),
+        help="Run clang-tidy on the entire repository.",
+    )
+
+    files_subparser = subparsers.add_parser(
+        str(Commands.FILES),
+        help="Run clang-tidy on the provided files.",
+    )
+    files_subparser.add_argument(
+        "specific_files",
+        nargs="+",
+        metavar="FILE",
+        help="Files to be analyzed by clang-tidy.",
+    )
+
+    git_diff_subparser = subparsers.add_parser(
+        str(Commands.GIT_DIFF),
+        help="Run clang-tidy on changed files.",
+    )
+    git_diff_subparser.add_argument(
+        "--git",
+        type=find_program,
+        default="git",
+        help="Path to git.",
+    )
+    git_diff_subparser.add_argument(
+        "commit",
+        help="Which commit to diff against.",
+        nargs="?",
+        default="origin/main",
+    )
+
     parser.add_argument(
         "--run_clang_tidy",
         type=find_program,
         default="run-clang-tidy",
         help="Path to run-clang-tidy or run-clang-tidy.py.",
-    )
-    parser.add_argument(
-        "--git",
-        type=find_program,
-        default="git",
-        help="Path to git.",
     )
     parser.add_argument(
         "--host_build_dir",
@@ -86,27 +115,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Automatically fix issues that are found. Same as clang-tidy -fix.",
     )
-    parser.add_argument(
-        "--files",
-        type=FilesChoice,
-        choices=[x for x in FilesChoice],
-        default=FilesChoice.GIT_DIFF,
-        help="Which files to run clang-tidy on.",
-    )
-    parser.add_argument(
-        "specific_files",
-        nargs="*",
-        help="With `--files specific`, these files will be analyzed with clang-tidy.",
-    )
     args = parser.parse_args()
 
-    if args.files == FilesChoice.SPECIFIC and not args.specific_files:
-        raise ValueError(f"--files specific requires files to be provided")
-
-    if args.files != FilesChoice.SPECIFIC and args.specific_files:
-        raise ValueError(
-            f"Use --files specific to analyze the provided files: {' '.join(args.specific_files)}"
-        )
+    if args.command is None:
+        # Default to git_diff. In order to properly parse arguments on
+        # subparsers (i.e. to populate args.git), reparse with the default
+        # command explicitly provided.
+        args = parser.parse_args([str(Commands.GIT_DIFF)] + sys.argv[1:])
 
     return args
 
@@ -116,16 +131,19 @@ def main(args: argparse.Namespace):
     source_filter = "|".join([f"{str(dive_root)}/{dir}/.*" for dir in dive.SOURCE_DIRS])
     # NOTE: This script doesn't filter on arg.files since run-clang-tidy does that for us.
 
+    print(args)
+
     def choose_files() -> list[str]:
-        match args.files:
-            case FilesChoice.ALL:
+        match args.command:
+            case Commands.ALL:
                 return []
-            case FilesChoice.GIT_DIFF:
-                return git_diff(args.git)
-            case FilesChoice.SPECIFIC:
+            case Commands.GIT_DIFF:
+                return git_diff(args.git, args.commit)
+            case Commands.FILES:
                 return args.specific_files
-            case _:
-                raise NotImplementedError(f"Unknown --files option: {args.files}")
+            case unknown:
+                raise NotImplementedError(f"Unknown command: {unknown}")
+        return []
 
     def execute_run_clang_tidy(build_dir: pathlib.Path) -> int:
         return subprocess.run(

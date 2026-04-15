@@ -28,10 +28,12 @@ limitations under the License.
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "common/macros.h"
+#include "common/status.h"
 #include "constants.h"
 #include "device_mgr.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
+#include "os/command_utils.h"
 
 namespace Dive
 {
@@ -154,7 +156,7 @@ absl::Status AndroidApplication::ParsePackage()
 absl::Status AndroidApplication::Cleanup()
 {
     LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " started";
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_file \\\"\\\""));
         RETURN_IF_ERROR(
@@ -163,6 +165,8 @@ absl::Status AndroidApplication::Cleanup()
             m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file false"));
         RETURN_IF_ERROR(
             m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger \\\"\\\""));
+        RETURN_IF_ERROR(m_dev.Adb().Run(
+            "shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end \\\"\\\""));
         if (!m_package.empty())
         {
             RETURN_IF_ERROR(m_dev.Adb().Run(
@@ -188,7 +192,7 @@ absl::Status AndroidApplication::Cleanup()
         .IgnoreError();
     adb.Run(absl::StrFormat("shell setprop debug.vulkan.layers \"''\"")).IgnoreError();
 
-    m_gfxr_enabled = false;
+    m_gfxr_capture_settings = {};
     m_runtime_what_if_enabled = false;
     LOG(INFO) << "AndroidApplication::Cleanup() package " << m_package << " ended";
 
@@ -269,7 +273,7 @@ absl::Status GLESApplication::Setup()
 {
     RETURN_IF_ERROR(GrantAllFilesAccess());
     Stop().IgnoreError();
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         return absl::UnimplementedError("GFXR capture for GLES application is not supported.");
     }
@@ -311,7 +315,7 @@ absl::Status GLESApplication::Pm4CaptureCleanup()
 
 absl::Status GLESApplication::Cleanup()
 {
-    if (!m_gfxr_enabled)
+    if (!m_gfxr_capture_settings)
     {
         RETURN_IF_ERROR(Pm4CaptureCleanup());
     }
@@ -336,7 +340,7 @@ absl::Status VulkanApplication::Setup()
         return absl::OkStatus();
     }
 
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         RETURN_IF_ERROR(GfxrSetup());
     }
@@ -377,18 +381,13 @@ absl::Status VulkanApplication::Pm4CaptureCleanup()
 
 absl::Status VulkanApplication::Cleanup()
 {
-    if (!m_gfxr_enabled)
-    {
-        RETURN_IF_ERROR(Pm4CaptureCleanup());
-    }
-
     auto status = AndroidApplication::Cleanup();
     if (!status.ok())
     {
         return status;
     }
 
-    if (!m_gfxr_enabled && !m_runtime_what_if_enabled)
+    if (!m_gfxr_capture_settings && !m_runtime_what_if_enabled)
     {
         RETURN_IF_ERROR(Pm4CaptureCleanup());
     }
@@ -397,7 +396,10 @@ absl::Status VulkanApplication::Cleanup()
     return absl::OkStatus();
 }
 
-void AndroidApplication::SetGfxrEnabled(bool enable) { m_gfxr_enabled = enable; }
+void AndroidApplication::SetGfxrCaptureSettings(std::optional<GfxrCaptureSettings> settings)
+{
+    m_gfxr_capture_settings = std::move(settings);
+}
 
 void AndroidApplication::SetRuntimeWhatIfEnabled(bool enable)
 {
@@ -467,6 +469,12 @@ absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory
 
 absl::Status AndroidApplication::GfxrSetup()
 {
+    if (!m_gfxr_capture_settings)
+    {
+        return Dive::FailedPreconditionError(
+            "Called GfxrSetup without calling SetGfxrCaptureSettings first!");
+    }
+
     LOG(INFO) << "AndroidApplication::GfxrSetup() package " << m_package << " started";
     RETURN_IF_ERROR(
         m_dev.DeployDeviceResource(Dive::DeviceResourcesConstants::kVkGfxrLayerLibName));
@@ -489,8 +497,9 @@ absl::Status AndroidApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run(
         absl::StrFormat("shell settings put global gpu_debug_layer_app %s", m_package)));
 
-    std::string gfxr_capture_directory = absl::StrCat(
-        Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/", m_gfxr_capture_file_directory);
+    std::string gfxr_capture_directory =
+        absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
+                     m_gfxr_capture_settings->capture_file_directory);
 
     std::string capture_file_location =
         absl::StrCat(gfxr_capture_directory, "/", m_package, ".gfxr");
@@ -505,6 +514,19 @@ absl::Status AndroidApplication::GfxrSetup()
 
     // capture_android_trigger must be set in order for GFXR to listen for triggers.
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
+
+    AdbSession& adb = m_dev.Adb();
+    switch (m_gfxr_capture_settings->end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end false"));
+            break;
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end true"));
+            break;
+    }
 
     LOG(INFO) << "AndroidApplication::GfxrSetup() package " << m_package << " done";
     return absl::OkStatus();
@@ -561,7 +583,7 @@ absl::Status OpenXRApplication::Setup()
         return absl::OkStatus();
     }
 
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         RETURN_IF_ERROR(GfxrSetup());
     }
@@ -588,7 +610,7 @@ absl::Status OpenXRApplication::Pm4CaptureSetup()
 
 absl::Status OpenXRApplication::Cleanup()
 {
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
         // `debug.openxr.enable_frame_delimiter`
@@ -655,7 +677,7 @@ absl::Status VulkanCliApplication::Setup()
         return absl::OkStatus();
     }
 
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         RETURN_IF_ERROR(GfxrSetup());
     }
@@ -700,7 +722,7 @@ absl::Status VulkanCliApplication::WaitForProcessToStart()
 absl::Status VulkanCliApplication::Start()
 {
     std::string cmd;
-    if (m_gfxr_enabled)
+    if (m_gfxr_capture_settings)
     {
         cmd = absl::StrFormat("shell %s %s", m_command, m_command_args);
     }
@@ -727,6 +749,11 @@ absl::Status VulkanCliApplication::Stop()
 
 absl::Status VulkanCliApplication::GfxrSetup()
 {
+    if (!m_gfxr_capture_settings)
+    {
+        return Dive::FailedPreconditionError(
+            "Called GfxrSetup without calling SetGfxrCaptureSettings first!");
+    }
     LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " started";
     RETURN_IF_ERROR(m_dev.DeployDeviceResource(
         /*file_name=*/Dive::DeviceResourcesConstants::kVkGfxrLayerLibName,
@@ -735,8 +762,9 @@ absl::Status VulkanCliApplication::GfxrSetup()
     RETURN_IF_ERROR(
         m_dev.Adb().Run(absl::StrFormat("shell setprop debug.vulkan.layers %s", kVkGfxrLayerName)));
 
-    std::string gfxr_capture_directory = absl::StrCat(
-        Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/", m_gfxr_capture_file_directory);
+    std::string gfxr_capture_directory =
+        absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
+                     m_gfxr_capture_settings->capture_file_directory);
     std::string command_filename = std::filesystem::path(m_command).filename().string();
     std::string capture_file_location =
         absl::StrCat(gfxr_capture_directory, "/", command_filename, ".gfxr");
@@ -747,6 +775,19 @@ absl::Status VulkanCliApplication::GfxrSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_trigger_frames 1"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_use_asset_file true"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger false"));
+
+    AdbSession& adb = m_dev.Adb();
+    switch (m_gfxr_capture_settings->end_point)
+    {
+        case GfxrCaptureSettings::EndPoint::kFrame:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end false"));
+            break;
+        case GfxrCaptureSettings::EndPoint::kQueueSubmit:
+            RETURN_IF_ERROR(
+                adb.Run("shell setprop debug.gfxrecon.capture_queue_submit_is_frame_end true"));
+            break;
+    }
     LOG(INFO) << "VulkanCliApplication::GfxrSetup() cmd " << m_command << " ended";
     return absl::OkStatus();
 }

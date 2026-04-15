@@ -434,16 +434,14 @@ absl::Status WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device,
     {
         setup_app_res =
             device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
-                             Dive::ApplicationType::OPENXR_APK, m_runtime_data.command_args,
-                             /*gfxr_capture_directory*/ "");
+                             Dive::ApplicationType::OPENXR_APK, m_runtime_data.command_args);
     }
     else if (app_type == Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkan_Non_OpenXR)]
                              .ui_name.data())
     {
         setup_app_res =
             device->SetupApp(m_runtime_data.cur_pkg.toStdString(),
-                             Dive::ApplicationType::VULKAN_APK, m_runtime_data.command_args,
-                             /*gfxr_capture_directory*/ "");
+                             Dive::ApplicationType::VULKAN_APK, m_runtime_data.command_args);
     }
     else if (app_type ==
              Dive::kAppTypeInfos[static_cast<size_t>(Dive::AppType::kVulkanCLI_Non_OpenXR)]
@@ -457,8 +455,7 @@ absl::Status WhatIfSetupDialog::StartPackage(Dive::AndroidDevice* device,
                  << " args: " << m_runtime_data.command_args.c_str();
         setup_app_res =
             device->SetupApp(m_runtime_data.cur_pkg.toStdString(), m_runtime_data.command_args,
-                             Dive::ApplicationType::VULKAN_CLI,
-                             /*gfxr_capture_directory*/ "");
+                             Dive::ApplicationType::VULKAN_CLI);
     }
     if (!setup_app_res.ok())
     {

@@ -89,29 +89,34 @@ export PATH=$QTDIR/bin:$PATH
 export DIVE_ROOT_PATH=~/src/dive
 ```
 
+# External Dive Plugins
+Place pre-built plugins under `plugins/external/` and they will be copied to `build/pkg/plugins/` by the build script automatically.
+
 # Building Dive
 
 ## Host and Device Libraries
 
 This will run the default (entire) build process except for:
-* Placing external (to this repo) plugins in the appropriate folder `build/pkg/plugins/`
 * On macOS, for Debug builds, you will still need to make the app bundle and sign it
 * Cross-platform release process
 
 TODO: b/484082504 - Add more stages for packaging and deploying to the unified build script
 
 ```sh
-# TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
-
 python scripts/build.py
+
+# TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022 (or 2019)
+#      and use --build-via-generator to build through VS and use multiple cores for speed
+
+python scripts/build.py --build-via-generator
 ```
 
 ### Custom Building Tips
 
 * On Windows, using the Visual Studio UI for the host build can be clearer than building it on the command line. To do that, split the build process like so:
-    1. Generate the Visual Studio Solution
+    1. Do all actions up to and including generating the Visual Studio Solution
         ```bat
-        python scripts/build.py --actions configure_host
+        python scripts/build.py --actions < the prior... >,configure_host
         ```
     1. Compile manually in Visual Studio (same as `python scripts/build.py --actions build_host`)
         * Open Visual Studio UI and build target ALL_BUILD

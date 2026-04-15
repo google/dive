@@ -25,7 +25,7 @@ def find_program(candidate: str) -> pathlib.Path | None:
     if candidate_path.exists():
         return candidate_path
 
-    raise argparse.ArgumentTypeError(f"Can't find program: {candidate}")
+    return None
 
 
 def git_diff(git: pathlib.Path, commit: str) -> list[str]:
@@ -47,6 +47,22 @@ def git_diff(git: pathlib.Path, commit: str) -> list[str]:
 
 
 def parse_args() -> argparse.Namespace:
+    def find_program_or_die(candidate: str) -> pathlib.Path:
+        program = find_program(candidate)
+        if program is None:
+            raise argparse.ArgumentTypeError(f"Can't find program: {candidate}")
+        return program
+
+    def find_run_clang_tidy(candidate: str) -> pathlib.Path:
+        program = find_program_or_die(candidate)
+        process = subprocess.run([program, "--help"], capture_output=True, text=True)
+        if "-source-filter" not in process.stdout:
+            raise argparse.ArgumentTypeError(
+                f"run-clang-tidy doesn't support -source-filter. Need at least run-clang-tidy-19. "
+                f"Tried: {candidate}"
+            )
+        return program
+
     build_dir = dive.get_dive_root() / "build"
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -76,7 +92,7 @@ def parse_args() -> argparse.Namespace:
     )
     git_diff_subparser.add_argument(
         "--git",
-        type=find_program,
+        type=find_program_or_die,
         default="git",
         help="Path to git.",
     )
@@ -89,9 +105,12 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--run_clang_tidy",
-        type=find_program,
+        type=find_run_clang_tidy,
         default="run-clang-tidy",
-        help="Path to run-clang-tidy or run-clang-tidy.py.",
+        help=(
+            "Path to run-clang-tidy or run-clang-tidy.py. Must support -source-filter (at least "
+            "run-clang-tidy-19)"
+        ),
     )
     parser.add_argument(
         "--host_build_dir",

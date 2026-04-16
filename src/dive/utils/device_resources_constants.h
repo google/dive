@@ -89,7 +89,7 @@ Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN
     // -------------------------------------------------------------------------
 
     // The absolute path to the standard Download directory on Android.
-    static constexpr char kDeviceDownloadPath[] = "/sdcard/Download";
+    static constexpr char kDeviceDownloadPath[] = "/data/local/tmp/dive";
     // The name of the temporary staging directory created on the device.
     static constexpr char kDeviceStagingDirectoryName[] = "dive_capture_files";
 };

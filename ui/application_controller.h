@@ -32,7 +32,7 @@ class ApplicationController : public QObject
     ApplicationController();
     ~ApplicationController();
 
-    bool IsInteractive();
+    bool IsInteractive() const;
     void SetInteractive(bool enabled);
 
     void Register(MainWindow&);

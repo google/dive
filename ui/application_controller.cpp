@@ -38,7 +38,7 @@ ApplicationController::ApplicationController() {}
 
 ApplicationController::~ApplicationController() {}
 
-bool ApplicationController::IsInteractive() { return m_impl->m_interactive; }
+bool ApplicationController::IsInteractive() const { return m_impl->m_interactive; }
 void ApplicationController::SetInteractive(bool enabled) { m_impl->m_interactive = enabled; }
 
 void ApplicationController::Register(MainWindow& main_window)

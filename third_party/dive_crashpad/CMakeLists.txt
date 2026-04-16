@@ -21,6 +21,38 @@ project(dive_crashpad)
 message(CHECK_START "Generate build files for third_party/dive_crashpad")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
+add_library(
+    dive_crashpad
+    SHARED
+    include/dive_crashpad/crashpad_client.h
+    dive_crashpad/crashpad_client.cpp
+)
+
+target_link_libraries(
+    dive_crashpad
+    PRIVATE
+    dive_crashpad_static
+)
+
+target_include_directories(dive_crashpad PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+
+if(MSVC)
+    target_compile_definitions(dive_crashpad PRIVATE DIVE_CRASHPAD_LIB_BUILD)
+endif()
+
+if(NOT DIVE_BUILD_WITH_CRASHPAD)
+    add_library(
+        dive_crashpad_static
+        STATIC
+        dive_crashpad/crashpad_client.h
+        dive_crashpad/crashpad_client_stub.cpp
+    )
+    target_include_directories(dive_crashpad_static PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
+    list(POP_BACK CMAKE_MESSAGE_INDENT)
+    message(CHECK_PASS "done (stub implementation)")
+    return()
+endif()
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 if(WIN32)
@@ -112,26 +144,27 @@ add_custom_target(
 )
 
 add_library(
-    dive_crashpad
+    dive_crashpad_static
     STATIC
-    $<$<CONFIG:RelWithDebInfo>:dive_crashpad/crashpad_client.cpp>
+    $<$<CONFIG:RelWithDebInfo>:dive_crashpad/crashpad_client_impl.cpp>
     $<$<NOT:$<CONFIG:RelWithDebInfo>>:dive_crashpad/crashpad_client_stub.cpp>
-    dive_crashpad/crashpad_client.h
+    dive_crashpad/crashpad_client_impl.h
     dive_crashpad/crashpad_utils.h
     dive_crashpad/${PLATFORM_UTILS}
 )
 
 add_dependencies(dive_crashpad dive_crashpad_ensure_binaries)
+add_dependencies(dive_crashpad_static dive_crashpad_ensure_binaries)
 
 target_link_libraries(
-    dive_crashpad
+    dive_crashpad_static
     PUBLIC absl::base absl::status absl::strings
     PRIVATE $<$<CONFIG:RelWithDebInfo>:${CACHED_LIBS}>
 )
 
 if(APPLE)
     target_link_libraries(
-        dive_crashpad
+        dive_crashpad_static
         PRIVATE
             "-framework AppKit"
             "-framework CoreFoundation"
@@ -141,14 +174,14 @@ if(APPLE)
     )
 endif()
 
-target_include_directories(dive_crashpad PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
+target_include_directories(dive_crashpad_static PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
 target_include_directories(
-    dive_crashpad
+    dive_crashpad_static
     PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/crashpad"
         "${CMAKE_CURRENT_BINARY_DIR}/crashpad/third_party/mini_chromium/mini_chromium"
 )
-target_include_directories(dive_crashpad PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(dive_crashpad_static PUBLIC "${CMAKE_SOURCE_DIR}/src")
 
 add_executable(crashpad_handler_exe IMPORTED GLOBAL)
 set_property(

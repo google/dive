@@ -14,16 +14,15 @@
  limitations under the License.
 */
 
-#include "dive_crashpad/crashpad_client.h"
+#pragma once
 
-#include "crashpad_client_impl.h"
+#include <string>
+
+#include "absl/status/status.h"
 
 namespace Dive
 {
 
-absl::Status InitializeCrashpad(const std::string& product_name)
-{
-    return InitializeCrashpadImpl(product_name);
-}
+absl::Status InitializeCrashpadImpl(const std::string& product_name);
 
 }  // namespace Dive

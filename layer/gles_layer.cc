@@ -136,6 +136,8 @@ EGLAPI EGLFuncPointer EGLAPIENTRY glesLayer_GetLayerProcAddress(const char* func
 
 extern "C"
 {
+    __attribute__((constructor)) void AndroidGlesEarlyInit() { SetLayerStatusLoaded(); }
+
     __attribute((visibility("default"))) EGLAPI void AndroidGLESLayer_Initialize(
         void* layer_id, PFNEGLGETNEXTLAYERPROCADDRESSPROC get_next_layer_proc_address)
     {

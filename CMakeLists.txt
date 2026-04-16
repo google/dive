@@ -63,10 +63,11 @@ set(DIVE_INSTALL_DEST_HOST "host") # Should only be used as destination for host
 set(DIVE_INSTALL_DEST_DEVICE "device") # Should only be used as destination for device builds
 # Plugins folders
 set(DIVE_PLUGINS_PARENT_DIR "plugins")
-set(DIVE_INSTALL_DEST_SAMPLE_PLUGIN "dive_sample_plugin")
+set(DIVE_HOST_PLUGINS_INSTALL_DIR "plugins")
 set(DIVE_PROFILING_PLUGIN_DIR "dive_profiling_plugin") # This is not built within Dive
 # macOS bundle
 set(DIVE_MACOS_BUNDLE_RESOURCES "Resources")
+set(DIVE_MACOS_BUNDLE_PLUGINS "PlugIns/dive_plugins")
 # License file
 set(DIVE_LICENSE_FILE_NAME "NOTICE")
 

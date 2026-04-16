@@ -56,6 +56,8 @@ target_link_libraries(gfxrecon-replay
                           $<$<BOOL:${D3D12_SUPPORT}>:dxgi.lib>
                           $<$<BOOL:${DXC_FOUND}>:${DXC_LIBRARY_PATH}>)
 
+target_link_libraries(gfxrecon-replay gfxr_decode_ext_lib)
+
 target_link_options(gfxrecon-replay PUBLIC "-rdynamic")
 
 if (MSVC)

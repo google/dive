@@ -16,6 +16,7 @@ limitations under the License.
 
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "absl/status/status.h"
@@ -48,6 +49,16 @@ std::string ParsePackageForActivity(const std::string& input, const std::string&
 
 class AndroidDevice;
 
+struct GfxrCaptureSettings
+{
+    std::string capture_file_directory;
+    enum class EndPoint
+    {
+        kFrame,
+        kQueueSubmit,
+    } end_point = EndPoint::kFrame;
+};
+
 class AndroidApplication
 {
  public:
@@ -68,15 +79,12 @@ class AndroidApplication
     bool IsStarted() const { return m_started; }
     virtual bool IsRunning() const;
     virtual absl::Status IsAppRunningOnForeground() const;
-    void SetGfxrEnabled(bool enable);
+    // nullopt means no GFXR capture will take place.
+    void SetGfxrCaptureSettings(std::optional<GfxrCaptureSettings> settings);
     void SetRuntimeWhatIfEnabled(bool enable);
     absl::Status RuntimeWhatIfSetup();
     absl::Status RuntimeWhatIfCleanup();
 
-    void SetGfxrCaptureFileDirectory(const std::string& capture_file_directory)
-    {
-        m_gfxr_capture_file_directory = capture_file_directory;
-    };
     absl::Status CreateGfxrDirectory(const std::string command_args);
     virtual absl::Status GfxrSetup();
     virtual absl::Status Pm4CaptureSetup();
@@ -93,11 +101,10 @@ class AndroidApplication
     std::string m_main_activity;
     std::string m_command_args;
 
-    std::string m_gfxr_capture_file_directory;
     bool m_is_debuggable = false;
     bool m_started = false;
 
-    bool m_gfxr_enabled = false;
+    std::optional<GfxrCaptureSettings> m_gfxr_capture_settings;
     bool m_runtime_what_if_enabled = false;
 };
 

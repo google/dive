@@ -31,6 +31,7 @@ limitations under the License.
 #include "common/status.h"
 #include "constants.h"
 #include "device_mgr.h"
+#include "dive/utils/component_files_constants.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
 
@@ -39,11 +40,12 @@ namespace
 std::string GetGfxrCaptureFilePath(absl::string_view gfxr_capture_directory,
                                    absl::string_view file_name)
 {
-    // Android system property value length limit
-    // See https://source.android.com/docs/core/architecture/configuration/archive#system-properties
-    constexpr size_t kMaxSetPropLength = 92;
-    constexpr absl::string_view kExtension = ".gfxr";
-    constexpr absl::string_view kDefaultName = "dive_capture";
+    // TODO: b/503812460 - Find better workarounds for the GFXR capture file name length limit on
+    // Android.
+    constexpr size_t kMaxSetPropLength = Dive::DeviceResourcesConstants::kMaxSetPropLength;
+    constexpr absl::string_view kExtension = Dive::ComponentFileConstants::kGfxrExt;
+    constexpr absl::string_view kDefaultName =
+        Dive::DeviceResourcesConstants::kDefaultGfxrCaptureName;
 
     size_t fixed_overhead = gfxr_capture_directory.size() + 1 + kExtension.size();
 

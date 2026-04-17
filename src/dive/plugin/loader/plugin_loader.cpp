@@ -151,6 +151,7 @@ absl::Status PluginLoader::LoadPlugins()
         if (!plugin->Initialize(m_bridge))
         {
             append_error_message("Failed to initialize plugin: " + plugin->PluginName());
+            continue;
         }
 
         m_loaded_plugin_entries.emplace_back(std::move(library_handle_ptr), std::move(plugin));

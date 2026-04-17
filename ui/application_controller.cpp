@@ -18,6 +18,7 @@
 
 #include <QAction>
 #include <QCoreApplication>
+#include <QDebug>
 #include <QMenu>
 #include <QMessageBox>
 
@@ -28,6 +29,7 @@ struct ApplicationController::Impl
 {
     MainWindow* m_main_window = nullptr;
     QAction* m_advanced_option = nullptr;
+    bool m_interactive = true;
 
     Dive::PluginLoader m_plugin_manager;
 };
@@ -35,6 +37,9 @@ struct ApplicationController::Impl
 ApplicationController::ApplicationController() {}
 
 ApplicationController::~ApplicationController() {}
+
+bool ApplicationController::IsInteractive() const { return m_impl->m_interactive; }
+void ApplicationController::SetInteractive(bool enabled) { m_impl->m_interactive = enabled; }
 
 void ApplicationController::Register(MainWindow& main_window)
 {
@@ -63,6 +68,17 @@ void ApplicationController::MainWindowInitialized()
 
 void ApplicationController::MainWindowClosed() { m_impl->m_plugin_manager.UnloadPlugins(); }
 
+void ApplicationController::NotifyWarning(QWidget* parent, const QString& title,
+                                          const QString& text)
+{
+    if (!IsInteractive())
+    {
+        qDebug() << "Warning dialog: " << title << ": " << text;
+        return;
+    }
+    QMessageBox::warning(parent, title, text);
+}
+
 bool ApplicationController::InitializePlugins()
 {
     if (!m_impl->m_main_window)
@@ -72,7 +88,7 @@ bool ApplicationController::InitializePlugins()
 
     if (absl::Status load_status = m_impl->m_plugin_manager.LoadPlugins(); !load_status.ok())
     {
-        QMessageBox::warning(
+        NotifyWarning(
             m_impl->m_main_window, tr("Plugin Loading Failed"),
             tr("Error: '%1'").arg(QString::fromStdString(std::string(load_status.message()))));
         return false;

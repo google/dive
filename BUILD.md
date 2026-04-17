@@ -1,6 +1,6 @@
 # Prerequisites
 
-- Visual Studio Professional (Windows Only): To build on Windows, you must use Visual Studio Professional 2022. Other editions, such as Visual Studio Community will not work for this build environment.
+- Visual Studio Professional (Windows Only): To build on Windows, you must use Visual Studio Professional (2022 version is recommended). Other editions such as Visual Studio Community will not work for this build environment.
 - CMake
 - Ninja
 - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.

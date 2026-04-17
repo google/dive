@@ -18,6 +18,7 @@ import argparse
 import common_dive_utils as dive
 import enum
 import os
+import pathlib
 import platform
 import shutil
 
@@ -27,17 +28,23 @@ import shutil
 EXTERNAL_PLUGINS_DIR = "plugins/external"
 # Build directory structure relative to --root-build-dir
 PKG_DIR = "pkg"
+APP_DIR = "dive_app"
 # CMake generator names
 NINJA_MULTI_CONFIG_NAME = "Ninja Multi-Config"
+# For release
+WINDOWS_UNNECESSARY_DIRS = ["translations"]
+WINDOWS_QT_DEPENDENCIES_BINARY = "dive_gui_lib.dll"
 
 
-# TODO: b/484082504 - Add more stages for packaging and deploying (incorporate scripts/deploy_mac_bundle.py)
 class ActionType(enum.StrEnum):
     COPY_PLUGINS = "copy_plugins"       # copy external plugins into pkg dir
     CONFIGURE_HOST = "configure_host"
     BUILD_HOST = "build_host"           # separated to make VS builds using the UI easy
     INSTALL_HOST = "install_host"
     ALL_DEVICE = "all_device"           # configure, build, and install device libraries
+    DEPLOY_QT = "deploy_qt"
+    CLEAN_AND_ZIP = "clean_and_zip"     # removes some extraneous files and compresses the release
+
 
 class BuildType(enum.StrEnum):
     DEBUG = "Debug"
@@ -63,44 +70,51 @@ def parse_args():
         help="Build type for Dive (excluding GFXR gradle build which is always Debug)")
     parser.add_argument(
         "--build-via-generator",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform")
     parser.add_argument(
-        "--bypass-prereq-checks",
-        action="store_true",
-        help="Bypass the check for if prerequisites are located as expected")
+        "--prereq-checks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Check if prerequisites are located as expected")
     parser.add_argument(
         "--ci",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Build is part of continuous integration")
-    parser.add_argument(
-        "--clean-build",
-        action="store_true",
-        help="Attempt to clean the entire build folder before building")
-    parser.add_argument(
-        "--cmake-exec",
-        default="cmake",
-        help="The name of the CMake executable on the path")
     parser.add_argument(
         "--dive-release-type",
         default="dev",
         help="Description string for Dive version info")
     parser.add_argument(
-        "--host-configure-additional-flags",
-        help="String of additional CMake flags to pass directly to cmake in the "
-        "configure_host stage.")
+        "--exec-cmake",
+        default="cmake",
+        help="The name of the CMake executable on the path")
     parser.add_argument(
-        "--list-actions",
-        action="store_true",
-        help="Build is part of continuous integration")
+        "--exec-deployqt",
+        help="The path to the platform-specific deployqt executable, if blank will use windeployqt/macdeployqt")
     parser.add_argument(
-        "--msbuild-exec",
+        "--exec-msbuild",
         default="msbuild",
         help="The name of the Microsoft Build Engine executable on the path")
     parser.add_argument(
-        "--ninja-exec",
+        "--exec-ninja",
         default="ninja",
         help="The name of the ninja executable on the path")
+    parser.add_argument(
+        "--exec-tar",
+        default="tar",
+        help="The name of the tar executable on the path")
+    parser.add_argument(
+        "--host-configure-additional-flags",
+        help="String of additional CMake flags to pass directly to cmake in the "
+        "configure_host stage")
+    parser.add_argument(
+        "--list-actions",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="List all actions this script can perform in the order they will be performed")
     parser.add_argument(
         "--root-build-dir",
         default="build",
@@ -120,54 +134,91 @@ def list_actions():
         print(f"{i+1}. {action}")
 
 
-def parse_actions(lis):
-    """Parses lis and returns a list of valid ActionType actions
+def parse_actions(args):
+    """Parses args.actions and changes it in-place into a list of valid ActionType actions
     """
     allowed_actions = [str(x) for x in ActionType]
     actions = []
-    if lis:
-        comma_separated = lis.split(",")
+    if args.actions:
+        comma_separated = args.actions.split(",")
         for action in comma_separated:
             if action not in allowed_actions:
                 raise Exception(f"Invalid action specified: '{action}', refer "
                                 "to --list-actions for the valid list OR leave blank to run all")
             actions.append(action)
     else:
-        actions = [x for x in ActionType]
+        actions = []
+        for action in ActionType:
+            actions.append(action)
+            if (args.build_type == BuildType.DEBUG) and (action == ActionType.ALL_DEVICE) and (platform.system() != "Darwin"):
+                # For Windows and Linux Debug builds, by default the last action is ALL_DEVICE
+                break
+            if (args.build_type == BuildType.DEBUG) and (action == ActionType.DEPLOY_QT) and (platform.system() == "Darwin"):
+                # For macOS Debug builds, by default the last action is DEPLOY_QT
+                break
 
     str_actions = ", ".join(actions)
-    print(f"\nQueued actions, not listed in order: {str_actions}")
+    print(f"\nQueued actions, not necessarily listed in order: {str_actions}")
 
-    return actions
+    args.actions = actions
+
+
+def check_intersect(lis1, lis2):
+    intersect = set(lis1) & set(lis2)
+    return len(intersect) > 0
 
 
 def check_environment(args):
     """Checks for env vars and executables that will be used by this script.
-    Can be disabled with --bypass-prereq-checks
+    Overwrites some args.exec_* values in-place with valid ones.
+    Can be disabled with --no-prereq-checks
     """
-    if args.build_type != "Debug":
-        print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
-    print("\nChecking env vars...")
-    if "ANDROID_NDK_HOME" not in os.environ:
-        raise Exception("ANDROID_NDK_HOME env var must be set")
+    if check_intersect([ActionType.ALL_DEVICE], args.actions):
+        if args.build_type != BuildType.DEBUG:
+            print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
 
-    print("\nChecking cmake...")
-    cmd = [args.cmake_exec, "--version"]
-    dive.echo_and_run(cmd)
+        print("\nChecking ANDROID_NDK_HOME...")
+        if "ANDROID_NDK_HOME" not in os.environ:
+            raise Exception("ANDROID_NDK_HOME env var must be set")
 
-    print("\nChecking ninja...")
-    cmd = [args.ninja_exec, "--version"]
-    dive.echo_and_run(cmd)
-
-    if (platform.system() == "Windows") and (args.build_via_generator):
-        cmd = [args.msbuild_exec, "--version"]
+    cmake_actions = [ActionType.CONFIGURE_HOST, ActionType.BUILD_HOST, ActionType.INSTALL_HOST, ActionType.ALL_DEVICE]
+    if check_intersect(cmake_actions, args.actions):
+        cmd = [args.exec_cmake, "--version"]
         dive.echo_and_run(cmd)
 
+    check_ninja = False
+    if ActionType.ALL_DEVICE in args.actions:
+        check_ninja = True
+    elif platform.system() in ["Linux", "Darwin"]:
+        if (ActionType.BUILD_HOST in args.actions) and args.build_via_generator:
+            check_ninja = True
+    if check_ninja:
+        cmd = [args.exec_ninja, "--version"]
+        dive.echo_and_run(cmd)
 
-def clean_build(args):
-    if os.path.exists(args.root_build_dir):
-        print("\nClearing build folder...")
-        shutil.rmtree(args.root_build_dir)
+    if (platform.system() == "Windows") and (args.build_via_generator) and (ActionType.BUILD_HOST in args.actions):
+        cmd = [args.exec_msbuild, "--version"]
+        dive.echo_and_run(cmd)
+
+    if ActionType.DEPLOY_QT in args.actions:
+        deploy_qt_exec = args.exec_deployqt
+        if not deploy_qt_exec:
+            if (platform.system() == "Darwin"):
+                deploy_qt_exec = "macdeployqt"
+
+            elif (platform.system() == "Windows"):
+                deploy_qt_exec = "windeployqt"
+
+        if deploy_qt_exec:
+            # Cannot check the --version because for some reason the return code is nonzero
+            deployqt_found = shutil.which(deploy_qt_exec)
+            if not deployqt_found:
+                raise Exception(f"{deploy_qt_exec} not found on the Path")
+            args.exec_deployqt = deploy_qt_exec
+
+    if (platform.system() == "Windows") and (ActionType.CLEAN_AND_ZIP in args.actions):
+        cmd = [args.exec_tar, "--version"]
+        dive.echo_and_run(cmd)
 
 
 def copy_plugins(args):
@@ -187,13 +238,13 @@ def configure_host(args):
     """
     print("\nGenerating build files with cmake...")
     if platform.system() in ["Linux", "Darwin"]:
-        cmd = [args.cmake_exec, ".",
+        cmd = [args.exec_cmake, ".",
                f'-G{NINJA_MULTI_CONFIG_NAME}',
                f"-B{args.root_build_dir}/host",
                f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
                ]
     elif platform.system() == "Windows":
-        cmd = [args.cmake_exec, ".",
+        cmd = [args.exec_cmake, ".",
                f"-G{args.visual_studio_name}",
                f"-B{args.root_build_dir}/host",
                f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
@@ -212,19 +263,19 @@ def build_host(args):
     """
     if not args.build_via_generator:
         print("\nBuilding host libraries by invoking cmake...")
-        cmd = [args.cmake_exec,
+        cmd = [args.exec_cmake,
                "--build", f"{args.root_build_dir}/host",
                "--config", f"{args.build_type}"
                ]
     elif platform.system() in ["Linux", "Darwin"]:
         print("\nBuilding host libraries by invoking Ninja...")
-        cmd = [args.ninja_exec,
+        cmd = [args.exec_ninja,
                "-f", f"build-{args.build_type}.ninja",
                "-C", f"{args.root_build_dir}/host"
                ]
     elif platform.system() == "Windows":
         print("\nBuilding host libraries by invoking Visual Studio...")
-        cmd = [args.msbuild_exec, f"{args.root_build_dir}/host/ALL_BUILD.vcxproj",
+        cmd = [args.exec_msbuild, f"{args.root_build_dir}/host/ALL_BUILD.vcxproj",
                "-maxCpuCount",
                "-t:Rebuild",
                f"-p:Configuration={args.build_type}"
@@ -245,7 +296,7 @@ def install_host(args):
         shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host")
 
     print("\nInstalling with cmake...")
-    cmd = [args.cmake_exec,
+    cmd = [args.exec_cmake,
            "--install", f"{args.root_build_dir}/host",
            "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
            "--config", f"{args.build_type}"
@@ -258,7 +309,7 @@ def all_device(args):
     """
     print("\nGenerating build files with cmake...")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
-    cmd = [args.cmake_exec, ".",
+    cmd = [args.exec_cmake, ".",
            f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
            f"-G{NINJA_MULTI_CONFIG_NAME}",
            f"-B{args.root_build_dir}/device",
@@ -274,7 +325,7 @@ def all_device(args):
     dive.echo_and_run(cmd)
 
     print("\nBuilding with ninja...")
-    cmd = [args.ninja_exec,
+    cmd = [args.exec_ninja,
            "-C", f"{args.root_build_dir}/device",
            "-f", f"build-{args.build_type}.ninja"
            ]
@@ -288,12 +339,71 @@ def all_device(args):
         shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/device")
 
     print("\nInstalling with cmake...")
-    cmd = [args.cmake_exec,
+    cmd = [args.exec_cmake,
            "--install", f"{args.root_build_dir}/device",
            "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
            "--config", f"{args.build_type}"
            ]
     dive.echo_and_run(cmd)
+
+
+def deploy_qt(args):
+    """Implements ActionType.DEPLOY_QT stage
+    """
+    # TODO: b/484082504 - Support other platforms
+    if (platform.system() == "Linux"):
+        print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
+        return
+
+    elif (platform.system() == "Darwin"):
+        print("\ndeploy_qt() is UNIMPLEMENTED for macOS...")
+        return
+
+    elif (platform.system() == "Windows"):
+        print(f"\nDeploying with {args.exec_deployqt}...")
+        cmd = [args.exec_deployqt, 
+               f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}"
+               ]
+        dive.echo_and_run(cmd)
+
+    else:
+        raise Exception(f"Unrecognized platform: {platform.system()}")
+
+
+def clean_and_zip(args):
+    """Implements ActionType.CLEAN_AND_ZIP stage
+    """
+    # TODO: b/484082504 - Support other platforms
+    if (platform.system() == "Linux"):
+        print("\nclean_and_zip() is UNIMPLEMENTED for Linux...")
+        return
+
+    elif (platform.system() == "Darwin"):
+        print("\nclean_and_zip() is UNIMPLEMENTED for macOS...")
+        return
+
+    elif (platform.system() == "Windows"):
+        for dir_name in WINDOWS_UNNECESSARY_DIRS:
+            if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}"):
+                print(f"\nClearing unnecessary {dir_name} folder...")
+                shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
+    
+        print("\nZipping with tar...")
+        former_dir = os.getcwd()
+        os.chdir(f"{args.root_build_dir}/{PKG_DIR}")
+        cmd = [args.exec_tar, "-a", "-c", "-v", "-f", f"{APP_DIR}.zip", "--exclude", f"{APP_DIR}.zip", "*"]
+        dive.echo_and_run(cmd)
+        os.chdir(former_dir)
+
+        final_location_zip = pathlib.Path(f"{args.root_build_dir}/{APP_DIR}.zip")
+        if final_location_zip.exists():
+            print("\nClearing previous archive...")
+            final_location_zip.unlink()
+        print(f"\nMoving zip archive to {os.getcwd()}/{args.root_build_dir}/{APP_DIR}.zip...")
+        shutil.move(f"{args.root_build_dir}/{PKG_DIR}/{APP_DIR}.zip", final_location_zip)
+
+    else:
+        raise Exception(f"Unrecognized platform: {platform.system()}")
 
 
 def main():
@@ -304,33 +414,38 @@ def main():
         list_actions()
         return
 
-    actions = parse_actions(args.actions)
+    parse_actions(args)
 
     if not args.ci:
         dive_root_path = dive.get_dive_root()
         os.chdir(dive_root_path)
 
+    if args.prereq_checks:
+        print(f"\nChecking build environment...")
+        check_environment(args)
+
     with dive.Timer("total"):
-        if not args.bypass_prereq_checks:
-            print(f"\nChecking build environment...")
-            check_environment(args)
-        if args.clean_build:
-            clean_build(args)
-        if ActionType.COPY_PLUGINS in actions:
+        if ActionType.COPY_PLUGINS in args.actions:
             with dive.Timer(ActionType.COPY_PLUGINS):
                 copy_plugins(args)
-        if ActionType.CONFIGURE_HOST in actions:
+        if ActionType.CONFIGURE_HOST in args.actions:
             with dive.Timer(ActionType.CONFIGURE_HOST):
                 configure_host(args)
-        if ActionType.BUILD_HOST in actions:
+        if ActionType.BUILD_HOST in args.actions:
             with dive.Timer(ActionType.BUILD_HOST):
                 build_host(args)
-        if ActionType.INSTALL_HOST in actions:
+        if ActionType.INSTALL_HOST in args.actions:
             with dive.Timer(ActionType.INSTALL_HOST):
                 install_host(args)
-        if ActionType.ALL_DEVICE in actions:
+        if ActionType.ALL_DEVICE in args.actions:
             with dive.Timer(ActionType.ALL_DEVICE):
                 all_device(args)
+        if ActionType.DEPLOY_QT in args.actions:
+            with dive.Timer(ActionType.DEPLOY_QT):
+                deploy_qt(args)
+        if ActionType.CLEAN_AND_ZIP in args.actions:
+            with dive.Timer(ActionType.CLEAN_AND_ZIP):
+                clean_and_zip(args)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,18 @@
 
 namespace Dive
 {
+namespace
+{
+#if defined(__APPLE__)
+constexpr std::string_view kPluginMessage =
+    "All plugin dynamic libraries need to be put into 'Contents/PlugIns/dive_plugins' "
+    "subdirectory.";
+#else
+constexpr std::string_view kPluginMessage =
+    "All plugin dynamic libraries need to be put into 'plugins' subdirectory.";
+#endif
+}  // namespace
+
 PluginSample::PluginSample(QObject* parent) : QObject(parent) {}
 
 PluginSample::~PluginSample() {}

@@ -4,15 +4,9 @@ import argparse
 import pathlib
 import subprocess
 
-DIVE_SOURCE_DIRS_CURRENT = (
-    "cli", "common", "dive_core", "gfxr_dump_resources", "gfxr_ext", "gpu_time",
-    "host_cli", "layer", "lrz_validator", "network", "plugins", "runtime_layer",
-    "tests", "trace_stats", "ui", "utils",
-)
-# Note: this is part of source tree organization
-DIVE_SOURCE_DIRS_FUTURE = ("include", "src")
-DIVE_SOURCE_DIRS = DIVE_SOURCE_DIRS_CURRENT + DIVE_SOURCE_DIRS_FUTURE
-DIVE_SOURCE_DIRS_SET = frozenset(DIVE_SOURCE_DIRS)
+import common_dive_utils as dive
+
+DIVE_SOURCE_DIRS_SET = frozenset(dive.SOURCE_DIRS)
 DIVE_CPPLINT_FILE_SUFFIX = (".cpp", ".cc", ".h")
 DIVE_CPPLINT_FILTERS = (
     # Dive repo specific

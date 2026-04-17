@@ -64,9 +64,6 @@ def main(args):
         if os.path.exists("dive.app"):
             shutil.rmtree("dive.app")
         shutil.move("host/dive.app", "dive.app")
-
-        cmd = [macdeployqt_exec, "dive.app"]
-        dive.echo_and_run(cmd)
     # There is an existing dive.app that has been deployed already, skip setup and proceed
     elif os.path.exists("dive.app"):
         print("\nSkipping setup because it was already done, reinstall host tools to retrigger...")
@@ -76,12 +73,24 @@ def main(args):
     print("\nCopying resources into app bundle...")
 
     shutil.copytree("host", "dive.app/Contents/MacOS", dirs_exist_ok=True)
-    shutil.copytree("plugins", "dive.app/Contents/Resources/plugins", dirs_exist_ok=True)
+
+    plugin_directory = "dive.app/Contents/PlugIns/dive_plugins"
+    shutil.copytree("plugins", plugin_directory, dirs_exist_ok=True)
 
     if args.device_libraries:
         shutil.copytree("device", "dive.app/Contents/Resources", dirs_exist_ok=True)
     else:
         print("\nSkipping copying device libraries because --no-device-libraries...")
+
+    # Find all plugins and add them via the -executable flag so that internal paths pointing to Homebrew are replaced with the bundle-relative paths.
+    cmd = [macdeployqt_exec, "dive.app"]
+    for root, dirs, files in os.walk(plugin_directory):
+        for file in files:
+            if file.endswith(".dylib") or file.endswith(".so"):
+                plugin_path = os.path.join(root, file)
+                cmd.append(f"-executable={plugin_path}")
+
+    dive.echo_and_run(cmd)
 
     if args.sign:
         cmd = [codesign_exec, "--force", "--deep", "--sign", "-", "dive.app"]

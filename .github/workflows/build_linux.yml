@@ -44,9 +44,11 @@ jobs:
       - name: Install Dive dependencies
         run: |
           sudo apt-get update --yes
+          # Request at least clang-tidy-19 to get run-clang-tidy -source-filter option
           sudo apt-get install --yes \
             ccache \
             cmake \
+            clang-tidy-19 \
             ${INPUTS_CC} \
             libsystemd-dev \
             libbsd-dev \
@@ -89,6 +91,10 @@ jobs:
       - name: Ninja log
         run: |
           cat build/host/.ninja_log
+      - name: Run clang-tidy on changes
+        run: |
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          python3 scripts/dive-run-clang-tidy.py --run_clang_tidy run-clang-tidy-19 --config_file .clang-tidy-ci git_diff "${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
       - name: Start Xvfb
         run: |
           Xvfb :99 -screen 0 1024x768x24 &

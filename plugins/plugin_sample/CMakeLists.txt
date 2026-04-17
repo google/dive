@@ -38,5 +38,5 @@ target_include_directories(
 
 install(
     TARGETS dive_plugin_sample
-    DESTINATION "${DIVE_PLUGINS_PARENT_DIR}/${DIVE_INSTALL_DEST_SAMPLE_PLUGIN}"
+    DESTINATION "${DIVE_HOST_PLUGINS_INSTALL_DIR}"
 )

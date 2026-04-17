@@ -1850,7 +1850,7 @@ class VulkanCaptureManager : public ApiCaptureManager
     // ones that don't present like benchmarks)
     bool IsQueueSubmitFrameEnd()
     {
-        // TODO: Implement for desktop
+        // TODO: b/502626697 - Implement for desktop.
 #if defined(__ANDROID__)
         static bool is_queue_submit_frame_end =
             gfxrecon::util::ParseBoolString(util::platform::GetEnv("debug.gfxrecon.capture_queue_submit_is_frame_end"),

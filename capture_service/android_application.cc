@@ -34,6 +34,39 @@ limitations under the License.
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
 
+namespace
+{
+std::string GetGfxrCaptureFileLocation(absl::string_view gfxr_capture_directory,
+                                       absl::string_view file_name)
+{
+    // Android system property value length limit
+    // See https://source.android.com/docs/core/architecture/configuration/archive#system-properties
+    constexpr size_t kMaxSetPropLength = 92;
+    constexpr absl::string_view kExtension = ".gfxr";
+
+    size_t fixed_overhead = gfxr_capture_directory.size() + 1 + kExtension.size();
+
+    if (fixed_overhead >= kMaxSetPropLength)
+    {
+        LOG(ERROR) << "GFXR capture directory and suffix alone exceed max property length: "
+                   << gfxr_capture_directory;
+        // Return the un-truncated path (it will fail setprop, but won't crash)
+        return absl::StrCat(gfxr_capture_directory, "/", file_name, kExtension);
+    }
+
+    size_t allowed_file_name_length = kMaxSetPropLength - fixed_overhead;
+    absl::string_view truncated_file_name = file_name;
+
+    if (file_name.size() > allowed_file_name_length)
+    {
+        // Truncate from the front (preserves the end of the package name)
+        truncated_file_name = file_name.substr(file_name.size() - allowed_file_name_length);
+    }
+
+    return absl::StrCat(gfxr_capture_directory, "/", truncated_file_name, kExtension);
+}
+}  // namespace
+
 namespace Dive
 {
 
@@ -499,7 +532,7 @@ absl::Status AndroidApplication::GfxrSetup()
                      m_gfxr_capture_settings->capture_file_directory);
 
     std::string capture_file_location =
-        absl::StrCat(gfxr_capture_directory, "/", m_package, ".gfxr");
+        GetGfxrCaptureFileLocation(gfxr_capture_directory, m_package);
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(
@@ -751,7 +784,7 @@ absl::Status VulkanCliApplication::GfxrSetup()
                      m_gfxr_capture_settings->capture_file_directory);
     std::string command_filename = std::filesystem::path(m_command).filename().string();
     std::string capture_file_location =
-        absl::StrCat(gfxr_capture_directory, "/", command_filename, ".gfxr");
+        GetGfxrCaptureFileLocation(gfxr_capture_directory, command_filename);
 
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
     RETURN_IF_ERROR(

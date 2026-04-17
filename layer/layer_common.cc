@@ -71,10 +71,9 @@ struct InitServer
         if (is_libwrap_loaded)
         {
             server_thread = std::thread([]() {
-                // This is to make sure libraries are loaded before running gRPC server. This is a
-                // workaround to make sure that gRPC dependencies are loaded before we start the
-                // service. we can remove this check once we transit to our own socket
-                // implementation.
+                // Wait for the graphics layer (Vulkan, OpenXR, or GLES) to fully initialize.
+                // This ensures all necessary dependencies and internal state are ready before
+                // the server starts handling requests.
                 while (!IsLayerLoaded())
                 {
                     LOGI("Waiting for Dive layer to finish loading.");

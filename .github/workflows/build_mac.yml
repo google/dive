@@ -34,6 +34,10 @@ jobs:
       - name: Install Dive dependencies
         run: |
           python3 -m pip install --break-system-packages mako
+      - name: Install presubmit check dependencies
+        run: |
+          brew install llvm
+          echo "PATH=$(brew --prefix llvm)/bin:$PATH" >> $GITHUB_ENV
       - name: (ccache) Install via Homebrew
         run: brew install ccache
       - name: (ccache) Clear stats
@@ -62,6 +66,10 @@ jobs:
       - name: Ninja log
         run: |
           cat build/host/.ninja_log
+      - name: Run clang-tidy on changes
+        run: |
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          python3 scripts/dive-run-clang-tidy.py --config_file .clang-tidy-ci git_diff "${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
       - name: Put files in app bundle
         run: |
           python scripts/deploy_mac_bundle.py --no-device-libraries --no-sign

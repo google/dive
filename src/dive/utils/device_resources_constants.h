@@ -33,7 +33,7 @@ On the host machine, resources are aggregated and installed into the "base resou
 Base resources dir:         DIVE_ROOT/build/pkg/                                            dive.app/Contents/
 Host resources dir:         DIVE_ROOT/build/pkg/CMAKE_GENERATED_INSTALL_DEST_HOST/          dive.app/Contents/MacOS/
 Device resources dir:       DIVE_ROOT/build/pkg/CMAKE_GENERATED_INSTALL_DEST_DEVICE/        dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/
-Plugin parent dir:          DIVE_ROOT/build/pkg/CMAKE_GENERATED_PLUGINS_PARENT_DIR/         dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/
+Plugin parent dir:          DIVE_ROOT/build/pkg/CMAKE_GENERATED_PLUGINS_PARENT_DIR/         dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_PLUGINS/
 Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/       dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/
 
 */
@@ -88,10 +88,16 @@ Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN
     // Device (Android) Constants
     // -------------------------------------------------------------------------
 
+    // Android system property value length limit
+    // See https://source.android.com/docs/core/architecture/configuration/archive#system-properties
+    static constexpr size_t kMaxSetPropLength = 92;
+
     // The absolute path to the standard Download directory on Android.
     static constexpr char kDeviceDownloadPath[] = "/data/local/tmp/dive";
     // The name of the temporary staging directory created on the device.
-    static constexpr char kDeviceStagingDirectoryName[] = "dive_capture_files";
+    static constexpr char kDeviceStagingDirectoryName[] = "out";
+    // The default name for GFXR capture files when the original name is too long.
+    static constexpr std::string_view kDefaultGfxrCaptureName = "dive_capture";
 };
 
 }  // namespace Dive

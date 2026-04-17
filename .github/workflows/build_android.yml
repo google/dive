@@ -33,8 +33,10 @@ jobs:
       - name: Install dependency
         run: |
           sudo apt-get update --yes
+          # Request at least clang-tidy-19 to get run-clang-tidy -source-filter option
           sudo apt-get install --yes \
             ccache \
+            clang-tidy-19 \
             cmake \
             libxcb-glx0-dev \
             ninja-build \
@@ -70,6 +72,10 @@ jobs:
       - name: Ninja log
         run: |
           cat build/device/.ninja_log
+      - name: Run clang-tidy on changes
+        run: |
+          git fetch --no-tags --prune --no-recurse-submodules --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          python3 scripts/dive-run-clang-tidy.py --run_clang_tidy run-clang-tidy-19 --config_file .clang-tidy-ci git_diff "${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
       - name: (ccache) Show stats
         run: ccache -s
       - name: (ccache) Save (upload_cache)

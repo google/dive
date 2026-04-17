@@ -15,17 +15,14 @@
  limitations under the License.
 */
 
-#include "common.h"
+#include "dive_core/common/common.h"
 
-#include <stdarg.h>
-
-#include <cerrno>
+#include <cstdarg>
 #include <cstdio>
-#include <cstring>
 
 void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...)
 {
-    va_list args;
+    va_list args{};
     char str[8 * 1024];
     va_start(args, format);
     vsnprintf(str, sizeof(str), format, args);

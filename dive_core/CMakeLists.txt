@@ -164,6 +164,7 @@ add_library(
     ${FREEDRENO_SRC_FILES}
     # Common
     common/common.h
+    common/common.cpp
     common/dive_capture_format.h
     common/emulate_pm4.cpp
     common/emulate_pm4.h
@@ -184,7 +185,6 @@ add_library(
     capture_event_info.h
     command_hierarchy.cpp
     command_hierarchy.h
-    common.cpp
     common.h
     conversions.h
     cross_ref.h

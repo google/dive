@@ -43,7 +43,7 @@ class ActionType(enum.StrEnum):
     INSTALL_HOST = "install_host"
     ALL_DEVICE = "all_device"           # configure, build, and install device libraries
     DEPLOY_QT = "deploy_qt"
-    CLEAN_AND_ZIP = "clean_and_zip"     # removes some extraneous files and compresses the release
+    PACKAGE = "package"                 # removes some extraneous files and packages the release
 
 
 class BuildType(enum.StrEnum):
@@ -147,78 +147,56 @@ def parse_actions(args):
                                 "to --list-actions for the valid list OR leave blank to run all")
             actions.append(action)
     else:
-        actions = []
-        for action in ActionType:
-            actions.append(action)
-            if (args.build_type == BuildType.DEBUG) and (action == ActionType.ALL_DEVICE) and (platform.system() != "Darwin"):
-                # For Windows and Linux Debug builds, by default the last action is ALL_DEVICE
-                break
-            if (args.build_type == BuildType.DEBUG) and (action == ActionType.DEPLOY_QT) and (platform.system() == "Darwin"):
-                # For macOS Debug builds, by default the last action is DEPLOY_QT
-                break
+        actions = [x for x in ActionType]
 
     str_actions = ", ".join(actions)
     print(f"\nQueued actions, not necessarily listed in order: {str_actions}")
 
+    if (not args.prereq_checks) and (ActionType.package in actions) and (not args.exec_deployqt):
+        raise Exception("Must pass value for --exec-deployqt when bypassing prereq checks for action DEPLOY_QT")
+
     args.actions = actions
-
-
-def check_intersect(lis1, lis2):
-    intersect = set(lis1) & set(lis2)
-    return len(intersect) > 0
 
 
 def check_environment(args):
     """Checks for env vars and executables that will be used by this script.
-    Overwrites some args.exec_* values in-place with valid ones.
+    Overwrites args.exec_deployqt value in-place with platform-specific valid name.
     Can be disabled with --no-prereq-checks
     """
-    if check_intersect([ActionType.ALL_DEVICE], args.actions):
-        if args.build_type != BuildType.DEBUG:
-            print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
 
-        print("\nChecking ANDROID_NDK_HOME...")
-        if "ANDROID_NDK_HOME" not in os.environ:
-            raise Exception("ANDROID_NDK_HOME env var must be set")
+    if args.build_type != BuildType.DEBUG:
+        print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
 
-    cmake_actions = [ActionType.CONFIGURE_HOST, ActionType.BUILD_HOST, ActionType.INSTALL_HOST, ActionType.ALL_DEVICE]
-    if check_intersect(cmake_actions, args.actions):
-        cmd = [args.exec_cmake, "--version"]
-        dive.echo_and_run(cmd)
+    if "ANDROID_NDK_HOME" not in os.environ:
+        raise Exception("ANDROID_NDK_HOME env var must be set")
 
-    check_ninja = False
-    if ActionType.ALL_DEVICE in args.actions:
-        check_ninja = True
-    elif platform.system() in ["Linux", "Darwin"]:
-        if (ActionType.BUILD_HOST in args.actions) and args.build_via_generator:
-            check_ninja = True
-    if check_ninja:
-        cmd = [args.exec_ninja, "--version"]
-        dive.echo_and_run(cmd)
+    cmd = [args.exec_cmake, "--version"]
+    dive.echo_and_run(cmd)
 
-    if (platform.system() == "Windows") and (args.build_via_generator) and (ActionType.BUILD_HOST in args.actions):
+    cmd = [args.exec_ninja, "--version"]
+    dive.echo_and_run(cmd)
+
+    if platform.system() == "Windows":
         cmd = [args.exec_msbuild, "--version"]
         dive.echo_and_run(cmd)
 
-    if ActionType.DEPLOY_QT in args.actions:
-        deploy_qt_exec = args.exec_deployqt
-        if not deploy_qt_exec:
-            if (platform.system() == "Darwin"):
-                deploy_qt_exec = "macdeployqt"
+    deploy_qt_exec = args.exec_deployqt
+    if not deploy_qt_exec:
+        if platform.system() == "Windows":
+            deploy_qt_exec = "windeployqt"
+        else:
+            # TODO: b/484082504 - Support other platforms
+            print("\nDefault *deployqt is not implemented")
 
-            elif (platform.system() == "Windows"):
-                deploy_qt_exec = "windeployqt"
+    if deploy_qt_exec:
+        # Cannot check the --version because for some reason the return code is nonzero
+        deployqt_found = shutil.which(deploy_qt_exec)
+        if not deployqt_found:
+            raise Exception(f"{deploy_qt_exec} not found on the Path")
+        args.exec_deployqt = deploy_qt_exec
 
-        if deploy_qt_exec:
-            # Cannot check the --version because for some reason the return code is nonzero
-            deployqt_found = shutil.which(deploy_qt_exec)
-            if not deployqt_found:
-                raise Exception(f"{deploy_qt_exec} not found on the Path")
-            args.exec_deployqt = deploy_qt_exec
-
-    if (platform.system() == "Windows") and (ActionType.CLEAN_AND_ZIP in args.actions):
-        cmd = [args.exec_tar, "--version"]
-        dive.echo_and_run(cmd)
+    cmd = [args.exec_tar, "--version"]
+    dive.echo_and_run(cmd)
 
 
 def copy_plugins(args):
@@ -348,18 +326,21 @@ def all_device(args):
 
 
 def deploy_qt(args):
-    """Implements ActionType.DEPLOY_QT stage
+    """Implements ActionType.DEPLOY_QT stage, which uses a QT tool to add QT
+    libraries to the same dir as the binary that depends on them in preparation
+    for packaging and distribution
     """
     # TODO: b/484082504 - Support other platforms
-    if (platform.system() == "Linux"):
+    # TODO: b/504654590 - Investigate if there's a way to identify the binaries without hardcoding them
+    if platform.system() == "Linux":
         print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
         return
 
-    elif (platform.system() == "Darwin"):
+    elif platform.system() == "Darwin":
         print("\ndeploy_qt() is UNIMPLEMENTED for macOS...")
         return
 
-    elif (platform.system() == "Windows"):
+    elif platform.system() == "Windows":
         print(f"\nDeploying with {args.exec_deployqt}...")
         cmd = [args.exec_deployqt, 
                f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}"
@@ -370,19 +351,21 @@ def deploy_qt(args):
         raise Exception(f"Unrecognized platform: {platform.system()}")
 
 
-def clean_and_zip(args):
-    """Implements ActionType.CLEAN_AND_ZIP stage
+def package(args):
+    """Implements ActionType.PACKAGE stage, which will package this Dive build
+    into a single file that is easy to transfer
     """
     # TODO: b/484082504 - Support other platforms
-    if (platform.system() == "Linux"):
-        print("\nclean_and_zip() is UNIMPLEMENTED for Linux...")
+    # TODO: b/504654590 - Investigate if there's a way to identify extraneous files
+    if platform.system() == "Linux":
+        print("\npackage() is UNIMPLEMENTED for Linux...")
         return
 
-    elif (platform.system() == "Darwin"):
-        print("\nclean_and_zip() is UNIMPLEMENTED for macOS...")
+    elif platform.system() == "Darwin":
+        print("\npackage() is UNIMPLEMENTED for macOS...")
         return
 
-    elif (platform.system() == "Windows"):
+    elif platform.system() == "Windows":
         for dir_name in WINDOWS_UNNECESSARY_DIRS:
             if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}"):
                 print(f"\nClearing unnecessary {dir_name} folder...")
@@ -443,9 +426,9 @@ def main():
         if ActionType.DEPLOY_QT in args.actions:
             with dive.Timer(ActionType.DEPLOY_QT):
                 deploy_qt(args)
-        if ActionType.CLEAN_AND_ZIP in args.actions:
-            with dive.Timer(ActionType.CLEAN_AND_ZIP):
-                clean_and_zip(args)
+        if ActionType.PACKAGE in args.actions:
+            with dive.Timer(ActionType.PACKAGE):
+                package(args)
 
 
 if __name__ == "__main__":

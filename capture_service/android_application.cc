@@ -31,9 +31,53 @@ limitations under the License.
 #include "common/status.h"
 #include "constants.h"
 #include "device_mgr.h"
+#include "dive/utils/component_files_constants.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
 #include "os/command_utils.h"
+
+namespace
+{
+std::string GetGfxrCaptureFilePath(absl::string_view gfxr_capture_directory,
+                                   absl::string_view file_name)
+{
+    // TODO: b/503812460 - Find better workarounds for the GFXR capture file name length limit on
+    // Android.
+    constexpr size_t kMaxSetPropLength = Dive::DeviceResourcesConstants::kMaxSetPropLength;
+    constexpr absl::string_view kExtension = Dive::ComponentFileConstants::kGfxrExt;
+    constexpr absl::string_view kDefaultName =
+        Dive::DeviceResourcesConstants::kDefaultGfxrCaptureName;
+
+    size_t fixed_overhead = gfxr_capture_directory.size() + 1 + kExtension.size();
+
+    if (fixed_overhead >= kMaxSetPropLength)
+    {
+        LOG(ERROR) << "GFXR capture directory and suffix alone exceed max property length ("
+                   << kMaxSetPropLength << "): " << gfxr_capture_directory;
+        // Return the original path (it will fail setprop, but won't crash)
+        return absl::StrCat(gfxr_capture_directory, "/", file_name, kExtension);
+    }
+
+    size_t allowed_file_name_length = kMaxSetPropLength - fixed_overhead;
+    absl::string_view final_name = file_name;
+
+    if (file_name.size() > allowed_file_name_length)
+    {
+        LOG(WARNING) << "GFXR capture file name '" << file_name
+                     << "' is too long, using generic name '" << kDefaultName << "' instead.";
+        final_name = kDefaultName;
+
+        if (final_name.size() > allowed_file_name_length)
+        {
+            final_name = final_name.substr(0, allowed_file_name_length);
+            LOG(WARNING) << "GFXR default file name also needed truncation to '" << final_name
+                         << "'. This indicates a very long directory path.";
+        }
+    }
+
+    return absl::StrCat(gfxr_capture_directory, "/", final_name, kExtension);
+}
+}  // namespace
 
 namespace Dive
 {
@@ -501,8 +545,7 @@ absl::Status AndroidApplication::GfxrSetup()
         absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/",
                      m_gfxr_capture_settings->capture_file_directory);
 
-    std::string capture_file_location =
-        absl::StrCat(gfxr_capture_directory, "/", m_package, ".gfxr");
+    std::string capture_file_location = GetGfxrCaptureFilePath(gfxr_capture_directory, m_package);
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
 
     RETURN_IF_ERROR(
@@ -767,7 +810,7 @@ absl::Status VulkanCliApplication::GfxrSetup()
                      m_gfxr_capture_settings->capture_file_directory);
     std::string command_filename = std::filesystem::path(m_command).filename().string();
     std::string capture_file_location =
-        absl::StrCat(gfxr_capture_directory, "/", command_filename, ".gfxr");
+        GetGfxrCaptureFilePath(gfxr_capture_directory, command_filename);
 
     RETURN_IF_ERROR(CreateGfxrDirectory(gfxr_capture_directory));
     RETURN_IF_ERROR(

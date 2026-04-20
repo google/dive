@@ -22,17 +22,13 @@ limitations under the License.
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "dive/utils/device_resources_constants.h"
 #include "trace_mgr.h"
 
 extern "C"
 {
     void SetCaptureState(int state);
     void SetCaptureName(const char* name, const char* frame_num);
-}
-
-namespace
-{
-constexpr std::string_view kTraceFilePath = "/sdcard/Download/";
 }
 
 namespace Dive
@@ -46,7 +42,8 @@ AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration)
 void AndroidTraceManager::TraceByFrame()
 {
     std::string num = absl::StrCat(m_frame_num);
-    std::string path = absl::StrCat(kTraceFilePath, "trace-frame");
+    std::string path =
+        absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/trace-frame");
     std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_frame_num);
 
     SetTraceFilePath(full_path);
@@ -63,7 +60,7 @@ void AndroidTraceManager::TraceByDuration()
 {
     m_trace_num++;
     std::string num = absl::StrCat(m_trace_num);
-    std::string path = absl::StrCat(kTraceFilePath, "trace");
+    std::string path = absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/trace");
     std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_trace_num);
     // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
     SetCaptureName(path.c_str(), num.c_str());

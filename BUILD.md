@@ -3,12 +3,15 @@
 - CMake
 - Ninja
 - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.
-- Android NDK (currently we are using 25.2.9519653).
+- Android NDK 29.0.14206865. You can get this fom https://developer.android.com/ndk/downloads or from the SDK package manager. If you have `sdkmanager` installed:
+  ```sh
+  sdkmanager --install "ndk;29.0.14206865"
+  ```
 - Python is installed with `python` in your PATH. It is recommended to use a virtual environment such as virtualenv or pipenv. Alternatively, on Debian, you can `sudo apt install python-is-python3`.
 - Mako Templates for Python: can be installed with following commandline
-    ```sh
-    pip install Mako
-    ```
+  ```sh
+  pip install Mako
+  ```
 - gfxreconstruct [dependencies](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#android-development-requirements), if targetting Android. Specifically:
     - Android Studio. Make sure to install an SDK and accept the licenses.
     - On Linux, set up environment variables for building GFXReconstruct as explained [here](https://github.com/LunarG/gfxreconstruct/blob/dev/BUILD.md#additional-linux-command-linux-prerequisites)
@@ -31,7 +34,7 @@ Add permanently or per-session as desired.
 # Example setup
 
 # Android NDK prerequisite
-export ANDROID_NDK_HOME=~/android_sdk/ndk/25.2.9519653
+export ANDROID_NDK_HOME=~/Android/Sdk/ndk/29.0.14206865
 
 # gfxreconstruct prerequisite
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
@@ -53,7 +56,7 @@ export DIVE_ROOT_PATH=/path/to/dive
 REM Example setup
 
 REM Android NDK prerequisite
-set ANDROID_NDK_HOME=C:\Users\name\...\Android\Sdk\ndk\25.2.9519653
+set ANDROID_NDK_HOME=C:\Users\name\...\Android\Sdk\ndk\29.0.14206865
 
 REM gfxreconstruct prerequisite
 set JAVA_HOME=C:\Users\name\...\temurin-17.0.13
@@ -75,7 +78,7 @@ set DIVE_ROOT_PATH=C:\path\to\dive
 # Example setup
 
 # Android NDK prerequisite
-export ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/25.2.9519653
+export ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/29.0.14206865
 
 # gfxreconstruct prerequisite
 export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home

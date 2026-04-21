@@ -52,6 +52,13 @@ class BuildType(enum.StrEnum):
     RELEASE = "Release"
 
 
+def get_default_deployqt():
+    if platform.system() == "Windows":
+        return "windeployqt"
+    # TODO: b/484082504 - Support other platforms
+    return None
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="build_android",
@@ -93,7 +100,8 @@ def parse_args():
         help="The name of the CMake executable on the path")
     parser.add_argument(
         "--exec-deployqt",
-        help="The path to the platform-specific deployqt executable, if blank will use windeployqt/macdeployqt")
+        default=get_default_deployqt(),
+        help="The path to the platform-specific deployqt executable")
     parser.add_argument(
         "--exec-msbuild",
         default="msbuild",
@@ -102,10 +110,6 @@ def parse_args():
         "--exec-ninja",
         default="ninja",
         help="The name of the ninja executable on the path")
-    parser.add_argument(
-        "--exec-tar",
-        default="tar",
-        help="The name of the tar executable on the path")
     parser.add_argument(
         "--host-configure-additional-flags",
         help="String of additional CMake flags to pass directly to cmake in the "
@@ -152,15 +156,11 @@ def parse_actions(args):
     str_actions = ", ".join(actions)
     print(f"\nQueued actions, not necessarily listed in order: {str_actions}")
 
-    if (not args.prereq_checks) and (ActionType.package in actions) and (not args.exec_deployqt):
-        raise Exception("Must pass value for --exec-deployqt when bypassing prereq checks for action DEPLOY_QT")
-
     args.actions = actions
 
 
 def check_environment(args):
     """Checks for env vars and executables that will be used by this script.
-    Overwrites args.exec_deployqt value in-place with platform-specific valid name.
     Can be disabled with --no-prereq-checks
     """
 
@@ -169,6 +169,7 @@ def check_environment(args):
 
     if "ANDROID_NDK_HOME" not in os.environ:
         raise Exception("ANDROID_NDK_HOME env var must be set")
+    print(f"\nANDROID_NDK_HOME found: {os.environ["ANDROID_NDK_HOME"]}")
 
     cmd = [args.exec_cmake, "--version"]
     dive.echo_and_run(cmd)
@@ -180,23 +181,12 @@ def check_environment(args):
         cmd = [args.exec_msbuild, "--version"]
         dive.echo_and_run(cmd)
 
-    deploy_qt_exec = args.exec_deployqt
-    if not deploy_qt_exec:
-        if platform.system() == "Windows":
-            deploy_qt_exec = "windeployqt"
-        else:
-            # TODO: b/484082504 - Support other platforms
-            print("\nDefault *deployqt is not implemented")
-
-    if deploy_qt_exec:
-        # Cannot check the --version because for some reason the return code is nonzero
-        deployqt_found = shutil.which(deploy_qt_exec)
+    # Cannot check the flag --version because for some reason the return code is nonzero
+    if args.exec_deployqt:
+        deployqt_found = shutil.which(args.exec_deployqt)
         if not deployqt_found:
-            raise Exception(f"{deploy_qt_exec} not found on the Path")
-        args.exec_deployqt = deploy_qt_exec
-
-    cmd = [args.exec_tar, "--version"]
-    dive.echo_and_run(cmd)
+            raise Exception(f"{args.exec_deployqt} not found on the Path")
+        print(f"\n{args.exec_deployqt} found on the Path")
 
 
 def copy_plugins(args):
@@ -212,23 +202,25 @@ def copy_plugins(args):
 
 
 def configure_host(args):
-    """Implementing ActionType.CONFIGURE_HOST stage
+    """Implementing ActionType.CONFIGURE_HOST stage, uses cmake to generate
+    build files targeting the host
     """
     print("\nGenerating build files with cmake...")
-    if platform.system() in ["Linux", "Darwin"]:
-        cmd = [args.exec_cmake, ".",
-               f'-G{NINJA_MULTI_CONFIG_NAME}',
-               f"-B{args.root_build_dir}/host",
-               f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
-               ]
-    elif platform.system() == "Windows":
-        cmd = [args.exec_cmake, ".",
-               f"-G{args.visual_studio_name}",
-               f"-B{args.root_build_dir}/host",
-               f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
-               ]
-    else:
-        raise Exception(f"Unrecognized platform: {platform.system()}")
+    match platform.system():
+        case "Linux" | "Darwin":
+            cmd = [args.exec_cmake, ".",
+                   f'-G{NINJA_MULTI_CONFIG_NAME}',
+                   f"-B{args.root_build_dir}/host",
+                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+                   ]
+        case "Windows":
+            cmd = [args.exec_cmake, ".",
+                   f"-G{args.visual_studio_name}",
+                   f"-B{args.root_build_dir}/host",
+                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+                   ]
+        case _:
+            raise Exception(f"Unrecognized platform: {platform.system()}")
     if args.host_configure_additional_flags:
         for arg in args.host_configure_additional_flags.split(" "):
             if arg:
@@ -332,23 +324,24 @@ def deploy_qt(args):
     """
     # TODO: b/484082504 - Support other platforms
     # TODO: b/504654590 - Investigate if there's a way to identify the binaries without hardcoding them
-    if platform.system() == "Linux":
-        print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
-        return
+    match platform.system():
+        case "Linux":
+            print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
+            return
 
-    elif platform.system() == "Darwin":
-        print("\ndeploy_qt() is UNIMPLEMENTED for macOS...")
-        return
+        case "Darwin":
+            print("\ndeploy_qt() is UNIMPLEMENTED for macOS...")
+            return
 
-    elif platform.system() == "Windows":
-        print(f"\nDeploying with {args.exec_deployqt}...")
-        cmd = [args.exec_deployqt, 
-               f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}"
-               ]
-        dive.echo_and_run(cmd)
+        case "Windows":
+            print(f"\nDeploying with {args.exec_deployqt}...")
+            cmd = [args.exec_deployqt, 
+                f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}"
+                ]
+            dive.echo_and_run(cmd)
 
-    else:
-        raise Exception(f"Unrecognized platform: {platform.system()}")
+        case _:
+            raise Exception(f"Unrecognized platform: {platform.system()}")
 
 
 def package(args):
@@ -357,36 +350,34 @@ def package(args):
     """
     # TODO: b/484082504 - Support other platforms
     # TODO: b/504654590 - Investigate if there's a way to identify extraneous files
-    if platform.system() == "Linux":
-        print("\npackage() is UNIMPLEMENTED for Linux...")
-        return
+    match platform.system():
+        case "Linux":
+            print("\npackage() is UNIMPLEMENTED for Linux...")
+            return
 
-    elif platform.system() == "Darwin":
-        print("\npackage() is UNIMPLEMENTED for macOS...")
-        return
+        case "Darwin":
+            print("\npackage() is UNIMPLEMENTED for macOS...")
+            return
 
-    elif platform.system() == "Windows":
-        for dir_name in WINDOWS_UNNECESSARY_DIRS:
-            if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}"):
-                print(f"\nClearing unnecessary {dir_name} folder...")
-                shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
-    
-        print("\nZipping with tar...")
-        former_dir = os.getcwd()
-        os.chdir(f"{args.root_build_dir}/{PKG_DIR}")
-        cmd = [args.exec_tar, "-a", "-c", "-v", "-f", f"{APP_DIR}.zip", "--exclude", f"{APP_DIR}.zip", "*"]
-        dive.echo_and_run(cmd)
-        os.chdir(former_dir)
+        case "Windows":
+            for dir_name in WINDOWS_UNNECESSARY_DIRS:
+                if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}"):
+                    print(f"\nClearing unnecessary {dir_name} folder...")
+                    shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
+        
+            print(f"\nZipping into '{APP_DIR}.zip'...")
+            shutil.make_archive(f"{APP_DIR}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
 
-        final_location_zip = pathlib.Path(f"{args.root_build_dir}/{APP_DIR}.zip")
-        if final_location_zip.exists():
-            print("\nClearing previous archive...")
-            final_location_zip.unlink()
-        print(f"\nMoving zip archive to {os.getcwd()}/{args.root_build_dir}/{APP_DIR}.zip...")
-        shutil.move(f"{args.root_build_dir}/{PKG_DIR}/{APP_DIR}.zip", final_location_zip)
+            final_location_zip = pathlib.Path(f"{args.root_build_dir}/{APP_DIR}.zip")
+            if final_location_zip.exists():
+                print("\nClearing previous archive...")
+                final_location_zip.unlink()
 
-    else:
-        raise Exception(f"Unrecognized platform: {platform.system()}")
+            print(f"\nMoving zip archive to {os.getcwd()}/{final_location_zip}...")
+            shutil.move(f"{APP_DIR}.zip", final_location_zip)
+
+        case _:
+            raise Exception(f"Unrecognized platform: {platform.system()}")
 
 
 def main():

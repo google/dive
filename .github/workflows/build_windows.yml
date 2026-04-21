@@ -6,9 +6,6 @@ on:
       build_type:
         required: true
         type: string
-      actions:
-        required: true
-        type: string
 
 jobs:
   build_host_windows:
@@ -30,7 +27,7 @@ jobs:
       - name: Build Dive host tools with VS 2022
         run: |
           python3 -u scripts/build.py `
-            --actions $env:INPUTS_ACTIONS `
+            --actions configure_host,build_host,install_host `
             --build-type $env:INPUTS_BUILD_TYPE `
             --build-via-generator `
             --ci `
@@ -38,7 +35,6 @@ jobs:
               -DDIVE_BUILD_WITH_CRASHPAD=OFF"
         env:
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
-          INPUTS_ACTIONS: ${{ inputs.actions }}
       - name: Run tests
         run: |
           ctest --output-on-failure -C $env:INPUTS_BUILD_TYPE --test-dir build/host

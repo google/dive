@@ -39,15 +39,10 @@ jobs:
       pull-requests: write
     strategy:
       matrix:
-        include:
-          - build_type: Debug
-            actions: configure_host,build_host,install_host
-          - build_type: RelWithDebInfo
-            actions: configure_host,build_host,install_host,deploy_qt
+        build_type: [Debug, RelWithDebInfo]
     uses: ./.github/workflows/build_windows.yml
     with:
       build_type: ${{ matrix.build_type }}
-      actions: ${{ matrix.actions }}
 
   build_host_mac:
     permissions:

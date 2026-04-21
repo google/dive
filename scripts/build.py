@@ -18,7 +18,6 @@ import argparse
 import common_dive_utils as dive
 import enum
 import os
-import pathlib
 import platform
 import shutil
 
@@ -57,6 +56,12 @@ def get_default_deployqt():
         return "windeployqt"
     # TODO: b/484082504 - Support other platforms
     return None
+
+
+def rmtree_if_exists(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+        print(f"\nDeleted existing dir: {path}")
 
 
 def parse_args():
@@ -123,6 +128,8 @@ def parse_args():
         "--root-build-dir",
         default="build",
         help="The build directory, relative to Dive root directory")
+    # TODO: b/504654590 - Make a platform-specific default so that users can
+    # have more flexibility with choosing a generator
     parser.add_argument(
         "--visual-studio-name",
         default="Visual Studio 17 2022",
@@ -202,7 +209,7 @@ def copy_plugins(args):
 
 
 def configure_host(args):
-    """Implementing ActionType.CONFIGURE_HOST stage, uses cmake to generate
+    """Implements ActionType.CONFIGURE_HOST stage, uses cmake to generate
     build files targeting the host
     """
     print("\nGenerating build files with cmake...")
@@ -261,9 +268,7 @@ def install_host(args):
     # TODO: b/482108095 - This must be done regardless of clean build because
     # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
-    if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host"):
-        print("\nClearing host pkg folders...")
-        shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host")
+    rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host")
 
     print("\nInstalling with cmake...")
     cmd = [args.exec_cmake,
@@ -304,9 +309,7 @@ def all_device(args):
     # TODO: b/482108095 - This must be done regardless of clean build because
     # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
-    if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/device"):
-        print("\nClearing install folder...")
-        shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/device")
+    rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/device")
 
     print("\nInstalling with cmake...")
     cmd = [args.exec_cmake,
@@ -361,17 +364,15 @@ def package(args):
 
         case "Windows":
             for dir_name in WINDOWS_UNNECESSARY_DIRS:
-                if os.path.exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}"):
-                    print(f"\nClearing unnecessary {dir_name} folder...")
-                    shutil.rmtree(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
+                rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
         
             print(f"\nZipping into '{APP_DIR}.zip'...")
             shutil.make_archive(f"{APP_DIR}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
 
-            final_location_zip = pathlib.Path(f"{args.root_build_dir}/{APP_DIR}.zip")
-            if final_location_zip.exists():
+            final_location_zip = f"{args.root_build_dir}/{APP_DIR}.zip"
+            if os.path.exists(final_location_zip):
                 print("\nClearing previous archive...")
-                final_location_zip.unlink()
+                os.unlink(final_location_zip)
 
             print(f"\nMoving zip archive to {os.getcwd()}/{final_location_zip}...")
             shutil.move(f"{APP_DIR}.zip", final_location_zip)
@@ -388,6 +389,8 @@ def main():
         list_actions()
         return
 
+    # TODO: b/504654590 - Use parser.add_argument() functionality to avoid
+    # having to call parse_actions() separately
     parse_actions(args)
 
     if not args.ci:

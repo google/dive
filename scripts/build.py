@@ -36,13 +36,13 @@ WINDOWS_QT_DEPENDENCIES_BINARY = "dive_gui_lib.dll"
 
 
 class ActionType(enum.StrEnum):
-    COPY_PLUGINS = "copy_plugins"       # copy external plugins into pkg dir
-    CONFIGURE_HOST = "configure_host"
-    BUILD_HOST = "build_host"           # separated to make VS builds using the UI easy
-    INSTALL_HOST = "install_host"
-    ALL_DEVICE = "all_device"           # configure, build, and install device libraries
-    DEPLOY_QT = "deploy_qt"
-    PACKAGE = "package"                 # removes some extraneous files and packages the release
+    COPY_PLUGINS = enum.auto()      # copy external plugins into pkg dir
+    CONFIGURE_HOST = enum.auto()
+    BUILD_HOST = enum.auto()        # separated to make VS builds using the UI easy
+    INSTALL_HOST = enum.auto()
+    ALL_DEVICE = enum.auto()        # configure, build, and install device libraries
+    DEPLOY_QT = enum.auto()
+    PACKAGE = enum.auto()           # removes some extraneous files and packages the release
 
 
 class BuildType(enum.StrEnum):
@@ -178,13 +178,19 @@ def check_environment(args):
         raise Exception("ANDROID_NDK_HOME env var must be set")
     print(f"\nANDROID_NDK_HOME found: {os.environ["ANDROID_NDK_HOME"]}")
 
+    if not shutil.which(args.exec_cmake):
+        raise Exception(f"Cannot find cmake exec {args.exec_cmake}")
     cmd = [args.exec_cmake, "--version"]
     dive.echo_and_run(cmd)
 
+    if not shutil.which(args.exec_ninja):
+        raise Exception(f"Cannot find ninja exec {args.exec_ninja}")
     cmd = [args.exec_ninja, "--version"]
     dive.echo_and_run(cmd)
 
-    if platform.system() == "Windows":
+    if (platform.system() == "Windows") and (args.build_via_generator):
+        if not shutil.which(args.exec_msbuild):
+            raise Exception(f"Cannot find msbuild exec {args.exec_msbuild}")
         cmd = [args.exec_msbuild, "--version"]
         dive.echo_and_run(cmd)
 
@@ -213,7 +219,8 @@ def configure_host(args):
     build files targeting the host
     """
     print("\nGenerating build files with cmake...")
-    match platform.system():
+    system_name = platform.system()
+    match system_name:
         case "Linux" | "Darwin":
             cmd = [args.exec_cmake, ".",
                    f'-G{NINJA_MULTI_CONFIG_NAME}',
@@ -227,7 +234,7 @@ def configure_host(args):
                    f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
                    ]
         case _:
-            raise Exception(f"Unrecognized platform: {platform.system()}")
+            raise Exception(f"Unrecognized platform: {system_name}")
     if args.host_configure_additional_flags:
         for arg in args.host_configure_additional_flags.split(" "):
             if arg:
@@ -327,7 +334,8 @@ def deploy_qt(args):
     """
     # TODO: b/484082504 - Support other platforms
     # TODO: b/504654590 - Investigate if there's a way to identify the binaries without hardcoding them
-    match platform.system():
+    system_name = platform.system()
+    match system_name:
         case "Linux":
             print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
             return
@@ -344,7 +352,7 @@ def deploy_qt(args):
             dive.echo_and_run(cmd)
 
         case _:
-            raise Exception(f"Unrecognized platform: {platform.system()}")
+            raise Exception(f"Unrecognized platform: {system_name}")
 
 
 def package(args):
@@ -353,7 +361,8 @@ def package(args):
     """
     # TODO: b/484082504 - Support other platforms
     # TODO: b/504654590 - Investigate if there's a way to identify extraneous files
-    match platform.system():
+    system_name = platform.system()
+    match system_name:
         case "Linux":
             print("\npackage() is UNIMPLEMENTED for Linux...")
             return
@@ -378,7 +387,7 @@ def package(args):
             shutil.move(f"{APP_DIR}.zip", final_location_zip)
 
         case _:
-            raise Exception(f"Unrecognized platform: {platform.system()}")
+            raise Exception(f"Unrecognized platform: {system_name}")
 
 
 def main():

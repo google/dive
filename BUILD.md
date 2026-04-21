@@ -1,6 +1,6 @@
 # Prerequisites
 
-- Visual Studio Professional (Windows Only): To build on Windows, you must use Visual Studio Professional (2022 version is recommended). Other editions such as Visual Studio Community will not work for this build environment.
+- Visual Studio (Windows Only): To build on Windows, you must use Visual Studio (2022 version is recommended).
 - CMake
 - Ninja
 - The QT framework, can be installed from [QT online installer](https://download.qt.io/archive/online_installers/4.6/). We are currently using QT 5.15.2. Note that to install QT 5.15.2 from the online installer, you have to enable (turn on) the `archived` versions and then click on `filter`.
@@ -106,7 +106,7 @@ TODO: b/484082504 - Add more stages for packaging and deploying to the unified b
 ```sh
 python scripts/build.py
 
-# TIP: On Windows, run in Visual Studio Professional Developer Command Prompt for VS 2022
+# TIP: On Windows, run in Visual Studio Developer Command Prompt for VS 2022
 #      and use --build-via-generator to build through VS and use multiple cores for speed
 
 python scripts/build.py --build-via-generator
@@ -114,12 +114,12 @@ python scripts/build.py --build-via-generator
 
 ### Custom Building Tips
 
-* On Windows, using the Visual Studio Professional UI for the host build can be clearer than building it on the command line. To do that, split the build process like so:
+* On Windows, using the Visual Studio UI for the host build can be clearer than building it on the command line. To do that, split the build process like so:
     1. Do all actions up to and including generating the Visual Studio Solution
         ```bat
         python scripts/build.py --actions < the prior... >,configure_host
         ```
-    1. Compile manually in Visual Studio Professional (same as `python scripts/build.py --actions build_host`)
+    1. Compile manually in Visual Studio (same as `python scripts/build.py --actions build_host`)
         * Open Visual Studio UI and build target ALL_BUILD
     1. Finish the other steps in the build process by specifying all the following actions after "build_host"
         ```bat

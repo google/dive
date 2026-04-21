@@ -23,6 +23,7 @@
 
 #include "capture_service/device_mgr.h"
 #include "device_dialog.h"
+#include "dive_ui_lib_export.h"
 #include "package_filter.h"
 
 #pragma once
@@ -60,7 +61,7 @@ class AppTypeFilterModel : public QSortFilterProxyModel
     bool m_filter_active = false;
 };
 
-class TraceDialog : public DeviceDialog
+class DIVE_UI_LIB_EXPORT TraceDialog : public DeviceDialog
 {
     Q_OBJECT
 

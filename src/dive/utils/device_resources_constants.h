@@ -23,22 +23,6 @@ namespace Dive
 
 struct DeviceResourcesConstants
 {
-    // clang-format off
-/*
-
-On the host machine, resources are aggregated and installed into the "base resources dir" for convenience.
-
-                            Most platforms (dev & release)                                  Apple bundle (DIVE_ROOT/build/pkg/dive.app)
----------------------------------------------------------------------------------------------------------------------------------------
-Base resources dir:         DIVE_ROOT/build/pkg/                                            dive.app/Contents/
-Host resources dir:         DIVE_ROOT/build/pkg/CMAKE_GENERATED_INSTALL_DEST_HOST/          dive.app/Contents/MacOS/
-Device resources dir:       DIVE_ROOT/build/pkg/CMAKE_GENERATED_INSTALL_DEST_DEVICE/        dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/
-Plugin parent dir:          DIVE_ROOT/build/pkg/CMAKE_GENERATED_PLUGINS_PARENT_DIR/         dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_PLUGINS/
-Profiling resources dir:    DIVE_ROOT/build/pkg/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/       dive.app/Contents/CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES/CMAKE_GENERATED_PLUGINS_PARENT_DIR/CMAKE_GENERATED_PROFILING_PLUGIN_DIR/
-
-*/
-    // clang-format on
-
     // Device resources:
     static constexpr std::string_view kVkLayerLibName = "libVkLayer_dive.so";
     static constexpr std::string_view kVkRuntimeLayerLibName = "libVkLayer_rt_dive.so";

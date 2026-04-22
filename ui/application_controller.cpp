@@ -21,7 +21,7 @@
 #include <QMenu>
 #include <QMessageBox>
 
-#include "dive/plugin/loader/plugin_loader.h"
+#include "dive/plugin/loader/host_plugin_loader.h"
 #include "ui/main_window.h"
 
 struct ApplicationController::Impl
@@ -29,7 +29,7 @@ struct ApplicationController::Impl
     MainWindow* m_main_window = nullptr;
     QAction* m_advanced_option = nullptr;
 
-    Dive::PluginLoader m_plugin_manager;
+    Dive::HostPluginLoader m_host_plugin_manager;
 };
 
 ApplicationController::ApplicationController() {}
@@ -38,8 +38,8 @@ ApplicationController::~ApplicationController() {}
 
 void ApplicationController::Register(MainWindow& main_window)
 {
-    m_impl->m_plugin_manager.Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow,
-                                                 &main_window);
+    m_impl->m_host_plugin_manager.Bridge().SetQObject(Dive::DiveUIObjectNames::kMainWindow,
+                                                      &main_window);
     m_impl->m_main_window = &main_window;
 }
 
@@ -61,7 +61,7 @@ void ApplicationController::MainWindowInitialized()
                      &ApplicationController::AdvancedOptionToggled);
 }
 
-void ApplicationController::MainWindowClosed() { m_impl->m_plugin_manager.UnloadPlugins(); }
+void ApplicationController::MainWindowClosed() { m_impl->m_host_plugin_manager.UnloadPlugins(); }
 
 bool ApplicationController::InitializePlugins()
 {
@@ -70,7 +70,7 @@ bool ApplicationController::InitializePlugins()
         return false;
     }
 
-    if (absl::Status load_status = m_impl->m_plugin_manager.LoadPlugins(); !load_status.ok())
+    if (absl::Status load_status = m_impl->m_host_plugin_manager.LoadPlugins(); !load_status.ok())
     {
         QMessageBox::warning(
             m_impl->m_main_window, tr("Plugin Loading Failed"),

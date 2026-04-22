@@ -168,7 +168,8 @@ def parse_actions(args):
 
 def check_environment(args):
     """Checks for env vars and executables that will be used by this script.
-    Can be disabled with --no-prereq-checks
+    Overwrites executables with their absolute path to satisfy the warning for
+    subprocess.Popen(). This step can be skipped with --no-prereq-checks
     """
 
     if args.build_type != BuildType.DEBUG:
@@ -178,28 +179,35 @@ def check_environment(args):
         raise Exception("ANDROID_NDK_HOME env var must be set")
     print(f"\nANDROID_NDK_HOME found: {os.environ["ANDROID_NDK_HOME"]}")
 
-    if not shutil.which(args.exec_cmake):
+    cmake = shutil.which(args.exec_cmake)
+    if not cmake:
         raise Exception(f"Cannot find cmake exec {args.exec_cmake}")
-    cmd = [args.exec_cmake, "--version"]
+    cmd = [cmake, "--version"]
     dive.echo_and_run(cmd)
+    args.exec_cmake = cmake
 
-    if not shutil.which(args.exec_ninja):
+    ninja = shutil.which(args.exec_ninja)
+    if not ninja:
         raise Exception(f"Cannot find ninja exec {args.exec_ninja}")
-    cmd = [args.exec_ninja, "--version"]
+    cmd = [ninja, "--version"]
     dive.echo_and_run(cmd)
+    args.exec_ninja = ninja
 
     if (platform.system() == "Windows") and (args.build_via_generator):
-        if not shutil.which(args.exec_msbuild):
+        msbuild = shutil.which(args.exec_msbuild)
+        if not msbuild:
             raise Exception(f"Cannot find msbuild exec {args.exec_msbuild}")
-        cmd = [args.exec_msbuild, "--version"]
+        cmd = [msbuild, "--version"]
         dive.echo_and_run(cmd)
+        args.exec_msbuild = msbuild
 
     # Cannot check the flag --version because for some reason the return code is nonzero
     if args.exec_deployqt:
-        deployqt_found = shutil.which(args.exec_deployqt)
-        if not deployqt_found:
+        deployqt = shutil.which(args.exec_deployqt)
+        if not deployqt:
             raise Exception(f"{args.exec_deployqt} not found on the Path")
-        print(f"\n{args.exec_deployqt} found on the Path")
+        print(f"\n{args.exec_deployqt} found on the Path at {deployqt}")
+        args.exec_deployqt = deployqt
 
 
 def copy_plugins(args):

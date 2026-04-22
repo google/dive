@@ -14,7 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
+#include "dive/utils/device_resources_constants.h"
 #include "gtest/gtest.h"
 #include "trace_mgr.h"
 
@@ -46,7 +48,9 @@ TEST(AndroidTraceManagerTest, OnFrameBoundaryDetectedTraceByFrameForOneFrame)
     EXPECT_EQ(android_trace_manager.GetState(), TraceState::Triggered);
     // Can detect that a frame-based trace was chosen based on the trace file path. Duration-based
     // is trace-XXXX.rd instead.
-    EXPECT_EQ(android_trace_manager.GetTraceFilePath(), "/sdcard/Download/trace-frame-0001.rd");
+    EXPECT_EQ(
+        android_trace_manager.GetTraceFilePath(),
+        absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/trace-frame-0001.rd"));
 
     // We should start tracing on this frame boundary
     android_trace_manager.OnNewFrame();
@@ -68,7 +72,8 @@ TEST(AndroidTraceManagerTest, TraceByDurationTransistionsToFinishAndUsesByDurati
     // Unlike trace by frame, all states transitions occur during TriggerTrace.
     EXPECT_EQ(android_trace_manager.GetState(), TraceState::Finished);
     // Can detect trace by duration based on the trace file path.
-    EXPECT_EQ(android_trace_manager.GetTraceFilePath(), "/sdcard/Download/trace-0001.rd");
+    EXPECT_EQ(android_trace_manager.GetTraceFilePath(),
+              absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/trace-0001.rd"));
 }
 
 }  // namespace

@@ -19,7 +19,7 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 project(freedreno C CXX)
 
 if(NOT ANDROID)
-    message(FATAL_ERROR "Dive only supports libwrap for Android.")
+    message(FATAL_ERROR "Dive only supports Freedreno for Android.")
 endif()
 
 add_library(freedreno_includes INTERFACE)

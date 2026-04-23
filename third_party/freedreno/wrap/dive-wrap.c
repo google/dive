@@ -64,7 +64,7 @@ void SetCaptureState(int state)
                  DIVE_REPLAY_PM4_CAPTURE_FILE_NAME_PROPERTY_NAME,
                  prop_str);
 
-            snprintf(path, 1024, "/sdcard/Download/%s", prop_str);
+            snprintf(path, 1024, "/data/local/tmp/dive/%s", prop_str);
         }
         else
         {
@@ -76,7 +76,7 @@ void SetCaptureState(int state)
 
             const char* name = getenv("TESTNAME");
             if (!name)
-                name = "/sdcard/Download/trace-frame";
+                name = "/data/local/tmp/dive/trace-frame";
 
             snprintf(path, 1024, "%s-%04u.rd", name, frame_num);
         }

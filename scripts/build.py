@@ -19,6 +19,7 @@ import common_dive_utils as dive
 import enum
 import os
 import platform
+import re
 import shutil
 
 
@@ -27,12 +28,13 @@ import shutil
 EXTERNAL_PLUGINS_DIR = "plugins/external"
 # Build directory structure relative to --root-build-dir
 PKG_DIR = "pkg"
-APP_DIR = "dive_app"
 # CMake generator names
 NINJA_MULTI_CONFIG_NAME = "Ninja Multi-Config"
 # For release
 WINDOWS_UNNECESSARY_DIRS = ["translations"]
 WINDOWS_QT_DEPENDENCIES_BINARY = "dive_gui_lib.dll"
+# For parsing version string
+HOST_TOOLS_BUILD_NAME = "Host Tools Build"
 
 
 class ActionType(enum.StrEnum):
@@ -74,6 +76,10 @@ def parse_args():
         help="Comma-separated list of actions that this script will perform. "
         "Use --list-actions to check which actions are available. If "
         "unspecified, then all actions will be performed")
+    parser.add_argument(
+        "--archive-name",
+        help="Base name (no extension) of the final archive produced by this "
+        f"script. If unspecified, the '{HOST_TOOLS_BUILD_NAME}' version string will be used")
     parser.add_argument(
         "--build-type",
         type=BuildType,
@@ -363,6 +369,23 @@ def deploy_qt(args):
             raise Exception(f"Unrecognized platform: {system_name}")
 
 
+def get_archive_name(args, unparsed_string):
+    """Given unparsed_string (output of host tool run with --version flag) and
+    args, determine the appropriate archive name (without extension)
+    """
+    if args.archive_name:
+        return args.archive_name
+
+    pattern = r"(?<=" + re.escape(HOST_TOOLS_BUILD_NAME) + r"\:\s)\S+"
+    match_obj = re.search(pattern, unparsed_string)
+
+    if not match_obj:
+        raise Exception(f"Unsupported format of version string:\n{unparsed_string}")
+
+    print(f"Found host verison: {match_obj.group()}")
+
+    return "dive-" + match_obj.group()
+
 def package(args):
     """Implements ActionType.PACKAGE stage, which will package this Dive build
     into a single file that is easy to transfer
@@ -382,17 +405,21 @@ def package(args):
         case "Windows":
             for dir_name in WINDOWS_UNNECESSARY_DIRS:
                 rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
-        
-            print(f"\nZipping into '{APP_DIR}.zip'...")
-            shutil.make_archive(f"{APP_DIR}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
 
-            final_location_zip = f"{args.root_build_dir}/{APP_DIR}.zip"
+            cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli.exe", "--version"]
+            long_version_string = dive.run_and_return_output(cmd)
+            archive_name = get_archive_name(args, long_version_string)
+        
+            print(f"\nZipping into '{archive_name}.zip'...")
+            shutil.make_archive(f"{archive_name}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
+
+            final_location_zip = f"{args.root_build_dir}/{archive_name}.zip"
             if os.path.exists(final_location_zip):
                 print("\nClearing previous archive...")
                 os.unlink(final_location_zip)
 
             print(f"\nMoving zip archive to {os.getcwd()}/{final_location_zip}...")
-            shutil.move(f"{APP_DIR}.zip", final_location_zip)
+            shutil.move(f"{archive_name}.zip", final_location_zip)
 
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")

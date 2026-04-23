@@ -31,6 +31,7 @@ SRC_DIRS=(
     "plugins"
     "runtime_layer"
     "third_party/dive_crashpad"
+    "third_party/freedreno"
     "trace_stats"
     "ui"
     "src"

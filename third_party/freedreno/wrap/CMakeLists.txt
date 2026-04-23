@@ -30,10 +30,7 @@ target_link_libraries(wrap PRIVATE freedreno_includes log z)
 # _FORTIFY_SOURCE can likely go in target_compile_definitions however it was
 # unclear to me if the #undef is necessary and whether or not we need to ensure
 # it is first on the command-line.
-target_compile_options(
-    wrap
-    PRIVATE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
-)
+target_compile_options(wrap PRIVATE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
 target_compile_definitions(
     wrap
     PRIVATE BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD ANDROID_STL=c++_shared BIONIC=1

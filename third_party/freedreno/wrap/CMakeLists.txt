@@ -36,11 +36,6 @@ target_compile_definitions(
     PRIVATE BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD ANDROID_STL=c++_shared BIONIC=1
 )
 
-set_target_properties(
-    wrap
-    PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
-        FOLDER "freedreno"
-)
+set_target_properties(wrap PROPERTIES FOLDER "freedreno")
 
-install(TARGETS wrap DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")

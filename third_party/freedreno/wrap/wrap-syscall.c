@@ -197,7 +197,7 @@ static void
 hexdump_dwords(const void *data, int sizedwords)
 {
 	uint32_t *buf = (void *) data;
-	int i;
+	int i = 0;
 
 	for (i = 0; i < sizedwords; i++) {
 		if (!(i % 8))
@@ -278,8 +278,8 @@ static void dump_ioctl(struct device_info *info, int dir, int fd,
 {
 	int nr = _IOC_NR(request);
 	int sz = _IOC_SIZE(request);
-	char c;
-	const char *name;
+	char c = 0;
+	const char *name = NULL;
 
 	if (dir == _IOC_READ)
 		c = '<';
@@ -304,7 +304,7 @@ static void dumpfile(const char *file)
 {
 	char buf[1024];
 	int fd = open(file, 0);
-	int n;
+	int n = 0;
 
 	while ((n = read(fd, buf, 1024)) > 0)
 		write(1, buf, n);
@@ -364,7 +364,7 @@ static struct buffer * find_buffer(int device_fd, void *hostptr,
 }
 
 static struct buffer * find_buffer_all(void *hostptr, uint64_t gpuaddr) {
-	int fd;
+	int fd = 0;
 	int index = 0;
 	while(-1 != (index = wrap_get_next_fd(index, &fd))) {
 		struct buffer *buf = find_buffer(fd, hostptr, gpuaddr, 0, 0, 0);
@@ -391,7 +391,7 @@ static void dump_buffer(uint64_t gpuaddr)
 	struct buffer *buf = find_buffer_all((void *)-1, gpuaddr);
 	if (buf) {
 		char filename[32];
-		int fd;
+		int fd = 0;
 		sprintf(filename, "%04d-%016" PRIx64 ".dat", cnt, buf->gpuaddr);
 		printf("\t\tdumping: %s\n", filename);
 		fd = open(filename, O_WRONLY| O_TRUNC | O_CREAT, 0644);
@@ -454,7 +454,7 @@ static void install_fd(const char *path, int fd)
 int open(const char* path, int flags, ...)
 {
 	mode_t mode = 0;
-	int ret;
+	int ret = 0;
 	PROLOG(open);
 
 	if (flags & (O_CREAT | O_TMPFILE)) {
@@ -497,7 +497,7 @@ int open(const char* path, int flags, ...)
 int openat(int dirfd, const char *path, int flags, ...)
 {
 	mode_t mode = 0;
-	int ret;
+	int ret = 0;
 	PROLOG(openat);
 
 	if (flags & (O_CREAT | O_TMPFILE)) {
@@ -539,7 +539,7 @@ int openat(int dirfd, const char *path, int flags, ...)
 
 int __openat(int dirfd, const char *path, int flags, int mode)
 {
-	int ret;
+	int ret = 0;
 	PROLOG(__openat);
 
 	printf("openat: path: %s\n", path);
@@ -610,7 +610,7 @@ static void dump_bos(int fd)
 	PROLOG(munmap);
 	// GOOGLE: lock the bo mutex
 	pthread_mutex_lock(&bo_lock);
-	struct buffer *buf;
+	struct buffer *buf = NULL;
 	struct list *buffers_of_interest = wrap_get_buffers_of_interest(fd);
 	assert(buffers_of_interest);
 	list_for_each_entry(buf, buffers_of_interest, node) {
@@ -648,7 +648,7 @@ static void dump_bos(int fd)
 
 static void dump_ib_prep(int device_fd)
 {
-	struct buffer *other_buf;
+	struct buffer *other_buf = NULL;
 	struct list *buffers_of_interest = wrap_get_buffers_of_interest(device_fd);
 	assert(buffers_of_interest);
 	list_for_each_entry(other_buf, buffers_of_interest, node) {
@@ -665,7 +665,7 @@ static void dump_ib(int fd, struct kgsl_ibdesc *ibdesc)
 
 	struct buffer *buf = find_buffer(fd, NULL, ibdesc->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
-		struct buffer *other_buf;
+		struct buffer *other_buf = NULL;
 		uint32_t off = ibdesc->gpuaddr - buf->gpuaddr;
 		uint32_t *ptr = buf->hostptr + off;
 
@@ -692,7 +692,7 @@ static void dump_cmd(int fd, struct kgsl_command_object *cmd)
 	/* note: kgsl seems to ignore cmd->offset.. which may be a bug.. */
 	struct buffer *buf = find_buffer(fd, NULL, cmd->gpuaddr, 0, 0, 0);
 	if (buf && buf->hostptr) {
-		struct buffer *other_buf;
+		struct buffer *other_buf = NULL;
 		uint32_t sizedwords = cmd->size / 4;
 		uint32_t off = cmd->gpuaddr - buf->gpuaddr;
 		uint32_t *ptr = buf->hostptr + off;
@@ -721,8 +721,8 @@ static void kgsl_ioctl_ringbuffer_issueibcmds_pre(int fd,
 		struct kgsl_ringbuffer_issueibcmds *param)
 {
 	int is2d = get_kgsl_info(fd) == &kgsl_2d_info;
-	int i;
-	struct kgsl_ibdesc *ibdesc;
+	int i = 0;
+	struct kgsl_ibdesc *ibdesc = NULL;
 	dump_ib_prep(fd);
 	printf("\t\tdrawctxt_id:\t%08x\n", param->drawctxt_id);
 	/*
@@ -779,7 +779,7 @@ so the context, restored on context switch, is the first: 320 (0x140) words
 		printf("\t\tibdesc[%d].hostptr:\t%p\n", i, legacy_ibdesc[i].hostptr);
 		if (is2d) {
 			if (ibdesc[i].sizedwords > PACKETSIZE_STATESTREAM) {
-				unsigned int len, *ptr;
+				unsigned int len = 0, *ptr = NULL;
 				/* note: kernel side seems to expect param->timestamp to
 				 * contain same thing as ibdesc[0].hostptr ... this seems to
 				 * be what actually gets read from on kernel side.  Maybe a
@@ -824,8 +824,8 @@ static void kgsl_ioctl_ringbuffer_issueibcmds_post(int fd,
 static void kgsl_ioctl_submit_commands_pre(int fd,
 		struct kgsl_submit_commands *param)
 {
-	int i;
-	struct kgsl_ibdesc *ibdesc;
+	int i = 0;
+	struct kgsl_ibdesc *ibdesc = NULL;
 
 	dump_ib_prep(fd);
 
@@ -916,7 +916,7 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 			typename ? typename : "unknown");
 	if (param->type == KGSL_PROP_DEVICE_INFO) {
 		struct kgsl_devinfo *devinfo = param->value;
-		uint32_t gpu_id;
+		uint32_t gpu_id = 0;
 		if (wrap_gpu_id()) {
 			uint32_t gpu_id = wrap_gpu_id();
 			/* convert gpu-id into chip-id, and add optional patch level: */
@@ -1013,9 +1013,9 @@ static void kgsl_ioctl_device_getproperty_post(int fd,
 
 static int len_from_vma(unsigned int hostptr)
 {
-	long long addr, endaddr, offset, inode;
-	FILE *f;
-	int ret;
+	long long addr = 0, endaddr = 0, offset = 0, inode = 0;
+	FILE *f = NULL;
+	int ret = 0;
 
 	// TODO: only for debug..
 	if (0)
@@ -1024,7 +1024,7 @@ static int len_from_vma(unsigned int hostptr)
 	f = fopen("/proc/self/maps", "r");
 
 	do {
-		char c;
+		char c = 0;
 		ret = fscanf(f, "%llx-%llx", &addr, &endaddr);
 		if (addr == hostptr)
 			return endaddr - addr;
@@ -1037,7 +1037,7 @@ static int len_from_vma(unsigned int hostptr)
 static void kgsl_ioctl_sharedmem_from_vmalloc_pre(int fd,
 		struct kgsl_sharedmem_from_vmalloc *param)
 {
-	int len;
+	int len = 0;
 
 	/* just make gpuaddr == hostptr.. should make it easy to track */
 	printf("\t\tflags:\t\t%08x\n", param->flags);
@@ -1203,7 +1203,7 @@ static void kgsl_ioctl_gpumem_alloc_pre(int fd,
 static void kgsl_ioctl_gpumem_alloc_post(int fd,
 		struct kgsl_gpumem_alloc *param)
 {
-	struct buffer *buf;
+	struct buffer *buf = NULL;
 	log_gpuaddr(fd, param->gpuaddr, param->size);
 	printf("\t\tgpuaddr:\t%08lx\n", param->gpuaddr);
 	/* NOTE: host addr comes from mmap'ing w/ gpuaddr as offset */
@@ -1227,7 +1227,7 @@ static void kgsl_ioctl_gpumem_alloc_id_pre(int fd,
 static void kgsl_ioctl_gpumem_alloc_id_post(int fd,
 		struct kgsl_gpumem_alloc_id *param)
 {
-	struct buffer *buf;
+	struct buffer *buf = NULL;
 #ifdef FAKE
 	static int id = 0;
 
@@ -1347,7 +1347,7 @@ static void kgls_ioctl_gpuobj_alloc_pre(int fd,
 static void kgls_ioctl_gpuobj_alloc_post(int fd,
 		struct kgsl_gpuobj_alloc *param)
 {
-	struct buffer *buf;
+	struct buffer *buf = NULL;
 #ifdef FAKE
 	static int id = 0;
 
@@ -1423,8 +1423,8 @@ static void kgsl_ioclt_gpuobj_import_post(int fd,
 static void kgls_ioctl_gpuobj_gpu_command_pre(int fd,
 		struct kgsl_gpu_command *param)
 {
-	int i;
-	struct kgsl_command_object *cmdobj;
+	int i = 0;
+	struct kgsl_command_object *cmdobj = NULL;
 
 	dump_ib_prep(fd);
 
@@ -1607,9 +1607,9 @@ int ioctl(int fd, unsigned long int request, ...)
 #endif
 {
 	int ioc_size = _IOC_SIZE(request);
-	int ret;
+	int ret = 0;
 	PROLOG(ioctl);
-	void *ptr;
+	void *ptr = NULL;
 
 	// XXX fbdev doesn't appear to play by the rules:
 	ioc_size = 1;
@@ -1629,7 +1629,7 @@ int ioctl(int fd, unsigned long int request, ...)
 	if (!get_kgsl_info(fd)) {
 		static char path[64];
 		static char buf[256];
-		int ret;
+		int ret = 0;
 
 		sprintf(path, "/proc/self/fd/%d", fd);
 
@@ -1802,8 +1802,8 @@ void *mmap64(void *addr, size_t length, int prot, int flags, int fd, int64_t off
 
 int munmap(void *addr, size_t length)
 {
-	struct buffer *buf;
-	int ret;
+	struct buffer *buf = NULL;
+	int ret = 0;
 	PROLOG(munmap);
 
 	LOCK();

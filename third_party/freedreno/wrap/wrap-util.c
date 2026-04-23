@@ -133,7 +133,7 @@ struct list *wrap_get_buffers_of_interest(int device_fd) {
 
 int wrap_printf(const char *format, ...)
 {
-	int n;
+	int n = 0;
 	va_list args;
 
 #ifdef USE_PTHREADS
@@ -146,7 +146,7 @@ int wrap_printf(const char *format, ...)
 	va_end(args);
 
 	if (strstr(tracebuf, "\n") || ((tracebufp - tracebuf) > (sizeof(tracebuf)/2))) {
-		char *p2, *p = tracebuf;
+		char *p2 = NULL, *p = tracebuf;
 		while ((p < tracebufp) && (p2 = strstr(p, "\n"))) {
 			*p2 = '\0';
 #if defined(BIONIC)
@@ -173,7 +173,7 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	char buf[PATH_MAX];
 	static int cnt = 0;
 	int n = cnt++;
-	const char *testnum;
+	const char *testnum = NULL;
 	va_list  args;
 
 	// GOOGLE: Use exsiting device_file if already being added.
@@ -461,7 +461,7 @@ void * __rd_dlsym_helper(const char *name)
 #ifdef BIONIC
 	static void *libc2d2_dl;
 #endif
-	void *func;
+	void *func = NULL;
 
 #ifndef BIONIC
 	if (!libc_dl)
@@ -569,7 +569,7 @@ void hexdump(const void *data, int size)
 {
 	unsigned char *buf = (void *) data;
 	char alpha[17];
-	int i;
+	int i = 0;
 
 	for (i = 0; i < size; i++) {
 		if (!(i % 16))

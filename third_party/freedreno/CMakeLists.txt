@@ -16,7 +16,7 @@
 
 # Freedreno can be compiled on its own; keep the version and project info.
 cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
-project(wrap C CXX)
+project(freedreno C CXX)
 
 if(NOT ANDROID)
     message(FATAL_ERROR "Dive only supports libwrap for Android.")

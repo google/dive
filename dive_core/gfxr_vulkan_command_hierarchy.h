@@ -77,6 +77,23 @@ class GfxrVulkanCommandHierarchyCreator
                   uint64_t child_node_index);
     void ConditionallyAddChild(uint64_t node_index);
 
+    // Helper function to extract and convert a value associated with a specific
+    // key from a JSON node into a string representation.
+    std::string GetValueStr(const nlohmann::ordered_json& node, const std::string& key);
+
+    // Creates a summary string containing key arguments
+    // and their values for a given Vulkan command.
+    std::string GetCommandSummary(const std::string& cmd_name, const nlohmann::ordered_json& args);
+
+    // Appends a summary of draw call arguments (vertex/index count, instance count) to the
+    // given stream.
+    void AppendDrawCallSummary(std::ostringstream& stream, const nlohmann::ordered_json& args,
+                               const std::string& primary_key);
+
+    // Appends a formatted enum value to the given stream, stripping a specified prefix if present.
+    void AppendEnumSummary(std::ostringstream& stream, const nlohmann::ordered_json& args,
+                           const std::string& key, const std::string& prefix);
+
     uint64_t m_cur_submit_node_index = 0;
     uint64_t m_cur_command_buffer_node_index = 0;
     std::stack<uint64_t> m_cur_parent_node_index_stack;
@@ -88,27 +105,5 @@ class GfxrVulkanCommandHierarchyCreator
     Topology m_topology[CommandHierarchy::kTopologyTypeCount];
     bool m_used_in_mixed_command_hierarchy = false;
     std::unordered_map<uint64_t, uint64_t> m_dive_indices_to_local_indices_map;
-
-    // Additional info that will be displayed in the description of a draw call node
-    struct DrawCallDescInfo
-    {
-        uint64_t index_count = 0;
-        uint64_t vertex_count = 0;
-        uint64_t instance_count = 0;
-    };
-
-    // Returns false if key was recognized to correspond to a DrawCallDescInfo field but val could
-    // not be parsed
-    bool ParseCurDrawCallInfo(std::string_view key, std::string_view val);
-
-    // Forms string of drawcall info, some examples:
-    //
-    // vkCmdDraw: "(vertexCount=#,instanceCount=#)"
-    // vkCmdDrawIndexed: "(indexCount=#,instanceCount=#)"
-    // vkCmdDrawMultiEXT: "(instanceCount=#)"
-    // vkCmdDraw* without instanceCount parameter: ""
-    std::string GetCurrDrawCallString();
-
-    DrawCallDescInfo m_cur_draw_call_info;
 };
 }  // namespace Dive

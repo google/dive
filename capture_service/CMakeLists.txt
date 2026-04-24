@@ -40,6 +40,7 @@ target_link_libraries(
         absl::str_format
         absl::strings
         absl::log
+        dive_device_resources_constants
 )
 
 if(ANDROID)
@@ -57,6 +58,7 @@ target_link_libraries(
         absl::log
         trace_mgr
         command_utils
+        dive_device_resources_constants
 )
 set_property(TARGET service PROPERTY POSITION_INDEPENDENT_CODE 1)
 
@@ -97,6 +99,7 @@ else()
         dive_src_includes
         version_info
         command_utils
+        dive_renderdoc_files
     )
 
     add_executable(dive_client_cli dive_client_cli.cc)
@@ -168,7 +171,13 @@ else()
     gtest_discover_tests(android_application_test)
 
     add_executable(android_trace_mgr_test android_trace_mgr_test.cc)
-    target_link_libraries(android_trace_mgr_test trace_mgr gtest gtest_main)
+    target_link_libraries(
+        android_trace_mgr_test
+        dive_device_resources_constants
+        trace_mgr
+        gtest
+        gtest_main
+    )
     gtest_discover_tests(android_trace_mgr_test)
 endif()
 

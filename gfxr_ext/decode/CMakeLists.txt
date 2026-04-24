@@ -61,6 +61,7 @@ target_include_directories(
 # Add add_subdirectory for gpu_time only when building for Android
 if(ANDROID)
     add_subdirectory(../../gpu_time ${CMAKE_CURRENT_BINARY_DIR}/gpu_time_build)
+    add_subdirectory(../../src ${CMAKE_CURRENT_BINARY_DIR}/src)
 endif()
 
 # -------------------
@@ -84,6 +85,7 @@ target_link_libraries(
     gfxrecon_decode
     gpu_time
     absl::any_invocable
+    dive_renderdoc_files
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if(WIN32)

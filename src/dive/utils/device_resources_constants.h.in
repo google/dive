@@ -46,7 +46,7 @@ struct DeviceResourcesConstants
 
     // -------------------------------------------------------------------------
     // On the device, device resources are deployed into these locations
-    static constexpr std::string_view kDeployFolderPath = "/data/local/tmp/dive";
+    static constexpr std::string_view kDeployFolderPath = "@DIVE_DEPLOY_FOLDER_PATH@";
     static constexpr std::string_view kDeployVulkanGlobalFolderPath = "/data/local/debug/vulkan";
     static constexpr std::string_view kDeployManifestFolderPath =
         "/system/etc/openxr/1/api_layers/implicit.d/";

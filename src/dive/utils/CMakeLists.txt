@@ -27,17 +27,39 @@ if(NOT ANDROID)
     )
 endif()
 
+# === dive_device_resources_constants ==========================================
+
+# We don't need the two-stage configure but it's consistent with src/dive/build_defs.
+configure_file(
+    device_resources_constants.h.in
+    device_resources_constants_tmp.h.in
+)
+file(
+    GENERATE OUTPUT
+        "${CMAKE_BINARY_DIR}/generated/$<CONFIG>/include/dive/utils/device_resources_constants.h"
+    INPUT "${CMAKE_CURRENT_BINARY_DIR}/device_resources_constants_tmp.h.in"
+)
+
+add_library(dive_device_resources_constants INTERFACE)
+target_include_directories(
+    dive_device_resources_constants
+    INTERFACE ${CMAKE_BINARY_DIR}/generated/$<CONFIG>/include
+)
+target_link_libraries(
+    dive_device_resources_constants
+    INTERFACE dive_src_includes
+)
+
 # === dive_device_resources ====================================================
 
 if(NOT ANDROID)
     add_library(dive_device_resources device_resources.h device_resources.cpp)
     target_link_libraries(
         dive_device_resources
-        PUBLIC absl::statusor
+        PUBLIC absl::statusor dive_device_resources_constants
         PRIVATE
             absl::span
             absl::strings
-            dive_build_defs
             dive_src_includes
             dive_status
             command_utils
@@ -60,6 +82,14 @@ endif()
 
 add_library(string_utils string_utils.h string_utils.cpp)
 target_link_libraries(string_utils PRIVATE dive_src_includes)
+
+# === dive_renderdoc_files =====================================================
+
+add_library(dive_renderdoc_files renderdoc_files.h renderdoc_files.cpp)
+target_link_libraries(
+    dive_renderdoc_files
+    PRIVATE dive_device_resources_constants
+)
 
 # === tests ====================================================================
 

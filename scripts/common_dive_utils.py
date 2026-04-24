@@ -67,6 +67,13 @@ def echo_and_run(cmd):
     subprocess.run(cmd, check=True, text=True)
 
 
+def run_and_return_output(cmd):
+    print(f"\n> {' '.join(cmd)}")
+    res = subprocess.run(cmd, capture_output=True, check=True, text=True)
+    print(res.stdout)
+    return res.stdout
+
+
 class Timer:
     def __init__(self, name="unnamed"):
         self._name = name

@@ -183,7 +183,7 @@ def check_environment(args):
 
     if "ANDROID_NDK_HOME" not in os.environ:
         raise Exception("ANDROID_NDK_HOME env var must be set")
-    print(f"\nANDROID_NDK_HOME found: {os.environ["ANDROID_NDK_HOME"]}")
+    print(f"\nANDROID_NDK_HOME found: {os.environ['ANDROID_NDK_HOME']}")
 
     cmake = shutil.which(args.exec_cmake)
     if not cmake:
@@ -382,7 +382,7 @@ def get_archive_name(args, unparsed_string):
     if not match_obj:
         raise Exception(f"Unsupported format of version string:\n{unparsed_string}")
 
-    print(f"Found host verison: {match_obj.group()}")
+    print(f"Found host version: {match_obj.group()}")
 
     return "dive-" + match_obj.group()
 

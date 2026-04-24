@@ -645,7 +645,7 @@ absl::Status AndroidDevice::CleanupPackageProperties(const std::string& package)
 }
 
 absl::Status AndroidDevice::SetupApp(const std::string& package, const ApplicationType type,
-                                     const std::string& command_args)
+                                     const std::string& command_args, bool skip_app_setup)
 {
     if (type == ApplicationType::VULKAN_APK)
     {
@@ -672,6 +672,11 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
     if (m_app == nullptr)
     {
         return absl::InternalError("Failed allocate memory for AndroidApplication");
+    }
+
+    if (skip_app_setup)
+    {
+        return absl::OkStatus();
     }
 
     m_app->SetGfxrCaptureSettings(m_gfxr_capture_settings);

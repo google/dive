@@ -149,8 +149,11 @@ class AndroidDevice
     absl::StatusOr<std::vector<std::string>> ListPackage(
         PackageListOptions option = PackageListOptions::kAll) const;
     std::string GetDeviceDisplayName() const;
+
+    // If skip_app_setup is set to true, the application object is instantiated but standard ADB
+    // setup procedures are bypassed. This is used when applications require specialized setups.
     absl::Status SetupApp(const std::string& package, const ApplicationType type,
-                          const std::string& command_args);
+                          const std::string& command_args, bool skip_app_setup = false);
     absl::Status SetupApp(const std::string& binary, const std::string& args,
                           const ApplicationType type);
 

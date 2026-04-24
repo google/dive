@@ -14,42 +14,11 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.5)
-project(libwrap)
-set(target_name wrap)
-
 if(NOT ANDROID)
-    message( FATAL_ERROR "libwrap can only works on Android." )
+    message(FATAL_ERROR "Dive only supports Freedreno for Android.")
 endif()
 
-message("Build libwrap for Android")
-set(HDR_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/wrap/list.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/wrap.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/dive-wrap.h"
-)
+add_library(freedreno_includes INTERFACE)
+target_include_directories(freedreno_includes INTERFACE includes util)
 
-set(SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/wrap/wrap-util.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/wrap-syscall.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/dive-load-status.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrap/dive-wrap.c"
-)
-
-add_library(wrap SHARED ${HDR_FILES} ${SRC_FILES})
-set(CMAKE_CPP_FLAGS "${CMAKE_CPP_FLAGS} -frtti -fexceptions")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DBIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD")
-add_definitions(-DANDROID_STL=c++_shared -DNDK_DEBUG=1 -DBIONIC=1)
-set(CMAKE_BUILD_TYPE Debug)  # Release build didn't work (TODO: check why release build not working)
-target_include_directories(${target_name} 
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/includes
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/util)
-target_link_libraries(${target_name} log z)
-set_target_properties(${target_name}
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
-)
-
-if(MSVC)
-    set_target_properties(${target_name} PROPERTIES FOLDER "freedreno")
-endif()
-
-install(TARGETS ${target_name} DESTINATION ${CMAKE_INSTALL_PREFIX})
+add_subdirectory(wrap)

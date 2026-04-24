@@ -186,9 +186,7 @@ else()
         "Generate build files for third_party/freedreno (libwrap)"
     )
     list(APPEND CMAKE_MESSAGE_INDENT "  ")
-    # Currently hardcoding debug build, unknown reason
-    add_subdirectory(third_party/freedreno EXCLUDE_FROM_ALL)
-    install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+    add_subdirectory(third_party/freedreno)
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
 

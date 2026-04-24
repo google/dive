@@ -44,6 +44,10 @@ android {
     androidResources {
         ignoreAssetsPattern "XrLayer_gfxreconstruct.json"
     }
+    // GOOGLE: Don't strip so tombstones have function names
+    packagingOptions {
+        doNotStrip "**/*/*.so"
+    }
 }
 
 dependencies {

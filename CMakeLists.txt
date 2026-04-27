@@ -143,6 +143,8 @@ if(UPLOAD_DEBUG_SYMBOLS)
     endif()
 endif()
 
+set(DIVE_DEPLOY_FOLDER_PATH /data/local/tmp/dive)
+
 # Disable gtest for install
 set(INSTALL_GTEST OFF)
 

@@ -519,6 +519,10 @@ absl::Status AndroidApplication::GfxrSetup()
             "Called GfxrSetup without calling SetGfxrCaptureSettings first!");
     }
 
+    // Need setenforce 0 to save files to /data/local/tmp
+    // TODO: b/506157883 - Make kDeviceDownloadPath user-configurable and remove need for root
+    RETURN_IF_ERROR(m_dev.RequestRootAccess());
+
     LOG(INFO) << "AndroidApplication::GfxrSetup() package " << m_package << " started";
     RETURN_IF_ERROR(
         m_dev.DeployDeviceResource(Dive::DeviceResourcesConstants::kVkGfxrLayerLibName));

@@ -921,8 +921,6 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
     std::string dump_pm4_file_name = parse_remote_capture.stem().string() + ".rd";
     std::string remote_pm4_path = absl::StrFormat(
         "%s/%s", Dive::DeviceResourcesConstants::kDeviceDownloadPath, dump_pm4_file_name.c_str());
-    std::string remote_pm4_inprogress_path =
-        absl::StrFormat("%s.inprogress", remote_pm4_path.c_str());
 
     if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
@@ -999,12 +997,6 @@ absl::Status DeviceManager::RunReplayGfxrScript(const GfxrReplaySettings& settin
 
     if (settings.run_type == GfxrReplayOptions::kPm4Dump)
     {
-        // Wait for PM4 trace file to be written to.
-        do
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        } while (m_device->FileExists(remote_pm4_inprogress_path));
-
         if (absl::Status s = m_device->RetrieveFile(remote_pm4_path, settings.local_download_dir);
             !s.ok())
         {

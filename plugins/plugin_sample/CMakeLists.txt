@@ -36,7 +36,4 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
-install(
-    TARGETS dive_plugin_sample
-    DESTINATION "${DIVE_HOST_PLUGINS_INSTALL_DIR}"
-)
+install(TARGETS dive_plugin_sample DESTINATION "${DIVE_DEST_HOST_PLUGINS}")

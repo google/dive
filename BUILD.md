@@ -139,14 +139,3 @@ python scripts/build.py --build-via-generator
         * `third_party/gfxreconstruct/android/layer/build`
         * `third_party/gfxreconstruct/android/tools/replay/.cxx`
         * `third_party/gfxreconstruct/android/tools/replay/build`
-
-## App bundle (macOS)
-
-After building the host tools and the device resources as outlined above and installing them, additional steps are required to make a self-contained macOS application bundle from the contents of the `build/pkg/` directory.
-
-All external plugin folders must be placed under `$DIVE_ROOT_PATH/build/pkg/plugins` to be properly added to the bundle.
-
-```sh
-python scripts/deploy_mac_bundle.py
-```
-This will deploy the mac package and place it at `$DIVE_ROOT_PATH/build/pkg/dive.app`.

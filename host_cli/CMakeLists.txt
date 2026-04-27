@@ -58,7 +58,7 @@ target_link_libraries(
         dive_legacy_includes
 )
 
-install(TARGETS host_cli DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+install(TARGETS host_cli DESTINATION "${DIVE_DEST_HOST}")
 
 # ---------------------
 # data_core_wrapper_test

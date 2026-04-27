@@ -24,9 +24,7 @@ import shutil
 
 
 # GLOBAL CONSTANTS
-# Dive directory structure relative to root Dive dir
-EXTERNAL_PLUGINS_DIR = "plugins/external"
-# Build directory structure relative to --root-build-dir
+PROFILING_PLUGIN_PATH = "plugins/external/dive_profiling_plugin"
 PKG_DIR = "pkg"
 # CMake generator names
 NINJA_MULTI_CONFIG_NAME = "Ninja Multi-Config"
@@ -38,11 +36,11 @@ HOST_TOOLS_BUILD_NAME = "Host Tools Build"
 
 
 class ActionType(enum.StrEnum):
-    COPY_PLUGINS = enum.auto()      # copy external plugins into pkg dir
     CONFIGURE_HOST = enum.auto()
     BUILD_HOST = enum.auto()        # separated to make VS builds using the UI easy
     INSTALL_HOST = enum.auto()
     ALL_DEVICE = enum.auto()        # configure, build, and install device libraries
+    COPY_PLUGINS = enum.auto()      # copy external plugins into pkg dir
     DEPLOY_QT = enum.auto()
     PACKAGE = enum.auto()           # removes some extraneous files and packages the release
 
@@ -219,13 +217,17 @@ def check_environment(args):
 def copy_plugins(args):
     """Implements ActionType.COPY_PLUGINS stage
     """
-    if not os.path.exists(EXTERNAL_PLUGINS_DIR):
-        print(f"\nDir {EXTERNAL_PLUGINS_DIR} does not exist, skipping")
+
+    if not os.path.exists(PROFILING_PLUGIN_PATH):
+        print(f"\nDir {PROFILING_PLUGIN_PATH} does not exist, skipping")
         return
 
-    print("\nCopying over external plugins...")
-    print(os.listdir(EXTERNAL_PLUGINS_DIR))
-    shutil.copytree(EXTERNAL_PLUGINS_DIR, f"{args.root_build_dir}/pkg/plugins/", dirs_exist_ok=True)
+    print("\nCopying over known external device plugin: dive_profiling_plugin...")
+    if platform.system() == "Darwin":
+        profiling_dest = f"{args.root_build_dir}/{PKG_DIR}/dive.app/Contents/Resources/dive_profiling_plugin"
+    else:
+        profiling_dest = f"{args.root_build_dir}/{PKG_DIR}/device/plugins/dive_profiling_plugin"
+    shutil.copytree(PROFILING_PLUGIN_PATH, profiling_dest, dirs_exist_ok=True)
 
 
 def configure_host(args):
@@ -239,13 +241,15 @@ def configure_host(args):
             cmd = [args.exec_cmake, ".",
                    f'-G{NINJA_MULTI_CONFIG_NAME}',
                    f"-B{args.root_build_dir}/host",
-                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+                   f"-DDIVE_STR_BUILD={args.root_build_dir}"
                    ]
         case "Windows":
             cmd = [args.exec_cmake, ".",
                    f"-G{args.visual_studio_name}",
                    f"-B{args.root_build_dir}/host",
-                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+                   f"-DDIVE_STR_BUILD={args.root_build_dir}"
                    ]
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")
@@ -314,7 +318,8 @@ def all_device(args):
            "-DANDROID_PLATFORM=android-26",
            "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
            "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
-           f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+           f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+           f"-DDIVE_STR_BUILD={args.root_build_dir}"
            ]
     if args.ci:
         cmd.append("-DDIVE_GFXR_GRADLE_CONSOLE=plain")
@@ -446,9 +451,6 @@ def main():
         check_environment(args)
 
     with dive.Timer("total"):
-        if ActionType.COPY_PLUGINS in args.actions:
-            with dive.Timer(ActionType.COPY_PLUGINS):
-                copy_plugins(args)
         if ActionType.CONFIGURE_HOST in args.actions:
             with dive.Timer(ActionType.CONFIGURE_HOST):
                 configure_host(args)
@@ -461,6 +463,9 @@ def main():
         if ActionType.ALL_DEVICE in args.actions:
             with dive.Timer(ActionType.ALL_DEVICE):
                 all_device(args)
+        if ActionType.COPY_PLUGINS in args.actions:
+            with dive.Timer(ActionType.COPY_PLUGINS):
+                copy_plugins(args)
         if ActionType.DEPLOY_QT in args.actions:
             with dive.Timer(ActionType.DEPLOY_QT):
                 deploy_qt(args)

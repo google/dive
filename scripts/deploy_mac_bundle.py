@@ -32,11 +32,6 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Sign the app bundle")
-    parser.add_argument(
-        "--device-libraries",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Copy over the device librares into the bundle")
     return parser.parse_args()
 
 
@@ -60,29 +55,11 @@ def main(args):
 
     print("\nSetting up dive.app...")
     # New dive.app was installed with host tools, move it and run macdeployqt
-    if os.path.exists("host/dive.app"):
-        if os.path.exists("dive.app"):
-            shutil.rmtree("dive.app")
-        shutil.move("host/dive.app", "dive.app")
-    # There is an existing dive.app that has been deployed already, skip setup and proceed
-    elif os.path.exists("dive.app"):
-        print("\nSkipping setup because it was already done, reinstall host tools to retrigger...")
-    else:
+    if not os.path.exists("dive.app"):
         raise Exception("Not detecting any dive.app bundle, have you installed host tools?")
 
-    print("\nCopying resources into app bundle...")
-
-    shutil.copytree("host", "dive.app/Contents/MacOS", dirs_exist_ok=True)
-
-    plugin_directory = "dive.app/Contents/PlugIns/dive_plugins"
-    shutil.copytree("plugins", plugin_directory, dirs_exist_ok=True)
-
-    if args.device_libraries:
-        shutil.copytree("device", "dive.app/Contents/Resources", dirs_exist_ok=True)
-    else:
-        print("\nSkipping copying device libraries because --no-device-libraries...")
-
     # Find all plugins and add them via the -executable flag so that internal paths pointing to Homebrew are replaced with the bundle-relative paths.
+    plugin_directory = "dive.app/Contents/PlugIns/plugins"
     cmd = [macdeployqt_exec, "dive.app"]
     for root, dirs, files in os.walk(plugin_directory):
         for file in files:

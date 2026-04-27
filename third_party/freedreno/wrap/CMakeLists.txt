@@ -38,4 +38,4 @@ target_compile_definitions(
 
 set_target_properties(wrap PROPERTIES FOLDER "freedreno")
 
-install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+install(TARGETS wrap DESTINATION "${DIVE_DEST_DEVICE}")

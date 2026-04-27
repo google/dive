@@ -23,6 +23,9 @@ add_subdirectory(../../framework/application ${PROJECT_SOURCE_DIR}/../../framewo
 # GOOGLE: Add subdirectories for gfxr_ext, putting binaries into the same dir as their base counterparts
 add_subdirectory(../../../../../gfxr_ext/decode ${CMAKE_SOURCE_DIR}/../../framework/decode_ext/build/tools/replay/${ANDROID_ABI})
 
+# GOOGLE: Package libwrap into replay to simplify deployment
+add_subdirectory(../../../../freedreno ${CMAKE_SOURCE_DIR}/../../framework/freedreno/build/tools/replay/${ANDROID_ABI})
+
 add_library(gfxrecon-replay
             SHARED
                 ${GFXRECON_SOURCE_DIR}/tools/tool_settings.h

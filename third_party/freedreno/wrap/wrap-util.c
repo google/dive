@@ -25,6 +25,7 @@
 
 // GOOGLE: Include Dive related header
 #include "dive-wrap.h"
+#include "dive/utils/device_resources_constants_defines.h"
 
 int IsCapturing();
 #include <ctype.h>
@@ -198,7 +199,8 @@ void rd_start(int device_fd, const char *name, const char *fmt, ...)
 	}
 
 #if defined(BIONIC)
-	char* base_path = "/sdcard/Download";
+	// GOOGLE: Use the same path as Dive since we know that we can write to it.
+	char* base_path = DIVE_DEVICE_DOWNLOAD_PATH;
 #else
 	char* base_path = "/tmp";
 #endif

@@ -21,6 +21,8 @@ limitations under the License.
 #include <string.h>
 #include <sys/system_properties.h>
 
+#include "dive/utils/device_resources_constants_defines.h"
+
 // TODO: (renfeng) update the capture interface so that user can set this property value.
 #define DIVE_MAX_BUFFER_SIZE_PROPERTY_NAME "debug.dive.pm4.max_buffer_size"
 #define DIVE_REPLAY_PM4_CAPTURE_PROPERTY_NAME "debug.dive.replay.capture_pm4"
@@ -64,7 +66,7 @@ void SetCaptureState(int state)
                  DIVE_REPLAY_PM4_CAPTURE_FILE_NAME_PROPERTY_NAME,
                  prop_str);
 
-            snprintf(path, 1024, "/data/local/tmp/dive/%s", prop_str);
+            snprintf(path, 1024, DIVE_DEVICE_DOWNLOAD_PATH "/%s", prop_str);
         }
         else
         {
@@ -76,7 +78,7 @@ void SetCaptureState(int state)
 
             const char* name = getenv("TESTNAME");
             if (!name)
-                name = "/data/local/tmp/dive/trace-frame";
+                name = DIVE_DEVICE_DOWNLOAD_PATH "/trace-frame";
 
             snprintf(path, 1024, "%s-%04u.rd", name, frame_num);
         }

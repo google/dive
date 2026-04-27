@@ -17,12 +17,12 @@ The recommended way of using Dive. Refer to [BUILD.md](BUILD.md) to first build 
 
 ```sh
 # On Linux
-$DIVE_ROOT_PATH/install/dive
+$DIVE_ROOT_PATH/build/pkg/dive
 ```
 
 ```bat
 REM On Windows
-%DIVE_ROOT_PATH%\install\dive.exe
+%DIVE_ROOT_PATH%\build\pkg\dive.exe
 ```
 
 # Capture Output Directory

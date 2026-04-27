@@ -19,28 +19,28 @@ import common_dive_utils as dive
 import enum
 import os
 import platform
+import re
 import shutil
 
 
 # GLOBAL CONSTANTS
-# Dive directory structure relative to root Dive dir
-EXTERNAL_PLUGINS_DIR = "plugins/external"
-# Build directory structure relative to --root-build-dir
+PROFILING_PLUGIN_PATH = "plugins/external/dive_profiling_plugin"
 PKG_DIR = "pkg"
-APP_DIR = "dive_app"
 # CMake generator names
 NINJA_MULTI_CONFIG_NAME = "Ninja Multi-Config"
 # For release
 WINDOWS_UNNECESSARY_DIRS = ["translations"]
 WINDOWS_QT_DEPENDENCIES_BINARY = "dive_gui_lib.dll"
+# For parsing version string
+HOST_TOOLS_BUILD_NAME = "Host Tools Build"
 
 
 class ActionType(enum.StrEnum):
-    COPY_PLUGINS = enum.auto()      # copy external plugins into pkg dir
     CONFIGURE_HOST = enum.auto()
     BUILD_HOST = enum.auto()        # separated to make VS builds using the UI easy
     INSTALL_HOST = enum.auto()
     ALL_DEVICE = enum.auto()        # configure, build, and install device libraries
+    COPY_PLUGINS = enum.auto()      # copy external plugins into pkg dir
     DEPLOY_QT = enum.auto()
     PACKAGE = enum.auto()           # removes some extraneous files and packages the release
 
@@ -74,6 +74,10 @@ def parse_args():
         help="Comma-separated list of actions that this script will perform. "
         "Use --list-actions to check which actions are available. If "
         "unspecified, then all actions will be performed")
+    parser.add_argument(
+        "--archive-name",
+        help="Base name (no extension) of the final archive produced by this "
+        f"script. If unspecified, the '{HOST_TOOLS_BUILD_NAME}' version string will be used")
     parser.add_argument(
         "--build-type",
         type=BuildType,
@@ -177,7 +181,7 @@ def check_environment(args):
 
     if "ANDROID_NDK_HOME" not in os.environ:
         raise Exception("ANDROID_NDK_HOME env var must be set")
-    print(f"\nANDROID_NDK_HOME found: {os.environ["ANDROID_NDK_HOME"]}")
+    print(f"\nANDROID_NDK_HOME found: {os.environ['ANDROID_NDK_HOME']}")
 
     cmake = shutil.which(args.exec_cmake)
     if not cmake:
@@ -213,13 +217,17 @@ def check_environment(args):
 def copy_plugins(args):
     """Implements ActionType.COPY_PLUGINS stage
     """
-    if not os.path.exists(EXTERNAL_PLUGINS_DIR):
-        print(f"\nDir {EXTERNAL_PLUGINS_DIR} does not exist, skipping")
+
+    if not os.path.exists(PROFILING_PLUGIN_PATH):
+        print(f"\nDir {PROFILING_PLUGIN_PATH} does not exist, skipping")
         return
 
-    print("\nCopying over external plugins...")
-    print(os.listdir(EXTERNAL_PLUGINS_DIR))
-    shutil.copytree(EXTERNAL_PLUGINS_DIR, f"{args.root_build_dir}/pkg/plugins/", dirs_exist_ok=True)
+    print("\nCopying over known external device plugin: dive_profiling_plugin...")
+    if platform.system() == "Darwin":
+        profiling_dest = f"{args.root_build_dir}/{PKG_DIR}/dive.app/Contents/Resources/dive_profiling_plugin"
+    else:
+        profiling_dest = f"{args.root_build_dir}/{PKG_DIR}/device/plugins/dive_profiling_plugin"
+    shutil.copytree(PROFILING_PLUGIN_PATH, profiling_dest, dirs_exist_ok=True)
 
 
 def configure_host(args):
@@ -233,13 +241,15 @@ def configure_host(args):
             cmd = [args.exec_cmake, ".",
                    f'-G{NINJA_MULTI_CONFIG_NAME}',
                    f"-B{args.root_build_dir}/host",
-                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+                   f"-DDIVE_STR_BUILD={args.root_build_dir}"
                    ]
         case "Windows":
             cmd = [args.exec_cmake, ".",
                    f"-G{args.visual_studio_name}",
                    f"-B{args.root_build_dir}/host",
-                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+                   f"-DDIVE_STR_BUILD={args.root_build_dir}"
                    ]
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")
@@ -308,7 +318,8 @@ def all_device(args):
            "-DANDROID_PLATFORM=android-26",
            "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
            "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
-           f"-DDIVE_RELEASE_TYPE={args.dive_release_type}"
+           f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+           f"-DDIVE_STR_BUILD={args.root_build_dir}"
            ]
     if args.ci:
         cmd.append("-DDIVE_GFXR_GRADLE_CONSOLE=plain")
@@ -363,6 +374,23 @@ def deploy_qt(args):
             raise Exception(f"Unrecognized platform: {system_name}")
 
 
+def get_archive_name(args, unparsed_string):
+    """Given unparsed_string (output of host tool run with --version flag) and
+    args, determine the appropriate archive name (without extension)
+    """
+    if args.archive_name:
+        return args.archive_name
+
+    pattern = r"(?<=" + re.escape(HOST_TOOLS_BUILD_NAME) + r"\:\s)\S+"
+    match_obj = re.search(pattern, unparsed_string)
+
+    if not match_obj:
+        raise Exception(f"Unsupported format of version string:\n{unparsed_string}")
+
+    print(f"Found host version: {match_obj.group()}")
+
+    return "dive-" + match_obj.group()
+
 def package(args):
     """Implements ActionType.PACKAGE stage, which will package this Dive build
     into a single file that is easy to transfer
@@ -382,17 +410,21 @@ def package(args):
         case "Windows":
             for dir_name in WINDOWS_UNNECESSARY_DIRS:
                 rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
-        
-            print(f"\nZipping into '{APP_DIR}.zip'...")
-            shutil.make_archive(f"{APP_DIR}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
 
-            final_location_zip = f"{args.root_build_dir}/{APP_DIR}.zip"
+            cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli.exe", "--version"]
+            long_version_string = dive.run_and_return_output(cmd)
+            archive_name = get_archive_name(args, long_version_string)
+        
+            print(f"\nZipping into '{archive_name}.zip'...")
+            shutil.make_archive(f"{archive_name}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
+
+            final_location_zip = f"{args.root_build_dir}/{archive_name}.zip"
             if os.path.exists(final_location_zip):
                 print("\nClearing previous archive...")
                 os.unlink(final_location_zip)
 
             print(f"\nMoving zip archive to {os.getcwd()}/{final_location_zip}...")
-            shutil.move(f"{APP_DIR}.zip", final_location_zip)
+            shutil.move(f"{archive_name}.zip", final_location_zip)
 
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")
@@ -419,9 +451,6 @@ def main():
         check_environment(args)
 
     with dive.Timer("total"):
-        if ActionType.COPY_PLUGINS in args.actions:
-            with dive.Timer(ActionType.COPY_PLUGINS):
-                copy_plugins(args)
         if ActionType.CONFIGURE_HOST in args.actions:
             with dive.Timer(ActionType.CONFIGURE_HOST):
                 configure_host(args)
@@ -434,6 +463,9 @@ def main():
         if ActionType.ALL_DEVICE in args.actions:
             with dive.Timer(ActionType.ALL_DEVICE):
                 all_device(args)
+        if ActionType.COPY_PLUGINS in args.actions:
+            with dive.Timer(ActionType.COPY_PLUGINS):
+                copy_plugins(args)
         if ActionType.DEPLOY_QT in args.actions:
             with dive.Timer(ActionType.DEPLOY_QT):
                 deploy_qt(args)

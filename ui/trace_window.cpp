@@ -681,6 +681,17 @@ void TraceDialog::OnTraceClicked()
         return;
     }
 
+    Dive::AndroidApplication* current_application = device->GetCurrentApplication();
+    if (current_application && !current_application->IsRunning())
+    {
+        std::string err_msg = absl::StrCat("App is not running! Did it crash?");
+        qDebug() << err_msg.c_str();
+        ShowMessage(QString::fromStdString(err_msg));
+        ResetTraceDialogOnAppStop();
+        current_application->Cleanup().IgnoreError();
+        return;
+    }
+
     if (absl::Status ret = device->IsAppRunningOnForeground(m_cur_pkg.toStdString()); !ret.ok())
     {
         std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
@@ -844,14 +855,6 @@ void TraceDialog::OnGfxrCaptureClicked()
         return;
     }
 
-    if (absl::Status ret = device->IsAppRunningOnForeground(m_cur_pkg.toStdString()); !ret.ok())
-    {
-        std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
-        qDebug() << err_msg.c_str();
-        ShowMessage(QString::fromStdString(err_msg));
-        return;
-    }
-
     absl::Status ret;
     if (m_gfxr_capture_button->text() == kRetrieve_Gfxr_Runtime_Capture)
     {
@@ -873,6 +876,25 @@ void TraceDialog::OnGfxrCaptureClicked()
     }
     else if (m_gfxr_capture_button->text() == kStart_Gfxr_Runtime_Capture)
     {
+        Dive::AndroidApplication* current_application = device->GetCurrentApplication();
+        if (current_application && !current_application->IsRunning())
+        {
+            std::string err_msg = absl::StrCat("App is not running! Did it crash?");
+            qDebug() << err_msg.c_str();
+            ShowMessage(QString::fromStdString(err_msg));
+            ResetTraceDialogOnAppStop();
+            current_application->Cleanup().IgnoreError();
+            return;
+        }
+
+        if (ret = device->IsAppRunningOnForeground(m_cur_pkg.toStdString()); !ret.ok())
+        {
+            std::string err_msg = absl::StrCat("Device check failed: ", ret.message());
+            qDebug() << err_msg.c_str();
+            ShowMessage(QString::fromStdString(err_msg));
+            return;
+        }
+
         ret = device->Adb().Run("shell setprop debug.gfxrecon.capture_android_trigger true");
         if (!ret.ok())
         {

@@ -119,7 +119,7 @@ else()
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
 
-    install(TARGETS dive_client_cli DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+    install(TARGETS dive_client_cli DESTINATION "${DIVE_DEST_HOST}")
 
     if(DIVE_BUILD_WITH_CRASHPAD)
         add_custom_command(
@@ -136,7 +136,7 @@ else()
         )
         install(
             PROGRAMS $<TARGET_FILE:crashpad_handler_exe>
-            DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+            DESTINATION "${DIVE_DEST_HOST}"
             CONFIGURATIONS RelWithDebInfo
         )
     endif()

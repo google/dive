@@ -52,4 +52,9 @@ android {
            assets.srcDirs = ['assets']
        }
     }
+
+    // GOOGLE: Don't strip so tombstones have function names
+    packagingOptions {
+        doNotStrip "**/*/*.so"
+    }
 }

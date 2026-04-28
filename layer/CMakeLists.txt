@@ -98,10 +98,10 @@ configure_file(
     "${CMAKE_BINARY_DIR}/bin/VkLayer_dive_capture.json"
     COPYONLY
 )
-install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_DEVICE}")
 install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
-    DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
+    DESTINATION "${DIVE_DEST_DEVICE}"
 )
 
 set(target_name XrApiLayer_dive)
@@ -128,10 +128,10 @@ if($<CONFIG:Release>)
 endif()
 target_link_libraries(${target_name} ${TARGET_LINK_LIBS})
 
-install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_DEVICE}")
 install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest/XrApiLayer_dive.json"
-    DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
+    DESTINATION "${DIVE_DEST_DEVICE}"
 )
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

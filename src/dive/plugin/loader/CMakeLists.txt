@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-message(CHECK_START "Generate build files for plugin loader")
+message(CHECK_START "Generate build files for host plugin loader")
 if(ANDROID)
     message(CHECK_FAIL "detected Android platform, skipping")
     return()
@@ -35,23 +35,23 @@ else()
 endif()
 
 add_library(
-    dive_plugin_loader
+    dive_host_plugin_loader
     STATIC
-    plugin_loader.h
-    plugin_loader.cpp
+    host_plugin_loader.h
+    host_plugin_loader.cpp
     library_loader.h
     ${DIVE_LIBRARY_LOADER_SOURCE}
 )
 
 set_target_properties(
-    dive_plugin_loader
+    dive_host_plugin_loader
     PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
 if(UNIX)
     find_library(DL_LIBRARY NAMES dl)
     if(DL_LIBRARY)
-        target_link_libraries(dive_plugin_loader PRIVATE ${DL_LIBRARY})
+        target_link_libraries(dive_host_plugin_loader PRIVATE ${DL_LIBRARY})
     else()
         message(
             FATAL_ERROR
@@ -61,7 +61,7 @@ if(UNIX)
 endif()
 
 target_link_libraries(
-    dive_plugin_loader
+    dive_host_plugin_loader
     PRIVATE
         absl::log
         absl::status

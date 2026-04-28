@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "dive/plugin/loader/plugin_loader.h"
+#include "dive/plugin/loader/host_plugin_loader.h"
 
 #include <iostream>
 #include <string>
@@ -73,19 +73,19 @@ void DivePluginBridge::SetConst(const char* name, const void* object)
     m_const_objects[name] = object;
 }
 
-PluginLoader::PluginLoader() : m_library_loader(CreateDynamicLibraryLoader()) {}
+HostPluginLoader::HostPluginLoader() : m_library_loader(CreateDynamicLibraryLoader()) {}
 
-PluginLoader::~PluginLoader() { UnloadPlugins(); }
+HostPluginLoader::~HostPluginLoader() { UnloadPlugins(); }
 
-absl::Status PluginLoader::LoadPlugins()
+absl::Status HostPluginLoader::LoadPlugins()
 {
     std::string error_message;
 
     auto append_error_message = [&](const std::string& msg) {
-        absl::StrAppend(&error_message, "PluginLoader: ", msg, "\n");
+        absl::StrAppend(&error_message, "HostPluginLoader: ", msg, "\n");
     };
 
-    absl::StatusOr<std::filesystem::path> plugins_dir_path = ResolvePluginsDir();
+    absl::StatusOr<std::filesystem::path> plugins_dir_path = ResolveHostPluginsDir();
     if (!plugins_dir_path.ok())
     {
         return plugins_dir_path.status();
@@ -145,7 +145,7 @@ absl::Status PluginLoader::LoadPlugins()
 
         PluginUniquePtr plugin(raw_plugin);
 
-        LOG(INFO) << "PluginLoader: Successfully instantiated plugin: " << plugin->PluginName()
+        LOG(INFO) << "HostPluginLoader: Successfully instantiated plugin: " << plugin->PluginName()
                   << " Version: " << plugin->PluginVersion();
 
         if (!plugin->Initialize(m_bridge))
@@ -154,7 +154,8 @@ absl::Status PluginLoader::LoadPlugins()
         }
 
         m_loaded_plugin_entries.emplace_back(std::move(library_handle_ptr), std::move(plugin));
-        LOG(INFO) << "PluginLoader: Plugin " << m_loaded_plugin_entries.back().plugin->PluginName()
+        LOG(INFO) << "HostPluginLoader: Plugin "
+                  << m_loaded_plugin_entries.back().plugin->PluginName()
                   << " initialized successfully.";
     }
 
@@ -167,32 +168,32 @@ absl::Status PluginLoader::LoadPlugins()
     return absl::OkStatus();
 }
 
-void PluginLoader::UnloadPlugins()
+void HostPluginLoader::UnloadPlugins()
 {
-    LOG(INFO) << "PluginLoader: Unloading all plugins...";
+    LOG(INFO) << "HostPluginLoader: Unloading all plugins...";
 
     m_loaded_plugin_entries.clear();
 
-    LOG(INFO) << "PluginLoader: All plugins unloaded.";
+    LOG(INFO) << "HostPluginLoader: All plugins unloaded.";
 }
 
-void PluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle handle) const
+void HostPluginLoader::NativeLibraryHandleDeleter::operator()(NativeLibraryHandle handle) const
 {
     if (handle != nullptr && loader != nullptr)
     {
         if (absl::Status free = loader->Free(handle); free.ok())
         {
-            LOG(INFO) << "PluginLoader: Library handle auto-freed via RAII.";
+            LOG(INFO) << "HostPluginLoader: Library handle auto-freed via RAII.";
         }
         else
         {
-            LOG(INFO) << "PluginLoader: Failed to auto-free library handle. Error: "
+            LOG(INFO) << "HostPluginLoader: Failed to auto-free library handle. Error: "
                       << free.message();
         }
     }
 }
 
-void PluginLoader::PluginDeleter::operator()(IDivePlugin* plugin) const
+void HostPluginLoader::PluginDeleter::operator()(IDivePlugin* plugin) const
 {
     if (plugin)
     {

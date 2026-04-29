@@ -154,8 +154,8 @@ add_library(
     tile_stats_tab_view.h
     tool_tip_summaries.cpp
     tool_tip_summaries.h
-    trace_window.cpp
-    trace_window.h
+    trace_dialog.cpp
+    trace_dialog.h
     tree_view_combo_box.cpp
     tree_view_combo_box.h
     viewport_stats_model.cpp

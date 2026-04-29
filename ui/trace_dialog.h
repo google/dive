@@ -66,8 +66,8 @@ class DIVE_UI_LIB_EXPORT TraceDialog : public DeviceDialog
     Q_OBJECT
 
  public:
-    TraceDialog(ApplicationController& controller, QWidget* parent = 0);
-    ~TraceDialog();
+    explicit TraceDialog(ApplicationController& controller, QWidget* parent = 0);
+    ~TraceDialog() override;
     void UpdatePackageList();
     void Cleanup() { Dive::GetDeviceManager().RemoveDevice(); }
     void ShowGfxrFields();
@@ -123,66 +123,39 @@ class DIVE_UI_LIB_EXPORT TraceDialog : public DeviceDialog
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
 
-    ApplicationController& m_controller;
+    QRadioButton* m_gfxr_capture_type_button = nullptr;
+    QRadioButton* m_pm4_capture_type_button = nullptr;
 
-    const QString kStart_Application = "&Start Application";
-    const QString kStop_Application = "&Stop Application";
-    const QString kStart_Gfxr_Runtime_Capture = "&Start GFXR Capture";
-    const QString kRetrieve_Gfxr_Runtime_Capture = "&Retrieve GFXR Capture";
+    QLabel* m_capture_warning_label = nullptr;
 
-    QHBoxLayout* m_capture_layout;
-    QLabel* m_device_label;
-    QPushButton* m_device_refresh_button;
+    QLabel* m_pkg_filter_label = nullptr;
+    PackageFilter* m_pkg_filter = nullptr;
+    QStandardItemModel* m_pkg_model = nullptr;
+    QComboBox* m_pkg_box = nullptr;
+    QPushButton* m_pkg_refresh_button = nullptr;
+    QPushButton* m_pkg_filter_button = nullptr;
+    Dive::AndroidDevice::PackageListOptions m_pkg_list_options =
+        Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
 
-    QHBoxLayout* m_capture_type_layout;
-    QLabel* m_capture_type_label;
-    QButtonGroup* m_capture_type_button_group;
-    QRadioButton* m_gfxr_capture_type_button;
-    QRadioButton* m_pm4_capture_type_button;
+    AppTypeFilterModel* m_app_type_filter_model = nullptr;
+    QComboBox* m_app_type_box = nullptr;
 
-    QHBoxLayout* m_capture_warning_layout;
-    QLabel* m_capture_warning_label;
+    QPushButton* m_capture_button = nullptr;
+    QPushButton* m_run_button = nullptr;
+    QPushButton* m_gfxr_capture_button = nullptr;
 
-    QHBoxLayout* m_pkg_filter_layout;
-    QLabel* m_pkg_filter_label;
-    PackageFilter* m_pkg_filter;
-    QHBoxLayout* m_pkg_layout;
-    QLabel* m_pkg_label;
-    QStandardItemModel* m_pkg_model;
-    QComboBox* m_pkg_box;
-    QPushButton* m_pkg_refresh_button;
-    QPushButton* m_pkg_filter_button;
-    Dive::AndroidDevice::PackageListOptions m_pkg_list_options;
+    QLineEdit* m_cmd_input_box = nullptr;
 
-    QHBoxLayout* m_type_layout;
-    QLabel* m_app_type_label;
-    QStandardItemModel* m_app_type_model;
-    AppTypeFilterModel* m_app_type_filter_model;
-    QComboBox* m_app_type_box;
+    QLineEdit* m_args_input_box = nullptr;
 
-    QPushButton* m_capture_button;
-    QPushButton* m_run_button;
-    QPushButton* m_gfxr_capture_button;
-    QHBoxLayout* m_button_layout;
+    QLabel* m_gfxr_capture_file_on_device_directory_label = nullptr;
+    QLineEdit* m_gfxr_capture_file_directory_input_box = nullptr;
 
-    QHBoxLayout* m_cmd_layout;
-    QLabel* m_file_label;
-    QLineEdit* m_cmd_input_box;
-
-    QHBoxLayout* m_args_layout;
-    QLabel* m_args_label;
-    QLineEdit* m_args_input_box;
-
-    QHBoxLayout* m_gfxr_capture_file_directory_layout;
-    QLabel* m_gfxr_capture_file_on_device_directory_label;
-    QLineEdit* m_gfxr_capture_file_directory_input_box;
-
-    QLineEdit* m_capture_file_local_root_directory_input_box;
+    QLineEdit* m_capture_file_local_root_directory_input_box = nullptr;
 
     QWidget* m_gfxr_capture_end_point_container = nullptr;
     QButtonGroup* m_gfxr_capture_end_point_button_group = nullptr;
 
-    QVBoxLayout* m_main_layout;
     QStringList m_pkg_list;
     QString m_cur_pkg;
     std::string m_executable;

@@ -75,6 +75,10 @@ def parse_args():
         "Use --list-actions to check which actions are available. If "
         "unspecified, then all actions will be performed")
     parser.add_argument(
+        "--archive-dir",
+        help="Output directory of the final archive produced by this script. "
+        f"If unspecified, the --root-build-dir will be used")
+    parser.add_argument(
         "--archive-name",
         help="Base name (no extension) of the final archive produced by this "
         f"script. If unspecified, the '{HOST_TOOLS_BUILD_NAME}' version string will be used")
@@ -89,11 +93,6 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform")
-    parser.add_argument(
-        "--prereq-checks",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Check if prerequisites are located as expected")
     parser.add_argument(
         "--ci",
         action=argparse.BooleanOptionalAction,
@@ -128,6 +127,11 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=False,
         help="List all actions this script can perform in the order they will be performed")
+    parser.add_argument(
+        "--prereq-checks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Check if prerequisites are located as expected")
     parser.add_argument(
         "--root-build-dir",
         default="build",
@@ -356,7 +360,7 @@ def deploy_qt(args):
     system_name = platform.system()
     match system_name:
         case "Linux":
-            print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
+            print("\ndeploy_qt() is a no-op for Linux, it's expected that the users install Qt...")
             return
 
         case "Darwin":
@@ -400,8 +404,7 @@ def package(args):
     system_name = platform.system()
     match system_name:
         case "Linux":
-            print("\npackage() is UNIMPLEMENTED for Linux...")
-            return
+            cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli", "--version"]
 
         case "Darwin":
             print("\npackage() is UNIMPLEMENTED for macOS...")
@@ -410,24 +413,27 @@ def package(args):
         case "Windows":
             for dir_name in WINDOWS_UNNECESSARY_DIRS:
                 rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
-
             cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli.exe", "--version"]
-            long_version_string = dive.run_and_return_output(cmd)
-            archive_name = get_archive_name(args, long_version_string)
-        
-            print(f"\nZipping into '{archive_name}.zip'...")
-            shutil.make_archive(f"{archive_name}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
-
-            final_location_zip = f"{args.root_build_dir}/{archive_name}.zip"
-            if os.path.exists(final_location_zip):
-                print("\nClearing previous archive...")
-                os.unlink(final_location_zip)
-
-            print(f"\nMoving zip archive to {os.getcwd()}/{final_location_zip}...")
-            shutil.move(f"{archive_name}.zip", final_location_zip)
 
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")
+
+    long_version_string = dive.run_and_return_output(cmd)
+    archive_name = get_archive_name(args, long_version_string)
+
+    print(f"\nZipping into '{archive_name}.zip'...")
+    shutil.make_archive(archive_name, "zip", f"{args.root_build_dir}/{PKG_DIR}")
+
+    archive_dir = args.archive_dir
+    if not archive_dir:
+        archive_dir = f"{os.getcwd()}/{args.root_build_dir}"
+    final_location_zip = f"{archive_dir}/{archive_name}.zip"
+    if os.path.exists(final_location_zip):
+        print("\nClearing previous archive...")
+        os.unlink(final_location_zip)
+
+    print(f"\nMoving zip archive to {final_location_zip}...")
+    shutil.move(f"{archive_name}.zip", final_location_zip)
 
 
 def main():

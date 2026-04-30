@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-#include "analyze_window.h"
+#include "analyze_dialog.h"
 
 #include <QApplication>
 #include <QCheckBox>

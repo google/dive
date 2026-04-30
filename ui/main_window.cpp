@@ -66,7 +66,7 @@
 #include "dive_core/log.h"
 #include "trace_stats/trace_stats.h"
 #include "ui/about_window.h"
-#include "ui/analyze_window.h"
+#include "ui/analyze_dialog.h"
 #include "ui/application_controller.h"
 #include "ui/capture_file_manager.h"
 #include "ui/command_buffer_model.h"

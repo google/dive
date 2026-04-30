@@ -54,8 +54,8 @@ add_library(
     # Dive Gui Source:
     about_window.cpp
     about_window.h
-    analyze_window.cpp
-    analyze_window.h
+    analyze_dialog.cpp
+    analyze_dialog.h
     application_controller.cpp
     application_controller.h
     capture_file_manager.cpp

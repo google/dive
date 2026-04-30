@@ -13,7 +13,10 @@
 
 #include "dive_core/gfxr_vulkan_command_hierarchy.h"
 
+#include <functional>
 #include <iostream>
+#include <string_view>
+#include <unordered_map>
 
 #include "absl/strings/numbers.h"
 #include "dive_core/dive_strings.h"
@@ -59,9 +62,7 @@ std::string GfxrVulkanCommandHierarchyCreator::GetValueStr(const nlohmann::order
         {
             return val.get<std::string>();
         }
-        std::ostringstream s;
-        s << val;
-        return s.str();
+        return val.dump();
     }
     return "0";
 }
@@ -107,88 +108,113 @@ std::string GfxrVulkanCommandHierarchyCreator::GetCommandSummary(const std::stri
 {
     std::ostringstream s;
 
-    if (cmd_name == "vkCmdDrawIndexed")
+    using SummaryHandler = std::function<void(GfxrVulkanCommandHierarchyCreator*,
+                                              std::ostringstream&, const nlohmann::ordered_json&)>;
+
+    static const std::unordered_map<std::string_view, SummaryHandler> handlers = {
+        {"vkCmdDrawIndexed",
+         [](auto* self, auto& s, const auto& args) {
+             self->AppendDrawCallSummary(s, args, "indexCount");
+         }},
+        {"vkCmdDraw",
+         [](auto* self, auto& s, const auto& args) {
+             self->AppendDrawCallSummary(s, args, "vertexCount");
+         }},
+        {"vkCmdSetViewport",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("pViewports") && args["pViewports"].is_array() &&
+                 !args["pViewports"].empty())
+             {
+                 const auto& vp = args["pViewports"][0];
+                 s << "(x:" << self->GetValueStr(vp, "x") << ", y:" << self->GetValueStr(vp, "y")
+                   << ", width:" << self->GetValueStr(vp, "width")
+                   << ", height:" << self->GetValueStr(vp, "height") << ")";
+             }
+         }},
+        {"vkCmdSetScissor",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("pScissors") && args["pScissors"].is_array() &&
+                 !args["pScissors"].empty())
+             {
+                 const auto& sc = args["pScissors"][0];
+                 if (sc.contains("offset") && sc.contains("extent"))
+                 {
+                     const auto& offset = sc["offset"];
+                     const auto& extent = sc["extent"];
+                     s << "(x:" << self->GetValueStr(offset, "x")
+                       << ", y:" << self->GetValueStr(offset, "y")
+                       << ", width:" << self->GetValueStr(extent, "width")
+                       << ", height:" << self->GetValueStr(extent, "height") << ")";
+                 }
+             }
+         }},
+        {"vkCmdDispatch",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("groupCountX"))
+             {
+                 s << "(x:" << self->GetValueStr(args, "groupCountX")
+                   << ", y:" << self->GetValueStr(args, "groupCountY")
+                   << ", z:" << self->GetValueStr(args, "groupCountZ") << ")";
+             }
+         }},
+        {"vkCmdDrawMultiEXT",
+         [](auto* self, auto& s, const auto& args) {
+             self->AppendDrawCallSummary(s, args, "drawCount");
+         }},
+        {"vkCmdDrawMultiIndexedEXT",
+         [](auto* self, auto& s, const auto& args) {
+             self->AppendDrawCallSummary(s, args, "drawCount");
+         }},
+        {"vkCmdDrawIndirect",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("drawCount"))
+             {
+                 std::string draw_count = self->GetValueStr(args, "drawCount");
+                 if (draw_count != "1")
+                 {
+                     s << "(drawCount: " << draw_count << ")";
+                 }
+             }
+         }},
+        {"vkCmdDrawIndexedIndirect",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("drawCount"))
+             {
+                 std::string draw_count = self->GetValueStr(args, "drawCount");
+                 if (draw_count != "1")
+                 {
+                     s << "(drawCount: " << draw_count << ")";
+                 }
+             }
+         }},
+        {"vkCmdBindPipeline",
+         [](auto* self, auto& s, const auto& args) {
+             self->AppendEnumSummary(s, args, "pipelineBindPoint", "VK_PIPELINE_BIND_POINT_");
+         }},
+        {"vkCmdBindDescriptorSets",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("firstSet") && args.contains("descriptorSetCount"))
+             {
+                 s << "(firstSet: " << self->GetValueStr(args, "firstSet")
+                   << ", setCount: " << self->GetValueStr(args, "descriptorSetCount") << ")";
+             }
+         }},
+        {"vkCmdBindVertexBuffers",
+         [](auto* self, auto& s, const auto& args) {
+             if (args.contains("firstBinding") && args.contains("bindingCount"))
+             {
+                 s << "(firstBinding: " << self->GetValueStr(args, "firstBinding")
+                   << ", bindingCount: " << self->GetValueStr(args, "bindingCount") << ")";
+             }
+         }},
+        {"vkCmdBindIndexBuffer", [](auto* self, auto& s, const auto& args) {
+             self->AppendEnumSummary(s, args, "indexType", "VK_INDEX_TYPE_");
+         }}};
+
+    auto it = handlers.find(std::string_view(cmd_name));
+    if (it != handlers.end())
     {
-        AppendDrawCallSummary(s, args, "indexCount");
-    }
-    else if (cmd_name == "vkCmdDraw")
-    {
-        AppendDrawCallSummary(s, args, "vertexCount");
-    }
-    else if (cmd_name == "vkCmdSetViewport")
-    {
-        if (args.contains("pViewports") && args["pViewports"].is_array() &&
-            !args["pViewports"].empty())
-        {
-            const auto& vp = args["pViewports"][0];
-            s << "(x:" << GetValueStr(vp, "x") << ", y:" << GetValueStr(vp, "y")
-              << ", width:" << GetValueStr(vp, "width") << ", height:" << GetValueStr(vp, "height")
-              << ")";
-        }
-    }
-    else if (cmd_name == "vkCmdSetScissor")
-    {
-        if (args.contains("pScissors") && args["pScissors"].is_array() &&
-            !args["pScissors"].empty())
-        {
-            const auto& sc = args["pScissors"][0];
-            if (sc.contains("offset") && sc.contains("extent"))
-            {
-                const auto& offset = sc["offset"];
-                const auto& extent = sc["extent"];
-                s << "(x:" << GetValueStr(offset, "x") << ", y:" << GetValueStr(offset, "y")
-                  << ", width:" << GetValueStr(extent, "width")
-                  << ", height:" << GetValueStr(extent, "height") << ")";
-            }
-        }
-    }
-    else if (cmd_name == "vkCmdDispatch")
-    {
-        if (args.contains("groupCountX"))
-        {
-            s << "(x:" << GetValueStr(args, "groupCountX")
-              << ", y:" << GetValueStr(args, "groupCountY")
-              << ", z:" << GetValueStr(args, "groupCountZ") << ")";
-        }
-    }
-    else if (cmd_name == "vkCmdDrawMultiEXT" || cmd_name == "vkCmdDrawMultiIndexedEXT")
-    {
-        AppendDrawCallSummary(s, args, "drawCount");
-    }
-    else if (cmd_name == "vkCmdDrawIndirect" || cmd_name == "vkCmdDrawIndexedIndirect")
-    {
-        if (args.contains("drawCount"))
-        {
-            std::string draw_count = GetValueStr(args, "drawCount");
-            if (draw_count != "1")
-            {
-                s << "(drawCount: " << draw_count << ")";
-            }
-        }
-    }
-    else if (cmd_name == "vkCmdBindPipeline")
-    {
-        AppendEnumSummary(s, args, "pipelineBindPoint", "VK_PIPELINE_BIND_POINT_");
-    }
-    else if (cmd_name == "vkCmdBindDescriptorSets")
-    {
-        if (args.contains("firstSet") && args.contains("descriptorSetCount"))
-        {
-            s << "(firstSet: " << GetValueStr(args, "firstSet")
-              << ", setCount: " << GetValueStr(args, "descriptorSetCount") << ")";
-        }
-    }
-    else if (cmd_name == "vkCmdBindVertexBuffers")
-    {
-        if (args.contains("firstBinding") && args.contains("bindingCount"))
-        {
-            s << "(firstBinding: " << GetValueStr(args, "firstBinding")
-              << ", bindingCount: " << GetValueStr(args, "bindingCount") << ")";
-        }
-    }
-    else if (cmd_name == "vkCmdBindIndexBuffer")
-    {
-        AppendEnumSummary(s, args, "indexType", "VK_INDEX_TYPE_");
+        it->second(this, s, args);
     }
 
     return s.str();
@@ -483,10 +509,8 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& js
                     {
                         // If an array element is a primitive,
                         // create a node containing its string representation.
-                        std::ostringstream vk_cmd_arg_string_stream;
-                        vk_cmd_arg_string_stream << element;
-                        uint64_t arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
-                                                     vk_cmd_arg_string_stream.str());
+                        uint64_t arg_index =
+                            AddNode(NodeType::kGfxrVulkanCommandArgNode, element.dump());
                         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                                  array_node_index, arg_index);
                     }
@@ -494,20 +518,10 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& js
             }
             else
             {
-                std::ostringstream s;
-                std::string val_str;
-
-                s.str("");
-                s << val;
-                val_str = s.str();
-
-                s.str("");
-                s << key << ":" << val;
-
                 // If the value is a primitive,
                 // create a node containing the "key:value" pair.
-
-                uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode, s.str());
+                uint64_t vk_cmd_arg_index =
+                    AddNode(NodeType::kGfxrVulkanCommandArgNode, key + ":" + val.dump());
                 AddChild(CommandHierarchy::TopologyType::kAllEventTopology, curr_index,
                          vk_cmd_arg_index);
             }
@@ -528,10 +542,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& js
             else
             {
                 // If an array element is a primitive, create a node for its string representation.
-                std::ostringstream vk_cmd_arg_string_stream;
-                vk_cmd_arg_string_stream << element;
-                uint64_t arg_index =
-                    AddNode(NodeType::kGfxrVulkanCommandArgNode, vk_cmd_arg_string_stream.str());
+                uint64_t arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode, element.dump());
                 AddChild(CommandHierarchy::TopologyType::kAllEventTopology, curr_index, arg_index);
             }
         }

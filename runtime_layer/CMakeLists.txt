@@ -78,9 +78,9 @@ set_target_properties(
 )
 
 if(ANDROID)
-    install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+    install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_DEVICE}")
 else()
-    install(TARGETS ${target_name} DESTINATION "${DIVE_INSTALL_DEST_HOST}")
+    install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_HOST}")
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

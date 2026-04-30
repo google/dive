@@ -31,7 +31,7 @@ std::string_view GetLicenseFileName();
 
 // -----------------------------------------------------------------------------
 // Returns the path of the parent dir containing plugins subdirectories
-absl::StatusOr<std::filesystem::path> ResolvePluginsDir();
+absl::StatusOr<std::filesystem::path> ResolveHostPluginsDir();
 
 // Returns the full local path of relative_file_path, which represents a host resource file
 absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(

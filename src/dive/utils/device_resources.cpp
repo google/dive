@@ -68,23 +68,20 @@ std::string_view GetDeviceResourcesVersionFileName()
     return CMAKE_GENERATED_DEVICE_RESOURCES_VERSION_FILENAME;
 }
 
-std::string_view GetProfilingDirName() { return CMAKE_GENERATED_PROFILING_PLUGIN_DIR; }
+std::string_view GetProfilingDirName() { return CMAKE_GENERATED_STR_DIVE_PROFILING_PLUGIN; }
 
-std::string_view GetLicenseFileName() { return CMAKE_GENERATED_DIVE_LICENSE_FILE_NAME; }
+std::string_view GetLicenseFileName() { return CMAKE_GENERATED_STR_NOTICE; }
 
-absl::StatusOr<std::filesystem::path> ResolvePluginsDir()
+absl::StatusOr<std::filesystem::path> ResolveHostPluginsDir()
 {
     // Determine plugins location relative to host tool
-    std::filesystem::path base_dir_installed = "..";
+    std::filesystem::path deployment_dir =
+        CMAKE_GENERATED_DEPLOYMENT_DIR_RELATIVE_TO_HOST_RESOURCES;
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Apple bundle
-        base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_PLUGINS,
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
-        // For launching host tool from Windows VS debugger, assuming other parts were installed
-        // under pkg/
-        dive_build_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR,
+        deployment_dir / CMAKE_GENERATED_DEST_HOST_PLUGINS,
+        // For launching host tool from Windows VS debugger
+        dive_build_root_dev / CMAKE_GENERATED_STR_PKG / CMAKE_GENERATED_DEST_HOST_PLUGINS,
     };
 
     absl::StatusOr<std::filesystem::path> plugins_dir_path = ResolvePath(search_dirs, ".");
@@ -106,11 +103,9 @@ absl::StatusOr<std::filesystem::path> ResolveHostResourcesLocalPath(
 {
     // Host resources should be in the same dir as the caller
     std::array search_dirs = {
-        // Most platforms
         std::filesystem::path("."),
-        // For launching host tool from Windows VS debugger, assuming other parts were installed
-        // under pkg/
-        std::filesystem::path("../../..") / "pkg" / CMAKE_GENERATED_INSTALL_DEST_HOST,
+        // For launching host tool from Windows VS debugger
+        std::filesystem::path("../../..") / CMAKE_GENERATED_STR_PKG / CMAKE_GENERATED_DEST_HOST,
     };
 
     return ResolvePath(search_dirs, relative_file_path);
@@ -120,16 +115,13 @@ absl::StatusOr<std::filesystem::path> ResolveDeviceResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
     // Determine device resources location relative to host tool
-    std::filesystem::path base_dir_installed = "..";
+    std::filesystem::path deployment_dir =
+        CMAKE_GENERATED_DEPLOYMENT_DIR_RELATIVE_TO_HOST_RESOURCES;
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Apple bundle
-        base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES,
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
-        // For launching host tool from Windows VS debugger, assuming other parts were installed
-        // under pkg/
-        dive_build_root_dev / "pkg" / CMAKE_GENERATED_INSTALL_DEST_DEVICE,
+        deployment_dir / CMAKE_GENERATED_DEST_DEVICE,
+        // For launching host tool from Windows VS debugger
+        dive_build_root_dev / CMAKE_GENERATED_STR_PKG / CMAKE_GENERATED_DEST_DEVICE,
     };
 
     return ResolvePath(search_dirs, relative_file_path);
@@ -139,19 +131,15 @@ absl::StatusOr<std::filesystem::path> ResolveProfilingResourcesLocalPath(
     std::filesystem::path relative_file_path)
 {
     // Determine profiling resources location relative to host tool
-    std::filesystem::path base_dir_installed = "..";
+    std::filesystem::path deployment_dir =
+        CMAKE_GENERATED_DEPLOYMENT_DIR_RELATIVE_TO_HOST_RESOURCES;
     std::filesystem::path dive_build_root_dev = "../../..";
     std::array search_dirs = {
-        // Apple bundle
-        base_dir_installed / CMAKE_GENERATED_DIVE_MACOS_BUNDLE_RESOURCES /
-            CMAKE_GENERATED_PLUGINS_PARENT_DIR / CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
-        // Most platforms
-        base_dir_installed / CMAKE_GENERATED_PLUGINS_PARENT_DIR /
-            CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
-        // For launching host tool from Windows VS debugger, assuming other parts were installed
-        // under pkg/
-        dive_build_root_dev / "pkg" / CMAKE_GENERATED_PLUGINS_PARENT_DIR /
-            CMAKE_GENERATED_PROFILING_PLUGIN_DIR,
+        deployment_dir / CMAKE_GENERATED_DEST_DEVICE_PLUGINS /
+            CMAKE_GENERATED_STR_DIVE_PROFILING_PLUGIN,
+        // For launching host tool from Windows VS debugger
+        dive_build_root_dev / CMAKE_GENERATED_STR_PKG / CMAKE_GENERATED_DEST_DEVICE_PLUGINS /
+            CMAKE_GENERATED_STR_DIVE_PROFILING_PLUGIN,
     };
 
     return ResolvePath(search_dirs, relative_file_path);

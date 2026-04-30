@@ -48,14 +48,14 @@ class DivePluginBridge : public IDivePluginBridge
     std::unordered_map<std::string, QObject*> m_qt_objects;
 };
 
-class PluginLoader
+class HostPluginLoader
 {
  public:
-    PluginLoader();
-    ~PluginLoader();
+    HostPluginLoader();
+    ~HostPluginLoader();
 
-    PluginLoader(const PluginLoader&) = delete;
-    PluginLoader& operator=(const PluginLoader&) = delete;
+    HostPluginLoader(const HostPluginLoader&) = delete;
+    HostPluginLoader& operator=(const HostPluginLoader&) = delete;
 
     absl::Status LoadPlugins();
     void UnloadPlugins();

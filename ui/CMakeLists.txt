@@ -54,8 +54,8 @@ add_library(
     # Dive Gui Source:
     about_window.cpp
     about_window.h
-    analyze_window.cpp
-    analyze_window.h
+    analyze_dialog.cpp
+    analyze_dialog.h
     application_controller.cpp
     application_controller.h
     capture_file_manager.cpp
@@ -154,8 +154,8 @@ add_library(
     tile_stats_tab_view.h
     tool_tip_summaries.cpp
     tool_tip_summaries.h
-    trace_window.cpp
-    trace_window.h
+    trace_dialog.cpp
+    trace_dialog.h
     tree_view_combo_box.cpp
     tree_view_combo_box.h
     viewport_stats_model.cpp
@@ -182,7 +182,7 @@ target_link_libraries(
         crash_report
         network
         dive_lib_ui
-        dive_plugin_loader
+        dive_host_plugin_loader
         component_files
         dive_device_resources
         version_info
@@ -339,13 +339,13 @@ file(
 # Generate license NOTICE file
 include("collect_licenses.cmake")
 GenerateThirdPartyLicenseFile(
-    "${CMAKE_CURRENT_BINARY_DIR}/${DIVE_LICENSE_FILE_NAME}"
+    "${CMAKE_CURRENT_BINARY_DIR}/${DIVE_STR_NOTICE}"
     "${CMAKE_CURRENT_BINARY_DIR}/licenses/"
 )
 add_custom_target(
     notice_file
     ALL
-    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${DIVE_LICENSE_FILE_NAME}"
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${DIVE_STR_NOTICE}"
 )
 
 if(APPLE)
@@ -358,24 +358,16 @@ if(APPLE)
 endif()
 
 if(APPLE)
-    install(
-        TARGETS ${PROJECT_NAME}
-        BUNDLE DESTINATION "${DIVE_INSTALL_DEST_HOST}"
-    )
-    install(
-        TARGETS dive_gui_lib
-        DESTINATION "${DIVE_INSTALL_DEST_HOST}/dive.app/Contents/Frameworks"
-    )
+    install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION "${DIVE_DEST_UI}")
 else()
-    install(
-        TARGETS ${PROJECT_NAME} dive_gui_lib
-        DESTINATION "${DIVE_INSTALL_DEST_HOST}"
-    )
+    install(TARGETS ${PROJECT_NAME} DESTINATION "${DIVE_DEST_UI}")
 endif()
 
+install(TARGETS dive_gui_lib DESTINATION "${DIVE_DEST_HOST_FRAMEWORKS}")
+
 install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/${DIVE_LICENSE_FILE_NAME}"
-    DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/${DIVE_STR_NOTICE}"
+    DESTINATION "${DIVE_DEST_HOST}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
 
@@ -397,7 +389,7 @@ if(DIVE_BUILD_WITH_CRASHPAD)
     )
     install(
         PROGRAMS $<TARGET_FILE:crashpad_handler_exe>
-        DESTINATION "${DIVE_INSTALL_DEST_HOST}"
+        DESTINATION "${DIVE_DEST_HOST}"
         CONFIGURATIONS RelWithDebInfo
     )
 endif()

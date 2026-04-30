@@ -26,6 +26,8 @@ add_library(
     wrap.h
 )
 target_link_libraries(wrap PRIVATE freedreno_includes log z)
+# Could use dive_src_includes but the GFXR build doesn't have it defined.
+target_include_directories(wrap PRIVATE ../../../src)
 # TODO: b/505831929 - Figure out which options are required
 # _FORTIFY_SOURCE can likely go in target_compile_definitions however it was
 # unclear to me if the #undef is necessary and whether or not we need to ensure
@@ -38,4 +40,4 @@ target_compile_definitions(
 
 set_target_properties(wrap PROPERTIES FOLDER "freedreno")
 
-install(TARGETS wrap DESTINATION "${DIVE_INSTALL_DEST_DEVICE}")
+install(TARGETS wrap DESTINATION "${DIVE_DEST_DEVICE}")

@@ -19,6 +19,93 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 project(dive VERSION 1.2.0)
 
 # ------------------------------------------------------------------------------
+# Global constants for Dive resources
+
+# NOTE: These are named DIVE_STR_* for simplicity when reading the various ways
+# they are concatenated
+
+# These will be overwritten by build.py (same defaults)
+set(DIVE_STR_BUILD "build")
+
+# WARNING: Many of these are hard-coded by build.py
+set(DIVE_STR_PKG "pkg")
+set(DIVE_STR_HOST "host")
+set(DIVE_STR_DEVICE "device")
+set(DIVE_STR_PLUGINS "plugins")
+set(DIVE_CAMEL_STR_CONTENTS "Contents")
+set(DIVE_CAMEL_STR_MACOS "MacOS")
+set(DIVE_CAMEL_STR_RESOURCES "Resources")
+set(DIVE_CAMEL_STR_PLUGINS "PlugIns")
+set(DIVE_CAMEL_STR_FRAMEWORKS "Frameworks")
+set(DIVE_STR_DIVE_DOT_APP "dive.app")
+set(DIVE_STR_DIVE_PROFILING_PLUGIN "dive_profiling_plugin")
+set(DIVE_STR_NOTICE "NOTICE")
+
+# During the cmake install process, the resources will be placed in these locations
+# External plugins need to be placed manually or by the build.py script
+#
+# Host                          Most platforms (Linux, Windows)         macOS
+# --------------------------------------------------------------------------------------------------------
+# (Dive UI / app bundle)
+# DIVE_DEST_UI:                 DIVE_ROOT/build/pkg/host/               DIVE_ROOT/build/pkg/
+#
+# The below paths are
+# relative to the
+# Deployment dir:               DIVE_ROOT/build/pkg/                    DIVE_ROOT/build/pkg/
+#
+# (Host resources)
+# DIVE_DEST_HOST:               host/                                   dive.app/Contents/MacOS/
+#
+# (Host libraries)
+# DIVE_DEST_HOST_FRAMEWORKS:    host/                                   dive.app/Contents/Frameworks/
+#
+# (Host plugins)
+# DIVE_DEST_HOST_PLUGINS:       host/plugins/                           dive.app/Contents/PlugIns/plugins
+#
+# (Device resources)
+# DIVE_DEST_DEVICE:             device/                                 dive.app/Contents/Resources/
+#
+# (Device plugins parent dir)
+# DIVE_DEST_DEVICE_PLUGINS:     device/plugins                          dive.app/Contents/Resources/
+#
+# (External profiling plugin)
+# Profiling plugin dir:         device/plugins/dive_profiling_plugin/   dive.app/Contents/Resources/dive_profiling_plugin/
+
+# Defining appropriate cmake install DESTINATION strings that are relative
+# to the deployment dir (default DIVE_ROOT/build/pkg/), which is passed as an
+# argument (--prefix) during the cmake install step
+#
+# e.g.:
+#   install(TARGETS target_name DESTINATION DIVE_DEST_UI)
+if(CMAKE_HOST_APPLE)
+    set(DIVE_DEST_UI ".")
+    set(DIVE_DEST_HOST
+        ${DIVE_STR_DIVE_DOT_APP}/${DIVE_CAMEL_STR_CONTENTS}/${DIVE_CAMEL_STR_MACOS}
+    )
+    set(DIVE_DEPLOYMENT_DIR_RELATIVE_TO_HOST_RESOURCES "../../..")
+    set(DIVE_DEST_HOST_FRAMEWORKS
+        ${DIVE_STR_DIVE_DOT_APP}/${DIVE_CAMEL_STR_CONTENTS}/${DIVE_CAMEL_STR_FRAMEWORKS}
+    )
+    set(DIVE_DEST_HOST_PLUGINS
+        ${DIVE_STR_DIVE_DOT_APP}/${DIVE_CAMEL_STR_CONTENTS}/${DIVE_CAMEL_STR_PLUGINS}/${DIVE_STR_PLUGINS}
+    )
+    set(DIVE_DEST_DEVICE
+        ${DIVE_STR_DIVE_DOT_APP}/${DIVE_CAMEL_STR_CONTENTS}/${DIVE_CAMEL_STR_RESOURCES}
+    )
+    set(DIVE_DEST_DEVICE_PLUGINS
+        ${DIVE_STR_DIVE_DOT_APP}/${DIVE_CAMEL_STR_CONTENTS}/${DIVE_CAMEL_STR_RESOURCES}
+    )
+else()
+    set(DIVE_DEST_UI ${DIVE_STR_HOST})
+    set(DIVE_DEST_HOST ${DIVE_STR_HOST})
+    set(DIVE_DEPLOYMENT_DIR_RELATIVE_TO_HOST_RESOURCES "..")
+    set(DIVE_DEST_HOST_FRAMEWORKS ${DIVE_STR_HOST})
+    set(DIVE_DEST_HOST_PLUGINS ${DIVE_STR_HOST}/${DIVE_STR_PLUGINS})
+    set(DIVE_DEST_DEVICE ${DIVE_STR_DEVICE})
+    set(DIVE_DEST_DEVICE_PLUGINS ${DIVE_STR_DEVICE}/${DIVE_STR_PLUGINS})
+endif()
+
+# ------------------------------------------------------------------------------
 # Global properties
 
 get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -37,7 +124,7 @@ if(MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
-set(THIRDPARTY_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
+set(THIRDPARTY_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 
 option(DIVE_BUILD_WITH_SANITIZER "Build Dive with sanitizers" OFF)
 
@@ -56,20 +143,7 @@ if(UPLOAD_DEBUG_SYMBOLS)
     endif()
 endif()
 
-# Placeholder value for DESTINATION to override cmake default.
-# These are all relative to the install destination prefix which is recommended as "pkg/"
-# e.g. install(TARGETS target_name DESTINATION "${DIVE_INSTALL_DEST_*}")
-set(DIVE_INSTALL_DEST_HOST "host") # Should only be used as destination for host builds
-set(DIVE_INSTALL_DEST_DEVICE "device") # Should only be used as destination for device builds
-# Plugins folders
-set(DIVE_PLUGINS_PARENT_DIR "plugins")
-set(DIVE_HOST_PLUGINS_INSTALL_DIR "plugins")
-set(DIVE_PROFILING_PLUGIN_DIR "dive_profiling_plugin") # This is not built within Dive
-# macOS bundle
-set(DIVE_MACOS_BUNDLE_RESOURCES "Resources")
-set(DIVE_MACOS_BUNDLE_PLUGINS "PlugIns/dive_plugins")
-# License file
-set(DIVE_LICENSE_FILE_NAME "NOTICE")
+set(DIVE_DEPLOY_FOLDER_PATH /data/local/tmp/dive)
 
 # Disable gtest for install
 set(INSTALL_GTEST OFF)
@@ -126,7 +200,7 @@ if(ANDROID)
     install(
         FILES
             ${CMAKE_CURRENT_BINARY_DIR}/bin/$<CONFIG>/${DEVICE_RESOURCES_VERSION_FILENAME}
-        DESTINATION ${DIVE_INSTALL_DEST_DEVICE}
+        DESTINATION ${DIVE_DEST_DEVICE}
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -288,18 +362,18 @@ if(ANDROID)
     install(
         FILES
             ${CMAKE_BINARY_DIR}/gfxr_layer/jni/${ANDROID_ABI}/libVkLayer_gfxreconstruct.so
-        DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
+        DESTINATION "${DIVE_DEST_DEVICE}"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/tools/replay/build/outputs/apk/debug/replay-debug.apk
-        DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
+        DESTINATION "${DIVE_DEST_DEVICE}"
         RENAME "gfxr-replay.apk"
     )
     install(
         FILES
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android/scripts/gfxrecon.py
-        DESTINATION "${DIVE_INSTALL_DEST_DEVICE}"
+        DESTINATION "${DIVE_DEST_DEVICE}"
     )
     list(POP_BACK CMAKE_MESSAGE_INDENT)
     message(CHECK_PASS "done")
@@ -310,35 +384,26 @@ endif()
 
 if(NOT ANDROID)
     enable_testing()
+    set(DIVE_HOST_TOOLS_DIR
+        ${CMAKE_CURRENT_SOURCE_DIR}/${DIVE_STR_BUILD}/${DIVE_STR_PKG}/${DIVE_DEST_HOST}
+    )
     set(DIVE_TEST_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/test_output)
     add_test(
         NAME TestLoadingUncompressedTrace
         COMMAND
-            ${CMAKE_BINARY_DIR}/bin/divecli extract -o .
-            ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0052.rd
+            ${DIVE_HOST_TOOLS_DIR}/divecli extract -o .
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/traces/bloom-frame-0052.rd
     )
     add_test(
         NAME TestLoadingCompressedTrace
         COMMAND
-            ${CMAKE_BINARY_DIR}/bin/divecli extract -o .
-            ${CMAKE_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd
+            ${DIVE_HOST_TOOLS_DIR}/divecli extract -o .
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/traces/bloom-frame-0080-compressed.rd
     )
 
     # MacOS has limited thread stack size, allocating large object in stack makes its stack overflow
     # This has been fixed in https://github.com/google/dive/pull/541
-    if(CMAKE_HOST_APPLE)
-        set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_CURRENT_SOURCE_DIR}/build/pkg/dive.app/Contents/MacOS/dive
-        )
-    elseif(CMAKE_HOST_WIN32)
-        set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_CURRENT_SOURCE_DIR}/build/pkg/host/dive.exe
-        )
-    else()
-        set(DIVE_EXECUTABLE_PATH
-            ${CMAKE_CURRENT_SOURCE_DIR}/build/pkg/host/dive
-        )
-    endif()
+    set(DIVE_EXECUTABLE_PATH ${DIVE_HOST_TOOLS_DIR}/dive)
     set(DIVE_TEST_TRACE_DIR ${PROJECT_SOURCE_DIR}/tests/gfxr_traces)
     set(DIVE_TEST_TRACE
         ${DIVE_TEST_TRACE_DIR}/com.google.bigwheels.project_graphics_pipeline.debug_trim_trigger_20251101T032619.gfxr

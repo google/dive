@@ -72,7 +72,7 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
 
 constexpr int kDataRole = Qt::UserRole + 1;
 constexpr int kDefaultFrameCount = 300;
-constexpr const char* kDefaultReplayButtonText = "Replay";
+constexpr std::string_view kDefaultReplayButtonText = "Replay";
 
 }  // namespace
 
@@ -130,23 +130,8 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
 
     // Custom replay
     {
-        auto* frame_count_layout = new QHBoxLayout();
-        auto* frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto* frame_count_box = new QSpinBox(this);
-        frame_count_box->setRange(1, std::numeric_limits<int>::max());
-        frame_count_box->setValue(kDefaultFrameCount);
-        frame_count_layout->addWidget(frame_count_label);
-        frame_count_layout->addWidget(frame_count_box);
-
-        auto* group_box = new QGroupBox();
-        group_box->setTitle("Custom Replay");
-        group_box->setCheckable(true);
-        group_box->setChecked(false);
-        group_box->setLayout(frame_count_layout);
-
-        m_custom_replay_box = group_box;
-        m_custom_replay_frame_count = frame_count_box;
-
+        m_custom_replay_box =
+            CreateFrameCountGroupBox("Custom Replay", m_custom_replay_frame_count);
         m_custom_replay_box->setVisible(m_controller.AdvancedOptionEnabled());
         QObject::connect(&m_controller, &ApplicationController::AdvancedOptionToggled,
                          m_custom_replay_box, &QGroupBox::setVisible);
@@ -171,22 +156,8 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
 
     // Enable GPU Time
     {
-        auto* frame_count_layout = new QHBoxLayout();
-        auto* frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto* frame_count_box = new QSpinBox(this);
-        frame_count_box->setRange(1, std::numeric_limits<int>::max());
-        frame_count_box->setValue(kDefaultFrameCount);
-        frame_count_layout->addWidget(frame_count_label);
-        frame_count_layout->addWidget(frame_count_box);
-
-        auto* group_box = new QGroupBox();
-        group_box->setTitle("Enable GPU Time");
-        group_box->setCheckable(true);
-        group_box->setChecked(false);
-        group_box->setLayout(frame_count_layout);
-
-        m_gpu_time_replay_box = group_box;
-        m_gpu_time_replay_frame_count = frame_count_box;
+        m_gpu_time_replay_box =
+            CreateFrameCountGroupBox("Enable GPU Time", m_gpu_time_replay_frame_count);
     }
 
     // Enable RenderDoc capture
@@ -273,6 +244,25 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
 
     QObject::connect(this, &AnalyzeDialog::DisableOverlay, this, &AnalyzeDialog::OnDisableOverlay);
     QObject::connect(this, &AnalyzeDialog::OverlayMessage, this, &AnalyzeDialog::OnOverlayMessage);
+}
+
+//--------------------------------------------------------------------------------------------------
+QGroupBox* AnalyzeDialog::CreateFrameCountGroupBox(const QString& title, QSpinBox*& out_spin_box)
+{
+    auto* frame_count_layout = new QHBoxLayout();
+    auto* frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+    out_spin_box = new QSpinBox(this);
+    out_spin_box->setRange(1, std::numeric_limits<int>::max());
+    out_spin_box->setValue(kDefaultFrameCount);
+    frame_count_layout->addWidget(frame_count_label);
+    frame_count_layout->addWidget(out_spin_box);
+
+    auto* group_box = new QGroupBox();
+    group_box->setTitle(title);
+    group_box->setCheckable(true);
+    group_box->setChecked(false);
+    group_box->setLayout(frame_count_layout);
+    return group_box;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -462,8 +452,8 @@ void AnalyzeDialog::OnAnalyzeCaptureEnded()
 }
 
 //--------------------------------------------------------------------------------------------------
-absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
-    Dive::AndroidDevice* device, const std::string& local_asset_file_path)
+absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(Dive::AndroidDevice* device,
+                                                             std::string_view local_asset_file_path)
 {
     const std::string remote_dir = "/sdcard/gfxr_captures_for_replay";
 
@@ -488,19 +478,19 @@ absl::StatusOr<std::string> AnalyzeDialog::PushFilesToDevice(
 }
 
 //--------------------------------------------------------------------------------------------------
-void AnalyzeDialog::SetReplayButton(const std::string& message, bool is_enabled)
+void AnalyzeDialog::SetReplayButton(std::string_view message, bool is_enabled)
 {
     m_replay_button->setEnabled(is_enabled);
-    m_replay_button->setText(message.c_str());
+    m_replay_button->setText(QString::fromUtf8(message.data(), static_cast<int>(message.size())));
 }
 
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager& device_manager,
-                                         const std::string& remote_gfxr_file)
+                                         std::string_view remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartNormalReplay);
     Dive::GfxrReplaySettings replay_settings;
-    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.remote_capture_path = std::string(remote_gfxr_file);
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
     replay_settings.run_type = Dive::GfxrReplayOptions::kNormal;
 
@@ -512,11 +502,11 @@ absl::Status AnalyzeDialog::NormalReplay(Dive::DeviceManager& device_manager,
 
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager& device_manager,
-                                      const std::string& remote_gfxr_file)
+                                      std::string_view remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPm4Replay);
     Dive::GfxrReplaySettings replay_settings;
-    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.remote_capture_path = std::string(remote_gfxr_file);
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
     replay_settings.run_type = Dive::GfxrReplayOptions::kPm4Dump;
 
@@ -525,11 +515,11 @@ absl::Status AnalyzeDialog::Pm4Replay(Dive::DeviceManager& device_manager,
 
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager& device_manager,
-                                              const std::string& remote_gfxr_file)
+                                              std::string_view remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartPerfCounterReplay);
     Dive::GfxrReplaySettings replay_settings;
-    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.remote_capture_path = std::string(remote_gfxr_file);
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
     replay_settings.run_type = Dive::GfxrReplayOptions::kPerfCounters;
 
@@ -541,11 +531,11 @@ absl::Status AnalyzeDialog::PerfCounterReplay(Dive::DeviceManager& device_manage
 
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager& device_manager,
-                                          const std::string& remote_gfxr_file)
+                                          std::string_view remote_gfxr_file)
 {
     UpdateReplayStatus(ReplayStatusUpdateCode::kStartGpuTimeReplay);
     Dive::GfxrReplaySettings replay_settings;
-    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.remote_capture_path = std::string(remote_gfxr_file);
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
     replay_settings.run_type = Dive::GfxrReplayOptions::kGpuTiming;
 
@@ -557,11 +547,11 @@ absl::Status AnalyzeDialog::GpuTimeReplay(Dive::DeviceManager& device_manager,
 
 //--------------------------------------------------------------------------------------------------
 absl::Status AnalyzeDialog::RenderDocReplay(Dive::DeviceManager& device_manager,
-                                            const std::string& remote_gfxr_file)
+                                            std::string_view remote_gfxr_file)
 {
     SetReplayButton("Replaying with RenderDoc...", false);
     Dive::GfxrReplaySettings replay_settings;
-    replay_settings.remote_capture_path = remote_gfxr_file;
+    replay_settings.remote_capture_path = std::string(remote_gfxr_file);
     replay_settings.local_download_dir = m_local_capture_file_directory.string();
     replay_settings.run_type = Dive::GfxrReplayOptions::kRenderDoc;
 
@@ -695,10 +685,11 @@ void AnalyzeDialog::ExecuteStatusUpdate()
     m_status_update_queue.clear();
 }
 
-void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string& message)
+void AnalyzeDialog::UpdateReplayStatus(ReplayStatusUpdateCode status, std::string_view message)
 {
-    qDebug() << message.c_str();
-    ReplayStatusUpdated(static_cast<int>(status), QString::fromStdString(message));
+    QString qmessage = QString::fromUtf8(message.data(), static_cast<int>(message.size()));
+    qDebug() << qmessage;
+    ReplayStatusUpdated(static_cast<int>(status), qmessage);
 }
 
 //--------------------------------------------------------------------------------------------------

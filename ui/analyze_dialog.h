@@ -17,6 +17,7 @@
 #include <QDialog>
 #include <future>
 #include <optional>
+#include <string_view>
 
 #include "capture_service/device_mgr.h"
 #include "device_dialog.h"
@@ -130,25 +131,26 @@ class AnalyzeDialog : public DeviceDialog
     void ShowMessage(const QString& message) override;
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
-    void SetReplayButton(const std::string& message, bool is_enabled);
+    void SetReplayButton(std::string_view message, bool is_enabled);
     void PopulateMetrics();
     void UpdateSelectedMetricsList();
     void UpdatePerfCounterElements(bool show);
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice* device,
-                                                  const std::string& local_asset_file_path);
+                                                  std::string_view local_asset_file_path);
     absl::Status NormalReplay(Dive::DeviceManager& device_manager,
-                              const std::string& remote_gfxr_file);
-    absl::Status Pm4Replay(Dive::DeviceManager& device_manager,
-                           const std::string& remote_gfxr_file);
+                              std::string_view remote_gfxr_file);
+    absl::Status Pm4Replay(Dive::DeviceManager& device_manager, std::string_view remote_gfxr_file);
     absl::Status PerfCounterReplay(Dive::DeviceManager& device_manager,
-                                   const std::string& remote_gfxr_file);
+                                   std::string_view remote_gfxr_file);
     absl::Status GpuTimeReplay(Dive::DeviceManager& device_manager,
-                               const std::string& remote_gfxr_file);
+                               std::string_view remote_gfxr_file);
     absl::Status RenderDocReplay(Dive::DeviceManager& device_manager,
-                                 const std::string& remote_gfxr_file);
+                                 std::string_view remote_gfxr_file);
 
-    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string& messge = "");
+    void UpdateReplayStatus(ReplayStatusUpdateCode status, std::string_view message = "");
     void ExecuteStatusUpdate();
+
+    QGroupBox* CreateFrameCountGroupBox(const QString& title, QSpinBox*& out_spin_box);
 
     void ReplayImpl(const ReplayConfig&);
     void DeleteReplayArtifactsImpl();

@@ -70,6 +70,10 @@ void AttemptDeletingTemporaryLocalFile(const std::filesystem::path& file_path)
     }
 }
 
+constexpr int kDataRole = Qt::UserRole + 1;
+constexpr int kDefaultFrameCount = 300;
+constexpr const char* kDefaultReplayButtonText = "Replay";
+
 }  // namespace
 
 // =================================================================================================
@@ -99,42 +103,42 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     m_enabled_metrics_list = new QListWidget();
 
     // Replay Button
-    m_button_layout = new QHBoxLayout();
+    auto* button_layout = new QHBoxLayout();
     m_replay_button = new QPushButton("&Replay", this);
     m_replay_button->setEnabled(false);
-    m_button_layout->addWidget(m_replay_button);
+    button_layout->addWidget(m_replay_button);
 
     // Device Selector
-    m_device_layout = new QHBoxLayout();
-    m_device_label = new QLabel(tr("Devices:"));
+    auto* device_layout = new QHBoxLayout();
+    auto* device_label = new QLabel(tr("Devices:"));
     m_device_box = new QComboBox();
     m_device_box->setModel(m_device_model);
-    m_device_refresh_button = new QPushButton("&Refresh", this);
-    m_device_layout->addWidget(m_device_label);
-    m_device_layout->addWidget(m_device_box);
-    m_device_layout->addWidget(m_device_refresh_button);
+    auto* device_refresh_button = new QPushButton("&Refresh", this);
+    device_layout->addWidget(device_label);
+    device_layout->addWidget(m_device_box);
+    device_layout->addWidget(device_refresh_button);
 
     // Selected File
-    m_selected_file_layout = new QHBoxLayout();
-    m_selected_file_label = new QLabel("Selected Capture file:");
+    auto* selected_file_layout = new QHBoxLayout();
+    auto* selected_file_label = new QLabel("Selected Capture file:");
     m_selected_file_input_box = new QLineEdit();
     m_selected_capture_file_string = "";
     m_selected_file_input_box->setText(m_selected_capture_file_string);
     m_selected_file_input_box->setReadOnly(true);
-    m_selected_file_layout->addWidget(m_selected_file_label);
-    m_selected_file_layout->addWidget(m_selected_file_input_box);
+    selected_file_layout->addWidget(selected_file_label);
+    selected_file_layout->addWidget(m_selected_file_input_box);
 
     // Custom replay
     {
-        auto frame_count_layout = new QHBoxLayout();
-        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto frame_count_box = new QSpinBox(this);
+        auto* frame_count_layout = new QHBoxLayout();
+        auto* frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+        auto* frame_count_box = new QSpinBox(this);
         frame_count_box->setRange(1, std::numeric_limits<int>::max());
         frame_count_box->setValue(kDefaultFrameCount);
         frame_count_layout->addWidget(frame_count_label);
         frame_count_layout->addWidget(frame_count_box);
 
-        auto group_box = new QGroupBox();
+        auto* group_box = new QGroupBox();
         group_box->setTitle("Custom Replay");
         group_box->setCheckable(true);
         group_box->setChecked(false);
@@ -167,15 +171,15 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
 
     // Enable GPU Time
     {
-        auto frame_count_layout = new QHBoxLayout();
-        auto frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
-        auto frame_count_box = new QSpinBox(this);
+        auto* frame_count_layout = new QHBoxLayout();
+        auto* frame_count_label = new QLabel(tr("Loop Single Frame Count:"));
+        auto* frame_count_box = new QSpinBox(this);
         frame_count_box->setRange(1, std::numeric_limits<int>::max());
         frame_count_box->setValue(kDefaultFrameCount);
         frame_count_layout->addWidget(frame_count_label);
         frame_count_layout->addWidget(frame_count_box);
 
-        auto group_box = new QGroupBox();
+        auto* group_box = new QGroupBox();
         group_box->setTitle("Enable GPU Time");
         group_box->setCheckable(true);
         group_box->setChecked(false);
@@ -193,46 +197,47 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     }
 
     // Replay Warning
-    m_replay_warning_layout = new QHBoxLayout();
-    m_replay_warning_label = new QLabel(tr(
+    auto* replay_warning_layout = new QHBoxLayout();
+    auto* replay_warning_label = new QLabel(tr(
         "⚠ Initiating replay will use and potentially overwrite temporary artifacts from previous "
         "replays. Save any desired artifacts manually in a separate folder before proceeding."));
-    m_replay_warning_label->setWordWrap(true);
-    m_replay_warning_layout->addWidget(m_replay_warning_label);
+    replay_warning_label->setWordWrap(true);
+    replay_warning_layout->addWidget(replay_warning_label);
 
     // Delete replay artifacts
-    m_delete_replay_artifacts_layout = new QHBoxLayout();
-    m_delete_replay_artifacts_button = new QPushButton("&Delete Previous Replay Artifacts", this);
-    m_delete_replay_artifacts_layout->addWidget(m_delete_replay_artifacts_button);
+    auto* delete_replay_artifacts_layout = new QHBoxLayout();
+    auto* delete_replay_artifacts_button =
+        new QPushButton("&Delete Previous Replay Artifacts", this);
+    delete_replay_artifacts_layout->addWidget(delete_replay_artifacts_button);
 
     // Left Panel Layout
-    m_left_panel_layout = new QVBoxLayout();
-    m_left_panel_layout->addWidget(m_metrics_list_label);
-    m_left_panel_layout->addWidget(m_metrics_list);
+    auto* left_panel_layout = new QVBoxLayout();
+    left_panel_layout->addWidget(m_metrics_list_label);
+    left_panel_layout->addWidget(m_metrics_list);
 
     // Right Panel Layout
-    m_right_panel_layout = new QVBoxLayout();
-    m_right_panel_layout->addWidget(m_selected_metrics_description_label);
-    m_right_panel_layout->addWidget(m_selected_metrics_description);
-    m_right_panel_layout->addWidget(m_enabled_metrics_list_label);
-    m_right_panel_layout->addWidget(m_enabled_metrics_list);
-    m_right_panel_layout->addLayout(m_device_layout);
-    m_right_panel_layout->addLayout(m_selected_file_layout);
-    m_right_panel_layout->addWidget(m_custom_replay_box);
-    m_right_panel_layout->addWidget(m_dump_pm4_box);
-    m_right_panel_layout->addWidget(m_perf_counter_box);
-    m_right_panel_layout->addWidget(m_gpu_time_replay_box);
-    m_right_panel_layout->addWidget(m_renderdoc_capture_box);
-    m_right_panel_layout->addLayout(m_replay_warning_layout);
-    m_right_panel_layout->addLayout(m_delete_replay_artifacts_layout);
-    m_right_panel_layout->addLayout(m_button_layout);
+    auto* right_panel_layout = new QVBoxLayout();
+    right_panel_layout->addWidget(m_selected_metrics_description_label);
+    right_panel_layout->addWidget(m_selected_metrics_description);
+    right_panel_layout->addWidget(m_enabled_metrics_list_label);
+    right_panel_layout->addWidget(m_enabled_metrics_list);
+    right_panel_layout->addLayout(device_layout);
+    right_panel_layout->addLayout(selected_file_layout);
+    right_panel_layout->addWidget(m_custom_replay_box);
+    right_panel_layout->addWidget(m_dump_pm4_box);
+    right_panel_layout->addWidget(m_perf_counter_box);
+    right_panel_layout->addWidget(m_gpu_time_replay_box);
+    right_panel_layout->addWidget(m_renderdoc_capture_box);
+    right_panel_layout->addLayout(replay_warning_layout);
+    right_panel_layout->addLayout(delete_replay_artifacts_layout);
+    right_panel_layout->addLayout(button_layout);
 
     // Main Layout
-    m_main_layout = new QHBoxLayout();
-    m_main_layout->addLayout(m_left_panel_layout);
-    m_main_layout->addLayout(m_right_panel_layout);
+    auto* main_layout = new QHBoxLayout();
+    main_layout->addLayout(left_panel_layout);
+    main_layout->addLayout(right_panel_layout);
 
-    m_overlay->Initialize(m_main_layout, this);
+    m_overlay->Initialize(main_layout, this);
     setLayout(m_overlay->GetLayout());
 
     // Connect the name list's selection change to a lambda
@@ -257,10 +262,10 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
 
     QObject::connect(m_device_box, SIGNAL(currentIndexChanged(const QString&)), this,
                      SLOT(OnDeviceSelectionChanged(const QString&)));
-    QObject::connect(m_device_refresh_button, &QPushButton::clicked, this,
+    QObject::connect(device_refresh_button, &QPushButton::clicked, this,
                      &AnalyzeDialog::OnDeviceListRefresh);
     QObject::connect(m_replay_button, &QPushButton::clicked, this, &AnalyzeDialog::OnReplay);
-    QObject::connect(m_delete_replay_artifacts_button, &QPushButton::clicked, this,
+    QObject::connect(delete_replay_artifacts_button, &QPushButton::clicked, this,
                      &AnalyzeDialog::OnDeleteReplayArtifacts);
 
     QObject::connect(this, &AnalyzeDialog::ReplayStatusUpdated, this,
@@ -289,7 +294,7 @@ void AnalyzeDialog::OnDisableOverlay() { m_overlay->Clear(); }
 //--------------------------------------------------------------------------------------------------
 void AnalyzeDialog::ShowMessage(const QString& message)
 {
-    auto message_box = new QMessageBox(this);
+    auto* message_box = new QMessageBox(this);
     message_box->setAttribute(Qt::WA_DeleteOnClose, true);
     message_box->setText(message);
     message_box->open();

@@ -21,7 +21,10 @@ project(dive_crashpad)
 message(CHECK_START "Generate build files for third_party/dive_crashpad")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+if(WIN32)
+    set(Python3_FIND_REGISTRY "NEVER")
+endif() # WIN32
+find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
 
 if(WIN32)
     set(PLATFORM "win32")

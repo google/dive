@@ -139,7 +139,7 @@ def parse_args():
         "--mac-sign", 
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Sign the macOS app bundle for local use, no-op for other platforms")
+        help="Sign the macOS app bundle, no-op for other platforms")
     parser.add_argument(
         "--prereq-checks",
         action=argparse.BooleanOptionalAction,
@@ -230,7 +230,7 @@ def check_environment(args):
         print(f"\n{args.exec_deployqt} found on the Path at {deployqt}")
         args.exec_deployqt = deployqt
 
-    if (platform.system() == "Darwin") and (args.mac_sign) and (not args.ci):
+    if (platform.system() == "Darwin") and (args.mac_sign):
         codesign = shutil.which(args.exec_codesign)
         if not codesign:
             raise Exception(f"Cannot find codesign exec: {args.exec_codesign}")
@@ -391,8 +391,8 @@ def deploy_qt(args):
                         cmd.append(f"-executable={plugin_path}")
             dive.echo_and_run(cmd)
 
-            if (args.mac_sign) and (not args.ci):
-                print(f"\nSigning for local use with {args.exec_codesign}...")
+            if args.mac_sign:
+                print(f"\nSigning with {args.exec_codesign}...")
                 cmd = [args.exec_codesign, "--force", "--deep", "--sign", "-", app_dir]
                 dive.echo_and_run(cmd)
 

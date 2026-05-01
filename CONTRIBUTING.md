@@ -170,8 +170,9 @@ As a long-running project, Dive has significant amounts of legacy code and this 
 
 ### Planned Structural Improvements
 
-These are some general ideas, meant to help make sense of the desired directory structure after major refactoring:
+These are some general ideas for structural improvements. Please keep them in mind during the addition of new code and the refactoring of the current code:
 
-* Moving all source code to underneath `src/`
-* Consolidate CLI tooling
+* Dive source code should live underneath `src/` rather than any other top-level directories in this repo
+* Since Dive supports "GFXR captures" and "PM4 captures", naming related to traces/captures should be specific
+* Consolidate CLI tools rather than further splintering
 * More scripts should be written in Python for cross-platform support

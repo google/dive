@@ -24,6 +24,171 @@
 namespace Dive
 {
 
+namespace
+{
+
+// Helper function to extract and convert a value associated with a specific
+// key from a JSON node into a string representation.
+std::string GetValueStr(const nlohmann::ordered_json& node, const std::string& key)
+{
+    if (node.contains(key))
+    {
+        const auto& val = node[key];
+        if (val.is_string())
+        {
+            return val.get<std::string>();
+        }
+        return val.dump();
+    }
+    return "0";
+}
+
+// Appends a summary of draw call arguments (vertex/index count, instance count) to the
+// given stream.
+void AppendDrawCallSummary(std::ostringstream& s, const nlohmann::ordered_json& args,
+                           const std::string& primary_key)
+{
+    if (args.contains(primary_key))
+    {
+        s << "(" << primary_key << ": " << GetValueStr(args, primary_key);
+        if (args.contains("instanceCount"))
+        {
+            std::string instance_count = GetValueStr(args, "instanceCount");
+            if (instance_count != "1")
+            {
+                s << ", instanceCount: " << instance_count;
+            }
+        }
+        s << ")";
+    }
+}
+
+// Appends a formatted enum value to the given stream, stripping a specified prefix if present.
+void AppendEnumSummary(std::ostringstream& s, const nlohmann::ordered_json& args,
+                       const std::string& key, const std::string& prefix)
+{
+    if (args.contains(key))
+    {
+        std::string val = GetValueStr(args, key);
+        size_t prefix_pos = val.find(prefix);
+        if (prefix_pos != std::string::npos)
+        {
+            val.erase(prefix_pos, prefix.length());
+        }
+        s << "(" << val << ")";
+    }
+}
+
+// Creates a summary string containing key arguments
+// and their values for a given Vulkan command.
+std::string GetCommandSummary(const std::string& cmd_name, const nlohmann::ordered_json& args)
+{
+    std::ostringstream s;
+
+    using SummaryHandler = std::function<void(std::ostringstream&, const nlohmann::ordered_json&)>;
+
+    static const std::unordered_map<std::string_view, SummaryHandler> handlers = {
+        {"vkCmdDrawIndexed",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "indexCount"); }},
+        {"vkCmdDraw",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "vertexCount"); }},
+        {"vkCmdSetViewport",
+         [](auto& s, const auto& args) {
+             if (args.contains("pViewports") && args["pViewports"].is_array() &&
+                 !args["pViewports"].empty())
+             {
+                 const auto& vp = args["pViewports"][0];
+                 s << "(x:" << GetValueStr(vp, "x") << ", y:" << GetValueStr(vp, "y")
+                   << ", width:" << GetValueStr(vp, "width")
+                   << ", height:" << GetValueStr(vp, "height") << ")";
+             }
+         }},
+        {"vkCmdSetScissor",
+         [](auto& s, const auto& args) {
+             if (args.contains("pScissors") && args["pScissors"].is_array() &&
+                 !args["pScissors"].empty())
+             {
+                 const auto& sc = args["pScissors"][0];
+                 if (sc.contains("offset") && sc.contains("extent"))
+                 {
+                     const auto& offset = sc["offset"];
+                     const auto& extent = sc["extent"];
+                     s << "(x:" << GetValueStr(offset, "x") << ", y:" << GetValueStr(offset, "y")
+                       << ", width:" << GetValueStr(extent, "width")
+                       << ", height:" << GetValueStr(extent, "height") << ")";
+                 }
+             }
+         }},
+        {"vkCmdDispatch",
+         [](auto& s, const auto& args) {
+             if (args.contains("groupCountX"))
+             {
+                 s << "(x:" << GetValueStr(args, "groupCountX")
+                   << ", y:" << GetValueStr(args, "groupCountY")
+                   << ", z:" << GetValueStr(args, "groupCountZ") << ")";
+             }
+         }},
+        {"vkCmdDrawMultiEXT",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "drawCount"); }},
+        {"vkCmdDrawMultiIndexedEXT",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "drawCount"); }},
+        {"vkCmdDrawIndirect",
+         [](auto& s, const auto& args) {
+             if (args.contains("drawCount"))
+             {
+                 std::string draw_count = GetValueStr(args, "drawCount");
+                 if (draw_count != "1")
+                 {
+                     s << "(drawCount: " << draw_count << ")";
+                 }
+             }
+         }},
+        {"vkCmdDrawIndexedIndirect",
+         [](auto& s, const auto& args) {
+             if (args.contains("drawCount"))
+             {
+                 std::string draw_count = GetValueStr(args, "drawCount");
+                 if (draw_count != "1")
+                 {
+                     s << "(drawCount: " << draw_count << ")";
+                 }
+             }
+         }},
+        {"vkCmdBindPipeline",
+         [](auto& s, const auto& args) {
+             AppendEnumSummary(s, args, "pipelineBindPoint", "VK_PIPELINE_BIND_POINT_");
+         }},
+        {"vkCmdBindDescriptorSets",
+         [](auto& s, const auto& args) {
+             if (args.contains("firstSet") && args.contains("descriptorSetCount"))
+             {
+                 s << "(firstSet: " << GetValueStr(args, "firstSet")
+                   << ", setCount: " << GetValueStr(args, "descriptorSetCount") << ")";
+             }
+         }},
+        {"vkCmdBindVertexBuffers",
+         [](auto& s, const auto& args) {
+             if (args.contains("firstBinding") && args.contains("bindingCount"))
+             {
+                 s << "(firstBinding: " << GetValueStr(args, "firstBinding")
+                   << ", bindingCount: " << GetValueStr(args, "bindingCount") << ")";
+             }
+         }},
+        {"vkCmdBindIndexBuffer", [](auto& s, const auto& args) {
+             AppendEnumSummary(s, args, "indexType", "VK_INDEX_TYPE_");
+         }}};
+
+    auto it = handlers.find(std::string_view(cmd_name));
+    if (it != handlers.end())
+    {
+        it->second(s, args);
+    }
+
+    return s.str();
+}
+
+}  // namespace
+
 // =================================================================================================
 // GfxrVulkanCommandHierarchyCreator
 // =================================================================================================
@@ -50,174 +215,6 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                  m_cur_parent_node_index_stack.top(), node_index);
     }
-}
-
-std::string GfxrVulkanCommandHierarchyCreator::GetValueStr(const nlohmann::ordered_json& node,
-                                                           const std::string& key)
-{
-    if (node.contains(key))
-    {
-        const auto& val = node[key];
-        if (val.is_string())
-        {
-            return val.get<std::string>();
-        }
-        return val.dump();
-    }
-    return "0";
-}
-
-void GfxrVulkanCommandHierarchyCreator::AppendDrawCallSummary(std::ostringstream& s,
-                                                              const nlohmann::ordered_json& args,
-                                                              const std::string& primary_key)
-{
-    if (args.contains(primary_key))
-    {
-        s << "(" << primary_key << ": " << GetValueStr(args, primary_key);
-        if (args.contains("instanceCount"))
-        {
-            std::string instance_count = GetValueStr(args, "instanceCount");
-            if (instance_count != "1")
-            {
-                s << ", instanceCount: " << instance_count;
-            }
-        }
-        s << ")";
-    }
-}
-
-void GfxrVulkanCommandHierarchyCreator::AppendEnumSummary(std::ostringstream& s,
-                                                          const nlohmann::ordered_json& args,
-                                                          const std::string& key,
-                                                          const std::string& prefix)
-{
-    if (args.contains(key))
-    {
-        std::string val = GetValueStr(args, key);
-        size_t prefix_pos = val.find(prefix);
-        if (prefix_pos != std::string::npos)
-        {
-            val.erase(prefix_pos, prefix.length());
-        }
-        s << "(" << val << ")";
-    }
-}
-
-std::string GfxrVulkanCommandHierarchyCreator::GetCommandSummary(const std::string& cmd_name,
-                                                                 const nlohmann::ordered_json& args)
-{
-    std::ostringstream s;
-
-    using SummaryHandler = std::function<void(GfxrVulkanCommandHierarchyCreator*,
-                                              std::ostringstream&, const nlohmann::ordered_json&)>;
-
-    static const std::unordered_map<std::string_view, SummaryHandler> handlers = {
-        {"vkCmdDrawIndexed",
-         [](auto* self, auto& s, const auto& args) {
-             self->AppendDrawCallSummary(s, args, "indexCount");
-         }},
-        {"vkCmdDraw",
-         [](auto* self, auto& s, const auto& args) {
-             self->AppendDrawCallSummary(s, args, "vertexCount");
-         }},
-        {"vkCmdSetViewport",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("pViewports") && args["pViewports"].is_array() &&
-                 !args["pViewports"].empty())
-             {
-                 const auto& vp = args["pViewports"][0];
-                 s << "(x:" << self->GetValueStr(vp, "x") << ", y:" << self->GetValueStr(vp, "y")
-                   << ", width:" << self->GetValueStr(vp, "width")
-                   << ", height:" << self->GetValueStr(vp, "height") << ")";
-             }
-         }},
-        {"vkCmdSetScissor",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("pScissors") && args["pScissors"].is_array() &&
-                 !args["pScissors"].empty())
-             {
-                 const auto& sc = args["pScissors"][0];
-                 if (sc.contains("offset") && sc.contains("extent"))
-                 {
-                     const auto& offset = sc["offset"];
-                     const auto& extent = sc["extent"];
-                     s << "(x:" << self->GetValueStr(offset, "x")
-                       << ", y:" << self->GetValueStr(offset, "y")
-                       << ", width:" << self->GetValueStr(extent, "width")
-                       << ", height:" << self->GetValueStr(extent, "height") << ")";
-                 }
-             }
-         }},
-        {"vkCmdDispatch",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("groupCountX"))
-             {
-                 s << "(x:" << self->GetValueStr(args, "groupCountX")
-                   << ", y:" << self->GetValueStr(args, "groupCountY")
-                   << ", z:" << self->GetValueStr(args, "groupCountZ") << ")";
-             }
-         }},
-        {"vkCmdDrawMultiEXT",
-         [](auto* self, auto& s, const auto& args) {
-             self->AppendDrawCallSummary(s, args, "drawCount");
-         }},
-        {"vkCmdDrawMultiIndexedEXT",
-         [](auto* self, auto& s, const auto& args) {
-             self->AppendDrawCallSummary(s, args, "drawCount");
-         }},
-        {"vkCmdDrawIndirect",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("drawCount"))
-             {
-                 std::string draw_count = self->GetValueStr(args, "drawCount");
-                 if (draw_count != "1")
-                 {
-                     s << "(drawCount: " << draw_count << ")";
-                 }
-             }
-         }},
-        {"vkCmdDrawIndexedIndirect",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("drawCount"))
-             {
-                 std::string draw_count = self->GetValueStr(args, "drawCount");
-                 if (draw_count != "1")
-                 {
-                     s << "(drawCount: " << draw_count << ")";
-                 }
-             }
-         }},
-        {"vkCmdBindPipeline",
-         [](auto* self, auto& s, const auto& args) {
-             self->AppendEnumSummary(s, args, "pipelineBindPoint", "VK_PIPELINE_BIND_POINT_");
-         }},
-        {"vkCmdBindDescriptorSets",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("firstSet") && args.contains("descriptorSetCount"))
-             {
-                 s << "(firstSet: " << self->GetValueStr(args, "firstSet")
-                   << ", setCount: " << self->GetValueStr(args, "descriptorSetCount") << ")";
-             }
-         }},
-        {"vkCmdBindVertexBuffers",
-         [](auto* self, auto& s, const auto& args) {
-             if (args.contains("firstBinding") && args.contains("bindingCount"))
-             {
-                 s << "(firstBinding: " << self->GetValueStr(args, "firstBinding")
-                   << ", bindingCount: " << self->GetValueStr(args, "bindingCount") << ")";
-             }
-         }},
-        {"vkCmdBindIndexBuffer", [](auto* self, auto& s, const auto& args) {
-             self->AppendEnumSummary(s, args, "indexType", "VK_INDEX_TYPE_");
-         }}};
-
-    auto it = handlers.find(std::string_view(cmd_name));
-    if (it != handlers.end())
-    {
-        it->second(this, s, args);
-    }
-
-    return s.str();
 }
 
 //--------------------------------------------------------------------------------------------------

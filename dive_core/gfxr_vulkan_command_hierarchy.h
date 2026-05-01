@@ -77,23 +77,6 @@ class GfxrVulkanCommandHierarchyCreator
                   uint64_t child_node_index);
     void ConditionallyAddChild(uint64_t node_index);
 
-    // Helper function to extract and convert a value associated with a specific
-    // key from a JSON node into a string representation.
-    std::string GetValueStr(const nlohmann::ordered_json& node, const std::string& key);
-
-    // Creates a summary string containing key arguments
-    // and their values for a given Vulkan command.
-    std::string GetCommandSummary(const std::string& cmd_name, const nlohmann::ordered_json& args);
-
-    // Appends a summary of draw call arguments (vertex/index count, instance count) to the
-    // given stream.
-    void AppendDrawCallSummary(std::ostringstream& stream, const nlohmann::ordered_json& args,
-                               const std::string& primary_key);
-
-    // Appends a formatted enum value to the given stream, stripping a specified prefix if present.
-    void AppendEnumSummary(std::ostringstream& stream, const nlohmann::ordered_json& args,
-                           const std::string& key, const std::string& prefix);
-
     uint64_t m_cur_submit_node_index = 0;
     uint64_t m_cur_command_buffer_node_index = 0;
     std::stack<uint64_t> m_cur_parent_node_index_stack;

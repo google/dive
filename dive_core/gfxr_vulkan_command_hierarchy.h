@@ -88,27 +88,5 @@ class GfxrVulkanCommandHierarchyCreator
     Topology m_topology[CommandHierarchy::kTopologyTypeCount];
     bool m_used_in_mixed_command_hierarchy = false;
     std::unordered_map<uint64_t, uint64_t> m_dive_indices_to_local_indices_map;
-
-    // Additional info that will be displayed in the description of a draw call node
-    struct DrawCallDescInfo
-    {
-        uint64_t index_count = 0;
-        uint64_t vertex_count = 0;
-        uint64_t instance_count = 0;
-    };
-
-    // Returns false if key was recognized to correspond to a DrawCallDescInfo field but val could
-    // not be parsed
-    bool ParseCurDrawCallInfo(std::string_view key, std::string_view val);
-
-    // Forms string of drawcall info, some examples:
-    //
-    // vkCmdDraw: "(vertexCount=#,instanceCount=#)"
-    // vkCmdDrawIndexed: "(indexCount=#,instanceCount=#)"
-    // vkCmdDrawMultiEXT: "(instanceCount=#)"
-    // vkCmdDraw* without instanceCount parameter: ""
-    std::string GetCurrDrawCallString();
-
-    DrawCallDescInfo m_cur_draw_call_info;
 };
 }  // namespace Dive

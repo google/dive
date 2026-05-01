@@ -13,13 +13,181 @@
 
 #include "dive_core/gfxr_vulkan_command_hierarchy.h"
 
+#include <functional>
 #include <iostream>
+#include <string_view>
+#include <unordered_map>
 
 #include "absl/strings/numbers.h"
 #include "dive_core/dive_strings.h"
 
 namespace Dive
 {
+
+namespace
+{
+
+// Helper function to extract and convert a value associated with a specific
+// key from a JSON node into a string representation.
+std::string GetValueStr(const nlohmann::ordered_json& node, const std::string& key)
+{
+    if (node.contains(key))
+    {
+        const auto& val = node[key];
+        if (val.is_string())
+        {
+            return val.get<std::string>();
+        }
+        return val.dump();
+    }
+    return "0";
+}
+
+// Appends a summary of draw call arguments (vertex/index count, instance count) to the
+// given stream.
+void AppendDrawCallSummary(std::ostringstream& s, const nlohmann::ordered_json& args,
+                           const std::string& primary_key)
+{
+    if (args.contains(primary_key))
+    {
+        s << "(" << primary_key << ": " << GetValueStr(args, primary_key);
+        if (args.contains("instanceCount"))
+        {
+            std::string instance_count = GetValueStr(args, "instanceCount");
+            if (instance_count != "1")
+            {
+                s << ", instanceCount: " << instance_count;
+            }
+        }
+        s << ")";
+    }
+}
+
+// Appends a formatted enum value to the given stream, stripping a specified prefix if present.
+void AppendEnumSummary(std::ostringstream& s, const nlohmann::ordered_json& args,
+                       const std::string& key, const std::string& prefix)
+{
+    if (args.contains(key))
+    {
+        std::string val = GetValueStr(args, key);
+        size_t prefix_pos = val.find(prefix);
+        if (prefix_pos != std::string::npos)
+        {
+            val.erase(prefix_pos, prefix.length());
+        }
+        s << "(" << val << ")";
+    }
+}
+
+// Creates a summary string containing key arguments
+// and their values for a given Vulkan command.
+std::string GetCommandSummary(const std::string& cmd_name, const nlohmann::ordered_json& args)
+{
+    std::ostringstream s;
+
+    using SummaryHandler = std::function<void(std::ostringstream&, const nlohmann::ordered_json&)>;
+
+    static const std::unordered_map<std::string_view, SummaryHandler> handlers = {
+        {"vkCmdDrawIndexed",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "indexCount"); }},
+        {"vkCmdDraw",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "vertexCount"); }},
+        {"vkCmdSetViewport",
+         [](auto& s, const auto& args) {
+             if (args.contains("pViewports") && args["pViewports"].is_array() &&
+                 !args["pViewports"].empty())
+             {
+                 const auto& vp = args["pViewports"][0];
+                 s << "(x:" << GetValueStr(vp, "x") << ", y:" << GetValueStr(vp, "y")
+                   << ", width:" << GetValueStr(vp, "width")
+                   << ", height:" << GetValueStr(vp, "height") << ")";
+             }
+         }},
+        {"vkCmdSetScissor",
+         [](auto& s, const auto& args) {
+             if (args.contains("pScissors") && args["pScissors"].is_array() &&
+                 !args["pScissors"].empty())
+             {
+                 const auto& sc = args["pScissors"][0];
+                 if (sc.contains("offset") && sc.contains("extent"))
+                 {
+                     const auto& offset = sc["offset"];
+                     const auto& extent = sc["extent"];
+                     s << "(x:" << GetValueStr(offset, "x") << ", y:" << GetValueStr(offset, "y")
+                       << ", width:" << GetValueStr(extent, "width")
+                       << ", height:" << GetValueStr(extent, "height") << ")";
+                 }
+             }
+         }},
+        {"vkCmdDispatch",
+         [](auto& s, const auto& args) {
+             if (args.contains("groupCountX"))
+             {
+                 s << "(x:" << GetValueStr(args, "groupCountX")
+                   << ", y:" << GetValueStr(args, "groupCountY")
+                   << ", z:" << GetValueStr(args, "groupCountZ") << ")";
+             }
+         }},
+        {"vkCmdDrawMultiEXT",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "drawCount"); }},
+        {"vkCmdDrawMultiIndexedEXT",
+         [](auto& s, const auto& args) { AppendDrawCallSummary(s, args, "drawCount"); }},
+        {"vkCmdDrawIndirect",
+         [](auto& s, const auto& args) {
+             if (args.contains("drawCount"))
+             {
+                 std::string draw_count = GetValueStr(args, "drawCount");
+                 if (draw_count != "1")
+                 {
+                     s << "(drawCount: " << draw_count << ")";
+                 }
+             }
+         }},
+        {"vkCmdDrawIndexedIndirect",
+         [](auto& s, const auto& args) {
+             if (args.contains("drawCount"))
+             {
+                 std::string draw_count = GetValueStr(args, "drawCount");
+                 if (draw_count != "1")
+                 {
+                     s << "(drawCount: " << draw_count << ")";
+                 }
+             }
+         }},
+        {"vkCmdBindPipeline",
+         [](auto& s, const auto& args) {
+             AppendEnumSummary(s, args, "pipelineBindPoint", "VK_PIPELINE_BIND_POINT_");
+         }},
+        {"vkCmdBindDescriptorSets",
+         [](auto& s, const auto& args) {
+             if (args.contains("firstSet") && args.contains("descriptorSetCount"))
+             {
+                 s << "(firstSet: " << GetValueStr(args, "firstSet")
+                   << ", setCount: " << GetValueStr(args, "descriptorSetCount") << ")";
+             }
+         }},
+        {"vkCmdBindVertexBuffers",
+         [](auto& s, const auto& args) {
+             if (args.contains("firstBinding") && args.contains("bindingCount"))
+             {
+                 s << "(firstBinding: " << GetValueStr(args, "firstBinding")
+                   << ", bindingCount: " << GetValueStr(args, "bindingCount") << ")";
+             }
+         }},
+        {"vkCmdBindIndexBuffer", [](auto& s, const auto& args) {
+             AppendEnumSummary(s, args, "indexType", "VK_INDEX_TYPE_");
+         }}};
+
+    auto it = handlers.find(std::string_view(cmd_name));
+    if (it != handlers.end())
+    {
+        it->second(s, args);
+    }
+
+    return s.str();
+}
+
+}  // namespace
 
 // =================================================================================================
 // GfxrVulkanCommandHierarchyCreator
@@ -50,33 +218,6 @@ void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_inde
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string GfxrVulkanCommandHierarchyCreator::GetCurrDrawCallString()
-{
-    // Early return for zero instance count
-    if (m_cur_draw_call_info.instance_count == 0)
-    {
-        return "";
-    }
-
-    std::ostringstream s;
-
-    s << "(";
-
-    if (m_cur_draw_call_info.index_count > 0)
-    {
-        s << "indexCount:" << m_cur_draw_call_info.index_count << ",";
-    }
-    else if (m_cur_draw_call_info.vertex_count > 0)
-    {
-        s << "vertexCount:" << m_cur_draw_call_info.vertex_count << ",";
-    }
-
-    s << "instanceCount:" << m_cur_draw_call_info.instance_count << ")";
-
-    return s.str();
-}
-
-//--------------------------------------------------------------------------------------------------
 void GfxrVulkanCommandHierarchyCreator::OnCommand(
     const DiveAnnotationProcessor::VulkanCommandInfo& vk_cmd_info, uint64_t draw_call_count,
     std::vector<uint64_t>& render_pass_draw_call_counts)
@@ -85,6 +226,8 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
     const nlohmann::ordered_json& vulkan_cmd_args = vk_cmd_info.args;
     std::ostringstream vk_cmd_string_stream;
     vk_cmd_string_stream << vulkan_cmd_name;
+    vk_cmd_string_stream << GetCommandSummary(vulkan_cmd_name, vulkan_cmd_args);
+
     if (vulkan_cmd_name == "vkBeginCommandBuffer")
     {
         vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
@@ -127,23 +270,10 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
     else if (vulkan_cmd_name.find("vkCmdDraw") != std::string::npos ||
              vulkan_cmd_name.find("vkCmdDispatch") != std::string::npos)
     {
-        m_cur_draw_call_info = {};
-
         uint64_t vk_cmd_index =
             AddNode(NodeType::kGfxrVulkanDrawCommandNode, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
         ConditionallyAddChild(vk_cmd_index);
-
-        if (vulkan_cmd_name.find("vkCmdDraw") != std::string::npos)
-        {
-            std::string extra_info = GetCurrDrawCallString();
-            if (!extra_info.empty())
-            {
-                // Update the draw node description with info obtained from its args
-                vk_cmd_string_stream << extra_info;
-                m_command_hierarchy.SetNodeDesc(vk_cmd_index, vk_cmd_string_stream.str());
-            }
-        }
     }
     else if (vulkan_cmd_name.find("vkCmdBeginRenderPass") != std::string::npos)
     {
@@ -326,44 +456,6 @@ void GfxrVulkanCommandHierarchyCreator::AddChild(CommandHierarchy::TopologyType 
     }
 }
 
-bool GfxrVulkanCommandHierarchyCreator::ParseCurDrawCallInfo(std::string_view key,
-                                                             std::string_view val)
-{
-    if (key == "indexCount")
-    {
-        uint64_t value = 0;
-        if (!absl::SimpleAtoi(val, &value))
-        {
-            return false;
-        }
-        m_cur_draw_call_info.index_count = value;
-        return true;
-    }
-    if (key == "vertexCount")
-    {
-        uint64_t value = 0;
-        if (!absl::SimpleAtoi(val, &value))
-        {
-            return false;
-        }
-        m_cur_draw_call_info.vertex_count = value;
-        return true;
-    }
-    if (key == "instanceCount")
-    {
-        uint64_t value = 0;
-        if (!absl::SimpleAtoi(val, &value))
-        {
-            return false;
-        }
-        m_cur_draw_call_info.instance_count = value;
-        return true;
-    }
-
-    // key is unrelated to DrawCallDescInfo
-    return true;
-}
-
 void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& json_args,
                                                 uint64_t curr_index)
 {
@@ -414,10 +506,8 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& js
                     {
                         // If an array element is a primitive,
                         // create a node containing its string representation.
-                        std::ostringstream vk_cmd_arg_string_stream;
-                        vk_cmd_arg_string_stream << element;
-                        uint64_t arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode,
-                                                     vk_cmd_arg_string_stream.str());
+                        uint64_t arg_index =
+                            AddNode(NodeType::kGfxrVulkanCommandArgNode, element.dump());
                         AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
                                  array_node_index, arg_index);
                     }
@@ -425,26 +515,10 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& js
             }
             else
             {
-                std::ostringstream s;
-                std::string val_str;
-
-                s.str("");
-                s << val;
-                val_str = s.str();
-
-                s.str("");
-                s << key << ":" << val;
-
-                if (!ParseCurDrawCallInfo(key, val_str))
-                {
-                    std::cerr << "GfxrVulkanCommandHierarchyCreator::GetArgs() "
-                              << "could not parse draw call info from: " << s.str() << std::endl;
-                }
-
                 // If the value is a primitive,
                 // create a node containing the "key:value" pair.
-
-                uint64_t vk_cmd_arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode, s.str());
+                uint64_t vk_cmd_arg_index =
+                    AddNode(NodeType::kGfxrVulkanCommandArgNode, key + ":" + val.dump());
                 AddChild(CommandHierarchy::TopologyType::kAllEventTopology, curr_index,
                          vk_cmd_arg_index);
             }
@@ -465,10 +539,7 @@ void GfxrVulkanCommandHierarchyCreator::GetArgs(const nlohmann::ordered_json& js
             else
             {
                 // If an array element is a primitive, create a node for its string representation.
-                std::ostringstream vk_cmd_arg_string_stream;
-                vk_cmd_arg_string_stream << element;
-                uint64_t arg_index =
-                    AddNode(NodeType::kGfxrVulkanCommandArgNode, vk_cmd_arg_string_stream.str());
+                uint64_t arg_index = AddNode(NodeType::kGfxrVulkanCommandArgNode, element.dump());
                 AddChild(CommandHierarchy::TopologyType::kAllEventTopology, curr_index, arg_index);
             }
         }

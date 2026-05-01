@@ -105,3 +105,73 @@ Make sure to have built everything according to BUILD.md (don't forget the insta
 1. Create a pull request for the updates.
 1. Monitor PR builds; you might need to fix the GitHub workflows.
 1. Ensure the commit is not squash merged so that git can find the subtree updates. This requires temporarily disabling the ["Require linear history" Branch Protection rule](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-linear-history)
+
+## Summary of repo structure
+
+As a long-running project, Dive has significant amounts of legacy code and this is reflected in its directory structure.
+
+### Top-level Directories
+
+* **.github/**
+    * Configuration files related to [Dive's Github Actions](https://github.com/google/dive/actions) for nightly and presubmit automated testing
+* **capture_service/**
+    * Libraries related to the Android device and communication via `adb`
+    * Also contains the main CLI tool `dive_client_cli`
+        * GFXR capture and replay
+* **cli/**
+    * CLI tool `divecli`
+        * Parsing PM4 capture
+* **cmake/**
+    * Contains `.cmake` files used in the cmake building process
+* **dive_core/**
+    * Functionality to parse captures (GFXR, PM4) into in-memory representations (Command Hierarchies)
+    * Also support for other data: GPU timing, metrics...
+* **gfxr_dump_resources/**
+    * CLI tool `gfxr_dump_resources`
+        * Process a GFXR capture and produce a file suitable for use with GFXR `--dump-resources`
+* **gfxr_ext/**
+    * Library to extend the functionality of `third_party/gfxreconstruct` for use in Dive
+    * Separated from the GFXR code to keep the process of updating the subtree simpler
+* **gpu_time/**
+    * Library for using Vulkan timestamps to time events on the GPU
+* **host_cli/**
+    * CLI tool `host_cli`
+        * Block-level manipulation of GFXR captures
+* **layer/**
+    * `libVkLayer_Dive.so` and `libXrApiLayer_dive.so` are Vulkan layers 
+        * Meant to be used on the device when running either GFXR replay APK or other Vulkan applications
+        * To support features such as PM4 capture via freedreno's `libwrap.so`
+* **lrz_validator/**
+    * Lightweight tool `lrz_validator` to validate the LowResolution Z Buffer data inside a PM4 capture
+* **network/**
+    * Library for socket communication between the host and the Android device
+* **plugins/**
+    * Samples and placeholders related to Dive plugins (refer to the [README.md](https://github.com/google/dive/tree/main/plugins/README.md) for more details)
+* **prebuild/**
+    * Contains prebuilt libraries to speed up the build process for host tools
+        * `libarchive`
+        * `zlib`
+* **runtime_layer/**
+    * `libVkLayer_rt_dive.so` is a Vulkan layer
+        * Mainly for use on the device, though can be useful for debugging on the host
+        * Intercepts Vulkan commands to alter them and support Runtime What-Ifs functionality
+* **scripts/**
+    * All scripts, user-facing and the ones used automatically during the build process
+* **src/**
+    * Newer Dive source code
+* **test/**
+    * Golden files and other test data for the unit tests
+* **third_party/**
+    * Third-party submodules and subtrees used in Dive
+* **trace_stats/**
+    * Library that extracts statistics from a PM4 capture for displaying in the UI
+* **ui/**
+    * Dive UI, built using `Qt` libraries
+
+### Planned Structural Improvements
+
+These are some general ideas, meant to help make sense of the desired directory structure after major refactoring:
+
+* Moving all source code to underneath `src/`
+* Consolidate CLI tooling
+* More scripts should be written in Python for cross-platform support

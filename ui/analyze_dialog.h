@@ -17,6 +17,7 @@
 #include <QDialog>
 #include <future>
 #include <optional>
+#include <string_view>
 
 #include "capture_service/device_mgr.h"
 #include "device_dialog.h"
@@ -95,9 +96,10 @@ class AnalyzeDialog : public DeviceDialog
     };
 
  public:
-    AnalyzeDialog(ApplicationController& controller,
-                  const Dive::AvailableMetrics* available_metrics, QWidget* parent = nullptr);
-    ~AnalyzeDialog();
+    explicit AnalyzeDialog(ApplicationController& controller,
+                           const Dive::AvailableMetrics* available_metrics,
+                           QWidget* parent = nullptr);
+    ~AnalyzeDialog() override;
  private slots:
     void OnReplayStatusUpdate(int status_code, const QString& error_message);
     void OnDeviceListRefresh();
@@ -129,25 +131,26 @@ class AnalyzeDialog : public DeviceDialog
     void ShowMessage(const QString& message) override;
     void OnDeviceSelected() override;
     void OnDeviceSelectionCleared() override;
-    void SetReplayButton(const std::string& message, bool is_enabled);
+    void SetReplayButton(std::string_view message, bool is_enabled);
     void PopulateMetrics();
     void UpdateSelectedMetricsList();
     void UpdatePerfCounterElements(bool show);
     absl::StatusOr<std::string> PushFilesToDevice(Dive::AndroidDevice* device,
-                                                  const std::string& local_asset_file_path);
+                                                  std::string_view local_asset_file_path);
     absl::Status NormalReplay(Dive::DeviceManager& device_manager,
-                              const std::string& remote_gfxr_file);
-    absl::Status Pm4Replay(Dive::DeviceManager& device_manager,
-                           const std::string& remote_gfxr_file);
+                              std::string_view remote_gfxr_file);
+    absl::Status Pm4Replay(Dive::DeviceManager& device_manager, std::string_view remote_gfxr_file);
     absl::Status PerfCounterReplay(Dive::DeviceManager& device_manager,
-                                   const std::string& remote_gfxr_file);
+                                   std::string_view remote_gfxr_file);
     absl::Status GpuTimeReplay(Dive::DeviceManager& device_manager,
-                               const std::string& remote_gfxr_file);
+                               std::string_view remote_gfxr_file);
     absl::Status RenderDocReplay(Dive::DeviceManager& device_manager,
-                                 const std::string& remote_gfxr_file);
+                                 std::string_view remote_gfxr_file);
 
-    void UpdateReplayStatus(ReplayStatusUpdateCode status, const std::string& messge = "");
+    void UpdateReplayStatus(ReplayStatusUpdateCode status, std::string_view message = "");
     void ExecuteStatusUpdate();
+
+    QGroupBox* CreateFrameCountGroupBox(const QString& title, QSpinBox*& out_spin_box);
 
     void ReplayImpl(const ReplayConfig&);
     void DeleteReplayArtifactsImpl();
@@ -155,25 +158,19 @@ class AnalyzeDialog : public DeviceDialog
 
     ApplicationController& m_controller;
 
-    QLabel* m_metrics_list_label;
-    QListWidget* m_metrics_list;
+    QLabel* m_metrics_list_label = nullptr;
+    QListWidget* m_metrics_list = nullptr;
 
-    QLabel* m_selected_metrics_description_label;
-    QTextEdit* m_selected_metrics_description;
+    QLabel* m_selected_metrics_description_label = nullptr;
+    QTextEdit* m_selected_metrics_description = nullptr;
 
-    QLabel* m_enabled_metrics_list_label;
-    QListWidget* m_enabled_metrics_list;
-
-    QHBoxLayout* m_device_layout;
-    QLabel* m_device_label;
-    QPushButton* m_device_refresh_button;
+    QLabel* m_enabled_metrics_list_label = nullptr;
+    QListWidget* m_enabled_metrics_list = nullptr;
 
     // Provides a description of which capture file is open, but immutable from
     // AnalyzeDialog. User would need to close the dialog and use MainWindow toolbar to change the
     // loaded capture
-    QHBoxLayout* m_selected_file_layout;
-    QLabel* m_selected_file_label;
-    QLineEdit* m_selected_file_input_box;
+    QLineEdit* m_selected_file_input_box = nullptr;
 
     QGroupBox* m_custom_replay_box = nullptr;
     QCheckBox* m_dump_pm4_box = nullptr;
@@ -184,18 +181,7 @@ class AnalyzeDialog : public DeviceDialog
     QSpinBox* m_gpu_time_replay_frame_count = nullptr;
     QSpinBox* m_custom_replay_frame_count = nullptr;
 
-    QHBoxLayout* m_replay_warning_layout;
-    QLabel* m_replay_warning_label;
-
-    QHBoxLayout* m_delete_replay_artifacts_layout;
-    QPushButton* m_delete_replay_artifacts_button;
-
-    QHBoxLayout* m_button_layout;
-    QPushButton* m_replay_button;
-
-    QHBoxLayout* m_main_layout;
-    QVBoxLayout* m_left_panel_layout;
-    QVBoxLayout* m_right_panel_layout;
+    QPushButton* m_replay_button = nullptr;
 
     // Representing a session with a specific GFXR capture file opened
     //
@@ -209,12 +195,8 @@ class AnalyzeDialog : public DeviceDialog
     QVector<CsvItem> m_csv_items;
     std::vector<std::string> m_enabled_metrics_vector;
     const Dive::AvailableMetrics* m_available_metrics = nullptr;
-    // Used to store a csv item's key in the enabled metrics vector.
-    const int kDataRole = Qt::UserRole + 1;
-    const int kDefaultFrameCount = 300;
-    const std::string kDefaultReplayButtonText = "Replay";
     std::future<void> m_replay_active;
-    OverlayHelper* m_overlay;
+    OverlayHelper* m_overlay = nullptr;
 
     struct StatusUpdateQueueItem
     {

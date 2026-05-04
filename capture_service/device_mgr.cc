@@ -21,7 +21,6 @@ limitations under the License.
 #include <future>
 #include <memory>
 
-#include "../dive_core/common/common.h"
 #include "absl/base/log_severity.h"
 #include "absl/cleanup/cleanup.h"
 #include "absl/log/check.h"
@@ -37,11 +36,10 @@ limitations under the License.
 #include "constants.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/component_files.h"
-#include "dive/utils/component_files_constants.h"
 #include "dive/utils/device_resources.h"
 #include "dive/utils/device_resources_constants.h"
+#include "dive/utils/renderdoc_files.h"
 #include "dive/utils/version_info.h"
-#include "remote_files.h"
 
 namespace Dive
 {

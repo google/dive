@@ -30,8 +30,8 @@
 #include <filesystem>
 #include <sstream>
 
+#include "dive/utils/device_resources_constants.h"
 #include "utils/device_resources.h"
-#include "utils/device_resources_constants.h"
 #include "utils/version_info.h"
 
 // =================================================================================================

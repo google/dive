@@ -52,6 +52,7 @@ target_link_libraries(
     network
     absl::log
     absl::flat_hash_map
+    dive_device_resources_constants
 )
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)

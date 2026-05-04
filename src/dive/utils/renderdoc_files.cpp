@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#pragma once
+#include "dive/utils/renderdoc_files.h"
 
 #include <filesystem>
 
+#include "dive/utils/component_files_constants.h"
 #include "dive/utils/device_resources_constants.h"
-#include "utils/component_files_constants.h"
 
 namespace Dive
 {
@@ -31,7 +31,7 @@ namespace Dive
 // Get the filename prefix that we want RenderDoc to use when creating a capture file. For the
 // actual filename, use GetRenderDocCaptureFilePath. The returned path is designed to be used in
 // portable generic format since that's the native format of the target device.
-inline std::filesystem::path GetRenderDocCaptureFilePathTemplate(
+std::filesystem::path GetRenderDocCaptureFilePathTemplate(
     const std::filesystem::path& gfxr_filepath)
 {
     return std::filesystem::path(DeviceResourcesConstants::kDeviceDownloadPath) /
@@ -40,15 +40,14 @@ inline std::filesystem::path GetRenderDocCaptureFilePathTemplate(
 
 // Get the expected filename of the completed RenderDoc capture. The returned path is designed to
 // be used in portable generic format since that's the native format of the target device.
-inline std::filesystem::path GetRenderDocCaptureFilePath(const std::filesystem::path& gfxr_filepath)
+std::filesystem::path GetRenderDocCaptureFilePath(const std::filesystem::path& gfxr_filepath)
 {
     // This is predicated on the current implementation of RenderDoc::CreateRDC() and the use of
     // StartFrameCapture. If either of these change then this won't work. Ideally, replay would
     // just tell us where the file is instead of us having to guess.
-    ComponentFileConstants consts;
     return GetRenderDocCaptureFilePathTemplate(gfxr_filepath)
-        .concat(consts.kRenderDocHostSuffix)
-        .concat(consts.kRdcExt);
+        .concat(ComponentFileConstants::kRenderDocHostSuffix)
+        .concat(ComponentFileConstants::kRdcExt);
 }
 
 }  // namespace Dive

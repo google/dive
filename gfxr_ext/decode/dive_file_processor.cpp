@@ -21,7 +21,7 @@ limitations under the License.
 #include <fstream>
 
 #include "capture_service/constants.h"
-#include "capture_service/remote_files.h"
+#include "dive/utils/renderdoc_files.h"
 #include "dive_block_data.h"
 #include "dive_pm4_capture.h"
 #include "dive_renderdoc.h"

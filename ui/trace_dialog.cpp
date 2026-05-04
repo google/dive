@@ -167,7 +167,7 @@ TraceDialog::TraceDialog(ApplicationController& controller, QWidget* parent) : D
 
     // Capture Debuggable Applications Only Warning
     auto* capture_warning_layout = new QHBoxLayout();
-    auto* m_capture_warning_label = new QLabel(tr(
+    m_capture_warning_label = new QLabel(tr(
         "⚠ The list below displays debuggable APKs available for capture on the selected device."));
     m_capture_warning_label->setWordWrap(true);
     capture_warning_layout->addWidget(m_capture_warning_label);

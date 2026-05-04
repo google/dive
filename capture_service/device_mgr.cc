@@ -540,6 +540,7 @@ absl::Status AndroidDevice::SetupDevice()
 
     if (!m_gfxr_capture_settings)
     {
+        // TODO: b/506128425 - We shouldn't need root for replay
         RETURN_IF_ERROR(RequestRootAccess());
         RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kVkLayerLibName));
         RETURN_IF_ERROR(DeployDeviceResource(Dive::DeviceResourcesConstants::kXrLayerLibName));

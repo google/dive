@@ -31,6 +31,7 @@ NINJA_MULTI_CONFIG_NAME = "Ninja Multi-Config"
 # For release
 WINDOWS_UNNECESSARY_DIRS = ["translations"]
 WINDOWS_QT_DEPENDENCIES_BINARY = "dive_gui_lib.dll"
+MAC_HOST_PLUGINS_DIR = "Contents/PlugIns/plugins"
 # For parsing version string
 HOST_TOOLS_BUILD_NAME = "Host Tools Build"
 
@@ -52,10 +53,13 @@ class BuildType(enum.StrEnum):
 
 
 def get_default_deployqt():
-    if platform.system() == "Windows":
-        return "windeployqt"
-    # TODO: b/484082504 - Support other platforms
-    return None
+    match platform.system():
+        case "Windows":
+            return "windeployqt"
+        case "Darwin":
+            return "macdeployqt"
+        case _:
+            return None
 
 
 def rmtree_if_exists(path):
@@ -75,6 +79,10 @@ def parse_args():
         "Use --list-actions to check which actions are available. If "
         "unspecified, then all actions will be performed")
     parser.add_argument(
+        "--archive-dir",
+        help="Output directory of the final archive produced by this script. "
+        f"If unspecified, the --root-build-dir will be used")
+    parser.add_argument(
         "--archive-name",
         help="Base name (no extension) of the final archive produced by this "
         f"script. If unspecified, the '{HOST_TOOLS_BUILD_NAME}' version string will be used")
@@ -90,11 +98,6 @@ def parse_args():
         default=False,
         help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform")
     parser.add_argument(
-        "--prereq-checks",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Check if prerequisites are located as expected")
-    parser.add_argument(
         "--ci",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -107,6 +110,10 @@ def parse_args():
         "--exec-cmake",
         default="cmake",
         help="The name of the CMake executable on the path")
+    parser.add_argument(
+        "--exec-codesign",
+        default="codesign",
+        help="The name of the codesign executable on the path (macOS only)")
     parser.add_argument(
         "--exec-deployqt",
         default=get_default_deployqt(),
@@ -128,6 +135,16 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=False,
         help="List all actions this script can perform in the order they will be performed")
+    parser.add_argument(
+        "--mac-sign", 
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Sign the macOS app bundle, no-op for other platforms")
+    parser.add_argument(
+        "--prereq-checks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Check if prerequisites are located as expected")
     parser.add_argument(
         "--root-build-dir",
         default="build",
@@ -192,7 +209,7 @@ def check_environment(args):
 
     ninja = shutil.which(args.exec_ninja)
     if not ninja:
-        raise Exception(f"Cannot find ninja exec {args.exec_ninja}")
+        raise Exception(f"Cannot find ninja exec: {args.exec_ninja}")
     cmd = [ninja, "--version"]
     dive.echo_and_run(cmd)
     args.exec_ninja = ninja
@@ -200,7 +217,7 @@ def check_environment(args):
     if (platform.system() == "Windows") and (args.build_via_generator):
         msbuild = shutil.which(args.exec_msbuild)
         if not msbuild:
-            raise Exception(f"Cannot find msbuild exec {args.exec_msbuild}")
+            raise Exception(f"Cannot find msbuild exec: {args.exec_msbuild}")
         cmd = [msbuild, "--version"]
         dive.echo_and_run(cmd)
         args.exec_msbuild = msbuild
@@ -212,6 +229,12 @@ def check_environment(args):
             raise Exception(f"{args.exec_deployqt} not found on the Path")
         print(f"\n{args.exec_deployqt} found on the Path at {deployqt}")
         args.exec_deployqt = deployqt
+
+    if (platform.system() == "Darwin") and (args.mac_sign):
+        codesign = shutil.which(args.exec_codesign)
+        if not codesign:
+            raise Exception(f"Cannot find codesign exec: {args.exec_codesign}")
+        args.exec_codesign = codesign
 
 
 def copy_plugins(args):
@@ -351,17 +374,27 @@ def deploy_qt(args):
     libraries to the same dir as the binary that depends on them in preparation
     for packaging and distribution
     """
-    # TODO: b/484082504 - Support other platforms
     # TODO: b/504654590 - Investigate if there's a way to identify the binaries without hardcoding them
     system_name = platform.system()
     match system_name:
         case "Linux":
-            print("\ndeploy_qt() is UNIMPLEMENTED for Linux...")
-            return
+            print("\ndeploy_qt() is a no-op for Linux, it's expected that the users install Qt...")
 
         case "Darwin":
-            print("\ndeploy_qt() is UNIMPLEMENTED for macOS...")
-            return
+            print(f"\nDeploying with {args.exec_deployqt}...")
+            app_dir = f"{args.root_build_dir}/{PKG_DIR}/dive.app"
+            cmd = [args.exec_deployqt, app_dir]
+            for root, dirs, files in os.walk(f"{app_dir}/{MAC_HOST_PLUGINS_DIR}"):
+                for file in files:
+                    if file.endswith(".dylib") or file.endswith(".so"):
+                        plugin_path = os.path.join(root, file)
+                        cmd.append(f"-executable={plugin_path}")
+            dive.echo_and_run(cmd)
+
+            if args.mac_sign:
+                print(f"\nSigning with {args.exec_codesign}...")
+                cmd = [args.exec_codesign, "--force", "--deep", "--sign", "-", app_dir]
+                dive.echo_and_run(cmd)
 
         case "Windows":
             print(f"\nDeploying with {args.exec_deployqt}...")
@@ -395,39 +428,39 @@ def package(args):
     """Implements ActionType.PACKAGE stage, which will package this Dive build
     into a single file that is easy to transfer
     """
-    # TODO: b/484082504 - Support other platforms
     # TODO: b/504654590 - Investigate if there's a way to identify extraneous files
     system_name = platform.system()
     match system_name:
         case "Linux":
-            print("\npackage() is UNIMPLEMENTED for Linux...")
-            return
+            cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli", "--version"]
 
         case "Darwin":
-            print("\npackage() is UNIMPLEMENTED for macOS...")
-            return
+            cmd = [f"{args.root_build_dir}/{PKG_DIR}/dive.app/Contents/MacOS/dive_client_cli", "--version"]
 
         case "Windows":
             for dir_name in WINDOWS_UNNECESSARY_DIRS:
                 rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
-
             cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli.exe", "--version"]
-            long_version_string = dive.run_and_return_output(cmd)
-            archive_name = get_archive_name(args, long_version_string)
-        
-            print(f"\nZipping into '{archive_name}.zip'...")
-            shutil.make_archive(f"{archive_name}", "zip", f"{args.root_build_dir}/{PKG_DIR}")
-
-            final_location_zip = f"{args.root_build_dir}/{archive_name}.zip"
-            if os.path.exists(final_location_zip):
-                print("\nClearing previous archive...")
-                os.unlink(final_location_zip)
-
-            print(f"\nMoving zip archive to {os.getcwd()}/{final_location_zip}...")
-            shutil.move(f"{archive_name}.zip", final_location_zip)
 
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")
+
+    long_version_string = dive.run_and_return_output(cmd)
+    archive_name = get_archive_name(args, long_version_string)
+
+    print(f"\nZipping into '{archive_name}.zip'...")
+    shutil.make_archive(archive_name, "zip", f"{args.root_build_dir}/{PKG_DIR}")
+
+    archive_dir = args.archive_dir
+    if not archive_dir:
+        archive_dir = f"{os.getcwd()}/{args.root_build_dir}"
+    final_location_zip = f"{archive_dir}/{archive_name}.zip"
+    if os.path.exists(final_location_zip):
+        print("\nClearing previous archive...")
+        os.unlink(final_location_zip)
+
+    print(f"\nMoving zip archive to {final_location_zip}...")
+    shutil.move(f"{archive_name}.zip", final_location_zip)
 
 
 def main():

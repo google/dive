@@ -47,7 +47,7 @@ set(FREEDRENO_IR3_ISA_HDR_FILE "${FREEDRENO_ISA_DIRECTORY}/ir3-isa.h")
 if(WIN32)
     set(Python3_FIND_REGISTRY "NEVER")
 endif() # WIN32
-find_package(Python3 COMPONENTS Interpreter)
+find_package(Python3 3.11 COMPONENTS Interpreter)
 
 if(NOT Python3_EXECUTABLE)
     # Note: CMake find_package(Python3) does not work on Kokoro for some reason.

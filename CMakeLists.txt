@@ -336,7 +336,7 @@ if(ANDROID)
     execute_process(
         COMMAND
             ${GRADLE_EXEC} layer:assembleDebug replay:assembleDebug
-            --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI}
+            --console=${DIVE_GFXR_GRADLE_CONSOLE} -P${ANDROID_ABI} --no-daemon
         WORKING_DIRECTORY
             ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gfxreconstruct/android
         COMMAND_ERROR_IS_FATAL ANY

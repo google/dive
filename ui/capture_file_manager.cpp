@@ -179,7 +179,7 @@ void CaptureFileManager::StartLoadFile()
     auto request = m_pending_request.value();
     m_pending_request = std::nullopt;
     m_working = true;
-    QMetaObject::invokeMethod(m_worker, [this, request = request]() {
+    QMetaObject::invokeMethod(m_worker, [this, request]() {
         auto debug_timer = DebugScopedStopwatch([](double duration) {
             DIVE_DEBUG_LOG("Time used to load the capture is %f seconds.\n", duration);
         });

@@ -329,7 +329,6 @@ class Pm4CaptureData : public CaptureData
     RegisterInfo m_registers;
     MemoryManager m_memory;
     ProgressTracker* m_progress_tracker = nullptr;
-    std::string m_cur_capture_file;
     CaptureDataHeader m_data_header;
 };
 

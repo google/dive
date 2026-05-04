@@ -38,6 +38,12 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 20)
 
+if(MSVC)
+    add_compile_options(/WX /W4)
+else()
+    add_compile_options(-Werror -Wall -Wshadow-all)
+endif()
+
 # Find the QtWidgets and QtSvg libraries
 find_package(Qt5 COMPONENTS Widgets Svg REQUIRED)
 
@@ -290,30 +296,6 @@ set_target_properties(
     ${PROJECT_NAME}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
-
-if(MSVC)
-    # 4099: missing PDB file for lib
-    # 4100: unreferenced formal parameter
-    # 4201: prevent nameless struct/union
-    # 4127: "conditional expression is constant" warnings
-    # 4324: structure was padded due to alignment specifier
-    # 4996: _CRT_SECURE_NO_WARNINGS
-    target_compile_options(
-        ${PROJECT_NAME}
-        PRIVATE /W4 /WX /wd4099 /wd4100 /wd4201 /wd4127 /wd4324 /wd4996
-    )
-else()
-    target_compile_options(
-        ${PROJECT_NAME}
-        PRIVATE
-            -Wall
-            -Wextra
-            -Werror
-            -Wno-unused-parameter
-            -Wno-missing-braces
-            -Wno-inconsistent-missing-override
-    )
-endif()
 
 if(MSVC)
     set_property(

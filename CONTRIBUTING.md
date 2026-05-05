@@ -78,30 +78,104 @@ Make sure to have built everything according to BUILD.md (don't forget the insta
 ## Updating Dive's gfxreconstruct subtree
 
 1. Create a branch to contain the merge.
-    ```sh
-    git checkout -b subtree_pull
-    ```
+
+        git checkout -b subtree_pull
+
 1. Run the pull command. Merge conflicts are expected:
-    ```sh
-    git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
-    ```
+
+        git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
+
 1. Run `//scripts/incorporate_gfxr_submodules.py` so that the required submodules are cloned.
 1. Since the previous step can't remove submodules, remove any `third_party/gfxreconstruct/external/*` submodule entries in `//.gitmodules` that aren't in `//third_party/gfxreconstruct/.gitmodules`.
 1. Update the submodules so that the merge commit includes the correct SHA:
-    ```sh
-    git submodule update --init --recursive
-    ```
+
+        git submodule update --init --recursive
+
 1. Regenerate GFXR Vulkan code:
-    ```sh
-    cd third_party/gfxreconstruct/framework/generated
-    python generate_vulkan.py
-    ```
+
+        cd third_party/gfxreconstruct/framework/generated
+        python generate_vulkan.py
+
 1. Try to [build](BUILD.md). Fix any errors.
 1. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
-    ```sh
-    git add third_party/gfxreconstruct
-    git commit -m "Merge third_party/gfxreconstruct updates"
-    ```
+
+        git add third_party/gfxreconstruct
+        git commit -m "Merge third_party/gfxreconstruct updates"
+
 1. Create a pull request for the updates.
 1. Monitor PR builds; you might need to fix the GitHub workflows.
 1. Ensure the commit is not squash merged so that git can find the subtree updates. This requires temporarily disabling the ["Require linear history" Branch Protection rule](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-linear-history)
+
+## Summary of repo structure
+
+As a long-running project, Dive has significant amounts of legacy code and this is reflected in its directory structure.
+
+### Top-level Directories
+
+* **.github/**
+    * Configuration files related to [Dive Github Actions](https://github.com/google/dive/actions) for nightly and presubmit automated testing
+* **capture_service/**
+    * Libraries related to the Android device and communication via `adb`
+    * Also contains the main CLI tool `dive_client_cli`
+        * GFXR capture and replay
+        * PM4 capture
+* **cli/**
+    * CLI tool `divecli`
+        * Parsing PM4 capture
+* **cmake/**
+    * Contains `.cmake` files used in the cmake building process
+* **dive_core/**
+    * Functionality to parse captures (GFXR, PM4) into in-memory representations (Command Hierarchies)
+    * Also support for other data: GPU timing, metrics...
+* **gfxr_dump_resources/**
+    * CLI tool `gfxr_dump_resources` and library
+        * Process a GFXR capture and produce a file suitable for use with GFXR `--dump-resources`
+* **gfxr_ext/**
+    * Library to extend the functionality of `third_party/gfxreconstruct` for use in Dive
+    * Separated from the GFXR code to keep the process of updating the subtree simpler
+* **gpu_time/**
+    * Library for using Vulkan timestamps to time events on the GPU
+* **host_cli/**
+    * CLI tool `host_cli`
+        * Block-level manipulation of GFXR captures
+* **layer/**
+    * `libVkLayer_Dive.so` is a Vulkan and GLES layer, and `libXrApiLayer_dive.so` is an OpenXR layer
+        * Meant to be used on the device when running either GFXR replay APK or other Vulkan applications
+        * To support features such as PM4 capture via freedreno's `libwrap.so`
+* **lrz_validator/**
+    * CLI tool `lrz_validator`
+        * Validate the LowResolution Z Buffer data inside a PM4 capture
+* **network/**
+    * Library for socket communication between the host and the Android device
+* **plugins/**
+    * Dive UI plugins (refer to the [README.md](https://github.com/google/dive/tree/main/plugins/README.md) for more details)
+* **prebuild/**
+    * Contains prebuilt libraries to speed up the build process for host tools
+        * `libarchive`
+        * `zlib`
+* **runtime_layer/**
+    * `libVkLayer_rt_dive.so` is a Vulkan layer
+        * Mainly for use on the device, though can be useful for debugging on the host
+        * Intercepts Vulkan commands to alter them and support Runtime What-Ifs functionality
+* **scripts/**
+    * All scripts, user-facing and the ones used automatically during the build process
+* **src/**
+    * Newer Dive source code
+* **tests/**
+    * Golden files and other test data for the unit tests
+* **third_party/**
+    * Third-party submodules and subtrees used in Dive
+* **trace_stats/**
+    * CLI tool `trace_stats` and library
+        * Extracts statistics from a PM4 capture for displaying in the UI
+* **ui/**
+    * Dive UI, built using `Qt` libraries
+
+### Planned Structural Improvements
+
+Because of legacy code and partial refactoring, there are some parts of Dive that are contradictory and the existing code may not have a clear intent that can be inferred easily. The following are some general ideas for structural improvements. Please keep them in mind during the addition of new code and the refactoring of the current code:
+
+* Dive source code should live underneath `src/` rather than any other top-level directories in this repo
+* Since Dive supports "GFXR captures" and "PM4 captures", naming related to traces/captures should be specific
+* Consolidate CLI tools rather than further splintering
+* Prefer writing scripts in Python for cross-platform support

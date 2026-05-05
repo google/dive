@@ -78,30 +78,30 @@ Make sure to have built everything according to BUILD.md (don't forget the insta
 ## Updating Dive's gfxreconstruct subtree
 
 1. Create a branch to contain the merge.
-    ```sh
-    git checkout -b subtree_pull
-    ```
+
+        git checkout -b subtree_pull
+
 1. Run the pull command. Merge conflicts are expected:
-    ```sh
-    git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
-    ```
+
+        git subtree pull --prefix=third_party/gfxreconstruct https://github.com/LunarG/gfxreconstruct.git dev --squash
+
 1. Run `//scripts/incorporate_gfxr_submodules.py` so that the required submodules are cloned.
 1. Since the previous step can't remove submodules, remove any `third_party/gfxreconstruct/external/*` submodule entries in `//.gitmodules` that aren't in `//third_party/gfxreconstruct/.gitmodules`.
 1. Update the submodules so that the merge commit includes the correct SHA:
-    ```sh
-    git submodule update --init --recursive
-    ```
+
+        git submodule update --init --recursive
+
 1. Regenerate GFXR Vulkan code:
-    ```sh
-    cd third_party/gfxreconstruct/framework/generated
-    python generate_vulkan.py
-    ```
+
+        cd third_party/gfxreconstruct/framework/generated
+        python generate_vulkan.py
+
 1. Try to [build](BUILD.md). Fix any errors.
 1. Resolve any conflicts that arise and ensure dive-specific changes are not removed. Files with dive-specific changes have comment lines: // GOOGLE: or # GOOGLE. If there are conflicts, don't forget to add them and commit:
-    ```sh
-    git add third_party/gfxreconstruct
-    git commit -m "Merge third_party/gfxreconstruct updates"
-    ```
+
+        git add third_party/gfxreconstruct
+        git commit -m "Merge third_party/gfxreconstruct updates"
+
 1. Create a pull request for the updates.
 1. Monitor PR builds; you might need to fix the GitHub workflows.
 1. Ensure the commit is not squash merged so that git can find the subtree updates. This requires temporarily disabling the ["Require linear history" Branch Protection rule](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-linear-history)

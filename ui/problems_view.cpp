@@ -38,8 +38,8 @@ class ProblemWidgetItem : public QTreeWidgetItem
 {
  public:
     ProblemWidgetItem(Dive::CrossRef ref, std::string short_desc, std::string long_desc,
-                      QTreeWidget* view)
-        : QTreeWidgetItem(view), m_ref(ref), m_short_desc(short_desc), m_long_desc(long_desc)
+                      QTreeWidget* treeview)
+        : QTreeWidgetItem(treeview), m_ref(ref), m_short_desc(short_desc), m_long_desc(long_desc)
     {
     }
     Dive::CrossRef GetRef() const { return m_ref; }

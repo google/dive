@@ -33,8 +33,8 @@ class ShaderWidgetItem : public QTreeWidgetItem
 {
  public:
     ShaderWidgetItem(Dive::ShaderStage shader_stage, Dive::CrossRef shader, uint32_t event_index,
-                     QTreeWidget* view)
-        : QTreeWidgetItem(view),
+                     QTreeWidget* treeview)
+        : QTreeWidgetItem(treeview),
           m_shader_stage(shader_stage),
           m_shader(shader),
           m_event_index(event_index)
@@ -44,9 +44,9 @@ class ShaderWidgetItem : public QTreeWidgetItem
     // TODO(tianc): make it so we don't need two different reference systems for crashdump and
     // profiler trace.
     ShaderWidgetItem(Dive::ShaderStage shader_stage, uint32_t shader_index, uint32_t event_index,
-                     QTreeWidget* view)
+                     QTreeWidget* treeview)
         : ShaderWidgetItem(shader_stage, Dive::CrossRef(Dive::CrossRefType::kNone, shader_index),
-                           event_index, view)
+                           event_index, treeview)
     {
     }
 

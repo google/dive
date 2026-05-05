@@ -76,8 +76,8 @@ class TextFileWidgetItem : public QTreeWidgetItem
  public:
     typedef decltype(std::declval<Dive::Pm4CaptureData>().GetNumText()) IndexType;
 
-    TextFileWidgetItem(std::string name, IndexType index, QTreeWidget* view)
-        : QTreeWidgetItem(view), m_name(name), m_index(index)
+    TextFileWidgetItem(std::string name, IndexType index, QTreeWidget* treeview)
+        : QTreeWidgetItem(treeview), m_name(name), m_index(index)
     {
     }
     std::string GetName() const { return m_name; }

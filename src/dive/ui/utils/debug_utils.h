@@ -67,7 +67,7 @@ DebugScoped(FuncT&&) -> DebugScoped<FuncT>;
 template <typename FuncT>
 inline auto DebugScopedStopwatch(FuncT&& func)
 {
-    return DebugScoped([func = func, start = std::chrono::steady_clock::now()]() {
+    return DebugScoped([func, start = std::chrono::steady_clock::now()]() {
         auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(
                             std::chrono::steady_clock::now() - start)
                             .count();

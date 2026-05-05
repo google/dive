@@ -33,8 +33,8 @@ class ShaderWidgetItem : public QTreeWidgetItem
 {
  public:
     ShaderWidgetItem(Dive::ShaderStage shader_stage, Dive::CrossRef shader, uint32_t event_index,
-                     QTreeWidget* view)
-        : QTreeWidgetItem(view),
+                     QTreeWidget* treeview)
+        : QTreeWidgetItem(treeview),
           m_shader_stage(shader_stage),
           m_shader(shader),
           m_event_index(event_index)
@@ -44,9 +44,9 @@ class ShaderWidgetItem : public QTreeWidgetItem
     // TODO(tianc): make it so we don't need two different reference systems for crashdump and
     // profiler trace.
     ShaderWidgetItem(Dive::ShaderStage shader_stage, uint32_t shader_index, uint32_t event_index,
-                     QTreeWidget* view)
+                     QTreeWidget* treeview)
         : ShaderWidgetItem(shader_stage, Dive::CrossRef(Dive::CrossRefType::kNone, shader_index),
-                           event_index, view)
+                           event_index, treeview)
     {
     }
 
@@ -172,18 +172,18 @@ void ShaderView::paintEvent(QPaintEvent* event)
             {
                 return;
             }
-            const Dive::EventInfo& event = metadata.m_event_info[event_id];
-            for (const auto& reference : event.m_shader_references)
+            const Dive::EventInfo& event_info = metadata.m_event_info[event_id];
+            for (const auto& reference : event_info.m_shader_references)
             {
                 auto shader_stage = (uint32_t)reference.m_stage;
                 // Do not add shaders that are not used by the event
-                if (event.m_type != Dive::Util::EventType::kDraw &&
-                    event.m_type != Dive::Util::EventType::kDispatch)
+                if (event_info.m_type != Dive::Util::EventType::kDraw &&
+                    event_info.m_type != Dive::Util::EventType::kDispatch)
                     continue;
-                if ((event.m_type == Dive::Util::EventType::kDraw) &&
+                if ((event_info.m_type == Dive::Util::EventType::kDraw) &&
                     (shader_stage == (uint32_t)Dive::ShaderStage::kShaderStageCs))
                     continue;
-                if ((event.m_type == Dive::Util::EventType::kDispatch) &&
+                if ((event_info.m_type == Dive::Util::EventType::kDispatch) &&
                     (shader_stage != (uint32_t)Dive::ShaderStage::kShaderStageCs))
                     continue;
 

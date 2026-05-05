@@ -62,6 +62,14 @@ def get_default_deployqt():
             return None
 
 
+def get_default_host_cmake_generator() -> str:
+    match platform.system():
+        case "Windows":
+            return "Visual Studio 17 2022"
+        case _:
+            return NINJA_MULTI_CONFIG_NAME
+
+
 def rmtree_if_exists(path):
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -149,12 +157,11 @@ def parse_args():
         "--root-build-dir",
         default="build",
         help="The build directory, relative to Dive root directory")
-    # TODO: b/504654590 - Make a platform-specific default so that users can
-    # have more flexibility with choosing a generator
     parser.add_argument(
-        "--visual-studio-name",
-        default="Visual Studio 17 2022",
-        help="Name of Visual Studio version to use on Windows platform")
+        "--host-cmake-generator",
+        default=get_default_host_cmake_generator(),
+        help="CMake generator to use for host builds",
+    )
     return parser.parse_args()
 
 
@@ -258,24 +265,14 @@ def configure_host(args):
     build files targeting the host
     """
     print("\nGenerating build files with cmake...")
-    system_name = platform.system()
-    match system_name:
-        case "Linux" | "Darwin":
-            cmd = [args.exec_cmake, ".",
-                   f'-G{NINJA_MULTI_CONFIG_NAME}',
-                   f"-B{args.root_build_dir}/host",
-                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
-                   f"-DDIVE_STR_BUILD={args.root_build_dir}"
-                   ]
-        case "Windows":
-            cmd = [args.exec_cmake, ".",
-                   f"-G{args.visual_studio_name}",
-                   f"-B{args.root_build_dir}/host",
-                   f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
-                   f"-DDIVE_STR_BUILD={args.root_build_dir}"
-                   ]
-        case _:
-            raise Exception(f"Unrecognized platform: {system_name}")
+    cmd = [
+        args.exec_cmake,
+        ".",
+        f"-G{args.host_cmake_generator}",
+        f"-B{args.root_build_dir}/host",
+        f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+        f"-DDIVE_STR_BUILD={args.root_build_dir}",
+    ]
     if args.host_configure_additional_flags:
         for arg in args.host_configure_additional_flags.split(" "):
             if arg:

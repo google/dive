@@ -26,6 +26,9 @@ project(diveCaptureLayer)
 set(CMAKE_CXX_STANDARD 20)
 set(target_name VkLayer_dive)
 
+include(${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
+
 include_directories(
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/third_party/abseil-cpp/
@@ -76,17 +79,6 @@ target_link_directories(
 
 if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
-endif()
-
-if(MSVC)
-    # 4100: unreferenced formal parameter
-    # 4201: prevent nameless struct/union
-    target_compile_options(${target_name} PRIVATE /W4 /WX /wd4100 /wd4201)
-else()
-    target_compile_options(
-        ${target_name}
-        PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
-    )
 endif()
 
 set_target_properties(

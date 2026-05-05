@@ -80,7 +80,7 @@ class ILog
 class LogNull : public ILog
 {
  public:
-    virtual void Log(const LogEntry& entry) override {}
+    void Log(const LogEntry& /*entry*/) override {}
     static LogNull& GetInstance();
 };
 
@@ -89,7 +89,7 @@ class LogNull : public ILog
 class LogConsole : public ILog
 {
  public:
-    virtual void Log(const LogEntry& entry) override;
+    void Log(const LogEntry& entry) override;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -179,8 +179,11 @@ class LogEntryBuilderNull
     {
         return *this;
     }
-    inline LogEntryBuilderNull& operator<<(std::ostream& (*manip)(std::ostream&)) { return *this; }
-    inline LogEntryBuilderNull& operator<<(const code& c) { return *this; }
+    inline LogEntryBuilderNull& operator<<(std::ostream& (* /*manip*/)(std::ostream&))
+    {
+        return *this;
+    }
+    inline LogEntryBuilderNull& operator<<(const code& /*c*/) { return *this; }
 };
 
 //--------------------------------------------------------------------------------------------------

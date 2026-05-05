@@ -68,8 +68,8 @@ class DiveAnnotationProcessor : public gfxrecon::decode::AnnotationHandler
     void WriteBlockEnd(const gfxrecon::util::DiveFunctionData& function_data) override;
 
     // @brief Convert annotations, which are simple {type:enum, key:string, value:string} objects.
-    virtual void ProcessAnnotation(uint64_t block_index, gfxrecon::format::AnnotationType type,
-                                   const std::string& label, const std::string& data) override
+    void ProcessAnnotation(uint64_t /*block_index*/, gfxrecon::format::AnnotationType /*type*/,
+                           const std::string& /*label*/, const std::string& /*data*/) override
     {
     }
 

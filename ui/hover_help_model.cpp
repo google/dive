@@ -410,7 +410,7 @@ void HoverHelp::SetCommandHierarchyNodeItem(const Dive::CommandHierarchy& comman
 }
 
 //--------------------------------------------------------------------------------------------------
-std::string HoverHelp::GetSyncNodeString(uint32_t param1, uint32_t param2, uint32_t param3)
+std::string HoverHelp::GetSyncNodeString(uint32_t /*param1*/, uint32_t /*param2*/, uint32_t /*param3*/)
 {
     // TODO: Fill out the hover help based on sync type and sync info!
     // Dive::SyncType sync_type = (Dive::SyncType)param1;

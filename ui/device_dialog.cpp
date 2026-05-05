@@ -80,7 +80,7 @@ void DeviceDialog::UpdateDeviceList()
     m_device_box->setCurrentIndex(index_to_select);
 }
 
-void DeviceDialog::OnDeviceSelectionChanged(const QString& s)
+void DeviceDialog::OnDeviceSelectionChanged(const QString& /*s*/)
 {
     std::string selected_device_serial = GetCurrentDeviceSerial();
 

@@ -17,7 +17,7 @@
 #include "dump_resources_builder_consumer.h"
 
 #include "state_machine.h"
-#include "third_party/gfxreconstruct/framework/util/logging.h"
+#include "util/logging.h"
 
 namespace Dive::gfxr
 {

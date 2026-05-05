@@ -18,7 +18,7 @@
 
 #include <functional>
 
-#include "third_party/gfxreconstruct/framework/util/logging.h"
+#include "util/logging.h"
 
 namespace Dive::gfxr
 {
@@ -26,8 +26,8 @@ namespace Dive::gfxr
 StateMachine::StateMachine(gfxrecon::format::HandleId command_buffer, AcceptingFunction accept,
                            RejectingFunction reject)
     : command_buffer_(command_buffer),
-      accept_(accept),
       reject_(reject),
+      accept_(accept),
       find_draw_(*this, find_render_pass_),
       find_render_pass_(*this, find_draw_),
       begin_state_(*this, find_render_pass_),

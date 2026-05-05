@@ -71,7 +71,7 @@ void GpuTimingTabView::CollectIndicesFromModel(const QAbstractItemModel& command
 }
 
 //--------------------------------------------------------------------------------------------------
-void GpuTimingTabView::CollectTimingIndex(Dive::NodeType node_type, const std::string& node_desc,
+void GpuTimingTabView::CollectTimingIndex(Dive::NodeType node_type, const std::string& /*node_desc*/,
                                           const QModelIndex& model_index)
 {
     if (!model_index.isValid())

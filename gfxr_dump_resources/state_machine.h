@@ -19,9 +19,9 @@
 #include <functional>
 
 #include "dump_entry.h"
+#include "format/format.h"
+#include "generated/generated_vulkan_consumer.h"
 #include "states.h"
-#include "third_party/gfxreconstruct/framework/format/format.h"
-#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
 
 namespace Dive::gfxr
 {

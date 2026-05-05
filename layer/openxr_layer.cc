@@ -231,7 +231,7 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrCreateSession(XrInstance instance,
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroySession(XrSession session)
 {
     LOGD("ApiDiveLayerXrDestroySession\n");
-    XrResult result = XR_SUCCESS;
+    XrResult result = XrResult::XR_ERROR_HANDLE_INVALID;
 
     auto sess_data = GetXrSessionLayerData(DataKey(session));
     if (sess_data)
@@ -244,14 +244,13 @@ XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrDestroySession(XrSession session)
         g_xr_session_data.erase(DataKey(session));
     }
 
-    return XrResult::XR_ERROR_HANDLE_INVALID;
+    return result;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL ApiDiveLayerXrGetInstanceProcAddr(XrInstance instance,
                                                                  const char* name,
                                                                  PFN_xrVoidFunction* function)
 {
-    XrResult result = XR_ERROR_HANDLE_INVALID;
     std::string func_name = name;
     LOGD("xrGetInstanceProcAddr:  %s\n", func_name.c_str());
 

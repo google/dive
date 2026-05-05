@@ -1208,7 +1208,7 @@ void EventStateView::DisplayHardwareSpecificStates(
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::OnHover(QTreeWidgetItem* item_ptr, int column)
+void EventStateView::OnHover(QTreeWidgetItem* item_ptr, int /*column*/)
 {
     HoverHelp* hover_help_ptr = HoverHelp::Get();
     QString field_name = item_ptr->text(0);
@@ -1222,7 +1222,7 @@ void EventStateView::OnHover(QTreeWidgetItem* item_ptr, int column)
 }
 
 //--------------------------------------------------------------------------------------------------
-void EventStateView::leaveEvent(QEvent* event)
+void EventStateView::leaveEvent(QEvent* /*event*/)
 {
     HoverHelp* hover_help_ptr = HoverHelp::Get();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);

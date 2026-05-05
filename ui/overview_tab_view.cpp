@@ -36,7 +36,7 @@
 // =================================================================================================
 // OverviewTabView
 // =================================================================================================
-OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& capture_metadata,
+OverviewTabView::OverviewTabView(const Dive::CaptureMetadata& /*capture_metadata*/,
                                  const Dive::CaptureStats& stats)
     : m_stats(stats)
 {

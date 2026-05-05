@@ -20,6 +20,6 @@ limitations under the License.
 namespace Dive
 {
 
-void AndroidLogSink::Send(const absl::LogEntry& entry) {}
+void AndroidLogSink::Send(const absl::LogEntry& /*entry*/) {}
 
 }  // namespace Dive

@@ -78,7 +78,7 @@ QModelIndex MiscStatsModel::index(int row, int column, const QModelIndex& parent
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex MiscStatsModel::parent(const QModelIndex& index) const { return QModelIndex(); }
+QModelIndex MiscStatsModel::parent(const QModelIndex& /*index*/) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int MiscStatsModel::rowCount(const QModelIndex& parent) const
@@ -91,7 +91,7 @@ int MiscStatsModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int MiscStatsModel::columnCount(const QModelIndex& parent) const { return m_headers.size(); }
+int MiscStatsModel::columnCount(const QModelIndex& /*parent*/) const { return m_headers.size(); }
 
 //--------------------------------------------------------------------------------------------------
 QVariant MiscStatsModel::data(const QModelIndex& index, int role) const

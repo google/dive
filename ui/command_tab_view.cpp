@@ -36,7 +36,7 @@
 // CommandTabView
 // =================================================================================================
 CommandTabView::CommandTabView(const Dive::CommandHierarchy& command_hierarchy, QWidget* parent)
-    : m_command_hierarchy(command_hierarchy)
+    : QFrame(parent), m_command_hierarchy(command_hierarchy)
 {
     m_command_buffer_model = new CommandBufferModel(command_hierarchy);
     m_command_buffer_view = new CommandBufferView(command_hierarchy);

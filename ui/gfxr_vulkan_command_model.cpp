@@ -122,8 +122,8 @@ Qt::ItemFlags GfxrVulkanCommandModel::flags(const QModelIndex& index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant GfxrVulkanCommandModel::headerData(int section, Qt::Orientation orientation,
-                                            int role) const
+QVariant GfxrVulkanCommandModel::headerData(int /*section*/, Qt::Orientation /*orientation*/,
+                                            int /*role*/) const
 {
     return QVariant();
 }
@@ -179,7 +179,7 @@ int GfxrVulkanCommandModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int GfxrVulkanCommandModel::columnCount(const QModelIndex& parent) const { return 1; }
+int GfxrVulkanCommandModel::columnCount(const QModelIndex& /*parent*/) const { return 1; }
 
 //--------------------------------------------------------------------------------------------------
 QModelIndex GfxrVulkanCommandModel::findNode(uint64_t node_index) const

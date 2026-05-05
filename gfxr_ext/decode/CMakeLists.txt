@@ -37,11 +37,16 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-if(MSVC)
-    add_compile_options(/WX /W4)
-else()
-    add_compile_options(-Werror -Wall)
-endif()
+include(../../cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
+
+add_library(gfxrecon_headers INTERFACE)
+target_include_directories(
+    gfxrecon_headers
+    SYSTEM
+    INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
+)
 
 add_library(dive_renderdoc)
 if(ANDROID)
@@ -51,10 +56,9 @@ else()
 endif()
 target_include_directories(
     dive_renderdoc
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../
 )
+target_link_libraries(dive_renderdoc PUBLIC gfxrecon_headers)
 
 # The Android Gradle script invokes its own CMake, starting from gfxrecon-replay's CMakeLists.txt.
 # This build system is isolated and does not see the gpu_time target defined in the root CMakeLists.txt.
@@ -91,10 +95,10 @@ target_link_libraries(
 if(WIN32)
     target_link_libraries(gfxr_decode_ext_lib psapi)
 endif()
+
 target_include_directories(
     gfxr_decode_ext_lib
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/gfxreconstruct/framework
         ${CMAKE_CURRENT_SOURCE_DIR}/../../
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
         ${CMAKE_CURRENT_SOURCE_DIR}/../../src/dive # to be removed

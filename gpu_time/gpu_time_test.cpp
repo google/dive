@@ -48,34 +48,36 @@ constexpr float kMockTimestampPeriod = 1.0f;
 // Mock implementations of the Vulkan functions that GPUTime calls.
 // These functions allow us to control the behavior and return values during tests.
 
-VkResult MockCreateQueryPool(VkDevice device, const VkQueryPoolCreateInfo* pCreateInfo,
-                             const VkAllocationCallbacks* pAllocator, VkQueryPool* pQueryPool)
+VkResult MockCreateQueryPool(VkDevice /*device*/, const VkQueryPoolCreateInfo* /*pCreateInfo*/,
+                             const VkAllocationCallbacks* /*pAllocator*/, VkQueryPool* pQueryPool)
 {
     *pQueryPool = MOCK_QUERY_POOL;
     return VK_SUCCESS;
 }
 
-void MockDestroyQueryPool(VkDevice device, VkQueryPool queryPool,
-                          const VkAllocationCallbacks* pAllocator)
+void MockDestroyQueryPool(VkDevice /*device*/, VkQueryPool /*queryPool*/,
+                          const VkAllocationCallbacks* /*pAllocator*/)
 {
     // No-op for testing
 }
 
-void MockResetQueryPool(VkDevice device, VkQueryPool queryPool, uint32_t firstQuery,
-                        uint32_t queryCount)
+void MockResetQueryPool(VkDevice /*device*/, VkQueryPool /*queryPool*/, uint32_t /*firstQuery*/,
+                        uint32_t /*queryCount*/)
 {
     // No-op for testing
 }
 
-void MockCmdWriteTimestamp(VkCommandBuffer commandBuffer, VkPipelineStageFlagBits pipelineStage,
-                           VkQueryPool queryPool, uint32_t query)
+void MockCmdWriteTimestamp(VkCommandBuffer /*commandBuffer*/,
+                           VkPipelineStageFlagBits /*pipelineStage*/, VkQueryPool /*queryPool*/,
+                           uint32_t /*query*/)
 {
     // No-op for testing
 }
 
-VkResult MockGetQueryPoolResults(VkDevice device, VkQueryPool queryPool, uint32_t firstQuery,
-                                 uint32_t queryCount, size_t dataSize, void* pData,
-                                 VkDeviceSize stride, VkQueryResultFlags flags)
+VkResult MockGetQueryPoolResults(VkDevice /*device*/, VkQueryPool /*queryPool*/,
+                                 uint32_t /*firstQuery*/, uint32_t /*queryCount*/,
+                                 size_t /*dataSize*/, void* pData, VkDeviceSize /*stride*/,
+                                 VkQueryResultFlags /*flags*/)
 {
     // Simulate returning some timestamp data.
     // Each query result consists of a timestamp (uint64_t) and an availability flag (uint64_t).
@@ -105,13 +107,13 @@ VkResult MockGetQueryPoolResults(VkDevice device, VkQueryPool queryPool, uint32_
     return VK_SUCCESS;
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL MockQueueWaitIdle(VkQueue queue)
+VKAPI_ATTR VkResult VKAPI_CALL MockQueueWaitIdle(VkQueue /*queue*/)
 {
     // No-op for testing
     return VK_SUCCESS;
 }
 
-VKAPI_ATTR VkResult VKAPI_CALL MockDeviceWaitIdle(VkDevice device)
+VKAPI_ATTR VkResult VKAPI_CALL MockDeviceWaitIdle(VkDevice /*device*/)
 {
     // No-op for testing
     return VK_SUCCESS;

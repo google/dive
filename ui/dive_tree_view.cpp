@@ -310,7 +310,7 @@ DiveTreeView::DiveTreeView(const Dive::CommandHierarchy& command_hierarchy, QWid
 }
 
 //--------------------------------------------------------------------------------------------------
-bool DiveTreeView::RenderBranch(const QModelIndex& index) const { return true; }
+bool DiveTreeView::RenderBranch(const QModelIndex& /*index*/) const { return true; }
 
 //--------------------------------------------------------------------------------------------------
 void DiveTreeView::setCurrentNode(uint64_t node_index)

@@ -44,7 +44,7 @@ class DIVE_UI_LIB_EXPORT MainWindow : public QMainWindow
     MainWindow& operator=(const MainWindow&) = delete;
     MainWindow& operator=(MainWindow&&) = delete;
 
-    bool LoadFile(const std::string& file_name, bool is_temp_file = false, bool async = true);
+    bool LoadFile(const std::string& file_name, bool is_temp_file = false);
     TraceDialog& GetTraceDialog();
     ProgressTrackerCallback& GetProgressTracker();
 
@@ -64,7 +64,7 @@ class DIVE_UI_LIB_EXPORT MainWindow : public QMainWindow
     void AnalyzeCaptureStarted(const QString& file_path);
 
  public slots:
-    void OnCapture(bool is_capture_delayed = false);
+    void OnCapture();
     void OnCaptureUpdated(const QString& file_path);
     void OnSwitchToShaderTab();
     void OnOpenVulkanDrawCallMenu(const QPoint& pos);

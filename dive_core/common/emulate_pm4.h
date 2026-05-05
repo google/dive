@@ -172,16 +172,16 @@ class EmulateCallbacksBase
 
     // Callback on an IB start. Also called for all call/chain IBs
     // A return value of false indicates to the emulator to skip parsing this IB
-    virtual bool OnIbStart(uint32_t submit_index, uint32_t ib_index,
-                           const IndirectBufferInfo& ib_info, IbType type)
+    virtual bool OnIbStart(uint32_t /*submit_index*/, uint32_t /*ib_index*/,
+                           const IndirectBufferInfo& ib_info, IbType /*type*/)
     {
         m_state_tracker.PushEnableMask(ib_info.m_enable_mask);
         return true;
     }
 
     // Callback for an IB end
-    virtual bool OnIbEnd(uint32_t submit_index, uint32_t ib_index,
-                         const IndirectBufferInfo& ib_info)
+    virtual bool OnIbEnd(uint32_t /*submit_index*/, uint32_t /*ib_index*/,
+                         const IndirectBufferInfo& /*ib_info*/)
     {
         m_state_tracker.PopEnableMask();
         return true;

@@ -20,12 +20,8 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# Enable warnings as errors. Require exhaustive switches.
-if(MSVC)
-    add_compile_options(/WX /we4062)
-else()
-    add_compile_options(-Werror -Wswitch)
-endif()
+include(${PROJECT_SOURCE_DIR}/cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
 
 # AndroidTraceManager can be compiled on the host. This allows us to unit test it.
 # Group both cc files in the same target since the public header trace_mgr.h declares both.

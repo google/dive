@@ -82,10 +82,10 @@ std::string GetGfxrCaptureFilePath(absl::string_view gfxr_capture_directory,
 namespace Dive
 {
 
-int GetIndentation(const std::string& line)
+size_t GetIndentation(const std::string& line)
 {
-    int indention = 0;
-    for (int i = 0; i < line.size(); i++)
+    size_t indention = 0;
+    for (size_t i = 0; i < line.size(); i++)
     {
         if (line[i] == ' ')
         {
@@ -118,7 +118,7 @@ std::string ParsePackageForActivity(const std::string& input, const std::string&
             continue;
         }
 
-        int cur_indent = GetIndentation(std::string(line));
+        int cur_indent = static_cast<int>(GetIndentation(std::string(line)));
 
         if (!in_non_data)
         {

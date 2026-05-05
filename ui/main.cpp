@@ -230,7 +230,7 @@ int DiveGuiMain(int argc, char** argv)
     if (positional_args.size() == 2)
     {
         // This is executed async.
-        main_window->LoadFile(positional_args.back(), false, true);
+        main_window->LoadFile(positional_args.back(), /*is_temp_file=*/false);
     }
 
     QTimer::singleShot(kSplashScreenDuration, splash_screen, SLOT(close()));

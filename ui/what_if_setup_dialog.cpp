@@ -73,7 +73,7 @@ void WhatIfAppTypeFilterModel::setFilterActive(bool active)
 
 //--------------------------------------------------------------------------------------------------
 bool WhatIfAppTypeFilterModel::filterAcceptsRow(int sourceRow,
-                                                const QModelIndex& sourceParent) const
+                                                const QModelIndex& /*sourceParent*/) const
 {
     if (m_filter_active)
     {

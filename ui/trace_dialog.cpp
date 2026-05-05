@@ -1060,7 +1060,7 @@ void AppTypeFilterModel::setFilterActive(bool active)
 }
 
 //--------------------------------------------------------------------------------------------------
-bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
+bool AppTypeFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& /*sourceParent*/) const
 {
     if (m_filter_active)
     {

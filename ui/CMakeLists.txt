@@ -43,6 +43,10 @@ if(MSVC)
     add_compile_options(
         /WX
         /W4
+        /w44456 # warn if local shadows previous local
+        /w44457 # warn if local shadows function parameter
+        /w44458 # warn if local shadows class member
+        /w44459 # warn if local shadows global variable
         /wd4201 # adreno.h uses non-standard nameless struct/union
         /wd4100 # emulate_pm4.h has unreferenced parameters
         /wd4127 # "conditional expression is constant" caused by Abseil

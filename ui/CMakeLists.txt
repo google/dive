@@ -39,7 +39,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
-    # TOOD: Remove /wd4100 after problems are fixed
+    # TOOD: b/509938195 - Remove /wd4100 after problems are fixed
     add_compile_options(
         /WX
         /W4
@@ -49,7 +49,12 @@ if(MSVC)
         /wd4324 # "structure was padded" caused by Abseil flags
     )
 else()
-    add_compile_options(-Werror -Wall -Wshadow-all)
+    add_compile_options(
+        -Werror
+        -Wall
+        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wshadow-all>
+        $<$<CXX_COMPILER_ID:GNU>:-Wshadow>
+    )
 endif()
 
 # Find the QtWidgets and QtSvg libraries

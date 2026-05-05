@@ -39,7 +39,15 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 20)
 
 if(MSVC)
-    add_compile_options(/WX /W4)
+    # TOOD: Remove /wd4100 after problems are fixed
+    add_compile_options(
+        /WX
+        /W4
+        /wd4201 # adreno.h uses non-standard nameless struct/union
+        /wd4100 # emulate_pm4.h has unreferenced parameters
+        /wd4127 # "conditional expression is constant" caused by Abseil
+        /wd4324 # "structure was padded" caused by Abseil flags
+    )
 else()
     add_compile_options(-Werror -Wall -Wshadow-all)
 endif()

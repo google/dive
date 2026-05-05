@@ -913,7 +913,14 @@ def outputPacketInfo(pm4_info_file, registers_et_root, enum_index_dict, opcode_d
 		const uint32_t shift_bits = 32 - kGPUVariantsBits;
 		uint32_t gpu_variants = reg.first << shift_bits >> shift_bits;
 		uint32_t reg_offset = reg.first >> kGPUVariantsBits;
-		g_sRegNameToIndex[name] = reg_offset;
+
+    // Only set the generic name if it hasn't been set yet. 
+    // This prevents later variants from overwriting the base/default offset.
+    if (g_sRegNameToIndex.find(name) == g_sRegNameToIndex.end())
+    {
+        g_sRegNameToIndex[name] = reg_offset;
+    }
+
 		if (gpu_variants != 0)
 		{
 			uint32_t bit_offset = 0;
@@ -994,17 +1001,20 @@ uint32_t GetRegOffsetByName(const char *name)
     }
 
     std::string str = std::string(name);
-    auto i = g_sRegNameToIndex.find(str);
-    if (i == g_sRegNameToIndex.end())
+    std::string name_with_variant = str + "_" + GetGPUStr(g_sGPU_variant);
+    auto i = g_sRegNameToIndex.find(name_with_variant);
+    if (i != g_sRegNameToIndex.end())
     {
-        std::string name_with_variant = str + "_" + GetGPUStr(g_sGPU_variant);
-        i = g_sRegNameToIndex.find(name_with_variant);
-        if (i == g_sRegNameToIndex.end())
-        {
-            return kInvalidRegOffset;
-        }
+        return i->second;
     }
-    return i->second;
+
+    // Fall back to the generic name if no variant match exists
+    i = g_sRegNameToIndex.find(str);
+    if (i != g_sRegNameToIndex.end())
+    {
+        return i->second;
+    }
+    return kInvalidRegOffset;
 }
 
 const char *GetEnumString(uint32_t enum_handle, uint32_t val)

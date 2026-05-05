@@ -113,11 +113,12 @@ As a long-running project, Dive has significant amounts of legacy code and this 
 ### Top-level Directories
 
 * **.github/**
-    * Configuration files related to [Dive's Github Actions](https://github.com/google/dive/actions) for nightly and presubmit automated testing
+    * Configuration files related to [Dive Github Actions](https://github.com/google/dive/actions) for nightly and presubmit automated testing
 * **capture_service/**
     * Libraries related to the Android device and communication via `adb`
     * Also contains the main CLI tool `dive_client_cli`
         * GFXR capture and replay
+        * PM4 capture
 * **cli/**
     * CLI tool `divecli`
         * Parsing PM4 capture
@@ -127,7 +128,7 @@ As a long-running project, Dive has significant amounts of legacy code and this 
     * Functionality to parse captures (GFXR, PM4) into in-memory representations (Command Hierarchies)
     * Also support for other data: GPU timing, metrics...
 * **gfxr_dump_resources/**
-    * CLI tool `gfxr_dump_resources`
+    * CLI tool `gfxr_dump_resources` and library
         * Process a GFXR capture and produce a file suitable for use with GFXR `--dump-resources`
 * **gfxr_ext/**
     * Library to extend the functionality of `third_party/gfxreconstruct` for use in Dive
@@ -138,15 +139,16 @@ As a long-running project, Dive has significant amounts of legacy code and this 
     * CLI tool `host_cli`
         * Block-level manipulation of GFXR captures
 * **layer/**
-    * `libVkLayer_Dive.so` and `libXrApiLayer_dive.so` are Vulkan layers 
+    * `libVkLayer_Dive.so` is a Vulkan and GLES layer, and `libXrApiLayer_dive.so` is an OpenXR layer
         * Meant to be used on the device when running either GFXR replay APK or other Vulkan applications
         * To support features such as PM4 capture via freedreno's `libwrap.so`
 * **lrz_validator/**
-    * Lightweight tool `lrz_validator` to validate the LowResolution Z Buffer data inside a PM4 capture
+    * CLI tool `lrz_validator`
+        * Validate the LowResolution Z Buffer data inside a PM4 capture
 * **network/**
     * Library for socket communication between the host and the Android device
 * **plugins/**
-    * Samples and placeholders related to Dive plugins (refer to the [README.md](https://github.com/google/dive/tree/main/plugins/README.md) for more details)
+    * Dive UI plugins (refer to the [README.md](https://github.com/google/dive/tree/main/plugins/README.md) for more details)
 * **prebuild/**
     * Contains prebuilt libraries to speed up the build process for host tools
         * `libarchive`
@@ -159,20 +161,21 @@ As a long-running project, Dive has significant amounts of legacy code and this 
     * All scripts, user-facing and the ones used automatically during the build process
 * **src/**
     * Newer Dive source code
-* **test/**
+* **tests/**
     * Golden files and other test data for the unit tests
 * **third_party/**
     * Third-party submodules and subtrees used in Dive
 * **trace_stats/**
-    * Library that extracts statistics from a PM4 capture for displaying in the UI
+    * CLI tool `trace_stats` and library
+        * Extracts statistics from a PM4 capture for displaying in the UI
 * **ui/**
     * Dive UI, built using `Qt` libraries
 
 ### Planned Structural Improvements
 
-These are some general ideas for structural improvements. Please keep them in mind during the addition of new code and the refactoring of the current code:
+Because of legacy code and partial refactoring, there are some parts of Dive that are contradictory and the existing code may not have a clear intent that can be inferred easily. The following are some general ideas for structural improvements. Please keep them in mind during the addition of new code and the refactoring of the current code:
 
 * Dive source code should live underneath `src/` rather than any other top-level directories in this repo
 * Since Dive supports "GFXR captures" and "PM4 captures", naming related to traces/captures should be specific
 * Consolidate CLI tools rather than further splintering
-* More scripts should be written in Python for cross-platform support
+* Prefer writing scripts in Python for cross-platform support

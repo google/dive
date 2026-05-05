@@ -27,10 +27,10 @@ REM On Windows
 
 ```sh
 # On macOS, the app bundle is at:
-${DIVE_ROOT_PATH}/build/pkg/dive
+${DIVE_ROOT_PATH}/build/pkg/dive.app
 
 # To launch from commandline and view stdout:
-${DIVE_ROOT_PATH}/build/pkg/dive.app/Contents/MacOs/dive
+${DIVE_ROOT_PATH}/build/pkg/dive.app/Contents/MacOS/dive
 ```
 
 # Capture Output Directory

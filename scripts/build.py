@@ -144,7 +144,7 @@ def parse_args():
         default=False,
         help="List all actions this script can perform in the order they will be performed")
     parser.add_argument(
-        "--mac-sign", 
+        "--mac-sign",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Sign the macOS app bundle, no-op for other platforms")
@@ -395,7 +395,7 @@ def deploy_qt(args):
 
         case "Windows":
             print(f"\nDeploying with {args.exec_deployqt}...")
-            cmd = [args.exec_deployqt, 
+            cmd = [args.exec_deployqt,
                 f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}"
                 ]
             dive.echo_and_run(cmd)
@@ -446,7 +446,14 @@ def package(args):
     archive_name = get_archive_name(args, long_version_string)
 
     print(f"\nZipping into '{archive_name}.zip'...")
-    shutil.make_archive(archive_name, "zip", f"{args.root_build_dir}/{PKG_DIR}")
+
+    match platform.system():
+        case "Darwin":
+            dive.echo_and_run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
+                              f"{args.root_build_dir}/{PKG_DIR}/dive.app", f"{archive_name}.zip"])
+        case _:
+            shutil.make_archive(archive_name, "zip",
+                                f"{args.root_build_dir}/{PKG_DIR}")
 
     archive_dir = args.archive_dir
     if not archive_dir:

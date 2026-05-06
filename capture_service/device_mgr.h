@@ -26,6 +26,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "android_application.h"
+#include "capture_service/capture_service_export.h"
 #include "constants.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/device_resources_constants.h"
@@ -33,7 +34,7 @@ limitations under the License.
 namespace Dive
 {
 
-struct DeviceInfo
+struct CAPTURE_SERVICE_EXPORT DeviceInfo
 {
     std::string m_serial;
     std::string m_manufacturer;
@@ -100,7 +101,7 @@ struct GfxrReplaySettings
 absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings& settings,
                                                               bool is_adreno_gpu);
 
-class AndroidDevice
+class CAPTURE_SERVICE_EXPORT AndroidDevice
 {
  public:
     static absl::StatusOr<std::unique_ptr<AndroidDevice>> Create(const std::string& serial);
@@ -229,7 +230,7 @@ class AndroidDevice
     int m_port = kFirstPort;
 };
 
-class DeviceManager
+class CAPTURE_SERVICE_EXPORT DeviceManager
 {
  public:
     DeviceManager() = default;
@@ -242,7 +243,7 @@ class DeviceManager
     // that which was created. If this fails then DeviceManager state will remain unaltered;
     // GetDevice will return the previous SelectDevice result.
     absl::StatusOr<AndroidDevice*> SelectDevice(const std::string& serial);
-    void RemoveDevice() { m_device = nullptr; }
+    void RemoveDevice();
     AndroidDevice* GetDevice() const { return m_device.get(); }
 
     // Exposing for user-initiated cleanup
@@ -260,5 +261,5 @@ class DeviceManager
     std::unique_ptr<AndroidDevice> m_device{nullptr};
 };
 
-DeviceManager& GetDeviceManager();
+CAPTURE_SERVICE_EXPORT DeviceManager& GetDeviceManager();
 }  // namespace Dive

@@ -75,10 +75,7 @@ if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
 else()
     add_library(device_mgr device_mgr.cc android_application.cc)
-    target_include_directories(
-        device_mgr
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
-    )
+    target_include_directories(device_mgr PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_link_libraries(
         device_mgr
         dive_legacy_includes
@@ -97,6 +94,11 @@ else()
         command_utils
         dive_renderdoc_files
     )
+
+    if(MSVC)
+        target_compile_definitions(device_mgr PUBLIC CAPTURE_SERVICE_BUILD)
+        message(STATUS "MSVC build: Defining CAPTURE_SERVICE_BUILD")
+    endif()
 
     add_executable(dive_client_cli dive_client_cli.cc)
     target_link_libraries(

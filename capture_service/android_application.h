@@ -21,6 +21,7 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "capture_service/capture_service_export.h"
 
 namespace Dive
 {
@@ -59,7 +60,7 @@ struct GfxrCaptureSettings
     } end_point = EndPoint::kFrame;
 };
 
-class AndroidApplication
+class CAPTURE_SERVICE_EXPORT AndroidApplication
 {
  public:
     AndroidApplication(AndroidDevice& dev, std::string package, ApplicationType type,
@@ -108,7 +109,7 @@ class AndroidApplication
     bool m_runtime_what_if_enabled = false;
 };
 
-class VulkanApplication : public AndroidApplication
+class CAPTURE_SERVICE_EXPORT VulkanApplication : public AndroidApplication
 {
  public:
     VulkanApplication(AndroidDevice& dev, std::string package, std::string command_args);
@@ -123,7 +124,7 @@ class VulkanApplication : public AndroidApplication
     absl::Status Pm4CaptureCleanup() override;
 };
 
-class GLESApplication : public AndroidApplication
+class CAPTURE_SERVICE_EXPORT GLESApplication : public AndroidApplication
 {
  public:
     GLESApplication(AndroidDevice& dev, std::string package, std::string command_args);
@@ -138,7 +139,7 @@ class GLESApplication : public AndroidApplication
     absl::Status Pm4CaptureCleanup() override;
 };
 
-class OpenXRApplication : public AndroidApplication
+class CAPTURE_SERVICE_EXPORT OpenXRApplication : public AndroidApplication
 {
  public:
     OpenXRApplication(AndroidDevice& dev, std::string package, std::string command_args);
@@ -153,7 +154,7 @@ class OpenXRApplication : public AndroidApplication
     absl::Status Pm4CaptureCleanup() override;
 };
 
-class VulkanCliApplication : public AndroidApplication
+class CAPTURE_SERVICE_EXPORT VulkanCliApplication : public AndroidApplication
 {
  public:
     VulkanCliApplication(AndroidDevice& dev, std::string command, std::string command_args);

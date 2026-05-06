@@ -72,17 +72,18 @@ jobs:
       - name: Build Dive host tools with ninja with ${{ inputs.cc }}
         run: |
           python -u scripts/build.py \
-            --actions configure_host,build_host,install_host \
+            --action configure_host \
+            --action build_host \
+            --action install_host \
             --build-type ${INPUTS_BUILD_TYPE} \
             --build-via-generator \
             --ci \
-            --host-configure-additional-flags "\
-              -DDIVE_BUILD_WITH_CRASHPAD=OFF \
-              -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${INPUTS_CC} \
-              -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \
-              -DCMAKE_CXX_FLAGS="${INPUTS_CXX_FLAGS}" \
-              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+            --host-configure-flag=-DDIVE_BUILD_WITH_CRASHPAD=OFF \
+            --host-configure-flag=-DCMAKE_C_COMPILER:FILEPATH=/usr/bin/${INPUTS_CC} \
+            --host-configure-flag=-DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/${INPUTS_CXX} \
+            --host-configure-flag=-DCMAKE_CXX_FLAGS="${INPUTS_CXX_FLAGS}" \
+            --host-configure-flag=-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            --host-configure-flag=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         env:
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
           INPUTS_CC: ${{ inputs.cc }}

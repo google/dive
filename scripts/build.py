@@ -21,6 +21,7 @@ import os
 import platform
 import re
 import shutil
+import typing
 
 # GLOBAL CONSTANTS
 PROFILING_PLUGIN_PATH = "plugins/external/dive_profiling_plugin"
@@ -35,14 +36,20 @@ MAC_HOST_PLUGINS_DIR = "Contents/PlugIns/plugins"
 HOST_TOOLS_BUILD_NAME = "Host Tools Build"
 
 
-class ActionType(enum.StrEnum):
-    CONFIGURE_HOST = enum.auto()
-    BUILD_HOST = enum.auto()  # separated to make VS builds using the UI easy
-    INSTALL_HOST = enum.auto()
-    ALL_DEVICE = enum.auto()  # configure, build, and install device libraries
-    COPY_PLUGINS = enum.auto()  # copy external plugins into pkg dir
-    DEPLOY_QT = enum.auto()
-    PACKAGE = enum.auto()  # removes some extraneous files and packages the release
+class Action:
+    def __init__(self, name: str, func: typing.Callable[[argparse.Namespace], None]):
+        assert name == name.lower()
+        self.name = name
+        self.func = func
+
+    def __str__(self):
+        return self.name
+
+    def __call__(self, args: argparse.Namespace):
+        self.func(args)
+
+
+available_actions: list[Action] = []
 
 
 class BuildType(enum.StrEnum):
@@ -77,16 +84,19 @@ def rmtree_if_exists(path):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        prog="build_android",
+        prog="build",
         description="This script automates the standard build process for Dive",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--actions",
-        help="Comma-separated list of actions that this script will perform. "
-        "Use --list-actions to check which actions are available. If "
-        "unspecified, then all actions will be performed",
+        "--action",
+        action="append",
+        default=[],
+        choices=[str(action) for action in available_actions],
+        help="List of actions that this script will perform. "
+        "If unspecified, then all actions will be performed",
     )
+    parser.add_argument("--actions", default="", help="Deprecated")
     parser.add_argument(
         "--archive-dir",
         help="Output directory of the final archive produced by this script. "
@@ -147,15 +157,14 @@ def parse_args():
         help="The name of the ninja executable on the path",
     )
     parser.add_argument(
-        "--host-configure-additional-flags",
+        "--host-configure-flag",
+        action="append",
+        default=[],
         help="String of additional CMake flags to pass directly to cmake in the "
         "configure_host stage",
     )
     parser.add_argument(
-        "--list-actions",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="List all actions this script can perform in the order they will be performed",
+        "--host-configure-additional-flags", default="", help="Deprecated"
     )
     parser.add_argument(
         "--mac-sign",
@@ -182,33 +191,19 @@ def parse_args():
     return parser.parse_args()
 
 
-def list_actions():
-    """Lists all of ActionType in the order they would be executed"""
-    print("\nIn order of execution...")
-    for i, action in enumerate(ActionType):
-        print(f"{i+1}. {action}")
+def parse_actions(args) -> list[str]:
+    """Converts args.actions to an ordered list of actions"""
 
+    allowed_actions = set(str(action) for action in available_actions)
+    actions = set(args.action) | set(filter(None, args.actions.split(",")))
+    for action in actions:
+        if action not in allowed_actions:
+            raise Exception(f"Invalid action specified: '{action}'")
+    if not actions:
+        actions = allowed_actions
 
-def parse_actions(args):
-    """Parses args.actions and changes it in-place into a list of valid ActionType actions"""
-    allowed_actions = [str(x) for x in ActionType]
-    actions = []
-    if args.actions:
-        comma_separated = args.actions.split(",")
-        for action in comma_separated:
-            if action not in allowed_actions:
-                raise Exception(
-                    f"Invalid action specified: '{action}', refer "
-                    "to --list-actions for the valid list OR leave blank to run all"
-                )
-            actions.append(action)
-    else:
-        actions = [x for x in ActionType]
-
-    str_actions = ", ".join(actions)
-    print(f"\nQueued actions, not necessarily listed in order: {str_actions}")
-
-    args.actions = actions
+    # Getting an ordered list of actions
+    return [action for action in available_actions if str(action) in actions]
 
 
 def check_environment(args):
@@ -264,7 +259,7 @@ def check_environment(args):
 
 
 def copy_plugins(args):
-    """Implements ActionType.COPY_PLUGINS stage"""
+    """Implements COPY_PLUGINS stage"""
 
     if not os.path.exists(PROFILING_PLUGIN_PATH):
         print(f"\nDir {PROFILING_PLUGIN_PATH} does not exist, skipping")
@@ -281,7 +276,7 @@ def copy_plugins(args):
 
 
 def configure_host(args):
-    """Implements ActionType.CONFIGURE_HOST stage, uses cmake to generate
+    """Implements CONFIGURE_HOST stage, uses cmake to generate
     build files targeting the host
     """
     print("\nGenerating build files with cmake...")
@@ -293,15 +288,13 @@ def configure_host(args):
         f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
         f"-DDIVE_STR_BUILD={args.root_build_dir}",
     ]
-    if args.host_configure_additional_flags:
-        for arg in args.host_configure_additional_flags.split(" "):
-            if arg:
-                cmd.append(arg)
+    cmd.extend(args.host_configure_flag)
+    cmd.extend(filter(None, args.host_configure_additional_flags.split(" ")))
     dive.echo_and_run(cmd)
 
 
 def build_host(args):
-    """Implementing ActionType.BUILD_HOST stage"""
+    """Implementing BUILD_HOST stage"""
     if not args.build_via_generator:
         print("\nBuilding host libraries by invoking cmake...")
         cmd = [
@@ -311,6 +304,10 @@ def build_host(args):
             "--config",
             f"{args.build_type}",
         ]
+        # Force cmake to run parallel build on Windows.
+        # Linux/macOS uses ninja, which do parallel builds by default.
+        if platform.system() == "Windows":
+            cmd.append(f"-j{os.cpu_count()}")
     elif platform.system() in ["Linux", "Darwin"]:
         print("\nBuilding host libraries by invoking Ninja...")
         cmd = [
@@ -335,7 +332,7 @@ def build_host(args):
 
 
 def install_host(args):
-    """Implementing ActionType.INSTALL_HOST stage"""
+    """Implementing INSTALL_HOST stage"""
     # TODO: b/482108095 - This must be done regardless of clean build because
     # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
@@ -355,7 +352,7 @@ def install_host(args):
 
 
 def all_device(args):
-    """Implementing ActionType.ALL_DEVICE stage"""
+    """Implementing ALL_DEVICE stage"""
     print("\nGenerating build files with cmake...")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
     cmd = [
@@ -405,7 +402,7 @@ def all_device(args):
 
 
 def deploy_qt(args):
-    """Implements ActionType.DEPLOY_QT stage, which uses a QT tool to add QT
+    """Implements DEPLOY_QT stage, which uses a QT tool to add QT
     libraries to the same dir as the binary that depends on them in preparation
     for packaging and distribution
     """
@@ -464,7 +461,7 @@ def get_archive_name(args, unparsed_string):
 
 
 def package(args):
-    """Implements ActionType.PACKAGE stage, which will package this Dive build
+    """Implements PACKAGE stage, which will package this Dive build
     into a single file that is easy to transfer
     """
     # TODO: b/504654590 - Investigate if there's a way to identify extraneous files
@@ -523,17 +520,27 @@ def package(args):
     shutil.move(f"{archive_name}.zip", final_location_zip)
 
 
+available_actions.extend(
+    [
+        Action("configure_host", configure_host),
+        Action("build_host", build_host),
+        Action("install_host", install_host),
+        Action("all_device", all_device),
+        Action("copy_plugins", copy_plugins),
+        Action("deploy_qt", deploy_qt),
+        Action("package", package),
+    ]
+)
+
+
 def main():
     dive.check_python_version()
     args = parse_args()
 
-    if args.list_actions:
-        list_actions()
-        return
+    actions = parse_actions(args)
 
-    # TODO: b/504654590 - Use parser.add_argument() functionality to avoid
-    # having to call parse_actions() separately
-    parse_actions(args)
+    str_actions = ", ".join(map(str, actions))
+    print(f"\nQueued actions: {str_actions}")
 
     if not args.ci:
         dive_root_path = dive.get_dive_root()
@@ -544,27 +551,9 @@ def main():
         check_environment(args)
 
     with dive.Timer("total"):
-        if ActionType.CONFIGURE_HOST in args.actions:
-            with dive.Timer(ActionType.CONFIGURE_HOST):
-                configure_host(args)
-        if ActionType.BUILD_HOST in args.actions:
-            with dive.Timer(ActionType.BUILD_HOST):
-                build_host(args)
-        if ActionType.INSTALL_HOST in args.actions:
-            with dive.Timer(ActionType.INSTALL_HOST):
-                install_host(args)
-        if ActionType.ALL_DEVICE in args.actions:
-            with dive.Timer(ActionType.ALL_DEVICE):
-                all_device(args)
-        if ActionType.COPY_PLUGINS in args.actions:
-            with dive.Timer(ActionType.COPY_PLUGINS):
-                copy_plugins(args)
-        if ActionType.DEPLOY_QT in args.actions:
-            with dive.Timer(ActionType.DEPLOY_QT):
-                deploy_qt(args)
-        if ActionType.PACKAGE in args.actions:
-            with dive.Timer(ActionType.PACKAGE):
-                package(args)
+        for action in actions:
+            with dive.Timer(str(action)):
+                action(args)
 
 
 if __name__ == "__main__":

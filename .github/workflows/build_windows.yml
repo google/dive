@@ -27,12 +27,13 @@ jobs:
       - name: Build Dive host tools with VS 2022
         run: |
           python3 -u scripts/build.py `
-            --actions configure_host,build_host,install_host `
+            --action configure_host `
+            --action build_host `
+            --action install_host `
             --build-type $env:INPUTS_BUILD_TYPE `
             --build-via-generator `
             --ci `
-            --host-configure-additional-flags "`
-              -DDIVE_BUILD_WITH_CRASHPAD=OFF"
+            --host-configure-flag=-DDIVE_BUILD_WITH_CRASHPAD=OFF
         env:
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}
       - name: Run tests

@@ -120,16 +120,15 @@ python scripts/build.py --build-via-generator
 * On Windows, using the Visual Studio UI for the host build can be clearer than building it on the command line. To do that, split the build process like so:
     1. Do all actions up to and including generating the Visual Studio Solution
         ```bat
-        python scripts/build.py --actions < the prior... >,configure_host
+        python scripts/build.py --action < the prior... > --action configure_host
         ```
-    1. Compile manually in Visual Studio (same as `python scripts/build.py --actions build_host`)
+    1. Compile manually in Visual Studio (same as `python scripts/build.py --action build_host`)
         * Open Visual Studio UI and build target ALL_BUILD
     1. Finish the other steps in the build process by specifying all the following actions after "build_host"
         ```bat
-        REM Tip: Use flag `--list-actions` to see an up-to-date list of all the available actions
-        python scripts/build.py --actions install_host,all_device,< the rest... >
-        ``` 
-* To build with Crashpad, specify `--build-type RelWithDebInfo`. In case the default is Crashpad off, specify additionally `--host-configure-additional-flags "-DDIVE_BUILD_WITH_CRASHPAD=ON"`
+        python scripts/build.py --action install_host --action all_device --action < the rest... >
+        ```
+* To build with Crashpad, specify `--build-type RelWithDebInfo`. In case the default is Crashpad off, specify additionally `--host-configure-flag=-DDIVE_BUILD_WITH_CRASHPAD=ON`
 
 ### Troubleshooting Tips
 * If the GFXR Gradle build is failing:

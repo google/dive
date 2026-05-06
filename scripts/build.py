@@ -22,7 +22,6 @@ import platform
 import re
 import shutil
 
-
 # GLOBAL CONSTANTS
 PROFILING_PLUGIN_PATH = "plugins/external/dive_profiling_plugin"
 PKG_DIR = "pkg"
@@ -38,12 +37,12 @@ HOST_TOOLS_BUILD_NAME = "Host Tools Build"
 
 class ActionType(enum.StrEnum):
     CONFIGURE_HOST = enum.auto()
-    BUILD_HOST = enum.auto()        # separated to make VS builds using the UI easy
+    BUILD_HOST = enum.auto()  # separated to make VS builds using the UI easy
     INSTALL_HOST = enum.auto()
-    ALL_DEVICE = enum.auto()        # configure, build, and install device libraries
-    COPY_PLUGINS = enum.auto()      # copy external plugins into pkg dir
+    ALL_DEVICE = enum.auto()  # configure, build, and install device libraries
+    COPY_PLUGINS = enum.auto()  # copy external plugins into pkg dir
     DEPLOY_QT = enum.auto()
-    PACKAGE = enum.auto()           # removes some extraneous files and packages the release
+    PACKAGE = enum.auto()  # removes some extraneous files and packages the release
 
 
 class BuildType(enum.StrEnum):
@@ -79,84 +78,102 @@ def rmtree_if_exists(path):
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="build_android",
-        description='This script automates the standard build process for Dive',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        description="This script automates the standard build process for Dive",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
         "--actions",
         help="Comma-separated list of actions that this script will perform. "
         "Use --list-actions to check which actions are available. If "
-        "unspecified, then all actions will be performed")
+        "unspecified, then all actions will be performed",
+    )
     parser.add_argument(
         "--archive-dir",
         help="Output directory of the final archive produced by this script. "
-        f"If unspecified, the --root-build-dir will be used")
+        f"If unspecified, the --root-build-dir will be used",
+    )
     parser.add_argument(
         "--archive-name",
         help="Base name (no extension) of the final archive produced by this "
-        f"script. If unspecified, the '{HOST_TOOLS_BUILD_NAME}' version string will be used")
+        f"script. If unspecified, the '{HOST_TOOLS_BUILD_NAME}' version string will be used",
+    )
     parser.add_argument(
         "--build-type",
         type=BuildType,
         default=BuildType.DEBUG,
         choices=[x for x in BuildType],
-        help="Build type for Dive (excluding GFXR gradle build which is always Debug)")
+        help="Build type for Dive (excluding GFXR gradle build which is always Debug)",
+    )
     parser.add_argument(
         "--build-via-generator",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform")
+        help="Perform the build step by invoking the generator rather than cmake, potentially faster on Windows platform",
+    )
     parser.add_argument(
         "--ci",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Build is part of continuous integration")
+        help="Build is part of continuous integration",
+    )
     parser.add_argument(
         "--dive-release-type",
         default="dev",
-        help="Description string for Dive version info")
+        help="Description string for Dive version info",
+    )
     parser.add_argument(
         "--exec-cmake",
         default="cmake",
-        help="The name of the CMake executable on the path")
+        help="The name of the CMake executable on the path",
+    )
     parser.add_argument(
         "--exec-codesign",
         default="codesign",
-        help="The name of the codesign executable on the path (macOS only)")
+        help="The name of the codesign executable on the path (macOS only)",
+    )
     parser.add_argument(
         "--exec-deployqt",
         default=get_default_deployqt(),
-        help="The path to the platform-specific deployqt executable")
+        help="The path to the platform-specific deployqt executable",
+    )
     parser.add_argument(
         "--exec-msbuild",
         default="msbuild",
-        help="The name of the Microsoft Build Engine executable on the path")
+        help="The name of the Microsoft Build Engine executable on the path",
+    )
     parser.add_argument(
         "--exec-ninja",
         default="ninja",
-        help="The name of the ninja executable on the path")
+        help="The name of the ninja executable on the path",
+    )
     parser.add_argument(
         "--host-configure-additional-flags",
         help="String of additional CMake flags to pass directly to cmake in the "
-        "configure_host stage")
+        "configure_host stage",
+    )
     parser.add_argument(
         "--list-actions",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="List all actions this script can perform in the order they will be performed")
+        help="List all actions this script can perform in the order they will be performed",
+    )
     parser.add_argument(
         "--mac-sign",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Sign the macOS app bundle, no-op for other platforms")
+        help="Sign the macOS app bundle, no-op for other platforms",
+    )
     parser.add_argument(
         "--prereq-checks",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Check if prerequisites are located as expected")
+        help="Check if prerequisites are located as expected",
+    )
     parser.add_argument(
         "--root-build-dir",
         default="build",
-        help="The build directory, relative to Dive root directory")
+        help="The build directory, relative to Dive root directory",
+    )
     parser.add_argument(
         "--host-cmake-generator",
         default=get_default_host_cmake_generator(),
@@ -166,24 +183,24 @@ def parse_args():
 
 
 def list_actions():
-    """Lists all of ActionType in the order they would be executed
-    """
+    """Lists all of ActionType in the order they would be executed"""
     print("\nIn order of execution...")
     for i, action in enumerate(ActionType):
         print(f"{i+1}. {action}")
 
 
 def parse_actions(args):
-    """Parses args.actions and changes it in-place into a list of valid ActionType actions
-    """
+    """Parses args.actions and changes it in-place into a list of valid ActionType actions"""
     allowed_actions = [str(x) for x in ActionType]
     actions = []
     if args.actions:
         comma_separated = args.actions.split(",")
         for action in comma_separated:
             if action not in allowed_actions:
-                raise Exception(f"Invalid action specified: '{action}', refer "
-                                "to --list-actions for the valid list OR leave blank to run all")
+                raise Exception(
+                    f"Invalid action specified: '{action}', refer "
+                    "to --list-actions for the valid list OR leave blank to run all"
+                )
             actions.append(action)
     else:
         actions = [x for x in ActionType]
@@ -201,7 +218,9 @@ def check_environment(args):
     """
 
     if args.build_type != BuildType.DEBUG:
-        print("WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type")
+        print(
+            "WARNING: GFXR gradle build is hardcoded to Debug regardless of --build_type"
+        )
 
     if "ANDROID_NDK_HOME" not in os.environ:
         raise Exception("ANDROID_NDK_HOME env var must be set")
@@ -245,8 +264,7 @@ def check_environment(args):
 
 
 def copy_plugins(args):
-    """Implements ActionType.COPY_PLUGINS stage
-    """
+    """Implements ActionType.COPY_PLUGINS stage"""
 
     if not os.path.exists(PROFILING_PLUGIN_PATH):
         print(f"\nDir {PROFILING_PLUGIN_PATH} does not exist, skipping")
@@ -256,7 +274,9 @@ def copy_plugins(args):
     if platform.system() == "Darwin":
         profiling_dest = f"{args.root_build_dir}/{PKG_DIR}/dive.app/Contents/Resources/dive_profiling_plugin"
     else:
-        profiling_dest = f"{args.root_build_dir}/{PKG_DIR}/device/plugins/dive_profiling_plugin"
+        profiling_dest = (
+            f"{args.root_build_dir}/{PKG_DIR}/device/plugins/dive_profiling_plugin"
+        )
     shutil.copytree(PROFILING_PLUGIN_PATH, profiling_dest, dirs_exist_ok=True)
 
 
@@ -281,75 +301,89 @@ def configure_host(args):
 
 
 def build_host(args):
-    """Implementing ActionType.BUILD_HOST stage
-    """
+    """Implementing ActionType.BUILD_HOST stage"""
     if not args.build_via_generator:
         print("\nBuilding host libraries by invoking cmake...")
-        cmd = [args.exec_cmake,
-               "--build", f"{args.root_build_dir}/host",
-               "--config", f"{args.build_type}"
-               ]
+        cmd = [
+            args.exec_cmake,
+            "--build",
+            f"{args.root_build_dir}/host",
+            "--config",
+            f"{args.build_type}",
+        ]
     elif platform.system() in ["Linux", "Darwin"]:
         print("\nBuilding host libraries by invoking Ninja...")
-        cmd = [args.exec_ninja,
-               "-f", f"build-{args.build_type}.ninja",
-               "-C", f"{args.root_build_dir}/host"
-               ]
+        cmd = [
+            args.exec_ninja,
+            "-f",
+            f"build-{args.build_type}.ninja",
+            "-C",
+            f"{args.root_build_dir}/host",
+        ]
     elif platform.system() == "Windows":
         print("\nBuilding host libraries by invoking Visual Studio...")
-        cmd = [args.exec_msbuild, f"{args.root_build_dir}/host/ALL_BUILD.vcxproj",
-               "-maxCpuCount",
-               "-t:Rebuild",
-               f"-p:Configuration={args.build_type}"
-               ]
+        cmd = [
+            args.exec_msbuild,
+            f"{args.root_build_dir}/host/ALL_BUILD.vcxproj",
+            "-maxCpuCount",
+            "-t:Rebuild",
+            f"-p:Configuration={args.build_type}",
+        ]
     else:
         raise Exception(f"Unrecognized platform: {platform.system()}")
     dive.echo_and_run(cmd)
 
 
 def install_host(args):
-    """Implementing ActionType.INSTALL_HOST stage
-    """
+    """Implementing ActionType.INSTALL_HOST stage"""
     # TODO: b/482108095 - This must be done regardless of clean build because
     # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
     rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host")
 
     print("\nInstalling with cmake...")
-    cmd = [args.exec_cmake,
-           "--install", f"{args.root_build_dir}/host",
-           "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
-           "--config", f"{args.build_type}"
-           ]
+    cmd = [
+        args.exec_cmake,
+        "--install",
+        f"{args.root_build_dir}/host",
+        "--prefix",
+        f"{args.root_build_dir}/{PKG_DIR}",
+        "--config",
+        f"{args.build_type}",
+    ]
     dive.echo_and_run(cmd)
 
 
 def all_device(args):
-    """Implementing ActionType.ALL_DEVICE stage
-    """
+    """Implementing ActionType.ALL_DEVICE stage"""
     print("\nGenerating build files with cmake...")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
-    cmd = [args.exec_cmake, ".",
-           f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
-           f"-G{NINJA_MULTI_CONFIG_NAME}",
-           f"-B{args.root_build_dir}/device",
-           "-DCMAKE_SYSTEM_NAME=Android",
-           "-DANDROID_ABI=arm64-v8a",
-           "-DANDROID_PLATFORM=android-26",
-           "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
-           "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
-           f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
-           f"-DDIVE_STR_BUILD={args.root_build_dir}"
-           ]
+    cmd = [
+        args.exec_cmake,
+        ".",
+        f"-DCMAKE_TOOLCHAIN_FILE={android_ndk_home}/build/cmake/android.toolchain.cmake",
+        f"-G{NINJA_MULTI_CONFIG_NAME}",
+        f"-B{args.root_build_dir}/device",
+        "-DCMAKE_SYSTEM_NAME=Android",
+        "-DANDROID_ABI=arm64-v8a",
+        "-DANDROID_PLATFORM=android-26",
+        "-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER",
+        "-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER",
+        f"-DDIVE_RELEASE_TYPE={args.dive_release_type}",
+        f"-DDIVE_STR_BUILD={args.root_build_dir}",
+    ]
     if args.ci:
         cmd.append("-DDIVE_GFXR_GRADLE_CONSOLE=plain")
     dive.echo_and_run(cmd)
 
     print("\nBuilding with ninja...")
-    cmd = [args.exec_ninja,
-           "-C", f"{args.root_build_dir}/device",
-           "-f", f"build-{args.build_type}.ninja"
-           ]
+    cmd = [
+        args.exec_ninja,
+        "-C",
+        f"{args.root_build_dir}/device",
+        "-f",
+        f"build-{args.build_type}.ninja",
+    ]
     dive.echo_and_run(cmd)
 
     # TODO: b/482108095 - This must be done regardless of clean build because
@@ -358,11 +392,15 @@ def all_device(args):
     rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/device")
 
     print("\nInstalling with cmake...")
-    cmd = [args.exec_cmake,
-           "--install", f"{args.root_build_dir}/device",
-           "--prefix", f"{args.root_build_dir}/{PKG_DIR}",
-           "--config", f"{args.build_type}"
-           ]
+    cmd = [
+        args.exec_cmake,
+        "--install",
+        f"{args.root_build_dir}/device",
+        "--prefix",
+        f"{args.root_build_dir}/{PKG_DIR}",
+        "--config",
+        f"{args.build_type}",
+    ]
     dive.echo_and_run(cmd)
 
 
@@ -375,7 +413,9 @@ def deploy_qt(args):
     system_name = platform.system()
     match system_name:
         case "Linux":
-            print("\ndeploy_qt() is a no-op for Linux, it's expected that the users install Qt...")
+            print(
+                "\ndeploy_qt() is a no-op for Linux, it's expected that the users install Qt..."
+            )
 
         case "Darwin":
             print(f"\nDeploying with {args.exec_deployqt}...")
@@ -395,9 +435,10 @@ def deploy_qt(args):
 
         case "Windows":
             print(f"\nDeploying with {args.exec_deployqt}...")
-            cmd = [args.exec_deployqt,
-                f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}"
-                ]
+            cmd = [
+                args.exec_deployqt,
+                f"{args.root_build_dir}/{PKG_DIR}/host/{WINDOWS_QT_DEPENDENCIES_BINARY}",
+            ]
             dive.echo_and_run(cmd)
 
         case _:
@@ -421,6 +462,7 @@ def get_archive_name(args, unparsed_string):
 
     return "dive-" + match_obj.group()
 
+
 def package(args):
     """Implements ActionType.PACKAGE stage, which will package this Dive build
     into a single file that is easy to transfer
@@ -432,12 +474,18 @@ def package(args):
             cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli", "--version"]
 
         case "Darwin":
-            cmd = [f"{args.root_build_dir}/{PKG_DIR}/dive.app/Contents/MacOS/dive_client_cli", "--version"]
+            cmd = [
+                f"{args.root_build_dir}/{PKG_DIR}/dive.app/Contents/MacOS/dive_client_cli",
+                "--version",
+            ]
 
         case "Windows":
             for dir_name in WINDOWS_UNNECESSARY_DIRS:
                 rmtree_if_exists(f"{args.root_build_dir}/{PKG_DIR}/host/{dir_name}")
-            cmd = [f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli.exe", "--version"]
+            cmd = [
+                f"{args.root_build_dir}/{PKG_DIR}/host/dive_client_cli.exe",
+                "--version",
+            ]
 
         case _:
             raise Exception(f"Unrecognized platform: {system_name}")
@@ -449,11 +497,19 @@ def package(args):
 
     match platform.system():
         case "Darwin":
-            dive.echo_and_run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
-                              f"{args.root_build_dir}/{PKG_DIR}/dive.app", f"{archive_name}.zip"])
+            dive.echo_and_run(
+                [
+                    "ditto",
+                    "-c",
+                    "-k",
+                    "--sequesterRsrc",
+                    "--keepParent",
+                    f"{args.root_build_dir}/{PKG_DIR}/dive.app",
+                    f"{archive_name}.zip",
+                ]
+            )
         case _:
-            shutil.make_archive(archive_name, "zip",
-                                f"{args.root_build_dir}/{PKG_DIR}")
+            shutil.make_archive(archive_name, "zip", f"{args.root_build_dir}/{PKG_DIR}")
 
     archive_dir = args.archive_dir
     if not archive_dir:

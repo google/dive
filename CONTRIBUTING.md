@@ -28,6 +28,7 @@ Guidelines](https://opensource.google/conduct/).
 ### Formatting
 - The C++ code in this repository is formatted with LLVM clang-format version 18.1.8
 - The cmake files are formatted with [gersemi](https://pypi.org/project/gersemi/) version 0.23.1
+- The Python files are formatted with [black](https://github.com/psf/black)
 
 #### Setup clang-format on Linux
 
@@ -52,9 +53,14 @@ Follow instructions [here](https://pypi.org/project/gersemi/) to use pip to inst
 There is a lint github action that will run clang-format on all source code in the project, and another one that runs the format_cmake scripts with gersemi.
 
 ### Code style
-- `CamelCase` for class and function names. The exception is overriding methods, like Qt, where adopting their naming convention is required.
-- `snake_case` for variable names.
-- Prefix class member variables with `m_`
+- C++ code follows [Google C++ Style Guide], except
+  - `CamelCase` for class and function names. The exception is overriding methods, like Qt, where adopting their naming convention is required.
+  - `snake_case` for variable names.
+  - Prefix class member variables with `m_`
+- Python code follows [Google Python Style Guide]
+
+[Google C++ Style Guide]: https://google.github.io/styleguide/cppguide.html
+[Google Python Style Guide]: https://google.github.io/styleguide/pyguide.html
 
 ### Code Reviews
 

@@ -60,12 +60,11 @@ jobs:
       - name: Build Dive device libraries with ninja
         run: |
           python -u scripts/build.py \
-            --actions all_device \
+            --action all_device \
             --build-type ${INPUTS_BUILD_TYPE} \
             --ci \
-            --host-configure-additional-flags "\
-              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+            --host-configure-flag=-DCMAKE_C_COMPILER_LAUNCHER=ccache\
+            --host-configure-flag=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           INPUTS_BUILD_TYPE: ${{ inputs.build_type }}

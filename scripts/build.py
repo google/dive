@@ -161,7 +161,7 @@ def parse_args():
         action="append",
         default=[],
         help="String of additional CMake flags to pass directly to cmake in the "
-        "configure_host stage",
+        "configure_host action",
     )
     parser.add_argument(
         "--host-configure-additional-flags", default="", help="Deprecated"
@@ -259,7 +259,7 @@ def check_environment(args):
 
 
 def copy_plugins(args):
-    """Implements COPY_PLUGINS stage"""
+    """Implements COPY_PLUGINS action"""
 
     if not os.path.exists(PROFILING_PLUGIN_PATH):
         print(f"\nDir {PROFILING_PLUGIN_PATH} does not exist, skipping")
@@ -276,7 +276,7 @@ def copy_plugins(args):
 
 
 def configure_host(args):
-    """Implements CONFIGURE_HOST stage, uses cmake to generate
+    """Implements CONFIGURE_HOST action, uses cmake to generate
     build files targeting the host
     """
     print("\nGenerating build files with cmake...")
@@ -294,7 +294,7 @@ def configure_host(args):
 
 
 def build_host(args):
-    """Implementing BUILD_HOST stage"""
+    """Implementing BUILD_HOST action"""
     if not args.build_via_generator:
         print("\nBuilding host libraries by invoking cmake...")
         cmd = [
@@ -332,7 +332,7 @@ def build_host(args):
 
 
 def install_host(args):
-    """Implementing INSTALL_HOST stage"""
+    """Implementing INSTALL_HOST action"""
     # TODO: b/482108095 - This must be done regardless of clean build because
     # install folders are re-used between different build types and the
     # timestamps could affect whether files within are correctly replaced or not
@@ -352,7 +352,7 @@ def install_host(args):
 
 
 def all_device(args):
-    """Implementing ALL_DEVICE stage"""
+    """Implementing ALL_DEVICE action"""
     print("\nGenerating build files with cmake...")
     android_ndk_home = os.environ["ANDROID_NDK_HOME"]
     cmd = [
@@ -402,7 +402,7 @@ def all_device(args):
 
 
 def deploy_qt(args):
-    """Implements DEPLOY_QT stage, which uses a QT tool to add QT
+    """Implements DEPLOY_QT action, which uses a QT tool to add QT
     libraries to the same dir as the binary that depends on them in preparation
     for packaging and distribution
     """
@@ -461,7 +461,7 @@ def get_archive_name(args, unparsed_string):
 
 
 def package(args):
-    """Implements PACKAGE stage, which will package this Dive build
+    """Implements PACKAGE action, which will package this Dive build
     into a single file that is easy to transfer
     """
     # TODO: b/504654590 - Investigate if there's a way to identify extraneous files

@@ -85,7 +85,7 @@ namespace Dive
 int GetIndentation(const std::string& line)
 {
     int indention = 0;
-    for (int i = 0; i < line.size(); i++)
+    for (int i = 0; i < static_cast<int>(line.size()); i++)
     {
         if (line[i] == ' ')
         {

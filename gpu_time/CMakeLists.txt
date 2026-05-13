@@ -18,6 +18,9 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 # Since this might be included from GFXR build, ensure Vulkan::Headers is defined
 include(../cmake/vulkan.cmake)
 
+include(../cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
+
 add_library(
     gpu_time
     STATIC

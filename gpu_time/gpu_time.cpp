@@ -289,7 +289,7 @@ std::string GPUTime::GetStatsString() const
     const Stats stats = m_metrics.GetFrameTimeStats();
     std::stringstream ss;
     ss << "FrameMetrics:\n";
-    
+
     PopulateStatsString(ss, stats, 0);
 
     size_t renderpass_index = 0;

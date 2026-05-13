@@ -32,6 +32,7 @@ function(enable_dive_compiler_warnings)
             /wd4324 # "structure was padded" caused by Abseil flags
             /w44062 # require exhastive switches
         )
+        add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     else()
         add_compile_options(
             -Werror

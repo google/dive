@@ -173,11 +173,10 @@ add_library(
 
 target_link_libraries(
     dive_gui_lib
-    PUBLIC Qt5::Widgets
+    PUBLIC Qt5::Widgets device_mgr
     PRIVATE
         dive_core
         dive_lib_os
-        device_mgr
         absl::span
         absl::status
         absl::statusor

@@ -21,7 +21,7 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "capture_service/capture_service_export.h"
+#include "capture_service_export.h"
 
 namespace Dive
 {

@@ -26,7 +26,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "android_application.h"
-#include "capture_service/capture_service_export.h"
+#include "capture_service_export.h"
 #include "constants.h"
 #include "dive/os/command_utils.h"
 #include "dive/utils/device_resources_constants.h"

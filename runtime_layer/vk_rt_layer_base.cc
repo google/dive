@@ -887,7 +887,7 @@ extern "C"
     }
 
     VKAPI_ATTR VkResult VKAPI_CALL DiveInterceptEnumerateDeviceLayerProperties(
-        VkPhysicalDevice physicalDevice, uint32_t* pPropertyCount, VkLayerProperties* pProperties)
+        VkPhysicalDevice /*physicalDevice*/, uint32_t* pPropertyCount, VkLayerProperties* pProperties)
     {
         LOGI("DiveInterceptEnumerateDeviceLayerProperties");
         return DiveInterceptEnumerateInstanceLayerProperties(pPropertyCount, pProperties);

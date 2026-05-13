@@ -195,7 +195,7 @@ LoadFileResult CaptureFileManager::LoadFileFailed(
         .status = status, .reference = request.reference, .components = request.components};
 }
 
-LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& context,
+LoadFileResult CaptureFileManager::LoadFileImpl(const Dive::Context& /*context*/,
                                                 const LoadFileRequest& request)
 {
     const auto& components = request.components;

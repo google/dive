@@ -280,16 +280,16 @@ size_t GPUTime::FrameMetrics::GetCmdRenderPassCount(size_t index) const
 std::string GPUTime::GetStatsString() const
 {
     absl::MutexLock lock(&m_mutex);
-    const Stats stats = m_metrics.GetFrameTimeStats();
+    const Stats frame_stats = m_metrics.GetFrameTimeStats();
     std::stringstream ss;
     ss << "FrameMetrics:\n";
 
-    auto PopulateStatsString = [&](std::stringstream& ss, const Stats& stats, int nLevel) {
+    auto PopulateStatsString = [&ss](const Stats& stats, int nLevel) {
         std::string indent(nLevel, '\t');
         ss << std::fixed << std::setprecision(2) << indent << "  Mean: " << stats.average << " ms\n"
            << indent << "  Median: " << stats.median << " ms\n";
     };
-    PopulateStatsString(ss, stats, 0);
+    PopulateStatsString(frame_stats, 0);
 
     size_t renderpass_index = 0;
     ss << "Command Buffer Metrics:\n";
@@ -298,14 +298,14 @@ std::string GPUTime::GetStatsString() const
     {
         const Stats cmd_stats = m_metrics.GetFrameCmdTimeStats(i);
         ss << "\tCommandBuffer" << i << ": \n";
-        PopulateStatsString(ss, cmd_stats, 1);
+        PopulateStatsString(cmd_stats, 1);
 
         size_t renderpass_count = m_metrics.GetCmdRenderPassCount(i);
         for (size_t j = 0; j < renderpass_count; ++j)
         {
             const Stats renderpass_stats = m_metrics.GetFrameRenderPassTimeStats(renderpass_index);
             ss << "\t\tRenderPass" << renderpass_index << ": \n";
-            PopulateStatsString(ss, renderpass_stats, 2);
+            PopulateStatsString(renderpass_stats, 2);
             renderpass_index++;
         }
     }

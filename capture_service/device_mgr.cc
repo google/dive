@@ -1128,13 +1128,12 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
 
     LOG(INFO) << "RunReplayApk(): Attempt to pin GPU clock frequency";
     bool trouble_pinning_clock = false;
-    auto ret = adb.Run("shell setprop compositor.high_priority 0");
-    if (!ret.ok())
+    if (auto ret = adb.Run("shell setprop compositor.high_priority 0"); !ret.ok())
     {
         LOG(WARNING) << "Could not disable the compositor preemption: " << ret.message();
         trouble_pinning_clock = true;
     }
-    absl::Cleanup enable_compositor_preemption = [this, &adb] {
+    absl::Cleanup enable_compositor_preemption = [&adb] {
         absl::Status ret = adb.Run("shell setprop compositor.high_priority 1");
         if (!ret.ok())
         {
@@ -1144,8 +1143,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
 
     if (!trouble_pinning_clock)
     {
-        ret = m_device->PinGpuClock(kPinGpuClockMHz);
-        if (!ret.ok())
+        if (auto ret = m_device->PinGpuClock(kPinGpuClockMHz); !ret.ok())
         {
             LOG(WARNING) << "Could not pin GPU clock: " << ret.message();
             trouble_pinning_clock = true;

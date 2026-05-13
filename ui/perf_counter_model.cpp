@@ -99,7 +99,7 @@ QModelIndex PerfCounterModel::index(int row, int column, const QModelIndex& pare
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex PerfCounterModel::parent(const QModelIndex& index) const { return QModelIndex(); }
+QModelIndex PerfCounterModel::parent(const QModelIndex& /*index*/) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int PerfCounterModel::rowCount(const QModelIndex& parent) const
@@ -112,7 +112,7 @@ int PerfCounterModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int PerfCounterModel::columnCount(const QModelIndex& parent) const
+int PerfCounterModel::columnCount(const QModelIndex& /*parent*/) const
 {
     return static_cast<int>(m_headers.size());
 }

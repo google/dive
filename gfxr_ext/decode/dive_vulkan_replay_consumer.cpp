@@ -952,7 +952,7 @@ void DiveVulkanReplayConsumer::Process_vkDestroyBufferView(
     VulkanReplayConsumer::Process_vkDestroyBufferView(call_info, device, bufferView, pAllocator);
 }
 
-void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
+void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t /*frame_number*/)
 {
     gpu_time_.ClearFrameCache();
     setup_finished_ = true;
@@ -967,7 +967,7 @@ void DiveVulkanReplayConsumer::ProcessStateEndMarker(uint64_t frame_number)
     }
 }
 
-void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t frame_number)
+void DiveVulkanReplayConsumer::ProcessFrameEndMarker(uint64_t /*frame_number*/)
 {
     std::vector<VkFence> reset_fence_list = {};
 

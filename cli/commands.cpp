@@ -104,7 +104,7 @@ int HelpCommand::operator()(int argc, int at, char** argv) const
     return (at + 1 == argc ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
-int HelpCommand::Help(int argc, int at, char** argv) const
+int HelpCommand::Help(int /*argc*/, int /*at*/, char** argv) const
 {
     std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName() << " [command]" << std::endl;
     return EXIT_SUCCESS;
@@ -123,14 +123,14 @@ struct VersionCommand : Command
 
 VersionCommand::VersionCommand() : Command("version", kNormal) {}
 
-int VersionCommand::operator()(int argc, int at, char** argv) const
+int VersionCommand::operator()(int /*argc*/, int /*at*/, char** /*argv*/) const
 {
     std::cout << "DiveCLI " << Dive::GetHostShortVersionString() << std::endl;
     std::cout << "Capture Format: v" << Dive::cli::FileFormatVersion() << std::endl;
     return EXIT_SUCCESS;
 }
 
-int VersionCommand::Help(int argc, int at, char** argv) const
+int VersionCommand::Help(int /*argc*/, int /*at*/, char** argv) const
 {
     std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName() << std::endl;
     return EXIT_SUCCESS;
@@ -190,7 +190,7 @@ int ExtractCommand::operator()(int argc, int at, char** argv) const
     return EXIT_FAILURE;
 }
 
-int ExtractCommand::Help(int argc, int at, char** argv) const
+int ExtractCommand::Help(int /*argc*/, int /*at*/, char** argv) const
 {
     std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName() << " [-o <dir>] <.dive>"
               << std::endl;
@@ -221,7 +221,7 @@ int PacketCommand::operator()(int argc, int at, char** argv) const
     return PrintPacketHeader(argv[at + 1]);
 }
 
-int PacketCommand::Help(int argc, int at, char** argv) const
+int PacketCommand::Help(int /*argc*/, int /*at*/, char** argv) const
 {
     std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName() << " <packet_header_in_hex>"
               << std::endl;
@@ -267,7 +267,7 @@ int InfoCommand::operator()(int argc, int at, char** argv) const
     return (res_type != EXIT_SUCCESS ? res_type : res_block);
 }
 
-int InfoCommand::Help(int argc, int at, char** argv) const
+int InfoCommand::Help(int /*argc*/, int /*at*/, char** argv) const
 {
     std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName() << " <filename.dive>"
               << std::endl;
@@ -369,7 +369,7 @@ int RawPM4Command::operator()(int argc, int at, char** argv) const
     return EXIT_SUCCESS;
 }
 
-int RawPM4Command::Help(int argc, int at, char** argv) const
+int RawPM4Command::Help(int /*argc*/, int /*at*/, char** argv) const
 {
     std::cout << "usage: " << ProgramName(argv[0]) << " " << GetName() << " <gfx|dma> <data.bin>"
               << std::endl;

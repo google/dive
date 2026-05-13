@@ -59,7 +59,7 @@ QModelIndex ViewportStatsModel::index(int row, int column, const QModelIndex& pa
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex ViewportStatsModel::parent(const QModelIndex& index) const { return QModelIndex(); }
+QModelIndex ViewportStatsModel::parent(const QModelIndex& /*index*/) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int ViewportStatsModel::rowCount(const QModelIndex& parent) const
@@ -72,7 +72,7 @@ int ViewportStatsModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int ViewportStatsModel::columnCount(const QModelIndex& parent) const { return m_headers.size(); }
+int ViewportStatsModel::columnCount(const QModelIndex& /*parent*/) const { return m_headers.size(); }
 
 //--------------------------------------------------------------------------------------------------
 QVariant ViewportStatsModel::data(const QModelIndex& index, int role) const

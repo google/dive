@@ -18,7 +18,7 @@ limitations under the License.
 
 #include "dive/log/log.h"
 
-int main(int argc, char** argv)
+int main(int /*argc*/, char** /*argv*/)
 {
     Dive::AbslLogger absl_logger = {};
     absl_logger.Init("dive_server");

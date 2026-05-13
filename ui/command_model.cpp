@@ -172,7 +172,7 @@ int CommandModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandModel::columnCount(const QModelIndex& parent) const
+int CommandModel::columnCount(const QModelIndex& /*parent*/) const
 {
     if (m_topology_ptr == &m_command_hierarchy.GetAllEventHierarchyTopology()) return 2;
     return 1;
@@ -188,21 +188,21 @@ QModelIndex CommandModel::findNode(uint64_t node_index) const
 }
 
 //--------------------------------------------------------------------------------------------------
-QVariant CommandModel::GetNodeUIId(uint64_t node_index,
-                                   const Dive::CommandHierarchy& command_hierarchy,
-                                   const Dive::SharedNodeTopology* topology_ptr)
+QVariant CommandModel::GetNodeUIId(uint64_t /*node_index*/,
+                                   const Dive::CommandHierarchy& /*command_hierarchy*/,
+                                   const Dive::SharedNodeTopology* /*topology_ptr*/)
 {
     return QVariant();
 }
 
 //--------------------------------------------------------------------------------------------------
-bool CommandModel::EventNodeHasMarker(uint64_t node_index) const { return false; }
+bool CommandModel::EventNodeHasMarker(uint64_t /*node_index*/) const { return false; }
 
 //--------------------------------------------------------------------------------------------------
-char CommandModel::GetEventNodeStream(uint64_t node_index) const { return '\0'; }
+char CommandModel::GetEventNodeStream(uint64_t /*node_index*/) const { return '\0'; }
 
 //--------------------------------------------------------------------------------------------------
-uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t node_index) const { return UINT32_MAX; }
+uint32_t CommandModel::GetEventNodeIndexInStream(uint64_t /*node_index*/) const { return UINT32_MAX; }
 
 //--------------------------------------------------------------------------------------------------
 void CommandModel::BuildNodeLookup(const QModelIndex& parent) const

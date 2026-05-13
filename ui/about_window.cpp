@@ -38,7 +38,7 @@
 // AboutDialog
 // =================================================================================================
 
-AboutDialog::AboutDialog(QWidget* parent)
+AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent)
 {
     auto main_layout = new QVBoxLayout;
     if (auto layout = CreateHeaderLayout())

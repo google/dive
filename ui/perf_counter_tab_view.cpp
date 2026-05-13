@@ -314,7 +314,7 @@ void PerfCounterTabView::ResizeColumns()
 }
 
 //--------------------------------------------------------------------------------------------------
-void PerfCounterTabView::OnSortApplied(int column_index)
+void PerfCounterTabView::OnSortApplied(int /*column_index*/)
 {
     QItemSelectionModel* selection_model = m_perf_counter_view->selectionModel();
     if (!selection_model)

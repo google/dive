@@ -608,7 +608,7 @@ void MainWindow::OnTraceAvailable(const QString& path)
 {
     qDebug() << "Trace is at " << path;
     // Figure out what do we do if we get repeated trigger of LoadFile before async call is done.
-    LoadFile(path.toStdString().c_str(), /*is_temp_file*/ true, /*async*/ false);
+    LoadFile(path.toStdString().c_str(), /*is_temp_file=*/true);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -959,7 +959,7 @@ void MainWindow::OnTraceStatsUpdated()
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file, bool async)
+bool MainWindow::LoadFile(const std::string& file_name, bool is_temp_file)
 {
     bool release_capture = m_capture_acquired;
     m_capture_acquired = false;
@@ -1208,7 +1208,7 @@ void MainWindow::OnOpenFile()
 // =================================================================================================
 // OnNormalCapture is triggered for captures without counters.
 // =================================================================================================
-void MainWindow::OnNormalCapture() { emit OnCapture(false); }
+void MainWindow::OnNormalCapture() { emit OnCapture(); }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAnalyzeCapture()
@@ -1245,13 +1245,13 @@ void MainWindow::OnCaptureTrigger()
     if (ok)
     {
         uint32_t capture_delay = input_dialog.intValue();
-        QTimer::singleShot(capture_delay * 1000, this, SLOT(OnCapture(true)));
+        QTimer::singleShot(capture_delay * 1000, this, SLOT(OnCapture()));
         Settings::Get()->WriteCaptureDelay(capture_delay);
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-void MainWindow::OnCapture(bool is_capture_delayed)
+void MainWindow::OnCapture()
 {
     m_trace_dig->UpdateDeviceList();
     m_trace_dig->show();
@@ -2445,7 +2445,7 @@ void MainWindow::OnCaptureUpdated(const QString& file_path)
 {
     const std::string file_path_std_str = file_path.toStdString();
     const char* file_path_str = file_path_std_str.c_str();
-    if (!LoadFile(file_path_str, /*is_temp_file*/ false, /*async*/ true))
+    if (!LoadFile(file_path_str, /*is_temp_file=*/false))
     {
         return;
     }

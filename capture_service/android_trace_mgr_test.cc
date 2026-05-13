@@ -24,8 +24,8 @@ limitations under the License.
 // In the future, we might be able to use them to assert state.
 extern "C"
 {
-    void SetCaptureState(int state) {}
-    void SetCaptureName(const char* name, const char* frame_num) {}
+    void SetCaptureState(int /*state*/) {}
+    void SetCaptureName(const char* /*name*/, const char* /*frame_num*/) {}
 }
 
 namespace Dive

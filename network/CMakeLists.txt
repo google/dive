@@ -17,7 +17,8 @@
 message(CHECK_START "Generate build files for network")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
-project(network)
+include(${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
 
 set(NETWORK_SRCS
     socket_connection.cc

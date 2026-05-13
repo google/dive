@@ -214,7 +214,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     // Connect the name list's selection change to a lambda
     QObject::connect(
         m_metrics_list, &QListWidget::currentItemChanged,
-        [&](QListWidgetItem* current, QListWidgetItem* previous) {
+        [&](QListWidgetItem* current, QListWidgetItem* /*previous*/) {
             if (current)
             {
                 int index = m_metrics_list->row(current);
@@ -225,7 +225,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
             }
         });
 
-    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem* item) {
+    QObject::connect(m_metrics_list, &QListWidget::itemChanged, [&](QListWidgetItem* /*item*/) {
         // This code will execute whenever an item's state changes
         // It will refresh the second list of selected items
         UpdateSelectedMetricsList();

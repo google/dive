@@ -606,8 +606,8 @@ void WhatIfConfigureDialog::OnAddModificationClicked()
 }
 
 //--------------------------------------------------------------------------------------------------
-void WhatIfConfigureDialog::OnItemCheckStateChanged(const QModelIndex& topLeft,
-                                                    const QModelIndex& bottomRight,
+void WhatIfConfigureDialog::OnItemCheckStateChanged(const QModelIndex& /*topLeft*/,
+                                                    const QModelIndex& /*bottomRight*/,
                                                     const QVector<int>& roles)
 {
     if (roles.isEmpty() || roles.contains(Qt::CheckStateRole))

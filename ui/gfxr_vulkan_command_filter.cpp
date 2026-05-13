@@ -35,7 +35,7 @@ static constexpr GfxrVulkanCommandFilterProxyModel::FilterMode kDefaultGfxrVulka
 GfxrVulkanCommandFilter::GfxrVulkanCommandFilter(DiveTreeView& command_hierarchy_view,
                                                  GfxrVulkanCommandFilterProxyModel& proxy_model,
                                                  QWidget* parent)
-    : m_command_hierarchy_view(command_hierarchy_view), m_proxy_Model(proxy_model)
+    : TreeViewComboBox(parent), m_command_hierarchy_view(command_hierarchy_view), m_proxy_Model(proxy_model)
 {
     // Set model for the gfxr command filter combo box
     QStandardItemModel* gfxr_command_filter_combo_box_model = new QStandardItemModel();

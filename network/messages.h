@@ -91,8 +91,8 @@ class HandshakeMessage : public ISerializable
 class EmptyMessage : public ISerializable
 {
  public:
-    absl::Status Serialize(Buffer& dest) const override { return Dive::OkStatus(); }
-    absl::Status Deserialize(const Buffer& src) override { return Dive::OkStatus(); }
+    absl::Status Serialize(Buffer& /*dest*/) const override { return Dive::OkStatus(); }
+    absl::Status Deserialize(const Buffer& /*src*/) override { return Dive::OkStatus(); }
 };
 
 class StringMessage : public ISerializable

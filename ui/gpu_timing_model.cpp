@@ -59,7 +59,7 @@ QModelIndex GpuTimingModel::index(int row, int column, const QModelIndex& parent
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex GpuTimingModel::parent(const QModelIndex& index) const { return QModelIndex(); }
+QModelIndex GpuTimingModel::parent(const QModelIndex& /*index*/) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int GpuTimingModel::rowCount(const QModelIndex& parent) const
@@ -76,7 +76,7 @@ int GpuTimingModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int GpuTimingModel::columnCount(const QModelIndex& parent) const
+int GpuTimingModel::columnCount(const QModelIndex& /*parent*/) const
 {
     return m_available_gpu_timing_data.GetColumns();
 }

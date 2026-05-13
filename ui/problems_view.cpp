@@ -164,7 +164,7 @@ void ProblemsView::OnProblemSelectionChanged()
 }
 
 //--------------------------------------------------------------------------------------------------
-void ProblemsView::OnProblemItemHover(QTreeWidgetItem* item_ptr, int column)
+void ProblemsView::OnProblemItemHover(QTreeWidgetItem* item_ptr, int /*column*/)
 {
     ProblemWidgetItem* problem_item_ptr = (ProblemWidgetItem*)item_ptr;
     HoverHelp* hover_help_ptr = HoverHelp::Get();
@@ -173,7 +173,7 @@ void ProblemsView::OnProblemItemHover(QTreeWidgetItem* item_ptr, int column)
 }
 
 //--------------------------------------------------------------------------------------------------
-void ProblemsView::leaveEvent(QEvent* event)
+void ProblemsView::leaveEvent(QEvent* /*event*/)
 {
     HoverHelp* hover_help_ptr = HoverHelp::Get();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);

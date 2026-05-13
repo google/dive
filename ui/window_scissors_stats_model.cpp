@@ -59,7 +59,7 @@ QModelIndex WindowScissorsStatsModel::index(int row, int column, const QModelInd
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex WindowScissorsStatsModel::parent(const QModelIndex& index) const
+QModelIndex WindowScissorsStatsModel::parent(const QModelIndex& /*index*/) const
 {
     return QModelIndex();
 }
@@ -75,7 +75,7 @@ int WindowScissorsStatsModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int WindowScissorsStatsModel::columnCount(const QModelIndex& parent) const
+int WindowScissorsStatsModel::columnCount(const QModelIndex& /*parent*/) const
 {
     return m_column_count;
 }

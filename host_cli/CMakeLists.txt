@@ -21,15 +21,11 @@ if(ANDROID)
 endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
-set(CMAKE_CXX_STANDARD 20)
-
-if(MSVC)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-endif()
-
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+include(${PROJECT_SOURCE_DIR}/cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
 
 # ---------------------
 # data_core_wrapper_lib

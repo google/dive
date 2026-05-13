@@ -20,13 +20,13 @@
 #include <memory>
 #include <unordered_map>
 
+#include "decode/api_decoder.h"
+#include "decode/struct_pointer_decoder.h"
 #include "dump_entry.h"
+#include "format/format.h"
+#include "generated/generated_vulkan_consumer.h"
+#include "generated/generated_vulkan_struct_decoders.h"
 #include "state_machine.h"
-#include "third_party/gfxreconstruct/framework/decode/api_decoder.h"
-#include "third_party/gfxreconstruct/framework/decode/struct_pointer_decoder.h"
-#include "third_party/gfxreconstruct/framework/format/format.h"
-#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_consumer.h"
-#include "third_party/gfxreconstruct/framework/generated/generated_vulkan_struct_decoders.h"
 
 namespace Dive::gfxr
 {

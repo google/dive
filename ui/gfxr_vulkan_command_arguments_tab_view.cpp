@@ -39,7 +39,7 @@ GfxrVulkanCommandArgumentsTabView::GfxrVulkanCommandArgumentsTabView(
     const Dive::CommandHierarchy& vulkan_command_hierarchy,
     GfxrVulkanCommandArgumentsFilterProxyModel* proxy_model,
     GfxrVulkanCommandModel* command_hierarchy_model, QWidget* parent)
-    : m_vulkan_command_hierarchy(vulkan_command_hierarchy),
+    : QFrame(parent), m_vulkan_command_hierarchy(vulkan_command_hierarchy),
       m_arg_proxy_model(proxy_model),
       m_command_hierarchy_model(command_hierarchy_model)
 {

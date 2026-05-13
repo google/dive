@@ -219,7 +219,7 @@ void MostExpensiveEventsView::OnCustomContextMenuRequested(QPoint pos)
 }
 
 //--------------------------------------------------------------------------------------------------
-void MostExpensiveEventsView::leaveEvent(QEvent* event)
+void MostExpensiveEventsView::leaveEvent(QEvent* /*event*/)
 {
     HoverHelp* hover_help_ptr = HoverHelp::Get();
     hover_help_ptr->SetCurItem(HoverHelp::Item::kNone);

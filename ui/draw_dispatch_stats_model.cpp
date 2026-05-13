@@ -102,7 +102,7 @@ QModelIndex DrawDispatchStatsModel::index(int row, int column, const QModelIndex
 }
 
 //--------------------------------------------------------------------------------------------------
-QModelIndex DrawDispatchStatsModel::parent(const QModelIndex& index) const { return QModelIndex(); }
+QModelIndex DrawDispatchStatsModel::parent(const QModelIndex& /*index*/) const { return QModelIndex(); }
 
 //--------------------------------------------------------------------------------------------------
 int DrawDispatchStatsModel::rowCount(const QModelIndex& parent) const
@@ -115,7 +115,7 @@ int DrawDispatchStatsModel::rowCount(const QModelIndex& parent) const
 }
 
 //--------------------------------------------------------------------------------------------------
-int DrawDispatchStatsModel::columnCount(const QModelIndex& parent) const
+int DrawDispatchStatsModel::columnCount(const QModelIndex& /*parent*/) const
 {
     return m_headers.size();
 }

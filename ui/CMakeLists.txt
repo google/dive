@@ -38,28 +38,8 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 20)
 
-if(MSVC)
-    # TOOD: b/509938195 - Remove /wd4100 after problems are fixed
-    add_compile_options(
-        /WX
-        /W4
-        /w44456 # warn if local shadows previous local
-        /w44457 # warn if local shadows function parameter
-        /w44458 # warn if local shadows class member
-        /w44459 # warn if local shadows global variable
-        /wd4201 # adreno.h uses non-standard nameless struct/union
-        /wd4100 # emulate_pm4.h has unreferenced parameters
-        /wd4127 # "conditional expression is constant" caused by Abseil
-        /wd4324 # "structure was padded" caused by Abseil flags
-    )
-else()
-    add_compile_options(
-        -Werror
-        -Wall
-        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wshadow-all>
-        $<$<CXX_COMPILER_ID:GNU>:-Wshadow>
-    )
-endif()
+include(${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
 
 # Find the QtWidgets and QtSvg libraries
 find_package(Qt5 COMPONENTS Widgets Svg REQUIRED)

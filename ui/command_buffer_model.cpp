@@ -68,7 +68,7 @@ void CommandBufferModel::SetTopologyToView(const Dive::SharedNodeTopology* topol
 }
 
 //--------------------------------------------------------------------------------------------------
-int CommandBufferModel::columnCount(const QModelIndex& parent) const { return kColumnCount; }
+int CommandBufferModel::columnCount(const QModelIndex& /*parent*/) const { return kColumnCount; }
 
 //--------------------------------------------------------------------------------------------------
 QModelIndex CommandBufferModel::scrollToIndex() const { return m_scroll_to_index; }

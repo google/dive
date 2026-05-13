@@ -279,16 +279,17 @@ size_t GPUTime::FrameMetrics::GetCmdRenderPassCount(size_t index) const
 
 std::string GPUTime::GetStatsString() const
 {
+    auto PopulateStatsString = [](std::stringstream& ss, const Stats& stats, int nLevel) {
+        std::string indent(nLevel, '\t');
+        ss << std::fixed << std::setprecision(2) << indent << "  Mean: " << stats.average << " ms\n"
+           << indent << "  Median: " << stats.median << " ms\n";
+    };
+
     absl::MutexLock lock(&m_mutex);
     const Stats stats = m_metrics.GetFrameTimeStats();
     std::stringstream ss;
     ss << "FrameMetrics:\n";
 
-    auto PopulateStatsString = [&](std::stringstream& ss, const Stats& stats, int nLevel) {
-        std::string indent(nLevel, '\t');
-        ss << std::fixed << std::setprecision(2) << indent << "  Mean: " << stats.average << " ms\n"
-           << indent << "  Median: " << stats.median << " ms\n";
-    };
     PopulateStatsString(ss, stats, 0);
 
     size_t renderpass_index = 0;

@@ -23,11 +23,11 @@ limitations under the License.
 #include "absl/status/statusor.h"
 
 // StatusOr Macros simplified from protobuf/stubs/status_macros.h
-#define RETURN_IF_ERROR(expr)               \
-    do                                      \
-    {                                       \
-        const absl::Status status = (expr); \
-        if (!status.ok()) return status;    \
+#define RETURN_IF_ERROR(expr)                                            \
+    do                                                                   \
+    {                                                                    \
+        const absl::Status return_if_error_status = (expr);              \
+        if (!return_if_error_status.ok()) return return_if_error_status; \
     } while (0)
 
 template <typename T>

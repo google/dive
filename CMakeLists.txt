@@ -276,7 +276,7 @@ endif()
 
 message(CHECK_START "Generate build files for third_party/abseil-cpp")
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
-add_subdirectory(third_party/abseil-cpp)
+add_subdirectory(third_party/abseil-cpp SYSTEM)
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")
 

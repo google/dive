@@ -21,6 +21,9 @@ if(ANDROID)
 endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
+include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
+enable_dive_compiler_warnings()
+
 # For each new plugin, you can add an add_subdirectory call here.
 add_subdirectory(plugin_sample)
 

@@ -28,11 +28,11 @@ namespace
 {
 #if defined(__APPLE__)
 constexpr std::string_view kPluginMessage =
-    "All plugin dynamic libraries need to be put into 'Contents/PlugIns/dive_plugins' "
-    "subdirectory.";
+    "All plugin .so(s) need to be put into 'Contents/PlugIns/dive_plugins' subdirectory.";
 #else
 constexpr std::string_view kPluginMessage =
-    "All plugin dynamic libraries need to be put into 'plugins' subdirectory.";
+    "All plugin .dll(s)/.so(s) need to be put into 'plugins' subdirectory longside the dive_ui "
+    "executable.";
 #endif
 }  // namespace
 
@@ -79,9 +79,7 @@ void PluginSample::OnPluginSampleActionTriggered()
 {
     QMessageBox::information(
         nullptr, QString::fromStdString("Plugin Info"),
-        QString::fromStdString(
-            "All plugin .dll(s)/.so(s) need to be put into 'plugins' subdirectory "
-            "alongside the dive_ui executable."));
+        QString::fromUtf8(kPluginMessage.data(), static_cast<int>(kPluginMessage.size())));
 }
 
 // This function must be exported from the shared library.

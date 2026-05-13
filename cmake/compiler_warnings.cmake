@@ -39,6 +39,12 @@ function(enable_dive_compiler_warnings)
             $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wshadow-all>
             $<$<CXX_COMPILER_ID:GNU>:-Wshadow>
             -Wswitch
+            -Wextra
+            # TODO: b/509938195 - Rmeove -Wno-unused-parameter when problems are fixed
+            -Wno-unused-parameter
+            # -Wmissing-field-initializers fights with readability-redundant-member-init.
+            # Rely on clang-tidy to catch the important ommissions.
+            -Wno-missing-field-initializers
         )
     endif()
 endfunction()

@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <vulkan/vulkan_core.h>
 
 namespace Dive
 {
@@ -419,7 +420,7 @@ TEST(GPUTimeTest, BeginCommandBufferForUnknownCmdDoesNotCrash)
     gpu_time.SetEnable(true);
     ASSERT_NO_FATAL_FAILURE(CreateGPUTime(gpu_time, kMockTimestampPeriod));
 
-    VkCommandBuffer unknown_cmd = reinterpret_cast<VkCommandBuffer>(0xdeadbeef);
+    MOCK_HANDLE(VkCommandBuffer, unknown_cmd, 0xdeadbeef);
 
     // This should return success (meaning it handled it gracefully) or at least not crash.
     // This is a legitimate case for secondary command buffers

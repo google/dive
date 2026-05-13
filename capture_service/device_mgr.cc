@@ -1133,7 +1133,7 @@ absl::Status DeviceManager::RunReplayApk(const GfxrReplaySettings& settings) con
         LOG(WARNING) << "Could not disable the compositor preemption: " << ret.message();
         trouble_pinning_clock = true;
     }
-    absl::Cleanup enable_compositor_preemption = [this, &adb] {
+    absl::Cleanup enable_compositor_preemption = [&adb] {
         if (absl::Status ret = adb.Run("shell setprop compositor.high_priority 1"); !ret.ok())
         {
             LOG(WARNING) << "Could not re-enable the compositor preemption: " << ret.message();

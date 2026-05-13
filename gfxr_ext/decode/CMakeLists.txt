@@ -94,7 +94,7 @@ target_link_libraries(
 )
 # gfxr_util has a psapi dependency on Windows. Ideally, gfxr_util should declare this dependency in their CMakeLists.txt
 if(WIN32)
-    target_link_libraries(gfxr_decode_ext_lib psapi)
+    target_link_libraries(gfxr_decode_ext_lib PUBLIC psapi)
 endif()
 target_include_directories(
     gfxr_decode_ext_lib

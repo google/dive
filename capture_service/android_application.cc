@@ -684,7 +684,7 @@ absl::Status OpenXRApplication::Pm4CaptureCleanup()
 {
     RETURN_IF_ERROR(m_dev.Adb().Run("remount"));
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat(
-        "shell rm -r %s", Dive::DeviceResourcesConstants::kDeployManifestFolderPath)));
+        "shell rm -rf %s", Dive::DeviceResourcesConstants::kDeployManifestFolderPath)));
     return absl::OkStatus();
 }
 

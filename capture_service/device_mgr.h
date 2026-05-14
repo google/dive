@@ -98,8 +98,8 @@ struct GfxrReplaySettings
 
 // Ensures that replay_flags_str is consistent with the other provided settings, and validates
 // the entire configuration
-absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(const GfxrReplaySettings& settings,
-                                                              bool is_adreno_gpu);
+CAPTURE_SERVICE_EXPORT absl::StatusOr<GfxrReplaySettings> ValidateGfxrReplaySettings(
+    const GfxrReplaySettings& settings, bool is_adreno_gpu);
 
 class CAPTURE_SERVICE_EXPORT AndroidDevice
 {

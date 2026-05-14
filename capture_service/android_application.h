@@ -46,7 +46,8 @@ Activity Resolver Table:
 35ec1d8 Action: "android.intent.action.MAIN" Category: "android.intent.category.LAUNCHER"
 ...
 */
-std::string ParsePackageForActivity(const std::string& input, const std::string& package);
+CAPTURE_SERVICE_EXPORT std::string ParsePackageForActivity(const std::string& input,
+                                                           const std::string& package);
 
 class AndroidDevice;
 

@@ -41,7 +41,7 @@ function(enable_dive_compiler_warnings)
             $<$<CXX_COMPILER_ID:GNU>:-Wshadow>
             -Wswitch
             -Wextra
-            # TODO: b/509938195 - Rmeove -Wno-unused-parameter when problems are fixed
+            # TODO: b/509938195 - Remove -Wno-unused-parameter when problems are fixed
             -Wno-unused-parameter
             # -Wmissing-field-initializers fights with readability-redundant-member-init.
             # Rely on clang-tidy to catch the important ommissions.

@@ -173,11 +173,10 @@ add_library(
 
 target_link_libraries(
     dive_gui_lib
-    PUBLIC Qt5::Widgets
+    PUBLIC Qt5::Widgets device_mgr
     PRIVATE
         dive_core
         dive_lib_os
-        device_mgr
         absl::span
         absl::status
         absl::statusor
@@ -349,6 +348,15 @@ install(
     DESTINATION "${DIVE_DEST_HOST}"
 )
 add_dependencies(${PROJECT_NAME} notice_file)
+
+add_custom_command(
+    TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:device_mgr>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copying device_mgr shared library to dive executable directory."
+)
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

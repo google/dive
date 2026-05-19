@@ -19,6 +19,7 @@ list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
 enable_dive_compiler_warnings()
@@ -74,10 +75,18 @@ target_link_libraries(
 if(ANDROID)
     target_link_libraries(service PRIVATE wrap)
 else()
-    add_library(device_mgr device_mgr.cc android_application.cc)
+    add_library(device_mgr SHARED device_mgr.cc android_application.cc)
     target_include_directories(
         device_mgr
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/..
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    )
+    include(GenerateExportHeader)
+    generate_export_header(
+        device_mgr
+        EXPORT_MACRO_NAME CAPTURE_SERVICE_EXPORT
+        EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/capture_service_export.h
     )
     target_link_libraries(
         device_mgr
@@ -118,7 +127,24 @@ else()
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
     )
 
+    if(APPLE)
+        set(CLIENT_RPATH "@executable_path")
+        set(LIB_RPATH "@loader_path")
+    else()
+        set(CLIENT_RPATH "$ORIGIN")
+        set(LIB_RPATH "$ORIGIN")
+    endif()
+    set_target_properties(
+        dive_client_cli
+        PROPERTIES INSTALL_RPATH "${CLIENT_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+    )
+    set_target_properties(
+        device_mgr
+        PROPERTIES INSTALL_RPATH "${LIB_RPATH}" BUILD_WITH_INSTALL_RPATH TRUE
+    )
+
     install(TARGETS dive_client_cli DESTINATION "${DIVE_DEST_HOST}")
+    install(TARGETS device_mgr DESTINATION "${DIVE_DEST_HOST_FRAMEWORKS}")
 
     if(DIVE_BUILD_WITH_CRASHPAD)
         add_custom_command(

@@ -95,6 +95,7 @@ class DIVE_UI_LIB_EXPORT MainWindow : public QMainWindow
     void OnAbout();
     void OnShortcuts();
     void OnSaveCapture();
+    void OnAdvancedOptionToggled(bool enabled);
     void OnSearchTrigger();
     void OpenRecentFile();
     void UpdateOverlay(const QString&);

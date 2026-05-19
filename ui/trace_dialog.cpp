@@ -459,7 +459,10 @@ void TraceDialog::OnShowAdvancedOptions(bool show)
     if (!show)
     {
         m_pkg_list_options = Dive::AndroidDevice::PackageListOptions::kDebuggableOnly;
-        UpdatePackageList();
+        if (isVisible())
+        {
+            UpdatePackageList();
+        }
     }
 }
 

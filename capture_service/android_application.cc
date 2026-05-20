@@ -475,6 +475,8 @@ absl::Status AndroidApplication::RuntimeWhatIfSetup()
     // New prop is prefixed with debug.
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter true"));
 
+    RETURN_IF_ERROR(m_dev.ForwardFirstAvailablePort());
+
     return absl::OkStatus();
 }
 
@@ -507,6 +509,7 @@ absl::Status AndroidApplication::RuntimeWhatIfCleanup()
 absl::Status AndroidApplication::CreateGfxrDirectory(const std::string directory)
 {
     RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell mkdir -p %s", directory)));
+    RETURN_IF_ERROR(m_dev.Adb().Run(absl::StrFormat("shell chmod 777 %s", directory)));
 
     return absl::OkStatus();
 }

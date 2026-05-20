@@ -514,6 +514,10 @@ absl::Status AndroidDevice::ForwardFirstAvailablePort()
 {
     for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
     {
+        // Explicitly remove any existing forward for this port to avoid "port already in use"
+        // or stale rules issues after adb root.
+        Adb().Run(absl::StrFormat("forward --remove tcp:%d", p)).IgnoreError();
+
         auto res = Adb().RunAndGetResult(
             absl::StrFormat("forward tcp:%d localabstract:%s", p,
                             Dive::DeviceResourcesConstants::kUnixAbstractPath));
@@ -532,7 +536,6 @@ absl::Status AndroidDevice::SetupDevice()
 {
     if (m_runtime_what_if_enabled)
     {
-        RETURN_IF_ERROR(ForwardFirstAvailablePort());
         return absl::OkStatus();
     }
 
@@ -1398,6 +1401,11 @@ absl::Status AndroidDevice::TriggerScreenCapture(
         on_device_screenshot_dir / Dive::kCaptureScreenshotFile;
 
     std::string on_device_capture_screen_shot = full_capture_path.generic_string();
+    std::string on_device_capture_dir = full_capture_path.parent_path().generic_string();
+
+    // Ensure the directory exists before taking the screenshot.
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat("shell mkdir -p %s", on_device_capture_dir)));
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat("shell chmod 777 %s", on_device_capture_dir)));
 
     absl::Status ret =
         m_adb.Run(absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
@@ -1437,6 +1445,7 @@ absl::Status AndroidDevice::DeployDeviceResource(const std::string_view& file_na
     }
 
     RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell mkdir -p '%s')", target_dir)));
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell chmod 777 '%s')", target_dir)));
 
     return m_adb.Run(
         absl::StrFormat(R"(push "%s" "%s")", host_full_lib_path.generic_string(), target_dir));

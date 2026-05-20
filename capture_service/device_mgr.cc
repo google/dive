@@ -27,6 +27,7 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -512,24 +513,25 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 
 absl::Status AndroidDevice::ForwardFirstAvailablePort()
 {
-    for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
+    // Explicitly remove any existing forward for the current port to avoid stale rules.
+    if (m_port != 0)
     {
-        // Explicitly remove any existing forward for this port to avoid "port already in use"
-        // or stale rules issues after adb root.
-        Adb().Run(absl::StrFormat("forward --remove tcp:%d", p)).IgnoreError();
+        Adb().Run(absl::StrFormat("forward --remove tcp:%d", m_port)).IgnoreError();
+        m_port = 0;
+    }
 
-        auto res = Adb().RunAndGetResult(
-            absl::StrFormat("forward tcp:%d localabstract:%s", p,
-                            Dive::DeviceResourcesConstants::kUnixAbstractPath));
-        if (res.ok())
+    auto res = Adb().RunAndGetResult(absl::StrFormat(
+        "forward tcp:0 localabstract:%s", Dive::DeviceResourcesConstants::kUnixAbstractPath));
+    if (res.ok())
+    {
+        if (absl::SimpleAtoi(*res, &m_port))
         {
-            m_port = p;
             return absl::OkStatus();
         }
+        return absl::InternalError(
+            absl::StrFormat("Failed to parse port from adb output: %s", *res));
     }
-    return absl::Status(absl::StatusCode::kUnknown,
-                        absl::StrFormat("Failed to forward available port between %d and %d",
-                                        kFirstPort, kFirstPort + kPortRange));
+    return res.status();
 }
 
 absl::Status AndroidDevice::SetupDevice()
@@ -590,7 +592,7 @@ absl::Status AndroidDevice::CleanupDevice()
         .IgnoreError();
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
-    if (output.ok())
+    if (output.ok() && Port() != 0)
     {
         if (output->find(std::to_string(Port())) != std::string::npos)
         {

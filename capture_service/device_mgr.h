@@ -227,7 +227,7 @@ class CAPTURE_SERVICE_EXPORT AndroidDevice
     std::unique_ptr<AndroidApplication> m_app;
     std::optional<GfxrCaptureSettings> m_gfxr_capture_settings;
     bool m_runtime_what_if_enabled = false;
-    int m_port = kFirstPort;
+    int m_port = 0;
 };
 
 class CAPTURE_SERVICE_EXPORT DeviceManager

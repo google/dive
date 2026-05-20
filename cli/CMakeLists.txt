@@ -33,6 +33,9 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
+enable_dive_compiler_warnings()
+
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_definitions(-DLITTLEENDIAN_CPU)
@@ -54,17 +57,6 @@ target_link_libraries(
 
 add_executable(${PROJECT_NAME} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
-
-if(MSVC)
-    # 4100: unreferenced formal parameter
-    # 4201: prevent nameless struct/union
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
-else()
-    target_compile_options(
-        ${PROJECT_NAME}
-        PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
-    )
-endif()
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     target_link_libraries(${PROJECT_NAME} PRIVATE dl)

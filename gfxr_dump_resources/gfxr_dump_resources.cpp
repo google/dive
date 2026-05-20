@@ -74,7 +74,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
     out << "  },\n";
 
     out << "  \"BeginCommandBuffer\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
+    for (size_t i = 0; i < dumpables.size(); ++i)
     {
         const DumpEntry& entry = dumpables[i];
         if (i != 0)
@@ -86,7 +86,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
     out << "],\n";
 
     out << "  \"RenderPass\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
+    for (size_t i = 0; i < dumpables.size(); ++i)
     {
         const DumpEntry& entry = dumpables[i];
         if (i != 0)
@@ -94,7 +94,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
             out << ',';
         }
         out << '[';
-        for (int ii = 0; ii < entry.render_passes.size(); ++ii)
+        for (size_t ii = 0; ii < entry.render_passes.size(); ++ii)
         {
             const DumpRenderPass& render_pass = entry.render_passes[ii];
             if (ii != 0)
@@ -109,7 +109,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
     out << "],\n";
 
     out << "  \"Draw\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
+    for (size_t i = 0; i < dumpables.size(); ++i)
     {
         const DumpEntry& entry = dumpables[i];
         if (i != 0)
@@ -117,7 +117,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
             out << ',';
         }
         out << '[';
-        for (int ii = 0; ii < entry.draws.size(); ++ii)
+        for (size_t ii = 0; ii < entry.draws.size(); ++ii)
         {
             uint64_t draw = entry.draws[ii];
             if (ii != 0)
@@ -131,7 +131,7 @@ bool SaveAsJsonFile(const std::vector<DumpEntry>& dumpables, const char* filenam
     out << "],\n";
 
     out << "  \"QueueSubmit\": [";
-    for (int i = 0; i < dumpables.size(); ++i)
+    for (size_t i = 0; i < dumpables.size(); ++i)
     {
         const DumpEntry& entry = dumpables[i];
         if (i != 0)

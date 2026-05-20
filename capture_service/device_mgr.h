@@ -70,8 +70,8 @@ enum class GfxrReplayOptions
 
 struct GfxrReplaySettings
 {
-    std::string remote_capture_path = "";
-    std::string local_download_dir = "";
+    std::string remote_capture_path;
+    std::string local_download_dir;
     GfxrReplayOptions run_type = GfxrReplayOptions::kNormal;
 
     // ----------------------------------------------------------------------
@@ -79,7 +79,7 @@ struct GfxrReplaySettings
 
     // Flags intended to be passed down to GFXR replay binary
     // Flags must be provided with a space (not '=') between flag and value
-    std::string replay_flags_str = "";
+    std::string replay_flags_str;
     // Wait for debugger to attach before continuing to replay.
     bool wait_for_debugger = false;
 

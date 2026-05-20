@@ -33,6 +33,7 @@ function(enable_dive_compiler_warnings)
             /w44062 # require exhastive switches
             /wd4251 # android_application.cc exports std::string (template member)
         )
+        add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     else()
         add_compile_options(
             -Werror
@@ -40,6 +41,12 @@ function(enable_dive_compiler_warnings)
             $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wshadow-all>
             $<$<CXX_COMPILER_ID:GNU>:-Wshadow>
             -Wswitch
+            -Wextra
+            # TODO: b/509938195 - Remove -Wno-unused-parameter when problems are fixed
+            -Wno-unused-parameter
+            # -Wmissing-field-initializers fights with readability-redundant-member-init.
+            # Rely on clang-tidy to catch the important ommissions.
+            -Wno-missing-field-initializers
         )
     endif()
 endfunction()

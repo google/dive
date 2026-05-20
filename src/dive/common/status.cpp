@@ -35,14 +35,14 @@ std::string StackTraceString(int skip_count)
 {
     std::array<void*, kMaxDepth> frames{};
     // skip_count + 1 to ignore this function's own frame
-    int depth = absl::GetStackTrace(frames.data(), frames.size(), skip_count + 1);
+    int depth = absl::GetStackTrace(frames.data(), static_cast<int>(frames.size()), skip_count + 1);
 
     std::string stack;
     std::array<char, kMaxSymbolLength> buf{};
     for (int i = 0; i < depth; ++i)
     {
         const char* symbol = "(unknown)";
-        if (absl::Symbolize(frames[i], buf.data(), buf.size()))
+        if (absl::Symbolize(frames[i], buf.data(), static_cast<int>(buf.size())))
         {
             symbol = buf.data();
         }

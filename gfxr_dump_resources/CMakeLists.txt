@@ -21,6 +21,9 @@ if(ANDROID)
 endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
+include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
+enable_dive_compiler_warnings()
+
 add_library(
     gfxr_dump_resources_lib
     STATIC

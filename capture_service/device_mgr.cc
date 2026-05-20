@@ -810,6 +810,8 @@ absl::StatusOr<AndroidDevice*> DeviceManager::SelectDevice(const std::string& se
     return m_device.get();
 }
 
+void DeviceManager::RemoveDevice() { m_device = nullptr; }
+
 absl::Status DeviceManager::DeployReplayApk(const std::string& serial)
 {
     const AdbSession& adb = m_device->Adb();

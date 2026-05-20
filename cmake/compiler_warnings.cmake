@@ -31,6 +31,7 @@ function(enable_dive_compiler_warnings)
             /wd4127 # "conditional expression is constant" caused by Abseil
             /wd4324 # "structure was padded" caused by Abseil flags
             /w44062 # require exhastive switches
+            /wd4251 # android_application.cc exports std::string (template member)
         )
         add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     else()

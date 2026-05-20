@@ -574,6 +574,9 @@ MainWindow::MainWindow(ApplicationController& controller) : m_controller(control
     CreateStatusBar();
     CreateShortcuts();
     CreateToolBars();
+    QObject::connect(&m_controller, &ApplicationController::AdvancedOptionToggled, this,
+                     &MainWindow::OnAdvancedOptionToggled);
+    OnAdvancedOptionToggled(m_controller.AdvancedOptionEnabled());
     UpdateRecentFileActions(Settings::Get()->ReadRecentFiles());
 
     // Capture overlay widget
@@ -1299,6 +1302,13 @@ void MainWindow::OnExpandToLevel()
             }
         }
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+void MainWindow::OnAdvancedOptionToggled(bool enabled)
+{
+    m_what_if_menu->menuAction()->setVisible(enabled);
+    m_what_if_setup_action->setVisible(enabled);
 }
 
 //--------------------------------------------------------------------------------------------------

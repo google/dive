@@ -33,6 +33,9 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
+enable_dive_compiler_warnings()
+
 add_library(dive_lib_trace_stats "trace_stats.cpp" "trace_stats.h")
 target_link_libraries(
     dive_lib_trace_stats
@@ -41,18 +44,6 @@ target_link_libraries(
 
 add_executable(${PROJECT_NAME} "main.cpp")
 target_link_libraries(${PROJECT_NAME} PRIVATE dive_lib_trace_stats)
-
-if(MSVC)
-    # 4100: unreferenced formal parameter
-    # 4201: prevent nameless struct/union
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX /wd4100 /wd4201)
-    target_link_libraries(${PROJECT_NAME} PRIVATE psapi)
-else()
-    target_compile_options(
-        ${PROJECT_NAME}
-        PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-braces
-    )
-endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)
 message(CHECK_PASS "done")

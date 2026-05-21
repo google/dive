@@ -14,6 +14,9 @@
 # limitations under the License.
 #
 
+include(../cmake/compiler_warnings.cmake)
+enable_dive_compiler_warnings()
+
 add_library(dive_src_includes INTERFACE)
 target_include_directories(
     dive_src_includes

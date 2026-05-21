@@ -31,6 +31,9 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
+enable_dive_compiler_warnings()
+
 # ---------------------
 # data_core_wrapper_lib
 add_library(data_core_wrapper_lib data_core_wrapper.h data_core_wrapper.cpp)

@@ -112,16 +112,16 @@ void PrintNodes(std::ostream& out, const Dive::CommandHierarchy* command_hierarc
                 const Dive::SharedNodeTopology& topology, uint64_t node_index, bool verbose)
 {
     VisitNodes(command_hierarchy_ptr, topology, node_index, 0,
-               [&out, command_hierarchy_ptr, &topology, verbose](uint64_t node_index,
+               [&out, command_hierarchy_ptr, &topology, verbose](uint64_t visit_node_index,
                                                                  uint32_t depth) -> bool {
                    for (uint32_t tab = 0; tab < depth; ++tab) out << "  ";
                    if (depth > 0) out << "| ";
 
-                   out << command_hierarchy_ptr->GetNodeDesc(node_index) << std::endl;
+                   out << command_hierarchy_ptr->GetNodeDesc(visit_node_index) << std::endl;
 
-                   if (verbose && 0 == topology.GetNumChildren(node_index))
+                   if (verbose && 0 == topology.GetNumChildren(visit_node_index))
                    {
-                       PrintSharedNodes(out, command_hierarchy_ptr, topology, node_index,
+                       PrintSharedNodes(out, command_hierarchy_ptr, topology, visit_node_index,
                                         depth + 1);
                    }
                    return true;

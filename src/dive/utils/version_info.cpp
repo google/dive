@@ -181,37 +181,38 @@ std::string GetLongVersionString()
 {
     std::string summary = GetHostToolsVersionInfo();
 
-    if (auto ret = ResolveDeviceResourcesLocalPath(GetDeviceResourcesVersionFileName()); ret.ok())
+    if (auto device_resources_version_path =
+            ResolveDeviceResourcesLocalPath(GetDeviceResourcesVersionFileName());
+        device_resources_version_path.ok())
     {
-        std::filesystem::path device_resources_version_path = *ret;
-        if (absl::StatusOr<std::string> ret =
-                ReadFileCapped(device_resources_version_path, kMaxCharsDeviceResourcesVersionFile);
-            ret.ok())
+        if (absl::StatusOr<std::string> file_contents =
+                ReadFileCapped(*device_resources_version_path, kMaxCharsDeviceResourcesVersionFile);
+            file_contents.ok())
         {
-            summary += "\n" + GetDeviceResourcesVersionInfo(*ret);
+            summary += "\n" + GetDeviceResourcesVersionInfo(*file_contents);
         }
         else
         {
-            LOG(ERROR) << ret.status().message();
+            LOG(ERROR) << file_contents.status().message();
         }
     }
     else
     {
-        LOG(ERROR) << ret.status().message();
+        LOG(ERROR) << device_resources_version_path.status().message();
     }
 
     std::filesystem::path profiling_sha_path =
         Dive::DeviceResourcesConstants::kProfilingPluginShaName;
 
-    if (auto ret = ResolveProfilingResourcesLocalPath(profiling_sha_path); ret.ok())
+    if (auto profiling_plugin_version_path = ResolveProfilingResourcesLocalPath(profiling_sha_path);
+        profiling_plugin_version_path.ok())
     {
-        std::filesystem::path profiling_plugin_version_path = *ret;
-        if (absl::StatusOr<std::string> ret =
-                ReadFileCapped(profiling_plugin_version_path, kLongSha);
-            ret.ok())
+        if (absl::StatusOr<std::string> file_contents =
+                ReadFileCapped(*profiling_plugin_version_path, kLongSha);
+            file_contents.ok())
         {
             std::string profiling_plugin_section =
-                absl::StrFormat("Profiling Plugin SHA: %s\n", *ret);
+                absl::StrFormat("Profiling Plugin SHA: %s\n", *file_contents);
             summary += "\n" + profiling_plugin_section;
         }
     }

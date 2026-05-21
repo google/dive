@@ -514,24 +514,27 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 absl::Status AndroidDevice::ForwardFirstAvailablePort()
 {
     // Explicitly remove any existing forward for the current port to avoid stale rules.
-    if (m_port != 0)
+    if (m_port.has_value())
     {
-        Adb().Run(absl::StrFormat("forward --remove tcp:%d", m_port)).IgnoreError();
-        m_port = 0;
+        Adb().Run(absl::StrFormat("forward --remove tcp:%d", *m_port)).IgnoreError();
+        m_port.reset();
     }
 
-    auto res = Adb().RunAndGetResult(absl::StrFormat(
+    auto new_port_str = Adb().RunAndGetResult(absl::StrFormat(
         "forward tcp:0 localabstract:%s", Dive::DeviceResourcesConstants::kUnixAbstractPath));
-    if (res.ok())
+    if (!new_port_str.ok())
     {
-        if (absl::SimpleAtoi(*res, &m_port))
-        {
-            return absl::OkStatus();
-        }
-        return absl::InternalError(
-            absl::StrFormat("Failed to parse port from adb output: %s", *res));
+        return new_port_str.status();
     }
-    return res.status();
+
+    int port_val = 0;
+    if (!absl::SimpleAtoi(*new_port_str, &port_val))
+    {
+        return absl::InternalError(
+            absl::StrFormat("Failed to parse port from adb output: %s", *new_port_str));
+    }
+    m_port = port_val;
+    return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::SetupDevice()
@@ -592,11 +595,11 @@ absl::Status AndroidDevice::CleanupDevice()
         .IgnoreError();
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
-    if (output.ok() && Port() != 0)
+    if (output.ok() && Port().has_value())
     {
-        if (output->find(std::to_string(Port())) != std::string::npos)
+        if (output->find(std::to_string(*Port())) != std::string::npos)
         {
-            Adb().Run(absl::StrFormat("forward --remove tcp:%d", Port())).IgnoreError();
+            Adb().Run(absl::StrFormat("forward --remove tcp:%d", *Port())).IgnoreError();
         }
     }
 

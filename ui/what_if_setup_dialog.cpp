@@ -691,14 +691,20 @@ Network::TcpClient* WhatIfSetupDialog::GetConnectedTcpClient()
     if (!m_tcp_client->IsConnected())
     {
         const std::string host = "127.0.0.1";
-        int port = device->Port();
+        std::optional<int> port = device->Port();
+        if (!port.has_value())
+        {
+            qDebug() << "GetConnectedTcpClient: Port not forwarded.";
+            ShowMessage(tr("Cannot connect to TCP server: Port not forwarded."));
+            return nullptr;
+        }
         qDebug() << "GetConnectedTcpClient: Client not connected. Attempting to connect to"
-                 << host.c_str() << ":" << port;
-        auto status = m_tcp_client->Connect(host, port);
+                 << host.c_str() << ":" << *port;
+        auto status = m_tcp_client->Connect(host, *port);
         if (!status.ok())
         {
             std::string err_msg = absl::StrFormat(
-                "Failed to connect to the application's TCP server at %s:%d.Error: %s", host, port,
+                "Failed to connect to the application's TCP server at %s:%d.Error: %s", host, *port,
                 status.message());
             qDebug() << "GetConnectedTcpClient:" << err_msg.c_str();
             ShowMessage(QString::fromStdString(err_msg));
@@ -706,7 +712,7 @@ Network::TcpClient* WhatIfSetupDialog::GetConnectedTcpClient()
             return nullptr;
         }
         qDebug() << "GetConnectedTcpClient: Successfully connected to" << host.c_str() << ":"
-                 << port;
+                 << *port;
     }
     else
     {

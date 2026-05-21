@@ -27,6 +27,7 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -512,27 +513,34 @@ absl::StatusOr<std::vector<std::string>> AndroidDevice::ListPackage(PackageListO
 
 absl::Status AndroidDevice::ForwardFirstAvailablePort()
 {
-    for (int p = kFirstPort; p <= kFirstPort + kPortRange; p++)
+    // Explicitly remove any existing forward for the current port to avoid stale rules.
+    if (m_port.has_value())
     {
-        auto res = Adb().RunAndGetResult(
-            absl::StrFormat("forward tcp:%d localabstract:%s", p,
-                            Dive::DeviceResourcesConstants::kUnixAbstractPath));
-        if (res.ok())
-        {
-            m_port = p;
-            return absl::OkStatus();
-        }
+        Adb().Run(absl::StrFormat("forward --remove tcp:%d", *m_port)).IgnoreError();
+        m_port.reset();
     }
-    return absl::Status(absl::StatusCode::kUnknown,
-                        absl::StrFormat("Failed to forward available port between %d and %d",
-                                        kFirstPort, kFirstPort + kPortRange));
+
+    auto new_port_str = Adb().RunAndGetResult(absl::StrFormat(
+        "forward tcp:0 localabstract:%s", Dive::DeviceResourcesConstants::kUnixAbstractPath));
+    if (!new_port_str.ok())
+    {
+        return new_port_str.status();
+    }
+
+    int port_val = 0;
+    if (!absl::SimpleAtoi(*new_port_str, &port_val))
+    {
+        return absl::InternalError(
+            absl::StrFormat("Failed to parse port from adb output: %s", *new_port_str));
+    }
+    m_port = port_val;
+    return absl::OkStatus();
 }
 
 absl::Status AndroidDevice::SetupDevice()
 {
     if (m_runtime_what_if_enabled)
     {
-        RETURN_IF_ERROR(ForwardFirstAvailablePort());
         return absl::OkStatus();
     }
 
@@ -587,11 +595,11 @@ absl::Status AndroidDevice::CleanupDevice()
         .IgnoreError();
     Adb().Run(absl::StrFormat("shell rm -rf -- %s", kReplayStateLoadedSignalFile)).IgnoreError();
     absl::StatusOr<std::string> output = Adb().RunAndGetResult(absl::StrFormat("forward --list"));
-    if (output.ok())
+    if (output.ok() && Port().has_value())
     {
-        if (output->find(std::to_string(Port())) != std::string::npos)
+        if (output->find(std::to_string(*Port())) != std::string::npos)
         {
-            Adb().Run(absl::StrFormat("forward --remove tcp:%d", Port())).IgnoreError();
+            Adb().Run(absl::StrFormat("forward --remove tcp:%d", *Port())).IgnoreError();
         }
     }
 
@@ -1398,6 +1406,11 @@ absl::Status AndroidDevice::TriggerScreenCapture(
         on_device_screenshot_dir / Dive::kCaptureScreenshotFile;
 
     std::string on_device_capture_screen_shot = full_capture_path.generic_string();
+    std::string on_device_capture_dir = full_capture_path.parent_path().generic_string();
+
+    // Ensure the directory exists before taking the screenshot.
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat("shell mkdir -p %s", on_device_capture_dir)));
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat("shell chmod 777 %s", on_device_capture_dir)));
 
     absl::Status ret =
         m_adb.Run(absl::StrFormat("shell screencap -p %s", on_device_capture_screen_shot));
@@ -1437,6 +1450,7 @@ absl::Status AndroidDevice::DeployDeviceResource(const std::string_view& file_na
     }
 
     RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell mkdir -p '%s')", target_dir)));
+    RETURN_IF_ERROR(m_adb.Run(absl::StrFormat(R"(shell chmod 777 '%s')", target_dir)));
 
     return m_adb.Run(
         absl::StrFormat(R"(push "%s" "%s")", host_full_lib_path.generic_string(), target_dir));

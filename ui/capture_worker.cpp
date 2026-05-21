@@ -63,8 +63,15 @@ void CaptureWorker::run()
 
     Network::TcpClient client;
     const std::string host = "127.0.0.1";
-    int port = device->Port();
-    auto status = client.Connect(host, port);
+    std::optional<int> port = device->Port();
+    if (!port.has_value())
+    {
+        std::string err_msg = "Port not forwarded.";
+        qDebug() << err_msg.c_str();
+        emit ShowMessage(QString::fromStdString(err_msg));
+        return;
+    }
+    auto status = client.Connect(host, *port);
     if (!status.ok())
     {
         std::string err_msg(status.message());

@@ -382,9 +382,13 @@ absl::Status TriggerPm4Capture(const CommandContext& ctx)
 
     Network::TcpClient client;
     const std::string host = "127.0.0.1";
-    int port = device->Port();
+    std::optional<int> port = device->Port();
+    if (!port.has_value())
+    {
+        return Dive::FailedPreconditionError("Port not forwarded.");
+    }
 
-    absl::Status status = client.Connect(host, port);
+    absl::Status status = client.Connect(host, *port);
     if (!status.ok())
     {
         return Dive::StatusWithContext(status, "Connection failed");

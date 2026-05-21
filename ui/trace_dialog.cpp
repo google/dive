@@ -616,6 +616,7 @@ void TraceDialog::OnStartPackage()
                                  m_gfxr_capture_end_point_button_group->checkedId()),
                          })
                        : std::nullopt);
+    device->EnableRuntimeWhatIf(false);
     absl::Status ret = device->SetupDevice();
     if (!ret.ok())
     {

@@ -163,7 +163,7 @@ class CAPTURE_SERVICE_EXPORT AndroidDevice
     absl::Status StopApp();
     const AdbSession& Adb() const { return m_adb; }
     AdbSession& Adb() { return m_adb; }
-    int Port() const { return m_port; }
+    std::optional<int> Port() const { return m_port; }
     bool IsAdrenoGpu() const { return m_dev_info.m_is_adreno_gpu; }
     std::string_view Serial() const { return m_serial; }
 
@@ -227,7 +227,7 @@ class CAPTURE_SERVICE_EXPORT AndroidDevice
     std::unique_ptr<AndroidApplication> m_app;
     std::optional<GfxrCaptureSettings> m_gfxr_capture_settings;
     bool m_runtime_what_if_enabled = false;
-    int m_port = kFirstPort;
+    std::optional<int> m_port;
 };
 
 class CAPTURE_SERVICE_EXPORT DeviceManager

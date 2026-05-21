@@ -77,9 +77,21 @@ class GfxrVulkanCommandHierarchyCreator
                   uint64_t child_node_index);
     uint64_t GetActiveParent(uint64_t default_parent) const;
 
-    uint64_t m_cur_submit_node_index = 0;
-    uint64_t m_cur_command_buffer_node_index = 0;
-    std::stack<uint64_t> m_cur_parent_node_index_stack;
+    struct ParsingState
+    {
+        uint64_t submit_node_index = 0;
+        uint64_t command_buffer_node_index = 0;
+        std::stack<uint64_t> parent_node_index_stack;
+
+        void Reset()
+        {
+            submit_node_index = 0;
+            command_buffer_node_index = 0;
+            parent_node_index_stack = {};
+        }
+    };
+
+    ParsingState m_parsing_state;
     CommandHierarchy& m_command_hierarchy;
     const GfxrCaptureData& m_capture_data;
     // This is a list of child indices per node, ie. topology info

@@ -354,6 +354,11 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
 //--------------------------------------------------------------------------------------------------
 bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData& capture_data)
 {
+    // Reset state at the beginning of processing to guarantee a clean slate
+    m_cur_parent_node_index_stack = {};
+    m_cur_submit_node_index = 0;
+    m_cur_command_buffer_node_index = 0;
+
     // Add frame node
     uint64_t frame_root_node_index = AddNode(NodeType::kGfxrRootFrameNode, "Frame");
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, frame_root_node_index);
@@ -383,7 +388,6 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
             }
         }
     }
-    while (!m_cur_parent_node_index_stack.empty()) m_cur_parent_node_index_stack.pop();
     return true;
 }
 

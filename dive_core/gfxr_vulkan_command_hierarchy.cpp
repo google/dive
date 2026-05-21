@@ -232,7 +232,7 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
     else if (vulkan_cmd_name == "vkEndCommandBuffer")
     {
         if (!m_cur_parent_node_index_stack.empty() &&
-            m_cur_parent_node_index_stack.top() == m_cur_command_buffer_node_index)
+            (m_cur_parent_node_index_stack.top() == m_cur_command_buffer_node_index))
         {
             m_cur_parent_node_index_stack.pop();
         }

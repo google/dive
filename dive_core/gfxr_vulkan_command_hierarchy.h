@@ -75,7 +75,7 @@ class GfxrVulkanCommandHierarchyCreator
     // Updates m_node_children
     void AddChild(CommandHierarchy::TopologyType type, uint64_t node_index,
                   uint64_t child_node_index);
-    uint64_t GetActiveParent(uint64_t default_parent) const;
+    void AddChildToActiveParent(uint64_t child_node_index, uint64_t default_parent);
 
     struct ParsingState
     {

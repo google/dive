@@ -13,6 +13,7 @@ AccessModifierOffset: -3
 
 # Fix clang-format-18's Google style:
 PointerAlignment: Left
+DerivePointerAlignment: false
 
 # Dive Specific:
 BraceWrapping:

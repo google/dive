@@ -29,6 +29,7 @@
 #include <QStandardItem>
 #include <QStandardItemModel>
 #include <QVBoxLayout>
+#include <limits>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -247,19 +248,23 @@ QWidget* WhatIfConfigureDialog::SetupDrawCallFiltersContainer()
     draw_call_filter_layout->setColumnStretch(2, 1);
     draw_call_filter_layout->setColumnStretch(1, 0);
 
-    CreateDrawCallFilterSpinner(m_index_count_filter, tr("Index Count:"), 0, 1000);
+    CreateDrawCallFilterSpinner(m_index_count_filter, tr("Index Count:"), 0,
+                                std::numeric_limits<int>::max());
     draw_call_filter_layout->addWidget(m_index_count_filter.label, 0, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_index_count_filter.spin_box, 0, 2);
 
-    CreateDrawCallFilterSpinner(m_vertex_count_filter, tr("Vertex Count:"), 0, 1000);
+    CreateDrawCallFilterSpinner(m_vertex_count_filter, tr("Vertex Count:"), 0,
+                                std::numeric_limits<int>::max());
     draw_call_filter_layout->addWidget(m_vertex_count_filter.label, 0, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_vertex_count_filter.spin_box, 0, 2);
 
-    CreateDrawCallFilterSpinner(m_instance_count_filter, tr("Instance Count:"), 0, 1000);
+    CreateDrawCallFilterSpinner(m_instance_count_filter, tr("Instance Count:"), 0,
+                                std::numeric_limits<int>::max());
     draw_call_filter_layout->addWidget(m_instance_count_filter.label, 1, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_instance_count_filter.spin_box, 1, 2);
 
-    CreateDrawCallFilterSpinner(m_draw_count_filter, tr("Draw Count:"), 0, 1000);
+    CreateDrawCallFilterSpinner(m_draw_count_filter, tr("Draw Count:"), 0,
+                                std::numeric_limits<int>::max());
     draw_call_filter_layout->addWidget(m_draw_count_filter.label, 1, 1, Qt::AlignRight);
     draw_call_filter_layout->addWidget(m_draw_count_filter.spin_box, 1, 2);
 

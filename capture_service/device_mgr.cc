@@ -565,9 +565,6 @@ absl::Status AndroidDevice::CleanupDevice()
     UnpinGpuClock().IgnoreError();
     Adb().Run("shell setprop compositor.high_priority 1").IgnoreError();
 
-    // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
-    // `debug.openxr.enable_frame_delimiter`
-    Adb().Run("shell setprop openxr.enable_frame_delimiter false").IgnoreError();
     Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false").IgnoreError();
 
     if (m_original_state.m_root_access_requested)
@@ -665,16 +662,6 @@ absl::Status AndroidDevice::SetupApp(const std::string& package, const Applicati
     else if (type == ApplicationType::OPENXR_APK)
     {
         m_app = std::make_unique<OpenXRApplication>(*this, package, command_args);
-        if (m_gfxr_capture_settings)
-        {
-            // Need root to set openxr.enable_frame_delimiter
-            // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
-            // `debug.openxr.enable_frame_delimiter`
-            RETURN_IF_ERROR(RequestRootAccess());
-            RETURN_IF_ERROR(Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
-            // New prop is prefixed with debug.
-            RETURN_IF_ERROR(Adb().Run("shell setprop debug.openxr.enable_frame_delimiter true"));
-        }
     }
     if (m_app == nullptr)
     {

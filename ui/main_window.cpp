@@ -1257,21 +1257,21 @@ void MainWindow::OnCaptureTrigger()
 void MainWindow::OnCapture(bool is_capture_delayed)
 {
     m_trace_dig->UpdateDeviceList();
-    m_trace_dig->show();
+    m_trace_dig->ShowAndRaise();
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnWhatIfSetupTrigger()
 {
     m_what_if_setup_dig->UpdateDeviceList();
-    m_what_if_setup_dig->show();
+    m_what_if_setup_dig->ShowAndRaise();
 }
 
 //--------------------------------------------------------------------------------------------------
 void MainWindow::OnAddWhatIfModification()
 {
     m_what_if_configure_dig->SetTcpClient(m_what_if_setup_dig->GetConnectedTcpClient());
-    m_what_if_configure_dig->show();
+    m_what_if_configure_dig->ShowAndRaise();
 }
 
 //--------------------------------------------------------------------------------------------------

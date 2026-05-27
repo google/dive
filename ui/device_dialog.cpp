@@ -26,6 +26,9 @@
 DeviceDialog::DeviceDialog(QWidget* parent) : QDialog(parent)
 {
     m_device_model = new QStandardItemModel(this);
+#if defined(__APPLE__)
+    setWindowFlags(windowFlags() | Qt::Tool);
+#endif
 }
 
 DeviceDialog::~DeviceDialog() {}
@@ -78,6 +81,24 @@ void DeviceDialog::UpdateDeviceList()
         index_to_select = 1;
     }
     m_device_box->setCurrentIndex(index_to_select);
+}
+
+void DeviceDialog::ShowAndRaise()
+{
+    if (isMinimized())
+    {
+        showNormal();
+    }
+    else
+    {
+        if (isVisible())
+        {
+            hide();
+        }
+        show();
+    }
+    raise();
+    activateWindow();
 }
 
 void DeviceDialog::OnDeviceSelectionChanged(const QString& s)

@@ -14,14 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "server.h"
+#pragma once
 
-#include "dive/log/log.h"
+#include "absl/status/status.h"
+#include "network/base_message_handler.h"
+#include "network/unix_domain_server.h"
 
-int main(int argc, char** argv)
+namespace Dive
 {
-    Dive::AbslLogger absl_logger = {};
-    absl_logger.Init("dive_server");
-    Dive::ServerMain();
-    return 0;
-}
+
+class Pm4ServiceMessageHandler : public Network::BaseMessageHandler
+{
+ public:
+    void HandleMessage(std::unique_ptr<Network::ISerializable> message,
+                       Network::SocketConnection* client_conn) override;
+};
+
+int RunPm4DirectCaptureServer();
+
+}  // namespace Dive

@@ -14,16 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "android_trace_mgr.h"
+
 #include <string>
 #include <string_view>
 
+#include "absl/base/log_severity.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "dive/utils/device_resources_constants.h"
-#include "trace_mgr.h"
 
 extern "C"
 {
@@ -34,132 +36,79 @@ extern "C"
 namespace Dive
 {
 
-AndroidTraceManager::AndroidTraceManager(absl::Duration trace_duration)
-    : m_trace_duration(trace_duration)
+namespace
 {
-}
+static constexpr std::string_view kFrameConfigTracePrefix = "trace-frame";
+static constexpr std::string_view kDurationConfigTracePrefix = "trace";
+}  // namespace
 
-void AndroidTraceManager::TraceByFrame()
+absl::Status AndroidTraceManager::FromTriggeredToTracing(const TraceSettings& trace_settings)
 {
-    std::string num = absl::StrCat(m_frame_num);
-    std::string path =
-        absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/trace-frame");
-    std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_frame_num);
+    m_curr_trace_result = {};
+    std::string prefix = "";
+    size_t suffix_number = 0;
 
-    SetTraceFilePath(full_path);
-    LOG(INFO) << "Set capture file path as " << GetTraceFilePath();
-    // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
-    SetCaptureName(path.c_str(), num.c_str());
+    switch (trace_settings.mode)
     {
-        absl::MutexLock lock(&m_state_lock);
-        m_state = TraceState::Triggered;
+        case TraceMode::Duration:
+        {
+            prefix = kDurationConfigTracePrefix;
+            suffix_number = trace_settings.session_frame_index;
+            break;
+        }
+        case TraceMode::Frame:
+        {
+            prefix = kFrameConfigTracePrefix;
+            suffix_number = trace_settings.trace_started_frame;
+            break;
+        }
+        default:
+        {
+            return absl::FailedPreconditionError(
+                absl::StrFormat("Unrecognized TraceMode: %d", trace_settings.mode));
+        }
     }
-}
 
-void AndroidTraceManager::TraceByDuration()
-{
-    m_trace_num++;
-    std::string num = absl::StrCat(m_trace_num);
-    std::string path = absl::StrCat(Dive::DeviceResourcesConstants::kDeviceDownloadPath, "/trace");
-    std::string full_path = absl::StrFormat("%s-%04u.rd", path, m_trace_num);
-    // We can't give libwrap `full_path` so we expect it to combine `path` and `num` as above.
-    SetCaptureName(path.c_str(), num.c_str());
-    {
-        absl::MutexLock lock(&m_state_lock);
-        m_state = TraceState::Triggered;
-    }
-    SetTraceFilePath(std::string(full_path));
+    // This is an Android path so the path separator must be "/" regardless of host platform
+    std::string partial_path =
+        absl::StrFormat("%s/%s", DeviceResourcesConstants::kDeviceDownloadPath, prefix);
+    std::string trace_num_str = absl::StrFormat("%04u", suffix_number);
+    std::string full_path = absl::StrFormat("%s-%s.rd", partial_path, trace_num_str);
 
-    {
-        absl::MutexLock lock(&m_state_lock);
-        SetCaptureState(1);
-        m_state = TraceState::Tracing;
-    }
-    LOG(INFO) << "Set capture file path as " << GetTraceFilePath();
+    m_curr_trace_result.file_path = full_path;
+    LOG(INFO) << "Set capture file path in AndroidTraceManager: " << m_curr_trace_result.file_path;
 
-    absl::SleepFor(m_trace_duration);
-    {
-        absl::MutexLock lock(&m_state_lock);
-        SetCaptureState(0);
-        m_state = TraceState::Finished;
-    }
-}
+    // Set up libwrap
+    // We can't give libwrap `full_path` so we expect it to combine these parts as above.
+    SetCaptureName(partial_path.c_str(), trace_num_str.c_str());
+    LOG(INFO) << "Passed to libwrap: " << partial_path << ", " << trace_num_str;
 
-void AndroidTraceManager::TriggerTrace()
-{
-    // There are two kinds of traces: by duration, and by frame. If OnNewFrame is called then trace
-    // by frame for GetNumFrameToTrace() frames; this function immediately returns and the trace
-    // will be collected the next time OnFewFrame is called. Otherwise, trace by duration for
-    // `m_trace_duration` time; this function will block until the trace is done.
-    if (m_frame_num > 0)
-    {
-        TraceByFrame();
-    }
-    else
-    {
-        TraceByDuration();
-    }
-}
-
-void AndroidTraceManager::OnNewFrame()
-{
-    m_frame_num++;
-    absl::MutexLock lock(&m_state_lock);
-    if (ShouldStartTrace())
-    {
-        OnTraceStart();
-    }
-    else if (ShouldStopTrace())
-    {
-        OnTraceStop();
-    }
-}
-
-void AndroidTraceManager::WaitForTraceDone()
-{
-    // TODO(renfeng): add timeout.
-    m_state_lock.Lock();
-    m_state_lock.Await(absl::Condition(
-        +[](TraceState* state) { return *state == TraceState::Finished; }, &m_state));
-    m_state_lock.Unlock();
-}
-
-bool AndroidTraceManager::ShouldStartTrace() const
-{
-#ifndef NDEBUG
-    m_state_lock.AssertHeld();
-#endif
-    return (m_state == TraceState::Triggered);
-}
-
-bool AndroidTraceManager::ShouldStopTrace() const
-{
-#ifndef NDEBUG
-    m_state_lock.AssertHeld();
-#endif
-    return (m_state == TraceState::Tracing &&
-            m_frame_num - m_trace_start_frame >= GetNumFrameToTrace());
-}
-
-void AndroidTraceManager::OnTraceStart()
-{
-#ifndef NDEBUG
-    m_state_lock.AssertHeld();
-#endif
+    // Tell libwrap to start capture
     SetCaptureState(1);
-    m_state = TraceState::Tracing;
-    LOG(INFO) << "Triggered at frame " << m_frame_num;
-    m_trace_start_frame = m_frame_num;
+
+    return absl::OkStatus();
 }
 
-void AndroidTraceManager::OnTraceStop()
+absl::Status AndroidTraceManager::FromTracingToFinished()
 {
-#ifndef NDEBUG
-    m_state_lock.AssertHeld();
-#endif
+    // Tell libwrap to end capture
     SetCaptureState(0);
-    m_state = TraceState::Finished;
-    LOG(INFO) << "Finished at frame " << m_frame_num;
+    return absl::OkStatus();
+}
+
+absl::StatusOr<TraceManager::TraceResult> AndroidTraceManager::FromFinishedToIdle()
+{
+    if (m_curr_trace_result.file_path.empty())
+    {
+        return absl::NotFoundError("Current finished trace is empty");
+    }
+    return m_curr_trace_result;
+}
+
+AndroidTraceManager& GetDefaultAndroidTraceManager()
+{
+    static AndroidTraceManager android_trace_mgr;
+    return android_trace_mgr;
 }
 
 }  // namespace Dive

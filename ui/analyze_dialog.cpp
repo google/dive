@@ -84,9 +84,7 @@ AnalyzeDialog::AnalyzeDialog(ApplicationController& controller,
     : DeviceDialog(parent), m_controller(controller), m_available_metrics(available_metrics)
 {
     qDebug() << "AnalyzeDialog created.";
-#if defined(__APPLE__)
-    setWindowFlags(windowFlags() | Qt::Tool);
-#endif
+
     m_overlay = new OverlayHelper(this);
 
     // Metrics List

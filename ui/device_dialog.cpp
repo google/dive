@@ -89,12 +89,8 @@ void DeviceDialog::ShowAndRaise()
     {
         showNormal();
     }
-    else
+    else if (!isVisible())
     {
-        if (isVisible())
-        {
-            hide();
-        }
         show();
     }
     raise();

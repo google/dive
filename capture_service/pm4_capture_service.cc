@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "service.h"
+#include "pm4_capture_service.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -24,6 +24,7 @@ limitations under the License.
 
 #include "absl/base/log_severity.h"
 #include "absl/log/log.h"
+#include "capture_service/android_trace_mgr.h"
 #include "constants.h"
 #include "dive/utils/device_resources_constants.h"
 #include "network/message_utils.h"
@@ -32,19 +33,43 @@ limitations under the License.
 namespace Dive
 {
 
-absl::Status StartPm4Capture(Network::SocketConnection* client_conn)
+namespace
 {
-    GetTraceMgr().TriggerTrace();
-    GetTraceMgr().WaitForTraceDone();
-    std::string capture_file_path = GetTraceMgr().GetTraceFilePath();
+
+absl::Status StartPm4DirectCapture(Network::SocketConnection* client_conn)
+{
+    LOG(INFO) << "StartPm4DirectCapture()";
+    AndroidTraceManager& trace_mgr = GetDefaultAndroidTraceManager();
+    trace_mgr.ResetTrace();
+    if (absl::Status res = trace_mgr.TriggerTrace(); !res.ok())
+    {
+        return res;
+    }
+    bool trace_finished = false;
+    while (!trace_finished)
+    {
+        absl::StatusOr<bool> res = trace_mgr.IsTraceFinished();
+        if (!res.ok())
+        {
+            return res.status();
+        }
+        trace_finished = *res;
+    }
+    absl::StatusOr<std::string> capture_file_path = trace_mgr.GetFinishedTracePath();
+    if (!capture_file_path.ok())
+    {
+        return capture_file_path.status();
+    }
 
     Network::Pm4CaptureResponse response;
-    response.SetString(capture_file_path);
+    response.SetString(*capture_file_path);
     return Network::SendSocketMessage(client_conn, response);
 }
 
-void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
-                                         Network::SocketConnection* client_conn)
+}  // namespace
+
+void Pm4ServiceMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable> message,
+                                             Network::SocketConnection* client_conn)
 {
     if (!message)
     {
@@ -62,9 +87,10 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
         case Network::MessageType::PM4_CAPTURE_REQUEST:
         {
             LOG(INFO) << "Message received: Pm4CaptureRequest";
-            if (absl::Status status = StartPm4Capture(client_conn); !status.ok())
+
+            if (absl::Status status = StartPm4DirectCapture(client_conn); !status.ok())
             {
-                LOG(ERROR) << "StartPm4Capture failed: " << status.message();
+                LOG(ERROR) << "StartPm4DirectCapture failed: " << status.message();
             }
             return;
         }
@@ -76,13 +102,14 @@ void ServerMessageHandler::HandleMessage(std::unique_ptr<Network::ISerializable>
     }
 }
 
-int RunServer()
+int RunPm4DirectCaptureServer()
 {
+    LOG(INFO) << "RunPm4DirectCaptureServer()";
     // We use a Unix (local) domain socket in an abstract namespace rather than an internet domain.
     // It avoids the need to grant INTERNET permission to the target application.
     // Also, no file-based permissions apply since it is in an abstract namespace.
     auto server =
-        std::make_unique<Network::UnixDomainServer>(std::make_unique<ServerMessageHandler>());
+        std::make_unique<Network::UnixDomainServer>(std::make_unique<Pm4ServiceMessageHandler>());
 
     std::string server_address = Dive::DeviceResourcesConstants::kUnixAbstractPath;
     auto status = server->Start(server_address);
@@ -93,9 +120,11 @@ int RunServer()
     }
     LOG(INFO) << "Server listening on: " << server_address;
     server->Wait();
+
+    AndroidTraceManager& trace_mgr = GetDefaultAndroidTraceManager();
+    trace_mgr.ResetAppSession();
+
     return 0;
 }
-
-int ServerMain() { return RunServer(); }
 
 }  // namespace Dive

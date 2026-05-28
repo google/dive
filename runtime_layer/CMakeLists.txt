@@ -61,6 +61,7 @@ target_link_libraries(
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
 target_link_libraries(${target_name} -lm -ldl -llog -landroid)
 
+# TODO b/515779388 - Check if generator expression is misused
 if($<CONFIG:Release>)
     set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()

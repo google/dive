@@ -14,20 +14,20 @@
 # limitations under the License.
 #
 
-message(CHECK_START "Generate build files for layer (diveCaptureLayer)")
+message(
+    CHECK_START
+    "Generate build files for layer (libVkLayer_dive.so, libXrApiLayer_dive.so)"
+)
 if(NOT ANDROID)
     message(CHECK_FAIL "not Android platform, skipping")
     return()
 endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
 
-project(diveCaptureLayer)
-
 include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
 enable_dive_compiler_warnings()
 
 set(CMAKE_CXX_STANDARD 20)
-set(target_name VkLayer_dive)
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
@@ -35,7 +35,7 @@ include_directories(
 )
 
 add_library(
-    ${target_name}
+    VkLayer_dive
     SHARED
     layer_common.h
     layer_common.cc
@@ -67,50 +67,48 @@ list(
     wrap
 )
 
-target_link_libraries(
-    ${target_name}
-    ${TARGET_LINK_LIBS}
-    PRIVATE Vulkan::Headers
-)
+target_link_libraries(VkLayer_dive ${TARGET_LINK_LIBS} PRIVATE Vulkan::Headers)
 target_link_directories(
-    ${target_name}
+    VkLayer_dive
     PRIVATE ${CMAKE_SOURCE_DIR}/capture_service
 )
 
+# TODO b/515779388 - Check if generator expression is misused
 if($<CONFIG:Release>)
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
+    set_target_properties(VkLayer_dive PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 set_target_properties(
-    ${target_name}
+    VkLayer_dive
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
-install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_DEVICE}")
+install(TARGETS VkLayer_dive DESTINATION "${DIVE_DEST_DEVICE}")
 
-set(target_name XrApiLayer_dive)
 set(XR_LAYER_SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/openxr_layer.cc"
     "${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/xr_generated_dispatch_table.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/layer_common.cc"
 )
 
-add_library(${target_name} SHARED ${XR_LAYER_SRC_FILES})
+add_library(XrApiLayer_dive SHARED ${XR_LAYER_SRC_FILES})
 set_target_properties(
-    ${target_name}
+    XrApiLayer_dive
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 target_include_directories(
-    ${target_name}
+    XrApiLayer_dive
     PUBLIC
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/include
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src
         ${CMAKE_SOURCE_DIR}/third_party/OpenXR-SDK/src/common
 )
-if($<CONFIG:Release>)
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
-endif()
-target_link_libraries(${target_name} ${TARGET_LINK_LIBS})
 
-install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_DEVICE}")
+# TODO b/515779388 - Check if generator expression is misused
+if($<CONFIG:Release>)
+    set_target_properties(XrApiLayer_dive PROPERTIES LINK_FLAGS_RELEASE -s)
+endif()
+target_link_libraries(XrApiLayer_dive ${TARGET_LINK_LIBS})
+
+install(TARGETS XrApiLayer_dive DESTINATION "${DIVE_DEST_DEVICE}")
 
 configure_file(manifest/XrApiLayer_dive.json.in manifest/XrApiLayer_dive.json)
 install(

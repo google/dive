@@ -14,20 +14,20 @@
 # limitations under the License.
 #
 
-message(CHECK_START "Generate build files for runtime_layer (diveRuntimeLayer)")
-if(NOT (ANDROID OR CMAKE_HOST_WIN32))
-    message(CHECK_FAIL "not Android or Windows platform, skipping")
+message(
+    CHECK_START
+    "Generate build files for runtime_layer (libVkLayer_rt_dive.so)"
+)
+if(NOT ANDROID)
+    message(CHECK_FAIL "not Android platform, skipping")
     return()
 endif()
 list(APPEND CMAKE_MESSAGE_INDENT "  ")
-
-project(diveRuntimeLayer)
 
 include("${dive_SOURCE_DIR}/cmake/compiler_warnings.cmake")
 enable_dive_compiler_warnings()
 
 set(CMAKE_CXX_STANDARD 20)
-set(target_name VkLayer_rt_dive)
 
 set(HDR_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/vk_rt_dispatch.h"
@@ -45,10 +45,10 @@ set(SRC_FILES
 
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/gpu_time)
 
-add_library(${target_name} SHARED ${HDR_FILES} ${SRC_FILES})
+add_library(VkLayer_rt_dive SHARED ${HDR_FILES} ${SRC_FILES})
 
 target_link_libraries(
-    ${target_name}
+    VkLayer_rt_dive
     dive_legacy_includes
     gpu_time
     Vulkan::Headers
@@ -59,21 +59,22 @@ target_link_libraries(
 )
 
 add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
-target_link_libraries(${target_name} -lm -ldl -llog -landroid)
+target_link_libraries(VkLayer_rt_dive -lm -ldl -llog -landroid)
 
+# TODO b/515779388 - Check if generator expression is misused
 if($<CONFIG:Release>)
-    set_target_properties(${target_name} PROPERTIES LINK_FLAGS_RELEASE -s)
+    set_target_properties(VkLayer_rt_dive PROPERTIES LINK_FLAGS_RELEASE -s)
 endif()
 
 set_target_properties(
-    ${target_name}
+    VkLayer_rt_dive
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/"
 )
 
 if(ANDROID)
-    install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_DEVICE}")
+    install(TARGETS VkLayer_rt_dive DESTINATION "${DIVE_DEST_DEVICE}")
 else()
-    install(TARGETS ${target_name} DESTINATION "${DIVE_DEST_HOST}")
+    install(TARGETS VkLayer_rt_dive DESTINATION "${DIVE_DEST_HOST}")
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

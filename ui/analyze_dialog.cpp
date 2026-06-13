@@ -439,7 +439,7 @@ void AnalyzeDialog::OnAnalyzeCaptureStarted(const QString& file_path)
 
     UpdateDeviceList();
     // Open the dialog for users to initiate analysis
-    show();
+    ShowAndRaise();
 }
 
 //--------------------------------------------------------------------------------------------------

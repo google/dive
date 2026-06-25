@@ -16,7 +16,7 @@ on:
 jobs:
   build_host_mac:
     name: Build Host Mac ${{ inputs.build_type }}
-    runs-on: macos-latest
+    runs-on: macos-15
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:

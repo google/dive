@@ -201,20 +201,14 @@ GfxrVulkanCommandHierarchyCreator::GfxrVulkanCommandHierarchyCreator(
 GfxrVulkanCommandHierarchyCreator::~GfxrVulkanCommandHierarchyCreator() {}
 
 //--------------------------------------------------------------------------------------------------
-void GfxrVulkanCommandHierarchyCreator::ConditionallyAddChild(uint64_t node_index)
+void GfxrVulkanCommandHierarchyCreator::AddChildToActiveParent(uint64_t child_node_index,
+                                                               uint64_t default_parent)
 {
-    // Check if the command node should be a child of a command buffer or debug utils/renderpass
-    // node
-    if (m_cur_parent_node_index_stack.empty())
-    {
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_command_buffer_node_index,
-                 node_index);
-    }
-    else
-    {
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology,
-                 m_cur_parent_node_index_stack.top(), node_index);
-    }
+    uint64_t parent = m_parsing_state.parent_node_index_stack.empty()
+                          ? default_parent
+                          : m_parsing_state.parent_node_index_stack.top();
+
+    AddChild(CommandHierarchy::TopologyType::kAllEventTopology, parent, child_node_index);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -233,38 +227,45 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
         vk_cmd_string_stream << ", Draw Call Count: " << draw_call_count;
         uint64_t cmd_buffer_index =
             AddNode(NodeType::kGfxrVulkanBeginCommandBufferNode, vk_cmd_string_stream.str());
-        m_cur_command_buffer_node_index = cmd_buffer_index;
-        GetArgs(vulkan_cmd_args, m_cur_command_buffer_node_index);
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_submit_node_index,
-                 cmd_buffer_index);
+        m_parsing_state.command_buffer_node_index = cmd_buffer_index;
+        GetArgs(vulkan_cmd_args, m_parsing_state.command_buffer_node_index);
+        AddChildToActiveParent(cmd_buffer_index, m_parsing_state.submit_node_index);
+        m_parsing_state.parent_node_index_stack.push(cmd_buffer_index);
     }
     else if (vulkan_cmd_name == "vkEndCommandBuffer")
     {
+        if (!m_parsing_state.parent_node_index_stack.empty() &&
+            (m_parsing_state.parent_node_index_stack.top() ==
+             m_parsing_state.command_buffer_node_index))
+        {
+            m_parsing_state.parent_node_index_stack.pop();
+        }
+
         uint64_t cmd_buffer_index =
             AddNode(NodeType::kGfxrVulkanEndCommandBufferNode, vk_cmd_string_stream.str());
 
         GetArgs(vulkan_cmd_args, cmd_buffer_index);
-        AddChild(CommandHierarchy::TopologyType::kAllEventTopology, m_cur_command_buffer_node_index,
-                 cmd_buffer_index);
+
+        AddChildToActiveParent(cmd_buffer_index, m_parsing_state.submit_node_index);
     }
     else if (vulkan_cmd_name.find("BeginDebugUtilsLabelEXT") != std::string::npos)
     {
         std::string label_name = vulkan_cmd_args["pLabelInfo"]["pLabelName"];
-
         uint64_t begin_debug_utils_label_cmd_index =
             AddNode(NodeType::kGfxrBeginDebugUtilsLabelCommandNode, label_name.c_str());
         GetArgs(vulkan_cmd_args, begin_debug_utils_label_cmd_index);
-        ConditionallyAddChild(begin_debug_utils_label_cmd_index);
-        m_cur_parent_node_index_stack.push(begin_debug_utils_label_cmd_index);
+        AddChildToActiveParent(begin_debug_utils_label_cmd_index,
+                               m_parsing_state.submit_node_index);
+        m_parsing_state.parent_node_index_stack.push(begin_debug_utils_label_cmd_index);
     }
     else if (vulkan_cmd_name.find("EndDebugUtilsLabelEXT") != std::string::npos)
     {
-        if (!m_cur_parent_node_index_stack.empty() &&
-            m_command_hierarchy.GetNodeType(m_cur_parent_node_index_stack.top()) ==
+        if (!m_parsing_state.parent_node_index_stack.empty() &&
+            m_command_hierarchy.GetNodeType(m_parsing_state.parent_node_index_stack.top()) ==
                 NodeType::kGfxrBeginDebugUtilsLabelCommandNode)
         {
             // Remove the corresponding begin debug utils node from the stack
-            m_cur_parent_node_index_stack.pop();
+            m_parsing_state.parent_node_index_stack.pop();
         }
     }
     else if (vulkan_cmd_name.find("vkCmdDraw") != std::string::npos ||
@@ -273,7 +274,7 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
         uint64_t vk_cmd_index =
             AddNode(NodeType::kGfxrVulkanDrawCommandNode, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
-        ConditionallyAddChild(vk_cmd_index);
+        AddChildToActiveParent(vk_cmd_index, m_parsing_state.command_buffer_node_index);
     }
     else if (vulkan_cmd_name.find("vkCmdBeginRenderPass") != std::string::npos)
     {
@@ -286,20 +287,22 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
         uint64_t vk_cmd_index =
             AddNode(NodeType::kGfxrVulkanBeginRenderPassCommandNode, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
-        ConditionallyAddChild(vk_cmd_index);
-        m_cur_parent_node_index_stack.push(vk_cmd_index);
+        AddChildToActiveParent(vk_cmd_index, m_parsing_state.command_buffer_node_index);
+        m_parsing_state.parent_node_index_stack.push(vk_cmd_index);
     }
     else if (vulkan_cmd_name.find("vkCmdEndRenderPass") != std::string::npos)
     {
+        if (!m_parsing_state.parent_node_index_stack.empty() &&
+            m_command_hierarchy.GetNodeType(m_parsing_state.parent_node_index_stack.top()) ==
+                NodeType::kGfxrVulkanBeginRenderPassCommandNode)
+        {
+            m_parsing_state.parent_node_index_stack.pop();
+        }
+
         uint64_t vk_cmd_index =
             AddNode(NodeType::kGfxrVulkanEndRenderPassCommandNode, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
-        ConditionallyAddChild(vk_cmd_index);
-        if (!m_cur_parent_node_index_stack.empty())
-        {
-            // Remove the corresponding vkCmdBeginRenderPass node from the stack
-            m_cur_parent_node_index_stack.pop();
-        }
+        AddChildToActiveParent(vk_cmd_index, m_parsing_state.command_buffer_node_index);
     }
     else
     {
@@ -327,7 +330,7 @@ void GfxrVulkanCommandHierarchyCreator::OnCommand(
 
         uint64_t vk_cmd_index = AddNode(node_type, vk_cmd_string_stream.str());
         GetArgs(vulkan_cmd_args, vk_cmd_index);
-        ConditionallyAddChild(vk_cmd_index);
+        AddChildToActiveParent(vk_cmd_index, m_parsing_state.command_buffer_node_index);
     }
 }
 
@@ -344,18 +347,15 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessVkCmds(
         OnCommand(vk_cmd_info, draw_call_count, mutable_render_pass_draw_call_counts);
     }
 
-    // Ensure the parent node index stack is cleared
-    while (!m_cur_parent_node_index_stack.empty())
-    {
-        m_cur_parent_node_index_stack.pop();
-    }
-
     return true;
 }
 
 //--------------------------------------------------------------------------------------------------
 bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData& capture_data)
 {
+    // Reset state at the beginning of processing to guarantee a clean slate
+    m_parsing_state.Reset();
+
     // Add frame node
     uint64_t frame_root_node_index = AddNode(NodeType::kGfxrRootFrameNode, "Frame");
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, frame_root_node_index);
@@ -385,6 +385,9 @@ bool GfxrVulkanCommandHierarchyCreator::ProcessGfxrSubmits(const GfxrCaptureData
             }
         }
     }
+
+    // Reset state at the end of processing to guarantee a clean slate
+    m_parsing_state.Reset();
     return true;
 }
 
@@ -560,7 +563,7 @@ void GfxrVulkanCommandHierarchyCreator::OnGfxrSubmit(
 
     // Add submit node to the other topologies as children to the root node
     AddChild(CommandHierarchy::kAllEventTopology, Topology::kRootNodeIndex, submit_node_index);
-    m_cur_submit_node_index = submit_node_index;
+    m_parsing_state.submit_node_index = submit_node_index;
 }
 
 //--------------------------------------------------------------------------------------------------

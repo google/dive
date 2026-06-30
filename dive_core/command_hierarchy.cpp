@@ -1314,12 +1314,9 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager& mem_manage
                                        header.type7.count, append_extra_dwords, packet_info_ptr,
                                        packet_node_index);
             }
-            else
+            else if (FirstTimeSeenBadOpCode(header.type7.opcode))
             {
-                if (FirstTimeSeenBadOpCode(header.type7.opcode))
-                {
-                    DIVE_ERROR_MSG("PacketInfo for opcode %d not found\n", header.type7.opcode);
-                }
+                DIVE_ERROR_MSG("PacketInfo for opcode %d not found\n", header.type7.opcode);
             }
         }
         return packet_node_index;

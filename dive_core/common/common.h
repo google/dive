@@ -25,12 +25,12 @@ void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...);
 #define DIVE_ERROR_MSG_ONCE(...)                                \
     do                                                          \
     {                                                           \
-        static bool log_once_guard##__LINE__ = false;           \
-        if (!log_once_guard##__LINE__)                          \
+        static bool dive_error_msg_once_log_guard = false;      \
+        if (!dive_error_msg_once_log_guard)                     \
         {                                                       \
             DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__); \
         }                                                       \
-        log_once_guard##__LINE__ = true;                        \
+        dive_error_msg_once_log_guard = true;                   \
     } while (false)
 #define DIVE_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
 

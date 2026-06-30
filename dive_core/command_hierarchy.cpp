@@ -42,7 +42,7 @@ bool FirstTimeSeenBadOpCode(uint32_t opcode)
 {
     constexpr int kOpcodeBits = 7;
     static std::bitset<(1 << kOpcodeBits)> seen = {};
-    if (opcode > seen.size())
+    if (opcode >= seen.size())
     {
         return true;
     }

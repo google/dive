@@ -20,6 +20,7 @@
 #include <assert.h>
 
 #include <algorithm>  // std::transform
+#include <bitset>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
@@ -35,6 +36,24 @@
 
 namespace Dive
 {
+namespace
+{
+bool FirstTimeSeenBadOpCode(uint32_t opcode)
+{
+    constexpr int kOpcodeBits = 7;
+    static std::bitset<(1 << kOpcodeBits)> seen = {};
+    if (opcode > seen.size())
+    {
+        return true;
+    }
+    if (seen[opcode])
+    {
+        return false;
+    }
+    seen.set(opcode);
+    return true;
+}
+}  // namespace
 
 // =================================================================================================
 // Topology
@@ -1288,11 +1307,20 @@ uint64_t CommandHierarchyCreator::AddPacketNode(const IMemoryManager& mem_manage
                                         header.type7.opcode != CP_LOAD_STATE6_FRAG);
 
             const PacketInfo* packet_info_ptr = GetPacketInfo(header.type7.opcode);
-            DIVE_ASSERT(packet_info_ptr != nullptr);
-            AppendPacketFieldNodes(mem_manager, submit_index,
-                                   va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
-                                   header.type7.count, append_extra_dwords, packet_info_ptr,
-                                   packet_node_index);
+            if (packet_info_ptr)
+            {
+                AppendPacketFieldNodes(mem_manager, submit_index,
+                                       va_addr + sizeof(Pm4Type7Header),  // skip the type7 PM4
+                                       header.type7.count, append_extra_dwords, packet_info_ptr,
+                                       packet_node_index);
+            }
+            else
+            {
+                if (FirstTimeSeenBadOpCode(header.type7.opcode))
+                {
+                    DIVE_ERROR_MSG("PacketInfo for opcode %d not found\n", header.type7.opcode);
+                }
+            }
         }
         return packet_node_index;
     }

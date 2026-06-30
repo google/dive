@@ -26,6 +26,16 @@
 
 namespace Dive
 {
+#define GET_REG_OFFSET_BY_NAME_OR_RETURN(var, name)                           \
+    uint32_t var = GetRegOffsetByName(#name);                                 \
+    do                                                                        \
+    {                                                                         \
+        if (var == kInvalidRegOffset)                                         \
+        {                                                                     \
+            DIVE_ERROR_MSG_ONCE("Register offset not found for " #name "\n"); \
+            return;                                                           \
+        }                                                                     \
+    } while (false)
 
 // =================================================================================================
 // DataCore
@@ -486,16 +496,15 @@ void CaptureMetadataCreator::FillDrawEventStateInfo(EventStateInfo::Iterator eve
 void CaptureMetadataCreator::FillResolveOrClearEventStateInfo(
     EventStateInfo::Iterator event_state_it)
 {
-    uint32_t rb_resolve_gmem_buffer_base_reg_offset =
-        GetRegOffsetByName("RB_RESOLVE_GMEM_BUFFER_BASE");
+    GET_REG_OFFSET_BY_NAME_OR_RETURN(rb_resolve_gmem_buffer_base_reg_offset,
+                                     RB_RESOLVE_GMEM_BUFFER_BASE);
     if (m_state_tracker.IsRegSet(rb_resolve_gmem_buffer_base_reg_offset))
     {
         event_state_it->SetResolveBaseGmem(
             m_state_tracker.GetRegValue(rb_resolve_gmem_buffer_base_reg_offset));
     }
 
-    uint32_t rb_resolve_cntl_1_reg_offset = GetRegOffsetByName("RB_RESOLVE_CNTL_1");
-    DIVE_ASSERT(rb_resolve_cntl_1_reg_offset != kInvalidRegOffset);
+    GET_REG_OFFSET_BY_NAME_OR_RETURN(rb_resolve_cntl_1_reg_offset, RB_RESOLVE_CNTL_1);
     if (m_state_tracker.IsRegSet(rb_resolve_cntl_1_reg_offset))
     {
         // Assumption: These are all set together. All-or-nothing.
@@ -565,8 +574,7 @@ void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_st
 {
     // Check if viewport is set. Up to 16 of them can be set.
     uint32_t viewport_id = 0;
-    uint32_t viewport_reg_start = GetRegOffsetByName("GRAS_CL_VIEWPORT0_XOFFSET");
-    DIVE_ASSERT(viewport_reg_start != kInvalidRegOffset);
+    GET_REG_OFFSET_BY_NAME_OR_RETURN(viewport_reg_start, GRAS_CL_VIEWPORT0_XOFFSET);
     while (viewport_id < 16 && m_state_tracker.IsRegSet(viewport_reg_start + 6 * viewport_id))
     {
         GRAS_CL_VIEWPORT_XOFFSET xOffset{};
@@ -604,8 +612,7 @@ void CaptureMetadataCreator::FillViewportState(EventStateInfo::Iterator event_st
     // Check if scissor is set. Up to 16 of them can be set.
     uint16_t scissor_id = 0;
     // TODO(wangra): there is also GRAS_SC_SCREEN_SCISSOR0_TL
-    uint32_t scissor_reg_start = GetRegOffsetByName("GRAS_SC_VIEWPORT_SCISSOR0_TL");
-    DIVE_ASSERT(scissor_reg_start != kInvalidRegOffset);
+    GET_REG_OFFSET_BY_NAME_OR_RETURN(scissor_reg_start, GRAS_SC_VIEWPORT_SCISSOR0_TL);
     while (scissor_id < 16 && m_state_tracker.IsRegSet(scissor_reg_start + 2 * scissor_id))
     {
         // Assumption: These are all set together. All-or-nothing.
@@ -839,8 +846,7 @@ void CaptureMetadataCreator::FillDepthState(EventStateInfo::Iterator event_state
 void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_state_it)
 {
     uint32_t rt_id = 0;
-    uint32_t rb_mrt_ctl_reg_start = GetRegOffsetByName("RB_MRT0_CONTROL");
-    DIVE_ASSERT(rb_mrt_ctl_reg_start != kInvalidRegOffset);
+    GET_REG_OFFSET_BY_NAME_OR_RETURN(rb_mrt_ctl_reg_start, RB_MRT0_CONTROL);
     constexpr uint32_t kElemCount = 8;
     while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_ctl_reg_start + kElemCount * rt_id))
     {
@@ -1041,8 +1047,7 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
     // field is enabled or not for current GPU
     uint32_t rt_id = 0;
     constexpr uint32_t kElemCount = 8;
-    uint32_t rb_mrt_buf_info_reg_start = GetRegOffsetByName("RB_MRT0_BUF_INFO");
-    DIVE_ASSERT(rb_mrt_buf_info_reg_start != kInvalidRegOffset);
+    GET_REG_OFFSET_BY_NAME_OR_RETURN(rb_mrt_buf_info_reg_start, RB_MRT0_BUF_INFO);
     while (rt_id < 8 && m_state_tracker.IsRegSet(rb_mrt_buf_info_reg_start + kElemCount * rt_id))
     {
         RB_MRT_BUF_INFO rb_mrt_buf_info{};
@@ -1059,8 +1064,7 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
 
     if (GetGPUVariantType() >= kA7XX)
     {
-        uint32_t rb_depth_buf_info_offset = GetRegOffsetByName("RB_DEPTH_BUFFER_INFO");
-        DIVE_ASSERT(rb_depth_buf_info_offset != kInvalidRegOffset);
+        GET_REG_OFFSET_BY_NAME_OR_RETURN(rb_depth_buf_info_offset, RB_DEPTH_BUFFER_INFO);
         if (m_state_tracker.IsRegSet(rb_depth_buf_info_offset))
         {
             RB_DEPTH_BUFFER_INFO depth_buffer_info{};

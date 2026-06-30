@@ -21,6 +21,17 @@ void DIVE_LOG_INTERNAL(const char* file, int line, const char* format, ...);
 #include <assert.h>
 
 #define DIVE_ERROR_MSG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
+// Note: this is not thread safe, but it does not really matter to log more than once
+#define DIVE_ERROR_MSG_ONCE(...)                                \
+    do                                                          \
+    {                                                           \
+        static bool dive_error_msg_once_log_guard = false;      \
+        if (!dive_error_msg_once_log_guard)                     \
+        {                                                       \
+            DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__); \
+        }                                                       \
+        dive_error_msg_once_log_guard = true;                   \
+    } while (false)
 #define DIVE_LOG(...) DIVE_LOG_INTERNAL(__FILE__, __LINE__, __VA_ARGS__)
 
 #ifndef NDEBUG  // DEBUG

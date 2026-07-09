@@ -40,6 +40,27 @@ target_link_libraries(
         dive_device_resources_constants
 )
 
+add_library(
+    capture_mgr
+    android_capture_mgr.cc
+    android_capture_mgr.h
+    capture_mgr.cc
+    capture_mgr.h
+)
+target_link_libraries(
+    capture_mgr
+    PUBLIC
+        dive_legacy_includes
+        absl::core_headers
+        absl::synchronization
+        absl::time
+        absl::str_format
+        absl::strings
+        absl::log
+        dive_device_resources_constants
+)
+target_include_directories(capture_mgr PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 if(ANDROID)
     add_library(service service.cc)
 else()
@@ -201,6 +222,22 @@ else()
         gtest_main
     )
     gtest_discover_tests(android_trace_mgr_test)
+
+    add_executable(android_capture_mgr_test android_capture_mgr_test.cc)
+    target_link_libraries(
+        android_capture_mgr_test
+        absl::status_matchers
+        absl::strings
+        capture_mgr
+        gtest
+        gtest_main
+        gmock
+    )
+    target_include_directories(
+        android_capture_mgr_test
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+    )
+    gtest_discover_tests(android_capture_mgr_test)
 endif()
 
 list(POP_BACK CMAKE_MESSAGE_INDENT)

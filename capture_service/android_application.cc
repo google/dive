@@ -468,11 +468,6 @@ absl::Status AndroidApplication::RuntimeWhatIfSetup()
     RETURN_IF_ERROR(m_dev.Adb().Run(
         absl::StrFormat("shell settings put global gpu_debug_layers %s", Dive::kVkLayerName)));
 
-    // Need root to set openxr.enable_frame_delimiter
-    // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
-    // `debug.openxr.enable_frame_delimiter`
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter true"));
-    // New prop is prefixed with debug.
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter true"));
 
     RETURN_IF_ERROR(m_dev.ForwardFirstAvailablePort());
@@ -498,9 +493,6 @@ absl::Status AndroidApplication::RuntimeWhatIfCleanup()
         absl::StrFormat("shell rm %s/%s", Dive::DeviceResourcesConstants::kDeployFolderPath,
                         Dive::DeviceResourcesConstants::kVkRuntimeLayerLibName)));
 
-    // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
-    // `debug.openxr.enable_frame_delimiter`
-    RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
     RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false"));
 
     return absl::OkStatus();
@@ -635,6 +627,7 @@ absl::Status OpenXRApplication::Setup()
 
     if (m_gfxr_capture_settings)
     {
+        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter true"));
         RETURN_IF_ERROR(GfxrSetup());
     }
     else
@@ -662,9 +655,6 @@ absl::Status OpenXRApplication::Cleanup()
 {
     if (m_gfxr_capture_settings)
     {
-        // TODO(b/426541653): remove this after all branches in AndroidXR accept the prop of
-        // `debug.openxr.enable_frame_delimiter`
-        RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop openxr.enable_frame_delimiter false"));
         RETURN_IF_ERROR(m_dev.Adb().Run("shell setprop debug.openxr.enable_frame_delimiter false"));
     }
     else if (!m_runtime_what_if_enabled)

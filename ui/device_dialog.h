@@ -33,6 +33,7 @@ class DeviceDialog : public QDialog
     virtual ~DeviceDialog();
     std::string GetCurrentDeviceSerial() const;
     void UpdateDeviceList();
+    void ShowAndRaise();
 
  protected:
     virtual void ShowMessage(const QString& message) = 0;

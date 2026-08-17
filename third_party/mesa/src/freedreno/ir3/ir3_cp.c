@@ -287,6 +287,34 @@ try_swap_cat3_two_srcs(struct ir3_instruction *instr, unsigned n,
    return is_sad(instr->opc) && try_swap_two_srcs(instr, n, new_flags, 1);
 }
 
+/* Is this a collect of only consecutive const srcs? Some instructions (e.g.,
+ * cat6) can directly use consecutive const registers as a src so the collect
+ * can be cp'ed like a mov.
+ */
+static bool
+is_const_vec(struct ir3_instruction *collect)
+{
+   if (collect->opc != OPC_META_COLLECT) {
+      return false;
+   }
+
+   unsigned first_num;
+
+   foreach_src_n (src, src_n, collect) {
+      if (!(src->flags & IR3_REG_CONST)) {
+         return false;
+      }
+
+      if (src_n == 0) {
+         first_num = src->num;
+      } else if (src->num != first_num + src_n) {
+         return false;
+      }
+   }
+
+   return true;
+}
+
 /**
  * Handle cp for a given src register.  This additionally handles
  * the cases of collapsing immedate/const (which replace the src
@@ -304,6 +332,22 @@ reg_cp(struct ir3_cp_ctx *ctx, struct ir3_instruction *instr,
       /* simple case, no immed/const/relativ, only mov's w/ ssa src: */
       struct ir3_register *src_reg = src->srcs[0];
       unsigned new_flags = reg->flags;
+
+      /* Narrowing integer cov instructions from GPR to uGPR do not
+       * behave the way you'd expect on gen8.  Instead of "chopping"
+       * out the high bits, if any high bit is set you get 0x7fff or
+       * 0xffff depending on whether src_type is signed or unsigned.
+       * Float conversions behave as expected.
+       */
+      if (ctx->shader->compiler->info->props.has_salu_int_narrowing_quirk &&
+          (instr->opc == OPC_MOV) &&
+          (instr->cat1.dst_type != instr->cat1.src_type) &&
+          (type_size(instr->cat1.dst_type) <
+           type_size(instr->cat1.src_type)) &&
+          !type_float(instr->cat1.dst_type) &&
+          (instr->dsts[0]->flags & IR3_REG_SHARED) &&
+          !(src->srcs[0]->flags & (IR3_REG_SHARED | IR3_REG_CONST | IR3_REG_SHARED)))
+         return false;
 
       combine_flags(&new_flags, src);
 
@@ -325,7 +369,7 @@ reg_cp(struct ir3_cp_ctx *ctx, struct ir3_instruction *instr,
       } else if (try_swap_cat3_two_srcs(instr, n, new_flags)) {
          return true;
       }
-   } else if ((is_same_type_mov(src) || is_const_mov(src)) &&
+   } else if ((is_same_type_mov(src) || is_const_mov(src) || is_const_vec(src)) &&
               /* cannot collapse const/immed/etc into control flow: */
               opc_cat(instr->opc) != 0) {
       /* immed/const/etc cases, which require some special handling: */
@@ -365,6 +409,11 @@ reg_cp(struct ir3_cp_ctx *ctx, struct ir3_instruction *instr,
        * dependency.
        */
       if (src_reg->flags & IR3_REG_CONST) {
+         if (!(src_reg->flags & IR3_REG_RELATIV) &&
+             !ir3_valid_const(instr, n, src_reg->num)) {
+            return false;
+         }
+
          /* an instruction cannot reference two different
           * address registers:
           */
@@ -390,25 +439,28 @@ reg_cp(struct ir3_cp_ctx *ctx, struct ir3_instruction *instr,
           * to work only for float. So we should do this only with
           * float opcodes.
           */
-         if (src->cat1.dst_type == TYPE_F16) {
-            /* TODO: should we have a way to tell phi/collect to use a
-             * float move so that this is legal?
-             */
-            if (is_meta(instr))
-               return false;
-            if (instr->opc == OPC_MOV && !type_float(instr->cat1.src_type))
-               return false;
-            if (!is_cat2_float(instr->opc) && !is_cat3_float(instr->opc))
-               return false;
-         } else if (src->cat1.dst_type == TYPE_U16 || src->cat1.dst_type == TYPE_S16) {
-            /* Since we set CONSTANT_DEMOTION_ENABLE, a float reference of
-             * what was a U16 value read from the constbuf would incorrectly
-             * do 32f->16f conversion, when we want to read a 16f value.
-             */
-            if (is_cat2_float(instr->opc) || is_cat3_float(instr->opc))
-               return false;
-            if (instr->opc == OPC_MOV && type_float(instr->cat1.src_type))
-               return false;
+         if (src->opc == OPC_MOV) {
+            if (src->cat1.dst_type == TYPE_F16) {
+               /* TODO: should we have a way to tell phi/collect to use a
+                * float move so that this is legal?
+                */
+               if (is_meta(instr))
+                  return false;
+               if (instr->opc == OPC_MOV && !type_float(instr->cat1.src_type))
+                  return false;
+               if (!is_cat2_float(instr->opc) && !is_cat3_float(instr->opc))
+                  return false;
+            } else if (src->cat1.dst_type == TYPE_U16 ||
+                       src->cat1.dst_type == TYPE_S16) {
+               /* Since we set CONSTANT_DEMOTION_ENABLE, a float reference of
+                * what was a U16 value read from the constbuf would incorrectly
+                * do 32f->16f conversion, when we want to read a 16f value.
+                */
+               if (is_cat2_float(instr->opc) || is_cat3_float(instr->opc))
+                  return false;
+               if (instr->opc == OPC_MOV && type_float(instr->cat1.src_type))
+                  return false;
+            }
          }
 
          src_reg = ir3_reg_clone(instr->block->shader, src_reg);

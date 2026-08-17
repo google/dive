@@ -1,24 +1,6 @@
 /*
  * Copyright © 2015-2016 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_compiler.h"
@@ -48,9 +30,6 @@ elk_compiler_create(void *mem_ctx, const struct intel_device_info *devinfo)
    compiler->precise_trig = debug_get_bool_option("INTEL_PRECISE_TRIG", false);
 
    compiler->has_negative_rhw_bug = devinfo->verx10 == 40;
-
-   /* Default to the sampler since that's what we've done since forever */
-   compiler->indirect_ubos_use_sampler = true;
 
    /* There is no vec4 mode on Gfx10+, and we don't use it at all on Gfx8+. */
    for (int i = MESA_SHADER_VERTEX; i < MESA_ALL_SHADER_STAGES; i++) {
@@ -107,10 +86,15 @@ elk_compiler_create(void *mem_ctx, const struct intel_device_info *devinfo)
       /* Prior to Gfx6, there are no three source operations, and Gfx11 loses
        * LRP.
        */
-      nir_options->lower_ffma16 = devinfo->ver < 6;
-      nir_options->lower_ffma32 = devinfo->ver < 6;
-      nir_options->lower_ffma64 = devinfo->ver < 6;
       nir_options->lower_flrp32 = devinfo->ver < 6;
+
+      if (devinfo->ver >= 6) {
+         nir_options->float_mul_add32 = nir_float_muladd_support_has_ffma;
+         nir_options->float_mul_add64 = nir_float_muladd_support_has_ffma;
+      }
+
+      if (devinfo->ver >= 8)
+         nir_options->float_mul_add16 = nir_float_muladd_support_has_ffma;
 
       nir_options->has_bfe = devinfo->ver >= 7;
       nir_options->has_bfm = devinfo->ver >= 7;
@@ -162,7 +146,6 @@ elk_get_compiler_config_value(const struct elk_compiler *compiler)
       DEBUG_SPILL_FS,
       DEBUG_SPILL_VEC4,
       DEBUG_NO_COMPACTION,
-      DEBUG_DO32,
       DEBUG_SOFT64,
       DEBUG_NO_SEND_GATHER,
    };
@@ -176,6 +159,11 @@ elk_get_compiler_config_value(const struct elk_compiler *compiler)
 
    u_foreach_bit64(bit, mask)
       insert_u64_bit(&config, (intel_simd & (1ULL << bit)) != 0);
+
+   for (unsigned i = 0; i < MESA_SHADER_STAGES; i++) {
+      insert_u64_bit(&config, (intel_simd_overridden & (1 << i)) != 0);
+      bits++;
+   }
 
    mask = 3;
    bits += util_bitcount64(mask);
@@ -193,7 +181,7 @@ elk_prog_data_size(mesa_shader_stage stage)
       [MESA_SHADER_TESS_CTRL]    = sizeof(struct elk_tcs_prog_data),
       [MESA_SHADER_TESS_EVAL]    = sizeof(struct elk_tes_prog_data),
       [MESA_SHADER_GEOMETRY]     = sizeof(struct elk_gs_prog_data),
-      [MESA_SHADER_FRAGMENT]     = sizeof(struct elk_wm_prog_data),
+      [MESA_SHADER_FRAGMENT]     = sizeof(struct elk_fs_prog_data),
       [MESA_SHADER_COMPUTE]      = sizeof(struct elk_cs_prog_data),
    };
    assert((int)stage >= 0 && stage < ARRAY_SIZE(stage_sizes));
@@ -208,7 +196,7 @@ elk_prog_key_size(mesa_shader_stage stage)
       [MESA_SHADER_TESS_CTRL]    = sizeof(struct elk_tcs_prog_key),
       [MESA_SHADER_TESS_EVAL]    = sizeof(struct elk_tes_prog_key),
       [MESA_SHADER_GEOMETRY]     = sizeof(struct elk_gs_prog_key),
-      [MESA_SHADER_FRAGMENT]     = sizeof(struct elk_wm_prog_key),
+      [MESA_SHADER_FRAGMENT]     = sizeof(struct elk_fs_prog_key),
       [MESA_SHADER_COMPUTE]      = sizeof(struct elk_cs_prog_key),
    };
    assert((int)stage >= 0 && stage < ARRAY_SIZE(stage_sizes));

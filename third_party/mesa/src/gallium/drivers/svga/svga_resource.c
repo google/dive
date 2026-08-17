@@ -33,7 +33,7 @@ svga_resource_create(struct pipe_screen *screen,
 
    if (!r) {
       struct svga_screen *svgascreen = svga_screen(screen);
-      svgascreen->hud.num_failed_allocations++;
+      p_atomic_inc(&svgascreen->hud.num_failed_allocations);
    }
 
    return r;

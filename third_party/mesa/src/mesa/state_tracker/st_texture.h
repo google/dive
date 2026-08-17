@@ -62,8 +62,6 @@ struct st_sampler_view
 
    /** The glsl version of the shader seen during validation */
    bool glsl130_or_later;
-   /** Derived from the sampler's sRGBDecode state during validation */
-   bool srgb_skip_decode;
 };
 
 
@@ -148,10 +146,10 @@ st_texture_create(struct st_context *st,
 extern void
 st_gl_texture_dims_to_pipe_dims(GLenum texture,
                                 unsigned widthIn,
-                                uint16_t heightIn,
+                                unsigned heightIn,
                                 uint16_t depthIn,
                                 unsigned *widthOut,
-                                uint16_t *heightOut,
+                                unsigned *heightOut,
                                 uint16_t *depthOut,
                                 uint16_t *layersOut);
 
@@ -251,7 +249,9 @@ st_convert_sampler_from_unit(const struct st_context *st,
 struct pipe_sampler_view *
 st_update_single_texture(struct st_context *st,
                          GLuint texUnit, bool glsl130_or_later,
-                         bool ignore_srgb_decode);
+                         bool ignore_srgb_decode,
+                         unsigned num_norelease_views,
+                         const struct pipe_sampler_view **norelease_views);
 
 unsigned
 st_get_sampler_views(struct st_context *st,

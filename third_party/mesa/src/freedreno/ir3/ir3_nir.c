@@ -7,10 +7,12 @@
  */
 
 #include "util/u_debug.h"
+#include "util/u_dynarray.h"
 #include "util/u_math.h"
 
 #include "ir3_compiler.h"
 #include "ir3_nir.h"
+#include "ir3_ra.h"
 #include "ir3_shader.h"
 
 #include "nir_builtin_builder.h"
@@ -137,10 +139,9 @@ ir3_load_driver_ubo_indirect(nir_builder *b, unsigned components,
 }
 
 static bool
-ir3_nir_should_scalarize_mem(const nir_instr *instr, const void *data)
+ir3_nir_should_scalarize_mem(const nir_intrinsic_instr *intrin, const void *data)
 {
    const struct ir3_compiler *compiler = data;
-   const nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
 
    /* Scalarize load_ssbo's that we could otherwise lower to isam,
     * as the tex cache benefit outweighs the benefit of vectorizing
@@ -148,7 +149,7 @@ ir3_nir_should_scalarize_mem(const nir_instr *instr, const void *data)
     */
    if ((intrin->intrinsic == nir_intrinsic_load_ssbo) &&
        (nir_intrinsic_access(intrin) & ACCESS_CAN_REORDER) &&
-       compiler->has_isam_ssbo && !compiler->has_isam_v) {
+       compiler->has_isam_ssbo && !compiler->info->props.has_isam_v) {
       return true;
    }
 
@@ -186,7 +187,7 @@ ir3_nir_should_vectorize_mem(unsigned align_mul, unsigned align_offset,
     */
    if ((low->intrinsic == nir_intrinsic_load_ssbo) &&
        (nir_intrinsic_access(low) & ACCESS_CAN_REORDER) &&
-       compiler->has_isam_ssbo && !compiler->has_isam_v) {
+       compiler->has_isam_ssbo && !compiler->info->props.has_isam_v) {
       return false;
    }
 
@@ -255,6 +256,7 @@ ir3_lower_bit_size(const nir_instr *instr, UNUSED void *data)
       case nir_op_ishr:
       case nir_op_isub_sat:
       case nir_op_uadd_sat:
+      case nir_op_usub_sat:
       case nir_op_umax:
       case nir_op_umin:
       case nir_op_ushr:
@@ -277,31 +279,6 @@ ir3_lower_bit_size(const nir_instr *instr, UNUSED void *data)
    return 0;
 }
 
-static void
-ir3_get_variable_size_align_bytes(const glsl_type *type, unsigned *size, unsigned *align)
-{
-   switch (type->base_type) {
-   case GLSL_TYPE_ARRAY:
-   case GLSL_TYPE_INTERFACE:
-   case GLSL_TYPE_STRUCT:
-      glsl_size_align_handle_array_and_structs(type, ir3_get_variable_size_align_bytes,
-                                               size, align);
-      break;
-   case GLSL_TYPE_UINT8:
-   case GLSL_TYPE_INT8:
-      /* 8-bit values are handled through 16-bit half-registers, so the resulting size
-       * and alignment value has to be doubled to reflect the actual variable size
-       * requirement.
-       */
-      *size = 2 * glsl_get_components(type);
-      *align = 2;
-      break;
-   default:
-      glsl_get_natural_size_align_bytes(type, size, align);
-      break;
-   }
-}
-
 #define OPT(nir, pass, ...)                                                    \
    ({                                                                          \
       bool this_progress = false;                                              \
@@ -311,8 +288,7 @@ ir3_get_variable_size_align_bytes(const glsl_type *type, unsigned *size, unsigne
 
 bool
 ir3_optimize_loop(struct ir3_compiler *compiler,
-                  const struct ir3_shader_nir_options *options,
-                  nir_shader *s)
+                  struct ir3_optimize_options *options, nir_shader *s)
 {
    MESA_TRACE_FUNC();
 
@@ -329,7 +305,7 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
       progress |= OPT(s, nir_lower_alu_to_scalar, NULL, NULL);
       progress |= OPT(s, nir_lower_phis_to_scalar, NULL, NULL);
 
-      progress |= OPT(s, nir_copy_prop);
+      progress |= OPT(s, nir_opt_copy_prop);
       progress |= OPT(s, nir_opt_deref);
       progress |= OPT(s, nir_opt_dce);
       progress |= OPT(s, nir_opt_cse);
@@ -345,9 +321,9 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
       if (gcm == -1)
          gcm = debug_get_num_option("GCM", 0);
       if (gcm == 1)
-         progress |= OPT(s, nir_opt_gcm, true);
+         progress |= OPT(s, nir_opt_gcm, true, true);
       else if (gcm == 2)
-         progress |= OPT(s, nir_opt_gcm, false);
+         progress |= OPT(s, nir_opt_gcm, false, true);
       nir_opt_peephole_select_options peephole_select_options = {
          .limit = 16,
          .indirect_load_ok = true,
@@ -365,9 +341,7 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
        * fp16/int16 for frag and compute, skip phi precision lowering
        * for other stages.
        */
-      if ((s->info.stage == MESA_SHADER_FRAGMENT) ||
-          (s->info.stage == MESA_SHADER_COMPUTE) ||
-          (s->info.stage == MESA_SHADER_KERNEL)) {
+      if (is_compute_or_frag(s->info.stage)) {
          progress |= OPT(s, nir_opt_phi_precision);
       }
       progress |= OPT(s, nir_opt_algebraic);
@@ -375,6 +349,7 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
       progress |= OPT(s, nir_lower_pack);
       progress |= OPT(s, nir_lower_bit_size, ir3_lower_bit_size, NULL);
       progress |= OPT(s, nir_opt_constant_folding);
+      progress |= OPT(s, nir_opt_uub, &options->opt_uub_options);
 
       /* Remove unused components from IO loads. */
       progress |= OPT(s, nir_opt_shrink_vectors, true);
@@ -397,10 +372,7 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
       progress |= OPT(s, nir_opt_offsets, &offset_options);
 
       if (lower_flrp != 0) {
-         if (OPT(s, nir_lower_flrp, lower_flrp, false /* always_precise */)) {
-            OPT(s, nir_opt_constant_folding);
-            progress = true;
-         }
+         OPT(s, nir_lower_flrp, lower_flrp, false /* always_precise */);
 
          /* Nothing should rematerialize any flrps, so we only
           * need to do this lowering once.
@@ -415,7 +387,7 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
           * things up if we want any hope of nir_opt_if or nir_opt_loop_unroll
           * to make progress.
           */
-         OPT(s, nir_copy_prop);
+         OPT(s, nir_opt_copy_prop);
          OPT(s, nir_opt_dce);
       }
       progress |= OPT(s, nir_opt_if, nir_opt_if_optimize_phi_true_false);
@@ -427,22 +399,6 @@ ir3_optimize_loop(struct ir3_compiler *compiler,
 
    OPT(s, nir_lower_var_copies);
    return did_progress;
-}
-
-static bool
-should_split_wrmask(const nir_instr *instr, const void *data)
-{
-   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-
-   switch (intr->intrinsic) {
-   case nir_intrinsic_store_ssbo:
-   case nir_intrinsic_store_shared:
-   case nir_intrinsic_store_global:
-   case nir_intrinsic_store_scratch:
-      return true;
-   default:
-      return false;
-   }
 }
 
 static bool
@@ -492,13 +448,18 @@ ir3_nir_lower_io_vars_to_temporaries(nir_shader *s)
     * stop doing that once we're sure all drivers are doing their own
     * indirect i/o lowering.
     */
-   bool lower_input = s->info.stage == MESA_SHADER_VERTEX ||
-                      s->info.stage == MESA_SHADER_FRAGMENT;
-   bool lower_output = s->info.stage != MESA_SHADER_TESS_CTRL &&
-                       s->info.stage != MESA_SHADER_GEOMETRY;
-   if (lower_input || lower_output) {
+   nir_variable_mode lower_modes = 0;
+
+   if (s->info.stage == MESA_SHADER_VERTEX ||
+       s->info.stage == MESA_SHADER_FRAGMENT)
+      lower_modes |= nir_var_shader_in;
+
+   if (s->info.stage != MESA_SHADER_TESS_CTRL)
+      lower_modes |= nir_var_shader_out;
+
+   if (lower_modes) {
       NIR_PASS(_, s, nir_lower_io_vars_to_temporaries, nir_shader_get_entrypoint(s),
-               lower_output, lower_input);
+               lower_modes);
 
       /* nir_lower_io_vars_to_temporaries() creates global variables and copy
        * instructions which need to be cleaned up.
@@ -511,14 +472,14 @@ ir3_nir_lower_io_vars_to_temporaries(nir_shader *s)
    /* Regardless of the above, we need to lower indirect references to
     * compact variables such as clip/cull distances because due to how
     * TCS<->TES IO works we cannot handle indirect accesses that "straddle"
-    * vec4 components. nir_lower_indirect_derefs has a special case for
-    * compact variables, so it will actually lower them even though we pass
-    * in 0 modes.
+    * vec4 components. nir_lower_indirect_derefs_to_if_else_trees has a special
+    * case for compact variables, so it will actually lower them even though we
+    * pass in 0 modes.
     *
     * Using temporaries would be slightly better but
     * nir_lower_io_vars_to_temporaries currently doesn't support TCS i/o.
     */
-   NIR_PASS(_, s, nir_lower_indirect_derefs, 0, UINT32_MAX);
+   NIR_PASS(_, s, nir_lower_indirect_derefs_to_if_else_trees, 0, UINT32_MAX);
 }
 
 /**
@@ -560,13 +521,81 @@ ir3_nir_lower_array_sampler(nir_shader *shader)
       nir_metadata_control_flow, NULL);
 }
 
+/* pack_uvec2_to_uint does clamping that we don't need to do. */
+static nir_def *
+pack_16_16(nir_builder *b, nir_def *x)
+{
+   return nir_ior(b, nir_channel(b, x, 0), nir_ishl_imm(b, nir_channel(b, x, 1), 16));
+}
+
+static bool
+ir3_nir_lower_image_processing_instr(struct nir_builder *b, nir_instr *instr,
+                                     void *_data)
+{
+   if (instr->type != nir_instr_type_tex)
+      return false;
+
+   nir_tex_instr *tex = nir_instr_as_tex(instr);
+   b->cursor = nir_before_instr(&tex->instr);
+
+   if (tex->op == nir_texop_box_filter_qcom) {
+      /* The hardware's box filter arg is preprocessed, but still a vec2.  We do
+       * the preprocessing in NIR so it's more legible, and can be constant
+       * folded.
+       */
+      int box_size_src = nir_tex_instr_src_index(tex, nir_tex_src_box_size);
+      assert(box_size_src >= 0);
+
+      nir_def *box_size = tex->src[box_size_src].src.ssa;
+      nir_def *area =
+         nir_fmul(b, nir_channel(b, box_size, 0), nir_channel(b, box_size, 1));
+      box_size =
+         nir_f2u32(b, nir_fround_even(b, nir_fmul_imm(b, box_size, 64.0)));
+      nir_def *inv_area = nir_u2u32(b, nir_f2f16(b, nir_frcp(b, area)));
+
+      nir_src_rewrite(&tex->src[box_size_src].src, nir_vec2(b, pack_16_16(b, box_size), inv_area));
+
+      return true;
+   } else if (tex->op == nir_texop_block_match_sad_qcom ||
+              tex->op == nir_texop_block_match_ssd_qcom) {
+      /* Convert the src coords to integer, and pack the ref coord and block
+       * into u32s each.
+       */
+      int coord_src = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+      assert(coord_src >= 0);
+      nir_src_rewrite(&tex->src[coord_src].src, nir_i2f32(b, tex->src[coord_src].src.ssa));
+
+      int ref_coord_src = nir_tex_instr_src_index(tex, nir_tex_src_ref_coord);
+      assert(ref_coord_src >= 0);
+      nir_src_rewrite(&tex->src[ref_coord_src].src,
+                      pack_16_16(b, tex->src[ref_coord_src].src.ssa));
+
+      int block_size_src = nir_tex_instr_src_index(tex, nir_tex_src_block_size);
+      assert(block_size_src >= 0);
+      nir_src_rewrite(&tex->src[block_size_src].src,
+                      pack_16_16(b, tex->src[block_size_src].src.ssa));
+
+      return true;
+   } else {
+      return false;
+   }
+}
+
+static bool
+ir3_nir_lower_image_processing(nir_shader *shader)
+{
+   return nir_shader_instructions_pass(shader, ir3_nir_lower_image_processing_instr,
+                                       nir_metadata_control_flow, NULL);
+}
+
 static bool
 lower_shader_clock(struct nir_builder *b, nir_intrinsic_instr *instr, void *data)
 {
    if (instr->intrinsic != nir_intrinsic_shader_clock)
       return false;
 
-   uint64_t uche_trap_base = *(uint64_t *)data;
+   struct ir3_compiler *compiler = data;
+   uint64_t uche_trap_base = compiler->options.uche_trap_base;
 
    b->cursor = nir_before_instr(&instr->instr);
    nir_def *clock, *undef;
@@ -575,11 +604,22 @@ lower_shader_clock(struct nir_builder *b, nir_intrinsic_instr *instr, void *data
    {
       /* ALWAYSON counter is mapped to this address. */
       nir_def *base_addr = nir_imm_int64(b, uche_trap_base);
-      /* Reading _LO first presumably latches _HI making the read atomic. */
-      nir_def *clock_lo =
-         nir_load_global_ir3(b, 1, 32, base_addr, nir_imm_int(b, 0));
-      nir_def *clock_hi =
-         nir_load_global_ir3(b, 1, 32, base_addr, nir_imm_int(b, 1));
+
+      nir_io_offset offset_lo =
+         ir3_nir_get_global_offset(b, compiler, nir_imm_int(b, 0), 2);
+      nir_io_offset offset_hi =
+         ir3_nir_get_global_offset(b, compiler, nir_imm_int(b, 1), 2);
+
+      /* Reading _LO first presumably latches _HI making the read atomic. Note
+       * that we mark the accesses volatile to prevent vectorization and
+       * reordering.
+       */
+      nir_def *clock_lo = nir_load_global_offset(
+         b, 1, 32, base_addr, offset_lo.def, .offset_shift = offset_lo.shift,
+         .access = ACCESS_VOLATILE);
+      nir_def *clock_hi = nir_load_global_offset(
+         b, 1, 32, base_addr, offset_hi.def, .offset_shift = offset_hi.shift,
+         .access = ACCESS_VOLATILE);
       clock = nir_vec2(b, clock_lo, clock_hi);
    }
    nir_push_else(b, NULL);
@@ -594,10 +634,10 @@ lower_shader_clock(struct nir_builder *b, nir_intrinsic_instr *instr, void *data
 }
 
 static bool
-ir3_nir_lower_shader_clock(nir_shader *shader, uint64_t uche_trap_base)
+ir3_nir_lower_shader_clock(nir_shader *shader, struct ir3_compiler *compiler)
 {
    return nir_shader_intrinsics_pass(shader, lower_shader_clock,
-                                     nir_metadata_none, &uche_trap_base);
+                                     nir_metadata_none, compiler);
 }
 
 static bool
@@ -696,13 +736,41 @@ ir3_finalize_nir(struct ir3_compiler *compiler,
       mesa_logi("----------------------");
    }
 
-   if (s->info.stage == MESA_SHADER_GEOMETRY)
+   /* For vertex inputs, we expect them to all be at the top. FS inputs are also
+    * more optimal at the top.
+    */
+   if (s->info.stage == MESA_SHADER_VERTEX ||
+       s->info.stage == MESA_SHADER_FRAGMENT) {
+      NIR_PASS(_, s, nir_opt_move_to_top,
+               nir_move_to_top_input_loads_simple |
+               nir_move_to_top_input_loads_complex_baryc);
+   }
+
+   if (s->info.stage == MESA_SHADER_GEOMETRY) {
+      /* nir_unlower_io_to_vars expects constant indirect offsets to be folded
+       * in.
+       */
+      NIR_PASS(_, s, nir_opt_constant_folding);
+      NIR_PASS(_, s, nir_opt_dce);
+
+      /* GS lowering works most easily with variables, so temporarily switch
+       * inputs/outputs to variables and then switch back after the lowering is
+       * done.
+       */
+      NIR_PASS(_, s, nir_unlower_io_to_vars, false);
+      /* nir_lower_io doesn't work with compact variables and non-constant
+       * indices, so clean up output of unlower_io_to_vars.
+       */
+      NIR_PASS(_, s, nir_opt_constant_folding);
+      NIR_PASS(_, s, nir_opt_dce);
+
       NIR_PASS(_, s, ir3_nir_lower_gs);
+
+      ir3_nir_lower_io(s);
+   }
 
    NIR_PASS(_, s, nir_lower_frexp);
    NIR_PASS(_, s, nir_lower_amul, ir3_glsl_type_size);
-
-   OPT(s, nir_lower_wrmasks, should_split_wrmask, s);
 
    OPT(s, nir_lower_tex, &tex_options);
    OPT(s, nir_lower_load_const_to_scalar);
@@ -710,17 +778,24 @@ ir3_finalize_nir(struct ir3_compiler *compiler,
    NIR_PASS(_, s, ir3_nir_lower_sparse_residency);
    NIR_PASS(_, s, ir3_nir_min_lod_workaround);
 
-   if (compiler->array_index_add_half)
+   /* for opencl kernels, TPL1_MODE_CNTL should be configured for
+    * isammode=CL and .arraycoordroundmode = ROUND_NEAREST_EVEN,
+    * as opposed to gl/vk compute shaders which follow GL rules:
+    */
+   if (compiler->array_index_add_half && (s->info.stage != MESA_SHADER_KERNEL))
       OPT(s, ir3_nir_lower_array_sampler);
 
+   OPT(s, ir3_nir_lower_image_processing);
+
    if (compiler->gen >= 6) {
-      OPT(s, ir3_nir_lower_shader_clock, compiler->options.uche_trap_base);
+      OPT(s, ir3_nir_lower_shader_clock, compiler);
    }
 
    OPT(s, nir_lower_is_helper_invocation);
    OPT(s, nir_opt_combine_barriers, NULL, NULL);
 
-   ir3_optimize_loop(compiler, options, s);
+   struct ir3_optimize_options optimize_options = {};
+   ir3_optimize_loop(compiler, &optimize_options, s);
 
    /* do idiv lowering after first opt loop to get a chance to propagate
     * constants for divide by immed power-of-two:
@@ -737,7 +812,8 @@ ir3_finalize_nir(struct ir3_compiler *compiler,
     * descriptor, even when it doesn't.
     */
    nir_load_store_vectorize_options vectorize_opts = {
-      .modes = nir_var_mem_ubo | nir_var_mem_ssbo | nir_var_mem_shared | nir_var_uniform,
+      .modes = nir_var_mem_ubo | nir_var_mem_ssbo | nir_var_mem_shared |
+               nir_var_uniform | nir_var_mem_global,
       .callback = ir3_nir_should_vectorize_mem,
       .robust_modes = options->robust_modes,
       .cb_data = compiler,
@@ -745,7 +821,7 @@ ir3_finalize_nir(struct ir3_compiler *compiler,
    bool vectorize_progress = OPT(s, nir_opt_load_store_vectorize, &vectorize_opts);
 
    if (idiv_progress || vectorize_progress)
-      ir3_optimize_loop(compiler, options, s);
+      ir3_optimize_loop(compiler, &optimize_options, s);
 
    OPT(s, nir_remove_dead_variables, nir_var_function_temp, NULL);
 
@@ -882,6 +958,29 @@ ir3_nir_lower_subgroup_id_cs(nir_shader *nir, struct ir3_shader *shader)
 }
 
 /**
+ * Call nir_lower_io with the appropriate arguments.
+ */
+void
+ir3_nir_lower_io(nir_shader *s)
+{
+   NIR_PASS(_, s, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
+            ir3_glsl_type_size,
+            nir_lower_io_lower_64bit_to_32 |
+               nir_lower_io_use_interpolated_input_intrinsics);
+   NIR_PASS(_, s, nir_opt_dce);
+   NIR_PASS(_, s, nir_remove_dead_variables,
+            nir_var_shader_in | nir_var_shader_out,
+            &(nir_remove_dead_variables_options) {});
+
+   if (s->xfb_info) {
+      NIR_PASS(_, s, nir_opt_constant_folding);
+      NIR_PASS(_, s, nir_io_add_intrinsic_xfb_info);
+   }
+
+   s->info.io_lowered = true;
+}
+
+/**
  * Late passes that need to be done after pscreen->finalize_nir()
  */
 void
@@ -892,25 +991,23 @@ ir3_nir_post_finalize(struct ir3_shader *shader)
 
    MESA_TRACE_FUNC();
 
-   NIR_PASS(_, s, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
-            ir3_glsl_type_size,
-            nir_lower_io_lower_64bit_to_32 |
-               nir_lower_io_use_interpolated_input_intrinsics);
-
    if (s->info.stage == MESA_SHADER_FRAGMENT) {
-      /* NOTE: lower load_barycentric_at_sample first, since it
+      /* NOTE: nir_opt_barycentric comes first, since it
        * produces load_barycentric_at_offset:
        */
-      NIR_PASS(_, s, ir3_nir_lower_load_barycentric_at_sample);
+      NIR_PASS(_, s, nir_opt_barycentric, true);
+      NIR_PASS(_, s, ir3_nir_lower_load_sample_pos);
       NIR_PASS(_, s, ir3_nir_lower_load_barycentric_at_offset);
       NIR_PASS(_, s, ir3_nir_move_varying_inputs);
       NIR_PASS(_, s, nir_lower_fb_read);
       NIR_PASS(_, s, ir3_nir_lower_layer_id);
-      NIR_PASS(_, s, ir3_nir_lower_frag_shading_rate);
+      if (!compiler->info->props.shading_rate_matches_vk)
+         NIR_PASS(_, s, ir3_nir_lower_frag_shading_rate);
    }
 
    if (s->info.stage == MESA_SHADER_VERTEX || s->info.stage == MESA_SHADER_GEOMETRY) {
-      NIR_PASS(_, s, ir3_nir_lower_primitive_shading_rate);
+      if (!compiler->info->props.shading_rate_matches_vk)
+         NIR_PASS(_, s, ir3_nir_lower_primitive_shading_rate);
    }
 
    if (compiler->gen >= 6 && s->info.stage == MESA_SHADER_FRAGMENT &&
@@ -932,14 +1029,8 @@ ir3_nir_post_finalize(struct ir3_shader *shader)
        * you'd end up with an incorrect f2f16(i2i32(load_input())) instead of
        * load_input).
        */
-      uint64_t mediump_varyings = 0;
-      nir_foreach_shader_in_variable(var, s) {
-         if ((var->data.precision == GLSL_PRECISION_MEDIUM ||
-              var->data.precision == GLSL_PRECISION_LOW) &&
-             var->data.interpolation != INTERP_MODE_FLAT) {
-            mediump_varyings |= BITFIELD64_BIT(var->data.location);
-         }
-      }
+      uint64_t mediump_varyings = s->info.linear_varyings |
+         s->info.perspective_varyings;
 
       if (mediump_varyings) {
          NIR_PASS(_, s, nir_lower_mediump_io, nir_var_shader_in,
@@ -979,9 +1070,8 @@ ir3_nir_post_finalize(struct ir3_shader *shader)
             .filter_data = compiler,
       };
 
-      if (!((s->info.stage == MESA_SHADER_COMPUTE) ||
-            (s->info.stage == MESA_SHADER_KERNEL) ||
-            compiler->has_getfiberid)) {
+      if (!(mesa_shader_stage_is_compute(s->info.stage) ||
+            compiler->info->props.has_getfiberid)) {
          options.subgroup_size = 1;
          options.lower_vote_trivial = true;
       }
@@ -991,8 +1081,7 @@ ir3_nir_post_finalize(struct ir3_shader *shader)
       OPT(s, ir3_nir_lower_shuffle, shader);
    }
 
-   if ((s->info.stage == MESA_SHADER_COMPUTE) ||
-       (s->info.stage == MESA_SHADER_KERNEL)) {
+   if (mesa_shader_stage_is_compute(s->info.stage)) {
       bool progress = false;
       NIR_PASS(progress, s, ir3_nir_lower_subgroup_id_cs, shader);
 
@@ -1035,7 +1124,8 @@ ir3_nir_post_finalize(struct ir3_shader *shader)
    if (compiler->gen >= 6)
       OPT(s, ir3_nir_lower_ssbo_size, compiler->options.storage_16bit ? 1 : 2);
 
-   ir3_optimize_loop(compiler, &shader->options.nir_options, s);
+   struct ir3_optimize_options optimize_options = {};
+   ir3_optimize_loop(compiler, &optimize_options, s);
 }
 
 static bool
@@ -1126,6 +1216,242 @@ atomic_supported(const nir_instr * instr, const void * data)
    return nir_instr_as_intrinsic(instr)->def.bit_size != 64;
 }
 
+/**
+ * Like glsl_get_natural_size_align_bytes, but for ir3 RA, where all <32-bit
+ * components are stored in half regs.
+ */
+static void
+ir3_get_ra_size_align_bytes(const glsl_type *type, unsigned *size, unsigned *align)
+{
+   switch (type->base_type) {
+   case GLSL_TYPE_BOOL:
+   case GLSL_TYPE_UINT8:
+   case GLSL_TYPE_INT8:
+   case GLSL_TYPE_UINT16:
+   case GLSL_TYPE_INT16:
+   case GLSL_TYPE_FLOAT16:
+   case GLSL_TYPE_BFLOAT16:
+      *size = 2 * glsl_get_components(type);
+      *align = 2;
+      break;
+
+   case GLSL_TYPE_FLOAT_E4M3FN:
+   case GLSL_TYPE_FLOAT_E5M2:
+   case GLSL_TYPE_UINT:
+   case GLSL_TYPE_INT:
+   case GLSL_TYPE_FLOAT:
+   case GLSL_TYPE_DOUBLE:
+   case GLSL_TYPE_UINT64:
+   case GLSL_TYPE_INT64: {
+      unsigned N = glsl_get_bit_size(type) / 8;
+      *size = N * glsl_get_components(type);
+      *align = N;
+      break;
+   }
+
+   case GLSL_TYPE_ARRAY:
+   case GLSL_TYPE_INTERFACE:
+   case GLSL_TYPE_STRUCT:
+      glsl_size_align_handle_array_and_structs(type,
+                                               ir3_get_ra_size_align_bytes,
+                                               size, align);
+      break;
+
+   case GLSL_TYPE_SAMPLER:
+   case GLSL_TYPE_TEXTURE:
+   case GLSL_TYPE_IMAGE:
+      /* Bindless samplers and images. */
+      *size = 8;
+      *align = 8;
+      break;
+
+   case GLSL_TYPE_COOPERATIVE_MATRIX:
+   case GLSL_TYPE_ATOMIC_UINT:
+   case GLSL_TYPE_SUBROUTINE:
+   case GLSL_TYPE_VOID:
+   case GLSL_TYPE_ERROR:
+      UNREACHABLE("type does not have a natural size");
+   }
+}
+
+static int
+variable_size_sort(const void *a, const void *b)
+{
+   const nir_variable *var_a = *(const nir_variable **)a;
+   const nir_variable *var_b = *(const nir_variable **)b;
+
+   uint32_t size_a, align_a;
+   ir3_get_ra_size_align_bytes(var_a->type, &size_a, &align_a);
+
+   uint32_t size_b, align_b;
+   ir3_get_ra_size_align_bytes(var_b->type, &size_b, &align_b);
+
+   if (size_a != size_b) {
+      return size_a - size_b;
+   }
+
+   /* Use the unique index as a tiebreaker to ensure a stable sort for
+    * determinism.
+    */
+   return var_a->index - var_b->index;
+}
+
+/* Filters out variables from the set that might go to ir3 RA, in order to avoid
+ * exceeding the limit of register pressure in a single instruction.
+ *
+ * A single instruction could require up to 4 array vars to be fully loaded in
+ * GPR space: 1 destination and 3 src operands (since we reload full arrays when
+ * unspilling)
+ */
+static void
+ir3_filter_vars_to_scratch_single_instr_limit(struct util_dynarray *vars,
+                                              uint32_t limit,
+                                              bool limit_for_half)
+{
+   struct util_dynarray candidate_nonspilled;
+   util_dynarray_init(&candidate_nonspilled, NULL);
+
+   /* Create an array of vars to potentially not spill sorted by increasing
+    * size.
+    */
+   util_dynarray_foreach (vars, nir_variable *, var_ptr) {
+      const nir_variable *var = *var_ptr;
+
+      if (var->data.pass_flags) {
+         continue;
+      }
+
+      /* If it's definitely a 32/64-bit array that will be stored in full regs,
+       * then don't consider it while we're limiting for half-reg accesses. This
+       * is conservative when we can't figure out the array type, but thanks to
+       * struct splitting we always successfully determine it on fossils db.
+       */
+      if (glsl_type_is_array_or_matrix(var->type)) {
+         const struct glsl_type *elem_type = glsl_without_array_or_matrix(var->type);
+         if (limit_for_half && glsl_type_is_vector_or_scalar(elem_type) &&
+             glsl_get_bit_size(elem_type) > 16) {
+            continue;
+         }
+      }
+      util_dynarray_append(&candidate_nonspilled, var);
+   }
+
+   if (util_dynarray_num_elements(&candidate_nonspilled, const nir_variable *) == 0) {
+      util_dynarray_fini(&candidate_nonspilled);
+      return;
+   }
+
+   qsort(
+      util_dynarray_begin(&candidate_nonspilled),
+      util_dynarray_num_elements(&candidate_nonspilled, const nir_variable *),
+      sizeof(nir_variable *), variable_size_sort);
+
+   /* Loop removing variables from the set of variables to not spill, until the
+    * worst case set of variables remaining fit under the limit.
+    */
+   for (;;) {
+      int last =
+         util_dynarray_num_elements(&candidate_nonspilled, nir_variable *) - 1;
+
+      uint32_t total_size = 0;
+      for (int i = last; i >= MAX2(last - 3, 0); i--) {
+         nir_variable *var =
+            *util_dynarray_element(&candidate_nonspilled, nir_variable *, i);
+         uint32_t size, align;
+         ir3_get_ra_size_align_bytes(var->type, &size, &align);
+         total_size += size;
+      }
+
+      if (total_size <= limit)
+         break;
+
+      nir_variable *var =
+         util_dynarray_pop(&candidate_nonspilled, nir_variable *);
+      var->data.pass_flags = true;
+   }
+
+   util_dynarray_fini(&candidate_nonspilled);
+}
+
+static void
+ir3_vars_to_scratch_cb(struct util_dynarray *vars, void *data)
+{
+   struct ir3_pressure *limit_pressure = data;
+
+   struct util_dynarray nonspilled;
+   util_dynarray_init(&nonspilled, NULL);
+
+   util_dynarray_foreach(vars, nir_variable *, var_ptr) {
+      nir_variable *var = *var_ptr;
+
+      if (var->data.pass_flags) {
+         util_dynarray_append(&nonspilled, var);
+         var->data.pass_flags = false;
+      }
+   }
+
+   /* Filter for the half vars first, which may let the full limit (which
+    * considers all vars) succeed on vars it wouldn't otherwise.
+    *
+    * We decrement the limit for the array's sizes by a vec4's size, because an
+    * instruction will likely have non-array sources that also need to be
+    * present, so we can't have the whole register file taken up by an array.
+    */
+   ir3_filter_vars_to_scratch_single_instr_limit(
+      &nonspilled, (limit_pressure->half * 2) - 16, true);
+   ir3_filter_vars_to_scratch_single_instr_limit(
+      &nonspilled, (limit_pressure->full * 2) - 16, false);
+
+   util_dynarray_fini(&nonspilled);
+}
+
+/**
+ * Filters the real_wavesize that was set based on API requirements, to an
+ * appopriate value given hardware limits and the NIR shader we get.
+ *
+ * The final wavesize in the SINGLE_OR_DOUBLE case will be determined later
+ * based on register allocation.
+ */
+static void
+ir3_nir_set_threadsize(struct ir3_shader_variant *v, const nir_shader *s)
+{
+   if (v->shader_options.real_wavesize != IR3_SINGLE_OR_DOUBLE)
+      return;
+
+   if (mesa_shader_stage_is_compute(v->type)) {
+      struct ir3_compiler *compiler = v->compiler;
+      const shader_info *info = &s->info;
+      unsigned threads_per_wg = info->workgroup_size[0] *
+                                info->workgroup_size[1] *
+                                info->workgroup_size[2];
+
+      /* If the workgroups fit in the base threadsize, then doubling would just
+       * leave us with an unused second half of each wave for no gain (the HW
+       * can't pack multiple workgroups into a wave, because the workgroups
+       * might make different barrier choices).
+       */
+      if (!info->workgroup_size_variable) {
+         if (threads_per_wg <= compiler->info->threadsize_base)
+            v->shader_options.real_wavesize = IR3_SINGLE_ONLY;
+      }
+
+      /* For a5xx, if the workgroup size is greater than the maximum number
+       * of threads per core with 32 threads per wave (512) then we have to
+       * use the doubled threadsize because otherwise the workgroup wouldn't
+       * fit. For smaller workgroup sizes, we follow the blob and use the
+       * smaller threadsize.
+       *
+       * For a6xx, because threadsize_base is bumped to 64, we don't have to
+       * worry about the workgroup fitting.
+       */
+      if (compiler->gen < 6 &&
+          (info->workgroup_size_variable ||
+           threads_per_wg > compiler->info->threadsize_base * compiler->info->max_waves)) {
+         v->shader_options.real_wavesize = IR3_DOUBLE_ONLY;
+      };
+   }
+}
+
 void
 ir3_nir_lower_variant(struct ir3_shader_variant *so,
                       const struct ir3_shader_nir_options *options,
@@ -1138,6 +1464,8 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
       nir_log_shaderi(s);
       mesa_logi("----------------------");
    }
+
+   ir3_nir_set_threadsize(so, s);
 
    bool progress = false;
 
@@ -1202,8 +1530,8 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
     * straddling loads.  Align everything to vec4 to avoid that, though we
     * could theoretically do better.
     */
-   OPT(s, nir_opt_large_constants, glsl_get_vec4_size_align_bytes,
-       32 /* bytes */);
+   progress |= OPT(s, nir_opt_large_constants, glsl_get_vec4_size_align_bytes,
+                   32 /* bytes */);
    progress |= OPT(s, ir3_nir_lower_load_constant, so);
 
    /* Lower large temporaries to scratch, which in Qualcomm terms is private
@@ -1212,13 +1540,13 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
     * expensive.
     */
    if (so->compiler->has_pvtmem) {
-      progress |= OPT(s, nir_lower_vars_to_scratch, nir_var_function_temp,
-                      16 * 16 /* bytes */,
-                      ir3_get_variable_size_align_bytes, glsl_get_natural_size_align_bytes);
+      struct ir3_pressure limit_pressure = ir3_ra_get_reg_file_limits(so);
+      progress |=
+         OPT(s, nir_lower_vars_to_scratch_global,
+             glsl_get_natural_size_align_bytes, ir3_vars_to_scratch_cb, &limit_pressure);
    }
 
    /* Lower scratch writemasks */
-   progress |= OPT(s, nir_lower_wrmasks, should_split_wrmask, s);
    progress |= OPT(s, nir_lower_atomics, atomic_supported);
 
    if (OPT(s, nir_lower_locals_to_regs, 1)) {
@@ -1231,29 +1559,41 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
    nir_lower_mem_access_bit_sizes_options mem_bit_size_options = {
       .modes = nir_var_mem_constant | nir_var_mem_ubo |
                nir_var_mem_global | nir_var_mem_shared |
-               nir_var_function_temp | nir_var_mem_ssbo,
+               nir_var_function_temp | nir_var_mem_ssbo | nir_var_mem_global,
       .callback = ir3_mem_access_size_align,
    };
 
    progress |= OPT(s, nir_lower_mem_access_bit_sizes, &mem_bit_size_options);
-   progress |= OPT(s, ir3_nir_lower_64b_global);
    progress |= OPT(s, ir3_nir_lower_64b_undef);
+   progress |= OPT(s, ir3_nir_lower_64b_image);
    progress |= OPT(s, nir_lower_int64);
-   progress |= OPT(s, ir3_nir_lower_64b_intrinsics);
    progress |= OPT(s, nir_lower_64bit_phis);
 
    progress |= OPT(s, ir3_nir_opt_subgroups, so);
 
-   if (so->compiler->load_shader_consts_via_preamble)
+   if (so->compiler->info->props.load_shader_consts_via_preamble)
       progress |= OPT(s, ir3_nir_lower_driver_params_to_ubo, so);
 
    if (!so->binning_pass) {
       ir3_setup_const_state(s, so, ir3_const_state_mut(so));
    }
 
+   /* At this point nir_opt_load_store_vectorize has run so it's safe to
+    * optimize imul to umul_16x16. Also call nir_opt_uub manually once to give
+    * it a chance to optimize imul, even if the previous passes didn't make any
+    * progress.
+    */
+   struct ir3_optimize_options optimize_options = {
+      .opt_uub_options = {
+         .opt_imul = true,
+      },
+   };
+
+   progress |= OPT(s, nir_opt_uub, &optimize_options.opt_uub_options);
+
    /* Cleanup code leftover from lowering passes before opt_preamble */
    if (progress) {
-      ir3_optimize_loop(so->compiler, options, s);
+      ir3_optimize_loop(so->compiler, &optimize_options, s);
 
       /* No need to run the optimize loop again if there's no progress after
        * this point.
@@ -1271,7 +1611,7 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
        !(ir3_shader_debug & IR3_DBG_NOPREAMBLE))
       progress |= OPT(s, ir3_nir_opt_preamble, so);
 
-   if (so->compiler->load_shader_consts_via_preamble)
+   if (so->compiler->info->props.load_shader_consts_via_preamble)
       progress |= OPT(s, ir3_nir_lower_driver_params_to_ubo, so);
 
    /* Do matrix reassociate after preamble, because we want uniform matrix
@@ -1306,24 +1646,24 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
    if (so->compiler->gen >= 6)
       progress |= OPT(s, nir_lower_ubo_vec4);
 
-   progress |= OPT(s, ir3_nir_lower_io_offsets);
+   progress |= OPT(s, ir3_nir_lower_io_offsets, so->compiler);
 
    if (!so->binning_pass) {
       ir3_const_alloc_all_reserved_space(&ir3_const_state_mut(so)->allocs);
    }
 
    if (progress)
-      ir3_optimize_loop(so->compiler, options, s);
+      ir3_optimize_loop(so->compiler, &optimize_options, s);
 
    /* verify that progress is always set */
-   assert(!ir3_optimize_loop(so->compiler, options, s));
+   assert(!ir3_optimize_loop(so->compiler, &optimize_options, s));
 
    /* Fixup indirect load_const_ir3's which end up with a const base offset
     * which is too large to encode.  Do this late(ish) so we actually
     * can differentiate indirect vs non-indirect.
     */
    if (OPT(s, ir3_nir_fixup_load_const_ir3))
-      ir3_optimize_loop(so->compiler, options, s);
+      ir3_optimize_loop(so->compiler, &optimize_options, s);
 
    /* Do late algebraic optimization to turn add(a, neg(b)) back into
     * subs, then the mandatory cleanup after algebraic.  Note that it may
@@ -1364,7 +1704,7 @@ ir3_nir_lower_variant(struct ir3_shader_variant *so,
          OPT(s, nir_opt_16bit_tex_image, &opt_16bit_options);
       }
       OPT(s, nir_opt_constant_folding);
-      OPT(s, nir_copy_prop);
+      OPT(s, nir_opt_copy_prop);
       OPT(s, nir_opt_dce);
       OPT(s, nir_opt_cse);
    }
@@ -1396,7 +1736,7 @@ ir3_get_driver_param_info(const nir_shader *shader, nir_intrinsic_instr *intr,
       param_info->offset = IR3_DP_CS(local_group_size_x);
       break;
    case nir_intrinsic_load_subgroup_size:
-      if (shader->info.stage == MESA_SHADER_COMPUTE) {
+      if (mesa_shader_stage_is_compute(shader->info.stage)) {
          param_info->offset = IR3_DP_CS(subgroup_size);
       } else if (shader->info.stage == MESA_SHADER_FRAGMENT) {
          param_info->offset = IR3_DP_FS(subgroup_size);
@@ -1436,14 +1776,25 @@ ir3_get_driver_param_info(const nir_shader *shader, nir_intrinsic_instr *intr,
       break;
    case nir_intrinsic_load_frag_size_ir3:
       param_info->offset = IR3_DP_FS(frag_size);
-      param_info->extra_size = 4 * (nir_intrinsic_range(intr) - 1);
+      param_info->extra_size = 8 * (nir_intrinsic_range(intr) - 1);
       break;
    case nir_intrinsic_load_frag_offset_ir3:
       param_info->offset = IR3_DP_FS(frag_offset);
-      param_info->extra_size = 4 * (nir_intrinsic_range(intr) - 1);
+      param_info->extra_size = 8 * (nir_intrinsic_range(intr) - 1);
+      break;
+   case nir_intrinsic_load_gmem_frag_scale_ir3:
+      param_info->offset = IR3_DP_FS(gmem_frag_scale);
+      param_info->extra_size = 8 * (nir_intrinsic_range(intr) - 1);
+      break;
+   case nir_intrinsic_load_gmem_frag_offset_ir3:
+      param_info->offset = IR3_DP_FS(gmem_frag_offset);
+      param_info->extra_size = 8 * (nir_intrinsic_range(intr) - 1);
       break;
    case nir_intrinsic_load_frag_invocation_count:
       param_info->offset = IR3_DP_FS(frag_invocation_count);
+      break;
+   case nir_intrinsic_load_alpha_to_coverage_enable_ir3:
+      param_info->offset = IR3_DP_FS(alpha_to_coverage_enable);
       break;
    default:
       return false;
@@ -1510,7 +1861,7 @@ ir3_nir_scan_driver_consts(struct ir3_compiler *compiler, nir_shader *shader,
     * hardware to upload these.
     */
    if (!compiler->has_shared_regfile &&
-         shader->info.stage == MESA_SHADER_COMPUTE) {
+       mesa_shader_stage_is_compute(shader->info.stage)) {
       num_driver_params =
          MAX2(num_driver_params, IR3_DP_CS(workgroup_id_z) + 1);
    }
@@ -1589,7 +1940,7 @@ ir3_alloc_driver_params(struct ir3_const_allocations *const_alloc,
     */
    *num_driver_params = align(*num_driver_params, 4);
    unsigned upload_unit = 1;
-   if (shader_stage == MESA_SHADER_COMPUTE ||
+   if (mesa_shader_stage_is_compute(shader_stage) ||
        (*num_driver_params >= IR3_DP_VS(vtxid_base))) {
       upload_unit = compiler->const_upload_unit;
    }
@@ -1651,7 +2002,7 @@ ir3_setup_const_state(nir_shader *nir, struct ir3_shader_variant *v,
                               align(IR3_MAX_SO_BUFFERS * ptrsz, 4) / 4, 1);
    }
 
-   if (!compiler->load_shader_consts_via_preamble) {
+   if (!compiler->info->props.load_shader_consts_via_preamble) {
       switch (v->type) {
       case MESA_SHADER_TESS_CTRL:
       case MESA_SHADER_TESS_EVAL:
@@ -1727,4 +2078,21 @@ ir3_nir_intrinsic_barycentric_sysval(nir_intrinsic_instr *intr)
    }
 
    return sysval;
+}
+
+nir_io_offset
+ir3_nir_get_global_offset(nir_builder *b, struct ir3_compiler *compiler,
+                          nir_def *offset, unsigned offset_shift)
+{
+   if (compiler->gen >= 7) {
+      return (nir_io_offset){
+         .def = nir_ishl_imm(b, offset, offset_shift),
+         .shift = 0,
+      };
+   }
+
+   return (nir_io_offset){
+      .def = offset,
+      .shift = offset_shift,
+   };
 }

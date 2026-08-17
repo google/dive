@@ -1,27 +1,7 @@
 /*
  * Copyright (C) 2019 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * Authors:
- *   Alyssa Rosenzweig <alyssa.rosenzweig@collabora.com>
+ * Copyright (C) 2026 Arm Ltd.
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef PAN_MODEL_H
@@ -42,20 +22,29 @@ struct pan_tiler_features {
    unsigned max_levels;
 };
 
-#define ARCH_MAJOR     BITFIELD_RANGE(28, 4)
-#define ARCH_MINOR     BITFIELD_RANGE(24, 4)
-#define ARCH_REV       BITFIELD_RANGE(20, 4)
-#define PRODUCT_MAJOR  BITFIELD_RANGE(16, 4)
-#define VERSION_MAJOR  BITFIELD_RANGE(12, 4)
-#define VERSION_MINOR  BITFIELD_RANGE(4, 8)
-#define VERSION_STATUS BITFIELD_RANGE(0, 4)
+#define PAN_ARCH_MAJOR(x)    (((x) & BITFIELD_RANGE(28, 4)) >> 28)
+#define PAN_ARCH_MINOR(x)    (((x) & BITFIELD_RANGE(24, 4)) >> 24)
+#define PAN_ARCH_REV(x)      (((x) & BITFIELD_RANGE(20, 4)) >> 20)
+#define PAN_PRODUCT_MAJOR(x) (((x) & BITFIELD_RANGE(16, 4)) >> 16)
+
+#define PAN_VERSION_MAJOR(x)  (((x) & BITFIELD_RANGE(12, 4)) >> 12)
+#define PAN_VERSION_MINOR(x)  (((x) & BITFIELD_RANGE(4, 8)) >> 4)
+#define PAN_VERSION_STATUS(x) ((x) & BITFIELD_RANGE(0, 4))
+
+/* GPU product id for Midgard */
+#define MIDGARD_PROD_ID(x) (((x) & BITFIELD_RANGE(16, 16)) >> 16)
+
+/* GPU product id since Bifrost. Assume 8 bits per field which ensures the
+ * prod_id is always greater than Midgard's. */
+#define PAN_PROD_ID(arch_major, arch_minor, prod_major)                        \
+   (((arch_major) << 16) | ((arch_minor) << 8) | (prod_major))
+
+/* GPU revision (rXpY) */
+#define PAN_REV(ver_major, ver_minor) (((ver_major) << 8) | ((ver_minor)))
 
 struct pan_model {
    /* GPU product ID */
    uint32_t gpu_prod_id;
-
-   /* Mask to apply to the GPU ID to get a product ID. */
-   uint32_t gpu_prod_id_mask;
 
    /* GPU variant. */
    uint32_t gpu_variant;
@@ -86,7 +75,10 @@ struct pan_model {
    struct {
       uint32_t pixel;
       uint32_t texel;
+      uint32_t varying;
+      uint32_t cvt;
       uint32_t fma;
+      uint32_t sfu;
    } rates;
 
    struct {
@@ -99,6 +91,45 @@ struct pan_model {
    } quirks;
 };
 
-const struct pan_model *pan_get_model(uint32_t gpu_id, uint32_t gpu_variant);
+const struct pan_model *pan_get_model(uint64_t gpu_id, uint32_t gpu_variant);
+
+/* Returns the architecture version given a GPU ID, either from a table for
+ * old-style Midgard versions or directly for new-style Bifrost/Valhall
+ * versions */
+
+static inline unsigned
+pan_arch(uint64_t gpu_id)
+{
+   switch (MIDGARD_PROD_ID(gpu_id)) {
+   case 0x600:
+   case 0x620:
+   case 0x720:
+      return 4;
+   case 0x750:
+   case 0x820:
+   case 0x830:
+   case 0x860:
+   case 0x880:
+      return 5;
+   default:
+      return PAN_ARCH_MAJOR(gpu_id);
+   }
+}
+
+static inline uint32_t
+pan_prod_id(uint64_t gpu_id)
+{
+   unsigned arch = pan_arch(gpu_id);
+   if (arch < 6)
+      return MIDGARD_PROD_ID(gpu_id);
+   return PAN_PROD_ID(PAN_ARCH_MAJOR(gpu_id), PAN_ARCH_MINOR(gpu_id),
+                      PAN_PRODUCT_MAJOR(gpu_id));
+}
+
+static inline uint32_t
+pan_rev(uint64_t gpu_id)
+{
+   return PAN_REV(PAN_VERSION_MAJOR(gpu_id), PAN_VERSION_MINOR(gpu_id));
+}
 
 #endif

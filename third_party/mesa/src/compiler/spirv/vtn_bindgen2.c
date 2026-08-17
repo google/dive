@@ -24,12 +24,9 @@ static const struct spirv_to_nir_options spirv_options = {
 };
 
 struct nir_shader_compiler_options generic_opts = {
-   /* TODO: Do we want to set has_*? Will drivers be able to lower
-    * appropriately?
-    */
-   .fuse_ffma16 = true,
-   .fuse_ffma32 = true,
-   .fuse_ffma64 = true,
+   .float_mul_add16 = nir_float_muladd_support_keep_weak_ffma,
+   .float_mul_add32 = nir_float_muladd_support_keep_weak_ffma,
+   .float_mul_add64 = nir_float_muladd_support_keep_weak_ffma,
 
    .max_unroll_iterations = 32,
    .max_unroll_iterations_fp64 = 32,
@@ -90,7 +87,7 @@ optimize(nir_shader *nir)
 
       NIR_PASS(progress, nir, nir_lower_vars_to_ssa);
 
-      NIR_PASS(progress, nir, nir_copy_prop);
+      NIR_PASS(progress, nir, nir_opt_copy_prop);
       NIR_PASS(progress, nir, nir_opt_remove_phis);
       NIR_PASS(progress, nir, nir_lower_all_phis_to_scalar);
       NIR_PASS(progress, nir, nir_opt_dce);
@@ -98,8 +95,7 @@ optimize(nir_shader *nir)
       NIR_PASS(progress, nir, nir_opt_cse);
 
       nir_opt_peephole_select_options peephole_select_options = {
-         .limit = 64,
-         .expensive_alu_ok = true,
+         .limit = 0,
       };
       NIR_PASS(progress, nir, nir_opt_peephole_select, &peephole_select_options);
       NIR_PASS(progress, nir, nir_opt_phi_precision);
@@ -124,7 +120,7 @@ compile(void *memctx, const uint32_t *spirv, size_t spirv_size)
 
    assert(spirv_size % 4 == 0);
    nir_shader *nir =
-      spirv_to_nir(spirv, spirv_size / 4, NULL, 0, MESA_SHADER_KERNEL,
+      spirv_to_nir(spirv, spirv_size / 4, NULL, MESA_SHADER_KERNEL,
                    "library", &spirv_options, nir_options);
    nir_validate_shader(nir, "after spirv_to_nir");
    ralloc_steal(memctx, nir);
@@ -158,7 +154,7 @@ compile(void *memctx, const uint32_t *spirv, size_t spirv_size)
    NIR_PASS(_, nir, nir_lower_returns);
    NIR_PASS(_, nir, nir_inline_functions);
    nir_remove_non_exported(nir);
-   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_copy_prop);
    NIR_PASS(_, nir, nir_opt_deref);
 
    /* We can't deal with constant data, get rid of it */
@@ -237,7 +233,8 @@ compile(void *memctx, const uint32_t *spirv, size_t spirv_size)
    bool scratch_lowered = false;
    NIR_PASS(scratch_lowered, nir, nir_lower_scratch_to_var);
    if (scratch_lowered) {
-      NIR_PASS(_, nir, nir_lower_indirect_derefs, nir_var_function_temp, ~0);
+      NIR_PASS(_, nir, nir_lower_indirect_derefs_to_if_else_trees,
+               nir_var_function_temp, ~0);
    }
 
    /* Prune derefs/variables late, since scratch lowering leaves dead
@@ -248,7 +245,7 @@ compile(void *memctx, const uint32_t *spirv, size_t spirv_size)
             nir_var_function_temp | nir_var_shader_temp, NULL);
 
    /* Do a last round of clean up after the extra lowering */
-   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_copy_prop);
    NIR_PASS(_, nir, nir_opt_constant_folding);
    NIR_PASS(_, nir, nir_opt_algebraic);
    NIR_PASS(_, nir, nir_opt_cse);
@@ -329,6 +326,7 @@ main(int argc, char **argv)
    }
 
    glsl_type_singleton_init_or_ref();
+   u_printf_singleton_init_or_ref();
 
    for (unsigned i = 0; i < 2; ++i) {
       FILE *fp = i ? fp_c : fp_h;
@@ -456,6 +454,7 @@ main(int argc, char **argv)
    fprintf(fp_c, "   static vtn_bindgen_dummy vtn_bindgen_dummy_instance;\n");
    fprintf(fp_c, "}\n");
 
+   u_printf_singleton_decref();
    glsl_type_singleton_decref();
    fclose(fp_c);
    fclose(fp_h);

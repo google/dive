@@ -21,10 +21,15 @@
  * IN THE SOFTWARE.
  */
 
+#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
 
+#include "intel/dev/intel_device_info.h"
+
 #include "util/os_file.h"
+
+#include "virtio/virtio-gpu/drm_hw.h"
 
 #include "iris_drm_public.h"
 extern struct pipe_screen *iris_screen_create(int fd, const struct pipe_screen_config *config);
@@ -33,4 +38,33 @@ struct pipe_screen *
 iris_drm_screen_create(int fd, const struct pipe_screen_config *config)
 {
    return iris_screen_create(fd, config);
+}
+
+/**
+ * Check if the native-context type exposed by virtgpu is one we
+ * support, and that we support the underlying device.
+ */
+bool
+iris_drm_probe_nctx(int fd, const struct virgl_renderer_capset_drm *caps)
+{
+#ifdef HAVE_INTEL_VIRTIO
+   if (caps->context_type != VIRTGPU_DRM_CONTEXT_I915)
+      return false;
+
+   if (debug_get_bool_option("INTEL_VIRTIO_DISABLE", false))
+      return false;
+
+   struct intel_device_info devinfo;
+
+   if (!intel_get_device_info_from_pci_id(caps->u.intel.pci_device_id,
+                                          &devinfo))
+      return false;
+
+   if (devinfo.ver < 8 || devinfo.platform == INTEL_PLATFORM_CHV)
+      return false;
+
+   return true;
+#else
+   return false;
+#endif
 }

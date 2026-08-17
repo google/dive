@@ -237,11 +237,17 @@ loader_wayland_wrap_surface(struct loader_wayland_surface *lws,
    lws->id = wl_proxy_get_id((struct wl_proxy *)wl_surface);
    wl_proxy_set_queue((struct wl_proxy *)lws->wrapper, queue);
 
-   asprintf(&track_name, "wl%d presentation", lws->id);
+   if (asprintf(&track_name, "wl%d presentation", lws->id) < 0) {
+      return false;
+   }
+
    lws->analytics.presentation_track_id = util_perfetto_new_track(track_name);
    free(track_name);
 
-   asprintf(&lws->analytics.latency_str, "wl%d latency", lws->id);
+   if (asprintf(&lws->analytics.latency_str, "wl%d latency", lws->id) < 0) {
+      return false;
+   }
+
    return true;
 }
 
@@ -412,7 +418,8 @@ loader_wayland_presentation_feedback(struct loader_wayland_presentation *pres,
        !tracing)
       return;
 
-   fd = malloc(sizeof *fd);
+   fd = calloc(1, sizeof *fd);
+
    fd->presentation = pres;
    fd->tracing = tracing;
    if (tracing) {

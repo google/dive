@@ -72,4 +72,4 @@ Consider recording a [GFXReconstruct](https://github.com/LunarG/gfxreconstruct/b
 
 Does the issue reproduce with the LLVM backend (`RADV_DEBUG=llvm`) or on the AMDGPU-PRO drivers?
 
-Does your environment set any of the variables `ACO_DEBUG`, `RADV_DEBUG`, and `RADV_PERFTEST`?
+Does your environment set any of the variables `ACO_DEBUG`, `RADV_DEBUG`, `RADV_PERFTEST` and `RADV_EXPERIMENTAL`?

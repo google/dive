@@ -28,6 +28,7 @@
 #include "common/intel_gem.h"
 #include "common/i915/intel_gem.h"
 #include "dev/intel_debug.h"
+#include "util/u_debug.h"
 
 #include "drm-uapi/i915_drm.h"
 
@@ -147,17 +148,20 @@ i915_gem_create(struct iris_bufmgr *bufmgr,
 static bool
 i915_bo_madvise(struct iris_bo *bo, enum iris_madvice state)
 {
-   uint32_t i915_state = state == IRIS_MADVICE_WILL_NEED ?
-                                  I915_MADV_WILLNEED : I915_MADV_DONTNEED;
    struct drm_i915_gem_madvise madv = {
       .handle = bo->gem_handle,
-      .madv = i915_state,
+      .madv = state,
       .retained = 1,
    };
 
-   intel_ioctl(iris_bufmgr_get_fd(bo->bufmgr), DRM_IOCTL_I915_GEM_MADVISE, &madv);
+   /* Make sure iris_madvice values match with i915 values */
+   STATIC_ASSERT(IRIS_MADVICE_WILL_NEED == I915_MADV_WILLNEED);
+   STATIC_ASSERT(IRIS_MADVICE_DONT_NEED == I915_MADV_DONTNEED);
 
-   return madv.retained;
+   int ret = intel_ioctl(iris_bufmgr_get_fd(bo->bufmgr), DRM_IOCTL_I915_GEM_MADVISE, &madv);
+   if (ret)
+      debug_warn_once("DRM_IOCTL_I915_GEM_MADVISE failed at least once\n");
+   return ret == 0 ? madv.retained : false;
 }
 
 static int
@@ -215,9 +219,15 @@ i915_gem_mmap_offset(struct iris_bufmgr *bufmgr, struct iris_bo *bo)
       return NULL;
    }
 
+   void *map;
+
    /* And map it */
-   void *map = mmap(0, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                    iris_bufmgr_get_fd(bufmgr), mmap_arg.offset);
+   if (iris_bufmgr_get_device_info(bufmgr)->is_virtio)
+      map = intel_virtio_bo_mmap(iris_bufmgr_get_fd(bufmgr),
+                                 bo->gem_handle, bo->size, NULL);
+   else
+      map = mmap(0, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                 iris_bufmgr_get_fd(bufmgr), mmap_arg.offset);
    if (map == MAP_FAILED) {
       DBG("%s:%d: Error mapping buffer %d (%s): %s .\n",
           __FILE__, __LINE__, bo->gem_handle, bo->name, strerror(errno));
@@ -372,7 +382,7 @@ i915_batch_submit(struct iris_batch *batch)
       .buffer_count = validation_count,
       .batch_start_offset = 0,
       /* This must be QWord aligned. */
-      .batch_len = ALIGN(batch->primary_batch_size, 8),
+      .batch_len = align(batch->primary_batch_size, 8),
       .flags = batch->i915.exec_flags |
                I915_EXEC_NO_RELOC |
                I915_EXEC_BATCH_FIRST |

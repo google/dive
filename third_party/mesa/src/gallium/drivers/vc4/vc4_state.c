@@ -378,6 +378,8 @@ vc4_set_constant_buffer(struct pipe_context *pctx,
         struct vc4_context *vc4 = vc4_context(pctx);
         struct vc4_constbuf_stateobj *so = &vc4->constbuf[shader];
 
+        util_copy_constant_buffer(&so->cb[index], cb);
+
         /* Note that the gallium frontend can unbind constant buffers by
          * passing NULL here.
          */
@@ -389,8 +391,6 @@ vc4_set_constant_buffer(struct pipe_context *pctx,
 
         if (index == 1 && so->cb[index].buffer_size != cb->buffer_size)
                 vc4->dirty |= VC4_DIRTY_UBO_1_SIZE;
-
-        util_copy_constant_buffer(&so->cb[index], cb);
 
         so->enabled_mask |= 1 << index;
         so->dirty_mask |= 1 << index;
@@ -444,7 +444,7 @@ vc4_get_stage_tex(struct vc4_context *vc4, mesa_shader_stage shader)
                 return &vc4->verttex;
                 break;
         default:
-                fprintf(stderr, "Unknown shader target %d\n", shader);
+                mesa_loge("Unknown shader target %d", shader);
                 abort();
         }
 }
@@ -463,7 +463,7 @@ static uint32_t translate_wrap(uint32_t p_wrap, bool using_nearest)
         case PIPE_TEX_WRAP_CLAMP:
                 return (using_nearest ? 1 : 3);
         default:
-                fprintf(stderr, "Unknown wrap mode %d\n", p_wrap);
+                mesa_loge("Unknown wrap mode %d", p_wrap);
                 assert(!"not reached");
                 return 0;
         }

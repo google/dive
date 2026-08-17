@@ -21,7 +21,7 @@
 #include <memory>
 #include <type_traits>
 #include <unordered_map>
-#include <vector>
+#include <unordered_set>
 
 namespace aco {
 
@@ -274,7 +274,7 @@ public:
       }
 
       /* create new larger buffer */
-      uint32_t total_size = buffer->data_size + sizeof(Buffer);
+      size_t total_size = buffer->data_size + sizeof(Buffer);
       do {
          total_size *= 2;
       } while (total_size - sizeof(Buffer) < size);
@@ -297,13 +297,45 @@ public:
       buffer->current_idx = 0;
    }
 
+   /* Release all memory, with the expectation that a similar amount will be allocated again. */
+   void release_reallocate()
+   {
+      size_t size = 0;
+      for (Buffer* buf = buffer; buf; buf = buf->next)
+         size += buf->current_idx;
+
+      if (buffer->data_size >= size) {
+         Buffer* buf = buffer->next;
+         while (buf) {
+            Buffer* next = buf->next;
+            free(buf);
+            buf = next;
+         }
+         buffer->next = NULL;
+         buffer->current_idx = 0;
+         return;
+      }
+
+      release();
+      free(buffer);
+
+      size_t total_size = initial_size;
+      do {
+         total_size *= 2;
+      } while (total_size - sizeof(Buffer) < size);
+      buffer = (Buffer*)malloc(total_size);
+      buffer->next = NULL;
+      buffer->data_size = total_size - sizeof(Buffer);
+      buffer->current_idx = 0;
+   }
+
    bool operator==(const monotonic_buffer_resource& other) const { return buffer == other.buffer; }
 
 private:
    struct Buffer {
       Buffer* next;
-      uint32_t current_idx;
-      uint32_t data_size;
+      size_t current_idx;
+      size_t data_size;
       uint8_t data[];
    };
 
@@ -333,7 +365,7 @@ public:
    /* Memory Allocation */
    T* allocate(size_t size)
    {
-      uint32_t bytes = sizeof(T) * size;
+      size_t bytes = sizeof(T) * size;
       return (T*)memory_resource.get().allocate(bytes, alignof(T));
    }
 
@@ -390,6 +422,14 @@ using map = std::map<Key, T, Compare, aco::monotonic_allocator<std::pair<const K
 template <class Key, class T, class Hash = std::hash<Key>, class Pred = std::equal_to<Key>>
 using unordered_map =
    std::unordered_map<Key, T, Hash, Pred, aco::monotonic_allocator<std::pair<const Key, T>>>;
+
+/*
+ * aco::unordered_set - alias for std::unordered_set with monotonic_allocator
+ *
+ * This template specialization mimics std::pmr::unordered_set.
+ */
+template <class T, class Hash = std::hash<T>, class Pred = std::equal_to<T>>
+using unordered_set = std::unordered_set<T, Hash, Pred, aco::monotonic_allocator<T>>;
 
 /*
  * Cache-friendly set of 32-bit IDs with fast insert/erase/lookup and

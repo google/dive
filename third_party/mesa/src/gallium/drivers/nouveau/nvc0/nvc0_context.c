@@ -83,7 +83,8 @@ nvc0_flush(struct pipe_context *pipe,
    struct nvc0_context *nvc0 = nvc0_context(pipe);
 
    if (fence)
-      nouveau_fence_ref(nvc0->base.fence, (struct nouveau_fence **)fence);
+      nouveau_fence_ref(nvc0->base.fence, (struct nouveau_fence **)fence,
+                        nvc0->base.screen);
 
    PUSH_KICK(nvc0->base.pushbuf); /* fencing handled in kick_notify */
 
@@ -528,7 +529,7 @@ nvc0_create(struct pipe_screen *pscreen, void *priv, unsigned ctxflags)
 
    memset(nvc0->tex_handles, ~0, sizeof(nvc0->tex_handles));
 
-   util_dynarray_init(&nvc0->global_residents, NULL);
+   nvc0->global_residents = UTIL_DYNARRAY_INIT;
 
    // Make sure that the first TSC entry has SRGB conversion bit set, since we
    // use it as a fallback on Fermi for TXF, and on Kepler+ generations for

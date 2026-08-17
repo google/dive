@@ -9,6 +9,8 @@
 #ifndef _AC_VCN_DEC_H
 #define _AC_VCN_DEC_H
 
+#include "ac_video_dec.h"
+
 /* VCN programming information shared between gallium/vulkan */
 #define RDECODE_PKT_TYPE_S(x)        (((unsigned)(x)&0x3) << 30)
 #define RDECODE_PKT_TYPE_G(x)        (((x) >> 30) & 0x3)
@@ -163,6 +165,7 @@
 /* *** decode flags *** */
 #define RDECODE_FLAGS_USE_DYNAMIC_DPB_MASK                  0x00000001
 #define RDECODE_FLAGS_USE_PAL_MASK                          0x00000008
+#define RDECODE_FLAGS_LOW_LATENCY_MASK                      0x00000080
 #define RDECODE_FLAGS_DPB_RESIZE_MASK                       0x00000100
 #define RDECODE_FLAGS_UNIFIED_DT_MASK                       0x00000200
 
@@ -435,7 +438,7 @@
 #define RDECODE_FRAME_HDR_INFO_AV1_ENABLE_FILTER_INTRA_MASK           (0x00000200)
 #define RDECODE_FRAME_HDR_INFO_AV1_USING_QMATRIX_MASK                 (0x00000100)
 #define RDECODE_FRAME_HDR_INFO_AV1_SKIP_MODE_FLAG_MASK                (0x00000080)
-#define RDECODE_FRAME_HDR_INFO_AV1_MONOCHROME_MASK                    (0x08000040)
+#define RDECODE_FRAME_HDR_INFO_AV1_MONOCHROME_MASK                    (0x00000040)
 #define RDECODE_FRAME_HDR_INFO_AV1_ALLOW_HIGH_PRECISION_MV_MASK       (0x00000020)
 #define RDECODE_FRAME_HDR_INFO_AV1_ALLOW_INTRABC_MASK                 (0x00000010)
 #define RDECODE_FRAME_HDR_INFO_AV1_INTRA_ONLY_MASK                    (0x00000008)
@@ -1146,6 +1149,18 @@ typedef struct rvcn_dec_feedback_profiling_s {
    unsigned int dmaHwCrc32Value2;
 } rvcn_dec_feedback_profiling_t;
 
+typedef struct rvcn_dec_avc_its_s {
+   unsigned char scaling_list_4x4[6][16];
+   unsigned char scaling_list_8x8[2][64];
+} rvcn_dec_avc_its_t;
+
+typedef struct rvcn_dec_hevc_its_s {
+   unsigned char scaling_list_4x4[6][16];
+   unsigned char scaling_list_8x8[6][64];
+   unsigned char scaling_list_16x16[6][64];
+   unsigned char scaling_list_32x32[2][64];
+} rvcn_dec_hevc_its_t;
+
 typedef struct rvcn_dec_vp9_nmv_ctx_mask_s {
    unsigned short classes_mask[2];
    unsigned short bits_mask[2];
@@ -1229,46 +1244,19 @@ typedef struct rvcn_dec_av1_segment_fg_s {
    rvcn_dec_av1_fg_init_buf_t fg_buf;
 } rvcn_dec_av1_segment_fg_t;
 
-struct jpeg_params {
-   unsigned bsd_size;
-   unsigned dt_pitch;
-   unsigned dt_uv_pitch;
-   unsigned dt_luma_top_offset;
-   unsigned dt_chroma_top_offset;
-   unsigned dt_chromav_top_offset;
-   unsigned dt_addr_mode;
-   unsigned dt_swizzle_mode;
-   uint16_t crop_x;
-   uint16_t crop_y;
-   uint16_t crop_width;
-   uint16_t crop_height;
+struct ac_vcn_dec_reg {
+   uint32_t data0;
+   uint32_t data1;
+   uint32_t data2;
+   uint32_t cmd;
+   uint32_t cntl;
 };
 
-#define RDECODE_VCN1_GPCOM_VCPU_CMD   0x2070c
-#define RDECODE_VCN1_GPCOM_VCPU_DATA0 0x20710
-#define RDECODE_VCN1_GPCOM_VCPU_DATA1 0x20714
-#define RDECODE_VCN1_ENGINE_CNTL      0x20718
+void ac_vcn_dec_init_regs(struct ac_vcn_dec_reg *reg, enum vcn_version version);
 
-#define RDECODE_VCN2_GPCOM_VCPU_CMD       (0x503 << 2)
-#define RDECODE_VCN2_GPCOM_VCPU_DATA0     (0x504 << 2)
-#define RDECODE_VCN2_GPCOM_VCPU_DATA1     (0x505 << 2)
-#define RDECODE_VCN2_GPCOM_VCPU_DATA2     (0x54C << 2)
-#define RDECODE_VCN2_ENGINE_CNTL          (0x506 << 2)
-
-#define RDECODE_VCN2_5_GPCOM_VCPU_CMD       0x3c
-#define RDECODE_VCN2_5_GPCOM_VCPU_DATA0     0x40
-#define RDECODE_VCN2_5_GPCOM_VCPU_DATA1     0x44
-#define RDECODE_VCN2_5_GPCOM_VCPU_DATA2     0x1A0
-#define RDECODE_VCN2_5_ENGINE_CNTL          0x9b4
-
-#define RDECODE_SESSION_CONTEXT_SIZE (128 * 1024)
-#define RDECODE_MAX_SUBSAMPLE_SIZE   (2048 * 2 * 4)
-#define RDECODE_IT_SCALING_TABLE_SIZE       992
-
-void ac_vcn_vp9_fill_probs_table(void *ptr);
-
-unsigned ac_vcn_dec_calc_ctx_size_av1(unsigned av1_version);
-void ac_vcn_av1_init_probs(unsigned av1_version, uint8_t *prob);
-void ac_vcn_av1_init_film_grain_buffer(unsigned av1_version, rvcn_dec_film_grain_params_t *fg_params, rvcn_dec_av1_fg_init_buf_t *fg_buf);
+uint32_t ac_vcn_dec_dpb_size(const struct radeon_info *info, struct ac_video_dec_session_param *param);
+uint32_t ac_vcn_dec_dpb_alignment(const struct radeon_info *info, struct ac_video_dec_session_param *param);
+struct ac_video_dec *ac_vcn_create_video_decoder(const struct radeon_info *info, struct ac_video_dec_session_param *param);
+struct ac_video_dec *ac_vcn_create_jpeg_decoder(const struct radeon_info *info, struct ac_video_dec_session_param *param);
 
 #endif

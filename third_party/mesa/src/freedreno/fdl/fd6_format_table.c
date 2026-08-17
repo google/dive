@@ -221,7 +221,7 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    V__(B10G10R10A2_SSCALED, 10_10_10_2_SINT,    WXYZ),
 
    VTC(R11G11B10_FLOAT, 11_11_10_FLOAT,         WZYX),
-   _T_(R9G9B9E5_FLOAT,  9_9_9_E5_FLOAT,         WZYX),
+   _TC(R9G9B9E5_FLOAT,  9_9_9_E5_FLOAT,         WZYX),
 
    _TC(Z24X8_UNORM,          Z24_UNORM_S8_UINT, WZYX),
    _TC(X24S8_UINT,           8_8_8_8_UINT,      WZYX),
@@ -358,6 +358,21 @@ static const struct fd6_format formats[PIPE_FORMAT_COUNT] = {
    _T_(ASTC_12x10_SRGB, ASTC_12x10,             WZYX),
    _T_(ASTC_12x12_SRGB, ASTC_12x12,             WZYX),
 
+   _T_(ASTC_4x4_FLOAT,   ASTC_4x4,              WZYX),
+   _T_(ASTC_5x4_FLOAT,   ASTC_5x4,              WZYX),
+   _T_(ASTC_5x5_FLOAT,   ASTC_5x5,              WZYX),
+   _T_(ASTC_6x5_FLOAT,   ASTC_6x5,              WZYX),
+   _T_(ASTC_6x6_FLOAT,   ASTC_6x6,              WZYX),
+   _T_(ASTC_8x5_FLOAT,   ASTC_8x5,              WZYX),
+   _T_(ASTC_8x6_FLOAT,   ASTC_8x6,              WZYX),
+   _T_(ASTC_8x8_FLOAT,   ASTC_8x8,              WZYX),
+   _T_(ASTC_10x5_FLOAT,  ASTC_10x5,             WZYX),
+   _T_(ASTC_10x6_FLOAT,  ASTC_10x6,             WZYX),
+   _T_(ASTC_10x8_FLOAT,  ASTC_10x8,             WZYX),
+   _T_(ASTC_10x10_FLOAT, ASTC_10x10,            WZYX),
+   _T_(ASTC_12x10_FLOAT, ASTC_12x10,            WZYX),
+   _T_(ASTC_12x12_FLOAT, ASTC_12x12,            WZYX),
+
    _T_(G8B8_G8R8_UNORM, R8G8R8B8_422_UNORM,     WZYX), /* YUYV */
    _T_(B8G8_R8G8_UNORM, G8R8B8R8_422_UNORM,     WZYX), /* UYVY */
 
@@ -432,7 +447,29 @@ bool
 fd6_texture_format_supported(const struct fd_dev_info *info, enum pipe_format format,
                              enum a6xx_tile_mode tile_mode, bool is_mutable)
 {
-   if (info->a6xx.is_a702) {
+   if (!info->props.has_astc_hdr) {
+      /* ASTC HDR formats are removed */
+      switch (format) {
+      case PIPE_FORMAT_ASTC_4x4_FLOAT:
+      case PIPE_FORMAT_ASTC_5x4_FLOAT:
+      case PIPE_FORMAT_ASTC_5x5_FLOAT:
+      case PIPE_FORMAT_ASTC_6x5_FLOAT:
+      case PIPE_FORMAT_ASTC_6x6_FLOAT:
+      case PIPE_FORMAT_ASTC_8x5_FLOAT:
+      case PIPE_FORMAT_ASTC_8x6_FLOAT:
+      case PIPE_FORMAT_ASTC_8x8_FLOAT:
+      case PIPE_FORMAT_ASTC_10x5_FLOAT:
+      case PIPE_FORMAT_ASTC_10x6_FLOAT:
+      case PIPE_FORMAT_ASTC_10x8_FLOAT:
+      case PIPE_FORMAT_ASTC_10x10_FLOAT:
+      case PIPE_FORMAT_ASTC_12x10_FLOAT:
+      case PIPE_FORMAT_ASTC_12x12_FLOAT:
+         return false;
+      default:
+         break;
+      }
+   }
+   if (info->props.is_a702) {
       /* BPTC is removed */
       switch (format) {
       case PIPE_FORMAT_BPTC_RGBA_UNORM:
@@ -488,6 +525,15 @@ fd6_color_format(enum pipe_format format, enum a6xx_tile_mode tile_mode)
       return FMT6_8_UNORM;
 
    return formats[format].rb;
+}
+
+bool
+fd6_color_format_supported(const struct fd_dev_info *info, enum pipe_format format,
+                             enum a6xx_tile_mode tile_mode)
+{
+   if (info->chip < 7 && format == PIPE_FORMAT_R9G9B9E5_FLOAT)
+      return false;
+   return fd6_color_format(format, tile_mode) != FMT6_NONE;
 }
 
 enum a3xx_color_swap

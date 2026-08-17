@@ -35,26 +35,32 @@ struct vk_pipeline_robustness_state;
 
 #define anv_drv_const_offset(field) \
    (offsetof(struct anv_push_constants, field))
+#define anv_drv_const_dword(field) \
+   (offsetof(struct anv_push_constants, field) / 4)
 #define anv_drv_const_size(field) \
    (sizeof(((struct anv_push_constants *)0)->field))
+#define anv_drv_const_includes_offset(field, offset) \
+   ((offset) >= anv_drv_const_offset(field) && \
+    (offset) < (anv_drv_const_offset(field) + anv_drv_const_size(field)))
 
 #define anv_load_driver_uniform(b, components, field)                   \
-   nir_load_push_constant(b, components,                                \
-                          anv_drv_const_size(field) * 8,                \
-                          nir_imm_int(b, 0),                            \
-                          .base = anv_drv_const_offset(field),          \
-                          .range = components * anv_drv_const_size(field))
-/* Use load_uniform for indexed values since load_push_constant requires that
- * the offset source is dynamically uniform in the subgroup which we cannot
- * guarantee.
+   nir_load_push_data_intel(b, components,                              \
+                            anv_drv_const_size(field) * 8,              \
+                            nir_imm_int(b, 0),                          \
+                            .base = anv_drv_const_offset(field),        \
+                            .range = components * anv_drv_const_size(field))
+/* Use ACCESS_NON_UNIFORM for indexed values since load_push_constant requires
+ * that the offset source is dynamically uniform in the subgroup which we
+ * cannot guarantee.
  */
 #define anv_load_driver_uniform_indexed(b, components, field, idx)      \
-   nir_load_uniform(b, components,                                      \
-                    anv_drv_const_size(field[0]) * 8,                   \
-                    nir_imul_imm(b, idx,                                \
-                                 anv_drv_const_size(field[0])),         \
-                    .base = anv_drv_const_offset(field),                \
-                    .range = anv_drv_const_size(field))
+   nir_load_push_data_intel(b, components,                              \
+                            anv_drv_const_size(field[0]) * 8,           \
+                            nir_imul_imm(b, idx,                        \
+                                         anv_drv_const_size(field[0])), \
+                            .base = anv_drv_const_offset(field),        \
+                            .range = anv_drv_const_size(field),         \
+                            .access = ACCESS_NON_UNIFORM)
 
 /* This map is represent a mapping where the key is the NIR
  * nir_intrinsic_resource_intel::block index. It allows mapping bindless UBOs
@@ -98,21 +104,36 @@ anv_nir_ubo_addr_format(const struct anv_physical_device *pdevice,
 
 bool anv_nir_lower_ubo_loads(nir_shader *shader);
 
+bool anv_nir_lower_driver_values(nir_shader *shader,
+                                 const struct anv_physical_device *pdevice);
+
 bool anv_nir_apply_pipeline_layout(nir_shader *shader,
                                    const struct anv_physical_device *pdevice,
                                    enum brw_robustness_flags robust_flags,
                                    struct anv_descriptor_set_layout * const *set_layouts,
                                    uint32_t set_count,
                                    const uint32_t *dynamic_offset_start,
+                                   bool device_bindable,
                                    struct anv_pipeline_bind_map *map,
                                    struct anv_pipeline_push_map *push_map,
                                    void *push_map_mem_ctx);
+
+bool
+anv_nir_lower_descriptor_heap(nir_shader *shader,
+                              const struct anv_device *device,
+                              uint32_t embedded_sampler_count,
+                              const struct vk_sampler_state* embedded_samplers,
+                              struct anv_pipeline_bind_map *map);
 
 struct anv_nir_push_layout_info {
    bool separate_tessellation;
    bool fragment_dynamic;
    bool mesh_dynamic;
 };
+
+bool anv_nir_shrink_push_constant_ranges(nir_shader *nir);
+
+bool anv_nir_realign_cbv(nir_shader *shader);
 
 bool anv_nir_compute_push_layout(nir_shader *nir,
                                  const struct anv_physical_device *pdevice,
@@ -121,14 +142,16 @@ bool anv_nir_compute_push_layout(nir_shader *nir,
                                  struct brw_base_prog_key *prog_key,
                                  struct brw_stage_prog_data *prog_data,
                                  struct anv_pipeline_bind_map *map,
-                                 const struct anv_pipeline_push_map *push_map,
-                                 void *mem_ctx);
+                                 const struct anv_pipeline_push_map *push_map);
 
 void anv_nir_validate_push_layout(const struct anv_physical_device *pdevice,
                                   struct brw_stage_prog_data *prog_data,
                                   struct anv_pipeline_bind_map *map);
 
 bool anv_nir_update_resource_intel_block(nir_shader *shader);
+
+bool anv_nir_lower_desc_address(nir_shader *shader,
+                                const struct anv_pipeline_bind_map *map);
 
 bool anv_nir_lower_unaligned_dispatch(nir_shader *shader);
 
@@ -155,6 +178,48 @@ uint32_t anv_nir_push_desc_ubo_fully_promoted(nir_shader *nir,
 void anv_apply_per_prim_attr_wa(struct nir_shader *ms_nir,
                                 struct nir_shader *fs_nir,
                                 struct anv_device *device);
+
+bool anv_nir_xe2_r11g11b10_atomic_swap_wa(nir_shader *nir);
+
+static inline bool
+anv_nir_is_promotable_ubo_binding(nir_src src)
+{
+   nir_intrinsic_instr *intrin = nir_src_as_intrinsic(src);
+
+   return intrin && intrin->intrinsic == nir_intrinsic_resource_intel &&
+      (nir_intrinsic_resource_access_intel(intrin) &
+       nir_resource_intel_pushable);
+}
+
+static inline bool
+anv_nir_is_internal_ubo(nir_src src)
+{
+   nir_intrinsic_instr *intrin = nir_src_as_intrinsic(src);
+
+   return intrin && intrin->intrinsic == nir_intrinsic_resource_intel &&
+      (nir_intrinsic_resource_access_intel(intrin) &
+       nir_resource_intel_internal);
+}
+
+static inline unsigned
+anv_nir_get_ubo_binding_push_block(nir_src src)
+{
+   nir_intrinsic_instr *intrin = nir_src_as_intrinsic(src);
+   assert(intrin && intrin->intrinsic == nir_intrinsic_resource_intel);
+
+   return nir_intrinsic_resource_block_intel(intrin);
+}
+
+bool anv_nir_is_pushable_pointer(nir_intrinsic_instr *intrin,
+                                 uint32_t *out_push_offset,
+                                 uint32_t *out_load_offset);
+
+void anv_nir_analyze_push_constants_ranges(nir_shader *nir,
+                                           const struct intel_device_info *devinfo,
+                                           const struct anv_pipeline_push_map *push_map,
+                                           struct anv_push_range out_ranges[4]);
+
+enum anv_pipeline_behavior anv_nir_clear_shader_analysis(nir_shader *shader);
 
 #ifdef __cplusplus
 }

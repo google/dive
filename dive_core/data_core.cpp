@@ -859,7 +859,7 @@ void CaptureMetadataCreator::FillColorBlendState(EventStateInfo::Iterator event_
         rb_mrt_blend_control.u32All = m_state_tracker.GetRegValue(mrt_reg + 1);
 
         VkPipelineColorBlendAttachmentState attach;
-        attach.blendEnable = (rb_mrt_control.bitfields.BLEND == 1) ? VK_TRUE : VK_FALSE;
+        attach.blendEnable = (rb_mrt_control.bitfields.COLOR_BLEND_EN == 1) ? VK_TRUE : VK_FALSE;
 
         // Be careful!!! Here we assume the enum `VkBlendFactor` matches exactly
         // `adreno_rb_blend_factor`
@@ -998,14 +998,18 @@ void CaptureMetadataCreator::FillHardwareSpecificStates(EventStateInfo::Iterator
         event_state_it->SetBinW(binw);
         event_state_it->SetBinH(binh);
         event_state_it->SetRenderMode(render_mode);
-
-        // this is only available on a6xx
-        if (IsFieldEnabled(GetRegFieldByName("BUFFERS_LOCATION", reg_info)))
-        {
-            const a6xx_buffers_location buffers_location = bitfields.BUFFERS_LOCATION;
-            event_state_it->SetBuffersLocation(buffers_location);
-        }
     }
+
+    uint32_t rb_cntl_reg_offset = GetRegOffsetByName("RB_CNTL");
+    if (m_state_tracker.IsRegSet(rb_cntl_reg_offset))
+    {
+        RB_CNTL rb_cntl{};
+        rb_cntl.u32All = m_state_tracker.GetRegValue(rb_cntl_reg_offset);
+        const auto bitfields = rb_cntl.bitfields;
+        const a6xx_buffers_location buffers_location = bitfields.BUFFERS_LOCATION;
+        event_state_it->SetBuffersLocation(buffers_location);
+    }
+
     uint32_t gras_sc_window_scissor_tl_reg_offset = GetRegOffsetByName("GRAS_SC_WINDOW_SCISSOR_TL");
     if (m_state_tracker.IsRegSet(gras_sc_window_scissor_tl_reg_offset))
     {

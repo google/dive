@@ -565,19 +565,20 @@ TEST_F(nir_opt_loop_test, opt_loop_merge_terminators_skip_merge_if_phis_nested_l
    )"));
 }
 
-TEST_F(nir_opt_loop_test, opt_loop_peel_initial_break_ends_with_jump)
+TEST_F(nir_opt_loop_test, opt_loop_peel_initial_break_no_work)
 {
+   nir_variable *var = nir_variable_create(b->shader, nir_var_shader_temp,
+                                           glsl_int_type(), "dummy_var");
+
    nir_loop *loop = nir_push_loop(b);
+
+   /* do_work1() */
+   nir_store_var(b, var, nir_imm_int(b, 0), 1);
 
    /* the break we want to move down: */
    nir_break_if(b, nir_imm_true(b));
 
-   /* do_work_2: */
-   nir_push_if(b, nir_imm_true(b));
-   nir_jump(b, nir_jump_continue);
-   nir_pop_if(b, NULL);
-   nir_jump(b, nir_jump_return);
-
+   /* No work afterwards. */
    nir_pop_loop(b, loop);
 
    ASSERT_FALSE(nir_opt_loop(b->shader));
@@ -593,40 +594,32 @@ TEST_F(nir_opt_loop_test, opt_loop_peel_initial_break_ends_with_jump)
       decl_var shader_out INTERP_MODE_NONE none int out (FRAG_RESULT_DEPTH.x, 0, 0)
       decl_var ubo INTERP_MODE_NONE none int ubo1 (0, 0, 0)
       decl_var ubo INTERP_MODE_NONE none int[4] ubo_array (0, 0, 0)
+      decl_var  INTERP_MODE_NONE none int dummy_var
       decl_function main () (entrypoint)
 
       impl main {
           block b0:  // preds:
           32    %0 = deref_var &in (shader_in int)
           32    %1 = @load_deref (%0) (access=none)
-                     // succs: b1
+                  // succs: b1
           loop {
-              block b1:  // preds: b0 b5
-              1     %2 = load_const (true)
-                         // succs: b2 b3
-              if %2 (true) {
+              block b1:  // preds: b0 b4
+              32    %2 = load_const (0x00000000)
+              32    %3 = deref_var &dummy_var (shader_temp int)
+                      @store_deref (%3, %2 (0x0)) (wrmask=x, access=none)
+              1     %4 = load_const (true)
+                      // succs: b2 b3
+              if %4 (true) {
                   block b2:// preds: b1
                   break
-                  // succs: b8
+                  // succs: b5
               } else {
                   block b3:  // preds: b1, succs: b4
               }
-              block b4:  // preds: b3
-              1     %3 = load_const (true)
-                         // succs: b5 b6
-              if %3 (true) {
-                  block b5:// preds: b4
-                  continue
-                  // succs: b1
-              } else {
-                  block b6:  // preds: b4, succs: b7
-              }
-              block b7:// preds: b6
-              return
-              // succs: b9
+              block b4:  // preds: b3, succs: b1
           }
-          block b8:  // preds: b2, succs: b9
-          block b9:
+          block b5:  // preds: b2, succs: b6
+          block b6:
       }
    )"));
 }

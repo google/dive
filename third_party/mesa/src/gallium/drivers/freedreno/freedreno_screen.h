@@ -23,6 +23,8 @@
 #include "util/u_memory.h"
 #include "util/u_queue.h"
 
+#include "common/fd6_gmem_cache.h"
+
 #include "freedreno_batch_cache.h"
 #include "freedreno_gmem.h"
 #include "freedreno_util.h"
@@ -48,20 +50,6 @@ enum fd_gmem_reason {
    FD_GMEM_FB_READ = BIT(5),
 };
 
-/* Offset within GMEM of various "non-GMEM" things that GMEM is used to
- * cache.  These offsets differ for gmem vs sysmem rendering (in sysmem
- * mode, the entire GMEM can be used)
- */
-struct fd6_gmem_config {
-   /* Color/depth CCU cache: */
-   uint32_t color_ccu_offset;
-   uint32_t depth_ccu_offset;
-
-   /* Vertex attrib cache (a750+): */
-   uint32_t vpc_attr_buf_size;
-   uint32_t vpc_attr_buf_offset;
-};
-
 struct fd_screen {
    struct pipe_screen base;
 
@@ -81,7 +69,6 @@ struct fd_screen {
    uint32_t gpu_id;  /* 220, 305, etc */
    uint64_t chip_id; /* coreid:8 majorrev:8 minorrev:8 patch:8 */
    uint32_t max_freq;
-   uint32_t ram_size;
    uint32_t max_rts; /* max # of render targets */
    uint32_t priority_mask;
    unsigned prio_low, prio_norm, prio_high;  /* remap low/norm/high priority to kernel priority */
@@ -105,6 +92,8 @@ struct fd_screen {
       /* If "dual_color_blend_by_location" workaround is enabled
        */
       bool dual_color_blend_by_location;
+
+      float heap_memory_percent;
    } driconf;
 
    struct fd_dev_info dev_info;
@@ -118,6 +107,7 @@ struct fd_screen {
 
    unsigned num_perfcntr_groups;
    const struct fd_perfcntr_group *perfcntr_groups;
+   struct fd_perfcntr_state *perfcntrs;
 
    /* generated at startup from the perfcntr groups: */
    unsigned num_perfcntr_queries;
@@ -165,11 +155,29 @@ struct fd_screen {
 
    struct renderonly *ro;
 
-   /* the blob seems to always use 8K factor and 128K param sizes, copy them */
-#define FD6_TESS_FACTOR_SIZE (8 * 1024)
-#define FD6_TESS_PARAM_SIZE (128 * 1024)
-#define FD6_TESS_BO_SIZE (FD6_TESS_FACTOR_SIZE + FD6_TESS_PARAM_SIZE)
    struct fd_bo *tess_bo;
+
+   /* Private memory is a memory space where each fiber gets its own piece of
+    * memory, in addition to registers. It is backed by a buffer which needs
+    * to be large enough to hold the contents of every possible wavefront in
+    * every core of the GPU. Because it allocates space via the internal
+    * wavefront ID which is shared between all currently executing shaders,
+    * the same buffer can be reused by all shaders, as long as all shaders
+    * sharing the same buffer use the exact same configuration. There are two
+    * inputs to the configuration, the amount of per-fiber space and whether
+    * to use the newer per-wave or older per-fiber layout. We only ever
+    * increase the size, and shaders with a smaller size requirement simply
+    * use the larger existing buffer, so that we only need to keep track of
+    * one buffer and its size, but we still need to keep track of per-fiber
+    * and per-wave buffers separately so that we never use the same buffer
+    * for different layouts. pvtmem[0] is for per-fiber, and pvtmem[1] is for
+    * per-wave.
+    */
+   struct {
+      struct fd_bo *bo;
+      uint32_t per_fiber_size;
+      uint32_t per_sp_size;
+   } pvtmem[2];
 
    /* table with MESA_PRIM_COUNT+1 entries mapping MESA_PRIM_x to
     * DI_PT_x value to use for draw initiator.  There are some
@@ -182,6 +190,7 @@ struct fd_screen {
    const enum pc_di_primtype *primtypes;
    uint32_t primtypes_mask;
 
+#define FD_CONTEXT_FLAG_AUX               (1u << 31)
    simple_mtx_t aux_ctx_lock;
    struct pipe_context *aux_ctx;
 };

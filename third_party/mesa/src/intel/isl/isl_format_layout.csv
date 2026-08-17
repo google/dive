@@ -352,3 +352,8 @@ GFX12_CCS_16BPP_Y0          ,   4, 16,  4,  1,     ,     ,     ,     ,     ,    
 GFX12_CCS_32BPP_Y0          ,   4,  8,  4,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
 GFX12_CCS_64BPP_Y0          ,   4,  4,  4,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
 GFX12_CCS_128BPP_Y0         ,   4,  2,  4,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
+GFX12_CCS_8BPP_Ys           ,   4,  8, 16,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
+GFX12_CCS_16BPP_Ys          ,   4,  8,  8,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
+GFX12_CCS_32BPP_Ys          ,   4,  4,  8,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
+GFX12_CCS_64BPP_Ys          ,   4,  4,  4,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs
+GFX12_CCS_128BPP_Ys         ,   4,  2,  4,  1,     ,     ,     ,     ,     ,     ,    ,      ,       ,   ccs

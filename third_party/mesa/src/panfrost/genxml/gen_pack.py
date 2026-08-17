@@ -3,25 +3,7 @@
 # Copyright (C) 2016 Intel Corporation
 # Copyright (C) 2016 Broadcom
 # Copyright (C) 2020 Collabora, Ltd.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a
-# copy of this software and associated documentation files (the "Software"),
-# to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense,
-# and/or sell copies of the Software, and to permit persons to whom the
-# Software is furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice (including the next
-# paragraph) shall be included in all copies or substantial portions of the
-# Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-# IN THE SOFTWARE.
+# SPDX-License-Identifier: MIT
 
 import argparse
 import xml.parsers.expat
@@ -621,9 +603,29 @@ class Parser(object):
 
     def emit_aggregate(self):
         aggregate = self.aggregate
-        print("struct %s_packed {" % aggregate.name.lower())
-        print("   uint32_t opaque[{}];".format(aggregate.get_size() // 4))
-        print("};\n")
+        if aggregate.sections:
+            print("struct %s_packed {" % aggregate.name.lower())
+            print("   union {")
+            print("      uint32_t opaque[{}];".format(aggregate.get_size() // 4))
+            print("      struct {")
+            sec_start = 0;
+            for section in aggregate.sections:
+                while sec_start < section.offset:
+                    print("         uint32_t __pad{};".format(sec_start))
+                    sec_start += 4
+                assert sec_start == section.offset
+                print("         struct {}_packed {};".format(section.type_name.lower(), section.name.upper()))
+                sec_start += section.type.get_length()
+            print("      };")
+            print("   };")
+            print("};")
+            for section in aggregate.sections:
+                print('static_assert(offsetof(struct {}_packed, {}) == {}, "");'.format(aggregate.name.lower(), section.name.upper(), section.offset))
+            print("")
+        else:
+            print("struct %s_packed {" % aggregate.name.lower())
+            print("   uint32_t opaque[{}];".format(aggregate.get_size() // 4))
+            print("};\n")
         print('#define {}_PACKED_T struct {}_packed'.format(aggregate.name.upper(), aggregate.name.lower()))
         print('#define {}_LENGTH {}'.format(aggregate.name.upper(), aggregate.size))
         if aggregate.align != None:

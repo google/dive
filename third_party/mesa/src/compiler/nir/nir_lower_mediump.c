@@ -94,7 +94,7 @@ nir_lower_mediump_io(nir_shader *nir, nir_variable_mode modes,
             bool is_fragdepth = (nir->info.stage == MESA_SHADER_FRAGMENT &&
                                  sem.location == FRAG_RESULT_DEPTH);
             if (!sem.medium_precision &&
-                (is_varying || is_fragdepth || val->parent_instr->type != nir_instr_type_alu ||
+                (is_varying || is_fragdepth || !nir_def_is_alu(val) ||
                  nir_def_as_alu(val)->op != upconvert_op)) {
                continue;
             }
@@ -476,9 +476,7 @@ static bool
 const_is_f16(nir_scalar scalar)
 {
    double value = nir_scalar_as_float(scalar);
-   uint16_t fp16_val = _mesa_float_to_half(value);
-   bool is_denorm = (fp16_val & 0x7fff) != 0 && (fp16_val & 0x7fff) <= 0x3ff;
-   return value == _mesa_half_to_float(fp16_val) && !is_denorm;
+   return _mesa_float_is_half(value);
 }
 
 static bool
@@ -521,9 +519,7 @@ can_opt_16bit_src(nir_def *ssa, nir_alu_type src_type, bool sext_matters)
          nir_alu_instr *alu = nir_def_as_alu(comp.def);
          bool is_16bit = alu->src[0].src.ssa->bit_size == 16;
 
-         if ((alu->op == nir_op_f2f32 && is_16bit) ||
-             alu->op == nir_op_unpack_half_2x16_split_x ||
-             alu->op == nir_op_unpack_half_2x16_split_y)
+         if (alu->op == nir_op_f2f32 && is_16bit)
             can_opt &= opt_f16;
          else if (alu->op == nir_op_i2i32 && is_16bit)
             can_opt &= opt_i16 || opt_i16_u16;
@@ -560,23 +556,6 @@ opt_16bit_src(nir_builder *b, nir_instr *instr, nir_src *src, nir_alu_type src_t
       } else {
          /* conversion instruction */
          new_comps[i] = nir_scalar_chase_alu_src(comp, 0);
-         if (new_comps[i].def->bit_size != 16) {
-            assert(new_comps[i].def->bit_size == 32);
-
-            nir_def *extract = nir_mov_scalar(b, new_comps[i]);
-            switch (nir_scalar_alu_op(comp)) {
-            case nir_op_unpack_half_2x16_split_x:
-               extract = nir_unpack_32_2x16_split_x(b, extract);
-               break;
-            case nir_op_unpack_half_2x16_split_y:
-               extract = nir_unpack_32_2x16_split_y(b, extract);
-               break;
-            default:
-               UNREACHABLE("unsupported alu op");
-            }
-
-            new_comps[i] = nir_get_scalar(extract, 0);
-         }
       }
    }
 
@@ -618,7 +597,7 @@ opt_16bit_destination(nir_def *ssa, nir_alu_type dest_type, unsigned exec_mode,
       nir_get_rounding_mode_from_float_controls(exec_mode, nir_type_float16);
 
    nir_foreach_use(use, ssa) {
-      nir_instr *instr = nir_src_parent_instr(use);
+      nir_instr *instr = nir_src_use_instr(use);
       if (instr->type != nir_instr_type_alu)
          return false;
 
@@ -674,7 +653,7 @@ opt_16bit_destination(nir_def *ssa, nir_alu_type dest_type, unsigned exec_mode,
 
    /* All uses are the same conversions. Replace them with mov. */
    nir_foreach_use(use, ssa) {
-      nir_alu_instr *alu = nir_instr_as_alu(nir_src_parent_instr(use));
+      nir_alu_instr *alu = nir_instr_as_alu(nir_src_use_instr(use));
       switch (alu->op) {
       case nir_op_f2f16_rtne:
       case nir_op_f2f16_rtz:
@@ -703,6 +682,7 @@ opt_16bit_destination(nir_def *ssa, nir_alu_type dest_type, unsigned exec_mode,
       default:
          UNREACHABLE("unsupported conversion op");
       };
+      alu->fp_math_ctrl = nir_op_valid_fp_math_ctrl(alu->op, alu->fp_math_ctrl);
    }
 
    ssa->bit_size = 16;
@@ -844,6 +824,7 @@ opt_16bit_tex_image(nir_builder *b, nir_instr *instr, void *params)
       nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(instr);
 
       switch (intrinsic->intrinsic) {
+      case nir_intrinsic_image_heap_store:
       case nir_intrinsic_bindless_image_store:
       case nir_intrinsic_image_deref_store:
       case nir_intrinsic_image_store:
@@ -852,6 +833,7 @@ opt_16bit_tex_image(nir_builder *b, nir_instr *instr, void *params)
          if (options->opt_image_srcs)
             progress |= opt_16bit_image_srcs(b, intrinsic, 4);
          break;
+      case nir_intrinsic_image_heap_load:
       case nir_intrinsic_bindless_image_load:
       case nir_intrinsic_image_deref_load:
       case nir_intrinsic_image_load:
@@ -860,12 +842,15 @@ opt_16bit_tex_image(nir_builder *b, nir_instr *instr, void *params)
          if (options->opt_image_srcs)
             progress |= opt_16bit_image_srcs(b, intrinsic, 3);
          break;
+      case nir_intrinsic_image_heap_sparse_load:
       case nir_intrinsic_bindless_image_sparse_load:
       case nir_intrinsic_image_deref_sparse_load:
       case nir_intrinsic_image_sparse_load:
          if (options->opt_image_srcs)
             progress |= opt_16bit_image_srcs(b, intrinsic, 3);
          break;
+      case nir_intrinsic_image_heap_atomic:
+      case nir_intrinsic_image_heap_atomic_swap:
       case nir_intrinsic_bindless_image_atomic:
       case nir_intrinsic_bindless_image_atomic_swap:
       case nir_intrinsic_image_deref_atomic:
@@ -874,6 +859,13 @@ opt_16bit_tex_image(nir_builder *b, nir_instr *instr, void *params)
       case nir_intrinsic_image_atomic_swap:
          if (options->opt_image_srcs)
             progress |= opt_16bit_image_srcs(b, intrinsic, -1);
+         break;
+      case nir_intrinsic_load_buffer_amd:
+         /* Skip sparse residency and non-format loads. */
+         if (options->opt_image_dest_types &&
+             nir_intrinsic_access(intrinsic) & ACCESS_USES_FORMAT_AMD &&
+             !(nir_intrinsic_access(intrinsic) & ACCESS_SPARSE))
+            progress |= opt_16bit_image_dest(intrinsic, exec_mode, options);
          break;
       default:
          break;

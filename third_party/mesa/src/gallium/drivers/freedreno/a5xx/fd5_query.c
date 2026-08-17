@@ -57,7 +57,7 @@ occlusion_resume(struct fd_acc_query *aq, struct fd_batch *batch)
 
    ASSERT_ALIGNED(struct fd5_query_sample, start, 16);
 
-   OUT_PKT4(ring, REG_A5XX_RB_SAMPLE_COUNT_ADDR_LO, 2);
+   OUT_PKT4(ring, REG_A5XX_RB_SAMPLE_COUNT_ADDR, 2);
    OUT_RELOC(ring, query_sample(aq, start));
 
    fd5_event_write(batch, ring, ZPASS_DONE, false);
@@ -85,7 +85,7 @@ occlusion_pause(struct fd_acc_query *aq, struct fd_batch *batch)
 
    ASSERT_ALIGNED(struct fd5_query_sample, stop, 16);
 
-   OUT_PKT4(ring, REG_A5XX_RB_SAMPLE_COUNT_ADDR_LO, 2);
+   OUT_PKT4(ring, REG_A5XX_RB_SAMPLE_COUNT_ADDR, 2);
    OUT_RELOC(ring, query_sample(aq, stop));
 
    fd5_event_write(batch, ring, ZPASS_DONE, false);

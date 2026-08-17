@@ -23,25 +23,14 @@ libnak_c_files = files(
   'nak_nir_lower_fs_inputs.c',
   'nak_nir_lower_gs_intrinsics.c',
   'nak_nir_lower_image_addrs.c',
+  'nak_nir_lower_mesh_intrinsics.c',
   'nak_nir_lower_non_uniform_ldcx.c',
   'nak_nir_lower_scan_reduce.c',
-  'nak_nir_lower_kepler_shared_atomics.c',
+  'nak_nir_lower_shared_atomics.c',
   'nak_nir_lower_tex.c',
   'nak_nir_lower_vtg_io.c',
   'nak_nir_mark_lcssa_invariants.c',
   'nak_nir_rematerialize_load_const.c',
-)
-
-_libacorn_rs = static_library(
-  'acorn',
-  files('acorn/lib.rs'),
-  gnu_symbol_visibility : 'hidden',
-  rust_abi : 'rust',
-  rust_args : nouveau_rust_args,
-)
-
-idep_acorn_rs = declare_dependency(
-  link_with : _libacorn_rs,
 )
 
 libnak_deps = [
@@ -72,6 +61,7 @@ _nak_bindings_rs = rust.bindgen(
     '--allowlist-function', 'nouveau_ws_.*',
     # provided through compiler::bindings::*
     '--blocklist-type', 'glsl_.*',
+    '--blocklist-type', 'pipe_format.*',
     '--no-prepend-enum-name',
     '--with-derive-default',
   ],
@@ -96,6 +86,7 @@ _libnak_ir_proc_rs = rust.proc_macro(
   'nak_ir_proc',
   files('nak/ir_proc.rs'),
   dependencies : [idep_compiler_proc_rs],
+  rust_args : rust_global_args,
 )
 
 _libnak_rs = static_library(
@@ -125,7 +116,10 @@ _libnak_rs = static_library(
 # TODO: Linking Rust executables (such as unit tests) doesn't play nicely
 # with the sanitizers because meson doesn't know to pass -fsanitize to the
 # Rust linker.  See also https://github.com/mesonbuild/meson/issues/11741
-if with_tests and get_option('b_sanitize') == 'none'
+#
+# Also, don't build on Android because we do cross-builds and, unlike most
+# tests, these depend on libdrm and that confuses the build system.
+if with_tests and get_option('b_sanitize') == 'none' and not with_platform_android
   rust.test(
     'nak',
     _libnak_rs,
@@ -141,13 +135,11 @@ if with_tests and get_option('b_sanitize') == 'none'
       idep_compiler.partial_dependency(link_args : true, links : true),
       idep_mesautil.partial_dependency(link_args : true, links : true),
       idep_nv_push_rs,
+      idep_acorn_rs,
     ],
     # This is needed to ensure we link against glibc
     # See also https://gitlab.freedesktop.org/mesa/mesa/-/issues/11632
     rust_args: ['-C', 'default-linker-libraries'],
-    link_with: [
-      _libacorn_rs,
-    ],
   )
 endif
 
@@ -166,7 +158,7 @@ nak_nir_algebraic_c = custom_target(
 _libnak = static_library(
   'nak',
   [libnak_c_files, nak_nir_algebraic_c],
-  include_directories : [inc_include, inc_src, inc_gallium],
+  include_directories : [inc_include, inc_src],
   dependencies : libnak_deps,
   link_with : [_libnak_rs],
   c_args : [no_override_init_args],

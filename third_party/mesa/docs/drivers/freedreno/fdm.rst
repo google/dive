@@ -36,11 +36,12 @@ This space exists whenever tiled rendering/GMEM is used, even without FDM. It
 is the space used to access GMEM, with the origin at the upper left of the
 tile. The hardware automatically transforms rendering space into GMEM space
 whenever GMEM is accessed using the various ``*_WINDOW_OFFSET`` registers. The
-origin of this space will be called :math:`b_{cs}`, the common bin start, for
-reasons that are explained below. When using FDM, coordinates in this space
-must be multiplied by the scaling factor :math:`s` derived from the fragment
-density map, or equivalently divided by the fragment area (as defined by the
-Vulkan specification), with the origin still at the upper left of the tile. For
+origin of this space in rendering space, or the value of ``*_WINDOW_OFFSET``,
+will be called :math:`b_{cs}`, the common bin start, for reasons that are
+explained below. When using FDM, coordinates in this space must be multiplied
+by the scaling factor :math:`s` derived from the fragment density map, or
+equivalently divided by the fragment area (as defined by the Vulkan
+specification), with the origin still at the upper left of the tile. For
 example, if :math:`s_x = 1/2`, then the bin is half as wide as it would've been
 without FDM and all coordinates in this space must be divided by 2.
 
@@ -80,6 +81,104 @@ integer, or in other words the framebuffer space bin start :math:`b_s` must be
 a multiple of :math:`1 / s`.  This is a natural constraint anyway, because if
 it wasn't the case then the bin would start in the middle of a fragment which
 isn't possible to handle correctly.
+
+Subsampled Space
+^^^^^^^^^^^^^^^^
+
+When using subsampled images, this is the space where the bin is stored in the
+underlying subsampled image. When sampling from a subsampled image, the driver
+inserts shader code to transform from framebuffer space to subsampled space
+using metadata written when rendering to the image.
+
+Accesses towards the edge of a bin may partially bleed into its neighboring bin
+with linear or bicubic sampling. If its neighbor has a different scale or isn't
+adjacent in subsampled space, we will sample the incorrect data or empty space
+and return a corrupted result. In order to handle this, we need to insert an
+"apron" around problematic edges and corners. This is done by blitting from the
+nearest neighbor of each bin after the renderpass.
+
+Subsampled space is normally scaled down similar to rendering space, which is
+the point of subsampled images in the first place, but the origin of the bin
+is up to the driver. The driver chooses the origin of each bin when rendering a
+given render pass and then encodes it in the metadata used when sampling the
+image. Bins that require an apron must be far enough away from each other that
+their aprons don't intersect, and all of the bins must be contained within the
+underlying image.
+
+Even when subsampled images are in use, not all bins may be subsampled. For
+example, there may not be enough space to insert aprons around every bin. When
+this is the case, subsampled space is not scaled like rendering space, that is
+we expand the bin when resolving similar to non-subsampled images, however the
+origin of the bin may still differ from framebuffer space origin.
+
+The algorithm used by turnip used to calculate the bin layout in subsampled
+space is to start with a "default" layout of the bins and then recursively
+solve conflicts caused by bins whose aprons are too close together. The first
+strategy used is to shift one of the bins over by a certain amount. The second
+fallback strategy is to un-subsample both neighboring bins, making them
+expanded so that they touch each other and there is no apron.
+
+One natural choice for the "default" layout is to just use rendering space.
+That is, start each bin at :math:`b_cs` by default. That mostly works, except
+for two problems. The first is easier to solve, and has to do with the border
+when sampling: it is allowed to use border colors with subsampled images, and
+when that happens and the framebuffer covers the entire image, it is expected
+that sampling around the edge correctly blends the border color and the edge
+pixel. In order for that to happen, bins that touch or intersect the edge of
+the framebuffer in framebuffer space have to be shifted over so that their edge
+touches the framebuffer edge in subsampled space too.
+
+Doing this also allows an optimization: because we are storing the tile's
+contents one to one from GMEM to system memory instead of scaling it up, we can
+use the dedicated resolve engine instead of GRAS to resolve the tile to system
+memory. Normally GRAS has to be used with non-subsampled images to scale up the
+bin when resolving. However this doesn't work for tiles around the right and
+bottom edge where we have to shift over the tile to align to the edge. This
+also gets a bit tricky when the tile is shifted to avoid apron conflicts, because
+normally the resolve engine would write the tile directly without shifting.
+However there is a trick we can use to avoid falling back to GRAS: by
+overriding ``RB_RESOLVE_WINDOW_OFFSET``, we can effectively apply an offset by
+telling the resolve engine that the tile was rendered somewhere else. This
+means that the shift amount has to be aligned to the alignment of
+``RB_RESOLVE_WINDOW_OFFSET``, which is ``tile_align_*`` in the device info.
+
+The other problem with making subsampled space equal rendering space is that
+with an FDM offset, rendering space can be arbitrarily larger than framebuffer
+space, and we may overflow the attachments by up to the size of a tile. The API
+is designed to allow the driver to allocate extra slop space in the image in
+this case, because there are image create flags for subsampled and FDM offset,
+however the maximum tile size is far too large and images would take up
+far too much memory if we allocated enough slop space for the largest
+possible tile. An alternative is to use a hybrid of framebuffer space and
+rendering space: shift over the tiles by :math:`b_o` so that their origin
+is :math:`b_s` instead of :math:`b_cs`, but leave them scaled down. This
+requires no slop space whatsoever, because the bins are shifted inside the
+original image, but we can no longer use the resolve engine as the tile offsets
+are no longer aligned to ``tile_align_*``. So in the driver we combine both
+approaches: we calculate an aligned offset :math:`b_o'` which is :math:`b_o`
+aligned down to ``tile_align_*`` and shift over the tiles by subtracting
+:math:`b_o'` instead of :math:`b_o`. This requires slop space, but only
+:math:`b_o - b_o'` slop space is required, which must be less than
+``tile_align_*``.  As usual the first row/column are not shifted over in x/y
+respectively.
+
+Here is an example of what a subsampled image looks like in memory, in this
+case without any FDM offset:
+
+.. figure:: subsampled_annotated.jpg
+   :alt: Example of a subsampled image
+
+Note how some of the bins are shifted over to make space for the apron. After
+applying the coordinate transform when sampling, this is the final image:
+
+.. figure:: subsampled_final.jpg
+   :alt: Example of a subsampled image after coordinate transform
+
+When ``VK_EXT_custom_resolve`` and subsampled images are used together, the
+custom resolve subpass writes directly to the subsampled image. This means that
+it needs to use subsampled space instead of rendering space, which in practice
+means replacing :math:`b_{cs}` with the origin of the bin in the subsampled
+image.
 
 Viewport and Scissor Patching
 -----------------------------

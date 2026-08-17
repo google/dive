@@ -1,42 +1,16 @@
 /*
- Copyright (C) Intel Corp.  2006.  All Rights Reserved.
- Intel funded Tungsten Graphics to
- develop this 3D driver.
-
- Permission is hereby granted, free of charge, to any person obtaining
- a copy of this software and associated documentation files (the
- "Software"), to deal in the Software without restriction, including
- without limitation the rights to use, copy, modify, merge, publish,
- distribute, sublicense, and/or sell copies of the Software, and to
- permit persons to whom the Software is furnished to do so, subject to
- the following conditions:
-
- The above copyright notice and this permission notice (including the
- next paragraph) shall be included in all copies or substantial
- portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- IN NO EVENT SHALL THE COPYRIGHT OWNER(S) AND/OR ITS SUPPLIERS BE
- LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
- **********************************************************************/
- /*
-  * Authors:
-  *   Keith Whitwell <keithw@vmware.com>
-  */
+ * Copyright © 2006 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ *
+ * Intel funded Tungsten Graphics to develop this 3D driver.
+ * File originally authored by: Keith Whitwell <keithw@vmware.com>
+ */
 
 /** @file
  *
  * This file defines struct brw_reg, which is our representation for EU
  * registers.  They're not a hardware specific format, just an abstraction
  * that intends to capture the full flexibility of the hardware registers.
- *
- * The brw_eu_emit.c layer's brw_set_dest/brw_set_src[01] functions encode
- * the abstract brw_reg type into the actual hardware instruction encoding.
  */
 
 #pragma once
@@ -69,6 +43,9 @@ struct intel_device_info;
 #define BRW_SWIZZLE_Y 1
 #define BRW_SWIZZLE_Z 2
 #define BRW_SWIZZLE_W 3
+
+/** Special value to treat inline parameter values like UNIFORM */
+#define BRW_INLINE_PARAM_REG (65535)
 
 #define BRW_SWIZZLE4(a,b,c,d) (((a)<<0) | ((b)<<2) | ((c)<<4) | ((d)<<6))
 #define BRW_GET_SWZ(swz, idx) (((swz) >> ((idx)*2)) & 0x3)
@@ -223,6 +200,17 @@ typedef struct brw_reg {
 
    bool equals(const brw_reg &r) const;
    bool negative_equals(const brw_reg &r) const;
+
+   brw_reg without_src_mods() const
+   {
+      brw_reg r = *this;
+
+      r.negate = false;
+      r.abs = false;
+
+      return r;
+   }
+
    bool is_contiguous() const;
 
    bool is_zero() const;
@@ -232,6 +220,17 @@ typedef struct brw_reg {
    bool is_accumulator() const { return brw_reg_is_arf(*this, BRW_ARF_ACCUMULATOR); }
    bool is_ip() const { return brw_reg_is_arf(*this, BRW_ARF_IP); }
    bool is_address() const;
+
+   /**
+    * These are all the things that will eventually become FIXED_GRF. The
+    * things that will live in regular registers can, for the most part, be
+    * treated the same by optimization passes.
+    */
+   bool is_grf() const
+   {
+      return file == FIXED_GRF || file == VGRF || file == ATTR ||
+             file == UNIFORM;
+   }
 
    unsigned address_slot(unsigned byte_offset) const;
 
@@ -1080,7 +1079,7 @@ brw_uniform_reg(unsigned nr, enum brw_reg_type type)
 static inline bool
 brw_reg_is_arf(struct brw_reg reg, unsigned arf)
 {
-   assert((arf & 0x0f) == 0 && arf <= BRW_ARF_TIMESTAMP);
+   assert(util_is_aligned(arf, 16) && arf <= BRW_ARF_TIMESTAMP);
 
    return reg.file == ARF && (reg.nr & 0xF0) == arf;
 }
@@ -1331,7 +1330,6 @@ element_sz(struct brw_reg reg)
 int brw_float_to_vf(float f);
 float brw_vf_to_float(unsigned char vf);
 
-bool brw_reg_saturate_immediate(brw_reg *reg);
 bool brw_reg_negate_immediate(brw_reg *reg);
 bool brw_reg_abs_immediate(brw_reg *reg);
 
@@ -1434,7 +1432,8 @@ reg_space(const brw_reg &r)
 static inline unsigned
 reg_offset(const brw_reg &r)
 {
-   return (r.file == ADDRESS || r.file == VGRF || r.file == IMM || r.file == ATTR ? 0 : r.nr) *
+   return (r.file == ADDRESS || r.file == VGRF || r.file == IMM ||
+           r.file == ATTR || brw_reg_is_arf(r, BRW_ARF_ACCUMULATOR) ? 0 : r.nr) *
           (r.file == UNIFORM ? 4 : REG_SIZE) + r.offset +
           (r.file == ADDRESS || r.file == ARF || r.file == FIXED_GRF ? r.subnr : 0);
 }

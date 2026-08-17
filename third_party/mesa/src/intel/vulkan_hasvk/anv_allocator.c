@@ -1211,7 +1211,7 @@ anv_state_stream_init(struct anv_state_stream *stream,
     */
    stream->next = block_size;
 
-   util_dynarray_init(&stream->all_blocks, NULL);
+   stream->all_blocks = UTIL_DYNARRAY_INIT;
 
    VG(VALGRIND_CREATE_MEMPOOL(stream, 0, false));
 }
@@ -1246,8 +1246,7 @@ anv_state_stream_alloc(struct anv_state_stream *stream,
 
       stream->block = anv_state_pool_alloc_no_vg(stream->state_pool,
                                                  block_size, PAGE_SIZE);
-      util_dynarray_append(&stream->all_blocks,
-                           struct anv_state, stream->block);
+      util_dynarray_append(&stream->all_blocks, stream->block);
       VG(VALGRIND_MAKE_MEM_NOACCESS(stream->block.map, block_size));
 
       /* Reset back to the start */

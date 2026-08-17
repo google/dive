@@ -7,6 +7,39 @@
 
 #include "compiler/nir/nir_builder.h"
 #include "r300_screen.h"
+#include "util/log.h"
+#include "util/u_endian.h"
+
+static bool
+r300_nir_stub_deriv_instr(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+{
+   switch (intr->intrinsic) {
+   case nir_intrinsic_ddx:
+   case nir_intrinsic_ddx_coarse:
+   case nir_intrinsic_ddy:
+   case nir_intrinsic_ddy_coarse:
+      break;
+   default:
+      return false;
+   }
+
+   mesa_logw_once("r300: WARNING: Shader is trying to use derivatives, "
+                  "but the hardware doesn't support it. "
+                  "Expect possible misrendering (it's not a bug, do not report it).");
+
+   b->cursor = nir_before_instr(&intr->instr);
+   nir_def_rewrite_uses(&intr->def,
+                        nir_imm_zero(b, intr->def.num_components, intr->def.bit_size));
+   nir_instr_remove(&intr->instr);
+   return true;
+}
+
+static bool
+r300_nir_stub_deriv(nir_shader *s)
+{
+   return nir_shader_intrinsics_pass(s, r300_nir_stub_deriv_instr,
+                                     nir_metadata_control_flow, NULL);
+}
 
 bool
 r300_is_only_used_as_float(const nir_alu_instr *instr)
@@ -15,7 +48,7 @@ r300_is_only_used_as_float(const nir_alu_instr *instr)
       if (nir_src_is_if(src))
          return false;
 
-      nir_instr *user_instr = nir_src_parent_instr(src);
+      nir_instr *user_instr = nir_src_use_instr(src);
       if (user_instr->type == nir_instr_type_alu) {
          nir_alu_instr *alu = nir_instr_as_alu(user_instr);
          switch (alu->op) {
@@ -129,11 +162,39 @@ remove_clip_vertex(nir_builder *b, nir_instr *instr, UNUSED void *_)
        deref->var->data.mode == nir_var_shader_out &&
        deref->var->data.location == VARYING_SLOT_CLIP_VERTEX) {
       nir_foreach_use_safe (src, &deref->def) {
-         nir_instr_remove(nir_src_parent_instr(src));
+         nir_instr_remove(nir_src_use_instr(src));
       }
       nir_instr_remove(instr);
       return true;
    }
+   return false;
+}
+
+static bool
+r300_alu_to_scalar_filter_cb(const nir_instr *instr, const void *data)
+{
+   if (instr->type != nir_instr_type_alu)
+      return false;
+
+   nir_alu_instr *alu = nir_instr_as_alu(instr);
+   switch (alu->op) {
+   case nir_op_ball_fequal2:
+   case nir_op_ball_fequal3:
+   case nir_op_ball_fequal4:
+   case nir_op_bany_fnequal2:
+   case nir_op_bany_fnequal3:
+   case nir_op_bany_fnequal4:
+   case nir_op_ball_iequal2:
+   case nir_op_ball_iequal3:
+   case nir_op_ball_iequal4:
+   case nir_op_bany_inequal2:
+   case nir_op_bany_inequal3:
+   case nir_op_bany_inequal4:
+      return true;
+   default:
+      break;
+   }
+
    return false;
 }
 
@@ -157,18 +218,28 @@ r300_optimize_nir(struct nir_shader *s, struct r300_screen *screen)
                var->data.driver_location--;
             }
          }
+         assert(s->num_outputs > 0);
+         s->num_outputs--;
          NIR_PASS(_, s, nir_remove_dead_variables, nir_var_shader_out, NULL);
          fprintf(stderr, "r300: no HW support for clip vertex, expect misrendering.\n");
+#if !UTIL_ARCH_BIG_ENDIAN
          fprintf(stderr, "r300: software emulation can be enabled with RADEON_DEBUG=notcl.\n");
+#endif
       }
    }
+
+   /* R300/R400 doesn't support derivatives in FS, we replace it with zero,
+    * emit warning and hope for the best. */
+   if (s->info.stage == MESA_SHADER_FRAGMENT && !is_r500)
+      NIR_PASS(_, s, r300_nir_stub_deriv);
 
    bool progress;
    do {
       progress = false;
       NIR_PASS(_, s, nir_lower_vars_to_ssa);
 
-      NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, nir_lower_alu_to_scalar, r300_alu_to_scalar_filter_cb, NULL);
+      NIR_PASS(progress, s, nir_opt_copy_prop);
       NIR_PASS(progress, s, r300_nir_lower_flrp);
       NIR_PASS(progress, s, nir_opt_algebraic);
       if (s->info.stage == MESA_SHADER_VERTEX) {
@@ -214,8 +285,9 @@ r300_optimize_nir(struct nir_shader *s, struct r300_screen *screen)
       NIR_PASS(progress, s, nir_opt_vectorize, r300_should_vectorize_instr, &too_many_ubos);
       NIR_PASS(progress, s, nir_opt_undef);
       if (!progress)
-         NIR_PASS(progress, s, nir_lower_undef_to_zero);
+         NIR_PASS(progress, s, nir_lower_undef_to_zero, NULL);
       NIR_PASS(progress, s, nir_opt_loop_unroll);
+      NIR_PASS(progress, s, nir_opt_licm, NULL);
 
       /* Try to fold addressing math into ubo_vec4's base to avoid load_consts
        * and ALU ops for it.
@@ -236,6 +308,17 @@ r300_optimize_nir(struct nir_shader *s, struct r300_screen *screen)
 
    NIR_PASS(_, s, nir_lower_var_copies);
    NIR_PASS(_, s, nir_remove_dead_variables, nir_var_function_temp, NULL);
+
+   /* FIXME: this could be probably moved earlier... */
+   if (s->info.stage == MESA_SHADER_FRAGMENT) {
+      if (is_r500) {
+         NIR_PASS(_, s, r300_transform_fs_trig_input);
+      }
+   } else if (screen->caps.has_tcl) {
+      if (is_r500 || screen->caps.is_r400) {
+         NIR_PASS(_, s, r300_transform_vs_trig_input);
+      }
+   }
 }
 
 char *
@@ -259,4 +342,83 @@ r300_check_control_flow(nir_shader *s)
    }
 
    return NULL;
+}
+
+bool
+r300_nir_lower_frontface(nir_shader *nir)
+{
+   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
+   nir_builder b = nir_builder_create(impl);
+   b.cursor = nir_after_impl(impl);
+
+   /* Emit FACE as 1 for front-facing fragments and 0 for back-facing. */
+   nir_variable *color = nir_variable_create(nir, nir_var_shader_out,
+                                             glsl_vec4_type(),
+                                             "r300_frontface_color");
+   color->data.location = VARYING_SLOT_COL0;
+   color->data.driver_location = nir->num_outputs++;
+   color->data.interpolation = INTERP_MODE_NOPERSPECTIVE;
+   nir_store_var(&b, color, nir_imm_vec4(&b, 1, 1, 1, 1), 0xf);
+
+   nir_variable *bcolor = nir_variable_create(nir, nir_var_shader_out,
+                                              glsl_vec4_type(),
+                                              "r300_frontface_bcolor");
+   bcolor->data.location = VARYING_SLOT_BFC0;
+   bcolor->data.driver_location = nir->num_outputs++;
+   bcolor->data.interpolation = INTERP_MODE_NOPERSPECTIVE;
+   nir_store_var(&b, bcolor, nir_imm_zero(&b, 4, 32), 0xf);
+
+   return nir_progress(true, impl, nir_metadata_control_flow);
+}
+
+/* Add a generic output that mirrors gl_Position, is placed in the first free VAR slot
+ * and used as WPOS by the r300 fragment shader.
+ */
+bool
+r300_nir_add_wpos(nir_shader *nir, nir_variable **wpos_var_out)
+{
+   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
+
+   nir_variable *pos_var = nir_find_variable_with_location(nir, nir_var_shader_out,
+                                                           VARYING_SLOT_POS);
+   if (!pos_var)
+      return nir_no_progress(impl);
+
+   int last_var = -1;
+   nir_foreach_shader_out_variable(var, nir) {
+      if (var->data.location >= VARYING_SLOT_VAR0 &&
+          var->data.location < VARYING_SLOT_PATCH0) {
+         int slot = var->data.location - VARYING_SLOT_VAR0;
+         last_var = MAX2(last_var, slot);
+      }
+   }
+
+   nir_variable *wpos_var = nir_variable_create(nir, nir_var_shader_out,
+                                                glsl_vec4_type(), "r300_wpos");
+   wpos_var->data.location = VARYING_SLOT_VAR0 + last_var + 1;
+   wpos_var->data.driver_location = nir->num_outputs++;
+   wpos_var->data.interpolation = INTERP_MODE_SMOOTH;
+
+   if (wpos_var_out)
+      *wpos_var_out = wpos_var;
+
+   nir_builder b = nir_builder_create(impl);
+
+   nir_foreach_block(block, impl) {
+      nir_foreach_instr_safe(instr, block) {
+         if (instr->type != nir_instr_type_intrinsic)
+            continue;
+         nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+         if (intrin->intrinsic != nir_intrinsic_store_deref)
+            continue;
+         nir_deref_instr *deref = nir_src_as_deref(intrin->src[0]);
+         if (nir_deref_instr_get_variable(deref) != pos_var)
+            continue;
+         b.cursor = nir_after_instr(instr);
+         nir_store_var(&b, wpos_var, intrin->src[1].ssa,
+                       nir_intrinsic_write_mask(intrin));
+      }
+   }
+
+   return nir_progress(true, impl, nir_metadata_control_flow);
 }

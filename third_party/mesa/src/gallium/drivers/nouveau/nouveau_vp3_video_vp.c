@@ -50,41 +50,6 @@ struct mpeg12_picparm_vp {
    uint8_t non_intra_quantizer_matrix[0x40]; // a4
 };
 
-struct mpeg4_picparm_vp {
-   uint32_t width; // 00 in normal units
-   uint32_t height; // 04 in normal units
-   uint32_t unk08; // stride 1
-   uint32_t unk0c; // stride 2
-   uint32_t ofs[6]; // 10..24 ofs
-   uint32_t bucket_size; // 28
-   uint32_t pad1; // 2c, pad
-   uint32_t pad2; // 30
-   uint32_t inter_ring_data_size; // 34
-
-   uint32_t trd[2]; // 38, 3c
-   uint32_t trb[2]; // 40, 44
-   uint32_t u48; // XXX codec selection? Should test with different values of VdpDecoderProfile
-   uint16_t f_code_fw; // 4c
-   uint16_t f_code_bw; // 4e
-   uint8_t interlaced; // 50
-
-   uint8_t quant_type; // bool, written to 528
-   uint8_t quarter_sample; // bool, written to 548
-   uint8_t short_video_header; // bool, negated written to 528 shifted by 1
-   uint8_t u54; // bool, written to 0x740
-   uint8_t vop_coding_type; // 55
-   uint8_t rounding_control; // 56
-   uint8_t alternate_vertical_scan_flag; // 57 bool
-   uint8_t top_field_first; // bool, written to vuc
-
-   uint8_t pad4[3]; // 59, 5a, 5b, contains garbage on blob
-
-   uint32_t intra[0x10]; // 5c
-   uint32_t non_intra[0x10]; // 9c
-   uint32_t pad5[0x10]; // bc what does this do?
-   // udc..uff pad?
-};
-
 // Full version, with data pumped from BSP
 struct vc1_picparm_vp {
    uint32_t bucket_size; // 00
@@ -263,53 +228,6 @@ nouveau_vp3_fill_picparm_mpeg12_vp(struct nouveau_vp3_decoder *dec,
 }
 
 static uint32_t
-nouveau_vp3_fill_picparm_mpeg4_vp(struct nouveau_vp3_decoder *dec,
-                                  struct pipe_mpeg4_picture_desc *desc,
-                                  struct nouveau_vp3_video_buffer *refs[16],
-                                  unsigned *is_ref,
-                                  char *map)
-{
-   struct mpeg4_picparm_vp pic_vp_stub = {}, *pic_vp = &pic_vp_stub;
-   uint32_t ring, ret = 0x01014; // !async_shutdown << 16 | watchdog << 12 | irq_record << 4 | unk;
-   *is_ref = desc->vop_coding_type <= 1;
-
-   pic_vp->width = dec->base.width;
-   pic_vp->height = mb(dec->base.height)<<4;
-   pic_vp->unk0c = pic_vp->unk08 = mb(dec->base.width)<<4; // Stride
-
-   nouveau_vp3_ycbcr_offsets(dec, &pic_vp->ofs[1], &pic_vp->ofs[3], &pic_vp->ofs[4]);
-   pic_vp->ofs[5] = pic_vp->ofs[3];
-   pic_vp->ofs[0] = pic_vp->ofs[2] = 0;
-   pic_vp->pad1 = pic_vp->pad2 = 0;
-   nouveau_vp3_inter_sizes(dec, 1, &ring, &pic_vp->bucket_size, &pic_vp->inter_ring_data_size);
-
-   pic_vp->trd[0] = desc->trd[0];
-   pic_vp->trd[1] = desc->trd[1];
-   pic_vp->trb[0] = desc->trb[0];
-   pic_vp->trb[1] = desc->trb[1];
-   pic_vp->u48 = 0; // Codec?
-   pic_vp->pad1 = pic_vp->pad2 = 0;
-   pic_vp->f_code_fw = desc->vop_fcode_forward;
-   pic_vp->f_code_bw = desc->vop_fcode_backward;
-   pic_vp->interlaced = desc->interlaced;
-   pic_vp->quant_type = desc->quant_type;
-   pic_vp->quarter_sample = desc->quarter_sample;
-   pic_vp->short_video_header = desc->short_video_header;
-   pic_vp->u54 = 0;
-   pic_vp->vop_coding_type = desc->vop_coding_type;
-   pic_vp->rounding_control = desc->rounding_control;
-   pic_vp->alternate_vertical_scan_flag = desc->alternate_vertical_scan_flag;
-   pic_vp->top_field_first = desc->top_field_first;
-
-   memcpy(pic_vp->intra, desc->intra_matrix, 0x40);
-   memcpy(pic_vp->non_intra, desc->non_intra_matrix, 0x40);
-   memcpy(map, pic_vp, sizeof(*pic_vp));
-   refs[0] = (struct nouveau_vp3_video_buffer *)desc->ref[0];
-   refs[!!refs[0]] = (struct nouveau_vp3_video_buffer *)desc->ref[1];
-   return ret;
-}
-
-static uint32_t
 nouveau_vp3_fill_picparm_h264_vp(struct nouveau_vp3_decoder *dec,
                                  const struct pipe_h264_picture_desc *d,
                                  struct nouveau_vp3_video_buffer *refs[16],
@@ -477,25 +395,6 @@ void nouveau_vp3_vp_caps(struct nouveau_vp3_decoder *dec, union pipe_desc desc,
          dec->refs[target->valid_ref].decoded_top = 1;
          dec->refs[target->valid_ref].decoded_bottom = 1;
          break;
-      }
-      return;
-   case PIPE_VIDEO_FORMAT_MPEG4:
-      *caps = nouveau_vp3_fill_picparm_mpeg4_vp(dec, desc.mpeg4, refs, is_ref, vp);
-      nouveau_vp3_handle_references(dec, refs, dec->fence_seq, target);
-      // XXX: Correct?
-      if (!desc.mpeg4->interlaced) {
-         dec->refs[target->valid_ref].decoded_top = 1;
-         dec->refs[target->valid_ref].decoded_bottom = 1;
-      } else if (desc.mpeg4->top_field_first) {
-         if (!dec->refs[target->valid_ref].decoded_top)
-            dec->refs[target->valid_ref].decoded_top = 1;
-         else
-            dec->refs[target->valid_ref].decoded_bottom = 1;
-      } else {
-         if (!dec->refs[target->valid_ref].decoded_bottom)
-            dec->refs[target->valid_ref].decoded_bottom = 1;
-         else
-            dec->refs[target->valid_ref].decoded_top = 1;
       }
       return;
    case PIPE_VIDEO_FORMAT_VC1: {

@@ -270,7 +270,7 @@ readpixels_memcpy(struct gl_context *ctx,
 
    /* memcpy*/
    if (dstStride == stride && dstStride == bytesPerRow) {
-      memcpy(dst, map, bytesPerRow * height);
+      memcpy(dst, map, (size_t)bytesPerRow * height);
    } else {
       for (j = 0; j < height; j++) {
          memcpy(dst, map, bytesPerRow);
@@ -561,7 +561,7 @@ read_rgba_pixels( struct gl_context *ctx,
          rgba = dst;
       } else {
          need_convert = true;
-         rgba = malloc(height * rgba_stride);
+         rgba = malloc((size_t)height * rgba_stride);
          if (!rgba) {
             _mesa_error(ctx, GL_OUT_OF_MEMORY, "glReadPixels");
             goto done_unmap;
@@ -575,8 +575,10 @@ read_rgba_pixels( struct gl_context *ctx,
                            needs_rebase ? rebase_swizzle : NULL);
 
       /* Handle transfer ops if necessary */
-      if (transferOps)
-         _mesa_apply_rgba_transfer_ops(ctx, transferOps, width * height, rgba);
+      if (transferOps) {
+         _mesa_apply_rgba_transfer_ops(ctx, transferOps,
+                                       (size_t)width * height, rgba);
+      }
 
       /* If we had to rebase, we have already taken care of that */
       needs_rebase = false;
@@ -617,14 +619,14 @@ read_rgba_pixels( struct gl_context *ctx,
       luminance_stride = width * sizeof(GLfloat);
       if (format == GL_LUMINANCE_ALPHA)
          luminance_stride *= 2;
-      luminance_bytes = height * luminance_stride;
+      luminance_bytes = (size_t)height * luminance_stride;
       luminance = malloc(luminance_bytes);
       if (!luminance) {
          _mesa_error(ctx, GL_OUT_OF_MEMORY, "glReadPixels");
          free(rgba);
          goto done_unmap;
       }
-      _mesa_pack_luminance_from_rgba_float(width * height, src,
+      _mesa_pack_luminance_from_rgba_float((size_t)width * height, src,
                                            luminance, format, transferOps);
 
       /* Convert from Luminance float to dst (this will hadle type conversion
@@ -636,7 +638,7 @@ read_rgba_pixels( struct gl_context *ctx,
                            width, height, NULL);
       free(luminance);
    } else {
-      _mesa_pack_luminance_from_rgba_integer(width * height, src, !src_is_uint,
+      _mesa_pack_luminance_from_rgba_integer((size_t)width * height, src, !src_is_uint,
                                              dst, format, type);
    }
 
@@ -1053,13 +1055,6 @@ read_pixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
 
    FLUSH_VERTICES(ctx, 0, 0);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glReadPixels(%d, %d, %s, %s, %p)\n",
-                  width, height,
-                  _mesa_enum_to_string(format),
-                  _mesa_enum_to_string(type),
-                  pixels);
-
    if (!no_error && (width < 0 || height < 0)) {
       _mesa_error( ctx, GL_INVALID_VALUE,
                    "glReadPixels(width=%d height=%d)", width, height );
@@ -1158,8 +1153,8 @@ read_pixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
        * integer-valued or both non-integer-valued.
        */
       if (ctx->Extensions.EXT_texture_integer && _mesa_is_color_format(format)) {
-         const struct gl_renderbuffer *rb = ctx->ReadBuffer->_ColorReadBuffer;
-         const GLboolean srcInteger = _mesa_is_format_integer_color(rb->Format);
+         const struct gl_renderbuffer *crb = ctx->ReadBuffer->_ColorReadBuffer;
+         const GLboolean srcInteger = _mesa_is_format_integer_color(crb->Format);
          const GLboolean dstInteger = _mesa_is_enum_format_integer(format);
          if (dstInteger != srcInteger) {
             _mesa_error(ctx, GL_INVALID_OPERATION,

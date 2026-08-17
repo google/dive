@@ -34,7 +34,7 @@ fd5_layout_resource(struct fd_resource *rsc, enum fd_layout_type type)
    if (type == FD_LAYOUT_UBWC)
       ubwc = true;
 
-   struct fdl_image_params params = fd_image_params(prsc, ubwc, tile_mode);
+   struct fdl_image_params params = fd_image_params(prsc, ubwc, tile_mode, 0);
 
    fdl5_layout_image(&rsc->layout, &params);
 

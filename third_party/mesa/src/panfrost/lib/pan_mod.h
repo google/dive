@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2025 Collabora, Ltd.
- *
  * SPDX-License-Identifier: MIT
  */
 
@@ -15,7 +14,7 @@ extern "C" {
 
 #include "pan_layout.h"
 
-struct pan_fb_info;
+struct pan_attachment_info;
 struct pan_image;
 struct pan_image_view;
 struct pan_image_usage;
@@ -59,13 +58,12 @@ struct pan_mod_handler {
                                   unsigned mip_level, unsigned layer_or_z_slice,
                                   unsigned sample, void **payload);
 
-   void (*emit_color_attachment)(const struct pan_fb_info *fb, unsigned rt_idx,
-                                 unsigned layer_or_z_slice,
-                                 unsigned cbuf_offset, void *payload);
-   void (*emit_zs_attachment)(const struct pan_fb_info *fb,
-                              unsigned layer_or_z_slice, void *payload);
-   void (*emit_s_attachment)(const struct pan_fb_info *fb,
-                             unsigned layer_or_z_slice, void *payload);
+   void (*emit_color_attachment)(const struct pan_attachment_info *att,
+                                 void *payload);
+   void (*emit_zs_attachment)(const struct pan_attachment_info *att,
+                              void *payload);
+   void (*emit_s_attachment)(const struct pan_attachment_info *att,
+                             void *payload);
 };
 
 #ifdef PAN_ARCH
@@ -86,6 +84,7 @@ const struct pan_mod_handler *pan_mod_get_handler_v9(uint64_t modifier);
 const struct pan_mod_handler *pan_mod_get_handler_v10(uint64_t modifier);
 const struct pan_mod_handler *pan_mod_get_handler_v12(uint64_t modifier);
 const struct pan_mod_handler *pan_mod_get_handler_v13(uint64_t modifier);
+const struct pan_mod_handler *pan_mod_get_handler_v14(uint64_t modifier);
 
 static inline const struct pan_mod_handler *
 pan_mod_get_handler(unsigned arch, uint64_t modifier)
@@ -107,6 +106,8 @@ pan_mod_get_handler(unsigned arch, uint64_t modifier)
       return pan_mod_get_handler_v12(modifier);
    case 13:
       return pan_mod_get_handler_v13(modifier);
+   case 14:
+      return pan_mod_get_handler_v14(modifier);
    default:
       UNREACHABLE("Unsupported arch");
    }

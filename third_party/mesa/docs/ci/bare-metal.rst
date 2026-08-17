@@ -6,5 +6,5 @@ no longer supported.
 
 Please consider using one of the following alternatives:
 
-- `CI-tron <https://gfx-ci.pages.freedesktop.org/ci-tron/>`__
+- `CI-tron <https://docs.ci-tron.dev>`__
 - :doc:`LAVA`

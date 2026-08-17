@@ -6,6 +6,8 @@
 
 #include "nir_opt_varyings_test.h"
 
+namespace {
+
 class nir_opt_varyings_test_prop_uniform : public nir_opt_varyings_test
 {};
 
@@ -14,13 +16,13 @@ class nir_opt_varyings_test_prop_uniform : public nir_opt_varyings_test
    UNUSED nir_intrinsic_instr *store, *store2 = NULL, *store3 = NULL; \
    store = \
       store_output(b1, VARYING_SLOT_##slot, comp, nir_type_float##bitsize, \
-                   load_uniform(b1, bitsize, index0), 0); \
+                   load_uniform(b1, bitsize, index0), 0, false); \
    if (is_per_vertex(b1, VARYING_SLOT_##slot, false) || \
        MESA_SHADER_##producer_stage == MESA_SHADER_GEOMETRY) { \
       store2 = store_output(b1, VARYING_SLOT_##slot, comp, nir_type_float##bitsize, \
-                            load_uniform(b1, bitsize, index1), 1); \
+                            load_uniform(b1, bitsize, index1), 1, false); \
       store3 = store_output(b1, VARYING_SLOT_##slot, comp, nir_type_float##bitsize, \
-                            load_uniform(b1, bitsize, index1), 2); \
+                            load_uniform(b1, bitsize, index1), 2, false); \
    } \
    \
    UNUSED unsigned pindex = VARYING_SLOT_##slot; \
@@ -30,9 +32,9 @@ class nir_opt_varyings_test_prop_uniform : public nir_opt_varyings_test
       cindex -= VARYING_SLOT_BFC0 - VARYING_SLOT_COL0; \
    \
    nir_def *input = load_input(b2, (gl_varying_slot)cindex, comp, nir_type_##type##bitsize, 0, 0); \
-   store_output(b2, VARYING_SLOT_VAR0, 0, nir_type_float##bitsize, input, 0); \
+   store_output(b2, VARYING_SLOT_VAR0, 0, nir_type_float##bitsize, input, 0, false); \
    nir_def *input2 = load_input(b2, (gl_varying_slot)cindex, comp, nir_type_##type##bitsize, 1, 0); \
-   store_output(b2, VARYING_SLOT_VAR1, 0, nir_type_float##bitsize, input2, 0); \
+   store_output(b2, VARYING_SLOT_VAR1, 0, nir_type_float##bitsize, input2, 0, false); \
    \
    if (MESA_SHADER_##consumer_stage == MESA_SHADER_FRAGMENT) { \
       /* Compaction moves COL1 to COL0. */ \
@@ -59,11 +61,11 @@ TEST_F(nir_opt_varyings_test_prop_uniform, \
    SHADER_UNIFORM_OUTPUT(producer_stage, consumer_stage, slot, comp, type, bitsize, 1, 1) \
    \
    if (nir_slot_is_sysval_output((gl_varying_slot)pindex, MESA_SHADER_##consumer_stage)) { \
-      ASSERT_TRUE(opt_varyings() == nir_progress_consumer); \
-      ASSERT_TRUE(b1->shader->info.outputs_written == BITFIELD64_BIT(pindex)); \
+      ASSERT_EQ(opt_varyings(), (nir_progress_producer | nir_progress_consumer)); \
+      ASSERT_EQ(b1->shader->info.outputs_written, BITFIELD64_BIT(pindex)); \
       ASSERT_TRUE(nir_intrinsic_io_semantics(store).no_varying); \
    } else { \
-      ASSERT_TRUE(opt_varyings() == (nir_progress_producer | nir_progress_consumer)); \
+      ASSERT_EQ(opt_varyings(), (nir_progress_producer | nir_progress_consumer)); \
       ASSERT_TRUE(b1->shader->info.outputs_written == 0 && \
                   b1->shader->info.patch_outputs_written == 0 && \
                   b1->shader->info.outputs_written_16bit == 0); \
@@ -91,23 +93,15 @@ TEST_F(nir_opt_varyings_test_prop_uniform, \
    \
    nir_io_xfb xfb; \
    memset(&xfb, 0, sizeof(xfb)); \
-   xfb.out[comp % 2].num_components = 1; \
-   if (comp <= 1) { \
-      nir_intrinsic_set_io_xfb(store, xfb); \
-      if (store2) \
-         nir_intrinsic_set_io_xfb(store2, xfb); \
-      if (store3) \
-         nir_intrinsic_set_io_xfb(store3, xfb); \
-   } else { \
-      nir_intrinsic_set_io_xfb2(store, xfb); \
-      if (store2) \
-         nir_intrinsic_set_io_xfb2(store2, xfb); \
-      if (store3) \
-         nir_intrinsic_set_io_xfb2(store3, xfb); \
-   } \
+   xfb.out[comp].num_components = 1; \
+   nir_intrinsic_set_io_xfb(store, xfb); \
+   if (store2) \
+      nir_intrinsic_set_io_xfb(store2, xfb); \
+   if (store3) \
+      nir_intrinsic_set_io_xfb(store3, xfb); \
    \
-   ASSERT_TRUE(opt_varyings() == nir_progress_consumer); \
-   ASSERT_TRUE(b1->shader->info.outputs_written == BITFIELD64_BIT(pindex)); \
+   ASSERT_EQ(opt_varyings(), (nir_progress_producer | nir_progress_consumer)); \
+   ASSERT_EQ(b1->shader->info.outputs_written, BITFIELD64_BIT(pindex)); \
    ASSERT_TRUE(nir_intrinsic_io_semantics(store).no_varying); \
    ASSERT_TRUE(b2->shader->info.inputs_read == 0 && \
                b2->shader->info.patch_inputs_read == 0 && \
@@ -122,18 +116,18 @@ TEST_F(nir_opt_varyings_test_prop_uniform, \
 { \
    SHADER_UNIFORM_OUTPUT(producer_stage, consumer_stage, slot, comp, type, bitsize, index0, index1) \
    \
-   ASSERT_TRUE(opt_varyings() == 0); \
+   ASSERT_EQ(opt_varyings(), 0); \
    if (pindex >= VARYING_SLOT_VAR0_16BIT) { \
-      ASSERT_TRUE(b1->shader->info.outputs_written_16bit == \
+      ASSERT_EQ(b1->shader->info.outputs_written_16bit, \
                   BITFIELD_BIT(pindex - VARYING_SLOT_VAR0_16BIT)); \
-      ASSERT_TRUE(b2->shader->info.inputs_read_16bit == \
+      ASSERT_EQ(b2->shader->info.inputs_read_16bit, \
                   BITFIELD_BIT(cindex - VARYING_SLOT_VAR0_16BIT)); \
    } else if (pindex >= VARYING_SLOT_PATCH0) { \
-      ASSERT_TRUE(b1->shader->info.patch_outputs_written == BITFIELD_BIT(pindex)); \
-      ASSERT_TRUE(b2->shader->info.patch_inputs_read == BITFIELD_BIT(cindex)); \
+      ASSERT_EQ(b1->shader->info.patch_outputs_written, BITFIELD_BIT(pindex)); \
+      ASSERT_EQ(b2->shader->info.patch_inputs_read, BITFIELD_BIT(cindex)); \
    } else { \
-      ASSERT_TRUE(b1->shader->info.outputs_written == BITFIELD64_BIT(pindex)); \
-      ASSERT_TRUE(b2->shader->info.inputs_read == BITFIELD64_BIT(cindex)); \
+      ASSERT_EQ(b1->shader->info.outputs_written, BITFIELD64_BIT(pindex)); \
+      ASSERT_EQ(b2->shader->info.inputs_read, BITFIELD64_BIT(cindex)); \
    } \
    ASSERT_TRUE(shader_contains_instr(b1, &store->instr)); \
    ASSERT_TRUE(shader_contains_def(b2, input)); \

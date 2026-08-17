@@ -3,33 +3,31 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "tu_knl.h"
-
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/dma-heap.h>
 #include <poll.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <linux/dma-heap.h>
 
 #define __user
-#include "msm_kgsl.h"
 #include "ion/ion.h"
 #include "ion/ion_4.19.h"
+#include "msm_kgsl.h"
 
-#include "vk_util.h"
-
+#include "util/libsync.h"
 #include "util/os_file.h"
+#include "util/timespec.h"
 #include "util/u_debug.h"
 #include "util/u_vector.h"
-#include "util/libsync.h"
-#include "util/timespec.h"
+#include "vk_util.h"
 
 #include "tu_cmd_buffer.h"
 #include "tu_cs.h"
 #include "tu_device.h"
 #include "tu_dynamic_rendering.h"
+#include "tu_knl.h"
 #include "tu_queue.h"
 #include "tu_rmv.h"
 
@@ -97,7 +95,7 @@ bo_init_new_dmaheap(struct tu_device *dev, struct tu_bo **out_bo, uint64_t size,
                        "DMA_HEAP_IOCTL_ALLOC failed (%s)", strerror(errno));
    }
 
-   return tu_bo_init_dmabuf(dev, out_bo, -1, alloc.fd);
+   return tu_bo_init_dmabuf(dev, out_bo, -1, TU_BO_ALLOC_NO_FLAGS, alloc.fd);
 }
 
 static VkResult
@@ -118,7 +116,7 @@ bo_init_new_ion(struct tu_device *dev, struct tu_bo **out_bo, uint64_t size,
                        "ION_IOC_NEW_ALLOC failed (%s)", strerror(errno));
    }
 
-   return tu_bo_init_dmabuf(dev, out_bo, -1, alloc.fd);
+   return tu_bo_init_dmabuf(dev, out_bo, -1, TU_BO_ALLOC_NO_FLAGS, alloc.fd);
 }
 
 static VkResult
@@ -160,7 +158,7 @@ bo_init_new_ion_legacy(struct tu_device *dev, struct tu_bo **out_bo, uint64_t si
                        "ION_IOC_FREE failed (%s)", strerror(errno));
    }
 
-   return tu_bo_init_dmabuf(dev, out_bo, -1, share.fd);
+   return tu_bo_init_dmabuf(dev, out_bo, -1, TU_BO_ALLOC_NO_FLAGS, share.fd);
 }
 
 static VkResult
@@ -300,6 +298,8 @@ kgsl_bo_init(struct tu_device *dev,
       .base = base,
    };
 
+   tu_dump_bo_init(dev, bo);
+
    VkResult result = VK_SUCCESS;
 
    if (lazy_vma) {
@@ -310,8 +310,6 @@ kgsl_bo_init(struct tu_device *dev,
 
    if (result != VK_SUCCESS)
       return result;
-
-   tu_dump_bo_init(dev, bo);
 
    *out_bo = bo;
 
@@ -328,6 +326,7 @@ static VkResult
 kgsl_bo_init_dmabuf(struct tu_device *dev,
                     struct tu_bo **out_bo,
                     uint64_t size,
+                    enum tu_bo_alloc_flags flags,
                     int fd)
 {
    struct kgsl_gpuobj_import_dma_buf import_dmabuf = {
@@ -368,6 +367,13 @@ kgsl_bo_init_dmabuf(struct tu_device *dev,
       .refcnt = 1,
       .shared_fd = os_dupfd_cloexec(fd),
    };
+
+   struct stat st;
+   if (fstat(fd, &st) == 0)
+      /* Use the inode number as the unique ID, but set the MSB to avoid
+       * collisions with 32-bit KGSL handles (which are used for native BOs).
+       */
+      bo->unique_id = st.st_ino | (1ULL << 63);
 
    tu_dump_bo_init(dev, bo);
 
@@ -555,31 +561,78 @@ kgsl_is_memory_type_supported(int fd, uint32_t flags)
       return false;
    }
 
+   /* The kernel echoes back the *actual* flags it used. Some KGSL
+    * versions silently strip unsupported flags (e.g. IOCOHERENT on
+    * GPUs that lack IO-coherence) instead of failing the ioctl.
+    * Detect this by checking the requested bits are still present.
+    */
+   bool supported = (req_alloc.flags & flags) == flags;
+
    struct kgsl_gpumem_free_id req_free = { .id = req_alloc.id };
 
    safe_ioctl(fd, IOCTL_KGSL_GPUMEM_FREE_ID, &req_free);
 
-   return true;
+   return supported;
 }
 
 static bool
 kgsl_is_virtual_bo_supported(int fd)
 {
-   struct kgsl_gpuobj_alloc req_alloc = {
-      .size = 0x1000,
+   bool supported = false;
+   struct kgsl_gpuobj_alloc req_alloc_parent = {
+      .size = 0x2000,
       .flags = KGSL_MEMFLAGS_VBO,
    };
+   struct kgsl_gpumem_alloc_id req_alloc_child = {
+      .size = 0x1000,
+   };
+   struct kgsl_gpumem_bind_range req_range = {};
+   struct kgsl_gpumem_bind_ranges req_ranges = {};
+   struct kgsl_gpumem_free_id req_free_child = {};
+   struct kgsl_gpuobj_free req_free_parent = {};
 
-   int ret = safe_ioctl(fd, IOCTL_KGSL_GPUOBJ_ALLOC, &req_alloc);
+   int ret = safe_ioctl(fd, IOCTL_KGSL_GPUOBJ_ALLOC, &req_alloc_parent);
    if (ret) {
       return false;
    }
 
-   struct kgsl_gpuobj_free req_free = { .id = req_alloc.id };
+   ret = safe_ioctl(fd, IOCTL_KGSL_GPUMEM_ALLOC_ID, &req_alloc_child);
+   if (ret) {
+      goto free_parent;
+   }
 
-   safe_ioctl(fd, IOCTL_KGSL_GPUOBJ_FREE, &req_free);
+   req_range = {
+      .child_offset = 0,
+      .target_offset = 0,
+      .length = 0x1000,
+      .child_id = req_alloc_child.id,
+      .op = KGSL_GPUMEM_RANGE_OP_BIND,
+   };
 
-   return true;
+   req_ranges = {
+      .ranges = (uint64_t) (uintptr_t) &req_range,
+      .ranges_nents = 1,
+      .ranges_size = sizeof(req_range),
+      .id = req_alloc_parent.id,
+      .flags = 0,
+   };
+
+   ret = safe_ioctl(fd, IOCTL_KGSL_GPUMEM_BIND_RANGES, &req_ranges);
+   if (ret) {
+      goto free_child;
+   }
+
+   supported = true;
+
+free_child:
+   req_free_child = { .id = req_alloc_child.id };
+   safe_ioctl(fd, IOCTL_KGSL_GPUMEM_FREE_ID, &req_free_child);
+
+free_parent:
+   req_free_parent = { .id = req_alloc_parent.id };
+   safe_ioctl(fd, IOCTL_KGSL_GPUOBJ_FREE, &req_free_parent);
+
+   return supported;
 }
 
 enum kgsl_syncobj_state {
@@ -740,7 +793,7 @@ wait_timestamp_safe(int fd,
    }
 }
 
-VkResult
+static VkResult
 kgsl_queue_wait_fence(struct tu_queue *queue, uint32_t fence,
                       uint64_t timeout_ns)
 {
@@ -1274,8 +1327,7 @@ kgsl_submit_add_bind(struct tu_device *device,
       };
 
 
-      util_dynarray_append(&submit->bind_cmds,
-                           struct kgsl_gpu_aux_command_bind, bind);
+      util_dynarray_append(&submit->bind_cmds, bind);
 
       submit->cur_vma = vma;
       submit->cur_vma_range_start = range_count;
@@ -1289,8 +1341,7 @@ kgsl_submit_add_bind(struct tu_device *device,
       .op = bo ? KGSL_GPUMEM_RANGE_OP_BIND : KGSL_GPUMEM_RANGE_OP_UNBIND,
    };
 
-   util_dynarray_append(&submit->ranges, struct kgsl_gpumem_bind_range,
-                        range);
+   util_dynarray_append(&submit->ranges, range);
 }
 
 /* We don't know the actual CPU pointers until we've finished adding all the
@@ -1328,7 +1379,7 @@ kgsl_queue_submit(struct tu_queue *queue, void *_submit,
    uint64_t start_ts = tu_perfetto_begin_submit();
 #endif
 
-   if (submit->commands.size == 0) {
+   if (submit->commands.size == 0 && submit->bind_cmds.size == 0) {
       /* This handles the case where we have a wait and no commands to submit.
        * It is necessary to handle this case separately as the kernel will not
        * advance the GPU timeline if a submit with no commands is made, even
@@ -1408,7 +1459,8 @@ kgsl_queue_submit(struct tu_queue *queue, void *_submit,
 
    struct kgsl_command_object *objs = (struct kgsl_command_object *)
       vk_alloc(&queue->device->vk.alloc, sizeof(*objs) * obj_count,
-               alignof(*objs), VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+               alignof(struct kgsl_command_object),
+               VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
 
    struct kgsl_cmdbatch_profiling_buffer *profiling_buffer = NULL;
    uint32_t obj_idx = 0;
@@ -1650,6 +1702,12 @@ kgsl_device_check_status(struct tu_device *device)
 {
    for (unsigned i = 0; i < TU_MAX_QUEUE_FAMILIES; i++) {
       for (unsigned q = 0; q < device->queue_count[i]; q++) {
+         /* Emulated queues share the real queue's context and have no
+          * kernel submitqueue of their own, so skip them.
+          */
+         if (vk_queue_is_emulated(&device->queues[i][q].vk))
+            continue;
+
          /* KGSL's KGSL_PROP_GPU_RESET_STAT takes the u32 msm_queue_id and returns a
          * KGSL_CTX_STAT_* for the worst reset that happened since the last time it
          * was queried on that queue.
@@ -1824,6 +1882,9 @@ tu_knl_kgsl_load(struct tu_instance *instance, int fd)
    /* preemption is always supported on kgsl */
    device->has_preemption = true;
 
+   /* KGSL doesn't allow writing the perf counter selector as the expectation is to use the uAPI provided for this. */
+   device->is_perf_cntr_selectable = false;
+
    device->ubwc_config.highest_bank_bit = highest_bank_bit;
 
    /* The other config values can be partially inferred from the UBWC version,
@@ -1844,6 +1905,8 @@ tu_knl_kgsl_load(struct tu_instance *instance, int fd)
       device->ubwc_config.macrotile_mode = FDL_MACROTILE_4_CHANNEL;
       break;
    case KGSL_UBWC_4_0:
+   case KGSL_UBWC_5_0:
+   case KGSL_UBWC_6_0:
       device->ubwc_config.bank_swizzle_levels = 0x6;
       device->ubwc_config.macrotile_mode = FDL_MACROTILE_8_CHANNEL;
       break;

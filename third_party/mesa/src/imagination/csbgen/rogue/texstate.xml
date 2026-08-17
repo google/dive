@@ -261,6 +261,14 @@ SOFTWARE.
     <value name="RG"  value="3"/>
   </enum>
 
+  <!-- FIXME: This is the definition for hardware with TPU_IMAGE_STATE_V2.
+       Add V1 definition when condition tags can be nested in enum tags.
+  -->
+  <enum name="CHROMAINTERP">
+    <value name="ZERO"  value="0"/>
+    <value name="ENABLED" value="1"/>
+  </enum>
+
   <struct name="IMAGE_WORD0" length="2">
     <field name="smpcnt" start="62" end="63" type="uint"/>
     <field name="height" start="48" end="61" type="uint"/>
@@ -321,6 +329,14 @@ SOFTWARE.
     <field name="texaddr" start="16" end="53" shift="2" type="address"/>
     <field name="mipmaps_present" start="15" end="15" type="bool"/>
     <field name="stride" start="0" end="14" type="uint"/>
+  </struct>
+
+  <struct name="YUV_IMAGE_WORD1" length="2">
+    <field name="csc_coeff_index" start="60" end="63" type="uint"/>
+    <field name="chroma_interpolation_v" start="59" end="59" type="CHROMAINTERP"/>
+    <field name="chroma_interpolation_u" start="53" end="53" type="CHROMAINTERP"/>
+    <field name="stride" start="38" end="52" type="uint"/>
+    <field name="texaddr" start="0" end="37" shift="2" type="address"/>
   </struct>
 
   <struct name="SAMPLER_WORD0" length="2">

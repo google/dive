@@ -35,14 +35,14 @@
 #include "drm-uapi/gpu_scheduler.h"
 
 static enum drm_sched_priority
-anv_vk_priority_to_drm_sched_priority(VkQueueGlobalPriorityKHR vk_priority)
+anv_vk_priority_to_drm_sched_priority(VkQueueGlobalPriority vk_priority)
 {
    switch (vk_priority) {
-   case VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR:
+   case VK_QUEUE_GLOBAL_PRIORITY_LOW:
       return DRM_SCHED_PRIORITY_MIN;
-   case VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR:
+   case VK_QUEUE_GLOBAL_PRIORITY_MEDIUM:
       return DRM_SCHED_PRIORITY_NORMAL;
-   case VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR:
+   case VK_QUEUE_GLOBAL_PRIORITY_HIGH:
       return DRM_SCHED_PRIORITY_HIGH;
    default:
       UNREACHABLE("Invalid priority");
@@ -75,19 +75,19 @@ create_engine(struct anv_device *device,
       &physical->queue.families[queue_family_index];
    const struct intel_query_engine_info *engines = physical->engine_info;
    struct drm_xe_engine_class_instance *instances;
-   const VkDeviceQueueGlobalPriorityCreateInfoKHR *queue_priority =
+   const VkDeviceQueueGlobalPriorityCreateInfo *queue_priority =
       vk_find_struct_const(pCreateInfo->pNext,
-                           DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR);
-   const VkQueueGlobalPriorityKHR priority = queue_priority ?
-                                             queue_priority->globalPriority :
-                                             VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR;
+                           DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO);
+   const VkQueueGlobalPriority priority = queue_priority ?
+                                          queue_priority->globalPriority :
+                                          VK_QUEUE_GLOBAL_PRIORITY_MEDIUM;
 
    /* As per spec, the driver implementation may deny requests to acquire
     * a priority above the default priority (MEDIUM) if the caller does not
     * have sufficient privileges. In this scenario VK_ERROR_NOT_PERMITTED_KHR
     * is returned.
     */
-   if (physical->max_context_priority >= VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR) {
+   if (physical->max_context_priority >= VK_QUEUE_GLOBAL_PRIORITY_MEDIUM) {
       if (priority > physical->max_context_priority)
          return vk_error(device, VK_ERROR_NOT_PERMITTED_KHR);
    }
@@ -116,6 +116,10 @@ create_engine(struct anv_device *device,
       .property = DRM_XE_EXEC_QUEUE_SET_PROPERTY_PRIORITY,
       .value = anv_vk_priority_to_drm_sched_priority(priority),
    };
+   struct drm_xe_ext_set_property state_cache_perf_ext = {
+      .property = DRM_XE_EXEC_QUEUE_SET_DISABLE_STATE_CACHE_PERF_FIX,
+      .value = true,
+   };
    struct drm_xe_ext_set_property pxp_ext = {
       .property = DRM_XE_EXEC_QUEUE_SET_PROPERTY_PXP_TYPE,
       .value = DRM_XE_PXP_TYPE_HWDRM,
@@ -126,14 +130,26 @@ create_engine(struct anv_device *device,
          .vm_id = device->vm_id,
          .width = 1,
          .num_placements = count,
+         .flags = 0,
    };
    intel_xe_gem_add_ext((uint64_t *)&create.extensions,
                         DRM_XE_EXEC_QUEUE_EXTENSION_SET_PROPERTY,
                         &priority_ext.base);
-   if (pxp_needed)
+   if (pxp_needed) {
       intel_xe_gem_add_ext((uint64_t *)&create.extensions,
                            DRM_XE_EXEC_QUEUE_EXTENSION_SET_PROPERTY,
                            &pxp_ext.base);
+   }
+   if (queue_family->engine_class == INTEL_ENGINE_CLASS_RENDER &&
+       !device->physical->rt_change_needs_flush) {
+      intel_xe_gem_add_ext((uint64_t *)&create.extensions,
+                           DRM_XE_EXEC_QUEUE_EXTENSION_SET_PROPERTY,
+                           &state_cache_perf_ext.base);
+   }
+   if (device->physical->instance->drirc.perf.guc_low_latency &&
+       physical->info.supports_low_latency_hint)
+      create.flags |= DRM_XE_EXEC_QUEUE_LOW_LATENCY_HINT;
+
    int ret;
    bool retry;
    do {

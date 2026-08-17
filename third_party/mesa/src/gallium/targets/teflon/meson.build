@@ -9,6 +9,7 @@ libteflon = shared_library(
   dependencies : [
     driver_etnaviv,
     driver_rocket,
+    driver_ethosu,
     idep_nir,
     idep_mesautil,
   ],
@@ -17,33 +18,20 @@ libteflon = shared_library(
 
 if with_tests
   tensorflow_lite = shared_library(
-    'tensorflow-lite',
+    'tensorflow-lite-stub',
     [ 'tflite-stub.c' ],
     include_directories : [ inc_include ],
+    link_args : [ '-Wl,-soname,libtensorflow-lite.so' ],
     install : false,
-  )
-
-  tflite_flatbuffer_h_name = 'tflite-schema-v2.15.0_generated.h'
-  tflite_flatbuffer_h = custom_target('tflite_flatbuffer.h',
-    output: tflite_flatbuffer_h_name,
-    input: 'tflite-schema-v2.15.0.fbs',
-    command : [
-      prog_flatc,
-      '--cpp',
-      '--cpp-ptr-type', 'std::shared_ptr',
-      '--gen-object-api',
-      '-o', meson.current_build_dir(),
-      '@INPUT@'
-    ],
   )
 
   executable(
     'test_teflon',
     'test_teflon.cpp',
     'test_executor.cpp',
-    tflite_flatbuffer_h,
+    'tflite-ref-ops.cc',
     dependencies : [ idep_mesautil, idep_gtest ],
     link_with : [ tensorflow_lite ],
-    include_directories : [ inc_include ],
+    include_directories : [ inc_include, inc_util ],
   )
 endif

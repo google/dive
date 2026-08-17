@@ -10,7 +10,13 @@
 #ifndef TU_CLEAR_BLIT_H
 #define TU_CLEAR_BLIT_H
 
-#include "tu_common.h"
+#include <stdint.h>
+
+#include "vulkan/vulkan_core.h"
+
+#include "common/fd_hw_common.h"
+
+struct tu_rect2d_float;
 
 void tu_init_clear_blit_shaders(struct tu_device *dev);
 
@@ -32,6 +38,7 @@ tu_resolve_sysmem(struct tu_cmd_buffer *cmd,
                   const struct tu_image_view *dst,
                   uint32_t layer_mask,
                   uint32_t layers,
+                  bool per_layer_rect,
                   const VkRect2D *rect);
 
 struct tu_resolve_group {
@@ -56,12 +63,14 @@ void
 tu_clear_gmem_attachment(struct tu_cmd_buffer *cmd,
                          struct tu_cs *cs,
                          struct tu_resolve_group *resolve_group,
+                         bool per_layer_render_area,
                          uint32_t a);
 
 void
 tu7_generic_clear_attachment(struct tu_cmd_buffer *cmd,
                              struct tu_cs *cs,
                              struct tu_resolve_group *resolve_group,
+                             bool per_layer_render_area,
                              uint32_t a);
 
 template <chip CHIP>
@@ -70,6 +79,8 @@ tu_load_gmem_attachment(struct tu_cmd_buffer *cmd,
                         struct tu_cs *cs,
                         struct tu_resolve_group *resolve_group,
                         uint32_t a,
+                        uint32_t gmem_a,
+                        bool per_layer_render_area,
                         bool cond_exec_allowed,
                         bool force_load);
 
@@ -83,6 +94,7 @@ tu_store_gmem_attachment(struct tu_cmd_buffer *cmd,
                          uint32_t gmem_a,
                          uint32_t layers,
                          uint32_t layer_mask,
+                         bool per_layer_render_area,
                          bool cond_exec_allowed);
 
 void
@@ -93,5 +105,15 @@ tu_cmd_fill_buffer_addr(VkCommandBuffer commandBuffer,
                         VkDeviceAddress dstAddr,
                         VkDeviceSize fillSize,
                         uint32_t data);
+
+template <chip CHIP>
+void
+tu_blit_subsampled_apron(struct tu_cmd_buffer *cmd,
+                         struct tu_cs *cs,
+                         const struct tu_image_view *iview,
+                         unsigned layer,
+                         const VkRect2D *dst_coord,
+                         const tu_rect2d_float *src_coord,
+                         unsigned count);
 
 #endif /* TU_CLEAR_BLIT_H */

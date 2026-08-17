@@ -43,13 +43,6 @@ cat2_needs_scalar_alu(struct ir3_instruction *instr)
    return cat2_all_srcs_have_flag(instr, IR3_REG_CONST | IR3_REG_SHARED);
 }
 
-static bool
-cat2_may_use_scalar_alu(struct ir3_instruction *instr)
-{
-   return cat2_all_srcs_have_flag(
-      instr, IR3_REG_CONST | IR3_REG_SHARED | IR3_REG_IMMED);
-}
-
 static struct ir3_instruction *
 clone_with_predicate_dst(struct opt_predicates_ctx *ctx,
                          struct ir3_instruction *instr)
@@ -66,8 +59,9 @@ clone_with_predicate_dst(struct opt_predicates_ctx *ctx,
    clone->dsts[0]->flags |= IR3_REG_PREDICATE;
    clone->dsts[0]->flags &= ~(IR3_REG_HALF | IR3_REG_SHARED);
 
-   if (ctx->ir->compiler->has_scalar_predicates && opc_cat(instr->opc) == 2 &&
-       cat2_may_use_scalar_alu(instr)) {
+   if (ctx->ir->compiler->info->props.has_scalar_predicates &&
+       opc_cat(instr->opc) == 2 &&
+       (instr->dsts[0]->flags & IR3_REG_SHARED)) {
       clone->dsts[0]->flags |= IR3_REG_UNIFORM;
    }
 
@@ -84,7 +78,7 @@ can_write_predicate(struct opt_predicates_ctx *ctx,
    case OPC_CMPS_U:
    case OPC_CMPS_F:
       return !cat2_needs_scalar_alu(instr) ||
-             ctx->ir->compiler->has_scalar_predicates;
+             ctx->ir->compiler->info->props.has_scalar_predicates;
    case OPC_AND_B:
    case OPC_OR_B:
    case OPC_NOT_B:
@@ -92,7 +86,7 @@ can_write_predicate(struct opt_predicates_ctx *ctx,
    case OPC_GETBIT_B:
       return ctx->ir->compiler->bitops_can_write_predicates &&
              (!cat2_needs_scalar_alu(instr) ||
-              ctx->ir->compiler->has_scalar_predicates);
+              ctx->ir->compiler->info->props.has_scalar_predicates);
    default:
       return false;
    }

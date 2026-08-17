@@ -43,6 +43,7 @@ dEQP-VK.query_pool.statistics_query.host_query_reset.geometry_shader_primitives.
 
 KHR-GL46.shader_image_load_store.basic-allTargets-loadStoreVS
 dEQP-GLES31.functional.image_load_store.3d.load_store.rgba8_snorm_single_layer
+dEQP-GLES31.functional.image_load_store.3d.load_store.r32f_single_layer
 
 # glcts update
 KHR-GL46.texture_view.view_classes
@@ -55,3 +56,7 @@ dEQP-VK.subgroups.shuffle.framebuffer.subgroupshuffle_bool_tess_control
 
 # New flake with GL CTS 4.6.6.0
 KHR-GL46.gpu_shader_fp64.builtin.smoothstep_dvec4
+
+# Nightly run expectations update
+dEQP-VK.synchronization.internally_synchronized_objects.pipeline_cache_graphics
+

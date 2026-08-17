@@ -50,10 +50,6 @@ u_reduce_video_profile(enum pipe_video_profile profile)
       case PIPE_VIDEO_PROFILE_MPEG2_MAIN:
          return PIPE_VIDEO_FORMAT_MPEG12;
 
-      case PIPE_VIDEO_PROFILE_MPEG4_SIMPLE:
-      case PIPE_VIDEO_PROFILE_MPEG4_ADVANCED_SIMPLE:
-         return PIPE_VIDEO_FORMAT_MPEG4;
-
       case PIPE_VIDEO_PROFILE_VC1_SIMPLE:
       case PIPE_VIDEO_PROFILE_VC1_MAIN:
       case PIPE_VIDEO_PROFILE_VC1_ADVANCED:

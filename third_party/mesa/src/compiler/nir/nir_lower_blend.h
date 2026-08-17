@@ -40,16 +40,23 @@ typedef struct {
 } nir_lower_blend_channel;
 
 typedef struct {
+   enum pipe_format format;
+
    nir_lower_blend_channel rgb;
    nir_lower_blend_channel alpha;
 
    /* 4-bit colormask. 0x0 for none, 0xF for RGBA, 0x1 for R */
-   unsigned colormask;
+   unsigned colormask:4;
+
+   unsigned advanced_blend:1;
+   enum pipe_advanced_blend_mode blend_mode;
+   bool src_premultiplied;
+   bool dst_premultiplied;
+   enum pipe_blend_overlap_mode overlap;
 } nir_lower_blend_rt;
 
 typedef struct {
    nir_lower_blend_rt rt[8];
-   enum pipe_format format[8];
 
    bool logicop_enable;
    enum pipe_logicop logicop_func;
@@ -58,6 +65,17 @@ typedef struct {
     * load_blend_const_color_rgba */
    bool scalar_blend_const;
 } nir_lower_blend_options;
+
+nir_def *
+nir_color_logicop(nir_builder *b, nir_def *src, nir_def *dst,
+                  enum pipe_logicop func, enum pipe_format format);
+
+nir_def *
+nir_color_blend(nir_builder *b, nir_def *src0, nir_def *src1, nir_def *dst,
+                const nir_lower_blend_rt *rt, bool scalar_blend_const);
+
+nir_def *
+nir_color_mask(nir_builder *b, nir_def *src, nir_def *dst, unsigned mask);
 
 bool nir_lower_blend(nir_shader *shader,
                      const nir_lower_blend_options *options);

@@ -7,21 +7,23 @@ bvh_shaders = [
   'encode.comp',
   'header.comp',
   'copy.comp',
+  'update.comp',
 ]
 
 # A mapping: [filename version, GFX_VERx10 define version]
 gfx_versions = [
   ['125', '125'],
   ['20', '200'],
-  ['30', '300']
+  ['30', '300'],
+  ['35', '350'],
 ]
 
 anv_bvh_include_dir = dir_source_root + '/src/intel/vulkan/bvh'
 
 anv_bvh_includes = files(
-  'anv_build_helpers.h',
-  'anv_build_interface.h',
-  'anv_bvh.h',
+  'anv_bvh_helpers.h',
+  'anv_bvh_defines.h',
+  'encode.h',
 )
 
 foreach shader : bvh_shaders

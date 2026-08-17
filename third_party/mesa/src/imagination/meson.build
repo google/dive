@@ -19,4 +19,8 @@ endif
 
 if with_imagination_vk
   subdir('vulkan')
+
+  if with_tools.contains('drm-shim')
+    subdir('drm-shim')
+  endif
 endif

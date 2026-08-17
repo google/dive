@@ -92,6 +92,7 @@ fn op_reg_latency(op: &Op, reader: bool, op_reg_idx: usize) -> RegLatencySM100 {
         Op::AL2P(_) => Decoupled,
 
         Op::Mov(_) => Dualalu,
+        Op::Movm(_) => DecoupledAgu,
         Op::Sel(_) => Dualalu,
         Op::BRev(_) => Decoupled,
         // P2R => Alu,
@@ -111,7 +112,7 @@ fn op_reg_latency(op: &Op, reader: bool, op_reg_idx: usize) -> RegLatencySM100 {
             }
         }
         Op::CS2R(cs2r) => {
-            if cs2r.dst.as_reg().unwrap().comps() == 2 {
+            if cs2r.dst.comps() == 2 {
                 Disp64
             } else {
                 Dualalu
@@ -158,6 +159,7 @@ fn op_reg_latency(op: &Op, reader: bool, op_reg_idx: usize) -> RegLatencySM100 {
         Op::SuAtom(_) => Decoupled,
         Op::PixLd(_) => DecoupledAgu,
         Op::Isberd(_) => DecoupledAgu,
+        Op::Isbewr(_) => DecoupledAgu,
         Op::LdTram(_) => DecoupledAgu,
         Op::Shfl(_) => DecoupledAgu,
         Op::Ldsm(_) => DecoupledAgu,
@@ -248,6 +250,13 @@ fn op_ureg_latency(
 
         Op::IMad64(_) => coupled,
         Op::ISetP(_) => coupled,
+        Op::ALd(_)
+        | Op::ASt(_)
+        | Op::Ld(_)
+        | Op::Ldsm(_)
+        | Op::St(_)
+        | Op::Atom(_) => decoupled,
+        Op::SuLd(_) | Op::SuSt(_) | Op::SuAtom(_) => decoupled,
         Op::Ldc(_) => {
             if uniform_op {
                 ToUr
@@ -384,22 +393,22 @@ pub struct SM120Latency {}
 impl SM120Latency {
     pub fn needs_scoreboards(op: &Op) -> bool {
         if op.is_uniform() {
-            match op_ureg_latency(op, false, 0) {
+            matches!(
+                op_ureg_latency(op, false, 0),
                 UregLatencySM100::Uldc
-                | UregLatencySM100::ToUr
-                | UregLatencySM100::Tex => true,
-                _ => false,
-            }
+                    | UregLatencySM100::ToUr
+                    | UregLatencySM100::Tex
+            )
         } else {
-            match op_reg_latency(op, false, 0) {
+            matches!(
+                op_reg_latency(op, false, 0),
                 RegLatencySM100::Dmma
-                | RegLatencySM100::Hmma
-                | RegLatencySM100::RedirectedFp64
-                | RegLatencySM100::Branch
-                | RegLatencySM100::Decoupled
-                | RegLatencySM100::DecoupledAgu => true,
-                _ => false,
-            }
+                    | RegLatencySM100::Hmma
+                    | RegLatencySM100::RedirectedFp64
+                    | RegLatencySM100::Branch
+                    | RegLatencySM100::Decoupled
+                    | RegLatencySM100::DecoupledAgu
+            )
         }
     }
 
@@ -409,10 +418,8 @@ impl SM120Latency {
         read: Option<&Op>,
         src_idx: usize,
     ) -> u32 {
-        let dst_file = match &write.dsts_as_slice()[dst_idx] {
-            Dst::None => return 0,
-            Dst::SSA(vec) => vec.file(),
-            Dst::Reg(reg) => reg.file(),
+        let Some(dst_file) = write.dsts_as_slice()[dst_idx].file() else {
+            return 0;
         };
 
         match dst_file {
@@ -466,10 +473,8 @@ impl SM120Latency {
     }
 
     pub fn war(read: &Op, src_idx: usize, write: &Op, dst_idx: usize) -> u32 {
-        let dst_file = match &write.dsts_as_slice()[dst_idx] {
-            Dst::None => return 0,
-            Dst::SSA(vec) => vec.file(),
-            Dst::Reg(reg) => reg.file(),
+        let Some(dst_file) = write.dsts_as_slice()[dst_idx].file() else {
+            return 0;
         };
 
         match dst_file {
@@ -511,10 +516,8 @@ impl SM120Latency {
         b_dst_idx: usize,
         a_op_pred: bool,
     ) -> u32 {
-        let dst_file = match &a.dsts_as_slice()[a_dst_idx] {
-            Dst::None => return 0,
-            Dst::SSA(vec) => vec.file(),
-            Dst::Reg(reg) => reg.file(),
+        let Some(dst_file) = a.dsts_as_slice()[a_dst_idx].file() else {
+            return 0;
         };
 
         match dst_file {

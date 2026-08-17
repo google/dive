@@ -118,6 +118,9 @@ dEQP-GLES2.functional.texture.vertex.cube.filtering.nearest_mipmap_linear_linear
 dEQP-GLES2.functional.texture.vertex.cube.filtering.nearest_mipmap_nearest_linear_clamp,Fail
 dEQP-GLES2.functional.texture.vertex.cube.filtering.nearest_mipmap_nearest_linear_mirror,Fail
 dEQP-GLES2.functional.texture.vertex.cube.filtering.nearest_mipmap_nearest_linear_repeat,Fail
+KHR-GLES2.core.internalformat.texture2d.depth_component_unsigned_int_depth_component16,Fail
+KHR-GLES2.core.internalformat.texture2d.depth_component_unsigned_int_depth_component24,Fail
+KHR-GLES2.core.internalformat.texture2d.depth_component_unsigned_short_depth_component16,Fail
 
 shaders@glsl-fs-pointcoord,Fail
 
@@ -144,11 +147,11 @@ spec@arb_fragment_program@fp-fragment-position,Crash
 spec@arb_fragment_program@fp-indirections2,Fail
 spec@arb_fragment_program@sparse-samplers,Crash
 
-spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_depth24_stencil8,Fail
-spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index16,Fail
-spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index1,Fail
-spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index4,Fail
-spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index8,Fail
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_depth24_stencil8,Crash
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index1,Crash
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index16,Crash
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index4,Crash
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit stencil gl_stencil_index8,Crash
 spec@arb_framebuffer_object@fbo-attachments-blit-scaled-linear,Fail
 spec@arb_framebuffer_object@fbo-blit-stretch,Fail
 
@@ -156,10 +159,9 @@ spec@arb_framebuffer_object@fbo-generatemipmap-cubemap s3tc_dxt1,Crash
 
 spec@arb_framebuffer_object@fbo-gl_pointcoord,Fail
 
-spec@arb_framebuffer_object@framebuffer-blit-levels draw stencil,Fail
-spec@arb_framebuffer_object@framebuffer-blit-levels read stencil,Fail
+spec@arb_framebuffer_object@framebuffer-blit-levels draw stencil,Crash
+spec@arb_framebuffer_object@framebuffer-blit-levels read stencil,Crash
 spec@arb_framebuffer_object@same-attachment-glframebuffertexture2d-gl_depth_stencil_attachment,Fail
-spec@arb_framebuffer_object@same-attachment-tex2d-depth_stencil,Fail
 
 spec@arb_internalformat_query2@all internalformat_<x>_type pname checks,Timeout
 
@@ -234,8 +236,6 @@ spec@arb_vertex_program@big-param,Fail
 spec@arb_vertex_program@clip-plane-transformation arb,Fail
 
 spec@egl 1.4@eglterminate then unbind context,Fail
-spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_depth_component24,Fail
-spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_rgba,Fail
 spec@egl_khr_surfaceless_context@viewport,Fail
 # segfault around starting the CopyMultiTexSubImage tests.
 spec@ext_direct_state_access@multi-texture,Crash
@@ -256,10 +256,10 @@ spec@ext_framebuffer_blit@fbo-blit-check-limits,Fail
 
 spec@ext_framebuffer_object@fbo-cubemap,Fail
 spec@ext_framebuffer_object@fbo-readpixels,Fail
-spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index16-blit,Fail
-spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index1-blit,Fail
-spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index4-blit,Fail
-spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index8-blit,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index16-blit,Crash
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index1-blit,Crash
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index4-blit,Crash
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index8-blit,Crash
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-export,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_p010,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_p012,Fail
@@ -271,8 +271,7 @@ spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_y412,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_y416,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_vyuy,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_yvyu,Fail
-spec@ext_packed_depth_stencil@depth_stencil texture,Fail
-spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-blit,Fail
+spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-blit,Crash
 spec@ext_packed_depth_stencil@texwrap formats bordercolor,Fail
 spec@ext_packed_depth_stencil@texwrap formats bordercolor@GL_DEPTH24_STENCIL8- border color only,Fail
 spec@ext_packed_depth_stencil@texwrap formats bordercolor-swizzled,Fail
@@ -282,9 +281,6 @@ spec@ext_texture_array@compressed teximage,Fail
 spec@ext_texture_array@compressed teximage pbo,Fail
 spec@ext_texture_array@compressed texsubimage,Fail
 spec@ext_texture_array@compressed texsubimage pbo,Fail
-spec@ext_texture_array@copyteximage 1d_array samples=2,Crash
-spec@ext_texture_array@copyteximage 1d_array samples=4,Crash
-spec@ext_texture_array@copyteximage 1d_array,Fail
 spec@ext_texture_array@fbo-generatemipmap-array,Fail
 spec@ext_texture_array@glsl-fs-shadow1darray-07,Fail
 spec@ext_texture_array@glsl-fs-shadow2darray-07,Fail
@@ -638,4 +634,225 @@ spec@glsl-1.10@execution@variable-indexing@fs-input-array-float-index-rd,Fail
 spec@glsl-1.10@execution@variable-indexing@fs-input-array-vec2-index-rd,Fail
 
 # uprev Piglit in Mesa
+shaders@glsl-vs-texturematrix-1,Fail
+spec@!opengl 1.1@polygon-mode-offset@config 3: Expected blue pixel in center,Fail
+spec@!opengl 1.1@polygon-mode-offset@config 4: Expected blue pixel in center,Fail
 spec@!opengl 1.1@push-pop-color-material,Fail
+spec@ext_framebuffer_object@fbo-readpixels-depth-formats,Fail
+spec@glsl-1.10@execution@built-in-functions@vs-sign-vec4,Fail
+spec@nv_half_float@attribs-half-float,Fail
+
+# Nightly run expectations update
+KHR-GLES2.core.internalformat.texture2d.depth_component_unsigned_int_depth_component,Fail
+KHR-GLES2.core.internalformat.texture2d.depth_component_unsigned_short_depth_component,Fail
+KHR-GLES2.core.internalformat.texture2d.depth_stencil_unsigned_int_24_8_depth_stencil,Fail
+dEQP-GLES2.functional.depth_stencil_clear.depth_stencil,Fail
+hiz@hiz-depth-read-fbo-d24-s0,Fail
+hiz@hiz-depth-read-fbo-d24s8,Fail
+hiz@hiz-depth-read-window-stencil0,Fail
+hiz@hiz-depth-read-window-stencil1,Fail
+hiz@hiz-stencil-read-fbo-d0-s8,Fail
+hiz@hiz-stencil-read-fbo-d24s8,Fail
+hiz@hiz-stencil-read-window-depth0,Fail
+hiz@hiz-stencil-read-window-depth1,Fail
+shaders@glsl-bug-22603,Fail
+shaders@glsl-fs-fragcoord-zw-ortho,Fail
+spec@!opengl 1.0@gl-1.0-drawpixels-stencil-test,Fail
+spec@!opengl 1.0@gl-1.0-scissor-many,Fail
+spec@!opengl 1.1@copyteximage 1d,Fail
+spec@!opengl 1.1@copyteximage 2d,Fail
+spec@!opengl 1.1@depthstencil-default_fb-blit,Fail
+spec@!opengl 1.1@depthstencil-default_fb-drawpixels-24_8,Fail
+spec@!opengl 1.1@depthstencil-default_fb-drawpixels-float-and-ushort,Fail
+spec@!opengl 1.1@depthstencil-default_fb-readpixels-24_8,Fail
+spec@!opengl 1.1@depthstencil-default_fb-readpixels-float-and-ushort,Fail
+spec@!opengl 1.1@drawpix-z,Fail
+spec@!opengl 1.1@getteximage-depth,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH24_STENCIL8,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_COMPONENT,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_COMPONENT24,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_COMPONENT32,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_STENCIL,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH24_STENCIL8,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_COMPONENT,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_COMPONENT24,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_COMPONENT32,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_STENCIL,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D-GL_DEPTH24_STENCIL8,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D-GL_DEPTH_COMPONENT,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D-GL_DEPTH_COMPONENT24,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D-GL_DEPTH_COMPONENT32,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D-GL_DEPTH_STENCIL,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D_ARRAY-GL_DEPTH24_STENCIL8,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D_ARRAY-GL_DEPTH_COMPONENT,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D_ARRAY-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D_ARRAY-GL_DEPTH_COMPONENT24,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D_ARRAY-GL_DEPTH_COMPONENT32,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_2D_ARRAY-GL_DEPTH_STENCIL,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_RECTANGLE-GL_DEPTH24_STENCIL8,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_RECTANGLE-GL_DEPTH_COMPONENT,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_RECTANGLE-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_RECTANGLE-GL_DEPTH_COMPONENT24,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_RECTANGLE-GL_DEPTH_COMPONENT32,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_RECTANGLE-GL_DEPTH_STENCIL,Fail
+spec@!opengl 1.1@masked-clear,Fail
+spec@!opengl 1.1@readpix-z,Fail
+spec@!opengl 1.1@stencil-drawpixels,Fail
+spec@!opengl 1.4@tex-miplevel-selection-lod,Fail
+spec@!opengl 1.4@tex-miplevel-selection-lod-bias,Fail
+spec@arb_clear_texture@arb_clear_texture-depth,Fail
+spec@arb_clear_texture@arb_clear_texture-depth-stencil,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 1024 d=z16,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 1024 d=z24,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 146 d=z16,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 146 d=z24,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 273 d=z16,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 273 d=z24,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 292 d=z16,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 292 d=z24,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 585 d=z16,Fail
+spec@arb_depth_texture@depthstencil-render-miplevels 585 d=z24,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component16-blit,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component16-readpixels,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component24-copypixels,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component24-drawpixels,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component24-readpixels,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component32-blit,Fail
+spec@arb_depth_texture@fbo-depth-gl_depth_component32-readpixels,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT NPOT,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT16,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT16 NPOT,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT24,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT24 NPOT,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT32,Fail
+spec@arb_depth_texture@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT32 NPOT,Fail
+spec@arb_depth_texture@texwrap formats,Fail
+spec@arb_depth_texture@texwrap formats@GL_DEPTH_COMPONENT24,Fail
+spec@arb_depth_texture@texwrap formats@GL_DEPTH_COMPONENT24- NPOT,Fail
+spec@arb_depth_texture@texwrap formats@GL_DEPTH_COMPONENT24- swizzled,Fail
+spec@arb_depth_texture@texwrap formats@GL_DEPTH_COMPONENT32,Fail
+spec@arb_depth_texture@texwrap formats@GL_DEPTH_COMPONENT32- NPOT,Fail
+spec@arb_depth_texture@texwrap formats@GL_DEPTH_COMPONENT32- swizzled,Fail
+spec@arb_es2_compatibility@fbo blit from missing attachment (es2 completeness rules),Fail
+spec@arb_es2_compatibility@fbo blit to missing attachment (es2 completeness rules),Fail
+spec@arb_es2_compatibility@fbo-missing-attachment-clear,Fail
+spec@arb_fragment_program_shadow@masked,Fail
+spec@arb_fragment_program_shadow@tex-shadow2d,Fail
+spec@arb_fragment_program_shadow@txp-shadow2d,Fail
+spec@arb_fragment_program_shadow@txp-shadow2drect,Fail
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit depth gl_depth24_stencil8,Fail
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit depth gl_depth_component24,Fail
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit depth gl_depth_component32,Fail
+spec@arb_framebuffer_object@arb_framebuffer_object-depth-stencil-blit depth_stencil gl_depth24_stencil8,Fail
+spec@arb_framebuffer_object@fbo blit from missing attachment,Fail
+spec@arb_framebuffer_object@fbo blit to missing attachment,Fail
+spec@arb_framebuffer_object@framebuffer-blit-levels draw depth,Fail
+spec@arb_framebuffer_object@framebuffer-blit-levels read depth,Fail
+spec@arb_pixel_buffer_object@fbo-pbo-readpixels-small@GL_DEPTH_COMPONENT16-GL_DEPTH_COMPONENT,Fail
+spec@arb_pixel_buffer_object@fbo-pbo-readpixels-small@GL_DEPTH_COMPONENT24-GL_DEPTH_COMPONENT,Fail
+spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-01,Fail
+spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-04,Fail
+spec@arb_shader_texture_lod@execution@tex-miplevel-selection *gradarb 3d,Fail
+spec@arb_shader_texture_lod@execution@tex-miplevel-selection *projgradarb 3d,Fail
+spec@arb_texture_rectangle@tex-miplevel-selection gl2:texture() 2drectshadow,Fail
+spec@arb_texture_rectangle@tex-miplevel-selection gl2:textureproj 2drectshadow,Fail
+spec@arb_vertex_program@z-write,Fail
+spec@ext_framebuffer_object@fbo-depth-sample-compare,Fail
+spec@ext_framebuffer_object@fbo-depthtex,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index1-copypixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index1-drawpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index1-readpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index16-copypixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index16-drawpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index16-readpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index4-copypixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index4-drawpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index4-readpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index8-copypixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index8-drawpixels,Fail
+spec@ext_framebuffer_object@fbo-stencil-gl_stencil_index8-readpixels,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 1024 d=s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 1024 d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 1024 ds=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 1024 s=d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 1024 s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 146 d=s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 146 d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 146 ds=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 146 s=d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 146 s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 273 d=s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 273 d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 273 ds=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 273 s=d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 273 s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 292 d=s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 292 d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 292 ds=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 292 s=d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 292 s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 585 d=s=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 585 d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 585 ds=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 585 s=d=z24_s8,Fail
+spec@ext_packed_depth_stencil@depthstencil-render-miplevels 585 s=z24_s8,Fail
+spec@ext_packed_depth_stencil@fbo-depth-gl_depth24_stencil8-drawpixels,Fail
+spec@ext_packed_depth_stencil@fbo-depth-gl_depth24_stencil8-readpixels,Fail
+spec@ext_packed_depth_stencil@fbo-depthstencil-gl_depth24_stencil8-blit,Fail
+spec@ext_packed_depth_stencil@fbo-depthstencil-gl_depth24_stencil8-copypixels,Fail
+spec@ext_packed_depth_stencil@fbo-depthstencil-gl_depth24_stencil8-drawpixels-24_8,Fail
+spec@ext_packed_depth_stencil@fbo-depthstencil-gl_depth24_stencil8-readpixels-24_8,Fail
+spec@ext_packed_depth_stencil@fbo-depthstencil-gl_depth24_stencil8-readpixels-float-and-ushort,Fail
+spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-copypixels,Fail
+spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-drawpixels,Fail
+spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-readpixels,Fail
+spec@ext_packed_depth_stencil@getteximage,Fail
+spec@ext_packed_depth_stencil@readdrawpixels,Fail
+spec@ext_packed_depth_stencil@readpixels-24_8,Fail
+spec@ext_packed_depth_stencil@texsubimage,Fail
+spec@ext_packed_depth_stencil@texwrap formats,Fail
+spec@ext_packed_depth_stencil@texwrap formats@GL_DEPTH24_STENCIL8,Fail
+spec@ext_packed_depth_stencil@texwrap formats@GL_DEPTH24_STENCIL8- NPOT,Fail
+spec@ext_packed_depth_stencil@texwrap formats@GL_DEPTH24_STENCIL8- swizzled,Fail
+spec@ext_texture_array@copyteximage 1d_array,Crash
+spec@ext_texture_array@copyteximage 1d_array samples=2,Crash
+spec@ext_texture_array@copyteximage 1d_array samples=4,Crash
+spec@ext_texture_swizzle@depth_texture_mode_and_swizzle,Fail
+spec@glsl-1.10@execution@built-in-functions@fs-op-selection-bool-bvec4-bvec4,Fail
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow1d,Fail
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow1d-04,Fail
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow1d-bias,Fail
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow1dproj,Fail
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow1dproj-bias,Fail
+spec@glsl-1.10@glsl-fs-discard-only,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 1d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 1dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 2d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 2dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() 3d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture() cube,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture(bias) 1d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture(bias) 1dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture(bias) 2d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture(bias) 2dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:texture(bias) 3d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 1d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 1d_projvec4,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 1dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 2d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 2d_projvec4,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 2dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj 3d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj(bias) 2d,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj(bias) 2d_projvec4,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj(bias) 2dshadow,Fail
+spec@glsl-1.20@execution@tex-miplevel-selection gl2:textureproj(bias) 3d,Fail
+
+spec@ext_framebuffer_multisample@accuracy all_samples stencil_resolve depthstencil,Crash
+spec@ext_framebuffer_multisample@accuracy all_samples stencil_resolve small depthstencil,Crash
+spec@ext_packed_depth_stencil@fbo-blit-d24s8,Crash

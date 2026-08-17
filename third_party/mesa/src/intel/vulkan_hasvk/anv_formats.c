@@ -602,6 +602,8 @@ anv_get_image_format_features2(const struct intel_device_info *devinfo,
       base_plane_format = anv_get_format_plane(devinfo, vk_format, 0,
                                                VK_IMAGE_TILING_LINEAR);
    }
+   if (base_plane_format.isl_format == ISL_FORMAT_UNSUPPORTED)
+      return 0;
 
    enum isl_format base_isl_format = base_plane_format.isl_format;
 
@@ -653,7 +655,7 @@ anv_get_image_format_features2(const struct intel_device_info *devinfo,
     * it for the list of shader storage extended formats [1]. Before that,
     * this applies to all VkFormats.
     *
-    * [1] : https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#features-shaderStorageImageExtendedFormats
+    * [1] : https://docs.vulkan.org/spec/latest/chapters/features.html#features-shaderStorageImageExtendedFormats
     */
    if (flags & VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT)
       flags |= VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT;

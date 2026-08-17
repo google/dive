@@ -23,9 +23,9 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
+#include "v3dv_device.h"
+#include "v3dv_entrypoints.h"
 #include "vk_util.h"
-#include "wsi_common.h"
 #include "wsi_common_drm.h"
 #include "wsi_common_entrypoints.h"
 
@@ -101,12 +101,15 @@ VkResult
 v3dv_wsi_init(struct v3dv_physical_device *physical_device)
 {
    VkResult result;
+   const struct v3dv_instance *v3dv_instance =
+      container_of(physical_device->vk.instance, struct v3dv_instance, vk);
 
    result = wsi_device_init(&physical_device->wsi_device,
                             v3dv_physical_device_to_handle(physical_device),
                             v3dv_wsi_proc_addr,
                             &physical_device->vk.instance->alloc,
-                            physical_device->display_fd, NULL,
+                            physical_device->display_fd,
+                            &v3dv_instance->drirc.options,
                             &(struct wsi_device_options){.sw_device = false});
 
    if (result != VK_SUCCESS)

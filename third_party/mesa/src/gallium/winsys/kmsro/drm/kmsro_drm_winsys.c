@@ -33,6 +33,7 @@
 #include "panfrost/drm/panfrost_drm_public.h"
 #include "lima/drm/lima_drm_public.h"
 #include "asahi/drm/asahi_drm_public.h"
+#include "zink/drm/zink_drm_public.h"
 #include "xf86drm.h"
 
 #include "pipe/p_screen.h"
@@ -129,6 +130,13 @@ struct pipe_screen *kmsro_drm_screen_create(int kms_fd,
       }
 
       free(render_dev_name);
+
+#if defined(GALLIUM_ZINK)
+      if (!screen) {
+         ro->create_for_resource = renderonly_create_kms_dumb_buffer_for_resource;
+         screen = zink_drm_create_screen_renderonly(ro->gpu_fd, ro, config);
+      }
+#endif
 
       /* test if the screen is actually graphics render capable */
       if (screen) {

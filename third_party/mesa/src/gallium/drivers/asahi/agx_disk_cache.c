@@ -13,7 +13,7 @@
 #include "util/blob.h"
 #include "util/build_id.h"
 #include "util/disk_cache.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "agx_bo.h"
 #include "agx_device.h"
 #include "agx_disk_cache.h"
@@ -31,8 +31,8 @@ agx_disk_cache_compute_key(struct disk_cache *cache,
                            const union asahi_shader_key *shader_key,
                            cache_key cache_key)
 {
-   uint8_t data[sizeof(uncompiled->nir_sha1) + sizeof(*shader_key)];
-   int hash_size = sizeof(uncompiled->nir_sha1);
+   uint8_t data[sizeof(uncompiled->nir_blake3) + sizeof(*shader_key)];
+   int hash_size = sizeof(uncompiled->nir_blake3);
    int key_size;
    if (uncompiled->type == MESA_SHADER_VERTEX ||
        uncompiled->type == MESA_SHADER_TESS_EVAL)
@@ -42,7 +42,7 @@ agx_disk_cache_compute_key(struct disk_cache *cache,
    else
       key_size = 0;
 
-   memcpy(data, uncompiled->nir_sha1, hash_size);
+   memcpy(data, uncompiled->nir_blake3, hash_size);
 
    if (key_size)
       memcpy(data + hash_size, shader_key, key_size);
@@ -210,12 +210,12 @@ agx_disk_cache_init(struct agx_screen *screen)
 
    const struct build_id_note *note =
       build_id_find_nhdr_for_addr(agx_disk_cache_init);
-   assert(note && build_id_length(note) == 20);
+   assert(note && build_id_length(note) == BUILD_ID_EXPECTED_HASH_LENGTH);
 
    const uint8_t *id_sha1 = build_id_data(note);
    assert(id_sha1);
 
-   char timestamp[41];
+   char timestamp[BLAKE3_HEX_LEN];
    _mesa_sha1_format(timestamp, id_sha1);
 
    uint64_t driver_flags = screen->dev.debug;

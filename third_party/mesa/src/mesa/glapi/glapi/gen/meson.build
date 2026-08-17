@@ -3,9 +3,9 @@
 
 glapi_mapi_tmp_h = custom_target(
   'glapi_mapi_tmp.h',
-  input : ['../../mapi_abi.py', 'gl_and_es_API.xml'],
+  input : ['../../mapi_abi.py', 'gl_and_es_API.xml', '../../../../glx/libgl-symbols.txt'],
   output : 'glapi_mapi_tmp.h',
-  command : [prog_python, '@INPUT0@', '--printer', 'glapi', '@INPUT1@'],
+  command : [prog_python, '@INPUT0@', '--printer', 'glapi', '--gl_symbols', '@INPUT2@', '@INPUT1@'],
   depend_files : glapi_xml_py_deps,
   capture : true,
 )
@@ -111,6 +111,15 @@ main_unmarshal_table_c = custom_target(
   capture : true,
 )
 
+main_api_trace_c = custom_target(
+  'api_trace.c',
+  input : ['api_trace_c.py', 'gl_and_es_API.xml'],
+  output : 'api_trace.c',
+  command : [prog_python, '@INPUT0@', '-f', '@INPUT1@'],
+  depend_files : glapi_xml_py_deps,
+  capture : true,
+)
+
 main_marshal_generated_c = []
 foreach x : ['0', '1', '2', '3', '4', '5', '6', '7']
   main_marshal_generated_c += custom_target(
@@ -128,9 +137,9 @@ glx_generated = []
 foreach x : [['indirect.c', 'proto'], ['indirect.h', 'init_h'], ['indirect_init.c', 'init_c']]
   glx_generated += custom_target(
     x[0],
-    input : ['glX_proto_send.py', 'gl_API.xml'],
+    input : ['glX_proto_send.py', 'gl_API.xml', '../../../../glx/libgl-symbols.txt'],
     output : x[0],
-    command : [prog_python, '@INPUT0@', '-f', '@INPUT1@', '-m', x[1]],
+    command : [prog_python, '@INPUT0@', '-f', '@INPUT1@', '-m', x[1], '-s', '@INPUT2@'],
     depend_files : glapi_xml_py_deps,
     capture : true,
   )

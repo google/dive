@@ -28,15 +28,12 @@
 #include <stdint.h>
 #include <vulkan/vulkan.h>
 
+#include "pvr_macros.h"
+
 struct pvr_device;
 struct pvr_render_pass;
 
-/* Specifies the location of render target writes. */
-enum usc_mrt_resource_type {
-   USC_MRT_RESOURCE_TYPE_INVALID = 0, /* explicitly treat 0 as invalid. */
-   USC_MRT_RESOURCE_TYPE_OUTPUT_REG,
-   USC_MRT_RESOURCE_TYPE_MEMORY,
-};
+#include "pvr_mrt.h"
 
 enum pvr_resolve_type {
    PVR_RESOLVE_TYPE_INVALID = 0, /* explicitly treat 0 as invalid. */
@@ -53,79 +50,6 @@ enum pvr_renderpass_hwsetup_input_access {
     * subpass.
     */
    PVR_RENDERPASS_HWSETUP_INPUT_ACCESS_ONCHIP_ZREPLICATE,
-};
-
-#define PVR_USC_RENDER_TARGET_MAXIMUM_SIZE_IN_DWORDS (4)
-
-struct usc_mrt_desc {
-   /* Size (in bytes) of the intermediate storage required for each pixel in the
-    * render target.
-    */
-   uint32_t intermediate_size;
-
-   /* Mask of the bits from each dword which are read by the PBE. */
-   uint32_t valid_mask[PVR_USC_RENDER_TARGET_MAXIMUM_SIZE_IN_DWORDS];
-
-   /* Higher number = higher priority. Used to decide which render targets get
-    * allocated dedicated output registers.
-    */
-   uint32_t priority;
-};
-
-struct usc_mrt_resource {
-   /* Input description of render target. */
-   struct usc_mrt_desc mrt_desc;
-
-   /* Resource type allocated for render target. */
-   enum usc_mrt_resource_type type;
-
-   /* Intermediate pixel size (in bytes). */
-   uint32_t intermediate_size;
-
-   union {
-      /* If type == USC_MRT_RESOURCE_TYPE_OUTPUT_REG. */
-      struct {
-         /* The output register to use. */
-         uint32_t output_reg;
-
-         /* The offset in bytes into the output register. */
-         uint32_t offset;
-      } reg;
-
-      /* If type == USC_MRT_RESOURCE_TYPE_MEMORY. */
-      struct {
-         /* The index of the tile buffer to use. */
-         uint32_t tile_buffer;
-
-         /* The offset in dwords within the tile buffer. */
-         uint32_t offset_dw;
-      } mem;
-   };
-};
-
-struct usc_mrt_setup {
-   /* Number of render targets present. */
-   uint32_t num_render_targets;
-
-   /* Number of output registers used per-pixel (1, 2 or 4). */
-   uint32_t num_output_regs;
-
-   /* Number of tile buffers used. */
-   uint32_t num_tile_buffers;
-
-   /* Size of a tile buffer in bytes. */
-   uint32_t tile_buffer_size;
-
-   /* Array of MRT resources allocated for each render target. The number of
-    * elements is determined by usc_mrt_setup::num_render_targets.
-    */
-   struct usc_mrt_resource *mrt_resources;
-
-   /* Don't set up source pos in emit. */
-   bool disable_source_pos_override;
-
-   /* Hash unique to this particular setup. */
-   uint32_t hash;
 };
 
 struct pvr_renderpass_hwsetup_eot_surface {
@@ -195,15 +119,6 @@ struct pvr_renderpass_colorinit {
 
    /* Type of operation either clear or load. */
    VkAttachmentLoadOp op;
-};
-
-struct pvr_load_op_state {
-   uint32_t load_op_count;
-
-   /* Load op array indexed by HW render view (not by the index in the view
-    * mask).
-    */
-   struct pvr_load_op *load_ops;
 };
 
 struct pvr_renderpass_hwsetup_render {
@@ -276,6 +191,8 @@ struct pvr_renderpass_hwsetup_render {
 
    bool requires_frag_pr;
 
+   bool multiview_enabled;
+
    /* View mask for multiview. */
    uint32_t view_mask;
 
@@ -303,16 +220,25 @@ struct pvr_renderpass_hwsetup {
    bool *surface_allocate;
 };
 
-VkResult pvr_create_renderpass_hwsetup(
+#ifdef PVR_PER_ARCH
+
+VkResult PVR_PER_ARCH(create_renderpass_hwsetup)(
    struct pvr_device *device,
    const VkAllocationCallbacks *alloc,
    struct pvr_render_pass *pass,
    bool disable_merge,
    struct pvr_renderpass_hwsetup **const hw_setup_out);
 
-void pvr_destroy_renderpass_hwsetup(const VkAllocationCallbacks *alloc,
-                                    struct pvr_renderpass_hwsetup *hw_setup);
+#   define pvr_arch_create_renderpass_hwsetup \
+      PVR_PER_ARCH(create_renderpass_hwsetup)
 
-uint32_t pvr_get_tile_buffer_size(const struct pvr_device *device);
+void PVR_PER_ARCH(destroy_renderpass_hwsetup)(
+   const VkAllocationCallbacks *alloc,
+   struct pvr_renderpass_hwsetup *hw_setup);
+
+#   define pvr_arch_destroy_renderpass_hwsetup \
+      PVR_PER_ARCH(destroy_renderpass_hwsetup)
+
+#endif
 
 #endif /* PVR_HW_PASS_H */

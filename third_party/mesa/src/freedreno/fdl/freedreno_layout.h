@@ -109,6 +109,10 @@ struct fdl_image_params {
     * standard sparse tiling.
     */
    bool sparse;
+
+   bool force_disable_linear_fallback;
+
+   uint32_t plane;
 };
 
 /**
@@ -158,6 +162,11 @@ struct fdl_layout {
     */
    uint8_t cpp_shift;
 
+   /* In texels the threshold for linear fallback can be different between
+    * compressed and uncompressed formats.
+    */
+   uint32_t linear_fallback_threshold_texels;
+
    uint32_t width0, height0, depth0;
    uint32_t mip_levels;
    uint32_t nr_samples;
@@ -167,6 +176,7 @@ struct fdl_layout {
    uint64_t size;       /* Size of the whole image, in bytes. */
    uint32_t base_align; /* Alignment of the base address, in bytes. */
    uint8_t pitchalign;  /* log2(pitchalign) */
+   uint32_t plane;
 };
 
 static inline uint32_t
@@ -234,8 +244,21 @@ fdl_ubwc_offset(const struct fdl_layout *layout, unsigned level, unsigned layer)
    return slice->offset + layer * layout->ubwc_layer_size;
 }
 
-/* Minimum layout width to enable UBWC. */
-#define FDL_MIN_UBWC_WIDTH 16
+/* Minimum layout width to enable tiling/UBWC, and width below which
+ * mipmaps can use LINEAR layout even if previous mipmaps are tiled.
+ * Can be in texel or blocks, depending on HW support.
+ */
+#define FDL_LINEAR_FALLBACK_THRESHOLD 16
+
+static inline uint32_t
+fdl_linear_fallback_threshold_texels(struct fdl_layout *layout,
+                                     const struct fd_dev_info *info)
+{
+   return info->props.supports_linear_mipmap_threshold_in_blocks
+             ? FDL_LINEAR_FALLBACK_THRESHOLD *
+                  util_format_get_blockwidth(layout->format)
+             : FDL_LINEAR_FALLBACK_THRESHOLD;
+}
 
 static inline bool
 fdl_level_linear(const struct fdl_layout *layout, int level)
@@ -244,7 +267,7 @@ fdl_level_linear(const struct fdl_layout *layout, int level)
       return false;
 
    unsigned w = u_minify(layout->width0, level);
-   if (w < FDL_MIN_UBWC_WIDTH)
+   if (w < layout->linear_fallback_threshold_texels)
       return true;
 
    return false;
@@ -354,6 +377,12 @@ struct fdl_view_args {
    enum pipe_format format;
    enum fdl_view_type type;
    enum fdl_chroma_location chroma_offsets[2];
+
+   uint32_t filter_width;
+   uint32_t filter_height;
+   uint32_t filter_center_x;
+   uint32_t filter_center_y;
+   uint32_t filter_num_phases;
 };
 
 #define FDL6_TEX_CONST_DWORDS 16
@@ -447,15 +476,23 @@ uint32_t fdl6_get_bank_shift(const struct fdl_ubwc_config *config);
 ENDC;
 
 #ifdef __cplusplus
-#include "adreno_common.xml.h"
+#include "common/fd_hw_common.h"
 template <chip CHIP>
 void
 fdl6_view_init(struct fdl6_view *view, const struct fdl_layout **layouts,
                const struct fdl_view_args *args, bool has_z24uint_s8uint);
+
+enum fdl_ssbo_emulation_mode {
+   FDL_SSBO_EMULATION_DISABLED,
+   FDL_SSBO_EMULATION_ENABLED,
+};
+
 template <chip CHIP>
 void
 fdl6_buffer_view_init(uint32_t *descriptor, enum pipe_format format,
-                      const uint8_t *swiz, uint64_t iova, uint32_t size);
+                      const uint8_t (&swiz)[4], uint64_t iova, uint32_t size,
+                      uint32_t struct_size_texels = 1,
+                      enum fdl_ssbo_emulation_mode ssbo_emulation = FDL_SSBO_EMULATION_DISABLED);
 #endif
 
 #endif /* FREEDRENO_LAYOUT_H_ */

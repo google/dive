@@ -530,7 +530,7 @@ lp_setup_try_clear_zs(struct lp_setup_context *setup,
    enum pipe_format format = setup->fb.zsbuf.format;
 
    const uint32_t zmask32 = (flags & PIPE_CLEAR_DEPTH) ? ~0U : 0U;
-   const uint8_t smask8 = (flags & PIPE_CLEAR_STENCIL) ? ~0U : 0U;
+   const uint8_t smask8 = (flags & PIPE_CLEAR_STENCIL) ? 0xFF : 0x00;
 
    uint64_t zsvalue = util_pack64_z_stencil(format, depth, stencil);
    uint64_t zsmask = util_pack64_mask_z_stencil(format, zmask32, smask8);
@@ -756,6 +756,21 @@ lp_setup_set_alpha_ref_value(struct lp_setup_context *setup,
    }
 }
 
+void
+lp_setup_set_depth_bounds_test_value(struct lp_setup_context *setup,
+                                     float min_depth_bounds,
+                                     float max_depth_bounds)
+{
+   LP_DBG(DEBUG_SETUP, "%s %f %f\n",
+          __func__, min_depth_bounds, max_depth_bounds);
+
+   if (setup->fs.current.jit_context.min_depth_bounds != min_depth_bounds ||
+       setup->fs.current.jit_context.max_depth_bounds != max_depth_bounds) {
+      setup->fs.current.jit_context.min_depth_bounds = min_depth_bounds;
+      setup->fs.current.jit_context.max_depth_bounds = max_depth_bounds;
+      setup->dirty |= LP_SETUP_NEW_FS;
+   }
+}
 
 void
 lp_setup_set_stencil_ref_values(struct lp_setup_context *setup,
@@ -1143,7 +1158,7 @@ try_update_scene_state(struct lp_setup_context *setup)
                 sizeof setup->fs.current.jit_context);
          memcpy(&stored->jit_resources,
                 &setup->fs.current.jit_resources,
-                sizeof setup->fs.current.jit_resources);         
+                sizeof setup->fs.current.jit_resources);
 
          stored->variant = setup->fs.current.variant;
 
@@ -1273,10 +1288,10 @@ lp_setup_update_state(struct lp_setup_context *setup,
 
       assert(lp->dirty == 0);
 
-      assert(lp->setup_variant.key.size ==
+      assert(lp->cached_setup_key.size ==
              setup->setup.variant->key.size);
 
-      assert(memcmp(&lp->setup_variant.key,
+      assert(memcmp(&lp->cached_setup_key,
                     &setup->setup.variant->key,
                     setup->setup.variant->key.size) == 0);
    }
@@ -1608,44 +1623,44 @@ lp_setup_add_scissor_planes(const struct u_rect *scissor,
     */
    if (s_planes[0]) {
       int x0 = scissor->x0;
-      plane_s->dcdx = ~0U << 8;
+      plane_s->dcdx = ~0U;
       plane_s->dcdy = 0;
-      plane_s->c = x0 << 8;
+      plane_s->c = TO_FIXED64(x0);
       plane_s->c = -plane_s->c; /* flip sign */
       /*
        * we need x0 to be exactly on plane edge, adjust by 1 since
        * this is an inclusive edge.
        */
       plane_s->c += 1;
-      plane_s->eo = 1 << 8;
+      plane_s->eo = 1;
       plane_s++;
    }
    if (s_planes[1]) {
       int x1 = scissor->x1 + 1;
-      plane_s->dcdx = 1 << 8;
+      plane_s->dcdx = 1;
       plane_s->dcdy = 0;
-      plane_s->c = x1 << 8;
+      plane_s->c = TO_FIXED64(x1);
       /*
        * no c adjustment, this edge should be exclusive.
        */
-      plane_s->eo = 0 << 8;
+      plane_s->eo = 0;
       plane_s++;
    }
    if (s_planes[2]) {
       int y0 = scissor->y0;
       plane_s->dcdx = 0;
-      plane_s->dcdy = 1 << 8;
-      plane_s->c = y0 << 8;
+      plane_s->dcdy = 1;
+      plane_s->c = TO_FIXED64(y0);
       plane_s->c = -plane_s->c; /* flip sign */
       plane_s->c += 1;
-      plane_s->eo = 1 << 8;
+      plane_s->eo = 1;
       plane_s++;
    }
    if (s_planes[3]) {
       int y1 = scissor->y1 + 1;
       plane_s->dcdx = 0;
-      plane_s->dcdy = ~0U << 8;
-      plane_s->c = y1 << 8;
+      plane_s->dcdy = ~0U;
+      plane_s->c = TO_FIXED64(y1);
       plane_s->eo = 0;
       plane_s++;
    }

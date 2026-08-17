@@ -33,7 +33,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/stat.h>
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "util/detect_os.h"
 
 #ifdef __cplusplus
@@ -41,7 +41,7 @@ extern "C" {
 #endif
 
 /* Size of cache keys in bytes. */
-#define CACHE_KEY_SIZE 20
+#define CACHE_KEY_SIZE BLAKE3_KEY_LEN
 
 #define CACHE_DIR_NAME "mesa_shader_cache"
 #define CACHE_DIR_NAME_SF "mesa_shader_cache_sf"
@@ -73,7 +73,7 @@ struct cache_item_metadata {
    uint32_t type;
 
    /** GLSL cache item metadata */
-   cache_key *keys;   /* sha1 list of shaders that make up the cache item */
+   cache_key *keys;   /* blake3 list of shaders that make up the cache item */
    uint32_t num_keys;
 };
 
@@ -104,28 +104,28 @@ disk_cache_get_function_timestamp(void *ptr, uint32_t* timestamp)
 }
 
 static inline bool
-disk_cache_get_function_identifier(void *ptr, struct mesa_sha1 *ctx)
+disk_cache_get_function_identifier(void *ptr, blake3_hasher *ctx)
 {
    uint32_t timestamp;
 
-#ifdef HAVE_DL_ITERATE_PHDR
+#if HAVE_BUILD_ID
    const struct build_id_note *note = NULL;
    if ((note = build_id_find_nhdr_for_addr(ptr))) {
-      _mesa_sha1_update(ctx, build_id_data(note), build_id_length(note));
+      _mesa_blake3_update(ctx, build_id_data(note), build_id_length(note));
    } else
 #endif
    if (disk_cache_get_function_timestamp(ptr, &timestamp)) {
-      _mesa_sha1_update(ctx, &timestamp, sizeof(timestamp));
+      _mesa_blake3_update(ctx, &timestamp, sizeof(timestamp));
    } else
       return false;
    return true;
 }
 #elif DETECT_OS_WINDOWS
 bool
-disk_cache_get_function_identifier(void *ptr, struct mesa_sha1 *ctx);
+disk_cache_get_function_identifier(void *ptr, blake3_hasher *ctx);
 #else
 static inline bool
-disk_cache_get_function_identifier(void *ptr, struct mesa_sha1 *ctx)
+disk_cache_get_function_identifier(void *ptr, blake3_hasher *ctx)
 {
    return false;
 }
@@ -156,10 +156,10 @@ disk_cache_get_function_identifier(void *ptr, struct mesa_sha1 *ctx)
  * a more efficient implementation.
  *
  * In all cases, the keys are sequences of 20 bytes. It is anticipated
- * that callers will compute appropriate SHA-1 signatures for keys,
+ * that callers will compute appropriate BLAKE3 signatures for keys,
  * (though nothing in this implementation directly relies on how the
- * names are computed). See mesa-sha1.h and _mesa_sha1_compute for
- * assistance in computing SHA-1 signatures.
+ * names are computed). See mesa-blake3.h and _mesa_blake3_compute for
+ * assistance in computing BLAKE3 signatures.
  */
 struct disk_cache *
 disk_cache_create(const char *gpu_name, const char *timestamp,

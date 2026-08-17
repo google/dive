@@ -59,11 +59,11 @@ struct geometry_constant {
    float clip_planes[MAX_CLIP_PLANES][4];
 };
 
-#define set_uniform_location(var, field, packed)                 \
-   do {                                                          \
-      unsigned offset = offsetof(struct geometry_constant, field); \
-      var->data.driver_location = offset >> (packed ? 2 : 4);    \
-      var->data.location_frac = (offset >> 2) & 0x3;             \
+#define set_uniform_location(var, field, packed)                    \
+   do {                                                             \
+      unsigned _offset = offsetof(struct geometry_constant, field); \
+      var->data.driver_location = _offset >> (packed ? 2 : 4);      \
+      var->data.location_frac = (_offset >> 2) & 0x3;               \
    } while (0)
 
 static nir_def *
@@ -186,7 +186,7 @@ get_intersection(nir_builder *b, nir_def *v1, nir_def *v2,
                  nir_def *d1, nir_def *d2)
 {
    nir_def *factor = nir_fdiv(b, d1, nir_fsub(b, d1, d2));
-   return nir_fmad(b, nir_fsub(b, v2, v1), factor, v1);
+   return nir_ffma_weak(b, nir_fsub(b, v2, v1), factor, v1);
 }
 
 #define begin_for_loop(name, max)                                       \
@@ -382,7 +382,7 @@ get_window_space_depth(nir_builder *b, nir_def *v, nir_def **trans)
    nir_def *d = nir_bcsel(b, c, nir_imm_float(b, -1), nir_fdiv(b, z, w));
 
    /* map [-1, 1] to [near, far] set by glDepthRange(near, far) */
-   return nir_fmad(b, trans[0], d, trans[1]);
+   return nir_ffma_weak(b, trans[0], d, trans[1]);
 }
 
 static void
@@ -647,13 +647,15 @@ hw_select_create_gs(struct st_context *st, union state_key state)
       UNREACHABLE("unexpected primitive");
    }
 
-   nir_lower_returns(nir);
+   NIR_PASS(_, nir, nir_lower_returns);
+   NIR_PASS(_, nir, nir_opt_intrinsics);
 
    return st_nir_finish_builtin_shader(st, nir);
 }
 
 bool
-st_draw_hw_select_prepare_common(struct gl_context *ctx)
+st_draw_hw_select_prepare_common(struct gl_context *ctx,
+                                 struct pipe_resource **releasebuf)
 {
    struct st_context *st = st_context(ctx);
    if (ctx->GeometryProgram._Current ||
@@ -691,7 +693,7 @@ st_draw_hw_select_prepare_common(struct gl_context *ctx)
    cb.buffer_size = sizeof(consts) - (MAX_CLIP_PLANES - num_planes) * 4 * sizeof(float);
 
    struct pipe_context *pipe = st->pipe;
-   pipe_upload_constant_buffer0(pipe, MESA_SHADER_GEOMETRY, &cb);
+   pipe_upload_constant_buffer0(pipe, MESA_SHADER_GEOMETRY, &cb, releasebuf);
 
    struct pipe_shader_buffer buffer;
    memset(&buffer, 0, sizeof(buffer));
@@ -819,3 +821,4 @@ st_draw_hw_select_prepare_mode(struct gl_context *ctx, struct pipe_draw_info *in
 
    return true;
 }
+

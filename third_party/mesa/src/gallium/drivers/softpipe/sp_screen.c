@@ -76,8 +76,12 @@ softpipe_get_name(struct pipe_screen *screen)
 
 static const nir_shader_compiler_options sp_compiler_options = {
    .fdot_replicates = true,
-   .fuse_ffma32 = true,
-   .fuse_ffma64 = true,
+   .float_mul_add32 =
+      nir_float_muladd_support_has_fmad |
+      nir_float_muladd_support_fuse,
+   .float_mul_add64 =
+      nir_float_muladd_support_has_fmad |
+      nir_float_muladd_support_fuse,
    .lower_extract_byte = true,
    .lower_extract_word = true,
    .lower_insert_byte = true,
@@ -86,7 +90,6 @@ static const nir_shader_compiler_options sp_compiler_options = {
    .lower_flrp64 = true,
    .lower_fmod = true,
    .lower_uniforms_to_ubo = true,
-   .lower_vector_cmp = true,
    .lower_int64_options = nir_lower_imul_2x32_64,
    .max_unroll_iterations = 32,
 

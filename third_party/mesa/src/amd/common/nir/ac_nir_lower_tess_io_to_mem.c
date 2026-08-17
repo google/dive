@@ -7,9 +7,9 @@
 #include "ac_gpu_info.h"
 #include "ac_nir.h"
 #include "ac_nir_helpers.h"
+#include "ac_shader_util.h"
 #include "nir_builder.h"
 #include "nir_tcs_info.h"
-#include "util/u_math.h"
 
 /*
  * These NIR passes are used to lower NIR cross-stage I/O intrinsics into the
@@ -386,7 +386,7 @@ filter_load_tcs_per_vertex_input(const nir_instr *instr,
 
    nir_src *off_src = nir_get_io_offset_src(intrin);
    nir_src *vertex_index_src = nir_get_io_arrayed_index_src(intrin);
-   nir_instr *vertex_index_instr = vertex_index_src->ssa->parent_instr;
+   nir_instr *vertex_index_instr = nir_def_instr(vertex_index_src->ssa);
    const nir_io_semantics io_sem = nir_intrinsic_io_semantics(intrin);
 
    /* If this is accessed via gl_InvocationIndex, don't use LDS if tcs_inputs_via_temp is also set,
@@ -1599,7 +1599,8 @@ ac_nir_lower_hs_outputs_to_mem(nir_shader *shader, const nir_tcs_info *info,
 {
    assert(shader->info.stage == MESA_SHADER_TESS_CTRL);
 
-   NIR_PASS(_, shader, nir_io_add_const_offset_to_base, nir_var_shader_out);
+   /* Fold constant offset srcs for IO. */
+   NIR_PASS(_, shader, nir_opt_constant_folding);
 
    lower_tess_io_state state = {
       .gfx_level = gfx_level,
@@ -1649,11 +1650,12 @@ ac_nir_lower_tes_inputs_to_mem(nir_shader *shader,
 }
 
 void
-ac_nir_compute_tess_wg_info(const struct radeon_info *info, const ac_nir_tess_io_info *io_info,
-                            unsigned tcs_vertices_out, unsigned wave_size, bool tess_uses_primid,
+ac_nir_compute_tess_wg_info(const struct ac_compiler_info *info,
+                            const ac_nir_tess_io_info *io_info, unsigned tcs_vertices_out,
+                            unsigned wave_size, bool tess_uses_primid,
                             unsigned num_tcs_input_cp, unsigned lds_input_vertex_size,
-                            unsigned num_remapped_tess_level_outputs, unsigned *num_patches_per_wg,
-                            unsigned *hw_lds_size)
+                            unsigned num_remapped_tess_level_outputs,
+                            unsigned *num_patches_per_wg, unsigned *lds_size)
 {
    unsigned lds_per_patch = num_tcs_input_cp * lds_input_vertex_size +
                             get_lds_output_patch_stride(io_info, tcs_vertices_out);
@@ -1662,19 +1664,18 @@ ac_nir_compute_tess_wg_info(const struct radeon_info *info, const ac_nir_tess_io
                                                       MAX2(io_info->highest_remapped_vram_patch_output,
                                                            num_remapped_tess_level_outputs),
                                                       lds_per_patch, wave_size, tess_uses_primid);
-   unsigned lds_size = lds_per_patch * num_patches + AC_TESS_LEVEL_VOTE_LDS_BYTES;
+   *lds_size = lds_per_patch * num_patches + AC_TESS_LEVEL_VOTE_LDS_BYTES;
 
    /* SPI_SHADER_PGM_RSRC2_HS.LDS_SIZE specifies the allocation size only for LDS. The HS offchip
     * ring buffer always uses a fixed allocation size per workgroup determined by
-    * info->hs_offchip_workgroup_dw_size.
+    * ac_cpu_info::hs_offchip_workgroup_dw_size.
     *
     * LDS is only used for TCS inputs (with cross-invocation or indirect access only or if TCS in/out
     * vertex counts are different) and for TCS outputs that are read (including tess level outputs
     * if they need to be re-read in invocation 0), while the HS ring buffer is only used for TCS
     * outputs consumed by TES.
     */
-   assert(lds_size <= (info->gfx_level >= GFX9 ? 65536 : 32768));
+   assert(*lds_size <= (info->gfx_level >= GFX9 ? 65536 : 32768));
 
    *num_patches_per_wg = num_patches;
-   *hw_lds_size = DIV_ROUND_UP(lds_size, info->lds_encode_granularity);
 }

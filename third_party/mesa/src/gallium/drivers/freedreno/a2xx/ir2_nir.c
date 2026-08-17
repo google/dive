@@ -19,13 +19,12 @@ static const nir_shader_compiler_options options = {
    .lower_fmod = true,
    .lower_fdiv = true,
    .lower_fceil = true,
-   .fuse_ffma16 = true,
-   .fuse_ffma32 = true,
-   .fuse_ffma64 = true,
+   .float_mul_add16 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
+   .float_mul_add32 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
+   .float_mul_add64 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
    /* .fdot_replicates = true, it is replicated, but it makes things worse */
    .vertex_id_zero_based = true, /* its not implemented anyway */
    .lower_bitops = true,
-   .lower_vector_cmp = true,
    .lower_fdph = true,
    .has_fsub = true,
    .has_isub = true,
@@ -60,7 +59,7 @@ ir2_optimize_loop(nir_shader *s)
 
       OPT_V(s, nir_lower_vars_to_ssa);
       progress |= OPT(s, nir_opt_copy_prop_vars);
-      progress |= OPT(s, nir_copy_prop);
+      progress |= OPT(s, nir_opt_copy_prop);
       progress |= OPT(s, nir_opt_dce);
       progress |= OPT(s, nir_opt_cse);
       /* progress |= OPT(s, nir_opt_gcm, true); */
@@ -80,7 +79,7 @@ ir2_optimize_loop(nir_shader *s)
           * things up if we want any hope of nir_opt_if or nir_opt_loop_unroll
           * to make progress.
           */
-         OPT(s, nir_copy_prop);
+         OPT(s, nir_opt_copy_prop);
          OPT(s, nir_opt_dce);
       }
       progress |= OPT(s, nir_opt_loop_unroll);
@@ -110,8 +109,8 @@ ir2_optimize_nir(nir_shader *s, bool lower)
    }
 
    OPT_V(s, nir_lower_vars_to_ssa);
-   OPT_V(s, nir_lower_indirect_derefs, nir_var_shader_in | nir_var_shader_out,
-         UINT32_MAX);
+   OPT_V(s, nir_lower_indirect_derefs_to_if_else_trees,
+         nir_var_shader_in | nir_var_shader_out, UINT32_MAX);
 
    if (lower) {
       OPT_V(s, ir3_nir_apply_trig_workarounds);
@@ -310,7 +309,7 @@ instr_create_alu(struct ir2_context *ctx, nir_op opcode, unsigned ncomp)
       [nir_op_fadd] = {ADDs, ADDv},
       [nir_op_fsub] = {ADDs, ADDv},
       [nir_op_fmul] = {MULs, MULv},
-      [nir_op_ffma] = {-1, MULADDv},
+      [nir_op_fmad] = {-1, MULADDv},
       [nir_op_fmax] = {MAXs, MAXv},
       [nir_op_fmin] = {MINs, MINv},
       [nir_op_ffloor] = {FLOORs, FLOORv},
@@ -749,7 +748,7 @@ emit_tex(struct ir2_context *ctx, nir_tex_instr *tex)
       rcp->src[0] = ir2_src(reg_idx, IR2_SWIZZLE_Z, IR2_SRC_REG);
       rcp->src[0].abs = true;
 
-      coord_xy = instr_create_alu_reg(ctx, nir_op_ffma, 3, instr);
+      coord_xy = instr_create_alu_reg(ctx, nir_op_fmad, 3, instr);
       coord_xy->src[0] = ir2_src(reg_idx, 0, IR2_SRC_REG);
       coord_xy->src[1] = ir2_src(rcp->idx, IR2_SWIZZLE_XXXX, IR2_SRC_SSA);
       coord_xy->src[2] = load_const(ctx, (float[]){1.5f}, 1);
@@ -869,7 +868,7 @@ extra_position_exports(struct ir2_context *ctx, bool binning)
    sc->src[0] = ctx->position;
    sc->src[1] = ir2_src(rcp->idx, IR2_SWIZZLE_XXXX, IR2_SRC_SSA);
 
-   wincoord = instr_create_alu(ctx, nir_op_ffma, 4);
+   wincoord = instr_create_alu(ctx, nir_op_fmad, 4);
    wincoord->src[0] = ir2_src(66, 0, IR2_SRC_CONST);
    wincoord->src[1] = ir2_src(sc->idx, 0, IR2_SRC_SSA);
    wincoord->src[2] = ir2_src(65, 0, IR2_SRC_CONST);
@@ -896,13 +895,13 @@ extra_position_exports(struct ir2_context *ctx, bool binning)
 
    /* 8 max set in freedreno_screen.. unneeded instrs patched out */
    for (int i = 0; i < 8; i++) {
-      instr = instr_create_alu(ctx, nir_op_ffma, 4);
+      instr = instr_create_alu(ctx, nir_op_fmad, 4);
       instr->src[0] = ir2_src(1, IR2_SWIZZLE_WYWW, IR2_SRC_CONST);
       instr->src[1] = ir2_src(off->idx, IR2_SWIZZLE_XXXX, IR2_SRC_SSA);
       instr->src[2] = ir2_src(3 + i, 0, IR2_SRC_CONST);
       instr->alu.export = 32;
 
-      instr = instr_create_alu(ctx, nir_op_ffma, 4);
+      instr = instr_create_alu(ctx, nir_op_fmad, 4);
       instr->src[0] = ir2_src(68 + i * 2, 0, IR2_SRC_CONST);
       instr->src[1] = ir2_src(wincoord->idx, 0, IR2_SRC_SSA);
       instr->src[2] = ir2_src(67 + i * 2, 0, IR2_SRC_CONST);
@@ -1097,6 +1096,18 @@ ir2_alu_to_scalar_filter_cb(const nir_instr *instr, const void *data)
 
    nir_alu_instr *alu = nir_instr_as_alu(instr);
    switch (alu->op) {
+   case nir_op_ball_fequal2:
+   case nir_op_ball_fequal3:
+   case nir_op_ball_fequal4:
+   case nir_op_bany_fnequal2:
+   case nir_op_bany_fnequal3:
+   case nir_op_bany_fnequal4:
+   case nir_op_ball_iequal2:
+   case nir_op_ball_iequal3:
+   case nir_op_ball_iequal4:
+   case nir_op_bany_inequal2:
+   case nir_op_bany_inequal3:
+   case nir_op_bany_inequal4:
    case nir_op_frsq:
    case nir_op_frcp:
    case nir_op_flog2:
@@ -1124,16 +1135,16 @@ ir2_nir_compile(struct ir2_context *ctx, bool binning)
    if (binning)
       cleanup_binning(ctx);
 
-   OPT_V(ctx->nir, nir_copy_prop);
+   OPT_V(ctx->nir, nir_opt_copy_prop);
    OPT_V(ctx->nir, nir_opt_dce);
    OPT_V(ctx->nir, nir_opt_move, nir_move_comparisons);
 
    OPT_V(ctx->nir, nir_lower_int_to_float);
+   OPT_V(ctx->nir, nir_lower_alu_to_scalar, ir2_alu_to_scalar_filter_cb, NULL);
    OPT_V(ctx->nir, nir_lower_bool_to_float, true);
    while (OPT(ctx->nir, nir_opt_algebraic))
       ;
    OPT_V(ctx->nir, nir_opt_algebraic_late);
-   OPT_V(ctx->nir, nir_lower_alu_to_scalar, ir2_alu_to_scalar_filter_cb, NULL);
 
    OPT_V(ctx->nir, nir_convert_from_ssa, true, false);
 

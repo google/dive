@@ -15,6 +15,7 @@
 #include "gfxstream_vk_private.h"
 #include "util/detect_os.h"
 #include "util/perf/cpu_trace.h"
+#include "vk_common_entrypoints.h"
 #include "vk_sync_dummy.h"
 #include "vk_util.h"
 
@@ -819,5 +820,42 @@ void gfxstream_vk_UpdateDescriptorSets(VkDevice device, uint32_t descriptorWrite
         resources->on_vkUpdateDescriptorSets(
             vkEnc, gfxstream_device->internal_object, descriptorWriteCount,
             internal_pDescriptorWrites.data(), descriptorCopyCount, pDescriptorCopies);
+    }
+}
+
+/*
+ * Override vk_common_SetDebugUtilsObjectNameEXT.
+ *
+ * Mesa's common implementation assumes every Vulkan object handle is a pointer
+ * to a vk_object_base. In gfxstream, only a subset of objects carry a Mesa
+ * wrapper; all other non-dispatchable handles are opaque host handles. Passing
+ * such a handle to the common path causes a null-pointer dereference.
+ *
+ * For wrapped objects we delegate to the common implementation. For unwrapped
+ * objects we return VK_SUCCESS as a no-op; the names would only become useful
+ * once guest-to-host forwarding is implemented.
+ */
+VkResult gfxstream_vk_SetDebugUtilsObjectNameEXT(VkDevice device,
+                                                 const VkDebugUtilsObjectNameInfoEXT* pNameInfo) {
+    MESA_TRACE_SCOPE("vkSetDebugUtilsObjectNameEXT");
+    /*
+     * These object types have a gfxstream Mesa wrapper containing a
+     * vk_object_base, so the common implementation can safely dereference
+     * the handle. This list corresponds to the gfxstream_vk_* structs
+     * defined in gfxstream_vk_private.h.
+     */
+    switch (pNameInfo->objectType) {
+        case VK_OBJECT_TYPE_INSTANCE:
+        case VK_OBJECT_TYPE_PHYSICAL_DEVICE:
+        case VK_OBJECT_TYPE_DEVICE:
+        case VK_OBJECT_TYPE_QUEUE:
+        case VK_OBJECT_TYPE_COMMAND_BUFFER:
+        case VK_OBJECT_TYPE_COMMAND_POOL:
+        case VK_OBJECT_TYPE_BUFFER:
+        case VK_OBJECT_TYPE_FENCE:
+        case VK_OBJECT_TYPE_SEMAPHORE:
+            return vk_common_SetDebugUtilsObjectNameEXT(device, pNameInfo);
+        default:
+            return VK_SUCCESS;
     }
 }

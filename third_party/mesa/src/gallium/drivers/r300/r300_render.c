@@ -12,6 +12,7 @@
 
 #include "util/u_inlines.h"
 
+#include "util/u_endian.h"
 #include "util/format/u_format.h"
 #include "util/u_draw.h"
 #include "util/u_memory.h"
@@ -485,13 +486,34 @@ static void r300_draw_elements_immediate(struct r300_context *r300,
                                          const struct pipe_draw_info *info,
                                          const struct pipe_draw_start_count_bias *draw)
 {
+#if UTIL_ARCH_BIG_ENDIAN
+    uint32_t indices[8];
+#else
     const uint8_t *ptr1;
     const uint16_t *ptr2;
     const uint32_t *ptr4;
+    unsigned i;
+#endif
     unsigned index_size = info->index_size;
-    unsigned i, count_dwords = index_size == 4 ? draw->count :
-                                                 (draw->count + 1) / 2;
+    bool use_32bit_indices = index_size == 4;
+    unsigned count_dwords;
+#if UTIL_ARCH_BIG_ENDIAN
+    /* R500 applies draw->index_bias in hardware via R500_VAP_INDEX_OFFSET. */
+    int index_bias = draw->index_bias && !r300->screen->caps.is_r500 ?
+                     draw->index_bias : 0;
+#endif
     CS_LOCALS(r300);
+
+#if UTIL_ARCH_BIG_ENDIAN
+    /* The VAP uses one endian-swap mode for all fetched data. On BE, emit
+     * immediate indices as 32-bit words to match the vertex streams.
+     */
+    use_32bit_indices = true;
+    assert(draw->count <= ARRAY_SIZE(indices));
+    r300_rebuild_elts_to_uint_userptr(&r300->context, info, 0, index_bias,
+                                      draw->start, draw->count, indices);
+#endif
+    count_dwords = use_32bit_indices ? draw->count : (draw->count + 1) / 2;
 
     /* 19 dwords for r300_draw_elements_immediate. Give up if the function fails. */
     if (!r300_prepare_for_rendering(r300,
@@ -504,6 +526,12 @@ static void r300_draw_elements_immediate(struct r300_context *r300,
     BEGIN_CS(2 + count_dwords);
     OUT_CS_PKT3(R300_PACKET3_3D_DRAW_INDX_2, count_dwords);
 
+#if UTIL_ARCH_BIG_ENDIAN
+    OUT_CS(R300_VAP_VF_CNTL__PRIM_WALK_INDICES | (draw->count << 16) |
+           R300_VAP_VF_CNTL__INDEX_SIZE_32bit |
+           r300_translate_primitive(info->mode));
+    OUT_CS_TABLE(indices, count_dwords);
+#else
     switch (index_size) {
     case 1:
         ptr1 = (uint8_t*)info->index.user;
@@ -544,7 +572,14 @@ static void r300_draw_elements_immediate(struct r300_context *r300,
             if (draw->count & 1)
                 OUT_CS(ptr2[i] + draw->index_bias);
         } else {
-            OUT_CS_TABLE(ptr2, count_dwords);
+            /* OUT_CS_TABLE expects full dwords so pack the odd tail manually. */
+            if (draw->count & 1) {
+                if (count_dwords > 1)
+                    OUT_CS_TABLE(ptr2, count_dwords - 1);
+                OUT_CS(ptr2[draw->count - 1]);
+            } else {
+                OUT_CS_TABLE(ptr2, count_dwords);
+            }
         }
         break;
 
@@ -564,6 +599,7 @@ static void r300_draw_elements_immediate(struct r300_context *r300,
         }
         break;
     }
+#endif
     END_CS;
 }
 
@@ -771,6 +807,60 @@ static unsigned r300_max_vertex_count(struct r300_context *r300)
    return result;
 }
 
+static void
+r300_update_clip_discard_distance(struct r300_context *r300, unsigned prim)
+{
+    struct r300_rs_state *rs = (struct r300_rs_state*)r300->rs_state.state;
+    float target_distance = 0.0f;
+
+    if (rs) {
+        if (prim == MESA_PRIM_POINTS)
+            target_distance = rs->max_point_size;
+        else if (r300_prim_is_lines(prim))
+            target_distance = rs->line_width;
+    }
+
+    if (r300->current_rast_prim != prim) {
+        r300->current_rast_prim = prim;
+        r300_set_clip_discard_distance(r300, target_distance);
+    } else if (prim == MESA_PRIM_POINTS || r300_prim_is_lines(prim)) {
+        r300_set_clip_discard_distance(r300, target_distance);
+    }
+}
+
+static bool
+r300_rasterizer_emits_points(struct r300_context *r300, unsigned prim)
+{
+    struct r300_rs_state *rs = (struct r300_rs_state*)r300->rs_state.state;
+
+    if (prim == MESA_PRIM_POINTS)
+        return true;
+
+    switch (prim) {
+    case MESA_PRIM_TRIANGLES:
+    case MESA_PRIM_TRIANGLE_STRIP:
+    case MESA_PRIM_TRIANGLE_FAN:
+    case MESA_PRIM_QUADS:
+    case MESA_PRIM_QUAD_STRIP:
+    case MESA_PRIM_POLYGON:
+        break;
+    default:
+        return false;
+    }
+
+    if (!rs)
+        return false;
+
+    bool front_rasterized = !(rs->rs.cull_face & PIPE_FACE_FRONT);
+    bool back_rasterized = !(rs->rs.cull_face & PIPE_FACE_BACK);
+
+    if (front_rasterized && rs->rs.fill_front != PIPE_POLYGON_MODE_POINT)
+        return false;
+    if (back_rasterized && rs->rs.fill_back != PIPE_POLYGON_MODE_POINT)
+        return false;
+
+    return front_rasterized || back_rasterized;
+}
 
 static void r300_draw_vbo(struct pipe_context* pipe,
                           const struct pipe_draw_info *dinfo,
@@ -793,11 +883,15 @@ static void r300_draw_vbo(struct pipe_context* pipe,
         return;
     }
 
-    if (r300->sprite_coord_enable != 0)
-        if ((info.mode == MESA_PRIM_POINTS) != r300->is_point) {
-            r300->is_point = !r300->is_point;
+    r300_update_clip_discard_distance(r300, info.mode);
+
+    if (r300->sprite_coord_enable != 0) {
+        bool is_point = r300_rasterizer_emits_points(r300, info.mode);
+        if (is_point != r300->is_point) {
+            r300->is_point = is_point;
             r300_mark_atom_dirty(r300, &r300->rs_block_state);
         }
+    }
 
     r300_update_derived_state(r300);
 
@@ -880,11 +974,13 @@ static void r300_swtcl_draw_vbo(struct pipe_context* pipe,
                          info->index_size, ~0);
     }
 
-    if (r300->sprite_coord_enable != 0)
-        if ((info->mode == MESA_PRIM_POINTS) != r300->is_point) {
-            r300->is_point = !r300->is_point;
+    if (r300->sprite_coord_enable != 0) {
+        bool is_point = r300_rasterizer_emits_points(r300, info->mode);
+        if (is_point != r300->is_point) {
+            r300->is_point = is_point;
             r300_mark_atom_dirty(r300, &r300->rs_block_state);
         }
+    }
 
     r300_update_derived_state(r300);
 
@@ -1153,10 +1249,13 @@ void r300_blitter_draw_rectangle(struct blitter_context *blitter,
     struct r300_context *r300 = r300_context(util_blitter_get_pipe(blitter));
     unsigned last_sprite_coord_enable = r300->sprite_coord_enable;
     unsigned last_is_point = r300->is_point;
+    /* We othewise always scissor to the viewport, but blits ignore it. */
+    struct pipe_scissor_state last_vp_scissor = r300->viewport_scissor;
+    r300->viewport_scissor = (struct pipe_scissor_state){0, 0, 16384, 16384};
     unsigned width = x2 - x1;
     unsigned height = y2 - y1;
     unsigned vertex_size = !r300->draw ? 8 : 4;
-    unsigned dwords = 13 + vertex_size +
+    unsigned dwords = 15 + vertex_size +
                       (type == UTIL_BLITTER_ATTRIB_TEXCOORD_XY ? 7 : 0);
     CS_LOCALS(r300);
 
@@ -1178,7 +1277,16 @@ void r300_blitter_draw_rectangle(struct blitter_context *blitter,
     r300->context.bind_vs_state(&r300->context, get_vs(blitter));
 
     if (type == UTIL_BLITTER_ATTRIB_TEXCOORD_XY) {
-        r300->sprite_coord_enable = 1;
+        /* The blitter's passthrough VS outputs GENERIC[0], which u_blitter
+         * encodes here as sprite_coord_enable bit 0. After
+         * ntr_fixup_varying_slots in nir_to_rc, the corresponding FS input
+         * lands at index 9 in fs_inputs->generic[] (VAR0 -> VAR9 from the
+         * +9 shift that leaves room for TEX0..TEX7 and PNTC). Match that
+         * by setting bit 9 instead of bit 0; the rest of the rasterizer
+         * setup (r300_state_derived.c) walks generic[i] and tests
+         * sprite_coord_enable & (1 << i) so the indices need to agree.
+         */
+        r300->sprite_coord_enable = 1 << 9;
         r300->is_point = true;
     }
 
@@ -1195,6 +1303,7 @@ void r300_blitter_draw_rectangle(struct blitter_context *blitter,
     BEGIN_CS(dwords);
     /* Set up GA. */
     OUT_CS_REG(R300_GA_POINT_SIZE, (height * 6) | ((width * 6) << 16));
+    OUT_CS_REG(R300_SC_CLIP_RULE, r300->scissor_enabled ? 0xAAAA : 0xFFFF);
 
     if (type == UTIL_BLITTER_ATTRIB_TEXCOORD_XY) {
         /* Set up the GA to generate texcoords. */
@@ -1235,9 +1344,11 @@ done:
     /* Restore the state. */
     r300_mark_atom_dirty(r300, &r300->rs_state);
     r300_mark_atom_dirty(r300, &r300->viewport_state);
+    r300_mark_atom_dirty(r300, &r300->scissor_state);
 
     r300->sprite_coord_enable = last_sprite_coord_enable;
     r300->is_point = last_is_point;
+    r300->viewport_scissor = last_vp_scissor;
 }
 
 void r300_init_render_functions(struct r300_context *r300)

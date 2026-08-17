@@ -291,10 +291,6 @@ draw_buffer(struct gl_context *ctx, struct gl_framebuffer *fb,
 
    FLUSH_VERTICES(ctx, 0, GL_COLOR_BUFFER_BIT);
 
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "%s %s\n", caller, _mesa_enum_to_string(buffer));
-   }
-
    if (buffer == GL_NONE) {
       destMask = 0x0;
    }
@@ -464,6 +460,16 @@ draw_buffers(struct gl_context *ctx, struct gl_framebuffer *fb, GLsizei n,
           (n != 1 || (buffers[0] != GL_NONE && buffers[0] != GL_BACK))) {
          _mesa_error(ctx, GL_INVALID_OPERATION, "%s(invalid buffers)", caller);
          return;
+      }
+
+      /* From the GL_EXT_shader_pixel_local_storage spec:
+       * "INVALID_OPERATION is generated if pixel local storage is enabled and
+       *  the application attempts to [...] change color buffer selection via
+       *  DrawBuffers, [...]"
+       */
+      if (ctx->PixelLocalStorage) {
+         _mesa_error(ctx, GL_INVALID_OPERATION,
+                     "%s(): pixel local storage enabled", caller);
       }
    }
 
@@ -930,9 +936,6 @@ read_buffer(struct gl_context *ctx, struct gl_framebuffer *fb,
    gl_buffer_index srcBuffer;
 
    FLUSH_VERTICES(ctx, 0, GL_PIXEL_MODE_BIT);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "%s %s\n", caller, _mesa_enum_to_string(buffer));
 
    if (buffer == GL_NONE) {
       /* This is legal--it means that no buffer should be bound for reading. */

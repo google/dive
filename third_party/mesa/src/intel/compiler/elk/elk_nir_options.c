@@ -22,7 +22,6 @@
    .lower_fisnormal = true,                                                   \
    .lower_fquantize2f16 = true,                                               \
    .lower_isign = true,                                                       \
-   .lower_ldexp = true,                                                       \
    .lower_bitfield_extract = true,                                            \
    .lower_bitfield_insert = true,                                             \
    .lower_device_index_to_zero = true,                                        \
@@ -55,6 +54,7 @@
    .avoid_ternary_with_two_constants = true,                                  \
    .has_pack_32_4x8 = true,                                                   \
    .max_unroll_iterations = 32,                                               \
+   .max_samples = 8,                                                          \
    .force_indirect_unrolling = nir_var_function_temp,                         \
    .divergence_analysis_options =                                             \
       (nir_divergence_single_patch_per_tcs_subgroup |                         \

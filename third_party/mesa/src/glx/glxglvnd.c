@@ -26,7 +26,7 @@ compare(const void *l, const void *r)
 
 static unsigned FindGLXFunction(const GLubyte *name)
 {
-    const char **match;
+    const char * const *match;
 
     match = bsearch(name, __glXDispatchTableStrings, DI_FUNCTION_COUNT,
                     sizeof(const char *), compare);

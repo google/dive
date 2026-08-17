@@ -10,7 +10,7 @@
 #error "PAN_ARCH must be defined"
 #endif
 
-#include "util/pan_ir.h"
+#include "compiler/pan_compiler.h"
 
 #include "pan_desc.h"
 #include "pan_earlyzs.h"
@@ -26,6 +26,7 @@
 
 extern const struct vk_device_shader_ops panvk_per_arch(device_shader_ops);
 
+#define MAX_RTS 8
 #define MAX_VS_ATTRIBS 16
 
 #if PAN_ARCH < 9
@@ -97,10 +98,48 @@ struct panvk_input_attachment_info {
 
 #define aligned_u64 __attribute__((aligned(sizeof(uint64_t)))) uint64_t
 
+/* System values which are common to both graphics and compute.  These are
+ * always at the same offset in both graphics and compute allowing us to
+ * compile the shader without knowing which queue it will be dispatched on.
+ */
+struct panvk_common_sysvals_inner {
+   /* Address of sysval/push constant buffer used for indirect loads */
+   aligned_u64 push_uniforms;
+
+   /* Address of the printf buffer */
+   aligned_u64 printf_buffer_address;
+} __attribute__((aligned(FAU_WORD_SIZE)));
+
+struct panvk_common_sysvals {
+   uint32_t _pad[4];
+   struct panvk_common_sysvals_inner common;
+} __attribute__((aligned(FAU_WORD_SIZE)));
+
+static_assert((offsetof(struct panvk_common_sysvals, common) %
+               FAU_WORD_SIZE) == 0,
+              "struct panvk_graphics_sysvals_inner must be 8-byte aligned");
+static_assert((sizeof(struct panvk_common_sysvals_inner) %
+               FAU_WORD_SIZE) == 0,
+              "struct panvk_graphics_sysvals_inner must be 8-byte aligned");
+
+#define SYSVALS_COMMON_START \
+   (offsetof(struct panvk_common_sysvals, common) / FAU_WORD_SIZE)
+
+#define SYSVALS_COMMON_COUNT \
+   (sizeof(struct panvk_common_sysvals_inner) / FAU_WORD_SIZE)
+
+#define SYSVALS_COMMON_END (SYSVALS_COMMON_START + SYSVALS_COMMON_COUNT)
+
 struct panvk_graphics_sysvals {
+   /* Blend constants MUST come first because their position cannot depend on
+    * the FAU packing of the fragment shader.
+    */
    struct {
       float constants[4];
    } blend;
+
+   /* This must be at the same offset for both compute and graphics */
+   struct panvk_common_sysvals_inner common;
 
    struct {
       struct {
@@ -117,9 +156,9 @@ struct panvk_graphics_sysvals {
       uint32_t noperspective_varyings;
    } vs;
 
-   /* Address of sysval/push constant buffer used for indirect loads */
-   aligned_u64 push_uniforms;
-   aligned_u64 printf_buffer_address;
+   struct {
+      aligned_u64 blend_descs[MAX_RTS];
+   } fs;
 
    struct panvk_input_attachment_info iam[INPUT_ATTACHMENT_MAP_SIZE];
 
@@ -135,11 +174,13 @@ struct panvk_graphics_sysvals {
 #endif
 } __attribute__((aligned(FAU_WORD_SIZE)));
 
+static_assert(offsetof(struct panvk_graphics_sysvals, blend) == 0,
+              "panvk_graphics_sysvals::blend must be at the start");
+static_assert(offsetof(struct panvk_graphics_sysvals, common) ==
+                 offsetof(struct panvk_common_sysvals, common),
+              "Common sysvals must be at the same offset everywhere");
 static_assert((sizeof(struct panvk_graphics_sysvals) % FAU_WORD_SIZE) == 0,
               "struct panvk_graphics_sysvals must be 8-byte aligned");
-static_assert((offsetof(struct panvk_graphics_sysvals, push_uniforms) %
-               FAU_WORD_SIZE) == 0,
-              "panvk_graphics_sysvals::push_uniforms must be 8-byte aligned");
 #if PAN_ARCH < 9
 static_assert((offsetof(struct panvk_graphics_sysvals, desc) % FAU_WORD_SIZE) ==
                  0,
@@ -150,16 +191,18 @@ struct panvk_compute_sysvals {
    struct {
       uint32_t x, y, z;
    } base;
+
+   uint32_t _pad;
+
+   /* This must be at the same offset for both compute and graphics */
+   struct panvk_common_sysvals_inner common;
+
    struct {
       uint32_t x, y, z;
    } num_work_groups;
    struct {
       uint32_t x, y, z;
    } local_group_size;
-
-   /* Address of sysval/push constant buffer used for indirect loads */
-   aligned_u64 push_uniforms;
-   aligned_u64 printf_buffer_address;
 
 #if PAN_ARCH < 9
    struct {
@@ -168,11 +211,11 @@ struct panvk_compute_sysvals {
 #endif
 } __attribute__((aligned(FAU_WORD_SIZE)));
 
+static_assert(offsetof(struct panvk_compute_sysvals, common) ==
+                 offsetof(struct panvk_common_sysvals, common),
+              "Common sysvals must be at the same offset everywhere");
 static_assert((sizeof(struct panvk_compute_sysvals) % FAU_WORD_SIZE) == 0,
               "struct panvk_compute_sysvals must be 8-byte aligned");
-static_assert((offsetof(struct panvk_compute_sysvals, push_uniforms) %
-               FAU_WORD_SIZE) == 0,
-              "panvk_compute_sysvals::push_uniforms must be 8-byte aligned");
 #if PAN_ARCH < 9
 static_assert((offsetof(struct panvk_compute_sysvals, desc) % FAU_WORD_SIZE) ==
                  0,
@@ -185,11 +228,27 @@ static_assert((offsetof(struct panvk_compute_sysvals, desc) % FAU_WORD_SIZE) ==
  */
 #define SYSVALS_PUSH_CONST_BASE MAX_PUSH_CONSTANTS_SIZE
 
-#define sysval_size(__ptype, __name)                                           \
-   sizeof(((struct panvk_##__ptype##_sysvals *)NULL)->__name)
+#define common_sysval_size(__name)                                             \
+   sizeof(((struct panvk_common_sysvals *)NULL)->common.__name)
 
-#define sysval_offset(__ptype, __name)                                         \
-   offsetof(struct panvk_##__ptype##_sysvals, __name)
+#define graphics_sysval_size(__name)                                           \
+   sizeof(((struct panvk_graphics_sysvals *)NULL)->__name)
+
+#define compute_sysval_size(__name)                                            \
+   sizeof(((struct panvk_compute_sysvals *)NULL)->__name)
+
+#define sysval_size(__ptype, __name) __ptype##_sysval_size(__name)
+
+#define common_sysval_offset(__name)                                           \
+   offsetof(struct panvk_common_sysvals, common.__name)
+
+#define graphics_sysval_offset(__name)                                         \
+   offsetof(struct panvk_graphics_sysvals, __name)
+
+#define compute_sysval_offset(__name)                                          \
+   offsetof(struct panvk_compute_sysvals, __name)
+
+#define sysval_offset(__ptype, __name) __ptype##_sysval_offset(__name)
 
 #define sysval_entry_size(__ptype, __name)                                     \
    sizeof(((struct panvk_##__ptype##_sysvals *)NULL)->__name[0])
@@ -297,6 +356,31 @@ struct panvk_shader_fau_info {
    uint32_t total_count;
 };
 
+struct panvk_shader_desc_info {
+   uint32_t used_set_mask;
+
+#if PAN_ARCH < 9
+   struct {
+      uint32_t map[MAX_DYNAMIC_UNIFORM_BUFFERS];
+      uint32_t count;
+   } dyn_ubos;
+   struct {
+      uint32_t map[MAX_DYNAMIC_STORAGE_BUFFERS];
+      uint32_t count;
+   } dyn_ssbos;
+   struct {
+      struct panvk_priv_mem map;
+      uint32_t count[PANVK_BIFROST_DESC_TABLE_COUNT];
+   } others;
+#else
+   struct {
+      uint32_t map[MAX_DYNAMIC_BUFFERS];
+      uint32_t count;
+   } dyn_bufs;
+   uint32_t fs_varying_attr_desc_count;
+#endif
+};
+
 struct panvk_shader_variant {
    struct pan_shader_info info;
 
@@ -308,33 +392,11 @@ struct panvk_shader_variant {
       struct {
          struct pan_earlyzs_lut earlyzs_lut;
          uint32_t input_attachment_read;
+         uint32_t tile_image_color_read;
+         bool tile_image_z_read;
+         bool tile_image_s_read;
       } fs;
    };
-
-   struct {
-      uint32_t used_set_mask;
-
-#if PAN_ARCH < 9
-      struct {
-         uint32_t map[MAX_DYNAMIC_UNIFORM_BUFFERS];
-         uint32_t count;
-      } dyn_ubos;
-      struct {
-         uint32_t map[MAX_DYNAMIC_STORAGE_BUFFERS];
-         uint32_t count;
-      } dyn_ssbos;
-      struct {
-         struct panvk_priv_mem map;
-         uint32_t count[PANVK_BIFROST_DESC_TABLE_COUNT];
-      } others;
-#else
-      struct {
-         uint32_t map[MAX_DYNAMIC_BUFFERS];
-         uint32_t count;
-      } dyn_bufs;
-      uint32_t max_varying_loads;
-#endif
-   } desc_info;
 
    struct panvk_shader_fau_info fau;
 
@@ -375,6 +437,8 @@ enum panvk_vs_variant {
 
 struct panvk_shader {
    struct vk_shader vk;
+
+   struct panvk_shader_desc_info desc_info;
 
    struct panvk_shader_variant variants[];
 };
@@ -436,7 +500,13 @@ panvk_shader_variant_get_dev_addr(const struct panvk_shader_variant *shader)
 
 #define panvk_shader_foreach_variant(__shader, __var)                          \
    for (struct panvk_shader_variant *__var = (__shader)->variants;             \
-        __var < (__shader)->variants +                                         \
+        (__shader) && __var < (__shader)->variants +                           \
+                   panvk_shader_num_variants((__shader)->vk.stage);            \
+        ++__var)
+
+#define panvk_shader_foreach_variant_const(__shader, __var)                    \
+   for (const struct panvk_shader_variant *__var = (__shader)->variants;       \
+        (__shader) && __var < (__shader)->variants +                           \
                    panvk_shader_num_variants((__shader)->vk.stage);            \
         ++__var)
 
@@ -461,12 +531,17 @@ panvk_shader_link_cleanup(struct panvk_shader_link *link)
 }
 #endif
 
+bool panvk_per_arch(nir_lower_input_attachment_loads)(
+   nir_shader *nir,
+   const struct vk_graphics_pipeline_state *state,
+   uint32_t *input_attachment_read_out);
+
 void panvk_per_arch(nir_lower_descriptors)(
    nir_shader *nir, struct panvk_device *dev,
    const struct vk_pipeline_robustness_state *rs, uint32_t set_layout_count,
    struct vk_descriptor_set_layout *const *set_layouts,
    const struct vk_graphics_pipeline_state *state,
-   struct panvk_shader_variant *shader);
+   struct panvk_shader_desc_info *desc_info);
 
 /* This a stripped-down version of panvk_shader for internal shaders that
  * are managed by vk_meta (blend and preload shaders). Those don't need the
@@ -483,20 +558,11 @@ struct panvk_internal_shader {
 #endif
 };
 
-#if PAN_ARCH >= 9
-static inline bool
-panvk_use_ld_var_buf(const struct panvk_shader_variant *shader)
-{
-   /* LD_VAR_BUF[_IMM] takes an 8-bit offset, limiting its use to 16 or less
-    * varyings, assuming highp vec4. */
-   if (shader->desc_info.max_varying_loads <= 16)
-      return true;
-   return false;
-}
-#endif
-
 VK_DEFINE_NONDISP_HANDLE_CASTS(panvk_internal_shader, vk.base, VkShaderEXT,
                                VK_OBJECT_TYPE_SHADER_EXT)
+
+void panvk_per_arch(compiler_lock)(void);
+void panvk_per_arch(compiler_unlock)(void);
 
 VkResult panvk_per_arch(create_internal_shader)(
    struct panvk_device *dev, nir_shader *nir,
@@ -507,5 +573,8 @@ VkResult panvk_per_arch(create_shader_from_binary)(
    struct panvk_device *dev, const struct pan_shader_info *info,
    struct pan_compute_dim local_size, const void *bin_ptr, size_t bin_size,
    struct panvk_shader **shader_out);
+
+VkResult panvk_per_arch(create_shader)(
+   struct panvk_device *dev, nir_shader *nir, struct panvk_shader **shader_out);
 
 #endif

@@ -5,11 +5,12 @@
  */
 
 #include "gallium/include/pipe/p_defines.h"
+#include "poly/cl/libpoly.h"
+#include "poly/nir/poly_nir.h"
 #include "util/format/u_formats.h"
 #include "agx_abi.h"
 #include "agx_linker.h"
 #include "agx_nir.h"
-#include "agx_nir_lower_gs.h"
 #include "agx_nir_lower_vbo.h"
 #include "agx_pack.h"
 #include "agx_tilebuffer.h"
@@ -72,8 +73,8 @@ map_vs_part_uniform(nir_intrinsic_instr *intr, unsigned nr_attribs)
    case nir_intrinsic_load_base_instance:
       return AGX_ABI_VUNI_BASE_INSTANCE(nr_attribs);
 
-   case nir_intrinsic_load_input_assembly_buffer_poly:
-      return AGX_ABI_VUNI_INPUT_ASSEMBLY(nr_attribs);
+   case nir_intrinsic_load_vertex_param_buffer_poly:
+      return AGX_ABI_VUNI_VERTEX_PARAMS(nr_attribs);
 
    default:
       return -1;
@@ -149,11 +150,11 @@ lower_adjacency(nir_builder *b, nir_intrinsic_instr *intr, void *data)
    nir_def *id = nir_load_vertex_id(b);
 
    if (key->adjacency == MESA_PRIM_LINES_ADJACENCY) {
-      id = libagx_map_to_line_adj(b, id);
+      id = poly_map_to_line_adj(b, id);
    } else if (key->adjacency == MESA_PRIM_TRIANGLE_STRIP_ADJACENCY) {
-      id = libagx_map_to_tri_strip_adj(b, id);
+      id = poly_map_to_tri_strip_adj(b, id);
    } else if (key->adjacency == MESA_PRIM_LINE_STRIP_ADJACENCY) {
-      id = libagx_map_to_line_strip_adj(b, id);
+      id = poly_map_to_line_strip_adj(b, id);
    } else if (key->adjacency == MESA_PRIM_TRIANGLES_ADJACENCY) {
       /* Sequence (0, 2, 4), (6, 8, 10), ... */
       id = nir_imul_imm(b, id, 2);
@@ -161,7 +162,7 @@ lower_adjacency(nir_builder *b, nir_intrinsic_instr *intr, void *data)
       UNREACHABLE("unknown");
    }
 
-   id = agx_nir_load_vertex_id(b, id, key->sw_index_size_B);
+   id = poly_nir_load_vertex_id(b, id);
 
    nir_def_replace(&intr->def, id);
    return true;
@@ -215,11 +216,14 @@ agx_nir_vs_prolog(nir_builder *b, const void *key_)
    }
 
    if (!key->hw) {
-      agx_nir_lower_sw_vs(b->shader, key->sw_index_size_B);
+      b->cursor = nir_before_impl(nir_shader_get_entrypoint(b->shader));
+      poly_nir_lower_sw_vs(b->shader);
    } else if (key->adjacency) {
       nir_shader_intrinsics_pass(b->shader, lower_adjacency,
                                  nir_metadata_control_flow, (void *)key);
    }
+   nir_inline_sysval(b->shader, nir_intrinsic_load_index_size_poly,
+                     key->sw_index_size_B);
 
    /* Finally, lower uniforms according to our ABI */
    unsigned nr = DIV_ROUND_UP(BITSET_LAST_BIT(key->component_mask), 4);
@@ -325,11 +329,14 @@ lower_tests_zs(nir_shader *s, bool value)
 static inline bool
 blend_uses_2src(struct agx_blend_rt_key rt)
 {
+   assert(rt.advanced_blend == false);
+   const struct agx_blend_standard blend = agx_unpack_blend_standard(rt.mode);
+
    enum pipe_blendfactor factors[] = {
-      rt.rgb_src_factor,
-      rt.rgb_dst_factor,
-      rt.alpha_src_factor,
-      rt.alpha_dst_factor,
+      blend.rgb_src_factor,
+      blend.rgb_dst_factor,
+      blend.alpha_src_factor,
+      blend.alpha_dst_factor,
    };
 
    for (unsigned i = 0; i < ARRAY_SIZE(factors); ++i) {
@@ -390,7 +397,8 @@ agx_nir_fs_epilog(nir_builder *b, const void *key_)
           * for blending so should be suppressed for missing attachments to keep
           * the assert from blowing up on OpenGL.
           */
-         if (blend_uses_2src(key->blend.rt[rt]) &&
+         if (!key->blend.rt[rt].advanced_blend &&
+             blend_uses_2src(key->blend.rt[rt]) &&
              key->rt_formats[rt] != PIPE_FORMAT_NONE) {
 
             assert(location == 0);
@@ -416,7 +424,7 @@ agx_nir_fs_epilog(nir_builder *b, const void *key_)
       key->rt_formats, ARRAY_SIZE(key->rt_formats), key->nr_samples, true);
 
    if (key->force_small_tile)
-      tib.tile_size = (struct agx_tile_size){16, 16};
+      tib.tile_size = 16 * 16;
 
    bool force_translucent = false;
    nir_lower_blend_options opts = {
@@ -425,21 +433,40 @@ agx_nir_fs_epilog(nir_builder *b, const void *key_)
       .logicop_func = key->blend.logicop_func,
    };
 
-   static_assert(ARRAY_SIZE(opts.format) == 8, "max RTs out of sync");
+   static_assert(ARRAY_SIZE(opts.rt) == 8, "max RTs out of sync");
 
    for (unsigned i = 0; i < 8; ++i) {
-      opts.format[i] = key->rt_formats[i];
-      opts.rt[i] = (nir_lower_blend_rt){
-         .rgb.src_factor = key->blend.rt[i].rgb_src_factor,
-         .rgb.dst_factor = key->blend.rt[i].rgb_dst_factor,
-         .rgb.func = key->blend.rt[i].rgb_func,
+      if (key->blend.rt[i].advanced_blend) {
+         const struct agx_blend_advanced blend =
+            agx_unpack_blend_advanced(key->blend.rt[i].mode);
 
-         .alpha.src_factor = key->blend.rt[i].alpha_src_factor,
-         .alpha.dst_factor = key->blend.rt[i].alpha_dst_factor,
-         .alpha.func = key->blend.rt[i].alpha_func,
+         opts.rt[i] = (nir_lower_blend_rt){
+            .format = key->rt_formats[i],
+            .advanced_blend = true,
+            .colormask = key->blend.rt[i].colormask,
+            .blend_mode = blend.op,
+            .src_premultiplied = blend.src_premultiplied,
+            .dst_premultiplied = blend.dst_premultiplied,
+            .overlap = blend.overlap,
+         };
+      } else {
+         const struct agx_blend_standard blend =
+            agx_unpack_blend_standard(key->blend.rt[i].mode);
 
-         .colormask = key->blend.rt[i].colormask,
-      };
+         opts.rt[i] = (nir_lower_blend_rt){
+            .format = key->rt_formats[i],
+
+            .rgb.src_factor = blend.rgb_src_factor,
+            .rgb.dst_factor = blend.rgb_dst_factor,
+            .rgb.func = blend.rgb_func,
+
+            .alpha.src_factor = blend.alpha_src_factor,
+            .alpha.dst_factor = blend.alpha_dst_factor,
+            .alpha.func = blend.alpha_func,
+
+            .colormask = key->blend.rt[i].colormask,
+         };
+      }
    }
 
    /* It's more efficient to use masked stores (with
@@ -472,8 +499,8 @@ agx_nir_fs_epilog(nir_builder *b, const void *key_)
 
    /* Alpha-to-coverage must be lowered before alpha-to-one */
    if (key->blend.alpha_to_coverage)
-      NIR_PASS(_, b->shader, nir_lower_alpha_to_coverage, tib.nr_samples,
-               false, NULL);
+      NIR_PASS(_, b->shader, nir_lower_alpha_to_coverage, false,
+               NULL);
 
    /* Depth/stencil writes must be deferred until after all discards,
     * particularly alpha-to-coverage.
@@ -706,7 +733,7 @@ agx_nir_lower_stats_fs(nir_shader *s)
    nir_def *samples = nir_bit_count(b, nir_load_sample_mask_in(b));
    unsigned query = PIPE_STAT_QUERY_PS_INVOCATIONS;
 
-   nir_def *addr = nir_load_stat_query_address_agx(b, .base = query);
+   nir_def *addr = nir_load_stat_query_address_poly(b, .base = query);
    nir_global_atomic(b, 32, addr, samples, .atomic_op = nir_atomic_op_iadd);
 
    nir_pop_if(b, NULL);

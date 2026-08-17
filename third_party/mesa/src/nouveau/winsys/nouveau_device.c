@@ -17,6 +17,8 @@
 #include <unistd.h>
 #include <xf86drm.h>
 
+#include "clc597.h"
+
 static const char *
 name_for_chip(uint32_t dev_id,
               uint16_t subsystem_id,
@@ -408,6 +410,24 @@ nouveau_ws_device_info(int fd, struct nouveau_ws_device *dev)
    return 0;
 }
 
+static int
+nouveau_ws_device_zcull_info(int fd, struct nouveau_ws_device *dev)
+{
+   struct drm_nouveau_get_zcull_info info;
+   int ret = drmCommandRead(fd, DRM_NOUVEAU_GET_ZCULL_INFO,
+                            &info, sizeof(info));
+
+   if (!ret) {
+      STATIC_ASSERT(sizeof(dev->info.zcull_info) == sizeof(info));
+      memcpy(&dev->info.zcull_info, &info, sizeof(dev->info.zcull_info));
+
+      dev->info.has_zcull_info = true;
+   } else {
+      dev->info.has_zcull_info = false;
+   }
+   return ret;
+}
+
 struct nouveau_ws_device *
 nouveau_ws_device_new(drmDevicePtr drm_device)
 {
@@ -441,6 +461,8 @@ nouveau_ws_device_new(drmDevicePtr drm_device)
    if (version < 0x01000301)
       goto out_err;
 
+   device->nouveau_version = version;
+
    const uint64_t KERN = NOUVEAU_WS_DEVICE_KERNEL_RESERVATION_START;
    const uint64_t TOP = 1ull << 40;
    struct drm_nouveau_vm_init vminit = { KERN, TOP-KERN };
@@ -458,6 +480,8 @@ nouveau_ws_device_new(drmDevicePtr drm_device)
 
    if (nouveau_ws_device_info(fd, device))
       goto out_err;
+
+   nouveau_ws_device_zcull_info(fd, device);  /* This is allowed to fail */
 
    const char *name;
    if (drm_device->bustype == DRM_BUS_PCI) {
@@ -516,6 +540,18 @@ nouveau_ws_device_new(drmDevicePtr drm_device)
    device->info.max_warps_per_mp = max_warps_per_mp_for_sm(device->info.sm);
    device->info.mp_per_tpc = mp_per_tpc_for_chipset(device->info.chipset);
 
+   /* Transfer queues require two kernel fixes:
+    *   0ef5c4e4db ("nouveau: fix disabling the nonstall irq due to storm code")
+    *   2cb66ae604 ("nouveau: Membar before between semaphore writes and the interrupt")
+    *
+    * Any kernel with compression support should have these fixes and gsp
+    * by default. Turing may not be fixed without gsp, but that should be rare on
+    * gsp-by-default kernels. Note that older architectures have not been fixed,
+    * so they require additional kernel work before we can expose this.
+    */
+   device->info.has_transfer_queue = device->nouveau_version >= 0x01000401 &&
+                                     device->info.cls_eng3d >= TURING_A;
+
    init_shared_mem_sizes(&device->info);
 
    nouveau_ws_context_destroy(tmp_ctx);
@@ -550,6 +586,10 @@ nouveau_ws_device_destroy(struct nouveau_ws_device *device)
 uint64_t
 nouveau_ws_device_vram_used(struct nouveau_ws_device *device)
 {
+   /* On Tegra, we don't have VRAM */
+   if (device->info.type == NV_DEVICE_TYPE_SOC)
+      return 0;
+
    uint64_t used = 0;
    if (nouveau_ws_param(device->fd, NOUVEAU_GETPARAM_VRAM_USED, &used))
       return 0;

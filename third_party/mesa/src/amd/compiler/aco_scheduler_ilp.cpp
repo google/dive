@@ -29,7 +29,10 @@ using mask_t = uint16_t;
 static_assert(std::numeric_limits<mask_t>::digits >= num_nodes);
 
 struct VOPDInfo {
-   VOPDInfo() : can_be_opx(0), is_dst_odd(0), src_banks(0), has_literal(0), is_commutative(0) {}
+   VOPDInfo()
+       : can_be_opx(0), is_dst_odd(0), src_banks(0), has_literal(0), is_commutative(0),
+         operand_swizzle(0b10'01'00)
+   {}
    uint16_t can_be_opx : 1;
    uint16_t is_dst_odd : 1;
    uint16_t src_banks : 10; /* 0-3: src0, 4-7: src1, 8-9: src2 */
@@ -38,6 +41,7 @@ struct VOPDInfo {
    aco_opcode op = aco_opcode::num_opcodes;
    uint32_t literal = 0;
    uint8_t port_vgprs[2] = {0, 0};
+   uint8_t operand_swizzle : 6; /* 2 bits per operands, 0-2 from instr->operands, 3 literal. */
 };
 
 struct InstrInfo {
@@ -130,7 +134,8 @@ can_reorder(const Instruction* const instr)
 VOPDInfo
 get_vopd_info(const SchedILPContext& ctx, const Instruction* instr)
 {
-   if (instr->format != Format::VOP1 && instr->format != Format::VOP2)
+   if (instr->format != Format::VOP1 && instr->format != Format::VOP2 &&
+       instr->format != Format::VOP3 && instr->format != Format::VOP3P)
       return VOPDInfo();
 
    VOPDInfo info;
@@ -153,6 +158,9 @@ get_vopd_info(const SchedILPContext& ctx, const Instruction* instr)
       if (!instr->operands[0].isConstant())
          return VOPDInfo();
       info.op = aco_opcode::v_dual_mov_b32;
+      info.operand_swizzle = 0x3;
+      info.has_literal = true;
+      info.literal = util_bitreverse(instr->operands[0].constantValue());
       break;
    case aco_opcode::v_cndmask_b32:
       info.op = aco_opcode::v_dual_cndmask_b32;
@@ -160,7 +168,18 @@ get_vopd_info(const SchedILPContext& ctx, const Instruction* instr)
       break;
    case aco_opcode::v_max_f32: info.op = aco_opcode::v_dual_max_f32; break;
    case aco_opcode::v_min_f32: info.op = aco_opcode::v_dual_min_f32; break;
-   case aco_opcode::v_dot2c_f32_f16: info.op = aco_opcode::v_dual_dot2acc_f32_f16; break;
+   case aco_opcode::v_dot2c_f32_f16:
+      info.op = aco_opcode::v_dual_dot2acc_f32_f16;
+      if (instr->operands[0].isConstant() && !instr->operands[0].isLiteral()) {
+         /* VOP2 encoded, opsel_hi[0] is implicitly true for inline constants,
+          * for VOPD it is false.
+          * To still read 0 for the high half, use a literal instead.
+          */
+         info.literal = instr->operands[0].constantValue();
+         info.has_literal = true;
+         info.operand_swizzle |= 0b11;
+      }
+      break;
    case aco_opcode::v_add_u32:
       info.op = aco_opcode::v_dual_add_nc_u32;
       info.can_be_opx = false;
@@ -174,6 +193,77 @@ get_vopd_info(const SchedILPContext& ctx, const Instruction* instr)
       info.op = aco_opcode::v_dual_and_b32;
       info.can_be_opx = false;
       break;
+   case aco_opcode::v_fma_f32: {
+      /* Convert v_fma_f32 with inline constant to fmamk/fmaak. */
+      int constant_idx = -1;
+      int vgpr_idx = -1;
+      for (int i = 0; i < 3; i++) {
+         const Operand& op = instr->operands[i];
+         if (op.isConstant() && !op.isLiteral())
+            constant_idx = i;
+         else if (op.isOfType(RegType::vgpr))
+            vgpr_idx = i;
+         else
+            return VOPDInfo();
+      }
+
+      if (constant_idx < 0 || vgpr_idx < 0 || instr->usesModifiers())
+         return VOPDInfo();
+
+      info.literal = instr->operands[constant_idx].constantValue();
+      info.has_literal = true;
+      if (constant_idx == 2) {
+         info.op = aco_opcode::v_dual_fmaak_f32;
+         info.operand_swizzle = vgpr_idx == 0 ? 0b11'00'01 : 0b11'01'00;
+      } else {
+         info.op = aco_opcode::v_dual_fmamk_f32;
+         info.is_commutative = false;
+         info.operand_swizzle = constant_idx == 0 ? 0b11'10'01 : 0b11'10'00;
+      }
+      break;
+   }
+   case aco_opcode::v_dot2_f32_f16:
+   case aco_opcode::v_dot2_f32_bf16: {
+      bool bf16 = instr->opcode == aco_opcode::v_dot2_f32_bf16;
+      /* src2 must be the same as the destination. */
+      if (!instr->operands[2].isOfType(RegType::vgpr) ||
+          instr->operands[2].physReg() != instr->definitions[0].physReg() ||
+          instr->valu().clamp)
+         return VOPDInfo();
+
+      /* One pair of factors must be a vgpr. */
+      if (!instr->operands[0].isOfType(RegType::vgpr) &&
+          !instr->operands[1].isOfType(RegType::vgpr))
+         return VOPDInfo();
+
+      for (unsigned i = 0; i < 3; i++) {
+         if (!instr->operands[i].isConstant() &&
+             (instr->valu().neg_lo[i] || instr->valu().neg_hi[i] || instr->valu().opsel_lo[i] ||
+              !instr->valu().opsel_hi[i]))
+            return VOPDInfo();
+         if (instr->operands[i].isConstant() &&
+             (instr->operands[i].isLiteral() || instr->valu().neg_lo[i] ||
+              instr->valu().neg_hi[i] || instr->valu().opsel_lo[i] != bf16 ||
+              instr->valu().opsel_hi[i] != bf16)) {
+            info.has_literal = true;
+            info.literal = instr->operands[i].constantValue();
+            uint32_t lo = (info.literal >> (instr->valu().opsel_lo[i] * 16)) & 0xffff;
+            uint32_t hi = (info.literal >> (instr->valu().opsel_hi[i] * 16)) & 0xffff;
+            lo ^= instr->valu().neg_lo[i] ? 0x8000 : 0;
+            hi ^= instr->valu().neg_hi[i] ? 0x8000 : 0;
+            info.literal = lo | (hi << 16);
+         }
+      }
+
+      if (!instr->operands[1].isOfType(RegType::vgpr))
+         info.operand_swizzle = 0b10'00'01;
+
+      if (info.has_literal)
+         info.operand_swizzle |= 0b11;
+
+      info.op = bf16 ? aco_opcode::v_dual_dot2acc_f32_bf16 : aco_opcode::v_dual_dot2acc_f32_f16;
+      break;
+   }
    default: return VOPDInfo();
    }
 
@@ -186,11 +276,14 @@ get_vopd_info(const SchedILPContext& ctx, const Instruction* instr)
    static const unsigned bank_mask[3] = {0x3, 0x3, 0x1};
    bool has_sgpr = false;
    for (unsigned i = 0; i < instr->operands.size(); i++) {
-      Operand op = instr->operands[i];
-      if (instr->opcode == aco_opcode::v_bfrev_b32)
-         op = Operand::get_const(ctx.program->gfx_level, util_bitreverse(op.constantValue()), 4);
+      uint8_t swizzle = (info.operand_swizzle >> (i * 2)) & 0x3;
+      if (swizzle == 3) {
+         assert(info.has_literal);
+         continue;
+      }
+      Operand op = instr->operands[swizzle];
 
-      unsigned port = (instr->opcode == aco_opcode::v_fmamk_f32 && i == 1) ? 2 : i;
+      unsigned port = (info.op == aco_opcode::v_dual_fmamk_f32 && i == 1) ? 2 : i;
       if (op.isOfType(RegType::vgpr)) {
          info.src_banks |= 1 << (port * 4 + (op.physReg().reg() & bank_mask[port]));
          if (port < 2)
@@ -212,7 +305,8 @@ get_vopd_info(const SchedILPContext& ctx, const Instruction* instr)
    if (has_sgpr && info.has_literal)
       return VOPDInfo();
 
-   info.is_commutative &= instr->operands[0].isOfType(RegType::vgpr);
+   info.is_commutative &= (info.operand_swizzle & 0x3) < 3 &&
+                          instr->operands[info.operand_swizzle & 0x3].isOfType(RegType::vgpr);
 
    return info;
 }
@@ -221,9 +315,9 @@ bool
 are_src_banks_compatible(enum amd_gfx_level gfx_level, const VOPDInfo& a, const VOPDInfo& b,
                          bool swap)
 {
-   if (gfx_level >= GFX12 && a.op == aco_opcode::v_dual_mov_b32 &&
+   if (gfx_level >= GFX11_7 && a.op == aco_opcode::v_dual_mov_b32 &&
        b.op == aco_opcode::v_dual_mov_b32) {
-      /* On GFX12+, OPY uses src2 if both OPX and OPY are v_dual_mov_b32, so there are no
+      /* On GFX11.7+, OPY uses src2 if both OPX and OPY are v_dual_mov_b32, so there are no
        * compatibility issues. */
       return true;
    }
@@ -573,8 +667,12 @@ remove_entry(SchedILPContext& ctx, const Instruction* const instr, const uint32_
          if (ctx.regs[reg].has_direct_dependency && ctx.regs[reg].direct_dependency == idx) {
             ctx.regs[reg].has_direct_dependency = false;
             if (!ctx.is_vopd) {
+               /* Do MAX2() so that the latency from both predecessors of a merge block are considered. */
+               if (BITSET_TEST(ctx.reg_has_latency, reg))
+                  ctx.regs[reg].latency = MAX2(ctx.regs[reg].latency, latency);
+               else
+                  ctx.regs[reg].latency = latency;
                BITSET_SET(ctx.reg_has_latency, reg);
-               ctx.regs[reg].latency = latency;
             }
          }
       }
@@ -772,26 +870,32 @@ void
 get_vopd_opcode_operands(const SchedILPContext& ctx, Instruction* instr, const VOPDInfo& info,
                          bool swap, aco_opcode* op, unsigned* num_operands, Operand* operands)
 {
-   *op = info.op;
-   *num_operands += instr->operands.size();
-   std::copy(instr->operands.begin(), instr->operands.end(), operands);
-
-   if (instr->opcode == aco_opcode::v_bfrev_b32) {
-      operands[0] = Operand::get_const(ctx.program->gfx_level,
-                                       util_bitreverse(operands[0].constantValue()), 4);
-   }
-
    if (swap && info.op == aco_opcode::v_dual_mov_b32) {
       *op = aco_opcode::v_dual_add_nc_u32;
-      (*num_operands)++;
-      operands[1] = operands[0];
+      *num_operands += 2;
       operands[0] = Operand::zero();
-   } else if (swap) {
+      operands[1] = instr->operands[0];
+      return;
+   }
+
+   *op = info.op;
+   *num_operands += instr->operands.size();
+
+   unsigned swizzle = info.operand_swizzle;
+   if (swap) {
+      swizzle = ((swizzle & 0b11) << 2) | ((swizzle & 0b11'00) >> 2) | (swizzle & 0b11'00'00);
       if (info.op == aco_opcode::v_dual_sub_f32)
          *op = aco_opcode::v_dual_subrev_f32;
       else if (info.op == aco_opcode::v_dual_subrev_f32)
          *op = aco_opcode::v_dual_sub_f32;
-      std::swap(operands[0], operands[1]);
+   }
+
+   for (unsigned i = 0; i < instr->operands.size(); i++) {
+      unsigned op_idx = (swizzle >> (i * 2)) & 0x3;
+      if (op_idx == 3)
+         operands[i] = Operand::literal32(info.literal);
+      else
+         operands[i] = instr->operands[op_idx];
    }
 }
 

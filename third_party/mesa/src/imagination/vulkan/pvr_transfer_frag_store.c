@@ -31,8 +31,8 @@
 #include "pvr_common.h"
 #include "pvr_device.h"
 #include "pvr_device_info.h"
-#include "pvr_job_transfer.h"
 #include "pvr_pds.h"
+#include "pvr_physical_device.h"
 #include "pvr_transfer_frag_store.h"
 #include "pvr_types.h"
 #include "pvr_usc.h"
@@ -186,7 +186,7 @@ static VkResult pvr_transfer_frag_store_entry_data_compile(
       offsetof(struct pvr_combined_image_sampler_descriptor, sampler) / 4;
 
    const uint32_t cache_line_size =
-      rogue_get_slc_cache_line_size(&device->pdevice->dev_info);
+      pvr_get_slc_cache_line_size(&device->pdevice->dev_info);
 
    struct pvr_tq_frag_sh_reg_layout *sh_reg_layout = &entry_data->sh_reg_layout;
    uint32_t next_free_sh_reg = 0;
@@ -229,6 +229,9 @@ static VkResult pvr_transfer_frag_store_entry_data_compile(
    return VK_SUCCESS;
 }
 
+static uint32_t get_doutu_sample_rate(const struct pvr_device_info *dev_info,
+                                      bool full_rate);
+
 static VkResult pvr_transfer_frag_store_entry_data_create(
    struct pvr_device *device,
    struct pvr_transfer_frag_store *store,
@@ -258,9 +261,8 @@ static VkResult pvr_transfer_frag_store_entry_data_create(
    pvr_pds_setup_doutu(&kick_usc_pds_prog.usc_task_control,
                        dev_addr.addr,
                        num_usc_temps,
-                       shader_props->full_rate
-                          ? ROGUE_PDSINST_DOUTU_SAMPLE_RATE_FULL
-                          : ROGUE_PDSINST_DOUTU_SAMPLE_RATE_INSTANCE,
+                       get_doutu_sample_rate(&device->pdevice->dev_info,
+                                             shader_props->full_rate),
                        false);
 
    pvr_pds_kick_usc(&kick_usc_pds_prog, NULL, 0U, false, PDS_GENERATE_SIZES);
@@ -394,4 +396,15 @@ void pvr_transfer_frag_store_fini(struct pvr_device *device,
    }
 
    _mesa_hash_table_destroy(store->hash_table, NULL);
+}
+
+/* Leave this at the very end, to avoid leakage of HW-defs here */
+#define PVR_BUILD_ARCH_ROGUE
+#include "pvr_csb.h"
+
+static uint32_t get_doutu_sample_rate(const struct pvr_device_info *dev_info,
+                                      bool full_rate)
+{
+   return full_rate ? ROGUE_PDSINST_DOUTU_SAMPLE_RATE_FULL
+                    : ROGUE_PDSINST_DOUTU_SAMPLE_RATE_INSTANCE;
 }

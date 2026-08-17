@@ -28,6 +28,7 @@
 #include "drm-uapi/xe_drm.h"
 
 #include "common/xe/intel_device_query.h"
+#include "common/xe/intel_gem.h"
 
 bool anv_xe_device_destroy_vm(struct anv_device *device)
 {
@@ -43,7 +44,8 @@ bool anv_xe_device_destroy_vm(struct anv_device *device)
 VkResult anv_xe_device_setup_vm(struct anv_device *device)
 {
    struct drm_xe_vm_create create = {
-      .flags = DRM_XE_VM_CREATE_FLAG_SCRATCH_PAGE,
+      .flags = device->physical->has_scratch_page ?
+         DRM_XE_VM_CREATE_FLAG_SCRATCH_PAGE : 0
    };
    if (intel_ioctl(device->fd, DRM_IOCTL_XE_VM_CREATE, &create) != 0)
       return vk_errorf(device, VK_ERROR_INITIALIZATION_FAILED,
@@ -62,19 +64,19 @@ VkResult anv_xe_device_setup_vm(struct anv_device *device)
    return VK_SUCCESS;
 }
 
-static VkQueueGlobalPriorityKHR
+static VkQueueGlobalPriority
 drm_sched_priority_to_vk_priority(enum drm_sched_priority drm_sched_priority)
 {
    switch (drm_sched_priority) {
    case DRM_SCHED_PRIORITY_MIN:
-      return VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
+      return VK_QUEUE_GLOBAL_PRIORITY_LOW;
    case DRM_SCHED_PRIORITY_NORMAL:
-      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR;
+      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM;
    case DRM_SCHED_PRIORITY_HIGH:
-      return VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR;
+      return VK_QUEUE_GLOBAL_PRIORITY_HIGH;
    default:
       UNREACHABLE("Invalid drm_sched_priority");
-      return VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
+      return VK_QUEUE_GLOBAL_PRIORITY_LOW;
    }
 }
 
@@ -173,20 +175,23 @@ anv_xe_physical_device_init_memory_types(struct anv_physical_device *device)
 }
 
 static VkResult
-anv_xe_get_device_status(struct anv_device *device, uint32_t exec_queue_id)
+anv_xe_get_device_status(struct anv_device *device,
+                         struct anv_queue *queue,
+                         uint32_t exec_queue_id)
 {
-   VkResult result = VK_SUCCESS;
    struct drm_xe_exec_queue_get_property exec_queue_get_property = {
       .exec_queue_id = exec_queue_id,
       .property = DRM_XE_EXEC_QUEUE_GET_PROPERTY_BAN,
    };
    int ret = intel_ioctl(device->fd, DRM_IOCTL_XE_EXEC_QUEUE_GET_PROPERTY,
                          &exec_queue_get_property);
+   if (ret == -1)
+      return anv_queue_set_lost(queue, errno, "exec_queue_get_property failed: %m");
 
-   if (ret || exec_queue_get_property.value)
-      result = vk_device_set_lost(&device->vk, "One or more queues banned");
+   if (exec_queue_get_property.value)
+      return anv_queue_set_lost(queue, ECANCELED, "One or more queues banned");
 
-   return result;
+   return VK_SUCCESS;
 }
 
 VkResult
@@ -196,23 +201,36 @@ anv_xe_device_check_status(struct vk_device *vk_device)
    VkResult result = VK_SUCCESS;
 
    for (uint32_t i = 0; i < device->queue_count; i++) {
-      result = anv_xe_get_device_status(device, device->queues[i].exec_queue_id);
+      result = anv_xe_get_device_status(device,
+                                        &device->queues[i],
+                                        device->queues[i].exec_queue_id);
       if (result != VK_SUCCESS)
-         return result;
+         goto done;
 
       if (device->queues[i].companion_rcs_id != 0) {
-         uint32_t exec_queue_id = device->queues[i].companion_rcs_id;
-         result = anv_xe_get_device_status(device, exec_queue_id);
+         result = anv_xe_get_device_status(device,
+                                           &device->queues[i],
+                                           device->queues[i].companion_rcs_id);
          if (result != VK_SUCCESS)
-            return result;
+            goto done;
       }
    }
 
-   if (result != VK_SUCCESS)
-      return result;
-
-   if (INTEL_DEBUG(DEBUG_SHADER_PRINT))
-      result = vk_check_printf_status(vk_device, &device->printf);
+ done:
+   if (anv_needs_printf_buffer()) {
+      VkResult print_result =
+         vk_check_printf_status(vk_device, &device->printf);
+      /* Report the device error if there is one, only report the printf error
+       * if no device error.
+       */
+      result = result != VK_SUCCESS ? result : print_result;
+   }
 
    return result;
+}
+
+struct intel_pagefault_buffer *
+anv_xe_device_alloc_get_vm_faults(struct anv_device *device)
+{
+   return xe_gem_alloc_get_vm_faults(device->fd, device->vm_id);
 }

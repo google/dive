@@ -74,6 +74,7 @@ enum color_transfer_func {
     TRANSFER_FUNC_LINEAR,
     TRANSFER_FUNC_NORMALIZED_PQ,
     TRANSFER_FUNC_HLG,
+    TRANSFER_FUNC_CUSTOM,
 };
 
 enum dither_option {
@@ -122,6 +123,7 @@ enum color_space {
     COLOR_SPACE_2020_RGB_LIMITEDRANGE,
     COLOR_SPACE_2020_YCBCR,
     COLOR_SPACE_2020_YCBCR_LIMITED,
+    COLOR_SPACE_CUSTOM,
     COLOR_SPACE_MAX,
 };
 
@@ -235,7 +237,8 @@ struct color_gamut_data {
 union vpe_3dlut_state {
     struct {
         uint32_t initialized : 1; /*< if 3dlut is went through color module for initialization */
-        uint32_t reserved    : 15;
+        uint32_t is_dma   : 1;
+        uint32_t reserved : 14;
     } bits;
     uint32_t raw;
 };
@@ -245,6 +248,14 @@ struct vpe_3dlut {
     struct tetrahedral_params lut_3d;
     struct fixed31_32         hdr_multiplier;
     union vpe_3dlut_state     state;
+    struct {
+        enum vpe_3dlut_mem_format format;
+        enum vpe_3dlut_mem_layout layout;
+        enum vpe_3dlut_addr_mode  addr_mode;
+        enum vpe_3dlut_crossbar   crossbar_r;
+        enum vpe_3dlut_crossbar   crossbar_g;
+        enum vpe_3dlut_crossbar   crossbar_b;
+    } dma_params;
 
     // the followings are for optimization: skip if no change
     bool                dirty[MAX_3DLUT];        /*< indicate this object is updated or not */
@@ -275,8 +286,8 @@ void vpe_convert_full_range_color_enum(enum color_space *cs);
 enum vpe_status vpe_color_update_whitepoint(
     const struct vpe_priv *vpe_priv, const struct vpe_build_param *param);
 
-enum vpe_status vpe_color_tm_update_hdr_mult(uint16_t shaper_in_exp_max, uint32_t peak_white,
-    struct fixed31_32 *hdr_multiplier, bool enable_3dlut, bool is_fp16);
+enum vpe_status vpe_color_tm_update_hdr_mult(
+    uint32_t peak_white, struct fixed31_32 *hdr_multiplier, bool enable_3dlut, bool is_fp16);
 
 enum vpe_status vpe_color_build_shaper_cs(const struct vpe_tonemap_params *tm_params,
     struct vpe_surface_info *surface_info, struct vpe_color_space *tm_out_cs);
@@ -301,6 +312,11 @@ bool vpe_color_update_degamma_tf(struct vpe_priv *vpe_priv, enum color_transfer_
 
 enum color_range_type vpe_get_range_type(
     enum color_space color_space, enum vpe_surface_pixel_format format);
+
+enum vpe_status vpe_color_setup_dma_lut(
+    struct vpe_3dlut *lut3d_func, struct stream_ctx *stream_ctx);
+
+enum vpe_status vpe_calculate_shaper(struct vpe_priv *vpe_priv, struct stream_ctx *stream_ctx);
 
 #ifdef __cplusplus
 }

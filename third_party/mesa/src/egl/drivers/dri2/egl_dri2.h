@@ -55,6 +55,7 @@ struct wl_drm;
 struct wl_registry;
 struct wl_shm;
 struct wl_surface;
+struct wl_fixes;
 struct zwp_linux_dmabuf_v1;
 struct zwp_linux_dmabuf_feedback_v1;
 #endif
@@ -279,6 +280,7 @@ struct dri2_egl_display {
 #endif
    struct wl_shm *wl_shm;
    struct wl_event_queue *wl_queue;
+   struct wl_fixes *wl_fixes;
    struct zwp_linux_dmabuf_v1 *wl_dmabuf;
    struct wp_presentation *wp_presentation;
    struct dri2_wl_formats formats;
@@ -596,6 +598,7 @@ dri2_set_WL_bind_wayland_display(_EGLDisplay *disp)
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
 
    disp->Extensions.WL_bind_wayland_display =
+      dri2_dpy->fd_render_gpu >= 0 &&
       dri2_dpy->has_dmabuf_import && dri2_dpy->has_dmabuf_export;
 #endif
 }

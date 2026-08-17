@@ -102,10 +102,18 @@ struct ac_ib_parser {
    unsigned cur_dw;
 };
 
+void ac_print_data_dword(FILE *file, uint32_t value, const char *comment);
+void ac_print_named_value(FILE *file, const char *name, uint32_t value, int bits);
+void ac_print_string_value(FILE *file, const char *name, const char *value);
 void ac_dump_reg(FILE *file, enum amd_gfx_level gfx_level, enum radeon_family family,
                  unsigned offset, uint32_t value, uint32_t field_mask);
+uint32_t ac_ib_get(struct ac_ib_parser *ib);
+void ac_ib_handle_address(struct ac_ib_parser *ib, uint32_t addr_lo, uint32_t addr_hi, uint32_t size);
 void ac_parse_ib_chunk(struct ac_ib_parser *ib);
 void ac_parse_ib(struct ac_ib_parser *ib, const char *name);
+
+void ac_dump_texture_descriptor(FILE *output, enum amd_gfx_level gfx_level,
+                                enum radeon_family family, uint32_t desc[8]);
 
 #ifdef __cplusplus
 }

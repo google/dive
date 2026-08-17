@@ -57,7 +57,7 @@ nir_opt_move_block(nir_block *block, nir_move_options options)
    bool progress = false;
    nir_instr *last_instr = nir_block_ends_in_jump(block) ? nir_block_last_instr(block) : NULL;
    const nir_if *iff = nir_block_get_following_if(block);
-   const nir_instr *if_cond_instr = iff ? iff->condition.ssa->parent_instr : NULL;
+   const nir_instr *if_cond_instr = iff ? nir_def_instr(iff->condition.ssa) : NULL;
 
    /* Walk the instructions backwards.
     * The instructions get indexed while iterating.
@@ -88,7 +88,7 @@ nir_opt_move_block(nir_block *block, nir_move_options options)
       const nir_def *def = nir_instr_def(instr);
       nir_instr *first_user = instr == if_cond_instr ? NULL : last_instr;
       nir_foreach_use(use, def) {
-         nir_instr *parent = nir_src_parent_instr(use);
+         nir_instr *parent = nir_src_use_instr(use);
          if (parent->type == nir_instr_type_phi || parent->block != block)
             continue;
          if (!first_user || parent->index > first_user->index)

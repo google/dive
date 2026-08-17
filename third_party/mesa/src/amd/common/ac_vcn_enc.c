@@ -6,10 +6,10 @@
  *
  **************************************************************************/
 
-#include <stdint.h>
 #include <stdbool.h>
 
 #include "ac_vcn_enc.h"
+#include "ac_gpu_info.h"
 
 #define RENCODE_IB_PARAM_SESSION_INFO                                               0x00000001
 #define RENCODE_IB_PARAM_TASK_INFO                                                  0x00000002
@@ -35,11 +35,13 @@
 #define RENCODE_HEVC_IB_PARAM_SLICE_CONTROL                                         0x00100001
 #define RENCODE_HEVC_IB_PARAM_SPEC_MISC                                             0x00100002
 #define RENCODE_HEVC_IB_PARAM_DEBLOCKING_FILTER                                     0x00100003
+#define RENCODE_HEVC_IB_PARAM_SLICE_INFO_VAR                                        0x00100004
 
 #define RENCODE_H264_IB_PARAM_SLICE_CONTROL                                         0x00200001
 #define RENCODE_H264_IB_PARAM_SPEC_MISC                                             0x00200002
 #define RENCODE_H264_IB_PARAM_ENCODE_PARAMS                                         0x00200003
 #define RENCODE_H264_IB_PARAM_DEBLOCKING_FILTER                                     0x00200004
+#define RENCODE_H264_IB_PARAM_SLICE_INFO_VAR                                        0x00200005
 
 #define RENCODE_V2_IB_PARAM_DIRECT_OUTPUT_NALU                                      0x0000000a
 #define RENCODE_V2_IB_PARAM_SLICE_HEADER                                            0x0000000b
@@ -61,7 +63,8 @@
 
 #define RENCODE_V5_IB_PARAM_METADATA_BUFFER                                         0x0000001c
 #define RENCODE_V5_IB_PARAM_ENCODE_CONTEXT_BUFFER_OVERRIDE                          0x0000001d
-#define RENCODE_V5_IB_PARAM_HEVC_ENCODE_PARAMS                                      0x00100004
+#define RENCODE_V5_HEVC_IB_PARAM_ENCODE_PARAMS                                      0x00100004
+#define RENCODE_V5_HEVC_IB_PARAM_SLICE_INFO_VAR                                     0x00100005
 #define RENCODE_V5_AV1_IB_PARAM_TILE_CONFIG                                         0x00300002
 #define RENCODE_V5_AV1_IB_PARAM_BITSTREAM_INSTRUCTION                               0x00300003
 #define RENCODE_V5_AV1_IB_PARAM_ENCODE_PARAMS                                       0x00300004
@@ -116,14 +119,35 @@ void ac_vcn_enc_init_cmds(rvcn_enc_cmd_t *cmd, enum vcn_version version)
       cmd->enc_statistics = RENCODE_V4_IB_PARAM_ENCODE_STATISTICS;
       cmd->spec_misc_av1 = RENCODE_V4_AV1_IB_PARAM_SPEC_MISC;
       cmd->bitstream_instruction_av1 = RENCODE_V4_AV1_IB_PARAM_BITSTREAM_INSTRUCTION;
+      cmd->slice_info_h264 = RENCODE_H264_IB_PARAM_SLICE_INFO_VAR;
+      cmd->slice_info_hevc = RENCODE_HEVC_IB_PARAM_SLICE_INFO_VAR;
    }
 
    if (version >= VCN_5_0_0) {
       cmd->metadata = RENCODE_V5_IB_PARAM_METADATA_BUFFER;
       cmd->ctx_override = RENCODE_V5_IB_PARAM_ENCODE_CONTEXT_BUFFER_OVERRIDE;
-      cmd->enc_params_hevc = RENCODE_V5_IB_PARAM_HEVC_ENCODE_PARAMS;
+      cmd->enc_params_hevc = RENCODE_V5_HEVC_IB_PARAM_ENCODE_PARAMS;
       cmd->tile_config_av1 = RENCODE_V5_AV1_IB_PARAM_TILE_CONFIG;
       cmd->bitstream_instruction_av1 = RENCODE_V5_AV1_IB_PARAM_BITSTREAM_INSTRUCTION;
       cmd->enc_params_av1 = RENCODE_V5_AV1_IB_PARAM_ENCODE_PARAMS;
+      cmd->slice_info_hevc = RENCODE_V5_HEVC_IB_PARAM_SLICE_INFO_VAR;
    }
+}
+
+bool
+ac_vcn_enc_variable_slice_mode_supported(const struct radeon_info *info, bool preencode)
+{
+   if (info->vcn_ip_version >= VCN_5_0_0) {
+      if (preencode)
+         return info->vcn_enc_minor_version > 12 ||
+                (info->vcn_enc_minor_version == 12 && info->vcn_fw_revision >= 0xA);
+      else
+         return info->vcn_enc_minor_version >= 11;
+   } else if (info->vcn_ip_version >= VCN_4_0_0) {
+      if (preencode)
+         return false; /* Need new FW */
+      else
+         return info->vcn_enc_minor_version >= 24;
+   } else
+      return false;
 }

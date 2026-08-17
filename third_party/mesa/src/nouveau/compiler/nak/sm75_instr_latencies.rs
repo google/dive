@@ -121,6 +121,7 @@ impl RegLatencySM75 {
             Op::AL2P(_) => Decoupled,
 
             Op::Mov(_) => CoupledAlu,
+            Op::Movm(_) => Decoupled,
             Op::Sel(_) => CoupledAlu,
             Op::BRev(_) => Decoupled,
             // P2R => CoupledAlu,
@@ -140,7 +141,7 @@ impl RegLatencySM75 {
                 }
             }
             Op::CS2R(cs2r) => {
-                if cs2r.dst.as_reg().unwrap().comps() == 2 {
+                if cs2r.dst.comps() == 2 {
                     CoupledDisp64
                 } else {
                     CoupledAlu
@@ -193,6 +194,7 @@ impl RegLatencySM75 {
             Op::SuAtom(_) => Decoupled,
             Op::PixLd(_) => Decoupled,
             Op::Isberd(_) => Decoupled,
+            Op::Isbewr(_) => Decoupled,
             Op::LdTram(_) => Decoupled,
             Op::Shfl(_) => Decoupled,
             Op::Ldsm(_) => Decoupled,
@@ -868,8 +870,6 @@ impl RegLatencySM75 {
     }
 }
 
-#[allow(non_camel_case_types)]
-#[allow(dead_code)]
 #[derive(Debug)]
 enum URegLatencySM75 {
     Udp,
@@ -926,6 +926,13 @@ impl URegLatencySM75 {
 
             Op::IMad64(_) => vcoupled,
             Op::ISetP(_) => vcoupled,
+            Op::ALd(_)
+            | Op::ASt(_)
+            | Op::Ld(_)
+            | Op::Ldsm(_)
+            | Op::St(_)
+            | Op::Atom(_) => vdecoupled,
+            Op::SuLd(_) | Op::SuSt(_) | Op::SuAtom(_) => vdecoupled,
             Op::Ldc(_) => {
                 if uniform_op {
                     Uldc
@@ -1186,10 +1193,10 @@ pub struct SM75Latency {}
 impl SM75Latency {
     pub fn needs_scoreboards(op: &Op) -> bool {
         if op.is_uniform() {
-            match URegLatencySM75::op_category(op, false, 0) {
-                URegLatencySM75::R2UR => true,
-                _ => false,
-            }
+            matches!(
+                URegLatencySM75::op_category(op, false, 0),
+                URegLatencySM75::R2UR
+            )
         } else {
             match RegLatencySM75::op_category(op, false, 0) {
                 RegLatencySM75::RedirectedFP64 |
@@ -1214,10 +1221,8 @@ impl SM75Latency {
         read: Option<&Op>,
         src_idx: usize,
     ) -> u32 {
-        let dst_file = match &write.dsts_as_slice()[dst_idx] {
-            Dst::None => return 0,
-            Dst::SSA(vec) => vec.file(),
-            Dst::Reg(reg) => reg.file(),
+        let Some(dst_file) = write.dsts_as_slice()[dst_idx].file() else {
+            return 0;
         };
 
         match dst_file {
@@ -1273,10 +1278,8 @@ impl SM75Latency {
     }
 
     pub fn war(read: &Op, src_idx: usize, write: &Op, dst_idx: usize) -> u32 {
-        let dst_file = match &write.dsts_as_slice()[dst_idx] {
-            Dst::None => return 0,
-            Dst::SSA(vec) => vec.file(),
-            Dst::Reg(reg) => reg.file(),
+        let Some(dst_file) = write.dsts_as_slice()[dst_idx].file() else {
+            return 0;
         };
 
         match dst_file {
@@ -1329,10 +1332,8 @@ impl SM75Latency {
         b_dst_idx: usize,
         a_op_pred: bool,
     ) -> u32 {
-        let dst_file = match &a.dsts_as_slice()[a_dst_idx] {
-            Dst::None => return 0,
-            Dst::SSA(vec) => vec.file(),
-            Dst::Reg(reg) => reg.file(),
+        let Some(dst_file) = a.dsts_as_slice()[a_dst_idx].file() else {
+            return 0;
         };
 
         match dst_file {

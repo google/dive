@@ -260,7 +260,6 @@ vbo_exec_wrap_upgrade_vertex(struct vbo_exec_context *exec,
    const GLuint old_vtx_size_no_pos = exec->vtx.vertex_size_no_pos;
    const GLuint old_vtx_size = exec->vtx.vertex_size; /* floats per vertex */
    const GLuint oldSize = exec->vtx.attr[attr].size;
-   GLuint i;
 
    assert(attr < VBO_ATTRIB_MAX);
 
@@ -373,7 +372,7 @@ vbo_exec_wrap_upgrade_vertex(struct vbo_exec_context *exec,
 
       assert(exec->vtx.buffer_ptr == exec->vtx.buffer_map);
 
-      for (i = 0 ; i < exec->vtx.copied.nr ; i++) {
+      for (GLuint i = 0 ; i < exec->vtx.copied.nr ; i++) {
          GLbitfield64 enabled = exec->vtx.enabled;
          while (enabled) {
             const int j = u_bit_scan64(&enabled);
@@ -523,7 +522,7 @@ do {                                                                    \
       unsigned vertex_size_no_pos = exec->vtx.vertex_size_no_pos;       \
                                                                         \
       /* Copy over attributes from exec. */                             \
-      for (unsigned i = 0; i < vertex_size_no_pos; i++)                 \
+      for (unsigned vi = 0; vi < vertex_size_no_pos; vi++)              \
          *dst++ = *src++;                                               \
                                                                         \
       /* Store the position, which is always last and can have 32 or */ \
@@ -648,7 +647,7 @@ _mesa_Materialfv(GLenum face, GLenum pname, const GLfloat *params)
          MAT_ATTR(VBO_ATTRIB_MAT_BACK_SHININESS, 1, params);
       break;
    case GL_COLOR_INDEXES:
-      if (ctx->API != API_OPENGL_COMPAT) {
+      if (!_mesa_is_desktop_gl_compat(ctx)) {
          _mesa_error(ctx, GL_INVALID_ENUM, "glMaterialfv(pname)");
          return;
       }
@@ -685,6 +684,9 @@ vbo_exec_FlushVertices_internal(struct vbo_exec_context *exec, unsigned flags)
    struct gl_context *ctx = gl_context_from_vbo_exec(exec);
 
    if (flags & FLUSH_STORED_VERTICES) {
+      /* Update the flag before entering the flush to prevent re-entering. */
+      ctx->Driver.NeedFlush = 0;
+
       if (exec->vtx.vert_count) {
          vbo_exec_vtx_flush(exec);
       }
@@ -693,19 +695,15 @@ vbo_exec_FlushVertices_internal(struct vbo_exec_context *exec, unsigned flags)
          vbo_exec_copy_to_current(exec);
          vbo_reset_all_attr(ctx);
       }
-
-      /* All done. */
-      ctx->Driver.NeedFlush = 0;
    } else {
       assert(flags == FLUSH_UPDATE_CURRENT);
+      /* Only FLUSH_UPDATE_CURRENT is done. */
+      ctx->Driver.NeedFlush = ~FLUSH_UPDATE_CURRENT;
 
       /* Note that the vertex size is unchanged.
        * (vbo_reset_all_attr isn't called)
        */
       vbo_exec_copy_to_current(exec);
-
-      /* Only FLUSH_UPDATE_CURRENT is done. */
-      ctx->Driver.NeedFlush = ~FLUSH_UPDATE_CURRENT;
    }
 }
 
@@ -863,7 +861,7 @@ _mesa_Begin(GLenum mode)
          ctx->Dispatch.Current = ctx->Dispatch.Exec;
    } else if (ctx->GLApi == ctx->Dispatch.OutsideBeginEnd) {
       ctx->GLApi = ctx->Dispatch.Current = ctx->Dispatch.Exec;
-      _mesa_glapi_set_dispatch(ctx->GLApi);
+      _mesa_set_dispatch(ctx, ctx->GLApi);
    } else {
       assert(ctx->GLApi == ctx->Dispatch.Save);
    }
@@ -926,7 +924,7 @@ _mesa_End(void)
    } else if (ctx->GLApi == ctx->Dispatch.BeginEnd ||
               ctx->GLApi == ctx->Dispatch.HWSelectModeBeginEnd) {
       ctx->GLApi = ctx->Dispatch.Current = ctx->Dispatch.Exec;
-      _mesa_glapi_set_dispatch(ctx->GLApi);
+      _mesa_set_dispatch(ctx, ctx->GLApi);
    }
 
    if (exec->vtx.prim_count > 0) {

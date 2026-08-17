@@ -1,25 +1,7 @@
 /*
  * Copyright (C) 2022 Collabora Ltd.
  * Copyright (C) 2025 Arm Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -31,13 +13,14 @@
 #include "gen_macros.h"
 
 #include "util/bitset.h"
+#include "util/fast_idiv_by_const.h"
 #include "util/u_dynarray.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Before Avalon, RUN_IDVS could use a selector but as we only hardcode the same
+/* Before 5th Gen, RUN_IDVS could use a selector but as we only hardcode the same
  * configuration, we match v12+ naming here */
 
 #if PAN_ARCH <= 11
@@ -115,6 +98,9 @@ struct cs_builder_conf {
 
    /* Number of 32-bit registers used by the kernel at submission time */
    uint8_t nr_kernel_registers;
+
+   /* RUN_COMPUTE.ep_limit. Must be 0 before v12. */
+   uint8_t compute_ep_limit;
 
    /* CS buffer allocator */
    struct cs_buffer (*alloc_buffer)(void *cookie);
@@ -218,6 +204,9 @@ struct cs_builder {
    /* ralloc context used for cs_maybe allocations */
    void *maybe_ctx;
 
+   /* Mask of resources required by this CS. */
+   uint32_t req_resource_mask;
+
    /* Temporary storage for inner blocks that need to be built
     * and copied in one monolithic sequence of instructions with no
     * jump in the middle.
@@ -248,10 +237,11 @@ cs_builder_init(struct cs_builder *b, const struct cs_builder_conf *conf,
                 struct cs_buffer root_buffer)
 {
    memset(b, 0, sizeof(*b));
+   util_dynarray_init(&b->blocks.instrs, NULL);
    b->conf = *conf;
    b->root_chunk.buffer = root_buffer;
    b->cur_chunk.buffer = root_buffer;
-   b->cur_ls_tracker = &b->root_ls_tracker,
+   b->cur_ls_tracker = &b->root_ls_tracker;
 
    memset(b->cur_ls_tracker, 0, sizeof(*b->cur_ls_tracker));
 
@@ -260,7 +250,14 @@ cs_builder_init(struct cs_builder *b, const struct cs_builder_conf *conf,
     */
    b->conf.nr_kernel_registers = MAX2(b->conf.nr_kernel_registers, 3);
 
-   util_dynarray_init(&b->blocks.instrs, NULL);
+   b->blocks.instrs = UTIL_DYNARRAY_INIT;
+}
+
+static inline void
+cs_builder_fini(struct cs_builder *b)
+{
+   util_dynarray_fini(&b->blocks.instrs);
+   ralloc_free(b->maybe_ctx);
 }
 
 static inline bool
@@ -285,7 +282,7 @@ cs_root_chunk_gpu_addr(struct cs_builder *b)
 static inline uint32_t
 cs_root_chunk_size(struct cs_builder *b)
 {
-   /* Make sure cs_finish() was called. */
+   /* Make sure cs_end() was called. */
    struct cs_chunk empty_chunk;
    memset(&empty_chunk, 0, sizeof(empty_chunk));
    assert(!memcmp(&b->cur_chunk, &empty_chunk, sizeof(b->cur_chunk)));
@@ -295,7 +292,7 @@ cs_root_chunk_size(struct cs_builder *b)
 
 /*
  * Wrap the current queue. External users shouldn't call this function
- * directly, they should call cs_finish() when they are done building
+ * directly, they should call cs_end() when they are done building
  * the command stream, which will in turn call cs_wrap_queue().
  *
  * Internally, this is also used to finalize internal CS chunks when
@@ -486,31 +483,26 @@ cs_overflow_length_reg(struct cs_builder *b)
 }
 
 static inline struct cs_index
-cs_extract32(struct cs_builder *b, struct cs_index idx, unsigned word)
+cs_extract_tuple(struct cs_builder *b, struct cs_index idx, unsigned word,
+                 unsigned size)
 {
    assert(idx.type == CS_INDEX_REGISTER && "unsupported");
-   assert(word < idx.size && "overrun");
+   assert(word + size <= idx.size && "overrun");
 
-   return cs_reg32(b, idx.reg + word);
+   return cs_reg_tuple(b, idx.reg + word, size);
+}
+
+static inline struct cs_index
+cs_extract32(struct cs_builder *b, struct cs_index idx, unsigned word)
+{
+   return cs_extract_tuple(b, idx, word, 1);
 }
 
 static inline struct cs_index
 cs_extract64(struct cs_builder *b, struct cs_index idx, unsigned word)
 {
-   assert(idx.type == CS_INDEX_REGISTER && "unsupported");
-   assert(word + 1 < idx.size && "overrun");
-
-   return cs_reg64(b, idx.reg + word);
-}
-
-static inline struct cs_index
-cs_extract_tuple(struct cs_builder *b, struct cs_index idx, unsigned word,
-                 unsigned size)
-{
-   assert(idx.type == CS_INDEX_REGISTER && "unsupported");
-   assert(word + size < idx.size && "overrun");
-
-   return cs_reg_tuple(b, idx.reg + word, size);
+   assert(!(word & 1) && "not properly aligned");
+   return cs_extract_tuple(b, idx, word, 2);
 }
 
 static inline struct cs_block *
@@ -753,7 +745,7 @@ cs_alloc_ins(struct cs_builder *b)
  * it for submission.
  */
 static inline void
-cs_finish(struct cs_builder *b)
+cs_end(struct cs_builder *b)
 {
    if (!cs_is_valid(b))
       return;
@@ -763,9 +755,6 @@ cs_finish(struct cs_builder *b)
 
    /* This prevents adding instructions after that point. */
    memset(&b->cur_chunk, 0, sizeof(b->cur_chunk));
-
-   util_dynarray_fini(&b->blocks.instrs);
-   ralloc_free(b->maybe_ctx);
 }
 
 /*
@@ -836,7 +825,11 @@ cs_instr_is_asynchronous(enum mali_cs_opcode opcode, uint16_t wait_mask)
    case MALI_CS_OPCODE_STORE_MULTIPLE:
    case MALI_CS_OPCODE_RUN_COMPUTE:
    case MALI_CS_OPCODE_RUN_COMPUTE_INDIRECT:
+#if PAN_ARCH >= 14
+   case MALI_CS_OPCODE_RUN_FRAGMENT2:
+#else
    case MALI_CS_OPCODE_RUN_FRAGMENT:
+#endif
    case MALI_CS_OPCODE_RUN_FULLSCREEN:
 #if PAN_ARCH >= 12
    case MALI_CS_OPCODE_RUN_IDVS2:
@@ -1458,7 +1451,7 @@ cs_maybe_end(struct cs_builder *b, struct cs_maybe_state *state,
         __state != NULL; cs_maybe_end(__b, __state, __maybe),                  \
         __state = NULL)
 
-/* Must be called before cs_finish */
+/* Must be called before cs_end */
 static inline void
 cs_patch_maybe(struct cs_builder *b, struct cs_maybe *maybe)
 {
@@ -1511,6 +1504,13 @@ cs_shader_res_sel(uint8_t srt, uint8_t fau, uint8_t spd, uint8_t tsd)
    };
 }
 
+enum cs_res_id {
+   CS_COMPUTE_RES = BITFIELD_BIT(0),
+   CS_FRAG_RES = BITFIELD_BIT(1),
+   CS_TILER_RES = BITFIELD_BIT(2),
+   CS_IDVS_RES = BITFIELD_BIT(3),
+};
+
 static inline void
 cs_run_compute(struct cs_builder *b, unsigned task_increment,
                enum mali_task_axis task_axis, struct cs_shader_res_sel res_sel)
@@ -1518,9 +1518,16 @@ cs_run_compute(struct cs_builder *b, unsigned task_increment,
    /* Staging regs */
    cs_flush_loads(b);
 
+   b->req_resource_mask |= CS_COMPUTE_RES;
+
    cs_emit(b, RUN_COMPUTE, I) {
       I.task_increment = task_increment;
       I.task_axis = task_axis;
+#if PAN_ARCH >= 12
+      I.ep_limit = b->conf.compute_ep_limit;
+#else
+      assert(b->conf.compute_ep_limit == 0);
+#endif
       I.srt_select = res_sel.srt;
       I.spd_select = res_sel.spd;
       I.tsd_select = res_sel.tsd;
@@ -1535,6 +1542,8 @@ cs_run_tiling(struct cs_builder *b, uint32_t flags_override,
 {
    /* Staging regs */
    cs_flush_loads(b);
+
+   b->req_resource_mask |= CS_TILER_RES;
 
    cs_emit(b, RUN_TILING, I) {
       I.flags_override = flags_override;
@@ -1554,6 +1563,8 @@ cs_run_idvs2(struct cs_builder *b, uint32_t flags_override, bool malloc_enable,
 {
    /* Staging regs */
    cs_flush_loads(b);
+
+   b->req_resource_mask |= CS_IDVS_RES;
 
    cs_emit(b, RUN_IDVS2, I) {
       I.flags_override = flags_override;
@@ -1576,6 +1587,8 @@ cs_run_idvs(struct cs_builder *b, uint32_t flags_override, bool malloc_enable,
 {
    /* Staging regs */
    cs_flush_loads(b);
+
+   b->req_resource_mask |= CS_IDVS_RES;
 
    cs_emit(b, RUN_IDVS, I) {
       I.flags_override = flags_override;
@@ -1606,6 +1619,22 @@ cs_run_idvs(struct cs_builder *b, uint32_t flags_override, bool malloc_enable,
 }
 #endif
 
+#if PAN_ARCH >= 14
+static inline void
+cs_run_fragment2(struct cs_builder *b, bool enable_tem,
+                 enum mali_tile_render_order tile_order)
+{
+   /* Staging regs */
+   cs_flush_loads(b);
+
+   b->req_resource_mask |= CS_FRAG_RES;
+
+   cs_emit(b, RUN_FRAGMENT2, I) {
+      I.enable_tem = enable_tem;
+      I.tile_order = tile_order;
+   }
+}
+#else
 static inline void
 cs_run_fragment(struct cs_builder *b, bool enable_tem,
                 enum mali_tile_render_order tile_order)
@@ -1613,11 +1642,14 @@ cs_run_fragment(struct cs_builder *b, bool enable_tem,
    /* Staging regs */
    cs_flush_loads(b);
 
+   b->req_resource_mask |= CS_FRAG_RES;
+
    cs_emit(b, RUN_FRAGMENT, I) {
       I.enable_tem = enable_tem;
       I.tile_order = tile_order;
    }
 }
+#endif
 
 static inline void
 cs_run_fullscreen(struct cs_builder *b, uint32_t flags_override,
@@ -1625,6 +1657,8 @@ cs_run_fullscreen(struct cs_builder *b, uint32_t flags_override,
 {
    /* Staging regs */
    cs_flush_loads(b);
+
+   b->req_resource_mask |= CS_TILER_RES;
 
    cs_emit(b, RUN_FULLSCREEN, I) {
       I.flags_override = flags_override;
@@ -1635,6 +1669,8 @@ cs_run_fullscreen(struct cs_builder *b, uint32_t flags_override,
 static inline void
 cs_finish_tiling(struct cs_builder *b)
 {
+   b->req_resource_mask |= CS_TILER_RES;
+
    cs_emit(b, FINISH_TILING, I)
       ;
 }
@@ -1654,8 +1690,8 @@ cs_finish_fragment(struct cs_builder *b, bool increment_frag_completed,
 }
 
 static inline void
-cs_add32(struct cs_builder *b, struct cs_index dest, struct cs_index src,
-         int32_t imm)
+cs_add_imm32(struct cs_builder *b, struct cs_index dest, struct cs_index src,
+             int32_t imm)
 {
    cs_emit(b, ADD_IMM32, I) {
       I.destination = cs_dst32(b, dest);
@@ -1665,8 +1701,8 @@ cs_add32(struct cs_builder *b, struct cs_index dest, struct cs_index src,
 }
 
 static inline void
-cs_add64(struct cs_builder *b, struct cs_index dest, struct cs_index src,
-         int32_t imm)
+cs_add_imm64(struct cs_builder *b, struct cs_index dest, struct cs_index src,
+             int32_t imm)
 {
    cs_emit(b, ADD_IMM64, I) {
       I.destination = cs_dst64(b, dest);
@@ -1676,47 +1712,67 @@ cs_add64(struct cs_builder *b, struct cs_index dest, struct cs_index src,
 }
 
 static inline void
-cs_umin32(struct cs_builder *b, struct cs_index dest, struct cs_index src1,
-          struct cs_index src2)
+cs_umin32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+          struct cs_index src1)
 {
    cs_emit(b, UMIN32, I) {
       I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
       I.source_1 = cs_src32(b, src1);
-      I.source_0 = cs_src32(b, src2);
    }
+}
+
+static inline void
+cs_move_reg32(struct cs_builder *b, struct cs_index dest, struct cs_index src)
+{
+#if PAN_ARCH >= 11
+   cs_emit(b, MOVE_REG32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source = cs_src32(b, src);
+   }
+#else
+   cs_add_imm32(b, dest, src, 0);
+#endif
+}
+
+static inline void
+cs_move_reg64(struct cs_builder *b, struct cs_index dest, struct cs_index src)
+{
+   cs_move_reg32(b, cs_extract32(b, dest, 0), cs_extract32(b, src, 0));
+   cs_move_reg32(b, cs_extract32(b, dest, 1), cs_extract32(b, src, 1));
 }
 
 #if PAN_ARCH >= 11
 static inline void
-cs_and32(struct cs_builder *b, struct cs_index dest, struct cs_index src1,
-         struct cs_index src2)
+cs_and32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+         struct cs_index src1)
 {
    cs_emit(b, AND32, I) {
       I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
       I.source_1 = cs_src32(b, src1);
-      I.source_0 = cs_src32(b, src2);
    }
 }
 
 static inline void
-cs_or32(struct cs_builder *b, struct cs_index dest, struct cs_index src1,
-        struct cs_index src2)
+cs_or32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+        struct cs_index src1)
 {
    cs_emit(b, OR32, I) {
       I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
       I.source_1 = cs_src32(b, src1);
-      I.source_0 = cs_src32(b, src2);
    }
 }
 
 static inline void
-cs_xor32(struct cs_builder *b, struct cs_index dest, struct cs_index src1,
-         struct cs_index src2)
+cs_xor32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+         struct cs_index src1)
 {
    cs_emit(b, XOR32, I) {
       I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
       I.source_1 = cs_src32(b, src1);
-      I.source_0 = cs_src32(b, src2);
    }
 }
 
@@ -1730,33 +1786,24 @@ cs_not32(struct cs_builder *b, struct cs_index dest, struct cs_index src)
 }
 
 static inline void
-cs_bit_set32(struct cs_builder *b, struct cs_index dest, struct cs_index src1,
-             struct cs_index src2)
+cs_bit_set32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+             struct cs_index src1)
 {
    cs_emit(b, BIT_SET32, I) {
       I.destination = cs_dst32(b, dest);
-      I.source_0 = cs_src32(b, src1);
-      I.source_1 = cs_src32(b, src2);
+      I.source_0 = cs_src32(b, src0);
+      I.source_1 = cs_src32(b, src1);
    }
 }
 
 static inline void
-cs_bit_clear32(struct cs_builder *b, struct cs_index dest, struct cs_index src1,
-               struct cs_index src2)
+cs_bit_clear32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+               struct cs_index src1)
 {
    cs_emit(b, BIT_CLEAR32, I) {
       I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
       I.source_1 = cs_src32(b, src1);
-      I.source_0 = cs_src32(b, src2);
-   }
-}
-
-static inline void
-cs_move_reg32(struct cs_builder *b, struct cs_index dest, struct cs_index src)
-{
-   cs_emit(b, MOVE_REG32, I) {
-      I.destination = cs_dst32(b, dest);
-      I.source = cs_src32(b, src);
    }
 }
 
@@ -1791,6 +1838,260 @@ cs_wait_indirect(struct cs_builder *b)
    cs_emit(b, WAIT, I) {
       I.wait_mode = MALI_CS_WAIT_MODE_INDIRECT;
    }
+}
+#endif
+
+#if PAN_ARCH >= 13
+static inline void
+cs_add32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+         struct cs_index src1)
+{
+   cs_emit(b, ADD32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
+      I.source_1 = cs_src32(b, src1);
+   }
+}
+
+static inline void
+cs_sub32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+         struct cs_index src1)
+{
+   cs_emit(b, SUB32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
+      I.source_1 = cs_src32(b, src1);
+   }
+}
+
+static inline void
+cs_add64(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+         struct cs_index src1)
+{
+   cs_emit(b, ADD64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source_0 = cs_src64(b, src0);
+      I.source_1 = cs_src64(b, src1);
+   }
+}
+
+static inline void
+cs_sub64(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+         struct cs_index src1)
+{
+   cs_emit(b, SUB64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source_0 = cs_src64(b, src0);
+      I.source_1 = cs_src64(b, src1);
+   }
+}
+
+static inline void
+cs_lshift_imm32(struct cs_builder *b, struct cs_index dest, struct cs_index src,
+                uint8_t imm)
+{
+   cs_emit(b, LSHIFT_IMM32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source = cs_src32(b, src);
+      I.shift_amount = imm;
+   }
+}
+
+static inline void
+cs_lshift32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+            struct cs_index src1)
+{
+   cs_emit(b, LSHIFT32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
+      I.source_1 = cs_src32(b, src1);
+   }
+}
+
+static inline void
+cs_rshift_imm_u32(struct cs_builder *b, struct cs_index dest,
+                  struct cs_index src, uint8_t imm)
+{
+   cs_emit(b, RSHIFT_IMM_U32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source = cs_src32(b, src);
+      I.shift_amount = imm;
+   }
+}
+
+static inline void
+cs_rshift_imm_s32(struct cs_builder *b, struct cs_index dest,
+                  struct cs_index src, int8_t imm)
+{
+   cs_emit(b, RSHIFT_IMM_S32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source = cs_src32(b, src);
+      I.shift_amount = imm;
+   }
+}
+
+
+static inline void
+cs_rshift_u32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+              struct cs_index src1)
+{
+   cs_emit(b, RSHIFT_U32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
+      I.source_1 = cs_src32(b, src1);
+   }
+}
+
+static inline void
+cs_rshift_s32(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+              struct cs_index src1)
+{
+   cs_emit(b, RSHIFT_S32, I) {
+      I.destination = cs_dst32(b, dest);
+      I.source_0 = cs_src32(b, src0);
+      I.source_1 = cs_src32(b, src1);
+   }
+}
+
+static inline void
+cs_lshift_imm64(struct cs_builder *b, struct cs_index dest, struct cs_index src,
+                uint8_t imm)
+{
+   cs_emit(b, LSHIFT_IMM64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source = cs_src64(b, src);
+      I.shift_amount = imm;
+   }
+}
+
+static inline void
+cs_lshift64(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+            struct cs_index src1)
+{
+   cs_emit(b, LSHIFT64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source_0 = cs_src64(b, src0);
+      I.source_1 = cs_src64(b, src1);
+   }
+}
+
+static inline void
+cs_rshift_imm_u64(struct cs_builder *b, struct cs_index dest,
+                  struct cs_index src, uint8_t imm)
+{
+   cs_emit(b, RSHIFT_IMM_U64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source = cs_src64(b, src);
+      I.shift_amount = imm;
+   }
+}
+
+static inline void
+cs_rshift_imm_s64(struct cs_builder *b, struct cs_index dest,
+                  struct cs_index src, int8_t imm)
+{
+   cs_emit(b, RSHIFT_IMM_S64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source = cs_src64(b, src);
+      I.shift_amount = imm;
+   }
+}
+
+
+static inline void
+cs_rshift_u64(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+              struct cs_index src1)
+{
+   cs_emit(b, RSHIFT_U64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source_0 = cs_src64(b, src0);
+      I.source_1 = cs_src64(b, src1);
+   }
+}
+
+static inline void
+cs_rshift_s64(struct cs_builder *b, struct cs_index dest, struct cs_index src0,
+              struct cs_index src1)
+{
+   cs_emit(b, RSHIFT_S64, I) {
+      I.destination = cs_dst64(b, dest);
+      I.source_0 = cs_src64(b, src0);
+      I.source_1 = cs_src64(b, src1);
+   }
+}
+
+/* reg64 * imm64 -> reg64 multiply */
+static inline void
+cs_umul64(struct cs_builder *b, struct cs_index dest, struct cs_index src,
+          uint64_t imm)
+{
+   /* src and dest registers must be different in order for the accumulation
+    * loop to work */
+   assert(memcmp(&dest, &src, sizeof(dest)) != 0);
+
+   if (imm == 0) {
+      cs_move64_to(b, dest, 0);
+      return;
+   }
+
+   /* Reverse bitscan */
+   bool first = true;
+   while (imm != 0) {
+      unsigned bit = util_last_bit64(imm) - 1;
+      imm &= ~(1 << bit);
+      unsigned next_bit = util_last_bit64(imm) == 0 ?
+         0 : util_last_bit64(imm) - 1;
+
+      if (first) {
+         cs_lshift_imm64(b, dest, src, bit - next_bit);
+         first = false;
+      } else {
+         cs_add64(b, dest, dest, src);
+         if (bit - next_bit > 0)
+            cs_lshift_imm64(b, dest, dest, bit - next_bit);
+      }
+   }
+}
+
+/* Needs 4 scratch registers */
+static inline void
+cs_udiv32(struct cs_builder *b, struct cs_index dest, struct cs_index src,
+          uint32_t imm, struct cs_index scratch)
+{
+   assert(scratch.size >= 4);
+   assert(imm != 0);
+
+   /* Fast path for power-of-two divisors */
+   if (util_is_power_of_two_nonzero(imm)) {
+      cs_rshift_imm_u32(b, dest, src, util_logbase2(imm));
+      return;
+   }
+
+   struct util_fast_udiv_info info = util_compute_fast_udiv_info(imm, 32, 32);
+
+   struct cs_index mul_src = cs_extract64(b, scratch, 0);
+   struct cs_index mul_src_lo = cs_extract32(b, scratch, 0);
+   struct cs_index mul_src_hi = cs_extract32(b, scratch, 1);
+
+   struct cs_index mul_dest = cs_extract64(b, scratch, 2);
+   struct cs_index mul_dest_hi = cs_extract32(b, mul_dest, 1);
+
+   if (info.pre_shift)
+      cs_rshift_imm_u32(b, mul_src_lo, src, info.pre_shift);
+
+   if (info.increment != 0)
+      cs_add_imm32(b, mul_src_lo, info.pre_shift ? mul_src_lo : src,
+                   info.increment);
+
+   if (!info.pre_shift && !(info.increment != 0))
+      cs_move_reg32(b, mul_src_lo, src);
+   cs_move32_to(b, mul_src_hi, 0);
+
+   cs_umul64(b, mul_dest, mul_src, info.multiplier);
+
+   /* (mul_dest << 32) implemented by taking the high register */
+
+   cs_rshift_imm_u32(b, dest, mul_dest_hi, info.post_shift);
 }
 #endif
 
@@ -1900,14 +2201,15 @@ cs_set_state_imm32(struct cs_builder *b, enum mali_cs_set_state_type state,
 
 /*
  * Select which scoreboard entry will track endpoint tasks.
- * On v10, this also set other endpoint to SB0.
+ * On v10, this also set the "other" SB to the ls_sb_slot passed at config
+ * time, because there's no way to set those things independently.
  * Pass to cs_wait to wait later.
  */
 static inline void
-cs_select_sb_entries_for_async_ops(struct cs_builder *b, unsigned ep)
+cs_select_endpoint_sb(struct cs_builder *b, unsigned ep)
 {
 #if PAN_ARCH == 10
-   cs_set_scoreboard_entry(b, ep, 0);
+   cs_set_scoreboard_entry(b, ep, b->conf.ls_sb_slot);
 #else
    cs_set_state_imm32(b, MALI_CS_SET_STATE_TYPE_SB_SEL_ENDPOINT, ep);
 #endif
@@ -1942,13 +2244,6 @@ cs_jump(struct cs_builder *b, struct cs_index address, struct cs_index length)
       I.length = cs_src32(b, length);
    }
 }
-
-enum cs_res_id {
-   CS_COMPUTE_RES = BITFIELD_BIT(0),
-   CS_FRAG_RES = BITFIELD_BIT(1),
-   CS_TILER_RES = BITFIELD_BIT(2),
-   CS_IDVS_RES = BITFIELD_BIT(3),
-};
 
 static inline void
 cs_req_res(struct cs_builder *b, uint32_t res_mask)
@@ -2049,8 +2344,15 @@ cs_run_compute_indirect(struct cs_builder *b, unsigned wg_per_task,
    /* Staging regs */
    cs_flush_loads(b);
 
+   b->req_resource_mask |= CS_COMPUTE_RES;
+
    cs_emit(b, RUN_COMPUTE_INDIRECT, I) {
       I.workgroups_per_task = wg_per_task;
+#if PAN_ARCH >= 12
+      I.ep_limit = b->conf.compute_ep_limit;
+#else
+      assert(b->conf.compute_ep_limit == 0);
+#endif
       I.srt_select = res_sel.srt;
       I.spd_select = res_sel.spd;
       I.tsd_select = res_sel.tsd;
@@ -2177,7 +2479,7 @@ cs_match_case(struct cs_builder *b, struct cs_match *match, uint32_t id)
    }
 
    if (id)
-      cs_add32(b, match->scratch_reg, match->val, -id);
+      cs_add_imm32(b, match->scratch_reg, match->val, -id);
 
    cs_branch_label(b, &match->next_case_label, MALI_CS_CONDITION_NEQUAL,
                    id ? match->scratch_reg : match->val);
@@ -2424,7 +2726,7 @@ static inline void
 cs_trace_preamble(struct cs_builder *b, const struct cs_tracing_ctx *ctx,
                   struct cs_index scratch_regs, unsigned trace_size)
 {
-   assert(trace_size > 0 && ALIGN_POT(trace_size, 64) == trace_size &&
+   assert(trace_size > 0 && util_is_aligned(trace_size, 64) &&
           trace_size < INT16_MAX);
    assert(scratch_regs.size >= 4 && !(scratch_regs.reg & 1));
 
@@ -2434,7 +2736,7 @@ cs_trace_preamble(struct cs_builder *b, const struct cs_tracing_ctx *ctx,
     * access. Use cs_trace_field_offset() to get an offset taking this
     * pre-increment into account. */
    cs_load64_to(b, tracebuf_addr, ctx->ctx_reg, ctx->tracebuf_addr_offset);
-   cs_add64(b, tracebuf_addr, tracebuf_addr, trace_size);
+   cs_add_imm64(b, tracebuf_addr, tracebuf_addr, trace_size);
    cs_store64(b, tracebuf_addr, ctx->ctx_reg, ctx->tracebuf_addr_offset);
    cs_flush_stores(b);
 }
@@ -2443,6 +2745,53 @@ cs_trace_preamble(struct cs_builder *b, const struct cs_tracing_ctx *ctx,
    (int16_t)(offsetof(struct cs_##__type##_trace, __field) -                   \
              sizeof(struct cs_##__type##_trace))
 
+#if PAN_ARCH >= 14
+#define CS_RUN_FRAGMENT2_SR_COUNT 56
+#define CS_RUN_FRAGMENT2_SR_MASK  BITFIELD64_RANGE(0, CS_RUN_FRAGMENT2_SR_COUNT)
+struct cs_run_fragment2_trace {
+   uint64_t ip;
+   uint32_t sr[CS_RUN_FRAGMENT2_SR_COUNT];
+} __attribute__((aligned(64)));
+
+static inline void
+cs_trace_run_fragment2(struct cs_builder *b, const struct cs_tracing_ctx *ctx,
+                       struct cs_index scratch_regs, bool enable_tem,
+                       enum mali_tile_render_order tile_order)
+{
+   if (likely(!ctx->enabled)) {
+      cs_run_fragment2(b, enable_tem, tile_order);
+      return;
+   }
+
+   struct cs_index tracebuf_addr = cs_reg64(b, scratch_regs.reg);
+   struct cs_index data = cs_reg64(b, scratch_regs.reg + 2);
+
+   cs_trace_preamble(b, ctx, scratch_regs,
+                     sizeof(struct cs_run_fragment2_trace));
+
+   /* cs_run_xx() must immediately follow cs_load_ip_to() otherwise the IP
+    * won't point to the right instruction. */
+   cs_load_ip_to(b, data);
+   cs_run_fragment2(b, enable_tem, tile_order);
+   cs_store64(b, data, tracebuf_addr, cs_trace_field_offset(run_fragment2, ip));
+
+   ASSERTED unsigned sr_count = 0;
+   unsigned sr_offset = cs_trace_field_offset(run_fragment2, sr);
+   for (unsigned i = 0; i < CS_RUN_FRAGMENT2_SR_COUNT; i += 16) {
+      unsigned mask = (CS_RUN_FRAGMENT2_SR_MASK >> i) & BITFIELD_MASK(16);
+      if (!mask)
+         continue;
+
+      cs_store(b, cs_reg_tuple(b, i, util_last_bit(mask)), tracebuf_addr, mask,
+               sr_offset);
+      sr_offset += util_bitcount(mask) * sizeof(uint32_t);
+      sr_count += util_bitcount(mask);
+   }
+   assert(sr_count == CS_RUN_FRAGMENT2_SR_COUNT);
+
+   cs_flush_stores(b);
+}
+#else
 struct cs_run_fragment_trace {
    uint64_t ip;
    uint32_t sr[7];
@@ -2472,6 +2821,70 @@ cs_trace_run_fragment(struct cs_builder *b, const struct cs_tracing_ctx *ctx,
 
    cs_store(b, cs_reg_tuple(b, 40, 7), tracebuf_addr, BITFIELD_MASK(7),
             cs_trace_field_offset(run_fragment, sr));
+   cs_flush_stores(b);
+}
+#endif
+
+#if PAN_ARCH >= 13
+#define CS_RUN_FULLSCREEN_SR_MASK \
+   (BITFIELD64_RANGE(40, 4) | BITFIELD64_RANGE(56, 4) | BITFIELD64_RANGE(61, 3))
+#define CS_RUN_FULLSCREEN_SR_COUNT 11
+#elif PAN_ARCH >= 11
+#define CS_RUN_FULLSCREEN_SR_MASK \
+   (BITFIELD64_RANGE(40, 4) | BITFIELD64_BIT(56) | BITFIELD64_RANGE(61, 3))
+#define CS_RUN_FULLSCREEN_SR_COUNT 8
+#else
+#define CS_RUN_FULLSCREEN_SR_MASK \
+   (BITFIELD64_RANGE(40, 4) | BITFIELD64_BIT(56))
+#define CS_RUN_FULLSCREEN_SR_COUNT 5
+#endif
+
+struct cs_run_fullscreen_trace {
+   uint64_t ip;
+   uint64_t dcd;
+   uint32_t sr[CS_RUN_FULLSCREEN_SR_COUNT];
+} __attribute__((aligned(64)));
+
+static inline void
+cs_trace_run_fullscreen(struct cs_builder *b, const struct cs_tracing_ctx *ctx,
+                        struct cs_index scratch_regs, uint32_t flags_override,
+                        struct cs_index dcd)
+{
+   if (likely(!ctx->enabled)) {
+      cs_run_fullscreen(b, flags_override, dcd);
+      return;
+   }
+
+   struct cs_index tracebuf_addr = cs_reg64(b, scratch_regs.reg);
+   struct cs_index data = cs_reg64(b, scratch_regs.reg + 2);
+
+   cs_trace_preamble(b, ctx, scratch_regs,
+                     sizeof(struct cs_run_fullscreen_trace));
+
+   /* cs_run_xx() must immediately follow cs_load_ip_to() otherwise the IP
+    * won't point to the right instruction. */
+   cs_load_ip_to(b, data);
+   cs_run_fullscreen(b, flags_override, dcd);
+   cs_store64(b, data, tracebuf_addr,
+              cs_trace_field_offset(run_fullscreen, ip));
+
+   cs_store64(b, dcd, tracebuf_addr,
+              cs_trace_field_offset(run_fullscreen, dcd));
+
+   ASSERTED unsigned sr_count = 0;
+   unsigned sr_offset = cs_trace_field_offset(run_fullscreen, sr);
+   for (unsigned i = 0; i < 64; i += 16) {
+      unsigned mask = (CS_RUN_FULLSCREEN_SR_MASK >> i) & BITFIELD_MASK(16);
+      if (!mask)
+         continue;
+
+      cs_store(b, cs_reg_tuple(b, i, util_last_bit(mask)),
+               tracebuf_addr, mask, sr_offset);
+      sr_offset += util_bitcount(mask) * sizeof(uint32_t);
+      sr_count += util_bitcount(mask);
+   }
+   assert(sr_count == CS_RUN_FULLSCREEN_SR_COUNT);
+
    cs_flush_stores(b);
 }
 
@@ -2668,11 +3081,11 @@ cs_single_link_list_add_tail(struct cs_builder *b, struct cs_index list_base,
    /* If the list is empty (head == NULL), set the head, otherwise append to the
     * last node. */
    cs_if(b, MALI_CS_CONDITION_EQUAL, head)
-      cs_add64(b, head, new_node_gpu, 0);
+      cs_add_imm64(b, head, new_node_gpu, 0);
    cs_else(b)
       cs_store64(b, new_node_gpu, tail, offset_next);
 
-   cs_add64(b, tail, new_node_gpu, 0);
+   cs_add_imm64(b, tail, new_node_gpu, 0);
    cs_store(b, head_tail, list_base, BITFIELD_MASK(4), list_offset);
    cs_flush_stores(b);
 }

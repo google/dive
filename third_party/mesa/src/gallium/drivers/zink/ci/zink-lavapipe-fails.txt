@@ -106,9 +106,12 @@ spec@arb_sample_shading@samplemask 8 all@noms mask_in_one,Fail
 spec@arb_sample_shading@samplemask 8 all@noms partition,Fail
 spec@arb_sample_shading@samplemask 8 all@sample mask_in_one,Fail
 spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgrad,Fail
-spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgradcube,Fail
 
-spec@egl 1.4@egl-ext_egl_image_storage,Fail
+# https://gitlab.freedesktop.org/mesa/mesa/-/issues/14988
+spec@egl 1.4@eglcreatepbuffersurface and then glclear,Crash
+spec@egl 1.4@largest possible eglcreatepbuffersurface and then glclear,Crash
+spec@egl_nok_texture_from_pixmap@basic,Crash
+
 spec@egl 1.4@eglterminate then unbind context,Fail
 spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_depth_component24,Fail
 spec@egl_khr_surfaceless_context@viewport,Fail
@@ -119,27 +122,10 @@ spec@ext_framebuffer_multisample@accuracy 8 srgb depthstencil,Fail
 spec@ext_framebuffer_multisample@accuracy 8 srgb depthstencil linear,Fail
 spec@ext_framebuffer_multisample@accuracy all_samples srgb depthstencil,Fail
 spec@ext_framebuffer_multisample@accuracy all_samples srgb depthstencil linear,Fail
-spec@ext_framebuffer_multisample@enable-flag,Fail
-spec@ext_framebuffer_multisample@interpolation 2 centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 2 centroid-disabled,Fail
 spec@ext_framebuffer_multisample@interpolation 2 centroid-edges,Fail
-spec@ext_framebuffer_multisample@interpolation 2 non-centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 2 non-centroid-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 centroid-disabled,Fail
 spec@ext_framebuffer_multisample@interpolation 4 centroid-edges,Fail
-spec@ext_framebuffer_multisample@interpolation 4 non-centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 non-centroid-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 6 centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 6 centroid-disabled,Fail
 spec@ext_framebuffer_multisample@interpolation 6 centroid-edges,Fail
-spec@ext_framebuffer_multisample@interpolation 6 non-centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 6 non-centroid-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 8 centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 8 centroid-disabled,Fail
 spec@ext_framebuffer_multisample@interpolation 8 centroid-edges,Fail
-spec@ext_framebuffer_multisample@interpolation 8 non-centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 8 non-centroid-disabled,Fail
 
 spec@khr_texture_compression_astc@miptree-gl srgb-fp,Fail
 spec@khr_texture_compression_astc@miptree-gl srgb-fp@sRGB decode full precision,Fail
@@ -160,8 +146,8 @@ spec@ext_transform_feedback@tessellation quads wireframe,Fail
 # Debian 12 CI update, see https://gitlab.freedesktop.org/mesa/mesa/-/issues/9072
 spec@ext_transform_feedback@tessellation quad_strip wireframe,Fail
 
-# uprev Piglit in Mea
-spec@ext_image_dma_buf_import@ext_image_dma_buf_import-export-tex,Fail
+# uprev Piglit in Mesa
+glx@glx-make-current,Fail
 spec@khr_texture_compression_astc@sliced-3d-miptree-gles srgb-fp,Fail
 spec@khr_texture_compression_astc@sliced-3d-miptree-gles srgb-fp@sRGB decode full precision,Fail
 

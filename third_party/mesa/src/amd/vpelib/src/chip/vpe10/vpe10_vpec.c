@@ -1,4 +1,4 @@
-/* Copyright 2022 Advanced Micro Devices, Inc.
+/* Copyright 2022-2025 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,8 @@
 #include "vpe10_vpec.h"
 
 static struct vpec_funcs vpec_funcs = {
-    .check_swmode_support    = vpe10_vpec_check_swmode_support,
+    .check_input_swmode_support  = vpe10_vpec_check_swmode_support,
+    .check_output_swmode_support = vpe10_vpec_check_swmode_support,
 };
 
 void vpe10_construct_vpec(struct vpe_priv *vpe_priv, struct vpec *vpec)
@@ -35,8 +36,9 @@ void vpe10_construct_vpec(struct vpe_priv *vpe_priv, struct vpec *vpec)
 }
 
 /** functions for capability check */
-bool vpe10_vpec_check_swmode_support(struct vpec *vpec, enum vpe_swizzle_mode_values sw_mode)
+bool vpe10_vpec_check_swmode_support(struct vpec *vpec, const struct vpe_surface_info *surface_info)
 {
+    uint32_t sw_mode = surface_info->swizzle;
     switch (sw_mode) {
     case VPE_SW_LINEAR:
     case VPE_SW_256B_D:

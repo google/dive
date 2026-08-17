@@ -7,7 +7,7 @@
 #include "aco_builder.h"
 #include "aco_ir.h"
 
-#include "common/sid.h"
+#include "common/amdgfxregs.h"
 
 #include "util/memstream.h"
 
@@ -32,12 +32,14 @@ struct branch_info {
 struct asm_context {
    Program* program;
    enum amd_gfx_level gfx_level;
+   std::vector<unsigned> block_emit_order;
    std::vector<branch_info> branches;
    std::map<unsigned, constaddr_info> constaddrs;
    std::map<unsigned, constaddr_info> resumeaddrs;
    std::vector<struct aco_symbol>* symbols;
-   uint32_t loop_header = -1u;
-   uint32_t loop_exit = 0u;
+   uint32_t loop_preheader = -1u;
+   uint32_t loop_latch = -1u;
+   uint32_t loop_exit = -1u;
    const int16_t* opcode;
    // TODO: keep track of branch instructions referring blocks
    // and, when emitting the block, correct the offset in instr
@@ -52,6 +54,8 @@ struct asm_context {
          opcode = &instr_info.opcode_gfx10[0];
       else if (gfx_level <= GFX11_5)
          opcode = &instr_info.opcode_gfx11[0];
+      else if (gfx_level <= GFX11_7)
+         opcode = &instr_info.opcode_gfx11_7[0];
       else
          opcode = &instr_info.opcode_gfx12[0];
    }
@@ -272,11 +276,11 @@ emit_smem_instruction(asm_context& ctx, std::vector<uint32_t>& out, const Instru
       /* We don't use the NV bit. */
    } else {
       encoding = (0b111101 << 26);
-      if (ctx.gfx_level <= GFX11_5)
+      if (ctx.gfx_level < GFX12)
          encoding |= dlc ? 1 << (ctx.gfx_level >= GFX11 ? 13 : 14) : 0;
    }
 
-   if (ctx.gfx_level <= GFX11_5) {
+   if (ctx.gfx_level < GFX12) {
       encoding |= opcode << 18;
       encoding |= glc ? 1 << (ctx.gfx_level >= GFX11 ? 14 : 16) : 0;
    } else {
@@ -999,6 +1003,14 @@ emit_exp_instruction(asm_context& ctx, std::vector<uint32_t>& out, const Instruc
    encoding |= exp.done ? 0b1 << 11 : 0;
    encoding |= exp.dest << 4;
    encoding |= exp.enabled_mask;
+
+   /* GFX6 (except OLAND and HAINAN) has a bug that it only looks at the X
+    * writemask component.
+    */
+   if (ctx.program->dev.has_gfx6_mrt_export_bug && exp.enabled_mask && exp.dest <= V_008DFC_SQ_EXP_MRTZ) {
+      encoding |= 0x1;
+   }
+
    out.push_back(encoding);
    encoding = reg(ctx, exp.operands[0], 8);
    encoding |= reg(ctx, exp.operands[1], 8) << 8;
@@ -1113,8 +1125,12 @@ emit_vop3_instruction(asm_context& ctx, std::vector<uint32_t>& out, const Instru
    else if (instr->opcode == aco_opcode::v_swap_b16)
       num_ops = 1;
 
-   for (unsigned i = 0; i < num_ops; i++)
-      encoding |= reg(ctx, instr->operands[i]) << (i * 9);
+   /* RDNA: Set unused operands to inline constant 0. */
+   unsigned encoded_ops = ctx.gfx_level >= GFX10 ? 3 : num_ops;
+   for (unsigned i = 0; i < encoded_ops; i++) {
+      Operand op = i < num_ops ? instr->operands[i] : Operand::zero();
+      encoding |= reg(ctx, op) << (i * 9);
+   }
    encoding |= vop3.omod << 27;
    for (unsigned i = 0; i < 3; i++)
       encoding |= vop3.neg[i] << (29 + i);
@@ -1145,8 +1161,13 @@ emit_vop3p_instruction(asm_context& ctx, std::vector<uint32_t>& out, const Instr
    encoding |= reg(ctx, instr->definitions[0], 8);
    out.push_back(encoding);
    encoding = 0;
-   for (unsigned i = 0; i < instr->operands.size(); i++)
-      encoding |= reg(ctx, instr->operands[i]) << (i * 9);
+
+   /* RDNA: Set unused operands to inline constant 0. */
+   unsigned encoded_ops = ctx.gfx_level >= GFX10 ? 3 : instr->operands.size();
+   for (unsigned i = 0; i < encoded_ops; i++) {
+      Operand op = i < instr->operands.size() ? instr->operands[i] : Operand::zero();
+      encoding |= reg(ctx, op) << (i * 9);
+   }
    encoding |= (vop3.opsel_hi & 0x3) << 27;
    for (unsigned i = 0; i < 3; i++)
       encoding |= vop3.neg_lo[i] << (29 + i);
@@ -1413,6 +1434,9 @@ emit_instruction(asm_context& ctx, std::vector<uint32_t>& out, Instruction* inst
 void
 emit_block(asm_context& ctx, std::vector<uint32_t>& out, Block& block)
 {
+   block.offset = out.size();
+   ctx.block_emit_order.push_back(block.index);
+
    for (aco_ptr<Instruction>& instr : block.instructions) {
 #if 0
       int start_idx = out.size();
@@ -1452,8 +1476,6 @@ fix_exports(asm_context& ctx, std::vector<uint32_t>& out, Program* program)
                exported = true;
                break;
             }
-         } else if ((*it)->definitions.size() && (*it)->definitions[0].physReg() == exec) {
-            break;
          }
          ++it;
       }
@@ -1475,9 +1497,10 @@ fix_exports(asm_context& ctx, std::vector<uint32_t>& out, Program* program)
 
 static void
 insert_code(asm_context& ctx, std::vector<uint32_t>& out, unsigned insert_before,
-            unsigned insert_count, const uint32_t* insert_data)
+            const std::vector<uint32_t>& code)
 {
-   out.insert(out.begin() + insert_before, insert_data, insert_data + insert_count);
+   out.insert(out.begin() + insert_before, code.begin(), code.end());
+   unsigned insert_count = code.size();
 
    /* Update the offset of each affected block */
    for (Block& block : ctx.program->blocks) {
@@ -1531,8 +1554,8 @@ fix_branches_gfx10(asm_context& ctx, std::vector<uint32_t>& out)
 
       if (gfx10_3f_bug) {
          /* Insert an s_nop after the branch */
-         constexpr uint32_t s_nop_0 = 0xbf800000u;
-         insert_code(ctx, out, buggy_branch_it->pos + 1, 1, &s_nop_0);
+         std::vector<uint32_t> s_nop_0 = {0xbf800000u};
+         insert_code(ctx, out, buggy_branch_it->pos + 1, s_nop_0);
       }
    } while (gfx10_3f_bug);
 }
@@ -1564,9 +1587,9 @@ chain_branches(asm_context& ctx, std::vector<uint32_t>& out, branch_info& branch
    const unsigned lower_end = MAX2(ctx.program->blocks[target].offset, branch.pos) - half_dist;
    const unsigned lower_start = lower_end - half_dist;
    unsigned insert_at = 0;
-   for (unsigned i = 0; i < ctx.program->blocks.size() - 1; i++) {
-      Block& block = ctx.program->blocks[i];
-      Block& next = ctx.program->blocks[i + 1];
+   for (unsigned i = 0; i < ctx.block_emit_order.size() - 1; i++) {
+      Block& block = ctx.program->blocks[ctx.block_emit_order[i]];
+      Block& next = ctx.program->blocks[ctx.block_emit_order[i + 1]];
       if (next.offset >= lower_end)
          break;
       if (next.offset < upper_start || (next.offset > upper_end && next.offset < lower_start))
@@ -1588,21 +1611,22 @@ chain_branches(asm_context& ctx, std::vector<uint32_t>& out, branch_info& branch
    /* If we didn't find a suitable insertion point, split the existing code. */
    if (insert_at == 0) {
       /* Find the last block that is still within reach. */
+      unsigned idx = 0;
       unsigned insertion_block_idx = 0;
-      unsigned next_block = 0;
-      while (ctx.program->blocks[next_block + 1].offset < upper_end) {
-         if (!ctx.program->blocks[next_block].instructions.empty())
-            insertion_block_idx = next_block;
-         next_block++;
+      while (ctx.program->blocks[ctx.block_emit_order[idx + 1]].offset < upper_end) {
+         if (!ctx.program->blocks[ctx.block_emit_order[idx]].instructions.empty())
+            insertion_block_idx = ctx.block_emit_order[idx];
+         idx++;
       }
 
-      insert_at = ctx.program->blocks[next_block].offset;
+      Block& next_block = ctx.program->blocks[ctx.block_emit_order[idx]];
+      insert_at = next_block.offset;
       if (insert_at < upper_start) {
          /* Ensure some forward progress by splitting the block if necessary. */
-         auto it = ctx.program->blocks[next_block].instructions.begin();
+         auto it = next_block.instructions.begin();
          int skip = 0;
          while (skip-- > 0 || insert_at < upper_start) {
-            assert(it != ctx.program->blocks[next_block].instructions.end());
+            assert(it != next_block.instructions.end());
             Instruction* instr = (it++)->get();
             if (instr->isSOPP()) {
                if (instr->opcode == aco_opcode::s_clause)
@@ -1622,11 +1646,11 @@ chain_branches(asm_context& ctx, std::vector<uint32_t>& out, branch_info& branch
 
          /* If the insertion point is in the middle of the block, insert the branch instructions
           * into that block instead. */
-         bld.reset(&ctx.program->blocks[next_block].instructions, it);
+         bld.reset(&next_block.instructions, it);
       } else {
          /* Insert the additional branches at the end of the previous non-empty block. */
          bld.reset(&ctx.program->blocks[insertion_block_idx].instructions);
-         skip_branch_target = next_block;
+         skip_branch_target = next_block.index;
       }
 
       /* Since we insert a branch into existing code, mitigate LdsBranchVmemWARHazard on GFX10. */
@@ -1644,7 +1668,7 @@ chain_branches(asm_context& ctx, std::vector<uint32_t>& out, branch_info& branch
 
    branch_instr = bld.sopp(aco_opcode::s_branch, 0);
    emit_sopp_instruction(ctx, code, branch_instr, true);
-   insert_code(ctx, out, insert_at, code.size(), code.data());
+   insert_code(ctx, out, insert_at, code);
 
    new_block->offset = block_offset;
    if (skip_branch_target) {
@@ -1706,16 +1730,18 @@ void
 align_block(asm_context& ctx, std::vector<uint32_t>& code, Block& block)
 {
    /* Align the previous loop. */
-   if (ctx.loop_header != -1u &&
-       block.loop_nest_depth < ctx.program->blocks[ctx.loop_header].loop_nest_depth) {
+   if (ctx.loop_latch != -1u &&
+       block.loop_nest_depth < ctx.program->blocks[ctx.loop_latch].loop_nest_depth) {
       assert(ctx.loop_exit != -1u);
-      Block& loop_header = ctx.program->blocks[ctx.loop_header];
+      Block& loop_preheader = ctx.program->blocks[ctx.loop_preheader];
+      Block& loop_latch = ctx.program->blocks[ctx.loop_latch];
       Block& loop_exit = ctx.program->blocks[ctx.loop_exit];
-      ctx.loop_header = -1u;
+      ctx.loop_preheader = -1u;
+      ctx.loop_latch = -1u;
       ctx.loop_exit = -1u;
       std::vector<uint32_t> nops;
 
-      const unsigned loop_num_cl = DIV_ROUND_UP(block.offset - loop_header.offset, 16);
+      const unsigned loop_num_cl = DIV_ROUND_UP(code.size() - loop_latch.offset, 16);
 
       /* On GFX10.3+, change the prefetch mode if the loop fits into 2 or 3 cache lines.
        * Don't use the s_inst_prefetch instruction on GFX10 as it might cause hangs.
@@ -1725,11 +1751,21 @@ align_block(asm_context& ctx, std::vector<uint32_t>& code, Block& block)
                                    loop_num_cl <= 3;
 
       if (change_prefetch) {
-         Builder bld(ctx.program, &ctx.program->blocks[loop_header.linear_preds[0]]);
+         Builder bld(ctx.program, &loop_preheader);
+         unsigned offset = loop_latch.offset;
+         if (!(loop_latch.kind & block_kind_loop_header)) {
+            /* If the loop latch is not the header, then the preheader ends in
+             * a branch in order to jump over the loop latch on the first iteration.
+             * Emit the s_inst_prefetch before the branch.
+             */
+            assert(loop_preheader.instructions.back()->opcode == aco_opcode::s_branch);
+            bld.reset(&loop_preheader.instructions, std::prev(loop_preheader.instructions.end()));
+            offset -= 1;
+         }
          int16_t prefetch_mode = loop_num_cl == 3 ? 0x1 : 0x2;
          Instruction* instr = bld.sopp(aco_opcode::s_inst_prefetch, prefetch_mode);
          emit_instruction(ctx, nops, instr);
-         insert_code(ctx, code, loop_header.offset, nops.size(), nops.data());
+         insert_code(ctx, code, offset, nops);
 
          /* Change prefetch mode back to default (0x3) at the loop exit. */
          bld.reset(&loop_exit.instructions, loop_exit.instructions.begin());
@@ -1737,23 +1773,23 @@ align_block(asm_context& ctx, std::vector<uint32_t>& code, Block& block)
          if (ctx.loop_exit < block.index) {
             nops.clear();
             emit_instruction(ctx, nops, instr);
-            insert_code(ctx, code, loop_exit.offset, nops.size(), nops.data());
+            insert_code(ctx, code, loop_exit.offset, nops);
          }
       }
 
-      const unsigned loop_start_cl = loop_header.offset >> 4;
-      const unsigned loop_end_cl = (block.offset - 1) >> 4;
+      const unsigned loop_start_cl = loop_latch.offset >> 4;
+      const unsigned loop_end_cl = (code.size() - 1) >> 4;
 
       /* Align the loop if it fits into the fetched cache lines or if we can
        * reduce the number of cache lines with less than 8 NOPs.
        */
       const bool align_loop = loop_end_cl - loop_start_cl >= loop_num_cl &&
-                              (loop_num_cl == 1 || change_prefetch || loop_header.offset % 16 > 8);
+                              (loop_num_cl == 1 || change_prefetch || loop_latch.offset % 16 > 8);
 
       if (align_loop) {
          nops.clear();
-         nops.resize(16 - (loop_header.offset % 16), 0xbf800000u);
-         insert_code(ctx, code, loop_header.offset, nops.size(), nops.data());
+         nops.resize(16 - (loop_latch.offset % 16), 0xbf800000u);
+         insert_code(ctx, code, loop_latch.offset, nops);
       }
    }
 
@@ -1763,19 +1799,28 @@ align_block(asm_context& ctx, std::vector<uint32_t>& code, Block& block)
        * Also ignore loops without back-edge.
        */
       if (block.linear_preds.size() > 1) {
-         ctx.loop_header = block.index;
+         ctx.loop_preheader = block.index - 1;
+         ctx.loop_latch = block.index;
          ctx.loop_exit = -1u;
       }
+   }
+
+   if (ctx.loop_latch != -1u && (block.kind & block_kind_loop_latch)) {
+      /* The loop latch is the block where where the loop re-enters.
+       * It might be the loop header or a block from the end of the loop.
+       */
+      if (ctx.program->blocks[ctx.loop_latch].loop_nest_depth == block.loop_nest_depth)
+         ctx.loop_latch = block.index;
    }
 
    /* Blocks with block_kind_loop_exit might be eliminated after jump threading,
     * so we instead find loop exits using the successors when in loop_nest_depth.
     * This works, because control flow always re-converges after loops.
     */
-   if (ctx.loop_header != -1u && ctx.loop_exit == -1u) {
+   if (ctx.loop_latch != -1u && ctx.loop_exit == -1u) {
       for (uint32_t succ_idx : block.linear_succs) {
          Block& succ = ctx.program->blocks[succ_idx];
-         if (succ.loop_nest_depth < ctx.program->blocks[ctx.loop_header].loop_nest_depth)
+         if (succ.loop_nest_depth < ctx.program->blocks[ctx.loop_latch].loop_nest_depth)
             ctx.loop_exit = succ_idx;
       }
    }
@@ -1785,6 +1830,28 @@ align_block(asm_context& ctx, std::vector<uint32_t>& code, Block& block)
       size_t cache_aligned = align(code.size(), 16);
       code.resize(cache_aligned, 0xbf800000u); /* s_nop 0 */
       block.offset = code.size();
+   }
+}
+
+void
+emit_loop_latch(asm_context& ctx, std::vector<uint32_t>& code, Block& block)
+{
+   /* No actual loop. */
+   if (block.linear_preds.size() == 1)
+      return;
+
+   /* The loop header is also the loop latch. */
+   if (block.kind & block_kind_loop_latch)
+      return;
+
+   unsigned i = block.index;
+   while (ctx.program->blocks[i].loop_nest_depth >= block.loop_nest_depth) {
+      Block& latch_block = ctx.program->blocks[i++];
+      if (latch_block.loop_nest_depth == block.loop_nest_depth &&
+          (latch_block.kind & block_kind_loop_latch)) {
+         emit_block(ctx, code, latch_block);
+         break;
+      }
    }
 }
 
@@ -1807,8 +1874,13 @@ emit_program(Program* program, std::vector<uint32_t>& code, std::vector<struct a
       fix_exports(ctx, code, program);
 
    for (Block& block : program->blocks) {
-      block.offset = code.size();
       align_block(ctx, code, block);
+
+      if (block.kind & block_kind_loop_header)
+         emit_loop_latch(ctx, code, block);
+      else if (block.kind & block_kind_loop_latch)
+         continue;
+
       emit_block(ctx, code, block);
    }
 
@@ -1829,7 +1901,9 @@ emit_program(Program* program, std::vector<uint32_t>& code, std::vector<struct a
                (uint32_t*)(program->constant_data.data() + program->constant_data.size()));
 
    program->config->scratch_bytes_per_wave =
-      align(program->config->scratch_bytes_per_wave, program->dev.scratch_alloc_granule);
+      align(program->config->scratch_bytes_per_wave + program->scratch_arg_size,
+            program->dev.scratch_alloc_granule);
+   program->config->wgp_mode = program->wgp_mode;
 
    return exec_size;
 }

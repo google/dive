@@ -1,23 +1,6 @@
 /*
  * Copyright © 2017 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdio.h>
@@ -28,13 +11,13 @@
 #include "util/ralloc.h"
 #include "util/u_inlines.h"
 #include "util/format/u_format.h"
+#include "util/u_sample_positions.h"
 #include "util/u_upload_mgr.h"
 #include "iris_context.h"
 #include "iris_perf.h"
 #include "iris_resource.h"
 #include "iris_screen.h"
 #include "iris_utrace.h"
-#include "common/intel_sample_positions.h"
 
 /**
  * The pipe->set_debug_callback() driver hook.
@@ -131,41 +114,6 @@ iris_set_device_reset_callback(struct pipe_context *ctx,
       memset(&ice->reset, 0, sizeof(ice->reset));
 }
 
-static void
-iris_get_sample_position(struct pipe_context *ctx,
-                         unsigned sample_count,
-                         unsigned sample_index,
-                         float *out_value)
-{
-   union {
-      struct {
-         float x[16];
-         float y[16];
-      } a;
-      struct {
-         float  _0XOffset,  _1XOffset,  _2XOffset,  _3XOffset,
-                _4XOffset,  _5XOffset,  _6XOffset,  _7XOffset,
-                _8XOffset,  _9XOffset, _10XOffset, _11XOffset,
-               _12XOffset, _13XOffset, _14XOffset, _15XOffset;
-         float  _0YOffset,  _1YOffset,  _2YOffset,  _3YOffset,
-                _4YOffset,  _5YOffset,  _6YOffset,  _7YOffset,
-                _8YOffset,  _9YOffset, _10YOffset, _11YOffset,
-               _12YOffset, _13YOffset, _14YOffset, _15YOffset;
-      } v;
-   } u;
-   switch (sample_count) {
-   case 1:  INTEL_SAMPLE_POS_1X(u.v._);  break;
-   case 2:  INTEL_SAMPLE_POS_2X(u.v._);  break;
-   case 4:  INTEL_SAMPLE_POS_4X(u.v._);  break;
-   case 8:  INTEL_SAMPLE_POS_8X(u.v._);  break;
-   case 16: INTEL_SAMPLE_POS_16X(u.v._); break;
-   default: UNREACHABLE("invalid sample count");
-   }
-
-   out_value[0] = u.a.x[sample_index];
-   out_value[1] = u.a.y[sample_index];
-}
-
 static bool
 create_dirty_dmabuf_set(struct iris_context *ice)
 {
@@ -229,9 +177,6 @@ iris_destroy_context(struct pipe_context *ctx)
 
    screen->vtbl.destroy_state(ice);
 
-   util_framebuffer_init(ctx, NULL, ice->state.fb_cbufs, &ice->state.fb_zsbuf);
-   util_unreference_framebuffer_state(&ice->state.framebuffer);
-
    for (unsigned i = 0; i < ARRAY_SIZE(ice->shaders.scratch_surfs); i++)
       pipe_resource_reference(&ice->shaders.scratch_surfs[i].res, NULL);
 
@@ -263,6 +208,9 @@ iris_destroy_context(struct pipe_context *ctx)
 
 #define genX_call(devinfo, func, ...)             \
    switch ((devinfo)->verx10) {                   \
+   case 350:                                      \
+      gfx35_##func(__VA_ARGS__);                  \
+      break;                                      \
    case 300:                                      \
       gfx30_##func(__VA_ARGS__);                  \
       break;                                      \
@@ -342,7 +290,7 @@ iris_create_context(struct pipe_screen *pscreen, void *priv, unsigned flags)
    ctx->set_debug_callback = iris_set_debug_callback;
    ctx->set_device_reset_callback = iris_set_device_reset_callback;
    ctx->get_device_reset_status = iris_get_device_reset_status;
-   ctx->get_sample_position = iris_get_sample_position;
+   ctx->get_sample_position = u_default_get_sample_position;
 
    iris_init_context_fence_functions(ctx);
    iris_init_blit_functions(ctx);
@@ -403,6 +351,10 @@ iris_create_context(struct pipe_screen *pscreen, void *priv, unsigned flags)
 
    /* Clover doesn't support u_threaded_context */
    if (flags & PIPE_CONTEXT_COMPUTE_ONLY)
+      return ctx;
+
+   /* Threaded context disabled via drirc. */
+   if (screen->driconf.disable_threaded_context)
       return ctx;
 
    return threaded_context_create(ctx, &screen->transfer_pool,

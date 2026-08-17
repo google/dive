@@ -9,22 +9,30 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "util/hash_table.h"
 #include "util/os_file.h"
 #include "util/os_misc.h"
 #include "util/ralloc.h"
 #include "util/u_dynarray.h"
 
+#include "mda_private.h"
 #include "slice.h"
 #include "tar.h"
 
 typedef struct content {
    slice name;
    slice fullname;
-   slice data;
+
+   /* Position offset and size inside the archive.  Don't store
+    * a slice here since the archive is loaded on demand.
+    */
+   int offset;
+   int len;
 } content;
 
 typedef struct object {
@@ -44,12 +52,15 @@ typedef struct mesa_archive {
    int     objects_count;
    object *objects;
 
-   const char *info;
+   slice info;
    slice detected_mda_prefix;
+
+   char *contents_ptr;
 } mesa_archive;
 
 enum diff_mode {
    DIFF_UNIFIED,
+   DIFF_WORDS,
    DIFF_SIDE_BY_SIDE,
 };
 
@@ -61,6 +72,8 @@ typedef struct context {
 
    mesa_archive **archives;
    int            archives_count;
+
+   bool keep_going;
 
    struct {
       enum diff_mode mode;
@@ -87,6 +100,12 @@ failf(const char *fmt, ...)
    vfprintf(stderr, fmt, args);
    va_end(args);
    exit(1);
+}
+
+static slice
+ralloc_slice_dup(void *mem_ctx, slice s)
+{
+   return (slice){ ralloc_memdup(mem_ctx, s.data, s.len), s.len };
 }
 
 typedef struct {
@@ -129,10 +148,22 @@ diff(context *ctx, slice a, slice b)
 
    const char *diff_cmd = os_get_option("MDA_DIFF_COMMAND");
    if (!diff_cmd) {
-      if (ctx->diff.mode == DIFF_UNIFIED) {
-         diff_cmd = ralloc_asprintf(mem_ctx, "git diff --no-index --color-words -U%d -- %%s %%s | tail -n +5", ctx->diff.param);
-      } else {
-         diff_cmd = ralloc_asprintf(mem_ctx, "diff -y -W%d %%s %%s", ctx->diff.param);
+      switch (ctx->diff.mode) {
+      case DIFF_WORDS:
+         diff_cmd = ralloc_asprintf(mem_ctx,
+                                    "git diff --no-index --color-words -U%d -- %%s %%s | tail -n +5",
+                                    ctx->diff.param);
+         break;
+      case DIFF_UNIFIED:
+         diff_cmd = ralloc_asprintf(mem_ctx,
+                                    "git diff --no-index --color=always -U%d -- %%s %%s | tail -n +5",
+                                    ctx->diff.param);
+         break;
+      case DIFF_SIDE_BY_SIDE:
+         diff_cmd = ralloc_asprintf(mem_ctx,
+                                    "diff --color=always -y -W%d %%s %%s",
+                                    ctx->diff.param);
+         break;
       }
    }
 
@@ -165,10 +196,56 @@ last_version(object *obj)
 }
 
 static void
-print_repeated(char c, int count)
+print_separator(int count)
 {
-   for (; count > 0; count--)
-      putchar(c);
+   /* Negative numbers always result in just a new line*/
+   for (; count > 1; count--)
+      putchar('#');
+   putchar('\n');
+}
+
+static slice
+get_archive_contents(context *ctx, mesa_archive *ma)
+{
+   /* Load the contents of archive on-demand.  This is done
+    * so the metadata can be processed without keeping the
+    * entire contents of all archives loaded.  Once there's
+    * a need to peek at individual objects, the archives are
+    * loaded.
+    */
+   if (ma->contents_ptr == NULL) {
+      const char *filepath = slice_to_cstr(ctx, ma->filename);
+      size_t size;
+      ma->contents_ptr = os_read_file(filepath, &size);
+
+      if (!ma->contents_ptr) {
+         fprintf(stderr, "mda: failed to load %s: %s\n",
+                 filepath, strerror(errno));
+         return (slice){NULL, 0};
+      }
+
+      ma->contents = (slice){ma->contents_ptr, size};
+   }
+
+   return ma->contents;
+}
+
+static void
+unload_archive_contents(context *ctx, mesa_archive *ma)
+{
+   if (ma->contents_ptr != NULL) {
+      /* These are loaded via os_read_file(). */
+      free(ma->contents_ptr);
+      ma->contents_ptr = NULL;
+      ma->contents = (slice){};
+   }
+}
+
+static slice
+get_content_data(context *ctx, mesa_archive *ma, const content *c)
+{
+   return slice_substr(get_archive_contents(ctx, ma),
+                       c->offset, c->offset + c->len);
 }
 
 static mesa_archive *
@@ -183,11 +260,9 @@ parse_mesa_archive(void *mem_ctx, const char *filename)
 
    mesa_archive *ma = rzalloc(mem_ctx, mesa_archive);
    ma->filename = slice_from_cstr(ralloc_strdup(ma, filename));
-   ma->contents = (slice) { ralloc_memdup(ma, (const char *)contents, size), size };
-   free(contents);
 
    tar_reader tr = {0};
-   tar_reader_init_from_bytes(&tr, ma->contents.data, ma->contents.len);
+   tar_reader_init_from_bytes(&tr, contents, size);
 
    tar_reader_entry entry = {0};
 
@@ -209,9 +284,10 @@ parse_mesa_archive(void *mem_ctx, const char *filename)
       if (slice_ends_with(fullpath, mda_mesa_txt)) {
          slice_cut_result cut = slice_cut(fullpath, '/');
          if (cut.found && slice_equal_cstr(cut.after, "mesa.txt")) {
-            /* Cut was succesful, so can extend to include the separator. */
-            ma->detected_mda_prefix = (slice){ cut.before.data, cut.before.len+1 };
-            ma->info = slice_to_cstr(ma, entry.contents);
+            /* Cut was successful, so can extend to include the separator. */
+            slice prefix_slice = (slice){ cut.before.data, cut.before.len+1 };
+            ma->detected_mda_prefix = ralloc_slice_dup(ma, prefix_slice);
+            ma->info = ralloc_slice_dup(ma, entry.contents);
             found_mesa_txt = true;
             break;
          }
@@ -219,12 +295,13 @@ parse_mesa_archive(void *mem_ctx, const char *filename)
    }
 
    if (!found_mesa_txt) {
+      free(contents);
       fprintf(stderr, "mda: wrong archive, missing mesa.txt\n");
       return NULL;
    }
 
-   /* Now that we found mesa. Reset header. */
-   tar_reader_init_from_bytes(&tr, ma->contents.data, ma->contents.len);
+   /* Now that we found mesa.txt, reset reader. */
+   tar_reader_init_from_bytes(&tr, contents, size);
 
    struct hash_table *lookup = slice_hash_table_create(ma);
 
@@ -236,7 +313,7 @@ parse_mesa_archive(void *mem_ctx, const char *filename)
                                               SLICE_FMT(entry.name));
          fullpath = slice_from_cstr(fullpath_str);
       } else {
-         fullpath = entry.name;
+         fullpath = ralloc_slice_dup(ma, entry.name);
       }
 
       /* Ignore directory entries. */
@@ -312,12 +389,15 @@ parse_mesa_archive(void *mem_ctx, const char *filename)
                                obj->versions_count, obj->versions_count + 1);
       int s = obj->versions_count++;
 
-      obj->versions[s].name = version_name;
-      obj->versions[s].data = entry.contents;
+      obj->versions[s].name = ralloc_slice_dup(ma, version_name);
       char *version_fullname_str = ralloc_asprintf(ma, "%.*s/%.*s", SLICE_FMT(obj->fullname), SLICE_FMT(version_name));
       obj->versions[s].fullname = slice_from_cstr(version_fullname_str);
+
+      obj->versions[s].offset = entry.contents.data - contents;
+      obj->versions[s].len = entry.contents.len;
    }
 
+   free(contents);
    return ma;
 }
 
@@ -331,60 +411,6 @@ typedef struct {
    match *matches;
    int    matches_count;
 } find_all_result;
-
-enum match_flags {
-   /* Up until first slash in the pattern, consider a prefix match, then
-    * fuzzy for the remaining of the pattern.
-    *
-    * This works better for the common case of mda.tar files with names
-    * containing hashes.  Trying to disambiguate by a prefix might end up
-    * also fuzzy matching the middle of other hashes.
-    */
-   MATCH_PREFIX_FIRST_SLASH = 1 << 0,
-};
-
-static bool
-is_match(slice name_slice, const char *pattern, unsigned match_flags)
-{
-   assert(!slice_is_empty(name_slice));
-
-   slice pattern_slice = slice_from_cstr(pattern);
-
-   /* Non-fuzzy matching first. */
-   if (slice_contains_str(name_slice, pattern_slice))
-      return true;
-
-   slice s = name_slice;
-   slice p = pattern_slice;
-
-   if (match_flags & MATCH_PREFIX_FIRST_SLASH) {
-      slice_cut_result pattern_cut = slice_cut(pattern_slice, '/');
-      if (pattern_cut.found) {
-         slice_cut_result name_cut = slice_cut(name_slice, '/');
-         if (!name_cut.found || !slice_starts_with(name_cut.before, pattern_cut.before))
-            return false;
-
-         /* Update s and p to continue from after the slash. */
-         s = name_cut.after;
-         p = pattern_cut.after;
-      }
-   }
-
-   bool matched = false;
-   int s_idx = 0, p_idx = 0;
-   while (s_idx < s.len && p_idx < p.len) {
-      if (s.data[s_idx] == p.data[p_idx]) {
-         p_idx++;
-         if (p_idx == p.len) {
-            matched = true;
-            break;
-         }
-      }
-      s_idx++;
-   }
-
-   return matched;
-}
 
 static void
 append_match(context *ctx, find_all_result *r, object *obj, content *c)
@@ -405,42 +431,30 @@ find_all(context *ctx, const char *pattern)
    if (!pattern)
       pattern = "";
 
-   unsigned round_flags[2] = {};
-   unsigned rounds = 1;
-   if (strchr(pattern, '/')) {
-      /* See comment on the enum definition. */
-      round_flags[0] = MATCH_PREFIX_FIRST_SLASH;
-      rounds++;
+   slice pattern_slice = slice_from_cstr(pattern);
+
+   for (int i = 0; i < ctx->archives_count; i++) {
+      mesa_archive *ma = ctx->archives[i];
+
+      foreach_object(obj, ma) {
+         if (is_match(obj->fullname, pattern_slice, MATCH_FLAG_NONE))
+            append_match(ctx, &r, obj, NULL);
+      }
    }
 
-   for (int round = 0; round < rounds; round++) {
-      unsigned match_flags = round_flags[round];
+   if (r.matches_count > 0)
+      return r;
 
-      for (int i = 0; i < ctx->archives_count; i++) {
-         mesa_archive *ma = ctx->archives[i];
+   for (int i = 0; i < ctx->archives_count; i++) {
+      mesa_archive *ma = ctx->archives[i];
 
-         foreach_object(obj, ma) {
-            if (is_match(obj->fullname, pattern, match_flags))
-               append_match(ctx, &r, obj, NULL);
+      foreach_object(obj, ma) {
+         foreach_version(c, obj) {
+            if (is_match(c->fullname, pattern_slice,
+                         MATCH_FLAG_SUBSTRING_LAST))
+               append_match(ctx, &r, obj, c);
          }
       }
-
-      if (r.matches_count > 0)
-         return r;
-
-      for (int i = 0; i < ctx->archives_count; i++) {
-         mesa_archive *ma = ctx->archives[i];
-
-         foreach_object(obj, ma) {
-            foreach_version(c, obj) {
-               if (is_match(c->fullname, pattern, match_flags))
-                  append_match(ctx, &r, obj, c);
-            }
-         }
-      }
-
-      if (r.matches_count > 0)
-         return r;
    }
 
    return r;
@@ -480,7 +494,7 @@ cmd_info(context *ctx)
 
       mesa_archive *ma = ctx->archives[i];
       printf("# From %.*s\n", SLICE_FMT(ma->filename));
-      printf("%s\n", ma->info);
+      printf("%.*s\n", SLICE_FMT(ma->info));
    }
 
    return 0;
@@ -585,11 +599,64 @@ cmd_diff(context *ctx)
 
    int x = printf("# A: %.*s\n", SLICE_FMT(a.content->fullname));
    int y = printf("# B: %.*s\n", SLICE_FMT(b.content->fullname));
-   print_repeated('#', MAX2(x, y) - 1);
-   printf("\n\n");
-
-   diff(ctx, a.content->data, b.content->data);
+   print_separator(MAX2(x, y));
    printf("\n");
+
+   slice a_data = get_content_data(ctx, a.object->ma, a.content);
+   slice b_data = get_content_data(ctx, b.object->ma, b.content);
+   diff(ctx, a_data, b_data);
+   printf("\n");
+
+   return 0;
+}
+
+static int
+cmd_difflog(context *ctx)
+{
+   if (ctx->args_count != 2) {
+      fprintf(stderr, "mda: difflog requires two patterns\n");
+      return 1;
+   }
+
+   match a = find_one(ctx, ctx->args[0]);
+   if (!a.object)
+      return 1;
+
+   match b = find_one(ctx, ctx->args[1]);
+   if (!b.object)
+      return 1;
+
+   int a_idx = a.content ? (int)(a.content - a.object->versions) : 0;
+   int b_idx = b.content ? (int)(b.content - b.object->versions) : 0;
+
+   const int count = MAX2(a.object->versions_count - a_idx,
+                          b.object->versions_count - b_idx);
+
+   for (int i = 0; i < count; i++) {
+      /* Repeat the last version when an object has less versions than the other. */
+      int curr_a_idx = MIN2(a_idx + i, a.object->versions_count - 1);
+      int curr_b_idx = MIN2(b_idx + i, b.object->versions_count - 1);
+
+      content *a_ver = &a.object->versions[curr_a_idx];
+      content *b_ver = &b.object->versions[curr_b_idx];
+
+      slice a_data = get_content_data(ctx, a.object->ma, a_ver);
+      slice b_data = get_content_data(ctx, b.object->ma, b_ver);
+
+      /* Check if the data differs. */
+      if (!slice_equal(a_data, b_data)) {
+         int x = printf("# A: %.*s\n", SLICE_FMT(a_ver->fullname));
+         int y = printf("# B: %.*s\n", SLICE_FMT(b_ver->fullname));
+         print_separator(MAX2(x, y));
+         printf("\n");
+
+         diff(ctx, a_data, b_data);
+         printf("\n");
+
+         if (!ctx->keep_going)
+            break;
+      }
+   }
 
    return 0;
 }
@@ -647,10 +714,11 @@ cmd_log(context *ctx)
       for (const content *c = start.content; c <= end.content; c++) {
          int x = printf("# %.*s/\n", SLICE_FMT(obj->fullname));
          int y = printf("# %.*s\n", SLICE_FMT(c->name));
-         print_repeated('#', MAX2(x, y) - 1);
-         printf("\n\n");
+         print_separator(MAX2(x, y));
+         printf("\n");
 
-         printf("%.*s\n", SLICE_FMT(c->data));
+         slice data = get_content_data(ctx, obj->ma, c);
+         printf("%.*s\n", SLICE_FMT(data));
       }
 
    } else {
@@ -659,10 +727,12 @@ cmd_log(context *ctx)
 
          int x = printf("# %.*s/\n", SLICE_FMT(obj->fullname));
          int y = printf("# %.*s -> %.*s\n", SLICE_FMT(c->name), SLICE_FMT(next->name));
-         print_repeated('#', MAX2(x, y) - 1);
-         printf("\n\n");
+         print_separator(MAX2(x, y));
+         printf("\n");
 
-         diff(ctx, c->data, next->data);
+         slice curr_data = get_content_data(ctx, obj->ma, c);
+         slice next_data = get_content_data(ctx, obj->ma, next);
+         diff(ctx, curr_data, next_data);
          printf("\n");
       }
    }
@@ -672,12 +742,14 @@ cmd_log(context *ctx)
 }
 
 static slice
-get_spirv_disassembly(void *mem_ctx, object *obj)
+get_spirv_disassembly(context *ctx, object *obj)
 {
    assert(slice_equal_cstr(obj->name, "SPV"));
    assert(obj->versions_count == 1);
 
    content *c = &obj->versions[0];
+
+   slice data = get_content_data(ctx, obj->ma, c);
 
    int stdin_pipe[2], stdout_pipe[2];
    if (pipe(stdin_pipe) < 0 || pipe(stdout_pipe) < 0)
@@ -712,13 +784,13 @@ get_spirv_disassembly(void *mem_ctx, object *obj)
    close(stdin_pipe[0]);
    close(stdout_pipe[1]);
 
-   ssize_t written = write(stdin_pipe[1], c->data.data, c->data.len);
+   ssize_t written = write(stdin_pipe[1], data.data, data.len);
    close(stdin_pipe[1]);
 
    struct util_dynarray output;
-   util_dynarray_init(&output, mem_ctx);
+   util_dynarray_init(&output, ctx);
 
-   if (written != (ssize_t)c->data.len)
+   if (written != (ssize_t)data.len)
       goto wait_and_fail;
 
    char read_buffer[1024];
@@ -738,7 +810,7 @@ get_spirv_disassembly(void *mem_ctx, object *obj)
    if (WEXITSTATUS(status) != 0 || output.size == 0)
       goto fail;
 
-   util_dynarray_append(&output, char, '\0');
+   util_dynarray_append_typed(&output, char, '\0');
 
    return slice_from_cstr(output.data);
 
@@ -752,9 +824,9 @@ fail:
 }
 
 static int
-print_disassembled_spirv(void *mem_ctx, object *obj)
+print_disassembled_spirv(context *ctx, object *obj)
 {
-   slice disassembly = get_spirv_disassembly(mem_ctx, obj);
+   slice disassembly = get_spirv_disassembly(ctx, obj);
    if (slice_is_empty(disassembly)) {
       fprintf(stderr, "mda: failed to disassemble SPIR-V\n");
       return 1;
@@ -788,11 +860,12 @@ cmd_print(context *ctx)
          return print_disassembled_spirv(ctx, m.object);
 
       int x = printf("### %.*s\n", SLICE_FMT(m.content->fullname));
-      print_repeated('#', x-1);
-      printf("\n\n");
+      print_separator(x);
+      printf("\n");
    }
 
-   printf("%.*s", SLICE_FMT(m.content->data));
+   slice data = get_content_data(ctx, m.object->ma, m.content);
+   printf("%.*s", SLICE_FMT(data));
 
    if (!raw)
       printf("\n");
@@ -892,8 +965,20 @@ cmd_search(context *ctx)
    find_all_result matches = find_all(ctx, pattern);
    int found_count = 0;
 
+   mesa_archive *prev = NULL;
+
    for (int i = 0; i < matches.matches_count; i++) {
       match *m = &matches.matches[i];
+
+      /* Matches are mostly grouped by archive, so once we stop seeing
+       * an archive unload its contents.  It will be reloaded later if
+       * needed.
+       */
+      if (prev != m->object->ma) {
+         if (prev)
+            unload_archive_contents(ctx, prev);
+         prev = m->object->ma;
+      }
 
       /* SPIR-V object has only one version.  We probably could clean up
        * handling of it here and elsewhere to something more general
@@ -902,17 +987,19 @@ cmd_search(context *ctx)
       const bool is_spirv = slice_equal_cstr(m->object->name, "SPV");
 
       if (search_all && !is_spirv) {
-         foreach_version(c, m->object)
-            found_count += print_search_matches(c->data, search_string, c->fullname);
+         foreach_version(c, m->object) {
+            slice data = get_content_data(ctx, m->object->ma, c);
+            found_count += print_search_matches(data, search_string, c->fullname);
+         }
 
       } else {
          content *latest = last_version(m->object);
 
          slice search_data;
          if (is_spirv)
-            search_data = get_spirv_disassembly(m->object->ma, m->object);
+            search_data = get_spirv_disassembly(ctx, m->object);
          else
-            search_data = latest->data;
+            search_data = get_content_data(ctx, m->object->ma, latest);
 
          found_count += print_search_matches(search_data, search_string, latest->fullname);
       }
@@ -950,7 +1037,7 @@ open_manual()
       "",
       ".SH SYNOPSIS",
       "",
-      "mda [[-f FILE]... [-U[nnn]] [-Y[nnn]]] COMMAND [args]",
+      "mda [[-f PATH]... [-W[nnn]] [-U[nnn]] [-Y[nnn]] [-k]] COMMAND [args]",
       "",
       ".SH DESCRIPTION",
       "",
@@ -960,17 +1047,22 @@ open_manual()
       "",
       "Without command, all the objects are listed, an object can",
       "be a particular internal shader form or other metadata.",
-      "Objects are identified by fuzzy matching a PATTERN with their",
-      "names.  Names can be seen in 'list' commands.",
+      "Objects are identified by prefix matching PATTERN segments against their",
+      "names in order; intermediate name segments may be skipped. Version names",
+      "allow substring matching on the last segment.",
+      "Names can be seen in 'list' commands.",
       "",
       "Objects may have multiple versions, e.g. multiple steps",
       "of a shader generated during optimization.  When not",
-      "specified in the PATTERN, commands pick a relevant version,",
-      "either first or last).",
+      "specified in the PATTERN, commands pick a relevant version",
+      "(either first or last). When a PATTERN matches a specific",
+      "version name, commands that iterate versions start from that",
+      "version.",
       "",
       "By default all *.mda.tar files in the current directory are read.",
-      "To specify which files to read use one or more `-f FILENAME` flags",
-      "before the command.",
+      "To specify which files or directories to read use one or more `-f PATH`",
+      "flags before the command.  When PATH is a directory, all *.mda.tar files",
+      "in that directory (non-recursively) are loaded.",
       "",
       ".SH COMMANDS",
       "",
@@ -992,6 +1084,8 @@ open_manual()
       "",
       "    diff        PATTERN PATTERN    compare two objects",
       "",
+      "    difflog     PATTERN PATTERN    compare objects version-by-version",
+      "",
       "    search      STRING [PATTERN]   search latest versions for string",
       "",
       "    searchall   STRING [PATTERN]   search all versions for string",
@@ -1000,23 +1094,31 @@ open_manual()
       "",
       ".SH OPTIONS",
       "",
-      "    -f FILENAME                    read from specific archive file",
+      "    -f PATH                        read a file, or mda.tar files in a directory",
+      "                                   non-recursively.  Multiple -f can be used.",
+      "                                   If no -f provided, current directory is used.",
+      "",
+      "    -W[nnn]                        use unified diff with color words",
+      "                                   (default: 5 context lines)",
       "",
       "    -U[nnn]                        use unified diff (default: 5 context lines)",
       "",
       "    -Y[nnn]                        use side-by-side diff (default: 240 width)",
       "",
-      "The -U and -Y options are mutually exclusive. If neither is specified,",
-      "-U5 is used by default.",
+      "    -k                             keep going after first difference in difflog",
+      "",
+      "The -W, -U and -Y options are mutually exclusive. If neither is specified,",
+      "-W5 (unified with color words and 5 lines of context) is used by default.",
       "",
       ".SH ENVIRONMENT VARIABLES",
       "",
       "The diff program used by mda can be configured by setting",
       "the MDA_DIFF_COMMAND environment variable, which overrides",
-      "the -U and -Y options. Without MDA_DIFF_COMMAND:",
+      "the -W, -U and -Y options. Without MDA_DIFF_COMMAND set:",
       "",
-      "    -U uses: git diff --no-index --color-words -Unnn -- %s %s | tail -n +5",
-      "    -Y uses: diff -y -Wnnn %s %s",
+      "    -W uses: git diff --no-index --color-words -Unnn -- %s %s | tail -n +5",
+      "    -U uses: git diff --no-index --color=always -Unnn -- %s %s | tail -n +5",
+      "    -Y uses: diff --color=always -y -Wnnn %s %s",
       "",
       "When showing SPIR-V files, spirv-dis tool is used.",
       ""
@@ -1044,13 +1146,18 @@ open_manual()
 static void
 print_help()
 {
-   printf("mda [[-f FILENAME]... [-U[nnn]] [-Y[nnn]]] CMD [ARGS...]\n"
+   printf("mda [[-f PATH]... [-W[nnn]] [-U[nnn]] [-Y[nnn]] [-k]] CMD [ARGS...]\n"
           "\n"
           "OPTIONS\n"
           "\n"
-          "    -f FILENAME                    read from specific archive file\n"
+          "    -f PATH                        read a file, or mda.tar files in a directory\n"
+          "                                   non-recursively.  Multiple -f can be used.\n"
+          "                                   If no -f provided, current directory is used.\n"
+          "    -W[nnn]                        use unified diff with color words\n"
+          "                                   (default: 5 context lines)\n"
           "    -U[nnn]                        use unified diff (default: 5 context lines)\n"
           "    -Y[nnn]                        use side-by-side diff (default: 240 width)\n"
+          "    -k                             keep going after first difference in difflog\n"
           "\n"
           "COMMANDS\n"
           "\n"
@@ -1063,15 +1170,16 @@ print_help()
           "    logfull     PATTERN [PATTERN]  print full contents of versions of an object\n"
           "    log1        PATTERN [PATTERN]  print names of the versions of an object\n"
           "    diff        PATTERN PATTERN    compare two objects\n"
+          "    difflog     PATTERN PATTERN    compare objects version-by-version\n"
           "    search      STRING [PATTERN]   search latest versions for string\n"
           "    searchall   STRING [PATTERN]   search all versions for string\n"
           "    info                           print metadata about the archive\n"
           "\n"
           "ENVIRONMENT VARIABLES\n"
           "\n"
-          "    MDA_DIFF_COMMAND               custom diff command (overrides -U/-Y)\n"
+          "    MDA_DIFF_COMMAND               custom diff command (overrides -W/-U/-Y)\n"
           "\n"
-          "Default diff mode is -U5 (unified diff with 5 context lines).\n"
+          "Default diff mode is -W5 (unified with color words and 5 lines of context).\n"
           "For more details, use 'mda help' to open the manual.\n");
 }
 
@@ -1087,6 +1195,31 @@ load_archive(context *ctx, const char *filename)
    ctx->archives[ctx->archives_count] = ma;
    ctx->archives_count++;
    return true;
+}
+
+static void
+load_archives_from_directory(context *ctx, const char *dirpath)
+{
+   DIR *d = opendir(dirpath);
+   if (!d) {
+      fprintf(stderr, "mda: couldn't open directory %s: %s\n", dirpath, strerror(errno));
+      return;
+   }
+
+   struct dirent *dir;
+   while ((dir = readdir(d)) != NULL) {
+      slice filename = slice_from_cstr(dir->d_name);
+      slice mda_ext = slice_from_cstr(".mda.tar");
+      if (slice_ends_with(filename, mda_ext)) {
+         char *fullpath = ralloc_asprintf(ctx, "%s/%s", dirpath, dir->d_name);
+         if (!load_archive(ctx, fullpath)) {
+            /* Failed to parse. */
+            fprintf(stderr, "mda: ignoring file after parsing failure: %s\n", fullpath);
+         }
+         ralloc_free(fullpath);
+      }
+   }
+   closedir(d);
 }
 
 static pid_t
@@ -1153,45 +1286,63 @@ main(int argc, char *argv[])
    }
 
    context *ctx = rzalloc(NULL, context);
-   ctx->diff.mode = DIFF_UNIFIED;
+   ctx->diff.mode = DIFF_WORDS;
    ctx->diff.param = 5;
 
    bool diff_set = false;
    int cur_arg = 1;
 
+   /* Set to deduplicate -f arguments. */
+   struct hash_table *seen_paths = _mesa_string_hash_table_create(NULL);
+
    while (cur_arg < argc && argv[cur_arg][0] == '-') {
       if (!strcmp(argv[cur_arg], "-f")) {
-      if (argc == cur_arg + 1)
-         failf("mda: missing filename after -f flag\n");
+         if (argc == cur_arg + 1)
+            failf("mda: missing filename after -f flag\n");
 
-      const char *filename = argv[cur_arg + 1];
-      cur_arg += 2;
+         const char *path = argv[cur_arg + 1];
+         cur_arg += 2;
 
-      for (int i = 0; i < ctx->archives_count; i++) {
-         mesa_archive *ma = ctx->archives[i];
+         /* Skip if we've already seen this path. */
+         if (_mesa_hash_table_search(seen_paths, path))
+            continue;
 
-         /* Don't load duplicate files from command line. */
-         if (slice_equal_cstr(ma->filename, filename)) {
-            filename = NULL;
-            break;
+         _mesa_hash_table_insert(seen_paths, path, NULL);
+
+         struct stat st;
+         if (stat(path, &st) != 0)
+            failf("mda: couldn't access path %s: %s\n", path, strerror(errno));
+
+         if (S_ISDIR(st.st_mode)) {
+            load_archives_from_directory(ctx, path);
+         } else if (S_ISREG(st.st_mode)) {
+            if (!load_archive(ctx, path))
+               failf("mda: failed to parse file: %s\n", path);
+         } else {
+            failf("mda: path is not a file or directory: %s\n", path);
          }
-      }
-
-      if (filename && !load_archive(ctx, filename))
-         failf("mda: failed to parse file: %s\n", filename);
-      } else if (argv[cur_arg][1] == 'U' || argv[cur_arg][1] == 'Y') {
+      } else if (argv[cur_arg][1] == 'W' ||
+                 argv[cur_arg][1] == 'U' ||
+                 argv[cur_arg][1] == 'Y') {
          if (diff_set)
-            failf("mda: -U and -Y options are mutually exclusive\n");
+            failf("mda: -W, -U and -Y options are mutually exclusive\n");
 
          diff_set = true;
-         ctx->diff.mode = (argv[cur_arg][1] == 'U') ? DIFF_UNIFIED : DIFF_SIDE_BY_SIDE;
+         switch (argv[cur_arg][1]) {
+         case 'W': ctx->diff.mode = DIFF_WORDS; break;
+         case 'U': ctx->diff.mode = DIFF_UNIFIED; break;
+         case 'Y': ctx->diff.mode = DIFF_SIDE_BY_SIDE; break;
+         }
 
          /* Parse optional numeric parameter. */
          if (argv[cur_arg][2] != '\0')
             ctx->diff.param = atoi(&argv[cur_arg][2]);
          else
-            ctx->diff.param = ctx->diff.mode == DIFF_UNIFIED ? 5 : 240;
+            ctx->diff.param = ctx->diff.mode == DIFF_SIDE_BY_SIDE ? 240 : 5;
 
+         cur_arg++;
+      } else if (!strcmp(argv[cur_arg], "-k")) {
+         ctx->keep_going = true;
          cur_arg++;
       } else {
          /* Unknown flag, stop parsing flags */
@@ -1199,25 +1350,11 @@ main(int argc, char *argv[])
       }
    }
 
+   _mesa_hash_table_destroy(seen_paths, NULL);
+
    if (ctx->archives_count == 0) {
       /* Load all mda files in the current directory. */
-      DIR *d;
-      struct dirent *dir;
-      d = opendir(".");
-      if (!d)
-         failf("mda: couldn't find *.mda.tar files in current directory: %s\n", strerror(errno));
-
-      while ((dir = readdir(d)) != NULL) {
-         slice filename = slice_from_cstr(dir->d_name);
-         slice mda_ext = slice_from_cstr(".mda.tar");
-         if (slice_ends_with(filename, mda_ext)) {
-            if (!load_archive(ctx, dir->d_name)) {
-               fprintf(stderr, "mda: ignoring file after parsing failure: %s\n", dir->d_name);
-               continue;
-            }
-         }
-      }
-      closedir(d);
+      load_archives_from_directory(ctx, ".");
 
       if (ctx->archives_count == 0)
          failf("Couldn't load any *.mda.tar files in the current directory\n");
@@ -1237,6 +1374,7 @@ main(int argc, char *argv[])
 
    static const struct command cmds[] = {
       { "diff",       cmd_diff },
+      { "difflog",    cmd_difflog },
       { "info",       cmd_info, .skip_pager = true },
       { "list",       cmd_list },
       { "listall",    cmd_list },
@@ -1267,6 +1405,10 @@ main(int argc, char *argv[])
    pid_t pid = cmd->skip_pager ? -1 : setup_pager();
 
    int r = cmd->func(ctx);
+
+   for (int i = 0; i < ctx->archives_count; i++)
+      unload_archive_contents(ctx, ctx->archives[i]);
+
    ralloc_free(ctx);
 
    if (pid > 0) {

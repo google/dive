@@ -32,12 +32,241 @@
 #include "vl/vl_video_buffer.h"
 #include "vl/vl_deint_filter.h"
 #include "vl/vl_winsys.h"
+#include "vl/vl_proc.h"
 
 #include "va_private.h"
 
+static VAProcColorStandardType vpp_color_standards[] = {
+   VAProcColorStandardBT601,
+   VAProcColorStandardBT709,
+   VAProcColorStandardBT2020,
+   VAProcColorStandardExplicit
+};
+
+VAStatus
+vlVaQueryVideoProcPipelineCaps(VADriverContextP ctx, VAContextID context,
+                               VABufferID *filters, unsigned int num_filters,
+                               VAProcPipelineCaps *pipeline_cap)
+{
+   unsigned int i = 0;
+
+   if (!ctx)
+      return VA_STATUS_ERROR_INVALID_CONTEXT;
+
+   if (!pipeline_cap)
+      return VA_STATUS_ERROR_INVALID_PARAMETER;
+
+   if (num_filters && !filters)
+      return VA_STATUS_ERROR_INVALID_PARAMETER;
+
+   pipeline_cap->pipeline_flags = 0;
+   pipeline_cap->filter_flags = 0;
+   pipeline_cap->num_forward_references = 0;
+   pipeline_cap->num_backward_references = 0;
+   pipeline_cap->rotation_flags = VA_ROTATION_NONE;
+   pipeline_cap->mirror_flags = VA_MIRROR_NONE;
+
+   struct pipe_screen *pscreen = VL_VA_PSCREEN(ctx);
+   bool media_only = !pscreen->caps.graphics && !pscreen->caps.compute;
+   uint32_t pipe_orientation_flags = pscreen->get_video_param(pscreen,
+                                                              PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                              PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                              PIPE_VIDEO_CAP_VPP_ORIENTATION_MODES);
+
+   if (!media_only || pipe_orientation_flags & PIPE_VIDEO_VPP_ROTATION_90)
+      pipeline_cap->rotation_flags |= (1 << VA_ROTATION_90);
+   if (!media_only || pipe_orientation_flags & PIPE_VIDEO_VPP_ROTATION_180)
+      pipeline_cap->rotation_flags |= (1 << VA_ROTATION_180);
+   if (!media_only || pipe_orientation_flags & PIPE_VIDEO_VPP_ROTATION_270)
+      pipeline_cap->rotation_flags |= (1 << VA_ROTATION_270);
+
+   if (!media_only || pipe_orientation_flags & PIPE_VIDEO_VPP_FLIP_HORIZONTAL)
+      pipeline_cap->mirror_flags |= VA_MIRROR_HORIZONTAL;
+   if (!media_only || pipe_orientation_flags & PIPE_VIDEO_VPP_FLIP_VERTICAL)
+      pipeline_cap->mirror_flags |= VA_MIRROR_VERTICAL;
+
+   pipeline_cap->input_color_standards = vpp_color_standards;
+   pipeline_cap->num_input_color_standards = ARRAY_SIZE(vpp_color_standards);
+   pipeline_cap->output_color_standards = vpp_color_standards;
+   pipeline_cap->num_output_color_standards = ARRAY_SIZE(vpp_color_standards);
+
+   pipeline_cap->max_input_width = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                            PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                            PIPE_VIDEO_CAP_VPP_MAX_INPUT_WIDTH);
+
+   pipeline_cap->max_input_height = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                             PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                             PIPE_VIDEO_CAP_VPP_MAX_INPUT_HEIGHT);
+
+   pipeline_cap->min_input_width = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                            PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                            PIPE_VIDEO_CAP_VPP_MIN_INPUT_WIDTH);
+
+   pipeline_cap->min_input_height = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                             PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                             PIPE_VIDEO_CAP_VPP_MIN_INPUT_HEIGHT);
+
+   pipeline_cap->max_output_width = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                             PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                             PIPE_VIDEO_CAP_VPP_MAX_OUTPUT_WIDTH);
+
+   pipeline_cap->max_output_height = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                              PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                              PIPE_VIDEO_CAP_VPP_MAX_OUTPUT_HEIGHT);
+
+   pipeline_cap->min_output_width = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                             PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                             PIPE_VIDEO_CAP_VPP_MIN_OUTPUT_WIDTH);
+
+   pipeline_cap->min_output_height = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                              PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                              PIPE_VIDEO_CAP_VPP_MIN_OUTPUT_HEIGHT);
+
+   uint32_t pipe_blend_modes = pscreen->get_video_param(pscreen, PIPE_VIDEO_PROFILE_UNKNOWN,
+                                                        PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+                                                        PIPE_VIDEO_CAP_VPP_BLEND_MODES);
+
+   pipeline_cap->blend_flags = 0;
+   if (!media_only || pipe_blend_modes & PIPE_VIDEO_VPP_BLEND_MODE_GLOBAL_ALPHA)
+      pipeline_cap->blend_flags |= VA_BLEND_GLOBAL_ALPHA;
+   if (!media_only || pipe_blend_modes & PIPE_VIDEO_VPP_BLEND_MODE_PREMULTIPLIED_ALPHA)
+      pipeline_cap->blend_flags |= VA_BLEND_PREMULTIPLIED_ALPHA;
+
+   vlVaDriver *drv = VL_VA_DRIVER(ctx);
+
+   mtx_lock(&drv->mutex);
+   for (i = 0; i < num_filters; i++) {
+      vlVaBuffer *buf = handle_table_get(drv->htab, filters[i]);
+      VAProcFilterParameterBufferBase *filter;
+
+      if (!buf || buf->type != VAProcFilterParameterBufferType) {
+         mtx_unlock(&drv->mutex);
+         return VA_STATUS_ERROR_INVALID_BUFFER;
+      }
+
+      filter = buf->data;
+      switch (filter->type) {
+      case VAProcFilterDeinterlacing: {
+         VAProcFilterParameterBufferDeinterlacing *deint = buf->data;
+         if (deint->algorithm == VAProcDeinterlacingMotionAdaptive) {
+            pipeline_cap->num_forward_references = 2;
+            pipeline_cap->num_backward_references = 1;
+         }
+         break;
+      }
+      default:
+         mtx_unlock(&drv->mutex);
+         return VA_STATUS_ERROR_UNIMPLEMENTED;
+      }
+   }
+   mtx_unlock(&drv->mutex);
+
+   return VA_STATUS_SUCCESS;
+}
+
+VAStatus
+vlVaQueryVideoProcFilters(VADriverContextP ctx, VAContextID context_id,
+                          VAProcFilterType *filters, unsigned int *num_filters)
+{
+   vlVaDriver *drv;
+   vlVaContext *context;
+   unsigned int num = 0;
+
+   if (!ctx)
+      return VA_STATUS_ERROR_INVALID_CONTEXT;
+
+   if (!num_filters || !filters)
+      return VA_STATUS_ERROR_INVALID_PARAMETER;
+
+   drv = VL_VA_DRIVER(ctx);
+
+   mtx_lock(&drv->mutex);
+   context = handle_table_get(drv->htab, context_id);
+   if (!context) {
+      mtx_unlock(&drv->mutex);
+      return VA_STATUS_ERROR_INVALID_CONTEXT;
+   }
+
+   if (context->templat.entrypoint != PIPE_VIDEO_ENTRYPOINT_ENCODE &&
+       context->templat.entrypoint != PIPE_VIDEO_ENTRYPOINT_BITSTREAM)
+      filters[num++] = VAProcFilterDeinterlacing;
+
+   mtx_unlock(&drv->mutex);
+
+   *num_filters = num;
+
+   return VA_STATUS_SUCCESS;
+}
+
+VAStatus
+vlVaQueryVideoProcFilterCaps(VADriverContextP ctx, VAContextID context_id,
+                             VAProcFilterType type, void *filter_caps,
+                             unsigned int *num_filter_caps)
+{
+   vlVaDriver *drv;
+   vlVaContext *context;
+   unsigned int i;
+   bool supports_filters;
+
+   if (!ctx)
+      return VA_STATUS_ERROR_INVALID_CONTEXT;
+
+   if (!filter_caps || !num_filter_caps)
+      return VA_STATUS_ERROR_INVALID_PARAMETER;
+
+   drv = VL_VA_DRIVER(ctx);
+
+   mtx_lock(&drv->mutex);
+   context = handle_table_get(drv->htab, context_id);
+   if (!context) {
+      mtx_unlock(&drv->mutex);
+      return VA_STATUS_ERROR_INVALID_CONTEXT;
+   }
+
+   supports_filters = context->templat.entrypoint != PIPE_VIDEO_ENTRYPOINT_ENCODE &&
+                      context->templat.entrypoint != PIPE_VIDEO_ENTRYPOINT_BITSTREAM;
+
+   mtx_unlock(&drv->mutex);
+
+   i = 0;
+
+   switch (type) {
+   case VAProcFilterNone:
+      break;
+   case VAProcFilterDeinterlacing: {
+      VAProcFilterCapDeinterlacing *deint = filter_caps;
+
+      if (!supports_filters)
+         return VA_STATUS_ERROR_UNIMPLEMENTED;
+
+      if (*num_filter_caps < 3) {
+         *num_filter_caps = 3;
+         return VA_STATUS_ERROR_MAX_NUM_EXCEEDED;
+      }
+
+      deint[i++].type = VAProcDeinterlacingBob;
+      deint[i++].type = VAProcDeinterlacingWeave;
+      deint[i++].type = VAProcDeinterlacingMotionAdaptive;
+      break;
+   }
+
+   case VAProcFilterNoiseReduction:
+   case VAProcFilterSharpening:
+   case VAProcFilterColorBalance:
+   case VAProcFilterSkinToneEnhancement:
+      return VA_STATUS_ERROR_UNIMPLEMENTED;
+   default:
+      assert(0);
+   }
+
+   *num_filter_caps = i;
+
+   return VA_STATUS_SUCCESS;
+}
+
 static const VARectangle *
 vlVaRegionDefault(const VARectangle *region, vlVaSurface *surf,
-		  VARectangle *def)
+                  VARectangle *def)
 {
    if (region)
       return region;
@@ -51,141 +280,27 @@ vlVaRegionDefault(const VARectangle *region, vlVaSurface *surf,
 }
 
 VAStatus
-vlVaPostProcCompositor(vlVaDriver *drv,
-                       struct pipe_video_buffer *src,
-                       struct pipe_video_buffer *dst,
-                       enum vl_compositor_deinterlace deinterlace,
-                       struct pipe_vpp_desc *param)
+vlVaPostProc(vlVaDriver *drv, vlVaContext *context, struct pipe_video_buffer *src,
+             struct pipe_video_buffer *dst, struct pipe_vpp_desc *param)
 {
-   struct pipe_surface *surfaces;
-   enum VL_CSC_COLOR_STANDARD color_standard;
-   enum vl_compositor_rotation rotation;
-   enum vl_compositor_mirror mirror;
-   bool src_yuv = util_format_is_yuv(src->buffer_format);
-   bool dst_yuv = util_format_is_yuv(dst->buffer_format);
-   bool dst_full_range =
-      param->out_color_range == PIPE_VIDEO_VPP_CHROMA_COLOR_RANGE_FULL ||
-      (param->out_color_range == PIPE_VIDEO_VPP_CHROMA_COLOR_RANGE_NONE && !dst_yuv);
+   struct pipe_video_codec *proc = NULL;
 
-   if (!drv->cstate.pipe)
+   if (context) {
+      assert(context->templat.entrypoint == PIPE_VIDEO_ENTRYPOINT_PROCESSING);
+      proc = context->decoder;
+   } else {
+      if (!drv->proc) {
+         struct pipe_video_codec templat = {
+            .profile = PIPE_VIDEO_PROFILE_UNKNOWN,
+            .entrypoint = PIPE_VIDEO_ENTRYPOINT_PROCESSING,
+         };
+         drv->proc = vl_create_proc(drv->pipe, &templat);
+      }
+      proc = drv->proc;
+   }
+
+   if (!proc)
       return VA_STATUS_ERROR_UNSUPPORTED_ENTRYPOINT;
-
-   /* Subsampled formats not supported */
-   if (util_format_is_subsampled_422(dst->buffer_format))
-      return VA_STATUS_ERROR_UNIMPLEMENTED;
-
-   surfaces = dst->get_surfaces(dst);
-   if (!surfaces[0].texture)
-      return VA_STATUS_ERROR_INVALID_SURFACE;
-
-   if (src_yuv == dst_yuv) {
-      color_standard = VL_CSC_COLOR_STANDARD_IDENTITY;
-   } else if (src_yuv) {
-      switch (param->in_colors_standard) {
-      case PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT601:
-         color_standard = VL_CSC_COLOR_STANDARD_BT_601;
-         break;
-      case PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT709:
-      default:
-         color_standard = param->in_color_range == PIPE_VIDEO_VPP_CHROMA_COLOR_RANGE_FULL ?
-            VL_CSC_COLOR_STANDARD_BT_709_FULL : VL_CSC_COLOR_STANDARD_BT_709;
-         break;
-      }
-   } else {
-      color_standard = VL_CSC_COLOR_STANDARD_BT_709_REV;
-   }
-
-   if (util_format_get_nr_components(src->buffer_format) == 1)
-      color_standard = VL_CSC_COLOR_STANDARD_IDENTITY;
-
-   vl_csc_get_matrix(color_standard, NULL, dst_full_range, &drv->csc);
-   vl_compositor_set_csc_matrix(&drv->cstate, &drv->csc, 1.0f, 0.0f);
-
-   if (src_yuv || dst_yuv) {
-      enum pipe_format format = src_yuv ? src->buffer_format : dst->buffer_format;
-      enum pipe_video_vpp_chroma_siting chroma_siting =
-         src_yuv ? param->in_chroma_siting : param->out_chroma_siting;
-
-      drv->cstate.chroma_location = VL_COMPOSITOR_LOCATION_NONE;
-
-      if (util_format_get_plane_height(format, 1, 4) != 4) {
-         if (chroma_siting & PIPE_VIDEO_VPP_CHROMA_SITING_VERTICAL_TOP)
-            drv->cstate.chroma_location |= VL_COMPOSITOR_LOCATION_VERTICAL_TOP;
-         else if (chroma_siting & PIPE_VIDEO_VPP_CHROMA_SITING_VERTICAL_BOTTOM)
-            drv->cstate.chroma_location |= VL_COMPOSITOR_LOCATION_VERTICAL_BOTTOM;
-         else
-            drv->cstate.chroma_location |= VL_COMPOSITOR_LOCATION_VERTICAL_CENTER;
-      }
-
-      if (util_format_is_subsampled_422(format) ||
-          util_format_get_plane_width(format, 1, 4) != 4) {
-         if (chroma_siting & PIPE_VIDEO_VPP_CHROMA_SITING_HORIZONTAL_CENTER)
-            drv->cstate.chroma_location |= VL_COMPOSITOR_LOCATION_HORIZONTAL_CENTER;
-         else
-            drv->cstate.chroma_location |= VL_COMPOSITOR_LOCATION_HORIZONTAL_LEFT;
-      }
-   }
-
-   if (param->orientation & PIPE_VIDEO_VPP_ROTATION_90)
-      rotation = VL_COMPOSITOR_ROTATE_90;
-   else if (param->orientation & PIPE_VIDEO_VPP_ROTATION_180)
-      rotation = VL_COMPOSITOR_ROTATE_180;
-   else if (param->orientation & PIPE_VIDEO_VPP_ROTATION_270)
-      rotation = VL_COMPOSITOR_ROTATE_270;
-   else
-      rotation = VL_COMPOSITOR_ROTATE_0;
-
-   if (param->orientation & PIPE_VIDEO_VPP_FLIP_VERTICAL)
-      mirror = VL_COMPOSITOR_MIRROR_VERTICAL;
-   else if (param->orientation & PIPE_VIDEO_VPP_FLIP_HORIZONTAL)
-      mirror = VL_COMPOSITOR_MIRROR_HORIZONTAL;
-   else
-      mirror = VL_COMPOSITOR_MIRROR_NONE;
-
-   vl_compositor_clear_layers(&drv->cstate);
-   vl_compositor_set_layer_rotation(&drv->cstate, 0, rotation);
-   vl_compositor_set_layer_mirror(&drv->cstate, 0, mirror);
-
-   if (dst_yuv) {
-      if (src_yuv) {
-         /* YUV -> YUV */
-         if (src->interlaced == dst->interlaced)
-            deinterlace = VL_COMPOSITOR_NONE;
-         vl_compositor_yuv_deint_full(&drv->cstate, &drv->compositor,
-                                      src, dst, &param->src_region, &param->dst_region,
-                                      deinterlace);
-      } else {
-         /* RGB -> YUV */
-         vl_compositor_convert_rgb_to_yuv(&drv->cstate, &drv->compositor, 0,
-                                          ((struct vl_video_buffer *)src)->resources[0],
-                                          dst, &param->src_region, &param->dst_region);
-      }
-   } else {
-      /* YUV/RGB -> RGB */
-      vl_compositor_set_buffer_layer(&drv->cstate, &drv->compositor, 0, src,
-                                     &param->src_region, NULL, deinterlace);
-      vl_compositor_set_layer_dst_area(&drv->cstate, 0, &param->dst_region);
-      vl_compositor_render(&drv->cstate, &drv->compositor, &surfaces[0], NULL, false);
-   }
-
-   drv->cstate.chroma_location = VL_COMPOSITOR_LOCATION_NONE;
-
-   return VA_STATUS_SUCCESS;
-}
-
-static VAStatus
-vlVaVidEngineBlit(vlVaDriver *drv,
-                  vlVaContext *context,
-                  struct pipe_video_buffer *src,
-                  struct pipe_video_buffer *dst,
-                  enum vl_compositor_deinterlace deinterlace,
-                  struct pipe_vpp_desc *param)
-{
-   if (deinterlace != VL_COMPOSITOR_NONE)
-      return VA_STATUS_ERROR_UNIMPLEMENTED;
-
-   if (!context->decoder || !context->decoder->process_frame)
-      return VA_STATUS_ERROR_UNIMPLEMENTED;
 
    if (!drv->pipe->screen->is_video_format_supported(drv->pipe->screen,
                                                      src->buffer_format,
@@ -199,13 +314,15 @@ vlVaVidEngineBlit(vlVaDriver *drv,
                                                      PIPE_VIDEO_ENTRYPOINT_PROCESSING))
       return VA_STATUS_ERROR_UNSUPPORTED_RT_FORMAT;
 
-   if (context->needs_begin_frame) {
-      context->decoder->begin_frame(context->decoder, dst,
-                                    &context->desc.base);
-      context->needs_begin_frame = false;
+   if (!context || context->needs_begin_frame) {
+      proc->begin_frame(proc, dst, &param->base);
+      if (context)
+         context->needs_begin_frame = false;
    }
 
-   if (context->decoder->process_frame(context->decoder, src, param))
+   proc->process_frame(proc, src, param);
+
+   if (!context && proc->end_frame(proc, dst, &param->base) != 0)
       return VA_STATUS_ERROR_OPERATION_FAILED;
 
    return VA_STATUS_SUCCESS;
@@ -258,10 +375,39 @@ vlVaApplyDeint(vlVaDriver *drv, vlVaContext *context,
    return context->deint->video_buffer;
 }
 
+static void
+vlVaGetColorProperties(VAProcColorStandardType standard,
+                       enum pipe_video_vpp_color_primaries *primaries,
+                       enum pipe_video_vpp_transfer_characteristic *trc,
+                       enum pipe_video_vpp_matrix_coefficients *coeffs)
+{
+   switch (standard) {
+   case VAProcColorStandardBT601:
+      *primaries = PIPE_VIDEO_VPP_PRI_SMPTE170M;
+      *trc = PIPE_VIDEO_VPP_TRC_SMPTE170M;
+      *coeffs = PIPE_VIDEO_VPP_MCF_SMPTE170M;
+      break;
+   case VAProcColorStandardBT709:
+      *primaries = PIPE_VIDEO_VPP_PRI_BT709;
+      *trc = PIPE_VIDEO_VPP_TRC_BT709;
+      *coeffs = PIPE_VIDEO_VPP_MCF_BT709;
+      break;
+   case VAProcColorStandardBT2020:
+      *primaries = PIPE_VIDEO_VPP_PRI_BT2020;
+      *trc = PIPE_VIDEO_VPP_TRC_SMPTE2084;
+      *coeffs = PIPE_VIDEO_VPP_MCF_BT2020_NCL;
+      break;
+   default:
+      *primaries = PIPE_VIDEO_VPP_PRI_UNSPECIFIED;
+      *trc = PIPE_VIDEO_VPP_TRC_UNSPECIFIED;
+      *coeffs = PIPE_VIDEO_VPP_MCF_UNSPECIFIED;
+      break;
+   }
+}
+
 VAStatus
 vlVaHandleVAProcPipelineParameterBufferType(vlVaDriver *drv, vlVaContext *context, vlVaBuffer *buf)
 {
-   enum vl_compositor_deinterlace deinterlace = VL_COMPOSITOR_NONE;
    VARectangle def_src_region, def_dst_region;
    const VARectangle *src_region, *dst_region;
    VAProcPipelineParameterBuffer *param;
@@ -293,6 +439,8 @@ vlVaHandleVAProcPipelineParameterBufferType(vlVaDriver *drv, vlVaContext *contex
          return VA_STATUS_ERROR_INVALID_PARAMETER;
 
       dst_surface = handle_table_get(drv->htab, param->additional_outputs[0]);
+      if (!dst_surface)
+         return VA_STATUS_ERROR_INVALID_SURFACE;
    }
 
    src_region = vlVaRegionDefault(param->surface_region, src_surface, &def_src_region);
@@ -316,26 +464,17 @@ vlVaHandleVAProcPipelineParameterBufferType(vlVaDriver *drv, vlVaContext *contex
          VAProcFilterParameterBufferDeinterlacing *deint = buf->data;
          switch (deint->algorithm) {
          case VAProcDeinterlacingBob:
-            if (deint->flags & VA_DEINTERLACING_BOTTOM_FIELD)
-               deinterlace = VL_COMPOSITOR_BOB_BOTTOM;
-            else
-               deinterlace = VL_COMPOSITOR_BOB_TOP;
-            break;
-
          case VAProcDeinterlacingWeave:
-            deinterlace = VL_COMPOSITOR_WEAVE;
             break;
 
          case VAProcDeinterlacingMotionAdaptive:
             src = vlVaApplyDeint(drv, context, param, src,
-				 !!(deint->flags & VA_DEINTERLACING_BOTTOM_FIELD));
-             deinterlace = VL_COMPOSITOR_MOTION_ADAPTIVE;
+                                 !!(deint->flags & VA_DEINTERLACING_BOTTOM_FIELD));
             break;
 
          default:
             return VA_STATUS_ERROR_UNIMPLEMENTED;
          }
-         drv->compositor.deinterlace = deinterlace;
          break;
       }
 
@@ -381,36 +520,38 @@ vlVaHandleVAProcPipelineParameterBufferType(vlVaDriver *drv, vlVaContext *contex
    }
 
    if (param->blend_state) {
-      if (param->blend_state->flags & VA_BLEND_GLOBAL_ALPHA) {
-         vpp.blend.mode = PIPE_VIDEO_VPP_BLEND_MODE_GLOBAL_ALPHA;
-         vpp.blend.global_alpha = param->blend_state->global_alpha;
-      }
+      vpp.blend.enabled = true;
+      vpp.blend.global_alpha = param->blend_state->global_alpha;
+      if (param->blend_state->flags & VA_BLEND_GLOBAL_ALPHA)
+         vpp.blend.mode |= PIPE_VIDEO_VPP_BLEND_MODE_GLOBAL_ALPHA;
+      if (param->blend_state->flags & VA_BLEND_PREMULTIPLIED_ALPHA)
+         vpp.blend.mode |= PIPE_VIDEO_VPP_BLEND_MODE_PREMULTIPLIED_ALPHA;
    }
 
    /* Output background color */
    vpp.background_color = param->output_background_color;
 
-   /* Input surface color standard */
-   switch (param->surface_color_standard) {
-   case VAProcColorStandardBT601:
-      vpp.in_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT601;
-      break;
-   case VAProcColorStandardBT709:
-      vpp.in_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT709;
-      break;
-   case VAProcColorStandardBT2020:
-      vpp.in_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT2020;
-      break;
-   case VAProcColorStandardExplicit:
-      vpp.in_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_EXPLICIT;
+   if (param->surface_color_standard == VAProcColorStandardExplicit) {
       vpp.in_color_primaries = param->input_color_properties.colour_primaries;
       vpp.in_transfer_characteristics = param->input_color_properties.transfer_characteristics;
       vpp.in_matrix_coefficients = param->input_color_properties.matrix_coefficients;
-      break;
-   default:
-      vpp.in_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_NONE;
-      break;
+   } else {
+      vlVaGetColorProperties(param->surface_color_standard, &vpp.in_color_primaries,
+                             &vpp.in_transfer_characteristics, &vpp.in_matrix_coefficients);
    }
+
+   if (vpp.in_color_primaries == PIPE_VIDEO_VPP_PRI_RESERVED0 ||
+       vpp.in_color_primaries == PIPE_VIDEO_VPP_PRI_UNSPECIFIED)
+      vpp.in_color_primaries = PIPE_VIDEO_VPP_PRI_BT709;
+
+   if (vpp.in_transfer_characteristics == PIPE_VIDEO_VPP_TRC_RESERVED0 ||
+       vpp.in_transfer_characteristics == PIPE_VIDEO_VPP_TRC_UNSPECIFIED)
+      vpp.in_transfer_characteristics = PIPE_VIDEO_VPP_TRC_GAMMA22;
+
+   if (vpp.in_matrix_coefficients == PIPE_VIDEO_VPP_MCF_UNSPECIFIED ||
+       (vpp.in_matrix_coefficients == PIPE_VIDEO_VPP_MCF_RGB &&
+        util_format_is_yuv(src->buffer_format)))
+      vpp.in_matrix_coefficients = PIPE_VIDEO_VPP_MCF_BT709;
 
    /* Input surface color range */
    switch (param->input_color_properties.color_range) {
@@ -439,27 +580,27 @@ vlVaHandleVAProcPipelineParameterBufferType(vlVaDriver *drv, vlVaContext *contex
    else if (param->input_color_properties.chroma_sample_location & VA_CHROMA_SITING_HORIZONTAL_CENTER)
       vpp.in_chroma_siting |= PIPE_VIDEO_VPP_CHROMA_SITING_HORIZONTAL_CENTER;
 
-   /* Output surface color standard */
-   switch (param->output_color_standard) {
-   case VAProcColorStandardBT601:
-      vpp.out_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT601;
-      break;
-   case VAProcColorStandardBT709:
-      vpp.out_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT709;
-      break;
-   case VAProcColorStandardBT2020:
-      vpp.out_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_BT2020;
-      break;
-   case VAProcColorStandardExplicit:
-      vpp.out_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_EXPLICIT;
+   if (param->output_color_standard == VAProcColorStandardExplicit) {
       vpp.out_color_primaries = param->output_color_properties.colour_primaries;
       vpp.out_transfer_characteristics = param->output_color_properties.transfer_characteristics;
       vpp.out_matrix_coefficients = param->output_color_properties.matrix_coefficients;
-      break;
-   default:
-      vpp.out_colors_standard = PIPE_VIDEO_VPP_COLOR_STANDARD_TYPE_NONE;
-      break;
+   } else {
+      vlVaGetColorProperties(param->output_color_standard, &vpp.out_color_primaries,
+                             &vpp.out_transfer_characteristics, &vpp.out_matrix_coefficients);
    }
+
+   if (vpp.out_color_primaries == PIPE_VIDEO_VPP_PRI_RESERVED0 ||
+       vpp.out_color_primaries == PIPE_VIDEO_VPP_PRI_UNSPECIFIED)
+      vpp.out_color_primaries = PIPE_VIDEO_VPP_PRI_BT709;
+
+   if (vpp.out_transfer_characteristics == PIPE_VIDEO_VPP_TRC_RESERVED0 ||
+       vpp.out_transfer_characteristics == PIPE_VIDEO_VPP_TRC_UNSPECIFIED)
+      vpp.out_transfer_characteristics = PIPE_VIDEO_VPP_TRC_GAMMA22;
+
+   if (vpp.out_matrix_coefficients == PIPE_VIDEO_VPP_MCF_UNSPECIFIED ||
+       (vpp.out_matrix_coefficients == PIPE_VIDEO_VPP_MCF_RGB &&
+        util_format_is_yuv(dst->buffer_format)))
+      vpp.out_matrix_coefficients = PIPE_VIDEO_VPP_MCF_BT709;
 
    /* Output surface color range */
    switch (param->output_color_properties.color_range) {
@@ -504,11 +645,5 @@ vlVaHandleVAProcPipelineParameterBufferType(vlVaDriver *drv, vlVaContext *contex
       return VA_STATUS_SUCCESS;
    }
 
-   if (vlVaVidEngineBlit(drv, context, src, dst, deinterlace, &vpp) == VA_STATUS_SUCCESS)
-      return VA_STATUS_SUCCESS;
-
-   VAStatus ret =
-      vlVaPostProcCompositor(drv, src, dst, deinterlace, &vpp);
-   vlVaSurfaceFlush(drv, dst_surface);
-   return ret;
+   return vlVaPostProc(drv, context, src, dst, &vpp);
 }

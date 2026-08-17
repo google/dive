@@ -268,7 +268,7 @@ next_sect(struct state *state, int *sect_size)
    *sect_size = end - state->buf;
 
    /* copy the section to keep things nicely 32b aligned: */
-   sect = malloc(ALIGN(*sect_size, 4));
+   sect = malloc(align(*sect_size, 4));
    memcpy(sect, state->buf, *sect_size);
 
    state->sz -= *sect_size + 4;
@@ -393,7 +393,7 @@ dump_short_summary(struct state *state, int nconsts,
 }
 
 static void
-dump_raw_shader(uint32_t *dwords, uint32_t sizedwords, int n, char *ext)
+dump_raw_shader(const uint32_t *dwords, uint32_t sizedwords, int n, char *ext)
 {
    static char filename[256];
    int fd;
@@ -584,8 +584,8 @@ dump_shaders_a3xx(struct state *state)
 
       if (!compact) {
          if (state->hdr->revision >= 7) {
-            instrs += ALIGN(instrs_size, 8) - instrs_size;
-            instrs_size = ALIGN(instrs_size, 8);
+            instrs += align(instrs_size, 8) - instrs_size;
+            instrs_size = align(instrs_size, 8);
          }
          instrs += 32;
          instrs_size -= 32;

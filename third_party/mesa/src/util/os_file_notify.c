@@ -11,7 +11,12 @@
 #if DETECT_OS_LINUX
 #include <sys/eventfd.h>
 #include <sys/inotify.h>
+
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#else
 #include <sys/poll.h>
+#endif
 
 #include <errno.h>
 #include <stdatomic.h>

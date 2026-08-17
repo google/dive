@@ -29,7 +29,8 @@
 #include "pvr_device_info.h"
 
 #define PVR_DEVICE_IDENT_4_V_2_51 \
-   .device_id = 0x6250, .series_name = "Rogue", .public_name = "GX6250"
+   .device_id = 0x6250, .series_name = "Rogue", \
+   .public_name = "GX6250", .arch = PVR_DEVICE_ARCH_ROGUE
 
 static const struct pvr_device_features pvr_device_features_4_V_2_51 = {
    .has_astc = true,
@@ -40,7 +41,7 @@ static const struct pvr_device_features pvr_device_features_4_V_2_51 = {
    .has_compute_overlap = true,
    .has_eight_output_registers = true,
    .has_fbcdc_algorithm = true,
-   .has_gs_rta_support = true,
+   /* .has_gs_rta_support = true, */
    .has_isp_max_tiles_in_flight = true,
    .has_isp_samples_per_pixel = true,
    .has_max_instances_per_pds_task = true,
@@ -63,6 +64,7 @@ static const struct pvr_device_features pvr_device_features_4_V_2_51 = {
    .has_unified_store_depth = true,
    .has_usc_f16sop_u8 = true,
    .has_usc_itrsmp = true,
+   .has_usc_itr_parallel_instances = true,
    .has_usc_min_output_registers_per_pix = true,
    .has_usc_slots = true,
    .has_uvs_banks = true,
@@ -87,6 +89,7 @@ static const struct pvr_device_features pvr_device_features_4_V_2_51 = {
    .tile_size_y = 32U,
    .tpu_parallel_instances = 4U,
    .unified_store_depth = 256U,
+   .usc_itr_parallel_instances = 8U,
    .usc_min_output_registers_per_pix = 2U,
    .usc_slots = 32U,
    .uvs_banks = 8U,
@@ -95,9 +98,6 @@ static const struct pvr_device_features pvr_device_features_4_V_2_51 = {
    .vdm_cam_size = 256U,
 
    .has_requires_fb_cdc_zls_setup = true,
-   .has_usc_itr_parallel_instances = true,
-
-   .usc_itr_parallel_instances = 8U,
 };
 
 static const struct pvr_device_enhancements pvr_device_enhancements_4_40_2_51 = {
@@ -152,7 +152,7 @@ static const struct pvr_device_features pvr_device_features_4_V_2_58 = {
    .has_compute_overlap = true,
    .has_eight_output_registers = true,
    .has_fbcdc_algorithm = true,
-   .has_gs_rta_support = true,
+   /* .has_gs_rta_support = true, */
    .has_isp_max_tiles_in_flight = true,
    .has_isp_samples_per_pixel = true,
    .has_max_instances_per_pds_task = true,
@@ -175,6 +175,7 @@ static const struct pvr_device_features pvr_device_features_4_V_2_58 = {
    .has_unified_store_depth = true,
    .has_usc_f16sop_u8 = true,
    .has_usc_itrsmp = true,
+   .has_usc_itr_parallel_instances = true,
    .has_usc_min_output_registers_per_pix = true,
    .has_usc_slots = true,
    .has_uvs_banks = true,
@@ -199,6 +200,7 @@ static const struct pvr_device_features pvr_device_features_4_V_2_58 = {
    .tile_size_y = 32U,
    .tpu_parallel_instances = 4U,
    .unified_store_depth = 256U,
+   .usc_itr_parallel_instances = 8U,
    .usc_min_output_registers_per_pix = 2U,
    .usc_slots = 32U,
    .uvs_banks = 8U,
@@ -207,9 +209,6 @@ static const struct pvr_device_features pvr_device_features_4_V_2_58 = {
    .vdm_cam_size = 256U,
 
    .has_requires_fb_cdc_zls_setup = true,
-   .has_usc_itr_parallel_instances = true,
-
-   .usc_itr_parallel_instances = 8U,
 };
 
 static const struct pvr_device_enhancements pvr_device_enhancements_4_45_2_58 = {

@@ -147,7 +147,7 @@ stw_pbuffer_create(const struct stw_pixelformat_info *pfi, int iWidth, int iHeig
    assert(rect.bottom - rect.top == iHeight);
 #endif
 
-   return stw_framebuffer_create(hWnd, pfi, STW_FRAMEBUFFER_PBUFFER, fscreen);
+   return stw_framebuffer_create(NULL, hWnd, pfi, STW_FRAMEBUFFER_PBUFFER, fscreen);
 }
 
 

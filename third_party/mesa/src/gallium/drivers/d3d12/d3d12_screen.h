@@ -77,6 +77,7 @@ struct d3d12_screen {
    util_dl_library *d3d12_mod;
    ID3D12Device3 *dev;
    ID3D12Device10 *dev10;
+   ID3D12Device15 *dev15;
    ID3D12CommandQueue *cmdqueue;
    bool (*init)(struct d3d12_screen *screen);
    void (*deinit)(struct d3d12_screen *screen);
@@ -86,11 +87,18 @@ struct d3d12_screen {
    ID3D12Fence *fence;
    uint64_t fence_value;
 
+   mtx_t pending_free_lock;
+   struct list_head pending_free_list;
+
    struct list_head residency_list;
    ID3D12Fence *residency_fence;
    uint64_t residency_fence_value;
    unsigned num_evictions;
    uint64_t total_bytes_evicted;
+
+   /* Periodic trim notification residency */
+   uint64_t periodic_trim_notification_index;      /* Incremented each callback invocation. */
+   DWORD    periodic_trim_callback_cookie;         /* Cookie returned at registration. DWORD_MAX indicates no callback registered. */
 
    struct list_head context_list;
    unsigned context_id_list[16];

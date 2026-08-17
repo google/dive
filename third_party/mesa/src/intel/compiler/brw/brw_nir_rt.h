@@ -1,24 +1,6 @@
 /*
  * Copyright © 2020 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -83,6 +65,24 @@ brw_nir_create_trivial_return_shader(const struct brw_compiler *compiler,
 nir_shader *
 brw_nir_create_null_ahs_shader(const struct brw_compiler *compiler,
                                void *mem_ctx);
+
+static inline nir_def *
+brw_nir_build_vec3_mat_mult_col_major(nir_builder *b, nir_def *vec,
+                                      nir_def *matrix[], bool translation)
+{
+   nir_def *result_components[3] = {
+      nir_channel(b, matrix[3], 0),
+      nir_channel(b, matrix[3], 1),
+      nir_channel(b, matrix[3], 2),
+   };
+   for (unsigned i = 0; i < 3; ++i) {
+      for (unsigned j = 0; j < 3; ++j) {
+         nir_def *v = nir_fmul(b, nir_channels(b, vec, 1 << j), nir_channels(b, matrix[j], 1 << i));
+         result_components[i] = (translation || j) ? nir_fadd(b, result_components[i], v) : v;
+      }
+   }
+   return nir_vec(b, result_components, 3);
+}
 
 #ifdef __cplusplus
 }

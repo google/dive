@@ -33,6 +33,7 @@ struct CopyEntry {
     bi: usize,
     src_type: SrcType,
     src: Src,
+    ftz: bool,
 }
 
 struct PrmtEntry {
@@ -53,12 +54,12 @@ enum CopyPropEntry {
 }
 
 struct CopyPropPass<'a> {
-    sm: &'a dyn ShaderModel,
+    sm: &'a ShaderModelInfo,
     ssa_map: FxHashMap<SSAValue, CopyPropEntry>,
 }
 
 impl<'a> CopyPropPass<'a> {
-    pub fn new(sm: &'a dyn ShaderModel) -> Self {
+    pub fn new(sm: &'a ShaderModelInfo) -> Self {
         CopyPropPass {
             sm: sm,
             ssa_map: Default::default(),
@@ -72,9 +73,27 @@ impl<'a> CopyPropPass<'a> {
         src_type: SrcType,
         src: Src,
     ) {
+        self.add_copy_float(bi, dst, src_type, src, false);
+    }
+
+    fn add_copy_float(
+        &mut self,
+        bi: usize,
+        dst: SSAValue,
+        src_type: SrcType,
+        src: Src,
+        ftz: bool,
+    ) {
         assert!(src.src_ref.get_reg().is_none());
-        self.ssa_map
-            .insert(dst, CopyPropEntry::Copy(CopyEntry { bi, src_type, src }));
+        self.ssa_map.insert(
+            dst,
+            CopyPropEntry::Copy(CopyEntry {
+                bi,
+                src_type,
+                src,
+                ftz,
+            }),
+        );
     }
 
     fn add_b2i(&mut self, _bi: usize, dst: SSAValue, src: Src) {
@@ -190,18 +209,30 @@ impl<'a> CopyPropPass<'a> {
         }
     }
 
-    fn prop_to_ssa_ref(&self, src_ssa: &mut SSARef) -> bool {
+    fn prop_to_ssa_values(
+        &self,
+        src_ssa: &mut [SSAValue],
+        same_file: bool,
+    ) -> bool {
         let mut progress = false;
 
-        for c in 0..src_ssa.comps() {
-            let c_ssa = &mut src_ssa[usize::from(c)];
+        for c_ssa in src_ssa {
             let Some(CopyPropEntry::Copy(entry)) = self.get_copy(c_ssa) else {
                 continue;
             };
 
+            if entry.ftz {
+                continue;
+            }
+
             if entry.src.is_unmodified() {
                 if let SrcRef::SSA(entry_ssa) = &entry.src.src_ref {
                     assert!(entry_ssa.comps() == 1);
+
+                    if same_file && (c_ssa.file() != entry_ssa[0].file()) {
+                        continue;
+                    }
+
                     *c_ssa = entry_ssa[0];
                     progress = true;
                 }
@@ -209,6 +240,21 @@ impl<'a> CopyPropPass<'a> {
         }
 
         progress
+    }
+
+    fn prop_to_ssa_ref(&self, src_ssa: &mut SSARef) -> bool {
+        self.prop_to_ssa_values(&mut src_ssa[..], false)
+    }
+
+    fn prop_to_cbuf_ref(&self, cbuf: &mut CBufRef) {
+        match cbuf.buf {
+            CBuf::BindlessSSA(ref mut ssa_values) => loop {
+                if !self.prop_to_ssa_values(&mut ssa_values[..], true) {
+                    break;
+                }
+            },
+            _ => (),
+        }
     }
 
     fn prop_to_ssa_src(&self, src: &mut Src) {
@@ -258,6 +304,7 @@ impl<'a> CopyPropPass<'a> {
         src_type: SrcType,
         cbuf_rule: &CBufRule,
         src: &mut Src,
+        instr_ftz: bool,
     ) {
         loop {
             let src_ssa = match &src.src_ref {
@@ -273,12 +320,20 @@ impl<'a> CopyPropPass<'a> {
 
             match entry {
                 CopyPropEntry::Copy(entry) => {
+                    // If the original op flushes denorms, but not the
+                    // consumer, we skip the propagation
+                    if entry.ftz && !instr_ftz {
+                        return;
+                    }
+
                     if !cbuf_rule.allows_src(entry.bi, &entry.src) {
                         return;
                     }
 
-                    // If there are modifiers, the source types have to match
-                    if !entry.src.is_unmodified() && entry.src_type != src_type
+                    // If there are modifiers or ftz enabled, the source types
+                    // have to match
+                    if (!entry.src.is_unmodified() || entry.ftz)
+                        && !entry.src_type.eq_ftz_mod(src_type)
                     {
                         return;
                     }
@@ -290,7 +345,10 @@ impl<'a> CopyPropPass<'a> {
                     // Turn the swizzle into a permute. For F16, we use Xx to
                     // indicate that it only takes the bottom 16 bits.
                     let swizzle_prmt: [u8; 4] = match src_type {
-                        SrcType::F16 => [0, 1, 0, 1],
+                        SrcType::F16 => match src.src_swizzle {
+                            SrcSwizzle::None | SrcSwizzle::Xx => [0, 1, 0, 1],
+                            SrcSwizzle::Yy => [2, 3, 2, 3],
+                        },
                         SrcType::F16v2 => match src.src_swizzle {
                             SrcSwizzle::None => [0, 1, 2, 3],
                             SrcSwizzle::Xx => [0, 1, 0, 1],
@@ -330,12 +388,11 @@ impl<'a> CopyPropPass<'a> {
 
                     // See if that permute is a valid swizzle
                     let new_swizzle = match src_type {
-                        SrcType::F16 => {
-                            if combined != [0, 1, 0, 1] {
-                                return;
-                            }
-                            SrcSwizzle::None
-                        }
+                        SrcType::F16 => match combined {
+                            [0, 1, _, _] => SrcSwizzle::None,
+                            [2, 3, _, _] => SrcSwizzle::Yy,
+                            _ => return,
+                        },
                         SrcType::F16v2 => match combined {
                             [0, 1, 2, 3] => SrcSwizzle::None,
                             [0, 1, 0, 1] => SrcSwizzle::Xx,
@@ -464,6 +521,7 @@ impl<'a> CopyPropPass<'a> {
         src_type: SrcType,
         cbuf_rule: &CBufRule,
         src: &mut Src,
+        instr_ftz: bool,
     ) {
         match src_type {
             SrcType::SSA => {
@@ -479,12 +537,19 @@ impl<'a> CopyPropPass<'a> {
             | SrcType::I32
             | SrcType::B32
             | SrcType::Pred => {
-                self.prop_to_scalar_src(src_type, cbuf_rule, src);
+                self.prop_to_scalar_src(src_type, cbuf_rule, src, instr_ftz);
             }
             SrcType::F64 => {
                 self.prop_to_f64_src(cbuf_rule, src);
             }
             SrcType::Carry | SrcType::Bar => (),
+        }
+
+        match &mut src.src_ref {
+            SrcRef::CBuf(cbuf) => {
+                self.prop_to_cbuf_ref(cbuf);
+            }
+            _ => (),
         }
     }
 
@@ -495,20 +560,22 @@ impl<'a> CopyPropPass<'a> {
                 assert!(dst.comps() == 1);
                 let dst = dst[0];
 
-                if !add.saturate && !add.ftz {
+                if !add.saturate {
                     if add.srcs[0].is_fneg_zero(SrcType::F16v2) {
-                        self.add_copy(
+                        self.add_copy_float(
                             bi,
                             dst,
                             SrcType::F16v2,
                             add.srcs[1].clone(),
+                            add.ftz,
                         );
                     } else if add.srcs[1].is_fneg_zero(SrcType::F16v2) {
-                        self.add_copy(
+                        self.add_copy_float(
                             bi,
                             dst,
                             SrcType::F16v2,
                             add.srcs[0].clone(),
+                            add.ftz,
                         );
                     }
                 }
@@ -518,20 +585,22 @@ impl<'a> CopyPropPass<'a> {
                 assert!(dst.comps() == 1);
                 let dst = dst[0];
 
-                if !add.saturate && !add.ftz {
+                if !add.saturate {
                     if add.srcs[0].is_fneg_zero(SrcType::F32) {
-                        self.add_copy(
+                        self.add_copy_float(
                             bi,
                             dst,
                             SrcType::F32,
                             add.srcs[1].clone(),
+                            add.ftz,
                         );
                     } else if add.srcs[1].is_fneg_zero(SrcType::F32) {
-                        self.add_copy(
+                        self.add_copy_float(
                             bi,
                             dst,
                             SrcType::F32,
                             add.srcs[0].clone(),
+                            add.ftz,
                         );
                     }
                 }
@@ -781,6 +850,7 @@ impl<'a> CopyPropPass<'a> {
                 };
 
                 let src_types = instr.src_types();
+                let ftz = instr.ftz();
                 for (i, src) in instr.srcs_mut().iter_mut().enumerate() {
                     let mut src_type = src_types[i];
                     if force_alu_src_type {
@@ -792,7 +862,7 @@ impl<'a> CopyPropPass<'a> {
                             _ => panic!("Unhandled src_type"),
                         };
                     };
-                    self.prop_to_src(src_type, &cbuf_rule, src);
+                    self.prop_to_src(src_type, &cbuf_rule, src, ftz);
                 }
             }
         }

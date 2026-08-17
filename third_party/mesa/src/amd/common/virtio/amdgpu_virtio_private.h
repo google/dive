@@ -48,7 +48,7 @@ struct amdvgpu_device {
     * Used to maintain a 1-to-1 mapping between the 2.
     */
    simple_mtx_t handle_to_vbo_mutex;
-   struct hash_table *handle_to_vbo;
+   struct hash_table_u64 *handle_to_vbo;
 
    /* Submission through virtio-gpu are ring based.
     * Ring 0 is used for CPU jobs, then N rings are allocated: 1

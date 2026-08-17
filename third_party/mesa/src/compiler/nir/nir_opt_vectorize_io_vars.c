@@ -280,7 +280,7 @@ create_new_io_vars(nir_shader *shader, nir_variable_mode mode,
          for (unsigned i = first; i < frac; i++) {
             new_vars[loc][i] = var;
             if (old_vars[loc][i]) {
-               util_dynarray_append(demote_vars, nir_variable *, old_vars[loc][i]);
+               util_dynarray_append(demote_vars, old_vars[loc][i]);
                old_vars[loc][i] = NULL;
             }
          }
@@ -398,8 +398,7 @@ nir_opt_vectorize_io_vars_impl(nir_function_impl *impl, nir_variable_mode modes)
 
    nir_metadata_require(impl, nir_metadata_dominance);
 
-   struct util_dynarray demote_vars;
-   util_dynarray_init(&demote_vars, NULL);
+   struct util_dynarray demote_vars = UTIL_DYNARRAY_INIT;
 
    nir_shader *shader = impl->function->shader;
    nir_variable *new_inputs[MAX_SLOTS][4] = { { 0 } };

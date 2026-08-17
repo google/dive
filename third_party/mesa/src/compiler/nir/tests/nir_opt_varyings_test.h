@@ -158,9 +158,9 @@ protected:
 
    nir_def *build_uniform_expr(nir_builder *b, unsigned bit_size, unsigned index)
    {
-      return nir_fsqrt(b, nir_ffma(b, load_uniform(b, bit_size, index),
-                                   nir_imm_floatN_t(b, 3.14, bit_size),
-                                   load_ubo(b, bit_size, index)));
+      return nir_fsqrt(b, nir_ffma_weak(b, load_uniform(b, bit_size, index),
+                                        nir_imm_floatN_t(b, 3.14, bit_size),
+                                        load_ubo(b, bit_size, index)));
    }
 
    bool shader_contains_uniform(nir_builder *target_b, unsigned bit_size,
@@ -197,7 +197,7 @@ protected:
    has_non_io_offset_non_vertex_index_use(nir_builder *b, nir_def *def)
    {
       nir_foreach_use(src, def) {
-         nir_instr *instr = nir_src_parent_instr(src);
+         nir_instr *instr = nir_src_use_instr(src);
 
          if (instr->type == nir_instr_type_intrinsic) {
             nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
@@ -254,13 +254,13 @@ protected:
       if (contains) {
          return shader_contains_uniform(b, bit_size, index) &&
                 shader_contains_ubo(b, bit_size, index) &&
-                shader_contains_alu_op(b, nir_op_ffma, bit_size) &&
+                shader_contains_alu_op(b, nir_op_ffma_weak, bit_size) &&
                 shader_contains_alu_op(b, nir_op_fsqrt, bit_size) &&
                 shader_contains_const_float(b, 3.14, bit_size);
       } else {
          return !shader_contains_uniform(b, bit_size, index) &&
                 !shader_contains_ubo(b, bit_size, index) &&
-                !shader_contains_alu_op(b, nir_op_ffma, bit_size) &&
+                !shader_contains_alu_op(b, nir_op_ffma_weak, bit_size) &&
                 !shader_contains_alu_op(b, nir_op_fsqrt, bit_size) &&
                 !shader_contains_const_float(b, 3.14, bit_size);
       }
@@ -268,11 +268,11 @@ protected:
 
    void optimize()
    {
-      NIR_PASS(_, b1->shader, nir_copy_prop);
+      NIR_PASS(_, b1->shader, nir_opt_copy_prop);
       NIR_PASS(_, b1->shader, nir_opt_dce);
       NIR_PASS(_, b1->shader, nir_opt_cse);
 
-      NIR_PASS(_, b2->shader, nir_copy_prop);
+      NIR_PASS(_, b2->shader, nir_opt_copy_prop);
       NIR_PASS(_, b2->shader, nir_opt_dce);
       NIR_PASS(_, b2->shader, nir_opt_cse);
    }
@@ -325,7 +325,7 @@ shader_contains_instr(nir_builder *b, nir_instr *i)
 static inline bool
 shader_contains_def(nir_builder *b, nir_def *def)
 {
-   return shader_contains_instr(b, def->parent_instr);
+   return shader_contains_instr(b, nir_def_instr(def));
 }
 
 static inline bool
@@ -377,19 +377,24 @@ is_per_vertex(nir_builder *b, gl_varying_slot slot, bool is_input)
 
 static inline nir_def *
 load_input_output(nir_builder *b, gl_varying_slot slot, unsigned component,
-                  nir_alu_type type, unsigned vertex_index, bool output)
+                  nir_alu_type type, int vertex_index, bool output)
 {
    unsigned bit_size = type & ~(nir_type_float | nir_type_int | nir_type_uint);
    nir_def *zero = nir_imm_int(b, 0);
-   nir_def *def;
+   nir_def *def, *vertex_index_def;
 
    if (is_per_vertex(b, slot, true)) {
       if (output) {
          def = nir_load_per_vertex_output(b, 1, bit_size,
                                           nir_imm_int(b, vertex_index), zero);
       } else {
+         if (b->shader->info.stage == MESA_SHADER_TESS_CTRL && vertex_index < 0)
+            vertex_index_def = nir_load_invocation_id(b);
+         else
+            vertex_index_def = nir_imm_int(b, vertex_index);
+
          def = nir_load_per_vertex_input(b, 1, bit_size,
-                                         nir_imm_int(b, vertex_index), zero);
+                                         vertex_index_def, zero);
       }
    } else {
       if (output)
@@ -548,8 +553,8 @@ load_interpolated_input_tes(nir_builder *b, gl_varying_slot slot,
          if (i == 0)
             def[i] = nir_fmul(b, def[i], nir_channel(b, tesscoord, remap[i]));
          else
-            def[i] = nir_ffma(b, def[i], nir_channel(b, tesscoord, remap[i]),
-                              def[i - 1]);
+            def[i] = nir_ffma_weak(b, def[i], nir_channel(b, tesscoord, remap[i]),
+                                   def[i - 1]);
       } else {
          def[i] = nir_fmul(b, def[i], nir_channel(b, tesscoord, remap[i]));
       }
@@ -563,7 +568,7 @@ load_interpolated_input_tes(nir_builder *b, gl_varying_slot slot,
 
 static inline nir_def *
 load_input(nir_builder *b, gl_varying_slot slot, unsigned component,
-           nir_alu_type type, unsigned vertex_index, unsigned interp)
+           nir_alu_type type, int vertex_index, unsigned interp)
 {
    if (b->shader->info.stage == MESA_SHADER_FRAGMENT && interp != INTERP_FLAT) {
       return load_input_interp(b, slot, component, type, interp);
@@ -578,14 +583,15 @@ load_input(nir_builder *b, gl_varying_slot slot, unsigned component,
 
 static inline nir_def *
 load_output(nir_builder *b, gl_varying_slot slot, unsigned component,
-            nir_alu_type type, unsigned vertex_index)
+            nir_alu_type type, int vertex_index)
 {
    return load_input_output(b, slot, component, type, vertex_index, true);
 }
 
 static inline nir_intrinsic_instr *
 store_output(nir_builder *b, gl_varying_slot slot, unsigned component,
-             nir_alu_type type, nir_def *src, int vertex_index)
+             nir_alu_type type, nir_def *src, int vertex_index,
+             bool no_signed_zero)
 {
    nir_def *zero = nir_imm_int(b, 0);
    nir_intrinsic_instr *intr;
@@ -609,6 +615,7 @@ store_output(nir_builder *b, gl_varying_slot slot, unsigned component,
    memset(&sem, 0, sizeof(sem));
    sem.location = slot;
    sem.num_slots = 1;
+   sem.no_signed_zero = no_signed_zero;
    nir_intrinsic_set_io_semantics(intr, sem);
 
    return intr;
@@ -646,7 +653,10 @@ movable_across_interp(nir_builder *b, nir_op op, unsigned interp[3],
    case nir_op_fmul:
    case nir_op_fmulz:
    case nir_op_ffma:
+   case nir_op_ffma_weak:
    case nir_op_ffmaz:
+   case nir_op_fmad:
+   case nir_op_fmadz:
       return !divergent[0] || !divergent[1];
 
    case nir_op_fdiv:
@@ -658,4 +668,6 @@ movable_across_interp(nir_builder *b, nir_op op, unsigned interp[3],
    default:
       return false;
    }
+}
+
 }

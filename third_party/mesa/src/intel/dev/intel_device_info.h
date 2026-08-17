@@ -31,6 +31,7 @@
 #include "util/bitset.h"
 #include "util/macros.h"
 #include "compiler/shader_enums.h"
+#include "intel_debug.h"
 #include "intel_kmd.h"
 
 #include "intel/dev/intel_wa.h"
@@ -161,6 +162,7 @@ intel_device_info_dual_subslice_id_bound(const struct intel_device_info *devinfo
 }
 
 int intel_device_name_to_pci_device_id(const char *name);
+const char *intel_platform_name_by_index(unsigned idx);
 
 static inline uint64_t
 intel_device_info_timebase_scale(const struct intel_device_info *devinfo,
@@ -169,8 +171,11 @@ intel_device_info_timebase_scale(const struct intel_device_info *devinfo,
    /* Try to avoid going over the 64bits when doing the scaling */
    uint64_t upper_ts = gpu_timestamp >> 32;
    uint64_t lower_ts = gpu_timestamp & 0xffffffff;
-   uint64_t upper_scaled_ts = upper_ts * 1000000000ull / devinfo->timestamp_frequency;
-   uint64_t lower_scaled_ts = lower_ts * 1000000000ull / devinfo->timestamp_frequency;
+   uint64_t upper_num = upper_ts * 1000000000ull;
+   uint64_t upper_scaled_ts = upper_num / devinfo->timestamp_frequency;
+   uint64_t upper_remainder = upper_num % devinfo->timestamp_frequency;
+   uint64_t lower_scaled_ts = ((upper_remainder << 32) + lower_ts * 1000000000ull) /
+                              devinfo->timestamp_frequency;
    return (upper_scaled_ts << 32) + lower_scaled_ts;
 }
 
@@ -203,16 +208,63 @@ bool intel_device_info_compute_system_memory(struct intel_device_info *devinfo, 
 #ifdef GFX_VERx10
 #define intel_needs_workaround(devinfo, id)         \
    (INTEL_WA_ ## id ## _GFX_VER &&                              \
-    BITSET_TEST(devinfo->workarounds, INTEL_WA_##id))
+    BITSET_TEST((devinfo)->workarounds, INTEL_WA_##id))
 #else
 #define intel_needs_workaround(devinfo, id) \
-   BITSET_TEST(devinfo->workarounds, INTEL_WA_##id)
+   BITSET_TEST((devinfo)->workarounds, INTEL_WA_##id)
 #endif
 
 enum intel_wa_steppings intel_device_info_wa_stepping(struct intel_device_info *devinfo);
 
 uint32_t intel_device_info_get_max_slm_size(const struct intel_device_info *devinfo);
 uint32_t intel_device_info_get_max_preferred_slm_size(const struct intel_device_info *devinfo);
+
+static inline unsigned
+intel_device_info_get_max_engine_prefetch(const struct intel_device_info *devinfo)
+{
+   unsigned max_prefetch = 0;
+   for (unsigned engine = INTEL_ENGINE_CLASS_RENDER;
+        engine < ARRAY_SIZE(devinfo->engine_class_prefetch); engine++)
+      max_prefetch = MAX2(max_prefetch, devinfo->engine_class_prefetch[engine]);
+   return max_prefetch;
+}
+
+/**
+ * True if this device supports the Extended Bindless Surface Offset mode,
+ * which offers 26-bit surface handles, instead of 20-bit.  This effectively
+ * gives us 4GB of bindless surface descriptors instead of only 64MB.
+ *
+ * On Gfx12.5 this is enabled via an "ExBSO" bit in the SEND instruction.
+ */
+static inline bool
+intel_has_extended_bindless(const struct intel_device_info *devinfo)
+{
+   return devinfo->verx10 >= 125;
+}
+
+/**
+ * Whether indirect UBO loads should use the sampler or go through the
+ * data/constant cache.  For the sampler, UBO surface states have to be set
+ * up with VK_FORMAT_R32G32B32A32_FLOAT whereas if it's going through the
+ * constant or data cache, UBOs must use VK_FORMAT_RAW.
+ */
+static inline bool
+intel_indirect_ubos_use_sampler(const struct intel_device_info *devinfo)
+{
+   return devinfo->ver < 12;
+}
+
+static inline bool
+intel_use_tcs_multi_patch(const struct intel_device_info *devinfo)
+{
+   return devinfo->ver >= 12;
+}
+
+static inline unsigned
+intel_device_info_max_sbids(const struct intel_device_info *devinfo)
+{
+   return devinfo->ver >= 30 ? 32 : 16;
+}
 
 #ifdef __cplusplus
 }

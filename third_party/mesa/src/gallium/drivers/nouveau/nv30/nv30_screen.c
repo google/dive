@@ -236,7 +236,6 @@ nv30_init_screen_caps(struct nv30_screen *screen)
    caps->legacy_math_rules = false;
    caps->doubles = false;
    caps->int64 = false;
-   caps->tgsi_tex_txf_lz = false;
    caps->shader_clock = false;
    caps->polygon_mode_fill_rectangle = false;
    caps->sparse_buffer_page_size = 0;
@@ -336,8 +335,7 @@ nv30_screen_is_format_supported(struct pipe_screen *pscreen,
 }
 
 static const nir_shader_compiler_options nv30_base_compiler_options = {
-   .fuse_ffma32 = true,
-   .fuse_ffma64 = true,
+   .float_mul_add32 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
    .lower_bitops = true,
    .lower_extract_byte = true,
    .lower_extract_word = true,
@@ -351,7 +349,6 @@ static const nir_shader_compiler_options nv30_base_compiler_options = {
    .lower_fmod = true,
    .lower_fpow = true, /* In hardware as of nv40 FS */
    .lower_uniforms_to_ubo = true,
-   .lower_vector_cmp = true,
    .force_indirect_unrolling = nir_var_all,
    .force_indirect_unrolling_sampler = true,
    .max_unroll_iterations = 32,

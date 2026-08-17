@@ -1,26 +1,8 @@
 /*
  * Copyright © 2019 Intel Corporation
+ * SPDX-License-Identifier: MIT
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
-
-/* GenX-specific function declarations.
+ * @file iris_genx_protos.h
  *
  * Don't include this directly, it will be included by iris_context.h.
  *
@@ -37,9 +19,7 @@ void genX(emit_hashing_mode)(struct iris_context *ice,
 void genX(emit_urb_config)(struct iris_batch *batch,
                            bool has_tess_eval,
                            bool has_geometry);
-void genX(emit_depth_state_workarounds)(struct iris_context *ice,
-                                        struct iris_batch *batch,
-                                        const struct isl_surf *surf);
+void genX(batch_disable_hiz_planes)(struct iris_batch *batch);
 void genX(update_pma_fix)(struct iris_context *ice,
                           struct iris_batch *batch,
                           bool enable);

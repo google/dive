@@ -374,6 +374,10 @@ typedef enum
    VARYING_SLOT_TASK_COUNT = VARYING_SLOT_BOUNDING_BOX0, /* Only appears in TASK. */
    VARYING_SLOT_CULL_PRIMITIVE = VARYING_SLOT_BOUNDING_BOX0, /* Only appears in MESH. */
 
+   VARYING_SLOT_GS_HEADER_IR3 = VARYING_SLOT_BOUNDING_BOX0, /* VS/TES output and GS input */
+   VARYING_SLOT_GS_VERTEX_FLAGS_IR3 = VARYING_SLOT_BOUNDING_BOX1, /* GS output */
+   VARYING_SLOT_PARAM_GEN_AMD = VARYING_SLOT_BOUNDING_BOX0, /* Only appears as FS input. */
+
    VARYING_SLOT_VAR0 = 32, /* First generic varying slot */
    /* the remaining are simply for the benefit of gl_varying_slot_name()
     * and not to be construed as an upper bound:
@@ -801,8 +805,10 @@ typedef enum
    /*@{*/
    SYSTEM_VALUE_FRAG_COORD,
    SYSTEM_VALUE_PIXEL_COORD,
+   SYSTEM_VALUE_FRAG_COORD_XY,
    SYSTEM_VALUE_FRAG_COORD_Z,
    SYSTEM_VALUE_FRAG_COORD_W,
+   SYSTEM_VALUE_FRAG_COORD_W_RCP,
    SYSTEM_VALUE_POINT_COORD,
    SYSTEM_VALUE_LINE_COORD, /**< Coord along axis perpendicular to line */
    SYSTEM_VALUE_FRONT_FACE,
@@ -813,8 +819,6 @@ typedef enum
    SYSTEM_VALUE_SAMPLE_MASK_IN,
    SYSTEM_VALUE_LAYER_ID,
    SYSTEM_VALUE_HELPER_INVOCATION,
-   SYSTEM_VALUE_COLOR0,
-   SYSTEM_VALUE_COLOR1,
    /*@}*/
 
    /**
@@ -854,6 +858,11 @@ typedef enum
 
    /** Required for VK_KHX_multiview */
    SYSTEM_VALUE_VIEW_INDEX,
+
+   /** Metal's amplification_id. Required to emulate view index on the vertex
+    * shaders. This value is present in both vertex and fragment shaders
+    */
+   SYSTEM_VALUE_AMPLIFICATION_ID_KK,
 
    /**
     * Driver internal vertex-count, used (for example) for drivers to
@@ -963,6 +972,9 @@ typedef enum
    SYSTEM_VALUE_WARP_ID_ARM,
    SYSTEM_VALUE_WARP_MAX_ID_ARM,
 
+   SYSTEM_VALUE_COLOR0_AMD,
+   SYSTEM_VALUE_COLOR1_AMD,
+
    SYSTEM_VALUE_MAX             /**< Number of values */
 } gl_system_value;
 
@@ -1021,11 +1033,18 @@ typedef enum
    FRAG_RESULT_DATA5,
    FRAG_RESULT_DATA6,
    FRAG_RESULT_DATA7,
+
+   /* The color output that sets the values for the SRC1 blend factors, also
+    * known as dual source blending. This is typically the second color output,
+    * and DATA1-DATA7 can't be written when this one is written. Enabled by
+    * nir_io_use_frag_result_dual_src_blend.
+    */
+   FRAG_RESULT_DUAL_SRC_BLEND,
+   FRAG_RESULT_MAX,
 } gl_frag_result;
 
 const char *gl_frag_result_name(gl_frag_result result);
-
-#define FRAG_RESULT_MAX		(FRAG_RESULT_DATA0 + MAX_DRAW_BUFFERS)
+int mesa_frag_result_get_color_index(gl_frag_result result);
 
 /**
  * \brief Layout qualifiers for gl_FragDepth.
@@ -1241,29 +1260,36 @@ enum gl_access_qualifier
     * fusion feature.
     */
    ACCESS_FUSED_EU_DISABLE_INTEL = (1 << 19),
-};
 
-/**
- * \brief Blend support qualifiers
- */
-enum gl_advanced_blend_mode
-{
-   BLEND_NONE = 0,
-   BLEND_MULTIPLY,
-   BLEND_SCREEN,
-   BLEND_OVERLAY,
-   BLEND_DARKEN,
-   BLEND_LIGHTEN,
-   BLEND_COLORDODGE,
-   BLEND_COLORBURN,
-   BLEND_HARDLIGHT,
-   BLEND_SOFTLIGHT,
-   BLEND_DIFFERENCE,
-   BLEND_EXCLUSION,
-   BLEND_HSL_HUE,
-   BLEND_HSL_SATURATION,
-   BLEND_HSL_COLOR,
-   BLEND_HSL_LUMINOSITY,
+   /**
+    * Whether the last returned component describes whether the address
+    * is resident, which is an opaque value that can be interpreted by
+    * nir_intrinsic_is_sparse_texels_resident.
+    *
+    * This only applies to nir_intrinsic_load_buffer_amd for now.
+    *
+    * TODO: Consider using this everywhere instead of having separate
+    *       intrinsics for sparse.
+    */
+   ACCESS_SPARSE = (1 << 20),
+
+   /**
+    * Internal streaming access (v9+)
+    *
+    * Whether the memory is accessed in a streaming fashion inside of the GPU.
+    * Since the data is likely to be read inside of the GPU, the hardware will
+    * try to store it in level 2 cache.
+    */
+   ACCESS_ISTREAM_PAN = (1 << 21),
+
+   /**
+    * External streaming access (v9+)
+    *
+    * Whether the memory is accessed in a streaming fashion outside of the GPU.
+    * This hints the hardware to not cache the data, it could be useful for
+    * one-time accesses or if the data is larger than what the memory can store.
+    */
+   ACCESS_ESTREAM_PAN = (1 << 22),
 };
 
 enum gl_tess_spacing
@@ -1538,62 +1564,28 @@ enum gl_derivative_group {
 
 enum float_controls
 {
-   /* The order of these matters. For float_controls2, only the first 9 bits
-    * are used and stored per-instruction in nir_alu_instr::fp_fast_math.
-    * Any changes in this enum need to be synchronized with that.
-    */
    FLOAT_CONTROLS_DEFAULT_FLOAT_CONTROL_MODE = 0,
-   FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP16  = BITFIELD_BIT(0),
-   FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP32  = BITFIELD_BIT(1),
-   FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP64  = BITFIELD_BIT(2),
-   FLOAT_CONTROLS_INF_PRESERVE_FP16          = BITFIELD_BIT(3),
-   FLOAT_CONTROLS_INF_PRESERVE_FP32          = BITFIELD_BIT(4),
-   FLOAT_CONTROLS_INF_PRESERVE_FP64          = BITFIELD_BIT(5),
-   FLOAT_CONTROLS_NAN_PRESERVE_FP16          = BITFIELD_BIT(6),
-   FLOAT_CONTROLS_NAN_PRESERVE_FP32          = BITFIELD_BIT(7),
-   FLOAT_CONTROLS_NAN_PRESERVE_FP64          = BITFIELD_BIT(8),
-   FLOAT_CONTROLS_DENORM_PRESERVE_FP16       = BITFIELD_BIT(9),
-   FLOAT_CONTROLS_DENORM_PRESERVE_FP32       = BITFIELD_BIT(10),
-   FLOAT_CONTROLS_DENORM_PRESERVE_FP64       = BITFIELD_BIT(11),
-   FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP16  = BITFIELD_BIT(12),
-   FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP32  = BITFIELD_BIT(13),
-   FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP64  = BITFIELD_BIT(14),
-   FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP16     = BITFIELD_BIT(15),
-   FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP32     = BITFIELD_BIT(16),
-   FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP64     = BITFIELD_BIT(17),
-   FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP16     = BITFIELD_BIT(18),
-   FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP32     = BITFIELD_BIT(19),
-   FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP64     = BITFIELD_BIT(20),
 
-   FLOAT_CONTROLS_SIGNED_ZERO_INF_NAN_PRESERVE_FP16 =
-      FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP16 |
-      FLOAT_CONTROLS_INF_PRESERVE_FP16 |
-      FLOAT_CONTROLS_NAN_PRESERVE_FP16,
+   /* Both input and output denorms must be preserved. */
+   FLOAT_CONTROLS_DENORM_PRESERVE_FP16       = BITFIELD_BIT(0),
+   FLOAT_CONTROLS_DENORM_PRESERVE_FP32       = BITFIELD_BIT(1),
+   FLOAT_CONTROLS_DENORM_PRESERVE_FP64       = BITFIELD_BIT(2),
 
-   FLOAT_CONTROLS_SIGNED_ZERO_INF_NAN_PRESERVE_FP32 =
-      FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP32 |
-      FLOAT_CONTROLS_INF_PRESERVE_FP32 |
-      FLOAT_CONTROLS_NAN_PRESERVE_FP32,
+   /* Both input and output denorms must be flushed.
+    * Note that this is different from SPIR-V, which only requires
+    * output flushing.
+    */
+   FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP16  = BITFIELD_BIT(3),
+   FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP32  = BITFIELD_BIT(4),
+   FLOAT_CONTROLS_DENORM_FLUSH_TO_ZERO_FP64  = BITFIELD_BIT(5),
 
-   FLOAT_CONTROLS_SIGNED_ZERO_INF_NAN_PRESERVE_FP64 =
-      FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP64 |
-      FLOAT_CONTROLS_INF_PRESERVE_FP64 |
-      FLOAT_CONTROLS_NAN_PRESERVE_FP64,
+   FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP16     = BITFIELD_BIT(6),
+   FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP32     = BITFIELD_BIT(7),
+   FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP64     = BITFIELD_BIT(8),
 
-   FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE =
-      FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP16 |
-      FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP32 |
-      FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE_FP64,
-
-   FLOAT_CONTROLS_INF_PRESERVE =
-      FLOAT_CONTROLS_INF_PRESERVE_FP16 |
-      FLOAT_CONTROLS_INF_PRESERVE_FP32 |
-      FLOAT_CONTROLS_INF_PRESERVE_FP64,
-
-   FLOAT_CONTROLS_NAN_PRESERVE =
-      FLOAT_CONTROLS_NAN_PRESERVE_FP16 |
-      FLOAT_CONTROLS_NAN_PRESERVE_FP32 |
-      FLOAT_CONTROLS_NAN_PRESERVE_FP64,
+   FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP16     = BITFIELD_BIT(9),
+   FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP32     = BITFIELD_BIT(10),
+   FLOAT_CONTROLS_ROUNDING_MODE_RTZ_FP64     = BITFIELD_BIT(11),
 };
 
 /**

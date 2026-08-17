@@ -40,7 +40,6 @@ libaco_files = files(
   'instruction_selection/aco_select_nir.cpp',
   'instruction_selection/aco_select_ps_epilog.cpp',
   'instruction_selection/aco_select_ps_prolog.cpp',
-  'instruction_selection/aco_select_rt_prolog.cpp',
   'instruction_selection/aco_select_trap_handler.cpp',
   'instruction_selection/aco_select_vs_prolog.cpp',
   'aco_dead_code_analysis.cpp',
@@ -74,6 +73,7 @@ libaco_files = files(
   'aco_scheduler.cpp',
   'aco_scheduler_ilp.cpp',
   'aco_spill.cpp',
+  'aco_spill_preserved.cpp',
   'aco_ssa_elimination.cpp',
   'aco_statistics.cpp',
   'aco_util.h',
@@ -89,10 +89,10 @@ _libaco = static_library(
    inc_include, inc_src, inc_amd, inc_amd_common,
   ],
   dependencies : [
-    dep_llvm, dep_thread, dep_valgrind, idep_nir_headers, idep_amdgfxregs_h, idep_mesautil,
+    dep_llvm, dep_thread, dep_valgrind, idep_nir_headers, idep_amd_generated_headers, idep_mesautil,
   ],
   gnu_symbol_visibility : 'hidden',
-  build_by_default : true,
+  build_by_default : false,
   cpp_args : [cpp_args_aco, cpp_msvc_compat_args],
 )
 

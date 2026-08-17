@@ -42,13 +42,14 @@ write_buffer(FILE *f,
 }
 
 void
-write_hw_image_buffer(FILE *f, const void *data, uint64_t size)
+write_hw_image_buffer(FILE *f, const void *data, uint64_t size, uint64_t offset)
 {
    struct intel_hang_dump_block_hw_image header = {
       .base = {
          .type = INTEL_HANG_DUMP_BLOCK_TYPE_HW_IMAGE,
       },
       .size    = size,
+      .offset  = offset,
    };
 
    fwrite(&header, sizeof(header), 1, f);

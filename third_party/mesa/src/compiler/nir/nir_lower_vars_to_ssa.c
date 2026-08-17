@@ -606,8 +606,8 @@ nir_def_set_name(nir_shader *shader, nir_def *def, char *name)
    if (!name || likely(!shader->has_debug_info))
       return;
 
-   nir_instr_debug_info *debug_info = nir_instr_get_debug_info(def->parent_instr);
-   debug_info->variable_name = name;
+   nir_instr_debug_info *debug_info = nir_instr_get_debug_info(nir_def_instr(def));
+   debug_info->variable_name = ralloc_strdup(shader, name);
 }
 
 /* Performs variable renaming
@@ -793,6 +793,10 @@ rename_variables(struct lower_variables_state *state)
 static bool
 nir_lower_vars_to_ssa_impl(nir_function_impl *impl)
 {
+   /* Nothing to do... */
+   if (exec_list_is_empty(&impl->locals))
+      return nir_no_progress(impl);
+
    struct lower_variables_state state;
 
    state.shader = impl->function->shader;

@@ -1,24 +1,6 @@
 /*
  * Copyright © 2014 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "brw_shader.h"
@@ -51,12 +33,18 @@ can_eliminate(const intel_device_info *devinfo, const brw_inst *inst,
  * Is it safe to omit the write, making the destination ARF null?
  */
 static bool
-can_omit_write(const brw_inst *inst)
+can_omit_write(const brw_compiler *compiler, const brw_inst *inst, bool late)
 {
    switch (inst->opcode) {
    case SHADER_OPCODE_MEMORY_ATOMIC_LOGICAL:
       return true;
    default:
+      /* Dead code elimination that occurs once after brw_lower_3src_null_dest
+       * should not generate more NULL destinations.
+       */
+      if (inst->is_3src(compiler) && late)
+         return false;
+
       /* We can eliminate the destination write for ordinary instructions,
        * but not most SENDs.
        */
@@ -100,6 +88,7 @@ bool
 brw_opt_dead_code_eliminate(brw_shader &s)
 {
    const intel_device_info *devinfo = s.devinfo;
+   const bool late = s.phase >= BRW_SHADER_PHASE_AFTER_LATE_LOWERING;
 
    bool progress = false;
 
@@ -108,7 +97,7 @@ brw_opt_dead_code_eliminate(brw_shader &s)
    BITSET_WORD *live = rzalloc_array(NULL, BITSET_WORD, BITSET_WORDS(num_vars));
    BITSET_WORD *flag_live = rzalloc_array(NULL, BITSET_WORD, 1);
 
-   foreach_block_reverse_safe(block, s.cfg) {
+   foreach_block_reverse(block, s.cfg) {
       memcpy(live, live_vars.block_data[block->num].liveout,
              sizeof(BITSET_WORD) * BITSET_WORDS(num_vars));
       memcpy(flag_live, live_vars.block_data[block->num].flag_liveout,
@@ -123,7 +112,8 @@ brw_opt_dead_code_eliminate(brw_shader &s)
                result_live |= BITSET_TEST(live, var + i);
 
             if (!result_live &&
-                (can_omit_write(inst) || can_eliminate(devinfo, inst, flag_live))) {
+                (can_omit_write(s.compiler, inst, late) ||
+                 can_eliminate(devinfo, inst, flag_live))) {
                inst->dst = brw_reg(spread(retype(brw_null_reg(), inst->dst.type),
                                           inst->dst.stride));
                progress = true;

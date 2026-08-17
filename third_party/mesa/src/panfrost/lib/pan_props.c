@@ -1,33 +1,11 @@
 /*
  * Copyright (C) 2019 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * Authors:
- *   Alyssa Rosenzweig <alyssa.rosenzweig@collabora.com>
+ * SPDX-License-Identifier: MIT
  */
 
 #include "util/macros.h"
 
 #include "kmod/pan_kmod.h"
-#include "panfrost/util/pan_ir.h"
 #include "pan_props.h"
 
 #include <genxml/gen_macros.h>
@@ -37,6 +15,13 @@ pan_query_l2_slices(const struct pan_kmod_dev_props *props)
 {
    /* L2_SLICES is MEM_FEATURES[11:8] minus(1) */
    return ((props->mem_features >> 8) & 0xF) + 1;
+}
+
+unsigned
+pan_query_bus_width(const struct pan_kmod_dev_props *props)
+{
+   /* BUS_WIDTH is L2_FEATURES[31:24] log2 */
+   return 1 << ((props->l2_features >> 24) & 0xF);
 }
 
 struct pan_tiler_features
@@ -53,21 +38,20 @@ pan_query_tiler_features(const struct pan_kmod_dev_props *props)
 }
 
 unsigned
-pan_query_core_count(const struct pan_kmod_dev_props *props,
-                     unsigned *core_id_range)
+pan_query_core_count(const struct pan_kmod_dev_props *props)
 {
-   /* On older kernels, worst-case to 16 cores */
+   /* The actual core count skips overs the gaps */
+   return util_bitcount64(props->shader_present);
+}
 
-   unsigned mask = props->shader_present;
-
+unsigned
+pan_query_core_id_range(const struct pan_kmod_dev_props *props)
+{
    /* Some cores might be absent. In some cases, we care
     * about the range of core IDs (that is, the greatest core ID + 1). If
     * the core mask is contiguous, this equals the core count.
     */
-   *core_id_range = util_last_bit(mask);
-
-   /* The actual core count skips overs the gaps */
-   return util_bitcount(mask);
+   return util_last_bit64(props->shader_present);
 }
 
 unsigned
@@ -181,4 +165,9 @@ pan_choose_gpu_va_alignment(const struct pan_kmod_vm *vm, uint64_t size)
       align = pgsize;
    }
    return align;
+}
+
+unsigned pan_query_perf_counter_per_block(const struct pan_kmod_dev_props *props)
+{
+   return pan_arch(props->gpu_id) <= 10 ? 64 : 128;
 }

@@ -20,13 +20,16 @@
 
 /* Driver-specific forward-declarations. */
 struct pvr_device_info;
+struct pvr_device_runtime_info;
 
 /* Compiler-specific forward-declarations. */
 typedef struct _pco_shader pco_shader;
 typedef struct _pco_ctx pco_ctx;
 typedef struct _pco_data pco_data;
 
-pco_ctx *pco_ctx_create(const struct pvr_device_info *dev_info, void *mem_ctx);
+pco_ctx *pco_ctx_create(const struct pvr_device_info *dev_info,
+                        const struct pvr_device_runtime_info *dev_runtime_info,
+                        void *mem_ctx);
 void pco_ctx_setup_usclib(pco_ctx *ctx, const void *data, unsigned size);
 void pco_ctx_update_dev_info(pco_ctx *ctx,
                              const struct pvr_device_info *dev_info);
@@ -55,6 +58,7 @@ const void *pco_shader_binary_data(pco_shader *shader);
 
 void pco_validate_shader(pco_shader *shader, const char *when);
 
+void pco_print_shader_stats(pco_shader *shader, FILE *fp);
 void pco_print_shader(pco_shader *shader, FILE *fp, const char *when);
 void pco_print_binary(pco_shader *shader, FILE *fp, const char *when);
 
@@ -94,4 +98,9 @@ typedef struct _pco_smp_params {
    bool int_mode;
 } pco_smp_params;
 nir_intrinsic_instr *pco_emit_nir_smp(nir_builder *b, pco_smp_params *params);
+
+enum pco_pck_format pco_pipe_to_pck_format(enum pipe_format format,
+                                           bool *scale,
+                                           bool *roundzero,
+                                           bool *split);
 #endif /* PCO_H */

@@ -8,7 +8,6 @@
 
 #include "ac_gpu_info.h"
 #include "util/u_math.h"
-#include "util/u_memory.h"
 
 #include <sid.h>
 #include <stdio.h>
@@ -17,8 +16,9 @@
 #define SPILLED_VGPRS 0x8
 
 /* Parse configuration data in .AMDGPU.config section format. */
-void ac_parse_shader_binary_config(const char *data, size_t nbytes, unsigned wave_size,
-                                   const struct radeon_info *info, struct ac_shader_config *conf)
+void ac_parse_llvm_binary_config(const char *data, size_t nbytes, unsigned wave_size,
+                                 const struct ac_compiler_info *compiler_info,
+                                 struct ac_shader_config *conf)
 {
    for (size_t i = 0; i < nbytes; i += 8) {
       unsigned reg = util_le32_to_cpu(*(uint32_t *)(data + i));
@@ -29,10 +29,10 @@ void ac_parse_shader_binary_config(const char *data, size_t nbytes, unsigned wav
       case R_00B228_SPI_SHADER_PGM_RSRC1_GS:
       case R_00B848_COMPUTE_PGM_RSRC1:
       case R_00B428_SPI_SHADER_PGM_RSRC1_HS:
-         if (wave_size == 32 || info->wave64_vgpr_alloc_granularity == 8)
-            conf->num_vgprs = MAX2(conf->num_vgprs, (G_00B028_VGPRS(value) + 1) * 8);
-         else
-            conf->num_vgprs = MAX2(conf->num_vgprs, (G_00B028_VGPRS(value) + 1) * 4);
+         conf->num_vgprs = MAX2(conf->num_vgprs,
+                                (G_00B028_VGPRS(value) + 1) *
+                                compiler_info->wave64_vgpr_encode_granularity *
+                                (wave_size == 32 ? 2 : 1));
 
          conf->num_sgprs = MAX2(conf->num_sgprs, (G_00B028_SGPRS(value) + 1) * 8);
          /* TODO: LLVM doesn't set FLOAT_MODE for non-compute shaders */
@@ -73,7 +73,7 @@ void ac_parse_shader_binary_config(const char *data, size_t nbytes, unsigned wav
          break;
       case R_0286E8_SPI_TMPRING_SIZE:
       case R_00B860_COMPUTE_TMPRING_SIZE:
-         if (info->gfx_level >= GFX11)
+         if (compiler_info->gfx_level >= GFX11)
             conf->scratch_bytes_per_wave = G_00B860_WAVESIZE(value) * 256;
          else
             conf->scratch_bytes_per_wave = G_00B860_WAVESIZE(value) * 1024;
@@ -113,7 +113,9 @@ void ac_parse_shader_binary_config(const char *data, size_t nbytes, unsigned wav
    conf->float_mode |= V_00B028_FP_16_64_DENORMS;
 }
 
-unsigned ac_align_shader_binary_for_prefetch(const struct radeon_info *info, unsigned size)
+unsigned ac_align_shader_binary_for_prefetch(enum amd_gfx_level gfx_level,
+                                             unsigned prefetch_distance,
+                                             unsigned size)
 {
    /* The SQ fetches up to N cache lines of 16 dwords
     * ahead of the PC, configurable by SH_MEM_CONFIG and
@@ -130,19 +132,30 @@ unsigned ac_align_shader_binary_for_prefetch(const struct radeon_info *info, uns
     * boundaries, but (1) needs to be addressed. Due to buffer
     * suballocation, we just play it safe.
     */
-   unsigned prefetch_distance = 0;
-
-   if (!info->has_graphics && info->family >= CHIP_MI200)
-      prefetch_distance = 16;
-   else if (info->gfx_level >= GFX10)
-      prefetch_distance = 3;
-
    if (prefetch_distance) {
-      if (info->gfx_level >= GFX11)
+      if (gfx_level >= GFX11)
          size = align(size + prefetch_distance * 64, 128);
       else
          size = align(size + prefetch_distance * 64, 64);
    }
 
    return size;
+}
+
+unsigned ac_get_instr_prefetch_size(enum amd_gfx_level gfx_level,
+                                    unsigned prefetch_distance,
+                                    unsigned size)
+{
+   assert(gfx_level >= GFX11);
+   unsigned aligned_size = ac_align_shader_binary_for_prefetch(gfx_level,
+                                                               prefetch_distance,
+                                                               size);
+
+   unsigned inst_pref_size = DIV_ROUND_UP(aligned_size, 128);
+
+   /* GFX12 allows 255, but that means one shader can thrash the entire cache.
+    * Limit to half of the 32KiB WGP instruction cache size.
+    */
+   unsigned max_pref_size = gfx_level >= GFX12 ? 128 : 63;
+   return MIN2(inst_pref_size, max_pref_size);
 }

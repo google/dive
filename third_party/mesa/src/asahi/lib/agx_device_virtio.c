@@ -89,7 +89,7 @@ agx_virtio_bo_alloc(struct agx_device *dev, size_t size, size_t align,
    req.blob_id = blob_id;
    req.vm_id = dev->vm_id;
 
-   handle = vdrm_bo_create(dev->vdrm, size, blob_flags, blob_id, &req.hdr);
+   handle = vdrm_bo_create(dev->vdrm, size, blob_flags, blob_id, 0, &req.hdr);
    if (!handle) {
       fprintf(stderr, "vdrm_bo_created failed\n");
       return NULL;
@@ -133,6 +133,7 @@ agx_virtio_bo_bind(struct agx_device *dev, struct drm_asahi_gem_bind_op *ops,
    memcpy(req->payload, ops, payload_size);
 
    int ret = vdrm_send_req(dev->vdrm, &req->hdr, false);
+   free(req);
    if (ret) {
       fprintf(stderr, "ASAHI_CCMD_GEM_BIND failed: %d\n", ret);
    }

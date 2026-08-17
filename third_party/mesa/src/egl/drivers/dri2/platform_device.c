@@ -260,12 +260,7 @@ static bool
 device_probe_device(_EGLDisplay *disp)
 {
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
-   bool request_software =
-      debug_get_bool_option("LIBGL_ALWAYS_SOFTWARE", false);
 
-   if (request_software)
-      _eglLog(_EGL_WARNING, "Not allowed to force software rendering when "
-                            "API explicitly selects a hardware device.");
    dri2_dpy->fd_render_gpu = device_get_fd(disp, disp->Device);
    if (dri2_dpy->fd_render_gpu < 0)
       return false;
@@ -277,7 +272,7 @@ device_probe_device(_EGLDisplay *disp)
       goto err_name;
 
    /* this is software fallback */
-   if (disp->Options.ForceSoftware && !request_software) {
+   if (disp->Options.ForceSoftware) {
       /* When doing software rendering, some times user still want to explicitly
       * choose the render node device since cross node import doesn't work between
       * vgem/virtio_gpu yet. It would be nice to have a new EXTENSION for this.
@@ -327,15 +322,22 @@ dri2_initialize_device(_EGLDisplay *disp)
 {
    const char *err;
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
+   bool request_software =
+      debug_get_bool_option("LIBGL_ALWAYS_SOFTWARE", false);
 
    /* Extension requires a PlatformDisplay - the EGLDevice. */
    disp->Device = disp->PlatformDisplay;
 
+   if (request_software)
+      _eglLog(_EGL_WARNING, "Not allowed to force software rendering when "
+                            "API explicitly selects a hardware device.");
+
    err = "DRI2: failed to load driver";
-   if (_eglDeviceSupports(disp->Device, _EGL_DEVICE_DRM)) {
+   /* device-drm platform cannot be explicit sw (because explicit sw is llvmpipe) */
+   if (!request_software && _eglDeviceSupports(disp->Device, _EGL_DEVICE_DRM)) {
       if (!device_probe_device(disp))
          goto cleanup;
-   } else if (_eglDeviceSupports(disp->Device, _EGL_DEVICE_SOFTWARE)) {
+   } else if (request_software || _eglDeviceSupports(disp->Device, _EGL_DEVICE_SOFTWARE)) {
       if (!device_probe_device_sw(disp))
          goto cleanup;
    } else {

@@ -35,6 +35,7 @@ DEPS=(
     libgbm-dev
     libglvnd-dev
     liblua5.3-dev
+    libpng-dev
     libxcb-dri2-0-dev
     libxcb-dri3-dev
     libxcb-glx0-dev
@@ -45,6 +46,9 @@ DEPS=(
     libxcb-xfixes0-dev
     libxcb1-dev
     libxml2-dev
+    libwayland-bin
+    libwayland-dev
+    libwayland-egl-backend-dev
     "llvm-${LLVM_VERSION}-dev"
     ocl-icd-opencl-dev
     python3-pip
@@ -52,6 +56,7 @@ DEPS=(
     spirv-tools
     strace
     time
+    wayland-protocols
     zstd
 )
 
@@ -75,8 +80,6 @@ curl -L --retry 4 -f --retry-all-errors --retry-delay 60 -O \
 tar -xvf $XORGMACROS_VERSION.tar.bz2 && rm $XORGMACROS_VERSION.tar.bz2
 cd $XORGMACROS_VERSION; ./configure; make install; cd ..
 rm -rf $XORGMACROS_VERSION
-
-. .gitlab-ci/container/build-wayland.sh
 
 . .gitlab-ci/container/build-shader-db.sh
 

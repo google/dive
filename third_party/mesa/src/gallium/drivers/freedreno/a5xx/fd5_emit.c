@@ -304,7 +304,7 @@ emit_border_color(struct fd_context *ctx, struct fd_ringbuffer *ring) assert_dt
    setup_border_colors(&ctx->tex[MESA_SHADER_FRAGMENT],
                        &entries[ctx->tex[MESA_SHADER_VERTEX].num_samplers]);
 
-   OUT_PKT4(ring, REG_A5XX_TPL1_TP_BORDER_COLOR_BASE_ADDR_LO, 2);
+   OUT_PKT4(ring, REG_A5XX_TPL1_TP_BORDER_COLOR_BASE_ADDR, 2);
    OUT_RELOC(ring, fd_resource(fd5_ctx->border_color_buf)->bo, off, 0, 0);
 
    u_upload_unmap(fd5_ctx->border_color_uploader);
@@ -712,7 +712,7 @@ fd5_emit_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
          if (!target)
             continue;
 
-         OUT_PKT4(ring, REG_A5XX_VPC_SO_BUFFER_BASE_LO(i), 3);
+         OUT_PKT4(ring, REG_A5XX_VPC_SO_BUFFER_BASE(i), 3);
          /* VPC_SO[i].BUFFER_BASE_LO: */
          OUT_RELOC(ring, fd_resource(target->base.buffer)->bo, 0, 0, 0);
          OUT_RING(ring, target->base.buffer_size + target->base.buffer_offset);
@@ -738,7 +738,7 @@ fd5_emit_state(struct fd_context *ctx, struct fd_ringbuffer *ring,
          }
 
          // After a draw HW would write the new offset to offset_bo
-         OUT_PKT4(ring, REG_A5XX_VPC_SO_FLUSH_BASE_LO(i), 2);
+         OUT_PKT4(ring, REG_A5XX_VPC_SO_FLUSH_BASE(i), 2);
          OUT_RELOC(ring, offset_bo, 0, 0, 0);
 
          so->reset &= ~(1 << i);
@@ -1017,13 +1017,13 @@ fd5_emit_restore(struct fd_batch *batch, struct fd_ringbuffer *ring)
    OUT_PKT4(ring, REG_A5XX_VPC_SO_OVERRIDE, 1);
    OUT_RING(ring, A5XX_VPC_SO_OVERRIDE_SO_DISABLE);
 
-   OUT_PKT4(ring, REG_A5XX_VPC_SO_BUFFER_BASE_LO(0), 3);
-   OUT_RING(ring, 0x00000000); /* VPC_SO_BUFFER_BASE_LO_0 */
+   OUT_PKT4(ring, REG_A5XX_VPC_SO_BUFFER_BASE(0), 3);
+   OUT_RING(ring, 0x00000000); /* VPC_SO_BUFFER_BASE_0 */
    OUT_RING(ring, 0x00000000); /* VPC_SO_BUFFER_BASE_HI_0 */
    OUT_RING(ring, 0x00000000); /* VPC_SO_BUFFER_SIZE_0 */
 
-   OUT_PKT4(ring, REG_A5XX_VPC_SO_FLUSH_BASE_LO(0), 2);
-   OUT_RING(ring, 0x00000000); /* VPC_SO_FLUSH_BASE_LO_0 */
+   OUT_PKT4(ring, REG_A5XX_VPC_SO_FLUSH_BASE(0), 2);
+   OUT_RING(ring, 0x00000000); /* VPC_SO_FLUSH_BASE_0 */
    OUT_RING(ring, 0x00000000); /* VPC_SO_FLUSH_BASE_HI_0 */
 
    OUT_PKT4(ring, REG_A5XX_PC_GS_PARAM, 1);
@@ -1056,7 +1056,7 @@ fd5_emit_restore(struct fd_batch *batch, struct fd_ringbuffer *ring)
    OUT_PKT4(ring, REG_A5XX_UNKNOWN_E5C2, 1);
    OUT_RING(ring, 0x00000000); /* UNKNOWN_E5C2 */
 
-   OUT_PKT4(ring, REG_A5XX_VPC_SO_BUFFER_BASE_LO(1), 3);
+   OUT_PKT4(ring, REG_A5XX_VPC_SO_BUFFER_BASE(1), 3);
    OUT_RING(ring, 0x00000000);
    OUT_RING(ring, 0x00000000);
    OUT_RING(ring, 0x00000000);

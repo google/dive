@@ -32,15 +32,15 @@ nir_io_add_intrinsic_xfb_info(nir_shader *nir)
          /* Calling this pass for the second time shouldn't do anything. */
          if (nir_intrinsic_io_xfb(intr).out[0].num_components ||
              nir_intrinsic_io_xfb(intr).out[1].num_components ||
-             nir_intrinsic_io_xfb2(intr).out[0].num_components ||
-             nir_intrinsic_io_xfb2(intr).out[1].num_components)
+             nir_intrinsic_io_xfb(intr).out[2].num_components ||
+             nir_intrinsic_io_xfb(intr).out[3].num_components)
             continue;
 
          nir_io_semantics sem = nir_intrinsic_io_semantics(intr);
          unsigned writemask = nir_intrinsic_write_mask(intr) << nir_intrinsic_component(intr);
 
-         nir_io_xfb xfb[2];
-         memset(xfb, 0, sizeof(xfb));
+         nir_io_xfb xfb;
+         memset(&xfb, 0, sizeof(xfb));
 
          for (unsigned i = 0; i < nir->xfb_info->output_count; i++) {
             nir_xfb_output_info *out = &nir->xfb_info->outputs[i];
@@ -60,11 +60,11 @@ nir_io_add_intrinsic_xfb_info(nir_shader *nir)
                   int start, count;
                   u_bit_scan_consecutive_range(&xfb_mask, &start, &count);
 
-                  xfb[start / 2].out[start % 2].num_components = count;
-                  xfb[start / 2].out[start % 2].buffer = out->buffer;
+                  xfb.out[start].num_components = count;
+                  xfb.out[start].buffer = out->buffer;
                   /* out->offset is relative to the first stored xfb component */
                   /* start is relative to component 0 */
-                  xfb[start / 2].out[start % 2].offset =
+                  xfb.out[start].offset =
                      out->offset / 4 - out->component_offset + start;
 
                   progress = true;
@@ -72,8 +72,7 @@ nir_io_add_intrinsic_xfb_info(nir_shader *nir)
             }
          }
 
-         nir_intrinsic_set_io_xfb(intr, xfb[0]);
-         nir_intrinsic_set_io_xfb2(intr, xfb[1]);
+         nir_intrinsic_set_io_xfb(intr, xfb);
       }
    }
 

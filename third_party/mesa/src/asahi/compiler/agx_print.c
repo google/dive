@@ -5,6 +5,7 @@
  */
 
 #include "util/lut.h"
+#include "util/u_math.h"
 #include "agx_builder.h"
 #include "agx_compiler.h"
 
@@ -191,7 +192,10 @@ agx_print_instr(const agx_instr *I, FILE *fp)
       else
          print_comma = true;
 
-      fprintf(fp, "#%" PRIx64, I->imm);
+      fprintf(fp, "#0x%" PRIx64, I->imm);
+      if (I->imm && util_is_probably_float(I->imm)) {
+         fprintf(fp, " /* %f */", uif(I->imm));
+      }
    }
 
    if (info.immediates & AGX_IMMEDIATE_DIM) {

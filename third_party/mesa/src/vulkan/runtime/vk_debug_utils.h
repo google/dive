@@ -31,6 +31,8 @@
 extern "C" {
 #endif
 
+struct vk_queue;
+
 struct vk_debug_utils_messenger {
    struct vk_object_base base;
    VkAllocationCallbacks alloc;
@@ -76,6 +78,14 @@ vk_emit_device_memory_report(struct vk_device* device,
                              VkObjectType obj_type,
                              uint64_t obj_handle,
                              uint32_t heap_index);
+
+void
+vk_queue_begin_debug_utils_label(struct vk_queue *queue,
+                                 const VkDebugUtilsLabelEXT *pLabelInfo);
+
+void
+vk_queue_end_debug_utils_label(struct vk_queue *queue);
+
 
 struct u_printf_ctx;
 

@@ -41,31 +41,28 @@
 
 static bool
 parse_atomic(nir_intrinsic_instr *intr, unsigned *offset_src,
-             unsigned *data_src, unsigned *offset2_src)
+             unsigned *offset2_src)
 {
    switch (intr->intrinsic) {
    case nir_intrinsic_ssbo_atomic:
       *offset_src = 1;
-      *data_src = 2;
       *offset2_src = *offset_src;
       return true;
    case nir_intrinsic_shared_atomic:
    case nir_intrinsic_global_atomic:
    case nir_intrinsic_deref_atomic:
       *offset_src = 0;
-      *data_src = 1;
       *offset2_src = *offset_src;
       return true;
    case nir_intrinsic_global_atomic_amd:
       *offset_src = 0;
-      *data_src = 1;
       *offset2_src = 2;
       return true;
    case nir_intrinsic_image_deref_atomic:
    case nir_intrinsic_image_atomic:
    case nir_intrinsic_bindless_image_atomic:
+   case nir_intrinsic_image_heap_atomic:
       *offset_src = 1;
-      *data_src = 3;
       *offset2_src = *offset_src;
       return true;
 
@@ -132,7 +129,7 @@ match_invocation_comparison(nir_scalar scalar)
          return get_dim(nir_scalar_chase_alu_src(scalar, 1));
       if (!nir_scalar_chase_alu_src(scalar, 1).def->divergent)
          return get_dim(nir_scalar_chase_alu_src(scalar, 0));
-   } else if (scalar.def->parent_instr->type == nir_instr_type_intrinsic) {
+   } else if (nir_def_is_intrinsic(scalar.def)) {
       nir_intrinsic_instr *intrin = nir_def_as_intrinsic(scalar.def);
       if (intrin->intrinsic == nir_intrinsic_elect) {
          return 0x8;
@@ -210,9 +207,9 @@ static nir_def *
 optimize_atomic(nir_builder *b, nir_intrinsic_instr *intrin, bool return_prev)
 {
    unsigned offset_src = 0;
-   unsigned data_src = 0;
+   unsigned data_src = nir_get_io_data_src_number(intrin);
    unsigned offset2_src = 0;
-   parse_atomic(intrin, &offset_src, &data_src, &offset2_src);
+   parse_atomic(intrin, &offset_src, &offset2_src);
    nir_atomic_op atomic_op = nir_intrinsic_atomic_op(intrin);
    nir_op op = nir_atomic_op_to_alu(atomic_op);
 
@@ -307,13 +304,13 @@ opt_uniform_atomics(nir_function_impl *impl, bool fs_atomics_predicated)
             continue;
 
          nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
-         unsigned offset_src, data_src, offset2_src;
-         if (!parse_atomic(intrin, &offset_src, &data_src, &offset2_src))
+         unsigned offset_src, offset2_src;
+         if (!parse_atomic(intrin, &offset_src, &offset2_src))
             continue;
 
          nir_atomic_op atomic_op = nir_intrinsic_atomic_op(intrin);
          if (atomic_op == nir_atomic_op_xchg) {
-            if (nir_src_is_divergent(&intrin->src[data_src]))
+            if (nir_src_is_divergent(nir_get_io_data_src(intrin)))
                continue;
          } else if (nir_atomic_op_to_alu(atomic_op) == nir_num_opcodes) {
             continue;

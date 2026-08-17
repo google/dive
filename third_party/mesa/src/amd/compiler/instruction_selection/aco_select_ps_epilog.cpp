@@ -344,14 +344,6 @@ export_fs_mrtz(isel_context* ctx, const struct aco_ps_epilog_info* info, Temp de
       }
    }
 
-   /* GFX6 (except OLAND and HAINAN) has a bug that it only looks at the X
-    * writemask component.
-    */
-   if (ctx->options->gfx_level == GFX6 && ctx->options->family != CHIP_OLAND &&
-       ctx->options->family != CHIP_HAINAN) {
-      enabled_channels |= 0x1;
-   }
-
    bld.exp(aco_opcode::exp, values[0], values[1], values[2], values[3], enabled_channels,
            V_008DFC_SQ_EXP_MRTZ, compr);
 }
@@ -457,8 +449,17 @@ select_ps_epilog(Program* program, void* pinfo, ac_shader_config* config,
    }
 
    if (mrt_num) {
+      if (einfo->mrt0_is_dual_src && mrt_num == 1) {
+         mrts[mrt_num++] = mrts[0];
+         std::fill(mrts[1].out, mrts[1].out + 3, Operand(v1));
+         u_foreach_bit (i, mrts[1].enabled_channels)
+            mrts[1].out[i] = bld.copy(bld.def(v1), Operand::c32(0));
+         if (einfo->colors[1].used)
+            std::swap(mrts[0], mrts[1]);
+         mrts[1].target++;
+      }
+
       if (ctx.options->gfx_level >= GFX11 && einfo->mrt0_is_dual_src) {
-         assert(mrt_num == 2);
          create_fs_dual_src_export_gfx11(&ctx, &mrts[0], &mrts[1]);
       } else {
          for (unsigned i = 0; i < mrt_num; i++)
@@ -470,7 +471,7 @@ select_ps_epilog(Program* program, void* pinfo, ac_shader_config* config,
 
    program->config->float_mode = program->blocks[0].fp_mode.val;
 
-   append_logical_end(ctx.block);
+   append_logical_end(&ctx);
    ctx.block->kind |= block_kind_export_end;
    bld.reset(ctx.block);
    bld.sopp(aco_opcode::s_endpgm);

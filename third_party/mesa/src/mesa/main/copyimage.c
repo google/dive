@@ -32,6 +32,7 @@
 #include "textureview.h"
 #include "glformats.h"
 #include "api_exec_decl.h"
+#include "pipe/p_screen.h"
 
 #include "state_tracker/st_cb_copyimage.h"
 
@@ -550,35 +551,45 @@ copy_image_subdata(struct gl_context *ctx,
                    int dstX, int dstY, int dstZ, int dstLevel,
                    int srcWidth, int srcHeight, int srcDepth)
 {
-   /* loop over 2D slices/faces/layers */
-   for (int i = 0; i < srcDepth; ++i) {
-      int newSrcZ = srcZ + i;
-      int newDstZ = dstZ + i;
+   bool src_is_cubemap = srcTexImage &&
+                         srcTexImage->TexObject->Target == GL_TEXTURE_CUBE_MAP;
+   bool dst_is_cubemap = dstTexImage &&
+                         dstTexImage->TexObject->Target == GL_TEXTURE_CUBE_MAP;
 
-      if (srcTexImage &&
-          srcTexImage->TexObject->Target == GL_TEXTURE_CUBE_MAP) {
-         /* need to update srcTexImage pointer for the cube face */
-         assert(srcZ + i < MAX_FACES);
-         srcTexImage = srcTexImage->TexObject->Image[srcZ + i][srcLevel];
-         assert(srcTexImage);
-         newSrcZ = 0;
-      }
+   if (src_is_cubemap || dst_is_cubemap || !ctx->screen->caps.blit_3d) {
+       /* loop over cubemap faces/layers */
+       for (int i = 0; i < srcDepth; ++i) {
+          int newSrcZ = srcZ + i;
+          int newDstZ = dstZ + i;
 
-      if (dstTexImage &&
-          dstTexImage->TexObject->Target == GL_TEXTURE_CUBE_MAP) {
-         /* need to update dstTexImage pointer for the cube face */
-         assert(dstZ + i < MAX_FACES);
-         dstTexImage = dstTexImage->TexObject->Image[dstZ + i][dstLevel];
-         assert(dstTexImage);
-         newDstZ = 0;
-      }
+          if (src_is_cubemap) {
+             /* need to update srcTexImage pointer for the cube face */
+             assert(srcZ + i < MAX_FACES);
+             srcTexImage = srcTexImage->TexObject->Image[srcZ + i][srcLevel];
+             assert(srcTexImage);
+             newSrcZ = 0;
+          }
 
-      st_CopyImageSubData(ctx,
-                          srcTexImage, srcRenderbuffer,
-                          srcX, srcY, newSrcZ,
-                          dstTexImage, dstRenderbuffer,
-                          dstX, dstY, newDstZ,
-                          srcWidth, srcHeight);
+          if (dst_is_cubemap) {
+             /* need to update dstTexImage pointer for the cube face */
+             assert(dstZ + i < MAX_FACES);
+             dstTexImage = dstTexImage->TexObject->Image[dstZ + i][dstLevel];
+             assert(dstTexImage);
+             newDstZ = 0;
+          }
+
+          st_CopyImageSubData(ctx,
+                              srcTexImage, srcRenderbuffer,
+                              srcX, srcY, newSrcZ,
+                              dstTexImage, dstRenderbuffer,
+                              dstX, dstY, newDstZ,
+                              srcWidth, srcHeight, 1);
+       }
+   } else {
+       st_CopyImageSubData(ctx,
+                           srcTexImage, srcRenderbuffer, srcX, srcY, srcZ,
+                           dstTexImage, dstRenderbuffer, dstX, dstY, dstZ,
+                           srcWidth, srcHeight, srcDepth);
    }
 }
 
@@ -621,16 +632,6 @@ _mesa_CopyImageSubData(GLuint srcName, GLenum srcTarget, GLint srcLevel,
    GLuint src_bw, src_bh, dst_bw, dst_bh;
    GLuint src_num_samples, dst_num_samples;
    int dstWidth, dstHeight, dstDepth;
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glCopyImageSubData(%u, %s, %d, %d, %d, %d, "
-                                          "%u, %s, %d, %d, %d, %d, "
-                                          "%d, %d, %d)\n",
-                  srcName, _mesa_enum_to_string(srcTarget), srcLevel,
-                  srcX, srcY, srcZ,
-                  dstName, _mesa_enum_to_string(dstTarget), dstLevel,
-                  dstX, dstY, dstZ,
-                  srcWidth, srcHeight, srcDepth);
 
    if (!ctx->Extensions.ARB_copy_image) {
       _mesa_error(ctx, GL_INVALID_OPERATION,
@@ -779,16 +780,6 @@ _mesa_CopyImageSubDataNV(GLuint srcName, GLenum srcTarget, GLint srcLevel,
    GLuint src_w, src_h, dst_w, dst_h;
    GLuint src_bw, src_bh, dst_bw, dst_bh;
    GLuint src_num_samples, dst_num_samples;
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glCopyImageSubDataNV(%u, %s, %d, %d, %d, %d, "
-                                            "%u, %s, %d, %d, %d, %d, "
-                                            "%d, %d, %d)\n",
-                  srcName, _mesa_enum_to_string(srcTarget), srcLevel,
-                  srcX, srcY, srcZ,
-                  dstName, _mesa_enum_to_string(dstTarget), dstLevel,
-                  dstX, dstY, dstZ,
-                  srcWidth, srcHeight, srcDepth);
 
    if (!ctx->Extensions.NV_copy_image) {
       _mesa_error(ctx, GL_INVALID_OPERATION,

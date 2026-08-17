@@ -66,15 +66,12 @@ pub fn derive_as_slice(
         Data::Struct(s) => {
             let mut has_repr_c = false;
             for attr in attrs {
-                match attr.meta {
-                    Meta::List(ml) => {
-                        if ml.path.is_ident("repr")
-                            && format!("{}", ml.tokens) == "C"
-                        {
-                            has_repr_c = true;
-                        }
+                if let Meta::List(ml) = attr.meta {
+                    if ml.path.is_ident("repr")
+                        && format!("{}", ml.tokens) == "C"
+                    {
+                        has_repr_c = true;
                     }
-                    _ => (),
                 }
             }
             assert!(has_repr_c, "Struct must be declared #[repr(C)]");
@@ -87,7 +84,7 @@ pub fn derive_as_slice(
             if let Fields::Named(named) = s.fields {
                 for f in named.named {
                     let f_count = count_type(&f.ty, slice_type);
-                    let f_attr = get_attr(&f, &attr_name);
+                    let f_attr = get_attr(&f, attr_name);
 
                     if f_count > 0 {
                         assert!(
@@ -114,7 +111,7 @@ pub fn derive_as_slice(
                             f_attr.is_none(),
                             "{attr_name} attribute is only allowed on {slice_type}"
                         );
-                        if !first.is_none() {
+                        if first.is_some() {
                             found_last = true;
                         }
                     }
@@ -127,27 +124,31 @@ pub fn derive_as_slice(
             let attr_type = Ident::new(attr_type, Span::call_site());
             if let Some(first) = first {
                 quote! {
+                    unsafe impl compiler::as_slice::AsArray<#slice_type, #count>
+                        for #ident
+                    {
+                        type Attr = #attr_type;
+                        const ATTRS: [#attr_type; #count] = [#attrs];
+                        const ARRAY_OFFSET: usize =
+                            std::mem::offset_of!(#ident, #first);
+                    }
+
                     impl compiler::as_slice::AsSlice<#slice_type> for #ident {
                         type Attr = #attr_type;
 
                         fn as_slice(&self) -> &[#slice_type] {
-                            unsafe {
-                                let first = &self.#first as *const #slice_type;
-                                std::slice::from_raw_parts(first, #count)
-                            }
+                            use compiler::as_slice::AsArray;
+                            self.as_array()
                         }
 
                         fn as_mut_slice(&mut self) -> &mut [#slice_type] {
-                            unsafe {
-                                let first =
-                                    &mut self.#first as *mut #slice_type;
-                                std::slice::from_raw_parts_mut(first, #count)
-                            }
+                            use compiler::as_slice::AsArray;
+                            self.as_mut_array()
                         }
 
-                        fn attrs(&self) -> AttrList<Self::Attr> {
-                            static ATTRS: [#attr_type; #count] = [#attrs];
-                            AttrList::Array(&ATTRS)
+                        fn attrs(&self) -> &'static [Self::Attr] {
+                            use compiler::as_slice::AsArray;
+                            &<#ident as AsArray<#slice_type, #count>>::ATTRS
                         }
                     }
                 }
@@ -164,8 +165,8 @@ pub fn derive_as_slice(
                             &mut []
                         }
 
-                        fn attrs(&self) -> AttrList<Self::Attr> {
-                            AttrList::Uniform(#attr_type::DEFAULT)
+                        fn attrs(&self) -> &'static [Self::Attr] {
+                            &[]
                         }
                     }
                 }
@@ -206,7 +207,7 @@ pub fn derive_as_slice(
                         }
                     }
 
-                    fn attrs(&self) -> AttrList<Self::Attr> {
+                    fn attrs(&self) -> &'static [Self::Attr] {
                         match self {
                             #types_cases
                         }

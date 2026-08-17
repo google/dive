@@ -23,7 +23,9 @@
 
 #include <gtest/gtest.h>
 #include <driconf.h>
-#include <xmlconfig.h>
+
+#include "util/xmlconfig.h"
+#include "util/os_misc.h"
 
 class xmlconfig_test : public ::testing::Test {
 protected:
@@ -43,15 +45,15 @@ xmlconfig_test::xmlconfig_test()
    /* Unset variables from the envrionment to prevent user settings from
     * impacting the tests.
     */
-   unsetenv("glsl_zero_init");
-   unsetenv("always_have_depth_buffer");
-   unsetenv("opt");
-   unsetenv("vblank_mode");
-   unsetenv("not_present");
-   unsetenv("mesa_b_option");
-   unsetenv("mesa_s_option");
-   unsetenv("mest_test_unknown_option");
-   unsetenv("mest_drirc_option");
+   os_unset_option("glsl_zero_init");
+   os_unset_option("always_have_depth_buffer");
+   os_unset_option("opt");
+   os_unset_option("vblank_mode");
+   os_unset_option("not_present");
+   os_unset_option("mesa_b_option");
+   os_unset_option("mesa_s_option");
+   os_unset_option("mest_test_unknown_option");
+   os_unset_option("mest_drirc_option");
 
    options = {};
 }
@@ -117,7 +119,7 @@ TEST_F(xmlconfig_test, enums_from_env)
       DRI_CONF_VBLANK_MODE(DRI_CONF_VBLANK_DEF_INTERVAL_1)
    };
 
-   setenv("vblank_mode", "0", 1);
+   os_set_option("vblank_mode", "0", true);
    driParseOptionInfo(&options, driconf, ARRAY_SIZE(driconf));
 
    EXPECT_EQ(0, driQueryOptioni(&options, "vblank_mode"));
@@ -168,10 +170,8 @@ TEST_F(xmlconfig_test, copy_cache)
     * "mesa_test_option" so the test shouldn't end up with something from the
     * user's homedir/environment that would override us.
     */
-   driParseConfigFiles(&cache, &options,
-                       0, "driver", "drm", NULL,
-                       NULL, 0,
-                       NULL, 0);
+   driConfigFileParseParams params = { .driverName = "driver", .kernelDriverName = "drm" };
+   driParseConfigFiles(&cache, &options, &params);
 
    /* Can we inspect the cache? */
    EXPECT_EQ(driCheckOption(&cache, "mesa_b_option", DRI_BOOL), true);
@@ -204,10 +204,15 @@ xmlconfig_test::drirc_init(const char *driver, const char *drm,
    /* This should parse the "user" drirc files under ./tests/drirc_test/,
     * based on the setting of $HOME by meson.build.
     */
-   driParseConfigFiles(&cache, &options,
-                       0, driver, drm, NULL,
-                       app, appver,
-                       engine, enginever);
+   driConfigFileParseParams params = {
+      .driverName = driver,
+      .kernelDriverName = drm,
+      .applicationName = app,
+      .applicationVersion = (uint32_t)appver,
+      .engineName = engine,
+      .engineVersion = (uint32_t)enginever,
+   };
+   driParseConfigFiles(&cache, &options, &params);
 
    return cache;
 }
@@ -242,14 +247,14 @@ TEST_F(xmlconfig_test, drirc_user_app)
 
 TEST_F(xmlconfig_test, drirc_env_override)
 {
-   setenv("mesa_drirc_option", "7", 1);
+   os_set_option("mesa_drirc_option", "7", true);
    driOptionCache cache = drirc_init("driver", "drm",
                                      "app1",
                                      NULL, 0,
                                      NULL, 0);
    /* env var takes precedence over config files */
    EXPECT_EQ(driQueryOptioni(&cache, "mesa_drirc_option"), 7);
-   unsetenv("mesa_drirc_option");
+   os_unset_option("mesa_drirc_option");
    driDestroyOptionCache(&cache);
 }
 
@@ -286,7 +291,7 @@ TEST_F(xmlconfig_test, drirc_exec_regexp)
 
 TEST_F(xmlconfig_test, drirc_exec_override)
 {
-   putenv("MESA_DRICONF_EXECUTABLE_OVERRIDE=app1");
+   os_set_option("MESA_DRICONF_EXECUTABLE_OVERRIDE", "app1", true);
    driOptionCache cache = drirc_init("driver", "drm",
                                      NULL,
                                      NULL, 0,

@@ -41,6 +41,7 @@ glslparsertest@glsl2@bit-logic-02.frag
 glslparsertest@shaders@varying1.frag
 glslparsertest@shaders@vector.frag
 spec@!opengl 3.2@layered-rendering@clear-color-all-types cube_map_array single_level
+spec@arb_framebuffer_object@fbo-generatemipmap-3d
 spec@arb_gpu_shader_fp64@compiler@built-in-functions@op-add-double-dvec2.vert
 spec@arb_gpu_shader_fp64@compiler@built-in-functions@op-add-double-dvec3.vert
 spec@arb_gpu_shader_int64@compiler@built-in-functions@min-i64vec3-int64_t.geom

@@ -31,6 +31,11 @@
 
 #include "vpe11_resource.h"
 
+#include "vpe20_resource.h"
+#include "multi_pipe_segmentation.h"
+
+#include "vpe22_resource.h"
+
 static const struct vpe_debug_options debug_defaults = {
     .flags                   = {0},
     .cm_in_bypass            = 0,
@@ -75,6 +80,10 @@ static const struct vpe_debug_options debug_defaults = {
     .skip_optimal_tap_check = 0,
     .disable_lut_caching    = 0,
     .bypass_blndgam         = 0,
+    .disable_performance_mode       = 0,
+    .multi_pipe_segmentation_policy = 1, // 0: disable, 1: use for blending, 2: always use
+    .opp_background_gen             = 0, // 0 : mpc bg gen, 1: opp bg gen
+    .subsampling_quality            = 1, // 0 : 4/5 taps 1: 2/3 taps
 };
 
 enum vpe_ip_level vpe_resource_parse_ip_version(
@@ -90,10 +99,18 @@ enum vpe_ip_level vpe_resource_parse_ip_version(
     case VPE_VERSION(6, 1, 2):
         ip_level = VPE_IP_LEVEL_1_1;
         break;
+    case VPE_VERSION(2, 0, 0):
+    case VPE_VERSION(7, 0, 0): // to be removed when caller switches to new convention
+        ip_level = VPE_IP_LEVEL_2_0;
+        break;
+    case VPE_VERSION(2, 2, 0):
+        ip_level = VPE_IP_LEVEL_2_2;
+        break;
     default:
         ip_level = VPE_IP_LEVEL_UNKNOWN;
         break;
     }
+
     return ip_level;
 }
 
@@ -107,6 +124,12 @@ enum vpe_status vpe_construct_resource(
         break;
     case VPE_IP_LEVEL_1_1:
         status = vpe11_construct_resource(vpe_priv, res);
+        break;
+    case VPE_IP_LEVEL_2_0:
+        status = vpe20_construct_resource(vpe_priv, res);
+        break;
+    case VPE_IP_LEVEL_2_2:
+        status = vpe22_construct_resource(vpe_priv, res);
         break;
     default:
         status = VPE_STATUS_NOT_SUPPORTED;
@@ -130,6 +153,12 @@ void vpe_destroy_resource(struct vpe_priv *vpe_priv, struct resource *res)
         break;
     case VPE_IP_LEVEL_1_1:
         vpe11_destroy_resource(vpe_priv, res);
+        break;
+    case VPE_IP_LEVEL_2_0:
+        vpe20_destroy_resource(vpe_priv, res);
+        break;
+    case VPE_IP_LEVEL_2_2:
+        vpe20_destroy_resource(vpe_priv, res);
         break;
     default:
         break;
@@ -176,7 +205,7 @@ static enum vpe_status create_input_config_vector(struct stream_ctx *stream_ctx)
             break;
         }
 
-        for (type_idx = 0; type_idx < VPE_CMD_TYPE_COUNT; type_idx++) {
+        for (type_idx = 0; type_idx < VPE_CMD_OPS_COUNT; type_idx++) {
             stream_ctx->stream_op_configs[pipe_idx][type_idx] =
                 vpe_vector_create(vpe_priv, sizeof(struct config_record), MIN_NUM_CONFIG);
             if (!stream_ctx->stream_op_configs[pipe_idx][type_idx]) {
@@ -205,7 +234,7 @@ static void destroy_input_config_vector(struct stream_ctx *stream_ctx)
             stream_ctx->configs[pipe_idx] = NULL;
         }
 
-        for (type_idx = 0; type_idx < VPE_CMD_TYPE_COUNT; type_idx++) {
+        for (type_idx = 0; type_idx < VPE_CMD_OPS_COUNT; type_idx++) {
             if (stream_ctx->stream_op_configs[pipe_idx][type_idx]) {
                 vpe_vector_free(stream_ctx->stream_op_configs[pipe_idx][type_idx]);
                 stream_ctx->stream_op_configs[pipe_idx][type_idx] = NULL;
@@ -275,6 +304,10 @@ static void free_stream_ctx(uint32_t num_streams, struct stream_ctx *stream_ctx)
             ctx->segment_ctx = NULL;
         }
 
+        if (ctx->mps_ctx)
+            if (ctx->mps_parent_stream == ctx)
+                vpe_free_mps_ctx(vpe_priv, &ctx->mps_ctx);
+
         destroy_input_config_vector(ctx);
     }
 }
@@ -334,6 +367,7 @@ void vpe_pipe_reset(struct vpe_priv *vpe_priv)
         pipe_ctx->is_top_pipe  = true;
         pipe_ctx->owner        = PIPE_CTX_NO_OWNER;
         pipe_ctx->top_pipe_idx = 0xff;
+        pipe_ctx->cmd_type     = VPE_CMD_OPS_COUNT;
     }
 }
 
@@ -418,7 +452,7 @@ static void calculate_recout(struct segment_ctx *segment)
     }
 }
 
-void calculate_scaling_ratios(struct scaler_data *scl_data, struct vpe_rect *src_rect,
+void vpe_calculate_scaling_ratios(struct scaler_data *scl_data, struct vpe_rect *src_rect,
     struct vpe_rect *dst_rect, enum vpe_surface_pixel_format format)
 {
     // no rotation support
@@ -431,6 +465,10 @@ void calculate_scaling_ratios(struct scaler_data *scl_data, struct vpe_rect *src
     if (vpe_is_yuv420(format)) {
         scl_data->ratios.horz_c.value /= 2;
         scl_data->ratios.vert_c.value /= 2;
+    }
+
+    if (vpe_is_yuv422(format)) {
+        scl_data->ratios.horz_c.value /= 2;
     }
 
     scl_data->ratios.horz   = vpe_fixpt_truncate(scl_data->ratios.horz, 19);
@@ -548,6 +586,10 @@ static enum vpe_status calculate_inits_and_viewports(struct segment_ctx *segment
     struct fixed31_32        init_adj_h = vpe_fixpt_zero;
     struct fixed31_32        init_adj_v = vpe_fixpt_zero;
 
+    if (vpe_is_yuv422(data->format)) {
+        vpc_h_div = 2;
+    }
+
     get_vp_scan_direction(stream_ctx->stream.rotation, stream_ctx->stream.horizontal_mirror,
         &orthogonal_rotation, &flip_vert_scan_dir, &flip_horz_scan_dir);
 
@@ -605,6 +647,21 @@ static enum vpe_status calculate_inits_and_viewports(struct segment_ctx *segment
     return VPE_STATUS_OK;
 }
 
+enum lut3d_type vpe_get_stream_lut3d_type(struct stream_ctx *stream_ctx)
+{
+    enum lut3d_type lut3d;
+    // lut3d_type holds the 3dlut type NONE, CPU (Direct Config), or GPU (Fast Load)
+    // for Fast Load Enable/Disable
+    if ((stream_ctx->stream.tm_params.UID == 0) || (!stream_ctx->stream.tm_params.enable_3dlut)) {
+        lut3d = LUT3D_TYPE_NONE;
+    } else if (stream_ctx->stream.tm_params.lut_type != VPE_LUT_TYPE_CPU) {
+        lut3d = LUT3D_TYPE_GPU;
+    } else {
+        lut3d = LUT3D_TYPE_CPU;
+    }
+    return lut3d;
+}
+
 uint16_t vpe_get_num_segments(struct vpe_priv *vpe_priv, const struct vpe_rect *src,
     const struct vpe_rect *dst, const uint32_t max_seg_width)
 {
@@ -613,13 +670,18 @@ uint16_t vpe_get_num_segments(struct vpe_priv *vpe_priv, const struct vpe_rect *
     return (uint16_t)(max(max(num_seg_src, num_seg_dst), 1));
 }
 
-bool should_generate_cmd_info(struct stream_ctx *stream_ctx)
+bool vpe_should_generate_cmd_info(struct stream_ctx *stream_ctx)
 {
     enum vpe_stream_type stream_type = stream_ctx->stream_type;
+
+    if (stream_ctx->mps_parent_stream != NULL && stream_ctx->mps_parent_stream != stream_ctx)
+        return false; // don't generate cmd info for non-parent stream in mps blending
+                      // all cmd info for whole MPS op will be generated by parent stream
 
     switch (stream_type) {
     case VPE_STREAM_TYPE_INPUT:
     case VPE_STREAM_TYPE_BG_GEN:
+    case VPE_STREAM_TYPE_BKGR_ALPHA:
         return true;
     default:
         /* destination-as-input virtual stream does not need a new cmd_info,
@@ -722,7 +784,7 @@ void vpe_handle_output_h_mirror(struct vpe_priv *vpe_priv)
     struct stream_ctx *stream_ctx;
 
     // swap the stream output location
-    for (stream_idx = 0; stream_idx < vpe_priv->num_streams; stream_idx++) {
+    for (stream_idx = 0; stream_idx < (uint16_t)vpe_priv->num_streams; stream_idx++) {
         stream_ctx = &vpe_priv->stream_ctx[stream_idx];
         if (stream_ctx->flip_horizonal_output) {
             struct segment_ctx *first_seg, *last_seg;
@@ -775,13 +837,72 @@ void vpe_resource_build_bit_depth_reduction_params(
     }
 }
 
+void vpe_build_clamping_params(struct opp *opp, struct clamping_and_pixel_encoding_params *clamping)
+{
+    struct vpe_priv         *vpe_priv     = opp->vpe_priv;
+    struct vpe_surface_info *dst_surface  = &vpe_priv->output_ctx.surface;
+    enum vpe_color_range     output_range = dst_surface->cs.range;
+
+    memset(clamping, 0, sizeof(*clamping));
+    clamping->clamping_level = CLAMPING_FULL_RANGE;
+    clamping->c_depth        = vpe_get_color_depth(dst_surface->format);
+    if (output_range == VPE_COLOR_RANGE_STUDIO) {
+        if (!vpe_priv->init.debug.clamping_setting) {
+            switch (clamping->c_depth) {
+            case COLOR_DEPTH_888:
+                clamping->clamping_level = CLAMPING_LIMITED_RANGE_8BPC;
+                break;
+            case COLOR_DEPTH_101010:
+                clamping->clamping_level = CLAMPING_LIMITED_RANGE_10BPC;
+                break;
+            case COLOR_DEPTH_121212:
+                clamping->clamping_level = CLAMPING_LIMITED_RANGE_12BPC;
+                break;
+            default:
+                clamping->clamping_level =
+                    CLAMPING_FULL_RANGE; // for all the others bit depths set the full range
+                break;
+            }
+        } else {
+            switch (vpe_priv->init.debug.clamping_params.clamping_range) {
+            case VPE_CLAMPING_LIMITED_RANGE_8BPC:
+                clamping->clamping_level = CLAMPING_LIMITED_RANGE_8BPC;
+                break;
+            case VPE_CLAMPING_LIMITED_RANGE_10BPC:
+                clamping->clamping_level = CLAMPING_LIMITED_RANGE_10BPC;
+                break;
+            case VPE_CLAMPING_LIMITED_RANGE_12BPC:
+                clamping->clamping_level = CLAMPING_LIMITED_RANGE_12BPC;
+                break;
+            default:
+                clamping->clamping_level =
+                    CLAMPING_LIMITED_RANGE_PROGRAMMABLE; // for all the others set to programmable
+                                                         // range
+                clamping->r_clamp_component_lower =
+                    vpe_priv->output_ctx.clamping_params.r_clamp_component_lower;
+                clamping->g_clamp_component_lower =
+                    vpe_priv->output_ctx.clamping_params.g_clamp_component_lower;
+                clamping->b_clamp_component_lower =
+                    vpe_priv->output_ctx.clamping_params.b_clamp_component_lower;
+                clamping->r_clamp_component_upper =
+                    vpe_priv->output_ctx.clamping_params.r_clamp_component_upper;
+                clamping->g_clamp_component_upper =
+                    vpe_priv->output_ctx.clamping_params.g_clamp_component_upper;
+                clamping->b_clamp_component_upper =
+                    vpe_priv->output_ctx.clamping_params.b_clamp_component_upper;
+                break;
+            }
+        }
+    }
+}
+
 void vpe_frontend_config_callback(
     void *ctx, uint64_t cfg_base_gpu, uint64_t cfg_base_cpu, uint64_t size, uint32_t pipe_idx)
 {
     struct config_frontend_cb_ctx *cb_ctx     = (struct config_frontend_cb_ctx *)ctx;
     struct vpe_priv               *vpe_priv   = cb_ctx->vpe_priv;
     struct stream_ctx             *stream_ctx = &vpe_priv->stream_ctx[cb_ctx->stream_idx];
-    enum vpe_cmd_type              cmd_type;
+    enum vpe_cmd_ops               cmd_type;
     struct config_record           record;
 
     if (cb_ctx->stream_sharing) {
@@ -821,10 +942,73 @@ void vpe_backend_config_callback(
         &vpe_priv->vpe_desc_writer, cfg_base_gpu, false, (uint8_t)vpe_priv->config_writer.buf->tmz);
 }
 
+uint32_t vpe_get_recout_width_alignment(const struct vpe_build_param *params)
+{
+    uint16_t recout_alignment;
+    bool dst_subsampled;
+
+    dst_subsampled = vpe_is_subsampled_format(params->dst_surface.format);
+
+    if (params->frod_param.enable_frod)
+        recout_alignment = VPE_FROD_ALIGNMENT;
+    else if (dst_subsampled == true)
+        recout_alignment = VPE_SUBSAMPLED_OUT_ALIGNMENT;
+    else
+        recout_alignment = VPE_NO_ALIGNMENT;
+
+    return recout_alignment;
+}
+
 bool vpe_rec_is_equal(struct vpe_rect rec1, struct vpe_rect rec2)
 {
     return (rec1.x == rec2.x && rec1.y == rec2.y && rec1.width == rec2.width &&
             rec1.height == rec2.height);
+}
+
+bool vpe_is_zero_rect(struct vpe_rect *rect)
+{
+    return (rect->width <= 0 || rect->height <= 0);
+}
+
+bool vpe_is_valid_vp(struct vpe_rect *src_rect, struct vpe_rect *dst_rect)
+{
+    return (src_rect->width >= VPE_MIN_VIEWPORT_SIZE && src_rect->height >= VPE_MIN_VIEWPORT_SIZE &&
+            dst_rect->width >= VPE_MIN_VIEWPORT_SIZE && dst_rect->height >= VPE_MIN_VIEWPORT_SIZE);
+}
+
+bool vpe_is_scaling_factor_supported(struct vpe_priv *vpe_priv, struct vpe_rect *src_rect,
+    struct vpe_rect *dst_rect, enum vpe_rotation_angle rotation)
+{
+    bool ort_rotated = (rotation == VPE_ROTATION_ANGLE_90 || rotation == VPE_ROTATION_ANGLE_270);
+    const uint32_t max_upscale_factor   = vpe_priv->pub.caps->plane_caps.max_upscale_factor;
+    const uint32_t max_downscale_factor = vpe_priv->pub.caps->plane_caps.max_downscale_factor;
+    uint32_t       factor;
+    uint32_t       src_width  = ort_rotated ? src_rect->height : src_rect->width;
+    uint32_t       src_height = ort_rotated ? src_rect->width : src_rect->height;
+
+    // horizontal factor
+    factor = (uint32_t)vpe_fixpt_ceil(vpe_fixpt_from_fraction((1000 * dst_rect->width), src_width));
+    if (factor > max_upscale_factor || factor < max_downscale_factor)
+        return false;
+
+    // vertical factor
+    factor =
+        (uint32_t)vpe_fixpt_ceil(vpe_fixpt_from_fraction((1000 * dst_rect->height), src_height));
+    if (factor > max_upscale_factor || factor < max_downscale_factor)
+        return false;
+
+    return true;
+}
+
+struct stream_ctx *vpe_get_virtual_stream(
+    struct vpe_priv *vpe_priv, enum vpe_stream_type stream_type)
+{
+    for (uint32_t i = 0; i < vpe_priv->num_virtual_streams; i++) {
+        if (vpe_priv->stream_ctx[i + vpe_priv->num_input_streams].stream_type == stream_type) {
+            return &(vpe_priv->stream_ctx[i + vpe_priv->num_input_streams]);
+        }
+    }
+    return NULL;
 }
 
 const struct vpe_caps *vpe_get_capability(enum vpe_ip_level ip_level)
@@ -836,6 +1020,12 @@ const struct vpe_caps *vpe_get_capability(enum vpe_ip_level ip_level)
         break;
     case VPE_IP_LEVEL_1_1:
         caps = vpe11_get_capability();
+        break;
+    case VPE_IP_LEVEL_2_0:
+        caps = vpe20_get_capability();
+        break;
+    case VPE_IP_LEVEL_2_2:
+        caps = vpe22_get_capability();
         break;
 
     default:
@@ -852,6 +1042,12 @@ void vpe_setup_check_funcs(struct vpe_check_support_funcs *funcs, enum vpe_ip_le
         break;
     case VPE_IP_LEVEL_1_1:
         vpe11_setup_check_funcs(funcs);
+        break;
+    case VPE_IP_LEVEL_2_0:
+        vpe20_setup_check_funcs(funcs);
+        break;
+    case VPE_IP_LEVEL_2_2:
+        vpe22_setup_check_funcs(funcs);
         break;
     default:
         break;

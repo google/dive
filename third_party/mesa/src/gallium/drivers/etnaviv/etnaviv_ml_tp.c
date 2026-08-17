@@ -247,7 +247,7 @@ set_default_tp_config(struct etna_tp_params *map)
 static struct etna_bo *
 create_transpose_config(struct etna_ml_subgraph *subgraph, const struct etna_operation *operation)
 {
-   struct etna_bo *bo = etna_ml_create_bo(subgraph->base.context, sizeof(struct etna_tp_params));
+   struct etna_bo *bo = etna_ml_create_bo(subgraph->screen, sizeof(struct etna_tp_params));
 
    etna_bo_cpu_prep(bo, DRM_ETNA_PREP_WRITE);
 
@@ -297,7 +297,7 @@ create_detranspose_config(struct etna_ml_subgraph *subgraph, const struct etna_o
    unsigned input_width = operation->input_width;
    unsigned input_height = operation->input_height;
    unsigned input_channels = operation->input_channels;
-   struct etna_bo *bo = etna_ml_create_bo(subgraph->base.context, sizeof(struct etna_tp_params));
+   struct etna_bo *bo = etna_ml_create_bo(subgraph->screen, sizeof(struct etna_tp_params));
 
    etna_bo_cpu_prep(bo, DRM_ETNA_PREP_WRITE);
 
@@ -367,21 +367,11 @@ split_reshuffle(struct etna_ml_subgraph *subgraph, const struct etna_operation *
       unsigned pad_y = 0;
 
       if (operation->padding_same) {
-         if (operation->weight_width == 5) {
-            if (i == 0 || dim_to_split != 0)
-               pad_x++;
+         if (i == 0 || dim_to_split != 0)
+            pad_x += (operation->weight_width - 2 + operation->input_width % 2) / 2;
 
-            if (i == 0 || dim_to_split != 1)
-               pad_y++;
-         }
-
-         if (operation->input_width % 2)
-            if (i == 0 || dim_to_split != 0)
-               pad_x++;
-
-         if (operation->input_height % 2)
-            if (i == 0 || dim_to_split != 1)
-               pad_y++;
+         if (i == 0 || dim_to_split != 1)
+            pad_y += (operation->weight_height - 2 + operation->input_height % 2) / 2;
       }
 
       if (i < tp_cores_used - 1) {
@@ -418,7 +408,7 @@ static struct etna_bo *
 create_reshuffle_config(struct etna_ml_subgraph *subgraph, const struct etna_operation *operation,
                         unsigned tp_core, unsigned tp_cores_used)
 {
-   struct etna_bo *bo = etna_ml_create_bo(subgraph->base.context, sizeof(struct etna_tp_params));
+   struct etna_bo *bo = etna_ml_create_bo(subgraph->screen, sizeof(struct etna_tp_params));
    unsigned input_width = operation->input_width;
    unsigned input_height = operation->input_height;
    unsigned output_width = operation->output_width;
@@ -572,8 +562,7 @@ static struct etna_bo *
 create_pad_config(struct etna_ml_subgraph *subgraph, const struct etna_operation *operation,
                   unsigned tp_core, unsigned tp_cores_used)
 {
-   struct pipe_context *pctx = subgraph->base.context;
-   struct etna_bo *bo = etna_ml_create_bo(pctx, sizeof(struct etna_tp_params));
+   struct etna_bo *bo = etna_ml_create_bo(subgraph->screen, sizeof(struct etna_tp_params));
    unsigned input_width = operation->input_width;
    unsigned input_height = operation->input_height;
    unsigned input_channels = operation->input_channels;
@@ -747,8 +736,7 @@ static struct etna_bo *
 create_pwl_lut_config(struct etna_ml_subgraph *subgraph, const struct etna_operation *operation,
                    unsigned tp_core, unsigned tp_cores_used, struct etna_bo *pwl_lut)
 {
-   struct pipe_context *pctx = subgraph->base.context;
-   struct etna_bo *bo = etna_ml_create_bo(pctx, sizeof(struct etna_tp_params));
+   struct etna_bo *bo = etna_ml_create_bo(subgraph->screen, sizeof(struct etna_tp_params));
    unsigned input_width = operation->input_width;
    unsigned input_height = operation->input_height;
    unsigned input_channels = operation->input_channels;
@@ -950,7 +938,10 @@ etna_ml_lower_reshuffle(struct etna_ml_subgraph *subgraph,
    operation->type = ETNA_JOB_TYPE_TP;
    operation->tp_type = ETNA_ML_TP_RESHUFFLE;
    operation->stride = convolution->conv.stride_x;
-   operation->padding_same = convolution->conv.padding_same;
+   operation->padding_same = convolution->conv.padding_top > 0 ||
+                             convolution->conv.padding_bottom > 0 ||
+                             convolution->conv.padding_left > 0 ||
+                             convolution->conv.padding_right > 0;
 
    operation->input_count = 1;
    operation->input_width = convolution->input_tensors[0]->dims[1];
@@ -979,13 +970,8 @@ etna_ml_lower_reshuffle(struct etna_ml_subgraph *subgraph,
    operation->weight_height = convolution->conv.weight_tensor->dims[2];
 
    if (operation->padding_same) {
-      if (operation->weight_width == 5) {
-         operation->output_width += 2;
-         operation->output_height += 2;
-      } else {
-         operation->output_width += 1;
-         operation->output_height += 1;
-      }
+      operation->output_width += operation->weight_width / 2;
+      operation->output_height += operation->weight_height / 2;
    }
 }
 
@@ -1121,10 +1107,8 @@ static struct etna_bo *
 create_relu_lut_bo(struct etna_ml_subgraph *subgraph,
                    const struct etna_operation *operation)
 {
-   struct pipe_context *context = subgraph->base.context;
-   struct etna_context *ctx = etna_context(context);
    const unsigned lut_length = 1024;
-   struct etna_bo *pwl_lut = etna_bo_new(ctx->screen->dev,
+   struct etna_bo *pwl_lut = etna_bo_new(subgraph->screen->dev,
                                          lut_length * sizeof(uint32_t),
                                          DRM_ETNA_GEM_CACHE_WC);
 
@@ -1152,10 +1136,8 @@ static struct etna_bo *
 create_abs_lut_bo(struct etna_ml_subgraph *subgraph,
                   const struct etna_operation *operation)
 {
-   struct pipe_context *context = subgraph->base.context;
-   struct etna_context *ctx = etna_context(context);
    unsigned lut_length = 1024;
-   struct etna_bo *pwl_lut = etna_bo_new(ctx->screen->dev,
+   struct etna_bo *pwl_lut = etna_bo_new(subgraph->screen->dev,
                                          lut_length * sizeof(uint32_t),
                                          DRM_ETNA_GEM_CACHE_WC);
 
@@ -1271,11 +1253,9 @@ static struct etna_bo *
 create_log_lut_bo(struct etna_ml_subgraph *subgraph,
                   const struct etna_operation *operation)
 {
-   struct pipe_context *context = subgraph->base.context;
-   struct etna_context *ctx = etna_context(context);
    unsigned lut_table_len = 1024;
 
-   struct etna_bo *pwl_lut = etna_bo_new(ctx->screen->dev,
+   struct etna_bo *pwl_lut = etna_bo_new(subgraph->screen->dev,
                                          lut_table_len * sizeof(uint32_t),
                                          DRM_ETNA_GEM_CACHE_WC);
 
@@ -1328,7 +1308,6 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
                              const struct etna_operation *operation,
                              struct etna_vip_instruction *instruction)
 {
-   struct etna_context *ctx = etna_context(subgraph->base.context);
    struct pipe_resource *input = etna_ml_get_resource(subgraph, operation->input_tensors[0]);
    assert(input);
    pipe_resource_reference(&instruction->input, input);
@@ -1348,7 +1327,7 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
       instruction->configs[0] = create_detranspose_config(subgraph, operation);
       break;
    case ETNA_ML_TP_RESHUFFLE: {
-      unsigned tp_core_count = etna_ml_get_core_info(ctx)->tp_core_count;
+      unsigned tp_core_count = etna_ml_get_core_info(subgraph->screen)->tp_core_count;
       unsigned tp_cores_used;
 
       tp_cores_used = (operation->input_width > 8 || operation->input_channels > 1) ? tp_core_count : 1;
@@ -1365,7 +1344,7 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
       break;
    }
    case ETNA_ML_TP_PAD: {
-      unsigned tp_cores_used = etna_ml_get_core_info(ctx)->tp_core_count;
+      unsigned tp_cores_used = etna_ml_get_core_info(subgraph->screen)->tp_core_count;
 
       if (operation->input_width == 1)
          tp_cores_used = 1;
@@ -1377,7 +1356,7 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
       break;
    }
    case ETNA_ML_TP_RELU: {
-      unsigned tp_cores_used = etna_ml_get_core_info(ctx)->tp_core_count;
+      unsigned tp_cores_used = etna_ml_get_core_info(subgraph->screen)->tp_core_count;
 
       if (operation->input_width < 6)
          tp_cores_used = 1;
@@ -1390,7 +1369,7 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
       break;
    }
    case ETNA_ML_TP_ABSOLUTE: {
-      unsigned tp_cores_used = etna_ml_get_core_info(ctx)->tp_core_count;
+      unsigned tp_cores_used = etna_ml_get_core_info(subgraph->screen)->tp_core_count;
 
       ML_DBG("absolute: input_width %d tp_cores_used %d\n", operation->input_width, tp_cores_used);
       instruction->pwl_lut = create_abs_lut_bo(subgraph, operation);
@@ -1400,7 +1379,7 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
       break;
    }
    case ETNA_ML_TP_LOGISTIC: {
-      unsigned tp_cores_used = etna_ml_get_core_info(ctx)->tp_core_count;
+      unsigned tp_cores_used = etna_ml_get_core_info(subgraph->screen)->tp_core_count;
 
       if (operation->input_width < 6)
          tp_cores_used = 1;
@@ -1418,12 +1397,13 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
 }
 
 void
-etna_ml_emit_operation_tp(struct etna_ml_subgraph *subgraph,
+etna_ml_emit_operation_tp(struct pipe_context *pctx,
+                          struct etna_ml_subgraph *subgraph,
                           struct etna_vip_instruction *operation,
                           unsigned idx)
 {
-   struct etna_context *ctx = etna_context(subgraph->base.context);
-   unsigned tp_core_count = etna_ml_get_core_info(ctx)->tp_core_count;
+   struct etna_context *ctx = etna_context(pctx);
+   unsigned tp_core_count = etna_ml_get_core_info(subgraph->screen)->tp_core_count;
    struct etna_cmd_stream *stream = ctx->stream;
    bool more_than_one_tp_job = operation->configs[1] != NULL;
    bool parallel = DBG_ENABLED(ETNA_DBG_NPU_PARALLEL);

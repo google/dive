@@ -36,7 +36,8 @@ nv50_flush(struct pipe_context *pipe,
    struct nouveau_context *context = nouveau_context(pipe);
 
    if (fence)
-      nouveau_fence_ref(context->fence, (struct nouveau_fence **)fence);
+      nouveau_fence_ref(context->fence, (struct nouveau_fence **)fence,
+                        context->screen);
 
    PUSH_KICK(context->pushbuf);
 
@@ -407,7 +408,7 @@ nv50_create(struct pipe_screen *pscreen, void *priv, unsigned ctxflags)
 
    nv50->base.scratch.bo_size = 2 << 20;
 
-   util_dynarray_init(&nv50->global_residents, NULL);
+   nv50->global_residents = UTIL_DYNARRAY_INIT;
 
    // Make sure that the first TSC entry has SRGB conversion bit set, since we
    // use it as a fallback.

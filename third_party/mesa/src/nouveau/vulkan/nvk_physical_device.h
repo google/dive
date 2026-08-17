@@ -39,6 +39,7 @@ struct nvk_physical_device {
    struct vk_physical_device vk;
    struct nv_device_info info;
    enum nvk_debug debug_flags;
+   bool ssbo_align_4b;
 
    struct nvkmd_pdev *nvkmd;
 

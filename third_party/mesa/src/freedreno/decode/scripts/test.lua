@@ -17,7 +17,7 @@ function draw(primtype, nindx)
   io.write("0x2280: written=" .. regs.written(0x2280) .. ", lastval=" .. regs.lastval(0x2280) .. ", val=" .. regs.val(0x2280) .. "\n")
 end
 
-function A6XX_TEX_CONST(pkt, size)
+function A6XX_TEX_MEMOBJ(pkt, size)
   io.write("\n-------- " .. size .. "\n")
   io.write("-------- w=" .. pkt[1].WIDTH .. ", h=" .. pkt[1].HEIGHT .. "\n")
   io.write("\n");

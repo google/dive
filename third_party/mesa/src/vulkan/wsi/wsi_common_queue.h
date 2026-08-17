@@ -34,7 +34,7 @@ struct wsi_queue {
    struct u_cnd_monotonic cond;
 };
 
-static inline int
+static inline VkResult
 wsi_queue_init(struct wsi_queue *queue, int length)
 {
    int ret;
@@ -44,7 +44,7 @@ wsi_queue_init(struct wsi_queue *queue, int length)
 
    ret = u_vector_init(&queue->vector, length, sizeof(uint32_t));
    if (!ret)
-      return ENOMEM;
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
 
    ret = u_cnd_monotonic_init(&queue->cond);
    if (ret != thrd_success)
@@ -54,7 +54,7 @@ wsi_queue_init(struct wsi_queue *queue, int length)
    if (ret != thrd_success)
       goto fail_cond;
 
-   return 0;
+   return VK_SUCCESS;
 
 fail_cond:
    u_cnd_monotonic_destroy(&queue->cond);

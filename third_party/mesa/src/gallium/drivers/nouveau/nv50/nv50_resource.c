@@ -146,7 +146,6 @@ nv50_init_resource_functions(struct pipe_context *pcontext)
    pcontext->texture_unmap = nv50_miptree_transfer_unmap;
    pcontext->buffer_subdata = u_default_buffer_subdata;
    pcontext->texture_subdata = u_default_texture_subdata;
-   pcontext->surface_destroy = nv50_surface_destroy;
    pcontext->invalidate_resource = nv50_invalidate_resource;
 }
 

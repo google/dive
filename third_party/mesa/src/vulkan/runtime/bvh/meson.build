@@ -40,14 +40,21 @@ bvh_shaders = [
     'ploc_internal.comp',
     'ploc_internal',
   ],
+  [
+    'hploc_internal.comp',
+    'hploc_internal',
+  ],
 ]
 
+spirv_include_dir = dir_source_root + '/src/compiler/spirv'
 vk_bvh_include_dir = dir_source_root + '/src/vulkan/runtime/bvh'
 
 vk_bvh_includes = files(
-  'vk_build_helpers.h',
-  'vk_build_interface.h',
-  'vk_bvh.h',
+  'leaf.h',
+  'vk_bvh_defines.h',
+  'vk_bvh_helpers.h',
+  'vk_debug.h',
+  spirv_include_dir + '/spirv_internal_exts.h',
 )
 
 vk_glsl_shader_extensions = [
@@ -66,7 +73,9 @@ vk_glsl_shader_extensions = [
   'GL_KHR_shader_subgroup_shuffle',
   'GL_KHR_shader_subgroup_ballot',
   'GL_KHR_shader_subgroup_clustered',
+  'GL_KHR_shader_subgroup_vote',
   'GL_EXT_shader_atomic_int64',
+  'GL_EXT_spirv_intrinsics',
 ]
 
 vk_glsl_shader_preamble = []
@@ -77,7 +86,7 @@ endforeach
 bvh_spv = []
 foreach s : bvh_shaders
   command = [
-    prog_glslang, '-V', '-I' + vk_bvh_include_dir, '--target-env', 'spirv1.5', '-x', '-o', '@OUTPUT@', '@INPUT@'
+    prog_glslang, '-V', '-I' + vk_bvh_include_dir, '-I' + spirv_include_dir, '--target-env', 'spirv1.5', '-x', '-o', '@OUTPUT@', '@INPUT@'
   ] + (with_mesa_debug ? ['-g'] : [])
   command += glslang_quiet
   command += vk_glsl_shader_preamble

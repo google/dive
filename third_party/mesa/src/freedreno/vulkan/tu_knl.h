@@ -10,10 +10,14 @@
 #ifndef TU_DRM_H
 #define TU_DRM_H
 
-#include "tu_common.h"
-#include "tu_queue.h"
+#include <stddef.h>
+#include <stdint.h>
+
+#include "util/u_atomic.h"
+#include "vulkan/vulkan_core.h"
 
 struct tu_u_trace_syncobj;
+struct tu_queue;
 struct vdrm_bo;
 
 enum tu_bo_alloc_flags {
@@ -65,6 +69,14 @@ struct tu_bo {
     * for the purposes of VK_EXT_device_address_binding_report
     */
    struct vk_object_base *base;
+
+   /* Stable identifier for the underlying memory object.
+    *
+    * Used for VK_EXT_device_memory_report. On KGSL, GEM handles are
+    * per-import and not stable, so this may be derived from the dma-buf
+    * inode to provide a consistent ID across imports.
+    */
+   uint64_t unique_id;
 };
 
 enum tu_sparse_vma_flags {
@@ -127,7 +139,7 @@ struct tu_knl {
                        struct tu_sparse_vma *lazy_vma,
                        const char *name);
    VkResult (*bo_init_dmabuf)(struct tu_device *dev, struct tu_bo **out_bo,
-                              uint64_t size, int prime_fd);
+                              uint64_t size, enum tu_bo_alloc_flags flags, int prime_fd);
    int (*bo_export_dmabuf)(struct tu_device *dev, struct tu_bo *bo);
    VkResult (*bo_alloc_lazy)(struct tu_device *dev, struct tu_bo *bo);
    VkResult (*bo_map)(struct tu_device *dev, struct tu_bo *bo, void *placed_addr);
@@ -203,6 +215,7 @@ VkResult
 tu_bo_init_dmabuf(struct tu_device *dev,
                   struct tu_bo **bo,
                   uint64_t size,
+                  enum tu_bo_alloc_flags flags,
                   int fd);
 
 int
@@ -223,8 +236,6 @@ tu_bo_sync_cache(struct tu_device *dev,
                  VkDeviceSize offset,
                  VkDeviceSize size,
                  enum tu_mem_sync_op op);
-
-uint32_t tu_get_l1_dcache_size();
 
 void tu_bo_allow_dump(struct tu_device *dev, struct tu_bo *bo);
 

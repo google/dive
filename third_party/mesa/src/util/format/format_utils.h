@@ -36,7 +36,7 @@
 
 /* Extends an integer of size SRC_BITS to one of size DST_BITS linearly */
 #define EXTEND_NORMALIZED_INT(X, SRC_BITS, DST_BITS) \
-      (((X) * (int)(u_uintN_max(DST_BITS) / u_uintN_max(SRC_BITS))) + \
+      (((X) * (int)((unsigned)u_uintN_max(DST_BITS) / (unsigned)u_uintN_max(SRC_BITS))) + \
        (((DST_BITS) % (SRC_BITS)) ? ((X) >> ((SRC_BITS) - (DST_BITS) % (SRC_BITS))) : 0))
 
 static inline float
@@ -87,16 +87,18 @@ static inline unsigned
 _mesa_unorm_to_unorm(unsigned x, unsigned src_bits, unsigned dst_bits)
 {
    if (src_bits < dst_bits) {
+      assert(dst_bits <= sizeof(unsigned) * 8);
       return EXTEND_NORMALIZED_INT(x, src_bits, dst_bits);
    } else if (src_bits > dst_bits) {
       unsigned src_half = (1u << (src_bits - 1)) - 1;
+      unsigned max_dst = (unsigned)u_uintN_max(dst_bits);
+      unsigned max_src = (unsigned)u_uintN_max(src_bits);
 
       if (src_bits + dst_bits > sizeof(x) * 8) {
          assert(src_bits + dst_bits <= sizeof(uint64_t) * 8);
-         return (((uint64_t) x * u_uintN_max(dst_bits) + src_half) /
-                 u_uintN_max(src_bits));
+         return ((uint64_t) x * max_dst + src_half) / max_src;
       } else {
-         return (x * u_uintN_max(dst_bits) + src_half) / u_uintN_max(src_bits);
+         return (x * max_dst + src_half) / max_src;
       }
    } else {
       return x;
@@ -140,9 +142,10 @@ _mesa_snorm_to_snorm(int x, unsigned src_bits, unsigned dst_bits)
 {
    if (x < -u_intN_max(src_bits))
       return -u_intN_max(dst_bits);
-   else if (src_bits < dst_bits)
+   else if (src_bits < dst_bits){
+      assert(dst_bits <= sizeof(unsigned) * 8);
       return EXTEND_NORMALIZED_INT(x, src_bits - 1, dst_bits - 1);
-   else
+   } else
       return x >> (src_bits - dst_bits);
 }
 

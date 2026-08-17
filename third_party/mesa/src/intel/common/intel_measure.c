@@ -65,7 +65,7 @@ intel_measure_init(struct intel_measure_device *device)
          return;
 
       char env_copy[1024];
-      strncpy(env_copy, env, 1024);
+      strncpy(env_copy, env, 1023);
       env_copy[1023] = '\0';
 
       config.file = stderr;
@@ -240,14 +240,20 @@ intel_measure_snapshot_string(enum intel_measure_snapshot_type type)
       [INTEL_SNAPSHOT_COMPUTE]             = "compute",
       [INTEL_SNAPSHOT_COPY]                = "copy",
       [INTEL_SNAPSHOT_DRAW]                = "draw",
+      [INTEL_SNAPSHOT_FAST_STENCIL_CLEAR]  = "fast stencil clear",
       [INTEL_SNAPSHOT_HIZ_AMBIGUATE]       = "hiz ambiguate",
       [INTEL_SNAPSHOT_HIZ_CLEAR]           = "hiz clear",
       [INTEL_SNAPSHOT_HIZ_RESOLVE]         = "hiz resolve",
+      [INTEL_SNAPSHOT_HIZ_PARTIAL_RESOLVE] = "hiz partial resolve",
+      [INTEL_SNAPSHOT_HIZ_STENCIL_CLEAR]   = "hiz + stencil clear",
+      [INTEL_SNAPSHOT_LINEAR_SURFACE_CLEAR]= "linear surface clear",
       [INTEL_SNAPSHOT_MCS_AMBIGUATE]       = "mcs ambiguate",
       [INTEL_SNAPSHOT_MCS_COLOR_CLEAR]     = "mcs color clear",
       [INTEL_SNAPSHOT_MCS_PARTIAL_RESOLVE] = "mcs partial resolve",
       [INTEL_SNAPSHOT_SLOW_COLOR_CLEAR]    = "slow color clear",
       [INTEL_SNAPSHOT_SLOW_DEPTH_CLEAR]    = "slow depth clear",
+      [INTEL_SNAPSHOT_SLOW_DEPTH_STENCIL_CLEAR] = "slow depth/stencil clear",
+      [INTEL_SNAPSHOT_SLOW_STENCIL_CLEAR]  = "slow stencil clear",
       [INTEL_SNAPSHOT_SECONDARY_BATCH]     = "secondary command buffer",
       [INTEL_SNAPSHOT_END]                 = "end",
    };

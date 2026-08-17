@@ -406,7 +406,6 @@ i915_create_surface_custom(struct pipe_context *ctx, struct pipe_resource *pt,
    ps->level = surf_tmpl->level;
    ps->first_layer = surf_tmpl->first_layer;
    ps->last_layer = surf_tmpl->last_layer;
-   ps->context = ctx;
 
    if (util_format_is_depth_or_stencil(ps->format)) {
       surf->buf_info = BUF_3D_ID_DEPTH;

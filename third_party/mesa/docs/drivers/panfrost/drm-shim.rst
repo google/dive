@@ -1,4 +1,3 @@
-
 drm-shim
 ========
 
@@ -34,8 +33,8 @@ Mali-G57   Valhall (v9)  9093
 Mali-G610  Valhall (v10) a867
 =========  ============= =======
 
-Additional GPU IDs are enumerated in the ``panfrost_model_list`` list in
-``src/panfrost/lib/pan_props.c``.
+Additional GPU IDs are enumerated in the ``pan_model_list`` list in
+``src/panfrost/model/pan_model.c``.
 
 As an example: assuming Mesa is installed to a local path ``~/lib`` and Mesa's
 build directory is ``~/mesa/build``, a shader can be compiled for Mali-G52 as:

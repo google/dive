@@ -18,11 +18,23 @@
       }                                                         \
    } while (0)
 
+#define BO_CACHE_INC(bucket, field) do {                        \
+      if (FD_BO_CACHE_STATS) {                                  \
+         (bucket)->field++;                                     \
+      }                                                         \
+   } while (0)
+
+#define BO_CACHE_DEC(bucket, field) do {                        \
+      if (FD_BO_CACHE_STATS) {                                  \
+         (bucket)->field++;                                     \
+      }                                                         \
+   } while (0)
+
 static void
 bo_remove_from_bucket(struct fd_bo_bucket *bucket, struct fd_bo *bo)
 {
    list_delinit(&bo->node);
-   bucket->count--;
+   BO_CACHE_DEC(bucket, count);
 }
 
 static void
@@ -153,7 +165,7 @@ fd_bo_cache_cleanup(struct fd_bo_cache *cache, time_t time)
 
          VG_BO_OBTAIN(bo);
          bo_remove_from_bucket(bucket, bo);
-         bucket->expired++;
+         BO_CACHE_INC(bucket, expired);
          list_addtail(&bo->node, &freelist);
          fd_alloc_log(bo, FD_ALLOC_CACHE, FD_ALLOC_NONE);
 
@@ -247,11 +259,11 @@ retry:
          }
          p_atomic_set(&bo->refcnt, 1);
          bo->reloc_flags = FD_RELOC_FLAGS_INIT;
-         bucket->hits++;
+         BO_CACHE_INC(bucket, hits);
          fd_alloc_log(bo, FD_ALLOC_CACHE, FD_ALLOC_ACTIVE);
          return bo;
       }
-      bucket->misses++;
+      BO_CACHE_INC(bucket, misses);
    }
 
    fd_bo_del_list_nocache(&freelist);
@@ -284,7 +296,7 @@ fd_bo_cache_free(struct fd_bo_cache *cache, struct fd_bo *bo)
 
       simple_mtx_lock(&cache->lock);
       list_addtail(&bo->node, &bucket->list);
-      bucket->count++;
+      BO_CACHE_INC(bucket, count);
       simple_mtx_unlock(&cache->lock);
 
       fd_alloc_log(bo, FD_ALLOC_ACTIVE, FD_ALLOC_CACHE);

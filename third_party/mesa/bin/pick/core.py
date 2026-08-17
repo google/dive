@@ -52,7 +52,7 @@ IS_FIX = re.compile(r'^\s*fixes:\s*([a-f0-9]{6,40})', flags=re.MULTILINE | re.IG
 IS_CC = re.compile(r'^\s*cc:\s*["\']?([0-9]{2}\.[0-9])?["\']?\s*["\']?([0-9]{2}\.[0-9])?["\']?\s*\<?mesa-stable',
                    flags=re.MULTILINE | re.IGNORECASE)
 IS_REVERT = re.compile(r'This reverts commit ([0-9a-f]{40})')
-IS_BACKPORT = re.compile(r'^\s*backport-to:\s*(\d{2}\.\d),?\s*(\d{2}\.\d)?',
+IS_BACKPORT = re.compile(r'^\s*backport-to:\s*(?:(\d{2}\.\d),?\s*(\d{2}\.\d)?|(\*))',
                          flags=re.MULTILINE | re.IGNORECASE)
 
 # XXX: hack
@@ -295,7 +295,7 @@ async def resolve_nomination(commit: 'Commit', version: str) -> 'Commit':
 
     if backport_to := IS_BACKPORT.findall(commit_message):
         for match in backport_to:
-            if any(Version(version) >= Version(backport_version)
+            if any(backport_version == '*' or Version(version) >= Version(backport_version)
                    for backport_version in match if backport_version != ''):
                 commit.nominated = True
                 commit.nomination_type = NominationType.BACKPORT

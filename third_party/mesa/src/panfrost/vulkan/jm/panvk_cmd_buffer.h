@@ -144,9 +144,6 @@ VkResult
    panvk_per_arch(cmd_prepare_tiler_context)(struct panvk_cmd_buffer *cmdbuf,
                                              uint32_t layer_idx);
 
-void panvk_per_arch(cmd_preload_fb_after_batch_split)(
-   struct panvk_cmd_buffer *cmdbuf);
-
 void panvk_per_arch(cmd_bind_shaders)(struct vk_command_buffer *vk_cmd,
                                       uint32_t stage_count,
                                       const mesa_shader_stage *stages,

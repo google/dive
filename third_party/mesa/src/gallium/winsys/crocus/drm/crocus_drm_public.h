@@ -24,10 +24,16 @@
 #ifndef CROCUS_DRM_PUBLIC_H
 #define CROCUS_DRM_PUBLIC_H
 
+#include <stdbool.h>
+
 struct pipe_screen;
 struct pipe_screen_config;
+struct virgl_renderer_capset_drm;
 
 struct pipe_screen *
 crocus_drm_screen_create(int drm_fd, const struct pipe_screen_config *config);
+
+bool
+crocus_drm_probe_nctx(int fd, const struct virgl_renderer_capset_drm *caps);
 
 #endif /* CROCUS_DRM_PUBLIC_H */

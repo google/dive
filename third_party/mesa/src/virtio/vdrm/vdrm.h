@@ -41,7 +41,8 @@ struct vdrm_device_funcs {
    uint32_t (*handle_to_res_id)(struct vdrm_device *vdev, uint32_t handle);
 
    uint32_t (*bo_create)(struct vdrm_device *vdev, size_t size, uint32_t blob_flags,
-                         uint64_t blob_id, struct vdrm_ccmd_req *req);
+                         uint64_t blob_id, uint32_t blob_hints,
+                         struct vdrm_ccmd_req *req);
    int (*bo_wait)(struct vdrm_device *vdev, uint32_t handle);
    void *(*bo_map)(struct vdrm_device *vdev, uint32_t handle, size_t size, void *placed_addr);
    int (*bo_export_dmabuf)(struct vdrm_device *vdev, uint32_t handle);
@@ -53,7 +54,6 @@ struct vdrm_device_funcs {
 struct vdrm_device {
    const struct vdrm_device_funcs *funcs;
 
-   struct virgl_renderer_capset_drm caps;
    bool supports_cross_device;
    struct vdrm_shmem *shmem;
    uint8_t *rsp_mem;
@@ -70,6 +70,12 @@ struct vdrm_device {
    uint32_t reqbuf_len;
    uint32_t reqbuf_cnt;
    uint8_t reqbuf[0x4000];
+
+   /*
+    * struct virgl_renderer_capset_drm has a varying size and must be placed
+    * in the end of struct vdrm_device.
+    */
+   struct virgl_renderer_capset_drm caps;
 };
 
 struct vdrm_device *vdrm_device_connect(int fd, uint32_t context_type);
@@ -125,6 +131,7 @@ vdrm_handle_to_res_id(struct vdrm_device *vdev, uint32_t handle)
 
 uint32_t vdrm_bo_create(struct vdrm_device *vdev, size_t size,
                         uint32_t blob_flags, uint64_t blob_id,
+                        uint32_t blob_hints,
                         struct vdrm_ccmd_req *req);
 
 static inline int

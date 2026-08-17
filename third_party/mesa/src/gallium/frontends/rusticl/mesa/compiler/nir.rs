@@ -307,6 +307,10 @@ impl NirShader {
         nir_pass!(self, nir_inline_functions);
     }
 
+    pub fn fully_linked(&self) -> bool {
+        unsafe { nir_shader_fully_linked(self.nir.as_ptr()) }
+    }
+
     pub fn gather_info(&mut self) {
         unsafe { nir_shader_gather_info(self.nir.as_ptr(), self.entrypoint()) }
     }
@@ -315,8 +319,17 @@ impl NirShader {
         unsafe { nir_remove_non_entrypoints(self.nir.as_ptr()) };
     }
 
-    pub fn cleanup_functions(&mut self) {
+    // This functions returns None when it detects a not fully linked nir shader.
+    pub fn cleanup_functions(self) -> Option<Self> {
+        if !self.fully_linked() {
+            return None;
+        }
+
+        // SAFETY: This is only safe to call when all remaining call instructions call into
+        //         functions with a definition, a.k.a. the shader was linked resolving all
+        //         functions.
         unsafe { nir_cleanup_functions(self.nir.as_ptr()) };
+        Some(self)
     }
 
     pub fn variables(&mut self) -> ExecListIter<'_, nir_variable> {
@@ -367,15 +380,6 @@ impl NirShader {
 
     pub fn num_subgroups(&self) -> u8 {
         unsafe { (*self.nir.as_ptr()).info.num_subgroups }
-    }
-
-    pub fn set_workgroup_size_variable_if_zero(&mut self) {
-        let nir = self.nir.as_ptr();
-        unsafe {
-            (*nir)
-                .info
-                .set_workgroup_size_variable((*nir).info.workgroup_size[0] == 0);
-        }
     }
 
     pub fn set_workgroup_size(&mut self, size: [u16; 3]) {
@@ -477,22 +481,6 @@ impl NirShader {
             } else {
                 slice::from_raw_parts(nir.constant_data.cast(), nir.constant_data_size as usize)
             }
-        }
-    }
-
-    pub fn preserve_fp16_denorms(&mut self) {
-        unsafe {
-            self.nir.as_mut().info.float_controls_execution_mode |=
-                float_controls::FLOAT_CONTROLS_DENORM_PRESERVE_FP16 as u32;
-        }
-    }
-
-    pub fn set_fp_rounding_mode_rtne(&mut self) {
-        unsafe {
-            self.nir.as_mut().info.float_controls_execution_mode |=
-                float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP16 as u32
-                    | float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP32 as u32
-                    | float_controls::FLOAT_CONTROLS_ROUNDING_MODE_RTE_FP64 as u32;
         }
     }
 

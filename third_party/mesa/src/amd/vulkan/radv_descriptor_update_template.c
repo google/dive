@@ -50,7 +50,6 @@ radv_CreateDescriptorUpdateTemplate(VkDevice _device, const VkDescriptorUpdateTe
    for (i = 0; i < entry_count; i++) {
       const VkDescriptorUpdateTemplateEntry *entry = &pCreateInfo->pDescriptorUpdateEntries[i];
       const struct radv_descriptor_set_binding_layout *binding_layout = set_layout->binding + entry->dstBinding;
-      const uint32_t buffer_offset = binding_layout->buffer_offset + entry->dstArrayElement;
       const uint32_t *immutable_samplers = NULL;
       uint32_t dst_offset;
       uint32_t dst_stride;
@@ -90,7 +89,6 @@ radv_CreateDescriptorUpdateTemplate(VkDevice _device, const VkDescriptorUpdateTe
                                                         .src_stride = entry->stride,
                                                         .dst_offset = dst_offset,
                                                         .dst_stride = dst_stride,
-                                                        .buffer_offset = buffer_offset,
                                                         .has_sampler = !binding_layout->immutable_samplers_offset,
                                                         .has_ycbcr_sampler = binding_layout->has_ycbcr_sampler,
                                                         .immutable_samplers = immutable_samplers};
@@ -124,7 +122,6 @@ radv_update_descriptor_set_with_template_impl(struct radv_device *device, struct
    uint32_t i;
 
    for (i = 0; i < templ->entry_count; ++i) {
-      struct radeon_winsys_bo **buffer_list = set->descriptors + templ->entry[i].buffer_offset;
       uint32_t *pDst = set->header.mapped_ptr + templ->entry[i].dst_offset;
       const uint8_t *pSrc = ((const uint8_t *)pData) + templ->entry[i].src_offset;
       uint32_t j;
@@ -140,37 +137,35 @@ radv_update_descriptor_set_with_template_impl(struct radv_device *device, struct
          case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC: {
             const unsigned idx = templ->entry[i].dst_offset + j;
             assert(!(set->header.layout->flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT));
-            radv_write_dynamic_buffer_descriptor(device, set->header.dynamic_descriptors + idx, buffer_list,
+            radv_write_dynamic_buffer_descriptor(set->header.dynamic_descriptors + idx,
                                                  (struct VkDescriptorBufferInfo *)pSrc);
             break;
          }
          case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
          case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-            radv_write_buffer_descriptor_impl(device, cmd_buffer, pDst, buffer_list,
+            radv_write_buffer_descriptor_impl(device, templ->entry[i].descriptor_type, pDst,
                                               (struct VkDescriptorBufferInfo *)pSrc);
             break;
          case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
          case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-            radv_write_texel_buffer_descriptor(device, cmd_buffer, pDst, buffer_list, *(VkBufferView *)pSrc);
+            radv_write_texel_buffer_descriptor(pDst, *(VkBufferView *)pSrc);
             break;
          case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-            radv_write_image_descriptor_impl(device, cmd_buffer, RADV_STORAGE_IMAGE_DESC_SIZE, pDst, buffer_list,
-                                             templ->entry[i].descriptor_type, (struct VkDescriptorImageInfo *)pSrc);
+            radv_write_image_descriptor(pDst, RADV_STORAGE_IMAGE_DESC_SIZE, templ->entry[i].descriptor_type,
+                                        (struct VkDescriptorImageInfo *)pSrc);
             break;
          case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
          case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-            radv_write_image_descriptor_impl(device, cmd_buffer, radv_get_sampled_image_desc_size(pdev), pDst,
-                                             buffer_list, templ->entry[i].descriptor_type,
-                                             (struct VkDescriptorImageInfo *)pSrc);
+            radv_write_image_descriptor(pDst, radv_get_sampled_image_desc_size(pdev), templ->entry[i].descriptor_type,
+                                        (struct VkDescriptorImageInfo *)pSrc);
             break;
          case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: {
             if (templ->entry[i].has_ycbcr_sampler) {
-               radv_write_image_descriptor_ycbcr_impl(device, cmd_buffer, pDst, buffer_list,
-                                                      (struct VkDescriptorImageInfo *)pSrc);
+               radv_write_image_descriptor_ycbcr(device, pDst, (struct VkDescriptorImageInfo *)pSrc, true);
             } else {
-               radv_write_combined_image_sampler_descriptor(
-                  device, cmd_buffer, pDst, buffer_list, templ->entry[i].descriptor_type,
-                  (struct VkDescriptorImageInfo *)pSrc, templ->entry[i].has_sampler);
+               radv_write_combined_image_sampler_descriptor(device, pDst, templ->entry[i].descriptor_type,
+                                                            (struct VkDescriptorImageInfo *)pSrc,
+                                                            templ->entry[i].has_sampler);
             }
 
             if (cmd_buffer && templ->entry[i].immutable_samplers) {
@@ -199,8 +194,6 @@ radv_update_descriptor_set_with_template_impl(struct radv_device *device, struct
          }
          pSrc += templ->entry[i].src_stride;
          pDst += templ->entry[i].dst_stride;
-
-         buffer_list += radv_descriptor_type_buffer_count(templ->entry[i].descriptor_type);
       }
    }
 }

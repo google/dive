@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2020 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "iris_context.h"
 #include "iris_fine_fence.h"
 #include "util/u_upload_mgr.h"

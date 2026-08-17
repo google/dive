@@ -126,7 +126,7 @@ get_builder(struct panvk_cmd_buffer *cmdbuf, struct u_trace *ut)
    return panvk_get_cs_builder(cmdbuf, subqueue);
 }
 
-static void
+static bool
 panvk_utrace_record_ts(struct u_trace *ut, void *cs, void *timestamps,
                        uint64_t offset_B, uint32_t flags)
 {
@@ -140,6 +140,8 @@ panvk_utrace_record_ts(struct u_trace *ut, void *cs, void *timestamps,
    const uint64_t addr = buf->dev + offset_B;
 
    cmd_write_timestamp(dev, b, addr, *cs_info->ts_async_op);
+
+   return true;
 }
 
 static void
@@ -170,21 +172,7 @@ panvk_utrace_capture_data(struct u_trace *ut, void *cs, void *dst_buffer,
 static uint32_t
 get_utrace_clone_mem_size()
 {
-   const char *v = os_get_option("PANVK_UTRACE_CLONE_MEM_SIZE");
-   if (v) {
-      uint32_t size = 0;
-      sscanf(v, "%u", &size);
-      if (size > 0) {
-         return size;
-      }
-      sscanf(v, "0x%x", &size);
-      if (size > 0) {
-         mesa_logi("selected utrace mem size = 0x%x (%u) hex", size, size);
-         return size;
-      }
-   }
-   /* 10 MB default */
-   return 0xa00000;
+   return debug_get_num_option("PANVK_UTRACE_CLONE_MEM_SIZE", 0xa00000);
 }
 
 VkResult
@@ -271,5 +259,6 @@ panvk_per_arch(utrace_clone_finish_builder)(struct cs_builder *b)
                    cs_defer(SB_IMM_MASK, SB_ID(IMM_FLUSH)));
    cs_wait_slot(b, SB_ID(IMM_FLUSH));
 
-   cs_finish(b);
+   cs_end(b);
+   cs_builder_fini(b);
 }

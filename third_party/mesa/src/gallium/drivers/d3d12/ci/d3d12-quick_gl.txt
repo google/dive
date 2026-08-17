@@ -408,6 +408,3 @@ spec@nv_copy_depth_to_color@nv_copy_depth_to_color 0 0x76356278,Fail
 spec@nv_copy_depth_to_color@nv_copy_depth_to_color 1 0x223344ff,Fail
 spec@nv_copy_depth_to_color@nv_copy_depth_to_color 1 0x76356278,Fail
 wgl@wgl-multi-context-single-window,Fail
-
-# This tests NaNs in a GLSL version where NaNs are undefined
-shaders@glsl-fs-fogscale@vs and fs,Fail

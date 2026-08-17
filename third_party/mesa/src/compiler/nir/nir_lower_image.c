@@ -95,6 +95,9 @@ lower_image_to_fragment_mask_load(nir_builder *b, nir_intrinsic_instr *intrin)
    case nir_intrinsic_bindless_image_load:
       fmask_op = nir_intrinsic_bindless_image_fragment_mask_load_amd;
       break;
+   case nir_intrinsic_image_heap_load:
+      fmask_op = nir_intrinsic_image_heap_fragment_mask_load_amd;
+      break;
    default:
       UNREACHABLE("bad intrinsic");
       break;
@@ -144,6 +147,9 @@ lower_image_samples_identical_to_fragment_mask_load(nir_builder *b, nir_intrinsi
    case nir_intrinsic_bindless_image_samples_identical:
       fmask_load->intrinsic = nir_intrinsic_bindless_image_fragment_mask_load_amd;
       break;
+   case nir_intrinsic_image_heap_samples_identical:
+      fmask_load->intrinsic = nir_intrinsic_image_heap_fragment_mask_load_amd;
+      break;
    default:
       UNREACHABLE("bad intrinsic");
       break;
@@ -166,6 +172,7 @@ lower_image_intrin(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
    case nir_intrinsic_image_size:
    case nir_intrinsic_image_deref_size:
    case nir_intrinsic_bindless_image_size:
+   case nir_intrinsic_image_heap_size:
       if (options->lower_cube_size &&
           nir_intrinsic_image_dim(intrin) == GLSL_SAMPLER_DIM_CUBE) {
          lower_cube_size(b, intrin);
@@ -176,6 +183,7 @@ lower_image_intrin(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
    case nir_intrinsic_image_load:
    case nir_intrinsic_image_deref_load:
    case nir_intrinsic_bindless_image_load:
+   case nir_intrinsic_image_heap_load:
       if (options->lower_to_fragment_mask_load_amd &&
           nir_intrinsic_image_dim(intrin) == GLSL_SAMPLER_DIM_MS &&
           /* Don't lower again. */
@@ -188,6 +196,7 @@ lower_image_intrin(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
    case nir_intrinsic_image_samples_identical:
    case nir_intrinsic_image_deref_samples_identical:
    case nir_intrinsic_bindless_image_samples_identical:
+   case nir_intrinsic_image_heap_samples_identical:
       if (options->lower_to_fragment_mask_load_amd &&
           nir_intrinsic_image_dim(intrin) == GLSL_SAMPLER_DIM_MS) {
          lower_image_samples_identical_to_fragment_mask_load(b, intrin);
@@ -197,7 +206,8 @@ lower_image_intrin(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
 
    case nir_intrinsic_image_samples:
    case nir_intrinsic_image_deref_samples:
-   case nir_intrinsic_bindless_image_samples: {
+   case nir_intrinsic_bindless_image_samples:
+   case nir_intrinsic_image_heap_samples: {
       if (options->lower_image_samples_to_one) {
          b->cursor = nir_after_instr(&intrin->instr);
          nir_def *samples = nir_imm_intN_t(b, 1, intrin->def.bit_size);

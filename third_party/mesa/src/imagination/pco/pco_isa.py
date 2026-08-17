@@ -1791,6 +1791,17 @@ elems=[
    ('write_back_lazy', 0b10),
 ])
 
+F_CACHEMODE_LD_ST = field_enum_type(
+name='cachemode_ld_st', num_bits=2,
+elems=[
+   ('normal', 0b00),
+   ('bypass', 0b01),
+   ('force_line_fill', 0b10),
+   ('write_through', 0b00),
+   ('write_back', 0b01),
+   ('write_back_lazy', 0b10),
+])
+
 F_DSIZE = field_enum_type(
 name='dsize', num_bits=2,
 elems=[
@@ -1934,11 +1945,19 @@ pieces=[
    ('soo', (2, '1')),
    ('tao', (2, '0')),
 
-   ('rsvd3_smp', (3, '7:5')),
+   ('extc', (3, '7')),
+   ('rsvd3_smp', (3, '6:5')),
    ('f16', (3, '4')),
    ('swap', (3, '3')),
    ('cachemode_smp', (3, '2:1')),
    ('smp_w', (3, '0')),
+
+   ('rsvd4_smp', (4, '7:5')),
+   ('direct', (4, '4')),
+   ('f16input', (4, '3')),
+   ('comparison', (4, '2')),
+   ('integer', (4, '1')),
+   ('array', (4, '0')),
 
    ## atomic
    ('atomic_op', (1, '7:4')),
@@ -2044,12 +2063,19 @@ fields=[
    ('soo', (F_BOOL, ['soo'])),
    ('tao', (F_BOOL, ['tao'])),
 
-   ('rsvd3_smp', (F_UINT3, ['rsvd3_smp'], 0)),
+   ('extc', (F_BOOL, ['extc'])),
+   ('rsvd3_smp', (F_UINT2, ['rsvd3_smp'], 0)),
    ('f16', (F_BOOL, ['f16'])),
    ('swap', (F_SCHED_CTRL1, ['swap'])),
-   ('cachemode_smp_ld', (F_CACHEMODE_LD, ['cachemode_smp'])),
-   ('cachemode_smp_st', (F_CACHEMODE_ST, ['cachemode_smp'])),
+   ('cachemode_smp_ld_st', (F_CACHEMODE_LD_ST, ['cachemode_smp'])),
    ('smp_w', (F_BOOL, ['smp_w'])),
+
+   ('rsvd4_smp', (F_UINT3, ['rsvd4_smp'], 0)),
+   ('direct', (F_BOOL, ['direct'])),
+   ('f16input', (F_BOOL, ['f16input'])),
+   ('comparison', (F_BOOL, ['comparison'])),
+   ('integer', (F_BOOL, ['integer'])),
+   ('array', (F_BOOL, ['array'])),
 
    ## atomic
    ('atomic_op', (F_ATOMIC_OP, ['atomic_op'])),
@@ -2528,10 +2554,11 @@ field_mappings=[
    ('chan', 'chan'),
    ('lodm', 'lodm'),
 
+   ('extc', 'extc', 0),
    ('rsvd3', 'rsvd3_smp'),
    ('f16', 'f16'),
    ('swap', 'swap'),
-   ('cachemode_ld', 'cachemode_smp_ld'),
+   ('cachemode_ld_st', 'cachemode_smp_ld_st'),
    ('w', 'smp_w'),
 ])
 
@@ -2559,11 +2586,51 @@ field_mappings=[
    ('soo', 'soo'),
    ('tao', 'tao'),
 
+   ('extc', 'extc', 0),
    ('rsvd3', 'rsvd3_smp'),
    ('f16', 'f16'),
    ('swap', 'swap'),
-   ('cachemode_ld', 'cachemode_smp_ld'),
+   ('cachemode_ld_st', 'cachemode_smp_ld_st'),
    ('w', 'smp_w'),
+])
+
+I_SMP_EXTABC = bit_struct(
+name='smp_extabc',
+bit_set=I_BACKEND,
+field_mappings=[
+   ('backend_op', 'backend_op', 'dma'),
+
+   ('fcnorm', 'fcnorm'),
+   ('drc', 'drc'),
+   ('dma_op', 'dma_op', 'smp'),
+
+   ('extb', 'extb', 1),
+   ('dmn', 'dmn'),
+   ('exta', 'exta', 1),
+   ('chan', 'chan'),
+   ('lodm', 'lodm'),
+
+   ('pplod', 'pplod'),
+   ('proj', 'proj'),
+   ('sbmode', 'sbmode'),
+   ('nncoords', 'nncoords'),
+   ('sno', 'sno'),
+   ('soo', 'soo'),
+   ('tao', 'tao'),
+
+   ('extc', 'extc', 1),
+   ('rsvd3', 'rsvd3_smp'),
+   ('f16', 'f16'),
+   ('swap', 'swap'),
+   ('cachemode_ld_st', 'cachemode_smp_ld_st'),
+   ('w', 'smp_w'),
+
+   ('rsvd4', 'rsvd4_smp'),
+   ('direct', 'direct', 0),
+   ('f16input', 'f16input', 0),
+   ('comparison', 'comparison', 0),
+   ('integer', 'integer'),
+   ('array', 'array'),
 ])
 
 I_ATOMIC = bit_struct(

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "tu_knl.h"
+#include "drm-uapi/msm_drm.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -12,22 +12,21 @@
 #include <sys/mman.h>
 #include <xf86drm.h>
 
-#include "vk_util.h"
-
-#include "drm-uapi/msm_drm.h"
-#include "util/u_debug.h"
-#include "util/u_process.h"
 #include "util/hash_table.h"
 #include "util/libsync.h"
+#include "util/u_debug.h"
+#include "util/u_process.h"
+#include "vk_util.h"
 
+#include "common/redump.h"
 #include "tu_cmd_buffer.h"
 #include "tu_cs.h"
 #include "tu_device.h"
 #include "tu_dynamic_rendering.h"
+#include "tu_knl.h"
 #include "tu_knl_drm.h"
 #include "tu_queue.h"
 #include "tu_rmv.h"
-#include "redump.h"
 
 static int
 tu_drm_get_param(int fd, uint32_t param, uint64_t *value)
@@ -475,7 +474,7 @@ tu_wait_fence(struct tu_device *dev,
    return VK_SUCCESS;
 }
 
-VkResult
+static VkResult
 msm_queue_wait_fence(struct tu_queue *queue, uint32_t fence,
                      uint64_t timeout_ns)
 {
@@ -770,7 +769,7 @@ tu_allocate_iova(struct tu_device *dev,
    return result;
 }
 
-void
+static void
 tu_free_iova(struct tu_device *dev,
              uint64_t iova,
              uint64_t size)
@@ -848,20 +847,10 @@ tu_bo_init(struct tu_device *dev,
 /**
  * Sets the name in the kernel so that the contents of /debug/dri/0/gem are more
  * useful.
- *
- * We skip this on release builds (when we're also not doing BO debugging) to
- * reduce overhead.
  */
 static void
 tu_bo_set_kernel_name(struct tu_device *dev, struct tu_bo *bo, const char *name)
 {
-   bool kernel_bo_names = dev->bo_sizes != NULL;
-#if MESA_DEBUG
-   kernel_bo_names = true;
-#endif
-   if (!kernel_bo_names)
-      return;
-
    struct drm_msm_gem_info req = {
       .handle = bo->gem_handle,
       .info = MSM_INFO_SET_NAME,
@@ -976,8 +965,11 @@ static VkResult
 msm_bo_init_dmabuf(struct tu_device *dev,
                    struct tu_bo **out_bo,
                    uint64_t size,
+                   enum tu_bo_alloc_flags flags,
                    int prime_fd)
 {
+   flags = (enum tu_bo_alloc_flags)(flags | TU_BO_ALLOC_DMABUF);
+
    /* lseek() to get the real size */
    off_t real_size = lseek(prime_fd, 0, SEEK_END);
    lseek(prime_fd, 0, SEEK_SET);
@@ -1016,7 +1008,7 @@ msm_bo_init_dmabuf(struct tu_device *dev,
    }
 
    VkResult result =
-      tu_allocate_iova(dev, gem_handle, size, 0, TU_BO_ALLOC_DMABUF, &iova);
+      tu_allocate_iova(dev, gem_handle, size, 0, flags, &iova);
 
    if (result != VK_SUCCESS) {
       tu_gem_close(dev, gem_handle);
@@ -1024,7 +1016,7 @@ msm_bo_init_dmabuf(struct tu_device *dev,
    }
 
    result =
-      tu_bo_init(dev, NULL, bo, gem_handle, size, iova, TU_BO_ALLOC_DMABUF, "dmabuf");
+      tu_bo_init(dev, NULL, bo, gem_handle, size, iova, flags, "dmabuf");
 
    if (result != VK_SUCCESS) {
       tu_free_iova(dev, iova, size);
@@ -1336,8 +1328,9 @@ msm_queue_submit(struct tu_queue *queue, void *_submit,
        * the memory required for page tables. Sort the entries to make sure
        * that neighboring mappings are next to each other.
        */
-      qsort(submit->binds.data, nr_ops, sizeof(struct drm_msm_vm_bind_op),
-            compare_binds);
+      if (nr_ops > 1)
+         qsort(submit->binds.data, nr_ops, sizeof(struct drm_msm_vm_bind_op),
+               compare_binds);
 
       u_rwlock_rdlock(&queue->device->vm_bind_fence_lock);
 
@@ -1663,6 +1656,8 @@ tu_knl_drm_msm_load(struct tu_instance *instance,
    device->has_sparse_prr = tu_drm_get_prr(device);
 
    device->has_preemption = tu_drm_has_preemption(device);
+
+   device->is_perf_cntr_selectable = true;
 
    /* Even if kernel is new enough, the GPU itself may not support it. */
    device->has_cached_coherent_memory =

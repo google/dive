@@ -1,4 +1,11 @@
-// iris specific driconf options
+/*
+ * Copyright © 2019 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ *
+ * @file driinfo_iris.h
+ *
+ * iris specific driconf options
+ */
 
 DRI_CONF_SECTION_DEBUG
    DRI_CONF_DUAL_COLOR_BLEND_BY_LOCATION(false)
@@ -7,11 +14,15 @@ DRI_CONF_SECTION_DEBUG
    DRI_CONF_OPT_B(sync_compile, false, "Always compile synchronously (will cause stalls)")
    DRI_CONF_LIMIT_TRIG_INPUT_RANGE(false)
    DRI_CONF_INTEL_ENABLE_WA_14018912822(false)
+   DRI_CONF_INTEL_ENABLE_WA_14024015672_MSAA(false)
    DRI_CONF_INTEL_SAMPLER_ROUTE_TO_LSC(false)
+   DRI_CONF_INTEL_DISABLE_THREADED_CONTEXT(false)
 DRI_CONF_SECTION_END
 
 DRI_CONF_SECTION_PERFORMANCE
    DRI_CONF_ADAPTIVE_SYNC(true)
+   DRI_CONFIG_INTEL_FORCE_COMPUTE_SURFACE_PREFETCH(false)
+   DRI_CONFIG_INTEL_FORCE_SAMPLER_PREFETCH(false)
    DRI_CONFIG_INTEL_TBIMR(true)
    DRI_CONFIG_INTEL_VF_DISTRIBUTION(true)
    DRI_CONFIG_INTEL_TE_DISTRIBUTION(true)

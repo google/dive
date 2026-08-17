@@ -8,7 +8,6 @@
 #define AC_RTLD_H
 
 #include "compiler/shader_enums.h"
-#include "util/u_dynarray.h"
 #include "amd_family.h"
 
 #include <stdbool.h>
@@ -21,7 +20,7 @@ extern "C" {
 
 struct ac_rtld_part;
 struct ac_shader_config;
-struct radeon_info;
+struct ac_compiler_info;
 
 struct ac_rtld_options {
    /* Loader will insert an s_sethalt 1 instruction as the
@@ -66,7 +65,7 @@ typedef bool (*ac_rtld_get_external_symbol_cb)(enum amd_gfx_level gfx_level, voi
  * the opened binary.
  */
 struct ac_rtld_open_info {
-   const struct radeon_info *info;
+   enum amd_gfx_level gfx_level;
    struct ac_rtld_options options;
    mesa_shader_stage shader_type;
    unsigned wave_size;
@@ -83,7 +82,8 @@ void ac_rtld_close(struct ac_rtld_binary *binary);
 bool ac_rtld_get_section_by_name(struct ac_rtld_binary *binary, const char *name, const char **data,
                                  size_t *nbytes);
 
-bool ac_rtld_read_config(const struct radeon_info *info, struct ac_rtld_binary *binary,
+bool ac_rtld_read_config(const struct ac_compiler_info *compiler_info,
+                         struct ac_rtld_binary *binary,
                          struct ac_shader_config *config);
 
 struct ac_rtld_upload_info {

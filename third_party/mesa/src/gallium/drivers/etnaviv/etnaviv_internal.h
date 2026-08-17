@@ -45,6 +45,12 @@
 #define ETNA_MAX_CONST_BUF 16
 #define ETNA_MAX_PIXELPIPES 2
 
+/* 128-bit color emulation reserves the upper half of the render targets for
+ * companion targets, so at most this many color RTs can be bound (and be
+ * 128-bit). It bounds the per-RT rt_is_128bit mask and rt_companion table.
+ */
+#define ETNA_MAX_128BIT_RTS (PIPE_MAX_COLOR_BUFS / 2)
+
 /* All RS operations must have width%16 = 0 */
 #define ETNA_RS_WIDTH_MASK (16 - 1)
 /* RS tiled operations must have height%4 = 0 */
@@ -95,6 +101,8 @@ struct etna_specs {
    unsigned bits_per_tile;
    /* clear value for TS (dependent on bits_per_tile) */
    uint32_t ts_clear_value;
+   /* fragment and vertex samplers share one dynamically partitioned array */
+   unsigned unified_samplers : 1;
    /* base of vertex texture units */
    unsigned vertex_sampler_offset;
    /* number of fragment sampler units */
@@ -139,7 +147,6 @@ struct etna_specs {
 
 /* Compiled pipe_blend_color */
 struct compiled_blend_color {
-   float color[4];
    uint32_t PE_ALPHA_BLEND_COLOR;
 
    struct {

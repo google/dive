@@ -1,24 +1,6 @@
 /*
  * Copyright © 2012 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_fs.h"
@@ -117,8 +99,8 @@ is_expression(const elk_fs_visitor *v, const elk_fs_inst *const inst)
 static bool
 operands_match(const elk_fs_inst *a, const elk_fs_inst *b, bool *negate)
 {
-   elk_fs_reg *xs = a->src;
-   elk_fs_reg *ys = b->src;
+   const elk_fs_reg *xs = a->src;
+   const elk_fs_reg *ys = b->src;
 
    if (a->opcode == ELK_OPCODE_MAD) {
       return xs[0].equals(ys[0]) &&
@@ -131,30 +113,23 @@ operands_match(const elk_fs_inst *a, const elk_fs_inst *b, bool *negate)
       bool ys0_negate = ys[0].negate;
       bool ys1_negate = ys[1].file == IMM ? ys[1].f < 0.0f
                                           : ys[1].negate;
-      float xs1_imm = xs[1].f;
-      float ys1_imm = ys[1].f;
+      /* Work on copies to avoid modifying the original instructions. */
+      elk_fs_reg src[4] = { xs[0], xs[1], ys[0], ys[1] };
 
-      xs[0].negate = false;
-      xs[1].negate = false;
-      ys[0].negate = false;
-      ys[1].negate = false;
-      xs[1].f = fabsf(xs[1].f);
-      ys[1].f = fabsf(ys[1].f);
-
-      bool ret = (xs[0].equals(ys[0]) && xs[1].equals(ys[1])) ||
-                 (xs[1].equals(ys[0]) && xs[0].equals(ys[1]));
-
-      xs[0].negate = xs0_negate;
-      xs[1].negate = xs[1].file == IMM ? false : xs1_negate;
-      ys[0].negate = ys0_negate;
-      ys[1].negate = ys[1].file == IMM ? false : ys1_negate;
-      xs[1].f = xs1_imm;
-      ys[1].f = ys1_imm;
+      src[0].negate = false;
+      src[1].negate = false;
+      src[2].negate = false;
+      src[3].negate = false;
+      if (src[1].file == IMM)
+         src[1].f = fabsf(src[1].f);
+      if (src[3].file == IMM)
+         src[3].f = fabsf(src[3].f);
 
       *negate = (xs0_negate != xs1_negate) != (ys0_negate != ys1_negate);
       if (*negate && (a->saturate || b->saturate))
          return false;
-      return ret;
+      return (src[0].equals(src[2]) && src[1].equals(src[3])) ||
+             (src[1].equals(src[2]) && src[0].equals(src[3]));
    } else if (!a->is_commutative()) {
       bool match = true;
       for (int i = 0; i < a->sources; i++) {

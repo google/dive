@@ -49,6 +49,7 @@ Here's a list of those requirements:
 * Device extensions:
 
   * :ext:`VK_KHR_maintenance1`
+  * :ext:`VK_KHR_maintenance5`
   * :ext:`VK_KHR_create_renderpass2`
   * :ext:`VK_KHR_imageless_framebuffer`
   * :ext:`VK_KHR_timeline_semaphore`
@@ -331,6 +332,8 @@ variable:
     Zap renderpass loads for DONT_CARE
   ``nogeneral``
     Disable GENERAL layout usage for supported hardware
+  ``perfinfo``
+    Log info when the driver notices perf issues
 
 Vulkan Validation Layers
 ^^^^^^^^^^^^^^^^^^^^^^^^

@@ -13,7 +13,9 @@ use crate::core::event::EventSig;
 use crate::core::format::*;
 use crate::core::gl::*;
 use crate::core::memory::*;
+use crate::core::platform::Platform;
 use crate::core::queue::*;
+use crate::rusticl_warn_once;
 
 use mesa_rust_gen::pipe_fd_type;
 use mesa_rust_util::properties::Properties;
@@ -48,8 +50,17 @@ fn validate_mem_flags(flags: cl_mem_flags, validation: MemFlagValidationType) ->
             | CL_MEM_WRITE_ONLY
             | CL_MEM_READ_ONLY
             | CL_MEM_KERNEL_READ_AND_WRITE
-            | CL_MEM_IMMUTABLE_EXT,
+            | CL_MEM_IMMUTABLE_EXT
+            | CL_MEM_ALLOW_UNRESTRICTED_SIZE_INTEL,
     );
+
+    if Platform::features().intel {
+        valid_flags |= cl_bitfield::from(
+            CL_MEM_FORCE_HOST_MEMORY_INTEL
+                | CL_MEM_COMPRESSED_HINT_INTEL
+                | CL_MEM_UNCOMPRESSED_HINT_INTEL,
+        );
+    }
 
     if validation != MemFlagValidationType::Imported {
         valid_flags |= cl_bitfield::from(
@@ -64,6 +75,12 @@ fn validate_mem_flags(flags: cl_mem_flags, validation: MemFlagValidationType) ->
 
     if flags & !valid_flags != 0 {
         return Err(CL_INVALID_VALUE);
+    }
+
+    if flags & cl_bitfield::from(CL_MEM_ALLOW_UNRESTRICTED_SIZE_INTEL) != 0 {
+        rusticl_warn_once!(
+            "Use of CL_MEM_ALLOW_UNRESTRICTED_SIZE_INTEL detected. This flag is ignored and applications shouldn't use them with rusticl."
+        );
     }
 
     Ok(())
@@ -319,6 +336,9 @@ unsafe impl CLInfo<cl_mem_info> for cl_mem {
             }),
             CL_MEM_SIZE => v.write::<usize>(mem.size),
             CL_MEM_TYPE => v.write::<cl_mem_object_type>(mem.mem_type),
+            CL_MEM_USES_COMPRESSION_INTEL if Platform::features().intel => {
+                v.write::<cl_bool>(CL_FALSE)
+            }
             CL_MEM_USES_SVM_POINTER | CL_MEM_USES_SVM_POINTER_ARM => {
                 v.write::<cl_bool>(mem.is_svm().into())
             }
@@ -444,10 +464,19 @@ fn create_sub_buffer(
         _ => return Err(CL_INVALID_VALUE),
     };
 
-    Ok(MemBase::new_sub_buffer(b, flags, offset, size).into_cl())
+    // CL_MISALIGNED_SUB_BUFFER_OFFSET if there are no devices in context associated with buffer for
+    // which offset is aligned to CL_DEVICE_MEM_BASE_ADDR_ALIGN.
+    let is_aligned_for_any_dev = b
+        .context
+        .devs
+        .iter()
+        .any(|&dev| offset % dev.mem_base_addr_align_bytes() == 0);
 
-    // TODO
-    // CL_MISALIGNED_SUB_BUFFER_OFFSET if there are no devices in context associated with buffer for which the origin field of the cl_buffer_region structure passed in buffer_create_info is aligned to the CL_DEVICE_MEM_BASE_ADDR_ALIGN value.
+    if !is_aligned_for_any_dev {
+        return Err(CL_MISALIGNED_SUB_BUFFER_OFFSET);
+    }
+
+    Ok(MemBase::new_sub_buffer(b, flags, offset, size).into_cl())
 }
 
 #[cl_entrypoint(clSetMemObjectDestructorCallback)]
@@ -1751,13 +1780,14 @@ fn enqueue_fill_buffer(
     // `slice::from_raw_parts()`. The caller is responsible for providing a
     // pointer to appropriately-sized, initialized memory.
     let pattern = unsafe { cl_slice::from_raw_parts(pattern.cast(), pattern_size)? }.to_vec();
+    let dev = q.device;
     create_and_queue(
         q,
         CL_COMMAND_FILL_BUFFER,
         evs,
         event,
         false,
-        Box::new(move |_, ctx| b.fill(ctx, &pattern, offset, size)),
+        b.fill(dev, pattern, offset, size)?,
     )
 
     // TODO
@@ -2124,13 +2154,14 @@ fn enqueue_fill_image(
         unsafe { fill_color.cast::<[u32; 4]>().read() }
     };
 
+    let dev = q.device;
     create_and_queue(
         q,
         CL_COMMAND_FILL_BUFFER,
         evs,
         event,
         false,
-        Box::new(move |_, ctx| i.fill(ctx, fill_color, &origin, &region)),
+        i.fill(dev, fill_color, origin, region)?,
     )
 
     //• CL_INVALID_IMAGE_SIZE if image dimensions (image width, height, specified or compute row and/or slice pitch) for image are not supported by device associated with queue.
@@ -2830,7 +2861,7 @@ fn enqueue_svm_mem_fill_impl(
             let pattern = unsafe { pattern_ptr.read_unaligned() };
             let svm_ptr = svm_ptr as usize;
 
-            Box::new(move |cl_ctx, ctx| cl_ctx.clear_svm(ctx, svm_ptr, size, pattern.0))
+            q.context.clear_svm(q.device, svm_ptr, size, pattern.0)?
         }};
     }
 

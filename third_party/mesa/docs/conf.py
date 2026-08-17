@@ -19,7 +19,9 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
+import shutil
 import sys
+import pathlib
 
 from hawkmoth.util import compiler
 
@@ -28,6 +30,7 @@ from hawkmoth.util import compiler
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.append(os.path.abspath('_exts'))
 
+GENERATED_FILES_DIR = '_generated'
 
 # -- General configuration ------------------------------------------------
 
@@ -44,7 +47,6 @@ extensions = [
     'formatting',
     'hawkmoth',
     'nir',
-    'redirects',
     'sphinx.ext.graphviz',
 ]
 
@@ -87,7 +89,7 @@ language = 'en'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['header-stubs']
+exclude_patterns = ['header-stubs', '_generated']
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
@@ -123,12 +125,6 @@ html_extra_path = [
     'README.VCE',
 ]
 
-html_redirects = [
-    ('webmaster', 'https://www.mesa3d.org/website/'),
-    ('developers', 'https://www.mesa3d.org/developers/'),
-    ('thanks', 'https://gitlab.freedesktop.org/mesa/mesa/-/blob/amber/docs/thanks.rst'),
-]
-
 
 # -- Options for linkcheck ------------------------------------------------
 
@@ -141,17 +137,23 @@ linkcheck_ignore = [
     r'https://github.com/.*#.*',  # needs JS eval
     r'https://www.intel.com/.*',  # intel.com is blocking the linkcheck user-agent; maybe it can be customized to look like a browser?
     r'https://sourceforge.net/.*',  # blocking the linkcheck user-agent
-    r'https://.*\.sourceforge\.net/.*',  # blocking the linkcheck user-agent
+    r'https://.*\.sourceforge\.(net|io)/.*',  # blocking the linkcheck user-agent
     r'https://stackoverflow.com/.*',  # blocking the linkcheck user-agent
     r'https://(www|dev)\.vulkan\.org/.*',  # blocking the linkcheck user-agent
     r'https://crates.io/.*',  # blocking the linkcheck user-agent
+    r'https://docs.vulkan.org/.*',  # blocking the linkcheck user-agent
+    r'https://wikis.khronos.org/.*',  # blocking the linkcheck user-agent
+    r'https://en.wikipedia.org/.*',  # rate-limited, which linkcheck doesn't respect
+    r'https://www.freedesktop.org/.*',  # protected by anubis
+    r'https://docs.redhat.com/.*',  # blocking the linkcheck user-agent
+    r'https://registry.khronos.org/.*',  # blocking the linkcheck user-agent
+    r'https://alt.3dcenter.org/.*',  # blocking the linkcheck user-agent
 ]
 linkcheck_exclude_documents = [r'relnotes/.*']
 
 linkcheck_allowed_redirects = {
     # Pages that forward the front-page to a wiki or some explore-page
     'https://www.freedesktop.org': 'https://www.freedesktop.org/wiki/',
-    'https://x.org': 'https://x.org/wiki/',
     'https://dri.freedesktop.org/': 'https://dri.freedesktop.org/wiki/',
     'https://gitlab.freedesktop.org/': 'https://gitlab.freedesktop.org/explore/groups',
     'https://www.sphinx-doc.org/': 'https://www.sphinx-doc.org/en/master/',
@@ -249,3 +251,20 @@ rst_prolog = '''
 .. |out| replace:: **[out]**
 .. |inout| replace:: **[inout]**
 '''
+
+def _copy_generated_rst(app):
+    if not mesa_build_root:
+        return
+
+    generated = [
+        'radv_drirc.rst',
+    ]
+
+    gen_dir = pathlib.Path(app.srcdir) / GENERATED_FILES_DIR
+    gen_dir.mkdir(exist_ok=True)
+
+    for file in generated:
+        shutil.copy(pathlib.Path(mesa_build_root) / 'docs' / file, gen_dir)
+
+def setup(app):
+    app.connect('builder-inited', _copy_generated_rst)

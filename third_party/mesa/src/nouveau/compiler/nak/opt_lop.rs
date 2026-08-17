@@ -73,23 +73,11 @@ impl LopPass {
         for i in 0..2 {
             for j in (i + 1)..3 {
                 if srcs[i].src_ref == srcs[j].src_ref {
+                    assert!(srcs[i].is_unmodified());
+                    assert!(srcs[j].is_unmodified());
                     *op = LogicOp3::new_lut(&|x, y, z| {
-                        let dup = [x, y, z][i];
-                        let si = match srcs[i].src_mod {
-                            SrcMod::None => dup,
-                            SrcMod::BNot => !dup,
-                            _ => panic!("Not a bitwise modifer"),
-                        };
-                        let sj = match srcs[j].src_mod {
-                            SrcMod::None => dup,
-                            SrcMod::BNot => !dup,
-                            _ => panic!("Not a bitwise modifer"),
-                        };
-
                         let mut s = [x, y, z];
-                        s[i] = si;
-                        s[j] = sj;
-
+                        s[j] = s[i];
                         op.eval(s[0], s[1], s[2])
                     });
                 }
@@ -206,6 +194,14 @@ impl LopPass {
             if !op.op.src_used(i) {
                 // Replace unused sources with RZ
                 *src = SrcRef::Zero.into();
+            } else if let Some(c) = src.as_u32(SrcType::B32) {
+                // If the high bit is set we normalize the constant to have it
+                // not set. This helps with lop3 merging as we detect inverse
+                // constant sources as equal now.
+                if c & 0x80000000 != 0 {
+                    *src = (!c).into();
+                    op.op.invert_src(i);
+                }
             }
         }
 
@@ -220,17 +216,19 @@ impl LopPass {
     }
 
     fn opt_plop3(&mut self, op: &mut OpPLop3) {
-        self.dedup_srcs(&mut op.ops[0], &op.srcs);
-        self.dedup_srcs(&mut op.ops[1], &op.srcs);
-
-        // Replace unused sources with PT
         for (i, src) in op.srcs.iter_mut().enumerate() {
             if src.src_mod.is_bnot() {
                 op.ops[0].invert_src(i);
                 op.ops[1].invert_src(i);
                 src.src_mod = SrcMod::None;
             }
+        }
 
+        self.dedup_srcs(&mut op.ops[0], &op.srcs);
+        self.dedup_srcs(&mut op.ops[1], &op.srcs);
+
+        // Replace unused sources with PT
+        for (i, src) in op.srcs.iter_mut().enumerate() {
             if let Some(b) = src_as_bool(src) {
                 op.ops[0].fix_src(i, b);
                 op.ops[1].fix_src(i, b);

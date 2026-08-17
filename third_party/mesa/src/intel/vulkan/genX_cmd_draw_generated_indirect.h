@@ -289,9 +289,9 @@ genX(cmd_buffer_emit_indirect_generated_draws_inplace)(struct anv_cmd_buffer *cm
       genX(cmd_buffer_set_binding_for_gfx8_vb_flush)(
          cmd_buffer, 0,
          (struct anv_address) {
-            .offset = device->physical->va.dynamic_state_pool.addr,
+            .offset = anv_physical_device_get_dynamic_state_pool_va(device->physical)->addr,
          },
-         device->physical->va.dynamic_state_pool.size);
+         anv_physical_device_get_dynamic_state_pool_va(device->physical)->size);
    }
 
    const struct anv_cmd_graphics_state *gfx = &cmd_buffer->state.gfx;
@@ -324,7 +324,7 @@ genX(cmd_buffer_emit_indirect_generated_draws_inplace)(struct anv_cmd_buffer *cm
       genX(cmd_buffer_emit_indirect_generated_draws_init)(cmd_buffer);
 
    /* Emit the 3D state in the main batch. */
-   genX(cmd_buffer_flush_gfx_state)(cmd_buffer);
+   genX(cmd_buffer_flush_gfx)(cmd_buffer);
 
    if (cmd_buffer->state.conditional_render_enabled)
       genX(cmd_emit_conditional_render_predicate)(cmd_buffer);
@@ -548,6 +548,10 @@ genX(cmd_buffer_emit_indirect_generated_draws_inring)(struct anv_cmd_buffer *cmd
    struct anv_gen_indirect_params *params = params_state.map;
 
    anv_add_pending_pipe_bits(cmd_buffer,
+                             gen_kernel->stage == MESA_SHADER_FRAGMENT ?
+                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT :
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
 #if GFX_VER == 9
                              ANV_PIPE_VF_CACHE_INVALIDATE_BIT |
 #endif
@@ -558,7 +562,7 @@ genX(cmd_buffer_emit_indirect_generated_draws_inring)(struct anv_cmd_buffer *cmd
    trace_intel_end_generate_draws(&cmd_buffer->trace);
 
    /* Emit the 3D state in the main batch. */
-   genX(cmd_buffer_flush_gfx_state)(cmd_buffer);
+   genX(cmd_buffer_flush_gfx)(cmd_buffer);
 
    if (cmd_buffer->state.conditional_render_enabled)
       genX(cmd_emit_conditional_render_predicate)(cmd_buffer);
@@ -597,6 +601,10 @@ genX(cmd_buffer_emit_indirect_generated_draws_inring)(struct anv_cmd_buffer *cmd
          anv_batch_current_address(&cmd_buffer->batch);
 
       anv_add_pending_pipe_bits(cmd_buffer,
+                                gen_kernel->stage == MESA_SHADER_FRAGMENT ?
+                                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT :
+                                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                 ANV_PIPE_STALL_AT_SCOREBOARD_BIT |
                                 ANV_PIPE_CS_STALL_BIT,
                                 "after generated draws batch");
@@ -623,6 +631,8 @@ genX(cmd_buffer_emit_indirect_generated_draws_inring)(struct anv_cmd_buffer *cmd
       mi_ensure_write_fence(&b);
 
       anv_add_pending_pipe_bits(cmd_buffer,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                 ANV_PIPE_CONSTANT_CACHE_INVALIDATE_BIT,
                                 "after generated draws batch increment");
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
@@ -645,6 +655,8 @@ genX(cmd_buffer_emit_indirect_generated_draws_inring)(struct anv_cmd_buffer *cmd
       mi_ensure_write_fence(&b);
 
       anv_add_pending_pipe_bits(cmd_buffer,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                 ANV_PIPE_CONSTANT_CACHE_INVALIDATE_BIT,
                                 "after generated draws end");
 
@@ -661,6 +673,8 @@ genX(cmd_buffer_emit_indirect_generated_draws)(struct anv_cmd_buffer *cmd_buffer
                                                uint32_t max_draw_count,
                                                bool indexed)
 {
+   const struct anv_instance *instance = cmd_buffer->device->physical->instance;
+
    /* In order to have the vertex fetch gather the data we need to have a non
     * 0 stride. It's possible to have a 0 stride given by the application when
     * draw_count is 1, but we need a correct value for the
@@ -674,7 +688,7 @@ genX(cmd_buffer_emit_indirect_generated_draws)(struct anv_cmd_buffer *cmd_buffer
    assert(indirect_data_stride > 0);
 
    const bool use_ring_buffer = max_draw_count >=
-      cmd_buffer->device->physical->instance->generated_indirect_ring_threshold;
+      instance->drirc.perf.generated_indirect_ring_threshold;
    if (use_ring_buffer) {
       genX(cmd_buffer_emit_indirect_generated_draws_inring)(cmd_buffer,
                                                             indirect_data_addr,

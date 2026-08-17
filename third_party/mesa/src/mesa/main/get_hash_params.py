@@ -127,7 +127,7 @@ descriptor=[
   [ "DEBUG_NEXT_LOGGED_MESSAGE_LENGTH", "LOC_CUSTOM, TYPE_INT, 0, NO_EXTRA" ],
   [ "MAX_DEBUG_LOGGED_MESSAGES", "CONST(MAX_DEBUG_LOGGED_MESSAGES), NO_EXTRA" ],
   [ "MAX_DEBUG_MESSAGE_LENGTH", "CONST(MAX_DEBUG_MESSAGE_LENGTH), NO_EXTRA" ],
-  [ "MAX_LABEL_LENGTH", "CONST(MAX_LABEL_LENGTH), NO_EXTRA" ],
+  [ "MAX_LABEL_LENGTH", "CAPS_UINT(max_label_length), NO_EXTRA" ],
   [ "MAX_DEBUG_GROUP_STACK_DEPTH", "CONST(MAX_DEBUG_GROUP_STACK_DEPTH), NO_EXTRA" ],
   [ "DEBUG_GROUP_STACK_DEPTH", "LOC_CUSTOM, TYPE_INT, 0, NO_EXTRA" ],
 
@@ -703,6 +703,10 @@ descriptor=[
   [ "VIEWPORT_SWIZZLE_Z_NV", "LOC_CUSTOM, TYPE_ENUM, 0, extra_NV_viewport_swizzle" ],
   [ "VIEWPORT_SWIZZLE_W_NV", "LOC_CUSTOM, TYPE_ENUM, 0, extra_NV_viewport_swizzle" ],
 
+# GL_EXT_shader_pixel_local_storage
+  [ "MAX_SHADER_PIXEL_LOCAL_STORAGE_SIZE_EXT", "CAPS_UINT(shader_pixel_local_storage_size), extra_EXT_shader_pixel_local_storage" ],
+  [ "MAX_SHADER_PIXEL_LOCAL_STORAGE_FAST_SIZE_EXT", "CAPS_UINT(shader_pixel_local_storage_fast_size), extra_EXT_shader_pixel_local_storage" ],
+
 # GL_KHR_shader_subgroup
   [ "SUBGROUP_SIZE_KHR", "CONTEXT_INT(Const.ShaderSubgroupSize), extra_KHR_shader_subgroup" ],
   [ "SUBGROUP_SUPPORTED_STAGES_KHR", "CONTEXT_INT(Const.ShaderSubgroupSupportedStages), extra_KHR_shader_subgroup" ],
@@ -1022,7 +1026,7 @@ descriptor=[
   [ "RGBA_INTEGER_MODE_EXT", "LOC_CUSTOM, TYPE_INT, 0, extra_EXT_texture_integer_and_new_buffers" ],
 
 # GL_ARB_transform_feedback3
-  [ "MAX_TRANSFORM_FEEDBACK_BUFFERS", "CONTEXT_INT(Const.MaxTransformFeedbackBuffers), extra_ARB_transform_feedback3" ],
+  [ "MAX_TRANSFORM_FEEDBACK_BUFFERS", "CONTEXT_INT(Const.MaxTransformFeedbackBuffers), extra_gl40_ARB_transform_feedback3" ],
   [ "MAX_VERTEX_STREAMS", "CONTEXT_INT(Const.MaxVertexStreams), extra_ARB_transform_feedback3_ARB_gpu_shader5" ],
 
 # GL_ARB_color_buffer_float

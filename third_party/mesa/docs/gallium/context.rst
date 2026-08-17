@@ -302,6 +302,8 @@ format.
 (which may be multiple bytes in length). Logically this is a memset with a
 multi-byte element value starting at offset bytes from resource start, going
 for size bytes. It is guaranteed that size % clear_value_size == 0.
+With ``pipe_caps::hw_clear_buffer_sizes`` drivers can indicate which
+clear_value_size is actually hardware accelerated and not software emulated.
 
 Evaluating Depth Buffers
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -465,6 +467,12 @@ scaled to nanoseconds, recorded after all commands issued prior to
 This query does not require a call to ``begin_query``.
 The result is an unsigned 64-bit integer.
 
+``PIPE_QUERY_TIMESTAMP_RAW`` returns a device/driver timestamp, recorded
+after all commands issued prior to ``end_query`` have been processed.
+This query does not require a call to ``begin_query``.
+The result is an unsigned 64-bit integer.  ``pipe_screen::convert_timestamp()``
+should be implemented, to covert the raw timestamp to nanoseconds, if
+this query type is supported.
 ``PIPE_QUERY_TIMESTAMP_DISJOINT`` can be used to check the
 internal timer resolution and whether the timestamp counter has become
 unreliable due to things like throttling etc. - only if this is FALSE

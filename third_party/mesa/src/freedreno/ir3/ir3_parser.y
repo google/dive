@@ -82,6 +82,7 @@ static void print_token(FILE *file, int type, YYSTYPE value)
 %token <tok> T_A_TEX
 %token <tok> T_A_PVTMEM
 %token <tok> T_A_LOCALMEM
+%token <tok> T_A_CONSTLEN
 %token <tok> T_A_EARLYPREAMBLE
 %token <tok> T_A_FULLNOPSTART
 %token <tok> T_A_FULLNOPEND
@@ -131,6 +132,7 @@ static void print_token(FILE *file, int type, YYSTYPE value)
 %token <tok> T_NOP
 %token <tok> T_EOLM
 %token <tok> T_EOGM
+%token <tok> T_EOSTSC
 
 /* category 0: */
 %token <tok> T_OP_NOP
@@ -169,12 +171,16 @@ static void print_token(FILE *file, int type, YYSTYPE value)
 %token <tok> T_OP_MOVMSK
 %token <tok> T_OP_MOVA1
 %token <tok> T_OP_MOVA
+%token <tok> T_OP_MOVA_R
 %token <tok> T_OP_MOV
 %token <tok> T_OP_COV
 %token <tok> T_OP_SWZ
 %token <tok> T_OP_GAT
 %token <tok> T_OP_SCT
 %token <tok> T_OP_MOVS
+
+%token <tok> T_MUL2
+%token <tok> T_DIV2
 
 /* category 2: */
 %token <tok> T_OP_ADD_F
@@ -299,6 +305,9 @@ static void print_token(FILE *file, int type, YYSTYPE value)
 %token <tok> T_OP_QSHUFFLE_V
 %token <tok> T_OP_QSHUFFLE_DIAG
 %token <tok> T_OP_TCINV
+%token <tok> T_OP_IMG_BINDLESS_HOF
+%token <tok> T_OP_IMG_BINDLESS_PCMN
+%token <tok> T_OP_IMG_BINDLESS
 
 /* category 6: */
 %token <tok> T_OP_LDG
@@ -422,6 +431,9 @@ static void print_token(FILE *file, int type, YYSTYPE value)
 %token <tok> T_3D
 %token <tok> T_4D
 
+%token <tok> T_SAD
+%token <tok> T_SSD
+
 /* condition qualifiers: */
 %token <tok> T_LT
 %token <tok> T_LE
@@ -497,6 +509,7 @@ header:            localsize_header
 |                  pvtmem_header
 |                  localmem_header
 |                  earlypreamble_header
+|                  constlen_header
 
 const_val:         T_FLOAT   { $$ = fui($1); }
 |                  T_INT     { $$ = $1;      }
@@ -576,6 +589,8 @@ localmem_header: T_A_LOCALMEM const_val { variant->shared_size = $2; }
 
 earlypreamble_header: T_A_EARLYPREAMBLE { variant->early_preamble = 1; }
 
+constlen_header: T_A_CONSTLEN const_val { variant->constlen = $2; }
+
 /* Stubs for now */
 in_header:         T_A_IN '(' T_REGISTER ')' T_IDENTIFIER '(' T_IDENTIFIER '=' integer ')' { }
 
@@ -601,12 +616,12 @@ iflag:             T_SY   { iflags.flags |= IR3_INSTR_SY; }
 |                  T_SS   { iflags.flags |= IR3_INSTR_SS; }
 |                  T_JP   { iflags.flags |= IR3_INSTR_JP; }
 |                  T_EQ_FLAG { iflags.flags |= IR3_INSTR_EQ; }
-|                  T_SAT  { iflags.flags |= IR3_INSTR_SAT; }
 |                  T_RPT  { iflags.repeat = $1; }
 |                  T_UL   { iflags.flags |= IR3_INSTR_UL; }
 |                  T_NOP  { iflags.nop = $1; }
 |                  T_EOLM { iflags.flags |= IR3_INSTR_EOLM; }
 |                  T_EOGM { iflags.flags |= IR3_INSTR_EOGM; }
+|                  T_EOSTSC { iflags.flags |= IR3_INSTR_EOSTSC; }
 
 iflags:
 |                  iflag iflags
@@ -703,19 +718,33 @@ mova_src:          src_reg_or_const_or_rel
 |                  immediate_cat1
 |                  src_reg_flags immediate_cat1
 
-cat1_mova1:        T_OP_MOVA1 T_A1 ',' {
+cat1_mova_flags:
+|                  '.' 'u' { iflags.flags |= IR3_INSTR_U; }
+
+cat1_mova1:        T_OP_MOVA1 cat1_mova_flags T_A1 ',' {
                        new_instr(OPC_MOV);
                        instr->cat1.src_type = TYPE_U16;
                        instr->cat1.dst_type = TYPE_U16;
                        new_dst((61 << 3) + 2, IR3_REG_HALF);
                    } mova_src
 
-cat1_mova:         T_OP_MOVA T_A0 ',' {
+cat1_mova:         T_OP_MOVA cat1_mova_flags T_A0 ',' {
                        new_instr(OPC_MOV);
                        instr->cat1.src_type = TYPE_S16;
                        instr->cat1.dst_type = TYPE_S16;
                        new_dst((61 << 3), IR3_REG_HALF);
                    } mova_src
+
+cat1_mova_dst_flags:
+|                  T_SAT { instr->flags |= IR3_INSTR_SAT; }
+
+cat1_mova_r:       T_OP_MOVA_R cat1_mova_flags { new_instr(OPC_MOV); } cat1_mova_dst_flags T_A0 ',' mova_src ',' integer ',' integer {
+                       instr->cat1.src_type = TYPE_S16;
+                       instr->cat1.dst_type = TYPE_S16;
+                       new_dst((61 << 3), IR3_REG_HALF);
+                       instr->cat1.r[0] = $9;
+                       instr->cat1.r[1] = $11;
+                   }
 
 cat1_swz:          T_OP_SWZ '.' T_CAT1_TYPE_TYPE { parse_type_type(new_instr(OPC_SWZ), $3); } dst_reg ',' dst_reg ',' src_reg ',' src_reg
 
@@ -732,6 +761,7 @@ cat1_movs: T_OP_MOVS '.' T_CAT1_TYPE_TYPE { parse_type_type(new_instr(OPC_MOVS),
 cat1_instr:        cat1_movmsk
 |                  cat1_mova1
 |                  cat1_mova
+|                  cat1_mova_r
 |                  cat1_swz
 |                  cat1_gat
 |                  cat1_sct
@@ -760,6 +790,10 @@ cat2_opc_2src_cnd: T_OP_CMPS_F    { new_instr(OPC_CMPS_F); }
 |                  T_OP_CMPV_F    { new_instr(OPC_CMPV_F); }
 |                  T_OP_CMPV_U    { new_instr(OPC_CMPV_U); }
 |                  T_OP_CMPV_S    { new_instr(OPC_CMPV_S); }
+|                  T_OP_ADD_F T_DIV2 { new_instr(OPC_ADD_F_DIV2); }
+|                  T_OP_ADD_F T_MUL2 { new_instr(OPC_ADD_F_MUL2); }
+|                  T_OP_MUL_F T_DIV2 { new_instr(OPC_MUL_F_DIV2); }
+|                  T_OP_MUL_F T_MUL2 { new_instr(OPC_MUL_F_MUL2); }
 
 cat2_opc_2src:     T_OP_ADD_F     { new_instr(OPC_ADD_F); }
 |                  T_OP_MIN_F     { new_instr(OPC_MIN_F); }
@@ -806,22 +840,14 @@ cat3_dp_signedness:'.' T_MIXED   { instr->cat3.signedness = IR3_SRC_MIXED; }
 cat3_dp_pack:      '.' T_LOW     { instr->cat3.packed = IR3_SRC_PACKED_LOW; }
 |                  '.' T_HIGH    { instr->cat3.packed = IR3_SRC_PACKED_HIGH; }
 
-cat3_opc:          T_OP_MAD_U16   { new_instr(OPC_MAD_U16); }
-|                  T_OP_MADSH_U16 { new_instr(OPC_MADSH_U16); }
-|                  T_OP_MAD_S16   { new_instr(OPC_MAD_S16); }
-|                  T_OP_MADSH_M16 { new_instr(OPC_MADSH_M16); }
-|                  T_OP_MAD_U24   { new_instr(OPC_MAD_U24); }
-|                  T_OP_MAD_S24   { new_instr(OPC_MAD_S24); }
+cat3_opc:          T_OP_MAD_F16 T_MUL2 { new_instr(OPC_MAD_F16_MUL2); }
+|                  T_OP_MAD_F32 T_MUL2 { new_instr(OPC_MAD_F32_MUL2); }
+|                  T_OP_MAD_F16 T_DIV2 { new_instr(OPC_MAD_F16_DIV2); }
+|                  T_OP_MAD_F32 T_DIV2 { new_instr(OPC_MAD_F32_DIV2); }
 |                  T_OP_MAD_F16   { new_instr(OPC_MAD_F16); }
 |                  T_OP_MAD_F32   { new_instr(OPC_MAD_F32); }
-|                  T_OP_SEL_B16   { new_instr(OPC_SEL_B16); }
-|                  T_OP_SEL_B32   { new_instr(OPC_SEL_B32); }
-|                  T_OP_SEL_S16   { new_instr(OPC_SEL_S16); }
-|                  T_OP_SEL_S32   { new_instr(OPC_SEL_S32); }
 |                  T_OP_SEL_F16   { new_instr(OPC_SEL_F16); }
 |                  T_OP_SEL_F32   { new_instr(OPC_SEL_F32); }
-|                  T_OP_SAD_S16   { new_instr(OPC_SAD_S16); }
-|                  T_OP_SAD_S32   { new_instr(OPC_SAD_S32); }
 
 cat3_imm_reg_opc:  T_OP_SHRM      { new_instr(OPC_SHRM); }
 |                  T_OP_SHLM      { new_instr(OPC_SHLM); }
@@ -829,13 +855,32 @@ cat3_imm_reg_opc:  T_OP_SHRM      { new_instr(OPC_SHRM); }
 |                  T_OP_SHLG      { new_instr(OPC_SHLG); }
 |                  T_OP_ANDG      { new_instr(OPC_ANDG); }
 
+cat3_reg_or_const_or_rel_opc:
+|                  T_OP_MAD_U16   { new_instr(OPC_MAD_U16); }
+|                  T_OP_MADSH_U16 { new_instr(OPC_MADSH_U16); }
+|                  T_OP_MAD_S16   { new_instr(OPC_MAD_S16); }
+|                  T_OP_MADSH_M16 { new_instr(OPC_MADSH_M16); }
+|                  T_OP_MAD_U24   { new_instr(OPC_MAD_U24); }
+|                  T_OP_MAD_S24   { new_instr(OPC_MAD_S24); }
+|                  T_OP_SEL_B16   { new_instr(OPC_SEL_B16); }
+|                  T_OP_SEL_B32   { new_instr(OPC_SEL_B32); }
+|                  T_OP_SEL_S16   { new_instr(OPC_SEL_S16); }
+|                  T_OP_SEL_S32   { new_instr(OPC_SEL_S32); }
+|                  T_OP_SAD_S16   { new_instr(OPC_SAD_S16); }
+|                  T_OP_SAD_S32   { new_instr(OPC_SAD_S32); }
+
 cat3_wmm:          T_OP_WMM       { new_instr(OPC_WMM); }
 |                  T_OP_WMM_ACCU  { new_instr(OPC_WMM_ACCU); }
 
 cat3_dp:           T_OP_DP2ACC    { new_instr(OPC_DP2ACC); }
 |                  T_OP_DP4ACC    { new_instr(OPC_DP4ACC); }
 
-cat3_instr:        cat3_opc dst_reg ',' src_reg_or_const_or_rel ',' src_reg_or_const ',' src_reg_or_const_or_rel
+src_reg_or_const_or_rel_or_flut: src_reg_or_const_or_rel
+|                  flut_immed     { new_src(0, IR3_REG_IMMED)->uim_val = $1; }
+|                  'h' flut_immed { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = $2; }
+
+cat3_instr:        cat3_opc dst_reg ',' src_reg_or_const_or_rel_or_flut ',' src_reg_or_const ',' src_reg_or_const_or_rel_or_flut
+|                  cat3_reg_or_const_or_rel_opc dst_reg ',' src_reg_or_const_or_rel_or_imm ',' src_reg_or_const ',' src_reg_or_const_or_rel_or_imm
 |                  cat3_imm_reg_opc dst_reg ',' src_reg_or_rel_or_imm ',' src_reg_or_const ',' src_reg_or_rel_or_imm
 |                  cat3_wmm         dst_reg ',' src_reg_gpr ',' src_reg ',' immediate
 |                  cat3_dp cat3_dp_signedness cat3_dp_pack dst_reg ',' src_reg_or_rel_or_imm ',' src_reg_or_const ',' src_reg_or_rel_or_imm
@@ -888,6 +933,12 @@ cat5_opc:          T_OP_ISAML     { new_instr(OPC_ISAML); }
 |                  T_OP_QSHUFFLE_H     { new_instr(OPC_QUAD_SHUFFLE_HORIZ); }
 |                  T_OP_QSHUFFLE_V     { new_instr(OPC_QUAD_SHUFFLE_VERT); }
 |                  T_OP_QSHUFFLE_DIAG  { new_instr(OPC_QUAD_SHUFFLE_DIAG); }
+|                  T_OP_IMG_BINDLESS_PCMN { new_instr(OPC_IMG_BINDLESS_PCMN); }
+|                  T_OP_IMG_BINDLESS_HOF      { new_instr(OPC_IMG_BINDLESS_HOF); }
+|                  T_OP_IMG_BINDLESS     { new_instr(OPC_IMG_BINDLESS); }
+
+cat5_matchmode:    '.' T_SAD   { instr->cat5.match_mode = IR3_MATCH_MODE_SAD; }
+|                  '.' T_SSD   { instr->cat5.match_mode = IR3_MATCH_MODE_SSD; }
 
 cat5_flag:         '.' T_3D       { instr->flags |= IR3_INSTR_3D; }
 |                  '.' 'a'        { instr->flags |= IR3_INSTR_A; }
@@ -902,6 +953,7 @@ cat5_flag:         '.' T_3D       { instr->flags |= IR3_INSTR_3D; }
 |                  '.' T_W        { instr->cat5.cluster_size = $2; }
 |                  '.' T_RCK      { instr->flags |= IR3_INSTR_RCK; }
 |                  '.' T_CLP      { instr->flags |= IR3_INSTR_CLP; }
+|                  cat5_matchmode
 cat5_flags:
 |                  cat5_flag cat5_flags
 
@@ -948,6 +1000,9 @@ cat6_dst_offset:   offset    { instr->cat6.dst_offset = $1; }
 
 cat6_immed:        integer   { instr->cat6.iim_val = $1; }
 
+cat6_immed_or_gpr: immediate
+|                  src_gpr
+
 cat6_src_shift: '<' '<' integer {$$ = $3;}
 |                               {$$ = 0;}
 
@@ -973,9 +1028,9 @@ cat6_a6xx_global_address_pt2:
                             new_src(0, IR3_REG_IMMED)->uim_val = 0;
                             new_src(0, IR3_REG_IMMED)->uim_val = $2;
                         } else {
-                            new_src(0, IR3_REG_IMMED)->uim_val = $2;
                             // Dummy src to smooth the difference between a6xx and a7xx
                             new_src(0, IR3_REG_IMMED)->uim_val = 0;
+                            new_src(0, IR3_REG_IMMED)->uim_val = $2;
                         }
                    }
 
@@ -984,7 +1039,7 @@ cat6_a6xx_global_address:
 
 cat6_load:         T_OP_LDG   { new_instr(OPC_LDG); }   cat6_type dst_reg ',' 'g' '[' src cat6_offset ']' ',' immediate
 |                  T_OP_LDG_A { new_instr(OPC_LDG_A); } cat6_type dst_reg ',' 'g' '[' cat6_a6xx_global_address ']' ',' immediate
-|                  T_OP_LDG_K { new_instr(OPC_LDG_K); } cat6_type 'c' '[' const_dst ']' ',' 'g' '[' src cat6_offset ']' ',' immediate
+|                  T_OP_LDG_K { new_instr(OPC_LDG_K); } cat6_type 'c' '[' const_dst ']' ',' 'g' '[' src cat6_offset ']' ',' cat6_immed_or_gpr
 |                  T_OP_LDP   { new_instr(OPC_LDP); }   cat6_type dst_reg ',' 'p' '[' src cat6_offset ']' ',' immediate
 |                  T_OP_LDL   { new_instr(OPC_LDL); }   cat6_type dst_reg ',' 'l' '[' src cat6_offset ']' ',' immediate
 |                  T_OP_LDLW  { new_instr(OPC_LDLW); }  cat6_type dst_reg ',' 'l' '[' src cat6_offset ']' ',' immediate
@@ -1302,6 +1357,7 @@ const:             T_CONSTANT     { $$ = new_src($1, IR3_REG_CONST); }
 dst_reg_flag:      T_EVEN         { instr->cat1.round = ROUND_EVEN; }
 |                  T_POS_INFINITY { instr->cat1.round = ROUND_POS_INF; }
 |                  T_NEG_INFINITY { instr->cat1.round = ROUND_NEG_INF; }
+|                  T_SAT          { instr->flags |= IR3_INSTR_SAT; }
 |                  T_EI           { rflags.flags |= IR3_REG_EI; }
 |                  T_WRMASK       { rflags.wrmask = $1; }
 
@@ -1377,6 +1433,11 @@ immediate_cat1:    integer             { new_src(0, IR3_REG_IMMED)->iim_val = ty
 |                  '(' float ')'       { new_src(0, IR3_REG_IMMED)->fim_val = $2; }
 |                  'h' '(' integer ')' { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->iim_val = $3 & 0xffff; }
 |                  'h' '(' float ')'   { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = _mesa_float_to_half($3); }
+|                  'h' T_FLUT_0_0      { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = _mesa_float_to_half(0.0); }
+|                  'h' T_FLUT_0_5      { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = _mesa_float_to_half(0.5); }
+|                  'h' T_FLUT_1_0      { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = _mesa_float_to_half(1.0); }
+|                  'h' T_FLUT_2_0      { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = _mesa_float_to_half(2.0); }
+|                  'h' T_FLUT_4_0      { new_src(0, IR3_REG_IMMED | IR3_REG_HALF)->uim_val = _mesa_float_to_half(4.0); }
 |                  '(' T_NAN ')'       { new_src(0, IR3_REG_IMMED)->fim_val = NAN; }
 |                  '(' T_INF ')'       { new_src(0, IR3_REG_IMMED)->fim_val = INFINITY; }
 |                  T_FLUT_0_0          { new_src(0, IR3_REG_IMMED)->fim_val = 0.0; }

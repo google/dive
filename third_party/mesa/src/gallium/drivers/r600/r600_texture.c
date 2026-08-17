@@ -14,6 +14,7 @@
 #include "util/u_memory.h"
 #include "util/u_pack_color.h"
 #include "util/u_surface.h"
+#include "util/u_resource.h"
 #include "util/os_time.h"
 #include "frontend/winsys_handle.h"
 #include <errno.h>
@@ -79,13 +80,13 @@ bool r600_prepare_for_dma_blit(struct r600_common_context *rctx,
 }
 
 /* Same as resource_copy_region, except that both upsampling and downsampling are allowed. */
-static void r600_copy_region_with_blit(struct pipe_context *pipe,
-				       struct pipe_resource *dst,
-                                       unsigned dst_level,
-                                       unsigned dstx, unsigned dsty, unsigned dstz,
-                                       struct pipe_resource *src,
-                                       unsigned src_level,
-                                       const struct pipe_box *src_box)
+void r600_copy_region_with_blit(struct pipe_context *pipe,
+				struct pipe_resource *dst,
+				unsigned dst_level,
+				unsigned dstx, unsigned dsty, unsigned dstz,
+				struct pipe_resource *src,
+				unsigned src_level,
+				const struct pipe_box *src_box)
 {
 	struct pipe_blit_info blit;
 
@@ -442,7 +443,7 @@ static bool r600_texture_get_param(struct pipe_screen *screen,
 
 	switch (param) {
 	case PIPE_RESOURCE_PARAM_NPLANES:
-		*value = 1;
+		*value = util_resource_num(resource);
 		return true;
 
 	case PIPE_RESOURCE_PARAM_STRIDE:
@@ -722,7 +723,7 @@ void r600_texture_get_cmask_info(struct r600_common_screen *rscreen,
 	unsigned element_bits = 4;
 	unsigned cmask_cache_bits = 1024;
 	unsigned num_pipes = rscreen->info.num_tile_pipes;
-	unsigned pipe_interleave_bytes = rscreen->info.pipe_interleave_bytes;
+	unsigned pipe_interleave_bytes = rscreen->info.r600_pipe_interleave_bytes;
 
 	unsigned elements_per_macro_tile = (cmask_cache_bits / element_bits) * num_pipes;
 	unsigned pixels_per_macro_tile = elements_per_macro_tile * cmask_tile_elements;
@@ -842,7 +843,7 @@ static void r600_texture_get_htile_size(struct r600_common_screen *rscreen,
 	slice_elements = (width * height) / (8 * 8);
 	slice_bytes = slice_elements * 4;
 
-	pipe_interleave_bytes = rscreen->info.pipe_interleave_bytes;
+	pipe_interleave_bytes = rscreen->info.r600_pipe_interleave_bytes;
 	base_align = num_pipes * pipe_interleave_bytes;
 
 	rtex->surface.meta_alignment_log2 = util_logbase2(base_align);
@@ -1572,7 +1573,6 @@ struct pipe_surface *r600_create_surface_custom(struct pipe_context *pipe,
 
 	pipe_reference_init(&surface->reference, 1);
 	pipe_resource_reference(&surface->texture, texture);
-	surface->context = pipe;
 	surface->format = templ->format;
 	surface->level = templ->level;
 	surface->first_layer = templ->first_layer;

@@ -4110,6 +4110,10 @@
     <field name="Blend Optimization Fix Disable Mask" dword="0" bits="30:30" type="bool" />
     <field name="Color Compression Disable Mask" dword="0" bits="31:31" type="bool" />
   </register>
+  <register name="COMMON_SLICE_CHICKEN2" length="1" num="0x7014">
+    <field name="Disable Gather at Set Shader Common Slice" dword="0" bits="12:12" type="bool" />
+    <field name="Disable Gather at Set Shader Common Slice Mask" dword="0" bits="28:28" type="bool" />
+  </register>
   <register name="CS_CHICKEN1" length="1" num="0x2580">
     <field name="Replay Mode" dword="0" bits="0:0" type="uint">
       <value name="Mid-cmdbuffer Preemption" value="0" />
@@ -4127,9 +4131,11 @@
     <field name="3D Rendering Instruction Disable" dword="0" bits="0:0" type="bool" />
     <field name="Media Instruction Disable" dword="0" bits="1:1" type="bool" />
     <field name="CONSTANT_BUFFER Address Offset Disable" dword="0" bits="4:4" type="bool" />
+    <field name="Disable Gather at Set Shader" dword="0" bits="7:7" type="bool" />
     <field name="3D Rendering Instruction Disable Mask" dword="0" bits="16:16" type="bool" />
     <field name="Media Instruction Disable Mask" dword="0" bits="17:17" type="bool" />
     <field name="CONSTANT_BUFFER Address Offset Disable Mask" dword="0" bits="20:20" type="bool" />
+    <field name="Disable Gather at Set Shader Mask" dword="0" bits="23:23" type="bool" />
   </register>
   <register name="GT_MODE" length="1" num="0x7008">
     <field name="Subslice Hashing" dword="0" bits="9:8" type="uint">

@@ -5,16 +5,9 @@
 # This is causing a binning memory overflow problem
 dEQP-GLES2.functional.fragment_ops.scissor.outside_render_line
 
-# Conformance issue: VC4 needs dynamic loops in the VS to cause a
-# shader link failure.
-#
-# The issue is that the HW doesn't have an exec mask at dispatch
-# for the VS, so the shouldn't-be-exec channels have undefined
-# contents and may cause infinite loops, leading to GPU hangs.  The
-# process of GPU hang reset causes flakes in whatever other jobs are
-# running simultaneously, so we can't even leave these in the flakes
-# list for tracking.
-dEQP-GLES2.functional.shaders.loops.*dynamic.*vertex
+# It causes GPU resets that can affect tests that are running
+# simultaneously.
+spec@arb_map_buffer_alignment.*
 
 # VK tests have been disabled in 32-bit piglit builds, but it doesn't
 # matter because we never could run them anyway.
@@ -40,5 +33,9 @@ spec@glsl-3.*
 spec@glsl-4.*
 spec@glsl-es-3.*
 
-# ASan issues
-asan-dEQP-GLES2.functional.uniform_api.random.21
+# Slow piglit tests (> 1 minute to run)
+spec@!opengl 1.0@gl-1.0-blend-func
+spec@!opengl 1.1@copypixels-draw-sync
+spec@!opengl 1.1@draw-copypixels-sync
+spec@!opengl 1.1@draw-sync
+spec@arb_vertex_buffer_object@vbo-subdata-many drawrangeelements

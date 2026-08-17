@@ -121,6 +121,30 @@ debian/ppc64el_build:
     - job: debian/ppc64el_build
       optional: true
 
+# Debian based RISC-V 64 cross-build image
+debian/riscv64_build:
+  extends:
+    - .use-debian/x86_64_build-base
+  variables:
+    MESA_IMAGE_TAG: &debian-riscv64_build ${DEBIAN_BUILD_TAG}
+    LLVM_VERSION: &debian-riscv64-llvm 19
+
+.use-debian/riscv64_build:
+  tags:
+    - $FDO_RUNNER_JOB_PRIORITY_TAG_X86_64
+  extends:
+    - .set-image-base-tag
+  variables:
+    MESA_BASE_TAG: *debian-x86_64_build-base
+    MESA_IMAGE_PATH: "debian/riscv64_build"
+    MESA_IMAGE_TAG: *debian-riscv64_build
+    LLVM_VERSION: *debian-riscv64-llvm
+  needs:
+    - job: sanity
+      optional: true
+    - job: debian/riscv64_build
+      optional: true
+
 # Debian based s390x cross-build image
 debian/s390x_build:
   extends:
@@ -145,25 +169,25 @@ debian/s390x_build:
     - job: debian/s390x_build
       optional: true
 
-# Android NDK cross-build image
+# Common Android variables
 .android-variables:
   variables:
-    ANDROID_VERSION: 14
-    ANDROID_NDK_VERSION: "r27c"
-    ANDROID_SDK_VERSION: 34
+    ANDROID_VERSION: 16
+    # Bump both DEBIAN_BUILD_TAG and DEBIAN_TEST_ANDROID_TAG when updating
+    # NDK and SDK versions.
+    ANDROID_NDK_VERSION: "r29"
+    ANDROID_SDK_VERSION: 35  # Android 16 would be 36, but NDK only supports up to 35
     ANDROID_LLVM_VERSION: llvmorg-19.1.7
     ANDROID_LLVM_ARTIFACT_NAME: android-x86_64-llvm-20250822
     # This can be confusing: LLVM_VERSION refers to the host LLVM toolchain
     # used (LLVM 19 in our Debian system), but ANDROID_LLVM_VERSION refers to
     # the cross-compiling LLVM toolchain used to build for the Android system.
     LLVM_VERSION: &debian-android-llvm 19
-    CUTTLEFISH_PROJECT_PATH: ao2/aosp-manifest
+    CUTTLEFISH_PROJECT_PATH: gfx-ci/android/aosp-manifest
     CUTTLEFISH_BUILD_VERSION_TAGS: mesa-venus
-    CUTTLEFISH_BUILD_NUMBER: 20250701.001
-    AOSP_KERNEL_PROJECT_PATH: ao2/aosp-kernel-manifest
-    AOSP_KERNEL_BUILD_VERSION_TAGS: common-android14-6.1-venus
-    AOSP_KERNEL_BUILD_NUMBER: 20241107.001
+    CUTTLEFISH_BUILD_NUMBER: 20260610.001
 
+# Android NDK cross-build image
 debian/android_build:
   extends:
     - .android-variables
@@ -405,6 +429,7 @@ debian/arm32_test-gl:
   extends:
     - .use-debian/arm32_test-base
     - .container-builds-arm32
+    - .container-builds-opencl-cts
     - .export-container
   variables:
     MESA_IMAGE_TAG: &debian-arm32_test-gl ${DEBIAN_TEST_GL_TAG}
@@ -501,6 +526,51 @@ debian/arm64_test-vk:
     - job: sanity
       optional: true
     - job: debian/arm64_test-vk
+      optional: true
+
+# Debian-based x86_64 builder for Android test tools.
+# ANGLE, dEQP, and deqp-runner are built here since Google does not provide
+# an arm64 NDK. Artifacts are then copied into the arm64 test image.
+debian/arm64_test-android-tools:
+  extends:
+    - .android-variables
+    - .use-debian/x86_64_test-base  # NOT a mistake!
+    - .container-builds-android
+  variables:
+    MESA_IMAGE_TAG: &debian-arm64_test-android ${DEBIAN_TEST_ANDROID_TAG}
+
+# Debian based arm64 test image for Android
+debian/arm64_test-android:
+  tags:
+    - $FDO_RUNNER_JOB_PRIORITY_TAG_AARCH64
+  extends:
+    - .android-variables
+    - .use-debian/arm64_test-base
+    - .container-builds-android
+    - .export-container
+  variables:
+    MESA_IMAGE_TAG: *debian-arm64_test-android
+  needs:
+    - !reference [.use-debian/arm64_test-base, needs]
+    - job: debian/arm64_test-android-tools
+      optional: true
+
+.use-debian/arm64_test-android:
+  tags:
+    - $FDO_RUNNER_JOB_PRIORITY_TAG_AARCH64
+  extends:
+    - .android-variables
+    - .set-image-base-tag
+  variables:
+    MESA_BASE_TAG: *debian-arm64_test-base
+    MESA_IMAGE_PATH: "debian/arm64_test-android"
+    MESA_IMAGE_TAG: *debian-arm64_test-android
+  needs:
+    - job: sanity
+      optional: true
+    - job: debian/arm64_test-android
+      optional: true
+    - job: debian/arm64_test-android-tools
       optional: true
 
 # x86_64 image with ARM64 & ARM32 kernel & rootfs for baremetal testing

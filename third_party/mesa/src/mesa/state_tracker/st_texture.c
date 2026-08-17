@@ -120,10 +120,10 @@ st_texture_create(struct st_context *st,
 void
 st_gl_texture_dims_to_pipe_dims(GLenum texture,
                                 unsigned widthIn,
-                                uint16_t heightIn,
+                                unsigned heightIn,
                                 uint16_t depthIn,
                                 unsigned *widthOut,
-                                uint16_t *heightOut,
+                                unsigned *heightOut,
                                 uint16_t *depthOut,
                                 uint16_t *layersOut)
 {
@@ -209,8 +209,8 @@ st_texture_match_image(struct st_context *st,
                        const struct pipe_resource *pt,
                        const struct gl_texture_image *image)
 {
-   unsigned ptWidth;
-   uint16_t ptHeight, ptDepth, ptLayers;
+   unsigned ptWidth, ptHeight;
+   uint16_t ptDepth, ptLayers;
 
    /* Images with borders are never pulled into mipmap textures.
     */
@@ -546,7 +546,7 @@ st_create_texture_handle_from_unit(struct st_context *st,
       (prog->shader_program ? prog->shader_program->GLSL_Version : 0) >= 130;
 
    /* TODO: Clarify the interaction of ARB_bindless_texture and EXT_texture_sRGB_decode */
-   view = st_update_single_texture(st, texUnit, glsl130, true);
+   view = st_update_single_texture(st, texUnit, glsl130, true, 0, NULL);
    if (!view)
       return 0;
 

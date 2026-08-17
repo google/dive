@@ -152,15 +152,18 @@ enum v3d_flush_cond {
 
 /* bitmask */
 enum v3d_blitter_op {
-        V3D_SAVE_TEXTURES         = (1u << 1),
-        V3D_SAVE_FRAMEBUFFER      = (1u << 2),
-        V3D_DISABLE_RENDER_COND   = (1u << 3),
+        V3D_SAVE_TEXTURES          = (1u << 1),
+        V3D_SAVE_FRAMEBUFFER       = (1u << 2),
+        V3D_SAVE_FRAGMENT_STATE    = (1u << 3),
+        V3D_SAVE_FRAGMENT_CONSTANT = (1u << 4),
+        V3D_DISABLE_RENDER_COND    = (1u << 5),
 
-        V3D_BLIT          = V3D_SAVE_FRAMEBUFFER | V3D_SAVE_TEXTURES,
-        V3D_BLIT_COND     = V3D_BLIT | V3D_DISABLE_RENDER_COND,
-        V3D_CLEAR         = 0,
-        V3D_CLEAR_COND    = V3D_CLEAR | V3D_DISABLE_RENDER_COND,
-        V3D_CLEAR_SURFACE = V3D_SAVE_FRAMEBUFFER,
+        V3D_BLIT               = V3D_SAVE_FRAMEBUFFER | V3D_SAVE_TEXTURES |
+                                 V3D_SAVE_FRAGMENT_STATE,
+        V3D_BLIT_COND          = V3D_BLIT | V3D_DISABLE_RENDER_COND,
+        V3D_CLEAR              = V3D_SAVE_FRAGMENT_STATE | V3D_SAVE_FRAGMENT_CONSTANT,
+        V3D_CLEAR_COND         = V3D_CLEAR | V3D_DISABLE_RENDER_COND,
+        V3D_CLEAR_SURFACE      = V3D_CLEAR | V3D_SAVE_FRAMEBUFFER,
         V3D_CLEAR_SURFACE_COND = V3D_CLEAR_SURFACE | V3D_DISABLE_RENDER_COND
 };
 
@@ -173,7 +176,8 @@ struct v3d_sampler_view {
 
         uint8_t texture_shader_state[32];
         /* V3D 4.x: Texture state struct. */
-        struct v3d_bo *bo;
+        struct pipe_resource *tex_state;
+        uint32_t tex_state_offset;
 
         enum v3d_sampler_state_variant sampler_variant;
 
@@ -231,7 +235,7 @@ struct v3d_uncompiled_shader {
         uint32_t num_tf_specs;
 
         /* For caching */
-        unsigned char sha1[20];
+        unsigned char blake3[BLAKE3_KEY_LEN];
 };
 
 struct v3d_compiled_shader {
@@ -751,7 +755,7 @@ struct v3d_blend_state {
 
 #define perf_debug(...) do {                            \
         if (V3D_DBG(PERF))                            \
-                fprintf(stderr, __VA_ARGS__);           \
+                mesa_logw(__VA_ARGS__);           \
         if (unlikely(v3d->base.debug.debug_message))         \
                 util_debug_message(&v3d->base.debug, PERF_INFO, __VA_ARGS__); \
 } while (0)

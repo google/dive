@@ -1,25 +1,7 @@
 /* -*- c++ -*- */
 /*
  * Copyright © 2010-2016 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -27,6 +9,8 @@
 #include <assert.h>
 #include "brw_reg.h"
 #include "compiler/brw_list.h"
+#include "compiler/gen/gen.h"
+#include "brw_sampler.h"
 
 #define MAX_SAMPLER_MESSAGE_SIZE 11
 
@@ -49,6 +33,7 @@ enum ENUM_PACKED brw_inst_kind {
    BRW_KIND_LOAD_PAYLOAD,
    BRW_KIND_URB,
    BRW_KIND_FB_WRITE,
+   BRW_KIND_SCRATCH,
 };
 
 brw_inst_kind brw_inst_kind_for_opcode(enum opcode opcode);
@@ -81,6 +66,7 @@ struct brw_inst : brw_exec_node {
    KIND_HELPERS(as_load_payload, brw_load_payload_inst, BRW_KIND_LOAD_PAYLOAD);
    KIND_HELPERS(as_urb, brw_urb_inst, BRW_KIND_URB);
    KIND_HELPERS(as_fb_write, brw_fb_write_inst, BRW_KIND_FB_WRITE);
+   KIND_HELPERS(as_scratch, brw_scratch_inst, BRW_KIND_SCRATCH);
 
 #undef KIND_HELPERS
 
@@ -119,12 +105,6 @@ struct brw_inst : brw_exec_node {
     * optimize these out unless you know what you are doing.
     */
    bool has_side_effects() const;
-
-   /**
-    * True if the instruction might be affected by side effects of other
-    * instructions.
-    */
-   bool is_volatile() const;
 
    /**
     * Return whether \p arg is a control source of a virtual instruction which
@@ -202,7 +182,6 @@ struct brw_inst : brw_exec_node {
           */
          bool predicate_trivial:1;
          bool eot:1;
-         bool keep_payload_trailing_zeros:1;
          /**
           * Whether the parameters of the SEND instructions are build with
           * NoMask (for A32 messages this covers only the surface handle, for
@@ -213,17 +192,12 @@ struct brw_inst : brw_exec_node {
           */
          bool has_no_mask_send_params:1;
 
-         /**
-          * Serialize the message (Gfx12.x only)
-          */
-         bool fused_eu_disable:1;
-
-         uint8_t pad:4;
+         uint8_t pad:6;
       };
       uint16_t bits;
    };
 
-   tgl_swsb sched; /**< Scheduling info. */
+   gen_swsb sched; /**< Scheduling info. */
 
    bblock_t *block;
 
@@ -259,12 +233,18 @@ struct brw_send_inst : brw_inst {
          bool check_tdr:1;
 
          bool has_side_effects:1;
+
+         /**
+          * True if the instruction might be affected by side effects of other
+          * instructions.
+          */
          bool is_volatile:1;
 
          /**
-          * Use extended bindless surface offset (26bits instead of 20bits)
+          * The surface used for this message is bindless and therefore should
+          * go into the address register.
           */
-         bool ex_bso:1;
+         bool bindless_surface:1;
 
          /**
           * Serialize the message (Gfx12.x only)
@@ -285,10 +265,7 @@ struct brw_send_inst : brw_inst {
 };
 
 struct brw_tex_inst : brw_inst {
-   enum sampler_opcode sampler_opcode;
-   uint32_t offset;
-   uint8_t coord_components;
-   uint8_t grad_components;
+   enum brw_sampler_opcode sampler_opcode;
    union {
       struct {
          /**
@@ -308,9 +285,31 @@ struct brw_tex_inst : brw_inst {
           * Whether the sampler handle is bindless
           */
          bool sampler_bindless:1;
+         /**
+          * Whether const_offsets holds meaningful values
+          */
+         bool has_const_offsets:1;
+         /**
+          * Coord components
+          */
+         uint8_t coord_components:2;
+         /**
+          * Gather component
+          */
+         uint8_t gather_component:2;
+         /**
+          * Bitfields payload parameters that cannot be optimized by
+          * brw_opt_zero_samples()
+          */
+         uint16_t required_params:13;
       };
-      uint8_t bits;
+      uint32_t bits;
    };
+
+   /**
+    * Constant offsets
+    */
+   int8_t const_offsets[3];
 };
 
 struct brw_mem_inst : brw_inst {
@@ -343,6 +342,7 @@ struct brw_load_payload_inst : brw_inst {
 };
 
 struct brw_urb_inst : brw_inst {
+   /** Global offset in bytes on Xe2 or OWords on older hardware */
    uint32_t offset;
    uint8_t components;
 };
@@ -352,6 +352,24 @@ struct brw_fb_write_inst : brw_inst {
    uint8_t target;
    bool null_rt;
    bool last_rt;
+};
+
+struct brw_scratch_inst : brw_inst {
+   /** Physical offset in scratch space for the load or store. */
+   unsigned offset;
+
+   /**
+    * Scratch offset assuming no reuse between spilled values.  Used by later
+    * optimizations to identify dead spills and fills.
+    */
+   unsigned logical_offset;
+
+   /**
+    * Should a LSC transpose message be used for the fill?
+    *
+    * Currently this must be false for spills.
+    */
+   bool use_transpose;
 };
 
 /**
@@ -427,9 +445,9 @@ regs_read(const struct intel_device_info *devinfo, const brw_inst *inst, unsigne
       return 1;
 
    const unsigned reg_size = inst->src[i].file == UNIFORM ? 4 : REG_SIZE;
+   const unsigned size_read = inst->size_read(devinfo, i);
    return DIV_ROUND_UP(reg_offset(inst->src[i]) % reg_size +
-                       inst->size_read(devinfo, i) -
-                       MIN2(inst->size_read(devinfo, i), reg_padding(inst->src[i])),
+                       size_read - MIN2(size_read, reg_padding(inst->src[i])),
                        reg_size);
 }
 
@@ -502,18 +520,31 @@ bool is_coalescing_payload(const struct brw_shader &s, const brw_inst *inst);
 
 bool has_bank_conflict(const struct brw_isa_info *isa, const brw_inst *inst);
 
+/* Helper from brw_lower_scoreboard.cpp. */
+gen_pipe
+inferred_exec_pipe(const struct intel_device_info *devinfo,
+                   const brw_inst *inst);
+
 /* Return the subset of flag registers that an instruction could
  * potentially read or write based on the execution controls and flag
  * subregister number of the instruction.
  */
 static inline unsigned
-brw_flag_mask(const brw_inst *inst, unsigned width)
+brw_flag_mask(unsigned flag_subreg, unsigned group, unsigned exec_size,
+              unsigned width)
 {
    assert(util_is_power_of_two_nonzero(width));
-   const unsigned start = (inst->flag_subreg * 16 + inst->group) &
+   const unsigned start = (flag_subreg * 16 + group) &
                           ~(width - 1);
-   const unsigned end = start + ALIGN(inst->exec_size, width);
+   const unsigned end = start + align(exec_size, width);
    return ((1 << DIV_ROUND_UP(end, 8)) - 1) & ~((1 << (start / 8)) - 1);
+}
+
+static inline unsigned
+brw_flag_mask(const brw_inst *inst, unsigned width)
+{
+   return brw_flag_mask(inst->flag_subreg, inst->group, inst->exec_size,
+                        width);
 }
 
 static inline unsigned
@@ -533,3 +564,7 @@ brw_flag_mask(const brw_reg &r, unsigned sz)
       return 0;
    }
 }
+
+unsigned brw_flags_written(enum opcode, enum brw_conditional_mod,
+                           unsigned flag_subreg, unsigned group,
+                           unsigned exec_size);

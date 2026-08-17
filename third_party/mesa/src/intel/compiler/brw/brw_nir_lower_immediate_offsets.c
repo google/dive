@@ -13,15 +13,6 @@ lower_immediate_offsets(nir_builder *b, nir_intrinsic_instr *intrin, void *data)
    unsigned max_bits = 0;
 
    switch (intrin->intrinsic) {
-   case nir_intrinsic_load_shared:
-   case nir_intrinsic_store_shared:
-   case nir_intrinsic_shared_atomic:
-   case nir_intrinsic_shared_atomic_swap:
-   case nir_intrinsic_load_shared_block_intel:
-   case nir_intrinsic_store_shared_block_intel:
-   case nir_intrinsic_load_shared_uniform_block_intel:
-      max_bits = LSC_ADDRESS_OFFSET_FLAT_BITS;
-      break;
    case nir_intrinsic_load_ssbo_intel:
    case nir_intrinsic_load_ubo_uniform_block_intel:
    case nir_intrinsic_load_ssbo_uniform_block_intel:
@@ -29,7 +20,7 @@ lower_immediate_offsets(nir_builder *b, nir_intrinsic_instr *intrin, void *data)
    case nir_intrinsic_store_ssbo_block_intel: {
       nir_src *binding = nir_get_io_index_src(intrin);
       const bool has_resource =
-         binding->ssa->parent_instr->type == nir_instr_type_intrinsic &&
+         nir_def_is_intrinsic(binding->ssa) &&
          nir_def_as_intrinsic(binding->ssa)->intrinsic ==
          nir_intrinsic_resource_intel;
       bool ss_binding = false;
@@ -67,7 +58,17 @@ lower_immediate_offsets(nir_builder *b, nir_intrinsic_instr *intrin, void *data)
          bti_is_const ? LSC_ADDRESS_OFFSET_BTI_BITS : 0;
       break;
    }
+   case nir_intrinsic_load_global_intel:
+   case nir_intrinsic_store_global_intel:
+   case nir_intrinsic_load_global_constant_uniform_block_intel:
+      max_bits = LSC_ADDRESS_OFFSET_FLAT_BITS;
+      break;
    default:
+      if (nir_is_shared_access(intrin)) {
+         max_bits = LSC_ADDRESS_OFFSET_FLAT_BITS;
+         break;
+      }
+
       return false;
    }
 
@@ -96,14 +97,18 @@ lower_immediate_offsets(nir_builder *b, nir_intrinsic_instr *intrin, void *data)
    if ((base % 4) == 0 && base >= min && base <= max)
       return false;
 
-   int32_t new_base = CLAMP(base, min, max);
-   new_base -= new_base % 4;
+   int32_t addition = (base / (max + 1)) * (max + 1);
+   int32_t new_base = base - addition;
+
+   int32_t unaligned = new_base % 4;
+   addition += unaligned;
+   new_base -= unaligned;
 
    assert(new_base >= min && new_base <= max);
 
    nir_src_rewrite(
       offset_src, nir_iadd_imm(
-         b, offset_src->ssa, base - new_base));
+         b, offset_src->ssa, addition));
    nir_intrinsic_set_base(intrin, new_base);
 
    return true;

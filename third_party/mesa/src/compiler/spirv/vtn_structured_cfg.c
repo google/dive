@@ -1,24 +1,6 @@
 /*
  * Copyright © 2015-2023 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "vtn_private.h"
@@ -504,7 +486,7 @@ pop_construct(struct vtn_construct_stack *stack)
 static inline void
 push_construct(struct vtn_construct_stack *stack, struct vtn_construct *c)
 {
-   util_dynarray_append(&stack->data, struct vtn_construct *, c);
+   util_dynarray_append(&stack->data, c);
 }
 
 static int
@@ -1238,6 +1220,14 @@ vtn_emit_branch(struct vtn_builder *b, const struct vtn_block *block,
       struct vtn_construct *loop = block->parent->innermost_loop;
       vtn_assert(loop);
       vtn_emit_break_for_construct(b, block, loop);
+
+      /* If this is a conditional back-edge, flag this loop as do-while loop.
+       * The same applies to single-block loops.
+       */
+      if (block->parent->type == vtn_construct_type_continue ||
+          vtn_is_single_block_loop(loop)) {
+         loop->nloop->do_while = true;
+      }
       break;
    }
 
@@ -1675,6 +1665,9 @@ vtn_emit_cf_func_structured(struct vtn_builder *b, struct vtn_function *func,
             nir_store_var(&b->nb, next->break_var, nir_imm_false(&b->nb), 1);
             next->nloop = nir_push_loop(&b->nb);
             nir_store_var(&b->nb, next->continue_var, nir_imm_false(&b->nb), 1);
+
+            if (!vtn_is_single_block_loop(next))
+               nir_loop_add_continue_construct(next->nloop);
 
             next->nloop->control = vtn_loop_control(b, block->merge[3]);
 

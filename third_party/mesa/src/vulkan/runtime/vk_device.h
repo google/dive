@@ -28,6 +28,7 @@
 #include "vk_extensions.h"
 #include "vk_object.h"
 #include "vk_physical_device_features.h"
+#include "vk_pipeline.h"
 
 #include "util/list.h"
 #include "util/simple_mtx.h"
@@ -187,6 +188,7 @@ struct vk_device {
 
    uint32_t current_frame;
    bool trace_hotkey_trigger;
+   bool capture_key_pressed;
    simple_mtx_t trace_mtx;
 
    /* For VK_EXT_private_data */
@@ -313,8 +315,13 @@ struct vk_device {
    /* For VK_KHR_pipeline_binary */
    bool disable_internal_cache;
 
+   /* Link-time optimization disable */
+   bool disable_lto;
+
    struct vk_device_memory_report *memory_reports;
    uint32_t memory_report_count;
+
+   struct vk_pipeline_robustness_state robustness_state;
 };
 
 VK_DEFINE_HANDLE_CASTS(vk_device, base, VkDevice,
@@ -439,13 +446,6 @@ vk_device_copy_semaphore_payloads(struct vk_device *device,
 VkResult
 vk_device_get_timestamp(struct vk_device *device, VkTimeDomainKHR domain,
                         uint64_t *timestamp);
-
-#ifndef _WIN32
-
-uint64_t
-vk_clock_gettime(clockid_t clock_id);
-
-#endif //!_WIN32
 
 static inline uint64_t
 vk_time_max_deviation(uint64_t begin, uint64_t end, uint64_t max_clock_period)

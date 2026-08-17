@@ -40,6 +40,11 @@
 #include "util/pb_slab.h"
 
 #include "util/blob.h"
+
+#ifdef HAVE_LIBDRM
+#include "renderonly/renderonly.h"
+#endif
+
 #include "util/disk_cache.h"
 #include "util/hash_table.h"
 #include "util/list.h"
@@ -66,7 +71,11 @@
 #include "vk_dispatch_table.h"
 #include "util/perf/cpu_trace.h"
 
+#include "nir_to_spirv/nir_to_spirv.h"
+
+#if HAVE_RENDERDOC_INTEGRATION
 #include "renderdoc_app.h"
+#endif
 
 /* the descriptor binding id for fbfetch/input attachment */
 #define ZINK_FBFETCH_BINDING 5
@@ -253,6 +262,8 @@ enum zink_debug {
    ZINK_DEBUG_MSAAOPT = (1<<20),
    ZINK_DEBUG_RPLOADS = (1<<21),
    ZINK_DEBUG_NOGENERAL = (1<<22),
+   ZINK_DEBUG_RPSTORES = (1<<23),
+   ZINK_DEBUG_PERFINFO = (1<<24),
 };
 
 enum zink_pv_emulation_primitive {
@@ -435,9 +446,9 @@ struct zink_descriptor_data {
    bool has_fbfetch;
    bool push_state_changed[ZINK_PIPELINE_MAX]; //gfx, compute, mesh
    uint8_t state_changed[ZINK_PIPELINE_MAX]; //gfx, compute, mesh
-   struct zink_descriptor_layout_key *push_layout_keys[2]; //gfx, compute
-   struct zink_descriptor_layout *push_dsl[2]; //gfx, compute
-   VkDescriptorUpdateTemplate push_template[2]; //gfx, compute
+   struct zink_descriptor_layout_key *push_layout_keys[ZINK_PIPELINE_MAX]; //gfx, compute
+   struct zink_descriptor_layout *push_dsl[ZINK_PIPELINE_MAX]; //gfx, compute
+   VkDescriptorSetLayout old_push_dsl[ZINK_PIPELINE_MAX]; //the non-fbfetch layout (gfx,unused,mesh); this can't be destroyed because it may be in use
 
    struct zink_descriptor_layout *dummy_dsl;
 
@@ -523,7 +534,7 @@ struct zink_batch_descriptor_data {
    unsigned pool_size[ZINK_DESCRIPTOR_BASE_TYPES];
    /* this array is sized based on the max zink_descriptor_pool_key::id used by the batch; members may be NULL */
    struct util_dynarray pools[ZINK_DESCRIPTOR_BASE_TYPES];
-   struct zink_descriptor_pool_multi push_pool[2]; //gfx, compute, mesh
+   struct zink_descriptor_pool_multi push_pool[ZINK_PIPELINE_MAX]; //gfx, compute, mesh
    /* the current program (for descriptor updating) */
    struct zink_program *pg[ZINK_PIPELINE_MAX]; //gfx, compute, mesh
    /* the current pipeline compatibility id (for pipeline compatibility rules) */
@@ -628,9 +639,6 @@ struct zink_batch_state {
    struct util_dynarray acquires;
    struct util_dynarray acquire_flags;
 
-   VkAccessFlags unordered_write_access;
-   VkPipelineStageFlags unordered_write_stages;
-
    simple_mtx_t exportable_lock;
 
    struct util_queue_fence flush_completed;
@@ -691,8 +699,15 @@ struct bo_export {
    struct list_head link;
 };
 
+enum zink_bo_type {
+   ZINK_BO_REAL,
+   ZINK_BO_SLAB,
+   ZINK_BO_SPARSE,
+};
+
 struct zink_bo {
-   struct pb_buffer base;
+   struct pb_buffer_lean base;
+   enum zink_bo_type type;
 
    union {
       struct {
@@ -739,7 +754,7 @@ struct zink_bo {
 };
 
 static inline struct zink_bo *
-zink_bo(struct pb_buffer *pbuf)
+zink_bo(struct pb_buffer_lean *pbuf)
 {
    return (struct zink_bo*)pbuf;
 }
@@ -765,22 +780,6 @@ struct zink_framebuffer_clear {
 
 
 /** compiler types */
-struct zink_shader_info {
-   uint16_t stride[PIPE_MAX_SO_BUFFERS];
-   uint32_t sampler_mask;
-   bool have_sparse;
-   bool have_vulkan_memory_model;
-   bool have_workgroup_memory_explicit_layout;
-   bool broken_arbitary_type_const;
-   struct {
-      uint8_t flush_denorms:3; // 16, 32, 64
-      uint8_t preserve_denorms:3; // 16, 32, 64
-      bool denorms_32_bit_independence:1;
-      bool denorms_all_independence:1;
-   } float_controls;
-   unsigned bindless_set_idx;
-};
-
 enum zink_rast_prim {
    ZINK_PRIM_POINTS,
    ZINK_PRIM_LINES,
@@ -804,7 +803,7 @@ struct zink_shader {
    /* this is deleted in zink_shader_init */
    nir_shader *nir;
 
-   struct zink_shader_info sinfo;
+   uint16_t xfb_stride[PIPE_MAX_SO_BUFFERS];
 
    struct {
       int index;
@@ -887,7 +886,7 @@ struct zink_gfx_pipeline_state {
    uint32_t feedback_loop : 1;
    uint32_t feedback_loop_zs : 1;
    uint32_t rast_attachment_order : 1;
-   uint32_t custom_sample_locations : 1;
+   uint32_t pad : 1;
    uint32_t rp_state : 16;
    VkSampleMask sample_mask;
    uint32_t blend_id;
@@ -1201,6 +1200,7 @@ struct zink_resource_object {
    VkPipelineStageFlags unordered_access_stage;
    VkAccessFlags unordered_access;
    VkAccessFlags last_write;
+   unsigned transfer_rp;
 
    /* 'access' is propagated from unordered_access to handle ops occurring
     * in the ordered cmdbuf which can promote barriers to unordered
@@ -1214,8 +1214,6 @@ struct zink_resource_object {
 
    struct u_rwlock copy_lock;
    struct util_dynarray copies[16]; //regions being copied to; for barrier omission
-
-   VkBuffer storage_buffer;
 
    union {
       VkBuffer buffer;
@@ -1234,6 +1232,7 @@ struct zink_resource_object {
    bool render_target;
    bool is_buffer;
    bool exportable;
+   bool exportable_dmabuf;
 
    /* TODO: this should be a union */
    int handle;
@@ -1262,6 +1261,7 @@ struct zink_resource_object {
    bool host_visible;
    bool coherent;
    bool is_aux;
+   bool immutable_handle;
 };
 
 /* "gfx" includes mesh here */
@@ -1271,7 +1271,7 @@ struct zink_resource {
    enum pipe_format internal_format:16;
 
    struct zink_resource_object *obj;
-   struct zink_resource *transient; //for msrtt without EXT_multisampled_render_to_single_sampled
+   struct zink_resource *transient; //for msrtt without EXT_multisampled_render_to_single_sampled and format view shadowing
    uint32_t queue;
    union {
       struct {
@@ -1303,6 +1303,7 @@ struct zink_resource {
    uint16_t sampler_bind_count[2]; //gfx, compute
    uint16_t image_bind_count[2]; //gfx, compute
    uint16_t write_bind_count[2]; //gfx, compute
+   VkPipelineStageFlagBits seen_sampler_bind_stages;
    union {
       uint16_t bindless[2]; //tex, img
       uint32_t all_bindless;
@@ -1324,11 +1325,16 @@ struct zink_resource {
    bool deleted; //resource_release
    bool swapchain;
    bool dmabuf;
+   bool unflushed_transient; //format view transient has newer data than parent
    bool subdata; //doing subdata call
    unsigned dt_stride;
 
    uint8_t modifiers_count;
    uint64_t *modifiers;
+
+#ifdef HAVE_LIBDRM
+   struct renderonly_scanout *ro_scanout;
+#endif
 };
 
 static inline struct zink_resource *
@@ -1404,6 +1410,9 @@ struct zink_screen {
 
    bool device_lost;
    int drm_fd;
+#ifdef HAVE_LIBDRM
+   struct renderonly *ro;
+#endif
 
    struct slab_parent_pool transfer_pool;
    struct disk_cache *disk_cache;
@@ -1432,14 +1441,12 @@ struct zink_screen {
 
    struct {
       struct pb_cache bo_cache;
-      struct pb_slabs bo_slabs[NUM_SLAB_ALLOCATORS];
-      unsigned min_alloc_size;
+      struct pb_slabs bo_slabs;
       uint32_t next_bo_unique_id;
    } pb;
    uint8_t heap_map[ZINK_HEAP_MAX][VK_MAX_MEMORY_TYPES];  // mapping from zink heaps to memory type indices
    uint8_t heap_count[ZINK_HEAP_MAX];  // number of memory types per zink heap
    bool resizable_bar;
-   bool always_cached_upload;
 
    uint64_t total_video_mem;
    uint64_t clamp_video_mem;
@@ -1459,6 +1466,7 @@ struct zink_screen {
 
    struct zink_device_info info;
    struct nir_shader_compiler_options nir_options;
+   struct ntv_info ntv_info;
 
    bool optimal_keys;
    bool have_full_ds3;
@@ -1479,19 +1487,21 @@ struct zink_screen {
    VkDevice dev;
    VkQueue queue; //gfx+compute
    VkQueue queue_sparse;
-   simple_mtx_t queue_lock;
+   simple_mtx_t *queue_lock;
    VkDebugUtilsMessengerEXT debugUtilsCallbackHandle;
 
    uint32_t cur_custom_border_color_samplers;
 
    unsigned screen_id;
 
+#if HAVE_RENDERDOC_INTEGRATION
    RENDERDOC_API_1_0_0 *renderdoc_api;
    unsigned renderdoc_capture_start;
    unsigned renderdoc_capture_end;
    unsigned renderdoc_frame;
    bool renderdoc_capturing;
    bool renderdoc_capture_all;
+#endif
 
    struct vk_uncompacted_dispatch_table vk;
 
@@ -1544,6 +1554,8 @@ struct zink_screen {
       bool can_2d_view_sparse;
       bool general_depth_layout;
       bool general_layout;
+      /* intel driver is somehow broken for srgb-compatible dmabufs...but only in mesa CI */
+      bool srgb_dmabufs;
    } driver_workarounds;
 };
 
@@ -1765,6 +1777,7 @@ struct zink_context {
    struct zink_rasterizer_state *rast_state;
    struct zink_depth_stencil_alpha_state *dsa_state;
 
+   bool transient_msrtss; //transient_attachments is for msrtss
    bool has_swapchain;
    bool pipeline_changed[ZINK_PIPELINE_MAX]; //gfx, compute, mesh
 
@@ -1806,6 +1819,7 @@ struct zink_context {
       VkRenderingInfo info;
       struct tc_renderpass_info tc_info;
       VkAttachmentFeedbackLoopInfoEXT fbfetch_att[PIPE_MAX_COLOR_BUFS + 2]; //+depth, +stencil
+      VkRenderingAttachmentFlagsInfoKHR flags[PIPE_MAX_COLOR_BUFS + 2]; //+depth, +stencil
    } dynamic_fb;
    uint32_t fb_layer_mismatch; //bitmask
    struct set rendering_state_cache[6]; //[util_logbase2_ceil(msrtss samplecount)]
@@ -1813,6 +1827,7 @@ struct zink_context {
    VkExtent2D swapchain_size;
    bool awaiting_resolve; //from tc info
    bool in_rp; //renderpass is currently active
+   bool rp_draw; //renderpass has draws
    bool rp_changed; //force renderpass restart
    bool rp_layout_changed; //renderpass changed, maybe restart
    bool rp_loadop_changed; //renderpass changed, don't restart
@@ -1828,6 +1843,7 @@ struct zink_context {
    struct zink_resource *needs_present;
 
    struct pipe_vertex_buffer vertex_buffers[PIPE_MAX_ATTRIBS];
+   unsigned vertex_buffers_count;
    bool vertex_buffers_dirty;
 
    struct zink_sampler_state *sampler_states[MESA_SHADER_MESH_STAGES][PIPE_MAX_SAMPLERS];
@@ -1840,6 +1856,7 @@ struct zink_context {
    float blend_constants[4];
 
    bool sample_locations_changed;
+   bool sample_locations_enabled;
    VkSampleLocationEXT vk_sample_locations[PIPE_MAX_SAMPLE_LOCATION_GRID_SIZE * PIPE_MAX_SAMPLE_LOCATION_GRID_SIZE];
    uint8_t sample_locations[2 * 4 * 8 * 16];
    unsigned num_sample_locations;
@@ -1962,6 +1979,9 @@ struct zink_context {
    struct pipe_resource *index_buffer; //last index buffer
    unsigned index_size;
 
+   unsigned rp_counter;
+   unsigned last_transfer_sync;
+
    uint32_t num_so_targets;
    struct pipe_stream_output_target *so_targets[PIPE_MAX_SO_BUFFERS];
    bool dirty_so_targets;
@@ -1988,6 +2008,9 @@ struct zink_context {
    bool rasterizer_discard_changed : 1;
    bool rp_tc_info_updated : 1;
    bool last_work_was_compute : 1;
+   bool needs_transfer_sync : 1;
+   bool can_promote_depth_op : 1;
+   bool depth_op_promoted : 1;
 };
 
 static inline struct zink_context *

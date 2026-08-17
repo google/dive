@@ -168,13 +168,13 @@ vn_sizeof_VkRingCreateInfoMESA_pnext(const void *val)
         case VK_STRUCTURE_TYPE_RING_MONITOR_INFO_MESA:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRingCreateInfoMESA_pnext(pnext->pNext);
+            size += vn_sizeof_VkRingCreateInfoMESA_pnext(((const VkRingMonitorInfoMESA *)pnext)->pNext);
             size += vn_sizeof_VkRingMonitorInfoMESA_self((const VkRingMonitorInfoMESA *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_RING_PRIORITY_INFO_MESA:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRingCreateInfoMESA_pnext(pnext->pNext);
+            size += vn_sizeof_VkRingCreateInfoMESA_pnext(((const VkRingPriorityInfoMESA *)pnext)->pNext);
             size += vn_sizeof_VkRingPriorityInfoMESA_self((const VkRingPriorityInfoMESA *)pnext);
             return size;
         default:
@@ -229,13 +229,13 @@ vn_encode_VkRingCreateInfoMESA_pnext(struct vn_cs_encoder *enc, const void *val)
         case VK_STRUCTURE_TYPE_RING_MONITOR_INFO_MESA:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRingCreateInfoMESA_pnext(enc, pnext->pNext);
+            vn_encode_VkRingCreateInfoMESA_pnext(enc, ((const VkRingMonitorInfoMESA *)pnext)->pNext);
             vn_encode_VkRingMonitorInfoMESA_self(enc, (const VkRingMonitorInfoMESA *)pnext);
             return;
         case VK_STRUCTURE_TYPE_RING_PRIORITY_INFO_MESA:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRingCreateInfoMESA_pnext(enc, pnext->pNext);
+            vn_encode_VkRingCreateInfoMESA_pnext(enc, ((const VkRingPriorityInfoMESA *)pnext)->pNext);
             vn_encode_VkRingPriorityInfoMESA_self(enc, (const VkRingPriorityInfoMESA *)pnext);
             return;
         default:

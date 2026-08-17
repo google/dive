@@ -1,6 +1,11 @@
 # Copyright © 2017 Intel Corporation
 # SPDX-License-Identifier: MIT
 
+mesa_python_path = [
+  join_paths(dir_source_root, 'src/util/perf/'),
+  join_paths(dir_source_root, 'src/vulkan/util/'),
+]
+
 subdir('gtest')
 subdir('c11/impl')
 subdir('android_stub')
@@ -26,6 +31,10 @@ else
   inc_amd_common_llvm = []
 endif
 
+inc_radv_bvh = include_directories('amd/vulkan/bvh')
+inc_radv_tools = include_directories('amd/vulkan/tools')
+inc_vulkan_bvh = include_directories('vulkan/runtime/bvh')
+
 glsl_util_files = files(
     'mesa/main/extensions_table.c',
     'mesa/program/prog_parameter.c',
@@ -49,10 +58,13 @@ endif
 if with_platform_x11
   subdir('x11')
 endif
-if with_gallium_or_lvp or with_gbm or with_platform_wayland
+if with_gallium_or_lvp or with_gbm or with_platform_wayland or with_platform_x11
   subdir('loader')
 endif
 subdir('compiler')
+if with_poly
+  subdir('poly')
+endif
 if with_tools.contains('drm-shim')
   subdir('drm-shim')
 endif
@@ -64,9 +76,6 @@ if with_wayland_bind_display
 endif
 if with_any_vk or with_gallium_zink
   subdir('vulkan')
-endif
-if with_any_intel
-  subdir('intel')
 endif
 if with_virtio_vk
   subdir('virtio/vulkan')
@@ -89,6 +98,9 @@ endif
 if with_imagination_vk or with_tools.contains('imagination')
   subdir('imagination')
 endif
+if with_any_intel
+  subdir('intel')
+endif
 if with_gallium_panfrost or with_gallium_lima or with_panfrost_vk or with_tools.contains('panfrost')
   subdir('panfrost')
 endif
@@ -101,15 +113,16 @@ endif
 if with_gfxstream_vk
   dep_virtgpu_kumquat_ffi = null_dep
   if with_virtgpu_kumquat
-    subdir('util/rust')
-    subdir('virtio/protocols')
-    subdir('virtio/virtgpu_kumquat')
-    subdir('virtio/virtgpu_kumquat_ffi')
+    subdir('virtio/magma-gpu-rs/lib')
+    subdir('virtio/magma-gpu-rs/ffi/virtgpu_kumquat_ffi')
   endif
   subdir('gfxstream')
 endif
 if with_gallium_asahi or with_asahi_vk or with_tools.contains('asahi')
   subdir('asahi')
+endif
+if with_kosmickrisp_vk
+  subdir('kosmickrisp')
 endif
 if with_gallium
   subdir('mesa')
@@ -147,8 +160,8 @@ endif
 if with_egl
   subdir('egl')
 endif
-if with_gallium and with_gbm
-  if with_glx == 'dri' or with_platform_x11 or with_platform_xcb
+if with_gallium
+  if with_glx == 'dri' or with_platform_x11
     subdir('gallium/targets/dril')
   endif
 endif
@@ -170,5 +183,11 @@ if with_glx != 'disabled' and not with_glvnd
     variables : ['glx_tls=yes'],
   )
 endif
+
+# Used by bin/drm-shim.py to calculate paths
+devenv.prepend(
+  'DRM_SHIM_PATH',
+  meson.project_build_root()
+)
 
 subdir('tool')

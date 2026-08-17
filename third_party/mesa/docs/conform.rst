@@ -20,7 +20,7 @@ easiest to submit your conformance through them.
 
 If you are an individual developer or your organization hasn't
 submitted results for the given API yet, X.Org is a member through
-Software in the Public Interest, and they can help submit your
+the Software Freedom Conservancy, and they can help submit your
 conformance results to get added to the list of conformant products.
 You should probably coordinate with board@foundation.x.org for your
 first submission.

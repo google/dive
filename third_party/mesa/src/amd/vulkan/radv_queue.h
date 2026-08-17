@@ -91,6 +91,8 @@ struct radv_queue {
 
    uint64_t last_shader_upload_seq;
    bool sqtt_present;
+
+   VkCommandPool utrace_command_pool;
 };
 
 VK_DEFINE_HANDLE_CASTS(radv_queue, vk.base, VkQueue, VK_OBJECT_TYPE_QUEUE)
@@ -131,6 +133,23 @@ vk_to_radeon_priority(VkQueueGlobalPriority priority)
       return RADEON_CTX_PRIORITY_LOW;
    default:
       return RADEON_CTX_PRIORITY_INVALID;
+   }
+}
+
+static inline VkQueueGlobalPriority
+radeon_to_vk_priority(enum radeon_ctx_priority priority)
+{
+   switch (priority) {
+   case RADEON_CTX_PRIORITY_REALTIME:
+      return VK_QUEUE_GLOBAL_PRIORITY_REALTIME;
+   case RADEON_CTX_PRIORITY_HIGH:
+      return VK_QUEUE_GLOBAL_PRIORITY_HIGH;
+   case RADEON_CTX_PRIORITY_MEDIUM:
+      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM;
+   case RADEON_CTX_PRIORITY_LOW:
+      return VK_QUEUE_GLOBAL_PRIORITY_LOW;
+   default:
+      UNREACHABLE("Invalid context priority");
    }
 }
 

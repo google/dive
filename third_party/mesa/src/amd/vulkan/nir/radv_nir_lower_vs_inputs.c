@@ -4,12 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "ac_gpu_info.h"
 #include "ac_nir.h"
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_deref.h"
-#include "radv_constants.h"
 #include "radv_nir.h"
 #include "radv_shader.h"
 #include "radv_shader_args.h"
@@ -18,7 +16,7 @@ typedef struct {
    const struct radv_shader_args *args;
    const struct radv_shader_info *info;
    const struct radv_graphics_state_key *gfx_state;
-   const struct radeon_info *gpu_info;
+   const struct radv_compiler_info *compiler_info;
 } lower_vs_inputs_state;
 
 static nir_def *
@@ -184,16 +182,66 @@ adjust_vertex_fetch_alpha(nir_builder *b, enum ac_vs_input_alpha_adjust alpha_ad
    return alpha;
 }
 
-static nir_def *
-lower_load_vs_input(nir_builder *b, nir_intrinsic_instr *intrin, lower_vs_inputs_state *s)
+static enum pipe_format
+adjust_format(const enum pipe_format attrib_format)
+{
+   if (util_format_get_max_channel_size(attrib_format) <= 32)
+      return attrib_format;
+
+   const struct util_format_description *f = util_format_description(attrib_format);
+
+   /* 1x 64-bit channel ~ 2x 32-bit channel */
+   if (f->nr_channels == 1)
+      return PIPE_FORMAT_R32G32_UINT;
+
+   /* 2x 64-bit channel ~ 4x 32-bit channel */
+   return PIPE_FORMAT_R32G32B32A32_UINT;
+}
+
+static bool
+location_is_64bit(const unsigned loc, const lower_vs_inputs_state *const s)
+{
+   if (!(s->gfx_state->vi.attributes_valid & (1 << loc)))
+      return false;
+
+   const enum pipe_format f = s->gfx_state->vi.vertex_attribute_formats[loc];
+   return util_format_get_max_channel_size(f) == 64;
+}
+
+static unsigned
+location_from_intrinsic(nir_intrinsic_instr *intrin, const lower_vs_inputs_state *const s, unsigned *is_high_dvec2)
 {
    nir_src *offset_src = nir_get_io_offset_src(intrin);
    assert(nir_src_is_const(*offset_src));
 
    const nir_io_semantics io_sem = nir_intrinsic_io_semantics(intrin);
    const unsigned base_offset = nir_src_as_uint(*offset_src);
-   const unsigned location = io_sem.location + base_offset - VERT_ATTRIB_GENERIC0;
+   const unsigned loc = io_sem.location + base_offset - VERT_ATTRIB_GENERIC0;
+
+   /* Check whether the current slot is the high part of a 64-bit input.
+    * If so, use the low part of the 64-bit input as location.
+    *
+    * See VK spec 15.1.5 "Component Assignment":
+    * Small bitsize inputs consume the same space as 32-bit inputs,
+    * but 64-bit inputs consume twice as many.
+    * 64-bit variables must not have a component of 1 or 3.
+    */
+   if (loc > 0 && location_is_64bit(loc - 1, s)) {
+      *is_high_dvec2 = 1;
+      return loc - 1;
+   }
+
+   *is_high_dvec2 = 0;
+   return loc;
+}
+
+static nir_def *
+lower_load_vs_input(nir_builder *b, nir_intrinsic_instr *intrin, lower_vs_inputs_state *s)
+{
+   unsigned high_dvec2 = 0;
+   const unsigned location = location_from_intrinsic(intrin, s, &high_dvec2);
    const unsigned bit_size = intrin->def.bit_size;
+   assert(bit_size <= 32);
    const unsigned dest_num_components = intrin->def.num_components;
 
    if (!(s->gfx_state->vi.attributes_valid & (1 << location))) {
@@ -201,15 +249,8 @@ lower_load_vs_input(nir_builder *b, nir_intrinsic_instr *intrin, lower_vs_inputs
       return nir_imm_zero(b, intrin->def.num_components, intrin->def.bit_size);
    }
 
-   /* Convert the component offset to bit_size units.
-    * (Intrinsic component offset is in 32-bit units.)
-    *
-    * Small bitsize inputs consume the same space as 32-bit inputs,
-    * but 64-bit inputs consume twice as many.
-    * 64-bit variables must not have a component of 1 or 3.
-    * (See VK spec 15.1.5 "Component Assignment")
-    */
-   const unsigned component = nir_intrinsic_component(intrin) / (MAX2(32, bit_size) / 32);
+   /* Intrinsic component offset is in 32-bit units. */
+   const unsigned component = nir_intrinsic_component(intrin);
 
    /* Bitmask of components in bit_size units
     * of the current input load that are actually used.
@@ -225,15 +266,16 @@ lower_load_vs_input(nir_builder *b, nir_intrinsic_instr *intrin, lower_vs_inputs
    const uint32_t attrib_binding = s->gfx_state->vi.vertex_attribute_bindings[location];
    const uint32_t attrib_offset = s->gfx_state->vi.vertex_attribute_offsets[location];
    const uint32_t attrib_stride = s->gfx_state->vi.vertex_attribute_strides[location];
-   const enum pipe_format attrib_format = s->gfx_state->vi.vertex_attribute_formats[location];
+   const enum pipe_format attrib_format = adjust_format(s->gfx_state->vi.vertex_attribute_formats[location]);
    const struct util_format_description *f = util_format_description(attrib_format);
-   const struct ac_vtx_format_info *vtx_info =
-      ac_get_vtx_format_info(s->gpu_info->gfx_level, s->gpu_info->family, attrib_format);
+   const struct ac_vtx_format_info *vtx_info = ac_get_vtx_format_info(
+      s->compiler_info->ac->gfx_level, s->compiler_info->ac->has_vtx_format_alpha_adjust_bug, attrib_format);
    const unsigned binding_index = s->info->vs.use_per_attribute_vb_descs ? location : attrib_binding;
    const unsigned desc_index = util_bitcount(s->info->vs.vb_desc_usage_mask & BITFIELD_MASK(binding_index));
 
    nir_def *vertex_buffers_arg = ac_nir_load_arg(b, &s->args->ac, s->args->ac.vertex_buffers);
-   nir_def *vertex_buffers = nir_pack_64_2x32_split(b, vertex_buffers_arg, nir_imm_int(b, s->gpu_info->address32_hi));
+   nir_def *vertex_buffers =
+      nir_pack_64_2x32_split(b, vertex_buffers_arg, nir_imm_int(b, s->compiler_info->hw.address32_hi));
    nir_def *descriptor =
       ac_nir_load_smem(b, 4, vertex_buffers, nir_imm_int(b, desc_index * 16), 4, ACCESS_CAN_SPECULATE);
    nir_def *base_index = calc_vs_input_index(b, location, s);
@@ -255,14 +297,16 @@ lower_load_vs_input(nir_builder *b, nir_intrinsic_instr *intrin, lower_vs_inputs
     * Beneficial because the backend may be able to emit fewer HW instructions.
     * Only possible with array formats.
     */
-   const unsigned first_used_channel = first_used_swizzled_channel(f, dest_use_mask, false);
+   const unsigned first_used_channel =
+      needs_swizzle ? first_used_swizzled_channel(f, dest_use_mask, false) : (ffs(dest_use_mask) - 1);
    const unsigned skipped_start = f->is_array ? first_used_channel : 0;
 
    /* Number of channels we actually use and load.
     * Don't shrink the format here because this might allow the backend to
     * emit fewer (but larger than needed) HW instructions.
     */
-   const unsigned first_trailing_unused_channel = first_used_swizzled_channel(f, dest_use_mask, true) + 1;
+   const unsigned first_trailing_unused_channel =
+      needs_swizzle ? (first_used_swizzled_channel(f, dest_use_mask, true) + 1) : util_last_bit(dest_use_mask);
    const unsigned max_loaded_channels = MIN2(first_trailing_unused_channel, f->nr_channels);
    const unsigned fetch_num_channels =
       first_used_channel >= max_loaded_channels ? 0 : max_loaded_channels - skipped_start;
@@ -287,7 +331,7 @@ lower_load_vs_input(nir_builder *b, nir_intrinsic_instr *intrin, lower_vs_inputs
       nir_def *index = base_index;
 
       /* Add excess constant offset to the index. */
-      unsigned const_off = attrib_offset + count_format_bytes(f, 0, start);
+      unsigned const_off = attrib_offset + high_dvec2 * 16 + count_format_bytes(f, 0, start);
       if (attrib_stride && const_off >= attrib_stride) {
          index = nir_iadd_imm(b, base_index, const_off / attrib_stride);
          const_off %= attrib_stride;
@@ -408,8 +452,8 @@ lower_vs_input_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
 }
 
 bool
-radv_nir_lower_vs_inputs(nir_shader *shader, const struct radv_shader_stage *vs_stage,
-                         const struct radv_graphics_state_key *gfx_state, const struct radeon_info *gpu_info)
+radv_nir_lower_vs_inputs(nir_shader *shader, const struct radv_compiler_info *compiler_info,
+                         const struct radv_shader_stage *vs_stage, const struct radv_graphics_state_key *gfx_state)
 {
    assert(shader->info.stage == MESA_SHADER_VERTEX);
 
@@ -417,7 +461,7 @@ radv_nir_lower_vs_inputs(nir_shader *shader, const struct radv_shader_stage *vs_
       .info = &vs_stage->info,
       .args = &vs_stage->args,
       .gfx_state = gfx_state,
-      .gpu_info = gpu_info,
+      .compiler_info = compiler_info,
    };
 
    return nir_shader_intrinsics_pass(shader, lower_vs_input_instr, nir_metadata_control_flow, &state);

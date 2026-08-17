@@ -108,10 +108,6 @@ static void
 blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
                     struct blorp_address address, uint32_t delta);
 
-static uint64_t
-blorp_get_surface_address(struct blorp_batch *batch,
-                          struct blorp_address address);
-
 #if GFX_VER < 10
 static struct blorp_address
 blorp_get_surface_base_address(struct blorp_batch *batch);
@@ -140,7 +136,7 @@ blorp_emit_post_draw(struct blorp_batch *batch,
                      const struct blorp_params *params);
 
 static inline unsigned
-brw_blorp_get_urb_length(const struct brw_wm_prog_data *prog_data)
+brw_blorp_get_urb_length(const struct brw_fs_prog_data *prog_data)
 {
    if (prog_data == NULL)
       return 1;
@@ -151,6 +147,9 @@ brw_blorp_get_urb_length(const struct brw_wm_prog_data *prog_data)
     */
    return MAX2((prog_data->num_varying_inputs + 1) / 2, 1);
 }
+
+static bool *
+blorp_get_write_fencing_status(struct blorp_batch *batch);
 
 /***** BEGIN blorp_exec implementation ******/
 
@@ -168,9 +167,25 @@ _blorp_combine_address(struct blorp_batch *batch, void *location,
 #define __gen_address_type struct blorp_address
 #define __gen_user_data struct blorp_batch
 #define __gen_combine_address _blorp_combine_address
+#define __gen_get_write_fencing_status(b) blorp_get_write_fencing_status(b)
+#define __gen_get_batch_dwords(b, d) blorp_emit_dwords((b), (d))
+
+static inline struct blorp_address
+__gen_address_offset(struct blorp_address addr, uint64_t offset)
+{
+   addr.offset += offset;
+   return addr;
+}
+
+static inline struct blorp_address
+__gen_get_batch_address(struct blorp_batch *batch, void *location)
+{
+   UNREACHABLE("Not supported by blorp");
+}
 
 #include "genxml/genX_pack.h"
 #include "common/intel_genX_state_brw.h"
+#include "common/mi_builder.h"
 
 #define _blorp_cmd_length(cmd) cmd ## _length
 #define _blorp_cmd_length_bias(cmd) cmd ## _length_bias
@@ -264,9 +279,9 @@ emit_urb_config(struct blorp_batch *batch,
     *
     * where 'n' stands for number of varying inputs expressed as vec4s.
     */
-   struct brw_wm_prog_data *wm_prog_data = params->wm_prog_data;
+   struct brw_fs_prog_data *fs_prog_data = params->fs_prog_data;
    const unsigned num_varyings =
-      wm_prog_data ? wm_prog_data->num_varying_inputs : 0;
+      fs_prog_data ? fs_prog_data->num_varying_inputs : 0;
    const unsigned total_needed = 16 + 16 + num_varyings * 16;
 
    /* The URB size is expressed in units of 64 bytes (512 bits) */
@@ -347,9 +362,9 @@ blorp_emit_input_varying_data(struct blorp_batch *batch,
    const unsigned vec4_size_in_bytes = 4 * sizeof(float);
    const unsigned max_num_varyings =
       DIV_ROUND_UP(sizeof(params->wm_inputs), vec4_size_in_bytes);
-   struct brw_wm_prog_data *wm_prog_data = params->wm_prog_data;
+   struct brw_fs_prog_data *fs_prog_data = params->fs_prog_data;
    const unsigned num_varyings =
-      wm_prog_data ? wm_prog_data->num_varying_inputs : 0;
+      fs_prog_data ? fs_prog_data->num_varying_inputs : 0;
 
    *size = 16 + num_varyings * vec4_size_in_bytes;
 
@@ -364,7 +379,7 @@ blorp_emit_input_varying_data(struct blorp_batch *batch,
    memcpy(inputs, &params->vs_inputs, sizeof(params->vs_inputs));
    inputs += 4;
 
-   if (params->wm_prog_data) {
+   if (params->fs_prog_data) {
       /* Walk over the attribute slots, determine if the attribute is used by
        * the program and when necessary copy the values from the input storage
        * to the vertex data buffer.
@@ -372,7 +387,7 @@ blorp_emit_input_varying_data(struct blorp_batch *batch,
       for (unsigned i = 0; i < max_num_varyings; i++) {
          const gl_varying_slot attr = VARYING_SLOT_VAR0 + i;
 
-         const int input_index = wm_prog_data->urb_setup[attr];
+         const int input_index = fs_prog_data->urb_setup[attr];
          if (input_index < 0)
             continue;
 
@@ -459,9 +474,9 @@ static void
 blorp_emit_vertex_elements(struct blorp_batch *batch,
                            const struct blorp_params *params)
 {
-   struct brw_wm_prog_data *wm_prog_data = params->wm_prog_data;
+   struct brw_fs_prog_data *fs_prog_data = params->fs_prog_data;
    const unsigned num_varyings =
-      wm_prog_data ? wm_prog_data->num_varying_inputs : 0;
+      fs_prog_data ? fs_prog_data->num_varying_inputs : 0;
    const unsigned num_elements = 2 + num_varyings;
 
    struct GENX(VERTEX_ELEMENT_STATE) ve[num_elements];
@@ -721,7 +736,7 @@ blorp_emit_sf_config(struct blorp_batch *batch,
                      const struct blorp_params *params,
                      const struct intel_urb_config *urb_cfg)
 {
-   const struct brw_wm_prog_data *prog_data = params->wm_prog_data;
+   const struct brw_fs_prog_data *prog_data = params->fs_prog_data;
 
    /* 3DSTATE_SF
     *
@@ -774,7 +789,7 @@ static void
 blorp_emit_ps_config(struct blorp_batch *batch,
                      const struct blorp_params *params)
 {
-   const struct brw_wm_prog_data *prog_data = params->wm_prog_data;
+   const struct brw_fs_prog_data *prog_data = params->fs_prog_data;
 
    /* Even when thread dispatch is disabled, max threads (dw5.25:31) must be
     * nonzero to prevent the GPU from hanging.  While the documentation doesn't
@@ -891,24 +906,24 @@ blorp_emit_ps_config(struct blorp_batch *batch,
 
          intel_set_ps_dispatch_state(&ps, devinfo, prog_data,
                                      params->num_samples,
-                                     0 /* msaa_flags */);
+                                     0 /* fs_config */);
 
          ps.DispatchGRFStartRegisterForConstantSetupData0 =
-            brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 0);
+            brw_fs_prog_data_dispatch_grf_start_reg(prog_data, ps, 0);
          ps.DispatchGRFStartRegisterForConstantSetupData1 =
-            brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 1);
+            brw_fs_prog_data_dispatch_grf_start_reg(prog_data, ps, 1);
 #if GFX_VER < 20
          ps.DispatchGRFStartRegisterForConstantSetupData2 =
-            brw_wm_prog_data_dispatch_grf_start_reg(prog_data, ps, 2);
+            brw_fs_prog_data_dispatch_grf_start_reg(prog_data, ps, 2);
 #endif
 
          ps.KernelStartPointer0 = params->wm_prog_kernel +
-                                  brw_wm_prog_data_prog_offset(prog_data, ps, 0);
+                                  brw_fs_prog_data_prog_offset(prog_data, ps, 0);
          ps.KernelStartPointer1 = params->wm_prog_kernel +
-                                  brw_wm_prog_data_prog_offset(prog_data, ps, 1);
+                                  brw_fs_prog_data_prog_offset(prog_data, ps, 1);
 #if GFX_VER < 20
          ps.KernelStartPointer2 = params->wm_prog_kernel +
-                                  brw_wm_prog_data_prog_offset(prog_data, ps, 2);
+                                  brw_fs_prog_data_prog_offset(prog_data, ps, 2);
 #endif
 
 #if GFX_VER >= 30
@@ -1101,7 +1116,7 @@ blorp_emit_pipeline(struct blorp_batch *batch,
    struct intel_urb_config urb_cfg;
    emit_urb_config(batch, params, &urb_cfg);
 
-   if (params->wm_prog_data) {
+   if (params->fs_prog_data) {
       blorp_emit_blend_state(batch, params);
    }
    blorp_emit_color_calc_state(batch, params);
@@ -1239,12 +1254,13 @@ blorp_emit_surface_state(struct blorp_batch *batch,
    isl_surf_fill_state(batch->blorp->isl_dev, state,
                        .surf = &surf, .view = &surface->view,
                        .aux_surf = &surface->aux_surf, .aux_usage = aux_usage,
+                       .aux_format = surface->aux_format,
                        .address =
-                          blorp_get_surface_address(batch, surface->addr),
+                          batch->blorp->get_surface_address(batch, surface->addr),
                        .aux_address = !use_aux_address ? 0 :
-                          blorp_get_surface_address(batch, surface->aux_addr),
+                          batch->blorp->get_surface_address(batch, surface->aux_addr),
                        .clear_address = !use_clear_address ? 0 :
-                          blorp_get_surface_address(batch, op_clear_addr),
+                          batch->blorp->get_surface_address(batch, op_clear_addr),
                        .mocs = surface->addr.mocs,
                        .clear_color = surface->clear_color,
                        .use_clear_address = use_clear_address);
@@ -1265,7 +1281,7 @@ blorp_emit_surface_state(struct blorp_batch *batch,
 
    if (aux_usage != ISL_AUX_USAGE_NONE && surface->clear_color_addr.buffer) {
 #if GFX_VER >= 10
-      assert((surface->clear_color_addr.offset & 0x3f) == 0);
+      assert(util_is_aligned(surface->clear_color_addr.offset, 64));
       uint32_t *clear_addr = state + isl_dev->ss.clear_color_state_offset;
       blorp_surface_reloc(batch, state_offset +
                           isl_dev->ss.clear_color_state_offset,
@@ -1286,6 +1302,45 @@ blorp_emit_surface_state(struct blorp_batch *batch,
    blorp_flush_range(batch, state, GENX(RENDER_SURFACE_STATE_length) * 4);
 }
 
+/**
+ * Emits the remaining rows of the 2D linear surface as a texel buffer, this
+ * is part of a workaround for performing buffer to image copies when the
+ * surface is straddling an extra page due to a misaligned sampler cache.
+ */
+static void
+blorp_emit_buffer_surface_state(struct blorp_batch *batch,
+                                const struct blorp_surface_info *surface,
+                                void *state, uint32_t state_offset)
+{
+   blorp_assert_is_buffer(surface->surf, surface->view);
+   assert(isl_format_block_is_1x1x1(surface->view.format));
+
+   const struct isl_device *isl_dev = batch->blorp->isl_dev;
+
+   struct blorp_address buffer_addr = surface->addr;
+   buffer_addr.offset +=
+      surface->surf.row_pitch_B * surface->surf.logical_level0_px.h;
+
+   uint32_t element_size_B =
+      isl_format_get_layout(surface->view.format)->bpb / 8;
+   uint64_t surface_size_B =
+      (uint64_t) surface->surf.row_pitch_B * (surface->buffer_rows - 1) +
+      surface->surf.logical_level0_px.w * element_size_B;
+
+   isl_buffer_fill_state(isl_dev, state,
+                         .address =
+                            batch->blorp->get_surface_address(batch, buffer_addr),
+                         .size_B = surface_size_B,
+                         .stride_B = element_size_B,
+                         .format = surface->view.format,
+                         .swizzle = surface->view.swizzle,
+                         .mocs = surface->addr.mocs,
+                         .usage = surface->surf.usage | surface->view.usage);
+
+   blorp_surface_reloc(batch, state_offset + isl_dev->ss.addr_offset,
+                       buffer_addr, 0);
+}
+
 static void
 blorp_emit_null_surface_state(struct blorp_batch *batch,
                               const struct blorp_surface_info *surface,
@@ -1294,8 +1349,8 @@ blorp_emit_null_surface_state(struct blorp_batch *batch,
    struct GENX(RENDER_SURFACE_STATE) ss = {
       .SurfaceType = SURFTYPE_NULL,
       .SurfaceFormat = ISL_FORMAT_R8G8B8A8_UNORM,
-      .Width = surface->surf.logical_level0_px.width - 1,
-      .Height = surface->surf.logical_level0_px.height - 1,
+      .Width = MAX2(surface->surf.logical_level0_px.width, 1) - 1,
+      .Height = MAX2(surface->surf.logical_level0_px.height, 1) - 1,
       .MIPCountLOD = surface->view.base_level,
       .MinimumArrayElement = surface->view.base_array_layer,
       .Depth = surface->view.array_len - 1,
@@ -1319,16 +1374,20 @@ blorp_emit_null_surface_state(struct blorp_batch *batch,
 
 static uint32_t
 blorp_setup_binding_table(struct blorp_batch *batch,
-                           const struct blorp_params *params)
+                          const struct blorp_params *params)
 {
    const struct isl_device *isl_dev = batch->blorp->isl_dev;
-   uint32_t surface_offsets[2], bind_offset = 0;
-   void *surface_maps[2];
+   uint32_t surface_offsets[BLORP_NUM_BT_ENTRIES], bind_offset = 0;
+   void *surface_maps[BLORP_NUM_BT_ENTRIES];
+
+   /* There's nothing to bind here. */
+   if (params->op == BLORP_OP_COPY_INDIRECT)
+      return 0;
 
    if (params->use_pre_baked_binding_table) {
       bind_offset = params->pre_baked_binding_table_offset;
    } else {
-      unsigned num_surfaces = 1 + params->src.enabled;
+      unsigned num_surfaces = 1 + params->src.enabled + params->src.buffer;
       if (!blorp_alloc_binding_table(batch, num_surfaces,
                                      isl_dev->ss.size, isl_dev->ss.align,
                                      &bind_offset, surface_offsets, surface_maps))
@@ -1349,11 +1408,23 @@ blorp_setup_binding_table(struct blorp_batch *batch,
       }
 
       if (params->src.enabled) {
-         blorp_emit_surface_state(batch, &params->src,
-                                  params->fast_clear_op,
-                                  surface_maps[BLORP_TEXTURE_BT_INDEX],
-                                  surface_offsets[BLORP_TEXTURE_BT_INDEX],
-                                  0, false);
+         if (params->src.surf.size_B != 0) {
+            blorp_emit_surface_state(batch, &params->src,
+                                    params->fast_clear_op,
+                                    surface_maps[BLORP_TEXTURE_BT_INDEX],
+                                    surface_offsets[BLORP_TEXTURE_BT_INDEX],
+                                    0, false);
+         } else {
+            /* Nothing to do, the entire surface got converted to a buffer */
+            blorp_emit_null_surface_state(batch, &params->src,
+                                          surface_maps[BLORP_TEXTURE_BT_INDEX]);
+         }
+
+         if (params->src.buffer) {
+            blorp_emit_buffer_surface_state(batch, &params->src,
+                                            surface_maps[BLORP_TEXBUF_BT_INDEX],
+                                            surface_offsets[BLORP_TEXBUF_BT_INDEX]);
+         }
       }
    }
 
@@ -1399,6 +1470,7 @@ blorp_emit_depth_stencil_config(struct blorp_batch *batch,
    }
 
    if (params->depth.enabled) {
+      info.depth_clear_value = params->depth.clear_color.f32[0];
       info.depth_surf = &params->depth.surf;
 
       info.depth_address =
@@ -1414,8 +1486,6 @@ blorp_emit_depth_stencil_config(struct blorp_batch *batch,
          info.hiz_address =
             blorp_emit_reloc(batch, dw + isl_dev->ds.hiz_offset / 4,
                              hiz_address, 0);
-
-         info.depth_clear_value = params->depth.clear_color.f32[0];
       }
    }
 
@@ -1553,11 +1623,21 @@ blorp_emit_gfx8_hiz_op(struct blorp_batch *batch,
          assert(params->full_surface_hiz_op);
          hzp.DepthBufferResolveEnable = true;
          break;
+      case ISL_AUX_OP_PARTIAL_RESOLVE:
+#if GFX_VERx10 >= 125
+         hzp.DepthBufferPartialResolveEnable = true;
+#else
+         /* ISL's state machine may suggest a partial resolve
+          * regardless of the graphics version. Emit a full resolve on
+          * platforms which don't support it.
+          */
+         hzp.DepthBufferResolveEnable = true;
+#endif
+         break;
       case ISL_AUX_OP_AMBIGUATE:
          assert(params->full_surface_hiz_op);
          hzp.HierarchicalDepthBufferResolveEnable = true;
          break;
-      case ISL_AUX_OP_PARTIAL_RESOLVE:
       case ISL_AUX_OP_NONE:
          UNREACHABLE("Invalid HIZ op");
       }
@@ -1656,7 +1736,7 @@ blorp_get_compute_push_const(struct blorp_batch *batch,
 {
    const struct brw_cs_prog_data *cs_prog_data = params->cs_prog_data;
    const unsigned push_const_size =
-      ALIGN(brw_cs_push_const_total_size(cs_prog_data, threads), 64);
+      align(brw_cs_push_const_total_size(cs_prog_data, threads), 64);
    assert(cs_prog_data->push.cross_thread.size +
           cs_prog_data->push.per_thread.size == sizeof(params->wm_inputs));
 
@@ -1708,6 +1788,170 @@ blorp_get_compute_push_const(struct blorp_batch *batch,
 }
 
 static void
+blorp_indirect_buffer_get_dispatch_size(struct blorp_batch *batch,
+                                        const struct blorp_params *params,
+                                        struct mi_builder *b,
+                                        struct mi_value *size_x,
+                                        struct mi_value *size_y,
+                                        struct mi_value *size_z)
+{
+   struct blorp_context *blorp = batch->blorp;
+   const struct brw_cs_prog_data *cs_prog_data = params->cs_prog_data;
+
+   uint64_t indirect_buf_addr = params->wm_inputs.indirect.indirect_buf_addr;
+   uint64_t stride = params->wm_inputs.indirect.indirect_buf_stride;
+   uint32_t copy_count = params->wm_inputs.indirect.copy_count;
+
+   size_t size_offset = 16; /* offsetof(VkCopyMemoryIndirectCommandKHR, size) */
+
+   struct mi_value biggest_copy_size;
+   for (int c = 0; c < copy_count; c++) {
+      struct blorp_address copy_size_addr = {
+         .buffer = NULL,
+         .offset = indirect_buf_addr + c * stride + size_offset,
+         .reloc_flags = 0,
+         .mocs = isl_mocs(blorp->isl_dev, ISL_SURF_USAGE_STORAGE_BIT, false),
+         .local_hint = false, /* We don't have a way to know this. */
+      };
+
+      struct mi_value this_copy_size = mi_mem32(copy_size_addr);
+      if (c == 0)
+         biggest_copy_size = this_copy_size;
+      else
+         biggest_copy_size = mi_umax2(b, this_copy_size, biggest_copy_size);
+   }
+
+   /* Each shader invocation writes an uint32_t. */
+   int divisor = cs_prog_data->local_size[0] * sizeof(uint32_t);
+   *size_x = mi_udiv32_imm(b, mi_iadd_imm(b, biggest_copy_size, divisor - 1),
+                           divisor);
+
+   assert(cs_prog_data->local_size[1] == 1);
+   assert(cs_prog_data->local_size[2] == 1);
+   *size_y = mi_imm(1);
+   *size_z = mi_imm(1);
+}
+
+static void
+blorp_indirect_buf2img_get_dispatch_size(struct blorp_batch *batch,
+                                         const struct blorp_params *params,
+                                         struct mi_builder *b,
+                                         struct mi_value *size_x,
+                                         struct mi_value *size_y,
+                                         struct mi_value *size_z)
+{
+   struct blorp_context *blorp = batch->blorp;
+   const struct brw_cs_prog_data *cs_prog_data = params->cs_prog_data;
+
+   uint64_t indirect_buf_addr = params->wm_inputs.indirect.indirect_buf_addr;
+   uint64_t stride = params->wm_inputs.indirect.indirect_buf_stride;
+   uint32_t copy_idx = params->wm_inputs.indirect.copy_idx;
+   bool is_forced_layer = params->wm_inputs.indirect.forced_layer_or_z != -1;
+   bool is_3d = params->wm_inputs.indirect.dimensions == 3;
+
+   /* These are all offsetof(VkCopyMemoryToImageIndirectCommandKHR, x). */
+   const size_t img_extent_x_offset = 44;
+   const size_t img_extent_y_offset = 48;
+   const size_t img_extent_z_offset = 52;
+
+   struct blorp_address x_extent_addr = {
+      .buffer = NULL,
+      .offset = indirect_buf_addr + copy_idx * stride + img_extent_x_offset,
+      .reloc_flags = 0,
+      .mocs = isl_mocs(blorp->isl_dev, ISL_SURF_USAGE_STORAGE_BIT, false),
+      .local_hint = false, /* We don't have a way to know this. */
+   };
+   struct blorp_address y_extent_addr = {
+      .buffer = NULL,
+      .offset = indirect_buf_addr + copy_idx * stride + img_extent_y_offset,
+      .reloc_flags = 0,
+      .mocs = isl_mocs(blorp->isl_dev, ISL_SURF_USAGE_STORAGE_BIT, false),
+      .local_hint = false, /* We don't have a way to know this. */
+   };
+   struct blorp_address z_extent_addr = {
+      .buffer = NULL,
+      .offset = indirect_buf_addr + copy_idx * stride + img_extent_z_offset,
+      .reloc_flags = 0,
+      .mocs = isl_mocs(blorp->isl_dev, ISL_SURF_USAGE_STORAGE_BIT, false),
+      .local_hint = false, /* We don't have a way to know this. */
+   };
+
+   /* Notes on the 'params->num_layers' usage below:
+    *
+    * - Please see how we handle this in function
+    *   blorp_copy_memory_to_image_indirect().
+    *
+    * - If we're using forced layers (see
+    *   params.wm_inputs.indirect.forced_layer_or_z), then we can just set
+    *   size_z to 1 and don't even look at the indirect buffer: each shader
+    *   call operates on a single layer.
+    *
+    * - The information on the number of layers for each copy is not truly
+    *   indirect: it has to be passed to during command creation, so we
+    *   have already processed it. See 'max_layer_count' in
+    *   blorp_copy_memory_to_image_indirect(). We don't want to be looking
+    *   at the indirect buffer if we don't need to.
+    *
+    * - For 3D images, the applications can use the Z axis as either an
+    *   actual axis (offset.z + extent.z) or pretend the Z axis is layers
+    *   (base_layer + layer_count), so would have to check both places.
+    *   Fortunately, base_layer + layer_count was already checked (see
+    *   above) and recorded in params->num_layers. If params->num_layers is
+    *   bigger than 1, then we don't even bother looking at extent.z.
+    */
+   struct mi_value x_extent = mi_mem32(x_extent_addr);
+   struct mi_value y_extent = mi_mem32(y_extent_addr);
+   struct mi_value z_extent;
+   if (is_forced_layer) {
+      z_extent = mi_imm(1);
+   } else {
+      if (is_3d && params->num_layers == 1)
+         z_extent = mi_mem32(z_extent_addr);
+      else
+         z_extent = mi_imm(params->num_layers);
+   }
+
+   int divisor_x = cs_prog_data->local_size[0];
+   int divisor_y = cs_prog_data->local_size[1];
+   int divisor_z = cs_prog_data->local_size[2];
+
+   assert(divisor_x != 1 && divisor_y != 1 && divisor_z == 1);
+   *size_x = mi_udiv32_imm(b, mi_iadd_imm(b, x_extent, divisor_x - 1),
+                           divisor_x);
+   *size_y = mi_udiv32_imm(b, mi_iadd_imm(b, y_extent, divisor_y - 1),
+                           divisor_y);
+   *size_z = z_extent;
+}
+
+static void
+blorp_indirect_write_gpgpu_dispatch_regs(struct blorp_batch *batch,
+                                         const struct blorp_params *params)
+{
+   struct blorp_context *blorp = batch->blorp;
+   const struct intel_device_info *devinfo = blorp->compiler->brw->devinfo;
+
+   struct mi_builder b;
+   mi_builder_init(&b, devinfo, batch);
+   mi_builder_set_mocs(&b, isl_mocs(blorp->isl_dev, 0, false));
+
+   struct mi_value size_x, size_y, size_z;
+
+   if (params->op == BLORP_OP_COPY_INDIRECT) {
+      blorp_indirect_buffer_get_dispatch_size(batch, params, &b, &size_x,
+                                              &size_y, &size_z);
+   } else {
+      assert(params->op == BLORP_OP_COPY_IMAGE_INDIRECT);
+
+      blorp_indirect_buf2img_get_dispatch_size(batch, params, &b, &size_x,
+                                               &size_y, &size_z);
+   }
+
+   mi_store(&b, mi_reg32(GENX(GPGPU_DISPATCHDIMX_num)), size_x);
+   mi_store(&b, mi_reg32(GENX(GPGPU_DISPATCHDIMY_num)), size_y);
+   mi_store(&b, mi_reg32(GENX(GPGPU_DISPATCHDIMZ_num)), size_z);
+}
+
+static void
 blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
 {
    assert(!(batch->flags & BLORP_BATCH_PREDICATE_ENABLE));
@@ -1721,14 +1965,27 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
    const struct intel_cs_dispatch_info dispatch =
       brw_cs_get_dispatch_info(devinfo, cs_prog_data, NULL);
 
+   bool use_indirect = blorp_op_type_is_indirect(params->op);
+
+   if (use_indirect)
+      blorp_indirect_write_gpgpu_dispatch_regs(batch, params);
+
    uint32_t group_x0 = params->x0 / cs_prog_data->local_size[0];
    uint32_t group_y0 = params->y0 / cs_prog_data->local_size[1];
    uint32_t group_z0 = params->dst.z_offset;
    uint32_t group_x1 = DIV_ROUND_UP(params->x1, cs_prog_data->local_size[0]);
    uint32_t group_y1 = DIV_ROUND_UP(params->y1, cs_prog_data->local_size[1]);
    assert(params->num_layers >= 1);
-   uint32_t group_z1 = params->dst.z_offset + params->num_layers;
+   uint32_t group_z1 = params->num_samples * params->num_layers;
    assert(cs_prog_data->local_size[2] == 1);
+   uint32_t push_const_offset;
+   unsigned push_const_size;
+
+   uint32_t surfaces_offset = blorp_setup_binding_table(batch, params);
+   uint32_t samplers_offset =
+      params->src.enabled ? blorp_emit_sampler_state(batch) : 0;
+   blorp_get_compute_push_const(batch, params, dispatch.threads,
+                                &push_const_offset, &push_const_size);
 
 #if GFX_VERx10 >= 125
 
@@ -1740,6 +1997,7 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
 
    intel_compute_engine_async_threads_limit(devinfo, dispatch.threads,
                                             slm_or_barrier_enabled,
+                                            cs_prog_data->uses_fence,
                                             &pixel_async_compute_thread_limit,
                                             &z_pass_async_compute_thread_limit,
                                             &np_z_async_throttle_settings);
@@ -1764,15 +2022,6 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
    }
 #endif /* GFX_VERx10 < 300 */
 
-   uint32_t surfaces_offset = blorp_setup_binding_table(batch, params);
-
-   uint32_t samplers_offset =
-      params->src.enabled ? blorp_emit_sampler_state(batch) : 0;
-
-   uint32_t push_const_offset;
-   unsigned push_const_size;
-   blorp_get_compute_push_const(batch, params, dispatch.threads,
-                                &push_const_offset, &push_const_size);
    struct GENX(COMPUTE_WALKER_BODY) body = {
       .SIMDSize                       = dispatch.simd_size / 16,
       .MessageSIMD                    = dispatch.simd_size / 16,
@@ -1791,13 +2040,19 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
       .IndirectDataStartAddress       = push_const_offset,
       .IndirectDataLength             = push_const_size,
 
-#if GFX_VERx10 >= 125
+      /* Send number of layers as inline register parameter to copy 2D MSAA
+       * array image/texture properly.
+       */
+      .EmitInlineParameter            = true,
+      .InlineData                     = {
+         [BLORP_INLINE_PARAM_THREAD_GROUP_ID_Z_DIMENSION / 4 + 0] = params->num_layers,
+      },
+
       .GenerateLocalID                = cs_prog_data->generate_local_id != 0,
       .EmitLocal                      = cs_prog_data->generate_local_id,
       .WalkOrder                      = cs_prog_data->walk_order,
       .TileLayout = cs_prog_data->walk_order == INTEL_WALK_ORDER_YXZ ?
                     TileY32bpe : Linear,
-#endif
 #if GFX_VER >= 30
       /* HSD 14016252163 */
       .DispatchWalkOrder = cs_prog_data->uses_sampler ? MortonWalk : LinearWalk,
@@ -1829,28 +2084,10 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
 
    assert(cs_prog_data->push.per_thread.regs == 0);
    blorp_emit(batch, GENX(COMPUTE_WALKER), cw) {
+      cw.IndirectParameterEnable = use_indirect,
       cw.body = body;
    }
-
-   /*
-    * TDOD: Add INTEL_NEEDS_WA_14025112257 check once HSD is propogated for all
-    * other impacted platforms.
-    *
-    * BSpec 47112 (xe), 56551 (xe2): Instruction_PIPE_CONTROL (ComputeCS):
-    * SW must follow below programming restrictions when programming
-    * PIPE_CONTROL command:
-    *
-    * "Command Streamer Stall Enable" must be always set.
-    * ...
-    */
-   if (devinfo->ver >= 20) {
-      blorp_emit(batch, GENX(PIPE_CONTROL), pc) {
-         pc.CommandStreamerStallEnable =
-            batch->flags & BLORP_BATCH_COMPUTE_ENGINE;
-         pc.StateCacheInvalidationEnable = true;
-      }
-   }
-#else
+#else /* GFX_VERx10 >= 125 */
 
    /* The MEDIA_VFE_STATE documentation for Gfx8+ says:
     *
@@ -1879,25 +2116,15 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
       vfe.URBEntryAllocationSize = 2;
 
       const uint32_t vfe_curbe_allocation =
-         ALIGN(cs_prog_data->push.per_thread.regs * dispatch.threads +
+         align(cs_prog_data->push.per_thread.regs * dispatch.threads +
                cs_prog_data->push.cross_thread.regs, 2);
       vfe.CURBEAllocationSize = vfe_curbe_allocation;
    }
-
-   uint32_t push_const_offset;
-   unsigned push_const_size;
-   blorp_get_compute_push_const(batch, params, dispatch.threads,
-                                &push_const_offset, &push_const_size);
 
    blorp_emit(batch, GENX(MEDIA_CURBE_LOAD), curbe) {
       curbe.CURBETotalDataLength = push_const_size;
       curbe.CURBEDataStartAddress = push_const_offset;
    }
-
-   uint32_t surfaces_offset = blorp_setup_binding_table(batch, params);
-
-   uint32_t samplers_offset =
-      params->src.enabled ? blorp_emit_sampler_state(batch) : 0;
 
    struct GENX(INTERFACE_DESCRIPTOR_DATA) idd = {
       .KernelStartPointer = params->cs_prog_kernel,
@@ -1927,6 +2154,7 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
    }
 
    blorp_emit(batch, GENX(GPGPU_WALKER), ggw) {
+      ggw.IndirectParameterEnable      = use_indirect,
       ggw.SIMDSize                     = dispatch.simd_size / 16;
       ggw.ThreadDepthCounterMaximum    = 0;
       ggw.ThreadHeightCounterMaximum   = 0;
@@ -1941,7 +2169,7 @@ blorp_exec_compute(struct blorp_batch *batch, const struct blorp_params *params)
       ggw.BottomExecutionMask          = 0xffffffff;
    }
 
-#endif
+#endif /* GFX_VERx10 >= 125 */
 
    blorp_measure_end(batch, params);
 }
@@ -2026,8 +2254,8 @@ xy_aux_mode(const struct blorp_surface_info *info)
 {
    switch (info->aux_usage) {
    case ISL_AUX_USAGE_CCS_E:
-   case ISL_AUX_USAGE_FCV_CCS_E:
    case ISL_AUX_USAGE_STC_CCS:
+   case ISL_AUX_USAGE_ZCS:
       return XY_CCS_E;
    case ISL_AUX_USAGE_NONE:
       return XY_NONE;
@@ -2062,19 +2290,22 @@ blorp_xy_block_copy_blt(struct blorp_batch *batch,
 
    unsigned dst_x0 = params->x0;
    unsigned dst_x1 = params->x1;
-   unsigned src_x0 =
-      dst_x0 - params->wm_inputs.coord_transform[0].offset;
-   ASSERTED unsigned src_x1 =
-      dst_x1 - params->wm_inputs.coord_transform[0].offset;
+   unsigned src_x0 = dst_x0;
+   ASSERTED unsigned src_x1 = dst_x1;
    unsigned dst_y0 = params->y0;
    unsigned dst_y1 = params->y1;
-   unsigned src_y0 =
-      dst_y0 - params->wm_inputs.coord_transform[1].offset;
-   ASSERTED unsigned src_y1 =
-      dst_y1 - params->wm_inputs.coord_transform[1].offset;
+   unsigned src_y0 = dst_y0;
+   ASSERTED unsigned src_y1 = dst_y1;
 
    assert(src_x1 - src_x0 == dst_x1 - dst_x0);
    assert(src_y1 - src_y0 == dst_y1 - dst_y0);
+
+   if (blorp_op_type_is_blit(params->op)) {
+      src_x0 = dst_x0 - params->wm_inputs.blit.coord_transform[0].offset;
+      src_x1 = dst_x1 - params->wm_inputs.blit.coord_transform[0].offset;
+      src_y0 = dst_y0 - params->wm_inputs.blit.coord_transform[1].offset;
+      src_y1 = dst_y1 - params->wm_inputs.blit.coord_transform[1].offset;
+   }
 
    const struct isl_surf *src_surf = &params->src.surf;
    const struct isl_surf *dst_surf = &params->dst.surf;
@@ -2132,6 +2363,7 @@ blorp_xy_block_copy_blt(struct blorp_batch *batch,
 #if GFX_VER < 20
       /* XY_BLOCK_COPY_BLT only supports AUX_CCS. */
       blt.DestinationDepthStencilResource =
+         params->dst.aux_usage == ISL_AUX_USAGE_ZCS ||
          params->dst.aux_usage == ISL_AUX_USAGE_STC_CCS;
 #endif
       blt.DestinationTargetMemory =
@@ -2143,7 +2375,7 @@ blorp_xy_block_copy_blt(struct blorp_batch *batch,
          blt.DestinationCompressionEnable = true;
 #endif
          blt.DestinationCompressionFormat =
-            isl_get_render_compression_format(dst_surf->format);
+            isl_get_render_compression_format(params->dst.aux_format);
          blt.DestinationClearValueEnable = !!params->dst.clear_color_addr.buffer;
          blt.DestinationClearAddress = params->dst.clear_color_addr;
       }
@@ -2178,6 +2410,7 @@ blorp_xy_block_copy_blt(struct blorp_batch *batch,
 #if GFX_VER < 20
       /* XY_BLOCK_COPY_BLT only supports AUX_CCS. */
       blt.SourceDepthStencilResource =
+         params->src.aux_usage == ISL_AUX_USAGE_ZCS ||
          params->src.aux_usage == ISL_AUX_USAGE_STC_CCS;
 #endif
       blt.SourceTargetMemory =
@@ -2189,7 +2422,7 @@ blorp_xy_block_copy_blt(struct blorp_batch *batch,
          blt.SourceCompressionEnable = true;
 #endif
          blt.SourceCompressionFormat =
-            isl_get_render_compression_format(src_surf->format);
+            isl_get_render_compression_format(params->src.aux_format);
          blt.SourceClearValueEnable = !!params->src.clear_color_addr.buffer;
          blt.SourceClearAddress = params->src.clear_color_addr;
       }
@@ -2253,9 +2486,13 @@ blorp_xy_fast_color_blit(struct blorp_batch *batch,
       blt.DestinationXOffset = params->dst.tile_x_sa;
       blt.DestinationYOffset = params->dst.tile_y_sa;
 
-      isl_color_value_pack((union isl_color_value *)
-                           params->wm_inputs.clear_color,
-                           params->dst.view.format, blt.FillColor);
+      if (blorp_op_type_is_clear(params->op)) {
+         isl_color_value_pack((union isl_color_value *)
+                              params->wm_inputs.clear.clear_color,
+                              params->dst.view.format, blt.FillColor);
+      } else {
+         memset(blt.FillColor, 0, sizeof(blt.FillColor));
+      }
 
 #if GFX_VERx10 >= 125
       blt.DestinationSurfaceType = xy_bcb_surf_dim(dst_surf);
@@ -2271,6 +2508,7 @@ blorp_xy_fast_color_blit(struct blorp_batch *batch,
       blt.DestinationVerticalAlign = isl_encode_valign(dst_align.height);
       /* XY_FAST_COLOR_BLT only supports AUX_CCS. */
       blt.DestinationDepthStencilResource =
+         params->dst.aux_usage == ISL_AUX_USAGE_ZCS ||
          params->dst.aux_usage == ISL_AUX_USAGE_STC_CCS;
       blt.DestinationTargetMemory =
          params->dst.addr.local_hint ? XY_MEM_LOCAL : XY_MEM_SYSTEM;
@@ -2283,7 +2521,7 @@ blorp_xy_fast_color_blit(struct blorp_batch *batch,
          blt.DestinationClearAddress = params->dst.clear_color_addr;
 #endif
          blt.DestinationCompressionFormat =
-            isl_get_render_compression_format(dst_surf->format);
+            isl_get_render_compression_format(params->dst.aux_format);
       }
 #endif
    }

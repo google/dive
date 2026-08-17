@@ -13,7 +13,7 @@ section_start angle "Building ANGLE"
 # setting up the environment variables locally
 ci_tag_build_time_check "ANGLE_TAG"
 
-ANGLE_REV="8ed16003f27125f27cbb87578368e447043420d3"
+ANGLE_REV="7a960f346c57daae4b1615ead302b4c58af12258"
 DEPOT_REV="5982a1aeb33dc36382ed8c62eddf52a6135e7dd3"
 
 # Set ANGLE_ARCH based on DEBIAN_ARCH if it hasn't been explicitly defined
@@ -129,25 +129,57 @@ if [[ "$DEBIAN_ARCH" = "arm64" ]]; then
   # 'arm64' toolchain you get from Google infrastructure is a cross-compiler
   # from x86-64
   build/linux/sysroot_scripts/install-sysroot.py --arch=arm64
+
+  # The Bullseye sysroot is too old for Chromium's default PAC/BTI setup.
+  # Chromium forces -z force-bti on arm64, but our sysroot objects lack BTI
+  # notes, which breaks linking. Disable branch protection to keep the build
+  # sane. See:
+  # https://chromium.googlesource.com/chromium/src/build/+/7c4a6063/config/linux/BUILD.gn#87
+  # https://chromium.googlesource.com/chromium/src/build/+/7c4a6063/config/arm.gni#77
+  cat >> out/Release/args.gn <<EOF
+arm_control_flow_integrity="none"
+EOF
 fi
+
+# The Chromium build system hardcodes these flags, and they're not compatible
+# with our clang19 'unbundled' toolchain. See:
+# https://chromium.googlesource.com/chromium/src/build/+/71caaf82/config/compiler/BUILD.gn#604
+# https://chromium.googlesource.com/chromium/src/build/+/71caaf82/config/compiler/BUILD.gn#643
+# https://chromium.googlesource.com/chromium/src/build/+/42209031/config/sanitizers/sanitizers.gni#548
+sed -i '/-fdiagnostics-show-inlining-chain/d' build/config/compiler/BUILD.gn
+sed -i '/-fno-lifetime-dse/d' build/config/compiler/BUILD.gn
+sed -i '/-fsanitize-ignore-for-ubsan-feature=/d' build/config/sanitizers/sanitizers.gni
 
 (
   # The 'unbundled' toolchain configuration requires clang, and it also needs to
   # be configured via environment variables.
-  export CC="clang-${LLVM_VERSION}"
-  export HOST_CC="$CC"
-  export CFLAGS="-Wno-unknown-warning-option"
-  export HOST_CFLAGS="$CFLAGS"
-  export CXX="clang++-${LLVM_VERSION}"
-  export HOST_CXX="$CXX"
-  export CXXFLAGS="-Wno-unknown-warning-option"
-  export HOST_CXXFLAGS="$CXXFLAGS"
-  export AR="ar"
-  export HOST_AR="$AR"
-  export NM="nm"
-  export HOST_NM="$NM"
-  export LDFLAGS="-fuse-ld=lld-${LLVM_VERSION} -lpthread -ldl"
-  export HOST_LDFLAGS="$LDFLAGS"
+  if [[ "$ANGLE_TARGET" == "linux" ]]; then
+    CC="$(command -v "clang-${LLVM_VERSION}")"
+    export CC
+    export HOST_CC="$CC"
+    export BUILD_CC="$CC"
+    export CFLAGS="-Wno-unknown-warning-option"
+    export HOST_CFLAGS="$CFLAGS"
+    export BUILD_CFLAGS="$CFLAGS"
+    CXX="$(command -v "clang++-${LLVM_VERSION}")"
+    export CXX
+    export HOST_CXX="$CXX"
+    export BUILD_CXX="$CXX"
+    export CXXFLAGS="-Wno-unknown-warning-option"
+    export HOST_CXXFLAGS="$CXXFLAGS"
+    export BUILD_CXXFLAGS="$CXXFLAGS"
+    AR="$(command -v ar)"
+    export AR
+    export HOST_AR="$AR"
+    export BUILD_AR="$AR"
+    NM="$(command -v nm)"
+    export NM
+    export HOST_NM="$NM"
+    export BUILD_NM="$NM"
+    export LDFLAGS="-fuse-ld=lld-${LLVM_VERSION} -lpthread -ldl"
+    export HOST_LDFLAGS="$LDFLAGS"
+    export BUILD_LDFLAGS="$LDFLAGS"
+  fi
 
   gn gen out/Release
   # depot_tools overrides ninja with a version that doesn't work.  We want

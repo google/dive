@@ -15,7 +15,6 @@ KHR-GLES31.core.gpu_shader5.texture_gather_offset_color_clamp_to_edge,Fail
 
 KHR-GLES31.core.layout_binding.image2D_layout_binding_imageLoad_ComputeShader,Fail
 
-KHR-GLES31.core.shader_atomic_counters.advanced-usage-many-dispatches,Fail
 KHR-GLES31.core.shader_atomic_counters.advanced-usage-many-draw-calls2,Fail
 KHR-GLES31.core.shader_atomic_counters.advanced-usage-multi-stage,Fail
 
@@ -28,7 +27,6 @@ KHR-GLES31.core.shader_storage_buffer_object.advanced-readWrite-case1-cs,Fail
 KHR-GLES31.core.tessellation_shader.single.max_patch_vertices,Crash
 
 KHR-GLES31.core.tessellation_shader.tessellation_shader_tessellation.TCS_TES,Fail
-KHR-GLES31.core.tessellation_shader.tessellation_shader_tessellation.gl_InvocationID_PatchVerticesIn_PrimitiveID,Fail
 KHR-GLES31.core.tessellation_shader.tessellation_shader_tessellation.max_in_out_attributes,Fail
 
 KHR-GLES31.core.texture_border_clamp.Texture2DArrayR32I,Fail
@@ -42,7 +40,6 @@ KHR-GLES31.core.texture_buffer.texture_buffer_max_size,Fail
 KHR-GLES31.core.texture_buffer.texture_buffer_texture_buffer_range,Fail
 
 KHR-GLES31.core.texture_cube_map_array.sampling,Fail
-KHR-GLES31.core.texture_cube_map_array.texture_size_tesselation_ev_sh,Fail
 
 KHR-GLES31.core.vertex_attrib_binding.basic-input-case5,Fail
 KHR-GLES31.core.vertex_attrib_binding.basic-input-case6,Fail
@@ -786,9 +783,6 @@ spec@arb_tessellation_shader@arb_tessellation_shader-tes-gs-max-output -small -s
 
 spec@arb_tessellation_shader@execution@fs-primitiveid-instanced,Fail
 spec@arb_tessellation_shader@execution@gs-primitiveid-instanced,Fail
-spec@arb_tessellation_shader@execution@tcs-primitiveid-instanced,Fail
-spec@arb_tessellation_shader@execution@tes-no-tcs-primitiveid-instanced,Fail
-spec@arb_tessellation_shader@execution@tes-primitiveid-instanced,Fail
 
 spec@arb_tessellation_shader@execution@trivial-tess-gs_no-gs-inputs,Fail
 
@@ -1057,8 +1051,6 @@ spec@arb_texture_stencil8@texwrap formats,Fail
 spec@arb_texture_stencil8@texwrap formats offset,Fail
 spec@arb_texture_stencil8@texwrap formats offset@GL_STENCIL_INDEX8- NPOT,Fail
 spec@arb_texture_stencil8@texwrap formats@GL_STENCIL_INDEX8- NPOT,Fail
-spec@arb_texture_view@rendering-layers-image,Fail
-spec@arb_texture_view@rendering-layers-image@layers rendering of imageCubeArray,Fail
 
 spec@arb_vertex_type_2_10_10_10_rev@arb_vertex_type_2_10_10_10_rev-array_types,Fail
 

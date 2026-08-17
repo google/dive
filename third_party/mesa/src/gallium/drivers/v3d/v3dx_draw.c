@@ -75,12 +75,10 @@ v3dX(start_binning)(struct v3d_context *v3d, struct v3d_job *job)
                 config.log2_tile_width = log2_tile_size(job->tile_desc.width);
                 config.log2_tile_height = log2_tile_size(job->tile_desc.height);
 
-                /* FIXME: ideallly we would like next assert on the packet header (as is
-                 * general, so also applies to GL). We would need to expand
-                 * gen_pack_header for that.
-                 */
-                assert(config.log2_tile_width == config.log2_tile_height ||
-                       config.log2_tile_width == config.log2_tile_height + 1);
+                config.tile_allocation_initial_block_size =
+                        V3D_TILE_ALLOC_INITIAL_BLOCK_SIZE_ENUM;
+                config.tile_allocation_block_size =
+                        V3D_TILE_ALLOC_OVERFLOW_BLOCK_SIZE_ENUM;
         }
 #endif
 
@@ -95,6 +93,11 @@ v3dX(start_binning)(struct v3d_context *v3d, struct v3d_job *job)
                 config.double_buffer_in_non_ms_mode = job->double_buffer;
 
                 config.maximum_bpp_of_all_render_targets = job->internal_bpp;
+
+                config.tile_allocation_initial_block_size =
+                        V3D_TILE_ALLOC_INITIAL_BLOCK_SIZE_ENUM;
+                config.tile_allocation_block_size =
+                        V3D_TILE_ALLOC_OVERFLOW_BLOCK_SIZE_ENUM;
         }
 #endif
 
@@ -1030,9 +1033,8 @@ v3d_check_compiled_shaders(struct v3d_context *v3d)
                 return true;
 
         if (!warned[failed_stage]) {
-                fprintf(stderr,
-                        "%s shader failed to compile. Expect corruption.\n",
-                        _mesa_shader_stage_to_string(failed_stage));
+                mesa_loge("%s shader failed to compile. Expect corruption.",
+                          _mesa_shader_stage_to_string(failed_stage));
                 warned[failed_stage] = true;
         }
         return false;
@@ -1387,8 +1389,7 @@ v3d_draw_vbo(struct pipe_context *pctx, const struct pipe_draw_info *info,
         if (v3d->streamout.num_targets)
            job->tf_draw_calls_queued++;
 
-        /* Increment the TF offsets by how many verts we wrote.  XXX: This
-         * needs some clamping to the buffer size.
+        /* Increment the TF offsets by how many verts we wrote.
          *
          * If primitive restart is enabled or we have a geometry shader, we
          * update it later, when we can query the device to know how many
@@ -1433,13 +1434,8 @@ v3d_launch_grid(struct pipe_context *pctx, const struct pipe_grid_info *info)
         v3d_update_compiled_cs(v3d);
 
         if (!v3d->prog.compute->resource) {
-                static bool warned = false;
-                if (!warned) {
-                        fprintf(stderr,
-                                "Compute shader failed to compile.  "
-                                "Expect corruption.\n");
-                        warned = true;
-                }
+                mesa_loge_once("Compute shader failed to compile.  "
+                               "Expect corruption.");
                 return;
         }
 
@@ -1457,7 +1453,6 @@ v3d_launch_grid(struct pipe_context *pctx, const struct pipe_grid_info *info)
          *   so we want to keep them small if one is present.
          */
         struct drm_v3d_submit_csd submit = { 0 };
-        struct v3d_job *job = v3d_job_create(v3d);
 
         /* Set up the actual number of workgroups, synchronously mapping the
          * indirect buffer if necessary to get the dimensions.
@@ -1531,6 +1526,7 @@ v3d_launch_grid(struct pipe_context *pctx, const struct pipe_grid_info *info)
         /* Make sure we didn't accidentally underflow. */
         assert(submit.cfg[4] != ~0);
 
+        struct v3d_job *job = v3d_job_create(v3d);
         v3d_job_add_bo(job, v3d_resource(v3d->prog.compute->resource)->bo);
         submit.cfg[5] = (v3d_resource(v3d->prog.compute->resource)->bo->offset +
                          v3d->prog.compute->offset);
@@ -1584,12 +1580,10 @@ v3d_launch_grid(struct pipe_context *pctx, const struct pipe_grid_info *info)
         if (!V3D_DBG(NORAST)) {
                 int ret = v3d_ioctl(screen->fd, DRM_IOCTL_V3D_SUBMIT_CSD,
                                     &submit);
-                static bool warned = false;
-                if (ret && !warned) {
-                        fprintf(stderr, "CSD submit call returned %s.  "
-                                "Expect corruption.\n", strerror(errno));
-                        warned = true;
-                } else if (!ret) {
+                if (ret) {
+                        mesa_loge_once("CSD submit call returned %s. Expect corruption.",
+                                       strerror(errno));
+                } else {
                         if (v3d->active_perfmon)
                                 v3d->active_perfmon->job_submitted = true;
                         if (V3D_DBG(SYNC)) {
@@ -1804,7 +1798,9 @@ v3d_tlb_clear(struct v3d_job *job, unsigned buffers,
 }
 
 static void
-v3d_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor_state *scissor_state,
+v3d_clear(struct pipe_context *pctx, unsigned buffers,
+          uint32_t color_clear_mask, uint8_t stencil_clear_mask,
+          const struct pipe_scissor_state *scissor_state,
           const union pipe_color_union *color, double depth, unsigned stencil)
 {
         struct v3d_context *v3d = v3d_context(pctx);
@@ -1876,7 +1872,7 @@ v3d_set_global_binding(struct pipe_context *pctx,
         }
 
 
-        for (unsigned i = first; i < first + count; ++i) {
+        for (unsigned i = 0; i < count; ++i) {
                 struct pipe_resource **res = util_dynarray_element(&v3d->global_buffers, struct pipe_resource *, first + i);
                 if (resources && resources[i]) {
                         struct v3d_resource *rsc = v3d_resource(resources[i]);

@@ -106,6 +106,8 @@ struct call_image_copy_buffer
 struct call_clear
 {
    unsigned buffers;
+   uint32_t color_clear_mask;
+   uint8_t stencil_clear_mask;
    struct pipe_scissor_state scissor_state;
    union pipe_color_union color;
    double depth;

@@ -77,7 +77,7 @@ st_convert_sampler(const struct st_context *st,
       sampler->mag_img_filter = PIPE_TEX_FILTER_NEAREST;
    }
 
-   if (texobj->Target == GL_TEXTURE_RECTANGLE_ARB && !st->lower_rect_tex)
+   if (texobj->Target == GL_TEXTURE_RECTANGLE_ARB && st->screen->caps.texrect)
       sampler->unnormalized_coords = 1;
 
    /*
@@ -222,7 +222,7 @@ update_shader_samplers(struct st_context *st,
    GLbitfield samplers_used = prog->SamplersUsed;
    GLbitfield free_slots = ~prog->SamplersUsed;
    GLbitfield external_samplers_used = prog->ExternalSamplersUsed;
-   unsigned unit, num_samplers;
+   unsigned num_samplers;
    struct pipe_sampler_state local_samplers[PIPE_MAX_SAMPLERS];
    const struct pipe_sampler_state *states[PIPE_MAX_SAMPLERS];
 
@@ -238,7 +238,7 @@ update_shader_samplers(struct st_context *st,
    num_samplers = util_last_bit(samplers_used);
 
    /* loop over sampler units (aka tex image units) */
-   for (unit = 0; samplers_used; unit++, samplers_used >>= 1) {
+   for (unsigned unit = 0; samplers_used; unit++, samplers_used >>= 1) {
       struct pipe_sampler_state *sampler = samplers + unit;
       unsigned tex_unit = prog->SamplerUnits[unit];
 
@@ -305,7 +305,9 @@ update_shader_samplers(struct st_context *st,
          if (stObj->pt->format == PIPE_FORMAT_R8G8_R8B8_UNORM ||
              stObj->pt->format == PIPE_FORMAT_R8B8_R8G8_UNORM ||
              stObj->pt->format == PIPE_FORMAT_B8R8_G8R8_UNORM ||
-             stObj->pt->format == PIPE_FORMAT_G8R8_B8R8_UNORM) {
+             stObj->pt->format == PIPE_FORMAT_G8R8_B8R8_UNORM ||
+             stObj->pt->format == PIPE_FORMAT_R16G16_R16B16_422_UNORM ||
+             stObj->pt->format == PIPE_FORMAT_X6R10X6G10_X6R10X6B10_422_UNORM) {
             /* no additional views needed */
             break;
          }

@@ -214,6 +214,7 @@ enum value_extra {
    EXTRA_EXT_FB_NO_ATTACH_GS,
    EXTRA_EXT_ES_GS,
    EXTRA_EXT_PROVOKING_VERTEX_32,
+   EXTRA_EXT_TBO,
 };
 
 #define NO_EXTRA NULL
@@ -379,7 +380,7 @@ static const int extra_GLSL_130_es3_gpushader4[] = {
 };
 
 static const int extra_texture_buffer_object[] = {
-   EXT(ARB_texture_buffer_object),
+   EXTRA_EXT_TBO,
    EXTRA_END
 };
 
@@ -557,7 +558,6 @@ EXTRA_EXT(ARB_seamless_cube_map);
 EXTRA_EXT(ARB_sync);
 EXTRA_EXT(ARB_vertex_shader);
 EXTRA_EXT(EXT_transform_feedback);
-EXTRA_EXT(ARB_transform_feedback3);
 EXTRA_EXT(ARB_vertex_program);
 EXTRA_EXT2(ARB_vertex_program, ARB_fragment_program);
 EXTRA_EXT(ARB_color_buffer_float);
@@ -602,6 +602,7 @@ EXTRA_EXT(KHR_shader_subgroup);
 EXTRA_EXT(OVR_multiview);
 EXTRA_EXT(NV_timeline_semaphore);
 EXTRA_EXT(EXT_mesh_shader);
+EXTRA_EXT(EXT_shader_pixel_local_storage);
 
 static const int extra_ARB_gl_spirv_or_es2_compat[] = {
    EXT(ARB_gl_spirv),
@@ -649,6 +650,12 @@ static const int extra_version_32_OES_geometry_shader[] = {
 static const int extra_gl40_ARB_sample_shading[] = {
    EXTRA_VERSION_40,
    EXT(ARB_sample_shading),
+   EXTRA_END
+};
+
+static const int extra_gl40_ARB_transform_feedback3[] = {
+   EXTRA_VERSION_40,
+   EXT(ARB_transform_feedback3),
    EXTRA_END
 };
 
@@ -1194,8 +1201,7 @@ find_custom_value(struct gl_context *ctx, const struct value_desc *d, union valu
       break;
    case GL_TEXTURE_BUFFER_DATA_STORE_BINDING_ARB:
       {
-         struct gl_buffer_object *buf =
-            ctx->Texture.Unit[ctx->Texture.CurrentUnit]
+         buf = ctx->Texture.Unit[ctx->Texture.CurrentUnit]
             .CurrentTex[TEXTURE_BUFFER_INDEX]->BufferObject;
          v->value_int = buf ? buf->Name : 0;
       }
@@ -1580,6 +1586,11 @@ check_extra(struct gl_context *ctx, const char *func, const struct value_desc *d
          api_check = GL_TRUE;
          if (_mesa_is_desktop_gl_compat(ctx) || version == 32)
             api_found = ctx->Extensions.EXT_provoking_vertex;
+         break;
+      case EXTRA_EXT_TBO:
+         api_check = GL_TRUE;
+         if (_mesa_has_texture_buffer_object(ctx))
+            api_found = GL_TRUE;
          break;
       case EXTRA_END:
          break;
@@ -2512,7 +2523,7 @@ tex_binding_to_index(const struct gl_context *ctx, GLenum binding)
    case GL_TEXTURE_BINDING_2D:
       return TEXTURE_2D_INDEX;
    case GL_TEXTURE_BINDING_3D:
-      return (ctx->API != API_OPENGLES &&
+      return (!_mesa_is_gles1(ctx) &&
               !(_mesa_is_gles2(ctx) && !ctx->Extensions.OES_texture_3D))
          ? TEXTURE_3D_INDEX : -1;
    case GL_TEXTURE_BINDING_CUBE_MAP:
@@ -2528,9 +2539,7 @@ tex_binding_to_index(const struct gl_context *ctx, GLenum binding)
          || _mesa_is_gles3(ctx)
          ? TEXTURE_2D_ARRAY_INDEX : -1;
    case GL_TEXTURE_BINDING_BUFFER:
-      return (_mesa_has_ARB_texture_buffer_object(ctx) ||
-              _mesa_has_OES_texture_buffer(ctx)) ?
-             TEXTURE_BUFFER_INDEX : -1;
+      return _mesa_has_texture_buffer_object(ctx) ? TEXTURE_BUFFER_INDEX : -1;
    case GL_TEXTURE_BINDING_CUBE_MAP_ARRAY:
       return _mesa_has_texture_cube_map_array(ctx)
          ? TEXTURE_CUBE_ARRAY_INDEX : -1;

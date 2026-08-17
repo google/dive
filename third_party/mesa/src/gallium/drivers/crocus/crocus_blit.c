@@ -52,7 +52,9 @@ void crocus_blitter_begin(struct crocus_context *ice, enum crocus_blitter_op op,
       util_blitter_save_fragment_shader(ice->blitter, ice->shaders.uncompiled[MESA_SHADER_FRAGMENT]);
       util_blitter_save_sample_mask(ice->blitter, ice->state.sample_mask, 0);
       util_blitter_save_rasterizer(ice->blitter, ice->state.cso_rast);
-      util_blitter_save_scissor(ice->blitter, &ice->state.scissors[0]);
+      util_blitter_save_scissor(ice->blitter, &(struct pipe_scissor_state) {
+         ice->state.scissors[0].minx, ice->state.scissors[0].miny,
+         ice->state.scissors[0].maxx, ice->state.scissors[0].maxy });
       util_blitter_save_viewport(ice->blitter, &ice->state.viewports[0]);
       util_blitter_save_fragment_constant_buffer_slot(ice->blitter, &ice->state.shaders[MESA_SHADER_FRAGMENT].constbufs[0]);
    }
@@ -414,13 +416,12 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
                crocus_blitter_begin(ice, CROCUS_SAVE_FRAMEBUFFER | CROCUS_SAVE_TEXTURES | CROCUS_SAVE_FRAGMENT_STATE, info->render_condition_enable);
                util_blitter_blit(ice->blitter, &depth_blit, NULL);
 
-               struct pipe_surface *dst_view, dst_templ;
+               struct pipe_surface dst_templ;
                util_blitter_default_dst_texture(&dst_templ, info->dst.resource, info->dst.level, info->dst.box.z);
-               dst_view = ctx->create_surface(ctx, info->dst.resource, &dst_templ);
 
                crocus_blitter_begin(ice, CROCUS_SAVE_FRAMEBUFFER | CROCUS_SAVE_TEXTURES | CROCUS_SAVE_FRAGMENT_STATE, info->render_condition_enable);
 
-               util_blitter_clear_depth_stencil(ice->blitter, dst_view, PIPE_CLEAR_STENCIL,
+               util_blitter_clear_depth_stencil(ice->blitter, &dst_templ, PIPE_CLEAR_STENCIL,
                                                 0, 0, info->dst.box.x, info->dst.box.y,
                                                 info->dst.box.width, info->dst.box.height);
                crocus_blitter_begin(ice, CROCUS_SAVE_FRAMEBUFFER | CROCUS_SAVE_TEXTURES | CROCUS_SAVE_FRAGMENT_STATE, info->render_condition_enable);
@@ -431,8 +432,6 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
                                              info->src.resource,
                                              info->src.level,
                                              &info->src.box, NULL);
-
-               pipe_surface_unref(ctx, &dst_view);
             }
             return;
          }

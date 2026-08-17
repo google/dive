@@ -38,8 +38,6 @@
 
 #include "pipe/p_state.h"
 #include "util/format/u_formats.h"
-#include "util/u_debug.h"
-#include "gallivm/lp_bld.h"
 #include "gallivm/lp_bld_type.h"
 #include "gallivm/lp_bld_swizzle.h"
 
@@ -223,6 +221,8 @@ struct lp_static_texture_state
    unsigned level_zero_only:1;
    unsigned tiled:1;
    unsigned tiled_samples:5;
+   /**< view min lod clamp (VK_EXT_image_view_min_lod): apply lod = max(lod, view_min_lod) */
+   unsigned apply_view_min_lod:1;
 };
 
 
@@ -378,6 +378,13 @@ struct lp_sampler_dynamic_state
                    LLVMTypeRef resources_type,
                    LLVMValueRef resources_ptr,
                    unsigned sampler_unit);
+
+   /* Obtain the per-view min-lod clamp (returns float, relative to first_level) */
+   LLVMValueRef
+   (*view_min_lod)(struct gallivm_state *gallivm,
+                   LLVMTypeRef resources_type,
+                   LLVMValueRef resources_ptr,
+                   unsigned texture_unit, LLVMValueRef texture_unit_offset);
 
    /**
     * Obtain texture cache (returns ptr to lp_build_format_cache).
@@ -864,6 +871,7 @@ lp_build_img_op_soa(const struct lp_static_texture_state *static_texture_state,
                     struct lp_sampler_dynamic_state *dynamic_state,
                     struct gallivm_state *gallivm,
                     const struct lp_img_params *params,
+                    bool is64,
                     LLVMValueRef *outdata);
 
 void
@@ -894,7 +902,8 @@ void
 lp_build_image_op_array_case(struct lp_build_img_op_array_switch *switch_info,
                              int idx,
                              const struct lp_static_texture_state *static_texture_state,
-                             struct lp_sampler_dynamic_state *dynamic_state);
+                             struct lp_sampler_dynamic_state *dynamic_state,
+                             bool is64);
 
 void
 lp_build_image_op_array_fini_soa(struct lp_build_img_op_array_switch *switch_info);

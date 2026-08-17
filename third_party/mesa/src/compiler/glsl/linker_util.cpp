@@ -29,6 +29,7 @@
 #include "util/set.h"
 #include "util/u_range_remap.h"
 #include "main/consts_exts.h"
+#include "main/context.h"
 
 void
 linker_error(gl_shader_program *prog, const char *fmt, ...)
@@ -75,7 +76,7 @@ link_shaders_init(struct gl_context *ctx, struct gl_shader_program *prog)
     * missing.
     */
    if (prog->NumShaders == 0) {
-      if (ctx->API != API_OPENGL_COMPAT)
+      if (!_mesa_is_desktop_gl_compat(ctx))
          linker_error(prog, "no shaders attached to the program\n");
       return;
    }
@@ -254,19 +255,20 @@ link_util_update_empty_uniform_locations(const struct gl_constants *consts,
                                          struct gl_shader_program *prog)
 {
    int prev_end = -1;
-   list_for_each_entry_safe(struct range_entry, e, prog->UniformRemapTable, node) {
+   list_for_each_entry_safe(struct list_range_entry, e,
+                            &prog->UniformRemapTable->r_list, node) {
       unsigned next_slot = prev_end + 1;
-      if (e->start > next_slot) {
+      if (e->entry.start > next_slot) {
          /* We've found the beginning of a new continous block of empty slots */
          struct empty_uniform_block *current_block =
             rzalloc(prog, struct empty_uniform_block);
          current_block->start = next_slot;
-         current_block->slots = e->start - next_slot;
+         current_block->slots = e->entry.start - next_slot;
          ir_exec_list_push_tail(&prog->EmptyUniformLocations,
                                 &current_block->link);
       }
 
-      prev_end = e->end;
+      prev_end = e->entry.end;
    }
 
    /* Add the remaining continous block of empty slots */

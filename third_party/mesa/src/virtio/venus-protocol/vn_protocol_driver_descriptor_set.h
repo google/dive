@@ -95,7 +95,7 @@ vn_sizeof_VkDescriptorSetAllocateInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorSetAllocateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkDescriptorSetAllocateInfo_pnext(((const VkDescriptorSetVariableDescriptorCountAllocateInfo *)pnext)->pNext);
             size += vn_sizeof_VkDescriptorSetVariableDescriptorCountAllocateInfo_self((const VkDescriptorSetVariableDescriptorCountAllocateInfo *)pnext);
             return size;
         default:
@@ -147,7 +147,7 @@ vn_encode_VkDescriptorSetAllocateInfo_pnext(struct vn_cs_encoder *enc, const voi
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDescriptorSetAllocateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkDescriptorSetAllocateInfo_pnext(enc, ((const VkDescriptorSetVariableDescriptorCountAllocateInfo *)pnext)->pNext);
             vn_encode_VkDescriptorSetVariableDescriptorCountAllocateInfo_self(enc, (const VkDescriptorSetVariableDescriptorCountAllocateInfo *)pnext);
             return;
         default:

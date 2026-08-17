@@ -444,8 +444,8 @@ struct svga_shader_emitter_v10
 
    bool uses_flat_interp;
 
-   unsigned reserved_token;        /* index to the reserved token */
    bool uses_precise_qualifier;
+   unsigned reserved_token;        /* index to the reserved token */
 
    /* For all shaders: const reg index for RECT coord scaling */
    unsigned texcoord_scale_index[PIPE_MAX_SAMPLERS];
@@ -891,6 +891,10 @@ translate_opcode(enum tgsi_opcode opcode)
       return VGPU10_OPCODE_ELSE;
    case TGSI_OPCODE_ENDIF:
       return VGPU10_OPCODE_ENDIF;
+   case TGSI_OPCODE_DDX_FINE:
+      return VGPU10_OPCODE_DERIV_RTX_FINE;
+   case TGSI_OPCODE_DDY_FINE:
+      return VGPU10_OPCODE_DERIV_RTY_FINE;
    case TGSI_OPCODE_CEIL:
       return VGPU10_OPCODE_ROUND_PI;
    case TGSI_OPCODE_I2F:
@@ -10981,6 +10985,8 @@ emit_instruction(struct svga_shader_emitter_v10 *emit,
    case TGSI_OPCODE_DP4:
    case TGSI_OPCODE_ELSE:
    case TGSI_OPCODE_ENDIF:
+   case TGSI_OPCODE_DDX_FINE:
+   case TGSI_OPCODE_DDY_FINE:
    case TGSI_OPCODE_ENDLOOP:
    case TGSI_OPCODE_ENDSUB:
    case TGSI_OPCODE_F2I:
@@ -12635,6 +12641,7 @@ done:
 static bool
 emit_vgpu10_header(struct svga_shader_emitter_v10 *emit)
 {
+   VGPU10OpcodeToken0 token;
    VGPU10ProgramToken ptoken;
 
    /* First token: VGPU10ProgramToken  (version info, program type (VS,GS,PS)) */
@@ -12656,7 +12663,6 @@ emit_vgpu10_header(struct svga_shader_emitter_v10 *emit)
       return false;
 
    if (emit->version >= 50) {
-      VGPU10OpcodeToken0 token;
 
       if (emit->unit == MESA_SHADER_TESS_CTRL) {
          /* For hull shader, we need to start the declarations phase first before
@@ -12668,33 +12674,18 @@ emit_vgpu10_header(struct svga_shader_emitter_v10 *emit)
          emit_dword(emit, token.value);
          end_emit_instruction(emit);
       }
-
-      /* Emit global flags */
-      token.value = 0;    /* init whole token to zero */
-      token.opcodeType = VGPU10_OPCODE_DCL_GLOBAL_FLAGS;
-      token.enableDoublePrecisionFloatOps = 1;  /* set bit */
-      token.instructionLength = 1;
-      if (!emit_dword(emit, token.value))
-         return false;
    }
 
-   if (emit->version >= 40) {
-      VGPU10OpcodeToken0 token;
+   /* Reserve token for global flags such as refactoringAllowed that we
+    * determine as we scan through the shader. Fixed up in emit_vgpu10_tail.
+    */
+   emit->reserved_token = (emit->ptr - emit->buf) / sizeof(VGPU10OpcodeToken0);
 
-      /* Reserved for global flag such as refactoringAllowed.
-       * If the shader does not use the precise qualifier, we will set the
-       * refactoringAllowed global flag; otherwise, we will leave the reserved
-       * token to NOP.
-       */
-      emit->reserved_token = (emit->ptr - emit->buf) / sizeof(VGPU10OpcodeToken0);
-      token.value = 0;
-      token.opcodeType = VGPU10_OPCODE_NOP;
-      token.instructionLength = 1;
-      if (!emit_dword(emit, token.value))
-         return false;
-   }
-
-   return true;
+   token.value = 0;
+   token.opcodeType = VGPU10_OPCODE_DCL_GLOBAL_FLAGS;
+   token.instructionLength = 1;
+   token.enableDoublePrecisionFloatOps = (version >= 50);
+   return emit_dword(emit, token.value);
 }
 
 
@@ -12707,24 +12698,11 @@ emit_vgpu10_tail(struct svga_shader_emitter_v10 *emit)
    tokens = (VGPU10ProgramToken *) emit->buf;
    tokens[1].value = emit_get_num_tokens(emit);
 
-   if (emit->version >= 40 && !emit->uses_precise_qualifier) {
-      /* Replace the reserved token with the RefactoringAllowed global flag */
-      VGPU10OpcodeToken0 *ptoken;
-
-      ptoken = (VGPU10OpcodeToken0 *)&tokens[emit->reserved_token];
-      assert(ptoken->opcodeType == VGPU10_OPCODE_NOP);
-      ptoken->opcodeType = VGPU10_OPCODE_DCL_GLOBAL_FLAGS;
-      ptoken->refactoringAllowed = 1;
-   }
-
-   if (emit->version >= 50 && emit->fs.forceEarlyDepthStencil) {
-      /* Replace the reserved token with the forceEarlyDepthStencil  global flag */
-      VGPU10OpcodeToken0 *ptoken;
-
-      ptoken = (VGPU10OpcodeToken0 *)&tokens[emit->reserved_token];
-      ptoken->opcodeType = VGPU10_OPCODE_DCL_GLOBAL_FLAGS;
-      ptoken->forceEarlyDepthStencil = 1;
-   }
+   /* Fixup global decls flags token with the RefactoringAllowed global flag */
+   VGPU10OpcodeToken0 *ptoken;
+   ptoken = (VGPU10OpcodeToken0 *)&tokens[emit->reserved_token];
+   ptoken->refactoringAllowed = !emit->uses_precise_qualifier;
+   ptoken->forceEarlyDepthStencil = (emit->version >= 50 && emit->fs.forceEarlyDepthStencil);
 
    return true;
 }

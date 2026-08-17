@@ -14,6 +14,8 @@
 #ifndef PVR_MACROS_H
 #define PVR_MACROS_H
 
+#include "util/u_debug.h"
+
 #ifdef HAVE_VALGRIND
 #   include <valgrind/valgrind.h>
 #   include <valgrind/memcheck.h>
@@ -24,15 +26,19 @@
 
 /**
  * Print a FINISHME message, including its source location.
+ *
+ * Suppressed when PVR_IGNORE_FINISHME_WARNINGS environment variable is set.
  */
 #define pvr_finishme(format, ...)              \
    do {                                        \
       static bool reported = false;            \
       if (!reported) {                         \
-         mesa_logw("%s:%d: FINISHME: " format, \
-                   __FILE__,                   \
-                   __LINE__,                   \
-                   ##__VA_ARGS__);             \
+         if (!debug_get_bool_option("PVR_IGNORE_FINISHME_WARNINGS", false)) { \
+            mesa_logw("%s:%d: FINISHME: " format, \
+                      __FILE__,                \
+                      __LINE__,                \
+                      ##__VA_ARGS__);          \
+         }                                     \
          reported = true;                      \
       }                                        \
    } while (false)
@@ -49,15 +55,32 @@
       _buffer[__offset / __nr_dwords] = __value;                 \
    } while (0)
 
-/* A non-fatal assert. Useful for debugging. */
-#if MESA_DEBUG
-#   define pvr_assert(x)                                           \
-      ({                                                           \
-         if (unlikely(!(x)))                                       \
-            mesa_loge("%s:%d ASSERT: %s", __FILE__, __LINE__, #x); \
-      })
-#else
-#   define pvr_assert(x)
+#define PVR_ARCH_NAME(name, arch) pvr_##arch##_##name
+
+#define PVR_ARCH_DISPATCH(name, arch, ...)        \
+   do {                                           \
+      switch (arch) {                             \
+      case PVR_DEVICE_ARCH_ROGUE:                 \
+         PVR_ARCH_NAME(name, rogue)(__VA_ARGS__); \
+         break;                                   \
+      default:                                    \
+         UNREACHABLE("Unsupported architecture"); \
+      }                                           \
+   } while (0)
+
+#define PVR_ARCH_DISPATCH_RET(name, arch, ret, ...)     \
+   do {                                                 \
+      switch (arch) {                                   \
+      case PVR_DEVICE_ARCH_ROGUE:                       \
+         ret = PVR_ARCH_NAME(name, rogue)(__VA_ARGS__); \
+         break;                                         \
+      default:                                          \
+         UNREACHABLE("Unsupported architecture");       \
+      }                                                 \
+   } while (0)
+
+#if defined(PVR_BUILD_ARCH_ROGUE)
+#   define PVR_PER_ARCH(name) PVR_ARCH_NAME(name, rogue)
 #endif
 
 #endif /* PVR_MACROS_H */

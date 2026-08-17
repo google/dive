@@ -37,7 +37,7 @@ TEST_F(nir_lower_alu_width_test, fdot_order)
 {
    nir_variable *res_var = nir_local_variable_create(b->impl, glsl_float_type(), "res");
 
-   b->exact = true;
+   b->fp_math_ctrl = nir_fp_exact;
 
    /* If this isn't done in xyz order, it evaluates to infinity. */
    nir_def *val = nir_fdot(

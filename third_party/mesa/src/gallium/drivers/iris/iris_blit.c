@@ -1,23 +1,6 @@
 /*
  * Copyright © 2017 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdio.h>
@@ -279,7 +262,8 @@ iris_blorp_surf_for_resource(struct iris_batch *batch,
 static bool
 is_astc(enum isl_format format)
 {
-   return isl_format_get_layout(format)->txc == ISL_TXC_ASTC;
+   return format != ISL_FORMAT_UNSUPPORTED &&
+          isl_format_get_layout(format)->txc == ISL_TXC_ASTC;
 }
 
 static void
@@ -703,8 +687,13 @@ iris_copy_region(struct blorp_context *blorp,
    enum isl_aux_usage dst_aux_usage =
       copy_region_aux_usage(ice, batch, dst_res, dst_fmt, dst_level, true);
 
-   if (iris_batch_references(batch, src_res->bo))
-      tex_cache_flush_hack(batch, src_fmt, src_res->surf.format);
+   if (iris_batch_references(batch, src_res->bo)) {
+      /* blorp_copy_get_formats() is only valid for compressed surfaces. */
+      tex_cache_flush_hack(batch,
+                           src_aux_usage == ISL_AUX_USAGE_NONE ?
+                           ISL_FORMAT_UNSUPPORTED : src_fmt,
+                           src_res->surf.format);
+   }
 
    if (dst->target == PIPE_BUFFER)
       util_range_add(&dst_res->base.b, &dst_res->valid_buffer_range, dstx, dstx + src_box->width);

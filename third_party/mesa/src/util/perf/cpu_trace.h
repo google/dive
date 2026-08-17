@@ -60,24 +60,7 @@ struct mesa_trace_flow {
          util_perfetto_trace_full_end(name, track_id, clock, timestamp);            \
    } while (0)
 
-/* NOTE: for now disable atrace for C++ to workaround a ndk bug with ordering
- * between stdatomic.h and atomic.h.  See:
- *
- *   https://github.com/android/ndk/issues/1178
- */
-#elif DETECT_OS_ANDROID && !defined(__cplusplus)
-
-#include <cutils/trace.h>
-
-#define _MESA_TRACE_BEGIN(name)                                              \
-   atrace_begin(ATRACE_TAG_GRAPHICS, name)
-#define _MESA_TRACE_END() atrace_end(ATRACE_TAG_GRAPHICS)
-#define _MESA_TRACE_FLOW_BEGIN(name, id)                                     \
-   atrace_begin(ATRACE_TAG_GRAPHICS, name)
-#define _MESA_TRACE_SET_COUNTER(name, value)
-#define _MESA_TRACE_TIMESTAMP_BEGIN(name, track_id, flow_id, clock, timestamp)
-#define _MESA_TRACE_TIMESTAMP_END(name, track_id, clock, timestamp)
-#else
+#else /* !HAVE_PERFETTO */
 
 #define _MESA_TRACE_BEGIN(name)
 #define _MESA_TRACE_END()
@@ -102,13 +85,13 @@ struct mesa_trace_flow {
 
 #if defined(HAVE_SYSPROF)
 
-#define _MESA_SYSPROF_TRACE_BEGIN(name) util_sysprof_begin(name)
-#define _MESA_SYSPROF_TRACE_END(scope) util_sysprof_end(scope)
+#define _MESA_SYSPROF_TRACE_BEGIN(trace, name) trace = util_sysprof_begin(name)
+#define _MESA_SYSPROF_TRACE_END(trace) util_sysprof_end(trace)
 
 #else
 
-#define _MESA_SYSPROF_TRACE_BEGIN(name) NULL
-#define _MESA_SYSPROF_TRACE_END(scope)
+#define _MESA_SYSPROF_TRACE_BEGIN(trace, name)
+#define _MESA_SYSPROF_TRACE_END(trace)
 
 #endif /* HAVE_SYSPROF */
 
@@ -123,6 +106,13 @@ struct mesa_trace_flow {
 #define _MESA_TRACE_SCOPE_VAR(suffix)                                        \
    _MESA_TRACE_SCOPE_VAR_CONCAT(_mesa_trace_scope_, suffix)
 
+struct _mesa_trace_scope {
+   bool cond;
+#if defined(HAVE_SYSPROF)
+   void *sysprof_trace;
+#endif /* HAVE_SYSPROF */
+};
+
 /* This must expand to a single non-scoped statement for
  *
  *    if (cond)
@@ -130,85 +120,108 @@ struct mesa_trace_flow {
  *
  * to work.
  */
-#define _MESA_TRACE_SCOPE_NAME(name)                                         \
-   void *_MESA_TRACE_SCOPE_VAR(__LINE__)                                     \
+#define _MESA_TRACE_SCOPE_NAME(cond, name)                                   \
+   struct _mesa_trace_scope _MESA_TRACE_SCOPE_VAR(__LINE__)                  \
       __attribute__((cleanup(_mesa_trace_scope_end), unused)) =              \
-         _mesa_trace_scope_begin_name(name)
+         _mesa_trace_scope_begin_name(cond, name)
 
-#define _MESA_TRACE_SCOPE(format, ...)                                       \
-   void *_MESA_TRACE_SCOPE_VAR(__LINE__)                                     \
+#define _MESA_TRACE_SCOPE(cond, format, ...)                                 \
+   struct _mesa_trace_scope _MESA_TRACE_SCOPE_VAR(__LINE__)                  \
       __attribute__((cleanup(_mesa_trace_scope_end), unused)) =              \
-         _mesa_trace_scope_begin(format, ##__VA_ARGS__)
+         _mesa_trace_scope_begin(cond, format, ##__VA_ARGS__)
 
-#define _MESA_TRACE_SCOPE_FLOW(name, id)                                     \
-   void *_MESA_TRACE_SCOPE_VAR(__LINE__)                                     \
+#define _MESA_TRACE_SCOPE_FLOW(cond, name, id)                               \
+   struct _mesa_trace_scope _MESA_TRACE_SCOPE_VAR(__LINE__)                  \
       __attribute__((cleanup(_mesa_trace_scope_end), unused)) =              \
-         _mesa_trace_scope_flow_begin(name, id)
+         _mesa_trace_scope_flow_begin(cond, name, id)
 
-
-static inline void *
-_mesa_trace_scope_begin_name(const char *name)
+static inline struct _mesa_trace_scope
+_mesa_trace_scope_begin_name(bool cond, const char *name)
 {
-   void *scope = NULL;
-   _MESA_TRACE_BEGIN(name);
-   _MESA_GPUVIS_TRACE_BEGIN(name);
-   scope = _MESA_SYSPROF_TRACE_BEGIN(name);
+   struct _mesa_trace_scope scope = { .cond = cond };
+
+   if (unlikely(cond)) {
+      _MESA_TRACE_BEGIN(name);
+      _MESA_GPUVIS_TRACE_BEGIN(name);
+      _MESA_SYSPROF_TRACE_BEGIN(scope.sysprof_trace, name);
+   }
+
    return scope;
 }
 
-__attribute__((format(printf, 1, 2)))
-static inline void *
-_mesa_trace_scope_begin(const char *format, ...)
+__attribute__((format(printf, 2, 3)))
+static inline struct _mesa_trace_scope
+_mesa_trace_scope_begin(bool cond, const char *format, ...)
 {
-   char name[_MESA_TRACE_SCOPE_MAX_NAME_LENGTH];
-   va_list args;
+   struct _mesa_trace_scope scope = { .cond = cond };
 
-   va_start(args, format);
-   ASSERTED size_t len = vsnprintf(name, _MESA_TRACE_SCOPE_MAX_NAME_LENGTH,
-                                   format, args);
-   va_end(args);
-   assert(len < _MESA_TRACE_SCOPE_MAX_NAME_LENGTH);
+   if (unlikely(cond)) {
+      char name[_MESA_TRACE_SCOPE_MAX_NAME_LENGTH];
+      va_list args;
 
-   return _mesa_trace_scope_begin_name(name);
-}
+      va_start(args, format);
+      ASSERTED size_t len = vsnprintf(name, _MESA_TRACE_SCOPE_MAX_NAME_LENGTH,
+                                      format, args);
+      va_end(args);
+      assert(len < _MESA_TRACE_SCOPE_MAX_NAME_LENGTH);
 
-static inline void *
-_mesa_trace_scope_flow_begin(const char *name,
-			     struct mesa_trace_flow *flow)
-{
-   void *scope = NULL;
-
-   if (flow->id == 0) {
-      flow->id = util_perfetto_next_id();
-      flow->start_time = os_time_get_nano();
+      _MESA_TRACE_BEGIN(name);
+      _MESA_GPUVIS_TRACE_BEGIN(name);
+      _MESA_SYSPROF_TRACE_BEGIN(scope.sysprof_trace, name);
    }
 
-   _MESA_TRACE_FLOW_BEGIN(name, flow->id);
-   _MESA_GPUVIS_TRACE_BEGIN(name);
-   scope = _MESA_SYSPROF_TRACE_BEGIN(name);
+   return scope;
+}
+
+static inline struct _mesa_trace_scope
+_mesa_trace_scope_flow_begin(bool cond,
+                             const char *name,
+                             struct mesa_trace_flow *flow)
+{
+   struct _mesa_trace_scope scope = { .cond = cond };
+
+   if (unlikely(cond)) {
+      if (flow->id == 0) {
+         flow->id = util_perfetto_next_id();
+         flow->start_time = os_time_get_nano();
+      }
+
+      _MESA_TRACE_FLOW_BEGIN(name, flow->id);
+      _MESA_GPUVIS_TRACE_BEGIN(name);
+      _MESA_SYSPROF_TRACE_BEGIN(scope.sysprof_trace, name);
+   }
+
    return scope;
 }
 
 static inline void
-_mesa_trace_scope_end(UNUSED void **scope)
+_mesa_trace_scope_end(UNUSED struct _mesa_trace_scope *scope)
 {
-   _MESA_GPUVIS_TRACE_END();
-   _MESA_TRACE_END();
-   _MESA_SYSPROF_TRACE_END(scope);
+   if (unlikely(scope->cond)) {
+      _MESA_SYSPROF_TRACE_END(scope->sysprof_trace);
+      _MESA_GPUVIS_TRACE_END();
+      _MESA_TRACE_END();
+   }
 }
 
 #else
 
-#define _MESA_TRACE_SCOPE(format, ...)
-#define _MESA_TRACE_SCOPE_FLOW(func, id)
-#define _MESA_TRACE_SCOPE_NAME(name)
+#define _MESA_TRACE_SCOPE(cond, format, ...)
+#define _MESA_TRACE_SCOPE_FLOW(cond, func, id)
+#define _MESA_TRACE_SCOPE_NAME(cond, name)
 
 #endif /* __has_attribute(cleanup) && __has_attribute(unused) */
 
-#define MESA_TRACE_SCOPE(format, ...) _MESA_TRACE_SCOPE(format, ##__VA_ARGS__)
-#define MESA_TRACE_SCOPE_FLOW(name, id) _MESA_TRACE_SCOPE_FLOW(name, id)
-#define MESA_TRACE_FUNC() _MESA_TRACE_SCOPE_NAME(__func__)
-#define MESA_TRACE_FUNC_FLOW(id) _MESA_TRACE_SCOPE_FLOW(__func__, id)
+#define MESA_TRACE_SCOPE(format, ...) _MESA_TRACE_SCOPE(true, format, ##__VA_ARGS__)
+#define MESA_TRACE_SCOPE_FLOW(name, id) _MESA_TRACE_SCOPE_FLOW(true, name, id)
+#define MESA_TRACE_FUNC() _MESA_TRACE_SCOPE_NAME(true, __func__)
+#define MESA_TRACE_FUNC_FLOW(id) _MESA_TRACE_SCOPE_FLOW(true, __func__, id)
+
+#define MESA_TRACE_SCOPE_IF(cond, format, ...) _MESA_TRACE_SCOPE(cond, format, ##__VA_ARGS__)
+#define MESA_TRACE_SCOPE_FLOW_IF(cond, name, id) _MESA_TRACE_SCOPE_FLOW(cond, name, id)
+#define MESA_TRACE_FUNC_IF(cond) _MESA_TRACE_SCOPE_NAME(cond, __func__)
+#define MESA_TRACE_FUNC_FLOW_IF(cond, id) _MESA_TRACE_SCOPE_FLOW(cond, __func__, id)
+
 #define MESA_TRACE_SET_COUNTER(name, value) _MESA_TRACE_SET_COUNTER(name, value)
 #define MESA_TRACE_TIMESTAMP_BEGIN(name, track_id, flow_id, clock, timestamp) \
    _MESA_TRACE_TIMESTAMP_BEGIN(name, track_id, flow_id, clock, timestamp)
@@ -220,8 +233,6 @@ util_cpu_trace_init()
 {
 #if defined(HAVE_PERFETTO)
    util_perfetto_init();
-#elif DETECT_OS_ANDROID && !defined(__cplusplus)
-   atrace_init();
 #endif /* HAVE_PERFETTO */
 
    util_gpuvis_init();

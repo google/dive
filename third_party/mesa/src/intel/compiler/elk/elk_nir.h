@@ -1,24 +1,6 @@
 /*
  * Copyright © 2015 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -31,16 +13,16 @@
 extern "C" {
 #endif
 
-int elk_type_size_vec4(const struct glsl_type *type, bool bindless);
-int elk_type_size_dvec4(const struct glsl_type *type, bool bindless);
+unsigned elk_type_size_vec4(const struct glsl_type *type, bool bindless);
+unsigned elk_type_size_dvec4(const struct glsl_type *type, bool bindless);
 
-static inline int
+static inline unsigned
 elk_type_size_scalar_bytes(const struct glsl_type *type, bool bindless)
 {
    return glsl_count_dword_slots(type, bindless) * 4;
 }
 
-static inline int
+static inline unsigned
 elk_type_size_vec4_bytes(const struct glsl_type *type, bool bindless)
 {
    return elk_type_size_vec4(type, bindless) * 16;
@@ -115,8 +97,7 @@ static inline bool
 elk_nir_ubo_surface_index_is_pushable(nir_src src)
 {
    nir_intrinsic_instr *intrin =
-      src.ssa->parent_instr->type == nir_instr_type_intrinsic ?
-      nir_def_as_intrinsic(src.ssa) : NULL;
+      nir_src_as_intrinsic(src);
 
    if (intrin && intrin->intrinsic == nir_intrinsic_resource_intel) {
       return (nir_intrinsic_resource_access_intel(intrin) &
@@ -135,7 +116,7 @@ elk_nir_ubo_surface_index_get_push_block(nir_src src)
    if (!elk_nir_ubo_surface_index_is_pushable(src))
       return UINT32_MAX;
 
-   assert(src.ssa->parent_instr->type == nir_instr_type_intrinsic);
+   assert(nir_src_is_intrinsic(src));
 
    nir_intrinsic_instr *intrin = nir_def_as_intrinsic(src.ssa);
    assert(intrin->intrinsic == nir_intrinsic_resource_intel);
@@ -157,7 +138,7 @@ elk_nir_ubo_surface_index_get_bti(nir_src src)
    if (nir_src_is_const(src))
       return nir_src_as_uint(src);
 
-   assert(src.ssa->parent_instr->type == nir_instr_type_intrinsic);
+   assert(nir_src_is_intrinsic(src));
 
    nir_intrinsic_instr *intrin = nir_def_as_intrinsic(src.ssa);
    if (!intrin || intrin->intrinsic != nir_intrinsic_resource_intel)
@@ -189,8 +170,8 @@ bool elk_nir_lower_cs_intrinsics(nir_shader *nir,
                                  const struct intel_device_info *devinfo,
                                  struct elk_cs_prog_data *prog_data);
 bool elk_nir_lower_alpha_to_coverage(nir_shader *shader,
-                                     const struct elk_wm_prog_key *key,
-                                     const struct elk_wm_prog_data *prog_data);
+                                     const struct elk_fs_prog_key *key,
+                                     const struct elk_fs_prog_data *prog_data);
 void elk_nir_lower_vs_inputs(nir_shader *nir,
                              bool edgeflag_is_last,
                              const uint8_t *vs_attrib_wa_flags);
@@ -199,7 +180,7 @@ void elk_nir_lower_vue_inputs(nir_shader *nir,
 void elk_nir_lower_tes_inputs(nir_shader *nir, const struct intel_vue_map *vue);
 void elk_nir_lower_fs_inputs(nir_shader *nir,
                              const struct intel_device_info *devinfo,
-                             const struct elk_wm_prog_key *key);
+                             const struct elk_fs_prog_key *key);
 void elk_nir_lower_vue_outputs(nir_shader *nir);
 void elk_nir_lower_tcs_outputs(nir_shader *nir, const struct intel_vue_map *vue,
                                enum tess_primitive_mode tes_primitive_mode);
@@ -273,9 +254,6 @@ const struct glsl_type *elk_nir_get_var_type(const struct nir_shader *nir,
                                              nir_variable *var);
 
 void elk_nir_adjust_payload(nir_shader *shader);
-
-nir_shader *
-elk_nir_from_spirv(void *mem_ctx, const uint32_t *spirv, size_t spirv_size);
 
 #ifdef __cplusplus
 }

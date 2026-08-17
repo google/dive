@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 traces-db:
-  download-url: "https://s3.freedesktop.org/mesa-tracie-public/"
+  download-url: https://s3.freedesktop.org/mesa-tracie-public/
 
 traces:
   0ad/0ad-v2.trace:
@@ -13,11 +13,11 @@ traces:
   behdad-glyphy/glyphy-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: ea49462ff1545f21506dbd7b5028df45
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 8174bc6130459c759ca35ef56f8ebe33
 
   blender/blender-demo-cube_diorama.trace:
@@ -39,11 +39,11 @@ traces:
   glxgears/glxgears-2-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 2a9c5e35fa5693fd7d3a76f7b9746edb
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 2a9c5e35fa5693fd7d3a76f7b9746edb
 
   godot/godot-thrive.trace:
@@ -65,7 +65,7 @@ traces:
   gputest/furmark-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 800b2be5981d7e1a6570643f7dfd9a33
     broadcom-rpi5:
       label: [skip, flakes]
@@ -85,7 +85,7 @@ traces:
       checksum: be70fc9e3829fff5ad1b6ecfb6fa551c
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 16c9cf65b3c8bc604e3d72eaf4d73418
 
   gputest/pixmark-julia-fp64-v2.trace:
@@ -98,18 +98,18 @@ traces:
 
   gputest/pixmark-volplosion-v2.trace:
     broadcom-rpi4:
-      checksum: 03f6b1c064af4e7eb117b800893cdba6
+      checksum: 807b5aaa07823a6d03fa53be15121669
     broadcom-rpi5:
-      checksum: 82dc611e8fe901bbc94b12e599983bd3
+      checksum: 9b1affcaa57f00c11943e267afa701c9
 
   gputest/plot3d-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 1ef33ad22679107a256501c79bfd9e7c
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 8810f36094492471d6c802784a904b8d
 
   gputest/tessmark-v2.trace:
@@ -123,91 +123,91 @@ traces:
   gputest/triangle-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: df6df2af5fecfa42b5c2c332b726e93c
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: dd4506e8810482ae2fafc5162e82b0ae
 
   humus/AmbientAperture-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: a2d2a0141384a23e91ed30a27ed46bfe
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 982171abc172d0be7a693b3c1ea592b6
 
   humus/CelShading-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 1135888a0e8723bbcded5ef9f0925964
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 1135888a0e8723bbcded5ef9f0925964
 
   humus/DynamicBranching3-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 68011c66cfd83aa8a6b568de7c726d49
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 81b086b8919b9e0121435ca3f4a130fd
 
   humus/HDR-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: de024f342418b578841f98ce697de8b5
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: de024f342418b578841f98ce697de8b5
 
   humus/Portals-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 269b9572113d6991cf58c96a833502bf
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 958215bf6ae46c27e29b3a60c83208a0
 
   humus/RaytracedShadows-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 6b572f241f4f9ee001ef849d10d03cc5
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: baae9911bb5f14f027f7e8d82dd5c8e1
 
   humus/VolumetricFogging2-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: d3b89dfaff0277be4b4b2ad2cf055d54
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 98d9343d3c23ef7acf8c4e34cb48207f
 
   jvgs/jvgs-d27fb67-v2.trace:
     broadcom-rpi4:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: 831138a408cc9557528ef68381b080f2
     broadcom-rpi5:
       label: [skip, flakes]
-      text: "Often fails when running on xwayland, with what looks like an incorrect resolution"
+      text: Often fails when running on xwayland, with what looks like an incorrect resolution
       checksum: cc35375bc249580f3cd921b86e45e6a8
 
   neverball/neverball-v2.trace:
@@ -321,14 +321,6 @@ traces:
     broadcom-rpi5:
       label: [skip, flakes]
       checksum: b8d8ceb748ea9900b1414ef54eec732e
-
-  thedarkmod/thedarkmod.trace:
-    broadcom-rpi4:
-      label: [unsupported]
-      text: needs GL 3.3
-    broadcom-rpi5:
-      label: [unsupported]
-      text: needs GL 3.3
 
   unvanquished/unvanquished-lowest.trace:
     broadcom-rpi4:

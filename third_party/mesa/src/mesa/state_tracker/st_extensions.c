@@ -123,8 +123,6 @@ void st_init_limits(struct pipe_screen *screen,
 
    c->MaxTextureSize = screen->caps.max_texture_2d_size;
    c->MaxTextureSize = MIN2(c->MaxTextureSize, 1 << (MAX_TEXTURE_LEVELS - 1));
-   c->MaxTextureMbytes = MAX2(c->MaxTextureMbytes,
-                              screen->caps.max_texture_mb);
 
    c->Max3DTextureLevels
       = _min(screen->caps.max_texture_3d_levels,
@@ -208,8 +206,10 @@ void st_init_limits(struct pipe_screen *screen,
    for (sh = 0; sh < MESA_SHADER_MESH_STAGES; ++sh) {
       struct gl_program_constants *pc = &c->Program[sh];
 
-      if (!screen->shader_caps[sh].max_instructions)
+      if (!screen->shader_caps[sh].max_instructions) {
+         pc->MaxTextureImageUnits = 0;
          continue;
+      }
 
       pc->MaxTextureImageUnits =
          _min(screen->shader_caps[sh].max_texture_samplers,
@@ -641,7 +641,8 @@ void st_init_limits(struct pipe_screen *screen,
    c->ShaderSubgroupSupportedStages =
       mesa_to_gl_stages(screen->caps.shader_subgroup_supported_stages);
    c->ShaderSubgroupSupportedFeatures =
-      screen->caps.shader_subgroup_supported_features;
+      screen->caps.shader_subgroup_supported_features &
+         BITFIELD_MASK(PIPE_SHADER_SUBGROUP_NUM_FEATURES);
    c->ShaderSubgroupQuadAllStages =
       screen->caps.shader_subgroup_quad_all_stages;
 }
@@ -1116,6 +1117,7 @@ void st_init_extensions(struct pipe_screen *screen,
 #else
    EXT_CAP(EXT_semaphore_win32,              fence_signal);
 #endif
+   EXT_CAP(EXT_shader_pixel_local_storage,   shader_pixel_local_storage_size);
    EXT_CAP(EXT_shader_realtime_clock,        shader_realtime_clock);
    EXT_CAP(EXT_shader_samples_identical,     shader_samples_identical);
    EXT_CAP(EXT_texture_array,                max_texture_array_layers);
@@ -1183,6 +1185,10 @@ void st_init_extensions(struct pipe_screen *screen,
    init_format_extensions(screen, extensions, depthstencil_mapping,
                           ARRAY_SIZE(depthstencil_mapping), PIPE_TEXTURE_2D,
                           PIPE_BIND_DEPTH_STENCIL | PIPE_BIND_SAMPLER_VIEW);
+
+   if (!screen->caps.native_fp32_depth)
+      extensions->ARB_depth_buffer_float = GL_FALSE;
+
    init_format_extensions(screen, extensions, texture_mapping,
                           ARRAY_SIZE(texture_mapping), PIPE_TEXTURE_2D,
                           PIPE_BIND_SAMPLER_VIEW);
@@ -1224,7 +1230,7 @@ void st_init_extensions(struct pipe_screen *screen,
 
    consts->AllowGLSLBuiltinVariableRedeclaration = options->allow_glsl_builtin_variable_redeclaration;
 
-   consts->dri_config_options_sha1 = options->config_options_sha1;
+   consts->dri_config_options_blake3 = options->config_options_blake3;
 
    consts->AllowGLSLCrossStageInterpolationMismatch = options->allow_glsl_cross_stage_interpolation_mismatch;
 
@@ -1265,7 +1271,9 @@ void st_init_extensions(struct pipe_screen *screen,
        * pipe cap.
        */
       extensions->EXT_gpu_shader4 = GL_TRUE;
-      extensions->EXT_texture_buffer_object = GL_TRUE;
+
+      if (!screen->caps.buffer_sampler_view_rgba_only)
+         extensions->EXT_texture_buffer_object = GL_TRUE;
 
       if (consts->MaxTransformFeedbackBuffers &&
           screen->caps.shader_array_components)
@@ -1331,6 +1339,8 @@ void st_init_extensions(struct pipe_screen *screen,
       consts->GLSLZeroInit = screen->caps.glsl_zero_init;
    }
 
+   consts->VertexProgramDefaultOut = options->vertex_program_default_out;
+
    if (extensions->EXT_semaphore) {
       consts->MaxTimelineSemaphoreValueDifference = screen->caps.max_timeline_semaphore_difference;
       extensions->NV_timeline_semaphore = consts->MaxTimelineSemaphoreValueDifference > 0;
@@ -1338,6 +1348,7 @@ void st_init_extensions(struct pipe_screen *screen,
 
    consts->ForceIntegerTexNearest = options->force_integer_tex_nearest;
 
+   consts->ForceExplicitUniformLocZero = options->force_explicit_uniform_loc_zero;
    consts->VendorOverride = options->force_gl_vendor;
    consts->RendererOverride = options->force_gl_renderer;
 
@@ -1484,14 +1495,14 @@ void st_init_extensions(struct pipe_screen *screen,
                                                   samples,
                                                   storage_samples,
                                                   PIPE_BIND_RENDER_TARGET)) {
-                     unsigned i = consts->NumSupportedMultisampleModes;
+                     unsigned mode = consts->NumSupportedMultisampleModes;
 
-                     assert(i < ARRAY_SIZE(consts->SupportedMultisampleModes));
-                     consts->SupportedMultisampleModes[i].NumColorSamples =
+                     assert(mode < ARRAY_SIZE(consts->SupportedMultisampleModes));
+                     consts->SupportedMultisampleModes[mode].NumColorSamples =
                         samples;
-                     consts->SupportedMultisampleModes[i].NumColorStorageSamples =
+                     consts->SupportedMultisampleModes[mode].NumColorStorageSamples =
                         storage_samples;
-                     consts->SupportedMultisampleModes[i].NumDepthStencilSamples =
+                     consts->SupportedMultisampleModes[mode].NumDepthStencilSamples =
                         depth_samples;
                      consts->NumSupportedMultisampleModes++;
                   }
@@ -1548,6 +1559,9 @@ void st_init_extensions(struct pipe_screen *screen,
    if (options->allow_glsl_120_subset_in_110)
       consts->AllowGLSL120SubsetIn110 = GL_TRUE;
 
+   if (options->allow_glsl_embedded_structure_declarations)
+      consts->AllowGLSLEmbeddedStructureDeclarations = GL_TRUE;
+
    if (options->allow_glsl_builtin_const_expression)
       consts->AllowGLSLBuiltinConstantExpression = GL_TRUE;
 
@@ -1562,7 +1576,7 @@ void st_init_extensions(struct pipe_screen *screen,
        screen->caps.buffer_sampler_view_rgba_only)
       extensions->ARB_texture_buffer_object = GL_FALSE;
 
-   if (extensions->ARB_texture_buffer_object) {
+   if (screen->caps.texture_buffer_objects) {
       consts->MaxTextureBufferSize =
          screen->caps.max_texel_buffer_elements;
       consts->TextureBufferOffsetAlignment =
@@ -1578,7 +1592,7 @@ void st_init_extensions(struct pipe_screen *screen,
 
    extensions->OES_texture_buffer =
       consts->Program[MESA_SHADER_COMPUTE].MaxImageUniforms &&
-      extensions->ARB_texture_buffer_object &&
+      screen->caps.texture_buffer_objects &&
       extensions->ARB_texture_buffer_range &&
       extensions->ARB_texture_buffer_object_rgb32;
 
@@ -1719,7 +1733,7 @@ void st_init_extensions(struct pipe_screen *screen,
             max_variable_threads_per_block;
 
          extensions->ARB_compute_variable_group_size =
-            max_variable_threads_per_block > 0;
+            max_variable_threads_per_block >= 512;
       }
    }
 

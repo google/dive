@@ -6,10 +6,10 @@
  */
 
 #include "radv_cp_reg_shadowing.h"
+#include "tools/radv_debug.h"
 #include "ac_shadowed_regs.h"
 #include "radv_buffer.h"
 #include "radv_cs.h"
-#include "radv_debug.h"
 #include "sid.h"
 
 VkResult
@@ -36,13 +36,11 @@ radv_create_shadow_regs_preamble(struct radv_device *device, struct radv_queue_s
       goto fail;
 
    /* fill the cs for shadow regs preamble ib that starts the register shadowing */
-   pm4 = ac_create_shadowing_ib_preamble(gpu_info, queue_state->shadowed_regs->va, device->pbb_allowed);
+   pm4 = ac_create_shadowing_ib_preamble(gpu_info, radv_buffer_get_va(queue_state->shadowed_regs), device->pbb_allowed);
    if (!pm4)
       goto fail_create;
 
-   radeon_begin(cs);
-   radeon_emit_array(pm4->pm4, pm4->ndw);
-   radeon_end();
+   ac_pm4_emit_commands(cs->b, pm4);
 
    ws->cs_pad(cs->b, 0);
 
@@ -130,9 +128,7 @@ radv_init_shadowed_regs_buffer_state(const struct radv_device *device, struct ra
          goto fail;
       }
 
-      radeon_begin(cs);
-      radeon_emit_array(pm4->pm4, pm4->ndw);
-      radeon_end();
+      ac_pm4_emit_commands(cs->b, pm4);
 
       ac_pm4_free_state(pm4);
    }

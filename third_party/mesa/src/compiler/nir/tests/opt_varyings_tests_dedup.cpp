@@ -6,6 +6,8 @@
 
 #include "nir_opt_varyings_test.h"
 
+namespace {
+
 class nir_opt_varyings_test_dedup : public nir_opt_varyings_test
 {};
 
@@ -30,7 +32,7 @@ TEST_F(nir_opt_varyings_test_dedup, \
       nir_def *input = load_input(b1, (gl_varying_slot)0, 0, nir_type_float##bitsize, 0, 0); \
       for (unsigned v = 0; v < (is_per_vertex(b1, (gl_varying_slot)pslot[s], false) ? 3 : 1); v++) { \
          store[s][v] = \
-            store_output(b1, (gl_varying_slot)pslot[s], s, nir_type_float##bitsize, input, v); \
+            store_output(b1, (gl_varying_slot)pslot[s], s, nir_type_float##bitsize, input, v, false); \
       } \
    } \
    \
@@ -39,7 +41,7 @@ TEST_F(nir_opt_varyings_test_dedup, \
       for (unsigned v = 0; v < (is_per_vertex(b2, (gl_varying_slot)cslot[s], true) ? 3 : 1); v++) { \
          load[s][v] = load_input(b2, (gl_varying_slot)cslot[s], s, \
                                  nir_type_float##bitsize, v, interp[s]); \
-         store_output(b2, VARYING_SLOT_VAR0, 0, nir_type_float##bitsize, load[s][v], 0); \
+         store_output(b2, VARYING_SLOT_VAR0, 0, nir_type_float##bitsize, load[s][v], 0, false); \
       } \
    } \
    \
@@ -62,7 +64,7 @@ TEST_F(nir_opt_varyings_test_dedup, \
          ASSERT_TRUE(!shader_contains_def(b2, load[1][v])); \
       } \
    } else { \
-      ASSERT_EQ(opt_varyings(), 0); \
+      ASSERT_EQ(opt_varyings() & nir_progress_consumer, 0); \
       for (unsigned v = 0; v < (is_per_vertex(b1, (gl_varying_slot)pslot[1], false) ? 3 : 1); v++) { \
          ASSERT_TRUE(shader_contains_instr(b1, &store[0][v]->instr)); \
          ASSERT_TRUE(shader_contains_instr(b1, &store[1][v]->instr)); \

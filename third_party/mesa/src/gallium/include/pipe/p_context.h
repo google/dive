@@ -88,6 +88,7 @@ struct u_upload_mgr;
 struct util_debug_callback;
 struct u_vbuf;
 struct pipe_context;
+struct pipe_ml_subgraph;
 
 typedef void (*pipe_draw_func)(struct pipe_context *pipe,
                                const struct pipe_draw_info *info,
@@ -712,6 +713,8 @@ struct pipe_context {
     * The entire buffers are cleared (no scissor, no colormask, etc).
     *
     * \param buffers  bitfield of PIPE_CLEAR_* values.
+    * \param color_clear_mask  4 color_mask bits per draw buffer, max 8 draw buffers. 4*8 = 32 bits
+    * \param stencil_clear_mask  the stencil mask
     * \param scissor_state  the scissored region to clear
     * \param color  pointer to a union of fiu array for each of r, g, b, a.
     * \param depth  depth clear value in [0,1].
@@ -719,6 +722,8 @@ struct pipe_context {
     */
    void (*clear)(struct pipe_context *pipe,
                  unsigned buffers,
+                 uint32_t color_clear_mask,
+                 uint8_t stencil_clear_mask,
                  const struct pipe_scissor_state *scissor_state,
                  const union pipe_color_union *color,
                  double depth,
@@ -862,19 +867,6 @@ struct pipe_context {
     */
    void (*sampler_view_release)(struct pipe_context *ctx,
                                 struct pipe_sampler_view *view);
-
-
-   /**
-    * Get a surface which is a "view" into a resource, used by
-    * render target / depth stencil stages.
-    */
-   struct pipe_surface *(*create_surface)(struct pipe_context *ctx,
-                                          struct pipe_resource *resource,
-                                          const struct pipe_surface *templat);
-
-   void (*surface_destroy)(struct pipe_context *ctx,
-                           struct pipe_surface *);
-
 
    /**
     * Map a resource.
@@ -1254,29 +1246,6 @@ struct pipe_context {
                                                      unsigned usage );
 
    /**
-    * Checks whether an operation can be accelerated by this context.
-    *
-    * \param ctx         pipe context
-    * \param operation   pipe_ml_operation to be checked
-    * \return            whether the context can accelerate this operation
-    */
-    bool (*ml_operation_supported)(struct pipe_context *context, const struct pipe_ml_operation *operation);
-
-   /**
-    * Compiles a ML subgraph, to be executed later. The returned pipe_ml_subgraph
-    * should contain all information needed to execute the subgraph with as
-    * little effort as strictly needed.
-    *
-    * \param ctx         pipe context
-    * \param operations  array containing the definitions of the operations in the graph
-    * \param count       number of operations
-    * \return            a newly allocated pipe_ml_subgraph
-    */
-   struct pipe_ml_subgraph *(*ml_subgraph_create)(struct pipe_context *context,
-                                                  const struct pipe_ml_operation *operations,
-                                                  unsigned count);
-
-   /**
     * Invokes a ML subgraph for a given input tensor.
     *
     * \param ctx         pipe context
@@ -1309,13 +1278,16 @@ struct pipe_context {
                                    void *outputs[], bool is_signed[]);
 
    /**
-    * Release all resources allocated by the implementation of ml_subgraph_create
-    * 
-    * \param ctx           pipe context
-    * \param subgraph      subgraph to release
+    * Deserialize a previously-serialized ML subgraph.
+    *
+    * \param context     pipe context
+    * \param data        serialized subgraph data
+    * \param size        size of the serialized data in bytes
+    * \return            a newly allocated pipe_ml_subgraph, or NULL on failure
     */
-   void (*ml_subgraph_destroy)(struct pipe_context *context,
-                               struct pipe_ml_subgraph *subgraph);
+   struct pipe_ml_subgraph *(*ml_subgraph_deserialize)(struct pipe_context *context,
+                                                       const uint8_t *data,
+                                                       size_t size);
 };
 
 

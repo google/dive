@@ -41,19 +41,6 @@ extern const struct intel_sample_position intel_sample_positions_4x[];
 extern const struct intel_sample_position intel_sample_positions_8x[];
 extern const struct intel_sample_position intel_sample_positions_16x[];
 
-static inline const struct intel_sample_position *
-intel_get_sample_positions(int samples)
-{
-   switch (samples) {
-   case 1: return intel_sample_positions_1x;
-   case 2: return intel_sample_positions_2x;
-   case 4: return intel_sample_positions_4x;
-   case 8: return intel_sample_positions_8x;
-   case 16: return intel_sample_positions_16x;
-   default: UNREACHABLE("Invalid sample count");
-   }
-}
-
 /* Examples:
  * in case of GFX_VER < 8:
  * INTEL_SAMPLE_POS_ELEM(ms.Sample, info->pSampleLocations, 0); expands to:

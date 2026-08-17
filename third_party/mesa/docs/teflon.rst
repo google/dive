@@ -97,14 +97,14 @@ Do some inference with MobileNetV1
 
 Run the above for a quick way of checking that the setup is correct and the NPU is accelerating the inference. It assumes you have followed the steps above so Python 3.10 and dependencies have been installed, and assumes that Mesa was built to the ``./build`` directory.
 
-You can use any image that prominently features one of the objects in the ``src/gallium/frontends/teflon/tests/labels_mobilenet_quant_v1_224.txt`` file.
+You can use any image that prominently features one of the objects in the ``src/gallium/frontends/teflon/tests/labels_mobilenet_quant_v1_224.txt`` file. You can use an [image of Grace Hopper](https://raw.githubusercontent.com/tensorflow/tensorflow/master/tensorflow/lite/examples/label_image/testdata/grace_hopper.bmp) as a running example.
 
 This example script has been based from the code in https://github.com/tensorflow/tensorflow/tree/master/tensorflow/lite/examples/python.
 
 .. code-block:: console
 
    ~ $ cd mesa/
-   mesa $ TEFLON_DEBUG=verbose ETNA_MESA_DEBUG=ml_dbgs python3.10 src/gallium/frontends/teflon/tests/classification.py \
+   mesa $ TEFLON_DEBUG=verbose ETNA_MESA_DEBUG=ml_msgs python3.10 src/gallium/frontends/teflon/tests/classification.py \
           -i ~/tensorflow/assets/grace_hopper.bmp \
           -m src/gallium/targets/teflon/tests/models/mobilenetv1/mobilenet_v1_1_224_quant.tflite \
           -l src/gallium/frontends/teflon/tests/labels_mobilenet_quant_v1_224.txt \
@@ -112,61 +112,82 @@ This example script has been based from the code in https://github.com/tensorflo
 
    Loading external delegate from build/src/gallium/targets/teflon/libteflon.so with args: {}
    Teflon delegate: loaded etnaviv driver
-
-   teflon: compiling graph: 89 tensors 28 operations
-   idx scale     zp has_data size        
-   =======================================
-   0 0.023528   0 no       1x1x1x1024
-   1 0.166099  42 no       1x1x1x1001
-   2 0.000117   0 yes      1001x0x0x0
-   3 0.004987  4a yes      1001x1x1x1024
-   4 0.166099  42 no       1x1001x0x0
-   5 0.166099  42 yes      2x0x0x0
-   6 0.000171   0 yes      32x0x0x0
-   7 0.023528   0 no       1x112x112x32
-   8 0.021827  97 yes      32x3x3x3
-   9 0.023528   0 no       1x14x14x512
+   idx type            ver support     inputs
+   ================================================================================================
+     0 CONV            v1  supported   in: 88(u8) 8(u8) 6(i32) out: 7(u8)
+     1 DWCONV          v1  supported   in: 7(u8) 35(u8) 34(i32) out: 33(u8)
+     2 CONV            v1  supported   in: 33(u8) 38(u8) 36(i32) out: 37(u8)
+     3 DWCONV          v1  supported   in: 37(u8) 41(u8) 40(i32) out: 39(u8)
+     4 CONV            v1  supported   in: 39(u8) 44(u8) 42(i32) out: 43(u8)
+     5 DWCONV          v1  supported   in: 43(u8) 47(u8) 46(i32) out: 45(u8)
+     6 CONV            v1  supported   in: 45(u8) 50(u8) 48(i32) out: 49(u8)
+     7 DWCONV          v1  supported   in: 49(u8) 53(u8) 52(i32) out: 51(u8)
+     8 CONV            v1  supported   in: 51(u8) 56(u8) 54(i32) out: 55(u8)
+     9 DWCONV          v1  supported   in: 55(u8) 59(u8) 58(i32) out: 57(u8)
    ...
 
-   idx type    in out  operation type-specific
-   ================================================================================================
-   0 CONV    88   7  w: 8 b: 6 stride: 2 pad: SAME
-   1 DWCONV   7  33  w: 35 b: 34 stride: 1 pad: SAME
-   2 CONV    33  37  w: 38 b: 36 stride: 1 pad: SAME
-   3 DWCONV  37  39  w: 41 b: 40 stride: 2 pad: SAME
-   4 CONV    39  43  w: 44 b: 42 stride: 1 pad: SAME
-   5 DWCONV  43  45  w: 47 b: 46 stride: 1 pad: SAME
-   6 CONV    45  49  w: 50 b: 48 stride: 1 pad: SAME
-   7 DWCONV  49  51  w: 53 b: 52 stride: 2 pad: SAME
-   8 CONV    51  55  w: 56 b: 54 stride: 1 pad: SAME
-   9 DWCONV  55  57  w: 59 b: 58 stride: 1 pad: SAME
-   10 CONV    57  61  w: 62 b: 60 stride: 1 pad: SAME
-   11 DWCONV  61  63  w: 65 b: 64 stride: 2 pad: SAME
-   12 CONV    63  67  w: 68 b: 66 stride: 1 pad: SAME
-   13 DWCONV  67  69  w: 71 b: 70 stride: 1 pad: SAME
-   14 CONV    69  73  w: 74 b: 72 stride: 1 pad: SAME
-   15 DWCONV  73  75  w: 77 b: 76 stride: 1 pad: SAME
-   16 CONV    75  79  w: 80 b: 78 stride: 1 pad: SAME
-   17 DWCONV  79  81  w: 83 b: 82 stride: 1 pad: SAME
-   18 CONV    81  85  w: 86 b: 84 stride: 1 pad: SAME
-   19 DWCONV  85   9  w: 11 b: 10 stride: 1 pad: SAME
-   20 CONV     9  13  w: 14 b: 12 stride: 1 pad: SAME
-   21 DWCONV  13  15  w: 17 b: 16 stride: 1 pad: SAME
-   22 CONV    15  19  w: 20 b: 18 stride: 1 pad: SAME
-   23 DWCONV  19  21  w: 23 b: 22 stride: 2 pad: SAME
-   24 CONV    21  25  w: 26 b: 24 stride: 1 pad: SAME
-   25 DWCONV  25  27  w: 29 b: 28 stride: 1 pad: SAME
-   26 CONV    27  31  w: 32 b: 30 stride: 1 pad: SAME
-   27 POOL    31   0  filter: 0x0 stride: 0 pad: VALID
+   teflon: compiling graph: 89 tensors 27 operations
+   idx scale     zp has_data size
+   =======================================
+     0 0.023528   0 no       1x1x1x1024
+     1 0.166099  42 no       1x1x1x1001
+     2 0.000117   0 yes      1x1x1x1001
+     3 0.004987  4a yes      1001x1x1x1024
+     4 0.166099  42 no       1x1x1x1001
+     5 0.000000   0 yes      1x1x1x2
+     6 0.000171   0 yes      1x1x1x32
+     7 0.023528   0 no       1x112x112x32
+     8 0.021827  97 yes      32x3x3x3
+     9 0.023528   0 no       1x14x14x512
+   ...
 
-   teflon: compiled graph, took 10307 ms
-   teflon: invoked graph, took 21 ms
-   teflon: invoked graph, took 17 ms
-   teflon: invoked graph, took 17 ms
-   teflon: invoked graph, took 17 ms
-   teflon: invoked graph, took 16 ms
-   0.866667: military uniform
+   idx type            inputs               outputs
+   ==========================================================================
+     0 CONV            88,8,6               7
+     1 DWCONV          7,35,34              33
+     2 CONV            33,38,36             37
+     3 DWCONV          37,41,40             39
+     4 CONV            39,44,42             43
+     5 DWCONV          43,47,46             45
+     6 CONV            45,50,48             49
+     7 DWCONV          49,53,52             51
+     8 CONV            51,56,54             55
+     9 DWCONV          55,59,58             57
+    10 CONV            57,62,60             61
+    11 DWCONV          61,65,64             63
+    12 CONV            63,68,66             67
+    13 DWCONV          67,71,70             69
+    14 CONV            69,74,72             73
+    15 DWCONV          73,77,76             75
+    16 CONV            75,80,78             79
+    17 DWCONV          79,83,82             81
+    18 CONV            81,86,84             85
+    19 DWCONV          85,11,10             9
+    20 CONV            9,14,12              13
+    21 DWCONV          13,17,16             15
+    22 CONV            15,20,18             19
+    23 DWCONV          19,23,22             21
+    24 CONV            21,26,24             25
+    25 DWCONV          25,29,28             27
+    26 CONV            27,32,30             31
+
+   teflon: compiled graph, took 1911 ms
+
+   ...
+   teflon: compiled graph, took 602 ms
+   teflon: invoked graph, took 7 ms
+   teflon: invoked graph, took 1 ms
+   teflon: invoked graph, took 7 ms
+   teflon: invoked graph, took 0 ms
+   teflon: invoked graph, took 7 ms
+   teflon: invoked graph, took 1 ms
+   teflon: invoked graph, took 7 ms
+   teflon: invoked graph, took 0 ms
+   teflon: invoked graph, took 7 ms
+   teflon: invoked graph, took 0 ms
+   0.870588: military uniform
    0.031373: Windsor tie
-   0.015686: mortarboard
+   0.011765: mortarboard
    0.007843: bow tie
-   0.007843: academic
+   0.007843: bulletproof vest
+   time: 7.549ms

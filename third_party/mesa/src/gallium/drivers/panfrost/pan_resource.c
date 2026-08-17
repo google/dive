@@ -5,30 +5,7 @@
  * Copyright (C) 2018-2019 Alyssa Rosenzweig
  * Copyright (C) 2019 Collabora, Ltd.
  * Copyright (C) 2023 Amazon.com, Inc. or its affiliates
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * Authors (Collabora):
- *   Tomeu Vizoso <tomeu.vizoso@collabora.com>
- *   Alyssa Rosenzweig <alyssa.rosenzweig@collabora.com>
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include <fcntl.h>
@@ -37,6 +14,7 @@
 
 #include "frontend/winsys_handle.h"
 #include "util/format/u_format.h"
+#include "util/os_misc.h"
 #include "util/u_debug_image.h"
 #include "util/u_drm.h"
 #include "util/u_gen_mipmap.h"
@@ -45,7 +23,6 @@
 #include "util/u_surface.h"
 #include "util/u_transfer.h"
 #include "util/u_transfer_helper.h"
-#include "util/perf/cpu_trace.h"
 #include "util/streaming-load-memcpy.h"
 
 #include "decode.h"
@@ -56,6 +33,7 @@
 #include "pan_resource.h"
 #include "pan_screen.h"
 #include "pan_tiling.h"
+#include "pan_trace.h"
 #include "pan_util.h"
 
 static void
@@ -65,6 +43,8 @@ panfrost_clear_depth_stencil(struct pipe_context *pipe,
                              unsigned dsty, unsigned width, unsigned height,
                              bool render_condition_enabled)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
+
    struct panfrost_context *ctx = pan_context(pipe);
 
    if (render_condition_enabled && !panfrost_render_condition_check(ctx))
@@ -88,6 +68,8 @@ panfrost_clear_render_target(struct pipe_context *pipe,
                              unsigned dsty, unsigned width, unsigned height,
                              bool render_condition_enabled)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
+
    struct panfrost_context *ctx = pan_context(pipe);
 
    if (render_condition_enabled && !panfrost_render_condition_check(ctx))
@@ -102,6 +84,12 @@ panfrost_clear_render_target(struct pipe_context *pipe,
       ctx, (render_condition_enabled ? PAN_RENDER_COND : PAN_RENDER_BASE) | PAN_SAVE_FRAGMENT_CONSTANT);
    util_blitter_clear_render_target(ctx->blitter, dst, color, dstx, dsty, width,
                                     height);
+}
+
+static uint64_t
+panfrost_max_res_size_b(unsigned arch)
+{
+   return u_uintN_max(arch < 11 ? 32 : 48);
 }
 
 static bool
@@ -130,21 +118,31 @@ panfrost_resource_init_image(
 
    /* The rest of the resource planes will be initialized when we hit the first
     * plane. */
-   if (plane_idx > 0 || format_plane_count == 1)
+   if (plane_idx > 0)
       return true;
 
-   plane_idx = 1;
-   for (struct panfrost_resource *plane = pan_resource(rsc->base.next);
-        plane && plane_idx < ARRAY_SIZE(rsc->image.planes);
-        plane = pan_resource(plane->base.next))
-      rsc->image.planes[plane_idx++] = &plane->plane;
+   if (format_plane_count > 1) {
+      plane_idx = 1;
+      for (struct panfrost_resource *plane = pan_resource(rsc->base.next);
+         plane && plane_idx < ARRAY_SIZE(rsc->image.planes);
+         plane = pan_resource(plane->base.next))
+         rsc->image.planes[plane_idx++] = &plane->plane;
 
-   assert(plane_idx == util_format_get_num_planes(iprops->format));
+      assert(plane_idx == util_format_get_num_planes(iprops->format));
 
-   for (struct panfrost_resource *plane = pan_resource(rsc->base.next);
-        plane; plane = pan_resource(plane->base.next)) {
-      memcpy(plane->image.planes, rsc->image.planes, sizeof(plane->image.planes));
+      for (struct panfrost_resource *plane = pan_resource(rsc->base.next);
+         plane; plane = pan_resource(plane->base.next)) {
+         memcpy(plane->image.planes, rsc->image.planes, sizeof(plane->image.planes));
+      }
    }
+
+   /* validate layout */
+   uint64_t res_size = 0;
+   for (uint32_t i = 0; i < util_format_get_num_planes(iprops->format); i++)
+      res_size += rsc->image.planes[i]->layout.data_size_B;
+
+   if (res_size > panfrost_max_res_size_b(dev->arch))
+      return false;
 
    return true;
 }
@@ -239,7 +237,7 @@ pan_resource_afbcp_stop(struct panfrost_resource *prsrc)
 static void
 panfrost_resource_destroy(struct pipe_screen *screen, struct pipe_resource *pt)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    struct panfrost_device *dev = pan_device(screen);
    struct panfrost_resource *rsrc = (struct panfrost_resource *)pt;
@@ -282,6 +280,8 @@ panfrost_resource_import_bo(struct panfrost_resource *rsc,
    rsc->bo = panfrost_bo_import(dev, fd);
    if (!rsc->bo)
       return -1;
+
+   pan_crc_state_set_ptr(&rsc->crc_state, &rsc->bo->ptr);
 
    return 0;
 }
@@ -351,6 +351,8 @@ panfrost_resource_from_handle(struct pipe_screen *pscreen,
                               const struct pipe_resource *templat,
                               struct winsys_handle *whandle, unsigned usage)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
+
    struct panfrost_device *dev = pan_device(pscreen);
    struct panfrost_resource *rsc;
    struct pipe_resource *prsc;
@@ -464,8 +466,7 @@ panfrost_set_resource_label(UNUSED struct pipe_screen *pscreen,
       return;
 
    char *old_label = (char *)panfrost_bo_set_label(rsrc->bo, new_label);
-   if (old_label)
-      free(old_label);
+   free(old_label);
 }
 
 static bool
@@ -848,7 +849,7 @@ panfrost_should_checksum(const struct panfrost_device *dev,
 
    return pres->base.bind & PIPE_BIND_RENDER_TARGET && panfrost_is_2d(pres) &&
           bytes_per_pixel <= bytes_per_pixel_max &&
-          pres->base.last_level == 0 && !(dev->debug & PAN_DBG_NO_CRC);
+          !(dev->debug & PAN_DBG_NO_CRC);
 }
 
 static bool
@@ -871,8 +872,12 @@ panfrost_resource_try_setup(struct pipe_screen *screen,
    /* Z32_S8X24 variants are actually stored in 2 planes (one per
     * component), we have to adjust the format on the first plane.
     */
+   unsigned arch = pan_arch(dev->kmod.dev->props.gpu_id);
    if (fmt == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT)
       fmt = PIPE_FORMAT_Z32_FLOAT;
+   else if (drm_is_afbc(chosen_mod) && fmt == PIPE_FORMAT_Z24X8_UNORM &&
+            arch >= 9)
+      fmt = PIPE_FORMAT_Z24_UNORM_PACKED;
 
    pres->modifier = chosen_mod;
 
@@ -1051,10 +1056,10 @@ panfrost_can_create_resource(struct pipe_screen *screen,
    if (!os_get_total_physical_memory(&system_memory))
       return false;
 
-   /* Limit maximum texture size to a quarter of the system memory, to avoid
-    * allocating huge textures on systems with little memory.
-    */
-   return tmp.plane.layout.data_size_B <= system_memory / 4;
+   const float heap_memory_percent = pan_screen(screen)->heap_memory_percent;
+   uint64_t memory = os_get_gpu_heap_size(heap_memory_percent, NULL);
+
+   return tmp.plane.layout.data_size_B <= memory;
 }
 
 static struct pipe_resource *
@@ -1062,7 +1067,7 @@ panfrost_resource_create_with_modifier(struct pipe_screen *screen,
                                        const struct pipe_resource *template,
                                        uint64_t modifier, unsigned plane_idx)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    struct panfrost_device *dev = pan_device(screen);
 
@@ -1168,6 +1173,7 @@ panfrost_resource_create_with_modifier(struct pipe_screen *screen,
 
       so->bo =
          panfrost_bo_create(dev, so->plane.layout.data_size_B, flags, res_label);
+      pan_crc_state_set_ptr(&so->crc_state, &so->bo->ptr);
 
       if (!so->bo) {
          panfrost_resource_destroy(screen, &so->base);
@@ -1560,7 +1566,7 @@ panfrost_ptr_map(struct pipe_context *pctx, struct pipe_resource *resource,
                  const struct pipe_box *box,
                  struct pipe_transfer **out_transfer)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    struct panfrost_context *ctx = pan_context(pctx);
    struct panfrost_device *dev = pan_device(pctx->screen);
@@ -1716,6 +1722,7 @@ panfrost_ptr_map(struct pipe_context *pctx, struct pipe_resource *resource,
             panfrost_bo_unreference(rsrc->bo);
             rsrc->bo = newbo;
             rsrc->plane.base = newbo->ptr.gpu;
+            pan_crc_state_set_ptr(&rsrc->crc_state, &newbo->ptr);
 
             if (!copy_resource && drm_is_afbc(rsrc->modifier)) {
                if (panfrost_resource_init_afbc_headers(rsrc))
@@ -1804,7 +1811,7 @@ pan_resource_modifier_convert(struct panfrost_context *ctx,
                               struct panfrost_resource *rsrc, uint64_t modifier,
                               bool copy_resource, const char *reason)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    bool need_shadow = rsrc->modifier_constant;
 
@@ -1889,6 +1896,7 @@ pan_resource_modifier_convert(struct panfrost_context *ctx,
       rsrc->bo = tmp_rsrc->bo;
       rsrc->plane.base = rsrc->bo->ptr.gpu;
       panfrost_bo_reference(rsrc->bo);
+      pan_crc_state_set_ptr(&rsrc->crc_state, &rsrc->bo->ptr);
 
       rsrc->owns_label = tmp_rsrc->owns_label;
       tmp_rsrc->owns_label = false;
@@ -2003,7 +2011,7 @@ static bool
 pan_resource_afbcp_get_payload_sizes(struct panfrost_context *ctx,
                                      struct panfrost_resource *prsrc)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    afbcp_debug(ctx,
                "AFBC-P prsrc=%p: Get payload sizes (reads=%u bo_size=%zu, gpu=%s)",
@@ -2014,6 +2022,7 @@ pan_resource_afbcp_get_payload_sizes(struct panfrost_context *ctx,
 
    struct panfrost_screen *screen = pan_screen(ctx->base.screen);
    struct panfrost_device *dev = pan_device(ctx->base.screen);
+   enum pipe_format format = prsrc->base.format;
    uint64_t modifier = prsrc->modifier;
    unsigned last_level = prsrc->base.last_level;
    unsigned layout_size = 0;
@@ -2023,9 +2032,9 @@ pan_resource_afbcp_get_payload_sizes(struct panfrost_context *ctx,
          &prsrc->plane.layout.slices[level];
       unsigned nr_blocks =
          pan_afbc_stride_blocks(
-            modifier, slice->afbc.header.row_stride_B) *
+            format, modifier, slice->afbc.header.row_stride_B) *
          pan_afbc_height_blocks(
-            modifier, u_minify(prsrc->image.props.extent_px.height, level));
+            format, modifier, u_minify(prsrc->image.props.extent_px.height, level));
       prsrc->afbcp->layout_offsets[level] = layout_size;
       layout_size += nr_blocks * sizeof(struct pan_afbc_payload_extent);
    }
@@ -2103,7 +2112,7 @@ static void
 pan_resource_afbcp_get_payload_offsets(struct panfrost_context *ctx,
                                        struct panfrost_resource *prsrc)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    afbcp_debug(ctx,
                "AFBC-P prsrc=%p: Get payload offsets (reads=%u bo_size=%zu)",
@@ -2112,6 +2121,7 @@ pan_resource_afbcp_get_payload_offsets(struct panfrost_context *ctx,
 
    struct panfrost_device *dev = pan_device(ctx->base.screen);
    uint64_t modifier = prsrc->modifier;
+   enum pipe_format format = prsrc->base.format;
    unsigned last_level = prsrc->base.last_level;
    unsigned total_size = 0;
 
@@ -2122,9 +2132,9 @@ pan_resource_afbcp_get_payload_offsets(struct panfrost_context *ctx,
          &prsrc->afbcp->plane.layout.slices[level];
       unsigned nr_blocks_total =
          pan_afbc_stride_blocks(
-            modifier, src_slice->afbc.header.row_stride_B) *
+            format, modifier, src_slice->afbc.header.row_stride_B) *
          pan_afbc_height_blocks(
-            modifier, u_minify(prsrc->image.props.extent_px.height, level));
+            format, modifier, u_minify(prsrc->image.props.extent_px.height, level));
       uint32_t body_offset_B = pan_afbc_body_offset(
          dev->arch, modifier, src_slice->afbc.header.surface_size_B);
       struct pan_afbc_payload_extent *layout =
@@ -2159,7 +2169,7 @@ static bool
 pan_resource_afbcp_pack(struct panfrost_context *ctx,
                         struct panfrost_resource *prsrc)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    afbcp_debug(ctx, "AFBC-P prsrc=%p: Pack (reads=%u bo_size=%zu ratio=%.2f)",
                prsrc, prsrc->afbcp->nr_consecutive_reads,
@@ -2206,7 +2216,7 @@ static void
 pan_resource_afbcp_commit(struct panfrost_context *ctx,
                           struct panfrost_resource *prsrc)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    afbcp_debug(ctx,
                "AFBC-P prsrc=%p: Commit (reads=%u bo_size=%zu ratio=%.2f)",
@@ -2222,7 +2232,7 @@ pan_resource_afbcp_commit(struct panfrost_context *ctx,
    prsrc->plane.layout.data_size_B = prsrc->afbcp->size;
    prsrc->plane.base = prsrc->afbcp->packed_bo->ptr.gpu;
    prsrc->image.props.crc = false;
-   prsrc->valid.crc = false;
+   pan_crc_state_invalidate(&prsrc->crc_state);
 
    for (unsigned level = 0; level <= prsrc->base.last_level; ++level)
       prsrc->plane.layout.slices[level] =
@@ -2234,6 +2244,7 @@ pan_resource_afbcp_commit(struct panfrost_context *ctx,
    panfrost_bo_unreference(prsrc->bo);
    prsrc->bo = prsrc->afbcp->packed_bo;
    prsrc->afbcp->packed_bo = NULL;
+   pan_crc_state_set_ptr(&prsrc->crc_state, &prsrc->bo->ptr);
 
    pan_resource_afbcp_stop(prsrc);
 }
@@ -2309,7 +2320,7 @@ pan_resource_afbcp_update(struct panfrost_context *ctx,
 static void
 panfrost_ptr_unmap(struct pipe_context *pctx, struct pipe_transfer *transfer)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
 
    /* Gallium expects writeback here, so we tile */
 
@@ -2321,7 +2332,7 @@ panfrost_ptr_unmap(struct pipe_context *pctx, struct pipe_transfer *transfer)
    struct panfrost_device *dev = pan_device(pctx->screen);
 
    if (transfer->usage & PIPE_MAP_WRITE)
-      prsrc->valid.crc = false;
+      pan_crc_state_invalidate(&prsrc->crc_state);
 
    /* AFBC/AFRC will use a staging resource. `initialized` will be set when
     * the fragment job is created; this is deferred to prevent useless surface
@@ -2340,11 +2351,12 @@ panfrost_ptr_unmap(struct pipe_context *pctx, struct pipe_transfer *transfer)
             pan_resource_afbcp_stop(prsrc);
 
             panfrost_resource_setup(screen, prsrc, DRM_FORMAT_MOD_LINEAR,
-                                    prsrc->image.props.format, 0);
+                                    prsrc->base.format, 0);
 
             prsrc->bo = pan_resource(trans->staging.rsrc)->bo;
             prsrc->plane.base = prsrc->bo->ptr.gpu;
             panfrost_bo_reference(prsrc->bo);
+            pan_crc_state_set_ptr(&prsrc->crc_state, &prsrc->bo->ptr);
 
             prsrc->owns_label = pan_resource(trans->staging.rsrc)->owns_label;
             pan_resource(trans->staging.rsrc)->owns_label = false;
@@ -2463,6 +2475,18 @@ static enum pipe_format
 panfrost_resource_get_internal_format(struct pipe_resource *rsrc)
 {
    struct panfrost_resource *prsrc = (struct panfrost_resource *)rsrc;
+
+   /* With AFBC enabled, Z24X8 can be packed into Z24 internally. However, with
+    * AFBC we can't map directly to CPU so we setup a new resource in the
+    * external format which is handled by Panfrost. To stop u_transfer_helper
+    * from trying to handle it, we return the external format here.
+    */
+   if (prsrc->base.format == PIPE_FORMAT_Z24X8_UNORM &&
+       prsrc->image.props.format == PIPE_FORMAT_Z24_UNORM_PACKED) {
+      assert(drm_is_afbc(prsrc->modifier));
+      return PIPE_FORMAT_Z24X8_UNORM;
+   }
+
    return prsrc->image.props.format;
 }
 
@@ -2498,6 +2522,8 @@ panfrost_generate_mipmap(struct pipe_context *pctx, struct pipe_resource *prsrc,
                          unsigned last_level, unsigned first_layer,
                          unsigned last_layer)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_RESOURCE);
+
    struct panfrost_resource *rsrc = pan_resource(prsrc);
 
    perf_debug(pan_context(pctx), "Unoptimized mipmap generation");

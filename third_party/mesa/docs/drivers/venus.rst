@@ -27,25 +27,24 @@ implementation-defined behaviors to support ``vkMapMemory`` (see `below
 drivers meeting the requirements.  It has only been tested with:
 
 - ANV 21.1 or later
+   - Note: with Intel Meteor Lake or xe driver, you need 6.16+ kernel and 11.0+
+     QEMU with ``-accel kvm,honor-guest-pat=on`` (request to default that on is
+     `here <https://gitlab.com/qemu-project/qemu/-/work_items/3357>`__).
 - RADV 21.1 or later
    - Note: you need 6.13+ kernel that already has
      `KVM: Stop grabbing references to PFNMAP'd pages
      <https://lore.kernel.org/all/20241010182427.1434605-1-seanjc@google.com/>`__.
-   - Note: for dGPU paired with Intel CPU, you need 6.11+ kernel patched with
-     `KVM: VMX: Always honor guest PAT on CPUs that support self-snoop
-     <https://lore.kernel.org/all/20240309010929.1403984-6-seanjc@google.com/>`__,
-     or 6.16+ kernel with VMM to opt-out ``KVM_X86_QUIRK_IGNORE_GUEST_PAT`` (QEMU
-     request is `here <https://gitlab.com/qemu-project/qemu/-/issues/2943>`__).
+   - Note: for dGPU paired with Intel CPU, you need 6.16+ kernel and 11.0+ QEMU
+     with ``-accel kvm,honor-guest-pat=on`` (request to default that on is
+     `here <https://gitlab.com/qemu-project/qemu/-/work_items/3357>`__).
+- NVIDIA (Proprietary) 570.86 or later
+   - Note: if paired with Intel CPU, you need 6.16+ kernel and 11.0+ QEMU with
+     ``-accel kvm,honor-guest-pat=on`` (request to default that on is
+     `here <https://gitlab.com/qemu-project/qemu/-/work_items/3357>`__).
+- ARM Mali (Proprietary) r32p0 or later
 - Turnip 22.0 or later
 - PanVK 25.1 or later
 - Lavapipe 22.1 or later
-- Mali (Proprietary) r32p0 or later
-- NVIDIA (Proprietary) 570.86 or later
-   - Note: if paired with Intel CPU, you need 6.11+ kernel patched with
-     `KVM: VMX: Always honor guest PAT on CPUs that support self-snoop
-     <https://lore.kernel.org/all/20240309010929.1403984-6-seanjc@google.com/>`__,
-     or 6.16+ kernel with VMM to opt-out ``KVM_X86_QUIRK_IGNORE_GUEST_PAT`` (QEMU
-     request is `here <https://gitlab.com/qemu-project/qemu/-/issues/2943>`__).
 
 The Venus driver requires supports for
 
@@ -90,11 +89,48 @@ the host driver as well when building the Venus driver.  Just remember to set
 :envvar:`VK_DRIVER_FILES` when starting the vtest server so that the vtest
 server finds the locally built host driver.
 
-Virtio-GPU
-----------
+QEMU
+----
 
-The driver requires ``VIRTGPU_PARAM_CONTEXT_INIT`` from the virtio-gpu kernel
-driver, which was upstreamed in kernel 5.16.
+This is how one might want to start QEMU
+
+.. code-block:: sh
+
+ $ ./qemu-system-x86_64                                             \
+       -enable-kvm                                                  \
+       -M q35                                                       \
+       -smp 8                                                       \
+       -m 4G                                                        \
+       -cpu host                                                    \
+       -net nic,model=virtio                                        \
+       -net user,hostfwd=tcp::2222-:22                              \
+       -device virtio-gpu-gl,hostmem=4G,blob=true,venus=true        \
+       -vga none                                                    \
+       -display sdl,gl=on,show-cursor=on                            \
+       -usb -device usb-tablet                                      \
+       -object memory-backend-memfd,id=mem1,size=4G                 \
+       -machine memory-backend=mem1                                 \
+       -hda $IMG
+
+To build QEMU, this is how one might want to configure it
+
+.. code-block:: sh
+
+ $ cd <QEMU source dir>
+ $ mkdir build && cd build
+ $ ../configure                                                     \
+       --prefix=$HOME/.local                                        \
+       --target-list=x86_64-softmmu                                 \
+       --enable-kvm                                                 \
+       --disable-werror                                             \
+       --enable-opengl                                              \
+       --enable-virglrenderer                                       \
+       --enable-gtk                                                 \
+       --enable-sdl
+ $ make -j$(nproc)
+
+crosvm
+------
 
 crosvm is written in Rust.  To build crosvm, make sure Rust has been installed
 and
@@ -127,13 +163,15 @@ This is how one might want to start crosvm
 assuming a working system is installed to partition 1 of ``disk.img``.
 ``sudo`` or ``CAP_NET_ADMIN`` is needed to set up the TAP network device.
 
+Android Cuttlefish
+------------------
+
+Venus isn't supported in the upstream Cuttlefish yet, for ``venus_guest_angle``
+mode used in Mesa CI against Android 16 AOSP, the instruction is
+`here <https://gitlab.freedesktop.org/gfx-ci/android/aosp-manifest/-/blob/android16-release+venus/README.md>`__.
+
 Optional Requirements
 ---------------------
-
-When virglrenderer is built with ``-Dminigbm_allocation=true``, the Venus
-renderer might need to import GBM BOs.  The imports will fail unless the host
-driver supports the formats, especially multi-planar ones, and the DRM format
-modifiers of the GBM BOs.
 
 In the future, if virglrenderer's ``virgl_renderer_export_fence`` is
 supported, the Venus renderer will require :ext:`VK_KHR_external_fence_fd`

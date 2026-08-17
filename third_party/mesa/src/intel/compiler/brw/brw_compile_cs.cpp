@@ -6,7 +6,6 @@
 #include "brw_shader.h"
 #include "brw_analysis.h"
 #include "brw_builder.h"
-#include "brw_generator.h"
 #include "brw_nir.h"
 #include "brw_cfg.h"
 #include "brw_private.h"
@@ -25,26 +24,22 @@ fill_push_const_block_info(struct brw_push_const_block *block, unsigned dwords)
    block->size = block->regs * 32;
 }
 
-static void
-cs_fill_push_const_info(const struct intel_device_info *devinfo,
-                        struct brw_cs_prog_data *cs_prog_data)
+extern "C" void
+brw_cs_fill_push_const_info(const struct intel_device_info *devinfo,
+                            struct brw_cs_prog_data *cs_prog_data,
+                            int subgroup_id_index)
 {
    const struct brw_stage_prog_data *prog_data = &cs_prog_data->base;
-   int subgroup_id_index = brw_get_subgroup_id_param_index(devinfo, prog_data);
-
-   /* The thread ID should be stored in the last param dword */
-   assert(subgroup_id_index == -1 ||
-          subgroup_id_index == (int)prog_data->nr_params - 1);
 
    unsigned cross_thread_dwords, per_thread_dwords;
-   if (subgroup_id_index >= 0) {
+   if (devinfo->verx10 < 125 && subgroup_id_index >= 0) {
       /* Fill all but the last register with cross-thread payload */
       cross_thread_dwords = 8 * (subgroup_id_index / 8);
-      per_thread_dwords = prog_data->nr_params - cross_thread_dwords;
+      per_thread_dwords = prog_data->push_sizes[0] / 4 - cross_thread_dwords;
       assert(per_thread_dwords > 0 && per_thread_dwords <= 8);
    } else {
       /* Fill all data using cross-thread payload */
-      cross_thread_dwords = prog_data->nr_params;
+      cross_thread_dwords = prog_data->push_sizes[0] / 4;
       per_thread_dwords = 0u;
    }
 
@@ -55,7 +50,7 @@ cs_fill_push_const_info(const struct intel_device_info *devinfo,
           cs_prog_data->push.per_thread.size == 0);
    assert(cs_prog_data->push.cross_thread.dwords +
           cs_prog_data->push.per_thread.dwords ==
-             prog_data->nr_params);
+             prog_data->push_sizes[0] / 4);
 }
 
 static bool
@@ -120,49 +115,16 @@ brw_nir_uses_sampler(nir_shader *shader)
                                        NULL);
 }
 
-static inline uint32_t *
-brw_stage_prog_data_add_params(struct brw_stage_prog_data *prog_data,
-                               unsigned nr_new_params)
-{
-   unsigned old_nr_params = prog_data->nr_params;
-   prog_data->nr_params += nr_new_params;
-   prog_data->param = reralloc(ralloc_parent(prog_data->param),
-                               prog_data->param, uint32_t,
-                               prog_data->nr_params);
-   return prog_data->param + old_nr_params;
-}
-
-static void
-brw_adjust_uniforms(brw_shader &s)
-{
-   if (s.devinfo->verx10 >= 125)
-      return;
-
-   assert(mesa_shader_stage_is_compute(s.stage));
-
-   if (brw_get_subgroup_id_param_index(s.devinfo, s.prog_data) == -1) {
-      /* Add uniforms for builtins after regular NIR uniforms. */
-      assert(s.uniforms == s.prog_data->nr_params);
-
-      /* Subgroup ID must be the last uniform on the list.  This will make
-       * easier later to split between cross thread and per thread
-       * uniforms.
-       */
-      uint32_t *param = brw_stage_prog_data_add_params(s.prog_data, 1);
-      *param = BRW_PARAM_BUILTIN_SUBGROUP_ID;
-   }
-
-   s.uniforms = s.prog_data->nr_params;
-}
-
 const unsigned *
 brw_compile_cs(const struct brw_compiler *compiler,
                struct brw_compile_cs_params *params)
 {
    const struct intel_device_info *devinfo = compiler->devinfo;
    struct nir_shader *nir = params->base.nir;
-   const struct brw_cs_prog_key *key = params->key;
-   struct brw_cs_prog_data *prog_data = params->prog_data;
+   const struct brw_cs_prog_key *key =
+      (const struct brw_cs_prog_key *)params->base.key;
+   struct brw_cs_prog_data *prog_data =
+      (struct brw_cs_prog_data *)params->base.prog_data;
 
    const bool debug_enabled =
       brw_should_print_shader(nir, params->base.debug_flag ?
@@ -170,17 +132,34 @@ brw_compile_cs(const struct brw_compiler *compiler,
                                    params->base.source_hash);
 
    brw_prog_data_init(&prog_data->base, &params->base);
-   prog_data->uses_inline_data = brw_nir_uses_inline_data(nir) ||
-                                 key->base.uses_inline_push_addr;
-   assert(compiler->devinfo->verx10 >= 125 || !prog_data->uses_inline_data);
 
    if (!nir->info.workgroup_size_variable) {
       prog_data->local_size[0] = nir->info.workgroup_size[0];
       prog_data->local_size[1] = nir->info.workgroup_size[1];
       prog_data->local_size[2] = nir->info.workgroup_size[2];
+
+      if (nir->info.workgroup_size[0] * nir->info.workgroup_size[1] % 32 == 0) {
+         struct nir_shader_compiler_options *options =
+            ralloc(nir, struct nir_shader_compiler_options);
+
+         *options = *nir->options;
+         options->divergence_analysis_options = nir_divergence_options(
+            options->divergence_analysis_options |
+            nir_divergence_uniform_local_invocation_id_z);
+         nir->options = options;
+      }
    }
 
-   brw_postprocess_nir_opts(nir, compiler, key->base.robust_flags);
+   brw_pass_tracker pt_ = {
+      .nir = nir,
+      .dispatch_width = 0,
+      .compiler = compiler,
+      .key = &key->base,
+      .archiver = params->base.archiver,
+   }, *pt = &pt_;
+
+   BRW_NIR_SNAPSHOT("first");
+   brw_postprocess_nir_opts(pt);
 
    brw_simd_selection_state simd_state{
       .devinfo = compiler->devinfo,
@@ -209,16 +188,21 @@ brw_compile_cs(const struct brw_compiler *compiler,
       const unsigned dispatch_width = 8u << simd;
 
       nir_shader *shader = nir_shader_clone(params->base.mem_ctx, nir);
-      brw_debug_archive_nir(params->base.archiver, shader, dispatch_width, "first");
 
-      brw_nir_apply_key(shader, compiler, &key->base,
-                        dispatch_width);
+      pt_ = {
+         .nir = shader,
+         .dispatch_width = dispatch_width,
+         .compiler = compiler,
+         .archiver = params->base.archiver,
+      };
 
-      NIR_PASS(_, shader, brw_nir_lower_simd, dispatch_width);
+      BRW_NIR_SNAPSHOT("first");
+      brw_nir_apply_key(pt, &key->base, dispatch_width);
 
-      brw_nir_optimize(shader, devinfo);
-      brw_postprocess_nir_out_of_ssa(shader, dispatch_width,
-                                     params->base.archiver, debug_enabled);
+      brw_nir_optimize(pt);
+      /* brw_nir_optimize undoes late lowerings. */
+      BRW_NIR_PASS(nir_opt_algebraic_late);
+      brw_postprocess_nir_out_of_ssa(pt, debug_enabled);
 
       const brw_shader_params shader_params = {
          .compiler                = compiler,
@@ -233,7 +217,6 @@ brw_compile_cs(const struct brw_compiler *compiler,
          .archiver                = params->base.archiver,
       };
       v[simd] = std::make_unique<brw_shader>(&shader_params);
-      brw_adjust_uniforms(*v[simd]);
 
       const bool allow_spilling = simd == 0 ||
          (!simd_state.compiled[simd - 1] && !brw_simd_should_compile(simd_state, simd - 1)) ||
@@ -245,8 +228,6 @@ brw_compile_cs(const struct brw_compiler *compiler,
       }
 
       if (run_cs(*v[simd], allow_spilling)) {
-         cs_fill_push_const_info(compiler->devinfo, prog_data);
-
          brw_simd_mark_compiled(simd_state, simd, v[simd]->spilled_any_registers);
 
          if (devinfo->ver >= 30 && !v[simd]->spilled_any_registers &&
@@ -278,36 +259,35 @@ brw_compile_cs(const struct brw_compiler *compiler,
    if (!nir->info.workgroup_size_variable)
       prog_data->prog_mask = 1 << selected_simd;
 
-   brw_generator g(compiler, &params->base, &prog_data->base,
-                  MESA_SHADER_COMPUTE);
-   if (unlikely(debug_enabled)) {
-      char *name = ralloc_asprintf(params->base.mem_ctx,
-                                   "%s compute shader %s",
-                                   nir->info.label ?
-                                   nir->info.label : "unnamed",
-                                   nir->info.name);
-      g.enable_debug(name);
-   }
+   brw_to_binary_params to_binary_params = {
+      .compiler = compiler,
+      .params = &params->base,
+      .prog_data = &prog_data->base,
+   };
 
-   uint32_t max_dispatch_width = 8u << (util_last_bit(prog_data->prog_mask) - 1);
-
-   struct genisa_stats *stats = params->base.stats;
+   unsigned num_variants = 0;
    for (unsigned simd = 0; simd < 3; simd++) {
       if (prog_data->prog_mask & (1u << simd)) {
          assert(v[simd]);
-         prog_data->prog_offset[simd] = g.generate_code(*v[simd], stats);
-         if (stats)
-            stats->max_dispatch_width = max_dispatch_width;
-         stats = stats ? stats + 1 : NULL;
-
+         to_binary_params.shaders[simd] = v[simd].get();
+         num_variants++;
          prog_data->base.grf_used = MAX2(prog_data->base.grf_used,
                                          v[simd]->grf_used);
-
-         max_dispatch_width = 8u << simd;
       }
    }
 
-   g.add_const_data(nir->constant_data, nir->constant_data_size);
+   const unsigned *assembly = brw_to_binary(&to_binary_params);
 
-   return g.get_assembly();
+   for (unsigned simd = 0; simd < 3; simd++) {
+      if (prog_data->prog_mask & (1u << simd))
+         prog_data->prog_offset[simd] = v[simd]->start_offset;
+   }
+
+   /* Override per-variant max_dispatch_width to make reports more useful. */
+   const uint32_t max_dispatch_width =
+      8u << (util_last_bit(prog_data->prog_mask) - 1);
+   for (unsigned i = 0; i < num_variants && params->base.stats; i++)
+      params->base.stats[i].max_dispatch_width = max_dispatch_width;
+
+   return assembly;
 }

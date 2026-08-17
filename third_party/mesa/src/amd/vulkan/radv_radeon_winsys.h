@@ -17,8 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "util/u_math.h"
-#include "util/u_memory.h"
 #include <vulkan/vulkan.h>
 #include "ac_cmdbuf.h"
 #include "amd_family.h"
@@ -42,7 +40,7 @@ enum radeon_bo_flag { /* bitfield */
                       RADEON_FLAG_CPU_ACCESS = (1 << 1),
                       RADEON_FLAG_NO_CPU_ACCESS = (1 << 2),
                       RADEON_FLAG_VIRTUAL = (1 << 3),
-                      RADEON_FLAG_VA_UNCACHED = (1 << 4),
+                      RADEON_FLAG_GL2_BYPASS = (1 << 4),
                       RADEON_FLAG_IMPLICIT_SYNC = (1 << 5),
                       RADEON_FLAG_NO_INTERPROCESS_SHARING = (1 << 6),
                       RADEON_FLAG_READ_ONLY = (1 << 7),
@@ -52,6 +50,10 @@ enum radeon_bo_flag { /* bitfield */
                       RADEON_FLAG_REPLAYABLE = (1 << 11),
                       RADEON_FLAG_DISCARDABLE = (1 << 12),
                       RADEON_FLAG_GFX12_ALLOW_DCC = (1 << 13),
+                      RADEON_FLAG_VM_UPDATE_WAIT = (1 << 14),
+                      RADEON_FLAG_VM_PAD_1PAGE = (1 << 15),
+                      RADEON_FLAG_ENCRYPTED = (1 << 16),
+                      RADEON_FLAG_EMULATE_SPARSE_RESIDENCY = (1 << 17),
 };
 
 enum radeon_ctx_priority {
@@ -185,6 +187,7 @@ struct radv_winsys_submit_info {
    struct ac_cmdbuf **continue_preamble_cs;
    struct ac_cmdbuf **postamble_cs;
    bool uses_shadow_regs;
+   bool secure;
 };
 
 /* Kernel effectively allows 0-31. This sets some priorities for fixed
@@ -216,20 +219,18 @@ struct radv_winsys_gpuvm_fault_info {
 };
 
 enum radv_cs_dump_type {
-   RADV_CS_DUMP_TYPE_IBS,
+   RADV_CS_DUMP_TYPE_PREAMBLE_IBS,
+   RADV_CS_DUMP_TYPE_MAIN_IBS,
+   RADV_CS_DUMP_TYPE_POSTAMBLE_IBS,
    RADV_CS_DUMP_TYPE_CTX_ROLLS,
 };
 
 struct radeon_winsys {
    void (*destroy)(struct radeon_winsys *ws);
 
-   void (*query_info)(struct radeon_winsys *ws, struct radeon_info *gpu_info);
-
    uint64_t (*query_value)(struct radeon_winsys *ws, enum radeon_value_id value);
 
    bool (*read_registers)(struct radeon_winsys *ws, unsigned reg_offset, unsigned num_registers, uint32_t *out);
-
-   const char *(*get_chip_name)(struct radeon_winsys *ws);
 
    bool (*query_gpuvm_fault)(struct radeon_winsys *ws, struct radv_winsys_gpuvm_fault_info *fault_info);
 
@@ -263,8 +264,6 @@ struct radeon_winsys {
 
    VkResult (*ctx_create)(struct radeon_winsys *ws, enum radeon_ctx_priority priority, struct radeon_winsys_ctx **ctx);
    void (*ctx_destroy)(struct radeon_winsys_ctx *ctx);
-
-   VkResult (*ctx_is_priority_permitted)(struct radeon_winsys *_ws, enum radeon_ctx_priority priority);
 
    bool (*ctx_wait_idle)(struct radeon_winsys_ctx *ctx, enum amd_ip_type amd_ip_type, int ring_index);
 
@@ -310,9 +309,9 @@ struct radeon_winsys {
 
    void (*dump_bo_log)(struct radeon_winsys *ws, FILE *file);
 
-   int (*get_fd)(struct radeon_winsys *ws);
+   bool (*bo_wait_for_idle)(struct radeon_winsys *ws, struct radeon_winsys_bo *bo);
 
-   const struct vk_sync_type *const *(*get_sync_types)(struct radeon_winsys *ws);
+   int (*get_fd)(struct radeon_winsys *ws);
 
    struct util_sync_provider *(*get_sync_provider)(struct radeon_winsys *ws);
 
@@ -322,6 +321,8 @@ struct radeon_winsys {
                                   uint32_t signal_count,
                                   const struct vk_sync_signal *signals);
 
+   int (*reserve_vmid)(struct radeon_winsys *ws);
+   void (*unreserve_vmid)(struct radeon_winsys *ws);
 };
 
 static inline uint64_t

@@ -1,24 +1,6 @@
 /*
  * Copyright © 2011 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 /**
@@ -32,13 +14,7 @@
  * have to agree on the layout.  However, there is also a "VUE Header" that
  * prescribes a fixed-layout for items that interact with fixed function
  * hardware, such as the clipper and rasterizer.
- *
- * Authors:
- *   Paul Berry <stereotype441@gmail.com>
- *   Chris Forbes <chrisf@ijw.co.nz>
- *   Eric Anholt <eric@anholt.net>
  */
-
 
 #include "brw_compiler.h"
 #include "dev/intel_debug.h"
@@ -145,6 +121,8 @@ brw_compute_per_primitive_map(int *out_per_primitive_map,
 static inline void
 assign_vue_slot(struct intel_vue_map *vue_map, int varying, int slot)
 {
+   STATIC_ASSERT(NUM_TOTAL_VARYING_SLOTS <= INT8_MAX);
+
    /* Make sure this varying hasn't been assigned a slot already */
    assert (vue_map->varying_to_slot[varying] == -1);
 
@@ -170,9 +148,6 @@ brw_compute_vue_map(const struct intel_device_info *devinfo,
        * read/write gl_ClipDistance, which has a fixed slot location.
        * We have to assume the worst and reserve a slot for it, or else
        * the rest of our varyings will be off by a slot.
-       *
-       * Note that we don't have to worry about COL/BFC, as those built-in
-       * variables only exist in legacy GL, which only supports VS and FS.
        */
       slots_valid |= VARYING_BIT_CLIP_DIST0;
       slots_valid |= VARYING_BIT_CLIP_DIST1;
@@ -189,18 +164,8 @@ brw_compute_vue_map(const struct intel_device_info *devinfo,
     */
    slots_valid &= ~VARYING_BIT_FACE;
 
-   /* Make sure that the values we store in vue_map->varying_to_slot and
-    * vue_map->slot_to_varying won't overflow the signed chars that are used
-    * to store them.  Note that since vue_map->slot_to_varying sometimes holds
-    * values equal to BRW_VARYING_SLOT_COUNT, we need to ensure that
-    * BRW_VARYING_SLOT_COUNT is <= 127, not 128.
-    */
-   STATIC_ASSERT(BRW_VARYING_SLOT_COUNT <= 127);
-
-   for (int i = 0; i < BRW_VARYING_SLOT_COUNT; ++i) {
-      vue_map->varying_to_slot[i] = -1;
-      vue_map->slot_to_varying[i] = BRW_VARYING_SLOT_PAD;
-   }
+   memset(vue_map->varying_to_slot, -1, sizeof(vue_map->varying_to_slot));
+   memset(vue_map->slot_to_varying, -1, sizeof(vue_map->slot_to_varying));
 
    int slot = 0;
 
@@ -239,19 +204,6 @@ brw_compute_vue_map(const struct intel_device_info *devinfo,
     * end so that the header ends on a 32-byte boundary".
     */
    slot += slot % 2;
-
-   /* front and back colors need to be consecutive so that we can use
-    * ATTRIBUTE_SWIZZLE_INPUTATTR_FACING to swizzle them when doing
-    * two-sided color.
-    */
-   if (slots_valid & VARYING_BIT_COL0)
-      assign_vue_slot(vue_map, VARYING_SLOT_COL0, slot++);
-   if (slots_valid & VARYING_BIT_BFC0)
-      assign_vue_slot(vue_map, VARYING_SLOT_BFC0, slot++);
-   if (slots_valid & VARYING_BIT_COL1)
-      assign_vue_slot(vue_map, VARYING_SLOT_COL1, slot++);
-   if (slots_valid & VARYING_BIT_BFC1)
-      assign_vue_slot(vue_map, VARYING_SLOT_BFC1, slot++);
 
    /* The hardware doesn't care about the rest of the vertex outputs, so we
     * can assign them however we like.  For normal programs, we simply assign
@@ -297,6 +249,11 @@ brw_compute_vue_map(const struct intel_device_info *devinfo,
       }
    }
 
+   assert(vue_map->varying_to_slot[VARYING_SLOT_PSIZ] == 0);
+   vue_map->varying_to_slot[VARYING_SLOT_PRIMITIVE_SHADING_RATE] = 0;
+   vue_map->varying_to_slot[VARYING_SLOT_LAYER] = 0;
+   vue_map->varying_to_slot[VARYING_SLOT_VIEWPORT] = 0;
+
    vue_map->num_slots = slot;
    vue_map->num_pos_slots = pos_slots;
    vue_map->num_per_vertex_slots = 0;
@@ -326,18 +283,8 @@ brw_compute_tess_vue_map(struct intel_vue_map *vue_map,
       vertex_slots |= VARYING_BIT_CLIP_DIST1;
    }
 
-   /* Make sure that the values we store in vue_map->varying_to_slot and
-    * vue_map->slot_to_varying won't overflow the signed chars that are used
-    * to store them.  Note that since vue_map->slot_to_varying sometimes holds
-    * values equal to VARYING_SLOT_TESS_MAX , we need to ensure that
-    * VARYING_SLOT_TESS_MAX is <= 127, not 128.
-    */
-   STATIC_ASSERT(VARYING_SLOT_TESS_MAX <= 127);
-
-   for (int i = 0; i < VARYING_SLOT_TESS_MAX ; ++i) {
-      vue_map->varying_to_slot[i] = -1;
-      vue_map->slot_to_varying[i] = BRW_VARYING_SLOT_PAD;
-   }
+   memset(vue_map->varying_to_slot, -1, sizeof(vue_map->varying_to_slot));
+   memset(vue_map->slot_to_varying, -1, sizeof(vue_map->slot_to_varying));
 
    int slot = 0;
 
@@ -348,8 +295,8 @@ brw_compute_tess_vue_map(struct intel_vue_map *vue_map,
     * described here, but pretending they're separate allows us to uniquely
     * identify them by distinct slot locations.
     */
-   assign_vue_slot(vue_map, VARYING_SLOT_TESS_LEVEL_INNER, slot++);
    assign_vue_slot(vue_map, VARYING_SLOT_TESS_LEVEL_OUTER, slot++);
+   assign_vue_slot(vue_map, VARYING_SLOT_TESS_LEVEL_INNER, slot++);
 
    /* first assign per-patch varyings */
    const int first_patch_slot = slot;
@@ -409,21 +356,6 @@ brw_compute_tess_vue_map(struct intel_vue_map *vue_map,
    vue_map->num_slots = slot;
 }
 
-static const char *
-varying_name(brw_varying_slot slot, mesa_shader_stage stage)
-{
-   assume(slot < BRW_VARYING_SLOT_COUNT);
-
-   if (slot < VARYING_SLOT_MAX)
-      return gl_varying_slot_name_for_stage((gl_varying_slot)slot, stage);
-
-   static const char *brw_names[] = {
-      [BRW_VARYING_SLOT_PAD - VARYING_SLOT_MAX] = "BRW_VARYING_SLOT_PAD",
-   };
-
-   return brw_names[slot - VARYING_SLOT_MAX];
-}
-
 void
 brw_print_vue_map(FILE *fp, const struct intel_vue_map *vue_map,
                   mesa_shader_stage stage)
@@ -439,21 +371,18 @@ brw_print_vue_map(FILE *fp, const struct intel_vue_map *vue_map,
               vue_map->num_per_patch_slots,
               vue_map->num_per_vertex_slots,
               layout_name);
-      for (int i = 0; i < vue_map->num_slots; i++) {
-         if (vue_map->slot_to_varying[i] >= VARYING_SLOT_PATCH0) {
-            fprintf(fp, "  [%02d] VARYING_SLOT_PATCH%d\n", i,
-                    vue_map->slot_to_varying[i] - VARYING_SLOT_PATCH0);
-         } else {
-            fprintf(fp, "  [%02d] %s\n", i,
-                    varying_name(vue_map->slot_to_varying[i], stage));
-         }
-      }
    } else {
       fprintf(fp, "%s VUE map (%d slots, %s)\n",
               mesa_shader_stage_name(stage), vue_map->num_slots, layout_name);
-      for (int i = 0; i < vue_map->num_slots; i++) {
+   }
+
+   for (int i = 0; i < vue_map->num_slots; i++) {
+      const signed char v = vue_map->slot_to_varying[i];
+      if (v == -1) {
+         fprintf(fp, "  ...\n");
+      } else {
          fprintf(fp, "  [%02d] %s\n", i,
-                 varying_name(vue_map->slot_to_varying[i], stage));
+                 gl_varying_slot_name_for_stage(v, stage));
       }
    }
    fprintf(fp, "\n");

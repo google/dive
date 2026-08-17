@@ -8,17 +8,17 @@ http://0x04.net/cgit/index.cgi/rules-ng-ng
 git clone git://0x04.net/rules-ng-ng
 
 The rules-ng-ng source files this header was generated from are:
-- state.xml     (  30672 bytes, from 2025-09-25 09:52:24)
-- common.xml    (  35664 bytes, from 2025-09-25 09:52:24)
-- common_3d.xml (  15069 bytes, from 2025-09-25 09:52:24)
-- state_hi.xml  (  35909 bytes, from 2025-09-25 09:52:24)
-- copyright.xml (   1597 bytes, from 2024-04-10 16:26:25)
-- state_2d.xml  (  52271 bytes, from 2024-04-10 16:26:25)
-- state_3d.xml  (  92108 bytes, from 2025-09-25 10:08:31)
-- state_blt.xml (  14592 bytes, from 2025-09-25 09:52:24)
-- state_vg.xml  (   5975 bytes, from 2024-04-10 16:26:25)
+- state.xml     (  30672 bytes, from 2026-06-11 21:02:17)
+- common.xml    (  35664 bytes, from 2026-06-11 21:02:17)
+- common_3d.xml (  15069 bytes, from 2026-06-11 21:02:17)
+- state_hi.xml  (  35909 bytes, from 2026-06-11 21:02:17)
+- copyright.xml (   1597 bytes, from 2026-03-02 22:49:28)
+- state_2d.xml  (  52271 bytes, from 2026-03-02 22:49:28)
+- state_3d.xml  (  92258 bytes, from 2026-06-11 21:02:17)
+- state_blt.xml (  15754 bytes, from 2026-06-11 21:02:17)
+- state_vg.xml  (   5975 bytes, from 2026-03-02 22:49:28)
 
-Copyright (C) 2012-2025 by the following authors:
+Copyright (C) 2012-2026 by the following authors:
 - Wladimir J. van der Laan <laanwj@gmail.com>
 - Christian Gmeiner <christian.gmeiner@gmail.com>
 - Lucas Stach <l.stach@pengutronix.de>

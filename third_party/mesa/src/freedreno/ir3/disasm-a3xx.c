@@ -61,17 +61,29 @@ struct disasm_ctx {
 
    int sfu_delay;
 
+   bool cat6_desc_src;  /* last field is {UBO} or {UAV} */
+   bool has_base;
+
    /**
     * State accumulated decoding fields of the current instruction,
     * handled after decoding is complete (ie. at start of next instr)
     */
    struct {
+      const char *name;      /* instruction NAME */
       bool ss;
       uint8_t nop;
       uint8_t repeat;
       bool alias;
       ir3_alias_scope alias_scope;
       bool alias_full;
+
+      bool has_a1;
+      bool has_tex;
+      bool has_samp;
+      bool has_base;
+      uint8_t tex;           /* #tN */
+      uint8_t samp;          /* #sN */
+      uint8_t base;
    } last;
 
    /**
@@ -321,6 +333,10 @@ static const struct opc_info {
    OPC(5, OPC_QUAD_SHUFFLE_VERT,  quad_shuffle.vert),
    OPC(5, OPC_QUAD_SHUFFLE_DIAG,  quad_shuffle.diag),
    OPC(5, OPC_TCINV,        tcinv),
+   OPC(5, OPC_IMG_BINDLESS_HOF,  img_bindless_hof),
+   OPC(5, OPC_IMG_BINDLESS_PCMN, img_bindless_pcmn),
+   OPC(5, OPC_IMG_BINDLESS,      img_bindless),
+
    /* macros are needed here for ir3_print */
    OPC(5, OPC_DSXPP_MACRO,  dsxpp.macro),
    OPC(5, OPC_DSYPP_MACRO,  dsypp.macro),
@@ -431,8 +447,14 @@ static void
 disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
 {
    struct disasm_ctx *ctx = d;
+   bool cat6_desc_src = ctx->cat6_desc_src;
+   bool has_base = ctx->has_base;
+
+   ctx->cat6_desc_src = false;
+   ctx->has_base = false;
 
    if (!strcmp(field_name, "NAME")) {
+      ctx->last.name = val->str;
       if (!strcmp("nop", val->str)) {
          if (ctx->has_end) {
             ctx->nop_count++;
@@ -523,6 +545,189 @@ disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
       memset(&ctx->reg, 0, sizeof(ctx->reg));
    } else if (!strcmp(field_name, "SCOPE")) {
       ctx->last.alias_scope = val->num;
+   } else if (!strcmp(field_name, "SAMP")) {
+      ctx->last.has_samp = true;
+      ctx->last.samp = val->num;
+   } else if (!strcmp(field_name, "TEX")) {
+      ctx->last.has_tex = true;
+      ctx->last.tex = val->num;
+   } else if (!strcmp(field_name, "BASE")) {
+      /* We'll get two {BASE} callbacks in a row if {BINDLESS} is true
+       * due to the way {BASE} is encoded as a bitset (ex, #cat6-base).
+       * The first is for displaying the bitset, and second is for the
+       * actual value.  The second only comes if it is actually bindless
+       */
+      if (has_base) {
+         ctx->last.has_base = true;
+         ctx->last.base = val->num;
+      } else {
+         ctx->has_base = true;
+      }
+   } else if (!strcmp(field_name, "UBO") || !strcmp(field_name, "UAV")) {
+      /* For cat6 ubo/uav descriptor src, it uses #cat6-src, with callback
+       * first for the bitset and then the field.. ie {UAV:2}{IMMED:2}.. so
+       * we need to keep state across callbacks to detect this.
+       *
+       * If the next callback isn't IMMED, then the descriptor is a GPR, so
+       * we don't know what the value will be at runtime.
+       */
+      assert(ctx->cur_opc_cat == 6);
+      ctx->cat6_desc_src = true;
+
+      /* HACK because ldc.k doesn't use {NAME}: */
+      if (!ctx->last.name && !strcmp(field_name, "UBO"))
+         ctx->last.name = "ldc.k";
+   } else if (!strcmp(field_name, "IMMED") && cat6_desc_src) {
+      ctx->last.has_tex = true;
+      ctx->last.tex = val->num;
+   } else if (!strcmp(field_name, "A1")) {
+      ctx->last.has_a1 = val->num;
+   }
+}
+
+/* Info about instructions that reference a "texture" descriptor, and
+ * whether they also reference a sample descriptor
+ */
+static const struct {
+   const char *name;
+   bool has_samp;
+} descriptor_instructions[] = {
+   /* cat5: some also reference a sampler */
+   { "isam",                 true,  },
+   { "img_bindless.hof",     true,  },
+   { "img_bindless.pcmn",    true,  },
+   { "img_bindless",         true,  },
+   { "isaml",                true,  },
+   { "isamm",                true,  },
+   { "sam",                  true,  },
+   { "samb",                 true,  },
+   { "saml",                 true,  },
+   { "samgq",                true,  },
+   { "getlod",               true,  },
+   { "conv",                 true,  },
+   { "convm",                true,  },
+   { "getsize",              false, },
+   { "getbuf",               false, },
+   { "getpos",               false, },
+   { "getinfo",              false, },
+   { "gather4r",             true,  },
+   { "gather4g",             true,  },
+   { "gather4b",             true,  },
+   { "gather4a",             true,  },
+   { "samgp0",               true,  },
+   { "samgp1",               true,  },
+   { "samgp2",               true,  },
+   { "samgp3",               true,  },
+   /* cat6: none reference a sampler */
+   { "ldc" },
+   { "ldc.k" },
+   { "ldc.u" },
+   { "resinfo.b" },
+   { "resbase" },
+   { "stib.b" },
+   { "ldib.b" },
+   { "atomic.b.add" },
+   { "atomic.b.sub" },
+   { "atomic.b.xchg" },
+   { "atomic.b.cmpxchg" },
+   { "atomic.b.min" },
+   { "atomic.b.max" },
+   { "atomic.b.and" },
+   { "atomic.b.or" },
+   { "atomic.b.xor" },
+   { "ray_intersection" },
+};
+
+static void
+update_descriptor_stats(struct disasm_ctx *ctx)
+{
+   if ((ctx->cur_opc_cat != 5) && (ctx->cur_opc_cat != 6))
+      return;
+
+   bool has_desc = false;  /* has tex or ubo descriptor */
+   bool has_samp = false;  /* has sampler descriptor */
+
+   if (ctx->last.name) {
+      for (unsigned i = 0; i < ARRAY_SIZE(descriptor_instructions); i++) {
+         if (!strcmp(descriptor_instructions[i].name, ctx->last.name)) {
+            has_desc = true;
+            has_samp = descriptor_instructions[i].has_samp;
+            break;
+         }
+      }
+   }
+
+   if (!has_desc)
+      return;
+
+   int idx = 0;
+
+   if (ctx->last.has_base)
+      idx = ctx->last.base + 1;
+
+   /* TODO ray_intersection instruction accesses DESC_BUFFER descriptor
+    * directly by address.. I guess we should mark all buffers as used?
+    */
+
+   bool is_img = strstr(ctx->last.name, "img") == ctx->last.name;
+   bool is_ubo = strstr(ctx->last.name, "ldc") == ctx->last.name;
+   bool is_ray = strstr(ctx->last.name, "ray_intersection") == ctx->last.name;
+
+   uint64_t tex_mask  = BITFIELD64_BIT(ctx->last.tex);
+   uint64_t samp_mask = BITFIELD64_BIT(ctx->last.samp);
+
+   if (!ctx->last.has_tex || (ctx->last.tex > 64))
+      tex_mask = ~0ull;
+
+   if (!ctx->last.has_samp || (ctx->last.samp > 64))
+      samp_mask = ~0ull;
+
+   /* img/img_bindless instructions have it all! */
+   ctx->stats->has_img  |= is_img;
+   ctx->stats->has_tex  |= is_img;
+
+   ctx->stats->has_tex  |= !is_ubo;
+   ctx->stats->has_samp |= has_samp;
+   ctx->stats->has_ubo  |= is_ubo;
+
+   /* TODO if we were smart enough to detect edges of flow control (ie.
+    * jump/branch/etc plus also branch targets), we could maybe detect
+    * writes of immed values to a1.  And then decode the instruction
+    * enough to know _which_ a1 encoding is used to figure out the samp
+    * or tex descriptor base, etc.
+    *
+    * For now, just throw up our hands and mark everything as used.
+    *
+    * For ray_query, directly accesses a descriptor from memory address
+    * (iova), so mark all descriptors as used.
+    */
+   if (ctx->last.has_a1 || is_ray) {
+      /* idx==0  is bindful, not relevant for a1 */
+      for (int i = 1; i < ARRAY_SIZE(ctx->stats->desc); i++) {
+         if (is_img) {
+            ctx->stats->desc[i].img = ~0ull;
+            ctx->stats->desc[i].tex = ~0ull;
+         } else if (is_ubo) {
+            ctx->stats->desc[i].ubo = ~0ull;
+         } else {
+            ctx->stats->desc[i].tex = ~0ull;
+         }
+
+         if (has_samp)
+            ctx->stats->desc[i].samp = ~0ull;
+      }
+   } else {
+      if (is_img) {
+         ctx->stats->desc[idx].img |= tex_mask;
+         ctx->stats->desc[idx].tex |= tex_mask;
+      } else if (is_ubo) {
+         ctx->stats->desc[idx].ubo |= tex_mask;
+      } else {
+         ctx->stats->desc[idx].tex |= tex_mask;
+      }
+
+      if (has_samp)
+         ctx->stats->desc[idx].samp |= samp_mask;
    }
 }
 
@@ -533,6 +738,8 @@ disasm_field_cb(void *d, const char *field_name, struct isa_decode_value *val)
 static void
 disasm_handle_last(struct disasm_ctx *ctx)
 {
+   update_descriptor_stats(ctx);
+
    if (ctx->last.ss) {
       ctx->stats->sstall += ctx->sfu_delay;
       ctx->sfu_delay = 0;
@@ -552,6 +759,9 @@ disasm_handle_last(struct disasm_ctx *ctx)
    }
 
    memset(&ctx->last, 0, sizeof(ctx->last));
+
+   ctx->cat6_desc_src = false;
+   ctx->has_base = false;
 }
 
 static void
@@ -605,7 +815,7 @@ disasm_instr_cb(void *d, unsigned n, void *instr)
 }
 
 int
-disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
+disasm_a3xx_stat(const uint32_t *dwords, int sizedwords, int level, FILE *out,
                  unsigned gpu_id, struct shader_stats *stats)
 {
    return disasm_a3xx_stat_with_debug(dwords, sizedwords, level, out, gpu_id, stats, debug);
@@ -640,7 +850,7 @@ int disasm_a3xx_stat_with_debug(uint32_t *dwords, int sizedwords,
 
    decode_options.cbdata = &ctx;
 
-   ir3_isa_disasm(dwords, sizedwords * 4, out, &decode_options);
+   ir3_isa_disasm((void *)dwords, sizedwords * 4, out, &decode_options);
 
    disasm_handle_last(&ctx);
 
@@ -682,7 +892,7 @@ ir3_assert_handler(const char *expr, const char *file, int line,
    } while (0)
 
 int
-disasm_a3xx(uint32_t *dwords, int sizedwords, int level, FILE *out,
+disasm_a3xx(const uint32_t *dwords, int sizedwords, int level, FILE *out,
             unsigned gpu_id)
 {
    struct shader_stats stats;
@@ -690,11 +900,18 @@ disasm_a3xx(uint32_t *dwords, int sizedwords, int level, FILE *out,
 }
 
 int
-try_disasm_a3xx(uint32_t *dwords, int sizedwords, int level, FILE *out,
+try_disasm_a3xx(const uint32_t *dwords, int sizedwords, int level, FILE *out,
                 unsigned gpu_id)
 {
    struct shader_stats stats;
+   return try_disasm_a3xx_stat(dwords, sizedwords, level, out, gpu_id, &stats);
+}
+
+int
+try_disasm_a3xx_stat(const uint32_t *dwords, int sizedwords, int level,
+                     FILE *out, unsigned gpu_id, struct shader_stats *stats)
+{
    int ret = -1;
-   TRY(ret = disasm_a3xx_stat(dwords, sizedwords, level, out, gpu_id, &stats));
+   TRY(ret = disasm_a3xx_stat(dwords, sizedwords, level, out, gpu_id, stats));
    return ret;
 }

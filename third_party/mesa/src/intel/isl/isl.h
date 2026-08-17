@@ -391,6 +391,11 @@ enum isl_format {
    ISL_FORMAT_GFX12_CCS_32BPP_Y0,
    ISL_FORMAT_GFX12_CCS_64BPP_Y0,
    ISL_FORMAT_GFX12_CCS_128BPP_Y0,
+   ISL_FORMAT_GFX12_CCS_8BPP_Ys,
+   ISL_FORMAT_GFX12_CCS_16BPP_Ys,
+   ISL_FORMAT_GFX12_CCS_32BPP_Ys,
+   ISL_FORMAT_GFX12_CCS_64BPP_Ys,
+   ISL_FORMAT_GFX12_CCS_128BPP_Ys,
 
    /* An upper bound on the supported format enumerations */
    ISL_NUM_FORMATS,
@@ -822,8 +827,8 @@ enum isl_aux_usage {
     * CCS-compressed surface contains valid data at all times.
     *
     * :invariant: The surface is a color surface
-    * :invariant: :c:member:`isl_surf.samples` == 1 for GFX 12, GFX 20 can
-    *             be multisampled
+    * :invariant: :c:member:`isl_surf.samples` == 1 for GFX 12, GFX 12.5 and
+    *             newer can be multisampled
     */
    ISL_AUX_USAGE_HIZ_CCS_WT,
 
@@ -851,6 +856,15 @@ enum isl_aux_usage {
     * :invariant: :c:member:`isl_surf.samples` > 1
     */
    ISL_AUX_USAGE_MCS_CCS,
+
+   /** Depth compression
+    *
+    * Introduced on Alchemist, this is similar to HIZ_CCS_WT but without the
+    * HiZ buffer.
+    *
+    * :invariant: The surface is a depth surface
+    */
+   ISL_AUX_USAGE_ZCS,
 
    /** Stencil compression
     *
@@ -980,6 +994,12 @@ enum isl_aux_state {
     * Since neither the primary surface nor the auxiliary surface contains the
     * clear value, the surface can be cleared to a different color by simply
     * changing the clear color without modifying either surface.
+    *
+    * Note that depth images that support HiZ CCS have two potential encodings
+    * of the clear state with inconsistent behavior depending on whether it is
+    * implied by the hierarchical depth surface (e.g. from a HiZ CCS fast
+    * clear) or by the CCS auxiliary surface (e.g. from a HiZ CCS WT clear),
+    * to avoid ambiguity this enum only denotes the former state.
     */
    ISL_AUX_STATE_CLEAR,
 
@@ -1000,6 +1020,11 @@ enum isl_aux_state {
     * primary surface may contain all, some, or none of the data required to
     * reconstruct the actual sample values.  Blocks may also be in the clear
     * state (see Clear) and have their value taken from outside the surface.
+    *
+    * In this state, all of the data required to reconstruct the final sample
+    * values is contained in the CCS/MCS auxiliary surfaces, primary surface
+    * and clear value, the hierarchical depth surface doesn't have to be
+    * considered if present.
     */
    ISL_AUX_STATE_COMPRESSED_CLEAR,
 
@@ -1007,10 +1032,24 @@ enum isl_aux_state {
     *
     * This state is identical to the state above except that no blocks are in
     * the clear state.  In this state, all of the data required to reconstruct
-    * the final sample values is contained in the auxiliary and primary
-    * surface and the clear value is not considered.
+    * the final sample values is contained in the CCS/MCS auxiliary surfaces
+    * and primary surface, the clear value and hierarchical depth surface
+    * don't have to be considered.
     */
    ISL_AUX_STATE_COMPRESSED_NO_CLEAR,
+
+   /** Compressed with hierarchical depth information
+    *
+    * In this state, neither the CCS surface (if present) nor the primary
+    * surface have a complete representation of the data.  Instead, they must
+    * be used together in combination with the hierarchical depth surface or
+    * else corruption may occur.  Depending on the auxiliary compression
+    * format and the CCS and hierarchical depth data, any given block in the
+    * primary surface may contain all, some, or none of the data required to
+    * reconstruct the actual sample values.  Blocks may also be in the clear
+    * state (see Clear) and have their value taken from outside the surface.
+    */
+   ISL_AUX_STATE_COMPRESSED_HIER_DEPTH,
 
    /** Resolved
     *
@@ -1141,6 +1180,9 @@ typedef uint64_t isl_surf_usage_flags_t;
 #define ISL_SURF_USAGE_MULTI_ENGINE_SEQ_BIT    (1u << 24)
 #define ISL_SURF_USAGE_MULTI_ENGINE_PAR_BIT    (1u << 25)
 #define ISL_SURF_USAGE_SOFTWARE_DETILING       (1u << 26)
+#define ISL_SURF_USAGE_PREFER_4K_ALIGNMENT     (1u << 27)
+#define ISL_SURF_USAGE_NO_ARRAY_OVERFETCH_BIT  (1u << 28)
+#define ISL_SURF_USAGE_NO_OVERFETCH_PADDING_BIT (1u << 29)
 /** @} */
 
 /**
@@ -1353,6 +1395,12 @@ struct isl_device {
     * address, size).
     */
    bool buffer_length_in_aux_addr;
+
+   /**
+    * True if the driver is running with scratch page disabled and requires
+    * extra padding on some surfaces to avoid page faults.
+    */
+   bool requires_padding;
 
    uint64_t dummy_aux_address;
 
@@ -1823,11 +1871,11 @@ struct isl_surf_fill_state_info {
    uint64_t aux_address;
 
    /**
-    * The format to use for decoding media compression.
+    * The format to use for encoding and decoding render/media compression.
     *
-    * Used together with the surface format.
+    * May be used together with the surface format.
     */
-   enum isl_format mc_format;
+   enum isl_format aux_format;
 
    /**
     * The clear color for this surface
@@ -2006,6 +2054,7 @@ enum isl_surf_param {
    ISL_SURF_PARAM_PITCH,
    ISL_SURF_PARAM_QPITCH,
    ISL_SURF_PARAM_FORMAT,
+   ISL_SURF_PARAM_MIN_ARRAY_ELEMENT,
 };
 
 /*
@@ -2460,6 +2509,7 @@ isl_aux_usage_has_ccs(enum isl_aux_usage usage)
           usage == ISL_AUX_USAGE_CCS_E ||
           usage == ISL_AUX_USAGE_FCV_CCS_E ||
           usage == ISL_AUX_USAGE_MC ||
+          usage == ISL_AUX_USAGE_ZCS ||
           usage == ISL_AUX_USAGE_HIZ_CCS_WT ||
           usage == ISL_AUX_USAGE_HIZ_CCS ||
           usage == ISL_AUX_USAGE_MCS_CCS ||
@@ -2595,6 +2645,9 @@ isl_drm_modifier_get_default_aux_state(uint64_t modifier)
 uint32_t
 isl_drm_modifier_get_score(const struct intel_device_info *devinfo,
                            uint64_t modifier);
+
+/* The maximum number of planes of an Intel modifier in drm_fourcc.h. */
+#define ISL_MODIFIER_MAX_PLANES 4
 
 /* Return the number of planes used by an image with the given parameters. */
 uint32_t
@@ -2783,14 +2836,11 @@ isl_surf_get_tile_info(const struct isl_surf *surf,
 
 /**
  * :param surf:                 |in|  The main surface
- * :param hiz_or_mcs_surf:      |in|  HiZ or MCS surface associated with the main
- *                                    surface
  * :returns: true if the given surface supports CCS.
  */
 bool
 isl_surf_supports_ccs(const struct isl_device *dev,
-                      const struct isl_surf *surf,
-                      const struct isl_surf *hiz_or_mcs_surf);
+                      const struct isl_surf *surf);
 
 /** Constructs a HiZ surface for the given main surface.
  *
@@ -3271,6 +3321,148 @@ isl_tiling_get_intratile_offset_sa(enum isl_tiling tiling,
    *y_offset_sa *= fmtl->bh;
    *z_offset_sa *= fmtl->bd;
 }
+
+/**
+ * Calculate the intratile extent of a slice of a surface, in elements.
+ *
+ * This function takes a coordinate and extent in global tile space and
+ * returns the byte offset to the specific range of tiles as well as the
+ * offset within those tiles to the given coordinate in tile space.  The
+ * returned x/y/z/array offsets are guaranteed to lie within the first tile.
+ *
+ * :param tiling:               |in|  The tiling of the surface
+ * :param bpb:                  |in|  The size of the surface format in bits per
+ *                                    block
+ * :param array_pitch_el_rows:  |in|  The array pitch of the surface for flat 2D
+ *                                    tilings such as ISL_TILING_Y0
+ * :param total_x_offset_el:    |in|  The X offset in tile space, in elements
+ * :param total_y_offset_el:    |in|  The Y offset in tile space, in elements
+ * :param total_z_offset_el:    |in|  The Z offset in tile space, in elements
+ * :param total_array_offset:   |in|  The array offset in tile space
+ * :param total_extent_el:      |in|  The extent in tile space
+ * :param tile_start_B:         |out| The returned byte offset to the start of
+ *                                    the first tile
+ * :param tile_end_B:           |out| The returned byte offset to the end of
+ *                                    the last tile
+ * :param x_offset_el:          |out| The X offset within the tile, in elements
+ * :param y_offset_el:          |out| The Y offset within the tile, in elements
+ * :param z_offset_el:          |out| The Z offset within the tile, in elements
+ * :param array_offset:         |out| The array offset within the tile
+ */
+void
+isl_tiling_get_intratile_range_el(enum isl_tiling tiling,
+                                  enum isl_surf_dim dim,
+                                  enum isl_msaa_layout msaa_layout,
+                                  uint32_t bpb,
+                                  uint32_t samples,
+                                  uint32_t row_pitch_B,
+                                  uint32_t array_pitch_el_rows,
+                                  uint32_t total_x_offset_el,
+                                  uint32_t total_y_offset_el,
+                                  uint32_t total_z_offset_el,
+                                  uint32_t total_array_offset,
+                                  struct isl_extent4d total_extent_el,
+                                  uint64_t *tile_start_B,
+                                  uint64_t *tile_end_B,
+                                  uint32_t *x_offset_el,
+                                  uint32_t *y_offset_el,
+                                  uint32_t *z_offset_el,
+                                  uint32_t *array_offset);
+
+/**
+ * Calculate the intratile extent of a slice of a surface, in samples.
+ *
+ * This function takes a coordinate and extent in global tile space and
+ * returns the byte offset to the specific range of tiles as well as the
+ * offset within those tiles to the given coordinate in tile space.  The
+ * returned x/y/z/array offsets are guaranteed to lie within the first tile.
+ *
+ * :param tiling:               |in|  The tiling of the surface
+ * :param bpb:                  |in|  The size of the surface format in bits per
+ *                                    block
+ * :param array_pitch_el_rows:  |in|  The array pitch of the surface for flat 2D
+ *                                    tilings such as ISL_TILING_Y0
+ * :param total_x_offset_sa:    |in|  The X offset in tile space, in samples
+ * :param total_y_offset_sa:    |in|  The Y offset in tile space, in samples
+ * :param total_z_offset_sa:    |in|  The Z offset in tile space, in samples
+ * :param total_array_offset:   |in|  The array offset in tile space
+ * :param total_extent_sa:      |in|  The extent in tile space
+ * :param tile_start_B:         |out| The returned byte offset to the start of
+ *                                    the first tile
+ * :param tile_end_B:           |out| The returned byte offset to the end of
+ *                                    the last tile
+ * :param x_offset_sa:          |out| The X offset within the tile, in samples
+ * :param y_offset_sa:          |out| The Y offset within the tile, in samples
+ * :param z_offset_sa:          |out| The Z offset within the tile, in samples
+ * :param array_offset:         |out| The array offset within the tile
+ */
+static inline void
+isl_tiling_get_intratile_range_sa(enum isl_tiling tiling,
+                                  enum isl_surf_dim dim,
+                                  enum isl_msaa_layout msaa_layout,
+                                  enum isl_format format,
+                                  uint32_t samples,
+                                  uint32_t row_pitch_B,
+                                  uint32_t array_pitch_el_rows,
+                                  uint32_t total_x_offset_sa,
+                                  uint32_t total_y_offset_sa,
+                                  uint32_t total_z_offset_sa,
+                                  uint32_t total_array_offset,
+                                  struct isl_extent4d total_extent_sa,
+                                  uint64_t *tile_start_B,
+                                  uint64_t *tile_end_B,
+                                  uint32_t *x_offset_sa,
+                                  uint32_t *y_offset_sa,
+                                  uint32_t *z_offset_sa,
+                                  uint32_t *array_offset)
+{
+   const struct isl_format_layout *fmtl = isl_format_get_layout(format);
+
+   /* For computing the intratile offsets, we actually want a strange unit
+    * which is samples for multisampled surfaces but elements for compressed
+    * surfaces.
+    */
+   assert(total_x_offset_sa % fmtl->bw == 0);
+   assert(total_y_offset_sa % fmtl->bh == 0);
+   assert(total_z_offset_sa % fmtl->bd == 0);
+   assert(total_extent_sa.w % fmtl->bw == 0);
+   assert(total_extent_sa.h % fmtl->bh == 0);
+   assert(total_extent_sa.d % fmtl->bd == 0);
+   const uint32_t total_x_offset_el = total_x_offset_sa / fmtl->bw;
+   const uint32_t total_y_offset_el = total_y_offset_sa / fmtl->bh;
+   const uint32_t total_z_offset_el = total_z_offset_sa / fmtl->bd;
+   const struct isl_extent4d total_extent_el = {
+      .w = total_extent_sa.w / fmtl->bw,
+      .h = total_extent_sa.h / fmtl->bh,
+      .d = total_extent_sa.d / fmtl->bd,
+      .a = total_extent_sa.a
+   };
+
+   isl_tiling_get_intratile_range_el(tiling, dim, msaa_layout, fmtl->bpb,
+                                     samples, row_pitch_B,
+                                     array_pitch_el_rows,
+                                     total_x_offset_el,
+                                     total_y_offset_el,
+                                     total_z_offset_el,
+                                     total_array_offset,
+                                     total_extent_el,
+                                     tile_start_B,
+                                     tile_end_B,
+                                     x_offset_sa, y_offset_sa,
+                                     z_offset_sa, array_offset);
+   *x_offset_sa *= fmtl->bw;
+   *y_offset_sa *= fmtl->bh;
+   *z_offset_sa *= fmtl->bd;
+}
+
+/**
+ * Calculates the size of a sampling engine surface, including the maximum
+ * number of extra padding bytes that could be fetched due to caching.
+ */
+uint64_t
+isl_surf_get_sampler_overfetch_size_B(const struct isl_device *dev,
+                                      const struct isl_surf *surf,
+                                      const struct isl_view *view);
 
 /**
  * Get value of 3DSTATE_DEPTH_BUFFER.SurfaceFormat

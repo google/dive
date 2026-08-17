@@ -63,7 +63,7 @@ d3d12_create_surface(struct d3d12_screen *screen,
                      const struct pipe_surface *tpl);
 
 void
-d3d12_surface_destroy(struct d3d12_surface *surf);
+d3d12_surface_destroy(struct pipe_context *ctx, struct pipe_surface *psurf);
 
 static inline void
 d3d12_surface_reference(struct d3d12_surface **dst, struct d3d12_surface *src)
@@ -74,7 +74,7 @@ d3d12_surface_reference(struct d3d12_surface **dst, struct d3d12_surface *src)
                                 src ? &src->base.reference : NULL,
                                 (debug_reference_descriptor)
                                 debug_describe_surface))
-      d3d12_surface_destroy(old_dst);
+      d3d12_surface_destroy(NULL, &old_dst->base);
    *dst = src;
 }
 

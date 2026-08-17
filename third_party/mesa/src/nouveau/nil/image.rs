@@ -19,6 +19,7 @@ pub const IMAGE_USAGE_2D_VIEW_BIT: ImageUsageFlags = 1 << 0;
 pub const IMAGE_USAGE_LINEAR_BIT: ImageUsageFlags = 1 << 1;
 pub const IMAGE_USAGE_SPARSE_RESIDENCY_BIT: ImageUsageFlags = 1 << 2;
 pub const IMAGE_USAGE_VIDEO_BIT: ImageUsageFlags = 1 << 3;
+pub const IMAGE_USAGE_UNCOMPRESSED_BIT: ImageUsageFlags = 1 << 4;
 
 #[derive(Clone, Debug, Copy, PartialEq, Default)]
 #[repr(u8)]
@@ -181,9 +182,9 @@ pub struct Image {
     pub array_stride_B: u64,
     pub align_B: u32,
     pub size_B: u64,
-    pub compressed: bool,
     pub tile_mode: u16,
     pub pte_kind: u8,
+    pub compressed_pte_kind: u8,
 }
 
 impl Image {
@@ -282,9 +283,9 @@ impl Image {
             array_stride_B: 0,
             align_B,
             size_B,
-            compressed: false,
             tile_mode: 0,
             pte_kind: 0,
+            compressed_pte_kind: 0,
             mip_tail_first_lod: 0,
         };
         image.levels[0] = level0;
@@ -322,6 +323,7 @@ impl Image {
             assert!((info.usage & IMAGE_USAGE_SPARSE_RESIDENCY_BIT) == 0);
             let mut min_tiling = Tiling::choose(
                 dev,
+                info.dim,
                 info.extent_px,
                 info.format,
                 sample_layout,
@@ -331,6 +333,7 @@ impl Image {
             for p in 0..infos.len() {
                 let plane_tiling = Tiling::choose(
                     dev,
+                    infos[p].dim,
                     infos[p].extent_px,
                     infos[p].format,
                     sample_layout,
@@ -348,6 +351,7 @@ impl Image {
         } else {
             Tiling::choose(
                 dev,
+                info.dim,
                 info.extent_px,
                 info.format,
                 sample_layout,
@@ -366,9 +370,9 @@ impl Image {
             array_stride_B: 0,
             align_B: 0,
             size_B: 0,
-            compressed: false,
             tile_mode: 0,
             pte_kind: 0,
+            compressed_pte_kind: 0,
             mip_tail_first_lod: 0,
         };
 
@@ -432,12 +436,12 @@ impl Image {
             image.align_B = std::cmp::max(image.align_B, 1 << 16);
         }
 
-        image.pte_kind = Self::choose_pte_kind(
-            dev,
-            info.format,
-            info.samples,
-            image.compressed,
-        );
+        image.pte_kind =
+            Self::choose_pte_kind(dev, info.format, info.samples, false);
+        if (info.usage & IMAGE_USAGE_UNCOMPRESSED_BIT) == 0 {
+            image.compressed_pte_kind =
+                Self::choose_pte_kind(dev, info.format, info.samples, true);
+        }
 
         if info.modifier != DRM_FORMAT_MOD_INVALID {
             let bl_mod = BlockLinearModifier::try_from(info.modifier).unwrap();
@@ -752,7 +756,7 @@ impl Image {
     fn gb202_choose_pte_kind(_format: Format, compressed: bool) -> u8 {
         use nvidia_headers::hwref::tu102::mmu::*;
         if compressed {
-            NV_MMU_PTE_KIND_GENERIC_MEMORY_COMPRESSIBLE_DISABLE_PLC
+            NV_MMU_PTE_KIND_GENERIC_MEMORY_COMPRESSIBLE
         } else {
             NV_MMU_PTE_KIND_GENERIC_MEMORY
         }
@@ -797,7 +801,7 @@ impl Image {
             }
             PIPE_FORMAT_Z32_FLOAT => {
                 if compressed {
-                    NV_MMU_PTE_KIND_GENERIC_MEMORY_COMPRESSIBLE_DISABLE_PLC
+                    NV_MMU_PTE_KIND_GENERIC_MEMORY_COMPRESSIBLE
                 } else {
                     NV_MMU_PTE_KIND_GENERIC_MEMORY
                 }
@@ -811,7 +815,7 @@ impl Image {
             }
             _ => {
                 if compressed {
-                    NV_MMU_PTE_KIND_GENERIC_MEMORY_COMPRESSIBLE_DISABLE_PLC
+                    NV_MMU_PTE_KIND_GENERIC_MEMORY_COMPRESSIBLE
                 } else {
                     NV_MMU_PTE_KIND_GENERIC_MEMORY
                 }
@@ -990,7 +994,6 @@ pub enum ViewType {
 }
 
 /// An enum describing how an image view will be accessed by the shader.
-#[allow(dead_code)]
 #[derive(Clone, Debug, Copy, PartialEq)]
 #[repr(u8)]
 pub enum ViewAccess {

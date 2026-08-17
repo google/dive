@@ -1,26 +1,7 @@
 /*
  * Copyright © 2021 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
-
 
 #include "brw_private.h"
 #include "compiler/shader_info.h"
@@ -272,7 +253,7 @@ TEST_F(SIMDSelectionCS, SpillAtSIMD16)
 
 TEST_F(SIMDSelectionCS, EnvironmentVariable32)
 {
-   BITSET_SET(intel_debug, DEBUG_DO32);
+   intel_simd_overridden |= BITFIELD_BIT(MESA_SHADER_COMPUTE);
 
    ASSERT_TRUE(brw_simd_should_compile(simd_state, SIMD8));
    brw_simd_mark_compiled(simd_state, SIMD8, not_spilled);
@@ -286,7 +267,7 @@ TEST_F(SIMDSelectionCS, EnvironmentVariable32)
 
 TEST_F(SIMDSelectionCS, EnvironmentVariable32ButSpills)
 {
-   BITSET_SET(intel_debug, DEBUG_DO32);
+   intel_simd_overridden |= BITFIELD_BIT(MESA_SHADER_COMPUTE);
 
    ASSERT_TRUE(brw_simd_should_compile(simd_state, SIMD8));
    brw_simd_mark_compiled(simd_state, SIMD8, not_spilled);

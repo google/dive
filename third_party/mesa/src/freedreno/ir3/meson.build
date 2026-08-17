@@ -50,7 +50,7 @@ ir3_parser = custom_target(
   input: 'ir3_parser.y',
   output: ['ir3_parser.c', 'ir3_parser.h'],
   command: [
-    prog_bison, '@INPUT@', '--name-prefix=ir3_yy', '--defines=@OUTPUT1@', '--output=@OUTPUT0@'
+    prog_bison, '@INPUT@', '--name-prefix=ir3_yy', '--defines=@OUTPUT1@', '--output=@OUTPUT0@', '-Werror', '-Wcounterexamples'
   ]
 )
 
@@ -101,8 +101,8 @@ libfreedreno_ir3_files = files(
   'ir3_nir_analyze_ubo_ranges.c',
   'ir3_nir_lower_64b.c',
   'ir3_nir_lower_driver_params_to_ubo.c',
-  'ir3_nir_lower_load_barycentric_at_sample.c',
   'ir3_nir_lower_load_barycentric_at_offset.c',
+  'ir3_nir_lower_load_sample_pos.c',
   'ir3_nir_lower_push_consts_to_preamble.c',
   'ir3_nir_lower_shading_rate.c',
   'ir3_nir_lower_io_offsets.c',
@@ -134,9 +134,16 @@ libfreedreno_ir3_files = files(
 
 libfreedreno_ir3 = static_library(
   'freedreno_ir3',
-  [libfreedreno_ir3_files, ir3_nir_trig_c, ir3_nir_imul_c, ir3_nir_branch_and_or_not_c, ir3_nir_triop_bitwise_c, ir3_parser[0], ir3_parser[1], ir3_lexer],
+  [libfreedreno_ir3_files,
+    ir3_nir_trig_c,
+    ir3_nir_imul_c,
+    ir3_nir_branch_and_or_not_c,
+    ir3_nir_triop_bitwise_c,
+    ir3_parser[0], ir3_parser[1],
+    ir3_lexer,
+  ],
   include_directories : [inc_freedreno, inc_include, inc_src],
-  c_args : [no_override_init_args],
+  c_args : [no_override_init_args, soong_compat_c_args],
   gnu_symbol_visibility : 'hidden',
   link_with: [libir3encode, libfreedreno_common],
   dependencies : [idep_libir3decode, idep_nir_headers, dep_dl, idep_mesautil],

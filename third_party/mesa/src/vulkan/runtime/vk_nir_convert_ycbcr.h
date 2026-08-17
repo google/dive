@@ -40,6 +40,12 @@ nir_convert_ycbcr_to_rgb(nir_builder *b,
 
 struct vk_ycbcr_conversion;
 
+/** Passed as the set parameter to nir_vk_ycbcr_conversion_lookup_cb() to
+ * indicate that embedded samplers are being used and that binding is the
+ * index in the embedded sampler table.
+ */
+#define VK_NIR_YCBCR_SET_IMMUTABLE_SAMPLERS UINT32_MAX
+
 typedef const struct vk_ycbcr_conversion_state *
    (*nir_vk_ycbcr_conversion_lookup_cb)(const void *data, uint32_t set,
                                         uint32_t binding, uint32_t array_index);

@@ -41,9 +41,6 @@ _mesa_ShadeModel( GLenum mode )
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glShadeModel %s\n", _mesa_enum_to_string(mode));
-
    if (ctx->Light.ShadeModel == mode)
       return;
 
@@ -66,9 +63,6 @@ void GLAPIENTRY
 _mesa_ProvokingVertex(GLenum mode)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE&VERBOSE_API)
-      _mesa_debug(ctx, "glProvokingVertexEXT 0x%x\n", mode);
 
    if (ctx->Light.ProvokingVertex == mode)
       return;
@@ -506,7 +500,7 @@ _mesa_LightModelfv( GLenum pname, const GLfloat *params )
          COPY_4V( ctx->Light.Model.Ambient, params );
          break;
       case GL_LIGHT_MODEL_LOCAL_VIEWER:
-         if (ctx->API != API_OPENGL_COMPAT)
+         if (!_mesa_is_desktop_gl_compat(ctx))
             goto invalid_pname;
          newbool = (params[0] != 0.0F);
 	 if (ctx->Light.Model.LocalViewer == newbool)
@@ -524,7 +518,7 @@ _mesa_LightModelfv( GLenum pname, const GLfloat *params )
 	 ctx->Light.Model.TwoSide = newbool;
          break;
       case GL_LIGHT_MODEL_COLOR_CONTROL:
-         if (ctx->API != API_OPENGL_COMPAT)
+         if (!_mesa_is_desktop_gl_compat(ctx))
             goto invalid_pname;
          if (params[0] == (GLfloat) GL_SINGLE_COLOR)
 	    newenum = GL_SINGLE_COLOR;
@@ -669,9 +663,6 @@ _mesa_update_material( struct gl_context *ctx, GLuint bitmask )
 {
    GLfloat (*mat)[4] = ctx->Light.Material.Attrib;
 
-   if (MESA_VERBOSE & VERBOSE_MATERIAL)
-      _mesa_debug(ctx, "_mesa_update_material, mask 0x%x\n", bitmask);
-
    if (!bitmask)
       return;
 
@@ -791,11 +782,6 @@ _mesa_ColorMaterial( GLenum face, GLenum mode )
 		   MAT_BIT_FRONT_DIFFUSE  | MAT_BIT_BACK_DIFFUSE  |
 		   MAT_BIT_FRONT_AMBIENT  | MAT_BIT_BACK_AMBIENT);
 
-   if (MESA_VERBOSE&VERBOSE_API)
-      _mesa_debug(ctx, "glColorMaterial %s %s\n",
-                  _mesa_enum_to_string(face),
-                  _mesa_enum_to_string(mode));
-
    bitmask = _mesa_material_bitmask(ctx, face, mode, legal, "glColorMaterial");
    if (bitmask == 0)
       return; /* error was recorded */
@@ -856,7 +842,7 @@ _mesa_GetMaterialfv( GLenum face, GLenum pname, GLfloat *params )
 	 *params = mat[MAT_ATTRIB_SHININESS(f)][0];
 	 break;
       case GL_COLOR_INDEXES:
-         if (ctx->API != API_OPENGL_COMPAT) {
+         if (!_mesa_is_desktop_gl_compat(ctx)) {
             _mesa_error( ctx, GL_INVALID_ENUM, "glGetMaterialfv(pname)" );
             return;
          }

@@ -14,74 +14,31 @@
 #ifndef PVR_DEVICE_H
 #define PVR_DEVICE_H
 
+#include <xf86drm.h>
+
 #include "vk_device.h"
 #include "vk_device_memory.h"
-#include "vk_instance.h"
 #include "vk_physical_device.h"
 
 #include "wsi_common.h"
 
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
-#include "pvr_border.h"
-#include "pvr_clear.h"
+#include "pvr_bo.h"
 #include "pvr_common.h"
+#include "pvr_macros.h"
 #include "pvr_pds.h"
 #include "pvr_spm.h"
 #include "pvr_usc.h"
-
-#if defined(VK_USE_PLATFORM_DISPLAY_KHR)
-#   define PVR_USE_WSI_PLATFORM_DISPLAY true
-#else
-#   define PVR_USE_WSI_PLATFORM_DISPLAY false
-#endif
-
-#if PVR_USE_WSI_PLATFORM_DISPLAY
-#   define PVR_USE_WSI_PLATFORM true
-#else
-#   define PVR_USE_WSI_PLATFORM false
-#endif
+#include "pvr_winsys.h"
 
 typedef struct _pco_ctx pco_ctx;
 
+struct pvr_border_color_table;
+struct pvr_device_static_clear_state;
 struct pvr_instance;
 struct pvr_queue;
-
-struct pvr_physical_device {
-   struct vk_physical_device vk;
-
-   /* Back-pointer to instance */
-   struct pvr_instance *instance;
-
-   char *render_path;
-   char *display_path;
-
-   /* primary node (cardN) of the render device */
-   dev_t primary_devid;
-   /* render node (renderN) of the render device */
-   dev_t render_devid;
-
-   struct pvr_winsys *ws;
-   struct pvr_device_info dev_info;
-   struct pvr_device_runtime_info dev_runtime_info;
-
-   VkPhysicalDeviceMemoryProperties memory;
-
-   struct wsi_device wsi_device;
-
-   pco_ctx *pco_ctx;
-
-   uint8_t device_uuid[SHA1_DIGEST_LENGTH];
-   uint8_t cache_uuid[SHA1_DIGEST_LENGTH];
-};
-
-struct pvr_instance {
-   struct vk_instance vk;
-
-   uint32_t active_device_count;
-
-   uint8_t driver_build_sha[SHA1_DIGEST_LENGTH];
-};
+struct pvr_render_target;
 
 struct pvr_compute_query_shader {
    struct pvr_suballoc_bo *usc_bo;
@@ -154,36 +111,7 @@ struct pvr_device {
       struct pvr_pds_upload sw_compute_barrier_pds;
    } idfwdf_state;
 
-   struct pvr_device_static_clear_state {
-      struct pvr_suballoc_bo *usc_vertex_shader_bo;
-      struct pvr_suballoc_bo *vertices_bo;
-      struct pvr_pds_upload pds;
-
-      /* Only valid if PVR_HAS_FEATURE(dev_info, gs_rta_support). */
-      struct pvr_suballoc_bo *usc_multi_layer_vertex_shader_bo;
-
-      struct pvr_static_clear_ppp_base ppp_base;
-      /* Indexable using VkImageAspectFlags. */
-      struct pvr_static_clear_ppp_template
-         ppp_templates[PVR_STATIC_CLEAR_VARIANT_COUNT];
-
-      const uint32_t *vdm_words;
-      const uint32_t *large_clear_vdm_words;
-
-      struct pvr_suballoc_bo *usc_clear_attachment_programs;
-      struct pvr_suballoc_bo *pds_clear_attachment_programs;
-      /* TODO: See if we can use PVR_CLEAR_ATTACHMENT_PROGRAM_COUNT to save some
-       * memory.
-       */
-      struct pvr_pds_clear_attachment_program_info {
-         pvr_dev_addr_t texture_program_offset;
-         pvr_dev_addr_t pixel_program_offset;
-
-         uint32_t texture_program_pds_temps_count;
-         /* Size in dwords. */
-         uint32_t texture_program_data_size;
-      } pds_clear_attachment_program_info[PVR_NUM_CLEAR_ATTACH_SHADERS];
-   } static_clear_state;
+   struct pvr_device_static_clear_state *static_clear_state;
 
    struct {
       struct pvr_suballoc_bo *usc_programs;
@@ -214,23 +142,16 @@ struct pvr_device {
 
    struct vk_sync *presignaled_sync;
 
-   struct pvr_border_color_table border_color_table;
+   struct pvr_border_color_table *border_color_table;
+
+   simple_mtx_t rs_mtx;
+   struct list_head render_states;
 };
 
 struct pvr_device_memory {
    struct vk_device_memory vk;
    struct pvr_winsys_bo *bo;
 };
-
-VK_DEFINE_HANDLE_CASTS(pvr_instance,
-                       vk.base,
-                       VkInstance,
-                       VK_OBJECT_TYPE_INSTANCE)
-
-VK_DEFINE_HANDLE_CASTS(pvr_physical_device,
-                       vk.base,
-                       VkPhysicalDevice,
-                       VK_OBJECT_TYPE_PHYSICAL_DEVICE)
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_device_memory,
                                vk.base,
@@ -244,20 +165,14 @@ static inline struct pvr_device *vk_to_pvr_device(struct vk_device *device)
    return container_of(device, struct pvr_device, vk);
 }
 
-uint32_t pvr_calc_fscommon_size_and_tiles_in_flight(
-   const struct pvr_device_info *dev_info,
-   const struct pvr_device_runtime_info *dev_runtime_info,
-   uint32_t fs_common_size,
-   uint32_t min_tiles_in_flight);
-
 VkResult pvr_device_tile_buffer_ensure_cap(struct pvr_device *device,
-                                           uint32_t capacity,
-                                           uint32_t size_in_bytes);
+                                           uint32_t capacity);
 
-VkResult pvr_pds_compute_shader_create_and_upload(
-   struct pvr_device *device,
-   struct pvr_pds_compute_shader_program *program,
-   struct pvr_pds_upload *const pds_upload_out);
+static inline void pvr_device_free_tile_buffer_state(struct pvr_device *device)
+{
+   for (uint32_t i = 0; i < device->tile_buffer_state.buffer_count; i++)
+      pvr_bo_free(device, device->tile_buffer_state.buffers[i]);
+}
 
 VkResult pvr_bind_memory(struct pvr_device *device,
                          struct pvr_device_memory *mem,
@@ -288,5 +203,43 @@ VkResult pvr_gpu_upload_usc(struct pvr_device *device,
                             size_t code_size,
                             uint64_t code_alignment,
                             struct pvr_suballoc_bo **const pvr_bo_out);
+
+void pvr_rstate_entry_add(struct pvr_device *device,
+                          struct pvr_render_state *rstate);
+
+void pvr_rstate_entry_remove(struct pvr_device *device,
+                             const struct pvr_render_state *rstate);
+
+void pvr_render_targets_fini(struct pvr_render_target *render_targets,
+                             uint32_t render_targets_count);
+
+#ifdef PVR_PER_ARCH
+
+VkResult PVR_PER_ARCH(create_device)(struct pvr_physical_device *pdevice,
+                                     const VkDeviceCreateInfo *pCreateInfo,
+                                     const VkAllocationCallbacks *pAllocator,
+                                     VkDevice *pDevice);
+
+void PVR_PER_ARCH(destroy_device)(struct pvr_device *device,
+                                  const VkAllocationCallbacks *pAllocator);
+
+uint32_t PVR_PER_ARCH(calc_fscommon_size_and_tiles_in_flight)(
+   const struct pvr_device_info *dev_info,
+   const struct pvr_device_runtime_info *dev_runtime_info,
+   uint32_t fs_common_size,
+   uint32_t min_tiles_in_flight);
+
+#   define pvr_arch_calc_fscommon_size_and_tiles_in_flight \
+      PVR_PER_ARCH(calc_fscommon_size_and_tiles_in_flight)
+
+VkResult PVR_PER_ARCH(pds_compute_shader_create_and_upload)(
+   struct pvr_device *device,
+   struct pvr_pds_compute_shader_program *program,
+   struct pvr_pds_upload *const pds_upload_out);
+
+#   define pvr_arch_pds_compute_shader_create_and_upload \
+      PVR_PER_ARCH(pds_compute_shader_create_and_upload)
+
+#endif /* PVR_PER_ARCH */
 
 #endif /* PVR_DEVICE_H */

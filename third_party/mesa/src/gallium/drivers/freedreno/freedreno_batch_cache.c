@@ -136,7 +136,7 @@ find_dependee(struct fd_context *ctx, struct fd_batch *last_batch)
    struct fd_batch *batch;
 
    foreach_batch (batch, cache, cache->batch_mask) {
-      if (batch->ctx == ctx && fd_batch_has_dep(batch, last_batch)) {
+      if (check_batch(batch, ctx) && fd_batch_has_dep(batch, last_batch)) {
          fd_batch_reference_locked(&last_batch, batch);
          return find_dependee(ctx, last_batch);
       }
@@ -158,7 +158,7 @@ fd_bc_last_batch(struct fd_context *ctx)
    fd_screen_lock(ctx->screen);
 
    foreach_batch (batch, cache, cache->batch_mask) {
-      if (batch->ctx == ctx) {
+      if (check_batch(batch, ctx)) {
          if (!last_batch ||
              /* Note: fd_fence_before() handles rollover for us: */
              fd_fence_before(last_batch->update_seqno, batch->update_seqno)) {
@@ -202,7 +202,7 @@ fd_bc_add_flush_deps(struct fd_context *ctx, struct fd_batch *last_batch)
    fd_screen_lock(ctx->screen);
 
    foreach_batch (batch, cache, cache->batch_mask) {
-      if (batch->ctx == ctx) {
+      if (check_batch(batch, ctx)) {
          fd_batch_reference_locked(&batches[n++], batch);
       }
    }
@@ -235,11 +235,12 @@ fd_bc_flush_writer(struct fd_context *ctx, struct fd_resource *rsc) assert_dt
    fd_screen_lock(ctx->screen);
    struct fd_batch *write_batch = NULL;
    fd_batch_reference_locked(&write_batch, rsc->track->write_batch);
+   if (write_batch && !check_batch(write_batch, ctx))
+      fd_batch_reference_locked(&write_batch, NULL);
    fd_screen_unlock(ctx->screen);
 
    if (write_batch) {
-      if (write_batch->ctx == ctx)
-         fd_batch_flush(write_batch);
+      fd_batch_flush(write_batch);
       fd_batch_reference(&write_batch, NULL);
    }
 }
@@ -260,12 +261,12 @@ fd_bc_flush_readers(struct fd_context *ctx, struct fd_resource *rsc) assert_dt
     */
    fd_screen_lock(ctx->screen);
    foreach_batch (batch, &ctx->screen->batch_cache, rsc->track->batch_mask)
-      fd_batch_reference_locked(&batches[batch_count++], batch);
+      if (check_batch(batch, ctx))
+         fd_batch_reference_locked(&batches[batch_count++], batch);
    fd_screen_unlock(ctx->screen);
 
    for (int i = 0; i < batch_count; i++) {
-      if (batches[i]->ctx == ctx)
-         fd_batch_flush(batches[i]);
+      fd_batch_flush(batches[i]);
       fd_batch_reference(&batches[i], NULL);
    }
 }
@@ -282,18 +283,18 @@ fd_bc_dump(struct fd_context *ctx, const char *fmt, ...)
 
    va_list ap;
    va_start(ap, fmt);
-   vprintf(fmt, ap);
+   vfprintf(stderr, fmt, ap);
    va_end(ap);
 
    for (int i = 0; i < ARRAY_SIZE(cache->batches); i++) {
       struct fd_batch *batch = cache->batches[i];
       if (batch) {
-         printf("  %p<%u>%s\n", batch, batch->seqno,
+         fprintf(stderr, "  %p<%u>%s\n", batch, batch->seqno,
                 batch->needs_flush ? ", NEEDS FLUSH" : "");
       }
    }
 
-   printf("----\n");
+   fprintf(stderr, "----\n");
 
    fd_screen_unlock(ctx->screen);
 }
@@ -391,8 +392,12 @@ alloc_batch_locked(struct fd_batch_cache *cache, struct fd_context *ctx,
       struct fd_batch *flush_batch = NULL;
       for (unsigned i = 0; i < ARRAY_SIZE(cache->batches); i++) {
          if (!flush_batch || (cache->batches[i]->seqno < flush_batch->seqno))
-            fd_batch_reference_locked(&flush_batch, cache->batches[i]);
+            if (check_batch(cache->batches[i], ctx))
+               fd_batch_reference_locked(&flush_batch, cache->batches[i]);
       }
+
+      if (!flush_batch)
+         return NULL;
 
       /* we can drop lock temporarily here, since we hold a ref,
        * flush_batch won't disappear under us.
@@ -471,7 +476,7 @@ struct fd_batch *
 fd_bc_alloc_batch(struct fd_context *ctx, bool nondraw)
 {
    struct fd_batch_cache *cache = &ctx->screen->batch_cache;
-   struct fd_batch *batch;
+   struct fd_batch *batch = NULL;
 
    /* For normal draw batches, pctx->set_framebuffer_state() handles
     * this, but for nondraw batches, this is a nice central location
@@ -480,9 +485,11 @@ fd_bc_alloc_batch(struct fd_context *ctx, bool nondraw)
    if (nondraw)
       fd_context_switch_from(ctx);
 
-   fd_screen_lock(ctx->screen);
-   batch = alloc_batch_locked(cache, ctx, nondraw);
-   fd_screen_unlock(ctx->screen);
+   while (!batch) {
+      fd_screen_lock(ctx->screen);
+      batch = alloc_batch_locked(cache, ctx, nondraw);
+      fd_screen_unlock(ctx->screen);
+   }
 
    alloc_query_buf(ctx, batch);
 
@@ -578,9 +585,12 @@ fd_batch_from_fb(struct fd_context *ctx,
 
    key->num_surfs = idx;
 
-   fd_screen_lock(ctx->screen);
-   struct fd_batch *batch = batch_from_key(ctx, key);
-   fd_screen_unlock(ctx->screen);
+   struct fd_batch *batch = NULL;
+   while (!batch) {
+      fd_screen_lock(ctx->screen);
+      batch = batch_from_key(ctx, key);
+      fd_screen_unlock(ctx->screen);
+   }
 
    alloc_query_buf(ctx, batch);
 

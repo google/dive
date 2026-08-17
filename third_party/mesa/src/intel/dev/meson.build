@@ -18,6 +18,25 @@ files_libintel_dev = files(
   'intel_kmd.h',
 )
 
+inc_intel_dev_virtio = []
+link_intel_dev_virtio = []
+
+if with_intel_virtio
+files_libintel_dev += files(
+  'virtio/intel_virtio_bo.c',
+  'virtio/intel_virtio_device.c',
+  'virtio/i915_virtio_ccmd.c',
+  'virtio/i915_virtio_ccmd_execbuf.c',
+)
+
+inc_intel_dev_virtio += [
+  inc_virtio_gpu,
+  inc_virtio_vdrm,
+]
+
+link_intel_dev_virtio += [ libvdrm ]
+endif
+
 intel_dev_wa_src = custom_target('intel_wa.[ch]',
                                  input : ['gen_wa_helpers.py', 'mesa_defs.json'],
                                  output : ['intel_wa.h', 'intel_wa.c'],
@@ -43,11 +62,12 @@ idep_intel_dev_info_gen = declare_dependency(sources : [intel_dev_info_gen_src[0
 libintel_dev = static_library(
   'intel_dev',
   [files_libintel_dev, sha1_h, [intel_dev_wa_src]],
-  include_directories : [inc_include, inc_src, inc_intel],
+  include_directories : [inc_include, inc_src, inc_intel, inc_intel_dev_virtio],
   dependencies : [dep_libdrm, idep_mesautil, idep_intel_dev_wa,
                   idep_intel_dev_info_gen],
-  c_args : [no_override_init_args],
+  c_args : [no_override_init_args, soong_compat_c_args],
   gnu_symbol_visibility : 'hidden',
+  link_with : [link_intel_dev_virtio],
 )
 
 idep_intel_dev = declare_dependency(

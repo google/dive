@@ -63,6 +63,8 @@ struct etna_sampler_view {
    /* sampler offset +4*sampler, interleave when committing state */
    uint32_t config0;
    uint32_t config0_mask;
+   uint32_t config0_native; /* config0 with native byte order format (A8B8G8R8) */
+   bool has_rb_swap;
    uint32_t config1;
    uint32_t config_3d;
    uint32_t size;
@@ -70,6 +72,7 @@ struct etna_sampler_view {
    uint32_t astc0;
    uint32_t linear_stride;  /* only LOD0 */
    struct etna_reloc lod_addr[VIVS_TE_SAMPLER_LOD_ADDR__LEN];
+   struct etna_reloc lod_addr_128bit[VIVS_TE_SAMPLER_LOD_ADDR__LEN]; /* BA-half plane */
    unsigned min_lod, max_lod; /* 5.5 fixp */
 
    struct etna_sampler_ts ts;
@@ -79,6 +82,21 @@ static inline struct etna_sampler_view *
 etna_sampler_view(struct pipe_sampler_view *view)
 {
    return (struct etna_sampler_view *)view;
+}
+
+/* Return the config0 value for the sampler view, selecting between PE-internal
+ * format and native byte order format based on the resource's shared state. */
+static inline uint32_t
+etna_sampler_view_config0(struct etna_sampler_view *sv)
+{
+   if (sv->has_rb_swap) {
+      struct etna_resource *rsc = etna_resource(sv->base.texture);
+
+      if (rsc->shared && rsc->shared_native_order)
+         return sv->config0_native;
+   }
+
+   return sv->config0;
 }
 
 static void *
@@ -164,7 +182,13 @@ etna_create_sampler_view_state(struct pipe_context *pctx, struct pipe_resource *
    struct etna_sampler_view *sv = CALLOC_STRUCT(etna_sampler_view);
    struct etna_context *ctx = etna_context(pctx);
    struct etna_screen *screen = ctx->screen;
-   const uint32_t format = translate_texture_format(so->format);
+   uint32_t format = translate_texture_format(so->format, screen);
+
+   /* For RB_SWAP formats, pre-compute the alternative texture format for when
+    * shared resources hold data in native byte order (RGBA). */
+   const bool rb_swap = translate_pe_format_rb_swap(so->format);
+   const uint32_t native_format = rb_swap ? remap_texture_format_rb_swap(format) : 0;
+
    const bool ext = !!(format & EXT_FORMAT);
    const bool astc = !!(format & ASTC_FORMAT);
    const bool srgb = util_format_is_srgb(so->format);
@@ -259,6 +283,18 @@ etna_create_sampler_view_state(struct pipe_context *pctx, struct pipe_resource *
    sv->min_lod = sv->base.u.tex.first_level << 5;
    sv->max_lod = MIN2(sv->base.u.tex.last_level, res->base.last_level) << 5;
 
+   /* 128-bit formats are emulated as two stacked G32R32 planes. The companion
+    * sampler reads the second (BA) plane, starting halfway into each level.
+    */
+   if (format_is_128bit(so->format)) {
+      for (int lod = 0; lod <= res->base.last_level; ++lod) {
+         sv->lod_addr_128bit[lod].bo = res->bo;
+         sv->lod_addr_128bit[lod].offset = res->levels[lod].offset +
+            etna_resource_level_second_plane_offset(&res->levels[lod]);
+         sv->lod_addr_128bit[lod].flags = ETNA_RELOC_READ;
+      }
+   }
+
    /* Workaround for npot textures -- it appears that only CLAMP_TO_EDGE is
     * supported when the appropriate capability is not set. */
    if (!etna_core_has_feature(screen->info, ETNA_FEATURE_NON_POWER_OF_TWO) &&
@@ -269,6 +305,12 @@ etna_create_sampler_view_state(struct pipe_context *pctx, struct pipe_resource *
       sv->config0 |=
          VIVS_TE_SAMPLER_CONFIG0_UWRAP(TEXTURE_WRAPMODE_CLAMP_TO_EDGE) |
          VIVS_TE_SAMPLER_CONFIG0_VWRAP(TEXTURE_WRAPMODE_CLAMP_TO_EDGE);
+   }
+
+   if (rb_swap) {
+      sv->config0_native = (sv->config0 & ~VIVS_TE_SAMPLER_CONFIG0_FORMAT__MASK) |
+                           VIVS_TE_SAMPLER_CONFIG0_FORMAT(native_format);
+      sv->has_rb_swap = true;
    }
 
    return &sv->base;
@@ -355,7 +397,13 @@ etna_emit_new_texture_state(struct etna_context *ctx)
                struct etna_sampler_state *ss = etna_sampler_state(ctx->sampler[x]);
                struct etna_sampler_view *sv = etna_sampler_view(ctx->sampler_view[x]);
 
-               val = (ss->config0 & sv->config0_mask) | sv->config0;
+               val = (ss->config0 & sv->config0_mask) | etna_sampler_view_config0(sv);
+
+               if (util_format_description(sv->base.format)->colorspace == UTIL_FORMAT_COLORSPACE_ZS &&
+                  ss->base.min_mip_filter == PIPE_TEX_MIPFILTER_LINEAR) {
+                  val &= ~VIVS_NTE_SAMPLER_CONFIG0_MIP__MASK;
+                  val |= VIVS_NTE_SAMPLER_CONFIG0_MIP(TEXTURE_FILTER_NEAREST);
+               }
             }
 
             /*10000*/ EMIT_STATE(NTE_SAMPLER_CONFIG0(x), val);
@@ -465,6 +513,49 @@ etna_emit_new_texture_state(struct etna_context *ctx)
       }
    }
 
+   /* Mirror each 128-bit sampler onto its companion slot, pointing the
+    * companion at the BA-half plane. The split is reassembled in the shader by
+    * etna_nir_lower_128bit(..).
+    */
+   if (unlikely(dirty & (ETNA_DIRTY_SAMPLER_VIEWS | ETNA_DIRTY_SAMPLERS)) &&
+       (ctx->tex_is_128bit[MESA_SHADER_FRAGMENT] | ctx->tex_is_128bit[MESA_SHADER_VERTEX])) {
+      for (int x = 0; x < VIVS_NTE_SAMPLER__LEN; ++x) {
+         if (!((1 << x) & active_samplers))
+            continue;
+
+         struct etna_sampler_view *sv = etna_sampler_view(ctx->sampler_view[x]);
+         if (!format_is_128bit(sv->base.format))
+            continue;
+
+         const unsigned y = companion_slot(ctx, x);
+         if (y == ~0U)
+            continue;
+
+         struct etna_sampler_state *ss = etna_sampler_state(ctx->sampler[x]);
+         uint32_t config0 = (ss->config0 & sv->config0_mask) | etna_sampler_view_config0(sv);
+         uint32_t log_size = sv->log_size;
+         unsigned max_lod = MAX2(MIN2(ss->max_lod + sv->min_lod, sv->max_lod), ss->max_lod_min);
+         unsigned min_lod = MIN2(MAX2(ss->min_lod + sv->min_lod, sv->min_lod), max_lod);
+
+         if (texture_use_int_filter(&sv->base, &ss->base, false))
+            log_size |= VIVS_TE_SAMPLER_LOG_SIZE_INT_FILTER;
+
+         EMIT_STATE(NTE_SAMPLER_CONFIG0(y), config0);
+         EMIT_STATE(NTE_SAMPLER_SIZE(y), sv->size);
+         EMIT_STATE(NTE_SAMPLER_LOG_SIZE(y), log_size);
+         EMIT_STATE(NTE_SAMPLER_LOD_CONFIG(y), ss->config_lod |
+                    VIVS_TE_SAMPLER_LOD_CONFIG_MAX(max_lod) |
+                    VIVS_TE_SAMPLER_LOD_CONFIG_MIN(min_lod));
+         EMIT_STATE(NTE_SAMPLER_LINEAR_STRIDE(0, y), sv->linear_stride);
+         EMIT_STATE(NTE_SAMPLER_3D_CONFIG(y), ss->config_3d | sv->config_3d);
+         EMIT_STATE(NTE_SAMPLER_CONFIG1(y), ss->config1 | sv->config1);
+         EMIT_STATE(NTE_SAMPLER_BASELOD(y), ss->baselod);
+
+         for (int lod = 0; lod < VIVS_NTE_SAMPLER_ADDR_LOD__LEN; ++lod)
+            EMIT_STATE_RELOC(NTE_SAMPLER_ADDR_LOD(y, lod), &sv->lod_addr_128bit[lod]);
+      }
+   }
+
    etna_coalesce_end(stream, &coalesce);
 
    ctx->prev_active_samplers = active_samplers;
@@ -494,8 +585,13 @@ etna_emit_texture_state(struct etna_context *ctx)
             if ((1 << x) & active_samplers) {
                struct etna_sampler_state *ss = etna_sampler_state(ctx->sampler[x]);
                struct etna_sampler_view *sv = etna_sampler_view(ctx->sampler_view[x]);
+               val = (ss->config0 & sv->config0_mask) | etna_sampler_view_config0(sv);
 
-               val = (ss->config0 & sv->config0_mask) | sv->config0;
+               if (util_format_description(sv->base.format)->colorspace == UTIL_FORMAT_COLORSPACE_ZS &&
+                  ss->base.min_mip_filter == PIPE_TEX_MIPFILTER_LINEAR) {
+                  val &= ~VIVS_TE_SAMPLER_CONFIG0_MIP__MASK;
+                  val |= VIVS_TE_SAMPLER_CONFIG0_MIP(TEXTURE_FILTER_NEAREST);
+               }
             }
 
             /*02000*/ EMIT_STATE(TE_SAMPLER_CONFIG0(x), val);

@@ -149,7 +149,7 @@ lower_store(nir_intrinsic_instr *instr, nir_builder *b, struct lower_state *stat
                .deref = nir_src_as_deref(instr->src[0]),
                .write_mask = nir_intrinsic_write_mask(instr),
             };
-            util_dynarray_append(&state->output_writes, struct output_writes, data);
+            util_dynarray_append(&state->output_writes, data);
             break;
          }
       }
@@ -166,11 +166,11 @@ lower_emit_vertex(nir_intrinsic_instr *instr, nir_builder *b, struct lower_state
 {
    unsigned stream_id = nir_intrinsic_stream_id(instr);
 
-   nir_def *point_width, *point_height;
-   get_scaled_point_size(b, state, &point_width, &point_height);
-
-   nir_instr_remove(&instr->instr);
+   b->cursor = nir_instr_remove(&instr->instr);
    if (stream_id == 0) {
+      nir_def *point_width, *point_height;
+      get_scaled_point_size(b, state, &point_width, &point_height);
+
       for (unsigned i = 0; i < 4; i++) {
          /* All outputs need to be emitted for each vertex */
          util_dynarray_foreach(&state->output_writes, struct output_writes, data) {
@@ -180,14 +180,14 @@ lower_emit_vertex(nir_intrinsic_instr *instr, nir_builder *b, struct lower_state
          /* pos = scaled_point_size * point_dir + point_pos */
          nir_def *point_dir = get_point_dir(b, state, i);
          nir_def *pos = nir_vec4(b,
-                                     nir_ffma(b,
-                                              point_width,
-                                              nir_channel(b, point_dir, 0),
-                                              nir_channel(b, state->point_pos, 0)),
-                                     nir_ffma(b,
-                                              point_height,
-                                              nir_channel(b, point_dir, 1),
-                                              nir_channel(b, state->point_pos, 1)),
+                                     nir_ffma_weak(b,
+                                                   point_width,
+                                                   nir_channel(b, point_dir, 0),
+                                                   nir_channel(b, state->point_pos, 0)),
+                                     nir_ffma_weak(b,
+                                                   point_height,
+                                                   nir_channel(b, point_dir, 1),
+                                                   nir_channel(b, state->point_pos, 1)),
                                      nir_channel(b, state->point_pos, 2),
                                      nir_channel(b, state->point_pos, 3));
          nir_store_var(b, state->pos_out, pos, 0xf);

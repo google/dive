@@ -4,10 +4,13 @@
  */
 #include "nvk_event.h"
 
+#include "nvk_buffer.h"
 #include "nvk_cmd_buffer.h"
 #include "nvk_device.h"
 #include "nvk_entrypoints.h"
 #include "nvk_mme.h"
+
+#include "vk_synchronization.h"
 
 #include "nv_push_cl906f.h"
 #include "nv_push_cl9097.h"
@@ -164,7 +167,8 @@ nvk_event_report_semaphore(struct nvk_cmd_buffer *cmd,
 {
    uint8_t subc = nvk_cmd_buffer_last_subchannel(cmd);
    if (subc == SUBC_NV9097) {
-      struct nv_push *p = nvk_cmd_buffer_push(cmd, 5);
+      struct nv_push *p = nvk_cmd_buffer_push(cmd, 7);
+      P_IMMD(p, NV9097, FLUSH_PENDING_WRITES, 0);
       P_MTHD(p, NV9097, SET_REPORT_SEMAPHORE_A);
       P_NV9097_SET_REPORT_SEMAPHORE_A(p, addr >> 32);
       P_NV9097_SET_REPORT_SEMAPHORE_B(p, addr);
@@ -213,13 +217,8 @@ nvk_CmdSetEvent2(VkCommandBuffer commandBuffer,
 
    nvk_cmd_flush_wait_dep(cmd, pDependencyInfo, false);
 
-   VkPipelineStageFlags2 stages = 0;
-   for (uint32_t i = 0; i < pDependencyInfo->memoryBarrierCount; i++)
-      stages |= pDependencyInfo->pMemoryBarriers[i].srcStageMask;
-   for (uint32_t i = 0; i < pDependencyInfo->bufferMemoryBarrierCount; i++)
-      stages |= pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask;
-   for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; i++)
-      stages |= pDependencyInfo->pImageMemoryBarriers[i].srcStageMask;
+   VkPipelineStageFlags2 stages =
+      vk_collect_dependency_info_src_stages(pDependencyInfo);
 
    nvk_event_report_semaphore(cmd, stages, event->addr, VK_EVENT_SET);
 }
@@ -259,4 +258,18 @@ nvk_CmdWaitEvents2(VkCommandBuffer commandBuffer,
    }
 
    nvk_cmd_invalidate_deps(cmd, eventCount, pDependencyInfos);
+}
+
+VKAPI_ATTR void VKAPI_CALL
+nvk_CmdWriteBufferMarker2AMD(VkCommandBuffer commandBuffer,
+                             VkPipelineStageFlags2 stage,
+                             VkBuffer _buffer,
+                             VkDeviceSize offset,
+                             uint32_t marker)
+{
+   VK_FROM_HANDLE(nvk_cmd_buffer, cmd, commandBuffer);
+   VK_FROM_HANDLE(nvk_buffer, buffer, _buffer);
+   const uint64_t marker_addr = vk_buffer_address(&buffer->vk, offset);
+
+   nvk_event_report_semaphore(cmd, stage, marker_addr, marker);
 }

@@ -97,6 +97,3 @@ prefix = "wayland-"
 piglit_folder = "/piglit"
 profile = "quick"
 process_isolation = true
-  [piglit.env]
-  # workaround for spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgradcube
-  GALLIVM_PERF = "no_quad_lod"

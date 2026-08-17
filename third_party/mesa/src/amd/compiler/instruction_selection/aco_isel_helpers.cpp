@@ -41,9 +41,14 @@ append_logical_start(Block* b)
 }
 
 void
-append_logical_end(Block* b)
+append_logical_end(isel_context* ctx, bool append_reload_preserved)
 {
-   Builder(NULL, b).pseudo(aco_opcode::p_logical_end);
+   Builder bld(ctx->program, ctx->block);
+
+   if (append_reload_preserved && ctx->program->is_callee && ctx->block->loop_nest_depth == 0)
+      emit_reload_preserved(ctx);
+
+   bld.pseudo(aco_opcode::p_logical_end);
 }
 
 Temp
@@ -112,42 +117,55 @@ emit_extract_vector(isel_context* ctx, Temp src, uint32_t idx, RegClass dst_rc)
    }
 
    assert(src.bytes() > (idx * dst_rc.bytes()));
-   Builder bld(ctx->program, ctx->block);
+
    auto it = ctx->allocated_vec.find(src.id());
-   if (it != ctx->allocated_vec.end() && dst_rc.bytes() == it->second[idx].regClass().bytes()) {
-      if (it->second[idx].regClass() == dst_rc) {
-         return it->second[idx];
-      } else {
-         assert(!dst_rc.is_subdword());
-         assert(dst_rc.type() == RegType::vgpr && it->second[idx].type() == RegType::sgpr);
-         return bld.copy(bld.def(dst_rc), it->second[idx]);
+   if (it != ctx->allocated_vec.end()) {
+      unsigned new_byte_offset = (idx * dst_rc.bytes()) % it->second[0].bytes();
+
+      if ((it->second[0].bytes() - new_byte_offset) >= dst_rc.bytes() &&
+          new_byte_offset % dst_rc.bytes() == 0) {
+         src = it->second[idx * dst_rc.bytes() / it->second[0].bytes()];
+         idx = new_byte_offset / dst_rc.bytes();
+         assert(src.id()); /* allocated_vec can contain undefs, but they must not be used. */
+         return emit_extract_vector(ctx, src, idx, dst_rc);
       }
    }
+
+   Builder bld(ctx->program, ctx->block);
 
    if (dst_rc.is_subdword())
       src = as_vgpr(ctx, src);
 
    if (src.bytes() == dst_rc.bytes()) {
       assert(idx == 0);
+      assert(dst_rc.type() == RegType::vgpr && src.type() == RegType::sgpr);
       return bld.copy(bld.def(dst_rc), src);
    } else {
-      Temp dst = bld.tmp(dst_rc);
-      bld.pseudo(aco_opcode::p_extract_vector, Definition(dst), src, Operand::c32(idx));
-      return dst;
+      return bld.pseudo(aco_opcode::p_extract_vector, bld.def(dst_rc), src, Operand::c32(idx));
    }
 }
 
 void
 emit_split_vector(isel_context* ctx, Temp vec_src, unsigned num_components)
 {
+   if (vec_src.size() == 1 && vec_src.type() == RegType::sgpr)
+      return;
+   unsigned comp_bytes = vec_src.bytes() / num_components;
+   assert(vec_src.bytes() % num_components == 0 && util_is_power_of_two_nonzero(comp_bytes));
    if (num_components == 1)
       return;
    if (ctx->allocated_vec.find(vec_src.id()) != ctx->allocated_vec.end())
       return;
-   if (num_components > vec_src.size() && vec_src.type() == RegType::sgpr) {
-      /* sub-dword split: should still help get_alu_src() */
-      emit_split_vector(ctx, vec_src, vec_src.size());
-      return;
+   if (comp_bytes < 4 && num_components > 2) {
+      /* sub-dword split: split into dwords/words first */
+      unsigned split_size = vec_src.size() == 1 ? 2 : 4;
+      if (vec_src.bytes() % split_size == 0) {
+         emit_split_vector(ctx, vec_src, vec_src.bytes() / split_size);
+         auto it = ctx->allocated_vec.find(vec_src.id());
+         for (unsigned i = 0; i < vec_src.bytes() / split_size; i++)
+            emit_split_vector(ctx, it->second[i], split_size / comp_bytes);
+         return;
+      }
    }
    RegClass rc = RegClass::get(vec_src.type(), vec_src.bytes() / num_components);
    aco_ptr<Instruction> split{
@@ -295,6 +313,30 @@ convert_pointer_to_64_bit(isel_context* ctx, Temp ptr, bool non_uniform)
                      Operand::c32((unsigned)ctx->options->address32_hi));
 }
 
+Temp
+add64_32(Builder& bld, Temp src0, Operand src1, Temp dst)
+{
+   Temp src00 = bld.tmp(src0.type(), 1);
+   Temp src01 = bld.tmp(src0.type(), 1);
+   bld.pseudo(aco_opcode::p_split_vector, Definition(src00), Definition(src01), src0);
+
+   if (src0.type() == RegType::vgpr || src1.isOfType(RegType::vgpr)) {
+      src1 = src1.isOfType(RegType::vgpr) ? src1 : bld.copy(bld.def(v1), src1);
+      Temp dst0 = bld.tmp(v1);
+      Temp carry = bld.vadd32(Definition(dst0), src00, src1, true).def(1).getTemp();
+      Temp dst1 = bld.vadd32(bld.def(v1), src01, Operand::zero(), false, carry);
+      Definition def = dst == Temp() ? bld.def(v2) : Definition(dst);
+      return bld.pseudo(aco_opcode::p_create_vector, def, dst0, dst1);
+   } else {
+      Temp carry = bld.tmp(s1);
+      Temp dst0 =
+         bld.sop2(aco_opcode::s_add_u32, bld.def(s1), bld.scc(Definition(carry)), src00, src1);
+      Temp dst1 = bld.sop2(aco_opcode::s_add_u32, bld.def(s1), bld.def(s1, scc), src01, carry);
+      Definition def = dst == Temp() ? bld.def(s2) : Definition(dst);
+      return bld.pseudo(aco_opcode::p_create_vector, def, dst0, dst1);
+   }
+}
+
 void
 select_vec2(isel_context* ctx, Temp dst, Temp cond, Temp then, Temp els)
 {
@@ -369,9 +411,9 @@ emit_interp_instr_gfx11(isel_context* ctx, unsigned idx, unsigned component, Tem
    Builder bld(ctx->program, ctx->block);
 
    if (ctx->cf_info.in_divergent_cf || ctx->cf_info.had_divergent_discard) {
-      bld.pseudo(aco_opcode::p_interp_gfx11, Definition(dst), Operand(v1.as_linear()),
-                 Operand::c32(idx), Operand::c32(component), Operand::c32(high_16bits), coord1,
-                 coord2, bld.m0(prim_mask));
+      bld.pseudo(aco_opcode::p_interp_gfx11, Definition(dst), Operand(lv1), Operand::c32(idx),
+                 Operand::c32(component), Operand::c32(high_16bits), coord1, coord2,
+                 bld.m0(prim_mask));
       return;
    }
 
@@ -445,9 +487,8 @@ emit_interp_mov_instr(isel_context* ctx, unsigned idx, unsigned component, unsig
    if (ctx->options->gfx_level >= GFX11) {
       uint16_t dpp_ctrl = dpp_quad_perm(vertex_id, vertex_id, vertex_id, vertex_id);
       if (ctx->cf_info.in_divergent_cf || ctx->cf_info.had_divergent_discard) {
-         bld.pseudo(aco_opcode::p_interp_gfx11, Definition(tmp), Operand(v1.as_linear()),
-                    Operand::c32(idx), Operand::c32(component), Operand::c32(dpp_ctrl),
-                    bld.m0(prim_mask));
+         bld.pseudo(aco_opcode::p_interp_gfx11, Definition(tmp), Operand(lv1), Operand::c32(idx),
+                    Operand::c32(component), Operand::c32(dpp_ctrl), bld.m0(prim_mask));
       } else {
          Temp p =
             bld.ldsdir(aco_opcode::lds_param_load, bld.def(v1), bld.m0(prim_mask), idx, component);
@@ -589,8 +630,8 @@ create_fs_dual_src_export_gfx11(isel_context* ctx, const struct aco_export_mrt* 
    aco_ptr<Instruction> exp{
       create_instruction(aco_opcode::p_dual_src_export_gfx11, Format::PSEUDO, 10, 6)};
    for (unsigned i = 0; i < 4; i++) {
-      exp->operands[i] = mrt0 ? mrt0->out[i] : Operand(v1);
-      exp->operands[i + 4] = mrt1 ? mrt1->out[i] : Operand(v1);
+      exp->operands[i] = mrt0->out[i];
+      exp->operands[i + 4] = mrt1->out[i];
    }
 
    instr_exact_mask(exp.get()) = Operand();
@@ -651,6 +692,26 @@ lanecount_to_mask(isel_context* ctx, Temp count, unsigned bit_offset)
 }
 
 void
+emit_barrier(Builder& bld, memory_sync_info sync, sync_scope exec_scope, aco_opcode op)
+{
+   if (bld.program->workgroup_size <= bld.program->wave_size) {
+      exec_scope = MIN2(exec_scope, scope_subgroup);
+      if (sync.scope == scope_workgroup)
+         sync.scope = scope_subgroup;
+   }
+
+   if (op == aco_opcode::p_barrier && bld.program->gfx_level >= GFX12 &&
+       exec_scope == scope_workgroup) {
+      memory_sync_info sync_release(sync.storage, sync.semantics & semantic_release, sync.scope);
+      memory_sync_info sync_acquire(sync.storage, sync.semantics & semantic_acquire, sync.scope);
+      bld.barrier(aco_opcode::p_barrier_signal, sync_release, exec_scope);
+      bld.barrier(aco_opcode::p_barrier_wait, sync_acquire, exec_scope);
+   } else {
+      bld.barrier(op, sync, exec_scope);
+   }
+}
+
+void
 build_end_with_regs(isel_context* ctx, std::vector<Operand>& regs)
 {
    aco_ptr<Instruction> end{
@@ -665,8 +726,10 @@ build_end_with_regs(isel_context* ctx, std::vector<Operand>& regs)
 }
 
 Instruction*
-add_startpgm(struct isel_context* ctx)
+add_startpgm(struct isel_context* ctx, bool is_callee)
 {
+   ctx->program->scratch_arg_size += ctx->callee_info.scratch_param_size * ctx->program->wave_size;
+
    unsigned def_count = 0;
    for (unsigned i = 0; i < ctx->args->arg_count; i++) {
       if (ctx->args->args[i].skip)
@@ -678,8 +741,14 @@ add_startpgm(struct isel_context* ctx)
          def_count++;
    }
 
-   if (ctx->stage.hw == AC_HW_COMPUTE_SHADER && ctx->program->gfx_level >= GFX12)
-      def_count += 3;
+   if (is_callee) {
+      /* We do not support shader args in callees. */
+      assert(def_count == 0);
+      def_count += ctx->callee_info.reg_param_count;
+      /* Add system parameters separately - they aren't counted by reg_param_count */
+      assert(ctx->callee_info.stack_ptr.is_reg && ctx->callee_info.return_address.is_reg);
+      def_count += 2;
+   }
 
    Instruction* startpgm = create_instruction(aco_opcode::p_startpgm, Format::PSEUDO, 0, def_count);
    ctx->block->instructions.emplace_back(startpgm);
@@ -713,33 +782,17 @@ add_startpgm(struct isel_context* ctx)
       }
    }
 
-   if (ctx->program->gfx_level >= GFX12 && ctx->stage.hw == AC_HW_COMPUTE_SHADER) {
-      Temp idx = ctx->program->allocateTmp(s1);
-      Temp idy = ctx->program->allocateTmp(s1);
-      ctx->ttmp8 = ctx->program->allocateTmp(s1);
-      startpgm->definitions[def_count - 3] = Definition(idx);
-      startpgm->definitions[def_count - 3].setPrecolored(PhysReg(108 + 9 /*ttmp9*/));
-      startpgm->definitions[def_count - 2] = Definition(ctx->ttmp8);
-      startpgm->definitions[def_count - 2].setPrecolored(PhysReg(108 + 8 /*ttmp8*/));
-      startpgm->definitions[def_count - 1] = Definition(idy);
-      startpgm->definitions[def_count - 1].setPrecolored(PhysReg(108 + 7 /*ttmp7*/));
-      ctx->workgroup_id[0] = Operand(idx);
-      if (ctx->args->workgroup_ids[2].used) {
-         Builder bld(ctx->program, ctx->block);
-         ctx->workgroup_id[1] =
-            bld.pseudo(aco_opcode::p_extract, bld.def(s1), bld.def(s1, scc), idy, Operand::zero(),
-                       Operand::c32(16u), Operand::zero());
-         ctx->workgroup_id[2] =
-            bld.pseudo(aco_opcode::p_extract, bld.def(s1), bld.def(s1, scc), idy, Operand::c32(1u),
-                       Operand::c32(16u), Operand::zero());
-      } else {
-         ctx->workgroup_id[1] = Operand(idy);
-         ctx->workgroup_id[2] = Operand::zero();
+   if (is_callee) {
+      unsigned def_idx = 0;
+      ctx->program->stack_ptr = ctx->callee_info.stack_ptr.def.getTemp();
+      startpgm->definitions[def_idx++] = ctx->callee_info.stack_ptr.def;
+      startpgm->definitions[def_idx++] = ctx->callee_info.return_address.def;
+
+      for (auto& info : ctx->callee_info.param_infos) {
+         if (!info.is_reg)
+            continue;
+         startpgm->definitions[def_idx++] = info.def;
       }
-   } else if (ctx->stage.hw == AC_HW_COMPUTE_SHADER) {
-      const struct ac_arg* ids = ctx->args->workgroup_ids;
-      for (unsigned i = 0; i < 3; i++)
-         ctx->workgroup_id[i] = ids[i].used ? Operand(get_arg(ctx, ids[i])) : Operand::zero();
    }
 
    /* epilog has no scratch */
@@ -823,11 +876,23 @@ finish_program(isel_context* ctx)
    }
 }
 
+ABI
+nir_abi_to_aco(unsigned function_attributes)
+{
+   switch (function_attributes & ACO_NIR_FUNCTION_ATTRIB_ABI_MASK) {
+   case ACO_NIR_CALL_ABI_RT_RECURSIVE: return rtRaygenABI;
+   case ACO_NIR_CALL_ABI_TRAVERSAL: return rtTraversalABI;
+   case ACO_NIR_CALL_ABI_AHIT_ISEC: return rtAnyHitABI;
+   default: UNREACHABLE("invalid abi");
+   }
+}
+
 struct param_assignment_info {
    uint16_t required_alignment;
    uint16_t provided_alignment;
    RegClass rc;
    parameter_info* dst_info;
+   const parameter_info* affinity;
    bool is_return_param;
    /* If true, this parameter shouldn't count toward the callee info's reg_param_count because it
     * receives special handling (e.g. the call return address being a definition instead of an
@@ -841,7 +906,7 @@ struct param_assignment_info {
 };
 
 std::optional<PhysReg>
-find_reg(BITSET_WORD* regs, RegClass rc)
+find_reg(BITSET_WORD* regs, RegClass rc, const BITSET_WORD* avoid)
 {
    uint16_t start = 0;
    uint16_t size = 128;
@@ -852,7 +917,7 @@ find_reg(BITSET_WORD* regs, RegClass rc)
 
    uint16_t contiguous_size = 0;
    for (uint16_t i = 0; i < size; ++i) {
-      if (!BITSET_TEST(regs, start + i)) {
+      if (!BITSET_TEST(regs, start + i) || (avoid && BITSET_TEST(avoid, start + i))) {
          contiguous_size = 0;
          continue;
       }
@@ -863,8 +928,67 @@ find_reg(BITSET_WORD* regs, RegClass rc)
 }
 
 void
+param_hint_avoid(param_assignment_hints& hints, const parameter_info& param_info)
+{
+   if (!param_info.is_reg)
+      return;
+   BITSET_SET_COUNT(hints.registers_to_avoid, param_info.def.physReg(), param_info.def.size());
+}
+
+void
+param_hint_map(param_assignment_hints& hints, const struct callee_info& traversal_info,
+               unsigned dst_param_idx, unsigned src_param_idx)
+{
+   auto& param_info = traversal_info.param_infos[src_param_idx + ACO_NIR_CALL_SYSTEM_ARG_COUNT];
+   if (!param_info.is_reg)
+      return;
+   hints.param_affinities[dst_param_idx + ACO_NIR_CALL_SYSTEM_ARG_COUNT] = param_info;
+}
+
+param_assignment_hints
+get_ahit_isec_param_hints(const struct callee_info& traversal_info, bool uses_descriptor_heap)
+{
+   param_assignment_hints hints;
+   hints.stack_pointer_affinity = traversal_info.stack_ptr;
+   hints.param_affinities.resize(AHIT_ISEC_ARG_HIT_ATTRIB_PAYLOAD_BASE, {});
+
+   for (auto& info : traversal_info.param_infos)
+      param_hint_avoid(hints, info);
+   param_hint_avoid(hints, traversal_info.stack_ptr);
+
+   param_hint_map(hints, traversal_info, RT_ARG_LAUNCH_ID, RT_ARG_LAUNCH_ID);
+   param_hint_map(hints, traversal_info, RT_ARG_LAUNCH_SIZE, RT_ARG_LAUNCH_SIZE);
+   if (uses_descriptor_heap) {
+      param_hint_map(hints, traversal_info, RT_ARG_HEAP_RESOURCE, RT_ARG_HEAP_RESOURCE);
+      param_hint_map(hints, traversal_info, RT_ARG_HEAP_SAMPLER, RT_ARG_HEAP_SAMPLER);
+   } else {
+      param_hint_map(hints, traversal_info, RT_ARG_DESCRIPTORS, RT_ARG_DESCRIPTORS);
+      param_hint_map(hints, traversal_info, RT_ARG_DYNAMIC_DESCRIPTORS, RT_ARG_DYNAMIC_DESCRIPTORS);
+   }
+   param_hint_map(hints, traversal_info, RT_ARG_PUSH_CONSTANTS, RT_ARG_PUSH_CONSTANTS);
+   param_hint_map(hints, traversal_info, RT_ARG_SBT_DESCRIPTORS, RT_ARG_SBT_DESCRIPTORS);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_SHADER_RECORD_PTR,
+                  TRAVERSAL_ARG_SHADER_RECORD_PTR);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_CULL_MASK_AND_FLAGS,
+                  TRAVERSAL_ARG_CULL_MASK_AND_FLAGS);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_RAY_ORIGIN, TRAVERSAL_ARG_RAY_ORIGIN);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_RAY_TMIN, TRAVERSAL_ARG_RAY_TMIN);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_RAY_DIRECTION, TRAVERSAL_ARG_RAY_DIRECTION);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_CANDIDATE_RAY_TMAX, TRAVERSAL_ARG_RAY_TMAX);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_PRIMITIVE_ADDR,
+                  TRAVERSAL_ARG_PRIMITIVE_ADDR);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_PRIMITIVE_ID, TRAVERSAL_ARG_PRIMITIVE_ID);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_INSTANCE_ADDR, TRAVERSAL_ARG_INSTANCE_ADDR);
+   param_hint_map(hints, traversal_info, AHIT_ISEC_ARG_GEOMETRY_ID_AND_FLAGS,
+                  TRAVERSAL_ARG_GEOMETRY_ID_AND_FLAGS);
+
+   return hints;
+}
+
+void
 find_param_regs(Program* program, const ABI& abi, callee_info& info,
-                std::vector<struct param_assignment_info>& params, RegisterDemand reg_limit)
+                std::vector<struct param_assignment_info>& params,
+                const BITSET_DECLARE(regs_to_avoid, 512), RegisterDemand reg_limit)
 {
    unsigned scratch_param_bytes = 0;
    RegisterDemand param_demand = RegisterDemand();
@@ -908,7 +1032,32 @@ find_param_regs(Program* program, const ABI& abi, callee_info& info,
       else
          regs = clobbered_regs;
 
-      auto next_reg = find_reg(regs, rc);
+      std::optional<PhysReg> next_reg;
+
+      if (params.back().affinity) {
+         bool use_affinity = true;
+         if (params.back().affinity->is_reg) {
+            const Definition& def = params.back().affinity->def;
+            for (auto reg = def.physReg(); reg < def.physReg().advance(def.bytes());
+                 reg = reg.advance(4)) {
+               if (!BITSET_TEST(regs, reg)) {
+                  use_affinity = false;
+                  break;
+               }
+            }
+            if (use_affinity)
+               next_reg = def.physReg();
+         } else {
+            /* TODO: scratch parameters could benefit from affinities as well */
+            use_affinity = false;
+         }
+      }
+
+      if (!next_reg)
+         next_reg = find_reg(regs, rc, regs_to_avoid);
+      if (!next_reg)
+         next_reg = find_reg(regs, rc, NULL);
+
       /* Force parameter into scratch if it exceeds the ABI's maximum parameter demand */
       if (abi.max_param_demand != RegisterDemand() &&
           (param_demand + Temp(0, rc)).exceeds(abi.max_param_demand))
@@ -943,6 +1092,7 @@ find_param_regs(Program* program, const ABI& abi, callee_info& info,
 
             param_demand += Temp(0, it2->rc);
 
+            it2->dst_info->needs_explicit_preservation = regs == clobbered_regs;
             it2->dst_info->def.setPrecolored(*next_reg);
             for (unsigned i = 0; i < it2->rc.size(); ++i)
                BITSET_CLEAR(regs, next_reg->reg() + i);
@@ -958,9 +1108,10 @@ find_param_regs(Program* program, const ABI& abi, callee_info& info,
             next_reg = next_reg->advance(required_padding * 4);
       }
       if (next_reg) {
+         params.back().dst_info->needs_explicit_preservation = regs == clobbered_regs;
          param_demand += Temp(0, params.back().rc);
          params.back().dst_info->def.setPrecolored(*next_reg);
-         BITSET_CLEAR_RANGE(regs, next_reg->reg(), next_reg->reg() + params.back().rc.size() - 1);
+         BITSET_CLEAR_COUNT(regs, next_reg->reg(), params.back().rc.size());
          if (!params.back().is_system_param) {
             ++info.reg_param_count;
             if (discardable)
@@ -981,8 +1132,9 @@ find_param_regs(Program* program, const ABI& abi, callee_info& info,
 }
 
 struct callee_info
-get_callee_info(amd_gfx_level gfx_level, const ABI& abi, unsigned param_count,
-                const nir_parameter* parameters, Program* program, RegisterDemand reg_limit)
+get_callee_info(amd_gfx_level gfx_level, unsigned wave_size, const ABI& abi, unsigned param_count,
+                const nir_parameter* parameters, Program* program, RegisterDemand reg_limit,
+                const param_assignment_hints& param_hints)
 {
    struct callee_info info = {};
    info.param_infos.reserve(param_count);
@@ -1002,7 +1154,7 @@ get_callee_info(amd_gfx_level gfx_level, const ABI& abi, unsigned param_count,
    return_def_info.provided_alignment = 2;
    return_def_info.rc = s2;
    return_def_info.dst_info = &info.return_address;
-   return_def_info.is_return_param = false;
+   return_def_info.is_return_param = true;
    return_def_info.is_system_param = true;
    return_def_info.force_reg = true;
    assignment_infos.push_back(return_def_info);
@@ -1023,6 +1175,9 @@ get_callee_info(amd_gfx_level gfx_level, const ABI& abi, unsigned param_count,
       stack_ptr_info.is_return_param = false;
       stack_ptr_info.is_system_param = true;
       stack_ptr_info.force_reg = true;
+      if (param_hints.stack_pointer_affinity)
+         stack_ptr_info.affinity = &(*param_hints.stack_pointer_affinity);
+
       assignment_infos.push_back(stack_ptr_info);
    } else {
       Temp scratch_rsrc = program ? program->allocateTmp(s4) : Temp();
@@ -1040,6 +1195,9 @@ get_callee_info(amd_gfx_level gfx_level, const ABI& abi, unsigned param_count,
       rsrc_info.is_return_param = false;
       rsrc_info.is_system_param = true;
       rsrc_info.force_reg = true;
+      if (param_hints.stack_pointer_affinity)
+         rsrc_info.affinity = &(*param_hints.stack_pointer_affinity);
+
       assignment_infos.push_back(rsrc_info);
    }
 
@@ -1048,9 +1206,13 @@ get_callee_info(amd_gfx_level gfx_level, const ABI& abi, unsigned param_count,
    for (unsigned i = 0; i < param_count; ++i) {
       RegType type = parameters[i].is_uniform ? RegType::sgpr : RegType::vgpr;
       unsigned byte_size = align(parameters[i].bit_size, 32) / 8 * parameters[i].num_components;
+      if (parameters[i].bit_size == 1) {
+         type = RegType::sgpr;
+         byte_size = wave_size / 8;
+      }
       RegClass rc = RegClass(type, byte_size / 4);
 
-      Temp dst = program ? program->allocateTmp(rc) : Temp();
+      Temp dst = program ? program->allocateTmp(rc) : Temp(0, rc);
       Definition def = Definition(dst);
 
       parameter_info param_info = {};
@@ -1083,15 +1245,41 @@ get_callee_info(amd_gfx_level gfx_level, const ABI& abi, unsigned param_count,
        * accessible through a temp.
        */
       assignment_info.force_reg = i <= 1;
+      if (param_hints.param_affinities.size() > i && param_hints.param_affinities[i])
+         assignment_info.affinity = &*param_hints.param_affinities[i];
       assignment_infos.push_back(assignment_info);
    }
 
    for (unsigned i = 0; i < param_count; ++i)
       assignment_infos[info_base + i].dst_info = &info.param_infos[i];
 
-   find_param_regs(program, abi, info, assignment_infos, reg_limit);
+   find_param_regs(program, abi, info, assignment_infos, param_hints.registers_to_avoid, reg_limit);
+
+   /* The call target parameters are special - they are marked as discardable to allow us
+    * to overwrite the parameter values within each callee for the divergent dispatch logic.
+    * However, we still need to explicitly write back the new values to the ABI-assigned registers
+    * when jumping to the next divergent callee/returning. Therefore, mark them as needing explicit
+    * preservation.
+    */
+   info.param_infos[ACO_NIR_CALL_SYSTEM_ARG_DIVERGENT_PC].needs_explicit_preservation = true;
+   info.param_infos[ACO_NIR_CALL_SYSTEM_ARG_UNIFORM_PC].needs_explicit_preservation = true;
+
+   /* Explicitly preserve the stack pointer. spill_preserved() can ensure correctness on its own,
+    * but it only can spill the initial stack pointer value to a linear VGPR, the inactive lanes of
+    * which would in turn need to be spilled to scratch. Explicitly preserving the stack pointer's
+    * value is more efficient.
+    */
+   info.stack_ptr.needs_explicit_preservation = true;
 
    return info;
+}
+
+void
+emit_reload_preserved(isel_context* ctx)
+{
+   Builder bld(ctx->program, ctx->block);
+   bld.pseudo(aco_opcode::p_reload_preserved, bld.def(bld.lm), Operand(),
+              Operand(ctx->program->stack_ptr));
 }
 
 } // namespace aco

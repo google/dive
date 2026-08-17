@@ -955,7 +955,7 @@ __fmul64(uint64_t a, uint64_t b)
 }
 
 uint64_t
-__ffma64(uint64_t a, uint64_t b, uint64_t c)
+__fmad64(uint64_t a, uint64_t b, uint64_t c)
 {
    return __fadd64(__fmul64(a, b), c);
 }
@@ -1733,7 +1733,7 @@ __fmax64(uint64_t a, uint64_t b)
    bool a_lt_b = __flt64_nonnan_minmax(a, b);
    bool a_nan = __is_nan(a);
 
-   return (b_nan || a_lt_b) && !a_nan ? b : a;
+   return (!b_nan && a_lt_b) || a_nan ? b : a;
 }
 
 uint64_t

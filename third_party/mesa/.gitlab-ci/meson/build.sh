@@ -43,9 +43,7 @@ fi
 
 # Android manages the rust toolchain differently, ignore that case
 if [ "$CI_JOB_STAGE" = "build-for-tests" ] && [[ "$CI_JOB_NAME" != *android* ]]; then
-  # Keep this in sync with the `rustc.version()` check in meson.build, and
-  # MINIMUM_SUPPORTED_RUST_VERSION in .gitlab-ci/container/build-rust.sh
-  rustup default 1.82.0
+  rustup default "$(python3 -c 'import tomllib; print(tomllib.load(open("'"$CI_PROJECT_DIR"'/clippy.toml", "rb"))["msrv"])')"
 fi
 
 # cross-xfail-$CROSS, if it exists, contains a list of tests that are expected
@@ -150,7 +148,7 @@ fi
 # these projects and making them warning-free is not our goal.
 # shellcheck disable=2206
 meson_subprojects=(
-  perfetto
+  perfetto-sdk
   syn-2-rs
   paste-1-rs
   pest-2-rs
@@ -177,6 +175,7 @@ meson_subprojects=(
   thiserror-impl-2-rs
   ucd-trie-0.1-rs
   unicode-ident-1-rs
+  xml-rs
   zerocopy-derive-0.8-rs
   ${FORCE_FALLBACK_FOR:-}
 )

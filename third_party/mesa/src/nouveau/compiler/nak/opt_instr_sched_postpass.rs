@@ -3,6 +3,7 @@
 
 use crate::ir::*;
 use crate::opt_instr_sched_common::*;
+use crate::reg_tracker::RegRefIterable;
 use crate::reg_tracker::RegTracker;
 use std::cmp::max;
 use std::cmp::Reverse;
@@ -31,7 +32,7 @@ impl<T: Clone> RegUse<T> {
     }
 }
 
-fn generate_dep_graph(sm: &dyn ShaderModel, instrs: &[Instr]) -> DepGraph {
+fn generate_dep_graph(sm: &ShaderModelInfo, instrs: &[Instr]) -> DepGraph {
     let mut g = DepGraph::new((0..instrs.len()).map(|_| Default::default()));
 
     // Maps registers to RegUse<ip, src_dst_idx>.  Predicates are
@@ -88,12 +89,10 @@ fn generate_dep_graph(sm: &dyn ShaderModel, instrs: &[Instr]) -> DepGraph {
                 } else {
                     sm.raw_latency(&instr.op, i, &instrs[r_ip].op, r_src_idx)
                 };
-                if sm.op_needs_scoreboard(&instr.op) {
-                    latency = max(
-                        latency,
-                        estimate_variable_latency(sm.sm(), &instr.op),
-                    );
-                }
+
+                latency =
+                    max(latency, estimate_variable_latency(sm, &instr.op));
+
                 g.add_edge(ip, r_ip, EdgeLabel { latency });
             }
         });
@@ -125,11 +124,11 @@ fn generate_dep_graph(sm: &dyn ShaderModel, instrs: &[Instr]) -> DepGraph {
             .map(|i| sm.worst_latency(&instr.op, i))
             .max()
             .unwrap_or(0);
-        if sm.op_needs_scoreboard(&instr.op) {
-            let var_latency = estimate_variable_latency(sm.sm(), &instr.op)
-                + sm.exec_latency(&instrs[instrs.len() - 1].op);
-            ready_cycle = max(ready_cycle, var_latency);
-        }
+
+        let var_latency = estimate_variable_latency(sm, &instr.op)
+            + sm.exec_latency(&instrs[instrs.len() - 1].op);
+        ready_cycle = max(ready_cycle, var_latency);
+
         let label = &mut g.nodes[ip].label;
         label.exec_latency = sm.exec_latency(&instr.op);
         label.ready_cycle = ready_cycle;
@@ -202,7 +201,7 @@ fn generate_order(
 }
 
 fn sched_buffer(
-    sm: &dyn ShaderModel,
+    sm: &ShaderModelInfo,
     instrs: Vec<Instr>,
 ) -> (impl Iterator<Item = Instr> + use<>, u64) {
     let mut g = generate_dep_graph(sm, &instrs);
@@ -212,8 +211,7 @@ fn sched_buffer(
     let (new_order, cycle_count) = generate_order(&mut g, init_ready_list);
 
     // Apply the new instruction order
-    let mut instrs: Vec<Option<Instr>> =
-        instrs.into_iter().map(|instr| Some(instr)).collect();
+    let mut instrs: Vec<Option<Instr>> = instrs.into_iter().map(Some).collect();
     let instrs = new_order.into_iter().rev().map(move |i| {
         std::mem::take(&mut instrs[i]).expect("Instruction scheduled twice")
     });
@@ -221,7 +219,7 @@ fn sched_buffer(
 }
 
 impl Function {
-    pub fn opt_instr_sched_postpass(&mut self, sm: &dyn ShaderModel) -> u64 {
+    pub fn opt_instr_sched_postpass(&mut self, sm: &ShaderModelInfo) -> u64 {
         let mut num_static_cycles = 0u64;
         for i in 0..self.blocks.len() {
             let block = &mut self.blocks[i];

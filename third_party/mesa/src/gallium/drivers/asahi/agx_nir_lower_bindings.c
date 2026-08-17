@@ -101,7 +101,7 @@ lower(nir_builder *b, nir_instr *instr, void *data)
       index = nir_iadd_imm(b, nir_imul_imm(b, index, 2), offset);
 
       nir_rewrite_image_intrinsic(intr, nir_load_texture_handle_agx(b, index),
-                                  true);
+                                  nir_image_intrinsic_type_bindless);
    } else if (instr->type == nir_instr_type_tex) {
       nir_tex_instr *tex = nir_instr_as_tex(instr);
 

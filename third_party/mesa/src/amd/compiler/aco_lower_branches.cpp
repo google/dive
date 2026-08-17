@@ -298,7 +298,9 @@ eliminate_useless_exec_writes_in_block(branch_ctx& ctx, Block& block)
 
       /* blocks_incoming_exec_used is initialized to true, so this is correct even for loops. */
       if (instr->opcode == aco_opcode::s_cbranch_scc0 ||
-          instr->opcode == aco_opcode::s_cbranch_scc1) {
+          instr->opcode == aco_opcode::s_cbranch_scc1 ||
+          instr->opcode == aco_opcode::s_cbranch_vccz ||
+          instr->opcode == aco_opcode::s_cbranch_vccnz) {
          exec_write_used |= ctx.blocks_incoming_exec_used[instr->salu().imm];
       }
 
@@ -377,6 +379,10 @@ can_remove_branch(branch_ctx& ctx, Block& block, Pseudo_branch_instruction* bran
       if (uniform_branch && !ctx.program->blocks[i].instructions.empty())
          return false;
 
+      /* Don't enter loops with empty exec mask. */
+      if (ctx.program->blocks[i].loop_nest_depth > block.loop_nest_depth)
+         return false;
+
       for (aco_ptr<Instruction>& instr : ctx.program->blocks[i].instructions) {
          if (instr->isSOPP()) {
             /* Discard early exits and loop breaks and continues should work fine with
@@ -386,12 +392,15 @@ can_remove_branch(branch_ctx& ctx, Block& block, Pseudo_branch_instruction* bran
                 instr->opcode == aco_opcode::s_cbranch_scc1 ||
                 instr->opcode == aco_opcode::s_cbranch_execz ||
                 instr->opcode == aco_opcode::s_cbranch_execnz) {
-               bool is_break_continue =
-                  ctx.program->blocks[i].kind & (block_kind_break | block_kind_continue);
+               bool is_break = ctx.program->blocks[i].kind & block_kind_break;
                bool discard_early_exit =
                   ctx.program->blocks[instr->salu().imm].kind & block_kind_discard_early_exit;
-               if (is_break_continue || discard_early_exit)
+               if (is_break || discard_early_exit) {
+                  /* If the branch target is the same, we can be sure that it will be taken. */
+                  if (instr->salu().imm == target)
+                     return true;
                   continue;
+               }
             }
             return false;
          } else if (instr->isSALU()) {
@@ -549,6 +558,78 @@ try_stitch_linear_block(branch_ctx& ctx, Block& block)
    }
 }
 
+void
+try_rotate_latch_block(branch_ctx& ctx, Block& header)
+{
+   /* For now, only allow exactly one predecessor block from the loop header
+    * to become the new loop latch.
+    */
+   if (!(header.kind & block_kind_loop_latch))
+      return;
+
+   /* After jump-threading, the loop header might have more than 2 predecessors. */
+   assert(header.linear_preds.size() >= 2);
+   Block& block = ctx.program->blocks[header.linear_preds.back()];
+
+   if (block.instructions.empty() || block.instructions.back()->opcode != aco_opcode::s_branch)
+      return;
+
+   /* Check for all predecessors, if they could actually jump back to the loop header. */
+   for (unsigned pred_idx : block.linear_preds) {
+      Block& pred = ctx.program->blocks[pred_idx];
+      assert(pred.index < block.index);
+      if (pred.instructions.empty() || !pred.instructions.back()->isSOPP())
+         return;
+
+      SALU_instruction* branch = &pred.instructions.back()->salu();
+      aco_opcode invert = aco_opcode::num_opcodes;
+      switch (branch->opcode) {
+      case aco_opcode::s_branch: continue;
+      case aco_opcode::s_cbranch_execz: invert = aco_opcode::s_cbranch_execnz; break;
+      case aco_opcode::s_cbranch_execnz: invert = aco_opcode::s_cbranch_execz; break;
+      case aco_opcode::s_cbranch_vccz: invert = aco_opcode::s_cbranch_vccnz; break;
+      case aco_opcode::s_cbranch_vccnz: invert = aco_opcode::s_cbranch_vccz; break;
+      case aco_opcode::s_cbranch_scc0: invert = aco_opcode::s_cbranch_scc1; break;
+      case aco_opcode::s_cbranch_scc1: invert = aco_opcode::s_cbranch_scc0; break;
+      default: return;
+      }
+      assert(pred.linear_succs.size() >= 2);
+      if (pred.linear_succs[1] == block.index) {
+         assert(branch->imm == block.index);
+         continue;
+      } else if (pred.linear_succs[0] == block.index) {
+         /* Check if there is a fall-through path for the jump target. */
+         if (block.index > pred.linear_succs[1] ||
+             (ctx.program->blocks[pred.linear_succs[1]].kind & block_kind_loop_latch))
+            return;
+
+         for (unsigned j = block.index + 1; j < pred.linear_succs[1]; j++) {
+            if (!ctx.program->blocks[j].instructions.empty())
+               return;
+         }
+
+         /* There can be at most one branch which falls through,
+          * so just update it directly.
+          */
+         pred.linear_succs[0] = pred.linear_succs[1];
+         pred.linear_succs[1] = block.index;
+         branch->opcode = invert;
+         branch->imm = block.index;
+      }
+   }
+
+   header.kind &= ~block_kind_loop_latch;
+   block.kind |= block_kind_loop_latch;
+   block.instructions.pop_back();
+   assert(!block.instructions.empty());
+
+   /* Insert a new branch at the loop preheader: */
+   Builder(ctx.program, &ctx.program->blocks[header.index - 1])
+      .sopp(aco_opcode::s_branch, header.index);
+
+   return;
+}
+
 } /* end namespace */
 
 void
@@ -568,8 +649,12 @@ lower_branches(Program* program)
          try_remove_simple_block(ctx, block);
    }
 
-   for (Block& block : program->blocks) {
-      try_stitch_linear_block(ctx, block);
+   for (int i = program->blocks.size() - 1; i >= 0; i--) {
+      Block& block = program->blocks[i];
+      if (block.kind & block_kind_loop_header)
+         try_rotate_latch_block(ctx, block);
+      else
+         try_stitch_linear_block(ctx, block);
    }
 }
 

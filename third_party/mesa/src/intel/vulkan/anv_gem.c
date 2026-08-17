@@ -91,7 +91,7 @@ anv_gem_handle_to_fd(struct anv_device *device, uint32_t gem_handle)
 
    int ret = intel_ioctl(device->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &args);
    if (ret == -1)
-      return -1;
+      return -errno;
 
    return args.fd;
 }

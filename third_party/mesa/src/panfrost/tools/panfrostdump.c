@@ -1,25 +1,6 @@
 /*
  * Copyright (C) 2021 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 /*
@@ -51,6 +32,7 @@
 #include <drm-uapi/panfrost_drm.h>
 
 #include "decode.h"
+#include "pan_compiler.h"
 
 /* Same as panfrost_dump_object_header, but with field
  * entries in host byte order
@@ -64,7 +46,7 @@ struct panfrost_dump_object_header_ho {
    union {
       struct pan_reg_hdr_ho {
          uint64_t jc;
-         uint32_t gpu_id;
+         uint64_t gpu_id;
          uint32_t major;
          uint32_t minor;
          uint64_t nbos;
@@ -112,7 +94,7 @@ read_header(FILE *fp, struct panfrost_dump_object_header_ho *pdoh)
    switch (pdoh->type) {
    case PANFROSTDUMP_BUF_REG:
       pdoh->reghdr.jc = le64toh(doh_le.reghdr.jc);
-      pdoh->reghdr.gpu_id = le32toh(doh_le.reghdr.gpu_id);
+      pdoh->reghdr.gpu_id = le64toh(doh_le.reghdr.gpu_id);
       pdoh->reghdr.major = le32toh(doh_le.reghdr.major);
       pdoh->reghdr.minor = le32toh(doh_le.reghdr.minor);
       pdoh->reghdr.nbos = le64toh(doh_le.reghdr.nbos);
@@ -214,7 +196,7 @@ main(int argc, char *argv[])
    struct panfrost_dump_object_header_ho doh;
    bool print_addr = false;
    bool print_reg = false;
-   uint32_t gpu_id = 0;
+   uint64_t gpu_id = 0;
    uint64_t jc = 0;
    size_t nbytes;
    int i, j, k, c;
@@ -255,6 +237,7 @@ main(int argc, char *argv[])
 
    atexit(cleanup);
    struct pandecode_context *ctx = pandecode_create_context(false);
+   pandecode_set_disassemble(ctx, pan_disassemble);
 
    hdr_fp = fopen(argv[optind], "r");
    if (!hdr_fp) {
@@ -288,7 +271,7 @@ main(int argc, char *argv[])
          return EXIT_FAILURE;
       }
 
-      printf("JC: %" PRIX64 ", GPU_ID: %" PRIX32 "\n", jc, gpu_id);
+      printf("JC: %" PRIX64 ", GPU_ID: %" PRIX64 "\n", jc, gpu_id);
 
       if (print_reg) {
          puts("GPU registers:");

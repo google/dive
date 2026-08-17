@@ -443,7 +443,10 @@ stw_make_current(struct stw_framebuffer *fb, struct stw_framebuffer *fbRead, str
             return true;
          }
       } else {
-         if (old_ctx->shared) {
+         if (old_ctx->shared ||
+            /* Using a winsys framebuffer effectively means that there's sharing since another
+             * context might end up using the same resources. */
+            (old_ctx->current_framebuffer && old_ctx->current_framebuffer->winsys_framebuffer)) {
             if (old_ctx->current_framebuffer) {
                stw_st_flush(old_ctx->st, old_ctx->current_framebuffer->drawable,
                             ST_FLUSH_FRONT | ST_FLUSH_WAIT);
@@ -543,8 +546,9 @@ get_unlocked_refd_framebuffer_from_dc(HDC hDC)
        * those here.
        */
       int iPixelFormat = stw_pixelformat_guess(hDC);
+      HWND hWnd = WindowFromDC(hDC);
       if (iPixelFormat)
-         fb = stw_framebuffer_create(WindowFromDC(hDC), stw_pixelformat_get_info(iPixelFormat), STW_FRAMEBUFFER_WGL_WINDOW, stw_dev->fscreen);
+         fb = stw_framebuffer_create(hWnd ? NULL : hDC, hWnd, stw_pixelformat_get_info(iPixelFormat), STW_FRAMEBUFFER_WGL_WINDOW, stw_dev->fscreen);
       if (!fb)
          return NULL;
    }

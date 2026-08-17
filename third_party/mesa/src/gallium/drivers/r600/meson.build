@@ -23,6 +23,7 @@ files_r600 = files(
   'r600_dump.h',
   'r600_formats.h',
   'r600_hw_context.c',
+  'r600_inline.h',
   'r600_isa.c',
   'r600_isa.h',
   'r600_opcodes.h',
@@ -72,6 +73,8 @@ files_r600 = files(
   'sfn/sfn_defines.h',
   'sfn/sfn_debug.cpp',
   'sfn/sfn_debug.h',
+  'sfn/sfn_fill_bytecode.cpp',
+  'sfn/sfn_fill_bytecode.h',
   'sfn/sfn_instr.cpp',
   'sfn/sfn_instr.h',
   'sfn/sfn_instr_alu.cpp',
@@ -173,7 +176,7 @@ libr600 = static_library(
     inc_src, inc_include, inc_gallium, inc_gallium_aux, inc_amd_common,
     inc_gallium_drivers,
   ],
-  dependencies: [dep_llvm, idep_nir, idep_nir_headers, idep_mesautil],
+  dependencies: [idep_nir, idep_nir_headers, idep_mesautil],
 )
 
 driver_r600 = declare_dependency(

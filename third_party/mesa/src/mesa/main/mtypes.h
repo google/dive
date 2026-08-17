@@ -292,7 +292,7 @@ struct gl_colorbuffer_attrib
     * draw buffer, and NVX_blend_equation_advanced_multi_draw_buffer still
     * requires all draw buffers to match, so we only need a single value.
     */
-   enum gl_advanced_blend_mode _AdvancedBlendMode;
+   enum pipe_advanced_blend_mode _AdvancedBlendMode;
 
    /** Coherency requested via glEnable(GL_BLEND_ADVANCED_COHERENT_KHR)? */
    bool BlendCoherent;
@@ -3247,6 +3247,9 @@ struct gl_dispatch
     * - ContextLost
     */
    struct _glapi_table *Current;
+
+   struct _glapi_table *Trace;
+   struct _glapi_table *RealPublished;
 };
 
 /**
@@ -3582,8 +3585,6 @@ struct gl_context
     */
    GLboolean HasConfig;
 
-   GLboolean TextureFormatSupported[MESA_FORMAT_COUNT];
-
    GLboolean RasterDiscard;  /**< GL_RASTERIZER_DISCARD */
    GLboolean IntelConservativeRasterization; /**< GL_CONSERVATIVE_RASTERIZATION_INTEL */
    GLboolean ConservativeRasterization; /**< GL_CONSERVATIVE_RASTERIZATION_NV */
@@ -3593,6 +3594,7 @@ struct gl_context
    GLboolean RepresentativeFragmentTest; /**< GL_REPRESENTATIVE_FRAGMENT_TEST_NV */
 
    GLboolean IntelBlackholeRender; /**< GL_INTEL_blackhole_render */
+   GLboolean PixelLocalStorage;    /**< GL_EXT_shader_pixel_local_storage */
 
    /** Does glVertexAttrib(0) alias glVertex()? */
    bool _AttribZeroAliasesVertex;
@@ -3669,19 +3671,9 @@ extern int MESA_DEBUG_FLAGS;
 /** The MESA_VERBOSE var is a bitmask of these flags */
 enum _verbose
 {
-   VERBOSE_VARRAY		= 0x0001,
-   VERBOSE_TEXTURE		= 0x0002,
-   VERBOSE_MATERIAL		= 0x0004,
-   VERBOSE_PIPELINE		= 0x0008,
-   VERBOSE_DRIVER		= 0x0010,
-   VERBOSE_STATE		= 0x0020,
-   VERBOSE_API			= 0x0040,
-   VERBOSE_DISPLAY_LIST		= 0x0100,
-   VERBOSE_LIGHTING		= 0x0200,
-   VERBOSE_PRIMS		= 0x0400,
-   VERBOSE_VERTS		= 0x0800,
-   VERBOSE_DISASSEM		= 0x1000,
-   VERBOSE_SWAPBUFFERS          = 0x4000
+   VERBOSE_STATE        = 0x0001,
+   VERBOSE_DISPLAY_LIST = 0x0002,
+   VERBOSE_API          = 0x0004,
 };
 
 

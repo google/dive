@@ -336,6 +336,8 @@ VkResult genX(CreateQueryPool)(
 
    ANV_RMV(query_pool_create, device, pool, false);
 
+   ANV_ADDR_BINDING_REPORT_BO_BIND(device, &pool->vk.base, pool->bo);
+
    *pQueryPool = anv_query_pool_to_handle(pool);
 
    return VK_SUCCESS;
@@ -357,6 +359,7 @@ void genX(DestroyQueryPool)(
    if (!pool)
       return;
 
+   ANV_ADDR_BINDING_REPORT_BO_UNBIND(device, &pool->vk.base, pool->bo);
    ANV_RMV(resource_destroy, device, pool);
    ANV_DMR_BO_FREE(&pool->vk.base, pool->bo);
    anv_device_release_bo(device, pool->bo);
@@ -859,14 +862,15 @@ void genX(CmdResetQueryPool)(
 {
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
-   struct anv_physical_device *pdevice = cmd_buffer->device->physical;
+   const struct anv_physical_device *pdevice = cmd_buffer->device->physical;
+   const struct anv_instance *instance = pdevice->instance;
 
    /* Shader clearing is only possible on render/compute when not in protected
     * mode.
     */
    if (anv_cmd_buffer_is_render_or_compute_queue(cmd_buffer) &&
        (cmd_buffer->vk.pool->flags & VK_COMMAND_POOL_CREATE_PROTECTED_BIT) == 0 &&
-       queryCount >= pdevice->instance->query_clear_with_blorp_threshold) {
+       queryCount >= instance->drirc.perf.query_clear_with_blorp_threshold) {
       trace_intel_begin_query_clear_blorp(&cmd_buffer->trace);
 
       anv_cmd_buffer_fill_area(cmd_buffer,
@@ -917,7 +921,10 @@ void genX(CmdResetQueryPool)(
        * completed. Otherwise some timestamps written later with MI_STORE_*
        * commands might race with the PIPE_CONTROL in the loop above.
        */
-      anv_add_pending_pipe_bits(cmd_buffer, ANV_PIPE_CS_STALL_BIT,
+      anv_add_pending_pipe_bits(cmd_buffer,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                                ANV_PIPE_CS_STALL_BIT,
                                 "vkCmdResetQueryPool of timestamps");
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
       break;
@@ -1091,6 +1098,9 @@ append_query_clear_flush(struct anv_cmd_buffer *cmd_buffer,
       return false;
 
    anv_add_pending_pipe_bits(cmd_buffer,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                             VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                             VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                              ANV_PIPE_QUERY_BITS(
                                 cmd_buffer->state.queries.clear_bits),
                              reason);
@@ -1564,9 +1574,17 @@ void genX(CmdWriteTimestamp2)(
 
    assert(pool->vk.query_type == VK_QUERY_TYPE_TIMESTAMP);
 
-   if (append_query_clear_flush(cmd_buffer, pool,
-                                "CmdWriteTimestamp flush query clears"))
-      genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
+   /* Anything bottom-of-pipe, request a post-sync */
+   if (stage != VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT)
+      cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_POST_SYNC_BIT;
+
+   append_query_clear_flush(cmd_buffer, pool,
+                            "CmdWriteTimestamp flush query clears");
+
+   /* Always flush, even for top-of-pipe there might be a barrier that needs
+    * executing before we take the timestamp.
+    */
+   genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
    struct mi_builder b;
    mi_builder_init(&b, cmd_buffer->device->info, &cmd_buffer->batch);
@@ -1576,10 +1594,6 @@ void genX(CmdWriteTimestamp2)(
                    mi_reg64(TIMESTAMP));
       emit_query_mi_availability(&b, query_addr, true);
    } else {
-      /* Everything else is bottom-of-pipe */
-      cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_POST_SYNC_BIT;
-      genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
-
       bool cs_stall_needed =
          (GFX_VER == 9 && cmd_buffer->device->info->gt == 4);
 
@@ -1735,6 +1749,9 @@ copy_query_results_with_cs(struct anv_cmd_buffer *cmd_buffer,
 
    if (needed_flushes) {
       anv_add_pending_pipe_bits(cmd_buffer,
+                                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                 needed_flushes,
                                 "CopyQueryPoolResults");
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
@@ -1847,6 +1864,7 @@ copy_query_results_with_shader(struct anv_cmd_buffer *cmd_buffer,
                                uint32_t query_count,
                                VkQueryResultFlags flags)
 {
+   VkPipelineStageFlags2 wait_stages = 0;
    enum anv_pipe_bits needed_flushes = 0;
 
    trace_intel_begin_query_copy_shader(&cmd_buffer->trace);
@@ -1863,31 +1881,25 @@ copy_query_results_with_shader(struct anv_cmd_buffer *cmd_buffer,
       if (anv_cmd_buffer_is_render_queue(cmd_buffer))
          genX(flush_pipeline_select_3d)(cmd_buffer);
       else
-         genX(flush_pipeline_select_gpgpu)(cmd_buffer);
+         genX(flush_pipeline_select_gpgpu)(cmd_buffer, false);
    }
 
    if ((cmd_buffer->state.queries.buffer_write_bits |
-        cmd_buffer->state.queries.clear_bits) & ANV_QUERY_WRITES_RT_FLUSH)
+        cmd_buffer->state.queries.clear_bits) & ANV_QUERY_WRITES_RT_FLUSH) {
+      wait_stages |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
       needed_flushes |= ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT;
+   }
 
    if ((cmd_buffer->state.queries.buffer_write_bits |
         cmd_buffer->state.queries.clear_bits) & ANV_QUERY_WRITES_DATA_FLUSH) {
+      wait_stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
       needed_flushes |= (ANV_PIPE_HDC_PIPELINE_FLUSH_BIT |
                          ANV_PIPE_UNTYPED_DATAPORT_CACHE_FLUSH_BIT);
    }
 
    /* Flushes for the queries to complete */
    if (flags & VK_QUERY_RESULT_WAIT_BIT) {
-      /* Some queries are done with shaders, so we need to have them flush
-       * high level caches writes. The L3 should be shared across the GPU.
-       */
-      if (pool->vk.query_type == VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR ||
-          pool->vk.query_type == VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SIZE_KHR ||
-          pool->vk.query_type == VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SERIALIZATION_SIZE_KHR ||
-          pool->vk.query_type == VK_QUERY_TYPE_ACCELERATION_STRUCTURE_SERIALIZATION_BOTTOM_LEVEL_POINTERS_KHR) {
-         needed_flushes |= ANV_PIPE_UNTYPED_DATAPORT_CACHE_FLUSH_BIT;
-      }
-      /* And we need to stall for previous CS writes to land or the flushes to
+      /* We need to stall for previous CS writes to land or the flushes to
        * complete.
        */
       needed_flushes |= ANV_PIPE_CS_STALL_BIT;
@@ -1910,6 +1922,8 @@ copy_query_results_with_shader(struct anv_cmd_buffer *cmd_buffer,
 
    if (needed_flushes) {
       anv_add_pending_pipe_bits(cmd_buffer,
+                                wait_stages,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                 needed_flushes | ANV_PIPE_END_OF_PIPE_SYNC_BIT,
                                 "CopyQueryPoolResults");
       genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
@@ -2031,9 +2045,10 @@ void genX(CmdCopyQueryPoolResults)(
    ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
    ANV_FROM_HANDLE(anv_buffer, buffer, destBuffer);
    struct anv_device *device = cmd_buffer->device;
-   struct anv_physical_device *pdevice = device->physical;
+   const struct anv_physical_device *pdevice = device->physical;
+   const struct anv_instance *instance = pdevice->instance;
 
-   if (queryCount > pdevice->instance->query_copy_with_shader_threshold &&
+   if (queryCount > instance->drirc.perf.query_copy_with_shader_threshold &&
        anv_cmd_buffer_is_render_or_compute_queue(cmd_buffer)) {
       copy_query_results_with_shader(cmd_buffer, pool,
                                      anv_address_add(buffer->address,
@@ -2053,9 +2068,44 @@ void genX(CmdCopyQueryPoolResults)(
    }
 }
 
+void genX(CmdCopyQueryPoolResultsToMemoryKHR)(
+    VkCommandBuffer                             commandBuffer,
+    VkQueryPool                                 queryPool,
+    uint32_t                                    firstQuery,
+    uint32_t                                    queryCount,
+    const VkStridedDeviceAddressRangeKHR*       pDstRange,
+    VkAddressCommandFlagsKHR                    dstFlags,
+    VkQueryResultFlags                          queryResultFlags)
+{
+   ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
+   ANV_FROM_HANDLE(anv_query_pool, pool, queryPool);
+   struct anv_device *device = cmd_buffer->device;
+   const struct anv_physical_device *pdevice = device->physical;
+   const struct anv_instance *instance = pdevice->instance;
+
+   struct anv_address dst_addr =
+      anv_address_from_strided_range_flags(*pDstRange, dstFlags);
+
+   if (queryCount > instance->drirc.perf.query_copy_with_shader_threshold) {
+      copy_query_results_with_shader(cmd_buffer, pool,
+                                     dst_addr,
+                                     pDstRange->stride,
+                                     firstQuery,
+                                     queryCount,
+                                     queryResultFlags);
+   } else {
+      copy_query_results_with_cs(cmd_buffer, pool,
+                                 dst_addr,
+                                 pDstRange->stride,
+                                 firstQuery,
+                                 queryCount,
+                                 queryResultFlags);
+   }
+}
+
 #if GFX_VERx10 >= 125 && ANV_SUPPORT_RT
 
-#include "bvh/anv_bvh.h"
+#include "bvh/anv_bvh_defines.h"
 
 void
 genX(CmdWriteAccelerationStructuresPropertiesKHR)(
@@ -2080,6 +2130,8 @@ genX(CmdWriteAccelerationStructuresPropertiesKHR)(
     */
    if (!ANV_DEVINFO_HAS_COHERENT_L3_CS(cmd_buffer->device->info)) {
       anv_add_pending_pipe_bits(cmd_buffer,
+                                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                                VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                                 ANV_PIPE_END_OF_PIPE_SYNC_BIT |
                                 ANV_PIPE_DATA_CACHE_FLUSH_BIT,
                                 "read BVH data using CS");

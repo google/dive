@@ -37,6 +37,11 @@ struct pvr_query_pool {
 struct pvr_query_info {
    enum pvr_query_type type;
 
+   struct {
+      bool is_dynamic_render : 1;
+      bool is_suspend : 1;
+   };
+
    union {
       struct {
          uint32_t num_query_indices;
@@ -68,7 +73,20 @@ VK_DEFINE_NONDISP_HANDLE_CASTS(pvr_query_pool,
                                VkQueryPool,
                                VK_OBJECT_TYPE_QUERY_POOL)
 
-VkResult pvr_device_create_compute_query_programs(struct pvr_device *device);
-void pvr_device_destroy_compute_query_programs(struct pvr_device *device);
+#ifdef PVR_PER_ARCH
+
+VkResult PVR_PER_ARCH(device_create_compute_query_programs)(
+   struct pvr_device *device);
+
+#   define pvr_arch_device_create_compute_query_programs \
+      PVR_PER_ARCH(device_create_compute_query_programs)
+
+void PVR_PER_ARCH(device_destroy_compute_query_programs)(
+   struct pvr_device *device);
+
+#   define pvr_arch_device_destroy_compute_query_programs \
+      PVR_PER_ARCH(device_destroy_compute_query_programs)
+
+#endif
 
 #endif /* PVR_QUERY_H*/

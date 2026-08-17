@@ -30,14 +30,16 @@
 #define LP_BLD_DEBUG_H
 
 
-#include "gallivm/lp_bld_init.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdbool.h>
 
-#include "util/compiler.h"
 #include "util/detect_os.h"
-#include "util/u_string.h"
 
+#include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
 
+struct gallivm_state;
 
 #define GALLIVM_DEBUG_TGSI          (1 << 0)
 #define GALLIVM_DEBUG_IR            (1 << 1)
@@ -52,6 +54,7 @@
 #define GALLIVM_PERF_NO_QUAD_LOD     (1 << 2)
 #define GALLIVM_PERF_NO_OPT          (1 << 3)
 #define GALLIVM_PERF_NO_AOS_SAMPLING (1 << 4)
+#define GALLIVM_PERF_NO_LOD_ELLIPSE  (1 << 5)
 
 #ifdef __cplusplus
 extern "C" {

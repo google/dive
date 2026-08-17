@@ -13,7 +13,8 @@
 
 #include <tuple>
 
-#define __FD_GPU_GENS A6XX, A7XX
+#define __FD_GPU_GENS A6XX, A7XX, A8XX
+
 #define FD_GENX(FUNC_NAME)                                                   \
    template <chip... CHIPs> constexpr auto FUNC_NAME##instantiate()          \
    {                                                                         \
@@ -21,6 +22,14 @@
    }                                                                         \
    static constexpr auto FUNC_NAME##tmpl __attribute__((used)) =             \
       FUNC_NAME##instantiate<__FD_GPU_GENS>();
+
+#define FD_GENX2(FUNC_NAME, EXT_TYPE, EXT)                                   \
+   template <chip... CHIPs> constexpr auto FUNC_NAME##inst##EXT()            \
+   {                                                                         \
+      return std::tuple_cat(std::make_tuple(FUNC_NAME<EXT, CHIPs>)...);      \
+   }                                                                         \
+   static constexpr auto FUNC_NAME##tmpl##EXT __attribute__((used)) =        \
+      FUNC_NAME##inst##EXT<__FD_GPU_GENS>();
 
 #define FD_CALLX(info, thing)                                                \
    ({                                                                        \
@@ -32,12 +41,18 @@
       case 7:                                                                \
          genX_thing = &thing<A7XX>;                                          \
          break;                                                              \
+      case 8:                                                                \
+         genX_thing = &thing<A8XX>;                                          \
+         break;                                                              \
       default:                                                               \
          UNREACHABLE("Unknown hardware generation");                         \
       }                                                                      \
       genX_thing;                                                            \
    })
 
+/* Helpers to deal with things that support ranges of chipsets: */
+#define chip_range_support chip CHIP, typename Enable = void
+#define chip_range(range) CHIP, typename std::enable_if<(range)>::type
 
 template<typename E>
 struct BitmaskEnum {
@@ -142,6 +157,9 @@ struct BitmaskEnum {
 #define COND(bool, val) ((bool) ? (val) : 0)
 
 #define BIT(bit) BITFIELD64_BIT(bit)
+
+#define U642VOID(x) ((void *)(unsigned long)(x))
+#define VOID2U64(x) ((uint64_t)(unsigned long)(x))
 
 /**
  * Helper for allocating sequence #s where zero is a non-valid seqno

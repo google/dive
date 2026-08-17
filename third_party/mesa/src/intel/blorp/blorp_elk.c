@@ -23,22 +23,21 @@ blorp_compile_fs_elk(struct blorp_context *blorp, void *mem_ctx,
                      struct nir_shader *nir,
                      bool multisample_fbo,
                      bool is_fast_clear,
-                     bool use_repclear)
+                     bool use_repclear,
+                     const void *key, uint32_t key_size)
 {
    const struct elk_compiler *compiler = blorp->compiler->elk;
 
-   struct elk_wm_prog_data *wm_prog_data = rzalloc(mem_ctx, struct elk_wm_prog_data);
-   wm_prog_data->base.nr_params = 0;
-   wm_prog_data->base.param = NULL;
+   struct elk_fs_prog_data *fs_prog_data = rzalloc(mem_ctx, struct elk_fs_prog_data);
+   fs_prog_data->base.nr_params = 0;
+   fs_prog_data->base.param = NULL;
 
-   struct elk_nir_compiler_opts opts = {
-      .softfp64 = blorp->get_fp64_nir ? blorp->get_fp64_nir(blorp) : NULL,
-   };
+   struct elk_nir_compiler_opts opts = {};
    elk_preprocess_nir(compiler, nir, &opts);
    nir_remove_dead_variables(nir, nir_var_shader_in, NULL);
    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
 
-   struct elk_wm_prog_key wm_key;
+   struct elk_fs_prog_key wm_key;
    memset(&wm_key, 0, sizeof(wm_key));
    wm_key.multisample_fbo = multisample_fbo ? ELK_ALWAYS : ELK_NEVER;
    wm_key.nr_color_regions = 1;
@@ -58,7 +57,7 @@ blorp_compile_fs_elk(struct blorp_context *blorp, void *mem_ctx,
          .debug_flag = DEBUG_BLORP,
       },
       .key = &wm_key,
-      .prog_data = wm_prog_data,
+      .prog_data = fs_prog_data,
 
       .use_rep_send = use_repclear,
       .max_polygons = 1,
@@ -67,21 +66,20 @@ blorp_compile_fs_elk(struct blorp_context *blorp, void *mem_ctx,
    const unsigned *kernel = elk_compile_fs(compiler, &params);
    return (struct blorp_program){
       .kernel         = kernel,
-      .kernel_size    = wm_prog_data->base.program_size,
-      .prog_data      = wm_prog_data,
-      .prog_data_size = sizeof(*wm_prog_data),
+      .kernel_size    = fs_prog_data->base.program_size,
+      .prog_data      = fs_prog_data,
+      .prog_data_size = sizeof(*fs_prog_data),
    };
 }
 
 static struct blorp_program
 blorp_compile_vs_elk(struct blorp_context *blorp, void *mem_ctx,
-                     struct nir_shader *nir)
+                     struct nir_shader *nir,
+                     const void *key, uint32_t key_size)
 {
    const struct elk_compiler *compiler = blorp->compiler->elk;
 
-   struct elk_nir_compiler_opts opts = {
-      .softfp64 = blorp->get_fp64_nir ? blorp->get_fp64_nir(blorp) : NULL,
-   };
+   struct elk_nir_compiler_opts opts = {};
    elk_preprocess_nir(compiler, nir, &opts);
    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
 
@@ -132,13 +130,12 @@ lower_base_workgroup_id(nir_builder *b, nir_intrinsic_instr *intrin,
 
 static struct blorp_program
 blorp_compile_cs_elk(struct blorp_context *blorp, void *mem_ctx,
-                     struct nir_shader *nir)
+                     struct nir_shader *nir,
+                     const void *key, uint32_t key_size)
 {
    const struct elk_compiler *compiler = blorp->compiler->elk;
 
-   struct elk_nir_compiler_opts opts = {
-      .softfp64 = blorp->get_fp64_nir ? blorp->get_fp64_nir(blorp) : NULL,
-   };
+   struct elk_nir_compiler_opts opts = {};
    elk_preprocess_nir(compiler, nir, &opts);
    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
 
@@ -186,10 +183,12 @@ blorp_compile_cs_elk(struct blorp_context *blorp, void *mem_ctx,
    };
 }
 
+#pragma pack(push, 1)
 struct blorp_sf_key {
    struct blorp_base_key base;
    struct elk_sf_prog_key key;
 };
+#pragma pack(pop)
 
 static bool
 blorp_ensure_sf_program_elk(struct blorp_batch *batch,
@@ -197,30 +196,30 @@ blorp_ensure_sf_program_elk(struct blorp_batch *batch,
 {
    struct blorp_context *blorp = batch->blorp;
    const struct elk_compiler *compiler = blorp->compiler->elk;
-   const struct elk_wm_prog_data *wm_prog_data = params->wm_prog_data;
-   assert(params->wm_prog_data);
+   const struct elk_fs_prog_data *fs_prog_data = params->fs_prog_data;
+   assert(params->fs_prog_data);
 
    /* Gfx6+ doesn't need a strips and fans program */
    if (compiler->devinfo->ver >= 6)
       return true;
 
-   struct blorp_sf_key key = {
-      .base = BLORP_BASE_KEY_INIT(BLORP_SHADER_TYPE_GFX4_SF),
-   };
+   struct blorp_sf_key key;
+   BLORP_KEY_INIT(key, BLORP_SHADER_TYPE_GFX4_SF,
+                  BLORP_SHADER_PIPELINE_RENDER);
 
    /* Everything gets compacted in vertex setup, so we just need a
     * pass-through for the correct number of input varyings.
     */
    const uint64_t slots_valid = VARYING_BIT_POS |
-      ((1ull << wm_prog_data->num_varying_inputs) - 1) << VARYING_SLOT_VAR0;
+      ((1ull << fs_prog_data->num_varying_inputs) - 1) << VARYING_SLOT_VAR0;
 
    key.key.attrs = slots_valid;
    key.key.primitive = ELK_SF_PRIM_TRIANGLES;
-   key.key.contains_flat_varying = wm_prog_data->contains_flat_varying;
+   key.key.contains_flat_varying = fs_prog_data->contains_flat_varying;
 
    STATIC_ASSERT(sizeof(key.key.interp_mode) ==
-                 sizeof(wm_prog_data->interp_mode));
-   memcpy(key.key.interp_mode, wm_prog_data->interp_mode,
+                 sizeof(fs_prog_data->interp_mode));
+   memcpy(key.key.interp_mode, fs_prog_data->interp_mode,
           sizeof(key.key.interp_mode));
 
    if (blorp->lookup_shader(batch, &key, sizeof(key),
@@ -271,13 +270,13 @@ blorp_params_get_layer_offset_vs_elk(struct blorp_batch *batch,
                                      struct blorp_params *params)
 {
    struct blorp_context *blorp = batch->blorp;
-   struct layer_offset_vs_key blorp_key = {
-      .base = BLORP_BASE_KEY_INIT(BLORP_SHADER_TYPE_LAYER_OFFSET_VS),
-   };
+   struct layer_offset_vs_key blorp_key;
+   BLORP_KEY_INIT(blorp_key, BLORP_SHADER_TYPE_LAYER_OFFSET_VS,
+                  BLORP_SHADER_PIPELINE_RENDER);
 
-   struct elk_wm_prog_data *wm_prog_data = params->wm_prog_data;
-   if (wm_prog_data)
-      blorp_key.num_inputs = wm_prog_data->num_varying_inputs;
+   struct elk_fs_prog_data *fs_prog_data = params->fs_prog_data;
+   if (fs_prog_data)
+      blorp_key.num_inputs = fs_prog_data->num_varying_inputs;
 
    if (blorp->lookup_shader(batch, &blorp_key, sizeof(blorp_key),
                             &params->vs_prog_kernel, &params->vs_prog_data))
@@ -331,7 +330,7 @@ blorp_params_get_layer_offset_vs_elk(struct blorp_batch *batch,
    }
 
    const struct blorp_program p =
-      blorp_compile_vs(blorp, mem_ctx, b.shader);
+      blorp_compile_vs(blorp, mem_ctx, b.shader, &blorp_key, sizeof(blorp_key));
 
    bool result =
       blorp->upload_shader(batch, MESA_SHADER_VERTEX,

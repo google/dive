@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "tu_cs.h"
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include "tu_cs.h"
 #include "tu_device.h"
 
 /* A simple implementations of breadcrumbs tracking of GPU progress
@@ -109,7 +108,7 @@ void
 tu_breadcrumbs_init(struct tu_device *device)
 {
    const char *breadcrumbs_opt = NULL;
-#ifdef TU_BREADCRUMBS_ENABLED
+#if TU_BREADCRUMBS_ENABLED
    breadcrumbs_opt = os_get_option("TU_BREADCRUMBS");
 #endif
 

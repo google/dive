@@ -6,8 +6,7 @@
  *
  */
 
-// GOOGLE: Remove this no-extern check to "fix" build error
-//#include "no_extern_c.h"
+#include "no_extern_c.h"
 
 #ifndef U_ATOMIC_H
 #define U_ATOMIC_H

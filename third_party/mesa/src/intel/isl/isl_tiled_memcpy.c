@@ -45,7 +45,7 @@
 #define FILE_DEBUG_FLAG DEBUG_TEXTURE
 
 #define ALIGN_DOWN(a, b) ROUND_DOWN_TO(a, b)
-#define ALIGN_UP(a, b) ALIGN(a, b)
+#define ALIGN_UP(a, b) align(a, b)
 
 /* Tile dimensions.  Width and span are in bytes, height is in pixels (i.e.
  * unitless).  A "span" is the most number of bytes we can copy from linear
@@ -357,7 +357,7 @@ rgba8_copy_16_aligned_src(void *dst, const void *src)
 static inline void *
 rgba8_copy_aligned_dst(void *dst, const void *src, size_t bytes)
 {
-   assert(bytes == 0 || !(((uintptr_t)dst) & 0xf));
+   assert(bytes == 0 || util_ptr_is_aligned(dst, 16));
 
 #if defined(__SSSE3__) || defined(__SSE2__)
    if (bytes == 64) {
@@ -387,7 +387,7 @@ rgba8_copy_aligned_dst(void *dst, const void *src, size_t bytes)
 static inline void *
 rgba8_copy_aligned_src(void *dst, const void *src, size_t bytes)
 {
-   assert(bytes == 0 || !(((uintptr_t)src) & 0xf));
+   assert(bytes == 0 || util_ptr_is_aligned(src, 16));
 
 #if defined(__SSSE3__) || defined(__SSE2__)
    if (bytes == 64) {

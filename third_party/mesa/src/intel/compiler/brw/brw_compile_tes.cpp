@@ -6,27 +6,11 @@
 #include "brw_cfg.h"
 #include "brw_eu.h"
 #include "brw_shader.h"
-#include "brw_generator.h"
 #include "brw_nir.h"
 #include "brw_private.h"
 #include "intel_nir.h"
 #include "dev/intel_debug.h"
 #include "util/macros.h"
-
-static void
-brw_assign_tes_urb_setup(brw_shader &s)
-{
-   assert(s.stage == MESA_SHADER_TESS_EVAL);
-
-   struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(s.prog_data);
-
-   s.first_non_payload_grf += 8 * vue_prog_data->urb_read_length;
-
-   /* Rewrite all ATTR file references to HW_REGs. */
-   foreach_block_and_inst(block, brw_inst, inst, s.cfg) {
-      s.convert_attr_sources_to_hw_regs(inst);
-   }
-}
 
 static bool
 run_tes(brw_shader &s)
@@ -40,14 +24,14 @@ run_tes(brw_shader &s)
    if (s.failed)
       return false;
 
-   s.emit_urb_writes();
-
    brw_calculate_cfg(s);
+
+   s.emit_tes_terminate();
 
    brw_optimize(s);
 
    s.assign_curb_setup();
-   brw_assign_tes_urb_setup(s);
+   brw_assign_urb_setup(s);
 
    brw_lower_3src_null_dest(s);
    brw_workaround_emit_dummy_mov_instruction(s);
@@ -59,20 +43,46 @@ run_tes(brw_shader &s)
    return !s.failed;
 }
 
+extern "C" void
+brw_fill_tess_info_from_shader_info(struct brw_tess_info *brw_info,
+                                    const shader_info *shader_info)
+{
+   STATIC_ASSERT(INTEL_TESS_PARTITIONING_INTEGER == TESS_SPACING_EQUAL - 1);
+   STATIC_ASSERT(INTEL_TESS_PARTITIONING_ODD_FRACTIONAL ==
+                 TESS_SPACING_FRACTIONAL_ODD - 1);
+   STATIC_ASSERT(INTEL_TESS_PARTITIONING_EVEN_FRACTIONAL ==
+                 TESS_SPACING_FRACTIONAL_EVEN - 1);
+
+   brw_info->primitive_mode = shader_info->tess._primitive_mode;
+   brw_info->spacing = shader_info->tess.spacing;
+   brw_info->ccw = shader_info->tess.ccw;
+   brw_info->point_mode = shader_info->tess.point_mode;
+}
+
 const unsigned *
 brw_compile_tes(const struct brw_compiler *compiler,
                 brw_compile_tes_params *params)
 {
    const struct intel_device_info *devinfo = compiler->devinfo;
    nir_shader *nir = params->base.nir;
-   const struct brw_tes_prog_key *key = params->key;
+   const struct brw_tes_prog_key *key =
+      (const struct brw_tes_prog_key *)params->base.key;
    struct intel_vue_map input_vue_map;
-   struct brw_tes_prog_data *prog_data = params->prog_data;
+   struct brw_tes_prog_data *prog_data =
+      (struct brw_tes_prog_data *)params->base.prog_data;
    const unsigned dispatch_width = brw_geometry_stage_dispatch_width(compiler->devinfo);
 
    const bool debug_enabled = brw_should_print_shader(nir, DEBUG_TES, params->base.source_hash);
 
-   brw_debug_archive_nir(params->base.archiver, nir, dispatch_width, "first");
+   brw_pass_tracker pt_ = {
+      .nir = nir,
+      .dispatch_width = dispatch_width,
+      .compiler = compiler,
+      .key = &key->base,
+      .archiver = params->base.archiver,
+   }, *pt = &pt_;
+
+   BRW_NIR_SNAPSHOT("first");
 
    brw_prog_data_init(&prog_data->base.base, &params->base);
 
@@ -89,13 +99,6 @@ brw_compile_tes(const struct brw_compiler *compiler,
                                key->separate_tess_vue_layout);
    }
 
-   brw_nir_apply_key(nir, compiler, &key->base, dispatch_width);
-   brw_nir_lower_tes_inputs(nir, &input_vue_map);
-   brw_nir_lower_vue_outputs(nir);
-   NIR_PASS(_, nir, intel_nir_lower_patch_vertices_tes);
-   brw_postprocess_nir(nir, compiler, dispatch_width, params->base.archiver,
-                       debug_enabled, key->base.robust_flags);
-
    const uint32_t pos_slots =
       (nir->info.per_view_outputs & VARYING_BIT_POS) ?
       MAX2(1, util_bitcount(key->base.view_mask)) : 1;
@@ -103,6 +106,20 @@ brw_compile_tes(const struct brw_compiler *compiler,
    brw_compute_vue_map(devinfo, &prog_data->base.vue_map,
                        nir->info.outputs_written,
                        key->base.vue_layout, pos_slots);
+
+   brw_nir_apply_key(pt, &key->base, dispatch_width);
+   brw_nir_lower_tes_inputs(nir, devinfo, &input_vue_map,
+                            &prog_data->base.urb_read_length);
+   brw_nir_lower_vue_outputs(nir);
+   BRW_NIR_SNAPSHOT("after_lower_io");
+
+   brw_nir_opt_vectorize_urb(pt);
+   BRW_NIR_PASS(intel_nir_lower_patch_vertices_tes);
+
+   brw_postprocess_nir(pt, debug_enabled);
+
+   BRW_NIR_PASS(brw_nir_lower_deferred_urb_writes, devinfo,
+                &prog_data->base.vue_map, 0, 0);
 
    unsigned output_size_bytes = prog_data->base.vue_map.num_slots * 4 * 4;
 
@@ -117,43 +134,10 @@ brw_compile_tes(const struct brw_compiler *compiler,
       BITSET_TEST(nir->info.system_values_read, SYSTEM_VALUE_PRIMITIVE_ID);
 
    /* URB entry sizes are stored as a multiple of 64 bytes. */
-   prog_data->base.urb_entry_size = ALIGN(output_size_bytes, 64) / 64;
+   prog_data->base.urb_entry_size = align(output_size_bytes, 64) / 64;
 
-   prog_data->base.urb_read_length = 0;
-
-   STATIC_ASSERT(INTEL_TESS_PARTITIONING_INTEGER == TESS_SPACING_EQUAL - 1);
-   STATIC_ASSERT(INTEL_TESS_PARTITIONING_ODD_FRACTIONAL ==
-                 TESS_SPACING_FRACTIONAL_ODD - 1);
-   STATIC_ASSERT(INTEL_TESS_PARTITIONING_EVEN_FRACTIONAL ==
-                 TESS_SPACING_FRACTIONAL_EVEN - 1);
-
-   prog_data->partitioning =
-      (enum intel_tess_partitioning) (nir->info.tess.spacing - 1);
-
-   switch (nir->info.tess._primitive_mode) {
-   case TESS_PRIMITIVE_QUADS:
-      prog_data->domain = INTEL_TESS_DOMAIN_QUAD;
-      break;
-   case TESS_PRIMITIVE_TRIANGLES:
-      prog_data->domain = INTEL_TESS_DOMAIN_TRI;
-      break;
-   case TESS_PRIMITIVE_ISOLINES:
-      prog_data->domain = INTEL_TESS_DOMAIN_ISOLINE;
-      break;
-   default:
-      UNREACHABLE("invalid domain shader primitive mode");
-   }
-
-   if (nir->info.tess.point_mode) {
-      prog_data->output_topology = INTEL_TESS_OUTPUT_TOPOLOGY_POINT;
-   } else if (nir->info.tess._primitive_mode == TESS_PRIMITIVE_ISOLINES) {
-      prog_data->output_topology = INTEL_TESS_OUTPUT_TOPOLOGY_LINE;
-   } else {
-      /* Hardware winding order is backwards from OpenGL */
-      prog_data->output_topology =
-         nir->info.tess.ccw ? INTEL_TESS_OUTPUT_TOPOLOGY_TRI_CW
-                             : INTEL_TESS_OUTPUT_TOPOLOGY_TRI_CCW;
-   }
+   brw_fill_tess_info_from_shader_info(&prog_data->tess_info,
+                                       &nir->info);
 
    if (unlikely(debug_enabled)) {
       fprintf(stderr, "TES Input ");
@@ -187,18 +171,11 @@ brw_compile_tes(const struct brw_compiler *compiler,
    prog_data->base.base.grf_used = v.grf_used;
    prog_data->base.dispatch_mode = INTEL_DISPATCH_MODE_SIMD8;
 
-   brw_generator g(compiler, &params->base,
-                  &prog_data->base.base, MESA_SHADER_TESS_EVAL);
-   if (unlikely(debug_enabled)) {
-      g.enable_debug(ralloc_asprintf(params->base.mem_ctx,
-                                     "%s tessellation evaluation shader %s",
-                                     nir->info.label ? nir->info.label
-                                                     : "unnamed",
-                                     nir->info.name));
-   }
-
-   g.generate_code(v, params->base.stats);
-   g.add_const_data(nir->constant_data, nir->constant_data_size);
-
-   return g.get_assembly();
+   const brw_to_binary_params to_binary_params = {
+      .compiler = compiler,
+      .params = &params->base,
+      .prog_data = &prog_data->base.base,
+      .shaders = { &v },
+   };
+   return brw_to_binary(&to_binary_params);
 }

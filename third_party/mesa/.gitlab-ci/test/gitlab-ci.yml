@@ -23,11 +23,12 @@ rustfmt:
   extends:
     - .formatting-check
     - .lint-rustfmt-rules
+    - .no-auto-retry  # this job can't be flaky
   before_script:
     - shopt -s globstar
     - source "$HOME/.cargo/env"
     - rustfmt --version
-    - rustfmt --verbose src/**/lib.rs
+    - rustfmt --verbose src/**/*.rs
 
 shader-db:
   stage: code-validation
@@ -44,6 +45,7 @@ shader-db:
     - !reference [.vc4-rules, rules]
     - !reference [.nouveau-rules, rules]
     - !reference [.r300-rules, rules]
+    - !reference [.radeonsi-collabora-rules, rules]
     # Also run if this job's own config or script changes
     - changes:
         - .gitlab-ci/build/gitlab-ci.yml
@@ -60,9 +62,6 @@ shader-db:
     paths:
       - shader-db
   timeout: 15m
-  tags:
-    # FIXME: kvm is a hack, should not be needed
-    - $FDO_RUNNER_JOB_PRIORITY_TAG_X86_64_KVM
 
 yaml-toml-shell-py-test:
   extends:
@@ -80,7 +79,6 @@ yaml-toml-shell-py-test:
     - section_end shellcheck
     - .gitlab-ci/run-pytest.sh
   rules:
-    - !reference [.disable-farm-mr-rules, rules]
     - !reference [.never-post-merge-rules, rules]
     - !reference [.no_scheduled_pipelines-rules, rules]
     # merge pipeline

@@ -26,12 +26,23 @@
 
 #include <vulkan/vulkan.h>
 
+#include "pvr_macros.h"
+#include "pvr_winsys.h"
+
+struct rogue_fwif_cmd_compute;
 struct pvr_device_info;
-struct pvr_winsys;
-struct pvr_winsys_compute_ctx;
-struct pvr_winsys_compute_ctx_create_info;
-struct pvr_winsys_compute_submit_info;
 struct vk_sync;
+
+struct pvr_srv_winsys_compute_ctx {
+   struct pvr_winsys_compute_ctx base;
+
+   void *handle;
+
+   int timeline;
+};
+
+#define to_pvr_srv_winsys_compute_ctx(ctx) \
+   container_of(ctx, struct pvr_srv_winsys_compute_ctx, base)
 
 /*******************************************
    Function prototypes
@@ -40,13 +51,16 @@ struct vk_sync;
 VkResult pvr_srv_winsys_compute_ctx_create(
    struct pvr_winsys *ws,
    const struct pvr_winsys_compute_ctx_create_info *create_info,
+   const struct pvr_device_info *dev_info,
    struct pvr_winsys_compute_ctx **const ctx_out);
 void pvr_srv_winsys_compute_ctx_destroy(struct pvr_winsys_compute_ctx *ctx);
 
-VkResult pvr_srv_winsys_compute_submit(
+#ifdef PVR_PER_ARCH
+VkResult PVR_PER_ARCH(srv_winsys_compute_submit)(
    const struct pvr_winsys_compute_ctx *ctx,
    const struct pvr_winsys_compute_submit_info *submit_info,
    const struct pvr_device_info *dev_info,
    struct vk_sync *signal_sync);
+#endif
 
 #endif /* PVR_SRV_JOB_COMPUTE_H */

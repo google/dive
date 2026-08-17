@@ -50,13 +50,12 @@ v3d_debug_resource_layout(struct v3d_resource *rsc, const char *caller)
         struct pipe_resource *prsc = &rsc->base;
 
         if (prsc->target == PIPE_BUFFER) {
-                fprintf(stderr,
-                        "rsc %s %p (format %s), %dx%d buffer @0x%08x-0x%08x\n",
-                        caller, rsc,
-                        util_format_short_name(prsc->format),
-                        prsc->width0, prsc->height0,
-                        rsc->bo->offset,
-                        rsc->bo->offset + rsc->bo->size - 1);
+                mesa_logd("rsc %s %p (format %s), %dx%d buffer @0x%08x-0x%08x",
+                          caller, rsc,
+                          util_format_short_name(prsc->format),
+                          prsc->width0, prsc->height0,
+                          rsc->bo->offset,
+                          rsc->bo->offset + rsc->bo->size - 1);
                 return;
         }
 
@@ -77,21 +76,20 @@ v3d_debug_resource_layout(struct v3d_resource *rsc, const char *caller)
                 int level_depth =
                         u_minify(util_next_power_of_two(prsc->depth0), i);
 
-                fprintf(stderr,
-                        "rsc %s %p (format %s), %dx%d: "
-                        "level %d (%s) %dx%dx%d -> %dx%dx%d, stride %d@0x%08x\n",
-                        caller, rsc,
-                        util_format_short_name(prsc->format),
-                        prsc->width0, prsc->height0,
-                        i, tiling_descriptions[slice->tiling],
-                        u_minify(prsc->width0, i),
-                        u_minify(prsc->height0, i),
-                        u_minify(prsc->depth0, i),
-                        level_width,
-                        level_height,
-                        level_depth,
-                        slice->stride,
-                        rsc->bo->offset + slice->offset);
+                mesa_logd("rsc %s %p (format %s), %dx%d: "
+                          "level %d (%s) %dx%dx%d -> %dx%dx%d, stride %d@0x%08x",
+                          caller, rsc,
+                          util_format_short_name(prsc->format),
+                          prsc->width0, prsc->height0,
+                          i, tiling_descriptions[slice->tiling],
+                          u_minify(prsc->width0, i),
+                          u_minify(prsc->height0, i),
+                          u_minify(prsc->depth0, i),
+                          level_width,
+                          level_height,
+                          level_depth,
+                          slice->stride,
+                          rsc->bo->offset + slice->offset);
         }
 }
 
@@ -200,6 +198,15 @@ v3d_map_usage_prep(struct pipe_context *pctx,
         MESA_TRACE_FUNC();
 
         if (usage & PIPE_MAP_DISCARD_WHOLE_RESOURCE) {
+                /* Flush any pending write jobs before replacing the BO.
+                 * The RCL reads rsc->bo at job submit time, so if we
+                 * replace the BO first, a later flush of the pending
+                 * job would resolve the new BO instead of the old one,
+                 * corrupting the new data with a stale store.
+                 */
+                v3d_flush_jobs_writing_resource(v3d, prsc,
+                                                V3D_FLUSH_ALWAYS,
+                                                false);
                 if (v3d_resource_bo_alloc(rsc)) {
                         /* If it might be bound as one of our vertex buffers
                          * or UBOs, make sure we re-emit vertex buffer state
@@ -305,7 +312,7 @@ v3d_resource_transfer_map(struct pipe_context *pctx,
         else
                 buf = v3d_bo_map(rsc->bo);
         if (!buf) {
-                fprintf(stderr, "Failed to map bo\n");
+                mesa_loge("Failed to map bo");
                 goto fail;
         }
 
@@ -573,8 +580,8 @@ v3d_get_dimension_mpad(uint32_t dimension, uint32_t level, uint32_t block_dimens
 }
 
 static void
-v3d_setup_slices(struct v3d_resource *rsc, uint32_t winsys_stride,
-                 bool uif_top)
+v3d_setup_slices(struct v3d_screen *screen, struct v3d_resource *rsc,
+                 uint32_t winsys_stride, bool uif_top)
 {
         struct pipe_resource *prsc = &rsc->base;
         uint32_t width = prsc->width0;
@@ -695,6 +702,20 @@ v3d_setup_slices(struct v3d_resource *rsc, uint32_t winsys_stride,
                         slice->stride = winsys_stride;
                 else
                         slice->stride = level_width * rsc->cpp;
+
+#if USE_V3D_SIMULATOR
+                /* Ensure stride alignment matches the one required by the GPU
+                 * that drives the display.
+                 */
+                if (slice->tiling == V3D_TILING_RASTER &&
+                    prsc->target == PIPE_TEXTURE_2D &&
+                    uif_top && !msaa) {
+                       slice->stride =
+                               align(slice->stride,
+                                     v3d_simulator_get_raster_stride_align(screen->fd));
+                }
+#endif
+
                 slice->padded_height = level_height;
                 slice->size = level_height * slice->stride;
 
@@ -836,13 +857,13 @@ v3d_resource_create_with_modifiers(struct pipe_screen *pscreen,
         } else if (drm_find_modifier(DRM_FORMAT_MOD_LINEAR, modifiers, count)) {
                 rsc->tiled = false;
         } else {
-                fprintf(stderr, "Unsupported modifier requested\n");
+                mesa_loge("Unsupported modifier requested");
                 goto fail;
         }
 
         rsc->internal_format = prsc->format;
 
-        v3d_setup_slices(rsc, 0, tmpl->bind & PIPE_BIND_SHARED);
+        v3d_setup_slices(screen, rsc, 0, tmpl->bind & PIPE_BIND_SHARED);
 
         if (screen->ro && (tmpl->bind & PIPE_BIND_SCANOUT)) {
                 assert(!rsc->tiled);
@@ -864,7 +885,7 @@ v3d_resource_create_with_modifiers(struct pipe_screen *pscreen,
                                                         &handle);
 
                 if (!rsc->scanout) {
-                        fprintf(stderr, "Failed to create scanout resource\n");
+                        mesa_loge("Failed to create scanout resource");
                         goto fail;
                 }
                 assert(handle.type == WINSYS_HANDLE_TYPE_FD);
@@ -932,9 +953,8 @@ v3d_resource_from_handle(struct pipe_screen *pscreen,
                                 fourcc_mod_broadcom_param(whandle->modifier);
                         break;
                 default:
-                        fprintf(stderr,
-                                "Attempt to import unsupported modifier 0x%llx\n",
-                                (long long)whandle->modifier);
+                        mesa_loge("Attempt to import unsupported modifier 0x%llx",
+                                  (long long)whandle->modifier);
                         goto fail;
                 }
         }
@@ -947,9 +967,8 @@ v3d_resource_from_handle(struct pipe_screen *pscreen,
                 rsc->bo = v3d_bo_open_dmabuf(screen, whandle->handle);
                 break;
         default:
-                fprintf(stderr,
-                        "Attempt to import unsupported handle type %d\n",
-                        whandle->type);
+                mesa_loge("Attempt to import unsupported handle type %d",
+                          whandle->type);
                 goto fail;
         }
 
@@ -958,25 +977,24 @@ v3d_resource_from_handle(struct pipe_screen *pscreen,
 
         rsc->internal_format = prsc->format;
 
-        v3d_setup_slices(rsc, whandle->stride, true);
+        v3d_setup_slices(screen, rsc, whandle->stride, true);
         v3d_debug_resource_layout(rsc, "import");
 
         if (whandle->offset != 0) {
                 if (rsc->tiled) {
-                        fprintf(stderr,
-                                "Attempt to import unsupported winsys offset %u\n",
-                                whandle->offset);
+                        mesa_loge("Attempt to import unsupported winsys offset %u",
+                                  whandle->offset);
                         goto fail;
                 }
                 rsc->slices[0].offset += whandle->offset;
 
                 if (rsc->slices[0].offset + rsc->slices[0].size >
                     rsc->bo->size) {
-                        fprintf(stderr, "Attempt to import "
-                                "with overflowing offset (%d + %d > %d)\n",
-                                whandle->offset,
-                                rsc->slices[0].size,
-                                rsc->bo->size);
+                        mesa_loge("Attempt to import with overflowing offset "
+                                  "(%d + %d > %d)",
+                                  whandle->offset,
+                                  rsc->slices[0].size,
+                                  rsc->bo->size);
                          goto fail;
                  }
         }
@@ -996,13 +1014,12 @@ v3d_resource_from_handle(struct pipe_screen *pscreen,
                 static bool warned = false;
                 if (!warned) {
                         warned = true;
-                        fprintf(stderr,
-                                "Attempting to import %dx%d %s with "
-                                "unsupported stride %d instead of %d\n",
-                                prsc->width0, prsc->height0,
-                                util_format_short_name(prsc->format),
-                                whandle->stride,
-                                slice->stride);
+                        mesa_loge("Attempting to import %dx%d %s with "
+                                  "unsupported stride %d instead of %d",
+                                  prsc->width0, prsc->height0,
+                                  util_format_short_name(prsc->format),
+                                  whandle->stride,
+                                  slice->stride);
                 }
                 goto fail;
         } else if (!rsc->tiled) {

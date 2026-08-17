@@ -273,6 +273,8 @@ renderbuffer_alloc_storage(struct gl_context * ctx,
                     PIPE_BIND_RENDER_TARGET);
    }
 
+   templ.bind |= PIPE_BIND_SAMPLER_VIEW;
+
    rb->texture = screen->resource_create(screen, &templ);
 
    if (!rb->texture)

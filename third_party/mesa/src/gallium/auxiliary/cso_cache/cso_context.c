@@ -73,7 +73,6 @@ struct cso_context_priv {
    bool has_geometry_shader;
    bool has_tessellation;
    bool has_compute_shader;
-   bool has_task_mesh_shader;
    bool has_streamout;
 
    uint32_t max_fs_samplerviews : 16;
@@ -328,9 +327,6 @@ cso_create_context(struct pipe_context *pipe, unsigned flags)
          ctx->has_compute_shader = true;
       }
    }
-   if (pipe->screen->shader_caps[MESA_SHADER_MESH].max_instructions > 0) {
-      ctx->has_task_mesh_shader = true;
-   }
    if (pipe->screen->caps.max_stream_output_buffers != 0) {
       ctx->has_streamout = true;
    }
@@ -383,7 +379,7 @@ cso_unbind_context(struct cso_context *cso)
                break;
             case MESA_SHADER_MESH:
             case MESA_SHADER_TASK:
-               if (!ctx->has_task_mesh_shader)
+               if (!ctx->base.pipe->screen->caps.mesh_shader)
                   continue;
                break;
             default:
@@ -435,7 +431,7 @@ cso_unbind_context(struct cso_context *cso)
       if (ctx->has_compute_shader) {
          ctx->base.pipe->bind_compute_state(ctx->base.pipe, NULL);
       }
-      if (ctx->has_task_mesh_shader) {
+      if (ctx->base.pipe->screen->caps.mesh_shader) {
          ctx->base.pipe->bind_ts_state(ctx->base.pipe, NULL);
          ctx->base.pipe->bind_ms_state(ctx->base.pipe, NULL);
       }
@@ -482,7 +478,6 @@ cso_destroy_context(struct cso_context *cso)
 {
    struct cso_context_priv *ctx = (struct cso_context_priv *)cso;
 
-   cso_unbind_context(cso);
    cso_cache_delete(&ctx->cache);
 
    if (ctx->vbuf)
@@ -1178,9 +1173,9 @@ void
 cso_set_task_shader_handle(struct cso_context *cso, void *handle)
 {
    struct cso_context_priv *ctx = (struct cso_context_priv *)cso;
-   assert(ctx->has_task_mesh_shader || !handle);
+   assert(ctx->base.pipe->screen->caps.mesh_shader || !handle);
 
-   if (ctx->has_task_mesh_shader && ctx->task_shader != handle) {
+   if (ctx->base.pipe->screen->caps.mesh_shader && ctx->task_shader != handle) {
       ctx->task_shader = handle;
       ctx->base.pipe->bind_ts_state(ctx->base.pipe, handle);
    }
@@ -1190,7 +1185,7 @@ cso_set_task_shader_handle(struct cso_context *cso, void *handle)
 static void
 cso_save_task_shader(struct cso_context_priv *ctx)
 {
-   if (!ctx->has_task_mesh_shader)
+   if (!ctx->base.pipe->screen->caps.mesh_shader)
       return;
 
    assert(!ctx->task_shader_saved);
@@ -1201,7 +1196,7 @@ cso_save_task_shader(struct cso_context_priv *ctx)
 static void
 cso_restore_task_shader(struct cso_context_priv *ctx)
 {
-   if (!ctx->has_task_mesh_shader)
+   if (!ctx->base.pipe->screen->caps.mesh_shader)
       return;
 
    if (ctx->task_shader_saved != ctx->task_shader) {
@@ -1216,9 +1211,9 @@ void
 cso_set_mesh_shader_handle(struct cso_context *cso, void *handle)
 {
    struct cso_context_priv *ctx = (struct cso_context_priv *)cso;
-   assert(ctx->has_task_mesh_shader || !handle);
+   assert(ctx->base.pipe->screen->caps.mesh_shader || !handle);
 
-   if (ctx->has_task_mesh_shader && ctx->mesh_shader != handle) {
+   if (ctx->base.pipe->screen->caps.mesh_shader && ctx->mesh_shader != handle) {
       ctx->mesh_shader = handle;
       ctx->base.pipe->bind_ms_state(ctx->base.pipe, handle);
    }
@@ -1228,7 +1223,7 @@ cso_set_mesh_shader_handle(struct cso_context *cso, void *handle)
 static void
 cso_save_mesh_shader(struct cso_context_priv *ctx)
 {
-   if (!ctx->has_task_mesh_shader)
+   if (!ctx->base.pipe->screen->caps.mesh_shader)
       return;
 
    assert(!ctx->mesh_shader_saved);
@@ -1239,7 +1234,7 @@ cso_save_mesh_shader(struct cso_context_priv *ctx)
 static void
 cso_restore_mesh_shader(struct cso_context_priv *ctx)
 {
-   if (!ctx->has_task_mesh_shader)
+   if (!ctx->base.pipe->screen->caps.mesh_shader)
       return;
 
    if (ctx->mesh_shader_saved != ctx->mesh_shader) {

@@ -26,6 +26,8 @@ struct svga_surface
 {
    struct pipe_surface base;
 
+   struct pipe_context *context;
+
    struct svga_host_surface_cache_key key;
 
    /*
@@ -59,22 +61,6 @@ struct svga_surface
                                     */
 };
 
-
-static inline void
-svga_surface_reference(struct svga_surface **dst,
-                       struct svga_surface *src)
-{
-   pipe_surface_reference((struct pipe_surface **) dst,
-                          (struct pipe_surface *) src);
-}
-
-
-static inline void
-svga_surface_unref(struct pipe_context *pipe,
-                   struct svga_surface **s)
-{
-   pipe_surface_unref(pipe, (struct pipe_surface **) s);
-}
 
 
 static inline bool
@@ -140,6 +126,10 @@ svga_create_surface(struct pipe_context *pipe,
                     struct pipe_resource *pt,
                     const struct pipe_surface *surf_tmpl);
 
+void
+svga_surface_destroy(struct pipe_context *pipe,
+                     struct pipe_surface *surf);
+
 static inline struct svga_surface *
 svga_surface(struct pipe_surface *surface)
 {
@@ -180,5 +170,24 @@ svga_resource_type(enum pipe_texture_target target)
       return SVGA3D_RESOURCE_TEXTURE2D;
    }
 }
+
+static inline void
+svga_surface_reference(struct svga_surface **dst,
+                       struct svga_surface *src,
+                       struct pipe_context *pipe)
+{
+   pipe_surface_reference((struct pipe_surface **) dst,
+                          (struct pipe_surface *) src,
+                          pipe, svga_surface_destroy);
+}
+
+
+static inline void
+svga_surface_unref(struct pipe_context *pipe,
+                   struct svga_surface **s)
+{
+   pipe_surface_unref(pipe, (struct pipe_surface **) s, svga_surface_destroy);
+}
+
 
 #endif

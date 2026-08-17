@@ -590,7 +590,7 @@ emit_combine(struct texenv_fragment_program *p,
       return nir_fdot3(p->b, smear(p->b, tmp0), smear(p->b, tmp1));
 
    case TEXENV_MODE_MODULATE_ADD_ATI:
-      return nir_fmad(p->b, src[0], src[2], src[1]);
+      return nir_ffma_weak(p->b, src[0], src[2], src[1]);
 
    case TEXENV_MODE_MODULATE_SIGNED_ADD_ATI:
       return nir_fadd_imm(p->b,
@@ -762,7 +762,13 @@ load_texture(struct texenv_fragment_program *p, GLuint unit)
       return ;
    }
 
-   unsigned num_srcs = 4;
+   bool tex_is_array = false;
+   enum glsl_sampler_dim tex_dim =
+      _mesa_texture_index_to_sampler_dim(texTarget, &tex_is_array);
+
+   unsigned num_srcs = 3;
+   if (tex_dim != GLSL_SAMPLER_DIM_CUBE)
+      num_srcs++;
    if (p->state->unit[unit].shadow)
       num_srcs++;
 
@@ -773,9 +779,8 @@ load_texture(struct texenv_fragment_program *p, GLuint unit)
    tex->sampler_index = unit;
    tex->can_speculate = true;
 
-   tex->sampler_dim =
-      _mesa_texture_index_to_sampler_dim(texTarget,
-                                         &tex->is_array);
+   tex->sampler_dim = tex_dim;
+   tex->is_array = tex_is_array;
 
    tex->coord_components =
       glsl_get_sampler_dim_coordinate_components(tex->sampler_dim);
@@ -810,14 +815,18 @@ load_texture(struct texenv_fragment_program *p, GLuint unit)
                    nir_component_mask(tex->coord_components));
    tex->src[2] = nir_tex_src_for_ssa(nir_tex_src_coord, src2);
 
-   tex->src[3] = nir_tex_src_for_ssa(nir_tex_src_projector,
-                                     nir_channel(p->b, texcoord, 3));
+   unsigned next_src = 3;
+
+   if (tex->sampler_dim != GLSL_SAMPLER_DIM_CUBE) {
+      tex->src[next_src++] = nir_tex_src_for_ssa(nir_tex_src_projector,
+                                                 nir_channel(p->b, texcoord, 3));
+   }
 
    if (p->state->unit[unit].shadow) {
       tex->is_shadow = true;
       nir_def *src4 =
          nir_channel(p->b, texcoord, tex->coord_components);
-      tex->src[4] = nir_tex_src_for_ssa(nir_tex_src_comparator, src4);
+      tex->src[next_src++] = nir_tex_src_for_ssa(nir_tex_src_comparator, src4);
    }
 
    nir_def_init(&tex->instr, &tex->def, 4, 32);
@@ -952,7 +961,7 @@ create_new_program(struct gl_context *ctx, struct state_key *key,
    if (key->num_draw_buffers)
       emit_instructions(&p);
 
-   nir_validate_shader(b.shader, "after generating ff-vertex shader");
+   nir_validate_shader(b.shader, "after generating ff-fragment shader");
 
    if (key->fog_mode) {
       NIR_PASS(_, b.shader, st_nir_lower_fog, key->fog_mode, p.state_params,

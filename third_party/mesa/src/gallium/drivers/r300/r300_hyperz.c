@@ -106,6 +106,10 @@ static bool r300_hiz_allowed(struct r300_context *r300)
         /* if depth func is NOTEQUAL */
         if (dsa->dsa.depth_func == PIPE_FUNC_NOTEQUAL)
             return false;
+
+        /* R5xx docs advise avoiding HiZ with ALWAYS comparisons. */
+        if (dsa->dsa.depth_func == PIPE_FUNC_ALWAYS)
+            return false;
     }
     return true;
 }
@@ -245,7 +249,7 @@ static void r300_update_ztop(struct r300_context* r300)
     /* ZS writes */
     if (util_writes_depth_stencil(r300->dsa_state.state) &&
            (r300_dsa_alpha_test_enabled(r300->dsa_state.state) ||  /* (1) */
-            r300_fs(r300)->shader->info.uses_kill)) {              /* (2) */
+            r300_fs(r300)->shader->uses_discard)) {                /* (2) */
         ztop_state->z_buffer_top = R300_ZTOP_DISABLE;
     } else if (r300_fragment_shader_writes_depth(r300_fs(r300))) { /* (5) */
         ztop_state->z_buffer_top = R300_ZTOP_DISABLE;

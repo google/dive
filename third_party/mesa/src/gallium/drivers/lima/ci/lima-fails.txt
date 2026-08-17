@@ -89,13 +89,11 @@ spec@arb_occlusion_query@occlusion_query_conform@GetObjivAval_multi2,Fail
 spec@arb_pixel_buffer_object@cubemap npot pbo,Fail
 spec@arb_pixel_buffer_object@cubemap pbo,Fail
 spec@arb_pixel_buffer_object@fbo-pbo-readpixels-small,Fail
-spec@arb_pixel_buffer_object@pbo-getteximage,Fail
 spec@arb_pixel_buffer_object@texsubimage-unpack pbo,Fail
 spec@arb_point_sprite@arb_point_sprite-checkerboard,Fail
 spec@arb_point_sprite@arb_point_sprite-mipmap,Fail
 spec@arb_provoking_vertex@arb-provoking-vertex-clipped-geometry-flatshading,Fail
 spec@arb_provoking_vertex@arb-provoking-vertex-render,Fail
-spec@arb_sampler_objects@gl_ext_texture_srgb_decode,Fail
 spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgradcube,Fail
 spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgrad,Fail
 spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-01,Fail
@@ -107,14 +105,10 @@ spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-07,Fail
 spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-08,Fail
 spec@arb_shader_texture_lod@execution@glsl-fs-shadow2dgradarb-cumulative,Fail
 spec@arb_texture_cube_map@copyteximage cube,Fail
-spec@arb_texture_cube_map@copyteximage cube samples=2,Fail
-spec@arb_texture_cube_map@copyteximage cube samples=4,Fail
 spec@arb_texture_cube_map@cubemap,Fail
 spec@arb_texture_cube_map@cubemap npot,Fail
 spec@arb_texture_cube_map@cubemap-shader,Fail
 spec@arb_texture_rectangle@1-1-linear-texture,Fail
-spec@arb_texture_rectangle@copyteximage rect samples=2,Fail
-spec@arb_texture_rectangle@copyteximage rect samples=4,Fail
 spec@arb_texture_rectangle@glsl-fs-shadow2drect-01,Fail
 spec@arb_texture_rectangle@glsl-fs-shadow2drect-02,Fail
 spec@arb_texture_rectangle@glsl-fs-shadow2drect-03,Fail
@@ -152,8 +146,6 @@ spec@ati_fragment_shader@ati_fragment_shader-render-default,Fail
 spec@ati_fragment_shader@ati_fragment_shader-render-notexture,Fail
 spec@ati_fragment_shader@ati_fragment_shader-render-sources,Fail
 spec@egl 1.4@eglterminate then unbind context,Fail
-spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_depth_component24,Fail
-spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_rgba,Fail
 spec@egl_khr_surfaceless_context@viewport,Fail
 spec@ext_framebuffer_blit@fbo-blit-check-limits,Fail
 spec@ext_framebuffer_multisample@dlist,Fail
@@ -184,40 +176,43 @@ spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_y216,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_y410,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_y412,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_y416,Fail
-spec@ext_packed_depth_stencil@depth_stencil texture,Fail
 spec@ext_packed_depth_stencil@fbo-blit-d24s8,Fail
 spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-blit,Fail
 spec@ext_packed_depth_stencil@fbo-stencil-gl_depth24_stencil8-copypixels,Fail
 spec@ext_provoking_vertex@provoking-vertex,Fail
 spec@ext_texture_format_bgra8888@api-errors,Fail
 spec@ext_texture_lod_bias@lodbias,Fail
-spec@ext_texture_srgb@tex-srgb,Fail
+# srgb bordercolor tests fail only on the GL_CLAMP subtests, likely due to
+# interpolating bordercolor in srgb before applying srgb->linear conversion
+# in shader.
 spec@ext_texture_srgb@texwrap formats bordercolor,Fail
 spec@ext_texture_srgb@texwrap formats bordercolor@GL_SRGB8_ALPHA8- border color only,Fail
 spec@ext_texture_srgb@texwrap formats bordercolor@GL_SRGB8- border color only,Fail
 spec@ext_texture_srgb@texwrap formats bordercolor-swizzled,Fail
 spec@ext_texture_srgb@texwrap formats bordercolor-swizzled@GL_SRGB8_ALPHA8- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats bordercolor-swizzled@GL_SRGB8- swizzled- border color only,Fail
-spec@ext_texture_srgb@texwrap formats,Fail
-spec@ext_texture_srgb@texwrap formats@GL_SRGB8_ALPHA8,Fail
-spec@ext_texture_srgb@texwrap formats@GL_SRGB8_ALPHA8- NPOT,Fail
-spec@ext_texture_srgb@texwrap formats@GL_SRGB8_ALPHA8- swizzled,Fail
-spec@ext_texture_srgb@texwrap formats@GL_SRGB8,Fail
-spec@ext_texture_srgb@texwrap formats@GL_SRGB8- NPOT,Fail
-spec@ext_texture_srgb@texwrap formats@GL_SRGB8- swizzled,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB- swizzled- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SRGB_ALPHA- border color only,Fail
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SRGB- border color only,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc@GL_COMPRESSED_SRGB_ALPHA- NPOT,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc@GL_COMPRESSED_SRGB_ALPHA- swizzled,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc@GL_COMPRESSED_SRGB_ALPHA,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc@GL_COMPRESSED_SRGB- NPOT,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc@GL_COMPRESSED_SRGB- swizzled,Fail
-spec@ext_texture_srgb@texwrap formats-s3tc@GL_COMPRESSED_SRGB,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SLUMINANCE- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SLUMINANCE_ALPHA- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_S3TC_DXT1_EXT- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SLUMINANCE- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SLUMINANCE_ALPHA- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT- border color only,Fail
+spec@ext_texture_srgb@texwrap formats-s3tc bordercolor@GL_COMPRESSED_SRGB_S3TC_DXT1_EXT- border color only,Fail
+spec@ext_texture_srgb@texwrap formats bordercolor-swizzled@GL_SLUMINANCE8- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats bordercolor-swizzled@GL_SLUMINANCE8_ALPHA8- swizzled- border color only,Fail
+spec@ext_texture_srgb@texwrap formats bordercolor@GL_SLUMINANCE8- border color only,Fail
+spec@ext_texture_srgb@texwrap formats bordercolor@GL_SLUMINANCE8_ALPHA8- border color only,Fail
 spec@glsl-1.10@execution@built-in-functions@fs-atan-float-float,Fail
 spec@glsl-1.10@execution@built-in-functions@fs-atan-vec2-vec2,Fail
 spec@glsl-1.10@execution@built-in-functions@fs-atan-vec3-vec3,Fail
@@ -481,6 +476,8 @@ spec@intel_performance_query@intel_performance_query-issue_2235,Fail
 spec@khr_texture_compression_astc@basic-gles,Fail
 spec@khr_texture_compression_astc@miptree-gles srgb,Fail
 spec@khr_texture_compression_astc@miptree-gles srgb-fp,Fail
+spec@khr_texture_compression_astc@miptree-gl srgb-fp,Fail
+spec@khr_texture_compression_astc@miptree-gl srgb-fp@sRGB decode full precision,Fail
 spec@oes_point_sprite@arb_point_sprite-checkerboard_gles1,Fail
 spec@!opengl 1.0@gl-1.0-dlist-bitmap,Fail
 spec@!opengl 1.0@gl-1.0-dlist-materials,Fail
@@ -539,12 +536,6 @@ spec@!opengl 1.5@depth-tex-compare,Fail
 spec@!opengl 2.0@early-z,Fail
 spec@!opengl 2.0@gl-2.0-edgeflag,Fail
 spec@!opengl 2.0@gl-2.0-edgeflag-immediate,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled back front2 back2,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled back front2 back2@vs and fs,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front back back2,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front back back2@vs and fs,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front front2 back2,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front front2 back2@vs and fs,Fail
 spec@!opengl 2.1@pbo,Fail
 spec@!opengl 2.1@pbo@test_bitmap,Fail
 spec@!opengl 2.1@pbo@test_polygon_stip,Fail
@@ -626,7 +617,6 @@ dEQP-GLES2.functional.texture.mipmap.2d.basic.linear_linear_mirror,Fail
 dEQP-GLES2.functional.fragment_ops.depth_stencil.stencil_ops.keep_decr_wrap_invert,Fail
 dEQP-GLES2.functional.fragment_ops.depth_stencil.stencil_ops.decr_wrap_keep_keep,Fail
 dEQP-GLES2.functional.texture.mipmap.2d.projected.nearest_nearest_repeat,Fail
-dEQP-GLES2.functional.texture.mipmap.cube.projected.nearest_linear,Fail
 dEQP-GLES2.functional.fragment_ops.depth_stencil.stencil_ops.decr_incr_decr_wrap,Fail
 dEQP-GLES2.functional.fragment_ops.depth_stencil.stencil_ops.invert_zero_incr_wrap,Fail
 dEQP-GLES2.functional.fragment_ops.depth_stencil.stencil_ops.replace_zero_decr,Fail
@@ -1037,9 +1027,11 @@ dEQP-GLES2.functional.shaders.texture_functions.fragment.texture2dproj_vec4_bias
 
 # uprev Piglit in Mesa
 spec@!opengl 1.4@triangle-rasterization-fbo,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front back front2,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front back front2@vs and fs,Fail
 spec@arb_color_buffer_float@gl_rgba8-drawpixels,Fail
+spec@arb_texture_cube_map@copyteximage cube samples=2,Fail
+spec@arb_texture_cube_map@copyteximage cube samples=4,Fail
+spec@arb_texture_rectangle@copyteximage rect samples=2,Fail
+spec@arb_texture_rectangle@copyteximage rect samples=4,Fail
 spec@arb_texture_rg@rg-draw-pixels,Fail
 spec@arb_texture_rg@texture-rg,Fail
 spec@ext_framebuffer_blit@fbo-readdrawpix,Fail
@@ -1047,13 +1039,10 @@ spec@glsl-1.20@execution@variable-indexing@vs-temp-array-mat4-index-col-row-wr,C
 spec@!opengl 1.0@gl-1.0-drawpixels-color-index,Fail
 spec@!opengl 1.1@texture-al,Fail
 spec@!opengl 1.4@triangle-rasterization,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front back,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front back@vs and fs,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front2 back2,Fail
-spec@!opengl 2.0@vertex-program-two-side enabled front2 back2@vs and fs,Fail
 spec@!opengl 2.1@pbo@test_draw_pixels,Fail
 spec@arb_pixel_buffer_object@pbo-drawpixels,Fail
 spec@ext_framebuffer_object@fbo-fragcoord2,Fail
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow2d-consecutive-draws,Fail
 spec@glsl-1.10@execution@variable-indexing@vs-temp-array-mat4-index-col-row-wr,Crash
 
 # With linux kernel 6.13-rc4 uprev

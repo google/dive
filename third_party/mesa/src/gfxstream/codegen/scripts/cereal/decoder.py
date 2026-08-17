@@ -34,6 +34,14 @@ GLOBAL_COMMANDS_WITHOUT_DISPATCH = [
     "vkEnumerateInstanceVersion",
     "vkEnumerateInstanceExtensionProperties",
     "vkEnumerateInstanceLayerProperties",
+    "vkTraceAsyncGOOGLE",
+    "vkSetDebugMetadataAsyncGOOGLE",
+]
+
+COMMANDS_WITHOUT_TRACE = [
+    # This command is used to set perfetto track names (using the guest process and thread name)
+    # and track names should (ideally) be set before any trace events
+    'vkSetDebugMetadataAsyncGOOGLE',
 ]
 
 SNAPSHOT_API_CALL_HANDLE_VARNAME = "snapshotApiCallHandle"
@@ -47,6 +55,7 @@ class IOStream;
 }  // namespace gfxstream
 
 namespace gfxstream {
+namespace host {
 namespace vk {
 
 class VkDecoder {
@@ -62,16 +71,15 @@ private:
 };
 
 }  // namespace vk
+}  // namespace host
 }  // namespace gfxstream
 
 """
 
 decoder_impl_preamble ="""
 namespace gfxstream {
+namespace host {
 namespace vk {
-
-using gfxstream::base::MetricEventBadPacketLength;
-using gfxstream::base::MetricEventDuplicateSequenceNum;
 
 class VkDecoder::Impl {
 public:
@@ -83,7 +91,7 @@ public:
              m_boxedHandleCreateMapping(m_state),
              m_boxedHandleUnwrapMapping(m_state),
              m_prevSeqno(std::nullopt),
-             m_queueSubmitWithCommandsEnabled(m_state->getFeatures().VulkanQueueSubmitWithCommands.enabled),
+             m_queueSubmitWithCommandsEnabled(m_state->getFeatures().VulkanQueueSubmitWithCommands.enabled()),
              m_snapshotsEnabled(m_state->snapshotsEnabled()) {}
     %s* stream() { return &m_vkStream; }
     VulkanMemReadingStream* readStream() { return &m_vkMemReadingStream; }
@@ -131,6 +139,7 @@ size_t VkDecoder::decode(void* buf, size_t bufsize, IOStream* stream,
 decoder_impl_postamble = """
 
 }  // namespace vk
+}  // namespace host
 }  // namespace gfxstream
 
 """
@@ -357,7 +366,7 @@ def emit_dispatch_call(api, cgen):
 
     cgen.vkApiCall(api, customPrefix=whichDispatch, customParameters=customParams, \
         globalStatePrefix=global_state_prefix, checkForDeviceLost=True,
-        checkForOutOfMemory=True, checkDispatcher=checkDispatcher)
+        checkDispatcher=checkDispatcher)
 
     if api.name in driver_workarounds_global_lock_apis:
         if not delay:
@@ -388,7 +397,7 @@ def emit_global_state_wrapped_call(api, cgen, context):
         checkDispatcher = None
     cgen.vkApiCall(api, customPrefix=global_state_prefix, \
         customParameters=customParams, globalStatePrefix=global_state_prefix, \
-        checkForDeviceLost=True, checkForOutOfMemory=True, checkDispatcher=checkDispatcher)
+        checkForDeviceLost=True, checkDispatcher=checkDispatcher)
 
     if delay:
         cgen.line("};")
@@ -582,8 +591,20 @@ def decode_vkFlushMappedMemoryRanges(typeInfo: VulkanTypeInfo, api, cgen):
     cgen.stmt("return ptr - (unsigned char*)buf")
     cgen.endIf()
     cgen.stmt("sizeLeft -= readStream")
+    cgen.stmt("auto memorySize = m_state->getDeviceMemorySize(memory)")
+    cgen.beginIf("offset > memorySize || readStream > memorySize - offset")
+    cgen.stmt(
+        "GFXSTREAM_ERROR("
+        "\"vkFlushMappedMemoryRanges: dropping out-of-bounds guest range \""
+        "\"[offset %llu, size %llu] for memory size %llu\", "
+        "(unsigned long long)offset, (unsigned long long)readStream, "
+        "(unsigned long long)memorySize)")
+    cgen.endIf()
+    cgen.beginElse()
     cgen.stmt("uint8_t* targetRange = hostPtr + offset")
-    cgen.stmt("memcpy(targetRange, *readStreamPtrPtr, readStream); *readStreamPtrPtr += readStream")
+    cgen.stmt("memcpy(targetRange, *readStreamPtrPtr, readStream)")
+    cgen.endElse()
+    cgen.stmt("*readStreamPtrPtr += readStream")
     cgen.stmt("packetLen += 8 + readStream")
     cgen.endFor()
     cgen.endIf()
@@ -609,9 +630,21 @@ def decode_vkInvalidateMappedMemoryRanges(typeInfo, api, cgen):
     cgen.stmt("auto size = range.size")
     cgen.stmt("auto offset = range.offset")
     cgen.stmt("auto hostPtr = m_state->getMappedHostPointer(memory)")
-    cgen.stmt("auto actualSize = size == VK_WHOLE_SIZE ? m_state->getDeviceMemorySize(memory) : size")
+    cgen.stmt("auto memorySize = m_state->getDeviceMemorySize(memory)")
+    cgen.stmt("auto actualSize = size == VK_WHOLE_SIZE ? "
+              "(offset <= memorySize ? memorySize - offset : 0) : size")
     cgen.stmt("uint64_t writeStream = 0")
     cgen.stmt("if (!hostPtr) { %s->write(&writeStream, sizeof(uint64_t)); continue; }" % WRITE_STREAM)
+    cgen.beginIf("offset > memorySize || actualSize > memorySize - offset")
+    cgen.stmt(
+        "GFXSTREAM_ERROR("
+        "\"vkInvalidateMappedMemoryRanges: dropping out-of-bounds guest range \""
+        "\"[offset %llu, size %llu] for memory size %llu\", "
+        "(unsigned long long)offset, (unsigned long long)actualSize, "
+        "(unsigned long long)memorySize)")
+    cgen.stmt("%s->write(&writeStream, sizeof(uint64_t))" % WRITE_STREAM)
+    cgen.stmt("continue")
+    cgen.endIf()
     cgen.stmt("uint8_t* targetRange = hostPtr + offset")
     cgen.stmt("writeStream = actualSize")
     cgen.stmt("%s->write(&writeStream, sizeof(uint64_t))" % WRITE_STREAM)
@@ -630,6 +663,9 @@ def decode_unsupported_api(typeInfo, api, cgen):
     cgen.stmt("__builtin_trap()")
 
 custom_decodes = {
+    "vkGetInstanceProcAddr" : emit_global_state_wrapped_decoding,
+    "vkGetDeviceProcAddr" : emit_global_state_wrapped_decoding,
+
     "vkEnumerateInstanceVersion" : emit_global_state_wrapped_decoding,
     "vkCreateInstance" : emit_global_state_wrapped_decoding,
     "vkDestroyInstance" : emit_global_state_wrapped_decoding,
@@ -683,9 +719,11 @@ custom_decodes = {
 
     "vkCreateImage" : emit_global_state_wrapped_decoding,
     "vkCreateImageView" : emit_global_state_wrapped_decoding,
+    "vkCreateBufferView" : emit_global_state_wrapped_decoding,
     "vkCreateSampler" : emit_global_state_wrapped_decoding,
     "vkDestroyImage" : emit_global_state_wrapped_decoding,
     "vkDestroyImageView" : emit_global_state_wrapped_decoding,
+    "vkDestroyBufferView" : emit_global_state_wrapped_decoding,
     "vkDestroySampler" : emit_global_state_wrapped_decoding,
     "vkCmdCopyBufferToImage" : emit_global_state_wrapped_decoding_with_context,
     "vkCmdCopyImage" : emit_global_state_wrapped_decoding,
@@ -741,6 +779,9 @@ custom_decodes = {
     "vkResetCommandPool" : emit_global_state_wrapped_decoding,
     "vkCmdPipelineBarrier" : emit_global_state_wrapped_decoding,
     "vkCmdPipelineBarrier2" : emit_global_state_wrapped_decoding,
+    "vkCmdWaitEvents" : emit_global_state_wrapped_decoding,
+    "vkCmdWaitEvents2" : emit_global_state_wrapped_decoding,
+    "vkCmdWaitEvents2KHR" : emit_global_state_wrapped_decoding,
     "vkCmdBindPipeline" : emit_global_state_wrapped_decoding,
     "vkCmdBindDescriptorSets" : emit_global_state_wrapped_decoding,
 
@@ -790,6 +831,7 @@ custom_decodes = {
     "vkGetBlobGOOGLE" : emit_global_state_wrapped_decoding,
     "vkGetSemaphoreGOOGLE" : emit_global_state_wrapped_decoding,
     "vkTraceAsyncGOOGLE" : emit_global_state_wrapped_decoding,
+    "vkSetDebugMetadataAsyncGOOGLE" : emit_global_state_wrapped_decoding,
 
     # Descriptor update templates
     "vkCreateDescriptorUpdateTemplate" : emit_global_state_wrapped_decoding,
@@ -880,8 +922,6 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
 
         self.cgen.stmt("const char* processName = context.processName")
         self.cgen.stmt("auto& gfx_logger = *context.gfxApiLogger")
-        self.cgen.stmt("auto* healthMonitor = context.healthMonitor")
-        self.cgen.stmt("auto& metricsLogger = *context.metricsLogger")
         self.cgen.stmt("auto& shouldExit = *context.shouldExit")
         self.cgen.stmt("if (len < 8) return 0")
         self.cgen.stmt("unsigned char *ptr = (unsigned char *)buf")
@@ -901,7 +941,6 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
         // packetLen should be at least 8 (op code and packet length) and should not be excessively large
         if (packetLen < 8 || packetLen > MAX_PACKET_LENGTH) {
             GFXSTREAM_WARNING("Bad packet length %d detected, decode may fail", packetLen);
-            metricsLogger.logMetricEvent(MetricEventBadPacketLength{ .len = packetLen });
         }
         """)
         self.cgen.stmt("if (end - ptr < packetLen) return ptr - (unsigned char*)buf")
@@ -914,53 +953,24 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
         self.cgen.stmt("uint8_t* readStreamPtr = %s->getBuf(); uint8_t** readStreamPtrPtr = &readStreamPtr" % READ_STREAM)
         self.cgen.stmt("%s->setHandleMapping(&m_boxedHandleUnwrapMapping)" % READ_STREAM)
         self.cgen.line("""
-        std::unique_ptr<EventHangMetadata::HangAnnotations> executionData =
-            std::make_unique<EventHangMetadata::HangAnnotations>();
-        if (healthMonitor) {
-            executionData->insert(
-                 {{"packet_length", std::to_string(packetLen)},
-                 {"opcode", std::to_string(opcode)}});
-            if (processName) {
-                executionData->insert(
-                    {{"renderthread_guest_process", std::string(processName)}});
-            }
-            if (m_prevSeqno) {
-                executionData->insert({{"previous_seqno", std::to_string(m_prevSeqno.value())}});
-            }
-        }
-
         std::atomic<uint32_t>* seqnoPtr = processResources ?
                 processResources->getSequenceNumberPtr() : nullptr;
 
         if (m_queueSubmitWithCommandsEnabled && ((opcode >= OP_vkFirst && opcode < OP_vkLast) || (opcode >= OP_vkFirst_old && opcode < OP_vkLast_old))) {
             uint32_t seqno;
             memcpy(&seqno, *readStreamPtrPtr, sizeof(uint32_t)); *readStreamPtrPtr += sizeof(uint32_t);
-            if (healthMonitor) executionData->insert({{"seqno", std::to_string(seqno)}});
             if (m_prevSeqno  && seqno == m_prevSeqno.value()) {
                 GFXSTREAM_WARNING(
                     "Seqno %d is the same as previously processed on thread %d. It might be a "
                     "duplicate command.",
-                    seqno, getCurrentThreadId());
-                metricsLogger.logMetricEvent(MetricEventDuplicateSequenceNum{ .opcode = opcode });
+                    seqno, gfxstream::base::getCurrentThreadId());
             }
             if (seqnoPtr && !m_forSnapshotLoad) {
                 {
-                    auto seqnoWatchdog =
-                        WATCHDOG_BUILDER(healthMonitor,
-                                         "RenderThread seqno loop")
-                            .setHangType(EventHangMetadata::HangType::kRenderThread)
-                            .setAnnotations(std::make_unique<EventHangMetadata::HangAnnotations>(*executionData))
-                            /* Data gathered if this hangs*/
-                            .setOnHangCallback([=]() {
-                                auto annotations = std::make_unique<EventHangMetadata::HangAnnotations>();
-                                annotations->insert({{"seqnoPtr", std::to_string(seqnoPtr->load(std::memory_order_seq_cst))}});
-                                return annotations;
-                            })
-                            .build();
                     while ((seqno - seqnoPtr->load(std::memory_order_seq_cst) != 1)) {
                         if (shouldExit.load(std::memory_order_relaxed)) {
                             GFXSTREAM_WARNING("Process=%s is exitting. Skip processing seqno=%d on thread=0x%x.",
-                                 processName ? processName : "null", seqno, getCurrentThreadId());
+                                 processName ? processName : "null", seqno, gfxstream::base::getCurrentThreadId());
                             return 0;
                         }
                         #if (defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64)))
@@ -986,14 +996,6 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
         gfx_logger.recordCommandExecution();
         """)
 
-        self.cgen.line("""
-        auto executionWatchdog =
-            WATCHDOG_BUILDER(healthMonitor, "RenderThread VkDecoder command execution")
-                .setHangType(EventHangMetadata::HangType::kRenderThread)
-                .setAnnotations(std::move(executionData))
-                .build();
-        """)
-
         self.cgen.line("switch (opcode)")
         self.cgen.beginBlock()  # switch stmt
 
@@ -1006,7 +1008,9 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
 
         cgen.line("case OP_%s:" % name)
         cgen.beginBlock()
-        cgen.stmt("GFXSTREAM_TRACE_EVENT(GFXSTREAM_TRACE_DECODER_CATEGORY, \"VkDecoder %s\")" % name)
+
+        if name not in COMMANDS_WITHOUT_TRACE:
+            cgen.stmt("GFXSTREAM_TRACE_EVENT(GFXSTREAM_TRACE_DECODER_CATEGORY, \"VkDecoder %s\")" % name)
 
         if api.name in custom_decodes.keys():
             custom_decodes[api.name](typeInfo, api, cgen)

@@ -1,26 +1,7 @@
 /*
  * © Copyright 2018 Alyssa Rosenzweig
  * Copyright (C) 2019 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include <unistd.h>
@@ -28,6 +9,7 @@
 
 #include "pan_device.h"
 #include "pan_mempool.h"
+#include "pan_trace.h"
 
 /* Knockoff u_upload_mgr. Uploads wherever we left off, allocating new entries
  * when needed.
@@ -46,6 +28,8 @@
 static struct panfrost_bo *
 panfrost_pool_alloc_backing(struct panfrost_pool *pool, size_t bo_sz)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_MEMPOOL);
+
    /* We don't know what the BO will be used for, so let's flag it
     * RW and attach it to both the fragment and vertex/tiler jobs.
     * TODO: if we want fine grained BO assignment we should pass
@@ -57,8 +41,9 @@ panfrost_pool_alloc_backing(struct panfrost_pool *pool, size_t bo_sz)
    if (!bo)
       return NULL;
 
-   if (pool->owned)
-      util_dynarray_append(&pool->bos, struct panfrost_bo *, bo);
+   if (pool->owned) {
+      util_dynarray_append(&pool->bos, bo);
+   }
    else
       panfrost_bo_unreference(pool->transient_bo);
 
@@ -74,6 +59,8 @@ panfrost_pool_init(struct panfrost_pool *pool, void *memctx,
                    size_t slab_size, const char *label, bool prealloc,
                    bool owned)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_MEMPOOL);
+
    memset(pool, 0, sizeof(*pool));
    pan_pool_init(&pool->base, slab_size);
    pool->dev = dev;
@@ -95,6 +82,8 @@ panfrost_pool_init(struct panfrost_pool *pool, void *memctx,
 void
 panfrost_pool_cleanup(struct panfrost_pool *pool)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_MEMPOOL);
+
    if (!pool->owned) {
       panfrost_bo_unreference(pool->transient_bo);
       return;
@@ -133,6 +122,8 @@ static struct pan_ptr
 panfrost_pool_alloc_aligned(struct panfrost_pool *pool, size_t sz,
                             unsigned alignment)
 {
+   PAN_TRACE_FUNC(PAN_TRACE_GL_MEMPOOL);
+
    assert(alignment == util_next_power_of_two(alignment));
 
    /* Find or create a suitable BO */

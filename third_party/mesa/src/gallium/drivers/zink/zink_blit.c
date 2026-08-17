@@ -80,7 +80,11 @@ blit_resolve(struct zink_context *ctx, const struct pipe_blit_info *info, bool *
       zink_resource_image_transfer_dst_barrier(ctx, dst, info->dst.level, &info->dst.box, false);
       screen->image_barrier(ctx, use_src,
                               VK_IMAGE_LAYOUT_GENERAL,
-                              VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                              VK_ACCESS_TRANSFER_READ_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT);
+      screen->image_barrier(ctx, use_src,
+                              VK_IMAGE_LAYOUT_GENERAL,
+                              VK_ACCESS_TRANSFER_WRITE_BIT,
                               VK_PIPELINE_STAGE_TRANSFER_BIT);
    } else {
       zink_resource_setup_transfer_layouts(ctx, use_src, dst);
@@ -149,6 +153,15 @@ blit_resolve(struct zink_context *ctx, const struct pipe_blit_info *info, bool *
                      dst->obj->image, dst->layout,
                      1, &region);
    zink_cmd_debug_marker_end(ctx, cmdbuf, marker);
+
+   if (cmdbuf == ctx->bs->cmdbuf) {
+      zink_resource_disable_unordered(dst, true);
+      zink_resource_disable_unordered(src, false);
+      if (ctx->track_renderpasses) {
+         ctx->needs_transfer_sync = true;
+         dst->obj->transfer_rp = ctx->rp_counter;
+      }
+   }
 
    return true;
 }
@@ -304,7 +317,11 @@ blit_native(struct zink_context *ctx, const struct pipe_blit_info *info, bool *n
       zink_resource_image_transfer_dst_barrier(ctx, dst, info->dst.level, &info->dst.box, false);
       screen->image_barrier(ctx, use_src,
                               VK_IMAGE_LAYOUT_GENERAL,
-                              VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                              VK_ACCESS_TRANSFER_READ_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT);
+      screen->image_barrier(ctx, use_src,
+                              VK_IMAGE_LAYOUT_GENERAL,
+                              VK_ACCESS_TRANSFER_WRITE_BIT,
                               VK_PIPELINE_STAGE_TRANSFER_BIT);
    } else {
       zink_resource_setup_transfer_layouts(ctx, use_src, dst);
@@ -327,6 +344,15 @@ blit_native(struct zink_context *ctx, const struct pipe_blit_info *info, bool *n
                   zink_filter(info->filter));
 
    zink_cmd_debug_marker_end(ctx, cmdbuf, marker);
+
+   if (cmdbuf == ctx->bs->cmdbuf) {
+      zink_resource_disable_unordered(dst, true);
+      zink_resource_disable_unordered(src, false);
+      if (ctx->track_renderpasses) {
+         ctx->needs_transfer_sync = true;
+         dst->obj->transfer_rp = ctx->rp_counter;
+      }
+   }
 
    return true;
 }
@@ -359,8 +385,12 @@ zink_blit(struct pipe_context *pctx,
    const struct util_format_description *dst_desc = util_format_description(info->dst.format);
 
    struct zink_resource *src = zink_resource(info->src.resource);
+   if (src->unflushed_transient)
+      src = src->transient;
    struct zink_resource *use_src = src;
    struct zink_resource *dst = zink_resource(info->dst.resource);
+   if (dst->unflushed_transient)
+      dst = dst->transient;
    bool needs_present_readback = false;
 
    if (ctx->awaiting_resolve && ctx->in_rp && ctx->dynamic_fb.tc_info.has_resolve) {
@@ -371,9 +401,12 @@ zink_blit(struct pipe_context *pctx,
       if (resolve == info->dst.resource) {
          zink_batch_no_rp_safe(ctx);
          ctx->awaiting_resolve = false;
+         ctx->rp_tc_info_updated = true;
          return;
       }
    }
+   if (dst->fb_bind_count)
+      ctx->rp_tc_info_updated = true;
 
    if (zink_is_swapchain(dst)) {
       if (!zink_kopper_acquire(ctx, dst, UINT64_MAX))
@@ -402,27 +435,23 @@ zink_blit(struct pipe_context *pctx,
 
    bool stencil_blit = false;
    if (!util_blitter_is_blit_supported(ctx->blitter, info)) {
-      if (util_format_is_depth_or_stencil(info->src.resource->format)) {
-         if (info->mask & PIPE_MASK_Z) {
-            struct pipe_blit_info depth_blit = *info;
-            depth_blit.mask = PIPE_MASK_Z;
-            if (util_blitter_is_blit_supported(ctx->blitter, &depth_blit)) {
-               zink_blit_begin(ctx, ZINK_BLIT_SAVE_FB | ZINK_BLIT_SAVE_FS | ZINK_BLIT_SAVE_TEXTURES);
-               util_blitter_blit(ctx->blitter, &depth_blit, NULL);
-            } else {
-               mesa_loge("ZINK: depth blit unsupported %s -> %s",
-                         util_format_short_name(info->src.resource->format),
-                         util_format_short_name(info->dst.resource->format));
-            }
-         }
-         if (info->mask & PIPE_MASK_S)
-            stencil_blit = true;
-      }
-      if (!stencil_blit) {
+      /* D/S blits could still work when split. stencil only blits are workaroundable. otherwise, nope out. */
+      if ((info->mask & PIPE_MASK_S) == 0) {
          mesa_loge("ZINK: blit unsupported %s -> %s",
-                 util_format_short_name(info->src.resource->format),
-                 util_format_short_name(info->dst.resource->format));
+            util_format_short_name(info->src.resource->format),
+            util_format_short_name(info->dst.resource->format));
          goto end;
+      } else if (info->mask == PIPE_MASK_S) {
+         stencil_blit = true;
+      } else {
+         assert(util_format_is_depth_or_stencil(info->src.resource->format));
+         struct pipe_blit_info split_blit = *info;
+         split_blit.mask = PIPE_MASK_Z;
+         zink_blit(pctx, &split_blit);
+
+         split_blit.mask = PIPE_MASK_S;
+         zink_blit(pctx, &split_blit);
+         return;
       }
    }
 
@@ -491,6 +520,8 @@ zink_blit(struct pipe_context *pctx,
    if (whole)
       pctx->invalidate_resource(pctx, info->dst.resource);
 
+   bool zsbuf_unused = ctx->zsbuf_unused;
+   bool zsbuf_readonly = ctx->zsbuf_readonly;
    ctx->unordered_blitting = !(info->render_condition_enable && ctx->render_condition_active) &&
                              !needs_present_readback &&
                              zink_get_cmdbuf(ctx, src, dst) == ctx->bs->reordered_cmdbuf;
@@ -513,9 +544,9 @@ zink_blit(struct pipe_context *pctx,
       zink_select_draw_vbo(ctx);
    }
    zink_blit_begin(ctx, ZINK_BLIT_SAVE_FB | ZINK_BLIT_SAVE_FS | ZINK_BLIT_SAVE_TEXTURES);
-   if (zink_format_needs_mutable(info->src.format, info->src.resource->format))
+   if (zink_format_needs_mutable(info->src.format, info->src.resource->format, (src->obj->vkflags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) > 0))
       zink_resource_object_init_mutable(ctx, src);
-   if (zink_format_needs_mutable(info->dst.format, info->dst.resource->format))
+   if (zink_format_needs_mutable(info->dst.format, info->dst.resource->format, (dst->obj->vkflags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) > 0))
       zink_resource_object_init_mutable(ctx, dst);
    zink_blit_barriers(ctx, use_src, dst, whole);
    /* if clears can't be stored, set blit barriers for all attachments because clears will be flushed */
@@ -560,7 +591,9 @@ zink_blit(struct pipe_context *pctx,
    if (ctx->unordered_blitting) {
       zink_batch_no_rp(ctx);
       ctx->in_rp = in_rp;
-      ctx->gfx_pipeline_state.rp_state = zink_update_rendering_info(ctx);
+      uint32_t rp_state = zink_update_rendering_info(ctx);
+      ctx->gfx_pipeline_state.dirty |= (ctx->gfx_pipeline_state.rp_state != rp_state);
+      ctx->gfx_pipeline_state.rp_state = rp_state;
       ctx->rp_changed = rp_changed;
       ctx->rp_tc_info_updated |= rp_tc_info_updated;
       ctx->queries_disabled = queries_disabled;
@@ -569,13 +602,15 @@ zink_blit(struct pipe_context *pctx,
       ctx->gfx_pipeline_state.pipeline = pipeline;
       ctx->pipeline_changed[ZINK_PIPELINE_GFX] = true;
       ctx->ds3_states = ds3_states;
+      ctx->zsbuf_readonly = zsbuf_readonly;
+      ctx->zsbuf_unused = zsbuf_unused;
       zink_select_draw_vbo(ctx);
    }
    ctx->unordered_blitting = false;
 end:
    if (needs_present_readback) {
-      src->obj->unordered_read = false;
-      dst->obj->unordered_write = false;
+      zink_resource_disable_unordered(src, false);
+      zink_resource_disable_unordered(dst, true);
       zink_kopper_present_readback(ctx, src);
    }
 }
@@ -657,7 +692,10 @@ zink_blit_barriers(struct zink_context *ctx, struct zink_resource *src, struct z
       VkImageLayout layout = !screen->driver_workarounds.general_layout && screen->info.have_EXT_attachment_feedback_loop_layout ?
                              VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT :
                              VK_IMAGE_LAYOUT_GENERAL;
-      screen->image_barrier(ctx, src, layout, VK_ACCESS_SHADER_READ_BIT | flags, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | pipeline);
+      /* apply read barrier first to avoid "sticky" read+write access flags in resource_needs_barrier() */
+      screen->image_barrier(ctx, src, layout, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+      u_foreach_bit(f, flags)
+         screen->image_barrier(ctx, src, layout, BITFIELD_BIT(f), pipeline);
    } else {
       if (src) {
          VkImageLayout layout = screen->driver_workarounds.general_layout ? VK_IMAGE_LAYOUT_GENERAL :
@@ -667,16 +705,17 @@ zink_blit_barriers(struct zink_context *ctx, struct zink_resource *src, struct z
          screen->image_barrier(ctx, src, layout,
                               VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
          if (!ctx->unordered_blitting)
-            src->obj->unordered_read = false;
+            zink_resource_disable_unordered(src, false);
       }
       VkImageLayout layout = screen->driver_workarounds.general_layout ? VK_IMAGE_LAYOUT_GENERAL :
                              util_format_is_depth_or_stencil(dst->base.b.format) ?
                              VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      screen->image_barrier(ctx, dst, layout, flags, pipeline);
+      u_foreach_bit(f, flags)
+         screen->image_barrier(ctx, dst, layout, BITFIELD_BIT(f), pipeline);
    }
    if (!ctx->unordered_blitting)
-      dst->obj->unordered_read = dst->obj->unordered_write = false;
+      zink_resource_disable_unordered(dst, true);
 }
 
 bool
@@ -724,37 +763,4 @@ zink_blit_region_covers(struct u_rect region, struct u_rect covers)
     u_rect_union(&intersect, &r, &c);
     return intersect.x0 == c.x0 && intersect.y0 == c.y0 &&
            intersect.x1 == c.x1 && intersect.y1 == c.y1;
-}
-
-void
-zink_draw_rectangle(struct blitter_context *blitter, void *vertex_elements_cso,
-                    blitter_get_vs_func get_vs, int x1, int y1, int x2, int y2,
-                    float depth, unsigned num_instances, enum blitter_attrib_type type,
-                    const struct blitter_attrib *attrib)
-{
-   struct zink_context *ctx = zink_context(blitter->pipe);
-
-   struct blitter_attrib new_attrib = *attrib;
-
-   /* Avoid inconsistencies in rounding between both triangles which can show with
-    * nearest filtering by expanding the rect so only one triangle is effectively drawn.
-    */
-   if (ctx->blit_scissor && ctx->blit_nearest) {
-      int64_t new_x1 = (int64_t)x1 * 2 - x2;
-      int64_t new_y2 = (int64_t)y2 * 2 - y1;
-      if (new_x1 < INT32_MAX && new_x1 > INT32_MIN &&
-          new_y2 < INT32_MAX && new_y2 > INT32_MIN) {
-         x1 = new_x1;
-         y2 = new_y2;
-
-         if (type == UTIL_BLITTER_ATTRIB_TEXCOORD_XY ||
-             type == UTIL_BLITTER_ATTRIB_TEXCOORD_XYZW) {
-            new_attrib.texcoord.x1 += new_attrib.texcoord.x1 - new_attrib.texcoord.x2;
-            new_attrib.texcoord.y2 += new_attrib.texcoord.y2 - new_attrib.texcoord.y1;
-         }
-      }
-   }
-
-   util_blitter_draw_rectangle(blitter, vertex_elements_cso, get_vs, x1, y1, x2, y2,
-                               depth, num_instances, type, &new_attrib);
 }

@@ -26,7 +26,8 @@ nvk_get_buffer_format_features(const struct nvk_physical_device *pdev,
 
    enum pipe_format p_format = nvk_format_to_pipe_format(vk_format);
    if (nil_format_supports_buffer(&pdev->info, p_format)) {
-      features |= VK_FORMAT_FEATURE_2_UNIFORM_TEXEL_BUFFER_BIT;
+      if (nil_format_supports_texturing(&pdev->info, p_format))
+         features |= VK_FORMAT_FEATURE_2_UNIFORM_TEXEL_BUFFER_BIT;
 
       if (nvk_format_supports_storage(pdev, p_format)) {
          features |= VK_FORMAT_FEATURE_2_STORAGE_TEXEL_BUFFER_BIT |

@@ -329,6 +329,8 @@ _mesa_glsl_parse_state::_mesa_glsl_parse_state(struct gl_context *_ctx,
       ctx->Const.AllowVertexTextureBias;
    this->allow_glsl_120_subset_in_110 =
       ctx->Const.AllowGLSL120SubsetIn110;
+   this->allow_glsl_embedded_structure_declarations =
+      ctx->Const.AllowGLSLEmbeddedStructureDeclarations;
    this->allow_builtin_variable_redeclaration =
       ctx->Const.AllowGLSLBuiltinVariableRedeclaration;
    this->ignore_write_to_readonly_var =
@@ -840,6 +842,7 @@ static const _mesa_glsl_extension _mesa_glsl_supported_extensions[] = {
    EXT(EXT_shader_implicit_conversions),
    EXT(EXT_shader_integer_mix),
    EXT_AEP(EXT_shader_io_blocks),
+   EXT(EXT_shader_pixel_local_storage),
    EXT(EXT_shader_realtime_clock),
    EXT(EXT_shader_samples_identical),
    EXT(EXT_shadow_samplers),
@@ -1175,6 +1178,17 @@ _mesa_ast_process_interface_block(YYLTYPE *locp,
                             "#version 140 / GL_ARB_uniform_buffer_object "
                             "required for defining uniform blocks");
       }
+   } else if (q.flags.q.pixel_local_storage) {
+      if (!state->EXT_shader_pixel_local_storage_enable) {
+         _mesa_glsl_error(locp, state,
+                          "GL_EXT_shader_pixel_local_storage "
+                          "required for defining pixel local storage blocks");
+
+      } else if (state->EXT_shader_pixel_local_storage_warn) {
+         _mesa_glsl_warning(locp, state,
+                            "GL_EXT_shader_pixel_local_storage "
+                            "required for defining pixel local storage blocks");
+      }
    } else {
       if (!state->has_shader_io_blocks()) {
          if (state->es_shader) {
@@ -1215,7 +1229,7 @@ _mesa_ast_process_interface_block(YYLTYPE *locp,
    ast_type_qualifier::bitset_t interface_type_mask;
    struct ast_type_qualifier temp_type_qualifier;
 
-   /* Get a bitmask containing only the in/out/uniform/buffer
+   /* Get a bitmask containing only the in/out/uniform/buffer/pls
     * flags, allowing us to ignore other irrelevant flags like
     * interpolation qualifiers.
     */
@@ -1226,11 +1240,13 @@ _mesa_ast_process_interface_block(YYLTYPE *locp,
    temp_type_qualifier.flags.q.buffer = true;
    temp_type_qualifier.flags.q.patch = true;
    temp_type_qualifier.flags.q.per_primitive = true;
+   temp_type_qualifier.flags.q.pixel_local_storage =
+      GLSL_PIXEL_LOCAL_STORAGE_INOUT;
    interface_type_mask = temp_type_qualifier.flags.i;
 
    /* Get the block's interface qualifier.  The interface_qualifier
     * production rule guarantees that only one bit will be set (and
-    * it will be in/out/uniform).
+    * it will be in/out/uniform/pls).
     */
    ast_type_qualifier::bitset_t block_interface_qualifier = q.flags.i;
 
@@ -1274,7 +1290,7 @@ _mesa_ast_process_interface_block(YYLTYPE *locp,
           *  the block."
           */
          _mesa_glsl_error(locp, state,
-                          "uniform/in/out qualifier on "
+                          "optional qualifier on "
                           "interface block member does not match "
                           "the interface block");
       }
@@ -2316,13 +2332,13 @@ can_skip_compile(struct gl_context *ctx, struct gl_shader *shader,
 {
    if (!force_recompile) {
       if (ctx->Cache) {
-         char buf[41];
+         char buf[BLAKE3_HEX_LEN];
          disk_cache_compute_key(ctx->Cache, source, strlen(source),
-                                shader->disk_cache_sha1);
-         if (disk_cache_has_key(ctx->Cache, shader->disk_cache_sha1)) {
+                                shader->disk_cache_blake3);
+         if (disk_cache_has_key(ctx->Cache, shader->disk_cache_blake3)) {
             /* We've seen this shader before and know it compiles */
             if (ctx->_Shader->Flags & GLSL_CACHE_INFO) {
-               _mesa_sha1_format(buf, shader->disk_cache_sha1);
+               _mesa_blake3_format(buf, shader->disk_cache_blake3);
                fprintf(stderr, "deferring compile of shader: %s\n", buf);
             }
             shader->CompileStatus = COMPILE_SKIPPED;
@@ -2528,11 +2544,11 @@ _mesa_glsl_compile_shader(struct gl_context *ctx, struct gl_shader *shader,
    ralloc_free(state);
 
    if (ctx->Cache && shader->CompileStatus == COMPILE_SUCCESS) {
-      char sha1_buf[41];
-      disk_cache_put_key(ctx->Cache, shader->disk_cache_sha1);
+      char blake3_buf[BLAKE3_HEX_LEN];
+      disk_cache_put_key(ctx->Cache, shader->disk_cache_blake3);
       if (ctx->_Shader->Flags & GLSL_CACHE_INFO) {
-         _mesa_sha1_format(sha1_buf, shader->disk_cache_sha1);
-         fprintf(stderr, "marking shader: %s\n", sha1_buf);
+         _mesa_blake3_format(blake3_buf, shader->disk_cache_blake3);
+         fprintf(stderr, "marking shader: %s\n", blake3_buf);
       }
    }
 }

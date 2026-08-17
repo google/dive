@@ -30,13 +30,11 @@
 
 # Based on https://github.com/pydata/pydata-sphinx-theme
 
-from docutils import nodes
-
-import sphinx
 from sphinx.ext.autosummary import autosummary_table
 from sphinx.locale import admonitionlabels
 
 import types
+
 
 class BootstrapHTML5TranslatorMixin:
     def __init__(self, *args, **kwds):
@@ -66,8 +64,7 @@ class BootstrapHTML5TranslatorMixin:
         self.body.append(self.starttag(
             node, 'div', CLASS=('alert ' + admonitionclasses[name])))
         if name:
-            self.body.append(
-                  self.starttag(node, 'div', '', CLASS='h5'))
+            self.body.append(self.starttag(node, 'div', '', CLASS='h5'))
             self.body.append(str(admonitionlabels[name]))
             self.body.append('</div>')
 
@@ -98,6 +95,7 @@ class BootstrapHTML5TranslatorMixin:
         tag = self.starttag(node, "table", CLASS=" ".join(classes), **atts)
         self.body.append(tag)
 
+
 def setup_translators(app):
     if app.builder.format != "html":
         return
@@ -123,6 +121,7 @@ def setup_translators(app):
                 {},
             )
             app.set_translator(name, translator, override=True)
+
 
 def setup(app):
     app.connect("builder-inited", setup_translators)

@@ -383,6 +383,7 @@ static struct rnndecaddrinfo *trymatch (struct rnndeccontext *ctx, struct rnndel
 				res = calloc (sizeof *res, 1);
 				res->typeinfo = &elems[i]->typeinfo;
 				res->width = elems[i]->width;
+				res->usage = elems[i]->usage;
 				asprintf (&res->name, "%s%s%s", ctx->colors->rname, elems[i]->name, ctx->colors->reset);
 				for (j = 0; j < indicesnum; j++)
 					res->name = appendidx(ctx, res->name, indices[j], NULL);
@@ -418,6 +419,8 @@ static struct rnndecaddrinfo *trymatch (struct rnndeccontext *ctx, struct rnndel
 					res = trymatch (ctx, elems[i]->subelems, elems[i]->subelemsnum, offset, write, dwidth, nind, nindnum);
 					if (!res)
 						continue;
+					if (!res->usage)
+						res->usage = elems[i]->usage;
 					if (!elems[i]->name)
 						return res;
 					asprintf (&name, "%s%s%s", ctx->colors->rname, elems[i]->name, ctx->colors->reset);
@@ -445,6 +448,8 @@ static struct rnndecaddrinfo *trymatch (struct rnndeccontext *ctx, struct rnndel
 					free(name);
 					free(res->name);
 					res->name = tmp;
+					if (!res->usage)
+						res->usage = elems[i]->usage;
 					return res;
 				}
 				res = calloc (sizeof *res, 1);

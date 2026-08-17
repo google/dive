@@ -231,7 +231,8 @@ mesh_convert_attrs_prim_to_vert(struct nir_shader *nir,
    nir_def *zero = nir_imm_int(b, 0);
 
    nir_def *provoking_vertex =
-      params->load_provoking_vertex(b, params->load_provoking_vertex_data);
+      params->wa_18019110168_load_provoking_vertex(
+         b, params->wa_18019110168_data);
    nir_def *local_invocation_index = nir_load_local_invocation_index(b);
 
    nir_def *cmp = nir_ieq(b, local_invocation_index, zero);
@@ -500,7 +501,8 @@ brw_nir_frag_convert_attrs_prim_to_vert(struct nir_shader *nir,
    nir_function_impl *impl = nir_shader_get_entrypoint(nir);
    nir_builder _b = nir_builder_at(nir_before_impl(impl)), *b = &_b;
 
-   uint64_t remapped_inputs = 0;
+   uint64_t old_per_primitive_inputs = 0;
+   uint64_t new_per_vertex_inputs = 0;
    nir_foreach_shader_in_variable_safe(var, nir) {
       gl_varying_slot location = var->data.location;
       if (location == VARYING_SLOT_PRIMITIVE_COUNT ||
@@ -524,10 +526,13 @@ brw_nir_frag_convert_attrs_prim_to_vert(struct nir_shader *nir,
       new_var->data.interpolation = INTERP_MODE_FLAT;
 
       new_derefs[location] = nir_build_deref_var(b, new_var);
+
+      old_per_primitive_inputs |= BITFIELD64_BIT(location);
+      new_per_vertex_inputs |= BITFIELD64_BIT(new_location);
    }
 
-   nir->info.inputs_read |= remapped_inputs;
-   nir->info.per_primitive_inputs &= ~remapped_inputs;
+   nir->info.inputs_read |= new_per_vertex_inputs;
+   nir->info.per_primitive_inputs &= ~old_per_primitive_inputs;
 
    NIR_PASS(_, nir, frag_update_derefs, new_derefs);
 
@@ -558,20 +563,21 @@ brw_nir_frag_convert_attrs_prim_to_vert_indirect(struct nir_shader *nir,
 
    per_primitive_stride = align(per_primitive_stride, devinfo->grf_size);
 
-   nir_def *msaa_flags = nir_load_fs_msaa_intel(b);
-   nir_def *needs_remapping = nir_test_mask(
-      b, msaa_flags, INTEL_MSAA_FLAG_PER_PRIMITIVE_REMAPPING);
+   nir_def *needs_remapping = nir_test_fs_config_intel(
+      b, 1, INTEL_FS_CONFIG_PER_PRIMITIVE_REMAPPING);
    nir_push_if(b, needs_remapping);
    {
+      nir_def *fs_config = nir_load_fs_config_intel(b);
       nir_def *first_slot =
          nir_ubitfield_extract_imm(
-            b, msaa_flags,
-            INTEL_MSAA_FLAG_FIRST_VUE_SLOT_OFFSET,
-            INTEL_MSAA_FLAG_FIRST_VUE_SLOT_SIZE);
+            b, fs_config,
+            INTEL_FS_CONFIG_FIRST_VUE_SLOT_OFFSET,
+            INTEL_FS_CONFIG_FIRST_VUE_SLOT_SIZE);
       nir_def *remap_table_addr =
          nir_pack_64_2x32_split(
             b,
-            nir_load_per_primitive_remap_intel(b),
+            params->wa_18019110168_load_per_primitive_remap_table_offset(
+               b, params->wa_18019110168_data),
             nir_load_reloc_const_intel(
                b, BRW_SHADER_RELOC_INSTRUCTION_BASE_ADDR_HIGH));
       u_foreach_bit64(location, per_primitive_inputs) {
@@ -583,9 +589,8 @@ brw_nir_frag_convert_attrs_prim_to_vert_indirect(struct nir_shader *nir,
           * space in the instruction heap.
           */
          nir_def *data =
-            nir_load_global_constant(
-               b, nir_iadd_imm(b, remap_table_addr, ROUND_DOWN_TO(location, 4)),
-               4, 1, 32);
+            nir_load_global_constant(b, 1, 32,
+               nir_iadd_imm(b, remap_table_addr, ROUND_DOWN_TO(location, 4)));
          const unsigned bit_offset = (8 * location) % 32;
          nir_def *absolute_attr_idx =
             nir_ubitfield_extract_imm(b, data, bit_offset, 4);
@@ -604,7 +609,7 @@ brw_nir_frag_convert_attrs_prim_to_vert_indirect(struct nir_shader *nir,
                   brw_nir_vertex_attribute_offset(b, attr_idx, devinfo),
                   per_primitive_stride);
             nir_def *value =
-               nir_read_attribute_payload_intel(b, per_vertex_offset);
+               nir_load_attribute_payload_intel(b, 1, 32, per_vertex_offset);
             /* Write back the values into the per-primitive location */
             nir_store_per_primitive_payload_intel(
                b, value, .base = location, .component = c);

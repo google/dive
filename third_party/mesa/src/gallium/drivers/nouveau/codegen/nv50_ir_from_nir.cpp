@@ -43,7 +43,7 @@ namespace {
 
 using namespace nv50_ir;
 
-int
+unsigned
 type_size(const struct glsl_type *type, bool bindless)
 {
    return glsl_count_attribute_slots(type, false);
@@ -466,10 +466,11 @@ Converter::getOperation(nir_op op)
       return OP_FLOOR;
    case nir_op_ffma:
    case nir_op_ffmaz:
-      /* No FMA op pre-nvc0 */
-      if (info->target < 0xc0)
-         return OP_MAD;
+      assert(info->target >= 0xc0);
       return OP_FMA;
+   case nir_op_ffma_weak:
+      assert(info->target < 0xc0);
+      return OP_MAD;
    case nir_op_flog2:
       return OP_LG2;
    case nir_op_fmax:
@@ -508,18 +509,6 @@ Converter::getOperation(nir_op op)
       return OP_RSQ;
    case nir_op_fsat:
       return OP_SAT;
-   case nir_op_ieq8:
-   case nir_op_ige8:
-   case nir_op_uge8:
-   case nir_op_ilt8:
-   case nir_op_ult8:
-   case nir_op_ine8:
-   case nir_op_ieq16:
-   case nir_op_ige16:
-   case nir_op_uge16:
-   case nir_op_ilt16:
-   case nir_op_ult16:
-   case nir_op_ine16:
    case nir_op_feq32:
    case nir_op_ieq32:
    case nir_op_fge32:
@@ -701,31 +690,19 @@ CondCode
 Converter::getCondCode(nir_op op)
 {
    switch (op) {
-   case nir_op_ieq8:
-   case nir_op_ieq16:
    case nir_op_feq32:
    case nir_op_ieq32:
       return CC_EQ;
-   case nir_op_ige8:
-   case nir_op_uge8:
-   case nir_op_ige16:
-   case nir_op_uge16:
    case nir_op_fge32:
    case nir_op_ige32:
    case nir_op_uge32:
       return CC_GE;
-   case nir_op_ilt8:
-   case nir_op_ult8:
-   case nir_op_ilt16:
-   case nir_op_ult16:
    case nir_op_flt32:
    case nir_op_ilt32:
    case nir_op_ult32:
       return CC_LT;
    case nir_op_fneu32:
       return CC_NEU;
-   case nir_op_ine8:
-   case nir_op_ine16:
    case nir_op_ine32:
       return CC_NE;
    default:
@@ -1578,7 +1555,7 @@ Converter::visit(nir_cf_node *node)
 bool
 Converter::visit(nir_block *block)
 {
-   if (!block->predecessors.entries && exec_list_is_empty(&block->instr_list))
+   if (!nir_block_num_preds(block) && exec_list_is_empty(&block->instr_list))
       return true;
 
    BasicBlock *bb = convert(block);
@@ -2615,6 +2592,7 @@ Converter::visit(nir_alu_instr *insn)
    case nir_op_ffloor:
    case nir_op_ffma:
    case nir_op_ffmaz:
+   case nir_op_ffma_weak:
    case nir_op_flog2:
    case nir_op_fmax:
    case nir_op_imax:
@@ -2669,6 +2647,7 @@ Converter::visit(nir_alu_instr *insn)
             switch (op) {
             case nir_op_fmul:
             case nir_op_ffma:
+            case nir_op_ffma_weak:
               i->dnz = this->info->io.mul_zero_wins;
               break;
             case nir_op_fmulz:
@@ -2730,18 +2709,6 @@ Converter::visit(nir_alu_instr *insn)
       break;
    }
    // compare instructions
-   case nir_op_ieq8:
-   case nir_op_ige8:
-   case nir_op_uge8:
-   case nir_op_ilt8:
-   case nir_op_ult8:
-   case nir_op_ine8:
-   case nir_op_ieq16:
-   case nir_op_ige16:
-   case nir_op_uge16:
-   case nir_op_ilt16:
-   case nir_op_ult16:
-   case nir_op_ine16:
    case nir_op_feq32:
    case nir_op_ieq32:
    case nir_op_fge32:
@@ -2800,14 +2767,6 @@ Converter::visit(nir_alu_instr *insn)
       mkCvt(OP_CVT, TYPE_F16, tmpL, TYPE_F32, getSrc(&insn->src[0]));
       mkCvt(OP_CVT, TYPE_F16, tmpH, TYPE_F32, getSrc(&insn->src[1]));
       mkOp3(OP_INSBF, TYPE_U32, newDefs[0], tmpH, mkImm(0x1010), tmpL);
-      break;
-   }
-   case nir_op_unpack_half_2x16_split_x:
-   case nir_op_unpack_half_2x16_split_y: {
-      LValues &newDefs = convert(&insn->def);
-      Instruction *cvt = mkCvt(OP_CVT, TYPE_F32, newDefs[0], TYPE_F16, getSrc(&insn->src[0]));
-      if (op == nir_op_unpack_half_2x16_split_y)
-         cvt->subOp = 1;
       break;
    }
    case nir_op_unpack_64_2x32: {
@@ -3003,7 +2962,7 @@ Converter::visit(nir_alu_instr *insn)
 
    if (!oldPos) {
       oldPos = this->bb->getEntry();
-      oldPos->precise = insn->exact;
+      oldPos->precise = nir_alu_instr_is_exact(insn);
    }
 
    if (unlikely(!oldPos))
@@ -3011,7 +2970,7 @@ Converter::visit(nir_alu_instr *insn)
 
    while (oldPos->next) {
       oldPos = oldPos->next;
-      oldPos->precise = insn->exact;
+      oldPos->precise = nir_alu_instr_is_exact(insn);
    }
 
    return true;
@@ -3324,18 +3283,6 @@ Converter::lowerBitSizeCB(const nir_instr *instr, void *data)
     * enum operation of some of the nir opcodes isn't distinct (e.g. depends
     * on the data type).
     */
-   case nir_op_ieq8:
-   case nir_op_ige8:
-   case nir_op_uge8:
-   case nir_op_ilt8:
-   case nir_op_ult8:
-   case nir_op_ine8:
-   case nir_op_ieq16:
-   case nir_op_ige16:
-   case nir_op_uge16:
-   case nir_op_ilt16:
-   case nir_op_ult16:
-   case nir_op_ine16:
    case nir_op_feq32:
    case nir_op_ieq32:
    case nir_op_fge32:
@@ -3373,13 +3320,13 @@ Converter::runOptLoop()
    bool progress;
    do {
       progress = false;
-      NIR_PASS(progress, nir, nir_copy_prop);
+      NIR_PASS(progress, nir, nir_opt_copy_prop);
       NIR_PASS(progress, nir, nir_opt_remove_phis);
       NIR_PASS(progress, nir, nir_opt_loop);
       NIR_PASS(progress, nir, nir_opt_cse);
       NIR_PASS(progress, nir, nir_opt_algebraic);
       NIR_PASS(progress, nir, nir_opt_constant_folding);
-      NIR_PASS(progress, nir, nir_copy_prop);
+      NIR_PASS(progress, nir, nir_opt_copy_prop);
       NIR_PASS(progress, nir, nir_opt_dce);
       NIR_PASS(progress, nir, nir_opt_dead_cf);
       NIR_PASS(progress, nir, nir_lower_64bit_phis);
@@ -3418,7 +3365,7 @@ Converter::run()
 
       if (lowered) {
          nir_function_impl *impl = nir_shader_get_entrypoint(nir);
-         NIR_PASS(_, nir, nir_lower_io_vars_to_temporaries, impl, true, false);
+         NIR_PASS(_, nir, nir_lower_io_vars_to_temporaries, impl, nir_var_shader_out);
          NIR_PASS(_, nir, nir_lower_global_vars_to_local);
          NIR_PASS(_, nir, nv50_nir_lower_load_user_clip_plane, info);
       } else {
@@ -3503,6 +3450,7 @@ Converter::run()
       NIR_PASS(_, nir, nv_nir_move_stores_to_end);
 
    NIR_PASS(_, nir, nir_opt_algebraic_late);
+   NIR_PASS(_, nir, nir_opt_dce);
 
    NIR_PASS(_, nir, nir_lower_bool_to_int32);
    NIR_PASS(_, nir, nir_lower_bit_size, Converter::lowerBitSizeCB, this);
@@ -3562,12 +3510,14 @@ nvir_nir_shader_compiler_options(int chipset, uint8_t shader_type)
 {
    nir_shader_compiler_options op = {};
    op.lower_fdiv = (chipset >= NVISA_GV100_CHIPSET);
-   op.lower_ffma16 = false;
-   op.lower_ffma32 = false;
-   op.lower_ffma64 = false;
-   op.fuse_ffma16 = false; /* nir doesn't track mad vs fma */
-   op.fuse_ffma32 = false; /* nir doesn't track mad vs fma */
-   op.fuse_ffma64 = false; /* nir doesn't track mad vs fma */
+   if (chipset >= NVISA_GF100_CHIPSET) {
+      op.float_mul_add32 = nir_float_muladd_support_has_ffma;
+      op.float_mul_add64 = nir_float_muladd_support_has_ffma;
+   } else {
+      /* TODO: SM13 supports FP64 ffma */
+      /* SM1x fmad is neither fused nor unfused, but something in-between. */
+      op.float_mul_add32 = nir_float_muladd_support_keep_weak_ffma;
+   }
    op.lower_flrp16 = (chipset >= NVISA_GV100_CHIPSET);
    op.lower_flrp32 = true;
    op.lower_flrp64 = true;
@@ -3588,7 +3538,6 @@ nvir_nir_shader_compiler_options(int chipset, uint8_t shader_type)
    op.lower_fneg = false;
    op.lower_ineg = false;
    op.lower_scmp = true; // TODO: not implemented yet
-   op.lower_vector_cmp = false;
    op.lower_bitops = false;
    op.lower_isign = (chipset >= NVISA_GV100_CHIPSET);
    op.lower_fsign = (chipset >= NVISA_GV100_CHIPSET);
@@ -3598,7 +3547,6 @@ nvir_nir_shader_compiler_options(int chipset, uint8_t shader_type)
    op.lower_ffract = true;
    op.lower_fceil = false; // TODO
    op.lower_ftrunc = false;
-   op.lower_ldexp = true;
    op.lower_pack_half_2x16 = true;
    op.lower_pack_unorm_2x16 = true;
    op.lower_pack_snorm_2x16 = true;
@@ -3632,6 +3580,7 @@ nvir_nir_shader_compiler_options(int chipset, uint8_t shader_type)
    op.has_rotate32 = (chipset >= NVISA_GV100_CHIPSET);
    op.has_imul24 = false;
    op.has_fmulz = (chipset > NVISA_G80_CHIPSET);
+   op.has_ffmaz_no_denorms = (chipset >= NVISA_GF100_CHIPSET);
    op.intel_vec4 = false;
    op.lower_uniforms_to_ubo = true;
    op.force_indirect_unrolling = (nir_variable_mode) (

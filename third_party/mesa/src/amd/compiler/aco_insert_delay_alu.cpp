@@ -8,7 +8,6 @@
 #include "aco_ir.h"
 
 #include <map>
-#include <stack>
 #include <vector>
 
 namespace aco {
@@ -227,7 +226,8 @@ gen_alu(Instruction* instr, delay_ctx& ctx)
 {
    Instruction_cycle_info cycle_info = get_cycle_info(*ctx.program, *instr);
    bool is_valu = instr->isVALU();
-   bool is_trans = instr->isTrans();
+   bool is_trans = instr->isTrans() && instr_info.classes[(int)instr->opcode] !=
+                                          instr_class::valu_double_transcendental;
 
    if (is_trans || is_valu || instr->isSALU()) {
       alu_delay_info delay;
@@ -307,6 +307,28 @@ handle_block(Program* program, Block& block, delay_ctx& ctx)
    block.instructions.swap(new_instructions);
 }
 
+void
+handle_loop_latch(Program* program, Block& block, delay_ctx& ctx)
+{
+   /* No actual loop. */
+   if (block.linear_preds.size() == 1)
+      return;
+
+   /* The loop header is also the loop latch. */
+   if (block.kind & block_kind_loop_latch)
+      return;
+
+   unsigned i = block.index;
+   while (ctx.program->blocks[i].loop_nest_depth >= block.loop_nest_depth) {
+      Block& latch_block = ctx.program->blocks[i++];
+      if (latch_block.loop_nest_depth == block.loop_nest_depth &&
+          (latch_block.kind & block_kind_loop_latch)) {
+         handle_block(program, latch_block, ctx);
+         break;
+      }
+   }
+}
+
 } /* end namespace */
 
 void
@@ -319,6 +341,12 @@ insert_delay_alu(Program* program)
       Block& current = program->blocks[i];
 
       if (current.instructions.empty())
+         continue;
+
+      /* Handle the loop latch block before the loop body. */
+      if (current.kind & block_kind_loop_header)
+         handle_loop_latch(program, current, ctx);
+      else if (current.kind & block_kind_loop_latch)
          continue;
 
       handle_block(program, current, ctx);

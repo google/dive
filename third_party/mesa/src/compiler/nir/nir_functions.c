@@ -22,10 +22,10 @@
  */
 
 #include "util/u_printf.h"
+#include "util/stack_array.h"
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_control_flow.h"
-#include "nir_vla.h"
 
 /*
  * TODO: write a proper inliner for GPUs.
@@ -88,11 +88,11 @@ fixup_cast_deref_mode(nir_deref_instr *deref)
       deref->modes ^= nir_var_function_temp;
 
       nir_foreach_use(use, &deref->def) {
-         if (nir_src_parent_instr(use)->type != nir_instr_type_deref)
+         if (nir_src_use_instr(use)->type != nir_instr_type_deref)
             continue;
 
          /* Recurse into children */
-         fixup_cast_deref_mode(nir_instr_as_deref(nir_src_parent_instr(use)));
+         fixup_cast_deref_mode(nir_instr_as_deref(nir_src_use_instr(use)));
       }
    }
 }
@@ -240,12 +240,13 @@ inline_functions_pass(nir_builder *b,
     * to an SSA value first.
     */
    const unsigned num_params = call->num_params;
-   NIR_VLA(nir_def *, params, num_params);
+   STACK_ARRAY(nir_def *, params, num_params);
    for (unsigned i = 0; i < num_params; i++) {
       params[i] = call->params[i].ssa;
    }
 
    nir_inline_function_impl(b, call->callee->impl, params, NULL);
+   STACK_ARRAY_FINISH(params);
    return true;
 }
 
@@ -556,15 +557,34 @@ nir_cleanup_functions(nir_shader *nir)
 
    struct set *used_funcs = _mesa_set_create(NULL, _mesa_hash_pointer,
                                              _mesa_key_pointer_equal);
-   foreach_list_typed_safe(nir_function, func, node, &nir->functions) {
-      if (func->is_entrypoint) {
-         _mesa_set_add(used_funcs, func);
-         nir_mark_used_functions(func, used_funcs);
-      }
+   nir_foreach_entrypoint(func, nir) {
+      _mesa_set_add(used_funcs, func);
+      nir_mark_used_functions(func, used_funcs);
    }
-   foreach_list_typed_safe(nir_function, func, node, &nir->functions) {
+   nir_foreach_function_safe(func, nir) {
       if (!_mesa_set_search(used_funcs, func))
          exec_node_remove(&func->node);
    }
    _mesa_set_destroy(used_funcs, NULL);
+}
+
+bool
+nir_shader_fully_linked(const nir_shader *nir)
+{
+   bool res = true;
+   struct set *used_funcs = _mesa_set_create(NULL, _mesa_hash_pointer,
+                                             _mesa_key_pointer_equal);
+   nir_foreach_entrypoint(func, nir) {
+      _mesa_set_add(used_funcs, func);
+      nir_mark_used_functions(func, used_funcs);
+   }
+   set_foreach(used_funcs, entry) {
+      nir_function *func = (nir_function *)entry->key;
+      if (!func->impl) {
+         res = false;
+         break;
+      }
+   }
+   _mesa_set_destroy(used_funcs, NULL);
+   return res;
 }

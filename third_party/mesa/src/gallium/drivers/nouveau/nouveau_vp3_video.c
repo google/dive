@@ -271,10 +271,6 @@ static void vp4_getpath(enum pipe_video_profile profile, char *path)
          sprintf(path, "/lib/firmware/nouveau/vuc-mpeg12-0");
          break;
       }
-      case PIPE_VIDEO_FORMAT_MPEG4: {
-         sprintf(path, "/lib/firmware/nouveau/vuc-mpeg4-0");
-         break;
-      }
       case PIPE_VIDEO_FORMAT_VC1: {
          sprintf(path, "/lib/firmware/nouveau/vuc-vc1-0");
          break;
@@ -338,11 +334,6 @@ nouveau_vp3_load_firmware(struct nouveau_vp3_decoder *dec,
 
    switch (u_reduce_video_profile(profile)) {
       case PIPE_VIDEO_FORMAT_MPEG12: {
-         assert((r & 0xff) == 0xe0);
-         dec->fw_sizes = (0x2e0<<16) | (r - 0x2e0);
-         break;
-      }
-      case PIPE_VIDEO_FORMAT_MPEG4: {
          assert((r & 0xff) == 0xe0);
          dec->fw_sizes = (0x2e0<<16) | (r - 0x2e0);
          break;
@@ -456,20 +447,14 @@ nouveau_vp3_screen_get_video_param(struct pipe_screen *pscreen,
    enum pipe_video_format codec = u_reduce_video_profile(profile);
    switch (param) {
    case PIPE_VIDEO_CAP_SUPPORTED:
-      /* VP3 does not support MPEG4, VP4+ do. */
       return entrypoint == PIPE_VIDEO_ENTRYPOINT_BITSTREAM &&
          profile >= PIPE_VIDEO_PROFILE_MPEG1 &&
          profile < PIPE_VIDEO_PROFILE_HEVC_MAIN &&
-         (!vp3 || codec != PIPE_VIDEO_FORMAT_MPEG4) &&
          firmware_present(pscreen, profile);
-   case PIPE_VIDEO_CAP_NPOT_TEXTURES:
-      return 1;
    case PIPE_VIDEO_CAP_MAX_WIDTH:
       switch (codec) {
       case PIPE_VIDEO_FORMAT_MPEG12:
          return vp5 ? 4032 : 2048;
-      case PIPE_VIDEO_FORMAT_MPEG4:
-         return 2048;
       case PIPE_VIDEO_FORMAT_VC1:
          return 2048;
       case PIPE_VIDEO_FORMAT_MPEG4_AVC:
@@ -488,8 +473,6 @@ nouveau_vp3_screen_get_video_param(struct pipe_screen *pscreen,
       switch (codec) {
       case PIPE_VIDEO_FORMAT_MPEG12:
          return vp5 ? 4048 : 2048;
-      case PIPE_VIDEO_FORMAT_MPEG4:
-         return 2048;
       case PIPE_VIDEO_FORMAT_VC1:
          return 2048;
       case PIPE_VIDEO_FORMAT_MPEG4_AVC:
@@ -504,42 +487,12 @@ nouveau_vp3_screen_get_video_param(struct pipe_screen *pscreen,
          debug_printf("unknown video codec: %d\n", codec);
          return 0;
       }
-   case PIPE_VIDEO_CAP_PREFERRED_FORMAT:
-      return PIPE_FORMAT_NV12;
    case PIPE_VIDEO_CAP_SUPPORTS_PROGRESSIVE:
       return false;
-   case PIPE_VIDEO_CAP_MAX_LEVEL:
-      switch (profile) {
-      case PIPE_VIDEO_PROFILE_MPEG1:
-         return 0;
-      case PIPE_VIDEO_PROFILE_MPEG2_SIMPLE:
-      case PIPE_VIDEO_PROFILE_MPEG2_MAIN:
-         return 3;
-      case PIPE_VIDEO_PROFILE_MPEG4_SIMPLE:
-         return 3;
-      case PIPE_VIDEO_PROFILE_MPEG4_ADVANCED_SIMPLE:
-         return 5;
-      case PIPE_VIDEO_PROFILE_VC1_SIMPLE:
-         return 1;
-      case PIPE_VIDEO_PROFILE_VC1_MAIN:
-         return 2;
-      case PIPE_VIDEO_PROFILE_VC1_ADVANCED:
-         return 4;
-      case PIPE_VIDEO_PROFILE_MPEG4_AVC_BASELINE:
-      case PIPE_VIDEO_PROFILE_MPEG4_AVC_CONSTRAINED_BASELINE:
-      case PIPE_VIDEO_PROFILE_MPEG4_AVC_MAIN:
-      case PIPE_VIDEO_PROFILE_MPEG4_AVC_HIGH:
-         return 41;
-      default:
-         debug_printf("unknown video profile: %d\n", profile);
-         return 0;
-      }
    case PIPE_VIDEO_CAP_MAX_MACROBLOCKS:
       switch (codec) {
       case PIPE_VIDEO_FORMAT_MPEG12:
          return vp5 ? 65536 : 8192;
-      case PIPE_VIDEO_FORMAT_MPEG4:
-         return 8192;
       case PIPE_VIDEO_FORMAT_VC1:
          return 8190;
       case PIPE_VIDEO_FORMAT_MPEG4_AVC:

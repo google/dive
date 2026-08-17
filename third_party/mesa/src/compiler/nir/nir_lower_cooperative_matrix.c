@@ -10,9 +10,13 @@
 /*
  * Lower flexible size cooperative matrix operations down to operations at the supported granularity.
  */
+struct split_box {
+   unsigned outer_rows;
+   unsigned outer_cols;
+};
+
 struct split_mat {
-   unsigned num_row_splits;
-   unsigned num_col_splits;
+   struct split_box box;
    nir_variable **split_vars;
 };
 
@@ -23,6 +27,23 @@ struct split_info {
    unsigned k_gran;
 };
 
+static unsigned get_num_splits_box(const struct split_box *box)
+{
+   return box->outer_rows * box->outer_cols;
+}
+
+static unsigned get_num_splits(struct split_mat *split)
+{
+   return get_num_splits_box(&split->box);
+}
+
+static unsigned split_alloc_vars(struct split_mat *split)
+{
+   unsigned num_split = get_num_splits_box(&split->box);
+   split->split_vars = ralloc_array(split, struct nir_variable *, num_split);
+   return num_split;
+}
+
 static struct split_mat *find_split(struct hash_table *split_mats,
                                     nir_intrinsic_instr *intr, int idx)
 {
@@ -31,11 +52,21 @@ static struct split_mat *find_split(struct hash_table *split_mats,
    return entry ? entry->data : NULL;
 }
 
-static struct nir_deref_instr *recreate_derefs(nir_builder *b, nir_intrinsic_instr *intr, int idx,
-                                               nir_variable *var)
+static struct split_mat *find_call_split(struct hash_table *split_mats,
+                                         nir_cmat_call_instr *call, int idx)
 {
-   nir_deref_instr *deref = nir_src_as_deref(intr->src[idx]);
+   nir_deref_instr *deref = nir_src_as_deref(call->params[idx]);
+   if (!deref)
+      return NULL;
+   nir_variable *var = nir_deref_instr_get_variable(deref);
+   struct hash_entry *entry = _mesa_hash_table_search(split_mats, var);
+   return entry ? entry->data : NULL;
+}
 
+static struct nir_deref_instr *recreate_derefs(nir_builder *b, nir_src *src,
+                                                nir_variable *var)
+{
+   nir_deref_instr *deref = nir_src_as_deref(*src);
    nir_deref_path path;
    nir_deref_path_init(&path, deref, NULL);
 
@@ -99,6 +130,30 @@ get_lower_sizes(struct glsl_cmat_description desc, unsigned m_gran,
 }
 
 static bool
+split_desc(struct glsl_cmat_description *desc, struct split_info *info,
+           struct split_box *box)
+{
+   unsigned split_rows = 0, split_cols = 0;
+   box->outer_cols = 1;
+   box->outer_rows = 1;
+
+   get_lower_sizes(*desc, info->m_gran, info->n_gran, info->k_gran, &split_rows, &split_cols);
+
+   if (split_rows) {
+      box->outer_rows = desc->rows / split_rows;
+      desc->rows = split_rows;
+   }
+   if (split_cols) {
+      box->outer_cols = desc->cols / split_cols;
+      desc->cols = split_cols;
+   }
+
+   if (box->outer_rows == 1 && box->outer_cols == 1)
+      return false;
+   return true;
+}
+
+static bool
 split_cmat_construct(nir_builder *b,
                      nir_intrinsic_instr *intr,
                      struct split_info *info)
@@ -108,12 +163,12 @@ split_cmat_construct(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_cmat_construct(b, &dst_deref->def, intr->src[1].ssa);
    }
@@ -133,15 +188,15 @@ split_cmat_copy(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
    assert(src_split);
 
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 1, src_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[1], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_cmat_copy(b, &dst_deref->def, &src_deref->def);
    }
@@ -200,7 +255,7 @@ split_cmat_insert(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
@@ -211,8 +266,8 @@ split_cmat_insert(nir_builder *b,
    nir_def *arr_idx = nir_udiv(b, intr->src[3].ssa, len);
    nir_def *base_idx = nir_umod(b, intr->src[3].ssa, len);
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 2, src_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[2], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
 
       nir_def *new_def = nir_cmat_extract(b, nir_src_bit_size(intr->src[1]), &src_deref->def, base_idx);
@@ -236,7 +291,7 @@ split_cmat_extract(nir_builder *b,
    if (!src_split)
       return false;
 
-   unsigned splits = src_split->num_col_splits * src_split->num_row_splits;
+   unsigned splits = get_num_splits(src_split);
    if (splits <= 1)
       return false;
 
@@ -247,7 +302,7 @@ split_cmat_extract(nir_builder *b,
    nir_def *base_idx = nir_umod(b, intr->src[1].ssa, len);
    nir_def *last_def = nir_undef(b, 1, intr->def.bit_size);
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 0, src_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[0], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_def *cond = nir_ieq_imm(b, arr_idx, i);
       nir_def *new_def = nir_cmat_extract(b, intr->def.bit_size, &src_deref->def, base_idx);
@@ -272,13 +327,14 @@ split_cmat_convert(nir_builder *b,
 
    assert(dst_split && src_split);
 
-   unsigned splits = src_split->num_col_splits * src_split->num_row_splits;
+   unsigned splits = get_num_splits(src_split);
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 1, src_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[1], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_cmat_convert(b, &dst_deref->def, &src_deref->def, .saturate = nir_intrinsic_saturate(intr),
-                       .cmat_signed_mask = nir_intrinsic_cmat_signed_mask(intr));
+                       .cmat_signed_mask = nir_intrinsic_cmat_signed_mask(intr),
+                       .fp_math_ctrl = nir_intrinsic_fp_math_ctrl(intr));
    }
    nir_instr_remove(instr);
    return true;
@@ -299,15 +355,16 @@ split_cmat_transpose(nir_builder *b,
 
    assert(dst_split && src_split);
 
-   for (unsigned r = 0; r < src_split->num_row_splits; r++) {
-      for (unsigned c = 0; c < src_split->num_col_splits; c++) {
-         int in_idx = r * src_split->num_col_splits + c;
-         int out_idx = c * dst_split->num_col_splits + r;
-         nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[out_idx]);
-         nir_deref_instr *src_deref = recreate_derefs(b, intr, 1, src_split->split_vars[in_idx]);
-         b->cursor = nir_before_instr(instr);
-         nir_cmat_transpose(b, &dst_deref->def, &src_deref->def);
-      }
+   unsigned dst_splits = get_num_splits(dst_split);
+
+   for (unsigned i = 0; i < dst_splits; i++) {
+      int r = i / dst_split->box.outer_rows;
+      int c = i % dst_split->box.outer_rows;
+      int out_idx = c * dst_split->box.outer_cols + r;
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[out_idx]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[1], src_split->split_vars[i]);
+      b->cursor = nir_before_instr(instr);
+      nir_cmat_transpose(b, &dst_deref->def, &src_deref->def, .fp_math_ctrl = nir_intrinsic_fp_math_ctrl(intr));
    }
    nir_instr_remove(instr);
    return true;
@@ -325,15 +382,15 @@ split_cmat_bitcast(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
    assert(src_split);
 
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 1, src_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[1], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_cmat_bitcast(b, &dst_deref->def, &src_deref->def);
    }
@@ -354,7 +411,7 @@ split_cmat_binary_op(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
@@ -362,12 +419,13 @@ split_cmat_binary_op(nir_builder *b,
    assert(src1_split);
 
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src0_deref = recreate_derefs(b, intr, 1, src0_split->split_vars[i]);
-      nir_deref_instr *src1_deref = recreate_derefs(b, intr, 2, src1_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src0_deref = recreate_derefs(b, &intr->src[1], src0_split->split_vars[i]);
+      nir_deref_instr *src1_deref = recreate_derefs(b, &intr->src[2], src1_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_cmat_binary_op(b, &dst_deref->def, &src0_deref->def, &src1_deref->def,
-                         .alu_op = nir_intrinsic_alu_op(intr));
+                         .alu_op = nir_intrinsic_alu_op(intr),
+                         .fp_math_ctrl = nir_intrinsic_fp_math_ctrl(intr));
    }
    nir_instr_remove(instr);
    return true;
@@ -385,17 +443,18 @@ split_cmat_unary_op(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
    assert(src_split);
 
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 1, src_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[1], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
-      nir_cmat_unary_op(b, &dst_deref->def, &src_deref->def, .alu_op = nir_intrinsic_alu_op(intr));
+      nir_cmat_unary_op(b, &dst_deref->def, &src_deref->def, .alu_op = nir_intrinsic_alu_op(intr),
+                        .fp_math_ctrl = nir_intrinsic_fp_math_ctrl(intr));
    }
    nir_instr_remove(instr);
    return true;
@@ -413,18 +472,19 @@ split_cmat_scalar_op(nir_builder *b,
    if (!dst_split)
       return false;
 
-   unsigned splits = dst_split->num_col_splits * dst_split->num_row_splits;
+   unsigned splits = get_num_splits(dst_split);
    if (splits <= 1)
       return false;
 
    assert(src_split);
 
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *dst_deref = recreate_derefs(b, intr, 0, dst_split->split_vars[i]);
-      nir_deref_instr *src_deref = recreate_derefs(b, intr, 1, src_split->split_vars[i]);
+      nir_deref_instr *dst_deref = recreate_derefs(b, &intr->src[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &intr->src[1], src_split->split_vars[i]);
       b->cursor = nir_before_instr(instr);
       nir_cmat_scalar_op(b, &dst_deref->def, &src_deref->def, intr->src[2].ssa,
-                         .alu_op = nir_intrinsic_alu_op(intr));
+                         .alu_op = nir_intrinsic_alu_op(intr),
+                         .fp_math_ctrl = nir_intrinsic_fp_math_ctrl(intr));
    }
    nir_instr_remove(instr);
    return true;
@@ -451,41 +511,204 @@ split_cmat_muladd(nir_builder *b,
 
    if (result_split) {
       assert(c_split);
-      m_splits = result_split->num_row_splits;
-      n_splits = result_split->num_col_splits;
+      m_splits = result_split->box.outer_rows;
+      n_splits = result_split->box.outer_cols;
 
-      assert(c_split->num_row_splits == m_splits);
-      assert(c_split->num_col_splits == n_splits);
+      assert(c_split->box.outer_rows == m_splits);
+      assert(c_split->box.outer_cols == n_splits);
       if (a_split)
-         assert(a_split->num_row_splits == m_splits);
+         assert(a_split->box.outer_rows == m_splits);
 
       if (b_split)
-         assert(b_split->num_col_splits == n_splits);
+         assert(b_split->box.outer_cols == n_splits);
    }
 
-   if (a_split && a_split->num_col_splits > 1) {
+   if (a_split && a_split->box.outer_cols > 1) {
       assert(b_split);
-      assert(b_split->num_row_splits == a_split->num_col_splits);
-      k_splits = a_split->num_col_splits;
+      assert(b_split->box.outer_rows == a_split->box.outer_cols);
+      k_splits = a_split->box.outer_cols;
    }
 
    for (unsigned m = 0; m < m_splits; m++) {
       for (unsigned n = 0; n < n_splits; n++) {
          unsigned idx = m * n_splits + n;
-         nir_deref_instr *dst_deref = result_split ? recreate_derefs(b, intr, 0, result_split->split_vars[idx]) : nir_src_as_deref(intr->src[0]);
-         nir_deref_instr *c_deref = c_split ? recreate_derefs(b, intr, 3, c_split->split_vars[idx]) : nir_src_as_deref(intr->src[3]);
+         nir_deref_instr *dst_deref = result_split ? recreate_derefs(b, &intr->src[0], result_split->split_vars[idx]) : nir_src_as_deref(intr->src[0]);
+         nir_deref_instr *c_deref = c_split ? recreate_derefs(b, &intr->src[3], c_split->split_vars[idx]) : nir_src_as_deref(intr->src[3]);
 
          for (unsigned k = 0; k < k_splits; k++) {
             unsigned a_idx = m * k_splits + k;
             unsigned b_idx = k * n_splits + n;
-            nir_deref_instr *a_deref = a_split ? recreate_derefs(b, intr, 1, a_split->split_vars[a_idx]) : nir_src_as_deref(intr->src[1]);
-            nir_deref_instr *b_deref = b_split ? recreate_derefs(b, intr, 2, b_split->split_vars[b_idx]) : nir_src_as_deref(intr->src[2]);
+            nir_deref_instr *a_deref = a_split ? recreate_derefs(b, &intr->src[1], a_split->split_vars[a_idx]) : nir_src_as_deref(intr->src[1]);
+            nir_deref_instr *b_deref = b_split ? recreate_derefs(b, &intr->src[2], b_split->split_vars[b_idx]) : nir_src_as_deref(intr->src[2]);
             nir_deref_instr *k_dst_deref = k == k_splits - 1 ? dst_deref : c_deref;
             b->cursor = nir_before_instr(instr);
 
             nir_cmat_muladd(b, &k_dst_deref->def, &a_deref->def, &b_deref->def, &c_deref->def,
                             .saturate = nir_intrinsic_saturate(intr),
                             .cmat_signed_mask = nir_intrinsic_cmat_signed_mask(intr));
+         }
+      }
+   }
+
+   nir_instr_remove(instr);
+   return true;
+}
+
+static void
+call_reduce(nir_builder *b,
+            nir_cmat_call_instr *call,
+            nir_cmat_reduce reduce,
+            nir_def *dst, nir_def *src0)
+{
+   nir_cmat_call_instr *ncall = nir_cmat_call_instr_create(b->shader, nir_cmat_call_op_reduce, call->callee);
+   ncall->params[0] = nir_src_for_ssa(dst);
+   ncall->params[1] = nir_src_for_ssa(src0);
+   ncall->const_index[0] = reduce;
+   nir_builder_instr_insert(b, &ncall->instr);
+}
+
+static void
+call_reduce_finish(nir_builder *b,
+                   nir_cmat_call_instr *call,
+                   nir_cmat_reduce reduce,
+                   nir_def *dst, nir_def *src0, nir_def *src1)
+{
+   nir_cmat_call_instr *ncall = nir_cmat_call_instr_create(b->shader, nir_cmat_call_op_reduce_finish, call->callee);
+   ncall->params[0] = nir_src_for_ssa(dst);
+   ncall->params[1] = nir_src_for_ssa(src0);
+   ncall->params[2] = nir_src_for_ssa(src1);
+   ncall->const_index[0] = reduce;
+   nir_builder_instr_insert(b, &ncall->instr);
+}
+
+static void
+call_reduce_2x2(nir_builder *b,
+                nir_cmat_call_instr *call,
+                nir_def *dst,
+                nir_def *src0, nir_def *src1,
+                nir_def *src2, nir_def *src3)
+{
+   nir_cmat_call_instr *ncall = nir_cmat_call_instr_create(b->shader, nir_cmat_call_op_reduce_2x2, call->callee);
+   ncall->params[0] = nir_src_for_ssa(dst);
+   ncall->params[1] = nir_src_for_ssa(src0);
+   ncall->params[2] = nir_src_for_ssa(src1);
+   ncall->params[3] = nir_src_for_ssa(src2);
+   ncall->params[4] = nir_src_for_ssa(src3);
+   nir_builder_instr_insert(b, &ncall->instr);
+}
+
+static bool
+split_cmat_call_reduce(nir_builder *b,
+                       nir_function_impl *impl,
+                       nir_cmat_call_instr *call,
+                       struct split_info *info)
+{
+   nir_instr *instr = &call->instr;
+   nir_cmat_reduce reduce = nir_cmat_call_reduce_flags(call);
+   struct split_mat *dst_split = find_call_split(info->split_mats, call, 0);
+   struct split_mat *src_split = find_call_split(info->split_mats, call, 1);
+
+   if (reduce & (NIR_CMAT_REDUCE_ROW | NIR_CMAT_REDUCE_COLUMN)) {
+      assert(!(reduce & ~(NIR_CMAT_REDUCE_ROW | NIR_CMAT_REDUCE_COLUMN)));
+
+      /* for each source split - reduce it by itself. */
+      int src_splits = 1;
+      if (src_split)
+         src_splits = get_num_splits(src_split);
+      nir_deref_instr **temp_derefs = ralloc_array(NULL, nir_deref_instr *, src_splits);
+
+      const struct glsl_type *temp_type = nir_deref_instr_get_variable(nir_src_as_deref(call->params[1]))->type;
+      if (src_splits > 1)
+         temp_type = src_split->split_vars[0]->type;
+      for (unsigned i = 0; i < src_splits; i++) {
+         nir_variable *temp_var = nir_local_variable_create(impl, temp_type,
+                                                            "reduce_split_srcs");
+         temp_derefs[i] = nir_build_deref_var(b, temp_var);
+      }
+
+      if (src_splits > 1) {
+         /* reduce each individual src matrix */
+         for (unsigned i = 0; i < src_splits; i++) {
+            nir_deref_instr *src_deref = recreate_derefs(b, &call->params[1], src_split->split_vars[i]);
+            b->cursor = nir_before_instr(instr);
+            call_reduce(b, call, reduce, &temp_derefs[i]->def, &src_deref->def);
+         }
+
+         if ((reduce & (NIR_CMAT_REDUCE_ROW | NIR_CMAT_REDUCE_COLUMN)) == (NIR_CMAT_REDUCE_ROW | NIR_CMAT_REDUCE_COLUMN)) {
+            for (unsigned i = 1; i < src_splits; i++) {
+               nir_deref_instr *second_deref = temp_derefs[i];
+               b->cursor = nir_before_instr(instr);
+               call_reduce_finish(b, call, reduce, &temp_derefs[0]->def, &temp_derefs[0]->def, &second_deref->def);
+            }
+         } else if (reduce & NIR_CMAT_REDUCE_ROW) {
+            for (unsigned i = 1; i < src_split->box.outer_cols; i++) {
+               nir_deref_instr *second_deref = temp_derefs[i];
+               b->cursor = nir_before_instr(instr);
+               call_reduce_finish(b, call, reduce, &temp_derefs[0]->def, &temp_derefs[0]->def, &second_deref->def);
+            }
+         } else if (reduce & NIR_CMAT_REDUCE_COLUMN) {
+            for (unsigned i = 1; i < src_split->box.outer_rows; i++) {
+               nir_deref_instr *second_deref = temp_derefs[i * src_split->box.outer_cols];
+               b->cursor = nir_before_instr(instr);
+               call_reduce_finish(b, call, reduce, &temp_derefs[0]->def, &temp_derefs[0]->def, &second_deref->def);
+            }
+         }
+      } else {
+         call_reduce(b, call, reduce, &temp_derefs[0]->def, &nir_src_as_deref(call->params[1])->def);
+      }
+
+      /* at this point temp_derefs should contain all the split reduced src matrices
+         now to store them */
+      if (dst_split) {
+         for (unsigned r = 0; r < dst_split->box.outer_rows; r++) {
+            for (unsigned c = 0; c < dst_split->box.outer_cols; c++) {
+               int didx = r * dst_split->box.outer_cols + c;
+               int idx;
+               if ((reduce & (NIR_CMAT_REDUCE_ROW | NIR_CMAT_REDUCE_COLUMN)) == (NIR_CMAT_REDUCE_ROW | NIR_CMAT_REDUCE_COLUMN))
+                  idx = 0;
+               else if (reduce & NIR_CMAT_REDUCE_ROW)
+                  idx = r % (src_split ? src_split->box.outer_rows : 1);
+               else if (reduce & NIR_CMAT_REDUCE_COLUMN)
+                  idx = c % (src_split ? src_split->box.outer_cols : 1);
+               else
+                  UNREACHABLE("Unknown NIR_CMAT_REDUCE_*");
+
+               nir_deref_instr *deref = recreate_derefs(b, &call->params[0], dst_split->split_vars[didx]);
+               b->cursor = nir_before_instr(instr);
+               nir_cmat_copy(b, &deref->def, &temp_derefs[idx]->def);
+            }
+         }
+      } else {
+         nir_cmat_copy(b, call->params[0].ssa, &temp_derefs[0]->def);
+      }
+
+      ralloc_free(temp_derefs);
+   } else if (reduce & NIR_CMAT_REDUCE_2X2) {
+      assert(reduce == NIR_CMAT_REDUCE_2X2);
+
+      /* dst can have target dimensions, but src but be at least twice as large */
+      assert (src_split);
+
+      int rows = 1, cols = 1;
+      if (dst_split) {
+         rows = dst_split->box.outer_rows;
+         cols = dst_split->box.outer_cols;
+      }
+
+      for (unsigned r = 0; r < rows; r++) {
+         for (unsigned c = 0; c < cols; c++) {
+            int d_idx = c + r * cols;
+            int src_top_left_col = c * 2;
+            int src_top_left_row = r * 2;
+            int src_top_idx = src_top_left_col + src_top_left_row * src_split->box.outer_cols;
+            int src_bottom_idx = src_top_left_col + (src_top_left_row + 1) * src_split->box.outer_cols;
+            nir_deref_instr *src0_deref = recreate_derefs(b, &call->params[1], src_split->split_vars[src_top_idx]);
+            nir_deref_instr *src1_deref = recreate_derefs(b, &call->params[1], src_split->split_vars[src_top_idx + 1]);
+            nir_deref_instr *src2_deref = recreate_derefs(b, &call->params[1], src_split->split_vars[src_bottom_idx]);
+            nir_deref_instr *src3_deref = recreate_derefs(b, &call->params[1], src_split->split_vars[src_bottom_idx + 1]);
+            nir_deref_instr *dst_deref = dst_split ? recreate_derefs(b, &call->params[0], dst_split->split_vars[d_idx]) : nir_src_as_deref(call->params[0]);
+            b->cursor = nir_before_instr(instr);
+            call_reduce_2x2(b, call, &dst_deref->def, &src0_deref->def, &src1_deref->def, &src2_deref->def, &src3_deref->def);
          }
       }
    }
@@ -508,9 +731,9 @@ split_cmat_load_store(nir_builder *b,
       return false;
 
    struct split_mat *split = entry->data;
-   unsigned splits = split->num_row_splits * split->num_col_splits;
+   unsigned splits = get_num_splits(split);
    for (unsigned i = 0; i < splits; i++) {
-      nir_deref_instr *new_deref = recreate_derefs(b, intr, !is_load, split->split_vars[i]);
+      nir_deref_instr *new_deref = recreate_derefs(b, &intr->src[!is_load], split->split_vars[i]);
       nir_deref_instr *ptr_deref;
       nir_def *stride = intr->src[2].ssa;
       nir_def *ptr = intr->src[is_load].ssa;
@@ -524,11 +747,10 @@ split_cmat_load_store(nir_builder *b,
          const struct glsl_type *scalar_type = glsl_get_scalar_type(glsl_get_cmat_element(var->type));
          unsigned elem_size = glsl_get_explicit_size(scalar_type, false);
          struct glsl_cmat_description desc = *glsl_get_cmat_description(split->split_vars[i]->type);
-         unsigned offset = desc.cols;
-
          unsigned row_offset, col_offset;
-         row_offset = i % split->num_col_splits;
-         col_offset = i / split->num_col_splits;
+
+         row_offset = (i % split->box.outer_cols) * desc.cols;
+         col_offset = (i / split->box.outer_cols) * desc.rows;
 
          if (layout == GLSL_MATRIX_LAYOUT_ROW_MAJOR)
             SWAP(row_offset, col_offset);
@@ -537,9 +759,9 @@ split_cmat_load_store(nir_builder *b,
          stride = nir_udiv_imm(b, nir_imul_imm(b, stride, deref_bytes_size), elem_size);
 
          if (col_offset)
-            this_index = nir_imm_intN_t(b, col_offset * offset, dst_bit_size);
+            this_index = nir_imm_intN_t(b, col_offset, dst_bit_size);
          if (row_offset)
-            this_index = nir_iadd(b, this_index, nir_u2uN(b, nir_imul_imm(b, stride, row_offset * offset), dst_bit_size));
+            this_index = nir_iadd(b, this_index, nir_u2uN(b, nir_imul_imm(b, stride, row_offset), dst_bit_size));
          ptr_deref = nir_build_deref_ptr_as_array(b, ptr_deref, this_index);
          ptr = &ptr_deref->def;
       }
@@ -549,6 +771,49 @@ split_cmat_load_store(nir_builder *b,
       else
          nir_cmat_store(b, ptr, &new_deref->def, stride,
                         .matrix_layout = layout);
+   }
+   nir_instr_remove(instr);
+   return true;
+}
+
+static bool
+split_cmat_call_per_element_op(nir_builder *b,
+                               nir_cmat_call_instr *call,
+                               struct split_info *info)
+{
+   nir_instr *instr = &call->instr;
+   struct split_mat *dst_split = find_call_split(info->split_mats, call, 0);
+   struct split_mat *src_split = find_call_split(info->split_mats, call, 3);
+   if (!dst_split)
+      return false;
+
+   assert(src_split);
+   int splits = get_num_splits(dst_split);
+   if (splits <= 1)
+      return false;
+
+   for (unsigned i = 0; i < splits; i++) {
+      int r = i / dst_split->box.outer_cols;
+      int c = i % dst_split->box.outer_cols;
+      nir_deref_instr *dst_deref = recreate_derefs(b, &call->params[0], dst_split->split_vars[i]);
+      nir_deref_instr *src_deref = recreate_derefs(b, &call->params[3], src_split->split_vars[i]);
+      struct glsl_cmat_description cmat_desc = *glsl_get_cmat_description(src_split->split_vars[0]->type);
+      nir_cmat_call_instr *new_call = nir_cmat_call_instr_create(b->shader, nir_cmat_call_op_per_element_op, call->callee);
+      new_call->params[0] = nir_src_for_ssa(&dst_deref->def);
+      new_call->params[1] = nir_src_for_ssa(nir_imm_int(b, cmat_desc.rows * r));
+      new_call->params[2] = nir_src_for_ssa(nir_imm_int(b, cmat_desc.cols * c));
+      new_call->params[3] = nir_src_for_ssa(&src_deref->def);
+
+      for (unsigned j = 4; j < call->num_params; j++) {
+         if (nir_src_as_deref(call->params[j])) {
+            struct split_mat *src1_split = find_call_split(info->split_mats, call, j);
+            nir_deref_instr *src1_deref = src1_split ? recreate_derefs(b, &call->params[j], src1_split->split_vars[i]) : nir_src_as_deref(call->params[j]);
+            new_call->params[j] = src1_deref ? nir_src_for_ssa(&src1_deref->def) : call->params[j];
+         } else
+            new_call->params[j] = call->params[j];
+      }
+      b->cursor = nir_before_instr(instr);
+      nir_builder_instr_insert(b, &new_call->instr);
    }
    nir_instr_remove(instr);
    return true;
@@ -611,6 +876,20 @@ split_matrix_impl(nir_function_impl *impl, struct split_info *info)
             }
             break;
          }
+         case nir_instr_type_cmat_call: {
+            nir_cmat_call_instr *cmat_call = nir_instr_as_cmat_call(instr);
+            switch (cmat_call->op) {
+            case nir_cmat_call_op_reduce:
+               progress |= split_cmat_call_reduce(&b, impl, cmat_call, info);
+               break;
+            case nir_cmat_call_op_per_element_op:
+               progress |= split_cmat_call_per_element_op(&b, cmat_call, info);
+               break;
+            default:
+               break;
+            }
+            break;
+         }
          default:
             break;
          }
@@ -619,17 +898,14 @@ split_matrix_impl(nir_function_impl *impl, struct split_info *info)
    return progress;
 }
 
-static struct split_mat *
+static void
 split_var(nir_shader *shader,
           nir_function_impl *impl,
-          void *mem_ctx,
-          nir_variable *var,
-          unsigned m_gran,
-          unsigned n_gran,
-          unsigned k_gran)
+          struct split_info *info,
+          nir_variable *var)
 {
    if (!glsl_type_is_cmat(glsl_without_array(var->type)))
-      return NULL;
+      return;
 
    const struct glsl_type *type = var->type;
    if (glsl_type_is_array(type)) {
@@ -637,34 +913,19 @@ split_var(nir_shader *shader,
    }
 
    struct glsl_cmat_description desc = *glsl_get_cmat_description(type);
-   unsigned split_rows = 0, split_cols = 0;
 
-   get_lower_sizes(desc, m_gran, n_gran, k_gran, &split_rows, &split_cols);
-
-   unsigned num_row_split = 1, num_col_split = 1;
-
-   if (split_rows) {
-      num_row_split = desc.rows / split_rows;
-      desc.rows = split_rows;
-   }
-   if (split_cols) {
-      num_col_split = desc.cols / split_cols;
-      desc.cols = split_cols;
-   }
-
-   if (num_row_split == 1 && num_col_split == 1)
-      return NULL;
+   struct split_box box;
+   if (!split_desc(&desc, info, &box))
+       return;
 
    const struct glsl_type *new_type = glsl_type_wrap_in_arrays(glsl_cmat_type(&desc), var->type);
 
-   struct split_mat *split_mat = ralloc(mem_ctx, struct split_mat);
+   struct split_mat *split_mat = rzalloc(info->split_mats, struct split_mat);
    if (!split_mat)
-      return NULL;
+      return;
 
-   unsigned num_split = num_row_split * num_col_split;
-   split_mat->num_row_splits = num_row_split;
-   split_mat->num_col_splits = num_col_split;
-   split_mat->split_vars = ralloc_array(split_mat, struct nir_variable *, num_split);
+   split_mat->box = box;
+   unsigned num_split = split_alloc_vars(split_mat);
    for (unsigned i = 0; i < num_split; i++) {
       if (!nir_variable_is_global(var)) {
          split_mat->split_vars[i] = nir_local_variable_create(impl,
@@ -674,27 +935,18 @@ split_var(nir_shader *shader,
                                                         new_type, var->name);
       }
    }
-   return split_mat;
+
+   _mesa_hash_table_insert(info->split_mats, var, split_mat);
 }
 
 static bool
 lower_dimensions(nir_shader *shader, nir_function_impl *impl,
                  unsigned m_gran, unsigned n_gran, unsigned k_gran)
 {
-   struct hash_table *split_mats = _mesa_pointer_hash_table_create(NULL);
    void *mem_ctx = ralloc_context(NULL);
-   bool progress = false;
+   struct hash_table *split_mats = _mesa_pointer_hash_table_create(mem_ctx);
 
-   nir_foreach_variable_in_shader(var, shader) {
-      struct split_mat *split_mat = split_var(shader, NULL, mem_ctx, var, m_gran, n_gran, k_gran);
-      if (split_mat)
-         _mesa_hash_table_insert(split_mats, var, split_mat);
-   }
-   nir_foreach_function_temp_variable (var, impl) {
-      struct split_mat *split_mat = split_var(shader, impl, mem_ctx, var, m_gran, n_gran, k_gran);
-      if (split_mat)
-         _mesa_hash_table_insert(split_mats, var, split_mat);
-   }
+   bool progress = false;
 
    struct split_info split_info = {
       .split_mats = split_mats,
@@ -702,6 +954,14 @@ lower_dimensions(nir_shader *shader, nir_function_impl *impl,
       .n_gran = n_gran,
       .k_gran = k_gran,
    };
+
+   nir_foreach_variable_in_shader(var, shader) {
+      split_var(shader, NULL, &split_info, var);
+   }
+   nir_foreach_function_temp_variable (var, impl) {
+      split_var(shader, impl, &split_info, var);
+   }
+
    progress = split_matrix_impl(impl, &split_info);
    _mesa_hash_table_destroy(split_mats, NULL);
    ralloc_free(mem_ctx);

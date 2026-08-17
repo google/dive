@@ -29,7 +29,7 @@
 
 #include "dxil_spirv_nir.h"
 
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 static uint32_t
 translate_desc_stages(VkShaderStageFlags in)
@@ -265,7 +265,7 @@ dzn_descriptor_set_layout_create(struct dzn_device *device,
    VkResult ret =
       vk_create_sorted_bindings(pCreateInfo->pBindings,
                                 pCreateInfo->bindingCount,
-                                &ordered_bindings);
+                                &ordered_bindings, NULL, NULL);
    if (ret != VK_SUCCESS) {
       vk_descriptor_set_layout_destroy(&device->vk, &set_layout->vk);
       return ret;
@@ -459,12 +459,12 @@ dzn_descriptor_set_layout_get_heap_offset(const struct dzn_descriptor_set_layout
    assert(b < layout->binding_count);
    D3D12_SHADER_VISIBILITY visibility = layout->bindings[b].visibility;
    assert(visibility < ARRAY_SIZE(layout->ranges));
-   assert(type < NUM_POOL_TYPES);
+   assert((unsigned)type < NUM_POOL_TYPES);
 
    if (bindless)
       type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 
-   uint32_t range_idx = layout->bindings[b].range_idx[type];
+   uint32_t range_idx = layout->bindings[b].range_idx[(unsigned)type];
 
    if (range_idx == ~0)
       return ~0;
@@ -592,9 +592,9 @@ dzn_pipeline_layout_hash_stages(struct dzn_pipeline_layout *layout,
       if (!(stages & BITFIELD_BIT(stage)))
          continue;
 
-      struct mesa_sha1 ctx;
+      blake3_hasher ctx;
 
-      _mesa_sha1_init(&ctx);
+      _mesa_blake3_init(&ctx);
       for (uint32_t set = 0; set < info->setLayoutCount; set++) {
          VK_FROM_HANDLE(dzn_descriptor_set_layout, set_layout, info->pSetLayouts[set]);
          if (!(BITFIELD_BIT(stage) & set_layout->stages))
@@ -604,12 +604,12 @@ dzn_pipeline_layout_hash_stages(struct dzn_pipeline_layout *layout,
             if (!(BITFIELD_BIT(stage) & set_layout->bindings[b].stages))
                continue;
 
-            _mesa_sha1_update(&ctx, &b, sizeof(b));
-            _mesa_sha1_update(&ctx, &set_layout->bindings[b].base_shader_register,
+            _mesa_blake3_update(&ctx, &b, sizeof(b));
+            _mesa_blake3_update(&ctx, &set_layout->bindings[b].base_shader_register,
                               sizeof(set_layout->bindings[b].base_shader_register));
          }
       }
-      _mesa_sha1_final(&ctx, layout->stages[stage].hash);
+      _mesa_blake3_final(&ctx, layout->stages[stage].hash);
    }
 }
 
@@ -854,7 +854,7 @@ dzn_pipeline_layout_create(struct dzn_device *device,
 
       root_param->ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
       root_param->Constants.ShaderRegister = 0;
-      root_param->Constants.Num32BitValues = ALIGN(push_constant_size, 4) / 4;
+      root_param->Constants.Num32BitValues = align(push_constant_size, 4) / 4;
       root_param->Constants.RegisterSpace = DZN_REGISTER_SPACE_PUSH_CONSTANT;
       root_param->ShaderVisibility = translate_desc_visibility(push_constant_flags);
       root_dwords += root_param->Constants.Num32BitValues;
@@ -1157,7 +1157,7 @@ need_custom_buffer_descriptor(struct dzn_device *device, const struct dzn_buffer
 {
    *out_desc = *info;
    uint32_t upper_bound_default_descriptor;
-   uint32_t size_align, offset_align;
+   uint64_t size_align, offset_align;
    /* Canonicalize descriptor types for hash/compare, and get size/align info */
    switch (info->type) {
    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
@@ -1680,7 +1680,7 @@ dzn_descriptor_set_init(struct dzn_descriptor_set *set,
       dzn_foreach_pool_type(type) {
          set->heap_offsets[type] = pool->free_offset[type];
          if (device->bindless)
-            set->heap_offsets[type] = ALIGN(set->heap_offsets[type], 2);
+            set->heap_offsets[type] = align(set->heap_offsets[type], 2);
          set->heap_sizes[type] = layout->range_desc_count[type] + variable_descriptor_count[type];
          set->pool->free_offset[type] = set->heap_offsets[type] + set->heap_sizes[type];
       }

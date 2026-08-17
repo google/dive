@@ -24,8 +24,10 @@ debug_describe_zink_batch_state(char *buf, const struct zink_batch_state *ptr)
 static void
 reset_obj(struct zink_screen *screen, struct zink_batch_state *bs, struct zink_resource_object *obj)
 {
-   /* if no batch usage exists after removing the usage from 'bs', this resource is considered fully idle */
-   if (!zink_resource_object_usage_unset(obj, bs)) {
+   /* if this is the only batch usage, this resource is considered fully idle */
+   struct zink_bo *bo = obj->bo;
+   if ((!bo->reads.u || zink_batch_usage_matches(bo->reads.u, bs)) &&
+       (!bo->writes.u || zink_batch_usage_matches(bo->writes.u, bs))) {
       /* the resource is idle, so reset all access/reordering info */
       obj->unordered_read = true;
       obj->unordered_write = true;
@@ -137,9 +139,6 @@ reset_batch_state_internal(struct zink_screen *screen, struct zink_batch_state *
    util_dynarray_foreach(&bs->fences, struct zink_tc_fence*, mfence)
       zink_fence_reference(screen, mfence, NULL);
    util_dynarray_clear(&bs->fences);
-
-   bs->unordered_write_access = VK_ACCESS_NONE;
-   bs->unordered_write_stages = VK_PIPELINE_STAGE_NONE;
 
    /* only increment batch generation if previously in-use to avoid false detection of batch completion */
    if (bs->fence.submitted)
@@ -268,6 +267,7 @@ zink_batch_state_destroy(struct zink_screen *screen, struct zink_batch_state *bs
    util_dynarray_fini(&bs->fd_wait_semaphore_stages);
    util_dynarray_fini(&bs->tracked_semaphores);
    util_dynarray_fini(&bs->acquire_flags);
+   util_dynarray_fini(&bs->fences);
    unsigned num_mfences = util_dynarray_num_elements(&bs->fence.mfences, void *);
    struct zink_tc_fence **mfence = bs->fence.mfences.data;
    for (unsigned i = 0; i < num_mfences; i++) {
@@ -362,26 +362,26 @@ create_batch_state(struct zink_context *ctx)
    SET_CREATE(&bs->programs);
    SET_CREATE(&bs->active_queries);
    SET_CREATE(&bs->dmabuf_exports);
-   util_dynarray_init(&bs->signal_semaphores, NULL);
-   util_dynarray_init(&bs->user_signal_semaphores, NULL);
-   util_dynarray_init(&bs->user_signal_semaphore_values, NULL);
-   util_dynarray_init(&bs->wait_semaphores, NULL);
-   util_dynarray_init(&bs->tracked_semaphores, NULL);
-   util_dynarray_init(&bs->fd_wait_semaphores, NULL);
-   util_dynarray_init(&bs->fences, NULL);
-   util_dynarray_init(&bs->dead_querypools, NULL);
-   util_dynarray_init(&bs->wait_semaphore_stages, NULL);
-   util_dynarray_init(&bs->wait_semaphore_values, NULL);
-   util_dynarray_init(&bs->fd_wait_semaphore_stages, NULL);
-   util_dynarray_init(&bs->zombie_samplers, NULL);
-   util_dynarray_init(&bs->freed_sparse_backing_bos, NULL);
-   util_dynarray_init(&bs->acquires, NULL);
-   util_dynarray_init(&bs->acquire_flags, NULL);
-   util_dynarray_init(&bs->bindless_releases[0], NULL);
-   util_dynarray_init(&bs->bindless_releases[1], NULL);
-   util_dynarray_init(&bs->swapchain_obj, NULL);
-   util_dynarray_init(&bs->swapchain_obj_unsync, NULL);
-   util_dynarray_init(&bs->fence.mfences, NULL);
+   bs->signal_semaphores = UTIL_DYNARRAY_INIT;
+   bs->user_signal_semaphores = UTIL_DYNARRAY_INIT;
+   bs->user_signal_semaphore_values = UTIL_DYNARRAY_INIT;
+   bs->wait_semaphores = UTIL_DYNARRAY_INIT;
+   bs->tracked_semaphores = UTIL_DYNARRAY_INIT;
+   bs->fd_wait_semaphores = UTIL_DYNARRAY_INIT;
+   bs->fences = UTIL_DYNARRAY_INIT;
+   bs->dead_querypools = UTIL_DYNARRAY_INIT;
+   bs->wait_semaphore_stages = UTIL_DYNARRAY_INIT;
+   bs->wait_semaphore_values = UTIL_DYNARRAY_INIT;
+   bs->fd_wait_semaphore_stages = UTIL_DYNARRAY_INIT;
+   bs->zombie_samplers = UTIL_DYNARRAY_INIT;
+   bs->freed_sparse_backing_bos = UTIL_DYNARRAY_INIT;
+   bs->acquires = UTIL_DYNARRAY_INIT;
+   bs->acquire_flags = UTIL_DYNARRAY_INIT;
+   bs->bindless_releases[0] = UTIL_DYNARRAY_INIT;
+   bs->bindless_releases[1] = UTIL_DYNARRAY_INIT;
+   bs->swapchain_obj = UTIL_DYNARRAY_INIT;
+   bs->swapchain_obj_unsync = UTIL_DYNARRAY_INIT;
+   bs->fence.mfences = UTIL_DYNARRAY_INIT;
 
    cnd_init(&bs->usage.flush);
    mtx_init(&bs->usage.mtx, mtx_plain);
@@ -570,6 +570,7 @@ zink_start_batch(struct zink_context *ctx)
 
    bs->fence.completed = false;
 
+#if HAVE_RENDERDOC_INTEGRATION
    if (VKCTX(CmdInsertDebugUtilsLabelEXT) && screen->renderdoc_api) {
       VkDebugUtilsLabelEXT capture_label;
       /* Magic fallback which lets us bridge the Wine barrier over to Linux RenderDoc. */
@@ -588,6 +589,7 @@ zink_start_batch(struct zink_context *ctx)
       screen->renderdoc_api->StartFrameCapture(RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(screen->instance), NULL);
       screen->renderdoc_capturing = true;
    }
+#endif
 
    /* descriptor buffers must always be bound at the start of a batch */
    if (zink_descriptor_mode == ZINK_DESCRIPTOR_MODE_DB && !(ctx->flags & ZINK_CONTEXT_COPY_ONLY))
@@ -659,12 +661,12 @@ submit_queue(void *data, void *gdata, int thread_index)
    for (unsigned i = 0; i < ARRAY_SIZE(si); i++)
       si[i].sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
    if (bs->sparse_semaphore)
-      util_dynarray_append(&bs->acquires, VkSemaphore, bs->sparse_semaphore);
+      util_dynarray_append(&bs->acquires, bs->sparse_semaphore);
    si[ZINK_SUBMIT_WAIT_ACQUIRE].waitSemaphoreCount = util_dynarray_num_elements(&bs->acquires, VkSemaphore);
    si[ZINK_SUBMIT_WAIT_ACQUIRE].pWaitSemaphores = bs->acquires.data;
    while (util_dynarray_num_elements(&bs->acquire_flags, VkPipelineStageFlags) < si[ZINK_SUBMIT_WAIT_ACQUIRE].waitSemaphoreCount) {
       VkPipelineStageFlags mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      util_dynarray_append(&bs->acquire_flags, VkPipelineStageFlags, mask);
+      util_dynarray_append(&bs->acquire_flags, mask);
    }
    assert(util_dynarray_num_elements(&bs->acquires, VkSemaphore) <= util_dynarray_num_elements(&bs->acquire_flags, VkPipelineStageFlags));
    si[ZINK_SUBMIT_WAIT_ACQUIRE].pWaitDstStageMask = bs->acquire_flags.data;
@@ -673,7 +675,7 @@ submit_queue(void *data, void *gdata, int thread_index)
    si[ZINK_SUBMIT_WAIT_FD].pWaitSemaphores = bs->fd_wait_semaphores.data;
    while (util_dynarray_num_elements(&bs->fd_wait_semaphore_stages, VkPipelineStageFlags) < si[ZINK_SUBMIT_WAIT_FD].waitSemaphoreCount) {
       VkPipelineStageFlags mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-      util_dynarray_append(&bs->fd_wait_semaphore_stages, VkPipelineStageFlags, mask);
+      util_dynarray_append(&bs->fd_wait_semaphore_stages, mask);
    }
    assert(util_dynarray_num_elements(&bs->fd_wait_semaphores, VkSemaphore) <= util_dynarray_num_elements(&bs->fd_wait_semaphore_stages, VkPipelineStageFlags));
    si[ZINK_SUBMIT_WAIT_FD].pWaitDstStageMask = bs->fd_wait_semaphore_stages.data;
@@ -699,6 +701,23 @@ submit_queue(void *data, void *gdata, int thread_index)
    };
    if (si[ZINK_SUBMIT_CMDBUF].waitSemaphoreCount)
       si[ZINK_SUBMIT_CMDBUF].pNext = &sem_submit;
+   {
+      VkCommandBuffer sync_cmdbuf = bs->has_work ? bs->cmdbuf :
+                                                   bs->has_reordered_work ? bs->reordered_cmdbuf :
+                                                                            bs->has_unsync ? bs->unsynchronized_cmdbuf :
+                                                                                             VK_NULL_HANDLE;
+      if (sync_cmdbuf) {
+         VkMemoryBarrier mb;
+         mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+         mb.pNext = NULL;
+         mb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+         mb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+         VKSCR(CmdPipelineBarrier)(sync_cmdbuf,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                   VK_PIPELINE_STAGE_HOST_BIT,
+                                   0, 1, &mb, 0, NULL, 0, NULL);
+      }
+   }
    VkCommandBuffer cmdbufs[3];
    unsigned c = 0;
    if (bs->has_unsync)
@@ -764,17 +783,16 @@ submit_queue(void *data, void *gdata, int thread_index)
       );
    }
    if (bs->has_reordered_work) {
-      if (bs->unordered_write_access) {
-         VkMemoryBarrier mb;
-         mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-         mb.pNext = NULL;
-         mb.srcAccessMask = bs->unordered_write_access;
-         mb.dstAccessMask = VK_ACCESS_NONE;
-         VKSCR(CmdPipelineBarrier)(bs->reordered_cmdbuf,
-                                   bs->unordered_write_stages,
-                                   screen->info.have_KHR_synchronization2 ? VK_PIPELINE_STAGE_NONE : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                   0, 1, &mb, 0, NULL, 0, NULL);
-      }
+      VkMemoryBarrier mb;
+      mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+      mb.pNext = NULL;
+      /* big sync hammer: everything here must complete before the main cmdbuf */
+      mb.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+      mb.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+      VKSCR(CmdPipelineBarrier)(bs->reordered_cmdbuf,
+                                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                 0, 1, &mb, 0, NULL, 0, NULL);
       VRAM_ALLOC_LOOP(result,
          VKSCR(EndCommandBuffer)(bs->reordered_cmdbuf),
          if (result != VK_SUCCESS) {
@@ -795,7 +813,7 @@ submit_queue(void *data, void *gdata, int thread_index)
       );
    }
 
-   simple_mtx_lock(&screen->queue_lock);
+   simple_mtx_lock(screen->queue_lock);
    VRAM_ALLOC_LOOP(result,
       VKSCR(QueueSubmit)(screen->queue, num_si, submit, VK_NULL_HANDLE),
       if (result != VK_SUCCESS) {
@@ -803,14 +821,16 @@ submit_queue(void *data, void *gdata, int thread_index)
          bs->is_device_lost = true;
       }
    );
-   simple_mtx_unlock(&screen->queue_lock);
+   simple_mtx_unlock(screen->queue_lock);
 
    unsigned i = 0;
    VkSemaphore *sem = bs->signal_semaphores.data;
    set_foreach(&bs->dmabuf_exports, entry) {
       struct zink_resource *res = (void*)entry->key;
-      for (; res; res = zink_resource(res->base.b.next))
-         zink_screen_import_dmabuf_semaphore(screen, res, sem[i++]);
+      if (res->obj->exportable_dmabuf) {
+         for (; res; res = zink_resource(res->base.b.next))
+            zink_screen_import_dmabuf_semaphore(screen, res, sem[i++]);
+      }
 
       struct pipe_resource *pres = (void*)entry->key;
       pipe_resource_reference(&pres, NULL);
@@ -923,8 +943,9 @@ zink_end_batch(struct zink_context *ctx)
 
       for (; res; res = zink_resource(res->base.b.next)) {
          VkSemaphore sem = zink_create_exportable_semaphore(screen);
-         if (sem)
-            util_dynarray_append(&ctx->bs->signal_semaphores, VkSemaphore, sem);
+         if (sem) {
+            util_dynarray_append(&ctx->bs->signal_semaphores, sem);
+         }
       }
       bs->has_work = true;
    }
@@ -939,11 +960,16 @@ zink_end_batch(struct zink_context *ctx)
       submit_queue(bs, NULL, 0);
    }
 
+   ctx->last_transfer_sync = 0;
+   ctx->rp_counter = 0;
+
+#if HAVE_RENDERDOC_INTEGRATION
    if (!(ctx->flags & ZINK_CONTEXT_COPY_ONLY) && screen->renderdoc_capturing && !screen->renderdoc_capture_all &&
        p_atomic_read(&screen->renderdoc_frame) > screen->renderdoc_capture_end) {
       screen->renderdoc_api->EndFrameCapture(RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(screen->instance), NULL);
       screen->renderdoc_capturing = false;
    }
+#endif
 }
 
 static int
@@ -1072,7 +1098,7 @@ zink_batch_reference_resource_move(struct zink_context *ctx, struct zink_resourc
             return true;
          }
       }
-      util_dynarray_append(&bs->swapchain_obj, struct zink_resource_object*, res->obj);
+      util_dynarray_append(&bs->swapchain_obj, res->obj);
       return false;
    }
    /* Fast exit for no-op calls.
@@ -1111,7 +1137,7 @@ zink_batch_reference_resource_move_unsync(struct zink_context *ctx, struct zink_
             return true;
          }
       }
-      util_dynarray_append(&bs->swapchain_obj_unsync, struct zink_resource_object*, res->obj);
+      util_dynarray_append(&bs->swapchain_obj_unsync, res->obj);
       return false;
    }
 
@@ -1174,7 +1200,7 @@ zink_batch_usage_unflushed_wait(struct zink_context *ctx, struct zink_batch_usag
    if (!zink_batch_usage_exists(u))
       return true;
    /* this batch state was already completed and reset */
-   if (u->submit_count - submit_count > 1)
+   if (zink_batch_submit_count_diff(u->submit_count, submit_count) > 1)
       return true;
    if (zink_batch_usage_is_unflushed(u)) {
       if (likely(u == &ctx->bs->usage)) {
@@ -1200,7 +1226,7 @@ batch_usage_wait(struct zink_context *ctx, struct zink_batch_usage *u, unsigned 
    if (!zink_batch_usage_exists(u))
       return;
    /* this batch state was already completed and reset */
-   if (u->submit_count - submit_count > 1)
+   if (zink_batch_submit_count_diff(u->submit_count, submit_count) > 1)
       return;
    if (zink_batch_usage_unflushed_wait(ctx, u, submit_count, trywait))
       zink_wait_on_batch(ctx, u->usage);

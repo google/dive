@@ -57,10 +57,6 @@ using InstructionSet = std::set<Instr *, std::less<Instr *>, Allocator<Instr *>>
 class VirtualValue : public Allocate {
 public:
    static const uint32_t virtual_register_base = 1024;
-   static const uint32_t clause_temp_registers = 2;
-   static const uint32_t gpr_register_end = 128 - 2 * clause_temp_registers;
-   static const uint32_t clause_temp_register_begin = gpr_register_end;
-   static const uint32_t clause_temp_register_end = 128;
 
    static const uint32_t uniforms_begin = 512;
    static const uint32_t uniforms_end = 640;
@@ -168,6 +164,7 @@ public:
    void del_use(Instr *instr);
    bool has_uses() const { return !m_uses.empty() || pin() == pin_array; }
    void set_chan(int c) { do_set_chan(c); }
+   void pin_to_chan();
 
    bool can_switch_to_chan(int c);
 

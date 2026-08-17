@@ -89,12 +89,10 @@ static char token_tmp[20];
 const char *
 _mesa_enum_to_string(int nr)
 {
-   enum_elt *elt;
-
-   elt = bsearch(& nr, enum_string_table_offsets,
-                 ARRAY_SIZE(enum_string_table_offsets),
-                 sizeof(enum_string_table_offsets[0]),
-                 (cfunc) compar_nr);
+   const enum_elt *elt = bsearch(& nr, enum_string_table_offsets,
+                                 ARRAY_SIZE(enum_string_table_offsets),
+                                 sizeof(enum_string_table_offsets[0]),
+                                 (cfunc) compar_nr);
 
    if (elt != NULL) {
       return &enum_string_table[elt->offset];

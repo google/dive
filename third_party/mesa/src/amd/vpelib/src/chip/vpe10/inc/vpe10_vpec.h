@@ -1,4 +1,4 @@
-/* Copyright 2022 Advanced Micro Devices, Inc.
+/* Copyright 2025 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -32,7 +32,8 @@ extern "C" {
 void vpe10_construct_vpec(struct vpe_priv *vpe_priv, struct vpec *vpec);
 
 /** functions for capability check */
-bool vpe10_vpec_check_swmode_support(struct vpec *vpec, enum vpe_swizzle_mode_values sw_mode);
+bool vpe10_vpec_check_swmode_support(
+    struct vpec *vpec, const struct vpe_surface_info *surface_info);
 
 /** functions for generating command buffer */
 

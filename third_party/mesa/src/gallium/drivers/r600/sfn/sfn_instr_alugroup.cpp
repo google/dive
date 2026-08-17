@@ -20,6 +20,16 @@ AluGroup::AluGroup()
    m_free_slots = has_t() ? 0x1f : 0xf;
 }
 
+void
+AluGroup::apply_add_instr(AluInstr *instr)
+{
+   instr->set_parent_group(this);
+   instr->pin_registers();
+   m_has_kill_op |= instr->is_kill();
+   m_has_pred_update |= instr->has_alu_flag(alu_update_exec);
+   assert(!(m_has_kill_op && m_has_pred_update));
+}
+
 bool
 AluGroup::add_instruction(AluInstr *instr)
 {
@@ -32,17 +42,13 @@ AluGroup::add_instruction(AluInstr *instr)
       ASSERTED auto opinfo = alu_ops.find(instr->opcode());
       assert(opinfo->second.can_channel(AluOp::t, s_chip_class));
       if (add_trans_instructions(instr)) {
-         instr->set_parent_group(this);
-         instr->pin_dest_to_chan();
-         m_has_kill_op |= instr->is_kill();
+         apply_add_instr(instr);
          return true;
       }
    }
 
    if (add_vec_instructions(instr) && !instr->has_alu_flag(alu_is_trans)) {
-      instr->set_parent_group(this);
-      instr->pin_dest_to_chan();
-      m_has_kill_op |= instr->is_kill();
+      apply_add_instr(instr);
       return true;
    }
 
@@ -51,9 +57,7 @@ AluGroup::add_instruction(AluInstr *instr)
 
    if (s_max_slots > 4 && opinfo->second.can_channel(AluOp::t, s_chip_class) &&
        add_trans_instructions(instr)) {
-      instr->set_parent_group(this);
-      instr->pin_dest_to_chan();
-      m_has_kill_op |= instr->is_kill();
+      apply_add_instr(instr);
       return true;
    }
 
@@ -128,6 +132,8 @@ AluGroup::add_trans_instructions(AluInstr *instr)
           * make sure the corresponding vector channel is used */
          assert(instr->has_alu_flag(alu_is_trans) || m_slots[instr->dest_chan()]);
          m_has_kill_op |= instr->is_kill();
+         m_has_pred_update |= instr->has_alu_flag(alu_update_exec);
+
          m_slot_assignemnt_order[m_next_slot_assignemnt++] = 4;
          return true;
       }
@@ -170,17 +176,12 @@ AluGroup::add_vec_instructions(AluInstr *instr)
    if (!m_slots[preferred_chan]) {
       if (instr->bank_swizzle() != alu_vec_unknown) {
          if (try_readport(instr, instr->bank_swizzle())) {
-            m_has_kill_op |= instr->is_kill();
-            m_slot_assignemnt_order[m_next_slot_assignemnt++] = preferred_chan;
             return true;
          }
       } else {
          for (AluBankSwizzle i = alu_vec_012; i != alu_vec_unknown; ++i) {
-            if (try_readport(instr, i)) {
-               m_has_kill_op |= instr->is_kill();
-               m_slot_assignemnt_order[m_next_slot_assignemnt++] = preferred_chan;
+            if (try_readport(instr, i))
                return true;
-            }
          }
       }
    } else {
@@ -209,18 +210,12 @@ AluGroup::add_vec_instructions(AluInstr *instr)
             sfn_log << SfnLog::schedule << "V: Try force channel " << free_chan << "\n";
             dest->set_chan(free_chan);
             if (instr->bank_swizzle() != alu_vec_unknown) {
-               if (try_readport(instr, instr->bank_swizzle())) {
-                  m_has_kill_op |= instr->is_kill();
-                  m_slot_assignemnt_order[m_next_slot_assignemnt++] = free_chan;
+               if (try_readport(instr, instr->bank_swizzle()))
                   return true;
-               }
             } else {
                for (AluBankSwizzle i = alu_vec_012; i != alu_vec_unknown; ++i) {
-                  if (try_readport(instr, i)) {
-                     m_has_kill_op |= instr->is_kill();
-                     m_slot_assignemnt_order[m_next_slot_assignemnt++] = free_chan;
+                  if (try_readport(instr, i))
                      return true;
-                  }
                }
             }
          }
@@ -318,6 +313,9 @@ AluGroup::try_readport(AluInstr *instr, AluBankSwizzle cycle)
          else if (dest->pin() == pin_group)
             dest->set_pin(pin_chgr);
       }
+      m_has_kill_op |= instr->is_kill();
+      m_has_pred_update |= instr->has_alu_flag(alu_update_exec);
+      m_slot_assignemnt_order[m_next_slot_assignemnt++] = preferred_chan;
       return true;
    }
    return false;

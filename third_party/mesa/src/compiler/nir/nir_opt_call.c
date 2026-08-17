@@ -10,7 +10,7 @@
 struct call_liveness_entry {
    struct list_head list;
    nir_call_instr *instr;
-   const BITSET_WORD *live_set;
+   struct u_sparse_bitset *live_set;
 };
 
 static bool
@@ -31,7 +31,9 @@ can_remat_instr(nir_instr *instr)
       case nir_intrinsic_load_push_constant:
       case nir_intrinsic_load_global_constant:
       case nir_intrinsic_load_scalar_arg_amd:
+      case nir_intrinsic_load_scalar_arg_wg_div_amd:
       case nir_intrinsic_load_vector_arg_amd:
+      case nir_intrinsic_load_push_data_intel:
          return true;
       case nir_intrinsic_load_global:
       case nir_intrinsic_load_global_amd:
@@ -50,7 +52,7 @@ remat_ssa_def(nir_builder *b, nir_def *def, struct hash_table *remap_table,
               struct hash_table *phi_value_table,
               struct nir_phi_builder *phi_builder, BITSET_WORD *def_blocks)
 {
-   memset(def_blocks, 0, BITSET_WORDS(b->impl->num_blocks) * sizeof(BITSET_WORD));
+   memset(def_blocks, 0, BITSET_BYTES(b->impl->num_blocks));
    BITSET_SET(def_blocks, nir_def_block(def)->index);
    BITSET_SET(def_blocks, nir_cursor_current_block(b->cursor)->index);
    struct nir_phi_builder_value *val =
@@ -58,7 +60,7 @@ remat_ssa_def(nir_builder *b, nir_def *def, struct hash_table *remap_table,
                                 def->bit_size, def_blocks);
    _mesa_hash_table_insert(phi_value_table, def, val);
 
-   nir_instr *clone = nir_instr_clone_deep(b->shader, def->parent_instr,
+   nir_instr *clone = nir_instr_clone_deep(b->shader, nir_def_instr(def),
                                            remap_table);
    nir_builder_instr_insert(b, clone);
    nir_def *new_def = nir_instr_def(clone);
@@ -83,13 +85,13 @@ can_remat_chain(nir_src *src, void *data)
    if (_mesa_hash_table_search(check_data->remap_table, src->ssa))
       return true;
 
-   if (!can_remat_instr(src->ssa->parent_instr))
+   if (!can_remat_instr(nir_def_instr(src->ssa)))
       return false;
 
    if (check_data->chain_length++ >= 16)
       return false;
 
-   return nir_foreach_src(src->ssa->parent_instr, can_remat_chain, check_data);
+   return nir_foreach_src(nir_def_instr(src->ssa), can_remat_chain, check_data);
 }
 
 struct remat_chain_data {
@@ -108,7 +110,7 @@ do_remat_chain(nir_src *src, void *data)
    if (_mesa_hash_table_search(remat_data->remap_table, src->ssa))
       return true;
 
-   nir_foreach_src(src->ssa->parent_instr, do_remat_chain, remat_data);
+   nir_foreach_src(nir_def_instr(src->ssa), do_remat_chain, remat_data);
 
    remat_ssa_def(remat_data->b, src->ssa, remat_data->remap_table,
                  remat_data->phi_value_table, remat_data->phi_builder,
@@ -122,7 +124,7 @@ rewrite_instr_src_from_phi_builder(nir_src *src, void *data)
    struct hash_table *phi_value_table = data;
 
    if (nir_src_is_const(*src)) {
-      nir_builder b = nir_builder_at(nir_before_instr(nir_src_parent_instr(src)));
+      nir_builder b = nir_builder_at(nir_before_instr(nir_src_use_instr(src)));
       nir_src_rewrite(src, nir_build_imm(&b, src->ssa->num_components,
                                          src->ssa->bit_size,
                                          nir_src_as_const_value(*src)));
@@ -133,13 +135,13 @@ rewrite_instr_src_from_phi_builder(nir_src *src, void *data)
    if (!entry)
       return true;
 
-   nir_block *block = nir_src_parent_instr(src)->block;
+   nir_block *block = nir_src_use_instr(src)->block;
    nir_def *new_def = nir_phi_builder_value_get_block_def(entry->data, block);
 
    bool can_rewrite = true;
    if (nir_def_block(new_def) == block && new_def->index != UINT32_MAX)
       can_rewrite =
-         !nir_instr_is_before(nir_src_parent_instr(src), new_def->parent_instr);
+         !nir_instr_is_before(nir_src_use_instr(src), nir_def_instr(new_def));
 
    if (can_rewrite)
       nir_src_rewrite(src, new_def);
@@ -188,8 +190,6 @@ nir_minimize_call_live_states_impl(nir_function_impl *impl)
    BITSET_WORD *def_blocks = ralloc_array(mem_ctx, BITSET_WORD, block_words);
 
    list_for_each_entry(struct call_liveness_entry, entry, &call_list, list) {
-      unsigned i;
-
       nir_builder b = nir_builder_at(nir_after_instr(&entry->instr->instr));
 
       struct nir_phi_builder *builder = nir_phi_builder_create(impl);
@@ -198,7 +198,7 @@ nir_minimize_call_live_states_impl(nir_function_impl *impl)
       struct hash_table *remap_table =
          _mesa_pointer_hash_table_create(mem_ctx);
 
-      BITSET_FOREACH_SET(i, entry->live_set, num_defs) {
+      U_SPARSE_BITSET_FOREACH_SET(entry->live_set, i) {
          if (!rematerializable[i] ||
              _mesa_hash_table_search(remap_table, rematerializable[i]))
             continue;
@@ -210,7 +210,7 @@ nir_minimize_call_live_states_impl(nir_function_impl *impl)
             .chain_length = 1,
          };
 
-         if (!nir_foreach_src(rematerializable[i]->parent_instr,
+         if (!nir_foreach_src(nir_def_instr(rematerializable[i]),
                               can_remat_chain, &check_data))
             continue;
 
@@ -222,7 +222,7 @@ nir_minimize_call_live_states_impl(nir_function_impl *impl)
             .def_blocks = def_blocks,
          };
 
-         nir_foreach_src(rematerializable[i]->parent_instr, do_remat_chain,
+         nir_foreach_src(nir_def_instr(rematerializable[i]), do_remat_chain,
                          &remat_data);
 
          remat_ssa_def(&b, rematerializable[i], remap_table, phi_value_table,

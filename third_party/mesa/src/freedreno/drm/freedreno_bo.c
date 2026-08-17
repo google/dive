@@ -501,7 +501,7 @@ bo_flush(struct fd_bo *bo)
    simple_mtx_unlock(&fence_lock);
 
    for (unsigned i = 0; i < nr; i++) {
-      fd_fence_flush(bo->fences[i]);
+      fd_fence_flush(fences[i]);
       fd_fence_del(fences[i]);
    }
 }

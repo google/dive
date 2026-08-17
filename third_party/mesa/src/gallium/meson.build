@@ -190,7 +190,16 @@ if with_gallium_rocket
 else
   driver_rocket = declare_dependency()
 endif
+if with_gallium_ethosu
+  subdir('winsys/ethosu/drm')
+  subdir('drivers/ethosu')
+else
+  driver_ethosu = declare_dependency()
+endif
 if with_gallium_zink
+  if not with_platform_windows
+    subdir('winsys/zink/drm')
+  endif
   subdir('drivers/zink')
 else
   driver_zink = declare_dependency()

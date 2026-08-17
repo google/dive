@@ -3,23 +3,27 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <perfetto.h>
-
 #include "tu_perfetto.h"
-#include "tu_buffer.h"
-#include "tu_device.h"
-#include "tu_queue.h"
-#include "tu_image.h"
 
-#include "util/hash_table.h"
 #include "util/perf/u_perfetto.h"
-#include "util/perf/u_perfetto_renderpass.h"
+#ifdef ANDROID_LIBPERFETTO
+#include <perfetto/trace/gpu/vulkan_memory_event.pbzero.h>
+#endif
 
+#include "util/parson.h"
+#include "util/perf/u_perfetto_renderpass.h"
+#include "util/perf/u_trace.h"
+#include "util/ralloc.h"
+#include "util/u_process.h"
+
+#include "tu_buffer.h"
 #include "tu_cmd_buffer.h"
+#include "tu_device.h"
+#include "tu_image.h"
+#include "tu_queue.h"
 #include "tu_tracepoints.h"
 #include "tu_tracepoints_perfetto.h"
-#include "vk_object.h"
-#include "vk_util.h"
+#include "tu_trace_bin_layout.h"
 
 /* we can't include tu_knl.h and tu_device.h */
 
@@ -35,58 +39,14 @@ tu_device_ticks_to_ns(struct tu_device *dev, uint64_t ts);
 struct u_trace_context *
 tu_device_get_u_trace(struct tu_device *device);
 
-/**
- * Queue-id's
- */
-enum {
-   DEFAULT_HW_QUEUE_ID,
-   /* Labels set via VK_EXT_debug_utils are in a separate track due to the
-    * following part of the spec:
-    *  "An application may open a debug label region in one command buffer and
-    *   close it in another, or otherwise split debug label regions across
-    *   multiple command buffers or multiple queue submissions."
-    *
-    * This means labels can start in one renderpass and end in another command
-    * buffer, which breaks our assumption that stages can be modeled as a stack.
-    * While applications aren't expected to use labels in such extreme ways,
-    * even simpler cases can break our assumptions.
-    *
-    * Having annotations in a separate track prevents the main track(s) from
-    * entering an invalid state.
-    */
-   ANNOTATIONS_QUEUE_ID,
-};
-
-/**
- * Render-stage id's
- */
-enum tu_stage_id {
-   CMD_BUFFER_STAGE_ID,
-   CMD_BUFFER_ANNOTATION_STAGE_ID,
-   RENDER_PASS_STAGE_ID,
-   SECONDARY_CMD_BUFFER_STAGE_ID,
-   CMD_BUFFER_ANNOTATION_RENDER_PASS_STAGE_ID,
-   BINNING_STAGE_ID,
-   GMEM_STAGE_ID,
-   BYPASS_STAGE_ID,
-   BLIT_STAGE_ID,
-   DRAW_STAGE_ID,
-   COMPUTE_STAGE_ID,
-   CLEAR_SYSMEM_STAGE_ID,
-   CLEAR_GMEM_STAGE_ID,
-   GENERIC_CLEAR_STAGE_ID,
-   GMEM_LOAD_STAGE_ID,
-   GMEM_STORE_STAGE_ID,
-   SYSMEM_RESOLVE_STAGE_ID,
-   // TODO add the rest from fd_stage_id
-};
-
 static const struct {
    const char *name;
    const char *desc;
 } queues[] = {
-   [DEFAULT_HW_QUEUE_ID] = {"GPU Queue 0", "Default Adreno Hardware Queue"},
    [ANNOTATIONS_QUEUE_ID] = {"Annotations", "Annotations Queue"},
+   [BR_HW_QUEUE_ID] = {"GPU Queue 0", "Default Adreno Hardware Queue"},
+   [BV_HW_QUEUE_ID] = {"GPU Queue 1", "Adreno Bin Visibility Queue"},
+   [PERF_WARNINGS_QUEUE_ID] = {"Performance Warnings", "Performance Warnings Queue"},
 };
 
 static const struct {
@@ -99,6 +59,8 @@ static const struct {
    [SECONDARY_CMD_BUFFER_STAGE_ID] = { "Secondary Command Buffer" },
    [CMD_BUFFER_ANNOTATION_RENDER_PASS_STAGE_ID]    = { "Annotation", "Render Pass Command Buffer Annotation" },
    [BINNING_STAGE_ID]        = { "Binning", "Perform Visibility pass and determine target bins" },
+   [CONCURRENT_BINNING_STAGE_ID] = { "Concurrent Binning", "Perform concurrent Visibility pass and determine target bins" },
+   [CONCURRENT_BINNING_BARRIER_STAGE_ID] = {"Concurrent Binning Barrier", "Concurrent binning cannot happen earlier than this point"},
    [GMEM_STAGE_ID]           = { "GMEM", "Rendering to GMEM" },
    [BYPASS_STAGE_ID]         = { "Bypass", "Rendering to system memory" },
    [BLIT_STAGE_ID]           = { "Blit", "Performing a Blit operation" },
@@ -110,10 +72,48 @@ static const struct {
    [GMEM_LOAD_STAGE_ID]      = { "GMEM Load", "Per tile system memory to GMEM load" },
    [GMEM_STORE_STAGE_ID]     = { "GMEM Store", "Per tile GMEM to system memory store" },
    [SYSMEM_RESOLVE_STAGE_ID] = { "SysMem Resolve", "System memory MSAA resolve" },
-   // TODO add the rest
+   [CUSTOM_RESOLVE_STAGE_ID] = { "Custom Resolve", "Custom resolve via shader" },
+   [CLEAR_COLOR_IMAGE_STAGE_ID] = { "Clear Color Image", "" },
+   [CLEAR_DEPTH_STENCIL_IMAGE_STAGE_ID] = { "Clear Depth Stencil Image", "" },
+   [COPY_BUFFER_TO_IMAGE_STAGE_ID] = { "Copy Buffer to Image", "" },
+   [COPY_IMAGE_TO_BUFFER_STAGE_ID] = { "Copy Image to Buffer", "" },
+   [COPY_IMAGE_STAGE_ID] = { "Copy Image", "" },
+   [RESOLVE_IMAGE_STAGE_ID] = { "Resolve Image", "" },
+   [FILL_BUFFER_STAGE_ID] = { "Fill Buffer", "" },
+   [COPY_BUFFER_STAGE_ID] = { "Copy Buffer", "" },
+   [UPDATE_BUFFER_STAGE_ID] = { "Update Buffer", "" },
+   [SLOW_CLEAR_LRZ_STAGE_ID] = { "Slow Clear LRZ", "Perform slow clear of LRZ for this image, should be avoided" },
+   [DISABLE_LRZ_STAGE_ID] = { "Disable LRZ", "Disable LRZ for this image, should be avoided" },
+   [WARNING_SLOW_CLEAR_LRZ_STAGE_ID] = {
+      "Slow LRZ Clear",
+     "LRZ fast clear is not used. Possible causes:\n"
+     "- The depth image is too large (width x height x layers x msaa) for LRZ fast clear\n"
+     "- [Adreno A6XX] LRZ is being cleared with a depth clear value other than 0.0 or 1.0"
+    },
+   [WARNING_DEPTH_IMAGE_NO_LRZ_STAGE_ID] = {
+     "Depth Image Without LRZ",
+     "LRZ isn't used because the depth image width x height x layers x msaa is too large"
+    },
+   [WARNING_LRZ_DISABLED_STAGE_ID] = {
+      "LRZ Read/Write Disabled",
+     "LRZ read/write is disabled for the rest of the RP. This should be avoided near the start of the RP, but is OK near the end" },
+   [WARNING_LRZ_WRITE_DISABLED_STAGE_ID] = {
+      "LRZ Write Disabled",
+     "LRZ write is disabled for the rest of the RP. Avoid this near the start of the RP, it is OK near the end" },
+   [WARNING_FDM_FORCE_DISABLED_STAGE_ID] = {
+      "FDM Force Disabled",
+     "FDM is disabled due to the presence of LOAD_OP_LOAD or LOAD_OP_STORE" },
 };
 
 static uint32_t gpu_clock_id;
+
+static uint64_t
+get_iid()
+{
+   static uint64_t iid = 1;
+   return p_atomic_inc_return(&iid);
+}
+
 struct TuRenderpassTraits : public perfetto::DefaultDataSourceTraits {
    using IncrementalStateType = MesaRenderpassIncrementalState;
 };
@@ -163,7 +163,8 @@ emit_sync_timestamp(struct tu_perfetto_clocks &clocks)
 }
 
 static void
-setup_incremental_state(TuRenderpassDataSource::TraceContext &ctx)
+setup_incremental_state(TuRenderpassDataSource::TraceContext &ctx,
+                        struct tu_device *dev)
 {
    auto state = ctx.GetIncrementalState();
    if (!state->was_cleared)
@@ -175,30 +176,67 @@ setup_incremental_state(TuRenderpassDataSource::TraceContext &ctx)
 
    auto packet = ctx.NewTracePacket();
 
+   packet->set_timestamp(perfetto::base::GetBootTimeNs().count());
+   packet->set_timestamp_clock_id(perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
    /* This must be set before interned data is sent. */
    packet->set_sequence_flags(perfetto::protos::pbzero::TracePacket::SEQ_INCREMENTAL_STATE_CLEARED);
 
-   packet->set_timestamp(0);
+   auto interned_data = packet->set_interned_data();
 
-   auto event = packet->set_gpu_render_stage_event();
-   event->set_gpu_id(0);
-
-   auto spec = event->set_specifications();
+   {
+      auto desc = interned_data->add_graphics_contexts();
+      desc->set_iid(dev->perfetto.context_iid);
+      desc->set_pid(getpid());
+      desc->set_api(perfetto::protos::pbzero::InternedGraphicsContext_Api::VULKAN);
+   }
 
    for (unsigned i = 0; i < ARRAY_SIZE(queues); i++) {
-      auto desc = spec->add_hw_queue();
+      char name[100];
+      auto desc = interned_data->add_gpu_specifications();
 
-      desc->set_name(queues[i].name);
+      snprintf(name, sizeof(name), "%.10s-%02u-%s",
+               util_get_process_name(), i, queues[i].name);
+      desc->set_iid(dev->perfetto.queue_iids[i]);
+      desc->set_name(name);
       desc->set_description(queues[i].desc);
    }
 
    for (unsigned i = 0; i < ARRAY_SIZE(stages); i++) {
-      auto desc = spec->add_stage();
+      auto desc = interned_data->add_gpu_specifications();
 
+      desc->set_iid(dev->perfetto.stage_iids[i]);
       desc->set_name(stages[i].name);
       if (stages[i].desc)
          desc->set_description(stages[i].desc);
    }
+}
+
+void
+tu_perfetto_init_state(struct tu_perfetto_state *state)
+{
+   mtx_init(&state->pending_clocks_sync_mtx, mtx_plain);
+
+   state->context_iid = get_iid();
+   state->event_id = 0;
+   for (unsigned i = 0; i < ARRAY_SIZE(state->queue_iids); i++)
+      state->queue_iids[i] = get_iid();
+   for (unsigned i = 0; i < ARRAY_SIZE(state->stage_iids); i++)
+      state->stage_iids[i] = get_iid();
+}
+
+void
+tu_perfetto_destroy_state(struct tu_perfetto_state *state)
+{
+   mtx_destroy(&state->pending_clocks_sync_mtx);
+}
+
+static void
+stage_cleanup(struct tu_perfetto_stage *stage)
+{
+   free((void *) stage->payload);
+
+   stage->payload = nullptr;
+   stage->start_payload_function = nullptr;
 }
 
 static struct tu_perfetto_stage *
@@ -233,6 +271,12 @@ get_stack(struct tu_device *dev, enum tu_stage_id stage_id)
    case CMD_BUFFER_ANNOTATION_STAGE_ID:
    case CMD_BUFFER_ANNOTATION_RENDER_PASS_STAGE_ID:
       return &dev->perfetto.annotations_stack;
+   case WARNING_SLOW_CLEAR_LRZ_STAGE_ID:
+   case WARNING_DEPTH_IMAGE_NO_LRZ_STAGE_ID:
+   case WARNING_LRZ_DISABLED_STAGE_ID:
+   case WARNING_LRZ_WRITE_DISABLED_STAGE_ID:
+   case WARNING_FDM_FORCE_DISABLED_STAGE_ID:
+      return &dev->perfetto.sticky_warnings_stack;
    default:
       return &dev->perfetto.render_stack;
    }
@@ -242,7 +286,6 @@ static void
 stage_start(struct tu_device *dev,
             uint64_t ts_ns,
             enum tu_stage_id stage_id,
-            const char *app_event,
             const void *payload = nullptr,
             size_t payload_size = 0,
             const void *indirect = nullptr,
@@ -267,22 +310,15 @@ stage_start(struct tu_device *dev,
 
    *stage = (struct tu_perfetto_stage) {
       .stage_id = stage_id,
-      .stage_iid = 0,
       .start_ts = ts_ns,
       .payload = payload,
       .start_payload_function = (void *) payload_as_extra,
    };
-
-   if (app_event) {
-      TuRenderpassDataSource::Trace([=](auto tctx) {
-         stage->stage_iid =
-            tctx.GetDataSourceLocked()->debug_marker_stage(tctx, app_event);
-      });
-   }
 }
 
 static void
 stage_end(struct tu_device *dev, uint64_t ts_ns, enum tu_stage_id stage_id,
+          const char *app_event,
           const void *flush_data,
           const void* payload = nullptr,
           const void *indirect = nullptr,
@@ -301,12 +337,15 @@ stage_end(struct tu_device *dev, uint64_t ts_ns, enum tu_stage_id stage_id,
 
    uint64_t duration = ts_ns - stage->start_ts;
    /* Zero duration can only happen when tracepoints did not happen on GPU. */
-   if (duration == 0)
+   if (duration == 0) {
+      stage_cleanup(stage);
       return;
+   }
 
    if (stage->stage_id != stage_id) {
       PERFETTO_ELOG("stage %d ended while stage %d is expected",
             stage_id, stage->stage_id);
+      stage_cleanup(stage);
       return;
    }
 
@@ -323,18 +362,53 @@ stage_end(struct tu_device *dev, uint64_t ts_ns, enum tu_stage_id stage_id,
       emit_sync_timestamp(clocks);
    }
 
-   uint32_t queue_id = DEFAULT_HW_QUEUE_ID;
+   uint32_t queue_id = BR_HW_QUEUE_ID;
+
+   /* Warnings should last until the end of the corresponding stage.
+    * This is a roundabout way to achive that, since we don't track
+    * which stage warning corresponds to.
+    */
+   if (stage_id != CLEAR_SYSMEM_STAGE_ID &&
+       stage_id != CLEAR_GMEM_STAGE_ID &&
+       stage_id != GENERIC_CLEAR_STAGE_ID &&
+       stage_id != GMEM_LOAD_STAGE_ID &&
+       stage_id != GMEM_STORE_STAGE_ID) {
+      while (dev->perfetto.sticky_warnings_stack.stage_depth > 0) {
+         struct tu_perfetto_stage *stage =
+            &dev->perfetto.sticky_warnings_stack.stages[dev->perfetto.sticky_warnings_stack.stage_depth - 1];
+         stage_end(dev, ts_ns, (tu_stage_id) stage->stage_id, nullptr, flush_data);
+      }
+   }
+
    switch (stage->stage_id) {
       case CMD_BUFFER_ANNOTATION_STAGE_ID:
       case CMD_BUFFER_ANNOTATION_RENDER_PASS_STAGE_ID:
          queue_id = ANNOTATIONS_QUEUE_ID;
+         break;
+      /* We only know dynamically whether concurrent binning was enabled. Just
+       * assume it is and always make binning appear on the BV timeline.
+       */
+      case CONCURRENT_BINNING_STAGE_ID:
+      case CONCURRENT_BINNING_BARRIER_STAGE_ID:
+         queue_id = BV_HW_QUEUE_ID;
+         break;
+      case WARNING_SLOW_CLEAR_LRZ_STAGE_ID:
+      case WARNING_DEPTH_IMAGE_NO_LRZ_STAGE_ID:
+      case WARNING_LRZ_DISABLED_STAGE_ID:
+      case WARNING_LRZ_WRITE_DISABLED_STAGE_ID:
+      case WARNING_FDM_FORCE_DISABLED_STAGE_ID:
+         queue_id = PERF_WARNINGS_QUEUE_ID;
          break;
       default:
          break;
    }
 
    TuRenderpassDataSource::Trace([=](TuRenderpassDataSource::TraceContext tctx) {
-      setup_incremental_state(tctx);
+      setup_incremental_state(tctx, dev);
+
+      uint64_t stage_iid = app_event ?
+         tctx.GetDataSourceLocked()->debug_marker_stage(tctx, app_event) :
+         state->stage_iids[stage->stage_id];
 
       auto packet = tctx.NewTracePacket();
 
@@ -344,26 +418,24 @@ stage_end(struct tu_device *dev, uint64_t ts_ns, enum tu_stage_id stage_id,
       packet->set_timestamp_clock_id(gpu_clock_id);
 
       auto event = packet->set_gpu_render_stage_event();
-      event->set_event_id(0); // ???
-      event->set_hw_queue_id(queue_id);
+      event->set_event_id(state->event_id++);
+      event->set_hw_queue_iid(state->queue_iids[queue_id]);
       event->set_duration(ts_ns - stage->start_ts);
-      if (stage->stage_iid)
-         event->set_stage_iid(stage->stage_iid);
-      else
-         event->set_stage_id(stage->stage_id);
-      event->set_context((uintptr_t) dev);
+      event->set_stage_iid(stage_iid);
+      event->set_context(state->context_iid);
       event->set_submission_id(submission_id);
 
       if (stage->payload) {
          if (stage->start_payload_function)
             ((trace_payload_as_extra_func) stage->start_payload_function)(
                event, stage->payload, nullptr);
-         free((void *)stage->payload);
       }
 
       if (payload && payload_as_extra)
          payload_as_extra(event, payload, indirect);
    });
+
+   stage_cleanup(stage);
 }
 
 class TuMemoryDataSource : public perfetto::DataSource<TuMemoryDataSource> {
@@ -393,7 +465,7 @@ extern "C" {
 
 static once_flag tu_perfetto_init_once_flag = ONCE_FLAG_INIT;
 
-void
+static void
 tu_perfetto_init_once()
 {
    {
@@ -540,6 +612,215 @@ tu_perfetto_end_submit(struct tu_queue *queue,
    return clocks;
 }
 
+struct tu_bin_layout_data *
+tu_bin_layout_data_create(const struct tu_cmd_buffer *cmd,
+                          uint32_t view_count,
+                          const VkOffset2D *fdm_offsets,
+                          uint32_t tile_count)
+{
+   if (!u_trace_enabled(&cmd->device->trace_context))
+      return NULL;
+
+   const struct vk_viewport_state *vp = &cmd->vk.dynamic_graphics_state.vp;
+   const struct tu_tiling_config *tiling = cmd->state.tiling;
+
+   struct tu_bin_layout_data *data = (struct tu_bin_layout_data *)
+      ralloc_size(NULL, sizeof(struct tu_bin_layout_data) +
+                        tile_count * sizeof(struct tu_tile_config));
+   if (!data) {
+      mesa_logw("Failed to allocate memory for Perfetto bin layout.");
+      return NULL;
+   }
+
+   data->fb_size = (VkExtent2D) {
+      .width = cmd->state.framebuffer->width,
+      .height = cmd->state.framebuffer->height
+   };
+
+   data->bin_size = tiling->tile0;
+
+   assert(vp->viewport_count <= MAX_VIEWPORTS);
+   data->viewport_count = vp->viewport_count;
+   for (uint32_t i = 0; i < data->viewport_count; i++) {
+      float height = vp->viewports[i].height;
+      float y = vp->viewports[i].y;
+
+      /* VK_KHR_maintenance1 allows negative height */
+      if (height < 0) {
+         y += height;
+         height = -height;
+      }
+
+      data->viewports[i] = (VkRect2D){
+         .offset = { .x = (int32_t)vp->viewports[i].x, .y = (int32_t)y },
+         .extent = {
+            .width = (uint32_t)vp->viewports[i].width,
+            .height = (uint32_t)height,
+         },
+      };
+   }
+
+   assert(vp->scissor_count <= MAX_SCISSORS);
+   data->scissor_count = vp->scissor_count;
+   for (uint32_t i = 0; i < data->scissor_count; i++)
+      data->scissors[i] = vp->scissors[i];
+
+   assert(view_count <= MAX_VIEWS);
+   data->view_count = view_count;
+   data->has_fdm_offsets = fdm_offsets && !cmd->state.rp.shared_viewport;
+   if (data->has_fdm_offsets)
+      for (uint32_t i = 0; i < view_count; i++)
+         data->fdm_offsets[i] = tu_bin_offset(fdm_offsets[i], tiling);
+
+   data->tile_size = tiling->tile0;
+   data->tile_count = 0;
+
+   data->valid = true;
+
+   return data;
+}
+
+static void
+json_append_extent2D(JSON_Object *parent, const char *name, VkExtent2D extent)
+{
+   JSON_Value *field_v = json_value_init_object();
+
+   JSON_Object *field = json_object(field_v);
+   json_object_set_number(field, "width", extent.width);
+   json_object_set_number(field, "height", extent.height);
+   json_object_set_value(parent, name, field_v);
+}
+
+static void
+json_append_arr_extent2D(JSON_Array *array, VkExtent2D extent)
+{
+   JSON_Value *field_v = json_value_init_object();
+
+   JSON_Object *field = json_object(field_v);
+   json_object_set_number(field, "width", extent.width);
+   json_object_set_number(field, "height", extent.height);
+   json_array_append_value(array, field_v);
+}
+
+static void
+json_append_arr_offset2D(JSON_Array *array, VkOffset2D offset)
+{
+   JSON_Value *field_v = json_value_init_object();
+
+   JSON_Object *field = json_object(field_v);
+   json_object_set_number(field, "x", offset.x);
+   json_object_set_number(field, "y", offset.y);
+   json_array_append_value(array, field_v);
+}
+
+static void
+json_append_arr_rect2D(JSON_Array *array, VkRect2D rect)
+{
+   JSON_Value *field_v = json_value_init_object();
+
+   JSON_Object *field = json_object(field_v);
+   json_object_set_number(field, "x", rect.offset.x);
+   json_object_set_number(field, "y", rect.offset.y);
+   json_object_set_number(field, "width", rect.extent.width);
+   json_object_set_number(field, "height", rect.extent.height);
+   json_array_append_value(array, field_v);
+}
+
+/* This serializes the bin layout and reuses its memory to store the string. */
+char *
+tu_bin_layout_data_json_serialize(enum u_trace_backend_type backend_type,
+                                  const struct tu_bin_layout_data *data)
+{
+   char *str;
+   const bool ret =
+      _tu_bin_layout_data_json_serialize_base(backend_type, data, &str);
+   if (ret)
+      return str;
+
+   const uint32_t version = 1;
+
+   JSON_Value *binInfo_v = json_value_init_object();
+   JSON_Object *binInfo = json_object(binInfo_v);
+
+   json_object_set_number(binInfo, "version", (double) version);
+
+   json_append_extent2D(binInfo, "fbSize", data->fb_size);
+   json_append_extent2D(binInfo, "binSize", data->bin_size);
+   json_object_set_number(binInfo, "viewCount", (double) data->view_count);
+
+   JSON_Value *viewports_v = json_value_init_array();
+   JSON_Array *viewports = json_array(viewports_v);
+   for (uint32_t i = 0; i < data->viewport_count; i++)
+      json_append_arr_rect2D(viewports, data->viewports[i]);
+   json_object_set_value(binInfo, "viewports", viewports_v);
+
+   JSON_Value *scissors_v = json_value_init_array();
+   JSON_Array *scissors = json_array(scissors_v);
+   for (uint32_t i = 0; i < data->scissor_count; i++)
+      json_append_arr_rect2D(scissors, data->scissors[i]);
+   json_object_set_value(binInfo, "scissors", scissors_v);
+
+   if (data->has_fdm_offsets) {
+      JSON_Value *perViewBinOffset_v = json_value_init_array();
+      JSON_Array *perViewBinOffset = json_array(perViewBinOffset_v);
+      for (uint32_t view = 0; view < data->view_count; view++)
+         json_append_arr_offset2D(perViewBinOffset, data->fdm_offsets[view]);
+      json_object_set_value(binInfo, "perViewBinOffset", perViewBinOffset_v);
+   }
+
+   JSON_Value *perViewFDMScale_v = json_value_init_array();
+   JSON_Array *perViewFDMScale = json_array(perViewFDMScale_v);
+
+   JSON_Value *perViewFDMScale_e_v[MAX_VIEWS];
+   JSON_Array *perViewFDMScale_e[MAX_VIEWS];
+   for (uint32_t i = 0; i < data->view_count; i++) {
+      perViewFDMScale_e_v[i] = json_value_init_array();
+      perViewFDMScale_e[i] = json_array(perViewFDMScale_e_v[i]);
+   }
+
+   JSON_Value *binCoordinates_v = json_value_init_array();
+   JSON_Array *binCoordinates = json_array(binCoordinates_v);
+
+   for (uint32_t i = 0; i < data->tile_count; i++) {
+      const struct tu_tile_config *tile = &data->tiles[i];
+
+      json_append_arr_rect2D(binCoordinates, (VkRect2D) {
+         .offset = {
+            .x = tile->pos.x * data->tile_size.width,
+            .y = tile->pos.y * data->tile_size.height,
+         },
+         .extent = {
+            .width = tile->sysmem_extent.width * data->tile_size.width,
+            .height = tile->sysmem_extent.height * data->tile_size.height,
+         },
+      });
+
+      for (uint32_t view = 0; view < data->view_count; view++) {
+         VkExtent2D fdm_scale;
+         if (!(tile->visible_views & BITFIELD_BIT(view)))
+            fdm_scale = (VkExtent2D) { 0, 0 };
+         else
+            fdm_scale = tile->frag_areas[view];
+
+         json_append_arr_extent2D(perViewFDMScale_e[view], fdm_scale);
+      }
+   }
+
+   json_object_set_value(binInfo, "binCoordinates", binCoordinates_v);
+
+   for (uint32_t view = 0; view < data->view_count; view++)
+      json_array_append_value(perViewFDMScale, perViewFDMScale_e_v[view]);
+   json_object_set_value(binInfo, "perViewFDMScale", perViewFDMScale_v);
+
+   size_t size = json_serialization_size(binInfo_v);
+   char *serialized = (char *) ralloc_size(NULL, size);
+
+   json_serialize_to_buffer(binInfo_v, serialized, size);
+   json_value_free(binInfo_v);
+
+   return serialized;
+}
+
 /*
  * Trace callbacks, called from u_trace once the timestamps from GPU have been
  * collected.
@@ -559,7 +840,7 @@ tu_perfetto_end_submit(struct tu_queue *queue,
       const void *indirect_data)                                                    \
    {                                                                                \
       stage_start(                                                                  \
-         dev, ts_ns, stage_id, NULL, payload, sizeof(*payload), indirect_data,      \
+         dev, ts_ns, stage_id, payload, sizeof(*payload), indirect_data,            \
          (trace_payload_as_extra_func) &trace_payload_as_extra_start_##event_name); \
    }                                                                                \
                                                                                     \
@@ -569,17 +850,26 @@ tu_perfetto_end_submit(struct tu_queue *queue,
       const void *indirect_data)                                                    \
    {                                                                                \
       stage_end(                                                                    \
-         dev, ts_ns, stage_id, flush_data, payload, indirect_data,                  \
+         dev, ts_ns, stage_id, NULL, flush_data, payload, indirect_data,            \
          (trace_payload_as_extra_func) &trace_payload_as_extra_end_##event_name);   \
+   }
+
+#define CREATE_STICKY_WARNING_EVENT_CALLBACK(event_name, stage_id)                                                     \
+   void tu_perfetto_##event_name(struct tu_device *dev, uint64_t ts_ns, uint16_t tp_idx, const void *flush_data,       \
+                                 const struct trace_##event_name *payload, const void *indirect_data)                  \
+   {                                                                                                                   \
+      stage_start(dev, ts_ns, stage_id, payload, sizeof(*payload), indirect_data,                                      \
+                  (trace_payload_as_extra_func) & trace_payload_as_extra_##event_name);                                \
    }
 
 CREATE_EVENT_CALLBACK(cmd_buffer, CMD_BUFFER_STAGE_ID)
 CREATE_EVENT_CALLBACK(secondary_cmd_buffer, SECONDARY_CMD_BUFFER_STAGE_ID)
 CREATE_EVENT_CALLBACK(render_pass, RENDER_PASS_STAGE_ID)
 CREATE_EVENT_CALLBACK(binning_ib, BINNING_STAGE_ID)
+CREATE_EVENT_CALLBACK(concurrent_binning_ib, CONCURRENT_BINNING_STAGE_ID)
+CREATE_EVENT_CALLBACK(concurrent_binning_barrier, CONCURRENT_BINNING_BARRIER_STAGE_ID)
 CREATE_EVENT_CALLBACK(draw_ib_gmem, GMEM_STAGE_ID)
 CREATE_EVENT_CALLBACK(draw_ib_sysmem, BYPASS_STAGE_ID)
-CREATE_EVENT_CALLBACK(blit, BLIT_STAGE_ID)
 CREATE_EVENT_CALLBACK(draw, DRAW_STAGE_ID)
 CREATE_EVENT_CALLBACK(compute, COMPUTE_STAGE_ID)
 CREATE_EVENT_CALLBACK(compute_indirect, COMPUTE_STAGE_ID)
@@ -590,6 +880,24 @@ CREATE_EVENT_CALLBACK(sysmem_clear_all, CLEAR_SYSMEM_STAGE_ID)
 CREATE_EVENT_CALLBACK(gmem_load, GMEM_LOAD_STAGE_ID)
 CREATE_EVENT_CALLBACK(gmem_store, GMEM_STORE_STAGE_ID)
 CREATE_EVENT_CALLBACK(sysmem_resolve, SYSMEM_RESOLVE_STAGE_ID)
+CREATE_EVENT_CALLBACK(custom_resolve, CUSTOM_RESOLVE_STAGE_ID)
+CREATE_EVENT_CALLBACK(blit_image, BLIT_STAGE_ID)
+CREATE_EVENT_CALLBACK(clear_color_image, CLEAR_COLOR_IMAGE_STAGE_ID)
+CREATE_EVENT_CALLBACK(clear_depth_stencil_image, CLEAR_DEPTH_STENCIL_IMAGE_STAGE_ID)
+CREATE_EVENT_CALLBACK(copy_buffer_to_image, COPY_BUFFER_TO_IMAGE_STAGE_ID)
+CREATE_EVENT_CALLBACK(copy_image, COPY_IMAGE_STAGE_ID)
+CREATE_EVENT_CALLBACK(copy_image_to_buffer, COPY_IMAGE_TO_BUFFER_STAGE_ID)
+CREATE_EVENT_CALLBACK(fill_buffer, FILL_BUFFER_STAGE_ID)
+CREATE_EVENT_CALLBACK(copy_buffer, COPY_BUFFER_STAGE_ID)
+CREATE_EVENT_CALLBACK(update_buffer, UPDATE_BUFFER_STAGE_ID)
+CREATE_EVENT_CALLBACK(resolve_image, RESOLVE_IMAGE_STAGE_ID)
+CREATE_EVENT_CALLBACK(slow_clear_lrz, SLOW_CLEAR_LRZ_STAGE_ID)
+CREATE_EVENT_CALLBACK(disable_lrz, DISABLE_LRZ_STAGE_ID)
+CREATE_STICKY_WARNING_EVENT_CALLBACK(warning_slow_clear_lrz, WARNING_SLOW_CLEAR_LRZ_STAGE_ID)
+CREATE_STICKY_WARNING_EVENT_CALLBACK(warning_depth_image_no_lrz, WARNING_DEPTH_IMAGE_NO_LRZ_STAGE_ID)
+CREATE_STICKY_WARNING_EVENT_CALLBACK(warning_lrz_disabled, WARNING_LRZ_DISABLED_STAGE_ID)
+CREATE_STICKY_WARNING_EVENT_CALLBACK(warning_lrz_write_disabled, WARNING_LRZ_WRITE_DISABLED_STAGE_ID)
+CREATE_STICKY_WARNING_EVENT_CALLBACK(warning_fdm_force_disabled, WARNING_FDM_FORCE_DISABLED_STAGE_ID)
 
 void
 tu_perfetto_start_cmd_buffer_annotation(
@@ -601,7 +909,7 @@ tu_perfetto_start_cmd_buffer_annotation(
    const void *indirect_data)
 {
    /* No extra func necessary, the only arg is in the end payload.*/
-   stage_start(dev, ts_ns, CMD_BUFFER_ANNOTATION_STAGE_ID, payload->str, payload,
+   stage_start(dev, ts_ns, CMD_BUFFER_ANNOTATION_STAGE_ID, payload,
                sizeof(*payload), NULL);
 }
 
@@ -617,7 +925,7 @@ tu_perfetto_end_cmd_buffer_annotation(
    /* Pass the payload string as the app_event, which will appear right on the
     * event block, rather than as metadata inside.
     */
-   stage_end(dev, ts_ns, CMD_BUFFER_ANNOTATION_STAGE_ID, flush_data,
+   stage_end(dev, ts_ns, CMD_BUFFER_ANNOTATION_STAGE_ID, payload->str, flush_data,
              payload, NULL);
 }
 
@@ -632,7 +940,7 @@ tu_perfetto_start_cmd_buffer_annotation_rp(
 {
    /* No extra func necessary, the only arg is in the end payload.*/
    stage_start(dev, ts_ns, CMD_BUFFER_ANNOTATION_RENDER_PASS_STAGE_ID,
-               payload->str, payload, sizeof(*payload), NULL);
+               payload, sizeof(*payload), NULL);
 }
 
 void
@@ -648,7 +956,7 @@ tu_perfetto_end_cmd_buffer_annotation_rp(
     * event block, rather than as metadata inside.
     */
    stage_end(dev, ts_ns, CMD_BUFFER_ANNOTATION_RENDER_PASS_STAGE_ID,
-             flush_data, payload, NULL);
+             payload->str, flush_data, payload, NULL);
 }
 
 
@@ -727,22 +1035,22 @@ tu_perfetto_log_destroy_image(struct tu_device *dev, struct tu_image *image)
 
 
 void
-tu_perfetto_set_debug_utils_object_name(const VkDebugUtilsObjectNameInfoEXT *pNameInfo)
+tu_perfetto_set_debug_utils_object_name(struct tu_device *dev, const VkDebugUtilsObjectNameInfoEXT *pNameInfo)
 {
    TuRenderpassDataSource::Trace([=](auto tctx) {
       /* Do we need this for SEQ_INCREMENTAL_STATE_CLEARED for the object name to stick? */
-      setup_incremental_state(tctx);
+      setup_incremental_state(tctx, dev);
 
       tctx.GetDataSourceLocked()->SetDebugUtilsObjectNameEXT(tctx, pNameInfo);
    });
 }
 
 void
-tu_perfetto_refresh_debug_utils_object_name(const struct vk_object_base *object)
+tu_perfetto_refresh_debug_utils_object_name(struct tu_device *dev, const struct vk_object_base *object)
 {
    TuRenderpassDataSource::Trace([=](auto tctx) {
       /* Do we need this for SEQ_INCREMENTAL_STATE_CLEARED for the object name to stick? */
-      setup_incremental_state(tctx);
+      setup_incremental_state(tctx, dev);
 
       tctx.GetDataSourceLocked()->RefreshSetDebugUtilsObjectNameEXT(tctx, object);
    });

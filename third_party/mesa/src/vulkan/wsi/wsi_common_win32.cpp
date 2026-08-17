@@ -26,6 +26,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "util/cnd_monotonic.h"
+#include "util/timespec.h"
+#include "util/u_thread.h"
 #include "vk_format.h"
 #include "vk_instance.h"
 #include "vk_physical_device.h"
@@ -100,6 +103,8 @@ struct wsi_win32_swapchain {
    IDXGISwapChain3            *dxgi;
    struct wsi_win32           *wsi;
    wsi_win32_surface          *surface;
+   mtx_t                      acquire_mutex;
+   struct u_cnd_monotonic     acquire_cond;
    uint64_t                     flip_sequence;
    VkResult                     status;
    VkExtent2D                 extent;
@@ -171,7 +176,7 @@ wsi_win32_surface_get_support(VkIcdSurfaceBase *surface,
 static VkResult
 wsi_win32_surface_get_capabilities(VkIcdSurfaceBase *surf,
                                    struct wsi_device *wsi_device,
-                                   VkSurfaceCapabilitiesKHR* caps)
+                                   VkSurfaceCapabilities2KHR* caps)
 {
    VkIcdSurfaceWin32 *surface = (VkIcdSurfaceWin32 *)surf;
 
@@ -179,44 +184,56 @@ wsi_win32_surface_get_capabilities(VkIcdSurfaceBase *surf,
    if (!GetClientRect(surface->hwnd, &win_rect))
       return VK_ERROR_SURFACE_LOST_KHR;
 
-   caps->minImageCount = 1;
+   caps->surfaceCapabilities.minImageCount = 1;
 
    if (!wsi_device->sw && wsi_device->win32.get_d3d12_command_queue) {
       /* DXGI doesn't support random presenting order (images need to
        * be presented in the order they were acquired), so we can't
        * expose more than two image per swapchain.
        */
-      caps->minImageCount = caps->maxImageCount = 2;
+      caps->surfaceCapabilities.minImageCount = caps->surfaceCapabilities.maxImageCount = 2;
    } else {
-      caps->minImageCount = 1;
+      caps->surfaceCapabilities.minImageCount = 1;
       /* Software callbacke, there is no real maximum */
-      caps->maxImageCount = 0;
+      caps->surfaceCapabilities.maxImageCount = 0;
    }
 
-   caps->currentExtent = {
+   caps->surfaceCapabilities.currentExtent = {
       (uint32_t)win_rect.right - (uint32_t)win_rect.left,
       (uint32_t)win_rect.bottom - (uint32_t)win_rect.top
    };
-   caps->minImageExtent = { 1u, 1u };
-   caps->maxImageExtent = {
+   caps->surfaceCapabilities.minImageExtent = { 1u, 1u };
+   caps->surfaceCapabilities.maxImageExtent = {
       wsi_device->maxImageDimension2D,
       wsi_device->maxImageDimension2D,
    };
 
-   caps->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   caps->currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   caps->maxImageArrayLayers = 1;
+   caps->surfaceCapabilities.supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+   caps->surfaceCapabilities.currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+   caps->surfaceCapabilities.maxImageArrayLayers = 1;
 
-   caps->supportedCompositeAlpha =
+   caps->surfaceCapabilities.supportedCompositeAlpha =
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR |
       VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR |
       VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
 
-   caps->supportedUsageFlags = wsi_caps_get_image_usage();
+   VkImageUsageFlags image_usage = wsi_caps_get_image_usage();
 
    VK_FROM_HANDLE(vk_physical_device, pdevice, wsi_device->pdevice);
    if (pdevice->supported_extensions.EXT_attachment_feedback_loop_layout)
-      caps->supportedUsageFlags |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;
+      image_usage |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;
+
+   VkSwapchainFlagsSurfaceCapabilitiesEXT *surface_caps = vk_find_struct(caps, SWAPCHAIN_FLAGS_SURFACE_CAPABILITIES_EXT);
+   if (surface_caps && pdevice->supported_extensions.EXT_multisampled_render_to_swapchain)
+      surface_caps->swapchainSupportedFlags |= VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT;
+
+   VkImageUsageFlags2CreateInfoKHR *usage2 =
+      vk_find_struct(caps->pNext, IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR);
+   if (usage2) {
+      usage2->usage = image_usage;
+   } else {
+      caps->surfaceCapabilities.supportedUsageFlags = image_usage;
+   }
 
    return VK_SUCCESS;
 }
@@ -229,12 +246,12 @@ wsi_win32_surface_get_capabilities2(VkIcdSurfaceBase *surface,
 {
    assert(caps->sType == VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR);
 
-   const VkSurfacePresentModeEXT *present_mode =
-      (const VkSurfacePresentModeEXT *)vk_find_struct_const(info_next, SURFACE_PRESENT_MODE_EXT);
+   const VkSurfacePresentModeKHR *present_mode =
+      (const VkSurfacePresentModeKHR *)vk_find_struct_const(info_next, SURFACE_PRESENT_MODE_KHR);
 
    VkResult result =
       wsi_win32_surface_get_capabilities(surface, wsi_device,
-                                      &caps->surfaceCapabilities);
+                                         caps);
 
    vk_foreach_struct(ext, caps->pNext) {
       switch (ext->sType) {
@@ -244,7 +261,7 @@ wsi_win32_surface_get_capabilities2(VkIcdSurfaceBase *surface,
          break;
       }
 
-      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT: {
+      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_KHR: {
          /* Unsupported. */
          VkSurfacePresentScalingCapabilitiesEXT *scaling =
             (VkSurfacePresentScalingCapabilitiesEXT *)ext;
@@ -256,10 +273,10 @@ wsi_win32_surface_get_capabilities2(VkIcdSurfaceBase *surface,
          break;
       }
 
-      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT: {
+      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_KHR: {
          /* Unsupported, just report the input present mode. */
-         VkSurfacePresentModeCompatibilityEXT *compat =
-            (VkSurfacePresentModeCompatibilityEXT *)ext;
+         VkSurfacePresentModeCompatibilityKHR *compat =
+            (VkSurfacePresentModeCompatibilityKHR *)ext;
          if (compat->pPresentModes) {
             if (compat->presentModeCount) {
                assert(present_mode);
@@ -268,11 +285,21 @@ wsi_win32_surface_get_capabilities2(VkIcdSurfaceBase *surface,
             }
          } else {
             if (!present_mode)
-               wsi_common_vk_warn_once("Use of VkSurfacePresentModeCompatibilityEXT "
-                                       "without a VkSurfacePresentModeEXT set. This is an "
+               wsi_common_vk_warn_once("Use of VkSurfacePresentModeCompatibilityKHR "
+                                       "without a VkSurfacePresentModeKHR set. This is an "
                                        "application bug.\n");
             compat->presentModeCount = 1;
          }
+         break;
+      }
+
+      case VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT: {
+         VkPresentTimingSurfaceCapabilitiesEXT *wait = (VkPresentTimingSurfaceCapabilitiesEXT *)ext;
+
+         wait->presentStageQueries = 0;
+         wait->presentTimingSupported = VK_FALSE;
+         wait->presentAtAbsoluteTimeSupported = VK_FALSE;
+         wait->presentAtRelativeTimeSupported = VK_FALSE;
          break;
       }
 
@@ -289,8 +316,9 @@ wsi_win32_surface_get_capabilities2(VkIcdSurfaceBase *surface,
 static const struct {
    VkFormat     format;
 } available_surface_formats[] = {
-   { VK_FORMAT_B8G8R8A8_SRGB },
    { VK_FORMAT_B8G8R8A8_UNORM },
+   { VK_FORMAT_R8G8B8A8_UNORM },
+   { VK_FORMAT_B8G8R8A8_SRGB },
 };
 
 
@@ -592,6 +620,10 @@ wsi_win32_swapchain_destroy(struct wsi_swapchain *drv_chain,
       chain->dxgi->Release();
 
    wsi_swapchain_finish(&chain->base);
+
+   u_cnd_monotonic_destroy(&chain->acquire_cond);
+   mtx_destroy(&chain->acquire_mutex);
+
    vk_free(allocator, chain);
    return VK_SUCCESS;
 }
@@ -604,6 +636,21 @@ wsi_win32_get_wsi_image(struct wsi_swapchain *drv_chain,
       (struct wsi_win32_swapchain *) drv_chain;
 
    return &chain->images[image_index].base;
+}
+
+static void
+wsi_win32_set_image_idle(struct wsi_win32_swapchain *chain,
+                         struct wsi_win32_image *image)
+{
+   if (!chain->dxgi)
+      mtx_lock(&chain->acquire_mutex);
+
+   image->state = WSI_IMAGE_IDLE;
+
+   if (!chain->dxgi) {
+      u_cnd_monotonic_broadcast(&chain->acquire_cond);
+      mtx_unlock(&chain->acquire_mutex);
+   }
 }
 
 static VkResult
@@ -620,12 +667,63 @@ wsi_win32_release_images(struct wsi_swapchain *drv_chain,
       uint32_t index = indices[i];
       assert(index < chain->base.image_count);
       assert(chain->images[index].state == WSI_IMAGE_DRAWING);
-      chain->images[index].state = WSI_IMAGE_IDLE;
+      wsi_win32_set_image_idle(chain, &chain->images[index]);
    }
 
    return VK_SUCCESS;
 }
 
+static bool
+wsi_win32_find_idle_image(struct wsi_win32_swapchain *chain,
+                          uint32_t *out_image_index)
+{
+   for (uint32_t i = 0; i < chain->base.image_count; i++) {
+      if (chain->images[i].state == WSI_IMAGE_IDLE) {
+         *out_image_index = i;
+         chain->images[i].state = WSI_IMAGE_DRAWING;
+         return true;
+      }
+   }
+   return false;
+}
+
+static VkResult
+wsi_win32_acquire_idle_cpu_image_locked(struct wsi_win32_swapchain *chain,
+                                        const VkAcquireNextImageInfoKHR *info,
+                                        uint32_t *out_image_index)
+{
+   if (wsi_win32_find_idle_image(chain, out_image_index))
+      return VK_SUCCESS;
+
+   if (info->timeout == 0)
+      return VK_NOT_READY;
+
+   const uint64_t abs_timeout = os_time_get_absolute_timeout(info->timeout);
+   struct timespec abs_timespec;
+   timespec_from_nsec(&abs_timespec, abs_timeout);
+   do {
+      int ret = u_cnd_monotonic_timedwait(
+         &chain->acquire_cond, &chain->acquire_mutex, &abs_timespec);
+      if (ret == thrd_timedout)
+         return VK_TIMEOUT;
+      else if (ret != thrd_success)
+         return VK_ERROR_OUT_OF_DATE_KHR;
+   } while (!wsi_win32_find_idle_image(chain, out_image_index));
+
+   return VK_SUCCESS;
+}
+
+static inline VkResult
+wsi_win32_acquire_idle_cpu_image(struct wsi_win32_swapchain *chain,
+                                 const VkAcquireNextImageInfoKHR *info,
+                                 uint32_t *out_image_index)
+{
+   mtx_lock(&chain->acquire_mutex);
+   VkResult result = wsi_win32_acquire_idle_cpu_image_locked(chain, info,
+                                                             out_image_index);
+   mtx_unlock(&chain->acquire_mutex);
+   return result;
+}
 
 static VkResult
 wsi_win32_acquire_next_image(struct wsi_swapchain *drv_chain,
@@ -639,13 +737,12 @@ wsi_win32_acquire_next_image(struct wsi_swapchain *drv_chain,
    if (chain->status != VK_SUCCESS)
       return chain->status;
 
-   for (uint32_t i = 0; i < chain->base.image_count; i++) {
-      if (chain->images[i].state == WSI_IMAGE_IDLE) {
-         *image_index = i;
-         chain->images[i].state = WSI_IMAGE_DRAWING;
-         return VK_SUCCESS;
-      }
-   }
+   /* acquire timeout has to be explicitly handled for sw wsi */
+   if (!chain->dxgi)
+      return wsi_win32_acquire_idle_cpu_image(chain, info, image_index);
+
+   if (wsi_win32_find_idle_image(chain, image_index))
+      return VK_SUCCESS;
 
    assert(chain->dxgi);
    uint32_t index = chain->dxgi->GetCurrentBackBufferIndex();
@@ -735,7 +832,7 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
    if (!StretchBlt(chain->chain_dc, 0, 0, chain->extent.width, chain->extent.height, image->sw.dc, 0, 0, chain->extent.width, chain->extent.height, SRCCOPY))
       chain->status = VK_ERROR_MEMORY_MAP_FAILED;
 
-   image->state = WSI_IMAGE_IDLE;
+   wsi_win32_set_image_idle(chain, image);
 
    return chain->status;
 }
@@ -783,12 +880,12 @@ wsi_win32_surface_create_swapchain_dxgi(
          DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u
    };
 
-   if (create_info->imageUsage &
-       (VK_IMAGE_USAGE_SAMPLED_BIT |
-        VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT))
+   const VkImageUsageFlags2KHR image_usage = vk_swapchain_usage_flags(create_info);
+
+   if (image_usage & (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT))
       desc.BufferUsage |= DXGI_USAGE_SHADER_INPUT;
 
-   if (create_info->imageUsage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+   if (image_usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
       desc.BufferUsage |= DXGI_USAGE_RENDER_TARGET_OUTPUT;
 
    IDXGISwapChain1 *swapchain1;
@@ -839,10 +936,25 @@ wsi_win32_surface_create_swapchain(
    if (chain == NULL)
       return VK_ERROR_OUT_OF_HOST_MEMORY;
 
+   int ret = mtx_init(&chain->acquire_mutex, mtx_plain);
+   if (ret != thrd_success) {
+      vk_free(allocator, chain);
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   ret = u_cnd_monotonic_init(&chain->acquire_cond);
+   if (ret != thrd_success) {
+      mtx_destroy(&chain->acquire_mutex);
+      vk_free(allocator, chain);
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   }
+
+   const VkImageUsageFlags2KHR image_usage = vk_swapchain_usage_flags(create_info);
+
    struct wsi_dxgi_image_params dxgi_image_params = {
       { WSI_IMAGE_TYPE_DXGI },
    };
-   dxgi_image_params.storage_image = (create_info->imageUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0;
+   dxgi_image_params.storage_image = (image_usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0;
 
    struct wsi_cpu_image_params cpu_image_params = {
       { WSI_IMAGE_TYPE_CPU },
@@ -858,6 +970,8 @@ wsi_win32_surface_create_swapchain(
                                         create_info, image_params,
                                         allocator);
    if (result != VK_SUCCESS) {
+      u_cnd_monotonic_destroy(&chain->acquire_cond);
+      mtx_destroy(&chain->acquire_mutex);
       vk_free(allocator, chain);
       return result;
    }

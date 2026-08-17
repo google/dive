@@ -26,6 +26,7 @@
 #define H_LIMA_CONTEXT
 
 #include "util/list.h"
+#include "util/mesa-blake3.h"
 #include "util/slab.h"
 #include "util/u_debug.h"
 
@@ -56,14 +57,17 @@ struct lima_fs_compiled_shader {
 
 struct lima_fs_uncompiled_shader {
    struct pipe_shader_state base;
-   unsigned char nir_sha1[20];
+   unsigned char nir_blake3[BLAKE3_KEY_LEN];
 };
 
 struct lima_fs_key {
-   unsigned char nir_sha1[20];
+   unsigned char nir_blake3[BLAKE3_KEY_LEN];
    struct {
+      enum pipe_format format;
       uint8_t swizzle[4];
    } tex[PIPE_MAX_SAMPLERS];
+
+   enum pipe_format color_format;
 };
 
 #define LIMA_MAX_VARYING_NUM 13
@@ -94,11 +98,11 @@ struct lima_vs_compiled_shader {
 
 struct lima_vs_uncompiled_shader {
    struct pipe_shader_state base;
-   unsigned char nir_sha1[20];
+   unsigned char nir_blake3[BLAKE3_KEY_LEN];
 };
 
 struct lima_vs_key {
-   unsigned char nir_sha1[20];
+   unsigned char nir_blake3[BLAKE3_KEY_LEN];
 };
 
 struct lima_rasterizer_state {

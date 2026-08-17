@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <string>
 
 #include "common/intel_gem.h"
 #include "perf/intel_perf.h"
@@ -307,42 +308,180 @@ end_event(struct intel_ds_queue *queue, uint64_t ts_ns,
    stage->start_ns[level] = 0;
 }
 
+/* Variant for dynamic event names (for example, names formatted in
+ * stack-local buffers).
+ *
+ * Takes a std::string by value so the [=] lambda capture copies string storage
+ * into the Trace() closure. This avoids dangling pointers when Trace() runs
+ * after the caller's stack frame is gone.
+ *
+ * Keep end_event() with const char* for NULL, string literals, and other
+ * long-lived pointers to avoid std::string construction on the common path.
+ */
+static void
+end_event_dyn(struct intel_ds_queue *queue, uint64_t ts_ns,
+          enum intel_ds_queue_stage stage_id,
+          uint32_t submission_id,
+          uint16_t tracepoint_idx,
+          std::string app_event,
+          const void *payload = nullptr,
+          const void *indirect_data = nullptr,
+          trace_payload_as_extra_func payload_as_extra = nullptr)
+{
+   struct intel_ds_device *device = queue->device;
+
+   if (queue->stages[stage_id].level == 0)
+      return;
+
+   uint32_t level = --queue->stages[stage_id].level;
+   struct intel_ds_stage *stage = &queue->stages[stage_id];
+   uint64_t start_ns = stage->start_ns[level];
+
+   if (!start_ns)
+      return;
+
+   IntelRenderpassDataSource::Trace([=](IntelRenderpassDataSource::TraceContext tctx) {
+      setup_incremental_state(tctx, device);
+
+      sync_timestamp(tctx, device);
+
+      uint64_t evt_id = device->event_id++;
+
+      uint64_t stage_iid = !app_event.empty() ?
+         tctx.GetDataSourceLocked()->debug_marker_stage(tctx, app_event.c_str()) :
+         device->tracepoint_iids[tracepoint_idx];
+
+      auto packet = tctx.NewTracePacket();
+
+      packet->set_timestamp(start_ns);
+      packet->set_timestamp_clock_id(device->gpu_clock_id);
+
+      assert(ts_ns >= start_ns);
+
+      auto event = packet->set_gpu_render_stage_event();
+      event->set_gpu_id(device->gpu_id);
+
+      event->set_hw_queue_iid(stage->queue_iid);
+      event->set_stage_iid(stage_iid);
+      event->set_context(device->iid);
+      event->set_event_id(evt_id);
+      event->set_duration(ts_ns - start_ns);
+      event->set_submission_id(submission_id);
+
+      if ((payload || indirect_data) && payload_as_extra) {
+         payload_as_extra(event, payload, indirect_data);
+      }
+   });
+
+   stage->start_ns[level] = 0;
+}
+
+static size_t
+snprintf_stages(char *buf, size_t buf_size,
+                enum intel_ds_barrier_type type,
+                enum intel_ds_stages signal_stages,
+                enum intel_ds_stages wait_stages)
+{
+   return
+      snprintf(buf, buf_size, "%s: %s%s%s%s%s%s%s->%s%s%s%s%s%s%s: ",
+               type == INTEL_DS_BARRIER_TYPE_IMMEDIATE ? "imm" :
+               type == INTEL_DS_BARRIER_TYPE_SIGNAL    ? "signal" :
+               type == INTEL_DS_BARRIER_TYPE_WAIT      ? "wait" : "unknown",
+               (signal_stages & INTEL_DS_STAGES_TOP_BIT)    ? "+top" : "",
+               (signal_stages & INTEL_DS_STAGES_GEOM_BIT)   ? "+geom" : "",
+               (signal_stages & INTEL_DS_STAGES_RASTER_BIT) ? "+rast" : "",
+               (signal_stages & INTEL_DS_STAGES_DEPTH_BIT)  ? "+ds" : "",
+               (signal_stages & INTEL_DS_STAGES_PIXEL_BIT)  ? "+pix" : "",
+               (signal_stages & INTEL_DS_STAGES_COLOR_BIT)  ? "+col" : "",
+               (signal_stages & INTEL_DS_STAGES_GPGPU_BIT)  ? "+cs" : "",
+               (wait_stages & INTEL_DS_STAGES_TOP_BIT)    ? "+top" : "",
+               (wait_stages & INTEL_DS_STAGES_GEOM_BIT)   ? "+geom" : "",
+               (wait_stages & INTEL_DS_STAGES_RASTER_BIT) ? "+rast" : "",
+               (wait_stages & INTEL_DS_STAGES_DEPTH_BIT)  ? "+ds" : "",
+               (wait_stages & INTEL_DS_STAGES_PIXEL_BIT)  ? "+pix" : "",
+               (wait_stages & INTEL_DS_STAGES_COLOR_BIT)  ? "+col" : "",
+               (wait_stages & INTEL_DS_STAGES_GPGPU_BIT)  ? "+cs" : "");
+}
+
+static size_t
+snprintf_flags(char *buf, size_t buf_size, enum intel_ds_stall_flag bits)
+{
+   return
+      snprintf(buf, buf_size, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+               (bits & INTEL_DS_DEPTH_CACHE_FLUSH_BIT) ? "+depth_flush" : "",
+               (bits & INTEL_DS_DATA_CACHE_FLUSH_BIT) ? "+dc_flush" : "",
+               (bits & INTEL_DS_HDC_PIPELINE_FLUSH_BIT) ? "+hdc_flush" : "",
+               (bits & INTEL_DS_RENDER_TARGET_CACHE_FLUSH_BIT) ? "+rt_flush" : "",
+               (bits & INTEL_DS_TILE_CACHE_FLUSH_BIT) ? "+tile_flush" : "",
+               (bits & INTEL_DS_L3_FABRIC_FLUSH_BIT) ? "+l3_fabric_flush" : "",
+               (bits & INTEL_DS_STATE_CACHE_INVALIDATE_BIT) ? "+state_inv" : "",
+               (bits & INTEL_DS_CONST_CACHE_INVALIDATE_BIT) ? "+const_inv" : "",
+               (bits & INTEL_DS_VF_CACHE_INVALIDATE_BIT) ? "+vf_inv" : "",
+               (bits & INTEL_DS_TEXTURE_CACHE_INVALIDATE_BIT) ? "+tex_inv" : "",
+               (bits & INTEL_DS_INST_CACHE_INVALIDATE_BIT) ? "+inst_inv" : "",
+               (bits & INTEL_DS_STALL_AT_SCOREBOARD_BIT) ? "+pb_stall" : "",
+               (bits & INTEL_DS_DEPTH_STALL_BIT) ? "+depth_stall" : "",
+               (bits & INTEL_DS_CS_STALL_BIT) ? "+cs_stall" : "",
+               (bits & INTEL_DS_UNTYPED_DATAPORT_CACHE_FLUSH_BIT) ? "+udp_flush" : "",
+               (bits & INTEL_DS_END_OF_PIPE_BIT) ? "+eop" : "",
+               (bits & INTEL_DS_CCS_CACHE_FLUSH_BIT) ? "+ccs_flush" : "");
+}
+
+static size_t
+snprintf_reasons(char *buf, size_t buf_size,
+                 const char *r1, const char *r2,
+                 const char *r3, const char *r4)
+{
+   return
+      snprintf(buf, buf_size, ": %s%s%s%s%s%s%s",
+               r1 ? r1 : "unknown",
+               r2 ? "; " : "", r2 ? r2 : "",
+               r3 ? "; " : "", r3 ? r3 : "",
+               r4 ? "; " : "", r4 ? r4 : "");
+}
+
 static void
 custom_trace_payload_as_extra_end_stall(perfetto::protos::pbzero::GpuRenderStageEvent *event,
                                         const struct trace_intel_end_stall *payload)
 {
    char buf[256];
+   size_t buf_size = 0;
 
    {
       auto data = event->add_extra_data();
-      data->set_name("stall_reason");
+      data->set_name("reason");
 
-      snprintf(buf, sizeof(buf), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s : %s%s%s%s%s%s%s",
-              (payload->flags & INTEL_DS_DEPTH_CACHE_FLUSH_BIT) ? "+depth_flush" : "",
-              (payload->flags & INTEL_DS_DATA_CACHE_FLUSH_BIT) ? "+dc_flush" : "",
-              (payload->flags & INTEL_DS_HDC_PIPELINE_FLUSH_BIT) ? "+hdc_flush" : "",
-              (payload->flags & INTEL_DS_RENDER_TARGET_CACHE_FLUSH_BIT) ? "+rt_flush" : "",
-              (payload->flags & INTEL_DS_TILE_CACHE_FLUSH_BIT) ? "+tile_flush" : "",
-              (payload->flags & INTEL_DS_L3_FABRIC_FLUSH_BIT) ? "+l3_fabric_flush" : "",
-              (payload->flags & INTEL_DS_STATE_CACHE_INVALIDATE_BIT) ? "+state_inv" : "",
-              (payload->flags & INTEL_DS_CONST_CACHE_INVALIDATE_BIT) ? "+const_inv" : "",
-              (payload->flags & INTEL_DS_VF_CACHE_INVALIDATE_BIT) ? "+vf_inv" : "",
-              (payload->flags & INTEL_DS_TEXTURE_CACHE_INVALIDATE_BIT) ? "+tex_inv" : "",
-              (payload->flags & INTEL_DS_INST_CACHE_INVALIDATE_BIT) ? "+inst_inv" : "",
-              (payload->flags & INTEL_DS_STALL_AT_SCOREBOARD_BIT) ? "+pb_stall" : "",
-              (payload->flags & INTEL_DS_DEPTH_STALL_BIT) ? "+depth_stall" : "",
-              (payload->flags & INTEL_DS_CS_STALL_BIT) ? "+cs_stall" : "",
-              (payload->flags & INTEL_DS_UNTYPED_DATAPORT_CACHE_FLUSH_BIT) ? "+udp_flush" : "",
-              (payload->flags & INTEL_DS_END_OF_PIPE_BIT) ? "+eop" : "",
-              (payload->flags & INTEL_DS_CCS_CACHE_FLUSH_BIT) ? "+ccs_flush" : "",
-              (payload->reason1) ? payload->reason1 : "unknown",
-              (payload->reason2) ? "; " : "",
-              (payload->reason2) ? payload->reason2 : "",
-              (payload->reason3) ? "; " : "",
-              (payload->reason3) ? payload->reason3 : "",
-              (payload->reason4) ? "; " : "",
-              (payload->reason4) ? payload->reason4 : "");
+      buf_size += snprintf_flags(buf + buf_size, sizeof(buf) - buf_size,
+                                 (enum intel_ds_stall_flag) payload->flags);
+      buf_size += snprintf_reasons(buf + buf_size, sizeof(buf) - buf_size,
+                                   payload->reason1, payload->reason2,
+                                   payload->reason3, payload->reason4);
+      assert(strlen(buf) > 0);
 
+      data->set_value(buf);
+   }
+}
+
+static void
+custom_trace_payload_as_extra_end_barrier(perfetto::protos::pbzero::GpuRenderStageEvent *event,
+                                          const struct trace_intel_end_barrier *payload)
+{
+   char buf[256];
+   size_t buf_size = 0;
+
+   {
+      auto data = event->add_extra_data();
+      data->set_name("reason");
+
+      buf_size += snprintf_stages(buf + buf_size, sizeof(buf) - buf_size,
+                                  (enum intel_ds_barrier_type) payload->type,
+                                  (enum intel_ds_stages) payload->signal_stages,
+                                  (enum intel_ds_stages) payload->wait_stages);
+      buf_size += snprintf_flags(buf + buf_size, sizeof(buf) - buf_size,
+                                 (enum intel_ds_stall_flag) payload->flags);
+      buf_size += snprintf_reasons(buf + buf_size, sizeof(buf) - buf_size,
+                                   payload->reason1, payload->reason2,
+                                   payload->reason3, payload->reason4);
       assert(strlen(buf) > 0);
 
       data->set_value(buf);
@@ -392,17 +531,74 @@ extern "C" {
                 &trace_payload_as_extra_intel_end_##event_name);        \
    }                                                                    \
 
+/*
+ * Like CREATE_DUAL_EVENT_CALLBACK, but for dynamic event names.
+ *
+ * The name is formatted with snprintf() into a stack-local buffer, copied into
+ * a std::string, and passed by value to end_event_dyn(). That keeps the name
+ * alive in the Trace() lambda closure and avoids dangling stack pointers.
+ */
+#define CREATE_DUAL_EVENT_CALLBACK_DYN(event_name, stage, name_fmt, ...) \
+   void                                                                 \
+   intel_ds_begin_##event_name(struct intel_ds_device *device,          \
+                               uint64_t ts_ns,                          \
+                               uint16_t tp_idx,                         \
+                               const void *flush_data,                  \
+                               const struct trace_intel_begin_##event_name *payload, \
+                               const void *indirect_data)               \
+   {                                                                    \
+      const struct intel_ds_flush_data *flush =                         \
+         (const struct intel_ds_flush_data *) flush_data;               \
+      begin_event(flush->queue, ts_ns, stage);                          \
+   }                                                                    \
+                                                                        \
+   void                                                                 \
+   intel_ds_end_##event_name(struct intel_ds_device *device,            \
+                             uint64_t ts_ns,                            \
+                             uint16_t tp_idx,                           \
+                             const void *flush_data,                    \
+                             const struct trace_intel_end_##event_name *payload, \
+                             const void *indirect_data)                 \
+   {                                                                    \
+      const struct intel_ds_flush_data *flush =                         \
+         (const struct intel_ds_flush_data *) flush_data;               \
+      UNUSED const uint32_t *indirect =                                 \
+         (const uint32_t *) indirect_data;                              \
+      char buf[64];                                                     \
+      std::string name;                                                 \
+      if ((name_fmt) != NULL) {                                         \
+         snprintf(buf, sizeof(buf), (name_fmt), ##__VA_ARGS__);         \
+         name = buf;                                                    \
+      }                                                                 \
+      end_event_dyn(flush->queue, ts_ns, stage, flush->submission_id,   \
+                    tp_idx, std::move(name), payload, indirect_data,    \
+                    (trace_payload_as_extra_func)                       \
+                    &trace_payload_as_extra_intel_end_##event_name);    \
+   }                                                                    \
+
 CREATE_DUAL_EVENT_CALLBACK(frame, INTEL_DS_QUEUE_STAGE_FRAME)
 CREATE_DUAL_EVENT_CALLBACK(batch, INTEL_DS_QUEUE_STAGE_CMD_BUFFER)
 CREATE_DUAL_EVENT_CALLBACK(cmd_buffer, INTEL_DS_QUEUE_STAGE_CMD_BUFFER)
+CREATE_DUAL_EVENT_CALLBACK(sba, INTEL_DS_QUEUE_STAGE_CMD_BUFFER)
+CREATE_DUAL_EVENT_CALLBACK(btp, INTEL_DS_QUEUE_STAGE_CMD_BUFFER)
 CREATE_DUAL_EVENT_CALLBACK(render_pass, INTEL_DS_QUEUE_STAGE_RENDER_PASS)
 CREATE_DUAL_EVENT_CALLBACK(blorp, INTEL_DS_QUEUE_STAGE_BLORP)
-CREATE_DUAL_EVENT_CALLBACK(draw, INTEL_DS_QUEUE_STAGE_DRAW)
-CREATE_DUAL_EVENT_CALLBACK(draw_indexed, INTEL_DS_QUEUE_STAGE_DRAW)
+CREATE_DUAL_EVENT_CALLBACK_DYN(draw, INTEL_DS_QUEUE_STAGE_DRAW,
+                               "draw(%u)", payload->count)
+CREATE_DUAL_EVENT_CALLBACK_DYN(draw_indexed, INTEL_DS_QUEUE_STAGE_DRAW,
+                               "draw_indexed(%u)", payload->count)
 CREATE_DUAL_EVENT_CALLBACK(draw_indexed_multi, INTEL_DS_QUEUE_STAGE_DRAW)
-CREATE_DUAL_EVENT_CALLBACK(draw_indexed_indirect, INTEL_DS_QUEUE_STAGE_DRAW)
+CREATE_DUAL_EVENT_CALLBACK_DYN(draw_indexed_indirect, INTEL_DS_QUEUE_STAGE_DRAW,
+                               (p_atomic_read_relaxed(&device->trace_context.enabled_traces) &
+                                U_TRACE_TYPE_INDIRECTS) ?
+                               "draw_indexed_indirect(%u)" : "draw_indexed_indirect",
+                               payload->draw_count)
 CREATE_DUAL_EVENT_CALLBACK(draw_multi, INTEL_DS_QUEUE_STAGE_DRAW)
-CREATE_DUAL_EVENT_CALLBACK(draw_indirect, INTEL_DS_QUEUE_STAGE_DRAW)
+CREATE_DUAL_EVENT_CALLBACK_DYN(draw_indirect, INTEL_DS_QUEUE_STAGE_DRAW,
+                               (p_atomic_read_relaxed(&device->trace_context.enabled_traces) &
+                                U_TRACE_TYPE_INDIRECTS) ?
+                               "draw_indirect(%u)" : "draw_indirect",
+                               payload->draw_count)
 CREATE_DUAL_EVENT_CALLBACK(draw_indirect_count, INTEL_DS_QUEUE_STAGE_DRAW)
 CREATE_DUAL_EVENT_CALLBACK(draw_indirect_byte_count, INTEL_DS_QUEUE_STAGE_DRAW)
 CREATE_DUAL_EVENT_CALLBACK(draw_indexed_indirect_count, INTEL_DS_QUEUE_STAGE_DRAW)
@@ -410,10 +606,24 @@ CREATE_DUAL_EVENT_CALLBACK(draw_mesh, INTEL_DS_QUEUE_STAGE_DRAW_MESH)
 CREATE_DUAL_EVENT_CALLBACK(draw_mesh_indirect, INTEL_DS_QUEUE_STAGE_DRAW_MESH)
 CREATE_DUAL_EVENT_CALLBACK(draw_mesh_indirect_count, INTEL_DS_QUEUE_STAGE_DRAW_MESH)
 CREATE_DUAL_EVENT_CALLBACK(xfb, INTEL_DS_QUEUE_STAGE_CMD_BUFFER)
-CREATE_DUAL_EVENT_CALLBACK(compute, INTEL_DS_QUEUE_STAGE_COMPUTE)
-CREATE_DUAL_EVENT_CALLBACK(compute_indirect, INTEL_DS_QUEUE_STAGE_COMPUTE)
+CREATE_DUAL_EVENT_CALLBACK_DYN(compute, INTEL_DS_QUEUE_STAGE_COMPUTE,
+                               payload->group_z != 1 ? "compute(%u,%u,%u)" :
+                               payload->group_y != 1 ? "compute(%u,%u)" :
+                                                       "compute(%u)",
+                               payload->group_x, payload->group_y, payload->group_z)
+CREATE_DUAL_EVENT_CALLBACK_DYN(compute_indirect, INTEL_DS_QUEUE_STAGE_COMPUTE,
+                               ((p_atomic_read_relaxed(&device->trace_context.enabled_traces) &
+                                  U_TRACE_TYPE_INDIRECTS) && indirect) ?
+                               (indirect[2] != 1 ? "compute_indirect(%u,%u,%u)" :
+                                indirect[1] != 1 ? "compute_indirect(%u,%u)" :
+                                                   "compute_indirect(%u)") :
+                               "compute_indirect",
+                               indirect ? indirect[0] : 0,
+                               indirect ? indirect[1] : 0,
+                               indirect ? indirect[2] : 0)
 CREATE_DUAL_EVENT_CALLBACK(generate_draws, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
-CREATE_DUAL_EVENT_CALLBACK(generate_commands, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
+CREATE_DUAL_EVENT_CALLBACK(generate_cmds_pre, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
+CREATE_DUAL_EVENT_CALLBACK(generate_cmds_post, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
 CREATE_DUAL_EVENT_CALLBACK(trace_copy, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
 CREATE_DUAL_EVENT_CALLBACK(trace_copy_cb, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
 CREATE_DUAL_EVENT_CALLBACK(query_clear_blorp, INTEL_DS_QUEUE_STAGE_INTERNAL_OPS)
@@ -426,9 +636,12 @@ CREATE_DUAL_EVENT_CALLBACK(as_build, INTEL_DS_QUEUE_STAGE_AS)
 CREATE_DUAL_EVENT_CALLBACK(as_build_leaves, INTEL_DS_QUEUE_STAGE_AS)
 CREATE_DUAL_EVENT_CALLBACK(as_morton_generate, INTEL_DS_QUEUE_STAGE_AS)
 CREATE_DUAL_EVENT_CALLBACK(as_morton_sort, INTEL_DS_QUEUE_STAGE_AS)
-CREATE_DUAL_EVENT_CALLBACK(as_lbvh_build_internal, INTEL_DS_QUEUE_STAGE_AS)
+CREATE_DUAL_EVENT_CALLBACK(as_lbvh_main, INTEL_DS_QUEUE_STAGE_AS)
+CREATE_DUAL_EVENT_CALLBACK(as_lbvh_generate_ir, INTEL_DS_QUEUE_STAGE_AS)
 CREATE_DUAL_EVENT_CALLBACK(as_ploc_build_internal, INTEL_DS_QUEUE_STAGE_AS)
 CREATE_DUAL_EVENT_CALLBACK(as_encode, INTEL_DS_QUEUE_STAGE_AS)
+CREATE_DUAL_EVENT_CALLBACK(as_init_header, INTEL_DS_QUEUE_STAGE_AS)
+CREATE_DUAL_EVENT_CALLBACK(as_update, INTEL_DS_QUEUE_STAGE_AS)
 CREATE_DUAL_EVENT_CALLBACK(as_copy, INTEL_DS_QUEUE_STAGE_AS)
 
 void
@@ -513,6 +726,34 @@ intel_ds_end_stall(struct intel_ds_device *device,
              (trace_payload_as_extra_func)custom_trace_payload_as_extra_end_stall);
 }
 
+void
+intel_ds_begin_barrier(struct intel_ds_device *device,
+                       uint64_t ts_ns,
+                       uint16_t tp_idx,
+                       const void *flush_data,
+                       const struct trace_intel_begin_barrier *payload,
+                       const void *indirect_data)
+{
+   const struct intel_ds_flush_data *flush =
+      (const struct intel_ds_flush_data *) flush_data;
+   begin_event(flush->queue, ts_ns, INTEL_DS_QUEUE_STAGE_STALL);
+}
+
+void
+intel_ds_end_barrier(struct intel_ds_device *device,
+                     uint64_t ts_ns,
+                     uint16_t tp_idx,
+                     const void *flush_data,
+                     const struct trace_intel_end_barrier *payload,
+                     const void *indirect_data)
+{
+   const struct intel_ds_flush_data *flush =
+      (const struct intel_ds_flush_data *) flush_data;
+   end_event(flush->queue, ts_ns, INTEL_DS_QUEUE_STAGE_STALL,
+             flush->submission_id, tp_idx, NULL, payload, indirect_data,
+             (trace_payload_as_extra_func)custom_trace_payload_as_extra_end_barrier);
+}
+
 uint64_t
 intel_ds_begin_submit(struct intel_ds_queue *queue)
 {
@@ -540,6 +781,8 @@ intel_ds_end_submit(struct intel_ds_queue *queue,
       submit->set_duration_ns(end_ts - start_ts);
       submit->set_vk_queue((uintptr_t) queue);
       submit->set_submission_id(submission_id);
+      submit->set_pid(getpid());
+      submit->set_tid(gettid());
    });
 }
 

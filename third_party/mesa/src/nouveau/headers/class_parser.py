@@ -83,7 +83,7 @@ TEMPLATE_H = Template("""\
 
 #include <assert.h>
 #include <stdio.h>
-#include "util/u_math.h"
+#include "util/macros.h"
 
 %for mthd in methods:
 struct nv_${nvcl.lower()}_${mthd.name} {
@@ -101,7 +101,7 @@ __${nvcl}_${mthd.name}(uint32_t *val_out, struct nv_${nvcl.lower()}_${mthd.name}
     %if field_width == 32:
     val |= st.${field.name.lower()};
     %else:
-    assert(st.${field.name.lower()} < (1ULL << ${field_width}));
+    assert(st.${field.name.lower()} < (UINT64_C(1) << ${field_width}));
     val |= st.${field.name.lower()} << ${field.start};
     %endif
   %endfor
@@ -159,6 +159,8 @@ TEMPLATE_C = Template("""\
 #include "${header}"
 
 #include <stdio.h>
+
+#include "util/u_math.h"
 
 <%def name="cases(mthd)">
   %if mthd.is_array:
@@ -386,8 +388,23 @@ impl ArrayMthd for ${to_camel(mthd.name)} {
 ## A mere convenience to convert snake_case to CamelCase. Numbers are prefixed
 ## with "_".
 def to_camel(snake_str):
-    result = ''.join(word.title() for word in snake_str.split('_'))
-    return result if not result[0].isdigit() else '_' + result
+    words = snake_str.split("_")
+    words = [w for w in words if w != ""]
+    assert len(words) > 0
+
+    def to_camel_word(prev_word, word):
+        if word[0].isdigit():
+            if prev_word is None or prev_word[-1].isdigit():
+                return "_" + word.lower()
+            else:
+                return word.lower()
+        else:
+            return word.title()
+
+    return "".join(
+        to_camel_word(prev_word, word)
+        for prev_word, word in zip([None] + words, words)
+    )
 
 def strip_parens(s):
     s = s.strip()

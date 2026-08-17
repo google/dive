@@ -46,6 +46,35 @@ etna_lower_io(nir_shader *shader, struct etna_shader_variant *v)
 {
    bool progress = false;
 
+   /* Phase 1: Widen fragment color output variables to vec4 for R/B swap.
+    *
+    * The R/B channel swap needs to reorder components and adjust the
+    * writemask. NIR store_deref validation requires num_components ==
+    * glsl_get_vector_elements(deref->type) and writemask bits must be
+    * within BITFIELD_MASK(num_components). So for scalar/vec2/vec3
+    * outputs we must widen the variable type to vec4 first.
+    */
+   if (shader->info.stage == MESA_SHADER_FRAGMENT && v->key.frag_rb_swap) {
+      nir_foreach_shader_out_variable(var, shader) {
+         int rt = color_index_for_location(var->data.location);
+         if (rt == -1 || !(v->key.frag_rb_swap & (1 << rt)))
+            continue;
+
+         const glsl_type *type = var->type;
+         if (glsl_type_is_array(type)) {
+            const glsl_type *elem = glsl_get_array_element(type);
+            if (glsl_get_vector_elements(elem) < 4) {
+               var->type = glsl_array_type(
+                  glsl_vector_type(glsl_get_base_type(elem), 4),
+                  glsl_array_size(type), 0);
+            }
+         } else {
+            if (glsl_get_vector_elements(type) < 4)
+               var->type = glsl_vector_type(glsl_get_base_type(type), 4);
+         }
+      }
+   }
+
    nir_foreach_function_impl(impl, shader) {
       nir_builder b = nir_builder_create(impl);
       bool func_progress = false;
@@ -74,25 +103,51 @@ etna_lower_io(nir_shader *shader, struct etna_shader_variant *v)
                } break;
                case nir_intrinsic_store_deref: {
                   nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
-                  if (shader->info.stage != MESA_SHADER_FRAGMENT || !v->key.frag_rb_swap)
+                  if (shader->info.stage != MESA_SHADER_FRAGMENT ||
+                      !v->key.frag_rb_swap)
                      break;
 
-                  assert(deref->deref_type == nir_deref_type_var);
-
-                  int rt = color_index_for_location(deref->var->data.location);
+                  nir_variable *var = nir_deref_instr_get_variable(deref);
+                  int rt = color_index_for_location(var->data.location);
                   if (rt == -1)
                      break;
 
                   if (!(v->key.frag_rb_swap & (1 << rt)))
                      break;
 
+                  /* Phase 2: Update deref type to match widened variable and
+                   * perform R/B channel swap via pad + swizzle + writemask.
+                   */
+                  if (deref->deref_type == nir_deref_type_var) {
+                     deref->type = var->type;
+                  } else {
+                     /* Array deref: update parent deref_var and this element */
+                     nir_deref_instr *parent = nir_deref_instr_parent(deref);
+                     assert(parent->deref_type == nir_deref_type_var);
+                     parent->type = var->type;
+                     deref->type = glsl_get_array_element(var->type);
+                  }
+
                   b.cursor = nir_before_instr(instr);
 
-                  nir_def *ssa = nir_mov(&b, intr->src[1].ssa);
-                  nir_alu_instr *alu = nir_def_as_alu(ssa);
-                  alu->src[0].swizzle[0] = 2;
-                  alu->src[0].swizzle[2] = 0;
-                  nir_src_rewrite(&intr->src[1], ssa);
+                  nir_def *src = intr->src[1].ssa;
+                  unsigned old_wrmask = nir_intrinsic_write_mask(intr);
+
+                  /* Pad source to 4 components (undef for missing) */
+                  nir_def *padded = nir_pad_vec4(&b, src);
+
+                  /* Swap R and B channels */
+                  unsigned swiz[] = {2, 1, 0, 3};
+                  nir_def *swapped = nir_swizzle(&b, padded, swiz, 4);
+
+                  /* Swap bits 0 and 2 in writemask */
+                  unsigned new_wrmask = (old_wrmask & ~5u) |
+                                        ((old_wrmask & 1u) << 2) |
+                                        ((old_wrmask & 4u) >> 2);
+
+                  intr->num_components = 4;
+                  nir_intrinsic_set_write_mask(intr, new_wrmask);
+                  nir_src_rewrite(&intr->src[1], swapped);
 
                   func_progress = true;
                } break;
@@ -187,4 +242,39 @@ etna_lower_alu(nir_shader *shader, bool has_new_transcendentals)
    }
 
    return progress;
+}
+
+static bool
+lower_bitfield_insert(nir_builder *b, nir_alu_instr *alu, UNUSED void *data)
+{
+   if (alu->op != nir_op_bitfield_insert)
+      return false;
+
+   b->cursor = nir_before_instr(&alu->instr);
+
+   /* offset and bits are the same for every component here. A bitfield_insert
+    * with per-component offset or bits is scalarized by
+    * etna_alu_to_scalar_filter_cb, so component zero is representative.
+    */
+   for (unsigned i = 1; i < alu->def.num_components; i++) {
+      assert(alu->src[2].swizzle[i] == alu->src[2].swizzle[0]);
+      assert(alu->src[3].swizzle[i] == alu->src[3].swizzle[0]);
+   }
+
+   nir_def *base = nir_ssa_for_alu_src(b, alu, 0);
+   nir_def *insert = nir_ssa_for_alu_src(b, alu, 1);
+   nir_def *offset = nir_channel(b, alu->src[2].src.ssa, alu->src[2].swizzle[0]);
+   nir_def *bits = nir_channel(b, alu->src[3].src.ssa, alu->src[3].swizzle[0]);
+   nir_def *packed = nir_vec2(b, offset, bits);
+
+   nir_def_replace(&alu->def, nir_bitfield_insert_etna(b, base, insert, packed));
+
+   return true;
+}
+
+bool
+etna_nir_lower_bitfield_insert(nir_shader *shader)
+{
+   return nir_shader_alu_pass(shader, lower_bitfield_insert,
+                              nir_metadata_control_flow, NULL);
 }

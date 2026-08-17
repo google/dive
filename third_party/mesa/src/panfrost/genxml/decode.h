@@ -1,26 +1,7 @@
 /*
  * Copyright (C) 2017-2019 Lyude Paul
  * Copyright (C) 2017-2019 Alyssa Rosenzweig
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __PAN_DECODE_H__
@@ -41,6 +22,8 @@ struct pandecode_context {
    struct util_dynarray ro_mappings;
    int dump_frame_count;
    simple_mtx_t lock;
+
+   pandecode_shader_disassemble_cb dissassemble;
 
    /* On CSF context, set to true if the root CS ring buffer
     * is managed in userspace. The blob does that, and mesa might use
@@ -109,15 +92,15 @@ void pandecode_validate_buffer(struct pandecode_context *ctx, uint64_t addr,
 
 /* Forward declare for all supported gens to permit thunking */
 void pandecode_jc_v4(struct pandecode_context *ctx, uint64_t jc_gpu_va,
-                     unsigned gpu_id);
+                     uint64_t gpu_id);
 void pandecode_jc_v5(struct pandecode_context *ctx, uint64_t jc_gpu_va,
-                     unsigned gpu_id);
+                     uint64_t gpu_id);
 void pandecode_jc_v6(struct pandecode_context *ctx, uint64_t jc_gpu_va,
-                     unsigned gpu_id);
+                     uint64_t gpu_id);
 void pandecode_jc_v7(struct pandecode_context *ctx, uint64_t jc_gpu_va,
-                     unsigned gpu_id);
+                     uint64_t gpu_id);
 void pandecode_jc_v9(struct pandecode_context *ctx, uint64_t jc_gpu_va,
-                     unsigned gpu_id);
+                     uint64_t gpu_id);
 
 void pandecode_abort_on_fault_v4(struct pandecode_context *ctx,
                                  uint64_t jc_gpu_va);
@@ -131,25 +114,32 @@ void pandecode_abort_on_fault_v9(struct pandecode_context *ctx,
                                  uint64_t jc_gpu_va);
 
 void pandecode_interpret_cs_v10(struct pandecode_context *ctx, uint64_t queue,
-                                uint32_t size, unsigned gpu_id, uint32_t *regs);
+                                uint32_t size, uint64_t gpu_id, uint32_t *regs);
 void pandecode_cs_binary_v10(struct pandecode_context *ctx, uint64_t bin,
-                             uint32_t bin_size, unsigned gpu_id);
+                             uint32_t bin_size);
 void pandecode_cs_trace_v10(struct pandecode_context *ctx, uint64_t trace,
-                            uint32_t trace_size, unsigned gpu_id);
+                            uint32_t trace_size, uint64_t gpu_id);
 
 void pandecode_interpret_cs_v12(struct pandecode_context *ctx, uint64_t queue,
-                                uint32_t size, unsigned gpu_id, uint32_t *regs);
+                                uint32_t size, uint64_t gpu_id, uint32_t *regs);
 void pandecode_cs_binary_v12(struct pandecode_context *ctx, uint64_t bin,
-                             uint32_t bin_size, unsigned gpu_id);
+                             uint32_t bin_size);
 void pandecode_cs_trace_v12(struct pandecode_context *ctx, uint64_t trace,
-                            uint32_t trace_size, unsigned gpu_id);
+                            uint32_t trace_size, uint64_t gpu_id);
 
 void pandecode_interpret_cs_v13(struct pandecode_context *ctx, uint64_t queue,
-                                uint32_t size, unsigned gpu_id, uint32_t *regs);
+                                uint32_t size, uint64_t gpu_id, uint32_t *regs);
 void pandecode_cs_binary_v13(struct pandecode_context *ctx, uint64_t bin,
-                             uint32_t bin_size, unsigned gpu_id);
+                             uint32_t bin_size);
 void pandecode_cs_trace_v13(struct pandecode_context *ctx, uint64_t trace,
-                            uint32_t trace_size, unsigned gpu_id);
+                            uint32_t trace_size, uint64_t gpu_id);
+
+void pandecode_interpret_cs_v14(struct pandecode_context *ctx, uint64_t queue,
+                                uint32_t size, uint64_t gpu_id, uint32_t *regs);
+void pandecode_cs_binary_v14(struct pandecode_context *ctx, uint64_t bin,
+                             uint32_t bin_size);
+void pandecode_cs_trace_v14(struct pandecode_context *ctx, uint64_t trace,
+                            uint32_t trace_size, uint64_t gpu_id);
 
 /* Logging infrastructure */
 static void
@@ -225,7 +215,7 @@ pandecode_log_cont(struct pandecode_context *ctx, const char *format, ...)
    }
 
 void pandecode_shader_disassemble(struct pandecode_context *ctx,
-                                  uint64_t shader_ptr, unsigned gpu_id);
+                                  uint64_t shader_ptr, uint64_t gpu_id);
 
 #ifdef PAN_ARCH
 
@@ -237,16 +227,16 @@ struct pandecode_fbd {
 
 struct pandecode_fbd GENX(pandecode_fbd)(struct pandecode_context *ctx,
                                          uint64_t gpu_va, bool is_fragment,
-                                         unsigned gpu_id);
+                                         uint64_t gpu_id);
 
 #if PAN_ARCH >= 9
 void GENX(pandecode_dcd)(struct pandecode_context *ctx,
                          const struct MALI_DRAW *p, unsigned unused,
-                         unsigned gpu_id);
+                         uint64_t gpu_id);
 #else
 void GENX(pandecode_dcd)(struct pandecode_context *ctx,
                          const struct MALI_DRAW *p, enum mali_job_type job_type,
-                         unsigned gpu_id);
+                         uint64_t gpu_id);
 #endif
 
 #if PAN_ARCH <= 5
@@ -265,15 +255,14 @@ uint64_t GENX(pandecode_blend)(struct pandecode_context *ctx,
 #endif
 
 #if PAN_ARCH >= 6
-void GENX(pandecode_tiler)(struct pandecode_context *ctx, uint64_t gpu_va,
-                           unsigned gpu_id);
+void GENX(pandecode_tiler)(struct pandecode_context *ctx, uint64_t gpu_va);
 #endif
 
 #if PAN_ARCH >= 9
 #if PAN_ARCH < 12
 void GENX(pandecode_shader_environment)(struct pandecode_context *ctx,
                                         const struct MALI_SHADER_ENVIRONMENT *p,
-                                        unsigned gpu_id);
+                                        uint64_t gpu_id);
 #endif
 
 void GENX(pandecode_resource_tables)(struct pandecode_context *ctx,
@@ -283,16 +272,34 @@ void GENX(pandecode_fau)(struct pandecode_context *ctx, uint64_t addr,
                          unsigned count, const char *name);
 
 uint64_t GENX(pandecode_shader)(struct pandecode_context *ctx, uint64_t addr,
-                                const char *label, unsigned gpu_id);
+                                const char *label, uint64_t gpu_id);
 
 void GENX(pandecode_blend_descs)(struct pandecode_context *ctx, uint64_t blend,
                                  unsigned count, uint64_t frag_shader,
-                                 unsigned gpu_id);
+                                 uint64_t gpu_id);
 
 void GENX(pandecode_depth_stencil)(struct pandecode_context *ctx,
                                    uint64_t addr);
 #endif
 
+#endif
+
+#if PAN_ARCH >= 6
+void GENX(pandecode_sample_locations)(struct pandecode_context *ctx,
+                                      uint64_t sample_locations);
+
+void
+   GENX(pandecode_frame_shader_dcds)(struct pandecode_context *ctx,
+                                     uint64_t dcd_pointer, unsigned pre_frame_0,
+                                     unsigned pre_frame_1, unsigned post_frame,
+                                     unsigned job_type_param, uint64_t gpu_id);
+#endif
+
+#if PAN_ARCH >= 5
+void GENX(pandecode_rts)(struct pandecode_context *ctx, uint64_t gpu_va,
+                         uint32_t render_target_count);
+
+void GENX(pandecode_zs_crc_ext)(struct pandecode_context *ctx, uint64_t gpu_va);
 #endif
 
 #endif /* __MMAP_TRACE_H__ */

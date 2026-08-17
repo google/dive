@@ -69,8 +69,6 @@ struct hk_device {
    struct hk_descriptor_table occlusion_queries;
    struct hk_sampler_heap samplers;
 
-   struct vk_pipeline_cache *mem_cache;
-
    struct vk_meta_device meta;
    struct agx_bg_eot_cache bg_eot;
 
@@ -92,6 +90,7 @@ struct hk_device {
     * expected to be a legitimate problem. If it is, we can rework later.
     */
    struct agx_bo *heap;
+   util_once_flag heap_init_once;
 
    struct {
       struct agx_scratch vs, fs, cs;

@@ -69,7 +69,7 @@ get_load_resource(nir_instr *instr)
          switch (tex->src[i].src_type) {
          case nir_tex_src_texture_deref:
          case nir_tex_src_texture_handle:
-            return (opaque_resource*)tex->src[i].src.ssa->parent_instr;
+            return (opaque_resource*)nir_def_instr(tex->src[i].src.ssa);
          default:
             break;
          }
@@ -88,31 +88,38 @@ get_load_resource(nir_instr *instr)
       case nir_intrinsic_image_load:
       case nir_intrinsic_image_deref_load:
       case nir_intrinsic_bindless_image_load:
+      case nir_intrinsic_image_heap_load:
       case nir_intrinsic_image_sparse_load:
       case nir_intrinsic_image_deref_sparse_load:
       case nir_intrinsic_bindless_image_sparse_load:
+      case nir_intrinsic_image_heap_sparse_load:
       /* Fragment mask loads. (samples_identical also loads it) */
       case nir_intrinsic_image_fragment_mask_load_amd:
       case nir_intrinsic_image_deref_fragment_mask_load_amd:
       case nir_intrinsic_bindless_image_fragment_mask_load_amd:
+      case nir_intrinsic_image_heap_fragment_mask_load_amd:
       case nir_intrinsic_image_samples_identical:
       case nir_intrinsic_image_deref_samples_identical:
       case nir_intrinsic_bindless_image_samples_identical:
+      case nir_intrinsic_image_heap_samples_identical:
       /* Queries */
       case nir_intrinsic_image_size:
       case nir_intrinsic_image_deref_size:
       case nir_intrinsic_bindless_image_size:
+      case nir_intrinsic_image_heap_size:
       case nir_intrinsic_image_samples:
       case nir_intrinsic_image_deref_samples:
       case nir_intrinsic_bindless_image_samples:
+      case nir_intrinsic_image_heap_samples:
       case nir_intrinsic_image_levels:
       case nir_intrinsic_image_deref_levels:
       case nir_intrinsic_bindless_image_levels:
+      case nir_intrinsic_image_heap_levels:
       /* Other loads. */
       /* load_ubo is ignored because it's usually cheap. */
       case nir_intrinsic_load_ssbo:
       case nir_intrinsic_load_global:
-         return (opaque_resource*)nir_instr_as_intrinsic(instr)->src[0].ssa->parent_instr;
+         return (opaque_resource*)nir_def_instr(nir_instr_as_intrinsic(instr)->src[0].ssa);
       default:
          return NULL;
       }
@@ -167,7 +174,7 @@ has_only_sources_less_than(nir_src *src, void *data)
 
    /* true if nir_foreach_src should keep going */
    return state->block != nir_def_block(src->ssa) ||
-             state->infos[src->ssa->parent_instr->index].instr_index <
+             state->infos[nir_def_instr(src->ssa)->index].instr_index <
              state->first_instr_index;
 }
 
@@ -190,9 +197,9 @@ group_loads(nir_instr *first, nir_instr *last, instr_info *infos)
 
       if (def) {
          nir_foreach_use(use, def) {
-            if (nir_src_parent_instr(use)->block == instr->block &&
-                infos[nir_src_parent_instr(use)->index].instr_index <=
-                infos[last->index].instr_index) {
+            if (nir_src_use_instr(use)->block == instr->block &&
+                infos[nir_src_use_instr(use)->index].instr_index <=
+                   infos[last->index].instr_index) {
                all_uses_after_last = false;
                break;
             }
@@ -250,6 +257,7 @@ is_pseudo_inst(nir_instr *instr)
    /* Other instructions do not usually contribute to the shader binary size. */
    return instr->type != nir_instr_type_alu &&
           instr->type != nir_instr_type_call &&
+          instr->type != nir_instr_type_cmat_call &&
           instr->type != nir_instr_type_tex &&
           instr->type != nir_instr_type_intrinsic;
 }
@@ -329,11 +337,11 @@ static bool
 gather_indirections(nir_src *src, void *data)
 {
    struct indirection_state *state = (struct indirection_state *)data;
-   nir_instr *instr = src->ssa->parent_instr;
+   nir_instr *instr = nir_def_instr(src->ssa);
 
    /* We only count indirections within the same block. */
    if (instr->block == state->block) {
-      unsigned indirections = get_num_indirections(src->ssa->parent_instr,
+      unsigned indirections = get_num_indirections(nir_def_instr(src->ssa),
                                                    state->infos);
 
       if (instr->type == nir_instr_type_tex || is_grouped_load(instr))
@@ -464,8 +472,7 @@ nir_opt_group_loads(nir_shader *shader, nir_load_grouping grouping,
                     unsigned max_distance)
 {
    /* Temporary space for instruction info. */
-   struct util_dynarray infos_scratch;
-   util_dynarray_init(&infos_scratch, NULL);
+   struct util_dynarray infos_scratch = UTIL_DYNARRAY_INIT;
 
    nir_foreach_function_impl(impl, shader) {
       nir_metadata_require(impl, nir_metadata_instr_index);

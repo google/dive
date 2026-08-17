@@ -67,7 +67,7 @@ validate_reg(struct ir3_validate_ctx *ctx, struct ir3_register *reg)
    }
 
    if (reg->flags & IR3_REG_UNIFORM) {
-      validate_assert(ctx, ctx->ir->compiler->has_scalar_predicates);
+      validate_assert(ctx, ctx->ir->compiler->info->props.has_scalar_predicates);
       validate_assert(ctx, reg->flags & IR3_REG_PREDICATE);
    }
 
@@ -334,7 +334,7 @@ validate_instr(struct ir3_validate_ctx *ctx, struct ir3_instruction *instr)
    if ((opc_cat(instr->opc) == 2 || opc_cat(instr->opc) == 3 ||
         opc_cat(instr->opc) == 4)) {
       validate_assert(ctx, !(instr->dsts[0]->flags & IR3_REG_SHARED) ||
-                      ctx->ir->compiler->has_scalar_alu);
+                      ctx->ir->compiler->info->props.has_scalar_alu);
    }
 
    /* Check that src/dst types match the register types, and for
@@ -343,6 +343,16 @@ validate_instr(struct ir3_validate_ctx *ctx, struct ir3_instruction *instr)
     */
    switch (opc_cat(instr->opc)) {
    case 1: /* move instructions */
+      if (ctx->ir->compiler->info->props.has_salu_int_narrowing_quirk &&
+          (instr->opc == OPC_MOV) &&
+          (instr->cat1.dst_type != instr->cat1.src_type) &&
+          (type_size(instr->cat1.dst_type) <
+           type_size(instr->cat1.src_type)) &&
+          !type_float(instr->cat1.dst_type) &&
+          (instr->dsts[0]->flags & IR3_REG_SHARED)) {
+         validate_assert(ctx, instr->srcs[0]->flags &
+                              (IR3_REG_CONST | IR3_REG_IMMED | IR3_REG_SHARED));
+      }
       if (instr->opc == OPC_MOVMSK || instr->opc == OPC_BALLOT_MACRO) {
          validate_assert(ctx, instr->dsts_count == 1);
          validate_assert(ctx, instr->dsts[0]->flags & IR3_REG_SHARED);
@@ -454,6 +464,7 @@ validate_instr(struct ir3_validate_ctx *ctx, struct ir3_instruction *instr)
       switch (instr->opc) {
       case OPC_RESINFO:
       case OPC_RESFMT:
+      case OPC_RESBASE:
          if (instr->dsts_count > 0)
             validate_reg_size(ctx, instr->dsts[0], instr->cat6.type);
          validate_reg_size(ctx, instr->srcs[0], instr->cat6.type);
@@ -504,8 +515,10 @@ validate_instr(struct ir3_validate_ctx *ctx, struct ir3_instruction *instr)
       case OPC_LDC:
          validate_assert(ctx, !(instr->srcs[0]->flags & IR3_REG_HALF));
          validate_assert(ctx, !(instr->srcs[1]->flags & IR3_REG_HALF));
-         validate_assert(ctx, !!(instr->dsts[0]->flags & IR3_REG_SHARED) ==
-                              !!(instr->flags & IR3_INSTR_U));
+         if (instr->dsts[0]->num != INVALID_REG) {
+            validate_assert(ctx, !!(instr->dsts[0]->flags & IR3_REG_SHARED) ==
+                                 !!(instr->flags & IR3_INSTR_U));
+         }
          break;
       case OPC_LDC_K:
          validate_assert(ctx, !(instr->srcs[0]->flags & IR3_REG_HALF));
@@ -628,7 +641,7 @@ ir3_validate(struct ir3 *ir)
 
    ctx->ir = ir;
    ctx->defs_count = ir->instr_count + 1; /* serialno comes from pre-incrementing this. */
-   ctx->defs = rzalloc_array(ctx, BITSET_WORD, BITSET_WORDS(ctx->defs_count));
+   ctx->defs = BITSET_RZALLOC(ctx, ctx->defs_count);
    ctx->rpt_set = _mesa_pointer_set_create(ctx);
    ctx->rpt_block = NULL;
 

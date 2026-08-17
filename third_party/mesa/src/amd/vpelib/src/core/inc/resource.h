@@ -43,6 +43,7 @@ struct vpe_priv;
 struct vpe_cmd_output;
 struct vpe_cmd_info;
 struct segment_ctx;
+struct vpe_cmd_input;
 enum vpe_stream_type;
 
 #define MIN_VPE_CMD    (1024)
@@ -69,6 +70,9 @@ struct resource {
     enum vpe_status (*calculate_segments)(
         struct vpe_priv *vpe_priv, const struct vpe_build_param *params);
 
+    uint32_t (*get_max_seg_width)(struct output_ctx *output_ctx,
+        enum vpe_surface_pixel_format format, enum vpe_scan_direction scan);
+
     enum vpe_status(*check_bg_color_support)(struct vpe_priv* vpe_priv, struct vpe_color* bg_color);
 
     void (*bg_color_convert)(enum color_space output_cs, struct transfer_func *output_tf,
@@ -88,7 +92,7 @@ struct resource {
     uint16_t (*get_bg_stream_idx)(struct vpe_priv *vpe_priv);
 
     uint16_t (*find_bg_gaps)(struct vpe_priv *vpe_priv, const struct vpe_rect *target_rect,
-        struct vpe_rect *gaps, uint16_t max_gaps);
+        struct vpe_rect *gaps, uint32_t alignment, uint16_t max_gaps);
 
     void (*create_bg_segments)(
         struct vpe_priv *vpe_priv, struct vpe_rect *gaps, uint16_t gaps_cnt, enum vpe_cmd_ops ops);
@@ -97,6 +101,15 @@ struct resource {
 
     int32_t (*program_frontend)(struct vpe_priv *vpe_priv, uint32_t pipe_idx, uint32_t cmd_idx,
         uint32_t cmd_input_idx, bool seg_only);
+
+    int32_t (*program_frontend_frame)(
+        struct vpe_priv *vpe_priv, uint32_t pipe_idx, uint32_t cmd_idx, uint32_t cmd_input_idx);
+
+    int32_t (*program_frontend_segment)(
+        struct vpe_priv *vpe_priv, uint32_t pipe_idx, uint32_t cmd_idx, uint32_t cmd_input_idx);
+
+    int32_t (*program_stream_op_config)(struct vpe_priv *vpe_priv, uint32_t pipe_idx,
+        uint32_t cmd_input_idx, struct stream_ctx *stream_ctx, struct vpe_cmd_info *cmd_info);
 
     int32_t (*program_backend)(
         struct vpe_priv *vpe_priv, uint32_t pipe_idx, uint32_t cmd_idx, bool seg_only);
@@ -114,6 +127,50 @@ struct resource {
         bool geometric_scaling);
 
     bool (*validate_cached_param)(struct vpe_priv *vpe_priv, const struct vpe_build_param *param);
+
+    enum vpe_status (*check_alpha_fill_support)(
+        struct vpe *vpe, const struct vpe_build_param *param);
+
+    enum vpe_status (*fill_alpha_through_luma_cmd_info)(
+        struct vpe_priv *vpe_priv, uint16_t alpha_stream_idx);
+
+    enum vpe_status (*fill_non_performance_mode_cmd_info)(
+        struct vpe_priv *vpe_priv, uint16_t stream_idx);
+
+    enum vpe_status (*fill_performance_mode_cmd_info)(
+        struct vpe_priv *vpe_priv, uint16_t stream_idx, uint16_t avail_pipe_count);
+
+    enum vpe_status (*fill_blending_cmd_info)(
+        struct vpe_priv *vpe_priv, uint16_t top_stream_idx, uint16_t bot_stream_idx);
+
+    enum vpe_status (*populate_frod_param)(
+        struct vpe_priv *vpe_priv, const struct vpe_build_param *param);
+
+    uint32_t (*get_num_pipes_available)(struct vpe_priv *vpe_priv, struct stream_ctx *stream_ctx);
+
+    void (*set_frod_output_viewport)(struct vpe_cmd_output *dst_output,
+        struct vpe_cmd_output *src_output, uint32_t viewport_divider,
+        enum vpe_surface_pixel_format format);
+
+    enum vpe_status (*check_lut3d_compound)(
+        const struct vpe_stream *stream, const struct vpe_build_param *param);
+
+    void (*set_lls_pref)(struct vpe_priv *vpe_priv, struct spl_in *spl_input,
+        enum color_transfer_func tf, enum vpe_surface_pixel_format pixel_format);
+    void (*program_fastload)(struct vpe_priv *vpe_priv, uint32_t cmd_idx);
+    void (*pipe_setup)(struct vpe_priv *vpe_priv, uint32_t cmd_idx);
+    void (*mpc_reset)(struct vpe_priv *vpe_priv, uint32_t cmd_idx);
+
+    enum vpe_status (*calculate_shaper)(struct vpe_priv *vpe_priv, struct stream_ctx *stream_ctx);
+
+    void (*update_opp_adjust_and_boundary)(struct stream_ctx *stream_ctx, uint16_t seg_idx,
+        bool dst_subsampled, const struct vpe_rect *src_rect, const struct vpe_rect *dst_rect,
+        struct output_ctx *output_ctx, struct spl_opp_adjust *opp_recout_adjust);
+
+    bool (*set_dst_cmd_info_scaler)(struct stream_ctx *dst_stream_ctx,
+        struct scaler_data *dst_scaler_data, struct vpe_rect recout, struct vpe_rect dst_viewport,
+        struct fmt_boundary_mode *boundary_mode, struct spl_opp_adjust *opp_adjust);
+
     // Indicates the nominal range hdr input content should be in during processing.
     int internal_hdr_normalization;
 
@@ -157,13 +214,15 @@ struct pipe_ctx *vpe_pipe_find_owner(struct vpe_priv *vpe_priv, uint32_t stream_
 void vpe_clip_stream(
     struct vpe_rect *src_rect, struct vpe_rect *dst_rect, const struct vpe_rect *target_rect);
 
-void calculate_scaling_ratios(struct scaler_data *scl_data, struct vpe_rect *src_rect,
+void vpe_calculate_scaling_ratios(struct scaler_data *scl_data, struct vpe_rect *src_rect,
     struct vpe_rect *dst_rect, enum vpe_surface_pixel_format format);
+
+enum lut3d_type vpe_get_stream_lut3d_type(struct stream_ctx *stream_ctx);
 
 uint16_t vpe_get_num_segments(struct vpe_priv *vpe_priv, const struct vpe_rect *src,
     const struct vpe_rect *dst, const uint32_t max_seg_width);
 
-bool should_generate_cmd_info(struct stream_ctx *stream_ctx);
+bool vpe_should_generate_cmd_info(struct stream_ctx *stream_ctx);
 
 enum vpe_status vpe_resource_build_scaling_params(struct segment_ctx *segment);
 
@@ -171,6 +230,9 @@ void vpe_handle_output_h_mirror(struct vpe_priv *vpe_priv);
 
 void vpe_resource_build_bit_depth_reduction_params(
     struct opp *opp, struct bit_depth_reduction_params *fmt_bit_depth);
+
+void vpe_build_clamping_params(
+    struct opp *opp, struct clamping_and_pixel_encoding_params *clamping);
 
 /** resource function call backs*/
 void vpe_frontend_config_callback(
@@ -181,9 +243,21 @@ void vpe_backend_config_callback(
 
 bool vpe_rec_is_equal(struct vpe_rect rec1, struct vpe_rect rec2);
 
+bool vpe_is_zero_rect(struct vpe_rect *rect);
+
+bool vpe_is_valid_vp(struct vpe_rect *src_rect, struct vpe_rect *dst_rect);
+
+bool vpe_is_scaling_factor_supported(struct vpe_priv *vpe_priv, struct vpe_rect *src_rect,
+    struct vpe_rect *dst_rect, enum vpe_rotation_angle rotation);
+
+struct stream_ctx *vpe_get_virtual_stream(
+    struct vpe_priv *vpe_priv, enum vpe_stream_type stream_type);
+
 const struct vpe_caps *vpe_get_capability(enum vpe_ip_level ip_level);
 
 void vpe_setup_check_funcs(struct vpe_check_support_funcs *funcs, enum vpe_ip_level ip_level);
+
+uint32_t vpe_get_recout_width_alignment(const struct vpe_build_param *params);
 
 #ifdef __cplusplus
 }

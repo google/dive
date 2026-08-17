@@ -1,6 +1,8 @@
 # Copyright ©
 # SPDX-License-Identifier: MIT
 
+subdir('builtin_kernels')
+
 libmesa_rust_util_files = files(
   'util/lib.rs',
   'util/assert.rs',
@@ -54,6 +56,7 @@ rusticl_files = files(
   'core/format.rs',
   'core/kernel.rs',
   'core/memory.rs',
+  'core/meta.rs',
   'core/platform.rs',
   'core/program.rs',
   'core/queue.rs',
@@ -64,13 +67,15 @@ rusticl_files = files(
 )
 
 rusticl_args = [
+  # we error on all clippy warnings unless they are disabled
+  '-Dclippy::all',
+
+  rust_global_args,
   rust_2024_lint_args,
 
   # Should be ran manually before moving to the 2024 edition
   # '-Dtail_expr_drop_order',
 
-  # we error on all clippy warnings unless they are disabled
-  '-Dclippy::all',
   # we want to add asserts in control flow
   '-Aclippy::assertions_on_constants',
   # warns on Arc<_> as keys
@@ -126,7 +131,7 @@ cl_c_args = [
   '-DCL_USE_DEPRECATED_OPENCL_2_0_APIS',
   '-DCL_USE_DEPRECATED_OPENCL_2_1_APIS',
   '-DCL_USE_DEPRECATED_OPENCL_2_2_APIS',
-  '-DCL_TARGET_OPENCL_VERSION=300',
+  '-DCL_TARGET_OPENCL_VERSION=310',
 ]
 
 rusticl_opencl_bindings_rs = rust.bindgen(
@@ -134,6 +139,8 @@ rusticl_opencl_bindings_rs = rust.bindgen(
     'rusticl_opencl_bindings.h',
     opencl_headers,
   ],
+  # required by 'CL_intel/cl_ext_private.h'
+  language : 'cpp',
   output : 'rusticl_opencl_bindings.rs',
   include_directories : [
     inc_include,
@@ -270,13 +277,14 @@ rusticl_mesa_bindings = rust.bindgen(
     '--allowlist-function',     'mesa_.*',
     '--allowlist-var',          'OS_.*',
     '--allowlist-function',     'rz?alloc_.*',
-    '--allowlist-function',     'SHA1.*',
-    '--allowlist-var',          'SHA1_.*',
+    '--allowlist-var',          'BLAKE3_.*',
+    '--allowlist-function',     '_mesa_blake3_.*',
     '--allowlist-function',     'u_.*',
     '--allowlist-function',     'util_format_.*',
     '--allowlist-function',     'util_queue_.*',
     '--allowlist-function',     'util_vma_.*',
     '--allowlist-function',     'util_get_cpu_caps',
+    '--allowlist-function',     'util_perfetto_thread_flush',
     '--no-copy',                'util_vma_heap', # it's a linked list
     '--no-copy',                'util_queue',
     '--no-copy',                'util_queue_fence',
@@ -304,6 +312,7 @@ rusticl_mesa_bindings = rust.bindgen(
     '--bitfield-enum',          'nir_lower_int64_options',
     '--bitfield-enum',          'nir_opt_if_options',
     '--bitfield-enum',          'nir_variable_mode',
+    '--bitfield-enum',          'float_controls',
     '--allowlist-function',     'should_.*_nir',
     '--allowlist-function',     'spirv_.*',
 
@@ -322,6 +331,7 @@ rusticl_mesa_bindings = rust.bindgen(
     '--constified-enum-module', 'pipe_tex_wrap',
     '--allowlist-type',         'pipe_swizzle',
     '--constified-enum-module', 'pipe_swizzle',
+    '--blocklist-function',     'pipe_shader_state_from_tgsi',
 
     # rusticl C functions
     '--allowlist-function',     'rusticl_.*',
@@ -439,6 +449,7 @@ librusticl = static_library(
     rusticl_llvm_gen,
     rusticl_opencl_gen,
     rusticl_proc_macros,
+    rusticl_kernels_spv,
   ],
 )
 
@@ -451,6 +462,7 @@ if meson.version().version_compare('>= 1.9.0') and with_tests
     'rusticl_test',
     'test/lib.rs',
     rust_abi : 'c',
+    rust_args : rust_global_args,
   )
 
   rust.test('rusticl_opencl_gen_test', rusticl_opencl_gen, suite : ['rusticl'])

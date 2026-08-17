@@ -1,25 +1,7 @@
 /* -*- c++ -*- */
 /*
  * Copyright © 2010-2015 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -184,7 +166,10 @@ public:
    brw_builder
    uniform() const
    {
-      return exec_all().group(1, 0);
+      brw_builder bld = exec_all();
+      bld._group = 0;
+      bld._dispatch_width = 1;
+      return bld;
    }
 
    /**
@@ -589,7 +574,6 @@ public:
    ALU1(FBL)
    ALU1(FRC)
    ALU3(DP4A)
-   ALU2(LINE)
    ALU1(LZD)
    ALU2(MAC)
    ALU2_ACC(MACH)
@@ -636,6 +620,18 @@ public:
    SEND() const
    {
       return emit(SHADER_OPCODE_SEND, SEND_NUM_SRCS)->as_send();
+   }
+
+   brw_scratch_inst *
+   FILL() const
+   {
+      return emit(SHADER_OPCODE_LSC_FILL, FILL_NUM_SRCS)->as_scratch();
+   }
+
+   brw_scratch_inst *
+   SPILL() const
+   {
+      return emit(SHADER_OPCODE_LSC_SPILL, SPILL_NUM_SRCS)->as_scratch();
    }
 
    brw_urb_inst *
@@ -853,8 +849,8 @@ public:
 
    void
    VARYING_PULL_CONSTANT_LOAD(const brw_reg &dst,
-                              const brw_reg &surface,
-                              const brw_reg &surface_handle,
+                              const brw_reg &binding_type,
+                              const brw_reg &binding,
                               const brw_reg &varying_offset,
                               uint32_t const_offset,
                               uint8_t alignment,
@@ -877,8 +873,8 @@ public:
       brw_reg vec4_result = vgrf(BRW_TYPE_F, 4);
 
       brw_reg srcs[PULL_VARYING_CONSTANT_SRCS];
-      srcs[PULL_VARYING_CONSTANT_SRC_SURFACE]        = surface;
-      srcs[PULL_VARYING_CONSTANT_SRC_SURFACE_HANDLE] = surface_handle;
+      srcs[PULL_VARYING_CONSTANT_SRC_BINDING_TYPE]   = binding_type;
+      srcs[PULL_VARYING_CONSTANT_SRC_BINDING]        = binding;
       srcs[PULL_VARYING_CONSTANT_SRC_OFFSET]         = total_offset;
       srcs[PULL_VARYING_CONSTANT_SRC_ALIGNMENT]      = brw_imm_ud(alignment);
 
@@ -1113,9 +1109,8 @@ brw_reg
 brw_fetch_barycentric_reg(const brw_builder &bld, uint8_t regs[2]);
 
 void
-brw_check_dynamic_msaa_flag(const brw_builder &bld,
-                            const struct brw_wm_prog_data *wm_prog_data,
-                            enum intel_msaa_flags flag);
+brw_check_dynamic_fs_config(const brw_builder &bld,
+                            enum intel_fs_config flag);
 
 inline brw_inst *
 brw_transform_inst(const brw_builder &bld, brw_inst *inst,

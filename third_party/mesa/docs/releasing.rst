@@ -211,7 +211,7 @@ the branches:
    git push origin $VERSION-branchpoint
    git checkout $VERSION-branchpoint
    git push origin HEAD:refs/heads/$VERSION
-   git push origin HEAD:refs/heads/staging/$VERSION
+   git push origin HEAD:refs/heads/staging/$VERSION --push-option ci.skip
    git checkout staging/$VERSION
    git branch --set-upstream-to origin/staging/$VERSION
 
@@ -245,49 +245,21 @@ Get latest source files
 Ensure the latest code is available - both in your local main and the
 relevant branch.
 
-Perform basic testing
-~~~~~~~~~~~~~~~~~~~~~
 
-Most of the testing should already be done during the
-:ref:`cherry-pick <pickntest>` So we do a quick 'touch test'
+Merge the staging branch into the release branch
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--  meson dist
--  the produced binaries work
+This allows the CI to be run against the proposed patches while they are still
+on the ``staging/X.Y`` branch, and can be force pushed.
 
-Here is one solution:
+Create a new Merge Request, with ``staging/X.Y`` targeting the ``X.Y`` branch.
+Be sure to rename the merge request, something like ``merge staging/X.Y in to
+X.Y for the X.Y.Z release``. Ensure that ``delete source branch`` is **not**
+checked, and set the label to ``release-maintainer`` and ``mesa-release``.
+(this prevents the auto-labeller from running on this MR, which would otherwise
+spam labels which a dev who watches those probably doesn't care about).
+Assign to ``@marge-bot`` immediately.
 
-.. code-block:: sh
-
-   __glxgears_cmd='glxgears 2>&1 | grep -v "configuration file"'
-   __es2info_cmd='es2_info 2>&1 | egrep "GL_VERSION|GL_RENDERER|.*dri\.so"'
-   __es2gears_cmd='es2gears_x11 2>&1 | grep -v "configuration file"'
-   test "x$LD_LIBRARY_PATH" != 'x' && __old_ld="$LD_LIBRARY_PATH"
-   export LD_LIBRARY_PATH=`pwd`/test/usr/local/lib/:"${__old_ld}"
-   export LIBGL_DEBUG=verbose
-   eval $__glxinfo_cmd
-   eval $__glxgears_cmd
-   eval $__es2info_cmd
-   eval $__es2gears_cmd
-   export LIBGL_ALWAYS_SOFTWARE=true
-   eval $__glxinfo_cmd
-   eval $__glxgears_cmd
-   eval $__es2info_cmd
-   eval $__es2gears_cmd
-   export LIBGL_ALWAYS_SOFTWARE=true
-   export GALLIUM_DRIVER=softpipe
-   eval $__glxinfo_cmd
-   eval $__glxgears_cmd
-   eval $__es2info_cmd
-   eval $__es2gears_cmd
-   # Smoke test DOTA2
-   unset LD_LIBRARY_PATH
-   test "x$__old_ld" != 'x' && export LD_LIBRARY_PATH="$__old_ld" && unset __old_ld
-   unset LIBGL_DEBUG
-   unset LIBGL_ALWAYS_SOFTWARE
-   unset GALLIUM_DRIVER
-   export VK_DRIVER_FILES=`pwd`/test/usr/local/share/vulkan/icd.d/intel_icd.x86_64.json
-   steam steam://rungameid/570  -vconsole -vulkan
-   unset VK_DRIVER_FILES
 
 Create release notes for the new release
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -334,14 +306,15 @@ the ``X.Y`` branch:
    git push origin HEAD:X.Y
 
 
-Back on mesa main, add the new release notes into the tree
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Create a new branch against main for the release notes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Something like the following steps will do the trick:
 
 .. code-block:: sh
 
-   git cherry-pick -x X.Y~1
+   git checkout -b X.Y-release
+   git cherry-pick -x X.Y~2
    git cherry-pick -x X.Y
 
 Then run the
@@ -357,7 +330,27 @@ push:
 
 .. code-block:: sh
 
-      git push origin main X.Y
+      git push -u YOUR_FORK X.Y-release
+
+Finally, open a merge request against the main branch, assigning it to
+``@marge-bot`` immediately.
+
+Update the website
+------------------
+
+Create a fork of `Mesa3d.org <https://gitlab.freedesktop.org/mesa/mesa3d.org/>`__, and create
+a new merge request using the script:
+
+.. code-block:: sh
+
+   git checkout -b X.Y-release
+   ./post_release.py X.Y.Z
+   git push -u YOUR_FORK X.Y-release
+
+Where X.Y.Z is the same value as passed to post_version.py in the previous step.
+
+Create a merge request from this commit. After the commit to mesa is merged,
+merge this MR.
 
 Announce the release
 --------------------

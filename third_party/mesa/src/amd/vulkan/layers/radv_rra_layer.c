@@ -5,9 +5,12 @@
  */
 
 #include "meta/radv_meta.h"
+#include "tools/radv_debug.h"
+#include "tools/radv_rra.h"
 #include "util/u_process.h"
+#include "radv_device.h"
 #include "radv_event.h"
-#include "radv_rra.h"
+#include "radv_physical_device.h"
 #include "vk_acceleration_structure.h"
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -15,6 +18,8 @@ rra_QueuePresentKHR(VkQueue _queue, const VkPresentInfoKHR *pPresentInfo)
 {
    VK_FROM_HANDLE(radv_queue, queue, _queue);
    struct radv_device *device = radv_queue_device(queue);
+   struct radv_physical_device *pdev = radv_device_physical(device);
+   struct radv_instance *instance = radv_physical_device_instance(pdev);
 
    if (device->rra_trace.triggered) {
       device->rra_trace.triggered = false;
@@ -25,14 +30,26 @@ rra_QueuePresentKHR(VkQueue _queue, const VkPresentInfoKHR *pPresentInfo)
          char filename[2048];
          time_t t = time(NULL);
          struct tm now = *localtime(&t);
-         snprintf(filename, sizeof(filename), "/tmp/%s_%04d.%02d.%02d_%02d.%02d.%02d.rra", util_get_process_name(),
-                  1900 + now.tm_year, now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec);
+         if (instance->vk.trace_mode & RADV_TRACE_MODE_GAMMA) {
+            snprintf(filename, sizeof(filename), "/tmp/%s_%04d.%02d.%02d_%02d.%02d.%02d.gamma", util_get_process_name(),
+                     1900 + now.tm_year, now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec);
 
-         VkResult result = radv_rra_dump_trace(_queue, filename);
-         if (result == VK_SUCCESS)
-            fprintf(stderr, "radv: RRA capture saved to '%s'\n", filename);
-         else
-            fprintf(stderr, "radv: Failed to save RRA capture!\n");
+            VkResult result = radv_gamma_dump_trace(_queue, filename);
+            if (result == VK_SUCCESS)
+               fprintf(stderr, "radv: gamma capture saved to '%s'\n", filename);
+            else
+               fprintf(stderr, "radv: Failed to save gamma capture!\n");
+         }
+         if (instance->vk.trace_mode & RADV_TRACE_MODE_RRA) {
+            snprintf(filename, sizeof(filename), "/tmp/%s_%04d.%02d.%02d_%02d.%02d.%02d.rra", util_get_process_name(),
+                     1900 + now.tm_year, now.tm_mon + 1, now.tm_mday, now.tm_hour, now.tm_min, now.tm_sec);
+
+            VkResult result = radv_rra_dump_trace(_queue, filename);
+            if (result == VK_SUCCESS)
+               fprintf(stderr, "radv: RRA capture saved to '%s'\n", filename);
+            else
+               fprintf(stderr, "radv: Failed to save RRA capture!\n");
+         }
       }
    }
 
@@ -43,12 +60,12 @@ rra_QueuePresentKHR(VkQueue _queue, const VkPresentInfoKHR *pPresentInfo)
    VkDevice _device = radv_device_to_handle(device);
    radv_rra_trace_clear_ray_history(_device, &device->rra_trace);
 
-   if (device->rra_trace.triggered && device->rra_trace.ray_history_buffer) {
+   if (device->rra_trace.triggered && device->rra_trace.ray_history_addr) {
       result = device->layer_dispatch.rra.DeviceWaitIdle(_device);
       if (result != VK_SUCCESS)
          return result;
 
-      struct radv_ray_history_header *header = device->rra_trace.ray_history_data;
+      struct radv_ray_history_header *header = device->rra_trace.ray_history_buffer.map;
       header->offset = sizeof(struct radv_ray_history_header);
    }
 
@@ -76,58 +93,8 @@ rra_init_accel_struct_data_buffer(VkDevice vk_device, struct radv_rra_accel_stru
 
    buffer->ref_cnt = 1;
 
-   VkBufferCreateInfo buffer_create_info = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = size,
-   };
-
-   VkResult result = radv_create_buffer(device, &buffer_create_info, NULL, &buffer->buffer, true);
-   if (result != VK_SUCCESS)
-      return result;
-
-   VkDeviceBufferMemoryRequirements buffer_mem_req_info = {
-      .sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS,
-      .pCreateInfo = &buffer_create_info,
-   };
-   VkMemoryRequirements2 requirements = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-   };
-
-   radv_GetDeviceBufferMemoryRequirements(vk_device, &buffer_mem_req_info, &requirements);
-
-   VkMemoryAllocateFlagsInfo flags_info = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
-      .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
-   };
-
-   VkMemoryAllocateInfo alloc_info = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = &flags_info,
-      .allocationSize = requirements.memoryRequirements.size,
-      .memoryTypeIndex = device->rra_trace.copy_memory_index,
-   };
-   result = radv_alloc_memory(device, &alloc_info, NULL, &buffer->memory, true);
-   if (result != VK_SUCCESS)
-      goto fail_buffer;
-
-   VkBindBufferMemoryInfo bind_info = {
-      .sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO,
-      .buffer = buffer->buffer,
-      .memory = buffer->memory,
-   };
-
-   result = radv_BindBufferMemory2(vk_device, 1, &bind_info);
-   if (result != VK_SUCCESS)
-      goto fail_memory;
-
-   return result;
-fail_memory:
-   radv_FreeMemory(vk_device, buffer->memory, NULL);
-   buffer->memory = VK_NULL_HANDLE;
-fail_buffer:
-   radv_DestroyBuffer(vk_device, buffer->buffer, NULL);
-   buffer->buffer = VK_NULL_HANDLE;
-   return result;
+   return radv_backed_buffer_init(device, &buffer->buffer, size, radv_memory_type_gtt,
+                                  VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, false);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -263,7 +230,7 @@ handle_accel_struct_write(VkCommandBuffer commandBuffer, VkAccelerationStructure
    VkCopyBufferInfo2 copyInfo = {
       .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2,
       .srcBuffer = vk_buffer_to_handle(accel_struct->buffer),
-      .dstBuffer = data->buffer->buffer,
+      .dstBuffer = data->buffer->buffer.buffer,
       .regionCount = 1,
       .pRegions = &region,
    };
@@ -374,7 +341,16 @@ rra_QueueSubmit2KHR(VkQueue _queue, uint32_t submitCount, const VkSubmitInfo2 *p
    struct radv_device *device = radv_queue_device(queue);
 
    VkResult result = device->layer_dispatch.rra.QueueSubmit2KHR(_queue, submitCount, pSubmits, _fence);
-   if (result != VK_SUCCESS || !device->rra_trace.triggered)
+   if (result != VK_SUCCESS)
+      return result;
+
+   if (radv_bvh_stats_file()) {
+      result = radv_dump_bvh_stats(_queue);
+      if (result != VK_SUCCESS)
+         return result;
+   }
+
+   if (!device->rra_trace.triggered)
       return result;
 
    uint32_t total_trace_count = 0;
@@ -401,7 +377,7 @@ rra_QueueSubmit2KHR(VkQueue _queue, uint32_t submitCount, const VkSubmitInfo2 *p
 
    result = device->layer_dispatch.rra.DeviceWaitIdle(radv_device_to_handle(device));
 
-   struct radv_ray_history_header *header = device->rra_trace.ray_history_data;
+   struct radv_ray_history_header *header = device->rra_trace.ray_history_buffer.map;
    header->submit_base_index += total_trace_count;
 
    simple_mtx_unlock(&device->rra_trace.data_mtx);

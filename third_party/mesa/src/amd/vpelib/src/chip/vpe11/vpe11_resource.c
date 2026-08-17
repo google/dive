@@ -45,6 +45,13 @@
 #define LUT_NUM_COMPONENT (3)
 #define LUT_BUFFER_SIZE   (LUT_NUM_ENTRIES * LUT_ENTRY_SIZE * LUT_NUM_COMPONENT)
 
+#define SHAPER_LUT_DATA_POINTS_PER_CHANNEL (256)
+#define SHAPER_LUT_DMA_DATA_SIZE           (0)
+#define SHAPER_LUT_DMA_CONFIG_SIZE         (0)
+#define SHAPER_LUT_DMA_DATA_ALIGNMENT      (0)
+#define SHAPER_LUT_DMA_CONFIG_ALIGNMENT    (0)
+#define SHAPER_LUT_DMA_CONFIG_PADDING      (0)
+#define LUT_3D_DMA_ALIGNMENT               (0)
 // set field/register/bitfield name
 #define SFRB(field_name, reg_name, post_fix) .field_name = reg_name##__##field_name##post_fix
 
@@ -58,102 +65,178 @@
     .reg_name = {BASE(reg##reg_name##_BASE_IDX) + reg##reg_name, reg##reg_name##_##DEFAULT,        \
         reg##reg_name##_##DEFAULT, false}
 
-static struct vpe_caps caps = {
-    .max_input_size =
+static struct vpe_caps
+    caps =
         {
-            .width  = 16384,
-            .height = 16384,
-        },
-    .max_output_size =
-        {
-            .width  = 16384,
-            .height = 16384,
-        },
-    .min_input_size =
-        {
-            .width  = 1,
-            .height = 1,
-        },
-    .min_output_size =
-        {
-            .width  = 1,
-            .height = 1,
-        },
-    .lut_size               = LUT_BUFFER_SIZE,
-    .rotation_support       = 0,
-    .h_mirror_support       = 1,
-    .v_mirror_support       = 0,
-    .is_apu                 = 1,
-    .bg_color_check_support = 0,
-    .resource_caps =
-        {
-            .num_dpp       = 1,
-            .num_opp       = 1,
-            .num_mpc_3dlut = 1,
-            .num_queue     = 8,
-            .num_cdc_be    = 1,
-        },
-    .color_caps = {.dpp =
-                       {
-                           .pre_csc    = 1,
-                           .luma_key   = 0,
-                           .color_key  = 1,
-                           .dgam_ram   = 0,
-                           .post_csc   = 1,
-                           .gamma_corr = 1,
-                           .hw_3dlut   = 1,
-                           .ogam_ram   = 1, /**< programmable gam in output -> gamma_corr */
-                           .ocsc       = 0,
-                           .dgam_rom_caps =
+            .max_input_size =
+                {
+                    .width  = 16384,
+                    .height = 16384,
+                },
+            .max_output_size =
+                {
+                    .width  = 16384,
+                    .height = 16384,
+                },
+            .min_input_size =
+                {
+                    .width  = 1,
+                    .height = 1,
+                },
+            .min_output_size =
+                {
+                    .width  = 1,
+                    .height = 1,
+                },
+            .lut_size               = LUT_BUFFER_SIZE,
+            .rotation_support       = 0,
+            .h_mirror_support       = 1,
+            .v_mirror_support       = 0,
+            .is_apu                 = 1,
+            .bg_color_check_support = 0,
+
+            .prefer_external_scaler_coef = 1,
+
+            .resource_caps =
+                {
+                    .num_dpp       = 1,
+                    .num_opp       = 1,
+                    .num_mpc_3dlut = 1,
+                    .num_queue     = 8,
+                    .num_cdc_be    = 1,
+                },
+            .color_caps = {.dpp =
                                {
-                                   .srgb     = 1,
-                                   .bt2020   = 1,
-                                   .gamma2_2 = 1,
-                                   .pq       = 1,
-                                   .hlg      = 1,
+                                   .pre_csc    = 1,
+                                   .luma_key   = 0,
+                                   .color_key  = 1,
+                                   .dgam_ram   = 0,
+                                   .post_csc   = 1,
+                                   .gamma_corr = 1,
+                                   .hw_3dlut   = 1,
+                                   .ogam_ram   = 1, /**< programmable gam in output -> gamma_corr */
+                                   .ocsc       = 0,
+                                   .dgam_rom_caps =
+                                       {
+                                           .srgb     = 1,
+                                           .bt2020   = 1,
+                                           .gamma2_2 = 1,
+                                           .pq       = 1,
+                                           .hlg      = 1,
+                                       },
                                },
-                       },
-        .mpc =
-            {
-                .gamut_remap         = 1,
-                .ogam_ram            = 1,
-                .ocsc                = 1,
-                .shared_3d_lut       = 1,
-                .global_alpha        = 1,
-                .top_bottom_blending = 0,
-            }},
-    .plane_caps =
-        {
-            .per_pixel_alpha = 1,
-            .input_pixel_format_support =
+                .mpc =
+                    {
+                        .gamut_remap         = 1,
+                        .ogam_ram            = 1,
+                        .ocsc                = 1,
+                        .shared_3d_lut       = 1,
+                        .global_alpha        = 1,
+                        .top_bottom_blending = 0,
+                        .dma_3d_lut       = 0,
+                        .yuv_linear_blend = 0,
+                        .lut_dim_caps =
+                            {
+                                .dim_9  = 1,
+                                .dim_17 = 1,
+                                .dim_33 = 0,
+                            },
+                        .fast_load_caps =
+                            {
+                                .lut_3d_17 = 0,
+                                .lut_3d_33 = 0,
+                            },
+                        .lut_caps =
+                            {
+                                .lut_shaper_caps =
+                                    {
+                                        .dma_data             = 0,
+                                        .dma_config           = 0,
+                                        .non_monotonic        = 0,
+                                        .data_alignment       = SHAPER_LUT_DMA_DATA_ALIGNMENT,
+                                        .config_alignment     = SHAPER_LUT_DMA_CONFIG_ALIGNMENT,
+                                        .config_padding       = SHAPER_LUT_DMA_CONFIG_PADDING,
+                                        .data_size            = SHAPER_LUT_DMA_DATA_SIZE,
+                                        .config_size          = SHAPER_LUT_DMA_CONFIG_SIZE,
+                                        .data_pts_per_channel = SHAPER_LUT_DATA_POINTS_PER_CHANNEL,
+                                    },
+                                .lut_3dlut_caps =
+                                    {
+                                        .data_dim_9  = 1,
+                                        .data_dim_17 = 1,
+                                        .data_dim_33 = 0,
+                                        .dma_dim_9   = 0,
+                                        .dma_dim_17  = 0,
+                                        .dma_dim_33  = 0,
+                                        .alignment   = LUT_3D_DMA_ALIGNMENT,
+                                    },
+                                .lut_3d_compound = 0,
+                            },
+                    }},
+            .plane_caps =
                 {
-                    .argb_packed_32b = 1,
-                    .nv12            = 1,
-                    .fp16            = 0,
-                    .p010            = 1, /**< planar 4:2:0 10-bit */
-                    .p016            = 0, /**< planar 4:2:0 16-bit */
-                    .ayuv            = 0, /**< packed 4:4:4 */
-                    .yuy2            = 0, /**< packed 4:2:2 */
+                    .per_pixel_alpha = 1,
+                    .input_pixel_format_support =
+                        {
+                            .argb_packed_32b = 1,
+                            .nv12            = 1,
+                            .fp16            = 0,
+                            .p010            = 1, /**< planar 4:2:0 10-bit */
+                            .p016            = 0, /**< planar 4:2:0 16-bit */
+                            .ayuv            = 0, /**< packed 4:4:4 */
+                            .yuy2            = 0, /**< packed 4:2:2 */
+                            .y210 = 0,            /**< packed 4:2:2 10-bit */
+                            .y216 = 0,            /**< packed 4:2:2 16-bit */
+                            .p210 = 0,            /**< planar 4:2:2 10-bit */
+                            .p216 = 0,            /**< planar 4:2:2 16-bit */
+                        },
+                    .output_pixel_format_support =
+                        {
+                            .argb_packed_32b = 1,
+                            .nv12            = 0,
+                            .fp16            = 1,
+                            .p010            = 0, /**< planar 4:2:0 10-bit */
+                            .p016            = 0, /**< planar 4:2:0 16-bit */
+                            .ayuv            = 0, /**< packed 4:4:4 */
+                            .yuy2 = 0,            /**< packed 4:2:2 */
+                            .y210 = 0,            /**< packed 4:2:2 10-bit */
+                            .y216 = 0,            /**< packed 4:2:2 16-bit */
+                            .p210 = 0,            /**< planar 4:2:2 10-bit */
+                            .p216 = 0,            /**< planar 4:2:2 16-bit */
+
+                        },
+                    .max_upscale_factor = 64000,
+
+                    // 6:1 downscaling ratio: 1000/6 = 166.666
+                    .max_downscale_factor = 167,
+
+                    .pitch_alignment    = 256,
+                    .addr_alignment     = 256,
+                    .max_viewport_width = 1024,
                 },
-            .output_pixel_format_support =
+            .isharp_caps =
                 {
-                    .argb_packed_32b = 1,
-                    .nv12            = 0,
-                    .fp16            = 1,
-                    .p010            = 0, /**< planar 4:2:0 10-bit */
-                    .p016            = 0, /**< planar 4:2:0 16-bit */
-                    .ayuv            = 0, /**< packed 4:4:4 */
-                    .yuy2 = 0
+                    .support = false,
+                    .range =
+                        {
+                            .min  = 0,
+                            .max  = 0,
+                            .step = 0,
+                        },
                 },
-            .max_upscale_factor = 64000,
-
-            // 6:1 downscaling ratio: 1000/6 = 166.666
-            .max_downscale_factor = 167,
-
-            .pitch_alignment    = 256,
-            .addr_alignment     = 256,
-            .max_viewport_width = 1024,
-        },
+            .easf_support                = 0,
+            .input_internal_dcc_support  = 0,
+            .output_internal_dcc_support = 0,
+            .histogram_support      = 0,
+            .frod_support           = 0,
+            .alpha_blending_support = 0,
+            .alpha_fill_caps =
+                {
+                    .opaque        = 1,
+                    .bg_color      = 1,
+                    .destination   = 0,
+                    .source_stream = 0,
+                },
 };
 
 enum vpe_status vpe11_construct_resource(struct vpe_priv *vpe_priv, struct resource *res)
@@ -194,6 +277,7 @@ enum vpe_status vpe11_construct_resource(struct vpe_priv *vpe_priv, struct resou
 
     res->check_h_mirror_support            = vpe10_check_h_mirror_support;
     res->calculate_segments                = vpe10_calculate_segments;
+    res->get_max_seg_width                 = vpe10_get_max_seg_width;
     res->set_num_segments                  = vpe11_set_num_segments;
     res->split_bg_gap                      = vpe10_split_bg_gap;
     res->calculate_dst_viewport_and_active = vpe10_calculate_dst_viewport_and_active;
@@ -210,6 +294,10 @@ enum vpe_status vpe11_construct_resource(struct vpe_priv *vpe_priv, struct resou
     res->update_blnd_gamma                 = vpe10_update_blnd_gamma;
     res->update_output_gamma               = vpe10_update_output_gamma;
     res->validate_cached_param             = vpe11_validate_cached_param;
+    res->check_alpha_fill_support          = vpe10_check_alpha_fill_support;
+    res->populate_frod_param  = NULL;
+    res->check_lut3d_compound = NULL;
+    res->calculate_shaper = vpe10_calculate_shaper;
 
     return VPE_STATUS_OK;
 err:
@@ -327,6 +415,4 @@ void vpe11_setup_check_funcs(struct vpe_check_support_funcs *funcs)
     funcs->check_output_format            = vpe10_check_output_format;
     funcs->check_input_color_space        = vpe10_check_input_color_space;
     funcs->check_output_color_space       = vpe10_check_output_color_space;
-    funcs->get_dcc_compression_input_cap  = vpe10_get_dcc_compression_input_cap;
-    funcs->get_dcc_compression_output_cap = vpe10_get_dcc_compression_output_cap;
 }

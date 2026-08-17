@@ -273,7 +273,10 @@ util_end_pipestat_query(struct pipe_context *ctx, struct pipe_query *q,
            "    ps_invocations = %"PRIu64"\n"
            "    hs_invocations = %"PRIu64"\n"
            "    ds_invocations = %"PRIu64"\n"
-           "    cs_invocations = %"PRIu64"\n",
+           "    cs_invocations = %"PRIu64"\n"
+           "    ts_invocations = %"PRIu64"\n"
+           "    ms_invocations = %"PRIu64"\n"
+           "    ms_primitives = %"PRIu64"\n",
            (unsigned)p_atomic_inc_return(&counter),
            stats.ia_vertices,
            stats.ia_primitives,
@@ -285,7 +288,10 @@ util_end_pipestat_query(struct pipe_context *ctx, struct pipe_query *q,
            stats.ps_invocations,
            stats.hs_invocations,
            stats.ds_invocations,
-           stats.cs_invocations);
+           stats.cs_invocations,
+           stats.ts_invocations,
+           stats.ms_invocations,
+           stats.ms_primitives);
 }
 
 /* This is a helper for profiling. Don't remove. */

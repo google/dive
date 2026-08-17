@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "util/os_misc.h"
 #include "util/u_dynarray.h"
 #include "util/u_math.h"
 #include <sys/mman.h>
@@ -992,7 +993,7 @@ agxdecode_track_alloc(struct agxdecode_ctx *ctx, struct agx_bo *alloc)
       assert(!match && "tried to alloc already allocated BO");
    }
 
-   util_dynarray_append(&ctx->mmap_array, struct agx_bo, *alloc);
+   util_dynarray_append(&ctx->mmap_array, *alloc);
 }
 
 void
@@ -1020,11 +1021,11 @@ agxdecode_dump_file_open(void)
    if (agxdecode_dump_stream)
       return;
 
-   /* This does a getenv every frame, so it is possible to use
-    * setenv to change the base at runtime.
+   /* This does a os_get_option every frame, so it is possible to use
+    * os_set_option to change the base at runtime.
     */
    const char *dump_file_base =
-      getenv("AGXDECODE_DUMP_FILE") ?: "agxdecode.dump";
+      os_get_option("AGXDECODE_DUMP_FILE") ?: "agxdecode.dump";
    if (!strcmp(dump_file_base, "stderr"))
       agxdecode_dump_stream = stderr;
    else {

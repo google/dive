@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 traces-db:
-  download-url: "https://s3.freedesktop.org/mesa-tracie-public/"
+  download-url: https://s3.freedesktop.org/mesa-tracie-public/
 
 text: |-
   NOTE for faster runtime, try to sort tests so the longer running traces
@@ -24,9 +24,9 @@ traces:
       checksum: 8f5929c82e7d990e8c3d2bea14688224
       label: [skip, slow]
     freedreno-a530:
-      checksum: e3370ce93f56703e0c827a36dca2256d
+      checksum: 5def334bb574b024198ddddb1a069529
     freedreno-a618:
-      checksum: eaedce6c69165b08a63a57b9c9901230
+      checksum: a1710b1977081218f518cf988c86c6e6
     zink-a618:
       checksum: 45bdbb33bf87ed114bd548248be13408
       label: [skip, broken]
@@ -44,7 +44,7 @@ traces:
     freedreno-a618:
       checksum: e0e18dcc50ab2e23cead650d64469178
     zink-a618:
-      checksum: b7e0cdb0db74ea9a31fb7a75ae0d76fc
+      checksum: b007c69ad3d9ede36bac6b2fe356722b
 
   valve/counterstrike-source-v2.trace:
     freedreno-a306:
@@ -52,9 +52,9 @@ traces:
       label: [skip, broken, slow]
       text: Broken minimap rendering since around !14643
     freedreno-a530:
-      checksum: 5ec09d3cf604d9f52ce7c34e969a35a1
+      checksum: bbe74b2171d62fc6738086740e1aa0d8
     freedreno-a618:
-      checksum: 747fa9a4e47bbb37c24c3376a3f8255b
+      checksum: e7b57988348b2ce98b964d71b18c1771
     zink-a618:
       label: [skip, slow]
       checksum: ade41e6fe932552914c678155149babb
@@ -77,9 +77,7 @@ traces:
     freedreno-a530:
       label: [unsupported]
     freedreno-a618:
-      label: [skip, flakes]
-      checksum: 17c6a6dd333514b125cc18282ce24ba8
-      text: May time out
+      checksum: b5fdea0f949c4c02c86b5785e0556dfe
     zink-a618:
       label: [skip, flakes]
       checksum: 96f7f231042f892c7d11c91defd7ecc1
@@ -169,7 +167,7 @@ traces:
       checksum: d25edb433abfcde517b626b3071906ff
     zink-a618:
       label: [no-perf]
-      checksum: d25edb433abfcde517b626b3071906ff
+      checksum: a8a714fd7017fb07be6c3e904595eb0f
 
   glxgears/glxgears-2-v2.trace:
     freedreno-a306:
@@ -194,7 +192,7 @@ traces:
     freedreno-a618:
       checksum: 709d72f86faa9b768495888b49cad086
     zink-a618:
-      checksum: ac00716889f247788292e838139bc2ac
+      checksum: f4e4216bfcf202d680b1cb6a20ef2dd5
 
 # gimark requires an environment var to work around a bug, disable for now
 #  gputest/gimark-v2.trace:
@@ -241,22 +239,22 @@ traces:
     freedreno-a306:
       label: [hang]
     freedreno-a530:
-      checksum: ef9cec3c226477e908d4bb2ffe9e8eb9
+      checksum: 57bb50e4a016bf870ee192057de3c19e
       text: Looks fine, but totally different shape from the rendering on i965.
     freedreno-a618:
-      checksum: e4da2cf366cb68833569105d37aaa50d
+      checksum: dbd6130eeae3eb6d5df73f3069beae28
     zink-a618:
-      checksum: e4da2cf366cb68833569105d37aaa50d
+      checksum: dbd6130eeae3eb6d5df73f3069beae28
 
   gputest/plot3d-v2.trace:
     freedreno-a306:
-      checksum: f6ecd9b8afc692b0cdb459b9b30db8d4
+      checksum: 4e9d4eae83618e47b655de9fd8536e84
     freedreno-a530:
-      checksum: 4faafe5fab0d8ec6d7b549c94f663c92
+      checksum: 512da39a517434eaaf9d8daaf7b736ea
     freedreno-a618:
-      checksum: 0a6a16c394a413f02ec2ebcc3251e366
+      checksum: 361926f700dac2db7e95a983f1d63e62
     zink-a618:
-      checksum: 0a6a16c394a413f02ec2ebcc3251e366
+      checksum: 361926f700dac2db7e95a983f1d63e62
 
   gputest/tessmark-v2.trace:
     freedreno-a306:
@@ -267,7 +265,7 @@ traces:
     freedreno-a618:
       checksum: 92312303aa8279214f0a300a625efa87
     zink-a618:
-      checksum: 92312303aa8279214f0a300a625efa87
+      checksum: 1fd6650d5f929fdac04430d0e22e0269
 
   gputest/triangle-v2.trace:
     freedreno-a306:
@@ -299,7 +297,7 @@ traces:
     freedreno-a618:
       checksum: b0ac8fb4b2b2268cfb87944730125886
     zink-a618:
-      checksum: bd713b79eaa2a7ebbf4ebebab3577e40
+      checksum: 47c816354d1ea4dcb64827394abf089e
 
   humus/DynamicBranching3-v2.trace:
     freedreno-a306:
@@ -498,7 +496,7 @@ traces:
     freedreno-a530:
       label: [unsupported]
     freedreno-a618:
-      checksum: a71d1ad391162acef60cbb2804d0cf64
+      checksum: b575c6f7e33472b56714a32449b332c4
     zink-a618:
       checksum: b487c2784d458dff4a12f65e5cc46ac1
 
@@ -522,16 +520,6 @@ traces:
       label: [crash]
     zink-a618:
       label: [crash]
-
-  thedarkmod/thedarkmod.trace:
-    freedreno-a306:
-      label: [unsupported]
-    freedreno-a530:
-      label: [unsupported]
-    freedreno-a618:
-      label: [skip, broken, slow]
-    zink-a618:
-      label: [skip]
 
   jvgs/jvgs-d27fb67-v2.trace:
     freedreno-a306:

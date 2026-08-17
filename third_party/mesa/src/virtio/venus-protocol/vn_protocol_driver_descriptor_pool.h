@@ -97,7 +97,7 @@ vn_sizeof_VkDescriptorPoolCreateInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorPoolCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkDescriptorPoolCreateInfo_pnext(((const VkDescriptorPoolInlineUniformBlockCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkDescriptorPoolInlineUniformBlockCreateInfo_self((const VkDescriptorPoolInlineUniformBlockCreateInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT:
@@ -105,7 +105,7 @@ vn_sizeof_VkDescriptorPoolCreateInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorPoolCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkDescriptorPoolCreateInfo_pnext(((const VkMutableDescriptorTypeCreateInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkMutableDescriptorTypeCreateInfoEXT_self((const VkMutableDescriptorTypeCreateInfoEXT *)pnext);
             return size;
         default:
@@ -160,7 +160,7 @@ vn_encode_VkDescriptorPoolCreateInfo_pnext(struct vn_cs_encoder *enc, const void
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDescriptorPoolCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkDescriptorPoolCreateInfo_pnext(enc, ((const VkDescriptorPoolInlineUniformBlockCreateInfo *)pnext)->pNext);
             vn_encode_VkDescriptorPoolInlineUniformBlockCreateInfo_self(enc, (const VkDescriptorPoolInlineUniformBlockCreateInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT:
@@ -168,7 +168,7 @@ vn_encode_VkDescriptorPoolCreateInfo_pnext(struct vn_cs_encoder *enc, const void
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDescriptorPoolCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkDescriptorPoolCreateInfo_pnext(enc, ((const VkMutableDescriptorTypeCreateInfoEXT *)pnext)->pNext);
             vn_encode_VkMutableDescriptorTypeCreateInfoEXT_self(enc, (const VkMutableDescriptorTypeCreateInfoEXT *)pnext);
             return;
         default:

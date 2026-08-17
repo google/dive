@@ -46,40 +46,52 @@ static const VkPresentModeKHR present_modes[] = {
 static VkResult
 wsi_metal_surface_get_capabilities(VkIcdSurfaceBase *surface,
                                  struct wsi_device *wsi_device,
-                                 VkSurfaceCapabilitiesKHR* caps)
+                                 VkSurfaceCapabilities2KHR* caps)
 {
    VkIcdSurfaceMetal *metal_surface = (VkIcdSurfaceMetal *)surface;
    assert(metal_surface->pLayer);
 
    wsi_metal_layer_size(metal_surface->pLayer,
-      &caps->currentExtent.width,
-      &caps->currentExtent.height);
+      &caps->surfaceCapabilities.currentExtent.width,
+      &caps->surfaceCapabilities.currentExtent.height);
 
-   if (!caps->currentExtent.width && !caps->currentExtent.height)
-      caps->currentExtent.width = caps->currentExtent.height = UINT32_MAX;
+   if (!caps->surfaceCapabilities.currentExtent.width && !caps->surfaceCapabilities.currentExtent.height)
+      caps->surfaceCapabilities.currentExtent.width = caps->surfaceCapabilities.currentExtent.height = UINT32_MAX;
 
-   caps->minImageCount = 2;
-   caps->maxImageCount = 3;
+   caps->surfaceCapabilities.minImageCount = 2;
+   caps->surfaceCapabilities.maxImageCount = 3;
 
-   caps->minImageExtent = (VkExtent2D) { 1, 1 };
-   caps->maxImageExtent = (VkExtent2D) {
+   caps->surfaceCapabilities.minImageExtent = (VkExtent2D) { 1, 1 };
+   caps->surfaceCapabilities.maxImageExtent = (VkExtent2D) {
       wsi_device->maxImageDimension2D,
       wsi_device->maxImageDimension2D,
    };
 
-   caps->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   caps->currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   caps->maxImageArrayLayers = 1;
+   caps->surfaceCapabilities.supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+   caps->surfaceCapabilities.currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+   caps->surfaceCapabilities.maxImageArrayLayers = 1;
 
-   caps->supportedCompositeAlpha =
+   caps->surfaceCapabilities.supportedCompositeAlpha =
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR |
       VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
 
-   caps->supportedUsageFlags = wsi_caps_get_image_usage();
+   VkImageUsageFlags image_usage = wsi_caps_get_image_usage();
 
    VK_FROM_HANDLE(vk_physical_device, pdevice, wsi_device->pdevice);
    if (pdevice->supported_extensions.EXT_attachment_feedback_loop_layout)
-      caps->supportedUsageFlags |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;
+      image_usage |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;
+
+   VkSwapchainFlagsSurfaceCapabilitiesEXT *surface_caps = vk_find_struct(caps, SWAPCHAIN_FLAGS_SURFACE_CAPABILITIES_EXT);
+   if (surface_caps && pdevice->supported_extensions.EXT_multisampled_render_to_swapchain)
+      surface_caps->swapchainSupportedFlags |= VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT;
+
+   VkImageUsageFlags2CreateInfoKHR *usage2 =
+      vk_find_struct(caps->pNext, IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR);
+   if (usage2) {
+      usage2->usage = image_usage;
+   } else {
+      caps->surfaceCapabilities.supportedUsageFlags = image_usage;
+   }
 
    return VK_SUCCESS;
 }
@@ -92,12 +104,12 @@ wsi_metal_surface_get_capabilities2(VkIcdSurfaceBase *surface,
 {
    assert(caps->sType == VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR);
 
-   const VkSurfacePresentModeEXT *present_mode =
-      (const VkSurfacePresentModeEXT *)vk_find_struct_const(info_next, SURFACE_PRESENT_MODE_EXT);
+   const VkSurfacePresentModeKHR *present_mode =
+      (const VkSurfacePresentModeKHR *)vk_find_struct_const(info_next, SURFACE_PRESENT_MODE_KHR);
 
    VkResult result =
       wsi_metal_surface_get_capabilities(surface, wsi_device,
-                                      &caps->surfaceCapabilities);
+                                      caps);
 
    vk_foreach_struct(ext, caps->pNext) {
       switch (ext->sType) {
@@ -107,10 +119,10 @@ wsi_metal_surface_get_capabilities2(VkIcdSurfaceBase *surface,
          break;
       }
 
-      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT: {
+      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_KHR: {
          /* TODO: support scaling */
-         VkSurfacePresentScalingCapabilitiesEXT *scaling =
-            (VkSurfacePresentScalingCapabilitiesEXT *)ext;
+         VkSurfacePresentScalingCapabilitiesKHR *scaling =
+            (VkSurfacePresentScalingCapabilitiesKHR *)ext;
          scaling->supportedPresentScaling = 0;
          scaling->supportedPresentGravityX = 0;
          scaling->supportedPresentGravityY = 0;
@@ -119,10 +131,10 @@ wsi_metal_surface_get_capabilities2(VkIcdSurfaceBase *surface,
          break;
       }
 
-      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT: {
+      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_KHR: {
          /* Unsupported, just report the input present mode. */
-         VkSurfacePresentModeCompatibilityEXT *compat =
-            (VkSurfacePresentModeCompatibilityEXT *)ext;
+         VkSurfacePresentModeCompatibilityKHR *compat =
+            (VkSurfacePresentModeCompatibilityKHR *)ext;
          if (compat->pPresentModes) {
             if (compat->presentModeCount) {
                assert(present_mode);
@@ -131,11 +143,21 @@ wsi_metal_surface_get_capabilities2(VkIcdSurfaceBase *surface,
             }
          } else {
             if (!present_mode)
-               wsi_common_vk_warn_once("Use of VkSurfacePresentModeCompatibilityEXT "
-                                       "without a VkSurfacePresentModeEXT set. This is an "
+               wsi_common_vk_warn_once("Use of VkSurfacePresentModeCompatibilityKHR "
+                                       "without a VkSurfacePresentModeKHR set. This is an "
                                        "application bug.\n");
             compat->presentModeCount = 1;
          }
+         break;
+      }
+
+      case VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT: {
+         VkPresentTimingSurfaceCapabilitiesEXT *wait = (void *)ext;
+
+         wait->presentStageQueries = 0;
+         wait->presentTimingSupported = VK_FALSE;
+         wait->presentAtAbsoluteTimeSupported = VK_FALSE;
+         wait->presentAtRelativeTimeSupported = VK_FALSE;
          break;
       }
 
@@ -164,6 +186,8 @@ static const VkColorSpaceKHR available_surface_color_spaces[] = {
    VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT,
    VK_COLOR_SPACE_BT709_NONLINEAR_EXT,
    VK_COLOR_SPACE_BT2020_LINEAR_EXT,
+   VK_COLOR_SPACE_HDR10_ST2084_EXT,
+   VK_COLOR_SPACE_HDR10_HLG_EXT,
    VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT,
    VK_COLOR_SPACE_PASS_THROUGH_EXT,
    VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT,
@@ -192,13 +216,18 @@ wsi_metal_surface_get_formats(VkIcdSurfaceBase *icd_surface,
                                  uint32_t* pSurfaceFormatCount,
                                  VkSurfaceFormatKHR* pSurfaceFormats)
 {
+   VK_FROM_HANDLE(vk_physical_device, pdev, wsi_device->pdevice);
    VK_OUTARRAY_MAKE_TYPED(VkSurfaceFormatKHR, out, pSurfaceFormats, pSurfaceFormatCount);
 
    VkFormat sorted_formats[ARRAY_SIZE(available_surface_formats)];
    get_sorted_vk_formats(wsi_device->force_bgra8_unorm_first, sorted_formats);
+   unsigned color_space_count =
+      pdev->instance->enabled_extensions.EXT_swapchain_colorspace
+         ? ARRAY_SIZE(available_surface_color_spaces)
+         : 1u;
 
    for (unsigned i = 0; i < ARRAY_SIZE(sorted_formats); i++) {
-      for (unsigned j = 0; j < ARRAY_SIZE(available_surface_color_spaces); j++) {
+      for (unsigned j = 0; j < color_space_count; j++) {
          vk_outarray_append_typed(VkSurfaceFormatKHR, &out, f) {
             f->format = sorted_formats[i];
             f->colorSpace = available_surface_color_spaces[j];
@@ -216,13 +245,18 @@ wsi_metal_surface_get_formats2(VkIcdSurfaceBase *icd_surface,
                                   uint32_t* pSurfaceFormatCount,
                                   VkSurfaceFormat2KHR* pSurfaceFormats)
 {
+   VK_FROM_HANDLE(vk_physical_device, pdev, wsi_device->pdevice);
    VK_OUTARRAY_MAKE_TYPED(VkSurfaceFormat2KHR, out, pSurfaceFormats, pSurfaceFormatCount);
 
    VkFormat sorted_formats[ARRAY_SIZE(available_surface_formats)];
    get_sorted_vk_formats(wsi_device->force_bgra8_unorm_first, sorted_formats);
+   unsigned color_space_count =
+      pdev->instance->enabled_extensions.EXT_swapchain_colorspace
+         ? ARRAY_SIZE(available_surface_color_spaces)
+         : 1u;
 
    for (unsigned i = 0; i < ARRAY_SIZE(sorted_formats); i++) {
-      for (unsigned j = 0; j < ARRAY_SIZE(available_surface_color_spaces); j++) {
+      for (unsigned j = 0; j < color_space_count; j++) {
          vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, f) {
             assert(f->sType == VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR);
             f->surfaceFormat.format = sorted_formats[i];
@@ -329,7 +363,7 @@ wsi_cmd_blit_image_to_image(const struct wsi_swapchain *chain,
       const VkCommandBufferAllocateInfo cmd_buffer_info = {
          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
          .pNext = NULL,
-         .commandPool = chain->cmd_pools[0],
+         .commandPool = chain->cmd_pools[i],
          .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
          .commandBufferCount = 1,
       };
@@ -485,6 +519,49 @@ wsi_metal_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
 }
 
 static VkResult
+wsi_metal_swapchain_release_images(struct wsi_swapchain *wsi_chain,
+                                   uint32_t count, const uint32_t *indices)
+{
+   const struct wsi_device *wsi = wsi_chain->wsi;
+   struct wsi_metal_swapchain *chain =
+      (struct wsi_metal_swapchain *)wsi_chain;
+   const uint32_t queue_count = chain->base.blit.queue != NULL ? 1 :
+                                wsi->queue_family_count;
+
+   for (uint32_t idx = 0; idx < count; idx++) {
+      struct wsi_metal_image *image = &chain->images[indices[idx]];
+
+      if (wsi->sw) {
+         /* Directly release drawable */
+         if (image->drawable) {
+            wsi_metal_release_drawable(image->drawable);
+            image->drawable = NULL;
+         }
+      } else {
+         /* Drawable has been released and is retained by blit command buffers.
+          * Free them to release the reference. */
+         for (uint32_t queue_idx = 0; queue_idx < queue_count; queue_idx++) {
+            wsi->FreeCommandBuffers(
+               chain->base.device, chain->base.cmd_pools[queue_idx], 1u,
+               &image->base.blit.cmd_buffers[queue_idx]);
+            image->base.blit.cmd_buffers[queue_idx] = NULL;
+         }
+      }
+   }
+
+   return VK_SUCCESS;
+}
+
+static void
+wsi_metal_swapchain_set_present_mode(struct wsi_swapchain *wsi_chain,
+                                     VkPresentModeKHR mode)
+{
+   struct wsi_metal_swapchain *chain = (struct wsi_metal_swapchain *)wsi_chain;
+   const bool immediate_mode = mode == VK_PRESENT_MODE_IMMEDIATE_KHR;
+   wsi_metal_layer_set_immediate(chain->surface->pLayer, immediate_mode);
+}
+
+static VkResult
 wsi_metal_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
                                      uint32_t image_index,
                                      uint64_t present_id,
@@ -512,6 +589,15 @@ wsi_metal_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
 }
 
 static void
+wsi_metal_swapchain_set_hdr_metadata(struct wsi_swapchain *wsi_chain,
+                                     const VkHdrMetadataEXT* pMetadata)
+{
+   struct wsi_metal_swapchain *chain =
+      (struct wsi_metal_swapchain *)wsi_chain;
+   wsi_metal_layer_set_hdr_metadata(chain->surface->pLayer, pMetadata);
+}
+
+static void
 wsi_metal_destroy_image(const struct wsi_metal_swapchain *metal_chain,
                         struct wsi_metal_image *metal_image)
 {
@@ -525,16 +611,22 @@ wsi_metal_destroy_image(const struct wsi_metal_swapchain *metal_chain,
       return;
    }
 
-   /* Required since we allocate 2 per queue */
+   /* Required since we allocate 2 per queue, stored with the following layout:
+    * cmd_pool 0: 0, queue_count
+    * cmd_pool 1: 1, 1 + queue_count
+    * ...
+    */
    if (image->blit.cmd_buffers) {
-      int cmd_buffer_count =
-         chain->blit.queue != NULL ? 2 : wsi->queue_family_count * 2;
+      int queue_count =
+         chain->blit.queue != NULL ? 1 : wsi->queue_family_count;
 
-      for (uint32_t i = 0; i < cmd_buffer_count; i++) {
+      for (uint32_t i = 0; i < queue_count; i++) {
          if (!chain->cmd_pools[i])
             continue;
          wsi->FreeCommandBuffers(chain->device, chain->cmd_pools[i],
                                  1, &image->blit.cmd_buffers[i]);
+         wsi->FreeCommandBuffers(chain->device, chain->cmd_pools[i],
+                                 1, &image->blit.cmd_buffers[i + queue_count]);
       }
       vk_free(&chain->alloc, image->blit.cmd_buffers);
       image->blit.cmd_buffers = NULL;
@@ -649,7 +741,10 @@ wsi_metal_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
    chain->base.destroy = wsi_metal_swapchain_destroy;
    chain->base.get_wsi_image = wsi_metal_swapchain_get_wsi_image;
    chain->base.acquire_next_image = wsi_metal_swapchain_acquire_next_image;
+   chain->base.release_images = wsi_metal_swapchain_release_images;
+   chain->base.set_present_mode = wsi_metal_swapchain_set_present_mode;
    chain->base.queue_present = wsi_metal_swapchain_queue_present;
+   chain->base.set_hdr_metadata = wsi_metal_swapchain_set_hdr_metadata;
    chain->base.present_mode = wsi_swapchain_get_present_mode(wsi_device, pCreateInfo);
    chain->base.image_count = num_images;
    chain->extent = pCreateInfo->imageExtent;

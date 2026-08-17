@@ -3,6 +3,7 @@ project(
   'rust',
   version : '1.0.35',
   license : 'MIT OR Apache-2.0',
+  meson_version : '>= 1.7.0',
 )
 
 rc = meson.get_compiler('rust')
@@ -25,7 +26,7 @@ lib = static_library(
   'quote',
   'src/lib.rs',
   rust_args : rust_args,
-  override_options : ['rust_std=2018', 'build.rust_std=2018'],
+  override_options : ['rust_std=2018', 'build.rust_std=2018', 'warning_level=0'],
   link_with : pm2,
   rust_abi : 'rust',
   native : true,

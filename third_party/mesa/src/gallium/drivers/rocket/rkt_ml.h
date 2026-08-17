@@ -80,7 +80,10 @@ struct rkt_operation {
    bool depthwise;
    bool reuse_weights_cbuf;
    unsigned truncate_bits;
-   bool padding_same;
+   unsigned padding_top;
+   unsigned padding_bottom;
+   unsigned padding_left;
+   unsigned padding_right;
    unsigned stride;
 
    bool addition_input;
@@ -114,15 +117,16 @@ struct rkt_operation {
 struct rkt_ml_subgraph {
    struct pipe_ml_subgraph base;
 
+   struct pipe_context *context;
    struct util_dynarray operations; /* rkt_operation */
    struct util_dynarray tensors;    /* pipe_resource* */
 };
 
 bool
-rkt_ml_operation_supported(struct pipe_context *pcontext, const struct pipe_ml_operation *operation);
+rkt_ml_operation_supported(struct pipe_ml_device *pdevice, const struct pipe_ml_operation *operation);
 
 struct pipe_ml_subgraph *
-rkt_ml_subgraph_create(struct pipe_context *pcontext,
+rkt_ml_subgraph_create(struct pipe_ml_device *pdevice,
                        const struct pipe_ml_operation *poperations,
                        unsigned count);
 
@@ -137,7 +141,7 @@ void rkt_ml_subgraph_read_outputs(struct pipe_context *pcontext,
                                   unsigned output_idxs[], void *outputs[],
                                   bool is_signed[]);
 
-void rkt_ml_subgraph_destroy(struct pipe_context *context,
+void rkt_ml_subgraph_destroy(struct pipe_ml_device *pdevice,
                              struct pipe_ml_subgraph *psubgraph);
 
 struct rkt_resource *rkt_get_tensor(struct rkt_ml_subgraph *subgraph,

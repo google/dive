@@ -16,6 +16,9 @@ namespace pps
 {
 struct GpuIncrementalState {
    bool was_cleared = true;
+   std::unordered_map<uint32_t, double> last_counter_vals;
+   bool has_prev_sample_end_timestamp = false;
+   uint64_t prev_sample_end_timestamp = 0;
 };
 
 struct GpuDataSourceTraits : public perfetto::DefaultDataSourceTraits {
@@ -54,7 +57,7 @@ class GpuDataSource : public perfetto::DataSource<GpuDataSource, GpuDataSourceTr
    std::chrono::nanoseconds time_to_trace;
 
    /// Last CPU timestamp at which we correlated CPU/GPU timestamps
-   uint64_t last_correlation_timestamp = 0;
+   unsigned samples_since_correlation = 0;
 
    /// CPU timestamp of packet sent with counter descriptors
    uint64_t descriptor_timestamp = 0;

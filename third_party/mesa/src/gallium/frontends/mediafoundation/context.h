@@ -24,6 +24,7 @@
 #pragma once
 
 #include <Unknwn.h>
+#include "util/u_inlines.h"
 #include "vl/vl_winsys.h"
 #include "macros.h"
 #include "mfpipeinterop.h"
@@ -32,20 +33,25 @@
 typedef class DX12EncodeContext
 {
  public:
-   ComPtr<IMFSample> spSample;
    void *pAsyncCookie = nullptr;
    reference_frames_tracker_dpb_async_token *pAsyncDPBToken = nullptr;
    struct pipe_fence_handle *pAsyncFence = NULL;
+   ComPtr<ID3D12Fence> spAsyncFence;
    std::vector<struct pipe_resource *> pOutputBitRes;
    std::vector<struct pipe_fence_handle *> pSliceFences;
+   struct pipe_fence_handle *pLastSliceFence;
    D3D12_VIDEO_ENCODER_COMPRESSED_BITSTREAM_NOTIFICATION_MODE sliceNotificationMode =
       D3D12_VIDEO_ENCODER_COMPRESSED_BITSTREAM_NOTIFICATION_MODE_FULL_FRAME;
    pipe_resource *pPipeResourceQPMapStats = nullptr;
    pipe_resource *pPipeResourceSATDMapStats = nullptr;
    pipe_resource *pPipeResourceRCBitAllocMapStats = nullptr;
    pipe_resource *pPipeResourcePSNRStats = nullptr;
-   BOOL bUseSATDMapAllocator = FALSE;
-   BOOL bUseBitsusedMapAllocator = FALSE;
+   bool pipeResourceReconstructedPictureCopyMode = false;
+   pipe_resource *pPipeResourceReconstructedPicture = nullptr;
+   UINT PipeResourceReconstructedPictureSubresource = 0;
+   pipe_fence_handle *pPipeFenceReconstructedPictureCompletionFence = NULL;
+   ComPtr<ID3D12Fence> spReconstructedPictureCompletionFence;
+   UINT64 ReconstructedPictureCompletionFenceValue = 0;
 
    // Keep all the media and sync objects until encode is done
    // and then signal EnqueueResourceRelease so the media
@@ -59,6 +65,9 @@ typedef class DX12EncodeContext
 
    UINT textureWidth = 0;    // width of input sample
    UINT textureHeight = 0;   // height of input sample
+
+   LONGLONG inputSampleTime = 0;
+   LONGLONG inputSampleDuration = 0;
 
    BOOL bROI = FALSE;
    ROI_AREA video_roi_area = {};
@@ -74,6 +83,55 @@ typedef class DX12EncodeContext
       struct pipe_h265_enc_picture_desc h265enc;
       struct pipe_av1_enc_picture_desc av1enc;
    } encoderPicInfo = {};
+
+   bool IsSliceAutoModeEnabled()
+   {
+      return ( ( m_Codec == D3D12_VIDEO_ENCODER_CODEC_H264 ) &&
+               ( encoderPicInfo.h264enc.slice_mode == PIPE_VIDEO_SLICE_MODE_AUTO ) ) ||
+             ( ( m_Codec == D3D12_VIDEO_ENCODER_CODEC_HEVC ) &&
+               ( encoderPicInfo.h265enc.slice_mode == PIPE_VIDEO_SLICE_MODE_AUTO ) );
+   }
+
+   pipe_video_buffer *get_current_dpb_pic_buffer()
+   {
+      pipe_video_buffer *vid_buf = nullptr;
+
+      switch( m_Codec )
+      {
+         case D3D12_VIDEO_ENCODER_CODEC_H264:
+            if( encoderPicInfo.h264enc.not_referenced )
+               return nullptr;
+            vid_buf = encoderPicInfo.h264enc.dpb[encoderPicInfo.h264enc.dpb_curr_pic].buffer;
+            break;
+         case D3D12_VIDEO_ENCODER_CODEC_HEVC:
+            if( encoderPicInfo.h265enc.not_referenced )
+               return nullptr;
+            vid_buf = encoderPicInfo.h265enc.dpb[encoderPicInfo.h265enc.dpb_curr_pic].buffer;
+            break;
+         case D3D12_VIDEO_ENCODER_CODEC_AV1:
+            if( encoderPicInfo.av1enc.refresh_frame_flags == 0 )
+               return nullptr;
+            vid_buf = encoderPicInfo.av1enc.dpb[encoderPicInfo.av1enc.dpb_curr_pic].buffer;
+            break;
+      }
+
+      return vid_buf;
+   }
+
+   pipe_resource *get_current_dpb_pic_resource()
+   {
+      pipe_video_buffer *vid_buf = get_current_dpb_pic_buffer();
+      if( vid_buf )
+      {
+         struct pipe_resource *buf_resources[VL_NUM_COMPONENTS];
+         memset( buf_resources, 0, sizeof( buf_resources ) );
+         vid_buf->get_resources( vid_buf, &buf_resources[0] );
+         assert( buf_resources[0] );
+         return buf_resources[0];
+      }
+      return nullptr;
+   }
+
    const D3D12_VIDEO_ENCODER_CODEC m_Codec = D3D12_VIDEO_ENCODER_CODEC_H264;
    UINT32 GetPictureType()
    {
@@ -202,30 +260,29 @@ typedef class DX12EncodeContext
       }
 
       for( uint32_t slice_idx = 0; slice_idx < static_cast<uint32_t>( pOutputBitRes.size() ); slice_idx++ )
-         if( ( ( slice_idx == 0 ) || pOutputBitRes[slice_idx] != pOutputBitRes[slice_idx - 1] ) && pOutputBitRes[slice_idx] )
-            pVlScreen->pscreen->resource_destroy( pVlScreen->pscreen, pOutputBitRes[slice_idx] );
+         pipe_resource_reference( &pOutputBitRes[slice_idx], nullptr );
 
       if( pPipeResourceQPMapStats )
-         pVlScreen->pscreen->resource_destroy( pVlScreen->pscreen, pPipeResourceQPMapStats );
-
-      if( bUseSATDMapAllocator )
       {
-         pPipeResourceSATDMapStats = nullptr;
-      }
-      else
-      {
-         if( pPipeResourceSATDMapStats )
-            pVlScreen->pscreen->resource_destroy( pVlScreen->pscreen, pPipeResourceSATDMapStats );
+         pipe_resource_reference( &pPipeResourceQPMapStats, nullptr );
       }
 
-      if( bUseBitsusedMapAllocator )
+      if( pPipeResourceSATDMapStats )
       {
-         pPipeResourceRCBitAllocMapStats = nullptr;
+         pipe_resource_reference( &pPipeResourceSATDMapStats, nullptr );
       }
-      else
+
+      if( pPipeResourceRCBitAllocMapStats )
       {
-         if( pPipeResourceRCBitAllocMapStats )
-            pVlScreen->pscreen->resource_destroy( pVlScreen->pscreen, pPipeResourceRCBitAllocMapStats );
+         pipe_resource_reference( &pPipeResourceRCBitAllocMapStats, nullptr );
+      }
+
+      if( pipeResourceReconstructedPictureCopyMode )
+      {
+         if( pPipeResourceReconstructedPicture )
+         {
+            pipe_resource_reference( &pPipeResourceReconstructedPicture, nullptr );
+         }
       }
 
       if( pPipeVideoBuffer )
@@ -236,5 +293,7 @@ typedef class DX12EncodeContext
          pVlScreen->pscreen->resource_destroy( pVlScreen->pscreen, pPipeResourcePSNRStats );
       if( pDownscaledTwoPassPipeVideoBufferCompletionFence )
          pVlScreen->pscreen->fence_reference( pVlScreen->pscreen, &pDownscaledTwoPassPipeVideoBufferCompletionFence, NULL );
+      if( pPipeFenceReconstructedPictureCompletionFence )
+         pVlScreen->pscreen->fence_reference( pVlScreen->pscreen, &pPipeFenceReconstructedPictureCompletionFence, NULL );
    }
 } *LPDX12EncodeContext;

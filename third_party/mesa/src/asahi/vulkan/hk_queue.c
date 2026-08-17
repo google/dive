@@ -146,8 +146,7 @@ asahi_fill_vdm_command(struct hk_device *dev, struct hk_cs *cs,
       c->flags |= DRM_ASAHI_RENDER_NO_VERTEX_CLUSTERING;
    }
 
-   c->utile_width_px = cs->tib.tile_size.width;
-   c->utile_height_px = cs->tib.tile_size.height;
+   agx_tilebuffer_set_drm_cmd(c, &cs->tib);
 
    /* Can be 0 for attachmentless rendering with no draws */
    c->samples = MAX2(cs->tib.nr_samples, 1);
@@ -405,7 +404,7 @@ hk_bind_builder(struct hk_device *dev, struct vk_object_base *obj_base,
       .image = image,
    };
 
-   util_dynarray_init(&b.binds, NULL);
+   b.binds = UTIL_DYNARRAY_INIT;
    return b;
 }
 
@@ -488,7 +487,7 @@ hk_flush_bind(struct hk_bind_builder *b)
       };
    }
 
-   util_dynarray_append(&b->binds, struct drm_asahi_gem_bind_op, op);
+   util_dynarray_append(&b->binds, op);
 
    /* Shadow a read-only mapping to the upper half */
    op.flags &= ~DRM_ASAHI_BIND_WRITE;
@@ -498,7 +497,7 @@ hk_flush_bind(struct hk_bind_builder *b)
       op.handle = b->dev->dev.zero_bo->uapi_handle;
    }
 
-   util_dynarray_append(&b->binds, struct drm_asahi_gem_bind_op, op);
+   util_dynarray_append(&b->binds, op);
 
    return VK_SUCCESS;
 }
@@ -810,13 +809,7 @@ queue_submit(struct hk_device *dev, struct hk_queue *queue,
    };
 
    /* Now setup the command structs */
-   struct util_dynarray payload;
-   util_dynarray_init(&payload, NULL);
-   union drm_asahi_cmd *cmds = malloc(sizeof(*cmds) * command_count);
-   if (cmds == NULL) {
-      free(cmds);
-      return vk_error(dev, VK_ERROR_OUT_OF_HOST_MEMORY);
-   }
+   struct util_dynarray payload = UTIL_DYNARRAY_INIT;
 
    unsigned nr_vdm = 0, nr_cdm = 0;
 
@@ -829,7 +822,7 @@ queue_submit(struct hk_device *dev, struct hk_queue *queue,
          struct drm_asahi_cmd_header header =
             agx_cmd_header(cs->type == HK_CS_CDM, nr_vdm, nr_cdm);
 
-         util_dynarray_append(&payload, struct drm_asahi_cmd_header, header);
+         util_dynarray_append(&payload, header);
 
          if (cs->type == HK_CS_CDM) {
             perf_debug(
@@ -843,7 +836,7 @@ queue_submit(struct hk_device *dev, struct hk_queue *queue,
 
             struct drm_asahi_cmd_compute cmd;
             asahi_fill_cdm_command(dev, cs, &cmd);
-            util_dynarray_append(&payload, struct drm_asahi_cmd_compute, cmd);
+            util_dynarray_append(&payload, cmd);
             nr_cdm++;
          } else {
             assert(cs->type == HK_CS_VDM);
@@ -854,7 +847,7 @@ queue_submit(struct hk_device *dev, struct hk_queue *queue,
 
             struct drm_asahi_cmd_render cmd;
             asahi_fill_vdm_command(dev, cs, &cmd);
-            util_dynarray_append(&payload, struct drm_asahi_cmd_render, cmd);
+            util_dynarray_append(&payload, cmd);
             nr_vdm++;
          }
       }

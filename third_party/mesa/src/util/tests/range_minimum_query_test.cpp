@@ -42,7 +42,7 @@ TEST(range_minimum_query_test, range_minimum_query_test)
 
       range_minimum_query_table_preprocess(&table);
       for (uint32_t i = 0; i < width; i++) {
-         for (uint32_t j = i + 1; j < width; j++) {
+         for (uint32_t j = i + 1; j <= width; j++) {
             // printf("%i, %i\n", i, j);
             EXPECT_EQ(range_minimum_query(&table, i, j),
                       rmq_naive(&table, i, j));

@@ -334,28 +334,28 @@ nir_gather_xfb_info_from_intrinsics(nir_shader *nir)
          nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
 
          unsigned wr_mask = nir_intrinsic_write_mask(intr);
+         nir_io_xfb xfb = nir_intrinsic_io_xfb(intr);
 
          while (wr_mask) {
             unsigned i = u_bit_scan(&wr_mask);
             unsigned index = nir_intrinsic_component(intr) + i;
-            nir_io_xfb xfb = index < 2 ? nir_intrinsic_io_xfb(intr) : nir_intrinsic_io_xfb2(intr);
 
-            if (xfb.out[index % 2].num_components) {
+            if (xfb.out[index].num_components) {
                nir_io_semantics sem = nir_intrinsic_io_semantics(intr);
                nir_xfb_output_info out;
 
                out.component_offset = index;
                out.component_mask =
-                  BITFIELD_RANGE(index, xfb.out[index % 2].num_components);
+                  BITFIELD_RANGE(index, xfb.out[index].num_components);
                out.location = sem.location;
                out.data_is_16bit = intr->src[0].ssa->bit_size == 16;
                out.high_16bits = sem.high_16bits;
                out.mediump = sem.medium_precision;
                out.mediump_upconvert_type = nir_intrinsic_src_type(intr) &
                                             (nir_type_float | nir_type_int | nir_type_uint);
-               out.buffer = xfb.out[index % 2].buffer;
-               out.offset = (uint32_t)xfb.out[index % 2].offset * 4;
-               util_dynarray_append(&array, nir_xfb_output_info, out);
+               out.buffer = xfb.out[index].buffer;
+               out.offset = (uint32_t)xfb.out[index].offset * 4;
+               util_dynarray_append(&array, out);
 
                uint8_t stream = (sem.gs_streams >> (i * 2)) & 0x3;
                buffer_to_stream[out.buffer] = stream;

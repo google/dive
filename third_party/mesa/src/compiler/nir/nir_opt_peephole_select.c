@@ -25,6 +25,7 @@
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_control_flow.h"
+#include "nir_search_helpers.h"
 
 /*
  * Implements a small peephole optimization that looks for
@@ -92,8 +93,8 @@ block_check_for_allowed_instrs(nir_block *block, unsigned *count,
          }
 
          case nir_instr_type_call:
+         case nir_instr_type_cmat_call:
          case nir_instr_type_jump:
-         case nir_instr_type_parallel_copy:
             return false;
          }
       }
@@ -158,6 +159,7 @@ block_check_for_allowed_instrs(nir_block *block, unsigned *count,
          case nir_intrinsic_load_uniform:
          case nir_intrinsic_load_preamble:
          case nir_intrinsic_load_scalar_arg_amd:
+         case nir_intrinsic_load_scalar_arg_wg_div_amd:
          case nir_intrinsic_load_vector_arg_amd:
          case nir_intrinsic_load_helper_invocation:
          case nir_intrinsic_is_helper_invocation:
@@ -166,8 +168,10 @@ block_check_for_allowed_instrs(nir_block *block, unsigned *count,
          case nir_intrinsic_load_layer_id:
          case nir_intrinsic_load_frag_coord:
          case nir_intrinsic_load_pixel_coord:
+         case nir_intrinsic_load_frag_coord_xy:
          case nir_intrinsic_load_frag_coord_z:
          case nir_intrinsic_load_frag_coord_w:
+         case nir_intrinsic_load_frag_coord_w_rcp:
          case nir_intrinsic_load_sample_pos:
          case nir_intrinsic_load_sample_pos_or_center:
          case nir_intrinsic_load_sample_id:
@@ -200,6 +204,10 @@ block_check_for_allowed_instrs(nir_block *block, unsigned *count,
          case nir_intrinsic_ddy_fine:
          case nir_intrinsic_ddy_coarse:
          case nir_intrinsic_load_const_ir3:
+         case nir_intrinsic_ballot:
+         case nir_intrinsic_ballot_relaxed:
+         case nir_intrinsic_mbcnt_amd:
+         case nir_intrinsic_load_push_data_intel:
             if (!alu_ok)
                return false;
             break;
@@ -225,10 +233,10 @@ block_check_for_allowed_instrs(nir_block *block, unsigned *count,
          break;
 
       case nir_instr_type_alu: {
-         nir_alu_instr *mov = nir_instr_as_alu(instr);
+         nir_alu_instr *alu = nir_instr_as_alu(instr);
          bool movelike = false;
 
-         switch (mov->op) {
+         switch (alu->op) {
          case nir_op_mov:
          case nir_op_fneg:
          case nir_op_ineg:
@@ -275,14 +283,21 @@ block_check_for_allowed_instrs(nir_block *block, unsigned *count,
              * merged as a destination modifier or source modifier on some
              * other instruction.
              */
-            if (mov->op != nir_op_fsat && !movelike)
-               (*count)++;
+            if (alu->op != nir_op_fsat && !movelike) {
+               /* If this is a fmul that is only used by fadd, don't count it.
+                * It will likely be fused to fma/mad.
+                */
+               if ((alu->op != nir_op_fmul && alu->op != nir_op_fmulz) ||
+                   !is_only_used_by_fadd(alu)) {
+                  (*count)++;
+               }
+            }
          } else {
             /* The only uses of this definition must be phis in the successor */
-            nir_foreach_use_including_if(use, &mov->def) {
+            nir_foreach_use_including_if(use, &alu->def) {
                if (nir_src_is_if(use) ||
-                   nir_src_parent_instr(use)->type != nir_instr_type_phi ||
-                   nir_src_parent_instr(use)->block != block->successors[0])
+                   nir_src_use_instr(use)->type != nir_instr_type_phi ||
+                   nir_src_use_instr(use)->block != block->successors[0])
                   return false;
             }
          }
@@ -316,9 +331,11 @@ get_options_for_if(nir_if *if_stmt,
    return if_options;
 }
 
-/* If we're moving discards out of the if we need to add the if's condition to it */
+/* If we're moving discards or other conditional intrinsics
+ * out of the if we need to add the if's condition to it
+ */
 static void
-rewrite_discard_conds(nir_instr *instr, nir_def *if_cond, bool is_else)
+rewrite_intrinsic_conds(nir_instr *instr, nir_def *if_cond, bool is_else)
 {
    if (instr->type != nir_instr_type_intrinsic)
       return;
@@ -327,18 +344,25 @@ rewrite_discard_conds(nir_instr *instr, nir_def *if_cond, bool is_else)
    if (intr->intrinsic != nir_intrinsic_terminate_if &&
        intr->intrinsic != nir_intrinsic_terminate &&
        intr->intrinsic != nir_intrinsic_demote_if &&
-       intr->intrinsic != nir_intrinsic_demote)
+       intr->intrinsic != nir_intrinsic_demote &&
+       intr->intrinsic != nir_intrinsic_ballot)
       return;
 
    nir_builder b = nir_builder_at(nir_before_instr(instr));
 
-   if (is_else)
-      if_cond = nir_inot(&b, if_cond);
-
    if (intr->intrinsic == nir_intrinsic_terminate_if ||
-       intr->intrinsic == nir_intrinsic_demote_if) {
+       intr->intrinsic == nir_intrinsic_demote_if ||
+       intr->intrinsic == nir_intrinsic_ballot) {
+      if_cond = nir_b2bN(&b, if_cond, intr->src[0].ssa->bit_size);
+
+      if (is_else)
+         if_cond = nir_inot(&b, if_cond);
+
       nir_src_rewrite(&intr->src[0], nir_iand(&b, intr->src[0].ssa, if_cond));
    } else {
+      if (is_else)
+         if_cond = nir_inot(&b, if_cond);
+
       if (intr->intrinsic == nir_intrinsic_terminate)
          nir_terminate_if(&b, if_cond);
       else
@@ -412,9 +436,9 @@ nir_opt_collapse_if(nir_if *if_stmt, nir_shader *shader,
          nir_phi_get_src_from_block(phi, nir_if_first_else_block(if_stmt));
 
       nir_foreach_use(src, &phi->def) {
-         assert(nir_src_parent_instr(src)->type == nir_instr_type_phi);
+         assert(nir_src_use_instr(src)->type == nir_instr_type_phi);
          nir_phi_src *phi_src =
-            nir_phi_get_src_from_block(nir_instr_as_phi(nir_src_parent_instr(src)),
+            nir_phi_get_src_from_block(nir_instr_as_phi(nir_src_use_instr(src)),
                                        nir_if_first_else_block(parent_if));
          if (phi_src->src.ssa != else_src->src.ssa)
             return false;
@@ -438,7 +462,7 @@ nir_opt_collapse_if(nir_if *if_stmt, nir_shader *shader,
          nir_phi_get_src_from_block(phi, nir_if_first_else_block(if_stmt));
       nir_foreach_use_safe(src, &phi->def) {
          nir_phi_src *phi_src =
-            nir_phi_get_src_from_block(nir_instr_as_phi(nir_src_parent_instr(src)),
+            nir_phi_get_src_from_block(nir_instr_as_phi(nir_src_use_instr(src)),
                                        nir_if_first_else_block(parent_if));
          if (phi_src->src.ssa == else_src->src.ssa)
             nir_src_rewrite(&phi_src->src, &phi->def);
@@ -447,7 +471,7 @@ nir_opt_collapse_if(nir_if *if_stmt, nir_shader *shader,
 
    /* combine condition with potential demote/terminate */
    nir_foreach_instr_safe(instr, first)
-      rewrite_discard_conds(instr, parent_if->condition.ssa, false);
+      rewrite_intrinsic_conds(instr, parent_if->condition.ssa, false);
 
    /* combine the if conditions */
    struct nir_builder b = nir_builder_at(nir_before_cf_node(&if_stmt->cf_node));
@@ -526,14 +550,14 @@ nir_opt_peephole_select_block(nir_block *block, nir_shader *shader,
       exec_node_remove(&instr->node);
       instr->block = prev_block;
       exec_list_push_tail(&prev_block->instr_list, &instr->node);
-      rewrite_discard_conds(instr, if_stmt->condition.ssa, false);
+      rewrite_intrinsic_conds(instr, if_stmt->condition.ssa, false);
    }
 
    nir_foreach_instr_safe(instr, else_block) {
       exec_node_remove(&instr->node);
       instr->block = prev_block;
       exec_list_push_tail(&prev_block->instr_list, &instr->node);
-      rewrite_discard_conds(instr, if_stmt->condition.ssa, true);
+      rewrite_intrinsic_conds(instr, if_stmt->condition.ssa, true);
    }
 
    nir_foreach_phi_safe(phi, block) {

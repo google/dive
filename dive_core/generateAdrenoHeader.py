@@ -175,6 +175,19 @@ def outputPacketRegs(pm4_info_file, reg_list, prefix, domain):
 
 
 # ---------------------------------------------------------------------------------------
+def sortBitfields(bitfields):
+  def get_bitfield_start(bitfield):
+    if bitfield.tag != '{http://nouveau.freedesktop.org/}bitfield':
+      return -1
+    if 'low' in bitfield.attrib:
+      return int(bitfield.attrib['low'])
+    elif 'pos' in bitfield.attrib:
+      return int(bitfield.attrib['pos'])
+    else:
+      raise Exception("Encountered a bitfield with no pos/low/high!")
+  return sorted(bitfields, key=get_bitfield_start)
+
+# ---------------------------------------------------------------------------------------
 def outputBitfields(pm4_info_file, bitfields, extra_front_tab_str, cur_offset):
   for bitfield in bitfields:
     if bitfield.tag != '{http://nouveau.freedesktop.org/}bitfield':
@@ -228,6 +241,8 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
     pm4_info_file.write(extra_front_tab_str + "union\n")
   pm4_info_file.write(extra_front_tab_str + "{\n")
 
+  bitfields = reg.findall('{http://nouveau.freedesktop.org/}bitfield')
+
   type = None
   use_bitset_as_type = False
   cur_bitfield_offset = 0
@@ -249,19 +264,17 @@ def outputRegUnions(pm4_info_file, a6xx_domain, name, reg, for_pm4, postfix):
             bitset = registers_et_root.find('./{http://nouveau.freedesktop.org/}bitset[@name="'+type+'"]')
             if bitset is None:
               raise Exception("Not able to find bitset/enum " + type + " for register " + name)
+          bitfields = list(bitset) + bitfields
 
-          pm4_info_file.write(extra_front_tab_str + "\tstruct\n")
-          pm4_info_file.write(extra_front_tab_str + "\t{\n")
-          cur_bitfield_offset = outputBitfields(pm4_info_file, bitset, extra_front_tab_str, cur_bitfield_offset)
-
-  bitfields = reg.findall('{http://nouveau.freedesktop.org/}bitfield')
-  # This handles the case where bitfields is used to extend bitset type, see SP_VS_CTRL_REG0
   if bitfields:
-    if not use_bitset_as_type:
-      pm4_info_file.write(extra_front_tab_str + "\tstruct\n")
-      pm4_info_file.write(extra_front_tab_str + "\t{\n")
+    # Bitfields can come from *both* custom bitsets as well as from a separate 'type'
+    # Since they are concatanated, and outputBitfields assumes a certain order, a sort is necessary
+    bitfields = sortBitfields(bitfields)
+    pm4_info_file.write(extra_front_tab_str + "\tstruct\n")
+    pm4_info_file.write(extra_front_tab_str + "\t{\n")
     cur_bitfield_offset = outputBitfields(pm4_info_file, bitfields, extra_front_tab_str, cur_bitfield_offset)
 
+  # This handles the case where bitfields is used to extend bitset type, see SP_VS_CTRL_REG0
   if use_bitset_as_type or bitfields:
     pm4_info_file.write(extra_front_tab_str + "\t}bitfields" + postfix + ";\n\n")
 

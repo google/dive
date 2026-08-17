@@ -15,8 +15,7 @@ anv_nir_lower_unaligned_dispatch(nir_shader *shader)
 
    nir_def *global_idx = nir_channel(&b, nir_load_global_invocation_id(&b, 32), 0);
    nir_def *max_unaligned_invocations_x =
-      nir_load_inline_data_intel(&b, 1, 32,
-                                 .base = ANV_INLINE_PARAM_UNALIGNED_INVOCATIONS_X_OFFSET);
+      anv_load_driver_uniform(&b, 1, cs.unaligned_invocations_x);
 
    nir_push_if(&b, nir_uge(&b, global_idx, max_unaligned_invocations_x));
    {

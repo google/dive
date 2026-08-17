@@ -161,15 +161,18 @@ _mesa_reference_buffer_object_(struct gl_context *ctx,
          /* Update the private ref count. */
          assert(oldObj->CtxRefCount >= 1);
          oldObj->CtxRefCount--;
+         assert(oldObj->Ctx == ctx);
       }
    }
 
    if (bufObj) {
       /* reference new buffer */
-      if (shared_binding || ctx != bufObj->Ctx)
+      if (shared_binding || ctx != bufObj->Ctx) {
          p_atomic_inc(&bufObj->RefCount);
-      else
+      } else {
          bufObj->CtxRefCount++;
+         assert(bufObj->Ctx == ctx);
+      }
    }
 
    *ptr = bufObj;

@@ -43,7 +43,7 @@ DrmVirtGpuResource::DrmVirtGpuResource(int64_t deviceHandle, uint32_t blobHandle
 }
 
 DrmVirtGpuResource::~DrmVirtGpuResource() {
-    if (mBlobHandle == INVALID_DESCRIPTOR) {
+    if (mBlobHandle == static_cast<uint32_t>(INVALID_DESCRIPTOR)) {
         return;
     }
 

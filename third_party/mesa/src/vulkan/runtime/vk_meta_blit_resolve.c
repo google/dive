@@ -27,6 +27,7 @@
 #include "vk_device.h"
 #include "vk_format.h"
 #include "vk_pipeline.h"
+#include "vk_render_pass.h"
 
 #include "nir_builder.h"
 
@@ -77,12 +78,13 @@ aspect_to_tex_binding(VkImageAspectFlagBits aspect)
 struct vk_meta_blit_push_data {
    float x_off, y_off, x_scale, y_scale;
    float z_off, z_scale;
-   int32_t arr_delta;
+   uint32_t pad;
    uint32_t stencil_bit;
 };
 
 static inline void
 compute_off_scale(uint32_t src_level_size,
+                  bool normalize_src_coords,
                   uint32_t src0, uint32_t src1,
                   uint32_t dst0, uint32_t dst1,
                   uint32_t *dst0_out, uint32_t *dst1_out,
@@ -107,8 +109,20 @@ compute_off_scale(uint32_t src_level_size,
    double dst_region_size = (double)*dst1_out - (double)*dst0_out;
    assert(dst_region_size > 0);
 
-   double src_offset = src0 / (double)src_level_size;
-   double dst_scale = src_region_size / (src_level_size * dst_region_size);
+   /* The offset and scal returned by this function will be passed to a fma()
+    * to convert from destination coordinates to source coordinates so the
+    * scale is applied first, followed by the offset.  This means that the
+    * offset needs to be in (possibly normalized) source coordinates.
+    *
+    * The destination coordinates are in integer pixels since they're either
+    * gl_FragCoord.xy or a gl_Layer for Z.  The source coordinates may or may
+    * not be normalized to the range [0, 1].  For X/Y, they're always
+    * normalized but for Z they're normalized for 3D source textures and
+    * left in integer space for array slices.
+    */
+   double src_scale = normalize_src_coords ? (double)src_level_size : 1.0;
+   double src_offset = src0 / src_scale;
+   double dst_scale = src_region_size / (src_scale * dst_region_size);
    double dst_offset = (double)*dst0_out * dst_scale;
 
    *off_out = src_offset - dst_offset;
@@ -217,32 +231,35 @@ build_blit_shader(const struct vk_meta_blit_key *key)
 
    nir_def *out_coord_xy = nir_load_frag_coord(b);
    out_coord_xy = nir_trim_vector(b, out_coord_xy, 2);
-   nir_def *src_coord_xy = nir_ffma(b, out_coord_xy, xy_scale, xy_off);
+   nir_def *src_coord_xy = nir_ffma_weak(b, out_coord_xy, xy_scale, xy_off);
 
    nir_def *z_xform = load_struct_var(b, push, 1);
+   nir_def *z_off = nir_channel(b, z_xform, 0);
+   nir_def *z_scale = nir_channel(b, z_xform, 1);
+
    nir_def *out_layer = nir_load_layer_id(b);
+   /* Add 0.5 to get center-pixel sampling. */
+   nir_def *out_coord_z = nir_fadd_imm(b, nir_u2f32(b, out_layer), 0.5);
+   nir_def *src_coord_z = nir_ffma_weak(b, out_coord_z, z_scale, z_off);
+
+   /* We use center-pixel coordinates for the transform calculation but
+    * texelFetch() will round the array index to the nearest integer.
+    * Subtract 0.5 to re-center on zero.  It's important that we add 0.5 and
+    * then subtract it back off again because, even if our source is a 2D
+    * array image, z_scale may still be -1.0.  If we don't add and subtract
+    * 0.5, we'll end up off by a pixel.
+    */
+   if (key->dim != GLSL_SAMPLER_DIM_3D)
+      src_coord_z = nir_fadd_imm(b, src_coord_z, -0.5);
+
    nir_def *src_coord;
-   if (key->dim == GLSL_SAMPLER_DIM_3D) {
-      nir_def *z_off = nir_channel(b, z_xform, 0);
-      nir_def *z_scale = nir_channel(b, z_xform, 1);
-      nir_def *out_coord_z = nir_fadd_imm(b, nir_u2f32(b, out_layer), 0.5);
-      nir_def *src_coord_z = nir_ffma(b, out_coord_z, z_scale, z_off);
+   if (key->dim == GLSL_SAMPLER_DIM_1D) {
+      src_coord = nir_vec2(b, nir_channel(b, src_coord_xy, 0),
+                              src_coord_z);
+   } else {
       src_coord = nir_vec3(b, nir_channel(b, src_coord_xy, 0),
                               nir_channel(b, src_coord_xy, 1),
                               src_coord_z);
-   } else {
-      nir_def *arr_delta = nir_channel(b, z_xform, 2);
-      nir_def *in_layer = nir_iadd(b, out_layer, arr_delta);
-      if (key->dim == GLSL_SAMPLER_DIM_1D) {
-         src_coord = nir_vec2(b, nir_channel(b, src_coord_xy, 0),
-                                 nir_u2f32(b, in_layer));
-      } else {
-         assert(key->dim == GLSL_SAMPLER_DIM_2D ||
-                key->dim == GLSL_SAMPLER_DIM_MS);
-         src_coord = nir_vec3(b, nir_channel(b, src_coord_xy, 0),
-                                 nir_channel(b, src_coord_xy, 1),
-                                 nir_u2f32(b, in_layer));
-      }
    }
 
    nir_variable *sampler = nir_variable_create(b->shader, nir_var_uniform,
@@ -303,7 +320,7 @@ build_blit_shader(const struct vk_meta_blit_key *key)
 
       nir_def *val;
       if (resolve_mode == VK_RESOLVE_MODE_NONE) {
-         val = nir_txl(b, src_coord, nir_imm_float(b, 0),
+         val = nir_tex(b, src_coord, .lod = nir_imm_float(b, 0),
                        .texture_deref = t, .sampler_deref = s);
       } else {
          val = build_tex_resolve(b, t, nir_f2u32(b, src_coord),
@@ -747,14 +764,14 @@ vk_meta_blit_image(struct vk_command_buffer *cmd,
       uint32_t src_level = regions[r].srcSubresource.mipLevel;
       VkExtent3D src_extent = vk_image_mip_level_extent(src_image, src_level);
 
-      compute_off_scale(src_extent.width,
+      compute_off_scale(src_extent.width, true,
                         regions[r].srcOffsets[0].x,
                         regions[r].srcOffsets[1].x,
                         regions[r].dstOffsets[0].x,
                         regions[r].dstOffsets[1].x,
                         &dst_rect.x0, &dst_rect.x1,
                         &push.x_off, &push.x_scale);
-      compute_off_scale(src_extent.height,
+      compute_off_scale(src_extent.height, true,
                         regions[r].srcOffsets[0].y,
                         regions[r].srcOffsets[1].y,
                         regions[r].dstOffsets[0].y,
@@ -770,36 +787,38 @@ vk_meta_blit_image(struct vk_command_buffer *cmd,
       dst_subres.layerCount =
          vk_image_subresource_layer_count(dst_image, &dst_subres);
 
-      uint32_t dst_layer_count;
+      uint32_t src_level_layers = src_image->image_type == VK_IMAGE_TYPE_3D
+                                  ? src_extent.depth : src_subres.layerCount;
+
+      uint32_t src_z_layer[2];
       if (src_image->image_type == VK_IMAGE_TYPE_3D) {
-         /* We need to fixup to handle the 3D-->2D Array case */
-         unsigned dst_z_or_layer_offsets[] = {
-            regions[r].dstOffsets[0].z,
-            regions[r].dstOffsets[1].z
-         };
-
-         if (dst_image->image_type != VK_IMAGE_TYPE_3D) {
-            /* baseArrayLayer applied outside so we just need the count */
-            dst_z_or_layer_offsets[0] = 0;
-            dst_z_or_layer_offsets[1] = dst_subres.layerCount;
-         }
-
-         uint32_t layer0, layer1;
-         compute_off_scale(src_extent.depth,
-                           regions[r].srcOffsets[0].z,
-                           regions[r].srcOffsets[1].z,
-                           dst_z_or_layer_offsets[0],
-                           dst_z_or_layer_offsets[1],
-                           &layer0, &layer1,
-                           &push.z_off, &push.z_scale);
-         dst_rect.layer = layer0;
-         dst_layer_count = layer1 - layer0;
+         src_z_layer[0] = regions[r].srcOffsets[0].z;
+         src_z_layer[1] = regions[r].srcOffsets[1].z;
       } else {
-         assert(src_subres.layerCount == dst_subres.layerCount);
-         dst_layer_count = dst_subres.layerCount;
-         push.arr_delta = dst_subres.baseArrayLayer -
-                          src_subres.baseArrayLayer;
+         /* baseArrayLayer is applied by the image view */
+         src_z_layer[0] = 0;
+         src_z_layer[1] = src_subres.layerCount;
       }
+
+      uint32_t dst_z_layer[2];
+      if (dst_image->image_type == VK_IMAGE_TYPE_3D) {
+         dst_z_layer[0] = regions[r].dstOffsets[0].z;
+         dst_z_layer[1] = regions[r].dstOffsets[1].z;
+      } else {
+         /* baseArrayLayer is applied by the image view */
+         dst_z_layer[0] = 0;
+         dst_z_layer[1] = dst_subres.layerCount;
+      }
+
+      compute_off_scale(src_level_layers,
+                        src_image->image_type == VK_IMAGE_TYPE_3D,
+                        src_z_layer[0], src_z_layer[1],
+                        dst_z_layer[0], dst_z_layer[1],
+                        &dst_z_layer[0], &dst_z_layer[1],
+                        &push.z_off, &push.z_scale);
+
+      dst_rect.layer = dst_z_layer[0];
+      uint32_t dst_layer_count = dst_z_layer[1] - dst_z_layer[0];
 
       do_blit(cmd, meta,
               src_image, src_format, src_image_layout, src_subres,
@@ -851,6 +870,7 @@ vk_meta_resolve_image(struct vk_command_buffer *cmd,
          .y_off = regions[r].srcOffset.y - regions[r].dstOffset.y,
          .x_scale = 1,
          .y_scale = 1,
+         .z_scale = 1,
       };
       struct vk_meta_rect dst_rect = {
          .x0 = regions[r].dstOffset.x,
@@ -867,11 +887,60 @@ vk_meta_resolve_image(struct vk_command_buffer *cmd,
       dst_subres.layerCount =
          vk_image_subresource_layer_count(dst_image, &dst_subres);
 
+      assert(src_image->image_type != VK_IMAGE_TYPE_3D);
+
+      uint32_t layer_count;
+      if (dst_image->image_type == VK_IMAGE_TYPE_3D) {
+         /* For 2D images, baseArrayLayer is applied by the image view.  For
+          * 3D, we have to handle it by adjusting the layer and the Z xform.
+          */
+         dst_rect.layer = regions[r].dstOffset.z;
+         push.z_off = -(float)regions[r].dstOffset.z;
+
+         /* There is no separate destination extent.  The extent is specified
+          * in terms of source image pixels.  dstSubresource.layerCount is
+          * also useless since it's always 1.  Instead, we have to rely on
+          * src_subresource.layerCount.  To avoid rendering outside of the
+          * destination, be defensive and clamp to the destination image size.
+          */
+         VkExtent3D dst_extent =
+            vk_image_mip_level_extent(dst_image, dst_subres.mipLevel);
+         assert(regions[r].dstOffset.z < dst_extent.depth);
+         uint32_t dst_remaining_layers =
+            dst_extent.depth - regions[r].dstOffset.z;
+         layer_count = MIN2(dst_subres.layerCount, dst_remaining_layers);
+      } else {
+         /* From the Vulkan 1.4.354 spec:
+          *
+          *    VUID-VkImageResolve2-layerCount-08803
+          *
+          *    "If neither of the layerCount members of srcSubresource or
+          *    dstSubresource are VK_REMAINING_ARRAY_LAYERS, the layerCount
+          *    member of srcSubresource and dstSubresource must match"
+          *
+          *    VUID-VkImageResolve2-layerCount-08804
+          *
+          *    "If one of the layerCount members of srcSubresource or
+          *    dstSubresource is VK_REMAINING_ARRAY_LAYERS, the other member
+          *    must be either VK_REMAINING_ARRAY_LAYERS or equal to the
+          *    arrayLayers member of the VkImageCreateInfo used to create the
+          *    image minus baseArrayLayer"
+          *
+          * Technically, the second one may allow for images with two
+          * diferent layer counts to both use VK_REMAINING_ARRAY_LAYERS
+          * so we may have a mismatch.
+          *
+          * We defensively take the destination layer count so we don't
+          * render out-of-bounds in the destination.  If we end up out of
+          * bounds on the source image, the sampler will handle that.
+          */
+         layer_count = dst_subres.layerCount;
+      }
+
       do_blit(cmd, meta,
               src_image, src_format, src_image_layout, src_subres,
               dst_image, dst_format, dst_image_layout, dst_subres,
-              VK_NULL_HANDLE, &key, &push, &dst_rect,
-              dst_subres.layerCount);
+              VK_NULL_HANDLE, &key, &push, &dst_rect, layer_count);
    }
 }
 
@@ -883,16 +952,35 @@ vk_meta_resolve_image2(struct vk_command_buffer *cmd,
    VK_FROM_HANDLE(vk_image, src_image, resolve->srcImage);
    VK_FROM_HANDLE(vk_image, dst_image, resolve->dstImage);
 
+   /* Color resolve default to be based on the format */
    VkResolveModeFlagBits resolve_mode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
    if (vk_format_is_color(src_image->format) &&
        !vk_format_is_int(src_image->format))
       resolve_mode = VK_RESOLVE_MODE_AVERAGE_BIT;
 
+   VkResolveImageFlagBitsKHR resolve_flags = 0;
+   VkResolveModeFlagBits stencil_resolve_mode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
+
+   const VkResolveImageModeInfoKHR *mode_info =
+      vk_find_struct_const(resolve->pNext, RESOLVE_IMAGE_MODE_INFO_KHR);
+   if (mode_info != NULL) {
+      resolve_flags = mode_info->flags;
+      resolve_mode = mode_info->resolveMode;
+      stencil_resolve_mode = mode_info->stencilResolveMode;
+   }
+
+   VkFormat src_format = src_image->format;
+   VkFormat dst_format = dst_image->format;
+   if (resolve_flags & VK_RESOLVE_IMAGE_SKIP_TRANSFER_FUNCTION_BIT_KHR) {
+      src_format = vk_format_srgb_to_linear(src_format);
+      dst_format = vk_format_srgb_to_linear(dst_format);
+   }
+
    vk_meta_resolve_image(cmd, meta,
-                         src_image, src_image->format, resolve->srcImageLayout,
-                         dst_image, dst_image->format, resolve->dstImageLayout,
+                         src_image, src_format, resolve->srcImageLayout,
+                         dst_image, dst_format, resolve->dstImageLayout,
                          resolve->regionCount, resolve->pRegions,
-                         resolve_mode, VK_RESOLVE_MODE_SAMPLE_ZERO_BIT);
+                         resolve_mode, stencil_resolve_mode);
 }
 
 static void
@@ -903,6 +991,7 @@ vk_meta_resolve_attachment(struct vk_command_buffer *cmd,
                            struct vk_image_view *dst_view,
                            VkImageLayout dst_image_layout,
                            VkImageAspectFlags resolve_aspects,
+                           VkRenderingAttachmentFlagsKHR att_flags,
                            VkResolveModeFlagBits resolve_mode,
                            VkResolveModeFlagBits stencil_resolve_mode,
                            VkRect2D area, uint32_t layer_count,
@@ -923,6 +1012,13 @@ vk_meta_resolve_attachment(struct vk_command_buffer *cmd,
       .extent = { area.extent.width, area.extent.height, 1},
    };
 
+   VkFormat src_format = src_view->format;
+   VkFormat dst_format = dst_view->format;
+   if (att_flags & VK_RENDERING_ATTACHMENT_RESOLVE_SKIP_TRANSFER_FUNCTION_BIT_KHR) {
+      src_format = vk_format_srgb_to_linear(src_format);
+      dst_format = vk_format_srgb_to_linear(dst_format);
+   }
+
    if (view_mask) {
       u_foreach_bit(v, view_mask) {
          region.srcSubresource.baseArrayLayer = src_view->base_array_layer + v;
@@ -931,10 +1027,8 @@ vk_meta_resolve_attachment(struct vk_command_buffer *cmd,
          region.dstSubresource.layerCount = 1;
 
          vk_meta_resolve_image(cmd, meta,
-                               src_view->image, src_view->format,
-                               src_image_layout,
-                               dst_view->image, dst_view->format,
-                               dst_image_layout,
+                               src_view->image, src_format, src_image_layout,
+                               dst_view->image, dst_format, dst_image_layout,
                                1, &region, resolve_mode, stencil_resolve_mode);
       }
    } else {
@@ -944,10 +1038,8 @@ vk_meta_resolve_attachment(struct vk_command_buffer *cmd,
       region.dstSubresource.layerCount = layer_count;
 
       vk_meta_resolve_image(cmd, meta,
-                            src_view->image, src_view->format,
-                            src_image_layout,
-                            dst_view->image, dst_view->format,
-                            dst_image_layout,
+                            src_view->image, src_format, src_image_layout,
+                            dst_view->image, dst_format, dst_image_layout,
                             1, &region, resolve_mode, stencil_resolve_mode);
    }
 }
@@ -969,6 +1061,7 @@ vk_meta_resolve_rendering(struct vk_command_buffer *cmd,
       vk_meta_resolve_attachment(cmd, meta, view, att->imageLayout,
                                  res_view, att->resolveImageLayout,
                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                 vk_get_rendering_attachment_flags(att),
                                  att->resolveMode, VK_RESOLVE_MODE_NONE,
                                  pRenderingInfo->renderArea,
                                  pRenderingInfo->layerCount,
@@ -994,6 +1087,7 @@ vk_meta_resolve_rendering(struct vk_command_buffer *cmd,
                                     res_view, d_att->resolveImageLayout,
                                     VK_IMAGE_ASPECT_DEPTH_BIT |
                                     VK_IMAGE_ASPECT_STENCIL_BIT,
+                                    0, /* Flags don't affect Z/S resolves */
                                     d_att->resolveMode, s_att->resolveMode,
                                     pRenderingInfo->renderArea,
                                     pRenderingInfo->layerCount,
@@ -1006,6 +1100,7 @@ vk_meta_resolve_rendering(struct vk_command_buffer *cmd,
             vk_meta_resolve_attachment(cmd, meta, view, d_att->imageLayout,
                                        res_view, d_att->resolveImageLayout,
                                        VK_IMAGE_ASPECT_DEPTH_BIT,
+                                       0, /* Flags don't affect Z/S resolves */
                                        d_att->resolveMode, VK_RESOLVE_MODE_NONE,
                                        pRenderingInfo->renderArea,
                                        pRenderingInfo->layerCount,
@@ -1019,6 +1114,7 @@ vk_meta_resolve_rendering(struct vk_command_buffer *cmd,
             vk_meta_resolve_attachment(cmd, meta, view, s_att->imageLayout,
                                        res_view, s_att->resolveImageLayout,
                                        VK_IMAGE_ASPECT_STENCIL_BIT,
+                                       0, /* Flags don't affect Z/S resolves */
                                        VK_RESOLVE_MODE_NONE, s_att->resolveMode,
                                        pRenderingInfo->renderArea,
                                        pRenderingInfo->layerCount,

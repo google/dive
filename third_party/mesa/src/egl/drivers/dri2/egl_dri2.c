@@ -1,5 +1,6 @@
 /*
  * Copyright © 2010 Intel Corporation
+ * Copyright © 2026 NXP
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -84,6 +85,8 @@
 static const enum pipe_format dri2_pbuffer_visuals[] = {
    PIPE_FORMAT_R16G16B16A16_FLOAT,
    PIPE_FORMAT_R16G16B16X16_FLOAT,
+   PIPE_FORMAT_R16G16B16A16_UNORM,
+   PIPE_FORMAT_R16G16B16X16_UNORM,
    PIPE_FORMAT_B10G10R10A2_UNORM,
    PIPE_FORMAT_B10G10R10X2_UNORM,
    PIPE_FORMAT_BGRA8888_UNORM,
@@ -419,6 +422,21 @@ dri2_add_config(_EGLDisplay *disp, const struct dri_config *dri_config,
    base.RenderableType = disp->ClientAPIs;
    base.Conformant = disp->ClientAPIs;
 
+   /* Configs where any color channel exceeds 8 bits (e.g. RGBA16161616,
+    * RGB101010A2) are not usable with a GLES1 context in practice:
+    * glCopyTexImage2D(internalFormat=GL_RGBA) raises GL_INVALID_VALUE
+    * because Mesa has no defined copy path from a >8bpc framebuffer
+    * into a GLES1 texture format.
+    * Strip EGL_OPENGL_ES_BIT from such configs so eglGetConfigs /
+    * eglChooseConfig does not return them for a GLES1 context.
+    */
+
+   if (base.RedSize > 8 || base.GreenSize > 8 ||
+       base.BlueSize > 8 || base.AlphaSize > 8) {
+      base.RenderableType &= ~EGL_OPENGL_ES_BIT;
+      base.Conformant     &= ~EGL_OPENGL_ES_BIT;
+   }
+
    base.MinSwapInterval = dri2_dpy->min_swap_interval;
    base.MaxSwapInterval = dri2_dpy->max_swap_interval;
 
@@ -482,6 +500,7 @@ dri2_add_pbuffer_configs_for_visuals(_EGLDisplay *disp)
 
    for (unsigned i = 0; dri2_dpy->driver_configs[i] != NULL; i++) {
       struct dri2_egl_config *dri2_conf;
+      EGLint config_group = 0;
       struct gl_config *gl_config =
          (struct gl_config *) dri2_dpy->driver_configs[i];
       int idx = dri2_pbuffer_visual_index(gl_config->color_format);
@@ -489,8 +508,20 @@ dri2_add_pbuffer_configs_for_visuals(_EGLDisplay *disp)
       if (idx == -1)
          continue;
 
+      /* Put the 16 bpc rgb[a] unorm formats into a lower priority EGL config
+       * group 1, so they don't get preferably chosen by eglChooseConfig().
+       */
+      if (util_format_is_unorm16(util_format_description(gl_config->color_format)))
+         config_group = 1;
+
+      const EGLint attr_list[] = {
+         EGL_CONFIG_SELECT_GROUP_EXT,
+         config_group,
+         EGL_NONE,
+      };
+
       dri2_conf = dri2_add_config(disp, dri2_dpy->driver_configs[i],
-                                  EGL_PBUFFER_BIT, NULL);
+                                  EGL_PBUFFER_BIT, attr_list);
       if (dri2_conf)
          format_count[idx]++;
    }
@@ -542,8 +573,9 @@ dri2_detect_swrast_kopper(_EGLDisplay *disp)
 {
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
 
+   /* Kopper won't work on Android without extra platform level support. */
    dri2_dpy->kopper = dri2_dpy->driver_name && !strcmp(dri2_dpy->driver_name, "zink") &&
-                      !debug_get_bool_option("LIBGL_KOPPER_DISABLE", false);
+                      !debug_get_bool_option("LIBGL_KOPPER_DISABLE", false) && disp->Platform != _EGL_PLATFORM_ANDROID;
    dri2_dpy->swrast = (disp->Options.ForceSoftware && !dri2_dpy->kopper && strcmp(dri2_dpy->driver_name, "vmwgfx")) ||
                       !dri2_dpy->driver_name || strstr(dri2_dpy->driver_name, "swrast");
    dri2_dpy->swrast_not_kms = dri2_dpy->swrast && (!dri2_dpy->driver_name || strcmp(dri2_dpy->driver_name, "kms_swrast"));

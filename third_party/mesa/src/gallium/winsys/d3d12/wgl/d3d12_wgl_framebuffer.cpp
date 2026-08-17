@@ -40,6 +40,7 @@
 #include "stw_pixelformat.h"
 #include "stw_winsys.h"
 
+#include "d3d12/d3d12_bufmgr.h"
 #include "d3d12/d3d12_format.h"
 #include "d3d12/d3d12_resource.h"
 #include "d3d12/d3d12_screen.h"
@@ -168,16 +169,6 @@ d3d12_wgl_framebuffer_resize(stw_winsys_framebuffer *fb,
    desc.Scaling = DXGI_SCALING_STRETCH;
 
    framebuffer->pformat = templ->format;
-   switch (templ->format) {
-   case PIPE_FORMAT_B8G8R8X8_UNORM:
-      framebuffer->pformat = PIPE_FORMAT_B8G8R8A8_UNORM;
-      break;
-   case PIPE_FORMAT_R8G8B8X8_UNORM:
-      framebuffer->pformat = PIPE_FORMAT_R8G8B8A8_UNORM;
-      break;
-   default:
-      break;
-   }
 
    if (desc.AlphaMode != DXGI_ALPHA_MODE_IGNORE) {
       if (!framebuffer->dcomp) {
@@ -239,6 +230,11 @@ d3d12_wgl_framebuffer_resize(stw_winsys_framebuffer *fb,
 
       d3d12_wgl_framebuffer_drain_queue(framebuffer);
 
+      /* The flush + fence_finish above guarantees all GPU work is done, but
+       * reclaim_completed must be called explicitly to drop references on
+       * swapchain buffers before resizing. */
+      d3d12_screen_reclaim_completed(framebuffer->screen);
+
       for (uint32_t i = 0; i < num_buffers; ++i) {
          if (framebuffer->buffers[i]) {
             d3d12_resource_release(d3d12_resource(framebuffer->buffers[i]));
@@ -291,6 +287,11 @@ d3d12_wgl_framebuffer_resize(stw_winsys_framebuffer *fb,
       pipe_resource_reference(&framebuffer->buffers[i],
                               screen->base.base.resource_from_handle(&screen->base.base, &templ, &handle,
                                                                      PIPE_HANDLE_USAGE_FRAMEBUFFER_WRITE));
+
+#ifndef NDEBUG
+      struct d3d12_bo *bo = d3d12_resource(framebuffer->buffers[i])->bo;
+      bo->is_front_buffer = i != 0;
+#endif
    }
 
    if (framebuffer->single_buffered) {
@@ -332,10 +333,19 @@ d3d12_wgl_framebuffer_present(stw_winsys_framebuffer *fb, int interval)
       hr = framebuffer->swapchain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
    else
       hr = framebuffer->swapchain->Present(interval, 0);
+   assert(SUCCEEDED(hr));
 
-   if (hr == S_OK)
-      return WaitForSingleObject(framebuffer->waitable_object, 2000) == WAIT_OBJECT_0;
-   return false;
+#ifndef NDEBUG
+   uint32_t back_buffer_idx = framebuffer->swapchain->GetCurrentBackBufferIndex();
+   for (uint32_t i = 0; i < num_buffers; ++i) {
+      struct d3d12_bo *bo = d3d12_resource(framebuffer->buffers[i])->bo;
+      bo->is_front_buffer = i != back_buffer_idx;
+   }
+#endif
+
+   if (SUCCEEDED(hr))
+      (void)WaitForSingleObject(framebuffer->waitable_object, 2000);
+   return SUCCEEDED(hr);
 }
 
 static struct pipe_resource *

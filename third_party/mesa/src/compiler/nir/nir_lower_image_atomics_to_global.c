@@ -37,6 +37,7 @@ lower(nir_builder *b, nir_intrinsic_instr *intr, void *data)
       CASE(image)
       CASE(bindless_image)
       CASE(image_deref)
+      CASE(image_heap)
    default:
       return false;
    }
@@ -45,6 +46,7 @@ lower(nir_builder *b, nir_intrinsic_instr *intr, void *data)
    b->cursor = nir_before_instr(&intr->instr);
    nir_atomic_op atomic_op = nir_intrinsic_atomic_op(intr);
    enum pipe_format format = nir_intrinsic_format(intr);
+   unsigned num_comps = intr->def.num_components;
    unsigned bit_size = intr->def.bit_size;
 
    if (state->filter && !state->filter(intr, state->data))
@@ -64,7 +66,7 @@ lower(nir_builder *b, nir_intrinsic_instr *intr, void *data)
       else
          format_type = UTIL_FORMAT_TYPE_UNSIGNED;
 
-      format = util_format_get_array(format_type, bit_size, 1, false,
+      format = util_format_get_array(format_type, bit_size, num_comps, false,
                                      type_ != nir_type_float);
    }
 
@@ -76,8 +78,7 @@ lower(nir_builder *b, nir_intrinsic_instr *intr, void *data)
       .format = format,
       .access = nir_intrinsic_access(intr));
 
-   nir_instr *address_instr = address->parent_instr;
-   nir_intrinsic_instr *address_intr = nir_instr_as_intrinsic(address_instr);
+   nir_intrinsic_instr *address_intr = nir_def_as_intrinsic(address);
 
    address_intr->intrinsic = address_op;
    if (address_op == nir_intrinsic_image_texel_address) {
@@ -100,8 +101,7 @@ lower(nir_builder *b, nir_intrinsic_instr *intr, void *data)
    /* Replace the image atomic with the global atomic. Remove the image
     * explicitly because it has side effects so is not DCE'd.
     */
-   nir_def_rewrite_uses(&intr->def, global);
-   nir_instr_remove(&intr->instr);
+   nir_def_replace(&intr->def, global);
    return true;
 }
 

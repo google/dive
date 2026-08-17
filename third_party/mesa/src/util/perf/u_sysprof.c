@@ -29,9 +29,9 @@ util_sysprof_begin(const char *name)
 }
 
 void
-util_sysprof_end(void **scope)
+util_sysprof_end(void *t)
 {
-   struct perf_sysprof_entry *trace = (struct perf_sysprof_entry *) *scope;
+   struct perf_sysprof_entry *trace = (struct perf_sysprof_entry *) t;
 
    sysprof_collector_mark(trace->begin,
                           SYSPROF_CAPTURE_CURRENT_TIME - trace->begin, "Mesa",

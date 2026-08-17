@@ -155,9 +155,37 @@ static inline bool xfer_op_mods(pco_instr *dest, pco_instr *src)
    return all_xfered;
 }
 
-static bool legalize_pseudo(pco_instr *instr)
+/**
+ * \brief Legalize fence pseudo instruction.
+ *
+ * \param[in,out] instr PCO instr.
+ * \return True if progress was made.
+ */
+static bool legalize_fence(pco_instr *instr)
+{
+   pco_builder b =
+      pco_builder_create(instr->parent_func, pco_cursor_after_instr(instr));
+
+   if (pco_is_last_instr(instr)) {
+      pco_nop(&b);
+      b.cursor = pco_cursor_after_instr(instr);
+   }
+
+   pco_flush_p0(&b);
+   pco_br_next(&b, .exec_cnd = PCO_EXEC_CND_E1_Z1);
+   pco_br_next(&b, .exec_cnd = PCO_EXEC_CND_E1_Z0);
+
+   pco_instr_delete(instr);
+
+   return true;
+}
+
+static bool legalize_pseudo_post_ra(pco_instr *instr)
 {
    switch (instr->op) {
+   case PCO_OP_FENCE:
+      return legalize_fence(instr);
+
    case PCO_OP_MOV:
       if (pco_ref_is_reg(instr->src[0]) &&
           pco_ref_get_reg_class(instr->src[0]) == PCO_REG_CLASS_SPEC)
@@ -186,7 +214,11 @@ static bool legalize_pseudo(pco_instr *instr)
       else
          dest = pco_ref_hwreg_idx_from(idx_reg_num, dest);
 
-      pco_instr *mbyp = pco_mbyp(&b, dest, src);
+      pco_instr *mbyp =
+         pco_ref_is_reg(src) && pco_ref_get_reg_class(src) == PCO_REG_CLASS_SPEC ?
+            pco_movs1(&b, dest, src) :
+            pco_mbyp(&b, dest, src);
+
       xfer_op_mods(mbyp, instr);
 
       pco_instr_delete(instr);
@@ -333,6 +365,98 @@ static bool legalize_pseudo(pco_instr *instr)
    return false;
 }
 
+static bool legalize_vote(pco_instr *instr)
+{
+   ASSERTED enum pco_exec_cnd exec_cnd = pco_instr_get_exec_cnd(instr);
+   assert(exec_cnd == PCO_EXEC_CND_E1_ZX);
+
+   enum pco_vote_op vote_op = pco_instr_get_vote_op(instr);
+   bool is_all = vote_op == PCO_VOTE_OP_ALL;
+
+   pco_ref dest = instr->dest[0];
+   pco_ref value = instr->src[0];
+
+   pco_func *func = instr->parent_func;
+   pco_ref result = pco_ref_new_vreg(func);
+
+   pco_builder b =
+      pco_builder_create(func, pco_cursor_after_instr(instr));
+
+   /* result = false */
+   pco_mbyp(&b, result, pco_false);
+
+   /* p0 = !value */
+   pco_tstz(&b,
+            pco_ref_null(),
+            pco_ref_pred(PCO_PRED_P0),
+            value,
+            .tst_type_main = PCO_TST_TYPE_MAIN_U32);
+
+   pco_ref emc = pco_emc_ref(func, &b);
+
+   /* Mask instance if (all ? value : !value) */
+   pco_cndst(&b,
+             pco_ref_pred(PCO_PRED_PE),
+             emc,
+             emc,
+             pco_ref_imm8(1),
+             .exec_cnd = PCO_EXEC_CND_EX_ZX,
+             .cnd = is_all ? PCO_CND_P0_TRUE : PCO_CND_P0_FALSE);
+
+   /* all: if no instances are running, i.e. value is true for all of them
+    * any: if at least one instance is running, i.e. value is true for at least
+    *      one of them
+    *
+    * If the condition is true, skip to result = true instruction.
+    */
+   pco_br_skip_next(&b, .branch_cnd = is_all ? PCO_BRANCH_CND_ALLINST : PCO_BRANCH_CND_ANYINST);
+
+   /* Skip the result = true instruction (if the above branch isn't taken). */
+   pco_br_skip_next(&b);
+
+   /* result = true
+    * Execute even if the instance is masked out (for the all case).
+    * This will only not execute if the instruction is skipped by a branch.
+    */
+   pco_mbyp(&b, result, pco_true, .exec_cnd = PCO_EXEC_CND_EX_ZX);
+
+   /* Restore emc. */
+   pco_cndend(&b,
+              pco_ref_pred(PCO_PRED_PE),
+              emc,
+              emc,
+              pco_ref_imm8(1),
+              .exec_cnd = PCO_EXEC_CND_EX_ZX);
+
+   /* Copy the result to the destination. */
+   /* TODO: just replace it in its users instead. */
+   pco_mbyp(&b, dest, result);
+
+   pco_instr_delete(instr);
+
+   return true;
+}
+
+static bool legalize_pseudo_pre_ra(pco_instr *instr)
+{
+   switch (instr->op) {
+   case PCO_OP_VOTE:
+      return legalize_vote(instr);
+
+   default:
+      break;
+   }
+
+   return false;
+}
+
+static bool legalize_pseudo(pco_instr *instr, bool pre_ra)
+{
+   return pre_ra ?
+      legalize_pseudo_pre_ra(instr) :
+      legalize_pseudo_post_ra(instr);
+}
+
 static bool try_legalize_large_hwreg_offsets(pco_instr *instr,
                                              const struct pco_op_info *info)
 {
@@ -397,6 +521,27 @@ static bool try_legalize_large_hwreg_offsets(pco_instr *instr,
 }
 
 /**
+ * \brief Insert pseudo fences around DITR and DITRP instructions.
+ *
+ * \param[in,out] instr PCO instr.
+ * \return True if progress was made.
+ */
+static bool try_legalize_ditr_fence(pco_instr *instr)
+{
+   if (instr->op != PCO_OP_DITR && instr->op != PCO_OP_DITRP)
+      return false;
+
+   pco_builder b =
+      pco_builder_create(instr->parent_func, pco_cursor_before_instr(instr));
+   pco_fence(&b);
+
+   b.cursor = pco_cursor_after_instr(instr);
+   pco_fence(&b);
+
+   return true;
+}
+
+/**
  * \brief Try to legalizes an instruction.
  *
  * \param[in,out] instr PCO instr.
@@ -408,33 +553,65 @@ static bool try_legalize(pco_instr *instr)
    bool progress = false;
 
    progress |= try_legalize_large_hwreg_offsets(instr, info);
-
-   /* Skip pseudo instructions. */
-   if (info->type == PCO_OP_TYPE_PSEUDO) {
-      progress |= legalize_pseudo(instr);
-   } else {
-      progress |= try_legalize_src_mappings(instr, info);
-   }
+   progress |= try_legalize_ditr_fence(instr);
 
    return progress;
 }
 
 /**
  * \brief Legalizes instructions where additional restrictions apply.
+ * This should be run after register allocation.
  *
  * \param[in,out] shader PCO shader.
  * \return True if the pass made progress.
  */
-bool pco_legalize(pco_shader *shader)
+bool pco_pre_ra_legalize(pco_shader *shader)
 {
    bool progress = false;
 
    assert(!shader->is_grouped);
    assert(!shader->is_legalized);
 
+   const struct pco_op_info *info;
+
+   pco_foreach_func_in_shader (func, shader) {
+      pco_foreach_instr_in_func_safe (instr, func) {
+         info = &pco_op_info[instr->op];
+         if (info->type != PCO_OP_TYPE_PSEUDO)
+            progress |= try_legalize_src_mappings(instr, info);
+         else
+            progress |= legalize_pseudo(instr, true);
+      }
+   }
+
+   return progress;
+}
+
+/**
+ * \brief Post-RA legalization pass.
+ *
+ * \param[in,out] shader PCO shader.
+ * \return True if the pass made progress.
+ */
+bool pco_post_ra_legalize(pco_shader *shader)
+{
+   assert(!shader->is_grouped);
+
+   bool progress = false;
+
    pco_foreach_func_in_shader (func, shader) {
       pco_foreach_instr_in_func_safe (instr, func) {
          progress |= try_legalize(instr);
+      }
+   }
+
+   const struct pco_op_info *info;
+
+   pco_foreach_func_in_shader (func, shader) {
+      pco_foreach_instr_in_func_safe (instr, func) {
+         info = &pco_op_info[instr->op];
+         if (info->type == PCO_OP_TYPE_PSEUDO)
+            progress |= legalize_pseudo(instr, false);
       }
    }
 

@@ -96,7 +96,7 @@ kopper_CreateSurface(struct zink_screen *screen, struct kopper_displaytarget *cd
    switch (type) {
 #ifdef VK_USE_PLATFORM_XCB_KHR
    case VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR: {
-#ifdef GLX_USE_APPLE
+#ifdef GLX_USE_APPLEGL
       error = VK_INCOMPLETE;
 #else
       VkXcbSurfaceCreateInfoKHR *xcb = (VkXcbSurfaceCreateInfoKHR *)&cdt->info.bos;
@@ -172,15 +172,15 @@ destroy_swapchain(struct zink_screen *screen, struct kopper_swapchain *cswap)
       zink_destroy_resource_surface_cache(screen, &cswap->images[i].surface_cache, false);
    }
    free(cswap->images);
-   hash_table_foreach(cswap->presents, he) {
-      struct util_dynarray *arr = he->data;
+   hash_table_u64_foreach(cswap->presents, he) {
+      struct util_dynarray *arr = he.data;
       simple_mtx_lock(&screen->semaphores_lock);
       util_dynarray_append_dynarray(&screen->semaphores, arr);
       simple_mtx_unlock(&screen->semaphores_lock);
       util_dynarray_fini(arr);
       free(arr);
    }
-   _mesa_hash_table_destroy(cswap->presents, NULL);
+   _mesa_hash_table_u64_destroy(cswap->presents);
    VKSCR(DestroySwapchainKHR)(screen->dev, cswap->swapchain, NULL);
    free(cswap);
 }
@@ -282,7 +282,10 @@ kopper_CreateSwapchain(struct zink_screen *screen, struct kopper_displaytarget *
       cswap->scci.surface = cdt->surface;
       cswap->scci.flags = zink_kopper_has_srgb(cdt) ? VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR : 0;
       cswap->scci.imageFormat = cdt->formats[0];
-      cswap->scci.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      if (cdt->type == KOPPER_WAYLAND)
+          cswap->scci.imageColorSpace = VK_COLOR_SPACE_PASS_THROUGH_EXT;
+      else
+          cswap->scci.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
       // TODO: This is where you'd hook up stereo
       cswap->scci.imageArrayLayers = 1;
       cswap->scci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -346,9 +349,9 @@ kopper_CreateSwapchain(struct zink_screen *screen, struct kopper_displaytarget *
    if (error == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) {
       if (cdt->async)
          util_queue_finish(&screen->flush_queue);
-      simple_mtx_lock(&screen->queue_lock);
+      simple_mtx_lock(screen->queue_lock);
       VkResult wait_result = VKSCR(QueueWaitIdle)(screen->queue);
-      simple_mtx_unlock(&screen->queue_lock);
+      simple_mtx_unlock(screen->queue_lock);
       if (wait_result != VK_SUCCESS)
          mesa_loge("ZINK: vkQueueWaitIdle failed (%s)", vk_Result_to_str(wait_result));
       error = VKSCR(CreateSwapchainKHR)(screen->dev, &cswap->scci, NULL,
@@ -378,7 +381,7 @@ kopper_GetSwapchainImages(struct zink_screen *screen, struct kopper_swapchain *c
       mesa_loge("ZINK: failed to allocate cswap->images!");
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    }
-   cswap->presents = _mesa_hash_table_create_u32_keys(NULL);
+   cswap->presents = _mesa_hash_table_u64_create(NULL);
    VkImage images[32];
    error = VKSCR(GetSwapchainImagesKHR)(screen->dev, cswap->swapchain, &cswap->num_images, images);
    assert(cswap->num_images <= ARRAY_SIZE(images));
@@ -751,7 +754,7 @@ kopper_present(void *data, void *gdata, int thread_idx)
    VkResult error = VK_SUCCESS;
    cpi->info.pResults = &error;
 
-   simple_mtx_lock(&screen->queue_lock);
+   simple_mtx_lock(screen->queue_lock);
    if (screen->driver_workarounds.implicit_sync && cdt->type != KOPPER_WIN32) {
       if (!screen->fence) {
          VkFenceCreateInfo fci = {0};
@@ -768,13 +771,13 @@ kopper_present(void *data, void *gdata, int thread_idx)
 
       error = VKSCR(QueueSubmit)(screen->queue, 1, &si, screen->fence);
       if (!zink_screen_handle_vkresult(screen, error)) {
-         simple_mtx_unlock(&screen->queue_lock);
+         simple_mtx_unlock(screen->queue_lock);
          VKSCR(DestroySemaphore)(screen->dev, cpi->sem, NULL);
          goto out;
       }
       error = VKSCR(WaitForFences)(screen->dev, 1, &screen->fence, VK_TRUE, UINT64_MAX);
       if (!zink_screen_handle_vkresult(screen, error)) {
-         simple_mtx_unlock(&screen->queue_lock);
+         simple_mtx_unlock(screen->queue_lock);
          VKSCR(DestroySemaphore)(screen->dev, cpi->sem, NULL);
          goto out;
       }
@@ -784,7 +787,7 @@ kopper_present(void *data, void *gdata, int thread_idx)
    VkResult error2 = VKSCR(QueuePresentKHR)(screen->queue, &cpi->info);
    zink_screen_debug_marker_end(screen, screen->frame_marker_emitted);
    zink_screen_debug_marker_begin(screen, "frame");
-   simple_mtx_unlock(&screen->queue_lock);
+   simple_mtx_unlock(screen->queue_lock);
    swapchain->last_present = cpi->image;
    if (cpi->indefinite_acquire)
       p_atomic_dec(&swapchain->num_acquires);
@@ -802,16 +805,14 @@ kopper_present(void *data, void *gdata, int thread_idx)
     */
    struct util_dynarray *arr;
    for (; screen->last_finished && swapchain->last_present_prune != screen->last_finished; swapchain->last_present_prune++) {
-      struct hash_entry *he = _mesa_hash_table_search(swapchain->presents,
-                                                      (void*)(uintptr_t)swapchain->last_present_prune);
-      if (he) {
-         arr = he->data;
+      arr = _mesa_hash_table_u64_search(swapchain->presents, swapchain->last_present_prune);
+      if (arr) {
          simple_mtx_lock(&screen->semaphores_lock);
          util_dynarray_append_dynarray(&screen->semaphores, arr);
          simple_mtx_unlock(&screen->semaphores_lock);
          util_dynarray_fini(arr);
          free(arr);
-         _mesa_hash_table_remove(swapchain->presents, he);
+         _mesa_hash_table_u64_remove(swapchain->presents, swapchain->last_present_prune);
       }
    }
    /* queue this wait semaphore for deletion on completion of the next batch */
@@ -819,20 +820,18 @@ kopper_present(void *data, void *gdata, int thread_idx)
    uint32_t next = (uint32_t)screen->curr_batch + 1;
    /* handle overflow */
    next = MAX2(next + 1, 1);
-   struct hash_entry *he = _mesa_hash_table_search(swapchain->presents, (void*)(uintptr_t)next);
-   if (he)
-      arr = he->data;
-   else {
+   arr = _mesa_hash_table_u64_search(swapchain->presents, next);
+   if (!arr) {
       arr = malloc(sizeof(struct util_dynarray));
       if (!arr) {
          mesa_loge("ZINK: failed to allocate arr!");
          return;
       }
 
-      util_dynarray_init(arr, NULL);
-      _mesa_hash_table_insert(swapchain->presents, (void*)(uintptr_t)next, arr);
+      *arr = UTIL_DYNARRAY_INIT;
+      _mesa_hash_table_u64_insert(swapchain->presents, next, arr);
    }
-   util_dynarray_append(arr, VkSemaphore, cpi->sem);
+   util_dynarray_append(arr, cpi->sem);
 out:
    if (thread_idx != -1) {
       p_atomic_dec(&swapchain->async_presents);
@@ -931,6 +930,12 @@ zink_kopper_present_queue(struct zink_screen *screen, struct zink_resource *res,
    memset(&res->damage, 0, sizeof(res->damage));
    cdt->swapchain->images[res->obj->dt_idx].acquired = NULL;
    res->obj->dt_idx = UINT32_MAX;
+   /* pick up pending present mode updates here */
+   if (cdt->present_mode != cdt->swapchain->scci.presentMode) {
+      VkResult ret = update_swapchain(screen, cdt, cdt->caps.currentExtent.width, cdt->caps.currentExtent.height);
+      if (ret != VK_SUCCESS)
+         mesa_loge("zink: failed to set swap interval!");
+   }
 }
 
 void
@@ -1058,9 +1063,9 @@ zink_kopper_present_readback(struct zink_context *ctx, struct zink_resource *res
    si.waitSemaphoreCount = !!acquire;
    si.pWaitSemaphores = &acquire;
    si.pSignalSemaphores = &present;
-   simple_mtx_lock(&screen->queue_lock);
+   simple_mtx_lock(screen->queue_lock);
    VkResult error = VKSCR(QueueSubmit)(screen->queue, 1, &si, VK_NULL_HANDLE);
-   simple_mtx_unlock(&screen->queue_lock);
+   simple_mtx_unlock(screen->queue_lock);
    if (!zink_screen_handle_vkresult(screen, error))
       return false;
 
@@ -1068,12 +1073,12 @@ zink_kopper_present_readback(struct zink_context *ctx, struct zink_resource *res
    if (cdt->async)
       util_queue_fence_wait(&cdt->swapchain->present_fence);
 
-   simple_mtx_lock(&screen->queue_lock);
+   simple_mtx_lock(screen->queue_lock);
    error = VKSCR(QueueWaitIdle)(screen->queue);
-   simple_mtx_unlock(&screen->queue_lock);
+   simple_mtx_unlock(screen->queue_lock);
 
    simple_mtx_lock(&screen->semaphores_lock);
-   util_dynarray_append(&screen->semaphores, VkSemaphore, acquire);
+   util_dynarray_append(&screen->semaphores, acquire);
    simple_mtx_unlock(&screen->semaphores_lock);
 
    cdt->age_locked = false;
@@ -1202,11 +1207,16 @@ zink_kopper_set_swap_interval(struct pipe_screen *pscreen, struct pipe_resource 
 
    if (old_present_mode == cdt->present_mode)
       return;
-   VkResult ret = update_swapchain(screen, cdt, cdt->caps.currentExtent.width, cdt->caps.currentExtent.height);
-   if (ret == VK_SUCCESS)
-      return;
-   cdt->present_mode = old_present_mode;
-   mesa_loge("zink: failed to set swap interval!");
+   if (res->obj->dt_idx == UINT32_MAX) {
+      /* only update swapchain when there is no current acquire to avoid flickering,
+       * otherwise the update is deferred to the next present
+       */
+      VkResult ret = update_swapchain(screen, cdt, cdt->caps.currentExtent.width, cdt->caps.currentExtent.height);
+      if (ret != VK_SUCCESS) {
+         cdt->present_mode = old_present_mode;
+         mesa_loge("zink: failed to set swap interval!");
+      }
+   }
 }
 
 int

@@ -130,8 +130,7 @@ __gen_padded(uint32_t v, uint32_t start, uint32_t end)
    pan_unpack((const PREFIX2(T, PACKED_T) *)(src), T, name)
 
 #define pan_section_ptr(base, A, S)                                            \
-   ((PREFIX4(A, SECTION, S, PACKED_TYPE) *)((uint8_t *)(base) +                \
-                                            pan_section_offset(A, S)))
+   (&((PREFIX2(A, PACKED_T) *)(base))->S)
 
 #define pan_section_pack(dst, A, S, name)                                      \
    for (UNUSED PREFIX4(A, SECTION, S, TYPE)                                    \
@@ -155,7 +154,7 @@ __gen_padded(uint32_t v, uint32_t start, uint32_t end)
       size_t __tmp_bytes = pan_size(type);                                     \
       for (unsigned i = 0; i < (__tmp_bytes / 4); ++i)                         \
          (packed1)->opaque[i] |= (packed2)->opaque[i];                         \
-   } while (0);
+   } while (0)
 
 #ifndef __OPENCL_VERSION__
 static inline const char *

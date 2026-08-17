@@ -164,6 +164,8 @@ struct rnndomain {
 	int subelemsmax;
 	char *fullname;
 	char *file;
+	unsigned minoff;
+	unsigned maxoff;
 };
 
 struct rnngroup {
@@ -205,6 +207,7 @@ struct rnndelem {
 	struct rnnenum *index;   /* for arrays, for symbolic idx values */
 	char *fullname;
 	char *file;
+	char *usage;
 };
 
 struct rnnspectype {

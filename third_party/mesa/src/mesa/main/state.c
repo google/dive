@@ -374,7 +374,7 @@ update_program(struct gl_context *ctx)
       if (ctx->FragmentProgram._Current)
          ST_SET_STATES(dirty, ctx->FragmentProgram._Current->affected_states);
 
-      if (!ctx->st->needs_texcoord_semantic)
+      if (!ctx->st->screen->caps.tgsi_texcoord)
          ST_SET_STATE(dirty, ST_NEW_RASTERIZER);
    }
 
@@ -455,7 +455,7 @@ update_program(struct gl_context *ctx)
       _mesa_set_active_states(ctx);
 
       /* Some drivers need to clean up previous states too */
-      if (st->validate_all_dirty_states)
+      if (st->screen->caps.validate_all_dirty_states)
          ST_SET_STATES(st->active_states, dirty);
 
       return _NEW_PROGRAM;
@@ -738,7 +738,7 @@ set_vertex_processing_mode(struct gl_context *ctx, gl_vertex_processing_mode m)
        * impossible to reach.  The meta code is careful to not use shaders in
        * ES1.
        */
-      assert(ctx->API != API_OPENGLES);
+      assert(!_mesa_is_gles1(ctx));
 
       /* Other parts of the code assume that inputs[VERT_ATTRIB_POS] through
        * inputs[VERT_ATTRIB_GENERIC0-1] will be non-NULL.  However, in OpenGL

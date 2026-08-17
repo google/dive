@@ -6,9 +6,6 @@ OpenGL programs which use the GLX API can render to any X display, even
 those that don't support the GLX extension. Effectively, the Xlib driver
 converts all OpenGL rendering into Xlib calls.
 
-The Xlib driver is the oldest Mesa driver and the most mature of Mesa's
-software-only drivers.
-
 Since the Xlib driver *emulates* the GLX extension, it's not totally
 conformant with a true GLX implementation. The differences are fairly
 obscure, however.
@@ -63,32 +60,6 @@ blending will require a round-trip message for pixel readback.)
 
 Experiment with the MESA_BACK_BUFFER variable to see which is faster for
 your application.
-
-Colormaps
----------
-
-When using Mesa directly or with GLX, it's up to the application writer
-to create a window with an appropriate colormap. The GLUT toolkit tries
-to minimize colormap *flashing* by sharing colormaps when possible.
-Specifically, if the visual and depth of the window matches that of the
-root window, the root window's colormap will be shared by the Mesa
-window. Otherwise, a new, private colormap will be allocated.
-
-When sharing the root colormap, Mesa may be unable to allocate the
-colors it needs, resulting in poor color quality. This can happen when a
-large number of colorcells in the root colormap are already allocated.
-
-Overlay Planes
---------------
-
-Hardware overlay planes are supported by the Xlib driver. To determine
-if your X server has overlay support you can test for the
-SERVER_OVERLAY_VISUALS property:
-
-.. code-block:: sh
-
-   xprop -root | grep SERVER_OVERLAY_VISUALS
-
 
 Extensions
 ----------

@@ -1,24 +1,6 @@
 /*
  * Copyright (C) 2022 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "pan_afbc.h"
@@ -173,10 +155,10 @@ TEST(BlockSize, AFBCSuperblock64x4)
  * stride calculations.
  */
 static uint32_t
-pan_afbc_line_stride(uint64_t modifier, uint32_t width)
+pan_afbc_line_stride(enum pipe_format format, uint64_t modifier, uint32_t width)
 {
-   return pan_afbc_stride_blocks(modifier,
-                                 pan_afbc_row_stride(modifier, width));
+   return pan_afbc_stride_blocks(format, modifier,
+                                 pan_afbc_row_stride(format, modifier, width));
 }
 
 /* Which form of the stride we specify is hardware specific (row stride for
@@ -196,17 +178,17 @@ TEST(AFBCStride, Linear)
 
    for (unsigned m = 0; m < ARRAY_SIZE(modifiers); ++m) {
       uint64_t modifier = modifiers[m];
-
+      enum pipe_format format = PIPE_FORMAT_R8G8B8A8_UNORM;
       uint32_t sw = pan_afbc_superblock_width(modifier);
       uint32_t cases[] = {1, 4, 17, 39};
 
       for (unsigned i = 0; i < ARRAY_SIZE(cases); ++i) {
          uint32_t width = sw * cases[i];
 
-         EXPECT_EQ(pan_afbc_row_stride(modifier, width),
+         EXPECT_EQ(pan_afbc_row_stride(format, modifier, width),
                    16 * DIV_ROUND_UP(width, sw));
 
-         EXPECT_EQ(pan_afbc_line_stride(modifier, width),
+         EXPECT_EQ(pan_afbc_line_stride(format, modifier, width),
                    DIV_ROUND_UP(width, sw));
       }
    }
@@ -225,17 +207,17 @@ TEST(AFBCStride, Tiled)
 
    for (unsigned m = 0; m < ARRAY_SIZE(modifiers); ++m) {
       uint64_t modifier = modifiers[m];
-
+      enum pipe_format format = PIPE_FORMAT_R8_UNORM;
       uint32_t sw = pan_afbc_superblock_width(modifier);
       uint32_t cases[] = {1, 4, 17, 39};
 
       for (unsigned i = 0; i < ARRAY_SIZE(cases); ++i) {
          uint32_t width = sw * 8 * cases[i];
 
-         EXPECT_EQ(pan_afbc_row_stride(modifier, width),
+         EXPECT_EQ(pan_afbc_row_stride(format, modifier, width),
                    16 * DIV_ROUND_UP(width, (sw * 8)) * 8 * 8);
 
-         EXPECT_EQ(pan_afbc_line_stride(modifier, width),
+         EXPECT_EQ(pan_afbc_line_stride(format, modifier, width),
                    DIV_ROUND_UP(width, sw * 8) * 8);
       }
    }
@@ -265,6 +247,25 @@ layout_init(unsigned arch, const struct pan_image_props *props,
 
    *layout = plane.layout;
    return true;
+}
+
+TEST(Layout, LargeImage)
+{
+   struct pan_image_props p = {
+      .modifier = DRM_FORMAT_MOD_LINEAR,
+      .format = PIPE_FORMAT_R8G8B8A8_UNORM,
+      .extent_px = {
+         .width = 65536,
+         .height = 65536,
+         .depth = 1,
+      },
+      .nr_samples = 1,
+      .dim = MALI_TEXTURE_DIMENSION_2D,
+      .nr_slices = 1,
+   };
+   struct pan_image_layout l = {};
+
+   ASSERT_TRUE(layout_init(0, &p, 0, NULL, &l));
 }
 
 /* dEQP-GLES3.functional.texture.format.compressed.etc1_2d_pot */
@@ -591,6 +592,8 @@ format_can_do_mod(unsigned arch, enum pipe_format format, unsigned plane_idx,
       return pan_afbc_format(arch, format, plane_idx) != PAN_AFBC_MODE_INVALID;
    } else if (drm_is_afrc(modifier)) {
       return arch >= 10 && pan_afrc_supports_format(format);
+   } else if (modifier == DRM_FORMAT_MOD_ARM_INTERLEAVED_64K) {
+      return false;
    } else {
       assert(modifier == DRM_FORMAT_MOD_ARM_16X16_BLOCK_U_INTERLEAVED ||
              modifier == DRM_FORMAT_MOD_LINEAR);
@@ -710,7 +713,7 @@ default_wsi_row_pitch(unsigned arch, const struct pan_image_props *iprops,
 
       unsigned row_pitch_B =
          (width_px / util_format_get_blockwidth(format)) * fmt_blksz_B;
-      struct pan_image_block_size tile_size_el = {1, 1};
+      ASSERTED struct pan_image_block_size tile_size_el = {1, 1};
 
       if (modifier == DRM_FORMAT_MOD_ARM_16X16_BLOCK_U_INTERLEAVED) {
          if (util_format_is_compressed(format)) {
@@ -734,7 +737,7 @@ TEST(WSI, Import)
 {
    /* We don't want to spam stderr with failure messages caused by our
     * EXPECT_FALSE() cases. */
-   setenv("MESA_LOG", "null", 0);
+   os_set_option("MESA_LOG", "null", false);
 
    struct pan_image_layout layout;
    for (unsigned i = 0; i < ARRAY_SIZE(archs); i++) {

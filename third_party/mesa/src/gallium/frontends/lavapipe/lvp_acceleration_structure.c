@@ -5,9 +5,10 @@
 
 #include "lvp_acceleration_structure.h"
 #include "lvp_entrypoints.h"
+#include "lvp_private.h"
 
 #include "radix_sort/radix_sort_u64.h"
-#include "bvh/vk_bvh.h"
+#include "bvh/vk_bvh_defines.h"
 
 struct radix_sort_vk_target_config lvp_radix_sort_config = {
    .keyval_dwords = 2,
@@ -49,7 +50,7 @@ lvp_init_radix_sort(struct lvp_device *device)
                                &device->vk.alloc, VK_NULL_HANDLE,
                                lvp_radix_sort_config);
 
-   device->accel_struct_args.radix_sort = device->radix_sort;
+   device->accel_struct_args.radix_sort_64 = device->radix_sort;
 
    simple_mtx_unlock(&device->radix_sort_lock);
 }
@@ -105,29 +106,18 @@ lvp_write_buffer_cp(VkCommandBuffer cmdbuf, VkDeviceAddress addr,
 {
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, cmdbuf);
 
-   struct vk_cmd_queue_entry *entry =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct vk_cmd_queue_entry),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   struct vk_cmd_queue_entry *entry = 
+      linear_zalloc_child(cmd_buffer->vk.cmd_queue.ctx, offsetof(struct vk_cmd_queue_entry, u) + sizeof(struct lvp_cmd_write_buffer_cp) + size);
    if (!entry)
       return;
 
    entry->type = LVP_CMD_WRITE_BUFFER_CP;
 
-   struct lvp_cmd_write_buffer_cp *cmd =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct lvp_cmd_write_buffer_cp) + size,
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (!entry) {
-      vk_free(cmd_buffer->vk.cmd_queue.alloc, entry);
-      return;
-   }
-
+   struct lvp_cmd_write_buffer_cp *cmd = (struct lvp_cmd_write_buffer_cp *)((uint8_t *)entry + offsetof(struct vk_cmd_queue_entry, u));
    cmd->addr = addr;
    cmd->data = cmd + 1;
    cmd->size = size;
-
    memcpy(cmd->data, data, size);
-
-   entry->driver_data = cmd;
 
    list_addtail(&entry->cmd_link, &cmd_buffer->vk.cmd_queue.cmds);
 }
@@ -144,8 +134,7 @@ lvp_cmd_dispatch_unaligned(VkCommandBuffer cmdbuf, uint32_t invocations_x,
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, cmdbuf);
 
    struct vk_cmd_queue_entry *entry =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct vk_cmd_queue_entry),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      linear_zalloc_child(cmd_buffer->vk.cmd_queue.ctx, offsetof(struct vk_cmd_queue_entry, u) + sizeof(struct vk_cmd_dispatch));
    if (!entry)
       return;
 
@@ -165,64 +154,50 @@ lvp_cmd_fill_buffer_addr(VkCommandBuffer cmdbuf, VkDeviceAddress addr,
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, cmdbuf);
 
    struct vk_cmd_queue_entry *entry =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct vk_cmd_queue_entry),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      linear_zalloc_child(cmd_buffer->vk.cmd_queue.ctx, offsetof(struct vk_cmd_queue_entry, u) + sizeof(struct lvp_cmd_fill_buffer_addr));
    if (!entry)
       return;
 
    entry->type = LVP_CMD_FILL_BUFFER_ADDR;
 
-   struct lvp_cmd_fill_buffer_addr *cmd =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct lvp_cmd_write_buffer_cp),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (!entry) {
-      vk_free(cmd_buffer->vk.cmd_queue.alloc, entry);
-      return;
-   }
-
+   struct lvp_cmd_fill_buffer_addr *cmd = (struct lvp_cmd_fill_buffer_addr *)((uint8_t *)entry + offsetof(struct vk_cmd_queue_entry, u));
    cmd->addr = addr;
    cmd->size = size;
    cmd->data = data;
-
-   entry->driver_data = cmd;
 
    list_addtail(&entry->cmd_link, &cmd_buffer->vk.cmd_queue.cmds);
 }
 
 static void
-lvp_enqueue_encode_as(VkCommandBuffer commandBuffer, const struct vk_acceleration_structure_build_state *state)
+lvp_enqueue_encode(VkCommandBuffer commandBuffer, struct vk_device *device, struct vk_meta_device *meta,
+                   const struct vk_acceleration_structure_build_args *args, struct vk_acceleration_structure_build_state *states,
+                   uint32_t build_count, bool flushed_cp_after_init_update_scratch, bool flushed_compute_after_init_update_scratch)
 {
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, commandBuffer);
-   VK_FROM_HANDLE(vk_acceleration_structure, dst, state->build_info->dstAccelerationStructure);
 
-   struct vk_cmd_queue_entry *entry =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct vk_cmd_queue_entry),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (!entry)
-      return;
+   for (uint32_t i = 0; i < build_count; i++) {
+      struct vk_acceleration_structure_build_state *state = &states[i];
+      VK_FROM_HANDLE(vk_acceleration_structure, dst, state->build_info->dstAccelerationStructure);
 
-   entry->type = LVP_CMD_ENCODE_AS;
+      struct vk_cmd_queue_entry *entry =
+         linear_zalloc_child(cmd_buffer->vk.cmd_queue.ctx, offsetof(struct vk_cmd_queue_entry, u) + sizeof(struct lvp_cmd_encode_as));
+      if (!entry)
+         return;
 
-   struct lvp_cmd_encode_as *cmd =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct lvp_cmd_encode_as),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-   if (!entry) {
-      vk_free(cmd_buffer->vk.cmd_queue.alloc, entry);
-      return;
+      entry->type = LVP_CMD_ENCODE_AS;
+
+      uint64_t intermediate_header_addr = state->build_info->scratchData.deviceAddress + state->scratch.header_offset;
+      uint64_t intermediate_bvh_addr = state->build_info->scratchData.deviceAddress + state->scratch.ir_offset;
+
+      struct lvp_cmd_encode_as *cmd = (struct lvp_cmd_encode_as *)((uint8_t *)entry + offsetof(struct vk_cmd_queue_entry, u));
+      cmd->dst = dst;
+      cmd->intermediate_as_addr = intermediate_bvh_addr;
+      cmd->intermediate_header_addr = intermediate_header_addr;
+      cmd->leaf_count = state->leaf_node_count;
+      cmd->geometry_type = vk_get_as_geometry_type(state->build_info);
+
+      list_addtail(&entry->cmd_link, &cmd_buffer->vk.cmd_queue.cmds);
    }
-
-   uint64_t intermediate_header_addr = state->build_info->scratchData.deviceAddress + state->scratch.header_offset;
-   uint64_t intermediate_bvh_addr = state->build_info->scratchData.deviceAddress + state->scratch.ir_offset;
-
-   cmd->dst = dst;
-   cmd->intermediate_as_addr = intermediate_bvh_addr;
-   cmd->intermediate_header_addr = intermediate_header_addr;
-   cmd->leaf_count = state->leaf_node_count;
-   cmd->geometry_type = vk_get_as_geometry_type(state->build_info);
-
-   entry->driver_data = cmd;
-
-   list_addtail(&entry->cmd_link, &cmd_buffer->vk.cmd_queue.cmds);
 }
 
 static uint32_t
@@ -278,7 +253,7 @@ lvp_select_subtrees_to_flatten(const struct vk_ir_header *header, const struct v
    }
 
    if (flatten && has_internal_child) {
-      util_dynarray_append(subtrees, uint32_t, index);
+      util_dynarray_append(subtrees, index);
       *max_subtree_size = MAX2(*max_subtree_size, child_count);
       return;
    }
@@ -313,7 +288,7 @@ lvp_gather_subtree(const uint8_t *output, uint32_t offset, uint32_t *leaf_nodes,
 
 static uint32_t
 lvp_rebuild_subtree(const uint8_t *output, uint32_t *leaf_nodes, vk_aabb *leaf_bounds,
-                    uint32_t *internal_nodes, uint32_t leaf_node_count, 
+                    uint32_t *internal_nodes, uint32_t leaf_node_count,
                     uint32_t *internal_node_index)
 {
    uint32_t child_nodes[2];
@@ -393,7 +368,7 @@ lvp_flatten_as(const struct vk_ir_header *header, const struct vk_ir_box_node *i
    /* Select the subtrees that have to be rebuilt in order to
     * limit the BVH to a supported depth.
     */
-   util_dynarray_init(&subtrees, NULL);
+   subtrees = UTIL_DYNARRAY_INIT;
    uint32_t max_subtree_size = 0;
    lvp_select_subtrees_to_flatten(header, ir_box_nodes, node_depth, child_counts,
                                   root_offset, header->ir_internal_node_count - 1,
@@ -571,10 +546,10 @@ lvp_encode_as(struct vk_acceleration_structure *dst, VkDeviceAddress intermediat
       }
    }
 
-   /* The BVH exceeds the maximum depth supported by the traversal stack, 
+   /* The BVH exceeds the maximum depth supported by the traversal stack,
     * flatten the offending parts of the tree.
     */
-   if (max_node_depth >= 24)
+   if (max_node_depth >= (geometry_type == VK_GEOMETRY_TYPE_INSTANCES_KHR ? LVP_MAX_TLAS_DEPTH : LVP_MAX_BLAS_DEPTH))
       lvp_flatten_as(header, ir_box_nodes, root_offset, node_depth, output);
 
    free(node_depth);
@@ -655,16 +630,9 @@ lvp_CopyAccelerationStructureToMemoryKHR(VkDevice _device, VkDeferredOperationKH
    return VK_ERROR_FEATURE_NOT_PRESENT;
 }
 
-static VkResult
-lvp_encode_bind_pipeline(VkCommandBuffer cmd_buffer, const struct vk_acceleration_structure_build_state *state)
-{
-   return VK_SUCCESS;
-}
-
 const struct vk_acceleration_structure_build_ops accel_struct_ops = {
    .get_as_size = lvp_get_as_size,
-   .encode_bind_pipeline[0] = lvp_encode_bind_pipeline,
-   .encode_as[0] = lvp_enqueue_encode_as,
+   .encode = lvp_enqueue_encode,
 };
 
 VkResult
@@ -698,8 +666,7 @@ lvp_enqueue_save_state(VkCommandBuffer cmdbuf)
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, cmdbuf);
 
    struct vk_cmd_queue_entry *entry =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct vk_cmd_queue_entry),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      linear_zalloc_child(cmd_buffer->vk.cmd_queue.ctx, offsetof(struct vk_cmd_queue_entry, u));
    if (!entry)
       return;
 
@@ -714,8 +681,7 @@ lvp_enqueue_restore_state(VkCommandBuffer cmdbuf)
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, cmdbuf);
 
    struct vk_cmd_queue_entry *entry =
-      vk_zalloc(cmd_buffer->vk.cmd_queue.alloc, sizeof(struct vk_cmd_queue_entry),
-                8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+      linear_zalloc_child(cmd_buffer->vk.cmd_queue.ctx, offsetof(struct vk_cmd_queue_entry, u));
    if (!entry)
       return;
 
@@ -730,13 +696,13 @@ lvp_CmdBuildAccelerationStructuresKHR(VkCommandBuffer commandBuffer, uint32_t in
                                       const VkAccelerationStructureBuildRangeInfoKHR *const *ppBuildRangeInfos)
 {
    VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, commandBuffer);
-
-   lvp_init_radix_sort(cmd_buffer->device);
+   struct lvp_device *device = lvp_cmd_buffer_device(cmd_buffer);
+   lvp_init_radix_sort(device);
 
    lvp_enqueue_save_state(commandBuffer);
 
-   vk_cmd_build_acceleration_structures(commandBuffer, &cmd_buffer->device->vk, &cmd_buffer->device->meta,
-                                        infoCount, pInfos, ppBuildRangeInfos, &cmd_buffer->device->accel_struct_args);
+   vk_cmd_build_acceleration_structures(commandBuffer, &device->vk, &device->meta,
+                                        infoCount, pInfos, ppBuildRangeInfos, &device->accel_struct_args);
 
    lvp_enqueue_restore_state(commandBuffer);
 }

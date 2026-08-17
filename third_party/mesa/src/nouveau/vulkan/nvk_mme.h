@@ -16,6 +16,7 @@ enum nvk_mme {
    NVK_MME_SELECT_CB0,
    NVK_MME_BIND_CBUF_DESC,
    NVK_MME_CLEAR,
+   NVK_MME_UPDATE_WINDOW_CLIP,
    NVK_MME_BIND_IB,
    NVK_MME_BIND_VB,
    NVK_MME_SET_VB_ENABLES,
@@ -29,6 +30,7 @@ enum nvk_mme {
    NVK_MME_DRAW_INDEXED_INDIRECT,
    NVK_MME_DRAW_INDIRECT_COUNT,
    NVK_MME_DRAW_INDEXED_INDIRECT_COUNT,
+   NVK_MME_BEGIN_COND_RENDER,
    NVK_MME_ADD_CS_INVOCATIONS,
    NVK_MME_DISPATCH_INDIRECT,
    NVK_MME_WRITE_CS_INVOCATIONS,
@@ -39,6 +41,10 @@ enum nvk_mme {
    NVK_MME_SET_CONSERVATIVE_RASTER_STATE,
    NVK_MME_SET_VIEWPORT_MIN_MAX_Z,
    NVK_MME_SET_Z_CLAMP,
+   NVK_MME_SET_STATISTICS_COUNTERS,
+   NVK_MME_DRAW_MESH,
+   NVK_MME_DRAW_MESH_INDIRECT,
+   NVK_MME_DRAW_MESH_INDIRECT_COUNT,
 
    NVK_MME_COUNT,
 };
@@ -59,7 +65,6 @@ enum nvk_mme_scratch {
    NVK_MME_SCRATCH_CS_INVOCATIONS_HI,
    NVK_MME_SCRATCH_CS_INVOCATIONS_LO,
 
-   NVK_MME_SCRATCH_DRAW_BEGIN,
    NVK_MME_SCRATCH_DRAW_COUNT,
    NVK_MME_SCRATCH_DRAW_PAD_DW,
    NVK_MME_SCRATCH_DRAW_IDX,
@@ -67,6 +72,10 @@ enum nvk_mme_scratch {
    NVK_MME_SCRATCH_WRITE_MASK_DYN,
    NVK_MME_SCRATCH_WRITE_MASK_PIPELINE,
    NVK_MME_SCRATCH_CONSERVATIVE_RASTER_STATE,
+   NVK_MME_SCRATCH_STATISTICS_COUNTER_STATE,
+
+   /* Copy of SET_WINDOW_CLIP_ENABLE */
+   NVK_MME_SCRATCH_WINDOW_CLIP_ENABLED, /* TODO: can we use shadow-ram? */
 
    /* Bitfield of enabled vertex buffer bindings */
    NVK_MME_SCRATCH_VB_ENABLES,
@@ -98,6 +107,9 @@ enum nvk_mme_scratch {
 
    /* Shadow copies of values in CB0 */
    NVK_MME_SCRATCH_CB0_FIRST_VERTEX,
+   NVK_MME_SCRATCH_CB0_MESH_GROUP_COUNT_X,
+   NVK_MME_SCRATCH_CB0_MESH_GROUP_COUNT_Y,
+   NVK_MME_SCRATCH_CB0_MESH_GROUP_COUNT_Z,
    NVK_MME_SCRATCH_CB0_DRAW_INDEX,
    NVK_MME_SCRATCH_CB0_VIEW_INDEX,
 
@@ -153,6 +165,8 @@ _nvk_mme_load_to_scratch(struct mme_builder *b, enum nvk_mme_scratch scratch)
 }
 #define nvk_mme_load_to_scratch(b, S) \
    _nvk_mme_load_to_scratch(b, NVK_MME_SCRATCH_##S)
+
+#define NVK_MME_VAL_MASK(val, mask) ((uint32_t)val) | (((uint32_t)mask) << 16)
 
 static inline uint32_t
 nvk_mme_val_mask(uint16_t val, uint16_t mask)
@@ -218,6 +232,7 @@ uint32_t *nvk_build_mme(const struct nv_device_info *devinfo,
 void nvk_mme_select_cb0(struct mme_builder *b);
 void nvk_mme_bind_cbuf_desc(struct mme_builder *b);
 void nvk_mme_clear(struct mme_builder *b);
+void nvk_mme_update_window_clip(struct mme_builder *b);
 void nvk_mme_bind_ib(struct mme_builder *b);
 void nvk_mme_bind_vb(struct mme_builder *b);
 void nvk_mme_set_vb_enables(struct mme_builder *b);
@@ -231,6 +246,7 @@ void nvk_mme_draw_indirect(struct mme_builder *b);
 void nvk_mme_draw_indexed_indirect(struct mme_builder *b);
 void nvk_mme_draw_indirect_count(struct mme_builder *b);
 void nvk_mme_draw_indexed_indirect_count(struct mme_builder *b);
+void nvk_mme_begin_cond_render(struct mme_builder *b);
 void nvk_mme_add_cs_invocations(struct mme_builder *b);
 void nvk_mme_dispatch_indirect(struct mme_builder *b);
 void nvk_mme_write_cs_invocations(struct mme_builder *b);
@@ -241,10 +257,15 @@ void nvk_mme_set_write_mask(struct mme_builder *b);
 void nvk_mme_set_conservative_raster_state(struct mme_builder *b);
 void nvk_mme_set_viewport_min_max_z(struct mme_builder *b);
 void nvk_mme_set_z_clamp(struct mme_builder *b);
+void nvk_mme_set_statistics_counters(struct mme_builder *b);
+void nvk_mme_draw_mesh(struct mme_builder *b);
+void nvk_mme_draw_mesh_indirect(struct mme_builder *b);
+void nvk_mme_draw_mesh_indirect_count(struct mme_builder *b);
 
-uint32_t nvk_mme_tess_params(enum nak_ts_domain domain,
+uint32_t nvk_mme_tess_params(mesa_shader_stage stage,
+                             enum nak_ts_domain domain,
                              enum nak_ts_spacing spacing,
-                             enum nak_ts_prims prims);
+                             bool ccw, bool point_mode);
 uint32_t nvk_mme_anti_alias_min_sample_shading(float mss);
 uint32_t nvk_mme_shading_rate_control_sample_shading(bool sample_shading);
 
@@ -269,6 +290,7 @@ extern const struct nvk_mme_test_case nvk_mme_bind_vb_tests[];
 extern const struct nvk_mme_test_case nvk_mme_set_tess_params_tests[];
 extern const struct nvk_mme_test_case nvk_mme_set_shading_rate_control_tests[];
 extern const struct nvk_mme_test_case nvk_mme_set_anti_alias_tests[];
+extern const struct nvk_mme_test_case nvk_mme_set_statistics_counters_tests[];
 
 void nvk_test_all_mmes(const struct nv_device_info *devinfo);
 

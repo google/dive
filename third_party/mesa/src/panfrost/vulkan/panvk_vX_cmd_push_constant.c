@@ -7,78 +7,89 @@
 #include "panvk_cmd_buffer.h"
 #include "panvk_entrypoints.h"
 
-VkResult
-panvk_per_arch(cmd_prepare_push_uniforms)(
-   struct panvk_cmd_buffer *cmdbuf, const struct panvk_shader_variant *shader,
-   uint32_t repeat_count)
+static VkResult
+prepare_push_uniforms(struct panvk_cmd_buffer *cmdbuf,
+                      const struct panvk_shader_variant *shader,
+                      struct pan_ptr *push_uniforms, uint32_t repeat_count,
+                      uint64_t *sysvals)
 {
-   uint64_t *push_ptr;
-
-   switch (shader->info.stage) {
-   case MESA_SHADER_COMPUTE:
-      if (!compute_state_dirty(cmdbuf, PUSH_UNIFORMS))
-         return VK_SUCCESS;
-      push_ptr = &cmdbuf->state.compute.push_uniforms;
-      break;
-   case MESA_SHADER_VERTEX:
-      if (!gfx_state_dirty(cmdbuf, VS_PUSH_UNIFORMS))
-         return VK_SUCCESS;
-      push_ptr = &cmdbuf->state.gfx.vs.push_uniforms;
-      break;
-   case MESA_SHADER_FRAGMENT:
-      if (!gfx_state_dirty(cmdbuf, FS_PUSH_UNIFORMS))
-         return VK_SUCCESS;
-      push_ptr = &cmdbuf->state.gfx.fs.push_uniforms;
-      break;
-   default:
-      assert(!"Invalid stage");
-      return VK_SUCCESS;
-   }
+   struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
 
    if (!shader->fau.total_count) {
-      *push_ptr = 0;
+      push_uniforms->cpu = NULL;
+      push_uniforms->gpu = 0;
       return VK_SUCCESS;
    }
 
-   struct pan_ptr push_uniforms = panvk_cmd_alloc_dev_mem(
+   *push_uniforms = panvk_cmd_alloc_dev_mem(
       cmdbuf, desc, shader->fau.total_count * sizeof(uint64_t) * repeat_count,
       sizeof(uint64_t));
 
-   if (!push_uniforms.gpu)
+   if (!push_uniforms->gpu)
       return VK_ERROR_OUT_OF_DEVICE_MEMORY;
 
-   uint64_t *sysvals = shader->info.stage == MESA_SHADER_COMPUTE
-                          ? (uint64_t *)&cmdbuf->state.compute.sysvals
-                          : (uint64_t *)&cmdbuf->state.gfx.sysvals;
-   uint64_t *push_consts = cmdbuf->state.push_constants.data;
-   uint64_t *faus = push_uniforms.cpu;
-   uint32_t w, fau = 0;
+   struct panvk_common_sysvals_inner common_inner = {
+      .printf_buffer_address = dev->printf.bo->addr.dev,
+   };
+   uint64_t *common = (uint64_t *)&common_inner;
 
-   for (uint32_t i = 0; i < repeat_count; i++) {
-      uint64_t addr =
-         push_uniforms.gpu + i * shader->fau.total_count * sizeof(uint64_t);
-      if (shader->info.stage == MESA_SHADER_COMPUTE)
-         cmdbuf->state.compute.sysvals.push_uniforms = addr;
-      else
-         cmdbuf->state.gfx.sysvals.push_uniforms = addr;
+   uint64_t *push_consts = cmdbuf->state.push_constants.data;
+   uint64_t *faus = push_uniforms->cpu;
+   const struct pan_fau_layout *fau = &shader->info.fau;
+   uint32_t w;
+
+   for (uint32_t r = 0; r < repeat_count; r++) {
+      /* Each repeat owns its own contiguous block of total_count slots. */
+      uint64_t *repeat_faus = faus + r * shader->fau.total_count;
+      uint32_t fau_idx = 0;
+
+      common_inner.push_uniforms =
+         push_uniforms->gpu + r * shader->fau.total_count * sizeof(uint64_t);
 
       /* After packing, the sysvals come first, followed by the user push
        * constants. The ordering is encoded shader side, so don't re-order
        * these loops. */
-      BITSET_FOREACH_SET(w, shader->fau.used_sysvals, MAX_SYSVAL_FAUS)
-         faus[fau++] = sysvals[w];
+      BITSET_FOREACH_SET(w, shader->fau.used_sysvals, MAX_SYSVAL_FAUS) {
+         if (w >= SYSVALS_COMMON_START && w < SYSVALS_COMMON_END)
+            repeat_faus[fau_idx++] = common[w - SYSVALS_COMMON_START];
+         else
+            repeat_faus[fau_idx++] = sysvals[w];
+      }
 
       BITSET_FOREACH_SET(w, shader->fau.used_push_consts, MAX_PUSH_CONST_FAUS)
-         faus[fau++] = push_consts[w];
+         repeat_faus[fau_idx++] = push_consts[w];
+      assert(fau_idx <= shader->fau.total_count);
 
-      for (uint32_t i = 0; i < shader->info.fau_consts_count; i += 2) {
-         faus[fau++] = (uint64_t)shader->info.fau_consts[i + 1] << 32 |
-                       shader->info.fau_consts[i];
+      pan_fau_foreach_imm(fau, i) {
+         bool hi = (i & 1) != 0;
+         unsigned idx = i / 2;
+         assert(fau_idx <= idx && idx < shader->fau.total_count);
+
+         repeat_faus[idx] =
+            (repeat_faus[idx] & ((uint64_t)UINT32_MAX << (32 * !hi))) |
+            ((uint64_t)fau->words[i].constant << (32 * hi));
       }
    }
 
-   *push_ptr = push_uniforms.gpu;
    return VK_SUCCESS;
+}
+
+VkResult
+panvk_per_arch(cmd_prepare_gfx_push_uniforms)(
+   struct panvk_cmd_buffer *cmdbuf, const struct panvk_shader_variant *shader,
+   struct pan_ptr *push_uniforms, uint32_t repeat_count)
+{
+   return prepare_push_uniforms(cmdbuf, shader, push_uniforms, repeat_count,
+                                (uint64_t *)&cmdbuf->state.gfx.sysvals);
+}
+
+VkResult
+panvk_per_arch(cmd_prepare_compute_push_uniforms)(
+   struct panvk_cmd_buffer *cmdbuf, const struct panvk_shader_variant *shader,
+   struct pan_ptr *push_uniforms)
+{
+   return prepare_push_uniforms(cmdbuf, shader, push_uniforms, 1,
+                                (uint64_t *)&cmdbuf->state.compute.sysvals);
 }
 
 VKAPI_ATTR void VKAPI_CALL

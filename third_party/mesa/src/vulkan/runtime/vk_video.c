@@ -46,6 +46,7 @@ vk_video_session_init(struct vk_device *device,
    vid->max_active_ref_pics = create_info->maxActiveReferencePictures;
    vid->luma_bit_depth = create_info->pVideoProfile->lumaBitDepth;
    vid->chroma_bit_depth = create_info->pVideoProfile->chromaBitDepth;
+   vid->chroma_subsampling = create_info->pVideoProfile->chromaSubsampling;
 
    switch (vid->op) {
    case VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR: {
@@ -107,6 +108,8 @@ vk_video_session_init(struct vk_device *device,
          vk_find_struct_const(create_info->pVideoProfile->pNext, VIDEO_ENCODE_USAGE_INFO_KHR);
       const struct VkVideoEncodeSessionIntraRefreshCreateInfoKHR *intra_refresh =
          vk_find_struct_const(create_info->pNext, VIDEO_ENCODE_SESSION_INTRA_REFRESH_CREATE_INFO_KHR);
+      const struct VkVideoEncodeProfileRgbConversionInfoVALVE *rgb_profile_info =
+         vk_find_struct_const(create_info->pVideoProfile->pNext, VIDEO_ENCODE_PROFILE_RGB_CONVERSION_INFO_VALVE);
       if (encode_usage_profile) {
          vid->enc_usage.video_usage_hints = encode_usage_profile->videoUsageHints;
          vid->enc_usage.video_content_hints = encode_usage_profile->videoContentHints;
@@ -118,6 +121,16 @@ vk_video_session_init(struct vk_device *device,
       }
       if (intra_refresh)
          vid->intra_refresh_mode = intra_refresh->intraRefreshMode;
+      if (rgb_profile_info && rgb_profile_info->performEncodeRgbConversion) {
+         const struct VkVideoEncodeSessionRgbConversionCreateInfoVALVE *rgb_info =
+            vk_find_struct_const(create_info->pNext, VIDEO_ENCODE_SESSION_RGB_CONVERSION_CREATE_INFO_VALVE);
+
+         vid->perform_rgb_conversion = true;
+         vid->rgb_conv.rgb_model = rgb_info->rgbModel;
+         vid->rgb_conv.rgb_range = rgb_info->rgbRange;
+         vid->rgb_conv.x_chroma_offset = rgb_info->xChromaOffset;
+         vid->rgb_conv.y_chroma_offset = rgb_info->yChromaOffset;
+      }
    }
 
    return VK_SUCCESS;
@@ -127,6 +140,15 @@ void
 vk_video_session_finish(struct vk_video_session *vid)
 {
    vk_object_base_finish(&vid->base);
+}
+
+static void
+copy_or_zero_init(void *dst, const void *src, size_t size)
+{
+   if (src)
+      memcpy(dst, src, size);
+   else
+      memset(dst, 0, size);
 }
 
 static void
@@ -170,10 +192,10 @@ vk_video_deep_copy_h265_vps(struct vk_video_h265_vps *dst,
                             const StdVideoH265VideoParameterSet *src)
 {
    memcpy(&dst->base, src, sizeof(StdVideoH265VideoParameterSet));
-   if (src->pDecPicBufMgr) {
-      memcpy(&dst->dec_pic_buf_mgr, src->pDecPicBufMgr, sizeof(StdVideoH265DecPicBufMgr));
-      dst->base.pDecPicBufMgr = &dst->dec_pic_buf_mgr;
-   }
+
+   copy_or_zero_init(&dst->dec_pic_buf_mgr, src->pDecPicBufMgr, sizeof(StdVideoH265DecPicBufMgr));
+   dst->base.pDecPicBufMgr = &dst->dec_pic_buf_mgr;
+
    if (src->pHrdParameters) {
       memcpy(&dst->hrd_parameters, src->pHrdParameters, sizeof(StdVideoH265HrdParameters));
       dst->base.pHrdParameters = &dst->hrd_parameters;
@@ -189,10 +211,8 @@ vk_video_deep_copy_h265_vps(struct vk_video_h265_vps *dst,
       }
    }
 
-   if (src->pProfileTierLevel) {
-      memcpy(&dst->tier_level, src->pProfileTierLevel, sizeof(StdVideoH265ProfileTierLevel));
-      dst->base.pProfileTierLevel = &dst->tier_level;
-   }
+   copy_or_zero_init(&dst->tier_level, src->pProfileTierLevel, sizeof(StdVideoH265ProfileTierLevel));
+   dst->base.pProfileTierLevel = &dst->tier_level;
 }
 
 static void
@@ -200,28 +220,25 @@ vk_video_deep_copy_h265_sps(struct vk_video_h265_sps *dst,
                             const StdVideoH265SequenceParameterSet *src)
 {
    memcpy(&dst->base, src, sizeof(StdVideoH265SequenceParameterSet));
-   if (src->pProfileTierLevel) {
-      memcpy(&dst->tier_level, src->pProfileTierLevel, sizeof(StdVideoH265ProfileTierLevel));
-      dst->base.pProfileTierLevel = &dst->tier_level;
-   }
-   if (src->pDecPicBufMgr) {
-      memcpy(&dst->dec_pic_buf_mgr, src->pDecPicBufMgr, sizeof(StdVideoH265DecPicBufMgr));
-      dst->base.pDecPicBufMgr = &dst->dec_pic_buf_mgr;
-   }
+
+   copy_or_zero_init(&dst->tier_level, src->pProfileTierLevel, sizeof(StdVideoH265ProfileTierLevel));
+   dst->base.pProfileTierLevel = &dst->tier_level;
+
+   copy_or_zero_init(&dst->dec_pic_buf_mgr, src->pDecPicBufMgr, sizeof(StdVideoH265DecPicBufMgr));
+   dst->base.pDecPicBufMgr = &dst->dec_pic_buf_mgr;
+
    if (src->flags.sps_scaling_list_data_present_flag && src->pScalingLists) {
       memcpy(&dst->scaling_lists, src->pScalingLists, sizeof(StdVideoH265ScalingLists));
       dst->base.pScalingLists = &dst->scaling_lists;
    }
 
-   if (src->pShortTermRefPicSet) {
-      memcpy(&dst->short_term_ref_pic_set, src->pShortTermRefPicSet, sizeof(StdVideoH265ShortTermRefPicSet));
-      dst->base.pShortTermRefPicSet = &dst->short_term_ref_pic_set;
-   }
+   copy_or_zero_init(&dst->short_term_ref_pic_set, src->pShortTermRefPicSet,
+                     sizeof(StdVideoH265ShortTermRefPicSet) * src->num_short_term_ref_pic_sets);
+   dst->base.pShortTermRefPicSet = dst->short_term_ref_pic_set;
 
-   if (src->pLongTermRefPicsSps) {
-      memcpy(&dst->long_term_ref_pics_sps, src->pLongTermRefPicsSps, sizeof(StdVideoH265LongTermRefPicsSps));
-      dst->base.pLongTermRefPicsSps = &dst->long_term_ref_pics_sps;
-   }
+
+   copy_or_zero_init(&dst->long_term_ref_pics_sps, src->pLongTermRefPicsSps, sizeof(StdVideoH265LongTermRefPicsSps));
+   dst->base.pLongTermRefPicsSps = &dst->long_term_ref_pics_sps;
 
    if (src->pSequenceParameterSetVui) {
       memcpy(&dst->vui, src->pSequenceParameterSetVui, sizeof(StdVideoH265SequenceParameterSetVui));
@@ -452,14 +469,12 @@ vk_video_deep_copy_av1_seq_hdr(struct vk_video_av1_seq_hdr *dst,
                                const StdVideoAV1SequenceHeader *src)
 {
    memcpy(&dst->base, src, sizeof(StdVideoAV1SequenceHeader));
-   if (src->pColorConfig) {
-      memcpy(&dst->color_config, src->pColorConfig, sizeof(StdVideoAV1ColorConfig));
-      dst->base.pColorConfig = &dst->color_config;
-   }
-   if (src->pTimingInfo) {
-      memcpy(&dst->timing_info, src->pTimingInfo, sizeof(StdVideoAV1TimingInfo));
-      dst->base.pTimingInfo = &dst->timing_info;
-   }
+
+   copy_or_zero_init(&dst->color_config, src->pColorConfig, sizeof(StdVideoAV1ColorConfig));
+   dst->base.pColorConfig = &dst->color_config;
+
+   copy_or_zero_init(&dst->timing_info, src->pTimingInfo, sizeof(StdVideoAV1TimingInfo));
+   dst->base.pTimingInfo = &dst->timing_info;
 }
 
 void *
@@ -796,23 +811,30 @@ vk_video_session_parameters_update(struct vk_video_session_parameters *params,
    case VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR: {
       const struct VkVideoDecodeH264SessionParametersAddInfoKHR *h264_add =
          vk_find_struct_const(update->pNext, VIDEO_DECODE_H264_SESSION_PARAMETERS_ADD_INFO_KHR);
-      return update_h264_dec_session_parameters(params, h264_add);
+      if (h264_add)
+         return update_h264_dec_session_parameters(params, h264_add);
+      break;
    }
    case VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR: {
       const struct VkVideoDecodeH265SessionParametersAddInfoKHR *h265_add =
          vk_find_struct_const(update->pNext, VIDEO_DECODE_H265_SESSION_PARAMETERS_ADD_INFO_KHR);
-
-      return update_h265_session_parameters(params, h265_add);
+      if (h265_add)
+         return update_h265_session_parameters(params, h265_add);
+      break;
    }
    case VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR: {
       const struct VkVideoEncodeH264SessionParametersAddInfoKHR *h264_add =
         vk_find_struct_const(update->pNext, VIDEO_ENCODE_H264_SESSION_PARAMETERS_ADD_INFO_KHR);
-      return update_h264_enc_session_parameters(params, h264_add);
+      if (h264_add)
+         return update_h264_enc_session_parameters(params, h264_add);
+      break;
    }
    case VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR: {
       const struct VkVideoEncodeH265SessionParametersAddInfoKHR *h265_add =
         vk_find_struct_const(update->pNext, VIDEO_ENCODE_H265_SESSION_PARAMETERS_ADD_INFO_KHR);
-      return update_h265_enc_session_parameters(params, h265_add);
+      if (h265_add)
+         return update_h265_enc_session_parameters(params, h265_add);
+      break;
    }
    default:
       UNREACHABLE("Unknown codec\n");
@@ -1237,10 +1259,15 @@ vk_fill_video_h265_reference_info(const VkVideoDecodeInfoKHR *frame_info,
          const uint8_t *cur_rps = rps[i];
 
          for (j = 0; (cur_rps[j] != 0xff) && ((j + ref_idx) < 8); j++) {
+
             ref_slots_tmp[list_idx][j + ref_idx].slot_index = cur_rps[j];
             ref_slots_tmp[list_idx][j + ref_idx].pic_order_cnt =
                vk_video_h265_poc_by_slot(frame_info, cur_rps[j]);
+            if (i == 2)
+               ref_slots_tmp[list_idx][j + ref_idx].lt = true;
          }
+         /* TODO handle pps_curr_pic_ref_enabled_flag here */
+
          ref_idx += j;
       }
 
@@ -1252,9 +1279,11 @@ vk_fill_video_h265_reference_info(const VkVideoDecodeInfoKHR *frame_info,
                ref_slots_tmp[list_idx][slice_params->list_entry_lx[list_idx][i]].slot_index;
             ref_slots[list_idx][i].pic_order_cnt =
                ref_slots_tmp[list_idx][slice_params->list_entry_lx[list_idx][i]].pic_order_cnt;
+            ref_slots[list_idx][i].lt =
+               ref_slots_tmp[list_idx][slice_params->list_entry_lx[list_idx][i]].lt;
          }
       } else {
-         memcpy(ref_slots, &ref_slots_tmp, sizeof(ref_slots_tmp));
+         memcpy(ref_slots[list_idx], &ref_slots_tmp[list_idx], sizeof(ref_slots_tmp[list_idx]));
       }
    }
 }
@@ -1527,12 +1556,12 @@ vk_video_parse_h265_slice_header(const struct VkVideoDecodeInfoKHR *frame_info,
 
          for (unsigned i = 0; i < num_refs; i++) {
             if (i < num_lt_sps) {
+               int lt_idx_sps = 0;
                if (sps->num_long_term_ref_pics_sps > 1)
-                  /* lt_idx_sps */
-                  vl_rbsp_u(&rbsp,
+                  lt_idx_sps = vl_rbsp_u(&rbsp,
                         util_logbase2_ceil(sps->num_long_term_ref_pics_sps));
 
-               if (sps->pLongTermRefPicsSps->used_by_curr_pic_lt_sps_flag)
+               if (sps->pLongTermRefPicsSps->used_by_curr_pic_lt_sps_flag & (1 << lt_idx_sps))
                   nb_refs++;
             } else {
                /* poc_lsb_lt */
@@ -3160,7 +3189,7 @@ vk_video_encode_av1_seq_hdr(const struct vk_video_session_parameters *params,
 
       if (seq_hdr->seq_force_screen_content_tools > 0) {
          if (seq_hdr->seq_force_integer_mv == 2 /* SELECT_INTEGER_MV */)
-            vl_bitstream_put_bits(&enc, 1, seq_hdr->seq_force_integer_mv); /* seq_choose_integer_mv = 1 */
+            vl_bitstream_put_bits(&enc, 1, 1); /* seq_choose_integer_mv = 1 */
          else {
             vl_bitstream_put_bits(&enc, 1, 0); /* seq_choose_integer_mv = 0 */
             vl_bitstream_put_bits(&enc, 1, seq_hdr->seq_force_integer_mv);
@@ -3297,7 +3326,7 @@ is_av1_profile_supported(const VkVideoProfileInfoKHR *video_profile,
        (video_profile->chromaSubsampling != VK_VIDEO_CHROMA_SUBSAMPLING_MONOCHROME_BIT_KHR &&
         video_profile->chromaSubsampling != VK_VIDEO_CHROMA_SUBSAMPLING_420_BIT_KHR))
       return VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR;
-  
+
    /* AV1 High profile only supports 4:4:4 */
    if (profile == STD_VIDEO_AV1_PROFILE_HIGH &&
        video_profile->chromaSubsampling != VK_VIDEO_CHROMA_SUBSAMPLING_444_BIT_KHR)
@@ -3346,6 +3375,9 @@ vk_video_is_profile_supported(const VkVideoProfileInfoKHR *video_profile)
    case VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR: {
       const struct VkVideoDecodeH264ProfileInfoKHR *h264_profile =
          vk_find_struct_const(video_profile->pNext, VIDEO_DECODE_H264_PROFILE_INFO_KHR);
+      if (h264_profile->stdProfileIdc == STD_VIDEO_H264_PROFILE_IDC_BASELINE &&
+          h264_profile->pictureLayout != VK_VIDEO_DECODE_H264_PICTURE_LAYOUT_PROGRESSIVE_KHR)
+         return VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR;
       return is_h264_profile_supported(video_profile, h264_profile->stdProfileIdc);
    }
    case VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR: {

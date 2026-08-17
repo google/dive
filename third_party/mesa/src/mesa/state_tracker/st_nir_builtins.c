@@ -47,7 +47,7 @@ st_nir_finish_builtin_nir(struct st_context *st, nir_shader *nir)
    };
    NIR_PASS(_, nir, nir_lower_compute_system_values, &cs_options);
 
-   if (st->lower_rect_tex) {
+   if (!st->screen->caps.texrect) {
       const struct nir_lower_tex_options opts = { .lower_rect = true, };
       NIR_PASS(_, nir, nir_lower_tex, &opts);
    }
@@ -58,7 +58,7 @@ st_nir_finish_builtin_nir(struct st_context *st, nir_shader *nir)
    st_nir_lower_samplers(screen, nir, NULL, NULL);
    st_nir_lower_uniforms(st, nir);
    if (!screen->caps.nir_images_as_deref)
-      NIR_PASS(_, nir, gl_nir_lower_images, false);
+      NIR_PASS(_, nir, gl_nir_lower_images, NULL, false);
 
    assert(nir->info.stage == MESA_SHADER_COMPUTE || nir->info.io_lowered);
 
@@ -69,7 +69,7 @@ st_nir_finish_builtin_nir(struct st_context *st, nir_shader *nir)
    }
 
    if (screen->finalize_nir) {
-      screen->finalize_nir(screen, nir);
+      screen->finalize_nir(screen, nir, true);
    } else {
       gl_nir_opts(nir);
    }

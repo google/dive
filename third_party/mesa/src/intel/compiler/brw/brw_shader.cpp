@@ -1,24 +1,6 @@
 /*
  * Copyright © 2010 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "brw_analysis.h"
@@ -35,265 +17,29 @@
 #include "dev/intel_wa.h"
 #include "compiler/glsl_types.h"
 #include "compiler/nir/nir_builder.h"
+#include "util/bitscan.h"
 #include "util/u_math.h"
+#include <algorithm>
 
 void
-brw_shader::emit_urb_writes(const brw_reg &gs_vertex_count)
+brw_assign_urb_setup(brw_shader &s)
 {
-   int slot, urb_offset, length;
-   int starting_urb_offset = 0;
-   const struct brw_vue_prog_data *vue_prog_data =
-      brw_vue_prog_data(this->prog_data);
-   const struct intel_vue_map *vue_map = &vue_prog_data->vue_map;
-   bool flush;
-   brw_reg sources[8];
-   brw_reg urb_handle;
+   struct brw_vue_prog_data *vue_prog_data = brw_vue_prog_data(s.prog_data);
+   const unsigned verts =
+      s.stage == MESA_SHADER_GEOMETRY ? s.nir->info.gs.vertices_in : 1;
 
-   switch (stage) {
-   case MESA_SHADER_VERTEX:
-      urb_handle = vs_payload().urb_handles;
-      break;
-   case MESA_SHADER_TESS_EVAL:
-      urb_handle = tes_payload().urb_output;
-      break;
-   case MESA_SHADER_GEOMETRY:
-      urb_handle = gs_payload().urb_handles;
-      break;
-   default:
-      UNREACHABLE("invalid stage");
+   s.first_non_payload_grf += 8 * vue_prog_data->urb_read_length * verts;
+
+   /* Rewrite all ATTR file references to HW_REGs. */
+   foreach_block_and_inst(block, brw_inst, inst, s.cfg) {
+      s.convert_attr_sources_to_hw_regs(inst);
    }
+}
 
-   const brw_builder bld = brw_builder(this);
-
-   brw_reg per_slot_offsets;
-
-   if (stage == MESA_SHADER_GEOMETRY) {
-      const struct brw_gs_prog_data *gs_prog_data =
-         brw_gs_prog_data(this->prog_data);
-
-      /* We need to increment the Global Offset to skip over the control data
-       * header and the extra "Vertex Count" field (1 HWord) at the beginning
-       * of the VUE.  We're counting in OWords, so the units are doubled.
-       */
-      starting_urb_offset = 2 * gs_prog_data->control_data_header_size_hwords;
-      if (gs_prog_data->static_vertex_count == -1)
-         starting_urb_offset += 2;
-
-      /* The URB offset is in 128-bit units, so we need to multiply by 2 */
-      const int output_vertex_size_owords =
-         gs_prog_data->output_vertex_size_hwords * 2;
-
-      /* On Xe2+ platform, LSC can operate on the Dword data element with byte
-       * offset granularity, so convert per slot offset in bytes since it's in
-       * Owords (16-bytes) unit else keep per slot offset in oword unit for
-       * previous platforms.
-       */
-      const int output_vertex_size = devinfo->ver >= 20 ?
-                                     output_vertex_size_owords * 16 :
-                                     output_vertex_size_owords;
-      if (gs_vertex_count.file == IMM) {
-         per_slot_offsets = brw_imm_ud(output_vertex_size *
-                                       gs_vertex_count.ud);
-      } else {
-         per_slot_offsets = bld.vgrf(BRW_TYPE_UD);
-         bld.MUL(per_slot_offsets, gs_vertex_count,
-                 brw_imm_ud(output_vertex_size));
-      }
-   }
-
-   length = 0;
-   urb_offset = starting_urb_offset;
-   flush = false;
-
-   /* SSO shaders can have VUE slots allocated which are never actually
-    * written to, so ignore them when looking for the last (written) slot.
-    */
-   int last_slot = vue_map->num_slots - 1;
-   while (last_slot > 0 &&
-          (vue_map->slot_to_varying[last_slot] == BRW_VARYING_SLOT_PAD ||
-           outputs[vue_map->slot_to_varying[last_slot]].file == BAD_FILE)) {
-      last_slot--;
-   }
-
-   bool urb_written = false;
-   for (slot = 0; slot < vue_map->num_slots; slot++) {
-      int varying = vue_map->slot_to_varying[slot];
-      switch (varying) {
-      case VARYING_SLOT_PSIZ: {
-         /* The point size varying slot is the vue header and is always in the
-          * vue map. If anything in the header is going to be read back by HW,
-          * we need to initialize it, in particular the viewport & layer
-          * values.
-          *
-          * SKL PRMs, Volume 7: 3D-Media-GPGPU, Vertex URB Entry (VUE)
-          * Formats:
-          *
-          *    "VUEs are written in two ways:
-          *
-          *       - At the top of the 3D Geometry pipeline, the VF's
-          *         InputAssembly function creates VUEs and initializes them
-          *         from data extracted from Vertex Buffers as well as
-          *         internally generated data.
-          *
-          *       - VS, GS, HS and DS threads can compute, format, and write
-          *         new VUEs as thread output."
-          *
-          *    "Software must ensure that any VUEs subject to readback by the
-          *     3D pipeline start with a valid Vertex Header. This extends to
-          *     all VUEs with the following exceptions:
-          *
-          *       - If the VS function is enabled, the VF-written VUEs are not
-          *         required to have Vertex Headers, as the VS-incoming
-          *         vertices are guaranteed to be consumed by the VS (i.e.,
-          *         the VS thread is responsible for overwriting the input
-          *         vertex data).
-          *
-          *       - If the GS FF is enabled, neither VF-written VUEs nor VS
-          *         thread-generated VUEs are required to have Vertex Headers,
-          *         as the GS will consume all incoming vertices.
-          *
-          *       - If Rendering is disabled, VertexHeaders are not required
-          *         anywhere."
-          */
-         brw_reg zero =
-            retype(brw_allocate_vgrf_units(*this, dispatch_width / 8), BRW_TYPE_UD);
-         bld.MOV(zero, brw_imm_ud(0u));
-
-         if (vue_map->slots_valid & VARYING_BIT_PRIMITIVE_SHADING_RATE &&
-             this->outputs[VARYING_SLOT_PRIMITIVE_SHADING_RATE].file != BAD_FILE) {
-            sources[length++] = this->outputs[VARYING_SLOT_PRIMITIVE_SHADING_RATE];
-         } else if (devinfo->has_coarse_pixel_primitive_and_cb) {
-            uint32_t one_fp16 = 0x3C00;
-            brw_reg one_by_one_fp16 =
-               retype(brw_allocate_vgrf_units(*this, dispatch_width / 8), BRW_TYPE_UD);
-            bld.MOV(one_by_one_fp16, brw_imm_ud((one_fp16 << 16) | one_fp16));
-            sources[length++] = one_by_one_fp16;
-         } else {
-            sources[length++] = zero;
-         }
-
-         if (vue_map->slots_valid & VARYING_BIT_LAYER)
-            sources[length++] = this->outputs[VARYING_SLOT_LAYER];
-         else
-            sources[length++] = zero;
-
-         if (vue_map->slots_valid & VARYING_BIT_VIEWPORT)
-            sources[length++] = this->outputs[VARYING_SLOT_VIEWPORT];
-         else
-            sources[length++] = zero;
-
-         if (vue_map->slots_valid & VARYING_BIT_PSIZ)
-            sources[length++] = this->outputs[VARYING_SLOT_PSIZ];
-         else
-            sources[length++] = zero;
-         break;
-      }
-      case VARYING_SLOT_EDGE:
-         UNREACHABLE("unexpected scalar vs output");
-         break;
-
-      default:
-         /* gl_Position is always in the vue map, but isn't always written by
-          * the shader.  Other varyings (clip distances) get added to the vue
-          * map but don't always get written.  In those cases, the
-          * corresponding this->output[] slot will be invalid we and can skip
-          * the urb write for the varying.  If we've already queued up a vue
-          * slot for writing we flush a mlen 5 urb write, otherwise we just
-          * advance the urb_offset.
-          */
-         if (varying == BRW_VARYING_SLOT_PAD ||
-             this->outputs[varying].file == BAD_FILE) {
-            if (length > 0)
-               flush = true;
-            else
-               urb_offset++;
-            break;
-         }
-
-         int slot_offset = 0;
-
-         /* When using Primitive Replication, there may be multiple slots
-          * assigned to POS.
-          */
-         if (varying == VARYING_SLOT_POS)
-            slot_offset = slot - vue_map->varying_to_slot[VARYING_SLOT_POS];
-
-         for (unsigned i = 0; i < 4; i++) {
-            sources[length++] = offset(this->outputs[varying], bld,
-                                       i + (slot_offset * 4));
-         }
-         break;
-      }
-
-      const brw_builder abld = bld.annotate("URB write");
-
-      /* If we've queued up 8 registers of payload (2 VUE slots), if this is
-       * the last slot or if we need to flush (see BAD_FILE varying case
-       * above), emit a URB write send now to flush out the data.
-       */
-      if (length == 8 || (length > 0 && slot == last_slot))
-         flush = true;
-      if (flush) {
-         brw_reg srcs[URB_LOGICAL_NUM_SRCS];
-
-         srcs[URB_LOGICAL_SRC_HANDLE] = urb_handle;
-         srcs[URB_LOGICAL_SRC_PER_SLOT_OFFSETS] = per_slot_offsets;
-         srcs[URB_LOGICAL_SRC_DATA] =
-            retype(brw_allocate_vgrf_units(*this, (dispatch_width / 8) * length), BRW_TYPE_F);
-         abld.LOAD_PAYLOAD(srcs[URB_LOGICAL_SRC_DATA], sources, length, 0);
-
-         brw_urb_inst *urb = abld.URB_WRITE(srcs, ARRAY_SIZE(srcs));
-         urb->components = length;
-
-         /* For Wa_1805992985 one needs additional write in the end. */
-         if (intel_needs_workaround(devinfo, 1805992985) && stage == MESA_SHADER_TESS_EVAL)
-            urb->eot = false;
-         else
-            urb->eot = slot == last_slot && stage != MESA_SHADER_GEOMETRY;
-
-         urb->offset = urb_offset;
-         urb_offset = starting_urb_offset + slot + 1;
-         length = 0;
-         flush = false;
-         urb_written = true;
-      }
-   }
-
-   /* If we don't have any valid slots to write, just do a minimal urb write
-    * send to terminate the shader.  This includes 1 slot of undefined data,
-    * because it's invalid to write 0 data:
-    *
-    * From the Broadwell PRM, Volume 7: 3D Media GPGPU, Shared Functions -
-    * Unified Return Buffer (URB) > URB_SIMD8_Write and URB_SIMD8_Read >
-    * Write Data Payload:
-    *
-    *    "The write data payload can be between 1 and 8 message phases long."
-    */
-   if (!urb_written) {
-      /* For GS, just turn EmitVertex() into a no-op.  We don't want it to
-       * end the thread, and emit_gs_thread_end() already emits a SEND with
-       * EOT at the end of the program for us.
-       */
-      if (stage == MESA_SHADER_GEOMETRY)
-         return;
-
-      brw_reg uniform_urb_handle =
-         retype(brw_allocate_vgrf_units(*this, dispatch_width / 8), BRW_TYPE_UD);
-      brw_reg payload =
-         retype(brw_allocate_vgrf_units(*this, dispatch_width / 8), BRW_TYPE_UD);
-
-      bld.exec_all().MOV(uniform_urb_handle, urb_handle);
-
-      brw_reg srcs[URB_LOGICAL_NUM_SRCS];
-      srcs[URB_LOGICAL_SRC_HANDLE] = uniform_urb_handle;
-      srcs[URB_LOGICAL_SRC_DATA] = payload;
-
-      brw_urb_inst *urb = bld.URB_WRITE(srcs, ARRAY_SIZE(srcs));
-      urb->eot = true;
-      urb->offset = 1;
-      urb->components = 1;
-      return;
-   }
+void
+brw_shader::emit_tes_terminate()
+{
+   assert(stage == MESA_SHADER_TESS_EVAL);
 
    /* Wa_1805992985:
     *
@@ -301,8 +47,10 @@ brw_shader::emit_urb_writes(const brw_reg &gs_vertex_count)
     * send cycle, which is a urb write with an eot must be 4 phases long and
     * all 8 lanes must valid.
     */
-   if (intel_needs_workaround(devinfo, 1805992985) && stage == MESA_SHADER_TESS_EVAL) {
+   if (intel_needs_workaround(devinfo, 1805992985)) {
       assert(dispatch_width == 8);
+      const brw_builder bld = brw_builder(this);
+      brw_reg urb_handle = tes_payload().urb_output;
       brw_reg uniform_urb_handle = retype(brw_allocate_vgrf_units(*this, 1), BRW_TYPE_UD);
       brw_reg uniform_mask = retype(brw_allocate_vgrf_units(*this, 1), BRW_TYPE_UD);
       brw_reg payload = retype(brw_allocate_vgrf_units(*this, 4), BRW_TYPE_UD);
@@ -343,6 +91,9 @@ brw_shader::emit_urb_writes(const brw_reg &gs_vertex_count)
       urb->eot = true;
       urb->offset = 0;
       urb->components = 4;
+   } else {
+      ASSERTED bool eot = mark_last_urb_write_with_eot();
+      assert(eot);
    }
 }
 
@@ -382,8 +133,8 @@ brw_shader::emit_cs_terminate()
    /* On Alchemist and later, send an EOT message to the message gateway to
     * terminate a compute shader.  For older GPUs, send to the thread spawner.
     */
-   send->sfid = devinfo->verx10 >= 125 ? BRW_SFID_MESSAGE_GATEWAY
-                                       : BRW_SFID_THREAD_SPAWNER;
+   send->sfid = devinfo->verx10 >= 125 ? GEN_SFID_MESSAGE_GATEWAY
+                                       : GEN_SFID_THREAD_SPAWNER;
    send->mlen = reg_unit(devinfo);
    send->eot = true;
 }
@@ -416,22 +167,20 @@ brw_shader::brw_shader(const brw_shader_params *params)
          api_subgroup_size == 16 ||
          api_subgroup_size == 32);
 
-   this->max_dispatch_width = 32;
-
    this->failed = false;
    this->fail_msg = NULL;
 
    this->payload_ = NULL;
-   this->source_depth_to_render_target = false;
    this->first_non_payload_grf = 0;
 
-   this->uniforms = this->nir->num_uniforms / 4;
    this->last_scratch = 0;
+   this->last_logical_scratch = 0;
 
    memset(&this->shader_stats, 0, sizeof(this->shader_stats));
 
    this->grf_used = 0;
    this->spilled_any_registers = false;
+   this->start_offset = 0;
 
    this->phase = BRW_SHADER_PHASE_INITIAL;
 
@@ -506,33 +255,8 @@ brw_shader::fail(const char *format, ...)
    va_end(va);
 }
 
-/**
- * Mark this program as impossible to compile with dispatch width greater
- * than n.
- *
- * During the SIMD8 compile (which happens first), we can detect and flag
- * things that are unsupported in SIMD16+ mode, so the compiler can skip the
- * SIMD16+ compile altogether.
- *
- * During a compile of dispatch width greater than n (if one happens anyway),
- * this just calls fail().
- */
-void
-brw_shader::limit_dispatch_width(unsigned n, const char *msg)
-{
-   if (dispatch_width > n) {
-      fail("%s", msg);
-   } else {
-      max_dispatch_width = MIN2(max_dispatch_width, n);
-      brw_shader_perf_log(compiler, log_data,
-                          "Shader dispatch width limited to SIMD%d: %s\n",
-                          n, msg);
-   }
-}
-
 enum intel_barycentric_mode
-brw_barycentric_mode(const struct brw_wm_prog_key *key,
-                     nir_intrinsic_instr *intr)
+brw_barycentric_mode(nir_intrinsic_instr *intr)
 {
    const glsl_interp_mode mode =
       (enum glsl_interp_mode) nir_intrinsic_interp_mode(intr);
@@ -544,13 +268,7 @@ brw_barycentric_mode(const struct brw_wm_prog_key *key,
    switch (intr->intrinsic) {
    case nir_intrinsic_load_barycentric_pixel:
    case nir_intrinsic_load_barycentric_at_offset:
-      /* When per sample interpolation is dynamic, assume sample
-       * interpolation. We'll dynamically remap things so that the FS thread
-       * payload is not affected.
-       */
-      bary = key->persample_interp == INTEL_SOMETIMES ?
-             INTEL_BARYCENTRIC_PERSPECTIVE_SAMPLE :
-             INTEL_BARYCENTRIC_PERSPECTIVE_PIXEL;
+      bary = INTEL_BARYCENTRIC_PERSPECTIVE_PIXEL;
       break;
    case nir_intrinsic_load_barycentric_centroid:
       bary = INTEL_BARYCENTRIC_PERSPECTIVE_CENTROID;
@@ -578,204 +296,56 @@ brw_barycentric_mode(const struct brw_wm_prog_key *key,
 bool
 brw_shader::mark_last_urb_write_with_eot()
 {
-   brw_foreach_in_list_reverse(brw_inst, prev, &this->instructions) {
-      if (prev->opcode == SHADER_OPCODE_URB_WRITE_LOGICAL) {
-         prev->eot = true;
-
-         /* Delete now dead instructions. */
-         brw_foreach_in_list_reverse_safe(brw_exec_node, dead, &this->instructions) {
-            if (dead == prev)
-               break;
-            dead->remove();
-         }
-         return true;
-      } else if (prev->is_control_flow() || prev->has_side_effects()) {
-         break;
-      }
+   brw_inst *inst = cfg->last_block()->end();
+   if (inst && inst->opcode == SHADER_OPCODE_URB_WRITE_LOGICAL) {
+      inst->eot = true;
+      return true;
    }
-
    return false;
-}
-
-static unsigned
-round_components_to_whole_registers(const intel_device_info *devinfo,
-                                    unsigned c)
-{
-   return DIV_ROUND_UP(c, 8 * reg_unit(devinfo)) * reg_unit(devinfo);
 }
 
 void
 brw_shader::assign_curb_setup()
 {
-   unsigned uniform_push_length =
-      round_components_to_whole_registers(devinfo, prog_data->nr_params);
-
-   unsigned ubo_push_length = 0;
-   unsigned ubo_push_start[4];
-   for (int i = 0; i < 4; i++) {
-      ubo_push_start[i] = 8 * (ubo_push_length + uniform_push_length);
-      ubo_push_length += prog_data->ubo_ranges[i].length;
-
-      assert(ubo_push_start[i] % (8 * reg_unit(devinfo)) == 0);
-      assert(ubo_push_length % (1 * reg_unit(devinfo)) == 0);
-   }
-
-   prog_data->curb_read_length = uniform_push_length + ubo_push_length;
-   if (stage == MESA_SHADER_FRAGMENT &&
-       ((struct brw_wm_prog_key *)key)->null_push_constant_tbimr_workaround)
-      prog_data->curb_read_length = MAX2(1, prog_data->curb_read_length);
-
-   uint64_t used = 0;
-   const bool pull_constants =
-      devinfo->verx10 >= 125 &&
-      (mesa_shader_stage_is_compute(stage) ||
-       mesa_shader_stage_is_mesh(stage)) &&
-      uniform_push_length;
-
-   if (pull_constants) {
-      const bool pull_constants_a64 =
-         (mesa_shader_stage_is_rt(stage) &&
-          brw_bs_prog_data(prog_data)->uses_inline_push_addr) ||
-         ((mesa_shader_stage_is_compute(stage) ||
-           mesa_shader_stage_is_mesh(stage)) &&
-          brw_cs_prog_data(prog_data)->uses_inline_push_addr);
-      assert(devinfo->has_lsc);
-      brw_builder ubld = brw_builder(this, 1).exec_all().at_start(cfg->first_block());
-
-      brw_reg base_addr;
-      if (pull_constants_a64) {
-         /* The address of the push constants is at offset 0 in the inline
-          * parameter.
-          */
-         base_addr =
-            mesa_shader_stage_is_rt(stage) ?
-            retype(bs_payload().inline_parameter, BRW_TYPE_UQ) :
-            retype(cs_payload().inline_parameter, BRW_TYPE_UQ);
-      } else {
-         /* The base offset for our push data is passed in as R0.0[31:6]. We
-          * have to mask off the bottom 6 bits.
-          */
-         base_addr = ubld.AND(retype(brw_vec1_grf(0, 0), BRW_TYPE_UD),
-                              brw_imm_ud(INTEL_MASK(31, 6)));
-      }
-
-      brw_analysis_dependency_class dirty_bits = BRW_DEPENDENCY_INSTRUCTIONS;
-
-      /* On Gfx12-HP we load constants at the start of the program using A32
-       * stateless messages.
-       */
-      for (unsigned i = 0; i < uniform_push_length;) {
-         /* Limit ourselves to LSC HW limit of 8 GRFs (256bytes D32V64). */
-         unsigned num_regs = MIN2(uniform_push_length - i, 8);
-         assert(num_regs > 0);
-         num_regs = 1 << util_logbase2(num_regs);
-
-         brw_reg addr;
-
-         if (i != 0) {
-            if (pull_constants_a64) {
-               dirty_bits |= BRW_DEPENDENCY_VARIABLES;
-               /* We need to do the carry manually as when this pass is run,
-                * we're not expecting any 64bit ALUs. Unfortunately all the
-                * 64bit lowering is done in NIR.
-                */
-               addr = ubld.vgrf(BRW_TYPE_UQ);
-               brw_reg addr_ldw = subscript(addr, BRW_TYPE_UD, 0);
-               brw_reg addr_udw = subscript(addr, BRW_TYPE_UD, 1);
-               brw_reg base_addr_ldw = subscript(base_addr, BRW_TYPE_UD, 0);
-               brw_reg base_addr_udw = subscript(base_addr, BRW_TYPE_UD, 1);
-               ubld.ADD(addr_ldw, base_addr_ldw, brw_imm_ud(i * REG_SIZE));
-               ubld.CMP(ubld.null_reg_d(), addr_ldw, base_addr_ldw, BRW_CONDITIONAL_L);
-               set_predicate(BRW_PREDICATE_NORMAL,
-                             ubld.ADD(addr_udw, base_addr_udw, brw_imm_ud(1)));
-               set_predicate_inv(BRW_PREDICATE_NORMAL, true,
-                                 ubld.MOV(addr_udw, base_addr_udw));
-            } else {
-               addr = ubld.ADD(base_addr, brw_imm_ud(i * REG_SIZE));
-            }
-         } else {
-            addr = base_addr;
-         }
-
-         brw_send_inst *send = ubld.SEND();
-         send->dst = retype(brw_vec8_grf(payload().num_regs + i, 0),
-                            BRW_TYPE_UD);
-
-         send->src[SEND_SRC_DESC]     = brw_imm_ud(0);
-         send->src[SEND_SRC_EX_DESC]  = brw_imm_ud(0);
-         send->src[SEND_SRC_PAYLOAD1] = addr;
-         send->src[SEND_SRC_PAYLOAD2] = brw_reg();
-
-         send->sfid = BRW_SFID_UGM;
-         uint32_t desc = lsc_msg_desc(devinfo, LSC_OP_LOAD,
-                                      LSC_ADDR_SURFTYPE_FLAT,
-                                      pull_constants_a64 ?
-                                      LSC_ADDR_SIZE_A64 : LSC_ADDR_SIZE_A32,
-                                      LSC_DATA_SIZE_D32,
-                                      num_regs * 8 /* num_channels */,
-                                      true /* transpose */,
-                                      LSC_CACHE(devinfo, LOAD, L1STATE_L3MOCS));
-         send->header_size = 0;
-         send->mlen = lsc_msg_addr_len(
-            devinfo, pull_constants_a64 ?
-            LSC_ADDR_SIZE_A64 : LSC_ADDR_SIZE_A32, 1);
-         send->size_written =
-            lsc_msg_dest_len(devinfo, LSC_DATA_SIZE_D32, num_regs * 8) * REG_SIZE;
-         assert((payload().num_regs + i + send->size_written / REG_SIZE) <=
-                (payload().num_regs + prog_data->curb_read_length));
-         send->is_volatile = true;
-
-         send->src[SEND_SRC_DESC] =
-            brw_imm_ud(desc | brw_message_desc(devinfo,
-                                               send->mlen,
-                                               send->size_written / REG_SIZE,
-                                               send->header_size));
-
-         i += num_regs;
-      }
-
-      invalidate_analysis(dirty_bits);
+   uint32_t ranges_start[4];
+   this->push_data_size = 0;
+   for (uint32_t i = 0; i < 4; i++) {
+      ranges_start[i] = this->push_data_size / REG_SIZE;
+      assert(prog_data->push_sizes[i] == align(prog_data->push_sizes[i], REG_SIZE));
+      this->push_data_size += prog_data->push_sizes[i];
    }
 
    /* Map the offsets in the UNIFORM file to fixed HW regs. */
+   uint64_t used = 0;
    foreach_block_and_inst(block, brw_inst, inst, cfg) {
       for (unsigned int i = 0; i < inst->sources; i++) {
-	 if (inst->src[i].file == UNIFORM) {
-            int uniform_nr = inst->src[i].nr + inst->src[i].offset / 4;
-            int constant_nr;
-            if (inst->src[i].nr >= UBO_START) {
-               /* constant_nr is in 32-bit units, the rest are in bytes */
-               constant_nr = ubo_push_start[inst->src[i].nr - UBO_START] +
-                             inst->src[i].offset / 4;
-            } else if (uniform_nr >= 0 && uniform_nr < (int) uniforms) {
-               constant_nr = uniform_nr;
-            } else {
-               /* Section 5.11 of the OpenGL 4.1 spec says:
-                * "Out-of-bounds reads return undefined values, which include
-                *  values from other variables of the active program or zero."
-                * Just return the first push constant.
-                */
-               constant_nr = 0;
-            }
+	 if (inst->src[i].file != UNIFORM)
+            continue;
 
-            assert(constant_nr / 8 < 64);
-            used |= BITFIELD64_BIT(constant_nr / 8);
+         struct brw_reg brw_reg;
+         if (inst->src[i].nr >= BRW_INLINE_PARAM_REG) {
+            brw_reg = cs_payload().inline_parameter;
+            brw_reg.nr += inst->src[i].nr - BRW_INLINE_PARAM_REG;
+         } else {
+            assert(inst->src[i].nr < 64);
+            used |= BITFIELD64_BIT(inst->src[i].nr);
 
-	    struct brw_reg brw_reg = brw_vec1_grf(payload().num_regs +
-						  constant_nr / 8,
-						  constant_nr % 8);
-            brw_reg.abs = inst->src[i].abs;
-            brw_reg.negate = inst->src[i].negate;
+            assert(inst->src[i].nr < this->push_data_size);
 
-            /* The combination of is_scalar for load_uniform, copy prop, and
-             * lower_btd_logical_send can generate a MOV from a UNIFORM with
-             * exec size 2 and stride of 1.
-             */
-            assert(inst->src[i].stride == 0 || inst->exec_size == 2);
-            inst->src[i] = byte_offset(
-               retype(brw_reg, inst->src[i].type),
-               inst->src[i].offset % 4);
-	 }
+            brw_reg = brw_vec1_grf(payload().num_regs + inst->src[i].nr, 0);
+         }
+
+         brw_reg.abs = inst->src[i].abs;
+         brw_reg.negate = inst->src[i].negate;
+
+         /* The combination of is_scalar for load_uniform, copy prop, and
+          * lower_btd_logical_send can generate a MOV from a UNIFORM with exec
+          * size 2 and stride of 1.
+          */
+         assert(inst->src[i].stride == 0 || inst->exec_size == 2);
+         inst->src[i] = byte_offset(
+            retype(brw_reg, inst->src[i].type),
+            inst->src[i].offset);
       }
    }
 
@@ -800,15 +370,16 @@ brw_shader::assign_curb_setup()
          ubld.group(16, 0).ADD(horiz_offset(offset_base, 16), offset_base, brw_imm_uw(16));
 
       u_foreach_bit(i, prog_data->robust_ubo_ranges) {
-         struct brw_ubo_range *ubo_range = &prog_data->ubo_ranges[i];
+         const unsigned range_length =
+            DIV_ROUND_UP(prog_data->push_sizes[i], REG_SIZE);
 
-         unsigned range_start = ubo_push_start[i] / 8;
-         uint64_t want_zero = (used >> range_start) & BITFIELD64_MASK(ubo_range->length);
+         const unsigned range_start = ranges_start[i];
+         uint64_t want_zero = (used >> range_start) & BITFIELD64_MASK(range_length);
          if (!want_zero)
             continue;
 
          const unsigned grf_start = payload().num_regs + range_start;
-         const unsigned grf_end = grf_start + ubo_range->length;
+         const unsigned grf_end = grf_start + range_length;
          const unsigned max_grf_mask = max_grf_writes * 4;
          unsigned grf = grf_start;
 
@@ -851,7 +422,15 @@ brw_shader::assign_curb_setup()
             ubld_mask.CMP(mask_reg, byte_offset(mask, i), offset_reg, BRW_CONDITIONAL_G);
 
             for (unsigned and_length; grf < mask_end; grf += and_length) {
-               and_length = 1u << (util_last_bit(MIN2(grf_end - grf, max_grf_writes)) - 1);
+               /* We can't have a destination/source register spanning more
+                * than 2 GRFs which would be the case on Xe2+ if we try to
+                * mask a payload register not aligned to 64B with a SIMD32
+                * instruction. In such case just reduce the SIMDness for the
+                * unaligned masking.
+                */
+               unsigned max_write = grf % reg_unit(devinfo) != 0 ? max_grf_writes / 2 : max_grf_writes;
+
+               and_length = 1u << (util_last_bit(MIN2(grf_end - grf, max_write)) - 1);
 
                if (!(want_zero & BITFIELD64_RANGE(grf - grf_start, and_length)))
                   continue;
@@ -875,7 +454,10 @@ brw_shader::assign_curb_setup()
    }
 
    /* This may be updated in assign_urb_setup or assign_vs_urb_setup. */
-   this->first_non_payload_grf = payload().num_regs + prog_data->curb_read_length;
+   this->first_non_payload_grf = payload().num_regs +
+                                 DIV_ROUND_UP(align(this->push_data_size,
+                                                    REG_SIZE * reg_unit(devinfo)),
+                                              REG_SIZE);
 
    this->debug_optimizer(this->nir, "assign_curb_setup", 90, 0);
 }
@@ -887,7 +469,7 @@ brw_shader::assign_curb_setup()
  * on each upload.
  */
 void
-brw_compute_urb_setup_index(struct brw_wm_prog_data *wm_prog_data)
+brw_compute_urb_setup_index(struct brw_fs_prog_data *fs_prog_data)
 {
    /* TODO(mesh): Review usage of this in the context of Mesh, we may want to
     * skip per-primitive attributes here.
@@ -897,11 +479,11 @@ brw_compute_urb_setup_index(struct brw_wm_prog_data *wm_prog_data)
    STATIC_ASSERT(VARYING_SLOT_MAX <= 0xff);
    uint8_t index = 0;
    for (uint8_t attr = 0; attr < VARYING_SLOT_MAX; attr++) {
-      if (wm_prog_data->urb_setup[attr] >= 0) {
-         wm_prog_data->urb_setup_attribs[index++] = attr;
+      if (fs_prog_data->urb_setup[attr] >= 0) {
+         fs_prog_data->urb_setup_attribs[index++] = attr;
       }
    }
-   wm_prog_data->urb_setup_attribs_count = index;
+   fs_prog_data->urb_setup_attribs_count = index;
 }
 
 void
@@ -911,7 +493,9 @@ brw_shader::convert_attr_sources_to_hw_regs(brw_inst *inst)
       if (inst->src[i].file == ATTR) {
          assert(inst->src[i].nr == 0);
          int grf = payload().num_regs +
-                   prog_data->curb_read_length +
+                   DIV_ROUND_UP(
+                      align(this->push_data_size, REG_SIZE * reg_unit(devinfo)),
+                      REG_SIZE) +
                    inst->src[i].offset / REG_SIZE;
 
          /* As explained at brw_lower_vgrf_to_fixed_grf, From the Haswell PRM:
@@ -945,27 +529,9 @@ brw_shader::convert_attr_sources_to_hw_regs(brw_inst *inst)
    }
 }
 
-int
-brw_get_subgroup_id_param_index(const intel_device_info *devinfo,
-                                const brw_stage_prog_data *prog_data)
-{
-   if (prog_data->nr_params == 0)
-      return -1;
-
-   if (devinfo->verx10 >= 125)
-      return -1;
-
-   /* The local thread id is always the last parameter in the list */
-   uint32_t last_param = prog_data->param[prog_data->nr_params - 1];
-   if (last_param == BRW_PARAM_BUILTIN_SUBGROUP_ID)
-      return prog_data->nr_params - 1;
-
-   return -1;
-}
-
 uint32_t
 brw_fb_write_msg_control(const brw_inst *inst,
-                         const struct brw_wm_prog_data *prog_data)
+                         const struct brw_fs_prog_data *prog_data)
 {
    uint32_t mctl;
 
@@ -1087,7 +653,7 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
    const nir_shader *nir = s.nir;
    bool allocated;
 
-   static const enum brw_instruction_scheduler_mode pre_modes[] = {
+   enum brw_instruction_scheduler_mode pre_modes[] = {
       BRW_SCHEDULE_PRE_LATENCY,
       BRW_SCHEDULE_PRE,
       BRW_SCHEDULE_PRE_NON_LIFO,
@@ -1104,10 +670,13 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
       [BRW_SCHEDULE_NONE] = "none",
    };
 
+   /* Performance of each schedule acording to the model. */
+   float perf_of_pre_modes[ARRAY_SIZE(scheduler_mode_name)] = {};
+
    uint32_t best_register_pressure = UINT32_MAX;
    float best_perf = -INFINITY;
-   unsigned best_press_idx = 0;
-   unsigned best_perf_idx = 0;
+   brw_instruction_scheduler_mode best_press_mode = BRW_SCHEDULE_NONE;
+   brw_instruction_scheduler_mode best_perf_mode = BRW_SCHEDULE_NONE;
 
    brw_opt_compact_virtual_grfs(s);
 
@@ -1116,14 +685,15 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
 
    s.debug_optimizer(nir, "pre_register_allocate", 90, 90);
 
-   bool spill_all = allow_spilling && INTEL_DEBUG(DEBUG_SPILL_FS);
+   bool spill_all = allow_spilling && INTEL_DEBUG(DEBUG_SPILL_FS) &&
+      !s.nir->info.internal;
 
    /* Before we schedule anything, stash off the instruction order as an array
     * of brw_inst *.  This way, we can reset it between scheduling passes to
     * prevent dependencies between the different scheduling modes.
     */
    brw_inst **orig_order = save_instruction_order(s.cfg);
-   brw_inst **orders[ARRAY_SIZE(pre_modes)] = {};
+   brw_inst **orders[ARRAY_SIZE(scheduler_mode_name)] = {};
 
    void *scheduler_ctx = ralloc_context(NULL);
    brw_instruction_scheduler *sched = brw_prepare_scheduler(s, scheduler_ctx);
@@ -1154,18 +724,19 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
       brw_schedule_instructions_pre_ra(s, sched, sched_mode);
       s.shader_stats.scheduler_mode = scheduler_mode_name[sched_mode];
       s.debug_optimizer(nir, s.shader_stats.scheduler_mode, 95, i);
-      orders[i] = save_instruction_order(s.cfg);
+      orders[sched_mode] = save_instruction_order(s.cfg);
 
       const unsigned press = brw_compute_max_register_pressure(s);
       if (press < best_register_pressure) {
          best_register_pressure = press;
-         best_press_idx = i;
+         best_press_mode = sched_mode;
       }
 
       const brw_performance &perf = s.performance_analysis.require();
+      perf_of_pre_modes[sched_mode] = perf.throughput;
       if (perf.throughput > best_perf) {
          best_perf = perf.throughput;
-         best_perf_idx = i;
+         best_perf_mode = sched_mode;
       }
 
       if (i + 1 < ARRAY_SIZE(pre_modes)) {
@@ -1174,15 +745,28 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
       }
    }
 
-   restore_instruction_order(s, orders[best_perf_idx]);
-   s.shader_stats.scheduler_mode = scheduler_mode_name[pre_modes[best_perf_idx]];
+   restore_instruction_order(s, orders[best_perf_mode]);
+   s.shader_stats.scheduler_mode = scheduler_mode_name[best_perf_mode];
    allocated = brw_assign_regs(s, false, spill_all);
 
    if (!allocated) {
-      /* Try each scheduling heuristic to see if it can successfully register
-       * allocate without spilling.  They should be ordered by decreasing
-       * performance but increasing likelihood of allocating.
+      /* Try each remaining scheduling heuristic to see if it can
+       * successfully register allocate without spilling.  But first
+       * order them by decreasing performance in order to get the best
+       * possible schedule that fits in the available registers.
+       *
+       * Note that a pre-RA mode m skipped in the loop above is
+       * assumed to have perf_of_pre_mode[m] == 0, since
+       * perf_of_pre_mode was initialized with zero, so it will end up
+       * towards the end of the list after sorting, as desired for a
+       * low-performance mode.
        */
+      std::sort(pre_modes, pre_modes + ARRAY_SIZE(pre_modes),
+                [&](brw_instruction_scheduler_mode m,
+                    brw_instruction_scheduler_mode n) {
+                   return perf_of_pre_modes[m] > perf_of_pre_modes[n];
+                });
+
       for (unsigned i = 0; i < ARRAY_SIZE(pre_modes); i++) {
          enum brw_instruction_scheduler_mode sched_mode = pre_modes[i];
 
@@ -1193,23 +777,23 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
             continue;
 
          /* Already tried to register-allocate this. */
-         if (i == best_perf_idx)
+         if (sched_mode == best_perf_mode)
             continue;
 
-         if (orders[i]) {
+         if (orders[sched_mode]) {
             /* We already scheduled the program with this mode. */
-            restore_instruction_order(s, orders[i]);
+            restore_instruction_order(s, orders[sched_mode]);
          } else {
             restore_instruction_order(s, orig_order);
             brw_schedule_instructions_pre_ra(s, sched, sched_mode);
             s.shader_stats.scheduler_mode = scheduler_mode_name[sched_mode];
             s.debug_optimizer(nir, s.shader_stats.scheduler_mode, 95, i);
-            orders[i] = save_instruction_order(s.cfg);
+            orders[pre_modes[i]] = save_instruction_order(s.cfg);
 
             const unsigned press = brw_compute_max_register_pressure(s);
             if (press < best_register_pressure) {
                best_register_pressure = press;
-               best_press_idx = i;
+               best_press_mode = sched_mode;
             }
          }
 
@@ -1226,13 +810,40 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
 
    ralloc_free(scheduler_ctx);
 
+#define OPT(pass, ...) ({                                               \
+      pass_num++;                                                       \
+      bool this_progress = pass(s, ##__VA_ARGS__);                      \
+                                                                        \
+      if (this_progress)                                                \
+         s.debug_optimizer(nir, #pass, iteration, pass_num);            \
+                                                                        \
+      this_progress;                                                    \
+   })
+
+   int pass_num = 0;
+   int iteration = 95;
+
    if (!allocated) {
       if (0) {
          fprintf(stderr, "Spilling - using lowest-pressure mode \"%s\"\n",
-                 scheduler_mode_name[pre_modes[best_press_idx]]);
+                 scheduler_mode_name[best_press_mode]);
       }
-      restore_instruction_order(s, orders[best_press_idx]);
-      s.shader_stats.scheduler_mode = scheduler_mode_name[pre_modes[best_press_idx]];
+      restore_instruction_order(s, orders[best_press_mode]);
+      s.shader_stats.scheduler_mode = scheduler_mode_name[best_press_mode];
+
+      if (OPT(brw_opt_cmod_propagation))
+         OPT(brw_opt_dead_code_eliminate);
+
+      if (OPT(brw_opt_cmp_flag_destination,
+               /* We want something like
+                * brw_wm_prog_data(s.prog_data)->uses_kill, but there are
+                * other things that can cause the sample_mask_flag_subreg to
+                * be used.
+                */
+              s.stage == MESA_SHADER_FRAGMENT)) {
+         OPT(brw_opt_cmod_propagation);
+         OPT(brw_opt_dead_code_eliminate);
+      }
 
       allocated = brw_assign_regs(s, allow_spilling, spill_all);
    }
@@ -1255,17 +866,26 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
    if (s.failed)
       return;
 
-   int pass_num = 0;
+#define OPT_V(pass, ...) do {                                           \
+      pass_num++;                                                       \
+      pass(s, ##__VA_ARGS__);                                           \
+      s.debug_optimizer(nir, #pass, iteration, pass_num);               \
+   } while (false)
 
-   s.debug_optimizer(nir, "post_ra_alloc", 96, pass_num++);
+   pass_num = 0;
+   iteration++;
 
-   brw_opt_bank_conflicts(s);
+   s.debug_optimizer(nir, "post_ra_alloc", iteration, pass_num);
 
-   s.debug_optimizer(nir, "bank_conflict", 96, pass_num++);
+   if (s.spilled_any_registers) {
+      if (!INTEL_DEBUG(DEBUG_NO_FILL_OPT))
+         OPT(brw_opt_fill_and_spill);
 
-   brw_schedule_instructions_post_ra(s);
+      OPT(brw_lower_fill_and_spill);
+   }
 
-   s.debug_optimizer(nir, "post_ra_alloc_scheduling", 96, pass_num++);
+   OPT(brw_opt_bank_conflicts);
+   OPT_V(brw_schedule_instructions_post_ra);
 
    /* Lowering VGRF to FIXED_GRF is currently done as a separate pass instead
     * of part of assign_regs since both bank conflicts optimization and post
@@ -1275,14 +895,27 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
     * TODO: Change the passes above, then move this lowering to be part of
     * assign_regs.
     */
-   brw_lower_vgrfs_to_fixed_grfs(s);
+   OPT_V(brw_lower_vgrfs_to_fixed_grfs);
 
-   s.debug_optimizer(nir, "lowered_vgrfs_to_fixed_grfs", 96, pass_num++);
+   /* brw_opt_dead_code_eliminate cannot be run after
+    * brw_lower_vgrfs_to_fixed_grfs as it depends on VGRFs. cmod propagation
+    * mostly cleans up after itself. The only thing DCE could do would be to
+    * eliminate writes to registers that are unread. Since register allocation
+    * and final scheduling has already happend, this won't help.
+    */
+   OPT(brw_opt_cmod_propagation);
 
-   if (s.devinfo->ver >= 30) {
-      brw_lower_send_gather(s);
-      s.debug_optimizer(nir, "lower_send_gather", 96, pass_num++);
+   if (OPT(brw_opt_cmp_flag_destination,
+           /* We want something like brw_wm_prog_data(s.prog_data)->uses_kill,
+            * but there are other things that can cause the
+            * sample_mask_flag_subreg to be used.
+            */
+           s.stage == MESA_SHADER_FRAGMENT)) {
+      OPT(brw_opt_cmod_propagation);
    }
+
+   if (s.devinfo->ver >= 30)
+      OPT(brw_lower_send_gather);
 
    brw_shader_phase_update(s, BRW_SHADER_PHASE_AFTER_REGALLOC);
 
@@ -1312,28 +945,25 @@ brw_allocate_registers(brw_shader &s, bool allow_spilling)
    if (s.failed)
       return;
 
-   brw_lower_scoreboard(s);
+   brw_workaround_emit_dummy_mov_mulmac(s);
 
-   s.debug_optimizer(nir, "scoreboard", 96, pass_num++);
+   OPT(brw_lower_scoreboard);
 }
 
 #ifndef NDEBUG
 void
-brw_debug_archive_nir(debug_archiver *archiver, nir_shader *nir,
-                      unsigned dispatch_width, const char *step)
+brw_pass_tracker_archive(brw_pass_tracker *pt, const char *pass_name)
 {
-   if (!archiver)
+   if (!pt->archiver)
       return;
 
-   const bool prefix_dispatch_width =
-      dispatch_width > 0 && mesa_shader_stage_uses_workgroup(nir->info.stage);
-   const char *filename = prefix_dispatch_width ?
-         ralloc_asprintf(archiver, "NIR%d/%s", dispatch_width, step) :
-         ralloc_asprintf(archiver, "NIR/%s", step);
+   const char *filename =
+      ralloc_asprintf(pt->archiver, "NIR%d/%03d-%s",
+                      pt->dispatch_width, pt->pass_num, pass_name);
 
-   FILE *f = debug_archiver_start_file(archiver, filename);
-   nir_print_shader(nir, f);
-   debug_archiver_finish_file(archiver);
+   FILE *f = debug_archiver_start_file(pt->archiver, filename);
+   nir_print_shader(pt->nir, f);
+   debug_archiver_finish_file(pt->archiver);
 }
 #endif
 
@@ -1358,7 +988,17 @@ brw_cs_get_dispatch_info(const struct intel_device_info *devinfo,
       override_local_size ? override_local_size :
                             prog_data->local_size;
 
-   const int simd = brw_simd_select_for_workgroup_size(devinfo, prog_data, sizes);
+   int simd = -1;
+   if (intel_use_jay(devinfo, MESA_SHADER_COMPUTE)) {
+      /* Currently Jay compiles only a single binary, just select that. In the
+       * future this needs to get smarter.
+       */
+      assert(util_is_power_of_two_nonzero(prog_data->prog_mask));
+      simd = util_logbase2(prog_data->prog_mask);
+   } else {
+      simd = brw_simd_select_for_workgroup_size(devinfo, prog_data, sizes);
+   }
+
    assert(simd >= 0 && simd < 3);
 
    info.group_size = sizes[0] * sizes[1] * sizes[2];
@@ -1421,4 +1061,57 @@ brw_reg
 brw_allocate_vgrf_units(brw_shader &s, unsigned units_of_REGSIZE)
 {
    return brw_vgrf(brw_allocate_vgrf_number(s, units_of_REGSIZE), BRW_TYPE_UD);
+}
+
+const unsigned *
+brw_compile(const struct brw_compiler *compiler,
+            struct brw_compile_params *params)
+{
+   assert(params);
+   assert(params->nir);
+   assert(params->key);
+   assert(params->prog_data);
+
+   switch (params->nir->info.stage) {
+   case MESA_SHADER_VERTEX:
+      return brw_compile_vs(compiler, (struct brw_compile_vs_params *)params);
+   case MESA_SHADER_TESS_CTRL:
+      return brw_compile_tcs(compiler, (struct brw_compile_tcs_params *)params);
+   case MESA_SHADER_TESS_EVAL:
+      return brw_compile_tes(compiler, (struct brw_compile_tes_params *)params);
+   case MESA_SHADER_GEOMETRY:
+      return brw_compile_gs(compiler, (struct brw_compile_gs_params *)params);
+   case MESA_SHADER_TASK:
+      return brw_compile_task(compiler, (struct brw_compile_task_params *)params);
+   case MESA_SHADER_MESH:
+      return brw_compile_mesh(compiler, (struct brw_compile_mesh_params *)params);
+   case MESA_SHADER_FRAGMENT:
+      return brw_compile_fs(compiler, (struct brw_compile_fs_params *)params);
+   case MESA_SHADER_COMPUTE:
+   case MESA_SHADER_KERNEL:
+      return brw_compile_cs(compiler, (struct brw_compile_cs_params *)params);
+   case MESA_SHADER_RAYGEN:
+   case MESA_SHADER_ANY_HIT:
+   case MESA_SHADER_CLOSEST_HIT:
+   case MESA_SHADER_MISS:
+   case MESA_SHADER_INTERSECTION:
+   case MESA_SHADER_CALLABLE:
+      return brw_compile_bs(compiler, (struct brw_compile_bs_params *)params);
+   default:
+      UNREACHABLE("Unsupported shader stage");
+      return NULL;
+   }
+}
+
+void brw_prog_data_init(struct brw_stage_prog_data *prog_data,
+                        const struct brw_compile_params *params)
+{
+   /* Do not memset the structure to 0, the driver might have put some bits of
+    * information in there.
+    */
+   prog_data->ray_queries = params->nir->info.ray_queries;
+   prog_data->stage = params->nir->info.stage;
+   prog_data->source_hash = params->source_hash;
+   prog_data->total_scratch = 0;
+   prog_data->total_shared = params->nir->info.shared_size;
 }

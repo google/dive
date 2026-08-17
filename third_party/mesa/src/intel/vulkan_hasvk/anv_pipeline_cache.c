@@ -25,7 +25,7 @@
 #include "util/hash_table.h"
 #include "util/u_debug.h"
 #include "util/disk_cache.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "nir/nir_serialize.h"
 #include "anv_private.h"
 #include "nir/nir_xfb_info.h"
@@ -196,12 +196,12 @@ anv_shader_bin_serialize(struct vk_pipeline_cache_object *object,
       blob_write_uint32(blob, 0);
    }
 
-   blob_write_bytes(blob, shader->bind_map.surface_sha1,
-                    sizeof(shader->bind_map.surface_sha1));
-   blob_write_bytes(blob, shader->bind_map.sampler_sha1,
-                    sizeof(shader->bind_map.sampler_sha1));
-   blob_write_bytes(blob, shader->bind_map.push_sha1,
-                    sizeof(shader->bind_map.push_sha1));
+   blob_write_bytes(blob, shader->bind_map.surface_blake3,
+                    sizeof(shader->bind_map.surface_blake3));
+   blob_write_bytes(blob, shader->bind_map.sampler_blake3,
+                    sizeof(shader->bind_map.sampler_blake3));
+   blob_write_bytes(blob, shader->bind_map.push_blake3,
+                    sizeof(shader->bind_map.push_blake3));
    blob_write_uint32(blob, shader->bind_map.surface_count);
    blob_write_uint32(blob, shader->bind_map.sampler_count);
    blob_write_bytes(blob, shader->bind_map.surface_to_descriptor,
@@ -251,9 +251,9 @@ anv_shader_bin_deserialize(struct vk_pipeline_cache *cache,
       xfb_info = blob_read_bytes(blob, xfb_size);
 
    struct anv_pipeline_bind_map bind_map;
-   blob_copy_bytes(blob, bind_map.surface_sha1, sizeof(bind_map.surface_sha1));
-   blob_copy_bytes(blob, bind_map.sampler_sha1, sizeof(bind_map.sampler_sha1));
-   blob_copy_bytes(blob, bind_map.push_sha1, sizeof(bind_map.push_sha1));
+   blob_copy_bytes(blob, bind_map.surface_blake3, sizeof(bind_map.surface_blake3));
+   blob_copy_bytes(blob, bind_map.sampler_blake3, sizeof(bind_map.sampler_blake3));
+   blob_copy_bytes(blob, bind_map.push_blake3, sizeof(bind_map.push_blake3));
    bind_map.surface_count = blob_read_uint32(blob);
    bind_map.sampler_count = blob_read_uint32(blob);
    bind_map.surface_to_descriptor = (void *)
@@ -336,19 +336,17 @@ anv_device_upload_kernel(struct anv_device *device,
    return container_of(cached, struct anv_shader_bin, base);
 }
 
-#define SHA1_KEY_SIZE 20
-
 struct nir_shader *
 anv_device_search_for_nir(struct anv_device *device,
                           struct vk_pipeline_cache *cache,
                           const nir_shader_compiler_options *nir_options,
-                          unsigned char sha1_key[SHA1_KEY_SIZE],
+                          unsigned char blake3_key[BLAKE3_KEY_LEN],
                           void *mem_ctx)
 {
    if (cache == NULL)
       cache = device->default_pipeline_cache;
 
-   return vk_pipeline_cache_lookup_nir(cache, sha1_key, SHA1_KEY_SIZE,
+   return vk_pipeline_cache_lookup_nir(cache, blake3_key, BLAKE3_KEY_LEN,
                                        nir_options, NULL, mem_ctx);
 }
 
@@ -356,10 +354,10 @@ void
 anv_device_upload_nir(struct anv_device *device,
                       struct vk_pipeline_cache *cache,
                       const struct nir_shader *nir,
-                      unsigned char sha1_key[SHA1_KEY_SIZE])
+                      unsigned char blake3_key[BLAKE3_KEY_LEN])
 {
    if (cache == NULL)
       cache = device->default_pipeline_cache;
 
-   vk_pipeline_cache_add_nir(cache, sha1_key, SHA1_KEY_SIZE, nir);
+   vk_pipeline_cache_add_nir(cache, blake3_key, BLAKE3_KEY_LEN, nir);
 }

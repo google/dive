@@ -12,11 +12,7 @@
 
 typedef struct {
    const struct ac_shader_args *const args;
-   const enum amd_gfx_level gfx_level;
-   bool has_ls_vgpr_init_bug;
-   unsigned wave_size;
-   unsigned workgroup_size;
-   const enum ac_hw_stage hw_stage;
+   const ac_nir_lower_intrinsics_to_args_options *options;
 
    nir_def *vertex_id;
    nir_def *instance_id;
@@ -35,9 +31,9 @@ preload_arg(lower_intrinsics_to_args_state *s, nir_function_impl *impl, struct a
    nir_def *value = ac_nir_load_arg_upper_bound(&start_b, s->args, arg, upper_bound);
 
    /* If there are no HS threads, SPI mistakenly loads the LS VGPRs starting at VGPR 0. */
-   if ((s->hw_stage == AC_HW_LOCAL_SHADER || s->hw_stage == AC_HW_HULL_SHADER) &&
-       s->has_ls_vgpr_init_bug) {
-      nir_def *count = ac_nir_unpack_arg(&start_b, s->args, s->args->merged_wave_info, 8, 8);
+   if ((s->options->hw_stage == AC_HW_LOCAL_SHADER || s->options->hw_stage == AC_HW_HULL_SHADER) &&
+       s->options->has_ls_vgpr_init_bug) {
+      nir_def *count = ac_nir_unpack_arg_wg_div(&start_b, s->args, s->args->merged_wave_info, 8, 8);
       nir_def *hs_empty = nir_ieq_imm(&start_b, count, 0);
       value = nir_bcsel(&start_b, hs_empty,
                         ac_nir_load_arg_upper_bound(&start_b, s->args, ls_buggy_arg, upper_bound),
@@ -49,24 +45,28 @@ preload_arg(lower_intrinsics_to_args_state *s, nir_function_impl *impl, struct a
 static nir_def *
 load_subgroup_id_lowered(lower_intrinsics_to_args_state *s, nir_builder *b)
 {
-   if (s->workgroup_size <= s->wave_size) {
+   if (s->options->workgroup_size <= s->options->wave_size) {
       return nir_imm_int(b, 0);
-   } else if (s->hw_stage == AC_HW_COMPUTE_SHADER) {
-      assert(s->gfx_level < GFX12 && s->args->tg_size.used);
-
-      if (s->gfx_level >= GFX10_3) {
-         return ac_nir_unpack_arg(b, s->args, s->args->tg_size, 20, 5);
+   } else if (s->options->hw_stage == AC_HW_COMPUTE_SHADER) {
+      if (s->options->gfx_level >= GFX12) {
+         assert(!s->options->use_llvm);
+         nir_def *ttmp8 = nir_load_ttmp_register_wg_div_amd(b, .base = 8);
+         return nir_ubfe_imm(b, ttmp8, 25, 5);
+      } else if (s->options->gfx_level >= GFX10_3) {
+         assert(s->args->tg_size.used);
+         return ac_nir_unpack_arg_wg_div(b, s->args, s->args->tg_size, 20, 5);
       } else {
          /* GFX6-10 don't actually support a wave id, but we can
           * use the ordered id because ORDERED_APPEND_* is set to
           * zero in the compute dispatch initiator.
           */
-         return ac_nir_unpack_arg(b, s->args, s->args->tg_size, 6, 6);
+         assert(s->args->tg_size.used);
+         return ac_nir_unpack_arg_wg_div(b, s->args, s->args->tg_size, 6, 6);
       }
-   } else if (s->hw_stage == AC_HW_HULL_SHADER) {
-      if (s->gfx_level >= GFX11) {
+   } else if (s->options->hw_stage == AC_HW_HULL_SHADER) {
+      if (s->options->gfx_level >= GFX11) {
          assert(s->args->tcs_wave_id.used);
-         return ac_nir_unpack_arg(b, s->args, s->args->tcs_wave_id, 0, 3);
+         return ac_nir_unpack_arg_wg_div(b, s->args, s->args->tcs_wave_id, 0, 3);
       } else if (b->shader->info.stage == MESA_SHADER_TESS_CTRL) {
          /* GFX6-10 don't have the subgroup ID sysval in TCS, so compute it like this:
           *    subgroup_id = (rel_patch_id * tcs_out_vertices + invocation_id) / wave_size;
@@ -89,14 +89,14 @@ load_subgroup_id_lowered(lower_intrinsics_to_args_state *s, nir_builder *b)
                sgpr_local_invocation_index = nir_iadd(b, sgpr_patch_start, sgpr_invocation_id);
             }
          }
-         return nir_ushr_imm(b, sgpr_local_invocation_index, util_logbase2(s->wave_size));
+         return nir_ushr_imm(b, sgpr_local_invocation_index, util_logbase2(s->options->wave_size));
       } else {
          UNREACHABLE("unimplemented for LS");
       }
-   } else if (s->hw_stage == AC_HW_LEGACY_GEOMETRY_SHADER ||
-              s->hw_stage == AC_HW_NEXT_GEN_GEOMETRY_SHADER) {
+   } else if (s->options->hw_stage == AC_HW_LEGACY_GEOMETRY_SHADER ||
+              s->options->hw_stage == AC_HW_NEXT_GEN_GEOMETRY_SHADER) {
       assert(s->args->merged_wave_info.used);
-      return ac_nir_unpack_arg(b, s->args, s->args->merged_wave_info, 24, 4);
+      return ac_nir_unpack_arg_wg_div(b, s->args, s->args->merged_wave_info, 24, 4);
    } else {
       return nir_imm_int(b, 0);
    }
@@ -111,16 +111,18 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
 
    switch (intrin->intrinsic) {
    case nir_intrinsic_load_subgroup_id:
-      if (s->gfx_level >= GFX12 && s->hw_stage == AC_HW_COMPUTE_SHADER)
-         return false; /* Lowered in backend compilers. */
+      /* LLVM uses an intrinsic to get this on gfx12. */
+      if (s->options->gfx_level >= GFX12 && s->options->hw_stage == AC_HW_COMPUTE_SHADER && s->options->use_llvm)
+         return false;
+
       replacement = load_subgroup_id_lowered(s, b);
       break;
    case nir_intrinsic_load_num_subgroups: {
-      if (s->hw_stage == AC_HW_COMPUTE_SHADER) {
+      if (s->options->hw_stage == AC_HW_COMPUTE_SHADER) {
          assert(s->args->tg_size.used);
          replacement = ac_nir_unpack_arg(b, s->args, s->args->tg_size, 0, 6);
-      } else if (s->hw_stage == AC_HW_LEGACY_GEOMETRY_SHADER ||
-                 s->hw_stage == AC_HW_NEXT_GEN_GEOMETRY_SHADER) {
+      } else if (s->options->hw_stage == AC_HW_LEGACY_GEOMETRY_SHADER ||
+                 s->options->hw_stage == AC_HW_NEXT_GEN_GEOMETRY_SHADER) {
          assert(s->args->merged_wave_info.used);
          replacement = ac_nir_unpack_arg(b, s->args, s->args->merged_wave_info, 28, 4);
       } else {
@@ -134,24 +136,77 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
          /* This lowering is only valid with fast_launch = 2, otherwise we assume that
           * lower_workgroup_id_to_index removed any uses of the workgroup id by this point.
           */
-         assert(s->gfx_level >= GFX11);
+         assert(s->options->gfx_level >= GFX11);
          nir_def *xy = ac_nir_load_arg(b, s->args, s->args->tess_offchip_offset);
          nir_def *z = ac_nir_load_arg(b, s->args, s->args->gs_attr_offset);
          replacement = nir_vec3(b, nir_extract_u16(b, xy, nir_imm_int(b, 0)),
                                 nir_extract_u16(b, xy, nir_imm_int(b, 1)),
                                 nir_extract_u16(b, z, nir_imm_int(b, 1)));
+      } else if (s->options->hw_stage == AC_HW_COMPUTE_SHADER) {
+         nir_def *undef = nir_undef(b, 1, 32);
+         nir_def *ids[3] = {undef, undef, undef};
+
+         if (s->options->gfx_level >= GFX12) {
+            /* LLVM uses intrinsics to get workgroup IDs on gfx12. */
+            if (s->options->use_llvm)
+               return false;
+
+            if (s->args->workgroup_ids[0].used)
+               ids[0] = nir_load_ttmp_register_amd(b, .base = 9);
+
+            if (s->args->workgroup_ids[1].used || s->args->workgroup_ids[2].used) {
+               unsigned ttmp7_upper_bound = s->args->workgroup_ids[2].used ? 0 : 0xffff;
+               nir_def *ttmp7 =
+                  nir_load_ttmp_register_amd(b, .base = 7,
+                                             .arg_upper_bound_u32_amd = ttmp7_upper_bound);
+
+               if (s->args->workgroup_ids[1].used) {
+                  if (s->args->workgroup_ids[2].used)
+                     ids[1] = nir_iand_imm(b, ttmp7, 0xffff);
+                  else
+                     ids[1] = ttmp7;
+               }
+
+               if (s->args->workgroup_ids[2].used)
+                  ids[2] = nir_ushr_imm(b, ttmp7, 16);
+            }
+         } else {
+            for (unsigned i = 0; i < 3; i++) {
+               if (s->args->workgroup_ids[i].used) {
+                  ids[i] = ac_nir_load_arg_upper_bound(b, s->args, s->args->workgroup_ids[i],
+                                                       i >= 1 ? 0xffff : 0);
+               }
+            }
+         }
+
+         replacement = nir_vec(b, ids, 3);
       } else {
-         return false;
+         UNREACHABLE("unexpected shader stage");
+      }
+      break;
+   case nir_intrinsic_load_num_workgroups:
+      if (s->options->load_grid_size_from_user_sgpr) {
+         replacement = ac_nir_load_arg(b, s->args, s->args->num_work_groups);
+      } else {
+         nir_def *addr = nir_pack_64_2x32(b, ac_nir_load_arg(b, s->args, s->args->num_work_groups));
+         replacement = ac_nir_load_smem(b, 3, addr, nir_imm_int(b, 0), 4, ACCESS_CAN_SPECULATE);
       }
       break;
    case nir_intrinsic_load_pixel_coord:
       replacement = nir_unpack_32_2x16(b, ac_nir_load_arg(b, s->args, s->args->pos_fixed_pt));
       break;
-   case nir_intrinsic_load_frag_coord:
-      replacement = nir_vec4(b, ac_nir_load_arg(b, s->args, s->args->frag_pos[0]),
-                             ac_nir_load_arg(b, s->args, s->args->frag_pos[1]),
-                             ac_nir_load_arg(b, s->args, s->args->frag_pos[2]),
-                             ac_nir_load_arg(b, s->args, s->args->frag_pos[3]));
+   case nir_intrinsic_load_frag_coord_xy:
+      replacement = nir_vec2(b, ac_nir_load_arg(b, s->args, s->args->frag_pos[0]),
+                             ac_nir_load_arg(b, s->args, s->args->frag_pos[1]));
+      break;
+   case nir_intrinsic_load_frag_coord_z:
+      replacement = ac_nir_load_arg(b, s->args, s->args->frag_pos[2]);
+      break;
+   case nir_intrinsic_load_frag_coord_w_rcp:
+      replacement = ac_nir_load_arg(b, s->args, s->args->frag_pos[3]);
+      break;
+   case nir_intrinsic_load_sample_mask_in:
+      replacement = ac_nir_load_arg(b, s->args, s->args->sample_coverage);
       break;
    case nir_intrinsic_load_local_invocation_id: {
       unsigned num_bits[3];
@@ -212,7 +267,7 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       break;
    }
    case nir_intrinsic_load_merged_wave_info_amd:
-      replacement = ac_nir_load_arg(b, s->args, s->args->merged_wave_info);
+      replacement = ac_nir_load_arg_at_offset(b, s->args, s->args->merged_wave_info, 0, true);
       break;
    case nir_intrinsic_load_workgroup_num_input_vertices_amd:
       replacement = ac_nir_unpack_arg(b, s->args, s->args->gs_tg_info, 12, 9);
@@ -226,7 +281,7 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       replacement = ac_nir_load_arg(b, s->args, s->args->gs_vtx_offset[0]);
       break;
    case nir_intrinsic_load_ordered_id_amd:
-      replacement = ac_nir_unpack_arg(b, s->args, s->args->gs_tg_info, 0, 12);
+      replacement = ac_nir_unpack_arg_wg_div(b, s->args, s->args->gs_tg_info, 0, 12);
       break;
    case nir_intrinsic_load_ring_tess_offchip_offset_amd:
       replacement = ac_nir_load_arg(b, s->args, s->args->tess_offchip_offset);
@@ -267,15 +322,15 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       replacement = ac_nir_load_arg(b, s->args, s->args->draw_id);
       break;
    case nir_intrinsic_load_view_index:
-      replacement = ac_nir_load_arg_upper_bound(b, s->args, s->args->view_index, 1);
+      replacement = ac_nir_load_arg_upper_bound(b, s->args, s->args->view_index, AC_MULTIVIEW_MAX_VIEWS - 1);
       break;
    case nir_intrinsic_load_invocation_id:
       if (b->shader->info.stage == MESA_SHADER_TESS_CTRL) {
          replacement = ac_nir_unpack_arg(b, s->args, s->args->tcs_rel_ids, 8, 5);
       } else if (b->shader->info.stage == MESA_SHADER_GEOMETRY) {
-         if (s->gfx_level >= GFX12) {
+         if (s->options->gfx_level >= GFX12) {
             replacement = ac_nir_unpack_arg(b, s->args, s->args->gs_vtx_offset[0], 27, 5);
-         } else if (s->gfx_level >= GFX10) {
+         } else if (s->options->gfx_level >= GFX10) {
             replacement = ac_nir_unpack_arg(b, s->args, s->args->gs_invocation_id, 0, 5);
          } else {
             replacement = ac_nir_load_arg_upper_bound(b, s->args, s->args->gs_invocation_id, 31);
@@ -286,10 +341,6 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       break;
    case nir_intrinsic_load_sample_id:
       replacement = ac_nir_unpack_arg(b, s->args, s->args->ancillary, 8, 4);
-      break;
-   case nir_intrinsic_load_sample_pos:
-      replacement = nir_vec2(b, nir_ffract(b, ac_nir_load_arg(b, s->args, s->args->frag_pos[0])),
-                             nir_ffract(b, ac_nir_load_arg(b, s->args, s->args->frag_pos[1])));
       break;
    case nir_intrinsic_load_frag_shading_rate: {
       /* VRS Rate X = Ancillary[2:3]
@@ -314,7 +365,7 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       break;
    case nir_intrinsic_load_layer_id:
       replacement = ac_nir_unpack_arg(b, s->args, s->args->ancillary,
-                                      16, s->gfx_level >= GFX12 ? 14 : 13);
+                                      16, s->options->gfx_level >= GFX12 ? 14 : 13);
       break;
    case nir_intrinsic_load_barycentric_optimize_amd: {
       nir_def *prim_mask = ac_nir_load_arg(b, s->args, s->args->prim_mask);
@@ -357,16 +408,16 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       nir_def *ddy_j = nir_ddy(b, j);
 
       /* Interpolate standard barycentrics by offset. */
-      nir_def *offset_i = nir_ffma(b, ddy_i, offset_y, nir_ffma(b, ddx_i, offset_x, i));
-      nir_def *offset_j = nir_ffma(b, ddy_j, offset_y, nir_ffma(b, ddx_j, offset_x, j));
+      nir_def *offset_i = nir_ffma_weak(b, ddy_i, offset_y, nir_ffma_weak(b, ddx_i, offset_x, i));
+      nir_def *offset_j = nir_ffma_weak(b, ddy_j, offset_y, nir_ffma_weak(b, ddx_j, offset_x, j));
       replacement = nir_vec2(b, offset_i, offset_j);
       break;
    }
    case nir_intrinsic_load_gs_wave_id_amd:
       if (s->args->merged_wave_info.used)
-         replacement = ac_nir_unpack_arg(b, s->args, s->args->merged_wave_info, 16, 8);
+         replacement = ac_nir_unpack_arg_wg_div(b, s->args, s->args->merged_wave_info, 16, 8);
       else if (s->args->gs_wave_id.used)
-         replacement = ac_nir_load_arg(b, s->args, s->args->gs_wave_id);
+         replacement = ac_nir_load_arg_at_offset(b, s->args, s->args->gs_wave_id, 0, true);
       else
          UNREACHABLE("Shader doesn't have GS wave ID.");
       break;
@@ -422,7 +473,7 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
          replacement = s->tes_patch_id ? s->tes_patch_id :
                                          ac_nir_load_arg(b, s->args, s->args->tes_patch_id);
       } else if (b->shader->info.stage == MESA_SHADER_VERTEX) {
-         if (s->hw_stage == AC_HW_VERTEX_SHADER)
+         if (s->options->hw_stage == AC_HW_VERTEX_SHADER)
             replacement = ac_nir_load_arg(b, s->args, s->args->vs_prim_id); /* legacy */
          else
             replacement = ac_nir_load_arg(b, s->args, s->args->gs_prim_id); /* NGG */
@@ -445,37 +496,38 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
    }
    case nir_intrinsic_load_local_invocation_index:
       /* GFX11 HS has subgroup_id, so use it instead of vs_rel_patch_id. */
-      if (s->gfx_level < GFX11 && b->shader->info.stage == MESA_SHADER_VERTEX &&
-          (s->hw_stage == AC_HW_LOCAL_SHADER || s->hw_stage == AC_HW_HULL_SHADER)) {
+      if (s->options->gfx_level < GFX11 && b->shader->info.stage == MESA_SHADER_VERTEX &&
+          (s->options->hw_stage == AC_HW_LOCAL_SHADER || s->options->hw_stage == AC_HW_HULL_SHADER)) {
          if (!s->vs_rel_patch_id) {
             s->vs_rel_patch_id = preload_arg(s, b->impl, s->args->vs_rel_patch_id,
                                              s->args->tcs_rel_ids, 255);
          }
          replacement = s->vs_rel_patch_id;
-      } else if (s->workgroup_size <= s->wave_size) {
+      } else if (s->options->workgroup_size <= s->options->wave_size) {
          /* Just a subgroup invocation ID. */
-         replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->wave_size), nir_imm_int(b, 0));
-      } else if (s->gfx_level < GFX12 && s->hw_stage == AC_HW_COMPUTE_SHADER && s->wave_size == 64) {
+         replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->options->wave_size), nir_imm_int(b, 0));
+      } else if (s->options->gfx_level < GFX12 && s->options->hw_stage == AC_HW_COMPUTE_SHADER && s->options->wave_size == 64) {
          /* After the AND the bits are already multiplied by 64 (left shifted by 6) so we can just
           * feed that to mbcnt. (GFX12 doesn't have tg_size)
           */
-         nir_def *wave_id_mul_64 = nir_iand_imm(b, ac_nir_load_arg(b, s->args, s->args->tg_size), 0xfc0);
-         replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->wave_size), wave_id_mul_64);
+         nir_def *wave_id_mul_64 = nir_iand_imm(b, ac_nir_load_arg_at_offset(b, s->args, s->args->tg_size, 0, true), 0xfc0);
+         replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->options->wave_size), wave_id_mul_64);
       } else {
          nir_def *subgroup_id;
 
-         if (s->gfx_level >= GFX12 && s->hw_stage == AC_HW_COMPUTE_SHADER) {
+         /* LLVM uses an intrinsic to get this on gfx12. */
+         if (s->options->gfx_level >= GFX12 && s->options->hw_stage == AC_HW_COMPUTE_SHADER && s->options->use_llvm) {
             subgroup_id = nir_load_subgroup_id(b);
          } else {
             subgroup_id = load_subgroup_id_lowered(s, b);
          }
 
-         replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->wave_size),
-                                     nir_imul_imm(b, subgroup_id, s->wave_size));
+         replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->options->wave_size),
+                                     nir_imul_imm(b, subgroup_id, s->options->wave_size));
       }
       break;
    case nir_intrinsic_load_subgroup_invocation:
-      replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->wave_size), nir_imm_int(b, 0));
+      replacement = nir_mbcnt_amd(b, nir_imm_intN_t(b, ~0ull, s->options->wave_size), nir_imm_int(b, 0));
       break;
    case nir_intrinsic_load_task_ring_entry_amd:
       replacement = ac_nir_load_arg(b, s->args, s->args->task_ring_entry);
@@ -497,18 +549,12 @@ lower_intrinsic_to_arg(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
 }
 
 bool
-ac_nir_lower_intrinsics_to_args(nir_shader *shader, const enum amd_gfx_level gfx_level,
-                                bool has_ls_vgpr_init_bug, const enum ac_hw_stage hw_stage,
-                                unsigned wave_size, unsigned workgroup_size,
-                                const struct ac_shader_args *ac_args)
+ac_nir_lower_intrinsics_to_args(nir_shader *shader, const struct ac_shader_args *ac_args,
+                                const ac_nir_lower_intrinsics_to_args_options *options)
 {
    lower_intrinsics_to_args_state state = {
-      .gfx_level = gfx_level,
-      .hw_stage = hw_stage,
-      .has_ls_vgpr_init_bug = has_ls_vgpr_init_bug,
-      .wave_size = wave_size,
-      .workgroup_size = workgroup_size,
       .args = ac_args,
+      .options = options,
    };
 
    return nir_shader_intrinsics_pass(shader, lower_intrinsic_to_arg,

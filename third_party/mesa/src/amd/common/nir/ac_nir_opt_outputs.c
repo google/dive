@@ -184,7 +184,6 @@ static bool ac_eliminate_duplicated_output(struct ac_out_info *outputs,
       nir_alu_type src_type = nir_intrinsic_src_type(cur_chan->store_intr);
       struct nir_io_semantics sem = nir_intrinsic_io_semantics(cur_chan->store_intr);
       struct nir_io_xfb xfb = nir_intrinsic_io_xfb(cur_chan->store_intr);
-      struct nir_io_xfb xfb2 = nir_intrinsic_io_xfb2(cur_chan->store_intr);
 
       /* p is gl_varying_slot in addition to being an index into outputs. */
       sem.location = p;
@@ -203,8 +202,7 @@ static bool ac_eliminate_duplicated_output(struct ac_out_info *outputs,
                                                .io_semantics = sem,
                                                .src_type = src_type,
                                                .write_mask = 0x1,
-                                               .io_xfb = xfb,
-                                               .io_xfb2 = xfb2);
+                                               .io_xfb = xfb);
 
       /* Update the undef channels in the output info. */
       assert(!prev_chan->value);
@@ -216,7 +214,6 @@ static bool ac_eliminate_duplicated_output(struct ac_out_info *outputs,
        */
       static struct nir_io_xfb zero_xfb;
       nir_intrinsic_set_io_xfb(cur->chan[i].store_intr, zero_xfb);
-      nir_intrinsic_set_io_xfb2(cur->chan[i].store_intr, zero_xfb);
    }
 
    ac_remove_varying(cur);
@@ -270,7 +267,7 @@ bool ac_nir_optimize_outputs(nir_shader *nir, bool sprite_tex_disallowed,
          /* nir_lower_io_to_scalar is required before this */
          assert(intr->src[0].ssa->num_components == 1);
          /* No intrinsic should store undef. */
-         assert(intr->src[0].ssa->parent_instr->type != nir_instr_type_undef);
+         assert(!nir_src_is_undef(intr->src[0]));
 
          /* Gather the output. */
          struct ac_out_info *out_info = &outputs[sem.location];
@@ -283,7 +280,7 @@ bool ac_nir_optimize_outputs(nir_shader *nir, bool sprite_tex_disallowed,
 
          unsigned chan = sem.high_16bits * 4 + nir_intrinsic_component(intr);
          out_info->chan[chan].store_intr = intr;
-         out_info->chan[chan].value = intr->src[0].ssa->parent_instr;
+         out_info->chan[chan].value = nir_def_instr(intr->src[0].ssa);
       }
    }
 

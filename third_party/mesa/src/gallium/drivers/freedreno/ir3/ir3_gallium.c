@@ -15,6 +15,7 @@
 #include "util/u_string.h"
 
 #include "nir/tgsi_to_nir.h"
+#include "freedreno_screen.h"
 #include "nir_serialize.h"
 
 #include "freedreno_context.h"
@@ -84,8 +85,9 @@ dump_shader_info(struct ir3_shader_variant *v,
 }
 
 static void
-upload_shader_variant(struct ir3_shader_variant *v)
+upload_shader_variant(struct ir3_shader_variant *v, void *arg)
 {
+   struct util_debug_callback *debug = arg;
    struct ir3_compiler *compiler = v->compiler;
 
    assert(!v->bo);
@@ -98,15 +100,22 @@ upload_shader_variant(struct ir3_shader_variant *v)
    fd_bo_mark_for_dump(v->bo);
 
    fd_bo_upload(v->bo, v->bin, 0, v->info.size);
+
+   if (v->shader->initial_variants_done && !v->binning_pass) {
+      perf_debug_message(debug, SHADER_INFO,
+                           "%s shader: recompiling at draw time: global "
+                           "0x%08x, vfsamples %x/%x, astc %x/%x\n",
+                           ir3_shader_stage(v), v->key.global, v->key.vsamples,
+                           v->key.fsamples, v->key.vastc_srgb, v->key.fastc_srgb);
+   }
+
+   dump_shader_info(v, debug);
 }
 
 struct ir3_shader_variant *
 ir3_shader_variant(struct ir3_shader *shader, struct ir3_shader_key key,
                    bool binning_pass, struct util_debug_callback *debug)
 {
-   struct ir3_shader_variant *v;
-   bool created = false;
-
    MESA_TRACE_FUNC();
 
    /* Some shader key values may not be used by a given ir3_shader (for
@@ -115,52 +124,8 @@ ir3_shader_variant(struct ir3_shader *shader, struct ir3_shader_key key,
     */
    ir3_key_clear_unused(&key, shader);
 
-   v = ir3_shader_get_variant(shader, &key, binning_pass, false, &created);
-
-   if (created) {
-      if (shader->initial_variants_done) {
-         perf_debug_message(debug, SHADER_INFO,
-                            "%s shader: recompiling at draw time: global "
-                            "0x%08x, vfsamples %x/%x, astc %x/%x\n",
-                            ir3_shader_stage(v), key.global, key.vsamples,
-                            key.fsamples, key.vastc_srgb, key.fastc_srgb);
-      }
-
-      dump_shader_info(v, debug);
-      upload_shader_variant(v);
-
-      if (v->binning) {
-         upload_shader_variant(v->binning);
-         dump_shader_info(v->binning, debug);
-      }
-   }
-
-   return v;
-}
-
-static void
-copy_stream_out(struct ir3_stream_output_info *i,
-                const struct pipe_stream_output_info *p)
-{
-   STATIC_ASSERT(ARRAY_SIZE(i->stride) == ARRAY_SIZE(p->stride));
-   STATIC_ASSERT(ARRAY_SIZE(i->output) == ARRAY_SIZE(p->output));
-
-   i->streams_written = 0;
-   i->num_outputs = p->num_outputs;
-   for (int n = 0; n < ARRAY_SIZE(i->stride); n++) {
-      i->stride[n] = p->stride[n];
-      if (p->stride[n])
-         i->streams_written |= BIT(n);
-   }
-
-   for (int n = 0; n < ARRAY_SIZE(i->output); n++) {
-      i->output[n].register_index = p->output[n].register_index;
-      i->output[n].start_component = p->output[n].start_component;
-      i->output[n].num_components = p->output[n].num_components;
-      i->output[n].output_buffer = p->output[n].output_buffer;
-      i->output[n].dst_offset = p->output[n].dst_offset;
-      i->output[n].stream = p->output[n].stream;
-   }
+   return ir3_shader_get_variant(shader, &key, binning_pass, false,
+                                 upload_shader_variant, debug);
 }
 
 static void
@@ -268,6 +233,11 @@ ir3_shader_compute_state_create(struct pipe_context *pctx,
    enum ir3_wavesize_option api_wavesize = IR3_SINGLE_OR_DOUBLE;
    enum ir3_wavesize_option real_wavesize = IR3_SINGLE_OR_DOUBLE;
 
+   if (ctx->screen->gen >= 6 && !ctx->screen->info->props.supports_double_threadsize) {
+      api_wavesize = IR3_SINGLE_ONLY;
+      real_wavesize = IR3_SINGLE_ONLY;
+   }
+
    const struct ir3_shader_options ir3_options = {
       /* TODO: force to single on a6xx with legacy ballot extension that uses
        * 64-bit masks
@@ -293,13 +263,8 @@ ir3_shader_compute_state_create(struct pipe_context *pctx,
    if (ctx->screen->gen >= 6)
       ir3_nir_lower_io_to_bindless(nir);
 
-   if (ctx->screen->gen >= 6 && !ctx->screen->info->a6xx.supports_double_threadsize) {
-      api_wavesize = IR3_SINGLE_ONLY;
-      real_wavesize = IR3_SINGLE_ONLY;
-   }
-
    struct ir3_shader *shader =
-      ir3_shader_from_nir(compiler, nir, &ir3_options, NULL);
+      ir3_shader_from_nir(compiler, nir, &ir3_options);
    shader->cs.req_local_mem = cso->static_shared_mem;
 
    struct ir3_shader_state *hwcso = calloc(1, sizeof(*hwcso));
@@ -352,24 +317,28 @@ ir3_shader_state_create(struct pipe_context *pctx,
    if (ctx->screen->gen >= 6)
       ir3_nir_lower_io_to_bindless(nir);
 
+   enum ir3_wavesize_option api_wavesize = IR3_SINGLE_OR_DOUBLE;
+   enum ir3_wavesize_option real_wavesize = IR3_SINGLE_OR_DOUBLE;
+
+   if (ctx->screen->gen >= 6 && !ctx->screen->info->props.supports_double_threadsize) {
+      api_wavesize = IR3_SINGLE_ONLY;
+      real_wavesize = IR3_SINGLE_ONLY;
+   }
+
    /*
     * Create ir3_shader:
     *
     * This part is cheap, it doesn't compile initial variants
     */
 
-   struct ir3_stream_output_info stream_output = {};
-   copy_stream_out(&stream_output, &cso->stream_output);
-
    hwcso->shader =
       ir3_shader_from_nir(compiler, nir, &(struct ir3_shader_options){
                               /* TODO: force to single on a6xx with legacy
                                * ballot extension that uses 64-bit masks
                                */
-                              .api_wavesize = IR3_SINGLE_OR_DOUBLE,
-                              .real_wavesize = IR3_SINGLE_OR_DOUBLE,
-                          },
-                          &stream_output);
+                              .api_wavesize = api_wavesize,
+                              .real_wavesize = real_wavesize,
+                          });
 
    /*
     * Create initial variants to avoid draw-time stalls.  This is
@@ -481,7 +450,8 @@ ir3_fixup_shader_state(struct pipe_context *pctx, struct ir3_shader_key *key)
 }
 
 static void
-ir3_screen_finalize_nir(struct pipe_screen *pscreen, struct nir_shader *nir)
+ir3_screen_finalize_nir(struct pipe_screen *pscreen, struct nir_shader *nir,
+                        bool optimize)
 {
    struct fd_screen *screen = fd_screen(pscreen);
 
@@ -489,7 +459,10 @@ ir3_screen_finalize_nir(struct pipe_screen *pscreen, struct nir_shader *nir)
 
    MESA_TRACE_FUNC();
 
-   ir3_nir_lower_io_vars_to_temporaries(nir);
+   if (!nir->info.io_lowered) {
+      ir3_nir_lower_io_vars_to_temporaries(nir);
+      ir3_nir_lower_io(nir);
+   }
    ir3_finalize_nir(screen->compiler, &options, nir);
 }
 
@@ -637,23 +610,25 @@ ir3_update_max_tf_vtx(struct fd_context *ctx,
 }
 
 void
-ir3_get_private_mem(struct fd_context *ctx, const struct ir3_shader_variant *so)
+ir3_get_private_mem(struct fd_screen *screen, const struct ir3_shader_variant *so)
 {
-   uint32_t fibers_per_sp = ctx->screen->info->fibers_per_sp;
-   uint32_t num_sp_cores = ctx->screen->info->num_sp_cores;
+   uint32_t fibers_per_sp = screen->info->fibers_per_sp;
+   uint32_t num_sp_cores = screen->info->num_sp_cores;
+
+   fd_screen_assert_locked(screen);
 
    uint32_t per_fiber_size = so->pvtmem_size;
-   if (per_fiber_size > ctx->pvtmem[so->pvtmem_per_wave].per_fiber_size) {
-      if (ctx->pvtmem[so->pvtmem_per_wave].bo)
-         fd_bo_del(ctx->pvtmem[so->pvtmem_per_wave].bo);
+   if (per_fiber_size > screen->pvtmem[so->pvtmem_per_wave].per_fiber_size) {
+      if (screen->pvtmem[so->pvtmem_per_wave].bo)
+         fd_bo_del(screen->pvtmem[so->pvtmem_per_wave].bo);
 
-      uint32_t per_sp_size = ALIGN(per_fiber_size * fibers_per_sp, 1 << 12);
+      uint32_t per_sp_size = align(per_fiber_size * fibers_per_sp, 1 << 12);
       uint32_t total_size = per_sp_size * num_sp_cores;
 
-      ctx->pvtmem[so->pvtmem_per_wave].per_fiber_size = per_fiber_size;
-      ctx->pvtmem[so->pvtmem_per_wave].per_sp_size = per_sp_size;
-      ctx->pvtmem[so->pvtmem_per_wave].bo = fd_bo_new(
-         ctx->screen->dev, total_size, FD_BO_NOMAP, "pvtmem_%s_%d",
+      screen->pvtmem[so->pvtmem_per_wave].per_fiber_size = per_fiber_size;
+      screen->pvtmem[so->pvtmem_per_wave].per_sp_size = per_sp_size;
+      screen->pvtmem[so->pvtmem_per_wave].bo = fd_bo_new(
+         screen->dev, total_size, FD_BO_NOMAP, "pvtmem_%s_%d",
          so->pvtmem_per_wave ? "per_wave" : "per_fiber", per_fiber_size);
    }
 }

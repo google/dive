@@ -40,4 +40,5 @@ int xe_perf_eustall_stream_read_samples(int perf_stream_fd, uint8_t *buffer,
                                         size_t buffer_len, bool *overflow);
 void xe_perf_eustall_accumulate_results(struct intel_perf_query_eustall_result *result,
                                         const uint8_t *start, const uint8_t *end,
-                                        size_t record_size);
+                                        size_t record_size,
+                                        int ver);

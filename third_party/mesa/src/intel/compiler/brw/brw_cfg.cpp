@@ -1,28 +1,6 @@
 /*
  * Copyright © 2012 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
- * Authors:
- *    Eric Anholt <eric@anholt.net>
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "brw_cfg.h"
@@ -126,9 +104,9 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
    s(s), total_instructions(0)
 {
    mem_ctx = ralloc_context(NULL);
-   block_list.make_empty();
    blocks = NULL;
    num_blocks = 0;
+   cap_blocks = 0;
 
    bblock_t *cur = NULL;
    int ip = 0;
@@ -160,36 +138,36 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
       case BRW_OPCODE_IF:
          append_inst(cur, inst);
 
-	 /* Push our information onto a stack so we can recover from
-	  * nested ifs.
-	  */
+         /* Push our information onto a stack so we can recover from
+          * nested ifs.
+          */
          push_stack(&if_stack, mem_ctx, cur_if);
          push_stack(&else_stack, mem_ctx, cur_else);
 
-	 cur_if = cur;
-	 cur_else = NULL;
+         cur_if = cur;
+         cur_else = NULL;
 
-	 /* Set up our immediately following block, full of "then"
-	  * instructions.
-	  */
-	 next = new_block();
+         /* Set up our immediately following block, full of "then"
+          * instructions.
+          */
+         next = new_block();
          cur_if->add_successor(mem_ctx, next, bblock_link_logical);
 
-	 set_next_block(&cur, next, ip);
-	 break;
+         set_next_block(&cur, next, ip);
+         break;
 
       case BRW_OPCODE_ELSE:
          append_inst(cur, inst);
 
          cur_else = cur;
 
-	 next = new_block();
+         next = new_block();
          assert(cur_if != NULL);
          cur_if->add_successor(mem_ctx, next, bblock_link_logical);
          cur_else->add_successor(mem_ctx, next, bblock_link_physical);
 
-	 set_next_block(&cur, next, ip);
-	 break;
+         set_next_block(&cur, next, ip);
+         break;
 
       case BRW_OPCODE_ENDIF: {
          bblock_t *cur_endif;
@@ -217,22 +195,22 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
          assert(cur_if->end()->opcode == BRW_OPCODE_IF);
          assert(!cur_else || cur_else->end()->opcode == BRW_OPCODE_ELSE);
 
-	 /* Pop the stack so we're in the previous if/else/endif */
-	 cur_if = pop_stack(&if_stack);
-	 cur_else = pop_stack(&else_stack);
-	 break;
+         /* Pop the stack so we're in the previous if/else/endif */
+         cur_if = pop_stack(&if_stack);
+         cur_else = pop_stack(&else_stack);
+         break;
       }
       case BRW_OPCODE_DO:
-	 /* Push our information onto a stack so we can recover from
-	  * nested loops.
-	  */
+         /* Push our information onto a stack so we can recover from
+          * nested loops.
+          */
          push_stack(&do_stack, mem_ctx, cur_do);
          push_stack(&while_stack, mem_ctx, cur_while);
 
-	 /* Set up the block just after the while.  Don't know when exactly
-	  * it will start, yet.
-	  */
-	 cur_while = new_block();
+         /* Set up the block just after the while.  Don't know when exactly
+          * it will start, yet.
+          */
+         cur_while = new_block();
 
          if (cur->instructions.is_empty()) {
             /* New block was just created; use it. */
@@ -277,7 +255,7 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
          cur->add_successor(mem_ctx, next, bblock_link_logical);
          cur->add_successor(mem_ctx, cur_while, bblock_link_physical);
          set_next_block(&cur, next, ip);
-	 break;
+         break;
 
       case BRW_OPCODE_CONTINUE:
          append_inst(cur, inst);
@@ -298,14 +276,14 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
          assert(cur_do != NULL);
          cur->add_successor(mem_ctx, cur_do->next(), bblock_link_logical);
 
-	 next = new_block();
-	 if (inst->predicate)
+         next = new_block();
+         if (inst->predicate)
             cur->add_successor(mem_ctx, next, bblock_link_logical);
          else
             cur->add_successor(mem_ctx, next, bblock_link_physical);
 
-	 set_next_block(&cur, next, ip);
-	 break;
+         set_next_block(&cur, next, ip);
+         break;
 
       case BRW_OPCODE_BREAK:
          append_inst(cur, inst);
@@ -324,14 +302,14 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
          cur->add_successor(mem_ctx, cur_do, bblock_link_physical);
          cur->add_successor(mem_ctx, cur_while, bblock_link_logical);
 
-	 next = new_block();
-	 if (inst->predicate)
+         next = new_block();
+         if (inst->predicate)
             cur->add_successor(mem_ctx, next, bblock_link_logical);
          else
             cur->add_successor(mem_ctx, next, bblock_link_physical);
 
-	 set_next_block(&cur, next, ip);
-	 break;
+         set_next_block(&cur, next, ip);
+         break;
 
       case BRW_OPCODE_WHILE:
          append_inst(cur, inst);
@@ -353,20 +331,18 @@ cfg_t::cfg_t(brw_shader *s, brw_exec_list *instructions) :
             cur->add_successor(mem_ctx, cur_do->next(), bblock_link_logical);
          }
 
-	 set_next_block(&cur, cur_while, ip);
+         set_next_block(&cur, cur_while, ip);
 
-	 /* Pop the stack so we're in the previous loop */
-	 cur_do = pop_stack(&do_stack);
-	 cur_while = pop_stack(&while_stack);
-	 break;
+         /* Pop the stack so we're in the previous loop */
+         cur_do = pop_stack(&do_stack);
+         cur_while = pop_stack(&while_stack);
+         break;
 
       default:
          append_inst(cur, inst);
-	 break;
+         break;
       }
    }
-
-   make_block_array();
 }
 
 cfg_t::~cfg_t()
@@ -472,8 +448,6 @@ cfg_t::remove_block(bblock_t *block)
       }
    }
 
-   block->link.remove();
-
    for (int b = block->num; b < this->num_blocks - 1; b++) {
       this->blocks[b] = this->blocks[b + 1];
       this->blocks[b]->num = b;
@@ -495,20 +469,13 @@ void
 cfg_t::set_next_block(bblock_t **cur, bblock_t *block, int ip)
 {
    block->num = num_blocks++;
-   block_list.push_tail(&block->link);
-   *cur = block;
-}
-
-void
-cfg_t::make_block_array()
-{
-   blocks = ralloc_array(mem_ctx, bblock_t *, num_blocks);
-
-   int i = 0;
-   foreach_block (block, this) {
-      blocks[i++] = block;
+   if (num_blocks > cap_blocks) {
+      int new_cap = MAX2(cap_blocks * 2, 8);
+      blocks = rerzalloc(mem_ctx, blocks, bblock_t *, cap_blocks, new_cap);
+      cap_blocks = new_cap;
    }
-   assert(i == num_blocks);
+   blocks[block->num] = block;
+   *cur = block;
 }
 
 void

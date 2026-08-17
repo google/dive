@@ -24,9 +24,26 @@
 
 #include "nir.h"
 #include "nir_builder.h"
+#include "nir_softfloat.h"
 
 #include <float.h>
 #include <math.h>
+
+static nir_def *
+nir_fmad_or_ffma(nir_builder *build, nir_def *src0, nir_def *src1,
+                 nir_def *src2)
+{
+   if (nir_prefers_fmad(build->shader, src0->bit_size))
+      return nir_fadd(build, nir_fmul(build, src0, src1), src2);
+   else
+      return nir_ffma(build, src0, src1, src2);
+}
+
+static nir_def *
+nir_fmad_or_fma_imm2(nir_builder *build, nir_def *src0, nir_def *src1, double src2)
+{
+   return nir_fmad_or_ffma(build, src0, src1, nir_imm_floatN_t(build, src2, src0->bit_size));
+}
 
 /*
  * Lowers some unsupported double operations, using only:
@@ -87,10 +104,8 @@ get_signed_inf(nir_builder *b, nir_def *zero)
 static nir_def *
 get_signed_zero(nir_builder *b, nir_def *src)
 {
-   uint32_t exec_mode = b->fp_fast_math;
-
    nir_def *zero;
-   if (nir_is_float_control_signed_zero_preserve(exec_mode, 64)) {
+   if (b->fp_math_ctrl & nir_fp_preserve_signed_zero) {
       nir_def *hi = nir_unpack_64_2x32_split_y(b, src);
       nir_def *sign = nir_iand_imm(b, hi, 0x80000000);
       zero = nir_pack_64_2x32_split(b, nir_imm_int(b, 0), sign);
@@ -104,9 +119,7 @@ get_signed_zero(nir_builder *b, nir_def *src)
 static nir_def *
 preserve_nan(nir_builder *b, nir_def *src, nir_def *res)
 {
-   uint32_t exec_mode = b->fp_fast_math;
-
-   if (nir_is_float_control_nan_preserve(exec_mode, 64)) {
+   if (b->fp_math_ctrl & nir_fp_preserve_nan) {
       nir_def *is_nan = nir_fneu(b, src, src);
       return nir_bcsel(b, is_nan, src, res);
    }
@@ -175,8 +188,8 @@ lower_rcp(nir_builder *b, nir_def *src)
     * See https://en.wikipedia.org/wiki/Division_algorithm for more details.
     */
 
-   ra = nir_ffma(b, nir_fneg(b, ra), nir_ffma_imm2(b, ra, src, -1), ra);
-   ra = nir_ffma(b, nir_fneg(b, ra), nir_ffma_imm2(b, ra, src, -1), ra);
+   ra = nir_fmad_or_ffma(b, nir_fneg(b, ra), nir_fmad_or_fma_imm2(b, ra, src, -1), ra);
+   ra = nir_fmad_or_ffma(b, nir_fneg(b, ra), nir_fmad_or_fma_imm2(b, ra, src, -1), ra);
 
    return fix_inv_result(b, ra, src, new_exp);
 }
@@ -302,21 +315,20 @@ lower_sqrt_rsq(nir_builder *b, nir_def *src, bool sqrt)
    nir_def *one_half = nir_imm_double(b, 0.5);
    nir_def *h_0 = nir_fmul(b, one_half, ra);
    nir_def *g_0 = nir_fmul(b, src, ra);
-   nir_def *r_0 = nir_ffma(b, nir_fneg(b, h_0), g_0, one_half);
-   nir_def *h_1 = nir_ffma(b, h_0, r_0, h_0);
+   nir_def *r_0 = nir_fmad_or_ffma(b, nir_fneg(b, h_0), g_0, one_half);
+   nir_def *h_1 = nir_fmad_or_ffma(b, h_0, r_0, h_0);
    nir_def *res;
    if (sqrt) {
-      nir_def *g_1 = nir_ffma(b, g_0, r_0, g_0);
-      nir_def *r_1 = nir_ffma(b, nir_fneg(b, g_1), g_1, src);
-      res = nir_ffma(b, h_1, r_1, g_1);
+      nir_def *g_1 = nir_fmad_or_ffma(b, g_0, r_0, g_0);
+      nir_def *r_1 = nir_fmad_or_ffma(b, nir_fneg(b, g_1), g_1, src);
+      res = nir_fmad_or_ffma(b, h_1, r_1, g_1);
    } else {
       nir_def *y_1 = nir_fmul_imm(b, h_1, 2.0);
-      nir_def *r_1 = nir_ffma(b, nir_fneg(b, y_1), nir_fmul(b, h_1, src),
-                              one_half);
-      res = nir_ffma(b, y_1, r_1, y_1);
+      nir_def *r_1 = nir_fmad_or_ffma(b, nir_fneg(b, y_1), nir_fmul(b, h_1, src),
+                                         one_half);
+      res = nir_fmad_or_ffma(b, y_1, r_1, y_1);
    }
 
-   uint32_t exec_mode = b->fp_fast_math;
    if (sqrt) {
       /* Here, the special cases we need to handle are
        * 0 -> 0 (sign preserving)
@@ -342,7 +354,7 @@ lower_sqrt_rsq(nir_builder *b, nir_def *src, bool sqrt)
       res = fix_inv_result(b, res, src, new_exp);
    }
 
-   if (nir_is_float_control_nan_preserve(exec_mode, 64))
+   if (b->fp_math_ctrl & nir_fp_preserve_nan)
       res = nir_bcsel(b, nir_feq_imm(b, src, -INFINITY),
                       nir_imm_double(b, NAN), res);
 
@@ -446,9 +458,10 @@ lower_round_even(nir_builder *b, nir_def *src)
    nir_def *sign = nir_iand_imm(b, nir_unpack_64_2x32_split_y(b, src),
                                 1ull << 31);
 
-   b->exact = true;
+   unsigned old_fp_math_ctrl = b->fp_math_ctrl;
+   b->fp_math_ctrl |= nir_fp_exact;
    nir_def *res = nir_fsub(b, nir_fadd(b, nir_fabs(b, src), two52), two52);
-   b->exact = false;
+   b->fp_math_ctrl = old_fp_math_ctrl;
 
    return nir_bcsel(b, nir_flt(b, nir_fabs(b, src), two52),
                     nir_pack_64_2x32_split(b, nir_unpack_64_2x32_split_x(b, res),
@@ -494,16 +507,14 @@ lower_mod(nir_builder *b, nir_def *src0, nir_def *src1)
 static nir_def *
 lower_minmax(nir_builder *b, nir_op cmp, nir_def *src0, nir_def *src1)
 {
-   b->exact = true;
    nir_def *src1_is_nan = nir_fneu(b, src1, src1);
    nir_def *cmp_res = nir_build_alu2(b, cmp, src0, src1);
-   b->exact = false;
    nir_def *take_src0 = nir_ior(b, src1_is_nan, cmp_res);
 
    /* IEEE-754-2019 requires that fmin/fmax compare -0 < 0, but -0 and 0 are
     * indistinguishable for flt/fge. So, we fix up signed zeroes.
     */
-   if (nir_is_float_control_signed_zero_preserve(b->fp_fast_math, 64)) {
+   if (b->fp_math_ctrl & nir_fp_preserve_signed_zero) {
       nir_def *src0_is_negzero = nir_ieq_imm(b, src0, 1ull << 63);
       nir_def *src1_is_poszero = nir_ieq_imm(b, src1, 0x0);
       nir_def *neg_pos_zero = nir_iand(b, src0_is_negzero, src1_is_poszero);
@@ -522,11 +533,9 @@ lower_minmax(nir_builder *b, nir_op cmp, nir_def *src0, nir_def *src1)
 static nir_def *
 lower_sat(nir_builder *b, nir_def *src)
 {
-   b->exact = true;
    /* This will get lowered again if nir_lower_dminmax is set */
    nir_def *sat = nir_fclamp(b, src, nir_imm_double(b, 0),
                              nir_imm_double(b, 1));
-   b->exact = false;
    return sat;
 }
 
@@ -661,9 +670,9 @@ lower_doubles_instr_to_soft(nir_builder *b, nir_alu_instr *instr,
       name = "__fmul64";
       mangled_name = "__fmul64(u641;u641;";
       break;
-   case nir_op_ffma:
-      name = "__ffma64";
-      mangled_name = "__ffma64(u641;u641;u641;";
+   case nir_op_fmad:
+      name = "__fmad64";
+      mangled_name = "__fmad64(u641;u641;u641;";
       break;
    case nir_op_fsat:
       name = "__fsat64";
@@ -692,37 +701,7 @@ lower_doubles_instr_to_soft(nir_builder *b, nir_alu_instr *instr,
       assert(func);
    }
 
-   nir_def *params[4] = {
-      NULL,
-   };
-
-   nir_variable *ret_tmp =
-      nir_local_variable_create(b->impl, return_type, "return_tmp");
-   nir_deref_instr *ret_deref = nir_build_deref_var(b, ret_tmp);
-   params[0] = &ret_deref->def;
-
-   assert(nir_op_infos[instr->op].num_inputs + 1 == func->num_params);
-   for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++) {
-      nir_alu_type n_type =
-         nir_alu_type_get_base_type(nir_op_infos[instr->op].input_types[i]);
-      /* Add bitsize */
-      n_type = n_type | instr->src[0].src.ssa->bit_size;
-
-      const struct glsl_type *param_type =
-         glsl_scalar_type(nir_get_glsl_base_type_for_nir_type(n_type));
-
-      nir_variable *param =
-         nir_local_variable_create(b->impl, param_type, "param");
-      nir_deref_instr *param_deref = nir_build_deref_var(b, param);
-      nir_store_deref(b, param_deref, nir_mov_alu(b, instr->src[i], 1), ~0);
-
-      assert(i + 1 < ARRAY_SIZE(params));
-      params[i + 1] = &param_deref->def;
-   }
-
-   nir_inline_function_impl(b, func->impl, params, NULL);
-
-   return nir_load_deref(b, ret_deref);
+   return nir_lower_softfloat_func(b, instr, func, return_type);
 }
 
 nir_lower_doubles_options
@@ -801,7 +780,7 @@ lower_doubles_instr(nir_builder *b, nir_instr *instr, void *_data)
    nir_alu_instr *alu = nir_instr_as_alu(instr);
 
    /* Easier to set it here than pass it around all over ther place. */
-   b->fp_fast_math = alu->fp_fast_math;
+   b->fp_math_ctrl = alu->fp_math_ctrl;
 
    nir_def *soft_def =
       lower_doubles_instr_to_soft(b, alu, data->softfp64, options);

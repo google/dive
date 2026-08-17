@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "pipe/p_state.h"
 #include "util/u_blend.h"
 #include "util/u_dual_blend.h"
@@ -60,7 +58,7 @@ __fd6_setup_blend_variant(struct fd6_blend_stateobj *blend,
    if (!so)
       return NULL;
 
-   unsigned nregs = (2 * A6XX_MAX_RENDER_TARGETS) + 3;
+   unsigned nregs = (3 * A6XX_MAX_RENDER_TARGETS) + 3;
    fd_crb crb(blend->ctx->pipe, nregs);
 
    for (unsigned i = 0; i <= cso->max_rt; i++) {
@@ -80,12 +78,20 @@ __fd6_setup_blend_variant(struct fd6_blend_stateobj *blend,
                  .alpha_dest_factor = fd_blend_factor(rt->alpha_dst_factor),
                ))
         .add(A6XX_RB_MRT_CONTROL(i,
-                 .blend = rt->blend_enable,
-                 .blend2 = rt->blend_enable,
+                 .color_blend_en = rt->blend_enable,
+                 .alpha_blend_en = rt->blend_enable,
                  .rop_enable = cso->logicop_enable,
                  .rop_code = rop,
                  .component_enable = rt->colormask,
                ));
+
+      if (CHIP == A8XX) {
+         crb.add(SP_MRT_BLEND_CNTL_REG(CHIP, i,
+                 .color_blend_en = rt->blend_enable,
+                 .alpha_blend_en = rt->blend_enable,
+                 .component_write_mask = rt->colormask,
+         ));
+      }
 
       if (rt->blend_enable) {
          mrt_blend |= (1 << i);
@@ -109,11 +115,12 @@ __fd6_setup_blend_variant(struct fd6_blend_stateobj *blend,
             .dither_mode_mrt6 = dither ? DITHER_ALWAYS : DITHER_DISABLE,
             .dither_mode_mrt7 = dither ? DITHER_ALWAYS : DITHER_DISABLE,
       ))
-     .add(A6XX_SP_BLEND_CNTL(
+     .add(SP_BLEND_CNTL(CHIP,
             .enable_blend = mrt_blend,
-            .unk8 = true,
+            .independent_blend_en = cso->independent_blend_enable,
             .dual_color_in_enable = blend->use_dual_src_blend,
             .alpha_to_coverage = cso->alpha_to_coverage,
+            .alpha_to_one = cso->alpha_to_one,
        ))
      .add(A6XX_RB_BLEND_CNTL(
             .blend_reads_dest = mrt_blend,
@@ -124,10 +131,10 @@ __fd6_setup_blend_variant(struct fd6_blend_stateobj *blend,
             .sample_mask = sample_mask,
        ));
 
-   so->stateobj = crb.ring();
+   so->stateobj = crb;
    so->sample_mask = sample_mask;
 
-   util_dynarray_append(&blend->variants, struct fd6_blend_variant *, so);
+   util_dynarray_append(&blend->variants, so);
 
    return so;
 }

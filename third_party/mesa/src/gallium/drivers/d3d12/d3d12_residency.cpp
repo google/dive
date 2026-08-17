@@ -26,7 +26,6 @@
 #include "d3d12_residency.h"
 #include "d3d12_resource.h"
 #include "d3d12_screen.h"
-
 #include "util/os_time.h"
 
 #include <dxguids/dxguids.h>
@@ -158,6 +157,7 @@ gather_base_bos(struct d3d12_screen *screen, set *base_bo_set, struct d3d12_bo *
 
    base_bo->last_used_fence = pending_fence_value;
    base_bo->last_used_timestamp = current_time;
+   base_bo->last_used_periodic_notification_index = screen->periodic_trim_notification_index;
 }
 
 void
@@ -261,9 +261,93 @@ d3d12_process_batch_residency(struct d3d12_screen *screen, struct d3d12_batch *b
       screen->cmdqueue->Wait(screen->residency_fence, screen->residency_fence_value);
 }
 
+static void
+evict_periodic_trim_allocations(struct d3d12_screen *screen)
+{
+   ID3D12Pageable *to_evict[residency_batch_size];
+   unsigned num_pending_evictions = 0;
+   uint64_t completed_fence = screen->fence->GetCompletedValue();
+
+   list_for_each_entry_safe(struct d3d12_bo, bo, &screen->residency_list, residency_list_entry) {
+      /* This residency list should all be base bos, not suballocated ones */
+      assert(bo->res);
+
+      if (bo->last_used_fence > completed_fence) {
+         /* List is LRU-sorted, this bo is still in use, so we're done */
+         break;
+      }
+
+      assert(bo->residency_status == d3d12_resident);
+
+      /* If the BO has not been used for at least one full periodic trim cycle, it is eligible for eviction */
+      if (bo->last_used_periodic_notification_index < (screen->periodic_trim_notification_index - 1))
+      {
+         to_evict[num_pending_evictions++] = bo->res;
+         log_eviction_info(screen, bo);
+         bo->residency_status = d3d12_evicted;
+         list_del(&bo->residency_list_entry);
+
+         if (num_pending_evictions == residency_batch_size) {
+            screen->dev->Evict(num_pending_evictions, to_evict);
+            num_pending_evictions = 0;
+         }
+      }
+   }
+
+   if (num_pending_evictions)
+      screen->dev->Evict(num_pending_evictions, to_evict);
+}
+
+static void APIENTRY d3d12_residency_periodic_trim_callback(const D3D12_TRIM_NOTIFICATION *pData)
+{
+   struct d3d12_screen *screen = reinterpret_cast<struct d3d12_screen *>(pData->pContext);
+   assert(screen);
+
+   // Take a mutex here to synchronize with d3d12_end_batch (which calls d3d12_process_batch_residency)
+   // so that we have a consistent view of the residency list from the latest submission.
+   // The periodic trim callback can be called from a different thread. And this way we ensure
+   // that the residency list is not being modified while we are processing the trim notification.
+   // and submissions don't happen in the middle of a periodic trim eviction.
+   mtx_lock(&screen->submit_mutex);
+
+   screen->periodic_trim_notification_index++;
+
+   if (pData->Flags & D3D12_TRIM_NOTIFICATION_FLAG_PERIODIC_TRIM) {
+      evict_periodic_trim_allocations(screen);
+   } 
+   
+   if (pData->Flags & D3D12_TRIM_NOTIFICATION_FLAG_TRIM_TO_BUDGET) {
+      // Try to free NumBytesToTrim bytes.
+      d3d12_memory_info mem_info = {};
+      screen->get_memory_info(screen, &mem_info);
+
+      uint64_t bytes_to_trim = MIN2(pData->NumBytesToTrim, mem_info.usage);
+      if (bytes_to_trim) {
+         uint64_t target_usage = mem_info.usage - bytes_to_trim; // desired post-trim usage
+         evict_to_fence_or_budget(screen,
+                                  screen->fence->GetCompletedValue(), // only evict resources not in-flight
+                                  mem_info.usage,
+                                  target_usage);
+      }
+   }
+
+   mtx_unlock(&screen->submit_mutex);
+}
+
 bool
 d3d12_init_residency(struct d3d12_screen *screen)
 {
+   screen->periodic_trim_notification_index = 1; // Start at 1 so that resources used in the first period are not immediately evicted
+   screen->periodic_trim_callback_cookie = UINT32_MAX;
+
+   if (screen->dev15) {
+      D3D12_REGISTER_TRIM_NOTIFICATION registerArgs = { &d3d12_residency_periodic_trim_callback, screen, 0 };
+      if (SUCCEEDED(screen->dev15->RegisterTrimNotificationCallback(&registerArgs)))
+         screen->periodic_trim_callback_cookie = registerArgs.CallbackCookie;
+      else
+         debug_printf("D3D12: Failed to register for periodic trim notifications\n");
+   }
+
    list_inithead(&screen->residency_list);
    if (FAILED(screen->dev->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&screen->residency_fence))))
       return false;
@@ -274,6 +358,14 @@ d3d12_init_residency(struct d3d12_screen *screen)
 void
 d3d12_deinit_residency(struct d3d12_screen *screen)
 {
+   if (screen->periodic_trim_callback_cookie != UINT32_MAX) {
+      if (screen->dev15 && SUCCEEDED(screen->dev15->UnregisterTrimNotificationCallback(screen->periodic_trim_callback_cookie))) {
+         debug_printf("D3D12: Unregistered periodic trim notification callback\n");
+      } else {
+         debug_printf("D3D12: Failed to unregister periodic trim notification callback\n");
+      }
+   }
+
    if (screen->residency_fence) {
       screen->residency_fence->Release();
       screen->residency_fence = nullptr;
@@ -281,25 +373,79 @@ d3d12_deinit_residency(struct d3d12_screen *screen)
 }
 
 void
-d3d12_promote_to_permanent_residency(struct d3d12_screen *screen, struct d3d12_resource* resource)
+d3d12_promote_to_permanent_residency(
+   struct d3d12_screen *screen,
+   struct d3d12_resource** resources,
+   unsigned count,
+   ID3D12Fence* pResidencyFence, /* NULL implies usage of synchronous MakeResident */
+   uint64_t *pResidencyFenceValue /* Out: value to wait on for residency for this call */
+)
 {
+#if MESA_DEBUG
+   if (pResidencyFence && !pResidencyFenceValue)
+   {
+      debug_printf("D3D12: d3d12_promote_to_permanent_residency called with a fence but no fence value out parameter!\n");
+      assert(false);
+   }
+
+   if (pResidencyFence && pResidencyFenceValue) {
+      debug_printf("D3D12: promote_to_permanent_residency called with %u resources, current fence value: %" PRIu64 "\n", count, *pResidencyFenceValue);
+   }
+#endif // MESA_DEBUG
+
+   if (count == 0)
+      return;
+
    mtx_lock(&screen->submit_mutex);
-   uint64_t offset;
-   struct d3d12_bo *base_bo = d3d12_bo_get_base(resource->bo, &offset);
+   
+   ID3D12Pageable *pageables_to_make_resident[residency_batch_size];
+   unsigned num_to_make_resident = 0;
+   
+   auto flush_batch = [](struct d3d12_screen *screen, ID3D12Pageable **pageables, unsigned count, ID3D12Fence* pResidencyFence, uint64_t *pResidencyFenceValue) {
+      if (count > 0) {
+         ASSERTED HRESULT hr = S_OK;
 
-   /* Promote non-permanent resident resources to permanent residency*/
-   if(base_bo->residency_status != d3d12_permanently_resident) {
-
-      /* Mark as permanently resident*/
-      base_bo->residency_status = d3d12_permanently_resident;
-
-      /* If it wasn't made resident before, make it*/
-      bool was_made_resident = (base_bo->residency_status == d3d12_resident);
-      if(!was_made_resident) {
-         ID3D12Pageable *pageable = base_bo->res;
-         ASSERTED HRESULT hr = screen->dev->MakeResident(1, &pageable);
+         if (!pResidencyFence)
+         {
+            hr = screen->dev->MakeResident(count, pageables);
+            if(SUCCEEDED(hr))
+            {
+               debug_printf("D3D12: Promoted %u resources to permanent residency (synchronous)\n", count);
+            }
+         }
+         else
+         {
+            hr = screen->dev->EnqueueMakeResident(D3D12_RESIDENCY_FLAG_NONE, count, pageables,
+               pResidencyFence, (*pResidencyFenceValue) + 1);
+            if(SUCCEEDED(hr))
+            {
+               (*pResidencyFenceValue)++;
+               debug_printf("D3D12: Promoted %u resources to permanent residency (asynchronous) with fence object %p and fence value %" PRIu64 " and hr %x\n", count, pResidencyFence, *pResidencyFenceValue, (unsigned)hr);
+            }
+         }
          assert(SUCCEEDED(hr));
       }
+   };
+   
+   for (unsigned i = 0; i < count; ++i) {
+      uint64_t offset;
+      struct d3d12_bo *base_bo = d3d12_bo_get_base(resources[i]->bo, &offset);
+
+      if (base_bo->residency_status != d3d12_permanently_resident) {
+         bool needs_make_resident = (base_bo->residency_status == d3d12_evicted);
+         base_bo->residency_status = d3d12_permanently_resident;
+
+         if (needs_make_resident) {
+            assert(num_to_make_resident < residency_batch_size);
+            pageables_to_make_resident[num_to_make_resident++] = base_bo->res;
+            if (num_to_make_resident == residency_batch_size) {
+               flush_batch(screen, pageables_to_make_resident, num_to_make_resident, pResidencyFence, pResidencyFenceValue);
+               num_to_make_resident = 0;
+            }
+         }
+      }
    }
+   
+   flush_batch(screen, pageables_to_make_resident, num_to_make_resident, pResidencyFence, pResidencyFenceValue);
    mtx_unlock(&screen->submit_mutex);
 }

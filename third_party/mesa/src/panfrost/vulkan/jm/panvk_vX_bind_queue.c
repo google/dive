@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2025 Collabora, Ltd.
+ * SPDX-License-Identifier: MIT
+ */
 #include "panvk_queue.h"
 
 VkResult

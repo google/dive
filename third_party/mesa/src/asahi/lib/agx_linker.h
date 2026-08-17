@@ -10,6 +10,7 @@
 #include "agx_nir_lower_vbo.h"
 #include "agx_pack.h"
 #include "nir_lower_blend.h"
+#include "util/macros.h"
 
 struct agx_linked_shader {
    /* Mapped executable memory */
@@ -100,16 +101,88 @@ struct agx_fs_prolog_key {
 };
 
 struct agx_blend_rt_key {
+   unsigned colormask      : 4;
+   unsigned advanced_blend : 1;
+   unsigned pad            : 1;
+   unsigned mode           : 26;
+};
+static_assert(sizeof(struct agx_blend_rt_key) == 4, "packed");
+
+struct agx_blend_standard {
    enum pipe_blend_func rgb_func          : 3;
    enum pipe_blendfactor rgb_src_factor   : 5;
    enum pipe_blendfactor rgb_dst_factor   : 5;
    enum pipe_blend_func alpha_func        : 3;
    enum pipe_blendfactor alpha_src_factor : 5;
    enum pipe_blendfactor alpha_dst_factor : 5;
-   unsigned colormask                     : 4;
-   unsigned pad                           : 2;
+   unsigned pad                           : 6;
 };
-static_assert(sizeof(struct agx_blend_rt_key) == 4, "packed");
+static_assert(sizeof(struct agx_blend_standard) == 4, "packed");
+
+static inline unsigned
+agx_pack_blend_standard(enum pipe_blend_func rgb_func,
+                        enum pipe_blendfactor rgb_src_factor,
+                        enum pipe_blendfactor rgb_dst_factor,
+                        enum pipe_blend_func alpha_func,
+                        enum pipe_blendfactor alpha_src_factor,
+                        enum pipe_blendfactor alpha_dst_factor)
+{
+   struct agx_blend_standard blend = {
+      .rgb_func = rgb_func,
+      .rgb_src_factor = rgb_src_factor,
+      .rgb_dst_factor = rgb_dst_factor,
+      .alpha_func = alpha_func,
+      .alpha_src_factor = alpha_src_factor,
+      .alpha_dst_factor = alpha_dst_factor,
+   };
+   unsigned val;
+   typed_memcpy(&val, &blend, 1);
+   return val;
+}
+
+static inline struct agx_blend_standard
+agx_unpack_blend_standard(unsigned mode)
+{
+   struct agx_blend_standard blend;
+   typed_memcpy(&blend, &mode, 1);
+   return blend;
+}
+
+struct agx_blend_advanced {
+   enum pipe_advanced_blend_mode op     : 8;
+   enum pipe_blend_overlap_mode overlap : 2;
+   unsigned src_premultiplied           : 1;
+   unsigned dst_premultiplied           : 1;
+   unsigned clamp_results               : 1;
+   unsigned pad                         : 19;
+};
+static_assert(sizeof(struct agx_blend_advanced) == 4, "packed");
+
+static inline unsigned
+agx_pack_blend_advanced(enum pipe_advanced_blend_mode op,
+                        enum pipe_blend_overlap_mode overlap,
+                        bool src_premultiplied, bool dst_premultiplied,
+                        bool clamp_results)
+{
+   struct agx_blend_advanced blend = {
+      .op = op,
+      .overlap = overlap,
+      .src_premultiplied = src_premultiplied,
+      .dst_premultiplied = dst_premultiplied,
+      .clamp_results = clamp_results,
+   };
+   unsigned val;
+   typed_memcpy(&val, &blend, 1);
+   return val;
+}
+
+static inline struct agx_blend_advanced
+agx_unpack_blend_advanced(unsigned mode)
+{
+   struct agx_blend_advanced blend;
+   typed_memcpy(&blend, &mode, 1);
+   return blend;
+}
 
 struct agx_blend_key {
    struct agx_blend_rt_key rt[8];

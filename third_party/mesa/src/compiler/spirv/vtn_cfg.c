@@ -1,24 +1,6 @@
 /*
  * Copyright © 2015 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "vtn_private.h"
@@ -366,7 +348,6 @@ vtn_cfg_handle_prepass_instruction(struct vtn_builder *b, SpvOp opcode,
        */
       nir_function_impl *impl = nir_function_impl_create(func);
       b->nb = nir_builder_at(nir_before_impl(impl));
-      b->nb.exact = b->exact;
 
       b->func_param_idx = 0;
 
@@ -522,7 +503,7 @@ vtn_parse_switch(struct vtn_builder *b,
       if (is_default) {
          cse->is_default = true;
       } else {
-         util_dynarray_append(&cse->values, uint64_t, literal);
+         util_dynarray_append(&cse->values, literal);
       }
 
       is_default = false;
@@ -637,7 +618,7 @@ vtn_emit_ret_store(struct vtn_builder *b, const struct vtn_block *block)
 static struct nir_block *
 vtn_new_unstructured_block(struct vtn_builder *b, struct vtn_function *func)
 {
-   struct nir_block *n = nir_block_create(b->shader);
+   struct nir_block *n = nir_block_create(func->nir_func->impl);
    exec_list_push_tail(&func->nir_func->impl->body, &n->cf_node.node);
    n->cf_node.parent = &func->nir_func->impl->cf_node;
    return n;
@@ -774,7 +755,6 @@ vtn_function_emit(struct vtn_builder *b, struct vtn_function *func,
    nir_function_impl *impl = func->nir_func->impl;
    b->nb = nir_builder_at(nir_after_impl(impl));
    b->func = func;
-   b->nb.exact = b->exact;
    b->phi_table = _mesa_pointer_hash_table_create(b);
 
    if (b->shader->info.stage == MESA_SHADER_KERNEL || force_unstructured) {
@@ -788,7 +768,7 @@ vtn_function_emit(struct vtn_builder *b, struct vtn_function *func,
                            vtn_handle_phi_second_pass);
 
    if (func->nir_func->impl->structured)
-      nir_copy_prop_impl(impl);
+      nir_opt_copy_prop_impl(impl);
    nir_rematerialize_derefs_in_use_blocks_impl(impl);
 
    /*

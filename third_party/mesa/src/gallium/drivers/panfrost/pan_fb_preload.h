@@ -1,25 +1,6 @@
 /*
  * Copyright (C) 2021 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __PAN_FB_PRELOAD_H
@@ -36,7 +17,7 @@ struct pan_jc;
 struct pan_pool;
 
 struct pan_fb_preload_cache {
-   unsigned gpu_id;
+   uint64_t gpu_id;
    uint32_t gpu_variant;
    struct {
       struct pan_pool *pool;
@@ -53,7 +34,7 @@ struct pan_fb_preload_cache {
 
 #ifdef PAN_ARCH
 void GENX(pan_fb_preload_cache_init)(
-   struct pan_fb_preload_cache *cache, unsigned gpu_id, uint32_t gpu_variant,
+   struct pan_fb_preload_cache *cache, uint64_t gpu_id, uint32_t gpu_variant,
    struct pan_blend_shader_cache *blend_shader_cache, struct pan_pool *bin_pool,
    struct pan_pool *desc_pool);
 

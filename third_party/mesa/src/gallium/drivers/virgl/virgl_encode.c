@@ -785,8 +785,10 @@ int virgl_encode_shader_state(struct virgl_context *ctx,
    if (bret == false)
       return -1;
 
-   if (virgl_debug & VIRGL_DEBUG_TGSI)
-      debug_printf("TGSI:\n---8<---\n%s\n---8<---\n", str);
+   if (virgl_debug & VIRGL_DEBUG_TGSI) {
+      mesa_logi("TGSI:");
+      mesa_log_multiline(MESA_LOG_INFO, str);
+   }
 
    /* virglrenderer before addbd9c5058dcc9d561b20ab747aed58c53499da mis-counts
     * the tokens needed for a BARRIER, so ask it to allocate some more space.
@@ -1781,7 +1783,7 @@ void virgl_encode_create_video_codec(struct virgl_context *ctx,
    virgl_encoder_write_dword(ctx->cbuf, cdc->handle);
    virgl_encoder_write_dword(ctx->cbuf, cdc->base.profile);
    virgl_encoder_write_dword(ctx->cbuf, cdc->base.entrypoint);
-   virgl_encoder_write_dword(ctx->cbuf, cdc->base.chroma_format);
+   virgl_encoder_write_dword(ctx->cbuf, PIPE_VIDEO_CHROMA_FORMAT_420);
    virgl_encoder_write_dword(ctx->cbuf, cdc->base.level);
    virgl_encoder_write_dword(ctx->cbuf, cdc->base.width);
    virgl_encoder_write_dword(ctx->cbuf, cdc->base.height);
@@ -1889,4 +1891,13 @@ int virgl_encode_clear_surface(struct virgl_context *ctx,
    virgl_encoder_write_dword(ctx->cbuf, height);
 
    return 0;
+}
+
+void virgl_encoder_get_layout(struct virgl_context *ctx,
+                              struct virgl_resource *out_res,
+                              struct virgl_resource *res)
+{
+   virgl_encoder_write_cmd_dword(ctx, VIRGL_CMD0(VIRGL_CCMD_GET_PIPE_RESOURCE_LAYOUT, 0, VIRGL_RESOURCE_LAYOUT_SIZE));
+   virgl_encoder_write_res(ctx, out_res);
+   virgl_encoder_write_res(ctx, res);
 }

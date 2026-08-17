@@ -98,7 +98,7 @@ struct ac_cs_blit_options {
 struct ac_cs_blit_description
 {
    struct {
-      struct radeon_surf *surf;
+      const struct radeon_surf *surf;
       uint8_t dim;            /* 1 = 1D texture, 2 = 2D texture, 3 = 3D texture */
       bool is_array;          /* array or cube texture */
       unsigned width0;        /* level 0 width */
@@ -144,7 +144,7 @@ union ac_cs_clear_copy_buffer_key {
       bool is_clear:1;
       unsigned dwords_per_thread:3; /* 1..4 allowed */
       bool clear_value_size_is_12:1;
-      bool src_is_sparse:1;
+      bool src_scalarize_for_sparse:1;
       /* Unaligned clears and copies. */
       unsigned src_align_offset:2; /* how much is the source address unaligned */
       unsigned dst_align_offset:4; /* the first thread shouldn't write this many bytes */
@@ -173,6 +173,7 @@ struct ac_cs_clear_copy_buffer_info {
    bool render_condition_enabled;
    bool dst_is_vram;
    bool src_is_vram;
+   bool dst_is_sparse;
    bool src_is_sparse;
 };
 
@@ -182,6 +183,7 @@ struct ac_cs_clear_copy_buffer_dispatch {
    unsigned num_ssbos;
    unsigned workgroup_size;
    unsigned num_threads;
+   unsigned dispatch_interleave; /* COMPUTE_DISPATCH_INTERLEAVE.INTERLEAVE/INTERLEAVE_1D */
 
    struct {
       unsigned offset;

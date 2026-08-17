@@ -10,7 +10,7 @@
 
 #include "vn_instance.h"
 
-#include "util/driconf.h"
+#include "vn_drirc.h"
 #include "venus-protocol/vn_protocol_driver_info.h"
 #include "venus-protocol/vn_protocol_driver_instance.h"
 #include "venus-protocol/vn_protocol_driver_transport.h"
@@ -39,6 +39,7 @@ static const struct vk_instance_extension_table
 #ifdef VN_USE_WSI_PLATFORM
       .KHR_get_surface_capabilities2 = true,
       .KHR_surface = true,
+      .KHR_surface_maintenance1 = true,
       .KHR_surface_protected_capabilities = true,
       .EXT_surface_maintenance1 = true,
       .EXT_swapchain_colorspace = true,
@@ -67,22 +68,6 @@ static const struct vk_instance_extension_table
 #endif
    };
 
-static const driOptionDescription vn_dri_options[] = {
-   /* clang-format off */
-   DRI_CONF_SECTION_PERFORMANCE
-      DRI_CONF_VK_X11_ENSURE_MIN_IMAGE_COUNT(false)
-      DRI_CONF_VK_X11_OVERRIDE_MIN_IMAGE_COUNT(0)
-      DRI_CONF_VK_X11_STRICT_IMAGE_COUNT(false)
-      DRI_CONF_VK_XWAYLAND_WAIT_READY(true)
-      DRI_CONF_VENUS_IMPLICIT_FENCING(false)
-      DRI_CONF_VENUS_WSI_MULTI_PLANE_MODIFIERS(false)
-   DRI_CONF_SECTION_END
-   DRI_CONF_SECTION_DEBUG
-      DRI_CONF_VK_WSI_FORCE_BGRA8_UNORM_FIRST(false)
-      DRI_CONF_VK_WSI_FORCE_SWAPCHAIN_TO_CURRENT_EXTENT(false)
-   DRI_CONF_SECTION_END
-   /* clang-format on */
-};
 
 static VkResult
 vn_instance_init_renderer_versions(struct vn_instance *instance)
@@ -236,14 +221,14 @@ out_renderer_destroy:
 
 /* instance commands */
 
-VkResult
+VKAPI_ATTR VkResult VKAPI_CALL
 vn_EnumerateInstanceVersion(uint32_t *pApiVersion)
 {
    *pApiVersion = VN_MAX_API_VERSION;
    return VK_SUCCESS;
 }
 
-VkResult
+VKAPI_ATTR VkResult VKAPI_CALL
 vn_EnumerateInstanceExtensionProperties(const char *pLayerName,
                                         uint32_t *pPropertyCount,
                                         VkExtensionProperties *pProperties)
@@ -255,7 +240,7 @@ vn_EnumerateInstanceExtensionProperties(const char *pLayerName,
       &vn_instance_supported_extensions, pPropertyCount, pProperties);
 }
 
-VkResult
+VKAPI_ATTR VkResult VKAPI_CALL
 vn_EnumerateInstanceLayerProperties(uint32_t *pPropertyCount,
                                     VkLayerProperties *pProperties)
 {
@@ -263,7 +248,7 @@ vn_EnumerateInstanceLayerProperties(uint32_t *pPropertyCount,
    return VK_SUCCESS;
 }
 
-VkResult
+VKAPI_ATTR VkResult VKAPI_CALL
 vn_CreateInstance(const VkInstanceCreateInfo *pCreateInfo,
                   const VkAllocationCallbacks *pAllocator,
                   VkInstance *pInstance)
@@ -363,28 +348,21 @@ vn_CreateInstance(const VkInstanceCreateInfo *pCreateInfo,
    if (result != VK_SUCCESS)
       goto out_ring_fini;
 
-   driParseOptionInfo(&instance->available_dri_options, vn_dri_options,
-                      ARRAY_SIZE(vn_dri_options));
-   driParseConfigFiles(&instance->dri_options,
-                       &instance->available_dri_options, 0, "venus", NULL,
-                       NULL, instance->base.vk.app_info.app_name,
-                       instance->base.vk.app_info.app_version,
-                       instance->base.vk.app_info.engine_name,
-                       instance->base.vk.app_info.engine_version);
+   vn_parse_dri_options(&instance->drirc,
+                        &(driConfigFileParseParams) {
+                           .driverName = "venus",
+                           .applicationName = instance->base.vk.app_info.app_name,
+                           .applicationVersion = instance->base.vk.app_info.app_version,
+                           .engineName = instance->base.vk.app_info.engine_name,
+                           .engineVersion = instance->base.vk.app_info.engine_version,
+                        });
 
    instance->renderer->info.has_implicit_fencing =
-      driQueryOptionb(&instance->dri_options, "venus_implicit_fencing");
-   instance->enable_wsi_multi_plane_modifiers = driQueryOptionb(
-      &instance->dri_options, "venus_wsi_multi_plane_modifiers");
+      instance->drirc.performance.implicit_fencing;
 
    if (VN_DEBUG(INIT)) {
       vn_log(instance, "supports multi-plane wsi format modifiers: %s",
-             instance->enable_wsi_multi_plane_modifiers ? "yes" : "no");
-   }
-
-   const char *engine_name = instance->base.vk.app_info.engine_name;
-   if (engine_name) {
-      instance->engine_is_zink = strcmp(engine_name, "mesa zink") == 0;
+             instance->drirc.performance.enable_wsi_multi_plane_modifiers ? "yes" : "no");
    }
 
    *pInstance = instance_handle;
@@ -410,7 +388,7 @@ out_mtx_destroy:
    return vn_error(NULL, result);
 }
 
-void
+VKAPI_ATTR void VKAPI_CALL
 vn_DestroyInstance(VkInstance _instance,
                    const VkAllocationCallbacks *pAllocator)
 {
@@ -451,14 +429,14 @@ vn_DestroyInstance(VkInstance _instance,
       vn_renderer_destroy(instance->renderer, alloc);
    }
 
-   driDestroyOptionCache(&instance->dri_options);
-   driDestroyOptionInfo(&instance->available_dri_options);
+   driDestroyOptionCache(&instance->drirc.options);
+   driDestroyOptionInfo(&instance->drirc.available_options);
 
    vn_instance_base_fini(&instance->base);
    vk_free(alloc, instance);
 }
 
-PFN_vkVoidFunction
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
 vn_GetInstanceProcAddr(VkInstance _instance, const char *pName)
 {
    struct vn_instance *instance = vn_instance_from_handle(_instance);

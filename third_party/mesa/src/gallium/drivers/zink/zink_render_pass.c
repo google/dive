@@ -182,12 +182,12 @@ zink_tc_init_color_attachment(struct zink_context *ctx, const struct tc_renderpa
 }
 
 void
-zink_render_msaa_expand(struct zink_context *ctx, uint32_t msaa_expand_mask)
+zink_render_attachment_shadow(struct zink_context *ctx, uint32_t attachment_shadow_mask)
 {
-   assert(msaa_expand_mask);
+   assert(attachment_shadow_mask);
 
    bool blitting = ctx->blitting;
-   u_foreach_bit(i, msaa_expand_mask) {
+   u_foreach_bit(i, attachment_shadow_mask) {
       zink_create_transient_surface(ctx, &ctx->fb_state.cbufs[i], ctx->fb_state.cbufs[i].nr_samples);
       struct pipe_resource *src = ctx->fb_state.cbufs[i].texture;
       struct zink_resource *res = zink_resource(src);

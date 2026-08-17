@@ -3,6 +3,7 @@
 
 use crate::util::EtnaAsmResultExt;
 
+use compiler::float16::F16;
 use etnaviv_isa_proc::IsaParser;
 use isa_bindings::*;
 use pest::iterators::Pair;
@@ -24,6 +25,20 @@ where
     T::Err: std::fmt::Debug,
 {
     item.as_str().parse::<T>().unwrap()
+}
+
+fn parse_numeric<T: FromStr>(item: Pair<Rule>) -> T
+where
+    T::Err: std::fmt::Debug,
+{
+    let cleaned = item.as_str();
+    // strip suffixes like :s20, :u20, :f16, :f20
+    let cleaned = if let Some((number, _type)) = cleaned.split_once(':') {
+        number
+    } else {
+        cleaned
+    };
+    cleaned.parse::<T>().unwrap()
 }
 
 fn fill_swizzle(item: Pair<Rule>) -> u32 {
@@ -97,7 +112,7 @@ fn fill_tex(pair: Pair<Rule>, tex: &mut etna_inst_tex) {
     }
 }
 
-fn fill_source(pair: Pair<Rule>, src: &mut etna_inst_src, dual_16_mode: bool) {
+fn fill_source(pair: Pair<Rule>, src: &mut etna_inst_src) {
     src.set_use(1);
 
     for item in pair.into_inner() {
@@ -126,38 +141,119 @@ fn fill_source(pair: Pair<Rule>, src: &mut etna_inst_src, dual_16_mode: bool) {
                     src.__bindgen_anon_1.__bindgen_anon_1.set_reg(r);
                 }
             }
-            Rule::Immediate_Minus_Nan => {
+            Rule::Immediate_inf_float => {
                 src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
 
                 let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
 
                 imm_struct.set_imm_type(0);
-                imm_struct.set_imm_val(0xfffff);
+                imm_struct.set_imm_val(0x7f800);
+            }
+            Rule::Immediate_neg_inf_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(0);
+                imm_struct.set_imm_val(0xff800);
+            }
+            Rule::Immediate_inf_half_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(3);
+                imm_struct.set_imm_val(0x7c00);
+            }
+            Rule::Immediate_neg_inf_half_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(3);
+                imm_struct.set_imm_val(0xfc00);
+            }
+            Rule::Immediate_nan_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(0);
+                imm_struct.set_imm_val(0x7fc00);
+            }
+            Rule::Immediate_neg_nan_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(0);
+                imm_struct.set_imm_val(0xffc00);
+            }
+            Rule::Immediate_nan_half_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(3);
+                imm_struct.set_imm_val(0x7fff);
+            }
+            Rule::Immediate_neg_nan_half_float => {
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(3);
+                imm_struct.set_imm_val(0xffff);
             }
             Rule::Immediate_float => {
-                let value: f32 = parse_pair(item);
+                let value: f32 = parse_numeric(item);
                 let bits = value.to_bits();
 
                 assert!((bits & 0xfff) == 0); /* 12 lsb cut off */
                 src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
 
-                let imm_type = if dual_16_mode { 3 } else { 0 };
                 let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
 
-                imm_struct.set_imm_type(imm_type);
+                imm_struct.set_imm_type(0);
                 imm_struct.set_imm_val(bits >> 12);
             }
-            i_type @ (Rule::Immediate_int | Rule::Immediate_uint) => {
-                let value = if i_type == Rule::Immediate_int {
-                    parse_pair::<i32>(item) as u32
-                } else {
-                    parse_pair::<u32>(item)
-                };
+            Rule::Immediate_half_float => {
+                let value: f32 = parse_numeric(item);
+                let bits = F16::from_f32_rtne(value).to_bits();
 
                 src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
 
                 let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(3);
+                imm_struct.set_imm_val(bits as u32);
+            }
+            Rule::Immediate_int => {
+                let value: i32 = parse_numeric(item);
+                assert!(
+                    (-0x80000..=0x7ffff).contains(&value),
+                    "Immediate_int out of 20-bit signed range: {value}"
+                );
+
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                // 20-bit two's-complement
+                let imm_val = (value as u32) & 0xfffff;
+
                 imm_struct.set_imm_type(1);
+                imm_struct.set_imm_val(imm_val);
+            }
+            Rule::Immediate_uint => {
+                let value: u32 = parse_numeric(item);
+                assert!(value <= 0xfffff, "Immediate_uint out of range: {value}");
+
+                src.set_rgroup(isa_reg_group::ISA_REG_GROUP_IMMED);
+
+                let imm_struct = unsafe { &mut src.__bindgen_anon_1.__bindgen_anon_2 };
+
+                imm_struct.set_imm_type(2);
                 imm_struct.set_imm_val(value);
             }
             Rule::SrcSwizzle => {
@@ -171,7 +267,7 @@ fn fill_source(pair: Pair<Rule>, src: &mut etna_inst_src, dual_16_mode: bool) {
     }
 }
 
-fn process(input: Pair<Rule>, dual_16_mode: bool) -> Option<etna_inst> {
+fn process(input: Pair<Rule>) -> Option<etna_inst> {
     // The assembler and disassembler are both using the
     // 'full' form of the ISA which contains void's and
     // use the HW ordering of instruction src arguments.
@@ -211,6 +307,9 @@ fn process(input: Pair<Rule>, dual_16_mode: bool) -> Option<etna_inst> {
             Rule::Local => {
                 instr.set_local(1);
             }
+            Rule::Unk => {
+                instr.set_unk(1);
+            }
             Rule::Left_shift => {
                 let item = p.into_inner().next().unwrap();
                 let amount = parse_pair(item);
@@ -241,7 +340,7 @@ fn process(input: Pair<Rule>, dual_16_mode: bool) -> Option<etna_inst> {
                 // Nothing to do
             }
             Rule::SrcRegister => {
-                fill_source(p, &mut instr.src[src_index], dual_16_mode);
+                fill_source(p, &mut instr.src[src_index]);
                 src_index += 1;
             }
             Rule::TexSrc => {
@@ -258,13 +357,13 @@ fn process(input: Pair<Rule>, dual_16_mode: bool) -> Option<etna_inst> {
     Some(instr)
 }
 
-fn parse(rule: Rule, content: &str, dual_16_mode: bool, asm_result: &mut etna_asm_result) {
+fn parse(rule: Rule, content: &str, asm_result: &mut etna_asm_result) {
     let result = Isa::parse(rule, content);
 
     match result {
         Ok(program) => {
             for line in program {
-                if let Some(result) = process(line, dual_16_mode) {
+                if let Some(result) = process(line) {
                     asm_result.append_instruction(result);
                 }
             }
@@ -278,12 +377,12 @@ fn parse(rule: Rule, content: &str, dual_16_mode: bool, asm_result: &mut etna_as
     }
 }
 
-pub fn asm_process_str(string: &str, dual_16_mode: bool, asm_result: &mut etna_asm_result) {
-    parse(Rule::instruction, string, dual_16_mode, asm_result)
+pub fn asm_process_str(string: &str, asm_result: &mut etna_asm_result) {
+    parse(Rule::instruction, string, asm_result)
 }
 
-pub fn asm_process_file(file: &str, dual_16_mode: bool, asm_result: &mut etna_asm_result) {
+pub fn asm_process_file(file: &str, asm_result: &mut etna_asm_result) {
     let content = fs::read_to_string(file).expect("cannot read file");
 
-    parse(Rule::instructions, &content, dual_16_mode, asm_result)
+    parse(Rule::instructions, &content, asm_result)
 }

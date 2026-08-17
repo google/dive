@@ -3,6 +3,32 @@ Release Notes
 
 The release notes summarize what's new or changed in each Mesa release.
 
+-  :doc:`26.1.5 release notes <relnotes/26.1.5>`
+-  :doc:`26.1.4 release notes <relnotes/26.1.4>`
+-  :doc:`26.1.3 release notes <relnotes/26.1.3>`
+-  :doc:`26.1.2 release notes <relnotes/26.1.2>`
+-  :doc:`26.0.8 release notes <relnotes/26.0.8>`
+-  :doc:`26.1.1 release notes <relnotes/26.1.1>`
+-  :doc:`26.0.7 release notes <relnotes/26.0.7>`
+-  :doc:`26.1.0 release notes <relnotes/26.1.0>`
+-  :doc:`26.0.6 release notes <relnotes/26.0.6>`
+-  :doc:`26.0.5 release notes <relnotes/26.0.5>`
+-  :doc:`26.0.4 release notes <relnotes/26.0.4>`
+-  :doc:`26.0.3 release notes <relnotes/26.0.3>`
+-  :doc:`26.0.2 release notes <relnotes/26.0.2>`
+-  :doc:`26.0.1 release notes <relnotes/26.0.1>`
+-  :doc:`25.3.6 release notes <relnotes/25.3.6>`
+-  :doc:`26.0.0 release notes <relnotes/26.0.0>`
+-  :doc:`25.3.5 release notes <relnotes/25.3.5>`
+-  :doc:`25.3.4 release notes <relnotes/25.3.4>`
+-  :doc:`25.3.3 release notes <relnotes/25.3.3>`
+-  :doc:`25.3.2 release notes <relnotes/25.3.2>`
+-  :doc:`25.2.8 release notes <relnotes/25.2.8>`
+-  :doc:`25.3.1 release notes <relnotes/25.3.1>`
+-  :doc:`25.3.0 release notes <relnotes/25.3.0>`
+-  :doc:`25.2.7 release notes <relnotes/25.2.7>`
+-  :doc:`25.2.6 release notes <relnotes/25.2.6>`
+-  :doc:`25.2.5 release notes <relnotes/25.2.5>`
 -  :doc:`25.2.4 release notes <relnotes/25.2.4>`
 -  :doc:`25.2.3 release notes <relnotes/25.2.3>`
 -  :doc:`25.2.2 release notes <relnotes/25.2.2>`
@@ -465,6 +491,32 @@ The release notes summarize what's new or changed in each Mesa release.
    :maxdepth: 1
    :hidden:
 
+   26.1.5 <relnotes/26.1.5>
+   26.1.4 <relnotes/26.1.4>
+   26.1.3 <relnotes/26.1.3>
+   26.1.2 <relnotes/26.1.2>
+   26.0.8 <relnotes/26.0.8>
+   26.1.1 <relnotes/26.1.1>
+   26.0.7 <relnotes/26.0.7>
+   26.1.0 <relnotes/26.1.0>
+   26.0.6 <relnotes/26.0.6>
+   26.0.5 <relnotes/26.0.5>
+   26.0.4 <relnotes/26.0.4>
+   26.0.3 <relnotes/26.0.3>
+   26.0.2 <relnotes/26.0.2>
+   26.0.1 <relnotes/26.0.1>
+   25.3.6 <relnotes/25.3.6>
+   26.0.0 <relnotes/26.0.0>
+   25.3.5 <relnotes/25.3.5>
+   25.3.4 <relnotes/25.3.4>
+   25.3.3 <relnotes/25.3.3>
+   25.3.2 <relnotes/25.3.2>
+   25.2.8 <relnotes/25.2.8>
+   25.3.1 <relnotes/25.3.1>
+   25.3.0 <relnotes/25.3.0>
+   25.2.7 <relnotes/25.2.7>
+   25.2.6 <relnotes/25.2.6>
+   25.2.5 <relnotes/25.2.5>
    25.2.4 <relnotes/25.2.4>
    25.2.3 <relnotes/25.2.3>
    25.2.2 <relnotes/25.2.2>

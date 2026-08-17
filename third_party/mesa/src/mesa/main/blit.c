@@ -505,7 +505,7 @@ do_blit_framebuffer(struct gl_context *ctx,
       st_window_rectangles_to_blit(ctx, &blit);
 
    blit.filter = pFilter;
-   blit.render_condition_enable = st->has_conditional_render;
+   blit.render_condition_enable = st->screen->caps.conditional_render;
    blit.alpha_blend = false;
 
    if (mask & GL_COLOR_BUFFER_BIT) {
@@ -532,7 +532,8 @@ do_blit_framebuffer(struct gl_context *ctx,
 
          blit.src.resource = srcObj->pt;
          blit.src.level = srcAtt->TextureLevel;
-         blit.src.box.z = srcAtt->Zoffset + srcAtt->CubeMapFace;
+         blit.src.box.z = srcAtt->Zoffset + srcAtt->CubeMapFace +
+                          srcAtt->Texture->Attrib.MinLayer;
          blit.src.format = srcObj->surface_based ? srcObj->surface_format : srcObj->pt->format;
 
          if (!ctx->Color.sRGBEnabled)
@@ -909,14 +910,6 @@ _mesa_BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx,
-                  "glBlitFramebuffer(%d, %d, %d, %d, "
-                  " %d, %d, %d, %d, 0x%x, %s)\n",
-                  srcX0, srcY0, srcX1, srcY1,
-                  dstX0, dstY0, dstX1, dstY1,
-                  mask, _mesa_enum_to_string(filter));
-
    blit_framebuffer_err(ctx, ctx->ReadBuffer, ctx->DrawBuffer,
                         srcX0, srcY0, srcX1, srcY1,
                         dstX0, dstY0, dstX1, dstY1,
@@ -999,15 +992,6 @@ _mesa_BlitNamedFramebuffer(GLuint readFramebuffer, GLuint drawFramebuffer,
                            GLbitfield mask, GLenum filter)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx,
-                  "glBlitNamedFramebuffer(%u %u %d, %d, %d, %d, "
-                  " %d, %d, %d, %d, 0x%x, %s)\n",
-                  readFramebuffer, drawFramebuffer,
-                  srcX0, srcY0, srcX1, srcY1,
-                  dstX0, dstY0, dstX1, dstY1,
-                  mask, _mesa_enum_to_string(filter));
 
    blit_named_framebuffer(ctx, readFramebuffer, drawFramebuffer,
                           srcX0, srcY0, srcX1, srcY1,

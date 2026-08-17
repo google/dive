@@ -410,13 +410,8 @@ v3d_nir_lower_image_load(nir_builder *b, nir_intrinsic_instr *instr)
         } else if (util_format_is_pure_sint(format)) {
                 result = nir_format_unpack_sint(b, result, bits16, 4);
         } else {
-                nir_def *rg = nir_channel(b, result, 0);
-                nir_def *ba = nir_channel(b, result, 1);
-                result = nir_vec4(b,
-                                  nir_unpack_half_2x16_split_x(b, rg),
-                                  nir_unpack_half_2x16_split_y(b, rg),
-                                  nir_unpack_half_2x16_split_x(b, ba),
-                                  nir_unpack_half_2x16_split_y(b, ba));
+                nir_def *color = nir_extract_bits(b, &result, 1, 0, 4, 16);
+                result = nir_f2f32(b, color);
         }
 
         nir_def_rewrite_uses_after(&instr->def, result);

@@ -35,6 +35,7 @@
 #include "intel_wa.h"
 #include "i915/intel_device_info.h"
 #include "xe/intel_device_info.h"
+#include "virtio/intel_virtio.h"
 
 #include "common/intel_gem.h"
 #include "util/u_debug.h"
@@ -78,7 +79,15 @@ static const struct {
    { "lnl", 0x64a0 },
    { "bmg", 0xe202 },
    { "ptl", 0xb080 },
+   { "nvl-u", 0xd740 },
+   { "nvl", 0xd750 },
 };
+
+const char *
+intel_platform_name_by_index(unsigned idx)
+{
+   return idx < ARRAY_SIZE(name_map) ? name_map[idx].name : NULL;
+}
 
 /**
  * Get the PCI ID for the device name.
@@ -521,35 +530,8 @@ static const struct intel_device_info intel_device_info_chv = {
    .simulator_id = 13,
 };
 
-#define CMAT_PRE_XEHP_CONFIGURATIONS                                                                                            \
-   .cooperative_matrix_configurations = {                                                                                       \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16 },    \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT32, INTEL_CMAT_FLOAT32 },    \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 32, INTEL_CMAT_SINT8, INTEL_CMAT_SINT8, INTEL_CMAT_SINT32, INTEL_CMAT_SINT32 },          \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 32, INTEL_CMAT_UINT8, INTEL_CMAT_UINT8, INTEL_CMAT_UINT32, INTEL_CMAT_UINT32 },          \
-   }
-
-#define CMAT_XEHP_CONFIGURATIONS                                                                                                \
-   .cooperative_matrix_configurations = {                                                                                       \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT32, INTEL_CMAT_FLOAT32 },    \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_FLOAT32, INTEL_CMAT_FLOAT32 },  \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 32, INTEL_CMAT_SINT8, INTEL_CMAT_SINT8, INTEL_CMAT_SINT32, INTEL_CMAT_SINT32 },          \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 8, 32, INTEL_CMAT_UINT8, INTEL_CMAT_UINT8, INTEL_CMAT_UINT32, INTEL_CMAT_UINT32 },          \
-   }
-
-#define CMAT_XE2_CONFIGURATIONS                                                                                                 \
-   .cooperative_matrix_configurations = {                                                                                       \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 16, 16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16 },   \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 16, 16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT16, INTEL_CMAT_FLOAT32, INTEL_CMAT_FLOAT32 },   \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 16, 16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_BFLOAT16 }, \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 16, 16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_BFLOAT16, INTEL_CMAT_FLOAT32, INTEL_CMAT_FLOAT32 }, \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 16, 32, INTEL_CMAT_SINT8, INTEL_CMAT_SINT8, INTEL_CMAT_SINT32, INTEL_CMAT_SINT32 },         \
-    { INTEL_CMAT_SCOPE_SUBGROUP, 8, 16, 32, INTEL_CMAT_UINT8, INTEL_CMAT_UINT8, INTEL_CMAT_UINT32, INTEL_CMAT_UINT32 },         \
-   }
-
 #define GFX9_FEATURES                               \
    GFX8_FEATURES,                                   \
-   CMAT_PRE_XEHP_CONFIGURATIONS,                    \
    .ver = 9,                                        \
    .has_sample_with_hiz = true,                     \
    .timestamp_frequency = 12000000
@@ -1040,20 +1022,24 @@ static const struct intel_device_info intel_device_info_sg1 = {
       .size = 768, /* For intel_stub_gpu */                \
       .min_entries = {                                     \
          [MESA_SHADER_VERTEX]    = 64,                     \
+         [MESA_SHADER_TESS_CTRL] = 0,                      \
          [MESA_SHADER_TESS_EVAL] = 34,                     \
          [MESA_SHADER_GEOMETRY]  = 2,                      \
+         [MESA_SHADER_TASK]      = 0,                      \
+         [MESA_SHADER_MESH]      = 0,                      \
       },                                                   \
       .max_entries = {                                     \
          [MESA_SHADER_VERTEX]    = 3832, /* BSpec 47138 */ \
          [MESA_SHADER_TESS_CTRL] = 1548, /* BSpec 47137 */ \
          [MESA_SHADER_TESS_EVAL] = 3576, /* BSpec 47135 */ \
          [MESA_SHADER_GEOMETRY]  = 1548, /* BSpec 47136 */ \
+         [MESA_SHADER_TASK]      = 1548, /* BSpec 47133 */ \
+         [MESA_SHADER_MESH]      = 1548, /* Bspec 47132 */ \
       }                                                    \
    }
 
 #define XEHP_FEATURES                                           \
    GFX12_FEATURES,                                              \
-   CMAT_XEHP_CONFIGURATIONS,                                    \
    .verx10 = 125,                                               \
    .has_lsc = true,                                             \
    .has_llc = false,                                            \
@@ -1122,7 +1108,6 @@ static const struct intel_device_info intel_device_info_atsm_g11 = {
 
 #define MTL_CONFIG(platform_suffix)                             \
    XEHP_FEATURES, XEHP_PLACEHOLDER_THREADS_AND_URB,             \
-   CMAT_PRE_XEHP_CONFIGURATIONS,                                \
    .platform = INTEL_PLATFORM_ ## platform_suffix,              \
    .has_64bit_float = true,                                     \
    .has_64bit_float_via_math_pipe = true,                       \
@@ -1156,14 +1141,13 @@ static const struct intel_device_info intel_device_info_arl_u = {
 static const struct intel_device_info intel_device_info_arl_h = {
    MTL_CONFIG(ARL_H),
    .has_bfloat16 = true,
+   .has_indirect_unroll = true,
    /* BSpec 55414 (r53716). */
    .has_systolic = true,
-   CMAT_XEHP_CONFIGURATIONS,
 };
 
 #define XE2_FEATURES                                            \
    XEHP_FEATURES,                                               \
-   CMAT_XE2_CONFIGURATIONS,                                     \
    .ver = 20,                                                   \
    .verx10 = 200,                                               \
    .grf_size = 64,                                              \
@@ -1180,24 +1164,46 @@ static const struct intel_device_info intel_device_info_arl_h = {
  *
  * (both 10 and 12 map to different compressed L3UC entries)
  */
-#define XE2_PAT_ENTRIES                                         \
-   /* BSpec 71582 (r59285) */                                   \
-   .pat = {                                                     \
-      /* CPU: WB, GPU: PAT 1 => WB, 1WAY */                     \
-      .cached_coherent = PAT_ENTRY(1, WB),                      \
-      /* CPU: WC, GPU: PAT 6 => XD */                           \
-      .scanout = PAT_ENTRY(6, WC),                              \
-      /* CPU: WC, GPU: PAT 0 => WB */                           \
-      .writecombining = PAT_ENTRY(0, WC),                       \
-      /* CPU: WC, GPU: PAT 11 => XD, compressed */              \
-      .compressed_scanout = PAT_ENTRY(11, WC),                  \
-      /* CPU: WC, GPU: PAT 9 => WB, compressed */               \
-      .compressed = PAT_ENTRY(9, WC)                            \
+#define XE2_PAT_ENTRIES                                              \
+   /* BSpec 71582 (r59285) */                                        \
+   .pat = {                                                          \
+      /* CPU: WB, GPU: PAT 1 => WB, 1WAY */                          \
+      .cached_coherent = PAT_ENTRY(1, WB),                           \
+      /* CPU: WC, GPU: PAT 6 => WB+display transient */              \
+      .scanout = PAT_ENTRY(6, WC),                                   \
+      /* CPU: WC, GPU: PAT 0 => WB */                                \
+      .writecombining = PAT_ENTRY(0, WC),                            \
+      /* CPU: WC, GPU: PAT 11 => WB+display transient+compressed */  \
+      .compressed_scanout = PAT_ENTRY(11, INVALID),                  \
+      /* CPU: WC, GPU: PAT 9 => WB+compressed */                     \
+      .compressed = PAT_ENTRY(9, INVALID)                            \
+   }
+
+#define XE2_URB_MIN_MAX_ENTRIES  \
+   .urb = {                                                \
+      .size = 768, /* For intel_stub_gpu */                \
+      .min_entries = {                                     \
+         [MESA_SHADER_VERTEX]    = 64,                     \
+         [MESA_SHADER_TESS_CTRL] = 0,                      \
+         [MESA_SHADER_TESS_EVAL] = 50,                     \
+         [MESA_SHADER_GEOMETRY]  = 2,                      \
+         [MESA_SHADER_TASK]      = 0,                      \
+         [MESA_SHADER_MESH]      = 1,                      \
+      },                                                   \
+      .max_entries = {                                     \
+         [MESA_SHADER_VERTEX]    = 4800, /* BSpec 56268 */ \
+         [MESA_SHADER_TESS_CTRL] = 1548, /* BSpec 56265 */ \
+         [MESA_SHADER_TESS_EVAL] = 4480, /* BSpec 56263 */ \
+         [MESA_SHADER_GEOMETRY]  = 1952, /* BSpec 56264 */ \
+         [MESA_SHADER_TASK]      = 1548, /* BSpec 56267 */ \
+         [MESA_SHADER_MESH]      = 1952, /* BSpec 56266 */ \
+      }                                                    \
    }
 
 #define XE2_CONFIG(platform_suffix)                             \
    XE2_FEATURES, XE2_PAT_ENTRIES,                               \
    XEHP_PLACEHOLDER_THREADS_AND_URB,                            \
+   XE2_URB_MIN_MAX_ENTRIES,                                     \
    .platform = INTEL_PLATFORM_ ## platform_suffix
 
 static const struct intel_device_info intel_device_info_bmg = {
@@ -1215,9 +1221,16 @@ static const struct intel_device_info intel_device_info_lnl = {
    .ver = 30,                                                   \
    .verx10 = 300
 
+#define XE3_URB_MIN_MAX_ENTRIES                                 \
+   XE2_URB_MIN_MAX_ENTRIES
+
+#define XE3_PLACEHOLDER_THREADS_AND_URB                         \
+   XEHP_PLACEHOLDER_THREADS_AND_URB,                            \
+   XE3_URB_MIN_MAX_ENTRIES
+
 #define XE3_CONFIG(platform_suffix)                             \
    XE3_FEATURES, XE2_PAT_ENTRIES,                               \
-   XEHP_PLACEHOLDER_THREADS_AND_URB,                            \
+   XE3_PLACEHOLDER_THREADS_AND_URB,                             \
    .platform = INTEL_PLATFORM_ ## platform_suffix
 
 
@@ -1230,6 +1243,38 @@ static const struct intel_device_info intel_device_info_wcl = {
    XE3_CONFIG(WCL),
    .has_local_mem = false,
    .has_ray_tracing = false,
+};
+
+static const struct intel_device_info intel_device_info_nvl_s_hx_ul = {
+   XE3_CONFIG(NVL_U),
+   .has_local_mem = false,
+   .has_ray_tracing = false,
+};
+
+static const struct intel_device_info intel_device_info_nvl_u_h = {
+   XE3_CONFIG(NVL_U),
+   .has_local_mem = false,
+};
+
+#define XE3P_PLACEHOLDER_THREADS_AND_URB                        \
+   XE3_PLACEHOLDER_THREADS_AND_URB,                             \
+   .num_thread_per_eu = 8 /* BSpec 74198 */,                    \
+   .urb.min_entries[MESA_SHADER_TASK] = 2,                      \
+   .urb.min_entries[MESA_SHADER_MESH] = 2
+
+#define XE3P_FEATURES                                           \
+   XE3_FEATURES,                                                \
+   .ver = 35,                                                   \
+   .verx10 = 350
+
+#define XE3P_CONFIG(platform_suffix)                            \
+   XE3P_FEATURES, XE2_PAT_ENTRIES,                              \
+   XE3P_PLACEHOLDER_THREADS_AND_URB,                            \
+   .platform = INTEL_PLATFORM_ ## platform_suffix
+
+static const struct intel_device_info intel_device_info_nvl_p = {
+   XE3P_CONFIG(NVL_P),
+   .has_local_mem = false,
 };
 
 void
@@ -1558,6 +1603,7 @@ intel_device_info_init_common(int pci_id, bool building,
    case 12:
    case 20:
    case 30:
+   case 35:
       devinfo->max_wm_threads = 128 /* threads-per-PSD */
                               * devinfo->num_slices
                               * 8; /* subslices per slice */
@@ -1616,6 +1662,14 @@ intel_device_info_apply_workarounds(struct intel_device_info *devinfo)
 
    if (intel_needs_workaround(devinfo, 18040209780))
       devinfo->max_gs_threads = 312;
+
+   /* Wa_16025326720 */
+   if (intel_needs_workaround(devinfo, 16025326720)) {
+      devinfo->urb.max_entries[MESA_SHADER_TESS_CTRL] = 1408;
+      devinfo->urb.max_entries[MESA_SHADER_TASK] = 1408;
+      devinfo->urb.max_entries[MESA_SHADER_MESH] = 1792;
+      devinfo->urb.max_entries[MESA_SHADER_GEOMETRY] = 1792;
+   }
 
    /* Fixes issues with:
     * dEQP-GLES31.functional.geometry_shading.layered.render_with_default_layer_cubemap
@@ -1686,37 +1740,10 @@ intel_device_info_adjust_memory(struct intel_device_info *devinfo)
 static void
 init_max_scratch_ids(struct intel_device_info *devinfo)
 {
-   /* Determine the max number of subslices that potentially might be used in
+   /* Determine the max subslice that potentially might be used in
     * scratch space ids.
-    *
-    * For, Gfx11+, scratch space allocation is based on the number of threads
-    * in the base configuration.
-    *
-    * For Gfx9, devinfo->subslice_total is the TOTAL number of subslices and
-    * we wish to view that there are 4 subslices per slice instead of the
-    * actual number of subslices per slice. The documentation for 3DSTATE_PS
-    * "Scratch Space Base Pointer" says:
-    *
-    *    "Scratch Space per slice is computed based on 4 sub-slices.  SW
-    *     must allocate scratch space enough so that each slice has 4
-    *     slices allowed."
-    *
-    * According to the other driver team, this applies to compute shaders
-    * as well.  This is not currently documented at all.
-    *
-    * For Gfx8 and older we user devinfo->subslice_total.
     */
-   unsigned subslices;
-   if (devinfo->verx10 == 125)
-      subslices = 32;
-   else if (devinfo->ver == 12)
-      subslices = (devinfo->platform == INTEL_PLATFORM_DG1 || devinfo->gt == 2 ? 6 : 2);
-   else if (devinfo->ver == 11)
-      subslices = 8;
-   else if (devinfo->ver >= 9 && devinfo->ver < 11)
-      subslices = 4 * devinfo->num_slices;
-   else
-      subslices = devinfo->subslice_total;
+   unsigned subslices = intel_device_info_dual_subslice_id_bound(devinfo);
    assert(subslices >= devinfo->subslice_total);
 
    unsigned scratch_ids_per_subslice;
@@ -1881,29 +1908,39 @@ intel_get_device_info_from_fd(int fd, struct intel_device_info *devinfo, int min
     * rely on an ioctl to get PCI device id for the next step when skipping
     * this drm query.
     */
-   drmDevicePtr drmdev = NULL;
-   if (drmGetDevice2(fd, DRM_DEVICE_GET_PCI_REVISION, &drmdev)) {
-      mesa_loge("Failed to query drm device.");
-      return false;
-   }
-   if (!intel_device_info_init_common(drmdev->deviceinfo.pci->device_id,
-                                      false, devinfo)) {
+   if (is_intel_virtio_fd(fd)) {
+      if (!intel_virtio_get_pci_device_info(fd, devinfo))
+         return false;
+
+      if (!intel_device_info_init_common(devinfo->pci_device_id,
+                                         false, devinfo))
+         return false;
+
+      devinfo->is_virtio = true;
+   } else {
+      drmDevicePtr drmdev = NULL;
+      if (drmGetDevice2(fd, DRM_DEVICE_GET_PCI_REVISION, &drmdev)) {
+         mesa_loge("Failed to query drm device.");
+         return false;
+      }
+      if (!intel_device_info_init_common(drmdev->deviceinfo.pci->device_id,
+                                         false, devinfo)) {
+         drmFreeDevice(&drmdev);
+         return false;
+      }
+
+      devinfo->pci_domain = drmdev->businfo.pci->domain;
+      devinfo->pci_bus = drmdev->businfo.pci->bus;
+      devinfo->pci_dev = drmdev->businfo.pci->dev;
+      devinfo->pci_func = drmdev->businfo.pci->func;
+      devinfo->pci_device_id = drmdev->deviceinfo.pci->device_id;
+      devinfo->pci_revision_id = drmdev->deviceinfo.pci->revision_id;
       drmFreeDevice(&drmdev);
-      return false;
    }
 
-   if ((min_ver > 0 && devinfo->ver < min_ver) || (max_ver > 0 && devinfo->ver > max_ver)) {
-      drmFreeDevice(&drmdev);
+   if ((min_ver > 0 && devinfo->ver < min_ver) || (max_ver > 0 && devinfo->ver > max_ver))
       return false;
-   }
 
-   devinfo->pci_domain = drmdev->businfo.pci->domain;
-   devinfo->pci_bus = drmdev->businfo.pci->bus;
-   devinfo->pci_dev = drmdev->businfo.pci->dev;
-   devinfo->pci_func = drmdev->businfo.pci->func;
-   devinfo->pci_device_id = drmdev->deviceinfo.pci->device_id;
-   devinfo->pci_revision_id = drmdev->deviceinfo.pci->revision_id;
-   drmFreeDevice(&drmdev);
    devinfo->no_hw = debug_get_bool_option("INTEL_NO_HW", false);
 
    devinfo->kmd_type = intel_get_kmd_type(fd);

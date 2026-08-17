@@ -10,6 +10,7 @@
 
 #include "util/format/u_format.h"
 #include "util/half_float.h"
+#include "util/u_math.h"
 #include "util/u_pack_color.h"
 #include "util/u_surface.h"
 
@@ -108,12 +109,19 @@ static uint32_t r300_depth_clear_cb_value(enum pipe_format format,
                                           const float* rgba)
 {
     union util_color uc;
+
+    format = r300_unbyteswap_array_format(format);
+
     util_pack_color(rgba, format, &uc);
 
-    if (util_format_get_blocksizebits(format) == 32)
-        return uc.ui[0];
-    else
-        return uc.us | (uc.us << 16);
+    if (util_format_get_blocksizebits(format) == 32) {
+        /* CBZB clears reuse ZB_DEPTHCLEARVALUE, which expects the 32-bit
+         * payload in little-endian byte order.
+         */
+        return util_cpu_to_le32(uc.ui[0]);
+    }
+
+    return uc.us | (uc.us << 16);
 }
 
 static bool r300_cbzb_clear_allowed(struct r300_context *r300,
@@ -134,8 +142,21 @@ static bool r300_fast_zclear_allowed(struct r300_context *r300,
 {
     struct pipe_framebuffer_state *fb =
         (struct pipe_framebuffer_state*)r300->fb_state.state;
+    struct r300_resource *tex = r300_resource(fb->zsbuf.texture);
+    unsigned zmask_dwords = tex->tex.zmask_dwords[fb->zsbuf.level];
 
-    return r300_resource(fb->zsbuf.texture)->tex.zmask_dwords[fb->zsbuf.level] != 0;
+    if (!zmask_dwords)
+        return false;
+
+    /* On tested RV530, 3D_CLEAR_ZMASK does not work above 0x1400. Avoid fast Z
+     * clear in that range and fall back to normal depth clear.
+     *
+     * FIXME: Validate whether pre-R5xx families need a similar guard and/or
+     * a different threshold. */
+    if (r300->screen->caps.is_r500 && zmask_dwords > 0x1400)
+        return false;
+
+    return true;
 }
 
 static bool r300_hiz_clear_allowed(struct r300_context *r300)
@@ -195,6 +216,8 @@ DEBUG_GET_ONCE_BOOL_OPTION(hyperz, "RADEON_HYPERZ", false)
 /* Clear currently bound buffers. */
 static void r300_clear(struct pipe_context* pipe,
                        unsigned buffers,
+                       uint32_t color_clear_mask,
+                       uint8_t stencil_clear_mask,
                        const struct pipe_scissor_state *scissor_state,
                        const union pipe_color_union *color,
                        double depth,
@@ -411,6 +434,24 @@ static void r300_clear(struct pipe_context* pipe,
         r300_mark_fb_state_dirty(r300, R300_CHANGED_HYPERZ_FLAG);
     }
 
+    /* If we are clearing texture currently bound for sampling we need to invalidate the cache. */
+    if (buffers & PIPE_CLEAR_COLOR) {
+        struct r300_textures_state *texstate =
+            (struct r300_textures_state*)r300->textures_state.state;
+        for (unsigned i = 0; i < fb->nr_cbufs; i++) {
+            struct pipe_resource *cbuf_tex = fb->cbufs[i].texture;
+            if (!cbuf_tex)
+                continue;
+            for (unsigned s = 0; s < texstate->sampler_view_count; s++) {
+                struct r300_sampler_view *view = texstate->sampler_views[s];
+                if (view && view->base.texture == cbuf_tex) {
+                    r300_mark_atom_dirty(r300, &r300->texture_cache_inval);
+                    break;
+                }
+            }
+        }
+    }
+
     /* Enable fastfill and/or hiz.
      *
      * If we cleared zmask/hiz, it's in use now. The Hyper-Z state update
@@ -508,7 +549,7 @@ void r300_decompress_zmask_locked(struct r300_context *r300)
     r300->context.set_framebuffer_state(&r300->context, &saved_fb);
     util_unreference_framebuffer_state(&saved_fb);
 
-    pipe_surface_reference(&r300->locked_zbuffer, NULL);
+    pipe_surface_reference(&r300->locked_zbuffer, NULL, &r300->context, r300_surface_destroy);
 }
 
 bool r300_is_blit_supported(enum pipe_format format)
@@ -671,7 +712,7 @@ static void r300_resource_copy_region(struct pipe_context *pipe,
                               false, false, 0, NULL);
     r300_blitter_end(r300);
 
-    pipe_surface_reference(&dst_view, NULL);
+    pipe_surface_reference(&dst_view, NULL, &r300->context, r300_surface_destroy);
     pipe_sampler_view_reference(&src_view, NULL);
 }
 
@@ -716,18 +757,13 @@ static void r300_simple_msaa_resolve(struct pipe_context *pipe,
 
     memset(&surf_tmpl, 0, sizeof(surf_tmpl));
     surf_tmpl.format = format;
-    srcsurf = r300_surface(pipe->create_surface(pipe, src, &surf_tmpl));
+    srcsurf = r300_surface(r300_create_surface(pipe, src, &surf_tmpl));
 
     surf_tmpl.format = format;
     surf_tmpl.level = dst_level;
     surf_tmpl.first_layer =
     surf_tmpl.last_layer = dst_layer;
-    dstsurf = r300_surface(pipe->create_surface(pipe, dst, &surf_tmpl));
-
-    /* COLORPITCH should contain the tiling info of the resolve buffer.
-     * The tiling of the AA buffer isn't programmable anyway. */
-    srcsurf->pitch &= ~(R300_COLOR_TILE(1) | R300_COLOR_MICROTILE(3));
-    srcsurf->pitch |= dstsurf->pitch & (R300_COLOR_TILE(1) | R300_COLOR_MICROTILE(3));
+    dstsurf = r300_surface(r300_create_surface(pipe, dst, &surf_tmpl));
 
     /* Enable AA resolve. */
     aa->dest = dstsurf;
@@ -744,8 +780,8 @@ static void r300_simple_msaa_resolve(struct pipe_context *pipe,
     r300->aa_state.size = 4;
     r300_mark_atom_dirty(r300, &r300->aa_state);
 
-    pipe_surface_reference((struct pipe_surface**)&srcsurf, NULL);
-    pipe_surface_reference((struct pipe_surface**)&dstsurf, NULL);
+    r300_surface_destroy(pipe, &srcsurf->base);
+    r300_surface_destroy(pipe, &dstsurf->base);
 }
 
 static void r300_msaa_resolve(struct pipe_context *pipe,

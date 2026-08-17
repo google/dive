@@ -12,10 +12,9 @@ libradeon_noop_drm_shim = shared_library(
 
 libamdgpu_noop_drm_shim = shared_library(
   'amdgpu_noop_drm_shim',
-  ['amdgpu_noop_drm_shim.c', 'amdgpu_devices.c'],
+  ['amdgpu_noop_drm_shim.c', '../common/amdgpu_devices.c'],
   include_directories: [inc_include, inc_src, inc_amd],
   dependencies: dep_drm_shim,
-  gnu_symbol_visibility : 'hidden',
   install : true,
 )
 

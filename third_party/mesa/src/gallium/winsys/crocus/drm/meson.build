@@ -10,4 +10,5 @@ libcrocuswinsys = static_library(
   ],
   gnu_symbol_visibility : 'hidden',
   dependencies : [dep_valgrind, idep_intel_dev, idep_mesautil],
+  link_with : [libintel_dev],
 )

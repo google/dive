@@ -11,7 +11,7 @@
 #ifndef RADV_PIPELINE_GRAPHICS_H
 #define RADV_PIPELINE_GRAPHICS_H
 
-#include "sid.h"
+#include "amdgfxregs.h"
 
 #include "radv_descriptor_set.h"
 #include "radv_pipeline.h"
@@ -19,7 +19,6 @@
 #include "radv_shader.h"
 
 #include "vk_graphics_state.h"
-#include "vk_meta.h"
 
 #define VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO_RADV (VkStructureType)2000290001
 
@@ -28,10 +27,6 @@
 typedef struct VkGraphicsPipelineCreateInfoRADV {
    VkStructureType sType;
    const void *pNext;
-   VkBool32 db_depth_clear;
-   VkBool32 db_stencil_clear;
-   VkBool32 depth_compress_disable;
-   VkBool32 stencil_compress_disable;
    uint32_t custom_blend_mode;
 } VkGraphicsPipelineCreateInfoRADV;
 
@@ -141,7 +136,6 @@ struct radv_graphics_pipeline {
 
    struct radv_multisample_state ms;
    struct radv_ia_multi_vgt_param_helpers ia_multi_vgt_param;
-   uint32_t db_render_control;
 
    /* Last pre-PS API stage */
    mesa_shader_stage last_vgt_api_stage;
@@ -152,14 +146,8 @@ struct radv_graphics_pipeline {
    /* Whether the pipeline uses out-of-order rasterization. */
    bool uses_out_of_order_rast;
 
-   /* Whether the pipeline uses VRS. */
-   bool uses_vrs;
-
    /* Whether the pipeline uses a VRS attachment. */
    bool uses_vrs_attachment;
-
-   /* Whether the pipeline uses VRS coarse shading internally. */
-   bool uses_vrs_coarse_shading;
 
    /* For relocation of shaders with RGP. */
    struct radv_sqtt_shaders_reloc *sqtt_shaders_reloc;
@@ -174,7 +162,7 @@ struct radv_retained_shaders {
    struct {
       void *serialized_nir;
       size_t serialized_nir_size;
-      unsigned char shader_sha1[SHA1_DIGEST_LENGTH];
+      unsigned char shader_blake3[BLAKE3_KEY_LEN];
       struct radv_shader_stage_key key;
    } stages[MESA_VULKAN_SHADER_STAGES];
 };
@@ -627,8 +615,6 @@ radv_normalize_blend_factor(VkBlendOp op, VkBlendFactor *src_factor, VkBlendFact
 void radv_blend_remove_dst(VkBlendOp *func, VkBlendFactor *src_factor, VkBlendFactor *dst_factor,
                            VkBlendFactor expected_dst, VkBlendFactor replacement_src);
 
-unsigned radv_format_meta_fs_key(struct radv_device *device, VkFormat format);
-
 struct radv_ia_multi_vgt_param_helpers radv_compute_ia_multi_vgt_param(const struct radv_device *device,
                                                                        struct radv_shader *const *shaders);
 
@@ -658,24 +644,29 @@ struct radv_ps_epilog_state {
    uint8_t need_src_alpha;
 };
 
-struct radv_ps_epilog_key radv_generate_ps_epilog_key(const struct radv_device *device,
+struct radv_ps_epilog_key radv_generate_ps_epilog_key(const struct radv_compiler_info *compiler_info,
                                                       const struct radv_ps_epilog_state *state);
 
-void radv_graphics_shaders_compile(struct radv_device *device, struct vk_pipeline_cache *cache,
+void radv_graphics_shaders_compile(const struct radv_compiler_info *compiler_info, struct vk_pipeline_cache *cache,
                                    struct radv_shader_stage *stages, const struct radv_graphics_state_key *gfx_state,
-                                   bool keep_executable_info, bool keep_statistic_info, bool is_internal,
-                                   bool skip_shaders_cache, struct radv_retained_shaders *retained_shaders,
-                                   bool noop_fs, struct radv_shader **shaders, struct radv_shader_binary **binaries,
-                                   struct radv_shader **gs_copy_shader, struct radv_shader_binary **gs_copy_binary);
+                                   bool is_internal, struct radv_retained_shaders *retained_shaders, bool noop_fs,
+                                   struct radv_shader_debug_info *debug, struct radv_shader_binary **binaries,
+                                   struct radv_shader_debug_info *gs_copy_debug,
+                                   struct radv_shader_binary **gs_copy_binary);
+
+void radv_graphics_shaders_create(struct radv_device *device, struct vk_pipeline_cache *cache, bool skip_shaders_cache,
+                                  struct radv_shader **shaders, struct radv_shader_binary **binaries,
+                                  struct radv_shader_debug_info *debug, struct radv_shader **gs_copy_shader,
+                                  struct radv_shader_binary *gs_copy_binary,
+                                  struct radv_shader_debug_info *gs_copy_debug);
 
 struct radv_vgt_shader_key {
    uint8_t tess : 1;
    uint8_t gs : 1;
-   uint8_t mesh_scratch_ring : 1;
    uint8_t mesh : 1;
    uint8_t ngg_passthrough : 1;
    uint8_t ngg : 1; /* gfx10+ */
-   uint8_t ngg_streamout : 1;
+   uint8_t ngg_wave_id_en : 1;
    uint8_t hs_wave32 : 1;
    uint8_t gs_wave32 : 1;
    uint8_t vs_wave32 : 1;

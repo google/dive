@@ -19,6 +19,11 @@
 
 #include "pvr_common.h"
 
+/* Amount of padding required for VkBuffers to ensure we don't read beyond
+ * a page boundary.
+ */
+#define PVR_BUFFER_MEMORY_PADDING_SIZE 4
+
 struct pvr_buffer {
    struct vk_buffer vk;
 

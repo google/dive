@@ -10,24 +10,21 @@
 
 #include "radv_nir_to_llvm.h"
 #include "nir/nir.h"
-#include "radv_debug.h"
 #include "radv_llvm_helper.h"
 #include "radv_shader.h"
 #include "radv_shader_args.h"
 
 #include "ac_binary.h"
 #include "ac_llvm_build.h"
-#include "ac_nir.h"
 #include "ac_nir_to_llvm.h"
 #include "ac_shader_abi.h"
 #include "ac_shader_util.h"
-#include "sid.h"
 
 struct radv_shader_context {
    struct ac_llvm_context ac;
    const struct nir_shader *shader;
    struct ac_shader_abi abi;
-   const struct radv_nir_compiler_options *options;
+   const struct radv_llvm_compiler_options *options;
    const struct radv_shader_info *shader_info;
    const struct radv_shader_args *args;
 
@@ -47,17 +44,17 @@ radv_shader_context_from_abi(struct ac_shader_abi *abi)
 static struct ac_llvm_pointer
 create_llvm_function(struct ac_llvm_context *ctx, LLVMModuleRef module, LLVMBuilderRef builder,
                      const struct ac_shader_args *args, enum ac_llvm_calling_convention convention,
-                     unsigned max_workgroup_size, const struct radv_nir_compiler_options *options)
+                     unsigned max_workgroup_size, const struct radv_llvm_compiler_options *options)
 {
    struct ac_llvm_pointer main_function = ac_build_main(args, ctx, convention, "main", ctx->voidt, module);
 
-   if (options->info->address32_hi) {
+   if (options->address32_hi) {
       ac_llvm_add_target_dep_function_attr(main_function.value, "amdgpu-32bit-address-high-bits",
-                                           options->info->address32_hi);
+                                           options->address32_hi);
    }
 
    ac_llvm_set_workgroup_size(main_function.value, max_workgroup_size);
-   ac_llvm_set_target_features(main_function.value, ctx, true);
+   ac_llvm_set_target_features(main_function.value, ctx, options->wgp_mode);
 
    return main_function;
 }
@@ -184,7 +181,7 @@ ac_llvm_finalize_module(struct radv_shader_context *ctx, struct ac_midend_optimi
 }
 
 static LLVMModuleRef
-ac_translate_nir_to_llvm(struct ac_llvm_compiler *ac_llvm, const struct radv_nir_compiler_options *options,
+ac_translate_nir_to_llvm(struct ac_llvm_compiler *ac_llvm, const struct radv_llvm_compiler_options *options,
                          const struct radv_shader_info *info, struct nir_shader *const *shaders, int shader_count,
                          const struct radv_shader_args *args)
 {
@@ -206,7 +203,8 @@ ac_translate_nir_to_llvm(struct ac_llvm_compiler *ac_llvm, const struct radv_nir
       exports_color_null = !exports_mrtz || (shaders[0]->info.outputs_written & (0xffu << FRAG_RESULT_DATA0));
    }
 
-   ac_llvm_context_init(&ctx.ac, ac_llvm, options->info, float_mode, info->wave_size, exports_color_null, exports_mrtz);
+   ac_llvm_context_init(&ctx.ac, ac_llvm, options->compiler_info, float_mode, info->wave_size, exports_color_null,
+                        exports_mrtz);
 
    uint32_t length = 1;
    for (uint32_t i = 0; i < shader_count; i++)
@@ -239,8 +237,7 @@ ac_translate_nir_to_llvm(struct ac_llvm_compiler *ac_llvm, const struct radv_nir
    ctx.abi.load_ssbo = radv_load_ssbo;
    ctx.abi.load_sampler_desc = radv_get_sampler_desc;
    ctx.abi.clamp_shadow_reference = false;
-   ctx.abi.robust_buffer_access = options->robust_buffer_access_llvm;
-   ctx.abi.load_grid_size_from_user_sgpr = args->load_grid_size_from_user_sgpr;
+   ctx.abi.robust_buffer_access = options->robust_buffer_access;
 
    bool is_ngg = is_pre_gs_stage(shaders[0]->info.stage) && info->is_ngg;
    if (shader_count >= 2 || is_ngg)
@@ -354,7 +351,7 @@ radv_llvm_compile(LLVMModuleRef M, char **pelf_buffer, size_t *pelf_size, struct
 
 static void
 ac_compile_llvm_module(struct ac_llvm_compiler *ac_llvm, LLVMModuleRef llvm_module, struct radv_shader_binary **rbinary,
-                       const char *name, const struct radv_nir_compiler_options *options)
+                       const char *name, const struct radv_llvm_compiler_options *options)
 {
    char *elf_buffer = NULL;
    size_t elf_size = 0;
@@ -390,6 +387,7 @@ ac_compile_llvm_module(struct ac_llvm_compiler *ac_llvm, LLVMModuleRef llvm_modu
 
    rbin->base.type = RADV_BINARY_TYPE_RTLD;
    rbin->base.total_size = alloc_size;
+   rbin->base.config.wgp_mode = options->wgp_mode;
    rbin->elf_size = elf_size;
    rbin->llvm_ir_size = llvm_ir_size;
    *rbinary = &rbin->base;
@@ -399,7 +397,7 @@ ac_compile_llvm_module(struct ac_llvm_compiler *ac_llvm, LLVMModuleRef llvm_modu
 }
 
 static void
-radv_compile_nir_shader(struct ac_llvm_compiler *ac_llvm, const struct radv_nir_compiler_options *options,
+radv_compile_nir_shader(struct ac_llvm_compiler *ac_llvm, const struct radv_llvm_compiler_options *options,
                         const struct radv_shader_info *info, struct radv_shader_binary **rbinary,
                         const struct radv_shader_args *args, struct nir_shader *const *nir, int nir_count)
 {
@@ -413,7 +411,7 @@ radv_compile_nir_shader(struct ac_llvm_compiler *ac_llvm, const struct radv_nir_
 }
 
 void
-llvm_compile_shader(const struct radv_nir_compiler_options *options, const struct radv_shader_info *info,
+llvm_compile_shader(const struct radv_llvm_compiler_options *options, const struct radv_shader_info *info,
                     unsigned shader_count, struct nir_shader *const *shaders, struct radv_shader_binary **binary,
                     const struct radv_shader_args *args)
 {
@@ -424,7 +422,7 @@ llvm_compile_shader(const struct radv_nir_compiler_options *options, const struc
    if (options->check_ir)
       tm_options |= AC_TM_CHECK_IR;
 
-   radv_init_llvm_compiler(&ac_llvm, options->info->family, tm_options, info->wave_size);
+   radv_init_llvm_compiler(&ac_llvm, options->family, tm_options, info->wave_size);
 
    radv_compile_nir_shader(&ac_llvm, options, info, binary, args, shaders, shader_count);
 }

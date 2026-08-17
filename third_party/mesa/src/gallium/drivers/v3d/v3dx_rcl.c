@@ -571,7 +571,8 @@ emit_render_layer(struct v3d_job *job, uint32_t layer)
          * core's tile list here.
          */
         uint32_t tile_alloc_offset =
-                layer * job->tile_desc.draw_x * job->tile_desc.draw_y * 64;
+                layer * job->tile_desc.draw_x * job->tile_desc.draw_y *
+                V3D_TILE_ALLOC_INITIAL_BLOCK_SIZE;
         cl_emit(&job->rcl, MULTICORE_RENDERING_TILE_LIST_SET_BASE, list) {
                 list.address = cl_address(job->tile_alloc, tile_alloc_offset);
         }
@@ -769,13 +770,6 @@ v3dX(emit_rcl)(struct v3d_job *job)
 #if V3D_VERSION >= 71
                 config.log2_tile_width = log2_tile_size(job->tile_desc.width);
                 config.log2_tile_height = log2_tile_size(job->tile_desc.height);
-
-                /* FIXME: ideallly we would like next assert on the packet header (as is
-                 * general, so also applies to GL). We would need to expand
-                 * gen_pack_header for that.
-                 */
-                assert(config.log2_tile_width == config.log2_tile_height ||
-                       config.log2_tile_width == config.log2_tile_height + 1);
 #endif
 
         }
@@ -934,7 +928,7 @@ v3dX(emit_rcl)(struct v3d_job *job)
         cl_emit(&job->rcl, TILE_LIST_INITIAL_BLOCK_SIZE, init) {
                 init.use_auto_chained_tile_lists = true;
                 init.size_of_first_block_in_chained_tile_lists =
-                        TILE_ALLOCATION_BLOCK_SIZE_64B;
+                        V3D_TILE_ALLOC_INITIAL_BLOCK_SIZE_ENUM;
         }
 
         /* ARB_framebuffer_no_attachments allows rendering to happen even when

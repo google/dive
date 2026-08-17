@@ -20,16 +20,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/syscall.h>
 #include <vulkan/vulkan.h>
 
-#include "c11/threads.h"
-#include "drm-uapi/drm_fourcc.h"
 #include "util/bitscan.h"
 #include "util/bitset.h"
 #include "util/compiler.h"
 #include "util/detect_os.h"
-#include "util/libsync.h"
 #include "util/list.h"
 #include "util/macros.h"
 #include "util/os_time.h"
@@ -37,6 +33,7 @@
 #include "util/simple_mtx.h"
 #include "util/u_atomic.h"
 #include "util/u_math.h"
+#include "util/u_thread.h"
 #include "util/xmlconfig.h"
 #include "vk_alloc.h"
 #include "vk_command_buffer.h"
@@ -50,6 +47,15 @@
 #include "vk_physical_device.h"
 #include "vk_queue.h"
 #include "vk_util.h"
+
+#if DETECT_OS_WINDOWS
+#include <processthreadsapi.h>
+#else
+#include <sys/syscall.h>
+
+#include "drm-uapi/drm_fourcc.h"
+#include "util/libsync.h"
+#endif
 
 #include "vn_entrypoints.h"
 
@@ -66,6 +72,10 @@
 
 #define VN_TRACE_SCOPE(name) MESA_TRACE_SCOPE(name)
 #define VN_TRACE_FUNC()      MESA_TRACE_SCOPE(__func__)
+
+#define VN_MAKE_NVIDIA_VERSION(major, minor, sub_minor, patch)               \
+   ((((uint32_t)(major)) << 22U) | (((uint32_t)(minor)) << 14U) |            \
+    (((uint32_t)(sub_minor)) << 6U) | ((uint32_t)(patch)))
 
 struct vn_instance;
 struct vn_physical_device;
@@ -117,6 +127,8 @@ enum vn_debug {
    VN_DEBUG_NO_SECOND_QUEUE = 1ull << 9,
    VN_DEBUG_NO_RAY_TRACING = 1ull << 10,
    VN_DEBUG_MEM_BUDGET = 1ull << 11,
+   VN_DEBUG_NO_DESC_HEAP = 1ull << 12,
+   VN_DEBUG_NO_DRM_SYNCOBJ = 1ull << 13,
 };
 
 enum vn_perf {
@@ -133,6 +145,7 @@ enum vn_perf {
    VN_PERF_NO_MULTI_RING = 1ull << 11,
    VN_PERF_NO_ASYNC_IMAGE_CREATE = 1ull << 12,
    VN_PERF_NO_ASYNC_IMAGE_FORMAT = 1ull << 13,
+   VN_PERF_NO_ASYNC_PRESENT = 1ull << 14,
 };
 
 typedef uint64_t vn_object_id;
@@ -261,6 +274,7 @@ struct vn_relax_state {
    uint32_t iter;
    const struct vn_relax_profile profile;
    const char *reason_str;
+   bool warn;
 };
 
 /* TLS ring
@@ -417,6 +431,12 @@ vn_relax(struct vn_relax_state *state);
 
 void
 vn_relax_fini(struct vn_relax_state *state);
+
+static inline bool
+vn_relax_warn(struct vn_relax_state *state)
+{
+   return state->warn;
+}
 
 static_assert(sizeof(vn_object_id) >= sizeof(uintptr_t), "");
 
@@ -614,8 +634,10 @@ vn_gettid(void)
 {
 #if DETECT_OS_ANDROID
    return gettid();
-#elif defined(__FreeBSD__)
+#elif DETECT_OS_FREEBSD
    return syscall(SYS_thr_self);
+#elif DETECT_OS_WINDOWS
+   return GetCurrentThreadId();
 #else
    return syscall(SYS_gettid);
 #endif
@@ -650,13 +672,13 @@ vn_tls_destroy_ring(struct vn_tls_ring *tls_ring);
 static inline uint32_t
 vn_cache_key_hash_function(const void *key)
 {
-   return _mesa_hash_data(key, SHA1_DIGEST_LENGTH);
+   return _mesa_hash_data(key, BLAKE3_KEY_LEN);
 }
 
 static inline bool
 vn_cache_key_equal_function(const void *key1, const void *key2)
 {
-   return memcmp(key1, key2, SHA1_DIGEST_LENGTH) == 0;
+   return memcmp(key1, key2, BLAKE3_KEY_LEN) == 0;
 }
 
 static inline void

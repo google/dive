@@ -13,12 +13,16 @@
 #include "nir_builder.h"
 #include "vk_pipeline.h"
 
+#include "nvkcl.h"
+#include "cl/nvk_copy_indirect.h"
+
 #include "clcb97.h"
 #include "nv_push.h"
 #include "nv_push_cl9097.h"
 #include "nv_push_cl906f.h"
 #include "nv_push_cla0c0.h"
 #include "nv_push_clb1c0.h"
+#include "nv_push_clc597.h"
 #include "nv_push_clc6c0.h"
 #include "nv_push_clc7c0.h"
 #include "nv_push_clc86f.h"
@@ -114,7 +118,7 @@ build_exec_set_addr(nir_builder *b, struct process_cmd_in *in, nir_def *idx)
 static nir_def *
 load_global_dw(nir_builder *b, nir_def *addr, uint32_t offset_dw)
 {
-   return nir_load_global(b, nir_iadd_imm(b, addr, offset_dw * 4), 4, 1, 32);
+   return nir_load_global(b, 1, 32, nir_iadd_imm(b, addr, offset_dw * 4));
 }
 
 static void
@@ -122,7 +126,7 @@ store_global_dw(nir_builder *b, nir_def *addr, uint32_t offset_dw,
                 nir_def *data)
 {
    assert(data->bit_size == 32 && data->num_components == 1);
-   nir_store_global(b, nir_iadd_imm(b, addr, offset_dw * 4), 4, data, 0x1);
+   nir_store_global(b, data, nir_iadd_imm(b, addr, offset_dw * 4));
 }
 
 static void
@@ -390,12 +394,46 @@ build_process_cs_cmd_seq(nir_builder *b, struct nvk_nir_push *p,
                nir_ior(b, load_global_dw(b, shader_qmd_addr, cb0_addr_hi_dw),
                           nir_unpack_64_2x32_split_y(b, root_addr_shifted));
 
+            /* Ensure each local size parameters are part of the same 32-bit
+             * value */
+            assert(qmd_layout.local_x_start / 32 ==
+                   (qmd_layout.local_x_end - 1) / 32);
+            assert(qmd_layout.local_y_start / 32 ==
+                   (qmd_layout.local_y_end - 1) / 32);
+            assert(qmd_layout.local_z_start / 32 ==
+                   (qmd_layout.local_z_end - 1) / 32);
+
+            /* Preload local size parameters as we are going to use them */
+            qmd_repl[qmd_layout.local_x_start / 32] = load_global_dw(
+               b, shader_qmd_addr, qmd_layout.local_x_start / 32);
+            qmd_repl[qmd_layout.local_y_start / 32] = load_global_dw(
+               b, shader_qmd_addr, qmd_layout.local_y_start / 32);
+            qmd_repl[qmd_layout.local_z_start / 32] = load_global_dw(
+               b, shader_qmd_addr, qmd_layout.local_z_start / 32);
+
             copy_repl_global_dw(b, qmd_addr, shader_qmd_addr,
                                 qmd_repl, qmd_repl_count);
 
-            /* Now emit commands */
+            nir_def *local_x = nir_ubitfield_extract_imm(
+               b, qmd_repl[qmd_layout.local_x_start / 32],
+               qmd_layout.local_x_start % 32,
+               qmd_layout.local_x_end - qmd_layout.local_x_start);
+            nir_def *local_y = nir_ubitfield_extract_imm(
+               b, qmd_repl[qmd_layout.local_y_start / 32],
+               qmd_layout.local_y_start % 32,
+               qmd_layout.local_y_end - qmd_layout.local_y_start);
+            nir_def *local_z = nir_ubitfield_extract_imm(
+               b, qmd_repl[qmd_layout.local_z_start / 32],
+               qmd_layout.local_z_start % 32,
+               qmd_layout.local_z_end - qmd_layout.local_z_start);
+            nir_def *local_size =
+               nir_imul(b, nir_imul(b, local_x, local_y), local_z);
+
             nir_def *invoc = nir_imul_2x32_64(b, disp_size_x, disp_size_y);
             invoc = nir_imul(b, invoc, nir_u2u64(b, disp_size_z));
+            invoc = nir_imul(b, invoc, nir_u2u64(b, local_size));
+
+            /* Now emit commands */
             if (pdev->info.cls_compute >= AMPERE_COMPUTE_B)
                nvk_nir_P_1INC(b, p, NVC7C0, CALL_MME_MACRO(NVK_MME_ADD_CS_INVOCATIONS), 2);
             else
@@ -465,7 +503,8 @@ build_gfx_set_exec(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr,
          if (stage != MESA_SHADER_FRAGMENT)
             last_vtgm = stage;
 
-         uint32_t type = mesa_to_nv9097_shader_type(stage);
+         uint32_t type = mesa_to_nv9097_shader_type(
+            stage, token->shaderStages & VK_SHADER_STAGE_TASK_BIT_EXT);
          type_stage[type] = stage;
          type_shader_idx[type] = load_global_dw(b, token_addr, i++);
       }
@@ -496,7 +535,37 @@ build_gfx_set_exec(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr,
 }
 
 static void
+build_push_write_push_const(nir_builder *b, struct nvk_nir_push *p,
+                            const struct nvk_physical_device *pdev,
+                            const VkPushConstantRange *pc_range)
+{
+   assert(pc_range->offset % 4 == 0);
+   assert(pc_range->size % 4 == 0);
+   const uint32_t dw_count = pc_range->size / 4;
+
+   assert(!(pc_range->stageFlags & VK_SHADER_STAGE_COMPUTE_BIT));
+   if (nvk_use_hw_root_table(&pdev->info, true)) {
+      const uint32_t table = nvk_hw_root_table_index(push);
+      static_assert(nvk_hw_root_table_offset(push) == 0,
+                    "Push constants are aligned");
+
+      uint32_t root_table_selector;
+      V_NVC597_SET_ROOT_TABLE_SELECTOR(root_table_selector,{
+         .root_table = table,
+         .offset = pc_range->offset,
+      });
+      nvk_nir_P_1INC(b, p, NVC597, SET_ROOT_TABLE_SELECTOR, 1 + dw_count);
+      nvk_nir_push_dw(b, p, nir_imm_int(b, root_table_selector));
+   } else {
+      nvk_nir_P_1INC(b, p, NV9097, LOAD_CONSTANT_BUFFER_OFFSET, 1 + dw_count);
+      nvk_nir_push_dw(b, p, nir_imm_int(b,
+         nvk_root_descriptor_offset(push) + pc_range->offset));
+   }
+}
+
+static void
 build_push_gfx_const(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr,
+                     const struct nvk_physical_device *pdev,
                      const VkIndirectCommandsPushConstantTokenEXT *token)
 {
    const VkPushConstantRange *pc_range = &token->updateRange;
@@ -504,13 +573,10 @@ build_push_gfx_const(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr
    // TODO: Compute
    assert(!(pc_range->stageFlags & VK_SHADER_STAGE_COMPUTE_BIT));
 
-   assert(pc_range->offset % 4 == 0);
    assert(pc_range->size % 4 == 0);
    const uint32_t dw_count = pc_range->size / 4;
 
-   nvk_nir_P_1INC(b, p, NV9097, LOAD_CONSTANT_BUFFER_OFFSET, 1 + dw_count);
-   nvk_nir_push_dw(b, p, nir_imm_int(b,
-      nvk_root_descriptor_offset(push) + pc_range->offset));
+   build_push_write_push_const(b, p, pdev, pc_range);
    for (uint32_t i = 0; i < dw_count; i++)
       nvk_nir_push_dw(b, p, load_global_dw(b, token_addr, i));
 }
@@ -518,18 +584,16 @@ build_push_gfx_const(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr
 static void
 build_push_gfx_seq_idx(nir_builder *b, struct nvk_nir_push *p,
                        nir_def *token_addr, nir_def *seq_idx,
+                       const struct nvk_physical_device *pdev,
                        const VkIndirectCommandsPushConstantTokenEXT *token)
 {
    const VkPushConstantRange *pc_range = &token->updateRange;
 
    // TODO: Compute
    assert(!(pc_range->stageFlags & VK_SHADER_STAGE_COMPUTE_BIT));
-
-   assert(pc_range->offset % 4 == 0);
    assert(pc_range->size == 4);
-   nvk_nir_P_1INC(b, p, NV9097, LOAD_CONSTANT_BUFFER_OFFSET, 2);
-   nvk_nir_push_dw(b, p, nir_imm_int(b,
-      nvk_root_descriptor_offset(push) + pc_range->offset));
+
+   build_push_write_push_const(b, p, pdev, pc_range);
    nvk_nir_push_dw(b, p, seq_idx);
 }
 
@@ -618,10 +682,11 @@ build_draw_count(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr)
    nir_def *stride  = load_global_dw(b, token_addr, 2);
    nir_def *count   = load_global_dw(b, token_addr, 3);
 
-   nvk_nir_P_1INC(b, p, NV9097, CALL_MME_MACRO(NVK_MME_DRAW_INDIRECT), 4);
+   nvk_nir_P_1INC(b, p, NV9097, CALL_MME_MACRO(NVK_MME_DRAW_INDIRECT), 5);
    nvk_nir_push_dw(b, p, addr_hi);
    nvk_nir_push_dw(b, p, addr_lo);
    nvk_nir_push_dw(b, p, count);
+   nvk_nir_push_dw(b, p, nir_imm_zero(b, 1, 32)); // stride >> 32
    nvk_nir_push_dw(b, p, stride);
 }
 
@@ -634,10 +699,40 @@ build_draw_indexed_count(nir_builder *b, struct nvk_nir_push *p,
    nir_def *stride  = load_global_dw(b, token_addr, 2);
    nir_def *count   = load_global_dw(b, token_addr, 3);
 
-   nvk_nir_P_1INC(b, p, NV9097, CALL_MME_MACRO(NVK_MME_DRAW_INDEXED_INDIRECT), 4);
+   nvk_nir_P_1INC(b, p, NV9097, CALL_MME_MACRO(NVK_MME_DRAW_INDEXED_INDIRECT), 5);
    nvk_nir_push_dw(b, p, addr_hi);
    nvk_nir_push_dw(b, p, addr_lo);
    nvk_nir_push_dw(b, p, count);
+   nvk_nir_push_dw(b, p, nir_imm_zero(b, 1, 32)); // stride >> 32
+   nvk_nir_push_dw(b, p, stride);
+}
+
+static void
+build_draw_mesh_tasks(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr)
+{
+   nir_def *group_count_x = load_global_dw(b, token_addr, 0);
+   nir_def *group_count_y = load_global_dw(b, token_addr, 1);
+   nir_def *group_count_z = load_global_dw(b, token_addr, 2);
+
+   nvk_nir_P_1INC(b, p, NV9097, CALL_MME_MACRO(NVK_MME_DRAW_MESH), 3);
+   nvk_nir_push_dw(b, p, group_count_x);
+   nvk_nir_push_dw(b, p, group_count_y);
+   nvk_nir_push_dw(b, p, group_count_z);
+}
+
+static void
+build_draw_mesh_tasks_count(nir_builder *b, struct nvk_nir_push *p, nir_def *token_addr)
+{
+   nir_def *addr_lo = load_global_dw(b, token_addr, 0);
+   nir_def *addr_hi = load_global_dw(b, token_addr, 1);
+   nir_def *stride  = load_global_dw(b, token_addr, 2);
+   nir_def *count   = load_global_dw(b, token_addr, 3);
+
+   nvk_nir_P_1INC(b, p, NV9097, CALL_MME_MACRO(NVK_MME_DRAW_MESH_INDIRECT), 5);
+   nvk_nir_push_dw(b, p, addr_hi);
+   nvk_nir_push_dw(b, p, addr_lo);
+   nvk_nir_push_dw(b, p, count);
+   nvk_nir_push_dw(b, p, nir_imm_zero(b, 1, 32)); // stride >> 32
    nvk_nir_push_dw(b, p, stride);
 }
 
@@ -660,11 +755,12 @@ build_process_gfx_cmd_seq(nir_builder *b, struct nvk_nir_push *p,
          break;
 
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT:
-         build_push_gfx_const(b, p, token_addr, token->data.pPushConstant);
+         build_push_gfx_const(b, p, token_addr, pdev,
+                              token->data.pPushConstant);
          break;
 
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT:
-         build_push_gfx_seq_idx(b, p, token_addr, seq_idx,
+         build_push_gfx_seq_idx(b, p, token_addr, seq_idx, pdev,
                                 token->data.pPushConstant);
          break;
 
@@ -690,6 +786,14 @@ build_process_gfx_cmd_seq(nir_builder *b, struct nvk_nir_push *p,
 
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_COUNT_EXT:
          build_draw_count(b, p, token_addr);
+         break;
+
+      case VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_MESH_TASKS_EXT:
+         build_draw_mesh_tasks(b, p, token_addr);
+         break;
+
+      case VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_MESH_TASKS_COUNT_EXT:
+         build_draw_mesh_tasks_count(b, p, token_addr);
          break;
 
       default:
@@ -1089,7 +1193,8 @@ nvk_CmdExecuteGeneratedCommandsEXT(VkCommandBuffer commandBuffer,
          uint8_t set_types = 0;
          u_foreach_bit(s, layout->set_stages) {
             mesa_shader_stage stage = vk_to_mesa_shader_stage(1 << s);
-            uint32_t type = mesa_to_nv9097_shader_type(stage);
+            uint32_t type = mesa_to_nv9097_shader_type(
+               stage, layout->set_stages & VK_SHADER_STAGE_TASK_BIT_EXT);
             set_types |= BITFIELD_BIT(type);
          }
 
@@ -1132,4 +1237,164 @@ nvk_CmdExecuteGeneratedCommandsEXT(VkCommandBuffer commandBuffer,
          cmd->state.gfx.shaders_dirty |= NVK_SHADER_STAGE_GRAPHICS_BITS;
       }
    }
+}
+
+struct nvk_copy_indirect_push {
+   uint64_t in;
+   uint64_t in_stride;
+   uint64_t out;
+   uint32_t count;
+};
+
+static nir_shader *
+build_copy_indierct_shader(void)
+{
+   nir_builder build =
+      nir_builder_init_simple_shader(MESA_SHADER_COMPUTE, NULL,
+                                     "nvk-meta-copy-indirect");
+   nir_builder *b = &build;
+
+   struct glsl_struct_field push_fields[] = {
+      { .type = glsl_uint64_t_type(), .name = "in", .offset = 0 },
+      { .type = glsl_uint64_t_type(), .name = "in_stride", .offset = 8 },
+      { .type = glsl_uint64_t_type(), .name = "out", .offset = 16 },
+      { .type = glsl_uint_type(), .name = "count", .offset = 24 },
+   };
+   const struct glsl_type *push_iface_type =
+      glsl_interface_type(push_fields, ARRAY_SIZE(push_fields),
+                          GLSL_INTERFACE_PACKING_STD140,
+                          false /* row_major */, "push");
+   nir_variable *push = nir_variable_create(b->shader, nir_var_mem_push_const,
+                                            push_iface_type, "push");
+
+   b->shader->info.workgroup_size[0] = 32;
+
+   nvk_copy_indirect(b, load_struct_var(b, push, 0),
+                     load_struct_var(b, push, 1),
+                     load_struct_var(b, push, 2),
+                     load_struct_var(b, push, 3));
+
+   return build.shader;
+}
+
+static struct nvk_shader *
+atomic_set_or_destroy_shader(struct nvk_device *dev,
+                             struct nvk_shader **shader_ptr,
+                             struct nvk_shader *shader,
+                             const VkAllocationCallbacks *alloc)
+{
+   struct nvk_shader *old_shader = p_atomic_cmpxchg(shader_ptr, NULL, shader);
+   if (old_shader == NULL) {
+      return shader;
+   } else {
+      vk_shader_destroy(&dev->vk, &shader->vk, alloc);
+      return old_shader;
+   }
+}
+
+static VkResult
+get_copy_indirect_shader(struct nvk_device *dev,
+                        struct nvk_shader **shader_out)
+{
+   struct nvk_shader *shader = p_atomic_read(&dev->copy_indirect);
+   if (shader != NULL) {
+      *shader_out = shader;
+      return VK_SUCCESS;
+   }
+
+   nir_shader *nir = build_copy_indierct_shader();
+   VkResult result = nvk_compile_nir_shader(dev, nir, &dev->vk.alloc, &shader);
+   if (result != VK_SUCCESS)
+      return result;
+
+   *shader_out = atomic_set_or_destroy_shader(dev, &dev->copy_indirect,
+                                              shader, &dev->vk.alloc);
+
+   return VK_SUCCESS;
+}
+
+VKAPI_ATTR void VKAPI_CALL
+nvk_CmdCopyMemoryIndirectKHR(VkCommandBuffer commandBuffer,
+                             const VkCopyMemoryIndirectInfoKHR* info)
+{
+   VK_FROM_HANDLE(nvk_cmd_buffer, cmd, commandBuffer);
+   struct nvk_device *dev = nvk_cmd_buffer_device(cmd);
+   const struct nvk_physical_device *pdev = nvk_device_physical(dev);
+   VkResult result;
+
+   if (info->copyCount == 0)
+      return;
+
+   struct nvk_shader *shader;
+   result = get_copy_indirect_shader(dev, &shader);
+   if (result != VK_SUCCESS) {
+      vk_command_buffer_set_error(&cmd->vk, result);
+      return;
+   }
+
+   const uint32_t cmds_per_buffer =
+      NVK_CMD_MEM_SIZE / NVK_COPY_INDIRECT_CMD_BYTES;
+   const uint32_t num_buffers = DIV_ROUND_UP(info->copyCount, cmds_per_buffer);
+
+   if (!util_dynarray_ensure_cap(&cmd->copy_memory_indirect_temps,
+                                 sizeof(struct nvk_cmd_mem*) * num_buffers)) {
+      vk_command_buffer_set_error(&cmd->vk, VK_ERROR_OUT_OF_HOST_MEMORY);
+      return;
+   }
+
+   while (util_dynarray_num_elements(&cmd->copy_memory_indirect_temps,
+                                     struct nvk_cmd_mem*) < num_buffers) {
+      struct nvk_cmd_mem *temp_mem;
+      result = nvk_cmd_buffer_alloc_mem(cmd, false, &temp_mem);
+      if (result != VK_SUCCESS) {
+         vk_command_buffer_set_error(&cmd->vk, result);
+         return;
+      }
+      util_dynarray_append_typed(&cmd->copy_memory_indirect_temps,
+                                 struct nvk_cmd_mem*, temp_mem);
+   }
+
+   for (int i = 0; i < info->copyCount; i += cmds_per_buffer) {
+      struct nvk_cmd_mem *temp_mem =
+         *util_dynarray_element(&cmd->copy_memory_indirect_temps,
+                                struct nvk_cmd_mem*, i / cmds_per_buffer);
+      uint32_t count = MIN2(cmds_per_buffer, info->copyCount - i);
+
+      const struct nvk_copy_indirect_push push_constants = {
+         .in = info->copyAddressRange.address + i * info->copyAddressRange.stride,
+         .in_stride = info->copyAddressRange.stride,
+         .out = temp_mem->mem->va->addr,
+         .count = count
+      };
+
+      nvk_cmd_dispatch_shader(cmd, shader,
+                              &push_constants, sizeof(push_constants),
+                              DIV_ROUND_UP(count, 32), 1, 1);
+   }
+
+   if (pdev->info.cls_eng3d >= HOPPER_A) {
+      struct nv_push *p = nvk_cmd_buffer_push(cmd, 1);
+      P_IMMD_WORD(p, NVC86F, WFI, 0);
+   } else {
+      struct nv_push *p = nvk_cmd_buffer_push(cmd, 2);
+      P_IMMD_WORD(p, NVA0C0, WAIT_FOR_IDLE, 0);
+      __push_immd(p, SUBC_NV9097, NV906F_SET_REFERENCE, 0);
+   }
+
+   for (int i = 0; i < info->copyCount; i += cmds_per_buffer) {
+      struct nvk_cmd_mem *temp_mem =
+         *util_dynarray_element(&cmd->copy_memory_indirect_temps,
+                                struct nvk_cmd_mem*, i / cmds_per_buffer);
+      uint32_t count = MIN2(cmds_per_buffer, info->copyCount - i);
+
+      nvk_cmd_buffer_push_indirect(cmd, temp_mem->mem->va->addr,
+                                   NVK_COPY_INDIRECT_CMD_BYTES * count);
+   }
+}
+
+void nvk_CmdCopyMemoryToImageIndirectKHR(VkCommandBuffer commandBuffer,
+      const VkCopyMemoryToImageIndirectInfoKHR* info)
+{
+   /* Feature unimplemented */
+   assert(false);
 }

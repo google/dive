@@ -44,6 +44,7 @@ struct rgp_shader_data {
    uint32_t is_combined;
    char rt_shader_name[32];
    uint32_t rt_stack_size;
+   uint32_t is_rt_traversal;
 };
 
 struct rgp_code_object_record {
@@ -175,8 +176,23 @@ struct rgp_clock_calibration {
    simple_mtx_t lock;
 };
 
+enum ac_rgp_capture_mode {
+   AC_RGP_CAPTURE_MODE_FRAME = 0,
+   AC_RGP_CAPTURE_MODE_SUBMIT,
+};
+
+struct ac_rgp_capture_info {
+   enum ac_rgp_capture_mode mode;
+
+   union {
+      uint32_t frame_idx;
+      uint32_t submit_idx;
+   };
+};
+
 int ac_dump_rgp_capture(const struct radeon_info *info, struct ac_sqtt_trace *sqtt_trace,
-                        const struct ac_spm_trace *spm_trace);
+                        const struct ac_spm_trace *spm_trace,
+                        const struct ac_rgp_capture_info *capture_info);
 
 void
 ac_rgp_file_write_elf_object(FILE *output, size_t file_elf_start,

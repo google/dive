@@ -36,6 +36,5 @@ vmware-vmx-piglit:x86_64:
     RUNNER_TAG: mesa-ci-x86-64-lava-vmware
     DEVICE_TYPE: x86
     BOOT_METHOD: ipxe
-    KERNEL_REPO: "blu/linux"
-    KERNEL_TAG: "1106ba88b"
+    HWCI_KERNEL_MODULES: vmwgfx
     FDO_CI_CONCURRENT: 2

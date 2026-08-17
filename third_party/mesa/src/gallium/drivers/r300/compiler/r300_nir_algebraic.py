@@ -31,17 +31,22 @@ transform_trig_input_fs_r500 = [
         (('fcos', 'a'), ('fcos', ('ffract', ('fmul', 'a', 1 / (2 * pi))))),
 ]
 
-# The is a pattern produced by wined3d for A0 register load.
+# This is a pattern produced by wined3d for A0 register load.
 # The specific pattern wined3d emits looks like this
 # A0.x = (int(floor(abs(R0.x) + 0.5) * sign(R0.x)));
-# however we lower both sign and floor so here we check for the already lowered
-# sequence.
+# NIR can canonicalize this to f2i32(a + sign(a) * 0.5).
+lowered_fsign = ('fadd', ('b2f', ('!flt', 0.0, a)),
+                         ('fneg', ('b2f', ('!flt', a, 0.0))))
+
 r300_nir_fuse_fround_d3d9 = [
+        (('f2i32', ('fadd', a, ('fmul', lowered_fsign, 0.5))),
+         ('f2i32', ('fround_even', a))),
+        (('f2i32', ('fmad', lowered_fsign, 0.5, a)),
+         ('f2i32', ('fround_even', a))),
         (('fmul', ('fadd', ('fadd', ('fabs', 'a') , 0.5),
                            ('fneg', ('ffract', ('fadd', ('fabs', 'a') , 0.5)))),
-                  ('fadd', ('b2f', ('!flt', 0.0, 'a')),
-                           ('fneg', ('b2f', ('!flt', 'a', 0.0))))),
-         ('fround_even', 'a'))
+                  lowered_fsign),
+         ('fround_even', 'a')),
 ]
 
 # Here are some specific optimizations for code reordering such that the backend
@@ -52,11 +57,11 @@ r300_nir_prepare_presubtract = [
         (('fadd', a, -1.0), ('fneg', ('fadd', 1.0, ('fneg', a)))),
         (('fadd', -1.0, a), ('fneg', ('fadd', 1.0, ('fneg', a)))),
         # Bias presubtract 1 - 2 * x expects MAD -a 2.0 1.0 form.
-        (('ffma', 2.0, ('fneg', a), 1.0), ('ffma', ('fneg', a), 2.0, 1.0)),
-        (('ffma', a, -2.0, 1.0), ('fneg', ('ffma', ('fneg', a), 2.0, 1.0))),
-        (('ffma', -2.0, a, 1.0), ('fneg', ('ffma', ('fneg', a), 2.0, 1.0))),
-        (('ffma', 2.0, a, -1.0), ('fneg', ('ffma', ('fneg', a), 2.0, 1.0))),
-        (('ffma', a, 2.0, -1.0), ('fneg', ('ffma', ('fneg', a), 2.0, 1.0))),
+        (('fmad', 2.0, ('fneg', a), 1.0), ('fmad', ('fneg', a), 2.0, 1.0)),
+        (('fmad', a, -2.0, 1.0), ('fmad', ('fneg', a), 2.0, 1.0)),
+        (('fmad', -2.0, a, 1.0), ('fmad', ('fneg', a), 2.0, 1.0)),
+        (('fmad', 2.0, a, -1.0), ('fneg', ('fmad', ('fneg', a), 2.0, 1.0))),
+        (('fmad', a, 2.0, -1.0), ('fneg', ('fmad', ('fneg', a), 2.0, 1.0))),
         # x * 2 can be usually folded into output modifier for the previous
         # instruction, but that only works if x is a temporary. If it is input or
         # constant just convert it to add instead.
@@ -76,7 +81,17 @@ r300_nir_opt_algebraic_late = [
         (('fabs', ('fneg', a)), ('fabs', a)),
         # Some cleanups after comparison lowering if one of the operands is 0.
         (('fadd', a, 0.0), a),
+        (('fadd', a, -0.0), a),
         (('fadd', a, ('fneg', 0.0)), a),
+        # more post integer/bool lowering cleanups
+        (('fmad(nsz)', 0.0, ('seq', a, b), c), c),
+        (('fmad(nsz)', 0.0, ('sne', a, b), c), c),
+        (('fmad(nsz)', 0.0, ('slt', a, b), c), c),
+        (('fmad(nsz)', 0.0, ('sge', a, b), c), c),
+        (('fcsel_gt', ('fcsel_ge', ('fadd', '#a(is_finite)', ('fneg', b)), 0.0, 1.0), c, d),
+         ('fcsel_gt', ('fadd', b, ('fneg', a)), c, d)),
+        (('fcsel_ge', ('fneg', ('fcsel_ge', a, 0.0, 1.0)), b, c), ('fcsel_ge', a, b, c)),
+        (('fcsel_ge', ('fneg', ('fcsel_ge', a, 1.0, 0.0)), b, c), ('fcsel_ge', a, c, b)),
         # NIR terminate_if expects bools, but we can handle floats just fine
         # so get rid of the unneeded select.
         (('fcsel_ge(is_only_used_by_terminate_if)', a, 0.0, 1.0), ('fneg', a)),
@@ -84,12 +99,15 @@ r300_nir_opt_algebraic_late = [
 
 # This is very late flrp lowering to clean up after bcsel->fcsel->flrp.
 r300_nir_lower_flrp = [
-        (('flrp', a, b, c), ('ffma', b, c, ('ffma', ('fneg', a), c, a)))
+        (('flrp', a, b, c), ('fmad', b, c, ('fmad', ('fneg', a), c, a)))
 ]
 
-# Lower fcsel_ge from ftrunc on r300
-r300_nir_lower_fcsel_r300 = [
-        (('fcsel_ge', a, b, c), ('flrp', c, b, ('sge', a, 0.0)))
+r300_nir_lower_vs_alu_r300 = [
+        # fcsel_ge from ftrunc.
+        (('fcsel_ge', a, b, c), ('flrp', c, b, ('sge', a, 0.0))),
+        # seq/sne may be produced by bool/int lowering.
+        (('seq', 'a@32', 'b@32'), ('fmul', ('sge', a, b), ('sge', b, a))),
+        (('sne', 'a@32', 'b@32'), ('fmax', ('slt', a, b), ('slt', b, a))),
 ]
 
 # Fragment shaders have no comparison opcodes. However, we can encode the comparison
@@ -126,19 +144,18 @@ def main():
     sys.path.insert(0, args.import_path)
 
     import nir_algebraic  # pylint: disable=import-error
-    ignore_exact = nir_algebraic.ignore_exact
 
     r300_nir_lower_bool_to_float = [
-        (('bcsel@32(is_only_used_as_float)', ignore_exact('feq', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(is_only_used_as_float)', ('feq', 'a@32', 'b@32'), c, d),
              ('fadd', ('fmul', c, ('seq', a, b)), ('fsub', d, ('fmul', d, ('seq', a, b)))),
              "!options->has_fused_comp_and_csel"),
-        (('bcsel@32(is_only_used_as_float)', ignore_exact('fneu', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(is_only_used_as_float)', ('fneu', 'a@32', 'b@32'), c, d),
              ('fadd', ('fmul', c, ('sne', a, b)), ('fsub', d, ('fmul', d, ('sne', a, b)))),
           "!options->has_fused_comp_and_csel"),
-        (('bcsel@32(is_only_used_as_float)', ignore_exact('flt', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(is_only_used_as_float)', ('flt', 'a@32', 'b@32'), c, d),
              ('fadd', ('fmul', c, ('slt', a, b)), ('fsub', d, ('fmul', d, ('slt', a, b)))),
           "!options->has_fused_comp_and_csel"),
-        (('bcsel@32(is_only_used_as_float)', ignore_exact('fge', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(is_only_used_as_float)', ('fge', 'a@32', 'b@32'), c, d),
              ('fadd', ('fmul', c, ('sge', a, b)), ('fsub', d, ('fmul', d, ('sge', a, b)))),
           "!options->has_fused_comp_and_csel"),
         (('bcsel@32(is_only_used_as_float)', ('feq', 'a@32', 'b@32'), c, d),
@@ -152,13 +169,13 @@ def main():
     ]
 
     r300_nir_lower_bool_to_float_fs = [
-        (('bcsel@32(r300_is_only_used_as_float)', ignore_exact('feq', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(r300_is_only_used_as_float)', ('feq', 'a@32', 'b@32'), c, d),
              ('fcsel_ge', ('fneg', ('fabs', ('fadd', a, ('fneg', b)))), c, d)),
-        (('bcsel@32(r300_is_only_used_as_float)', ignore_exact('fneu', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(r300_is_only_used_as_float)', ('fneu', 'a@32', 'b@32'), c, d),
              ('fcsel_ge', ('fneg', ('fabs', ('fadd', a, ('fneg', b)))), d, c)),
-        (('bcsel@32(r300_is_only_used_as_float)', ignore_exact('flt', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(r300_is_only_used_as_float)', ('flt', 'a@32', 'b@32'), c, d),
              ('fcsel_ge', ('fadd', a, ('fneg', b)), d, c)),
-        (('bcsel@32(r300_is_only_used_as_float)', ignore_exact('fge', 'a@32', 'b@32'), c, d),
+        (('bcsel@32(r300_is_only_used_as_float)', ('fge', 'a@32', 'b@32'), c, d),
              ('fcsel_ge', ('fadd', a, ('fneg', b)), c, d)),
         (('b2f32', ('feq', 'a@32', 'b@32')),
              ('fcsel_ge', ('fneg', ('fabs', ('fadd', a, ('fneg', b)))), 1.0, 0.0)),
@@ -200,8 +217,8 @@ def main():
         f.write(nir_algebraic.AlgebraicPass("r300_nir_lower_flrp",
                                             r300_nir_lower_flrp).render())
 
-        f.write(nir_algebraic.AlgebraicPass("r300_nir_lower_fcsel_r300",
-                                            r300_nir_lower_fcsel_r300).render())
+        f.write(nir_algebraic.AlgebraicPass("r300_nir_lower_vs_alu_r300",
+                                            r300_nir_lower_vs_alu_r300).render())
 
         f.write(nir_algebraic.AlgebraicPass("r300_nir_lower_comparison_fs",
                                             r300_nir_lower_comparison_fs).render())

@@ -3,26 +3,8 @@
  * Copyright (C) 2014 Broadcom
  * Copyright (C) 2018-2019 Alyssa Rosenzweig
  * Copyright (C) 2019-2020 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * Copyright (C) 2026 Google LLC
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __PAN_FORMAT_H
@@ -44,6 +26,8 @@
 #define PAN_SUPPORTED_MODIFIERS(__name)                                        \
    static const uint64_t __name[] = {                                          \
       DRM_FORMAT_MOD_ARM_AFBC(AFBC_FORMAT_MOD_BLOCK_SIZE_32x8 |                \
+                              AFBC_FORMAT_MOD_SPARSE),                         \
+      DRM_FORMAT_MOD_ARM_AFBC(AFBC_FORMAT_MOD_BLOCK_SIZE_32x8 |                \
                               AFBC_FORMAT_MOD_SPARSE | AFBC_FORMAT_MOD_SPLIT), \
       DRM_FORMAT_MOD_ARM_AFBC(AFBC_FORMAT_MOD_BLOCK_SIZE_32x8 |                \
                               AFBC_FORMAT_MOD_SPARSE | AFBC_FORMAT_MOD_SPLIT | \
@@ -63,7 +47,11 @@
       DRM_FORMAT_MOD_ARM_AFBC(AFBC_FORMAT_MOD_BLOCK_SIZE_16x16 |               \
                               AFBC_FORMAT_MOD_SPARSE),                         \
                                                                                \
+      DRM_FORMAT_MOD_ARM_AFBC(AFBC_FORMAT_MOD_BLOCK_SIZE_16x16 |               \
+                              AFBC_FORMAT_MOD_SPARSE | AFBC_FORMAT_MOD_SPLIT), \
+                                                                               \
       DRM_FORMAT_MOD_ARM_16X16_BLOCK_U_INTERLEAVED,                            \
+      DRM_FORMAT_MOD_ARM_INTERLEAVED_64K,                                      \
       DRM_FORMAT_MOD_LINEAR,                                                   \
                                                                                \
       DRM_FORMAT_MOD_ARM_AFRC(                                                 \
@@ -114,18 +102,39 @@ pan_format_get_plane_blocksize(enum pipe_format format, unsigned plane_idx)
    switch (format) {
    case PIPE_FORMAT_R8_G8B8_420_UNORM:
    case PIPE_FORMAT_R8_B8G8_420_UNORM:
+   case PIPE_FORMAT_G8_B8R8_420_UNORM:
    case PIPE_FORMAT_R8_G8B8_422_UNORM:
    case PIPE_FORMAT_R8_B8G8_422_UNORM:
+   case PIPE_FORMAT_Y8_U8V8_422_UNORM:
       return plane_idx ? 2 : 1;
+   case PIPE_FORMAT_X6G10_X6B10X6R10_420_UNORM:
+      return plane_idx ? 4 : 2;
    case PIPE_FORMAT_R10_G10B10_420_UNORM:
    case PIPE_FORMAT_R10_G10B10_422_UNORM:
       return plane_idx ? 10 : 5;
    case PIPE_FORMAT_R8_G8_B8_420_UNORM:
    case PIPE_FORMAT_R8_B8_G8_420_UNORM:
+   case PIPE_FORMAT_G8_B8_R8_420_UNORM:
+   case PIPE_FORMAT_Y8_U8_V8_422_UNORM:
       return 1;
    default:
       assert(util_format_get_num_planes(format) == 1);
       return util_format_get_blocksize(format);
+   }
+}
+
+static inline unsigned
+pan_format_tib_size(enum pipe_format format, bool internal)
+{
+   if (internal && !util_format_is_float(format)) {
+      /* Blendable UNORM and sRGB formats are always 32-bits in the tile
+       * buffer, extra bits are used as padding or to dither */
+      return 4;
+   } else {
+      /* Non-blendable and float formats are raw, rounded up to the nearest
+       * power-of-two size */
+      unsigned bytes = util_format_get_blocksize(format);
+      return util_next_power_of_two(bytes);
    }
 }
 
@@ -137,11 +146,12 @@ typedef uint32_t mali_pixel_format;
 #define PAN_BIND_SAMPLER_VIEW  BITFIELD_BIT(2)
 #define PAN_BIND_VERTEX_BUFFER BITFIELD_BIT(3)
 #define PAN_BIND_STORAGE_IMAGE BITFIELD_BIT(4)
+#define PAN_BIND_TEXEL_BUFFER  BITFIELD_BIT(5)
 
 struct pan_format {
-   uint32_t hw : 22;
+   uint32_t hw          : 21;
    uint32_t texfeat_bit : 5;
-   uint32_t bind        : 5;
+   uint32_t bind        : 6;
 };
 
 struct pan_blendable_format {
@@ -167,6 +177,8 @@ extern const struct pan_blendable_format
    pan_blendable_formats_v12[PIPE_FORMAT_COUNT];
 extern const struct pan_blendable_format
    pan_blendable_formats_v13[PIPE_FORMAT_COUNT];
+extern const struct pan_blendable_format
+   pan_blendable_formats_v14[PIPE_FORMAT_COUNT];
 
 uint8_t pan_raw_format_mask_midgard(enum pipe_format *formats);
 
@@ -183,6 +195,7 @@ pan_blendable_format_table(unsigned arch)
    FMT_TABLE(10);
    FMT_TABLE(12);
    FMT_TABLE(13);
+   FMT_TABLE(14);
 #undef FMT_TABLE
    default:
       assert(!"Unsupported architecture");
@@ -198,6 +211,7 @@ extern const struct pan_format pan_pipe_format_v9[PIPE_FORMAT_COUNT];
 extern const struct pan_format pan_pipe_format_v10[PIPE_FORMAT_COUNT];
 extern const struct pan_format pan_pipe_format_v12[PIPE_FORMAT_COUNT];
 extern const struct pan_format pan_pipe_format_v13[PIPE_FORMAT_COUNT];
+extern const struct pan_format pan_pipe_format_v14[PIPE_FORMAT_COUNT];
 
 static inline const struct pan_format *
 pan_format_table(unsigned arch)
@@ -212,6 +226,7 @@ pan_format_table(unsigned arch)
    FMT_TABLE(10);
    FMT_TABLE(12);
    FMT_TABLE(13);
+   FMT_TABLE(14);
 #undef FMT_TABLE
    default:
       assert(!"Unsupported architecture");
@@ -302,6 +317,15 @@ struct pan_decomposed_swizzle
 
 #define MALI_EXTRACT_INDEX(pixfmt) (((pixfmt) >> 12) & 0xFF)
 
+#if PAN_ARCH < 14
+#define MALI_YUV_CR_SITING_CENTER_422 (MALI_YUV_CR_SITING_CENTER_Y)
+#else
+#define MALI_YUV_CR_SITING_CENTER_422 (MALI_YUV_CR_SITING_CENTER_X)
+#endif
+
+#define MALI_SET_YUV_CR_SITING(pixfmt, cr_siting)                              \
+   ((pixfmt & ~(0b111 << 9)) | ((cr_siting & 0b111) << 9))
+
 static inline bool
 pan_format_is_yuv(enum pipe_format f)
 {
@@ -338,6 +362,25 @@ GENX(pan_dithered_format_from_pipe_format)(enum pipe_format f, bool dithered)
    return pixfmt ?: GENX(pan_format_from_pipe_format)(f)->hw;
 }
 #endif
+
+static inline bool
+GENX(pan_format_supports_hw_blend)(enum pipe_format format)
+{
+   return GENX(pan_blendable_format_from_pipe_format)(format)->internal;
+}
+
+static inline bool
+GENX(pan_format_supports_msaa_average)(enum pipe_format format)
+{
+   if (!GENX(pan_format_supports_hw_blend)(format))
+      return false;
+
+   /* F16 formats are blendable on v10 but don't support averaging until v11 */
+   if (util_format_is_float16(format) && PAN_ARCH < 11)
+      return false;
+
+   return true;
+}
 #endif
 
 #endif

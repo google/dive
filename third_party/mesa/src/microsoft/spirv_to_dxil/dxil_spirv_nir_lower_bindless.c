@@ -50,10 +50,10 @@ load_vulkan_ssbo(nir_builder *b, unsigned buf_idx,
                                 nir_imm_int(b, 0),
                                 .desc_set = 0,
                                 .binding = buf_idx,
-                                .desc_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                                .desc_type = nir_descriptor_type_storage_buffer);
    nir_def *descriptor =
       nir_load_vulkan_descriptor(b, 2, 32, res_index,
-                                 .desc_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                                 .desc_type = nir_descriptor_type_storage_buffer);
    return nir_load_ssbo(b, num_comps, 32,
                         nir_channel(b, descriptor, 0),
                         offset,
@@ -152,7 +152,7 @@ lower_bindless_image_intr(nir_builder *b, nir_intrinsic_instr *intr, struct dxil
    if (!handle)
       return false;
 
-   nir_rewrite_image_intrinsic(intr, handle, true);
+   nir_rewrite_image_intrinsic(intr, handle, nir_image_intrinsic_type_bindless);
    return true;
 }
 
@@ -287,7 +287,7 @@ lower_buffer_device_address(nir_builder *b, nir_intrinsic_instr *intr, void *dat
    nir_def *index = nir_iand_imm(b, nir_unpack_64_2x32_split_y(b, pointer), 0xffffff);
 
    nir_def *descriptor = nir_load_vulkan_descriptor(b, 2, 32, nir_vec2(b, index, offset),
-                                                    .desc_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+                                                    .desc_type = nir_descriptor_type_storage_buffer);
    nir_deref_instr *head = nir_build_deref_cast_with_alignment(b, descriptor, nir_var_mem_ssbo, old_head->type,
                                                                old_head->cast.ptr_stride,
                                                                old_head->cast.align_mul,

@@ -138,7 +138,7 @@ brw_sample_mask_reg(const brw_builder &bld)
    if (s.stage != MESA_SHADER_FRAGMENT) {
       return brw_imm_ud(0xffffffff);
    } else if (s.devinfo->ver >= 20 ||
-              brw_wm_prog_data(s.prog_data)->uses_kill) {
+              brw_fs_prog_data(s.prog_data)->uses_kill) {
       return brw_flag_subreg(sample_mask_flag_subreg(s) + bld.group() / 16);
    } else {
       assert(bld.dispatch_width() <= 16);
@@ -162,7 +162,7 @@ brw_emit_predicate_on_sample_mask(const brw_builder &bld, brw_inst *inst)
    const brw_reg sample_mask = brw_sample_mask_reg(bld);
    const unsigned subreg = sample_mask_flag_subreg(s);
 
-   if (s.devinfo->ver >= 20 || brw_wm_prog_data(s.prog_data)->uses_kill) {
+   if (s.devinfo->ver >= 20 || brw_fs_prog_data(s.prog_data)->uses_kill) {
       assert(sample_mask.file == ARF &&
              sample_mask.nr == brw_flag_subreg(subreg).nr &&
              sample_mask.subnr == brw_flag_subreg(
@@ -244,13 +244,13 @@ brw_fetch_barycentric_reg(const brw_builder &bld, uint8_t regs[2])
 }
 
 void
-brw_check_dynamic_msaa_flag(const brw_builder &bld,
-                        const struct brw_wm_prog_data *wm_prog_data,
-                        enum intel_msaa_flags flag)
+brw_check_dynamic_fs_config(const brw_builder &bld,
+                            enum intel_fs_config flag)
 {
+   struct brw_fs_prog_data *fs_prog_data = brw_fs_prog_data(bld.shader->prog_data);
+   fs_prog_data->uses_fs_config = true;
    brw_inst *inst = bld.AND(bld.null_reg_ud(),
-                            brw_dynamic_msaa_flags(wm_prog_data),
+                            brw_dynamic_fs_config(fs_prog_data),
                             brw_imm_ud(flag));
    inst->conditional_mod = BRW_CONDITIONAL_NZ;
 }
-

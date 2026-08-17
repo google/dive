@@ -8,9 +8,7 @@ KHR-GL46.gpu_shader_fp64.builtin.inverse_dmat4
 KHR-GL46.gpu_shader_fp64.fp64.varyings
 
 # Slow tests that may hit 60s timeout pre-merge, but pass otherwise
-dEQP-VK.memory.mapping.*.full.variable.implicit_unmap*
 dEQP-VK.spirv_assembly.instruction.graphics.16bit_storage.struct_mixed_types.uniform_buffer_block_vert
-dEQP-VK.spirv_assembly.instruction.*.spirv_ids_abuse.lots_ids*
 dEQP-VK.api.buffer_memory_requirements.create_sparse_binding_sparse_residency.ext_mem_flags_excluded.method1.size_req_storage_usage_bits
 dEQP-VK.api.buffer_memory_requirements.create_sparse_binding_sparse_residency.ext_mem_flags_excluded.method2.size_req_storage_usage_bits
 dEQP-VK.api.buffer_memory_requirements.create_sparse_binding_sparse_residency_sparse_aliased.ext_mem_flags_excluded.method1.size_req_storage_usage_bits
@@ -63,4 +61,17 @@ spec@glsl-4.20@execution@conversion@frag-conversion-implicit-mat4-dmat4-zero-sig
 # Slow tests that may hit 60s timeout pre-merge, but pass otherwise.  94% CPU
 # used in ir3 create_variant, but no single pass there dominating its time.
 # Just use the scalar/vec2 cases, which are fast enough for CI.
-dEQP-VK.subgroups.clustered.compute.subgroupclustered(min|max|mul)_[iu]64vec[34].*
+dEQP-VK.subgroups.clustered.compute.subgroupclustered(min|max|mul|and|or|xor|add)_[iu]64vec[34].*
+dEQP-VK.subgroups.clustered.compute.subgroupclustered(min|max|mul|and|or|xor|add)_[iu]vec[34].*
+dEQP-VK.subgroups.clustered.compute.subgroupclustered(min|max|mul|and|or|xor|add)_bvec[34].*
+
+# Speed up pre-merge testing by removing redundant coverage in force-gmem mode
+gmem-dEQP-VK.api.*
+gmem-dEQP-VK.renderpass\..*
+gmem-dEQP-VK.synchronization\..*
+gmem-dEQP-VK.wsi.*
+
+# Slow single-threaded tests (~45s each).
+# Running both adds ~90s, which is too much for pre-merge.
+dEQP-VK.memory.mapping.suballocation.full.variable.implicit_unmap
+dEQP-VK.memory.mapping.suballocation.full.variable.implicit_unmap_map2

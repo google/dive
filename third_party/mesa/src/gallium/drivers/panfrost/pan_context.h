@@ -1,25 +1,6 @@
 /*
  * © Copyright 2018 Alyssa Rosenzweig
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __BUILDER_H__
@@ -47,6 +28,9 @@
 #include "util/u_blitter.h"
 #include "util/u_printf.h"
 
+#include "util/perf/u_trace.h"
+#include "panfrost_perfetto.h"
+
 #include "compiler/shader_enums.h"
 #include "midgard/midgard_compile.h"
 
@@ -57,6 +41,15 @@
       lval |= (bit);                                                           \
    else                                                                        \
       lval &= ~(bit);
+
+/* Passed as the 'cs' argument to u_trace tracepoints, analogous to
+ * panvk_utrace_cs_info. sb_wait_mask != 0 makes the GPU defer the timestamp
+ * write until those scoreboard slots signal (CSF only, JM ignores it).
+ */
+struct panfrost_trace_cs_info {
+   struct panfrost_batch *batch;
+   uint16_t sb_wait_mask;
+};
 
 /* Dirty tracking flags. 3D is for general 3D state. Shader flags are
  * per-stage. Renderer refers to Renderer State Descriptors. Vertex refers to
@@ -206,6 +199,9 @@ struct panfrost_context {
    struct panfrost_sampler_view
       *sampler_views[MESA_SHADER_STAGES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
    unsigned sampler_view_count[MESA_SHADER_STAGES];
+   struct {
+      BITSET_DECLARE(mask, PIPE_MAX_SHADER_SAMPLER_VIEWS);
+   } texture_buffer[MESA_SHADER_STAGES];
 
    struct blitter_context *blitter;
 
@@ -248,6 +244,13 @@ struct panfrost_context {
       struct u_printf_ctx ctx;
       struct panfrost_bo *bo;
    } printf;
+
+   /* u_trace support */
+   struct u_trace_context trace_context;
+#ifdef HAVE_PERFETTO
+   struct panfrost_perfetto_state perfetto;
+#endif
+   uint32_t submit_count; /* monotonic submit ID for perfetto */
 };
 
 /* Corresponds to the CSO */
@@ -303,6 +306,7 @@ enum {
    PAN_SYSVAL_XFB = 17,
    PAN_SYSVAL_NUM_VERTICES = 18,
    PAN_SYSVAL_PRINTF_BUFFER = 19,
+   PAN_SYSVAL_IMAGE_SAMPLES = 20,
 };
 
 #define PAN_TXS_SYSVAL_ID(texidx, dim, is_array)                               \
@@ -361,6 +365,13 @@ struct panfrost_fs_key {
    uint8_t clip_plane_enable;
 
    bool line_smooth;
+
+   /* The VS varying layout determines how the FS is compiled (LD_VAR vs
+    * LD_VAR_BUF and byte offsets). Include the full layout in the key so
+    * the disk cache and in-memory variant cache correctly distinguish FS
+    * binaries compiled against different VS layouts.
+    */
+   struct pan_varying_layout vs_varying_layout;
 };
 
 struct panfrost_vs_key {
@@ -412,11 +423,14 @@ struct panfrost_uncompiled_shader {
     */
    const nir_shader *nir;
 
-   /* A SHA1 of the serialized NIR for the disk cache. */
-   unsigned char nir_sha1[20];
+   /* A BLAKE3 of the serialized NIR for the disk cache. */
+   unsigned char nir_blake3[BLAKE3_KEY_LEN];
 
    /* Stream output information */
    struct pipe_stream_output_info stream_output;
+
+   /* Varying layout (if known) */
+   struct pan_varying_layout vs_varying_layout;
 
    /** Lock for the variants array */
    simple_mtx_t lock;
@@ -469,8 +483,10 @@ bool panfrost_nir_remove_fragcolor_stores(nir_shader *s, unsigned nr_cbufs);
 bool panfrost_nir_lower_sysvals(nir_shader *s, unsigned arch,
                                 struct panfrost_sysvals *sysvals);
 
-bool panfrost_nir_lower_res_indices(nir_shader *shader,
-                                    struct pan_compile_inputs *inputs);
+bool panfrost_nir_lower_res_indices(nir_shader *shader, uint64_t gpu_id);
+
+bool panfrost_nir_lower_pls(nir_shader *shader,
+                            struct panfrost_screen *screen);
 
 /** (Vertex buffer index, divisor) tuple that will become an Attribute Buffer
  * Descriptor at draw-time on Midgard
@@ -540,21 +556,27 @@ void panfrost_shader_context_init(struct pipe_context *pctx);
 static inline void
 panfrost_dirty_state_all(struct panfrost_context *ctx)
 {
-   ctx->dirty = ~0;
+   ctx->dirty = (enum pan_dirty_3d)~0;
 
    for (unsigned i = 0; i < MESA_SHADER_STAGES; ++i)
-      ctx->dirty_shader[i] = ~0;
+      ctx->dirty_shader[i] = (enum pan_dirty_shader)~0;
 }
 
 static inline void
 panfrost_clean_state_3d(struct panfrost_context *ctx)
 {
-   ctx->dirty = 0;
+   ctx->dirty = (enum pan_dirty_3d)0;
 
    for (unsigned i = 0; i < MESA_SHADER_STAGES; ++i) {
       if (i != MESA_SHADER_COMPUTE)
-         ctx->dirty_shader[i] = 0;
+         ctx->dirty_shader[i] = (enum pan_dirty_shader)0;
    }
+}
+
+static inline bool
+panfrost_occlusion_query_active(struct panfrost_context *ctx)
+{
+   return ctx->occlusion_query && ctx->active_queries;
 }
 
 void panfrost_set_batch_masks_blend(struct panfrost_batch *batch);

@@ -151,6 +151,10 @@ impl ShaderModel for ShaderModel50 {
         13
     }
 
+    fn latency_upper_bound(&self) -> u32 {
+        14
+    }
+
     fn worst_latency(&self, write: &Op, dst_idx: usize) -> u32 {
         instr_latency(self.sm, write, dst_idx)
     }
@@ -445,7 +449,7 @@ fn legalize_ext_instr(op: &mut impl SrcsAsSlice, _b: &mut LegalizeBuilder) {
                 panic!("ALU srcs must be legalized explicitly");
             }
             SrcType::Pred => {
-                panic!("Predicates must be legalized explicitly");
+                assert!(src_is_reg(src, RegFile::Pred));
             }
             SrcType::Carry => {
                 panic!("Carry values must be legalized explicitly");
@@ -1756,19 +1760,21 @@ impl SM50Op for OpF2F {
     }
 
     fn encode(&self, e: &mut SM50Encoder<'_>) {
-        match &self.src.src_ref {
+        // The swizzle is handled by the .high bit below.
+        let src = self.src.clone().without_swizzle();
+        match &src.src_ref {
             SrcRef::Zero | SrcRef::Reg(_) => {
                 e.set_opcode(0x5ca8);
-                e.set_reg_fmod_src(20..28, 49, 45, &self.src);
+                e.set_reg_fmod_src(20..28, 49, 45, &src);
             }
             SrcRef::Imm32(imm32) => {
                 e.set_opcode(0x38a8);
                 e.set_src_imm_i20(20..39, 56, *imm32);
-                assert!(self.src.is_unmodified());
+                assert!(src.is_unmodified());
             }
             SrcRef::CBuf(_) => {
                 e.set_opcode(0x4ca8);
-                e.set_cb_fmod_src(20..39, 49, 45, &self.src);
+                e.set_cb_fmod_src(20..39, 49, 45, &src);
             }
             src => panic!("Invalid f2f src: {src}"),
         }
@@ -1782,7 +1788,7 @@ impl SM50Op for OpF2F {
         e.set_field(10..12, (self.src_type.bits() / 8).ilog2());
 
         e.set_rnd_mode(39..41, self.rnd_mode);
-        e.set_bit(41, self.high);
+        e.set_bit(41, self.src.src_swizzle == SrcSwizzle::Yy);
         e.set_bit(42, self.integer_rnd);
         e.set_bit(44, self.ftz);
         e.set_bit(50, false); // saturate
@@ -1827,6 +1833,7 @@ impl SM50Op for OpF2I {
         e.set_bit(12, self.dst_type.is_signed());
 
         e.set_rnd_mode(39..41, self.rnd_mode);
+        e.set_bit(41, self.src.src_swizzle == SrcSwizzle::Yy);
         e.set_bit(44, self.ftz);
         e.set_bit(47, false); // .CC
     }
@@ -2591,6 +2598,8 @@ impl SM50Op for OpLd {
     }
 
     fn encode(&self, e: &mut SM50Encoder<'_>) {
+        assert_eq!(self.stride, OffsetStride::X1);
+        assert!(self.pred.is_true());
         e.set_opcode(match self.access.space {
             MemSpace::Global(_) => 0xeed0,
             MemSpace::Local => 0xef40,
@@ -2646,6 +2655,7 @@ impl SM50Op for OpSt {
     }
 
     fn encode(&self, e: &mut SM50Encoder<'_>) {
+        assert_eq!(self.stride, OffsetStride::X1);
         e.set_opcode(match self.access.space {
             MemSpace::Global(_) => 0xeed8,
             MemSpace::Local => 0xef50,
@@ -2701,6 +2711,7 @@ impl SM50Op for OpAtom {
     }
 
     fn encode(&self, e: &mut SM50Encoder<'_>) {
+        assert_eq!(self.addr_stride, OffsetStride::X1);
         match self.mem_space {
             MemSpace::Global(addr_type) => {
                 if self.dst.is_none() {
@@ -3143,9 +3154,13 @@ impl SM50Op for OpIsberd {
     }
 
     fn encode(&self, e: &mut SM50Encoder<'_>) {
+        assert!(
+            self.access_type == IsbeAccessType::Map && self.imm_offset == 0
+        );
+
         e.set_opcode(0xefd0);
         e.set_dst(&self.dst);
-        e.set_reg_src(8..16, &self.idx);
+        e.set_reg_src(8..16, &self.offset);
     }
 }
 

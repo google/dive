@@ -34,6 +34,7 @@
 
 #include "apple_cgl.h"
 #include "apple_glx.h"
+#include "util/os_misc.h"
 
 #ifndef OPENGL_FRAMEWORK_PATH
 #define OPENGL_FRAMEWORK_PATH "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL"
@@ -69,7 +70,7 @@ apple_cgl_init(void)
    if (initialized)
       return;
 
-   opengl_framework_path = getenv("OPENGL_FRAMEWORK_PATH");
+   opengl_framework_path = os_get_option("OPENGL_FRAMEWORK_PATH");
    if (!opengl_framework_path) {
       opengl_framework_path = OPENGL_FRAMEWORK_PATH;
    }
@@ -89,7 +90,7 @@ apple_cgl_init(void)
 
    apple_cgl.get_version(&apple_cgl.version_major, &apple_cgl.version_minor);
 
-   apple_glx_diagnostic("CGL major %d minor %d\n", apple_cgl.version_major, apple_cgl.version_minor);
+   apple_glx_log_info("CGL major %d minor %d", apple_cgl.version_major, apple_cgl.version_minor);
 
    if (1 != apple_cgl.version_major) {
       fprintf(stderr, "WARNING: the CGL major version has changed!\n"

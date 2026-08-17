@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "pipe/p_state.h"
 #include "util/u_memory.h"
 #include "util/u_prim.h"
@@ -25,6 +23,7 @@
 #include "fd6_draw.h"
 #include "fd6_emit.h"
 #include "fd6_program.h"
+#include "fd6_screen.h"
 #include "fd6_vsc.h"
 #include "fd6_zsa.h"
 
@@ -375,7 +374,7 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
    }
    emit.fs = fd6_emit_get_prog(&emit)->fs;
 
-   if (emit.prog->num_driver_params || fd6_ctx->has_dp_state) {
+   if (emit.prog->needs_driver_params || fd6_ctx->has_dp_state) {
       emit.draw = &draws[0];
       emit.dirty_groups |= BIT(FD6_GROUP_DRIVER_PARAMS);
    }
@@ -429,10 +428,14 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
       draw0.tess_enable = true;
 
       /* maximum number of patches that can fit in tess factor/param buffers */
-      uint32_t subdraw_size = MIN2(FD6_TESS_FACTOR_SIZE / factor_stride,
-                                   FD6_TESS_PARAM_SIZE / (emit.hs->output_size * 4));
+      uint32_t subdraw_size = MIN2(FD6_TESS<CHIP>::FACTOR_SIZE / factor_stride,
+                                   FD6_TESS<CHIP>::PARAM_SIZE / (emit.hs->output_size * 4));
       /* convert from # of patches to draw count */
       subdraw_size *= ctx->patch_vertices;
+
+      /* For gen8 tess_bo is sized for two draws, adjust subdraw size accordingly: */
+      if (CHIP >= A8XX)
+         subdraw_size /= 2;
 
       fd_pkt7(cs, CP_SET_SUBDRAW_SIZE, 1)
          .add(subdraw_size);
@@ -440,9 +443,7 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
       ctx->batch->tessellation = true;
    }
 
-   {
-      fd_crb crb(cs, 3);
-
+   with_crb (cs, 3) {
       uint32_t index_start = is_indexed(DRAW) ? draws[0].index_bias : draws[0].start;
       if (ctx->last.dirty || (ctx->last.index_start != index_start)) {
          crb.add(A6XX_VFD_INDEX_OFFSET(index_start));
@@ -463,7 +464,7 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
    }
 
    if (emit.dirty_groups)
-      fd6_emit_3d_state<CHIP, PIPELINE>(cs, &emit);
+      fd6_emit_3d_state<PIPELINE, CHIP>(cs, &emit);
 
    /* All known firmware versions do not wait for WFI's with CP_DRAW_AUTO.
     * Plus, for the common case where the counter buffer is written by
@@ -480,14 +481,6 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
       ctx->batch->barrier |= FD6_WAIT_FOR_ME;
 
    fd6_barrier_flush<CHIP>(cs, ctx->batch);
-
-   /* for debug after a lock up, write a unique counter value
-    * to scratch7 for each draw, to make it easier to match up
-    * register dumps to cmdstream.  The combination of IB
-    * (scratch6) and DRAW is enough to "triangulate" the
-    * particular draw that caused lockup.
-    */
-   emit_marker6<CHIP>(cs, 7);
 
    if (is_indirect(DRAW)) {
       assert(num_draws == 1);  /* only >1 for direct draws */
@@ -541,7 +534,7 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
                emit.state.num_groups = 0;
                emit.draw = &draws[i];
                emit.draw_id = info->increment_draw_id ? i : 0;
-               fd6_emit_3d_state<CHIP, PIPELINE>(cs, &emit);
+               fd6_emit_3d_state<PIPELINE, CHIP>(cs, &emit);
             }
 
             assert(!index_offset); /* handled by util_draw_multi() */
@@ -552,8 +545,6 @@ draw_vbos(struct fd_context *ctx, const struct pipe_draw_info *info,
          ctx->last.index_start = last_index_start;
       }
    }
-
-   emit_marker6<CHIP>(cs, 7);
 
    flush_streamout<CHIP>(ctx, cs, &emit);
 

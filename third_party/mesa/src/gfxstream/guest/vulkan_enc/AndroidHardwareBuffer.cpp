@@ -72,6 +72,10 @@ VkResult getAndroidHardwareBufferPropertiesANDROID(
     const auto format = grallocHelper->getFormat(buffer);
     if (ahbFormatProps) {
         switch (format) {
+            case AHARDWAREBUFFER_FORMAT_B8G8R8A8_UNORM:
+                ahbFormatProps->format = VK_FORMAT_B8G8R8A8_UNORM;
+                ahbFormatProps->externalFormat = DRM_FORMAT_ARGB8888;
+                break;
             case AHARDWAREBUFFER_FORMAT_R8_UNORM:
                 ahbFormatProps->format = VK_FORMAT_R8_UNORM;
                 ahbFormatProps->externalFormat = DRM_FORMAT_R8;
@@ -124,9 +128,21 @@ VkResult getAndroidHardwareBufferPropertiesANDROID(
                 ahbFormatProps->format = VK_FORMAT_S8_UINT;
                 ahbFormatProps->externalFormat = DRM_FORMAT_S8_UINT;
                 break;
+#if __ANDROID_API__ >= 30
+            case AHARDWAREBUFFER_FORMAT_YCbCr_P010:
+#endif
+#if __ANDROID_API__ >= 35
+            case AHARDWAREBUFFER_FORMAT_YCbCr_P210:
+#endif
+                ahbFormatProps->format = VK_FORMAT_UNDEFINED;
+                ahbFormatProps->externalFormat = DRM_FORMAT_INVALID;
+                break;
             default:
                 ahbFormatProps->format = VK_FORMAT_UNDEFINED;
                 ahbFormatProps->externalFormat = DRM_FORMAT_INVALID;
+                mesa_loge("Unhandled AHB format:%u", format);
+                break;
+
         }
 
         // The formatFeatures member must include
@@ -183,7 +199,7 @@ VkResult getAndroidHardwareBufferPropertiesANDROID(
                 //  * V (CR) comes from the R-channel (after swizzle)
                 //
                 // See
-                // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#textures-sampler-YCbCr-conversion
+                // https://docs.vulkan.org/spec/latest/chapters/textures.html#textures-sampler-YCbCr-conversion
                 //
                 // To match the above, the guest needs to swizzle such that:
                 //
@@ -198,6 +214,10 @@ VkResult getAndroidHardwareBufferPropertiesANDROID(
                     case DRM_FORMAT_P010:
                         // P010 is a Y-plane followed by a interleaved UV-plane and is
                         // VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16 on the host.
+                        break;
+                    case DRM_FORMAT_P210:
+                        // P210 is a Y-plane followed by a interleaved UV-plane and is
+                        // VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16 on the host.
                         break;
                     case DRM_FORMAT_YUV420:
                         // YUV420 is a Y-plane, then a U-plane, and then a V-plane and is

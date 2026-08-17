@@ -868,7 +868,6 @@ glx@glx_ext_import_context@free context,Fail
 glx@glx_ext_import_context@get context id,Fail
 glx@glx_ext_import_context@make current- multi process,Fail
 glx@glx_ext_import_context@make current- single process,Fail
-glx@glx_ext_import_context@query context info,Fail
 hiz@hiz-depth-read-window-stencil0,Fail
 hiz@hiz-depth-read-window-stencil1,Fail
 hiz@hiz-depth-test-window-stencil0,Fail
@@ -1001,7 +1000,6 @@ spec@arb_occlusion_query@occlusion_query_meta_no_fragments,Fail
 spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex,Fail
 spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex@'vs_input2[1][0]' on GL_PROGRAM_INPUT,Fail
 
-spec@arb_provoking_vertex@arb-provoking-vertex-clipped-geometry-flatshading,Fail
 spec@arb_provoking_vertex@arb-provoking-vertex-render,Fail
 
 spec@arb_shader_image_load_store@execution@disable_early_z,Fail
@@ -1080,7 +1078,6 @@ spec@arb_texture_rg@texwrap formats@GL_R8- NPOT,Fail
 spec@arb_texture_rg@texwrap formats@GL_RG16- NPOT,Fail
 spec@arb_texture_rg@texwrap formats@GL_RG8- NPOT,Fail
 
-spec@arb_transform_feedback2@change objects while paused,Crash
 spec@arb_transform_feedback3@arb_transform_feedback3-ext_interleaved_two_bufs_gs,Crash
 spec@arb_transform_feedback3@arb_transform_feedback3-ext_interleaved_two_bufs_gs_max,Crash
 spec@arb_transform_feedback3@arb_transform_feedback3-ext_interleaved_two_bufs_vs,Crash
@@ -1222,7 +1219,6 @@ spec@nv_primitive_restart@primitive-restart-draw-mode-quads,Fail
 spec@nv_primitive_restart@primitive-restart-draw-mode-triangle_fan,Fail
 spec@nv_primitive_restart@primitive-restart-draw-mode-triangle_strip,Fail
 spec@nv_primitive_restart@primitive-restart-draw-mode-triangles,Fail
-spec@nv_read_depth@read_depth_gles3,Fail
 
 spec@!opengl 1.0@depth-clear-precision-check,Fail
 spec@!opengl 1.0@depth-clear-precision-check@depth32,Fail
@@ -1238,6 +1234,9 @@ spec@arb_texture_buffer_object@texture-buffer-size-clamp@rgba8ui_texture_buffer_
 spec@arb_texture_buffer_object@texture-buffer-size-clamp@rgba8ui_texture_buffer_size_via_sampler,Fail
 
 # uprev Piglit in Mesa
+spec@!opengl 1.0@depth-clear-precision-check@depth16,Fail
+spec@!opengl 1.0@depth-clear-precision-check@depth24_stencil8,Fail
+spec@!opengl 1.0@depth-clear-precision-check@depth24,Fail
 spec@!opengl 2.0@vertex-program-two-side enabled front back front2 back2,Fail
 spec@!opengl 2.0@vertex-program-two-side enabled front back front2 back2@gs-out and fs,Fail
 spec@!opengl 2.0@vertex-program-two-side enabled front back front2,Fail
@@ -1255,7 +1254,6 @@ spec@arb_internalformat_query2@max dimensions related pname checks@GL_MAX_DEPTH,
 spec@arb_internalformat_query2@max dimensions related pname checks@GL_MAX_HEIGHT,Fail
 spec@arb_internalformat_query2@max dimensions related pname checks@GL_MAX_LAYERS,Fail
 spec@arb_internalformat_query2@max dimensions related pname checks@GL_MAX_WIDTH,Fail
-spec@glsl-1.40@uniform_buffer@two-stages,Fail
 
 dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min,Fail
 dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_dst_x,Fail
@@ -1317,7 +1315,6 @@ KHR-GLES3.cull_distance.functional_test_item_7_primitive_mode_triangles_max_cull
 KHR-GLES3.cull_distance.functional_test_item_7_primitive_mode_triangles_max_culldist_3,Fail
 KHR-GLES3.framebuffer_blit.multisampled_to_singlesampled_blit_color_config_test,Fail
 KHR-GLES3.framebuffer_blit.multisampled_to_singlesampled_blit_depth_config_test,Fail
-KHR-GLES31.core.texture_stencil8.multisample,Fail
 dEQP-GLES2.functional.clipping.line.wide_line_clip_viewport_corner,Fail
 dEQP-GLES31.functional.geometry_shading.query.primitives_generated_instanced,Fail
 dEQP-GLES31.functional.geometry_shading.query.primitives_generated_no_amplification,Fail
@@ -1331,3 +1328,23 @@ spec@arb_occlusion_query@occlusion_query_meta_save,Fail
 shaders@glsl-fs-fogscale@vs and fs,Fail
 spec@arb_texture_rectangle@texwrap rect proj bordercolor,Fail
 spec@arb_texture_rectangle@texwrap rect proj bordercolor@GL_RGBA8- projected- border color only,Fail
+
+# New failures with ES CTS 3.2.13.0
+KHR-GLES3.cull_distance.functional_test_item_0_primitive_mode_triangles_max_culldist_3,Fail
+KHR-GLES3.cull_distance.functional_test_item_0_primitive_mode_triangles_max_culldist_6,Fail
+KHR-GLES3.cull_distance.functional_test_item_1_primitive_mode_triangles_max_culldist_0,Fail
+KHR-GLES3.cull_distance.functional_test_item_1_primitive_mode_triangles_max_culldist_2,Fail
+KHR-GLES3.cull_distance.functional_test_item_1_primitive_mode_triangles_max_culldist_6,Fail
+KHR-GLES3.cull_distance.functional_test_item_2_primitive_mode_triangles_max_culldist_7,Fail
+KHR-GLES3.cull_distance.functional_test_item_3_primitive_mode_triangles_max_culldist_0,Fail
+KHR-GLES3.cull_distance.functional_test_item_3_primitive_mode_triangles_max_culldist_5,Fail
+KHR-GLES3.cull_distance.functional_test_item_4_primitive_mode_triangles_max_culldist_0,Fail
+KHR-GLES3.cull_distance.functional_test_item_4_primitive_mode_triangles_max_culldist_2,Fail
+KHR-GLES3.cull_distance.functional_test_item_4_primitive_mode_triangles_max_culldist_4,Fail
+KHR-GLES3.cull_distance.functional_test_item_5_primitive_mode_triangles_max_culldist_6,Fail
+KHR-GLES3.cull_distance.functional_test_item_7_primitive_mode_triangles_max_culldist_7,Fail
+dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_dst_x,Fail
+dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_src_y,Fail
+dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_src_x,Fail
+dEQP-GLES3.functional.rasterization.fbo.rbo_multisample_max.interpolation.lines_wide,Fail
+dEQP-GLES3.functional.rasterization.fbo.texture_2d.interpolation.lines_wide,Fail

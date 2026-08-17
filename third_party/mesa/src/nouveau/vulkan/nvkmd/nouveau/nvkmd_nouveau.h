@@ -7,6 +7,7 @@
 
 #include "nvkmd/nvkmd.h"
 #include "vk_drm_syncobj.h"
+#include "util/u_dynarray.h"
 #include "util/vma.h"
 
 #include "drm-uapi/nouveau_drm.h"
@@ -97,7 +98,6 @@ VkResult nvkmd_nouveau_alloc_va(struct nvkmd_dev *dev,
 
 #define NVKMD_NOUVEAU_MAX_SYNCS 256
 #define NVKMD_NOUVEAU_MAX_BINDS 4096
-#define NVKMD_NOUVEAU_MAX_PUSH 1024
 
 struct nvkmd_nouveau_exec_ctx {
    struct nvkmd_ctx base;
@@ -109,10 +109,10 @@ struct nvkmd_nouveau_exec_ctx {
 
    uint32_t max_push;
 
+   struct drm_nouveau_exec req;
    struct drm_nouveau_sync req_wait[NVKMD_NOUVEAU_MAX_SYNCS];
    struct drm_nouveau_sync req_sig[NVKMD_NOUVEAU_MAX_SYNCS];
-   struct drm_nouveau_exec_push req_push[NVKMD_NOUVEAU_MAX_PUSH];
-   struct drm_nouveau_exec req;
+   struct util_dynarray req_push;
 };
 
 NVKMD_DECL_SUBCLASS(ctx, nouveau_exec);

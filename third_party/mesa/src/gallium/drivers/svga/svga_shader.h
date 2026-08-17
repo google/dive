@@ -131,10 +131,10 @@ struct svga_compile_key
       unsigned sampler_index:5;
    } tex[PIPE_MAX_SAMPLERS];
 
-   unsigned uav_splice_index:4;      /* starting uav index */
-   unsigned srv_raw_constbuf_index:8;   /* start index for srv raw buffers */
-   unsigned srv_raw_shaderbuf_index:8;  /* start index for srv raw shader bufs */
-   unsigned image_size_used:1;
+   uint8_t uav_splice_index;         /* starting uav index */
+   uint8_t srv_raw_constbuf_index;   /* start index for srv raw buffers */
+   uint8_t srv_raw_shaderbuf_index;  /* start index for srv raw shader bufs */
+   bool    image_size_used;
 
    uint16_t raw_constbufs;           /* bitmask of raw constant buffers */
    uint64_t raw_shaderbufs;          /* bitmask of raw shader buffers */

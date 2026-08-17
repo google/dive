@@ -208,7 +208,6 @@ OM_PPLOD = op_mod('pplod', BaseType.bool)
 OM_TAO = op_mod('tao', BaseType.bool)
 OM_SOO = op_mod('soo', BaseType.bool)
 OM_SNO = op_mod('sno', BaseType.bool)
-OM_WRT = op_mod('wrt', BaseType.bool)
 OM_SB_MODE = op_mod_enum('sb_mode', [
    ('none', ''),
    ('rawdata', 'rawdata'),
@@ -360,6 +359,11 @@ OM_ALU = [OM_OLCHK, OM_EXEC_CND, OM_END, OM_ATOM, OM_RPT]
 OM_ALU_RPT1 = [OM_OLCHK, OM_EXEC_CND, OM_END, OM_ATOM]
 OM_ALU_ATOMEXT = [OM_OLCHK, OM_EXEC_CND, OM_END, OM_RPT]
 
+OM_VOTE_OP = op_mod_enum('vote_op', [
+   'all',
+   'any',
+])
+
 ## Main.
 O_FADD = hw_op('fadd', OM_ALU + [OM_SAT], 1, 2, [], [[RM_ABS, RM_NEG, RM_FLR], [RM_ABS]])
 O_FMUL = hw_op('fmul', OM_ALU + [OM_SAT], 1, 2, [], [[RM_ABS, RM_NEG, RM_FLR], [RM_ABS]])
@@ -417,8 +421,13 @@ O_ATOMIC = hw_op('atomic', [OM_OLCHK, OM_EXEC_CND, OM_END, OM_ATOM_OP], 1, 2)
 
 O_SMP = hw_op('smp', OM_ALU_RPT1 + [OM_DIM, OM_PROJ, OM_FCNORM, OM_NNCOORDS,
                                     OM_LOD_MODE, OM_PPLOD, OM_TAO, OM_SOO,
-                                    OM_SNO, OM_WRT, OM_SB_MODE, OM_MCU_CACHE_MODE_LD,
+                                    OM_SNO, OM_SB_MODE, OM_MCU_CACHE_MODE_LD,
                                     OM_ARRAY, OM_INTEGER, OM_SCHEDSWAP, OM_F16], 1, 6)
+
+O_SMP_WRT = hw_op('smp.wrt', OM_ALU_RPT1 + [OM_DIM, OM_PROJ, OM_FCNORM, OM_NNCOORDS,
+                                            OM_LOD_MODE, OM_PPLOD, OM_TAO, OM_SOO,
+                                            OM_SNO, OM_SB_MODE, OM_MCU_CACHE_MODE_ST,
+                                            OM_ARRAY, OM_INTEGER, OM_SCHEDSWAP, OM_F16], 0, 6)
 
 O_ALPHATST = hw_op('alphatst', OM_ALU_RPT1, 1, 4)
 
@@ -428,6 +437,8 @@ O_DEPTHF = hw_op('depthf', OM_ALU_RPT1, 0, 2)
 O_SAVMSK = hw_op('savmsk', OM_ALU_RPT1 + [OM_SAVMSK_MODE], 2)
 
 O_EMITPIX = hw_op('emitpix', OM_ALU_RPT1 + [OM_FREEP], 0, 2)
+
+O_SETL = hw_op('setl', [OM_EXEC_CND], 0, 1)
 
 ## Bitwise.
 O_MOVI32 = hw_op('movi32', OM_ALU, 1, 1)
@@ -472,7 +483,11 @@ O_BR = hw_op('br', [OM_EXEC_CND, OM_BRANCH_CND, OM_LINK], has_target_cf_node=Tru
 
 O_BR_NEXT = hw_op('br.next', [OM_EXEC_CND])
 
+O_BR_SKIP_NEXT = hw_op('br.skip_next', [OM_EXEC_CND, OM_BRANCH_CND])
+
 O_MUTEX = hw_op('mutex', [OM_MUTEX_OP], 0, 1)
+
+O_SAVL = hw_op('savl', [OM_EXEC_CND], 1, 0)
 
 # Combination (> 1 instructions per group).
 O_SCMP = hw_op('scmp', OM_ALU + [OM_TST_OP_MAIN], 1, 2, [], [[RM_ABS, RM_NEG], [RM_ABS, RM_NEG]])
@@ -488,6 +503,9 @@ O_MIN = hw_op('min', OM_ALU + [OM_TST_TYPE_MAIN], 1, 2, [], [[RM_ABS, RM_NEG], [
 O_MAX = hw_op('max', OM_ALU + [OM_TST_TYPE_MAIN], 1, 2, [], [[RM_ABS, RM_NEG], [RM_ABS, RM_NEG]])
 O_IADD32 = hw_op('iadd32', OM_ALU + [OM_S], 1, 3, [], [[RM_ABS, RM_NEG], [RM_ABS, RM_NEG]])
 O_IMUL32 = hw_op('imul32', OM_ALU + [OM_S], 1, 3, [], [[RM_ABS, RM_NEG], [RM_ABS, RM_NEG]])
+
+O_UADD_CARRY = hw_op('uadd_carry', OM_ALU, 2, 2)
+O_UADD_SAT = hw_op('uadd_sat', OM_ALU, 1, 3)
 
 O_TSTZ = hw_op('tstz', OM_ALU + [OM_TST_TYPE_MAIN], 2, 1, [], [[RM_ELEM]])
 O_ST32 = hw_op('st32', OM_ALU_RPT1 + [OM_MCU_CACHE_MODE_ST, OM_IDF], 0, 5)
@@ -518,8 +536,11 @@ O_MOV = pseudo_op('mov', OM_ALU, 1, 1)
 O_MOV_OFFSET = pseudo_op('mov.offset', OM_ALU + [OM_OFFSET_SD], 1, 2)
 O_VEC = pseudo_op('vec', [OM_EXEC_CND], 1, VARIABLE)
 O_COMP = pseudo_op('comp', [], 1, 2)
+O_FENCE = pseudo_op('fence')
 
 O_OP_ATOMIC_OFFSET = pseudo_op('op.atomic.offset', OM_ALU_ATOMEXT + [OM_ATOM_OP], 2, 4, [], [[RM_ABS, RM_NEG], [RM_ABS, RM_NEG]])
 
 O_BREAK = pseudo_op('break', [OM_EXEC_CND])
 O_CONTINUE = pseudo_op('continue', [OM_EXEC_CND])
+
+O_VOTE = pseudo_op('vote', [OM_EXEC_CND, OM_VOTE_OP], 1, 1)

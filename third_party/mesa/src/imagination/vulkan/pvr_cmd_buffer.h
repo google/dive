@@ -19,6 +19,7 @@
 #include "pvr_common.h"
 #include "pvr_framebuffer.h"
 #include "pvr_job_render.h"
+#include "pvr_hw_pass.h"
 #include "pvr_types.h"
 
 struct pvr_pds_upload;
@@ -111,15 +112,42 @@ struct pvr_transfer_cmd {
     * cmd_buffer::bo_list head.
     */
    struct pvr_cmd_buffer *cmd_buffer;
+};
 
-   /* Deferred RTA clears are allocated from pvr_cmd_buffer->deferred_clears and
-    * cannot be freed directly.
-    */
-   bool is_deferred_clear;
+struct pvr_unbound_deferred_clear {
+   union fi clear_color[4];
+   VkOffset3D offset;
+   VkExtent3D extent;
+   uint32_t array_layer;
+   VkImageAspectFlags aspect_mask;
+   uint32_t attachment_index;
+};
+
+struct pvr_color_attachment_output_map {
+   uint32_t index_color;
+   uint32_t index_resolve;
+};
+
+struct pvr_dynamic_render_info {
+   /* Inputs */
+   struct pvr_render_pass_attachment *attachments;
+   uint32_t attachment_count;
+
+   /* Outputs */
+   struct pvr_color_attachment_output_map *color_attachments;
+   uint32_t color_attachment_count;
+
+   struct usc_mrt_setup *mrt_setup;
+
+   struct pvr_renderpass_hwsetup_render hw_render;
 };
 
 struct pvr_sub_cmd_gfx {
-   const struct pvr_framebuffer *framebuffer;
+   struct pvr_dynamic_render_info *dr_info;
+   struct pvr_renderpass_hwsetup_render *hw_render;
+   uint32_t attachment_count;
+
+   const struct pvr_render_state *rstate;
 
    struct pvr_render_job job;
 
@@ -189,6 +217,10 @@ struct pvr_sub_cmd_gfx {
 
    uint32_t view_mask;
    bool multiview_enabled;
+   bool view_index_wanted;
+
+   /* Recorded deferred RTA clears for secondary command buffers */
+   struct util_dynarray unbound_deferred_clears;
 };
 
 struct pvr_sub_cmd_compute {
@@ -254,11 +286,16 @@ struct pvr_sub_cmd {
 
    enum pvr_sub_cmd_type type;
 
-   /* True if the sub_cmd is owned by this command buffer. False if taken from
-    * a secondary command buffer, in that case we are not supposed to free any
-    * resources associated with the sub_cmd.
-    */
-   bool owned;
+   struct {
+      /* True if the sub_cmd is owned by this command buffer. False if taken
+       * from a secondary command buffer, in that case we are not supposed to
+       * free any resources associated with the sub_cmd.
+       */
+      bool owned : 1;
+      bool is_dynamic_render : 1;
+      bool is_suspend : 1;
+      bool is_resume : 1;
+   };
 
    union {
       struct pvr_sub_cmd_gfx gfx;
@@ -272,10 +309,16 @@ struct pvr_render_pass_info {
    const struct pvr_render_pass *pass;
    struct pvr_framebuffer *framebuffer;
 
+   struct pvr_dynamic_render_info *dr_info;
+   struct pvr_renderpass_hwsetup_render *hw_render;
+   struct pvr_render_state *rstate;
+
+   uint32_t attachment_count;
    struct pvr_image_view **attachments;
 
    uint32_t subpass_idx;
    uint32_t current_hw_subpass;
+   uint32_t sample_count;
 
    VkRect2D render_area;
 
@@ -287,6 +330,10 @@ struct pvr_render_pass_info {
    bool process_empty_tiles;
    bool enable_bg_tag;
    uint32_t isp_userpass;
+
+   bool dynamic_render;
+   bool suspend;
+   bool resume;
 };
 
 struct pvr_ppp_state {
@@ -502,7 +549,7 @@ struct pvr_cmd_buffer {
    /* List of struct pvr_transfer_cmd used to emulate RTA clears on non RTA
     * capable cores.
     */
-   struct util_dynarray deferred_clears;
+   struct list_head deferred_clears;
 
    /* List of pvr_bo structs associated with this cmd buffer. */
    struct list_head bo_list;
@@ -536,7 +583,7 @@ pvr_cmd_buffer_set_error_unwarned(struct pvr_cmd_buffer *cmd_buffer,
 static inline bool pvr_sub_cmd_gfx_requires_split_submit(
    const struct pvr_sub_cmd_gfx *const sub_cmd)
 {
-   return sub_cmd->job.run_frag && sub_cmd->framebuffer->layers > 1;
+   return sub_cmd->job.run_frag && sub_cmd->rstate->layers > 1;
 }
 
 #define PVR_CHECK_COMMAND_BUFFER_BUILDING_STATE(cmd_buffer)                  \
@@ -559,74 +606,163 @@ static inline bool pvr_sub_cmd_gfx_requires_split_submit(
       }                                                                      \
    } while (0)
 
-VkResult pvr_cmd_buffer_add_transfer_cmd(struct pvr_cmd_buffer *cmd_buffer,
-                                         struct pvr_transfer_cmd *transfer_cmd);
+#ifdef PVR_PER_ARCH
 
-VkResult pvr_cmd_buffer_alloc_mem(struct pvr_cmd_buffer *cmd_buffer,
-                                  struct pvr_winsys_heap *heap,
-                                  uint64_t size,
-                                  struct pvr_suballoc_bo **const pvr_bo_out);
+VkResult PVR_PER_ARCH(cmd_buffer_add_transfer_cmd)(
+   struct pvr_cmd_buffer *cmd_buffer,
+   struct pvr_transfer_cmd *transfer_cmd);
+
+#   define pvr_arch_cmd_buffer_add_transfer_cmd \
+      PVR_PER_ARCH(cmd_buffer_add_transfer_cmd)
+
+VkResult PVR_PER_ARCH(cmd_buffer_alloc_mem)(
+   struct pvr_cmd_buffer *cmd_buffer,
+   struct pvr_winsys_heap *heap,
+   uint64_t size,
+   struct pvr_suballoc_bo **const pvr_bo_out);
+
+#   define pvr_arch_cmd_buffer_alloc_mem PVR_PER_ARCH(cmd_buffer_alloc_mem)
+
+VkResult PVR_PER_ARCH(cmd_buffer_upload_general)(
+   struct pvr_cmd_buffer *const cmd_buffer,
+   const void *const data,
+   const size_t size,
+   struct pvr_suballoc_bo **const pvr_bo_out);
+
+#   define pvr_arch_cmd_buffer_upload_general \
+      PVR_PER_ARCH(cmd_buffer_upload_general)
+
+VkResult PVR_PER_ARCH(cmd_buffer_upload_pds)(
+   struct pvr_cmd_buffer *const cmd_buffer,
+   const uint32_t *data,
+   uint32_t data_size_dwords,
+   uint32_t data_alignment,
+   const uint32_t *code,
+   uint32_t code_size_dwords,
+   uint32_t code_alignment,
+   uint64_t min_alignment,
+   struct pvr_pds_upload *const pds_upload_out);
+
+#   define pvr_arch_cmd_buffer_upload_pds PVR_PER_ARCH(cmd_buffer_upload_pds)
 
 VkResult
-pvr_cmd_buffer_upload_general(struct pvr_cmd_buffer *const cmd_buffer,
-                              const void *const data,
-                              const size_t size,
-                              struct pvr_suballoc_bo **const pvr_bo_out);
-VkResult pvr_cmd_buffer_upload_pds(struct pvr_cmd_buffer *const cmd_buffer,
-                                   const uint32_t *data,
-                                   uint32_t data_size_dwords,
-                                   uint32_t data_alignment,
-                                   const uint32_t *code,
-                                   uint32_t code_size_dwords,
-                                   uint32_t code_alignment,
-                                   uint64_t min_alignment,
-                                   struct pvr_pds_upload *const pds_upload_out);
+   PVR_PER_ARCH(cmd_buffer_start_sub_cmd)(struct pvr_cmd_buffer *cmd_buffer,
+                                          enum pvr_sub_cmd_type type);
 
-VkResult pvr_cmd_buffer_start_sub_cmd(struct pvr_cmd_buffer *cmd_buffer,
-                                      enum pvr_sub_cmd_type type);
-VkResult pvr_cmd_buffer_end_sub_cmd(struct pvr_cmd_buffer *cmd_buffer);
+#   define pvr_arch_cmd_buffer_start_sub_cmd \
+      PVR_PER_ARCH(cmd_buffer_start_sub_cmd)
 
-void pvr_compute_generate_fence(struct pvr_cmd_buffer *cmd_buffer,
-                                struct pvr_sub_cmd_compute *const sub_cmd,
-                                bool deallocate_shareds);
-void pvr_compute_update_shared_private(
+VkResult
+   PVR_PER_ARCH(cmd_buffer_end_sub_cmd)(struct pvr_cmd_buffer *cmd_buffer);
+
+#   define pvr_arch_cmd_buffer_end_sub_cmd PVR_PER_ARCH(cmd_buffer_end_sub_cmd)
+
+void PVR_PER_ARCH(compute_generate_fence)(
+   struct pvr_cmd_buffer *cmd_buffer,
+   struct pvr_sub_cmd_compute *const sub_cmd,
+   bool deallocate_shareds);
+
+#   define pvr_arch_compute_generate_fence PVR_PER_ARCH(compute_generate_fence)
+
+void PVR_PER_ARCH(compute_update_shared_private)(
    struct pvr_cmd_buffer *cmd_buffer,
    struct pvr_sub_cmd_compute *const sub_cmd,
    struct pvr_private_compute_pipeline *pipeline);
 
-void pvr_compute_update_kernel_private(
+#   define pvr_arch_compute_update_shared_private \
+      PVR_PER_ARCH(compute_update_shared_private)
+
+void PVR_PER_ARCH(compute_update_kernel_private)(
    struct pvr_cmd_buffer *cmd_buffer,
    struct pvr_sub_cmd_compute *const sub_cmd,
    struct pvr_private_compute_pipeline *pipeline,
    const uint32_t global_workgroup_size[static const PVR_WORKGROUP_DIMENSIONS]);
 
-VkResult pvr_add_query_program(struct pvr_cmd_buffer *cmd_buffer,
-                               const struct pvr_query_info *query_info);
+#   define pvr_arch_compute_update_kernel_private \
+      PVR_PER_ARCH(compute_update_kernel_private)
 
-static inline void
-pvr_render_targets_datasets_destroy(struct pvr_render_target *render_target)
-{
-   u_foreach_bit (valid_idx, render_target->valid_mask) {
-      struct pvr_rt_dataset *rt_dataset = render_target->rt_dataset[valid_idx];
+VkResult
+   PVR_PER_ARCH(add_query_program)(struct pvr_cmd_buffer *cmd_buffer,
+                                   const struct pvr_query_info *query_info);
 
-      if (rt_dataset && render_target->valid_mask & BITFIELD_BIT(valid_idx))
-         pvr_render_target_dataset_destroy(rt_dataset);
+#   define pvr_arch_add_query_program PVR_PER_ARCH(add_query_program)
 
-      render_target->rt_dataset[valid_idx] = NULL;
-      render_target->valid_mask &= ~BITFIELD_BIT(valid_idx);
-   }
-}
+void PVR_PER_ARCH(reset_graphics_dirty_state)(
+   struct pvr_cmd_buffer *const cmd_buffer,
+   bool start_geom);
 
-void pvr_reset_graphics_dirty_state(struct pvr_cmd_buffer *const cmd_buffer,
-                                    bool start_geom);
+#   define pvr_arch_reset_graphics_dirty_state \
+      PVR_PER_ARCH(reset_graphics_dirty_state)
 
-void pvr_calculate_vertex_cam_size(const struct pvr_device_info *dev_info,
-                                   const uint32_t vs_output_size,
-                                   const bool raster_enable,
-                                   uint32_t *const cam_size_out,
-                                   uint32_t *const vs_max_instances_out);
+void PVR_PER_ARCH(calculate_vertex_cam_size)(
+   const struct pvr_device_info *dev_info,
+   const uint32_t vs_output_size,
+   const bool raster_enable,
+   uint32_t *const cam_size_out,
+   uint32_t *const vs_max_instances_out);
+
+#   define pvr_arch_cmd_buffer_end_sub_cmd PVR_PER_ARCH(cmd_buffer_end_sub_cmd)
+
+void PVR_PER_ARCH(compute_generate_fence)(
+   struct pvr_cmd_buffer *cmd_buffer,
+   struct pvr_sub_cmd_compute *const sub_cmd,
+   bool deallocate_shareds);
+
+#   define pvr_arch_compute_generate_fence PVR_PER_ARCH(compute_generate_fence)
+
+void PVR_PER_ARCH(compute_update_shared_private)(
+   struct pvr_cmd_buffer *cmd_buffer,
+   struct pvr_sub_cmd_compute *const sub_cmd,
+   struct pvr_private_compute_pipeline *pipeline);
+
+#   define pvr_arch_compute_update_shared_private \
+      PVR_PER_ARCH(compute_update_shared_private)
+
+void PVR_PER_ARCH(compute_update_kernel_private)(
+   struct pvr_cmd_buffer *cmd_buffer,
+   struct pvr_sub_cmd_compute *const sub_cmd,
+   struct pvr_private_compute_pipeline *pipeline,
+   const uint32_t global_workgroup_size[static const PVR_WORKGROUP_DIMENSIONS]);
+
+#   define pvr_arch_compute_update_kernel_private \
+      PVR_PER_ARCH(compute_update_kernel_private)
+
+VkResult
+   PVR_PER_ARCH(add_query_program)(struct pvr_cmd_buffer *cmd_buffer,
+                                   const struct pvr_query_info *query_info);
+
+#   define pvr_arch_add_query_program PVR_PER_ARCH(add_query_program)
+
+void PVR_PER_ARCH(reset_graphics_dirty_state)(
+   struct pvr_cmd_buffer *const cmd_buffer,
+   bool start_geom);
+
+#   define pvr_arch_reset_graphics_dirty_state \
+      PVR_PER_ARCH(reset_graphics_dirty_state)
+
+void PVR_PER_ARCH(calculate_vertex_cam_size)(
+   const struct pvr_device_info *dev_info,
+   const uint32_t vs_output_size,
+   const bool raster_enable,
+   uint32_t *const cam_size_out,
+   uint32_t *const vs_max_instances_out);
+
+#   define pvr_arch_calculate_vertex_cam_size \
+      PVR_PER_ARCH(calculate_vertex_cam_size)
 
 const struct pvr_renderpass_hwsetup_subpass *
-pvr_get_hw_subpass(const struct pvr_render_pass *pass, const uint32_t subpass);
+   PVR_PER_ARCH(get_hw_subpass)(const struct pvr_render_pass *pass,
+                                const uint32_t subpass);
+
+#   define pvr_arch_get_hw_subpass PVR_PER_ARCH(get_hw_subpass)
+
+struct pvr_renderpass_hwsetup_render *PVR_PER_ARCH(pass_info_get_hw_render)(
+   const struct pvr_render_pass_info *render_pass_info,
+   uint32_t idx);
+
+#   define pvr_arch_pass_info_get_hw_render \
+      PVR_PER_ARCH(pass_info_get_hw_render)
+
+#endif /* PVR_PER_ARCH */
 
 #endif /* PVR_CMD_BUFFER_H */

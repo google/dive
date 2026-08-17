@@ -330,7 +330,7 @@ blob_read_string(struct blob_reader *blob)
 {
    int size;
    char *ret;
-   uint8_t *nul;
+   const uint8_t *nul;
 
    /* If we're already at the end, then this is an overrun. */
    if (blob->current >= blob->end) {

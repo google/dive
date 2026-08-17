@@ -1,11 +1,13 @@
-# nouveau 0000:2d:00.0: gsp: mmu fault queued
-# nouveau 0000:2d:00.0: gsp: rc engn:00000001 chid:24 type:31 scope:1 part:233
-# nouveau 0000:2d:00.0: fifo:c00000:0003:0018:[d3d12[1056]] errored - disabling channel
-# nouveau 0000:2d:00.0: d3d12[1056]: channel 24 killed!
-test_uav_counter_null_behavior_dxbc,Crash
-test_uav_counter_null_behavior_dxil,Crash
+# With 32-bit handles, we only have 12-bit to fit the sampler index so this will break after 4096 border colors.
+# We should start using 64-bit handles to fix this.
+test_custom_border_color_limits,Fail
 
-test_sampler_feedback_implicit_lod_aniso,Fail
-
-test_derivative_hoisting_dxbc,Fail
+# NVIDIA hardware isn't conformant with D3D11.3 16.8.2
+# Upstream vkd3d-proton skips the non conformant cases for NVK now.
 test_derivative_hoisting_dxil,Fail
+
+# d3d12: ../src/nouveau/vulkan/nvk_edb_bview_cache.c:221: nvk_edb_bview_cache_get_descriptor: Assertion `offset_B % el_size_B == 0' failed.
+test_buffers_oob_behavior_vectorized_structured_16bit,Crash
+
+# d3d12: ../src/nouveau/vulkan/nvk_edb_bview_cache.c:204: nvk_edb_bview_cache_get_descriptor: Assertion `size_B <= view_stride_B(format)' failed.
+test_large_buffer_descriptors,Crash

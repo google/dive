@@ -22,8 +22,6 @@
  */
 #if MFT_CODEC_H265ENC
 #include "hmft_entrypoints.h"
-#include "mfbufferhelp.h"
-#include "mfpipeinterop.h"
 #include "reference_frames_tracker_hevc.h"
 #include "wpptrace.h"
 
@@ -77,46 +75,135 @@ ComputeCroppingRect( const UINT32 textureWidth,
    }
 }
 
-// utility function to fill in encoder picture descriptor (pPicInfo) which is used to pass information to DX12 encoder
-static void
-UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
-                          const encoder_capabilities &EncoderCapabilities,
-                          const VUInfo &VUIInfo,
-                          const MFRatio &FrameRate )
+HRESULT
+CDX12EncHMFT::UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
+                                        const uint32_t intra_period,
+                                        const uint32_t ip_period,
+                                        const uint8_t log2_max_pic_order_cnt_lsb_minus4,
+                                        const uint16_t pic_width_in_luma_samples,
+                                        const uint16_t pic_height_in_luma_samples )
 {
+   HRESULT hr = S_OK;
+
+   // fields are arranged in the same order as pipe_h265_enc_picture_desc
+   // base
+   pPicInfo->base.profile = m_outputPipeProfile;
+
+   // vid
+   pPicInfo->vid.vps_sub_layer_ordering_info_present_flag = 0;
+   pPicInfo->vid.vps_max_sub_layers_minus1 = 0;
+   for( int i = ( pPicInfo->vid.vps_sub_layer_ordering_info_present_flag ? 0 : pPicInfo->vid.vps_max_sub_layers_minus1 );
+        i <= pPicInfo->vid.vps_max_sub_layers_minus1;
+        i++ )
+   {
+      pPicInfo->vid.vps_max_dec_pic_buffering_minus1[i] = static_cast<uint8_t>( m_pPipeVideoCodec->max_references - 1 );
+      pPicInfo->vid.vps_max_num_reorder_pics[i] = 0;             // TODO: B-frames / reordering
+      pPicInfo->vid.vps_max_latency_increase_plus1[i] = 0 + 1;   // TODO: B-frames
+   }
+
+   // seq
+   pPicInfo->seq.conformance_window_flag = m_bFrameCroppingFlag;
+   pPicInfo->seq.vui_parameters_present_flag = 1;
+   pPicInfo->seq.video_full_range_flag = m_VUIInfo.stVidSigType.bVideoFullRangeFlag;
+
+   pPicInfo->seq.general_profile_idc = static_cast<uint8_t>( m_pPipeVideoCodec->profile );
+   pPicInfo->seq.general_level_idc = static_cast<uint8_t>( m_pPipeVideoCodec->level );
+
+   pPicInfo->seq.intra_period = intra_period;
+   pPicInfo->seq.ip_period = ip_period;
+   pPicInfo->seq.pic_width_in_luma_samples = pic_width_in_luma_samples;
+   pPicInfo->seq.pic_height_in_luma_samples = pic_height_in_luma_samples;
+   pPicInfo->seq.chroma_format_idc = GetChromaFormatIdc( ConvertProfileToFormat( m_outputPipeProfile ) );
+
+   pPicInfo->seq.log2_max_pic_order_cnt_lsb_minus4 = log2_max_pic_order_cnt_lsb_minus4;
+   pPicInfo->seq.log2_min_luma_coding_block_size_minus3 =
+      m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_coding_block_size_minus3;
+   pPicInfo->seq.log2_min_transform_block_size_minus2 =
+      m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_transform_block_size_minus2;
+   pPicInfo->seq.log2_diff_max_min_transform_block_size = static_cast<uint8_t>(
+      ( m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_max_luma_transform_block_size_minus2 + 2 ) -
+      ( m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_transform_block_size_minus2 + 2 ) );
+   pPicInfo->seq.log2_diff_max_min_luma_coding_block_size =
+      static_cast<uint8_t>( ( m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_max_coding_tree_block_size_minus3 + 3 ) -
+                            ( m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_coding_block_size_minus3 + 3 ) );
+   pPicInfo->seq.max_transform_hierarchy_depth_inter =
+      m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.min_max_transform_hierarchy_depth_inter;
+   pPicInfo->seq.max_transform_hierarchy_depth_intra =
+      m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.min_max_transform_hierarchy_depth_intra;
+
+   pPicInfo->seq.conf_win_right_offset = static_cast<uint16_t>( m_uiFrameCropRightOffset );
+   pPicInfo->seq.conf_win_bottom_offset = static_cast<uint16_t>( m_uiFrameCropBottomOffset );
+
+   pPicInfo->seq.sps_max_sub_layers_minus1 = static_cast<uint8_t>( m_uiLayerCount - 1 );
+
+   pPicInfo->seq.vui_flags.aspect_ratio_info_present_flag = m_VUIInfo.bEnableSAR;
+   pPicInfo->seq.vui_flags.timing_info_present_flag = 1;
+   pPicInfo->seq.vui_flags.video_signal_type_present_flag = m_VUIInfo.bEnableVST;
+   pPicInfo->seq.vui_flags.colour_description_present_flag = m_VUIInfo.stVidSigType.bColorInfoPresent;
+   pPicInfo->seq.vui_flags.chroma_loc_info_present_flag = 0;
+   pPicInfo->seq.vui_flags.overscan_info_present_flag = 0;
+   pPicInfo->seq.vui_flags.overscan_appropriate_flag = 0;
+
+   pPicInfo->seq.vui_flags.bitstream_restriction_flag = 1;
+
+   pPicInfo->seq.aspect_ratio_idc = 255 /* EXTENDED_SAR */;
+   pPicInfo->seq.sar_width = m_VUIInfo.stSARInfo.usWidth;
+   pPicInfo->seq.sar_height = m_VUIInfo.stSARInfo.usHeight;
+
+   pPicInfo->seq.num_units_in_tick = m_FrameRate.Denominator;
+   pPicInfo->seq.time_scale =
+      m_FrameRate.Numerator;   // Table E.6 seq.vui_flags.frame_field_info_present_flag is 0, deltaToDivisor should be 1.
+
+   pPicInfo->seq.video_format = m_VUIInfo.stVidSigType.eVideoFormat;
+   pPicInfo->seq.colour_primaries = m_VUIInfo.stVidSigType.eColorPrimary;
+   pPicInfo->seq.transfer_characteristics = m_VUIInfo.stVidSigType.eColorTransfer;
+   pPicInfo->seq.matrix_coefficients = m_VUIInfo.stVidSigType.eColorMatrix;
+
+   pPicInfo->seq.chroma_sample_loc_type_top_field = 0;
+   pPicInfo->seq.chroma_sample_loc_type_bottom_field = 0;
+
+   if( pPicInfo->seq.vui_flags.bitstream_restriction_flag )   // not needed, remove later
+   {
+      pPicInfo->seq.vui_flags.motion_vectors_over_pic_boundaries_flag = 0;
+      pPicInfo->seq.max_bytes_per_pic_denom = 0;
+      pPicInfo->seq.log2_max_mv_length_vertical = 0;
+      pPicInfo->seq.log2_max_mv_length_horizontal = 0;
+   }
+
+   // TODO: unsorted fields
    if( pPicInfo->base.profile == PIPE_VIDEO_PROFILE_HEVC_MAIN10_422 || pPicInfo->base.profile == PIPE_VIDEO_PROFILE_HEVC_MAIN_444 ||
        pPicInfo->base.profile == PIPE_VIDEO_PROFILE_HEVC_MAIN10_444 )
    {
       pPicInfo->seq.sps_range_extension.sps_range_extension_flag = 1;
       // SPS Range ext flags
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_transform_skip_rotation_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_transform_skip_rotation_enabled_flag )
          pPicInfo->seq.sps_range_extension.transform_skip_rotation_enabled_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_transform_skip_context_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_transform_skip_context_enabled_flag )
          pPicInfo->seq.sps_range_extension.transform_skip_context_enabled_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_implicit_rdpcm_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_implicit_rdpcm_enabled_flag )
          pPicInfo->seq.sps_range_extension.implicit_rdpcm_enabled_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_explicit_rdpcm_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_explicit_rdpcm_enabled_flag )
          pPicInfo->seq.sps_range_extension.explicit_rdpcm_enabled_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_extended_precision_processing_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_extended_precision_processing_flag )
          pPicInfo->seq.sps_range_extension.extended_precision_processing_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_intra_smoothing_disabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_intra_smoothing_disabled_flag )
          pPicInfo->seq.sps_range_extension.intra_smoothing_disabled_flag = 0;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_high_precision_offsets_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_high_precision_offsets_enabled_flag )
          pPicInfo->seq.sps_range_extension.high_precision_offsets_enabled_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_persistent_rice_adaptation_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_persistent_rice_adaptation_enabled_flag )
          pPicInfo->seq.sps_range_extension.persistent_rice_adaptation_enabled_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_cabac_bypass_alignment_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_cabac_bypass_alignment_enabled_flag )
          pPicInfo->seq.sps_range_extension.cabac_bypass_alignment_enabled_flag = 1;
 
       // PPS Range ext flags
       pPicInfo->pic.pps_range_extension.pps_range_extension_flag = 1;
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_cross_component_prediction_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_cross_component_prediction_enabled_flag )
          pPicInfo->pic.pps_range_extension.cross_component_prediction_enabled_flag = 1;
 
       // Codec valid range for support for log2_max_transform_skip_block_size_minus2 is [0, 3]
       for( unsigned i = 0; i < 4; i++ )
       {
-         if( ( EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_log2_max_transform_skip_block_size_minus2_values &
+         if( ( m_EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_log2_max_transform_skip_block_size_minus2_values &
                ( 1 << i ) ) != 0 )
          {
             pPicInfo->pic.pps_range_extension.log2_max_transform_skip_block_size_minus2 = i;
@@ -124,7 +211,7 @@ UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
          }
       }
 
-      if( EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_chroma_qp_offset_list_enabled_flag )
+      if( m_EncoderCapabilities.m_HWSupportH265RangeExtensionFlags.bits.supports_chroma_qp_offset_list_enabled_flag )
          pPicInfo->pic.pps_range_extension.chroma_qp_offset_list_enabled_flag = 1;
 
       if( pPicInfo->pic.pps_range_extension.chroma_qp_offset_list_enabled_flag )
@@ -132,7 +219,7 @@ UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
          // Codec valid range for support for diff_cu_chroma_qp_offset_depth is [0, 3].
          for( unsigned i = 0; i < 4; i++ )
          {
-            if( ( EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_diff_cu_chroma_qp_offset_depth_values &
+            if( ( m_EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_diff_cu_chroma_qp_offset_depth_values &
                   ( 1 << i ) ) != 0 )
             {
                pPicInfo->pic.pps_range_extension.diff_cu_chroma_qp_offset_depth = i;
@@ -141,7 +228,7 @@ UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
          }
 
          pPicInfo->pic.pps_range_extension.chroma_qp_offset_list_len_minus1 =
-            EncoderCapabilities.m_HWSupportH265RangeExtension.bits.min_chroma_qp_offset_list_len_minus1_values;
+            m_EncoderCapabilities.m_HWSupportH265RangeExtension.bits.min_chroma_qp_offset_list_len_minus1_values;
          for( unsigned i = 0; i < pPicInfo->pic.pps_range_extension.chroma_qp_offset_list_len_minus1 + 1; i++ )
          {
             pPicInfo->pic.pps_range_extension.cb_qp_offset_list[i] = 0;
@@ -152,8 +239,8 @@ UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
       // Codec valid range for support for log2_sao_offset_scale_luma is [0, 6].
       for( unsigned i = 0; i < 7; i++ )
       {
-         if( ( EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_log2_sao_offset_scale_luma_values & ( 1 << i ) ) !=
-             0 )
+         if( ( m_EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_log2_sao_offset_scale_luma_values &
+               ( 1 << i ) ) != 0 )
          {
             pPicInfo->pic.pps_range_extension.log2_sao_offset_scale_luma = i;
             break;
@@ -163,7 +250,7 @@ UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
       // Codec valid range for support for log2_sao_offset_scale_chroma is [0, 6].
       for( unsigned i = 0; i < 7; i++ )
       {
-         if( ( EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_log2_sao_offset_scale_chroma_values &
+         if( ( m_EncoderCapabilities.m_HWSupportH265RangeExtension.bits.supported_log2_sao_offset_scale_chroma_values &
                ( 1 << i ) ) != 0 )
          {
             pPicInfo->pic.pps_range_extension.log2_sao_offset_scale_chroma = i;
@@ -172,73 +259,21 @@ UpdateH265EncPictureDesc( pipe_h265_enc_picture_desc *pPicInfo,
       }
    }
 
-   pPicInfo->seq.log2_min_luma_coding_block_size_minus3 =
-      EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_coding_block_size_minus3;
-
-   pPicInfo->seq.log2_diff_max_min_luma_coding_block_size =
-      static_cast<uint8_t>( ( EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_max_coding_tree_block_size_minus3 + 3 ) -
-                            ( EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_coding_block_size_minus3 + 3 ) );
-
-   pPicInfo->seq.log2_min_transform_block_size_minus2 =
-      EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_transform_block_size_minus2;
-
-   pPicInfo->seq.log2_diff_max_min_transform_block_size =
-      static_cast<uint8_t>( ( EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_max_luma_transform_block_size_minus2 + 2 ) -
-                            ( EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_transform_block_size_minus2 + 2 ) );
-
-   pPicInfo->seq.max_transform_hierarchy_depth_inter =
-      EncoderCapabilities.m_HWSupportH265BlockSizes.bits.min_max_transform_hierarchy_depth_inter;
-
-   pPicInfo->seq.max_transform_hierarchy_depth_intra =
-      EncoderCapabilities.m_HWSupportH265BlockSizes.bits.min_max_transform_hierarchy_depth_intra;
-
-   // VUI Data - always true because we have timing_info_present_flag = 1
-   pPicInfo->seq.vui_parameters_present_flag = 1;
-
-   // SAR - aspect ratio
-   pPicInfo->seq.vui_flags.aspect_ratio_info_present_flag = VUIInfo.bEnableSAR;
-   pPicInfo->seq.aspect_ratio_idc = 255 /* EXTENDED_SAR */;
-   pPicInfo->seq.sar_width = VUIInfo.stSARInfo.usWidth;
-   pPicInfo->seq.sar_height = VUIInfo.stSARInfo.usHeight;
-
-   // VST - video signal type
-   pPicInfo->seq.vui_flags.video_signal_type_present_flag = VUIInfo.bEnableVST;
-   pPicInfo->seq.video_format = VUIInfo.stVidSigType.eVideoFormat;
-   pPicInfo->seq.video_full_range_flag = VUIInfo.stVidSigType.bVideoFullRangeFlag;
-   pPicInfo->seq.vui_flags.colour_description_present_flag = VUIInfo.stVidSigType.bColorInfoPresent;
-   pPicInfo->seq.colour_primaries = VUIInfo.stVidSigType.eColorPrimary;
-   pPicInfo->seq.transfer_characteristics = VUIInfo.stVidSigType.eColorTransfer;
-   pPicInfo->seq.matrix_coefficients = VUIInfo.stVidSigType.eColorMatrix;
-
-   pPicInfo->seq.vui_flags.timing_info_present_flag = 1;
-   pPicInfo->seq.num_units_in_tick = FrameRate.Denominator;
-   pPicInfo->seq.time_scale = FrameRate.Numerator * 2;
-
-   pPicInfo->seq.vui_flags.chroma_loc_info_present_flag = 0;
-   pPicInfo->seq.chroma_sample_loc_type_top_field = 0;
-   pPicInfo->seq.chroma_sample_loc_type_bottom_field = 0;
-
-   pPicInfo->seq.vui_flags.overscan_info_present_flag = 0;
-   pPicInfo->seq.vui_flags.overscan_appropriate_flag = 0;
-
-   pPicInfo->seq.vui_flags.bitstream_restriction_flag = 1;
-   if( pPicInfo->seq.vui_flags.bitstream_restriction_flag )
-   {
-      pPicInfo->seq.vui_flags.motion_vectors_over_pic_boundaries_flag = 0;
-      pPicInfo->seq.max_bytes_per_pic_denom = 0;
-      pPicInfo->seq.log2_max_mv_length_horizontal = 0;
-      pPicInfo->seq.log2_max_mv_length_vertical = 0;
-   }
+   return hr;
 }
 
 // internal function which contains the codec specific portion of PrepareForEncode
 HRESULT
-CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bool dirtyRectFrameNumSet, uint32_t dirtyRectFrameNum )
+CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext,
+                                      bool dirtyRectFrameNumSet,
+                                      uint32_t dirtyRectFrameNum,
+                                      bool moveRegionFrameNumSet,
+                                      uint32_t moveRegionFrameNum )
 {
    HRESULT hr = S_OK;
    pipe_h265_enc_picture_desc *pPicInfo = &pDX12EncodeContext->encoderPicInfo.h265enc;
    // Initialize raw headers array
-   util_dynarray_init( &pPicInfo->raw_headers, NULL );
+   pPicInfo->raw_headers = UTIL_DYNARRAY_INIT;
 
    const reference_frames_tracker_frame_descriptor_hevc *cur_frame_desc = nullptr;
 
@@ -277,16 +312,16 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
    if( pPicInfo->picture_type == PIPE_H2645_ENC_PICTURE_TYPE_IDR )
    {
       struct pipe_enc_raw_header header_vps = { /* type */ PIPE_H265_NAL_VPS };
-      util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_vps );
+      util_dynarray_append( &pPicInfo->raw_headers, header_vps );
       struct pipe_enc_raw_header header_sps = { /* type */ PIPE_H265_NAL_SPS };
-      util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_sps );
+      util_dynarray_append( &pPicInfo->raw_headers, header_sps );
       struct pipe_enc_raw_header header_pps = { /* type */ PIPE_H265_NAL_PPS };
-      util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_pps );
+      util_dynarray_append( &pPicInfo->raw_headers, header_pps );
    }
 
    // Always insert AUD
    struct pipe_enc_raw_header header_aud = { /* type */ PIPE_H265_NAL_AUD };
-   util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_aud );
+   util_dynarray_append( &pPicInfo->raw_headers, header_aud );
 
    pPicInfo->not_referenced = !cur_frame_desc->gop_info->is_used_as_future_reference;
    assert( ( cur_frame_desc->gop_info->frame_type == PIPE_H2645_ENC_PICTURE_TYPE_B ) == pPicInfo->not_referenced );
@@ -322,23 +357,28 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
          pPicInfo->ref_list0[i] = cur_frame_desc->l0_reference_list[i];
    }
 
+   if( !m_EncoderCapabilities.m_bHWSupportsAppControlledSlicePartitioning && m_EncoderCapabilities.m_bHWSupportSliceModeAuto )
+   {
+      pPicInfo->slice_mode = PIPE_VIDEO_SLICE_MODE_AUTO;
+   }
+
    if( m_uiDirtyRectEnabled )
    {
-      if( m_EncoderCapabilities.m_HWSupportDirtyRects.bits.supports_require_auto_slice_mode )
-      {
-         pPicInfo->slice_mode = PIPE_VIDEO_SLICE_MODE_AUTO;
-      }
-
       if( dirtyRectFrameNumSet )
       {
          DIRTYRECT_INFO *pDirtyRectInfo = (DIRTYRECT_INFO *) m_pDirtyRectBlob.data();
-         UINT uiNumDirtyRects = min( pDirtyRectInfo->NumDirtyRects, (UINT) PIPE_ENC_DIRTY_RECTS_NUM_MAX );
+         UINT uiNumDirtyRects = std::min( pDirtyRectInfo->NumDirtyRects, (UINT) PIPE_ENC_DIRTY_RECTS_NUM_MAX );
 
          if( uiNumDirtyRects > 0 )
          {
             bool foundSurfaceIndex = false;
             uint8_t surfaceIndex = UINT8_MAX;
             uint32_t search = dirtyRectFrameNum - 1;
+
+            if( m_EncoderCapabilities.m_HWSupportDirtyRects.bits.supports_require_auto_slice_mode )
+            {
+               pPicInfo->slice_mode = PIPE_VIDEO_SLICE_MODE_AUTO;
+            }
 
             CHECKHR_GOTO( ValidateDirtyRects( pDX12EncodeContext, pDirtyRectInfo ), done );
 
@@ -384,6 +424,68 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
       }
    }
 
+   // ----------------------------
+   // Move Regions (motion hints)
+   // ----------------------------
+
+   // Always reset per-frame optional hint structures
+   memset( &pPicInfo->move_info, 0, sizeof( pPicInfo->move_info ) );
+
+   if( moveRegionFrameNumSet && m_EncoderCapabilities.m_HWSupportMoveRects.bits.max_motion_hints > 0 &&
+       m_EncoderCapabilities.m_HWSupportMoveRects.bits.supports_precision_full_pixel &&
+       pPicInfo->picture_type == PIPE_H2645_ENC_PICTURE_TYPE_P )   // P-frames only
+   {
+      uint32_t current_poc = pPicInfo->pic_order_cnt;
+
+      // Validate frame number first
+      // Due to the way the move region frame number is generated, there can be cases where the frame number doesn't match the
+      // current POC. In those cases, we will log a warning but still try to use the move regions.
+      if( m_uiGopSize > 0 && ( moveRegionFrameNum % m_uiGopSize ) != current_poc )
+      {
+         debug_printf( "[dx12 hmft 0x%p] WARNING: MoveRegions frame mismatch (MRFN=%u, cur POC=%u, GOPSize=%u)\n",
+                       this,
+                       moveRegionFrameNum,
+                       current_poc,
+                       m_uiGopSize );
+      }
+
+      {
+         MOVEREGION_INFO *pMoveInfo = reinterpret_cast<MOVEREGION_INFO *>( m_pMoveRegionBlob.data() );
+         uint32_t maxRects = m_EncoderCapabilities.m_HWSupportMoveRects.bits.max_motion_hints;
+         uint32_t numRects = std::min( pMoveInfo->NumMoveRegions, maxRects );
+
+         if( numRects > 0 )
+         {
+            uint8_t surfaceIndex = pPicInfo->ref_list0[0];
+
+            if( surfaceIndex == PIPE_H2645_LIST_REF_INVALID_ENTRY )
+            {
+               debug_printf( "[dx12 hmft 0x%p] MoveRegions: invalid L0 reference, ignoring\n", this );
+            }
+            else
+            {
+               pPicInfo->move_info.input_mode = PIPE_ENC_MOVE_INFO_INPUT_MODE_RECTS;
+               pPicInfo->move_info.num_rects = numRects;
+               pPicInfo->move_info.dpb_reference_index = surfaceIndex;
+               pPicInfo->move_info.precision = PIPE_ENC_MOVE_INFO_PRECISION_UNIT_FULL_PIXEL;
+
+               for( uint32_t i = 0; i < numRects; i++ )
+               {
+                  const MOVE_RECT &mr = pMoveInfo->MoveRegions[i];
+
+                  pPicInfo->move_info.rects[i].source_point.x = mr.SourcePoint.x;
+                  pPicInfo->move_info.rects[i].source_point.y = mr.SourcePoint.y;
+
+                  pPicInfo->move_info.rects[i].dest_rect.left = mr.DestRect.left;
+                  pPicInfo->move_info.rects[i].dest_rect.top = mr.DestRect.top;
+                  pPicInfo->move_info.rects[i].dest_rect.right = mr.DestRect.right;
+                  pPicInfo->move_info.rects[i].dest_rect.bottom = mr.DestRect.bottom;
+               }
+            }
+         }
+      }
+   }
+
    pPicInfo->gpu_stats_qp_map = pDX12EncodeContext->pPipeResourceQPMapStats;
    pPicInfo->gpu_stats_satd_map = pDX12EncodeContext->pPipeResourceSATDMapStats;
    pPicInfo->gpu_stats_rc_bitallocation_map = pDX12EncodeContext->pPipeResourceRCBitAllocMapStats;
@@ -404,21 +506,12 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
       pPicInfo->twopass_frame_config.skip_1st_pass = false;
    }
 
-   // Setup Level, not sure why this is represented twice on the codec?
-   pPicInfo->seq.general_level_idc = static_cast<uint8_t>( m_pPipeVideoCodec->level );
-
-   pPicInfo->seq.intra_period = cur_frame_desc->gop_info->intra_period;
-   pPicInfo->seq.ip_period = cur_frame_desc->gop_info->ip_period;
-   pPicInfo->seq.log2_max_pic_order_cnt_lsb_minus4 = cur_frame_desc->gop_info->log2_max_pic_order_cnt_lsb_minus4;
-
-   UpdateH265EncPictureDesc( pPicInfo, m_EncoderCapabilities, m_VUIInfo, m_FrameRate );
-
-   pPicInfo->seq.conformance_window_flag = m_bFrameCroppingFlag;
-   pPicInfo->seq.conf_win_right_offset = static_cast<uint16_t>( m_uiFrameCropRightOffset );
-   pPicInfo->seq.conf_win_bottom_offset = static_cast<uint16_t>( m_uiFrameCropBottomOffset );
-
-   pPicInfo->seq.pic_width_in_luma_samples = static_cast<uint16_t>( pDX12EncodeContext->pPipeVideoBuffer->width );
-   pPicInfo->seq.pic_height_in_luma_samples = static_cast<uint16_t>( pDX12EncodeContext->pPipeVideoBuffer->height );
+   UpdateH265EncPictureDesc( pPicInfo,
+                             cur_frame_desc->gop_info->intra_period,
+                             cur_frame_desc->gop_info->ip_period,
+                             cur_frame_desc->gop_info->log2_max_pic_order_cnt_lsb_minus4,
+                             static_cast<uint16_t>( pDX12EncodeContext->pPipeVideoBuffer->width ),
+                             static_cast<uint16_t>( pDX12EncodeContext->pPipeVideoBuffer->height ) );
 
    // Slices data
    height_in_blocks = ( ( pDX12EncodeContext->pPipeVideoBuffer->height + 15 ) >> 4 );
@@ -619,18 +712,6 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
    pPicInfo->rc[rate_ctrl_active_layer_index].frame_rate_num = m_FrameRate.Numerator;
    pPicInfo->rc[rate_ctrl_active_layer_index].frame_rate_den = m_FrameRate.Denominator;
 
-   // VPS
-   pPicInfo->vid.vps_sub_layer_ordering_info_present_flag = 0;
-   pPicInfo->vid.vps_max_sub_layers_minus1 = 0;
-   for( int i = ( pPicInfo->vid.vps_sub_layer_ordering_info_present_flag ? 0 : pPicInfo->vid.vps_max_sub_layers_minus1 );
-        i <= pPicInfo->vid.vps_max_sub_layers_minus1;
-        i++ )
-   {
-      pPicInfo->vid.vps_max_dec_pic_buffering_minus1[i] = static_cast<uint8_t>( m_pPipeVideoCodec->max_references );
-      pPicInfo->vid.vps_max_num_reorder_pics[i] = 0;             // TODO: B-frames / reordering
-      pPicInfo->vid.vps_max_latency_increase_plus1[i] = 0 + 1;   // TODO: B-frames
-   }
-
    // sanity checks for future, currently these two values are all zeros.
    if( m_uiDirtyRectEnabled )
    {
@@ -665,6 +746,10 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
                  pPicInfo->num_slice_descriptors );
 
 done:
+   if( FAILED( hr ) )
+   {
+      MFE_ERROR( "[dx12 hmft 0x%p] PrepareForEncodeHelper - hr=0x%x", this, hr );
+   }
    return hr;
 }
 
@@ -677,27 +762,16 @@ CDX12EncHMFT::GetCodecPrivateData( LPBYTE pSPSPPSData, DWORD dwSPSPPSDataLen, LP
    UINT alignedHeight = static_cast<UINT>( std::ceil( m_uiOutputHeight / 16.0 ) ) * 16;
    int ret = EINVAL;
    unsigned buf_size = dwSPSPPSDataLen;
+   const uint32_t intra_period = m_uiGopSize;
+   const uint32_t ip_period = m_uiBFrameCount + 1;
+   const uint8_t log2_max_pic_order_cnt_lsb_minus4 = HEVC_LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4;
 
    pipe_h265_enc_picture_desc h265_pic_desc = {};
-   memset( &h265_pic_desc, 0, sizeof( h265_pic_desc ) );
 
-   uint32_t gop_length = m_uiGopSize;
-   uint32_t p_picture_period = m_uiBFrameCount + 1;
-
-   h265_pic_desc.base.profile = m_outputPipeProfile;
-
-   h265_pic_desc.pic_order_cnt_type = ( p_picture_period > 2 ) ? 0u : 2u;
+   h265_pic_desc.pic_order_cnt_type = ( ip_period > 2 ) ? 0u : 2u;
    h265_pic_desc.pic_order_cnt = 0;                                // cur_frame_desc->gop_info->picture_order_count;
    h265_pic_desc.picture_type = PIPE_H2645_ENC_PICTURE_TYPE_IDR;   // cur_frame_desc->gop_info->frame_type;
 
-   h265_pic_desc.seq.ip_period = p_picture_period;   // cur_frame_desc->gop_info->base.ip_period;
-   h265_pic_desc.seq.intra_period = gop_length;      // cur_frame_desc->gop_info->base.intra_period;
-   h265_pic_desc.seq.general_profile_idc = static_cast<uint8_t>( m_pPipeVideoCodec->profile );
-   h265_pic_desc.seq.general_level_idc = static_cast<uint8_t>( m_pPipeVideoCodec->level );
-   h265_pic_desc.seq.chroma_format_idc = GetChromaFormatIdc( ConvertProfileToFormat( m_outputPipeProfile ) );
-   h265_pic_desc.seq.log2_max_pic_order_cnt_lsb_minus4 = 4;
-
-   UpdateH265EncPictureDesc( &h265_pic_desc, m_EncoderCapabilities, m_VUIInfo, m_FrameRate );
    ComputeCroppingRect( alignedWidth,
                         alignedHeight,
                         m_uiOutputWidth,
@@ -707,40 +781,42 @@ CDX12EncHMFT::GetCodecPrivateData( LPBYTE pSPSPPSData, DWORD dwSPSPPSDataLen, LP
                         m_uiFrameCropRightOffset,
                         m_uiFrameCropBottomOffset );
 
-   h265_pic_desc.seq.conformance_window_flag = m_bFrameCroppingFlag;
-   h265_pic_desc.seq.conf_win_right_offset = static_cast<uint16_t>( m_uiFrameCropRightOffset );
-   h265_pic_desc.seq.conf_win_bottom_offset = static_cast<uint16_t>( m_uiFrameCropBottomOffset );
-
-   h265_pic_desc.seq.pic_width_in_luma_samples = static_cast<uint16_t>( alignedWidth );
-   h265_pic_desc.seq.pic_height_in_luma_samples = static_cast<uint16_t>( alignedHeight );
+   UpdateH265EncPictureDesc( &h265_pic_desc,
+                             intra_period,
+                             ip_period,
+                             log2_max_pic_order_cnt_lsb_minus4,
+                             static_cast<uint16_t>( alignedWidth ),
+                             static_cast<uint16_t>( alignedHeight ) );
 
    // Rate Control
-   h265_pic_desc.rc[0].rate_ctrl_method = PIPE_H2645_ENC_RATE_CONTROL_METHOD_DISABLE;
-   h265_pic_desc.rc[0].frame_rate_num = m_FrameRate.Numerator;
-   h265_pic_desc.rc[0].frame_rate_den = m_FrameRate.Denominator;
-   h265_pic_desc.rc[0].vbr_quality_factor = static_cast<unsigned int>( ( ( ( 100 - m_uiQuality[0] ) / 100.0 ) * 50 ) + 1 );
+   if( m_uiRateControlMode == eAVEncCommonRateControlMode_CBR )
+   {
+      h265_pic_desc.rc[0].rate_ctrl_method = PIPE_H2645_ENC_RATE_CONTROL_METHOD_CONSTANT;
+      h265_pic_desc.rc[0].target_bitrate = m_bMeanBitRateSet ? m_uiMeanBitRate : m_uiOutputBitrate;
+      h265_pic_desc.rc[0].peak_bitrate = m_bMeanBitRateSet ? m_uiMeanBitRate : m_uiOutputBitrate;
+   }
+   else
+   {
+      h265_pic_desc.rc[0].rate_ctrl_method = PIPE_H2645_ENC_RATE_CONTROL_METHOD_DISABLE;
+      h265_pic_desc.rc[0].frame_rate_num = m_FrameRate.Numerator;
+      h265_pic_desc.rc[0].frame_rate_den = m_FrameRate.Denominator;
+      h265_pic_desc.rc[0].vbr_quality_factor = static_cast<unsigned int>( ( ( ( 100 - m_uiQuality[0] ) / 100.0 ) * 50 ) + 1 );
+   }
    // Set default valid CQP 26 with 30 fps, doesn't affect header building
    // but needs to be valid, otherwise some drivers segfault
    h265_pic_desc.rc[0].quant_i_frames = m_uiEncodeFrameTypeIQP[0];
    h265_pic_desc.rc[0].quant_p_frames = m_uiEncodeFrameTypeIQP[0];
    h265_pic_desc.rc[0].quant_b_frames = m_uiEncodeFrameTypeIQP[0];
 
-   h265_pic_desc.vid.vps_sub_layer_ordering_info_present_flag = 0;
-   h265_pic_desc.vid.vps_max_sub_layers_minus1 = 0;
-   for( int i = ( h265_pic_desc.vid.vps_sub_layer_ordering_info_present_flag ? 0 : h265_pic_desc.vid.vps_max_sub_layers_minus1 );
-        i <= h265_pic_desc.vid.vps_max_sub_layers_minus1;
-        i++ )
-   {
-      h265_pic_desc.vid.vps_max_dec_pic_buffering_minus1[i] = static_cast<uint8_t>( m_pPipeVideoCodec->max_references - 1 );
-      h265_pic_desc.vid.vps_max_num_reorder_pics[i] = 0;             // TODO: B-frames / reordering
-      h265_pic_desc.vid.vps_max_latency_increase_plus1[i] = 0 + 1;   // TODO: B-frames
-   }
-
    ret = m_pPipeVideoCodec->get_encode_headers( m_pPipeVideoCodec, &h265_pic_desc.base, pSPSPPSData, &buf_size );
    CHECKHR_GOTO( ConvertErrnoRetToHR( ret ), done );
 
    *lpdwSPSPPSDataLen = (DWORD) buf_size;
 done:
+   if( FAILED( hr ) )
+   {
+      MFE_ERROR( "[dx12 hmft 0x%p] GetCodecPrivateData - hr=0x%x", this, hr );
+   }
    return hr;
 }
 
@@ -911,9 +987,14 @@ GetMaxDPBSize( int width, int height, eAVEncH265VLevel level_idc, int minCBSizeY
 UINT32
 CDX12EncHMFT::GetMaxReferences( unsigned int width, unsigned int height )
 {
-   const int minCbSizeY = 1 << ( m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_coding_block_size_minus3 + 3 );
-   int maxDPBSize = GetMaxDPBSize( width, height, m_uiLevel, minCbSizeY );
-   UINT32 uiMaxReferences = std::min( (int) m_EncoderCapabilities.m_uiMaxHWSupportedDPBCapacity, maxDPBSize );
+   UINT32 uiMaxReferences = m_EncoderCapabilities.m_uiMaxHWSupportedDPBCapacity;
+   if( width != 0 && height != 0 )
+   {
+      const int minCbSizeY =
+         1 << ( m_EncoderCapabilities.m_HWSupportH265BlockSizes.bits.log2_min_luma_coding_block_size_minus3 + 3 );
+      int maxDPBSize = GetMaxDPBSize( width, height, m_uiLevel, minCbSizeY );
+      uiMaxReferences = std::min( (int) m_EncoderCapabilities.m_uiMaxHWSupportedDPBCapacity, maxDPBSize );
+   }
    return uiMaxReferences;
 }
 
@@ -924,14 +1005,12 @@ CDX12EncHMFT::CreateGOPTracker( uint32_t textureWidth, uint32_t textureHeight )
 {
    HRESULT hr = S_OK;
    uint32_t MaxHWL0Ref = m_EncoderCapabilities.m_uiMaxHWSupportedL0References;
-   uint32_t MaxHWL1Ref = m_EncoderCapabilities.m_uiMaxHWSupportedL1References;
    MaxHWL0Ref = std::min( 1u, MaxHWL0Ref );   // we only support 1
-   MaxHWL1Ref = 0;
    std::unique_ptr<dpb_buffer_manager> upTwoPassDPBManager;
 
    SAFE_DELETE( m_pGOPTracker );
-   // B Frame not supported by HW
-   CHECKBOOL_GOTO( ( m_uiBFrameCount == 0 ) || ( MaxHWL1Ref > 0 ), E_INVALIDARG, done );
+   // B Frame not supported
+   CHECKBOOL_GOTO( ( m_uiBFrameCount == 0 ), E_INVALIDARG, done );
    // Requested number of temporal layers higher than max supported by HW
    CHECKBOOL_GOTO( m_uiLayerCount <= m_EncoderCapabilities.m_uiMaxTemporalLayers, MF_E_OUT_OF_RANGE, done );
    // Validate logic expression (m_uiLayerCount > 1) => (m_uiBFrameCount == 0)
@@ -953,21 +1032,23 @@ CDX12EncHMFT::CreateGOPTracker( uint32_t textureWidth, uint32_t textureHeight )
    assert( m_uiMaxNumRefFrame == m_pPipeVideoCodec->max_references );
    assert( 1 + m_uiMaxLongTermReferences <= m_uiMaxNumRefFrame );
    assert( MaxHWL0Ref <= m_uiMaxNumRefFrame );
-   assert( MaxHWL1Ref <= m_uiMaxNumRefFrame );
 
    if( m_pPipeVideoCodec->two_pass.enable && ( m_pPipeVideoCodec->two_pass.pow2_downscale_factor > 0 ) )
    {
       upTwoPassDPBManager = std::make_unique<dpb_buffer_manager>(
+         this,
          m_pPipeVideoCodec,
          static_cast<unsigned>( std::ceil( textureWidth / ( 1 << m_pPipeVideoCodec->two_pass.pow2_downscale_factor ) ) ),
          static_cast<unsigned>( std::ceil( textureHeight / ( 1 << m_pPipeVideoCodec->two_pass.pow2_downscale_factor ) ) ),
          ConvertProfileToFormat( m_pPipeVideoCodec->profile ),
          m_pPipeVideoCodec->max_references + 1 /*curr pic*/ +
-            ( m_bLowLatency ? 0 :
-                              MFT_INPUT_QUEUE_DEPTH ) /*MFT process input queue depth for delayed in flight recon pic release*/ );
+            ( m_bLowLatency ? 0 : MFT_INPUT_QUEUE_DEPTH ) /*MFT process input queue depth for delayed in flight recon pic release*/,
+         hr );
+      CHECKHR_GOTO( hr, done );
    }
 
-   m_pGOPTracker = new reference_frames_tracker_hevc( m_pPipeVideoCodec,
+   m_pGOPTracker = new reference_frames_tracker_hevc( this,
+                                                      m_pPipeVideoCodec,
                                                       textureWidth,
                                                       textureHeight,
                                                       m_uiGopSize,
@@ -976,13 +1057,17 @@ CDX12EncHMFT::CreateGOPTracker( uint32_t textureWidth, uint32_t textureHeight )
                                                       m_uiLayerCount,
                                                       m_bLowLatency,
                                                       MaxHWL0Ref,
-                                                      MaxHWL1Ref,
                                                       m_pPipeVideoCodec->max_references,
                                                       m_uiMaxLongTermReferences,
-                                                      std::move( upTwoPassDPBManager ) );
-   CHECKNULL_GOTO( m_pGOPTracker, MF_E_INVALIDMEDIATYPE, done );
+                                                      std::move( upTwoPassDPBManager ),
+                                                      hr );
+   CHECKHR_GOTO( hr, done );
 
 done:
+   if( FAILED( hr ) )
+   {
+      MFE_ERROR( "[dx12 hmft 0x%p] CreateGOPTracker - hr=0x%x", this, hr );
+   }
    return hr;
 }
 

@@ -82,7 +82,8 @@ lower_discard_to_sample_mask_0(nir_builder *b, nir_intrinsic_instr *intr,
       return false;
 
    b->cursor = nir_before_instr(&intr->instr);
-   nir_sample_mask_agx(b, intr->src[0].ssa, nir_imm_intN_t(b, 0, 16));
+   nir_sample_mask_agx(b, nir_u2u16(b, intr->src[0].ssa),
+                       nir_imm_intN_t(b, 0, 16));
    nir_instr_remove(&intr->instr);
    return true;
 }
@@ -146,7 +147,7 @@ run_tests_after_last_discard(nir_builder *b)
             b->cursor = nir_before_instr(&intr->instr);
 
             nir_def *all_samples = nir_imm_intN_t(b, ALL_SAMPLES, 16);
-            nir_def *killed = intr->src[0].ssa;
+            nir_def *killed = nir_u2u16(b, intr->src[0].ssa);
             nir_def *live = nir_ixor(b, killed, all_samples);
 
             nir_def *testing = nir_load_shader_part_tests_zs_agx(b);

@@ -12,7 +12,6 @@
 #define SI_BUILD_PM4_H
 
 #include "si_pipe.h"
-#include "sid.h"
 
 #define radeon_begin(cs) struct radeon_cmdbuf *__rcs = (cs); \
                          ac_cmdbuf_begin(&__rcs->current)
@@ -30,11 +29,8 @@
       sctx->context_roll = true; \
 } while (0)
 
-#define radeon_emit_array(values, num) do { \
-   unsigned __n = (num); \
-   memcpy(__cs_buf + __cs_num, (values), __n * 4); \
-   __cs_num += __n; \
-} while (0)
+#define radeon_emit_array(values, num) \
+   ac_cmdbuf_emit_array(values, num)
 
 /* Instead of writing into the command buffer, return the pointer to the command buffer and
  * assume that the caller will fill the specified number of elements.
@@ -197,14 +193,14 @@
 
 /* Packet building helpers for CONFIG registers. */
 #define radeon_set_config_reg(reg, value) \
-   ac_cmdbuf_set_config_reg(reg, value)
+   ac_cmdbuf_set_cfg_reg(reg, value)
 
 /* Packet building helpers for CONTEXT registers. */
 #define radeon_set_context_reg_seq(reg, num) \
-   radeon_set_reg_seq(reg, num, 0, SI_CONTEXT, PKT3_SET_CONTEXT_REG, 0)
+   ac_cmdbuf_set_ctx_reg_seq(reg, num)
 
 #define radeon_set_context_reg(reg, value) \
-   radeon_set_reg(reg, 0, value, SI_CONTEXT, PKT3_SET_CONTEXT_REG)
+   ac_cmdbuf_set_ctx_reg(reg, value)
 
 #define radeon_opt_set_context_reg(reg, reg_enum, value) \
    radeon_opt_set_reg(reg, reg_enum, 0, value, SI_CONTEXT, PKT3_SET_CONTEXT_REG)
@@ -232,10 +228,10 @@
 
 /* Packet building helpers for SH registers. */
 #define radeon_set_sh_reg_seq(reg, num) \
-   radeon_set_reg_seq(reg, num, 0, SI_SH, PKT3_SET_SH_REG, 0)
+   ac_cmdbuf_set_sh_reg_seq(reg, num)
 
 #define radeon_set_sh_reg(reg, value) \
-   radeon_set_reg(reg, 0, value, SI_SH, PKT3_SET_SH_REG)
+   ac_cmdbuf_set_sh_reg(reg, value)
 
 #define radeon_opt_set_sh_reg(reg, reg_enum, value) \
    radeon_opt_set_reg(reg, reg_enum, 0, value, SI_SH, PKT3_SET_SH_REG)
@@ -263,15 +259,13 @@
 
 /* Packet building helpers for UCONFIG registers. */
 #define radeon_set_uconfig_reg_seq(reg, num) \
-   radeon_set_reg_seq(reg, num, 0, CIK_UCONFIG, PKT3_SET_UCONFIG_REG, 0)
+   ac_cmdbuf_set_ucfg_reg_seq(reg, num)
 
-#define radeon_set_uconfig_perfctr_reg_seq(reg, num) \
-   radeon_set_reg_seq(reg, num, 0, CIK_UCONFIG, PKT3_SET_UCONFIG_REG, \
-                      sctx->gfx_level >= GFX10 && \
-                      sctx->ws->cs_get_ip_type(__rcs) == AMD_IP_GFX)
+#define radeon_set_uconfig_perfctr_reg_seq(gfx_level, ip_type, reg, num) \
+   ac_cmdbuf_set_ucfg_perfctr_reg_seq(gfx_level, ip_type, reg, num)
 
 #define radeon_set_uconfig_reg(reg, value) \
-   radeon_set_reg(reg, 0, value, CIK_UCONFIG, PKT3_SET_UCONFIG_REG)
+   ac_cmdbuf_set_ucfg_reg(reg, value)
 
 #define radeon_opt_set_uconfig_reg(reg, reg_enum, value) \
    radeon_opt_set_reg(reg, reg_enum, 0, value, CIK_UCONFIG, PKT3_SET_UCONFIG_REG)
@@ -286,88 +280,45 @@
 #define radeon_opt_set_uconfig_reg_idx(reg, reg_enum, idx, value) \
    radeon_opt_set_reg(reg, reg_enum, idx, value, CIK_UCONFIG, RESOLVE_PKT3_SET_UCONFIG_REG_INDEX)
 
-#define radeon_set_privileged_config_reg(reg, value) do { \
-   assert((reg) < CIK_UCONFIG_REG_OFFSET); \
-   radeon_emit(PKT3(PKT3_COPY_DATA, 4, 0)); \
-   radeon_emit(COPY_DATA_SRC_SEL(COPY_DATA_IMM) | \
-               COPY_DATA_DST_SEL(COPY_DATA_PERF)); \
-   radeon_emit(value); \
-   radeon_emit(0); /* unused */ \
-   radeon_emit((reg) >> 2); \
-   radeon_emit(0); /* unused */ \
-} while (0)
+#define radeon_set_privileged_config_reg(reg, value) \
+   ac_cmdbuf_set_privileged_config_reg(reg, value)
 
 /* GFX11 generic packet building helpers for buffered SH registers. Don't use these directly. */
-#define gfx11_push_reg(reg, value, prefix_name, buffer, reg_count) do { \
-   unsigned __i = (reg_count)++; \
-   assert((reg) >= prefix_name##_REG_OFFSET && (reg) < prefix_name##_REG_END); \
-   assert(__i / 2 < ARRAY_SIZE(buffer)); \
-   buffer[__i / 2].reg_offset[__i % 2] = ((reg) - prefix_name##_REG_OFFSET) >> 2; \
-   buffer[__i / 2].reg_value[__i % 2] = value; \
-} while (0)
-
 #define gfx11_opt_push_reg(reg, reg_enum, value, prefix_name, buffer, reg_count) do { \
-   unsigned __value = value; \
-   if (!BITSET_TEST(sctx->tracked_regs.reg_saved_mask, (reg_enum)) || \
-       sctx->tracked_regs.reg_value[reg_enum] != __value) { \
-      gfx11_push_reg(reg, __value, prefix_name, buffer, reg_count); \
-      BITSET_SET(sctx->tracked_regs.reg_saved_mask, (reg_enum)); \
-      sctx->tracked_regs.reg_value[reg_enum] = __value; \
-   } \
+   struct ac_tracked_regs *__tracked_regs = &sctx->tracked_regs; \
+   ac_gfx11_opt_push_reg(__tracked_regs, reg, reg_enum, value, prefix_name, buffer, reg_count); \
 } while (0)
 
 #define gfx11_opt_push_reg4(reg, reg_enum, v1, v2, v3, v4, prefix_name, buffer, reg_count) do { \
-   static_assert(BITSET_BITWORD((reg_enum)) == BITSET_BITWORD((reg_enum) + 3), \
-                 "bit range crosses dword boundary"); \
-   unsigned __v1 = (v1); \
-   unsigned __v2 = (v2); \
-   unsigned __v3 = (v3); \
-   unsigned __v4 = (v4); \
-   if (!BITSET_TEST_RANGE_INSIDE_WORD(sctx->tracked_regs.reg_saved_mask, \
-                                      (reg_enum), (reg_enum) + 3, 0xf) || \
-       sctx->tracked_regs.reg_value[(reg_enum)] != __v1 || \
-       sctx->tracked_regs.reg_value[(reg_enum) + 1] != __v2 || \
-       sctx->tracked_regs.reg_value[(reg_enum) + 2] != __v3 || \
-       sctx->tracked_regs.reg_value[(reg_enum) + 3] != __v4) { \
-      gfx11_push_reg((reg), __v1, prefix_name, buffer, reg_count); \
-      gfx11_push_reg((reg) + 4, __v2, prefix_name, buffer, reg_count); \
-      gfx11_push_reg((reg) + 8, __v3, prefix_name, buffer, reg_count); \
-      gfx11_push_reg((reg) + 12, __v4, prefix_name, buffer, reg_count); \
-      BITSET_SET_RANGE_INSIDE_WORD(sctx->tracked_regs.reg_saved_mask, \
-                                   (reg_enum), (reg_enum) + 3); \
-      sctx->tracked_regs.reg_value[(reg_enum)] = __v1; \
-      sctx->tracked_regs.reg_value[(reg_enum) + 1] = __v2; \
-      sctx->tracked_regs.reg_value[(reg_enum) + 2] = __v3; \
-      sctx->tracked_regs.reg_value[(reg_enum) + 3] = __v4; \
-   } \
+   struct ac_tracked_regs *__tracked_regs = &sctx->tracked_regs; \
+   ac_gfx11_opt_push_reg4(__tracked_regs, reg, reg_enum, v1, v2, v3, v4, prefix_name, buffer, reg_count); \
 } while (0)
 
 /* GFX11 packet building helpers for buffered SH registers. */
 #define gfx11_push_gfx_sh_reg(reg, value) \
-   gfx11_push_reg(reg, value, SI_SH, sctx->gfx11.buffered_gfx_sh_regs, \
-                  sctx->num_buffered_gfx_sh_regs)
+   ac_gfx11_push_reg(reg, value, SI_SH, sctx->buffered_gfx_sh_regs.gfx11.regs, \
+                     sctx->buffered_gfx_sh_regs.num)
 
 #define gfx11_push_compute_sh_reg(reg, value) \
-   gfx11_push_reg(reg, value, SI_SH, sctx->gfx11.buffered_compute_sh_regs, \
-                  sctx->num_buffered_compute_sh_regs)
+   ac_gfx11_push_reg(reg, value, SI_SH, sctx->buffered_compute_sh_regs.gfx11.regs, \
+                     sctx->buffered_compute_sh_regs.num)
 
 #define gfx11_opt_push_gfx_sh_reg(reg, reg_enum, value) \
-   gfx11_opt_push_reg(reg, reg_enum, value, SI_SH, sctx->gfx11.buffered_gfx_sh_regs, \
-                      sctx->num_buffered_gfx_sh_regs)
+   gfx11_opt_push_reg(reg, reg_enum, value, SI_SH, sctx->buffered_gfx_sh_regs.gfx11.regs, \
+                      sctx->buffered_gfx_sh_regs.num)
 
 #define gfx11_opt_push_compute_sh_reg(reg, reg_enum, value) \
-   gfx11_opt_push_reg(reg, reg_enum, value, SI_SH, sctx->gfx11.buffered_compute_sh_regs, \
-                      sctx->num_buffered_compute_sh_regs)
+   gfx11_opt_push_reg(reg, reg_enum, value, SI_SH, sctx->buffered_compute_sh_regs.gfx11.regs, \
+                      sctx->buffered_compute_sh_regs.num)
 
 /* GFX11 packet building helpers for SET_CONTEXT_REG_PAIRS_PACKED.
  * Registers are buffered on the stack and then copied to the command buffer at the end.
  */
 #define gfx11_begin_packed_context_regs() \
-   struct gfx11_reg_pair __cs_context_regs[50]; \
-   unsigned __cs_context_reg_count = 0;
+   ac_gfx11_begin_packed_ctx_regs()
 
 #define gfx11_set_context_reg(reg, value) \
-   gfx11_push_reg(reg, value, SI_CONTEXT, __cs_context_regs, __cs_context_reg_count)
+   ac_gfx11_set_ctx_reg(reg, value)
 
 #define gfx11_opt_set_context_reg(reg, reg_enum, value) \
    gfx11_opt_push_reg(reg, reg_enum, value, SI_CONTEXT, __cs_context_regs, \
@@ -377,82 +328,10 @@
    gfx11_opt_push_reg4(reg, reg_enum, v1, v2, v3, v4, SI_CONTEXT, __cs_context_regs, \
                        __cs_context_reg_count)
 
-#define gfx11_end_packed_context_regs() do { \
-   if (__cs_context_reg_count >= 2) { \
-      /* Align the count to 2 by duplicating the first register. */ \
-      if (__cs_context_reg_count % 2 == 1) { \
-         gfx11_set_context_reg(SI_CONTEXT_REG_OFFSET + __cs_context_regs[0].reg_offset[0] * 4, \
-                               __cs_context_regs[0].reg_value[0]); \
-      } \
-      assert(__cs_context_reg_count % 2 == 0); \
-      unsigned __num_dw = (__cs_context_reg_count / 2) * 3; \
-      radeon_emit(PKT3(PKT3_SET_CONTEXT_REG_PAIRS_PACKED, __num_dw, 0) | PKT3_RESET_FILTER_CAM_S(1)); \
-      radeon_emit(__cs_context_reg_count); \
-      radeon_emit_array(__cs_context_regs, __num_dw); \
-   } else if (__cs_context_reg_count == 1) { \
-      radeon_emit(PKT3(PKT3_SET_CONTEXT_REG, 1, 0)); \
-      radeon_emit(__cs_context_regs[0].reg_offset[0]); \
-      radeon_emit(__cs_context_regs[0].reg_value[0]); \
-   } \
-} while (0)
+#define gfx11_end_packed_context_regs() \
+   ac_gfx11_end_packed_ctx_regs()
 
 /* GFX12 generic packet building helpers for PAIRS packets. Don't use these directly. */
-#define gfx12_begin_regs(header) unsigned header = __cs_num++
-
-#define gfx12_set_reg(reg, value, base_offset) do { \
-   radeon_emit(((reg) - (base_offset)) >> 2); \
-   radeon_emit(value); \
-} while (0)
-
-#define gfx12_opt_set_reg(reg, reg_enum, value, base_offset) do { \
-   unsigned __value = value; \
-   if (!BITSET_TEST(sctx->tracked_regs.reg_saved_mask, (reg_enum)) || \
-       sctx->tracked_regs.reg_value[reg_enum] != __value) { \
-      gfx12_set_reg(reg, __value, base_offset); \
-      BITSET_SET(sctx->tracked_regs.reg_saved_mask, (reg_enum)); \
-      sctx->tracked_regs.reg_value[reg_enum] = __value; \
-   } \
-} while (0)
-
-#define gfx12_opt_set_reg4(reg, reg_enum, v1, v2, v3, v4, base_offset) do { \
-   static_assert(BITSET_BITWORD((reg_enum)) == BITSET_BITWORD((reg_enum) + 3), \
-                 "bit range crosses dword boundary"); \
-   unsigned __v1 = (v1), __v2 = (v2), __v3 = (v3), __v4 = (v4); \
-   if (!BITSET_TEST_RANGE_INSIDE_WORD(sctx->tracked_regs.reg_saved_mask, \
-                                      (reg_enum), (reg_enum) + 3, 0xf) || \
-       sctx->tracked_regs.reg_value[(reg_enum)] != __v1 || \
-       sctx->tracked_regs.reg_value[(reg_enum) + 1] != __v2 || \
-       sctx->tracked_regs.reg_value[(reg_enum) + 2] != __v3 || \
-       sctx->tracked_regs.reg_value[(reg_enum) + 3] != __v4) { \
-      gfx12_set_reg((reg), __v1, (base_offset)); \
-      gfx12_set_reg((reg) + 4, __v2, (base_offset)); \
-      gfx12_set_reg((reg) + 8, __v3, (base_offset)); \
-      gfx12_set_reg((reg) + 12, __v4, (base_offset)); \
-      BITSET_SET_RANGE_INSIDE_WORD(sctx->tracked_regs.reg_saved_mask, \
-                                   (reg_enum), (reg_enum) + 3); \
-      sctx->tracked_regs.reg_value[(reg_enum)] = __v1; \
-      sctx->tracked_regs.reg_value[(reg_enum) + 1] = __v2; \
-      sctx->tracked_regs.reg_value[(reg_enum) + 2] = __v3; \
-      sctx->tracked_regs.reg_value[(reg_enum) + 3] = __v4; \
-   } \
-} while (0)
-
-#define gfx12_end_regs(header, packet) do { \
-   if ((header) + 1 == __cs_num) { \
-      __cs_num--; /* no registers have been set, back off */ \
-   } else { \
-      unsigned __dw_count = __cs_num - (header) - 2; \
-      __cs_buf[(header)] = PKT3((packet), __dw_count, 0) | PKT3_RESET_FILTER_CAM_S(1); \
-   } \
-} while (0)
-
-/* GFX12 generic packet building helpers for buffered registers. Don't use these directly. */
-#define gfx12_push_reg(reg, value, base_offset, type) do { \
-   unsigned __i = sctx->num_buffered_##type##_regs++; \
-   assert(__i < ARRAY_SIZE(sctx->gfx12.buffered_##type##_regs)); \
-   sctx->gfx12.buffered_##type##_regs[__i].reg_offset = ((reg) - (base_offset)) >> 2; \
-   sctx->gfx12.buffered_##type##_regs[__i].reg_value = value; \
-} while (0)
 
 #define gfx12_opt_push_reg(reg, reg_enum, value, type) do { \
    unsigned __value = value; \
@@ -467,26 +346,30 @@
 
 /* GFX12 packet building helpers for PAIRS packets. */
 #define gfx12_begin_context_regs() \
-   gfx12_begin_regs(__cs_context_reg_header)
+   ac_gfx12_begin_ctx_regs()
 
 #define gfx12_set_context_reg(reg, value) \
-   gfx12_set_reg(reg, value, SI_CONTEXT_REG_OFFSET)
+   ac_gfx12_set_ctx_reg(reg, value)
 
-#define gfx12_opt_set_context_reg(reg, reg_enum, value) \
-   gfx12_opt_set_reg(reg, reg_enum, value, SI_CONTEXT_REG_OFFSET)
+#define gfx12_opt_set_context_reg(reg, reg_enum, value) do { \
+   struct ac_tracked_regs *__tracked_regs = &sctx->tracked_regs; \
+   ac_gfx12_opt_set_reg(__tracked_regs, reg, reg_enum, value, SI_CONTEXT_REG_OFFSET); \
+} while (0)
 
-#define gfx12_opt_set_context_reg4(reg, reg_enum, v1, v2, v3, v4) \
-   gfx12_opt_set_reg4(reg, reg_enum, v1, v2, v3, v4, SI_CONTEXT_REG_OFFSET)
+#define gfx12_opt_set_context_reg4(reg, reg_enum, v1, v2, v3, v4) do { \
+   struct ac_tracked_regs *__tracked_regs = &sctx->tracked_regs; \
+   ac_gfx12_opt_set_reg4(__tracked_regs, reg, reg_enum, v1, v2, v3, v4, SI_CONTEXT_REG_OFFSET); \
+} while (0)
 
 #define gfx12_end_context_regs() \
-   gfx12_end_regs(__cs_context_reg_header, PKT3_SET_CONTEXT_REG_PAIRS)
+   ac_gfx12_end_ctx_regs()
 
 /* GFX12 packet building helpers for buffered registers. */
 #define gfx12_push_gfx_sh_reg(reg, value) \
-   gfx12_push_reg(reg, value, SI_SH_REG_OFFSET, gfx_sh)
+   ac_gfx12_push_sh_reg(sctx->buffered_gfx_sh_regs, reg, value)
 
 #define gfx12_push_compute_sh_reg(reg, value) \
-   gfx12_push_reg(reg, value, SI_SH_REG_OFFSET, compute_sh)
+   ac_gfx12_push_sh_reg(sctx->buffered_compute_sh_regs, reg, value)
 
 #define gfx12_opt_push_gfx_sh_reg(reg, reg_enum, value) \
    gfx12_opt_push_reg(reg, reg_enum, value, gfx_sh)
@@ -506,28 +389,18 @@
 } while (0)
 
 /* Other packet helpers. */
-#define radeon_event_write(event_type) do { \
-   unsigned __event_type = (event_type); \
-   radeon_emit(PKT3(PKT3_EVENT_WRITE, 0, 0)); \
-   radeon_emit(EVENT_TYPE(__event_type) | \
-               EVENT_INDEX(__event_type == V_028A90_VS_PARTIAL_FLUSH || \
-                           __event_type == V_028A90_PS_PARTIAL_FLUSH || \
-                           __event_type == V_028A90_CS_PARTIAL_FLUSH ? 4 : \
-                           __event_type == V_028A90_PIXEL_PIPE_STAT_CONTROL ? 1 : 0)); \
-} while (0)
+#define radeon_event_write(event_type) \
+   ac_cmdbuf_event_write(event_type)
 
-#define radeon_emit_alt_hiz_logic() do { \
-   static_assert(GFX_VERSION == GFX12 || !ALT_HIZ_LOGIC, ""); \
-   if (GFX_VERSION == GFX12 && ALT_HIZ_LOGIC) { \
-      radeon_emit(PKT3(PKT3_RELEASE_MEM, 6, 0)); \
-      radeon_emit(S_490_EVENT_TYPE(V_028A90_BOTTOM_OF_PIPE_TS) | S_490_EVENT_INDEX(5)); \
-      radeon_emit(0); /* DST_SEL, INT_SEL = no write confirm, DATA_SEL = no data */ \
-      radeon_emit(0); /* ADDRESS_LO */ \
-      radeon_emit(0); /* ADDRESS_HI */ \
-      radeon_emit(0); /* DATA_LO */ \
-      radeon_emit(0); /* DATA_HI */ \
-      radeon_emit(0); /* INT_CTXID */ \
-   } \
+#define radeon_emit_alt_hiz_packets() do { \
+   radeon_emit(PKT3(PKT3_RELEASE_MEM, 6, 0)); \
+   radeon_emit(S_491_EVENT_TYPE(V_028A90_BOTTOM_OF_PIPE_TS) | S_491_EVENT_INDEX(5)); \
+   radeon_emit(0); /* DST_SEL, INT_SEL = no write confirm, DATA_SEL = no data */ \
+   radeon_emit(0); /* ADDRESS_LO */ \
+   radeon_emit(0); /* ADDRESS_HI */ \
+   radeon_emit(0); /* DATA_LO */ \
+   radeon_emit(0); /* DATA_HI */ \
+   radeon_emit(0); /* INT_CTXID */ \
 } while (0)
 
 /* This should be evaluated at compile time if all parameters are constants. */

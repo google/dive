@@ -49,11 +49,23 @@ struct dzn_physical_device_desc {
    char description[128];
 };
 
+struct d3d12_memory_info {
+   uint64_t usage_local;
+   uint64_t budget_local;
+   uint64_t usage_nonlocal;
+   uint64_t budget_nonlocal;
+   uint64_t usage;    // local + nonlocal
+   uint64_t budget;   // local + nonlocal
+};
+
 VkResult
 dzn_enumerate_physical_devices_dxgi(struct vk_instance *instance);
 
 VkResult
 dzn_enumerate_physical_devices_dxcore(struct vk_instance *instance);
+
+void
+dzn_query_memory_info(IUnknown* unk, struct d3d12_memory_info* memory_info);
 
 VkResult
 dzn_instance_add_physical_device(struct vk_instance *instance,

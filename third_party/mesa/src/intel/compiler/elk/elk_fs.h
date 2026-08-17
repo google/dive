@@ -1,28 +1,6 @@
 /*
  * Copyright © 2010 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
- * Authors:
- *    Eric Anholt <eric@anholt.net>
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -174,8 +152,8 @@ public:
               bool debug_enabled);
    elk_fs_visitor(const struct elk_compiler *compiler,
               const struct elk_compile_params *params,
-              const elk_wm_prog_key *key,
-              struct elk_wm_prog_data *prog_data,
+              const elk_fs_prog_key *key,
+              struct elk_fs_prog_data *prog_data,
               const nir_shader *shader,
               unsigned dispatch_width,
               bool needs_register_pressure,
@@ -309,8 +287,6 @@ public:
 
    elk_fs_reg interp_reg(const elk::fs_builder &bld, unsigned location,
                      unsigned channel, unsigned comp);
-   elk_fs_reg per_primitive_reg(const elk::fs_builder &bld,
-                            int location, unsigned comp);
 
    virtual void dump_instruction_to_file(const elk_backend_instruction *inst, FILE *file) const;
    virtual void dump_instructions_to_file(FILE *file) const;
@@ -539,16 +515,16 @@ namespace elk {
    fetch_barycentric_reg(const elk::fs_builder &bld, uint8_t regs[2]);
 
    inline elk_fs_reg
-   dynamic_msaa_flags(const struct elk_wm_prog_data *wm_prog_data)
+   dynamic_fs_config(const struct elk_fs_prog_data *fs_prog_data)
    {
-      return elk_fs_reg(UNIFORM, wm_prog_data->msaa_flags_param,
+      return elk_fs_reg(UNIFORM, fs_prog_data->fs_config_param,
                     ELK_REGISTER_TYPE_UD);
    }
 
    void
-   check_dynamic_msaa_flag(const fs_builder &bld,
-                           const struct elk_wm_prog_data *wm_prog_data,
-                           enum intel_msaa_flags flag);
+   check_dynamic_fs_config(const fs_builder &bld,
+                           const struct elk_fs_prog_data *fs_prog_data,
+                           enum intel_fs_config flag);
 
    bool
    lower_src_modifiers(elk_fs_visitor *v, elk_bblock_t *block, elk_fs_inst *inst, unsigned i);
@@ -572,9 +548,9 @@ elk_fs_reg elk_setup_imm_ub(const elk::fs_builder &bld,
 enum elk_barycentric_mode elk_barycentric_mode(nir_intrinsic_instr *intr);
 
 uint32_t elk_fb_write_msg_control(const elk_fs_inst *inst,
-                                  const struct elk_wm_prog_data *prog_data);
+                                  const struct elk_fs_prog_data *prog_data);
 
-void elk_compute_urb_setup_index(struct elk_wm_prog_data *wm_prog_data);
+void elk_compute_urb_setup_index(struct elk_fs_prog_data *fs_prog_data);
 
 bool elk_nir_lower_simd(nir_shader *nir, unsigned dispatch_width);
 

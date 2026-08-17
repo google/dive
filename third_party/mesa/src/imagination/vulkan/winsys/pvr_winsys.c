@@ -50,6 +50,7 @@ void pvr_winsys_destroy(struct pvr_winsys *ws)
 
 VkResult pvr_winsys_create(const char *render_path,
                            const char *display_path,
+                           bool keep_display_master,
                            const VkAllocationCallbacks *alloc,
                            struct pvr_winsys **const ws_out)
 {
@@ -76,6 +77,12 @@ VkResult pvr_winsys_create(const char *render_path,
                             display_path);
          goto err_close_render_fd;
       }
+      if (!keep_display_master) {
+         /* Try to drop master for the display FD if it's not meant to be
+          * kept, but not to fail if it's not the master at opening time.
+          */
+         drmDropMaster(display_fd);
+      }
    } else {
       display_fd = -1;
    }
@@ -88,10 +95,10 @@ VkResult pvr_winsys_create(const char *render_path,
       goto err_close_display_fd;
    }
 
-   if (strcmp(version->name, "powervr") == 0) {
+   if (strcmp(version->name, PVR_DRM_DRIVER_NAME) == 0) {
       result = pvr_drm_winsys_create(render_fd, display_fd, alloc, ws_out);
 #if defined(PVR_SUPPORT_SERVICES_DRIVER)
-   } else if (strcmp(version->name, "pvr") == 0) {
+   } else if (strcmp(version->name, PVR_SRV_DRIVER_NAME) == 0) {
       result = pvr_srv_winsys_create(render_fd, display_fd, alloc, ws_out);
 #endif
    } else {

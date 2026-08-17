@@ -103,7 +103,7 @@ SOFTWARE.
 <bitset name="#instruction-cat2-1src" extends="#instruction-cat2">
 	<override expr="#cat2-cat3-nop-encoding">
 		<display>
-			{SY}{SS}{JP}{SAT}(nop{NOP}) {UL}{NAME} {EI}{DST_HALF}{DST}, {SRC1}
+			{SY}{SS}{JP}(nop{NOP}) {UL}{NAME} {SAT}{EI}{DST_HALF}{DST}, {SRC1}
 		</display>
 		<derived name="NOP" expr="#cat2-cat3-nop-value" type="uint"/>
 		<field name="SRC1" low="0" high="15" type="#multisrc">
@@ -112,7 +112,7 @@ SOFTWARE.
 		</field>
 	</override>
 	<display>
-		{SY}{SS}{JP}{SAT}{REPEAT}{UL}{NAME} {EI}{DST_HALF}{DST}, {SRC1}
+		{SY}{SS}{JP}{REPEAT}{UL}{NAME} {SAT}{EI}{DST_HALF}{DST}, {SRC1}
 	</display>
 	<pattern low="16" high="31">xxxxxxxxxxxxxxxx</pattern>
 	<pattern low="48" high="50">xxx</pattern>  <!-- COND -->
@@ -127,7 +127,7 @@ SOFTWARE.
 <bitset name="#instruction-cat2-2src" extends="#instruction-cat2">
 	<override expr="#cat2-cat3-nop-encoding">
 		<display>
-			{SY}{SS}{JP}{SAT}(nop{NOP}) {UL}{NAME} {EI}{DST_HALF}{DST}, {SRC1}, {SRC2}
+			{SY}{SS}{JP}(nop{NOP}) {UL}{NAME} {SAT}{EI}{DST_HALF}{DST}, {SRC1}, {SRC2}
 		</display>
 		<derived name="NOP" expr="#cat2-cat3-nop-value" type="uint"/>
 		<field name="SRC1" low="0" high="15" type="#multisrc">
@@ -140,7 +140,7 @@ SOFTWARE.
 		</field>
 	</override>
 	<display>
-		{SY}{SS}{JP}{SAT}{REPEAT}{UL}{NAME} {EI}{DST_HALF}{DST}, {SRC1}, {SRC2}
+		{SY}{SS}{JP}{REPEAT}{UL}{NAME} {SAT}{EI}{DST_HALF}{DST}, {SRC1}, {SRC2}
 	</display>
 	<field name="SRC1" low="0" high="15" type="#multisrc">
 		<param name="SRC1_R" as="SRC_R"/>
@@ -345,6 +345,26 @@ SOFTWARE.
 
 <bitset name="cmpv.s" extends="#instruction-cat2-2src-cond">
 	<pattern low="53" high="58">100010</pattern>
+</bitset>
+
+<bitset name="mul.f.mul2" extends="#instruction-cat2-2src-cond">
+	<gen min="700"/>
+	<pattern low="53" high="58">100011</pattern>
+</bitset>
+
+<bitset name="add.f.mul2" extends="#instruction-cat2-2src-cond">
+	<gen min="700"/>
+	<pattern low="53" high="58">100100</pattern>
+</bitset>
+
+<bitset name="mul.f.div2" extends="#instruction-cat2-2src-cond">
+	<gen min="700"/>
+	<pattern low="53" high="58">100101</pattern>
+</bitset>
+
+<bitset name="add.f.div2" extends="#instruction-cat2-2src-cond">
+	<gen min="700"/>
+	<pattern low="53" high="58">100110</pattern>
 </bitset>
 
 <bitset name="mul.u24" extends="#instruction-cat2-2src">

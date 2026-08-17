@@ -22,6 +22,7 @@
 #include "sfn_nir_lower_tex.h"
 #include "sfn_optimizer.h"
 #include "sfn_ra.h"
+#include "sfn_shader_tess.h"
 #include "sfn_scheduler.h"
 #include "sfn_shader.h"
 #include "sfn_split_address_loads.h"
@@ -246,7 +247,7 @@ private:
       auto intr = nir_instr_as_intrinsic(instr);
       assert(intr->intrinsic == nir_intrinsic_load_ubo_vec4);
 
-      auto parent = intr->src[0].ssa->parent_instr;
+      auto parent = nir_def_instr(intr->src[0].ssa);
 
       if (parent->type != nir_instr_type_alu)
          return nullptr;
@@ -456,7 +457,7 @@ r600_nir_lower_atomics(nir_shader *shader)
 using r600::r600_lower_fs_out_to_vector;
 using r600::r600_lower_ubo_to_align16;
 
-int
+unsigned
 r600_glsl_type_size(const struct glsl_type *type, bool is_bindless)
 {
    return glsl_count_vec4_slots(type, false, is_bindless);
@@ -619,7 +620,7 @@ optimize_once(nir_shader *shader)
    bool progress = false;
    NIR_PASS(progress, shader, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
    NIR_PASS(progress, shader, nir_lower_vars_to_ssa);
-   NIR_PASS(progress, shader, nir_copy_prop);
+   NIR_PASS(progress, shader, nir_opt_copy_prop);
    NIR_PASS(progress, shader, nir_opt_dce);
    NIR_PASS(progress, shader, nir_opt_algebraic);
    if (shader->options->has_bitfield_select)
@@ -630,7 +631,7 @@ optimize_once(nir_shader *shader)
 
    if (nir_opt_loop(shader)) {
       progress = true;
-      NIR_PASS(progress, shader, nir_copy_prop);
+      NIR_PASS(progress, shader, nir_opt_copy_prop);
       NIR_PASS(progress, shader, nir_opt_dce);
    }
 
@@ -696,12 +697,14 @@ r600_finalize_nir_common(nir_shader *nir, enum amd_gfx_level gfx_level)
 
    NIR_PASS(_, nir, nir_lower_flrp, nir_lower_flrp_mask, false);
 
+   NIR_PASS(_, nir, nir_opt_idiv_const, 64);
+   NIR_PASS(_, nir, nir_opt_idiv_const, 32);
    nir_lower_idiv_options idiv_options = {0};
    NIR_PASS(_, nir, nir_lower_idiv, &idiv_options);
 
    NIR_PASS(_, nir, r600_nir_lower_trigen, gfx_level);
    NIR_PASS(_, nir, nir_lower_phis_to_scalar, NULL, NULL);
-   NIR_PASS(_, nir, nir_lower_undef_to_zero);
+   NIR_PASS(_, nir, nir_lower_undef_to_zero, NULL);
 
    struct nir_lower_tex_options lower_tex_options = {0};
    lower_tex_options.lower_txp = ~0u;
@@ -717,6 +720,7 @@ r600_finalize_nir_common(nir_shader *nir, enum amd_gfx_level gfx_level)
 
    NIR_PASS(_, nir, r600_lower_shared_io);
    NIR_PASS(_, nir, r600_nir_lower_atomics);
+
 
    static const nir_lower_subgroups_options r600_nir_subgroups_options = {
       .ballot_bit_size = 32,
@@ -735,6 +739,47 @@ r600_finalize_nir_common(nir_shader *nir, enum amd_gfx_level gfx_level)
 
    while (optimize_once(nir))
       ;
+}
+
+static bool
+r600_lower_primitive_id_pass(nir_builder *b,
+                             nir_intrinsic_instr *intrin,
+                             UNUSED void *cb_data)
+{
+   if (intrin->intrinsic != nir_intrinsic_load_primitive_id)
+      return false;
+
+   b->cursor = nir_instr_remove(&intrin->instr);
+
+   assert(offsetof(struct r600_lds_constant_buffer, primitiveid_inverse) -
+             offsetof(struct r600_lds_constant_buffer, primitiveid_modulo) ==
+          sizeof(uint32_t));
+
+   nir_def *const primitive_id_raw = nir_load_primitive_id_raw_r600(b);
+   nir_def *const primitive_id_vec2 = nir_load_primitive_id_modulo_r600(b);
+   nir_def *const primitive_id_modulo = nir_channel(b, primitive_id_vec2, 0);
+   nir_def *const primitive_id_inverse = nir_channel(b, primitive_id_vec2, 1);
+
+   /* This transformation is equivalent to:
+    * nir_umod(b, primitive_id_raw, primitive_id_modulo); */
+   nir_def_rewrite_uses(
+      &intrin->def,
+      nir_isub(b,
+               primitive_id_raw,
+               nir_imul(b,
+                        nir_umul_high(b, primitive_id_raw, primitive_id_inverse),
+                        primitive_id_modulo)));
+
+   return true;
+}
+
+static bool
+r600_lower_primitive_id(nir_shader *nir)
+{
+   return nir_shader_intrinsics_pass(nir,
+                                     r600_lower_primitive_id_pass,
+                                     nir_metadata_control_flow,
+                                     nullptr);
 }
 
 DEBUG_GET_ONCE_NUM_OPTION(skip_opt_start, "R600_SFN_SKIP_OPT_START", -1);
@@ -766,6 +811,12 @@ r600_lower_and_optimize_nir(nir_shader *sh,
       NIR_PASS(_, sh, nir_remove_dead_variables, nir_var_shader_out, 0);
       r600::sort_fsoutput(sh);
    }
+
+   if (sh->info.stage == MESA_SHADER_TESS_CTRL ||
+       sh->info.stage == MESA_SHADER_TESS_EVAL) {
+      NIR_PASS(_, sh, r600_lower_primitive_id);
+   }
+
    nir_variable_mode io_modes = nir_var_uniform | nir_var_shader_in | nir_var_shader_out;
 
    NIR_PASS(_, sh, nir_opt_combine_stores, nir_var_shader_out);
@@ -792,10 +843,11 @@ r600_lower_and_optimize_nir(nir_shader *sh,
 
    /**/
    if (lower_64bit)
-      NIR_PASS(_, sh, nir_lower_indirect_derefs, nir_var_function_temp, 10);
+      NIR_PASS(_, sh, nir_lower_indirect_derefs_to_if_else_trees,
+               nir_var_function_temp, 10);
 
+   /* Fold constant offset srcs for IO. */
    NIR_PASS(_, sh, nir_opt_constant_folding);
-   NIR_PASS(_, sh, nir_io_add_const_offset_to_base, io_modes);
 
    NIR_PASS(_, sh, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
    NIR_PASS(_, sh, nir_lower_phis_to_scalar, NULL, NULL);
@@ -804,7 +856,7 @@ r600_lower_and_optimize_nir(nir_shader *sh,
    NIR_PASS(_, sh, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
    NIR_PASS(_, sh, nir_lower_phis_to_scalar, NULL, NULL);
    NIR_PASS(_, sh, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
-   NIR_PASS(_, sh, nir_copy_prop);
+   NIR_PASS(_, sh, nir_opt_copy_prop);
    NIR_PASS(_, sh, nir_opt_dce);
 
    if (r600_is_last_vertex_stage(sh, *key))
@@ -821,8 +873,11 @@ r600_lower_and_optimize_nir(nir_shader *sh,
       NIR_PASS(_, sh, r600_lower_tess_io, static_cast<mesa_prim>(prim_type));
    }
 
-   if (sh->info.stage == MESA_SHADER_TESS_CTRL)
+   if (sh->info.stage == MESA_SHADER_TESS_CTRL) {
+      NIR_PASS(_, sh, nir_lower_system_values);
+      NIR_PASS(_, sh, r600_lower_tess_level_default_to_ubo);
       NIR_PASS(_, sh, r600_append_tcs_TF_emission, (mesa_prim)key->tcs.prim_mode);
+   }
 
    if (sh->info.stage == MESA_SHADER_TESS_EVAL) {
       NIR_PASS(_,
@@ -846,11 +901,14 @@ r600_lower_and_optimize_nir(nir_shader *sh,
    NIR_PASS(_, sh, nir_lower_ubo_vec4);
    NIR_PASS(_, sh, r600_opt_indirect_fbo_loads);
 
-   if (lower_64bit)
-      NIR_PASS(_, sh, r600::r600_nir_64_to_vec2);
-
-   if (lower_64bit_io_to_vec2)
+   if (lower_64bit_io_to_vec2) {
       NIR_PASS(_, sh, r600::r600_split_64bit_uniforms_and_ubo);
+      NIR_PASS(_, sh, nir_lower_alu_to_scalar, r600_lower_to_scalar_instr_filter, NULL);
+      NIR_PASS(_, sh, nir_lower_phis_to_scalar, NULL, NULL);
+      while (optimize_once(sh))
+         ;
+      NIR_PASS(_, sh, r600::r600_nir_64_to_vec2, gfx_level >= CAYMAN);
+   }
 
    /* Lower to scalar to let some optimization work out better */
    while (optimize_once(sh))
@@ -865,7 +923,6 @@ r600_lower_and_optimize_nir(nir_shader *sh,
    NIR_PASS(_,
             sh,
             nir_lower_vars_to_scratch,
-            nir_var_function_temp,
             64,
             r600_get_scratch_size_align,
             r600_get_scratch_size_align);
@@ -882,7 +939,7 @@ r600_lower_and_optimize_nir(nir_shader *sh,
       NIR_PASS(late_algebraic_progress, sh, r600_sfn_lower_alu);
       NIR_PASS(late_algebraic_progress, sh, nir_opt_algebraic_late);
       NIR_PASS(late_algebraic_progress, sh, nir_opt_constant_folding);
-      NIR_PASS(late_algebraic_progress, sh, nir_copy_prop);
+      NIR_PASS(late_algebraic_progress, sh, nir_opt_copy_prop);
       NIR_PASS(late_algebraic_progress, sh, nir_opt_dce);
       NIR_PASS(late_algebraic_progress, sh, nir_opt_cse);
    } while (late_algebraic_progress);
@@ -919,18 +976,18 @@ r600_finalize_and_optimize_shader(r600::Shader *shader)
       }
    }
 
-   split_address_loads(*shader);
-   
-   if (r600::sfn_log.has_debug_flag(r600::SfnLog::steps)) {
-      std::cerr << "Shader after splitting address loads\n";
-      shader->print(std::cerr);
-   }
-   
-   if (!skip_shader_opt) {
-      optimize(*shader);
+   if (split_address_loads(*shader)) {
       if (r600::sfn_log.has_debug_flag(r600::SfnLog::steps)) {
-         std::cerr << "Shader after optimization\n";
+         std::cerr << "Shader after splitting address loads\n";
          shader->print(std::cerr);
+      }
+
+      if (!skip_shader_opt) {
+         optimize(*shader);
+         if (r600::sfn_log.has_debug_flag(r600::SfnLog::steps)) {
+            std::cerr << "Shader after optimization\n";
+            shader->print(std::cerr);
+         }
       }
    }
 }

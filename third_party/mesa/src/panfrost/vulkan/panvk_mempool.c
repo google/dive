@@ -1,26 +1,7 @@
 /*
- * © Copyright 2018 Alyssa Rosenzweig
+ * Copyright © 2018 Alyssa Rosenzweig
  * Copyright (C) 2019 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "panvk_device.h"
@@ -141,6 +122,16 @@ panvk_pool_alloc_backing(struct panvk_pool *pool, size_t sz)
 struct panvk_priv_mem
 panvk_pool_alloc_mem(struct panvk_pool *pool, struct panvk_pool_alloc_info info)
 {
+   struct panvk_physical_device *pdev =
+      to_panvk_physical_device(pool->dev->vk.physical);
+
+   /* Make sure objects allocated from shared BOs are aligned on a cacheline. */
+   if (!pool->props.owns_bos &&
+       (pool->props.create_flags & PAN_KMOD_BO_FLAG_WB_MMAP)) {
+      info.alignment =
+         MAX2(pdev->vk.properties.nonCoherentAtomSize, info.alignment);
+   }
+
    assert(info.alignment == util_next_power_of_two(info.alignment));
 
    if (pool->props.needs_locking)
@@ -268,4 +259,32 @@ panvk_pool_get_bo_handles(struct panvk_pool *pool, uint32_t *handles)
 
    list_for_each_entry(struct panvk_priv_bo, bo, &pool->big_bos, node)
       handles[idx++] = pan_kmod_bo_handle(bo->bo);
+}
+
+void
+panvk_pool_flush_maps(struct panvk_pool *pool)
+{
+   /* Don't walk the buffers if we know the synchronization is not needed. */
+   if (!(pool->props.create_flags & PAN_KMOD_BO_FLAG_WB_MMAP))
+      return;
+
+   list_for_each_entry(struct panvk_priv_bo, bo, &pool->bos, node)
+      panvk_priv_bo_flush(bo, 0, bo->bo->size);
+
+   list_for_each_entry(struct panvk_priv_bo, bo, &pool->big_bos, node)
+      panvk_priv_bo_flush(bo, 0, bo->bo->size);
+}
+
+void
+panvk_pool_invalidate_maps(struct panvk_pool *pool)
+{
+   /* Don't walk the buffers if we know the synchronization is not needed. */
+   if (!(pool->props.create_flags & PAN_KMOD_BO_FLAG_WB_MMAP))
+      return;
+
+   list_for_each_entry(struct panvk_priv_bo, bo, &pool->bos, node)
+      panvk_priv_bo_invalidate(bo, 0, bo->bo->size);
+
+   list_for_each_entry(struct panvk_priv_bo, bo, &pool->big_bos, node)
+      panvk_priv_bo_invalidate(bo, 0, bo->bo->size);
 }

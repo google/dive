@@ -11,13 +11,13 @@ etna_ml_calc_addition_sizes(unsigned *input_width, unsigned *input_height, unsig
                             unsigned *output_width, unsigned *output_height, unsigned *output_channels);
 
 unsigned
-etna_ml_calculate_tiling_v7(struct etna_context *ctx, const struct etna_operation *operation, unsigned *tile_width_out, unsigned *tile_height_out);
+etna_ml_calculate_tiling_v7(struct etna_screen *screen, const struct etna_operation *operation, unsigned *tile_width_out, unsigned *tile_height_out);
 
 struct etna_bo *
 etna_ml_create_coeffs_v7(struct etna_ml_subgraph *subgraph, const struct etna_operation *operation, unsigned *cache_size);
 
 unsigned
-etna_ml_calculate_tiling_v8(struct etna_context *ctx, const struct etna_operation *operation, unsigned *tile_width_out, unsigned *tile_height_out);
+etna_ml_calculate_tiling_v8(struct etna_screen *screen, const struct etna_operation *operation, unsigned *tile_width_out, unsigned *tile_height_out);
 
 struct etna_bo *
 etna_ml_create_coeffs_v8(struct etna_ml_subgraph *subgraph, const struct etna_operation *operation, unsigned *cache_size);
@@ -43,6 +43,7 @@ etna_ml_compile_operation_nn(struct etna_ml_subgraph *subgraph,
                              struct etna_vip_instruction *instruction);
 
 void
-etna_ml_emit_operation_nn(struct etna_ml_subgraph *subgraph,
+etna_ml_emit_operation_nn(struct pipe_context *pctx,
+                          struct etna_ml_subgraph *subgraph,
                           struct etna_vip_instruction *operation,
                           unsigned idx);

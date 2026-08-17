@@ -33,6 +33,7 @@
 #define INSTR_6XX_RAW(i, d, ...) { .gpu_id = 630, .instr = NULL, .instr_raw = i, .expected = d, __VA_ARGS__ }
 #define INSTR_7XX(i, d, ...) { .chip_id = 0x07030001, .instr = #i, .instr_raw = 0, .expected = d, __VA_ARGS__ }
 #define INSTR_7XX_RAW(i, d, ...) { .chip_id = 0x07030001, .instr = NULL, .instr_raw = i, .expected = d, __VA_ARGS__ }
+#define INSTR_8XX(i, d, ...) { .chip_id = 0x44050000, .instr = #i, .instr_raw = 0, .expected = d, __VA_ARGS__ }
 /* clang-format on */
 
 static const struct test {
@@ -70,6 +71,7 @@ static const struct test {
 
    INSTR_7XX(00000003_00000000, "(eolm)(eogm)nop"),
    INSTR_7XX(00000001_00000000, "(eolm)nop"),
+   INSTR_8XX(00001004_00000000, "(ss)(eostsc)nop"),
 
    /* cat1 */
    INSTR_6XX(20244000_00000020, "mov.f32f32 r0.x, c8.x"),
@@ -90,14 +92,19 @@ static const struct test {
    INSTR_6XX(2400c205_04030201, "sct.f16u32 r1.y, r0.z, r0.w, r1.x, hr0.y"),
 
    INSTR_6XX(20510005_0000ffff, "mov.s16s16 hr1.y, -1"),
-   INSTR_6XX(20400005_00003900, "mov.f16f16 hr1.y, h(0.625000)"),
-   INSTR_6XX(20400006_00003800, "mov.f16f16 hr1.z, h(0.500000)"),
+   INSTR_6XX(20400005_00003900, "mov.f16f16 hr1.y, h(0.625)"),
+   INSTR_6XX(20400006_00003800, "mov.f16f16 hr1.z, h(0.5)"),
    INSTR_6XX(204880f5_00000000, "mova1 a1.x, 0"),
+
+   INSTR_6XX(201108f4_00000000, "mova.u a0.x, (r)hr0.x"),
+   INSTR_6XX(204888f5_00000000, "mova1.u a1.x, 0"),
+   INSTR_8XX(20130cf4_008000c0, "mova.r.u (sat)a0.x, hr48.x, 0, 1"),
 
    INSTR_7XX(2004c005_00000405, "cov.f32u32 r1.y, (last)r1.y"),
 
    INSTR_7XX(200440c0_ae800004, "movs.f32f32 r48.x, r1.x, 93"),
    INSTR_7XX(201100c0_c000040b, "movs.s16s16 hr48.x, (last)hr2.w, a0.x"),
+   INSTR_7XX(201504c0_000000c0, "cov.s32s16 (sat)hr48.x, r48.x"),
 
    /* cat2 */
    INSTR_6XX(40104002_0c210001, "add.f hr0.z, r0.y, c<a0.x + 33>"),
@@ -112,7 +119,7 @@ static const struct test {
    INSTR_6XX(438000f8_20010009, "and.b p0.x, hr2.y, h(1)"),
    INSTR_6XX(438000f9_00020001, "and.b p0.y, hr0.y, hr0.z"),
    INSTR_6XX(40080902_50200006, "(rpt1)add.f hr0.z, (r)hr1.z, (neg)(r)hc8.x"),
-   INSTR_6XX(42380c01_00040001, "(sat)(nop3) add.s r0.y, r0.y, r1.x"),
+   INSTR_6XX(42380c01_00040001, "(nop3) add.s (sat)r0.y, r0.y, r1.x"),
    INSTR_6XX(42480000_48801086, "(nop2) sub.u hr0.x, hc33.z, (neg)hr<a0.x + 128>"),
    INSTR_6XX(46b00001_00001020, "clz.b r0.y, c8.x"),
    INSTR_6XX(46700009_00000009, "bfrev.b r2.y, r2.y"),
@@ -121,6 +128,7 @@ static const struct test {
    INSTR_7XX(42930000_04000406, "cmps.u.ge r0.x, (last)r1.z, (last)r0.x"),
 
    INSTR_7XX(429000f5_100600c1, "cmps.u.lt up0.y, r48.y, c1.z"),
+   INSTR_7XX(4490000c_10534007, "add.f.mul2.lt r3.x, (neg)r1.w, c20.w"),
 
    /* cat3 */
    INSTR_6XX(66000000_10421041, "sel.f16 hr0.x, hc16.y, hr0.x, hc16.z"),
@@ -143,12 +151,16 @@ static const struct test {
    INSTR_6XX(67018c02_1002e003, "(nop3) wmm.accu hr0.z, (neg)hr0.w, hr0.w, 2"),
    INSTR_6XX(6701c802_9002a003, "(nop3) wmm r0.z, r0.w, r0.w, 2"), /* (nop3) wmm.f32f32 r0.z, (r)r0.w, (r)r0.w, 2 */
    /* custom test with qcom_dot8 function from cl_qcom_dot_product8 */
-   INSTR_6XX(66818c02_0002e003, "(sat)(nop3) dp2acc.mixed.low r0.z, r0.w, r0.w, r0.z"), /* (nop3) dp2acc (sat)r0.z, (signed)(low)(r)r0.w, (low)(r)r0.w, r0.z */
+   INSTR_6XX(66818c02_0002e003, "(nop3) dp2acc.mixed.low (sat)r0.z, r0.w, r0.w, r0.z"), /* (nop3) dp2acc (sat)r0.z, (signed)(low)(r)r0.w, (low)(r)r0.w, r0.z */
    INSTR_6XX(6681c802_8002a003, "(nop3) dp4acc.unsigned.low r0.z, r0.w, r0.w, (neg)r0.z"), /* (nop3) dp4acc r0.z, (unsigned)(r)r0.w, (r)r0.w, (neg)r0.z */
    INSTR_6XX(7681c002_00002002, "(sy)dp4acc.unsigned.low r0.z, r0.z, r0.w, r0.x"),
 
    INSTR_7XX(61808000_04020400, "madsh.m16 r0.x, (last)r0.x, r0.y, (last)r0.z"),
    INSTR_7XX(64838806_04088406, "(nop3) sel.b32 r1.z, (last)r1.z, r1.w, (last)r2.x"),
+   INSTR_7XX(6286880e_040ee002, "(nop3) mad.f32.mul2 r3.z, (neg)r0.z, r3.y, (last)r3.z"),
+   INSTR_8XX(6206000a_040a0610, "mad.u24 r2.z, 16, r3.x, (last)r2.z"),
+   INSTR_8XX(62000800_06030402, "(nop1) mad.u24 r0.x, (last)r0.z, r0.x, 3"),
+   INSTR_8XX(63820009_07024409, "mad.f32 r2.y, (neg)(last)r2.y, r1.x, (1.0)"),
 
    /* cat4 */
    INSTR_6XX(8010000a_00000003, "rcp r2.z, r0.w"),
@@ -188,6 +200,21 @@ static const struct test {
    INSTR_7XX(a00c3101_c2000001, "isam.v.base0.1d (u32)(x)r0.y, r0.x, s#0, t#1"),
    INSTR_7XX(a02c3f06_c2041003, "isam.v.base0 (u32)(xyzw)r1.z, r0.y+8, s#0, t#1"),
    INSTR_7XX(a02c3f05_a1240601, "isam.v.s2en.uniform.base0 (u32)(xyzw)r1.y, r0.x+3, r2.y"),
+
+   INSTR_7XX(a7581f00_e0014001, "img_bindless.sad.base0 (f32)(xyzw)r0.x, r0.x, r40.x, t#0, a1.x"), /* img_bindless.s2en.mode7.sad.base0 (f32)(xyzw)r0.x, r0.x, r40.x, 0 */
+   INSTR_7XX(a75c1f00_e0014001, "img_bindless.ssd.base0 (f32)(xyzw)r0.x, r0.x, r40.x, t#0, a1.x"), /* img_bindless.s2en.mode7.ssd.base0 (f32)(xyzw)r0.x, r0.x, r40.x, 0 */
+   INSTR_7XX(a7581f00_a0014541, "img_bindless.sad.s2en.uniform.base0 (f32)(xyzw)r0.x, r40.x, r40.z, r0.x"),
+   INSTR_7XX(a7581f00_e1414541, "img_bindless.sad.base0 (f32)(xyzw)r0.x, r40.x, r40.z, t#10, a1.x"),
+
+   /* dEQP-VK.image_processing.graphics.monolithic.block_matching.sad.basic.r8_unorm_diff (a750) */
+   INSTR_7XX(a7581104_e0014001, "img_bindless.sad.base0 (f32)(x)r1.x, r0.x, r40.x, t#0, a1.x"),    /* img_bindless.o.s2en.mode7.sad.base0 (f32)(xOOO)r1.x, r0.x, r40.x, 0; */
+   /* dEQP-VK.image_processing.graphics.monolithic.block_matching.ssd.basic.r8_unorm_diff (a750) */
+   INSTR_7XX(a75c1104_e0014001, "img_bindless.ssd.base0 (f32)(x)r1.x, r0.x, r40.x, t#0, a1.x"),    /* img_bindless.o.s.s2en.mode7.ssd.base0 (f32)(xOOO)r1.x, r0.x, r40.x, 0; */
+
+   /* dEQP-VK.image_processing.compute.box_filter_sampling.box_filter.* (a750) */
+   INSTR_7XX(a74c1f00_c0214541, "img_bindless.pcmn.base0 (f32)(xyzw)r0.x, r40.x, r40.z, s#1, t#0"),      /* img_bindless.s.s2en.mode6.pcmn.base0 (f32)(xyzw)r0.x, r40.x, r40.z, 1; */
+   /* dEQP-VK.image_processing.graphics.monolithic.weight_image_sampling.weight_sampling.basic.r8_unorm_weight_r8_unorm_random_subtexel (a750) */
+   INSTR_7XX(a7481f00_e0000141, "img_bindless.hof.base0 (f32)(xyzw)r0.x, r40.x, t#0, a1.x"),       /* img_bindless.s2en.mode7.hof.base0 (f32)(xyzw)r0.x, r40.x, 0; */
 
    /* dEQP-VK.subgroups.arithmetic.compute.subgroupadd_float */
    INSTR_6XX(a7c03102_00100003, "brcst.active.w8 (u32)(x)r0.z, r0.y"), /* brcst.active.w8 (u32)(xOOO)r0.z, r0.y */
@@ -383,12 +410,12 @@ static const struct test {
    INSTR_6XX(50600004_2c090004, "(sy)mul.f hr1.x, hr1.x, h(1/log2(10))"),
    INSTR_6XX(50600004_2c0a0004, "(sy)mul.f hr1.x, hr1.x, h(log2(10))"),
    INSTR_6XX(50600004_2c0b0004, "(sy)mul.f hr1.x, hr1.x, h(4.0)"),
-   INSTR_6XX(20444000_00000000, "mov.f32f32 r0.x, (0.000000)"),
-   INSTR_6XX(20444000_3f000000, "mov.f32f32 r0.x, (0.500000)"),
-   INSTR_6XX(20444000_3f800000, "mov.f32f32 r0.x, (1.000000)"),
-   INSTR_6XX(20444000_40000000, "mov.f32f32 r0.x, (2.000000)"),
-   INSTR_6XX(20444000_40400000, "mov.f32f32 r0.x, (3.000000)"),
-   INSTR_6XX(20444000_40800000, "mov.f32f32 r0.x, (4.000000)"),
+   INSTR_6XX(20444000_00000000, "mov.f32f32 r0.x, (0.0)"),
+   INSTR_6XX(20444000_3f000000, "mov.f32f32 r0.x, (0.5)"),
+   INSTR_6XX(20444000_3f800000, "mov.f32f32 r0.x, (1.0)"),
+   INSTR_6XX(20444000_40000000, "mov.f32f32 r0.x, (2.0)"),
+   INSTR_6XX(20444000_40400000, "mov.f32f32 r0.x, (3.0)"),
+   INSTR_6XX(20444000_40800000, "mov.f32f32 r0.x, (4.0)"),
 
    /* LDC.  Our disasm differs greatly from qcom here, and we've got some
     * important info they lack(?!), but same goes the other way.
@@ -415,6 +442,7 @@ static const struct test {
    INSTR_6XX(c0260000_00478200, "ldc.offset1.1.imm r0.x, r0.x, 0"), /* ldc.1.mode0.base0 r0.x, r0.x, 0 */
    INSTR_6XX(c0260000_00478400, "ldc.offset2.1.imm r0.x, r0.x, 0"), /* ldc.1.mode0.base0 r0.x, r0.x, 0 */
    INSTR_6XX(c0260000_00478600, "ldc.offset3.1.imm r0.x, r0.x, 0"), /* ldc.1.mode0.base0 r0.x, r0.x, 0 */
+   INSTR_8XX(c0260000_00678600, "ldc.offset3.1.imm r0.x, r0.x, 0"),
 
    /* dEQP-VK.glsl.arrays.length.float_fragment */
    INSTR_6XX(c02600c1_00c7a900, "ldc.u.offset0.3.imm.base0 r48.y, 0, 0"), /* ldc.u.3.mode4.base0 sr48.y, 0, 0 */
@@ -434,6 +462,7 @@ static const struct test {
 
    INSTR_6XX(c0160010_00b001a1, "ldg.k.u32 c[16], g[r48.x+208], 1"),
    INSTR_6XX(c0160188_00b01261, "ldg.k.u32 c[a1.x+136], g[r48.x+2352], 1"),
+   INSTR_6XX(c0160010_3d3001a1, "ldg.k.u32 c[16], g[r48.x+208], r15.y"),
 
    /* Atomic: */
 #if 0
@@ -521,7 +550,7 @@ static const struct test {
    INSTR_7XX(fbc21000_00000000, "(sy)(ss)(jp)lock"),
 
    /* dEQP-VK.pipeline.monolithic.sampler.border_swizzle.r4g4b4a4_unorm_pack16.rg1a.opaque_white.gather_1.no_swizzle_hint */
-   INSTR_7XX(e41401a0_bfba7736, "alias.tex.f32.1 r40.x, (-1.456763)"),
+   INSTR_7XX(e41401a0_bfba7736, "alias.tex.f32.1 r40.x, (-1.45676303)"),
    /* dEQP-VK.synchronization.op.single_queue.event.write_draw_indexed_read_image_geometry.image_128x128_r32g32b32a32_sfloat */
    INSTR_7XX(e40c0009_00000007, "alias.tex.f32.0 r2.y, c1.w"),
    /* dEQP-VK.binding_model.shader_access.primary_cmd_buf.storage_image.geometry.single_descriptor.2d_base_mip */
@@ -530,14 +559,14 @@ static const struct test {
    INSTR_7XX(e41100a0_00000002, "alias.tex.b16.0 hr40.x, h(0x2)"),
 
    /* dEQP-VK.glsl.derivate.dfdx.constant.float */
-   INSTR_7XX(e4108003_00003c00, "alias.rt.f16.0 rt0.w, h(1.000000)"),
+   INSTR_7XX(e4108003_00003c00, "alias.rt.f16.0 rt0.w, h(1.0)"),
    INSTR_7XX(f4088000_00000000, "(sy)alias.rt.f16.0 rt0.x, hc0.x"),
 
    /* dEQP-VK.glsl.opaque_type_indexing.ubo.const_literal_fragment */
    INSTR_7XX(e40c8008_00000010, "alias.rt.f32.0 rt2.x, c4.x"),
 
    /* dEQP-VK.dynamic_rendering.primary_cmd_buff.suballocation.multisample_resolve.layers_3.r16g16_unorm.samples_4_resolve_level_4 */
-   INSTR_7XX(e4148008_3f800000, "alias.rt.f32.0 rt2.x, (1.000000)"),
+   INSTR_7XX(e4148008_3f800000, "alias.rt.f32.0 rt2.x, (1.0)"),
 
    /* dEQP-VK.renderpass.suballocation.multisample_resolve.layers_3.r8g8b8a8_uint.samples_2_baseLayer1 */
    INSTR_7XX(e4158007_000000ff, "alias.rt.b32.0 rt1.w, (0xff)"),
@@ -685,6 +714,11 @@ main(int argc, char **argv)
          printf("FAIL: assembler\n");
          printf("  Expected: %08x_%08x\n", code[1], code[0]);
          printf("  Got:      %08x_%08x\n", v->bin[1], v->bin[0]);
+         uint32_t diff[2] = {code[0] ^ v->bin[0], code[1] ^ v->bin[1]};
+         if (diff[0] && util_bitcount64(diff[0]) == 1)
+            printf("Diff in bit %d\n", ffs(diff[0]) - 1);
+         if (diff[1] && util_bitcount64(diff[1]) == 1)
+            printf("Diff in bit %d\n", 32 + ffs(diff[1]) - 1);
          retval = 1;
          encode_fails++;
       }

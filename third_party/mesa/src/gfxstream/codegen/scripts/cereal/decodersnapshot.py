@@ -18,7 +18,7 @@ decoder_snapshot_decl_preamble = """
 
 namespace gfxstream {
 class Stream;
-} // namespace gfxstream
+}  // namespace gfxstream
 
 namespace gfxstream {
 namespace base {
@@ -27,6 +27,7 @@ class BumpPool;
 } // namespace gfxstream
 
 namespace gfxstream {
+namespace host {
 namespace vk {
 
 class VkDecoderSnapshot {
@@ -56,12 +57,14 @@ decoder_snapshot_decl_postamble = """
 };
 
 }  // namespace vk
+}  // namespace host
 }  // namespace gfxstream
 """
 
 decoder_snapshot_impl_preamble ="""
 
 namespace gfxstream {
+namespace host {
 namespace vk {
 
 class VkDecoderSnapshot::Impl {
@@ -139,6 +142,7 @@ VkDecoderSnapshot::~VkDecoderSnapshot() = default;
 decoder_snapshot_namespace_postamble = """
 
 }  // namespace vk
+}  // namespace host
 }  // namespace gfxstream
 
 """
@@ -213,6 +217,10 @@ def extract_deps_vkCreateImageView(param, access, lenExpr, api, cgen):
     cgen.stmt("mReconstruction.addHandleDependency((const uint64_t*)%s, %s, (uint64_t)(uintptr_t)%s)" % \
               (access, lenExpr, "unboxed_to_boxed_non_dispatchable_VkImage(pCreateInfo->image)"))
 
+def extract_deps_vkCreateBufferView(param, access, lenExpr, api, cgen):
+    cgen.stmt("mReconstruction.addHandleDependency((const uint64_t*)%s, %s, (uint64_t)(uintptr_t)%s)" % \
+              (access, lenExpr, "unboxed_to_boxed_non_dispatchable_VkBuffer(pCreateInfo->buffer)"))
+
 def extract_deps_vkCreateGraphicsPipelines(param, access, lenExpr, api, cgen):
     cgen.beginFor("uint32_t i = 0", "i < createInfoCount", "++i")
     cgen.beginFor("uint32_t j = 0", "j < pCreateInfos[i].stageCount", "++j")
@@ -250,6 +258,7 @@ specialCaseDependencyExtractors = {
     "vkAllocateDescriptorSets" : extract_deps_vkAllocateDescriptorSets,
     "vkAllocateMemory" : extract_deps_vkAllocateMemory,
     "vkCreateImageView" : extract_deps_vkCreateImageView,
+    "vkCreateBufferView" : extract_deps_vkCreateBufferView,
     "vkCreateGraphicsPipelines" : extract_deps_vkCreateGraphicsPipelines,
     "vkCreateFramebuffer" : extract_deps_vkCreateFramebuffer,
     "vkUpdateDescriptorSets" : extract_deps_vkUpdateDescriptorSets,
@@ -353,15 +362,6 @@ def api_special_implementation_vkResetCommandBuffer(api, cgen):
     cgen.stmt("std::lock_guard<std::mutex> lock(mReconstructionMutex)")
     cgen.stmt("mReconstruction.removeDescendantsOfHandle((uint64_t)(uintptr_t)commandBuffer)")
 
-def api_special_implementation_vkQueueFlushCommandsGOOGLE(api, cgen):
-    api_special_implementation_common(api, cgen, "Tag_VkCmdOp")
-    cgen.stmt("mReconstruction.removeDescendantsOfHandle((uint64_t)(uintptr_t)commandBuffer)")
-    cgen.stmt("mReconstruction.addHandleDependency((const uint64_t*)(&handle), 1, (uint64_t)(uintptr_t)commandBuffer)")
-
-    cgen.line("// Track that `handle` depends on previously tracked dependencies (e.g. the handle for this `vkQueueFlushCommandsGOOGLE()` call depends on the `VkPipeline` handle from `vkCmdBindPipeline()`).")
-    cgen.stmt("mReconstruction.addHandleDependenciesForApiCallDependencies(apiCallHandle, handle)")
-
-
 def api_special_implementation_vkBindBufferMemory(api, cgen):
     api_special_implementation_common(api, cgen, "Tag_VkBindMemory")
     cgen.stmt("mReconstruction.addHandleDependency( (const uint64_t*)(&handle), 1, (uint64_t)(uintptr_t)unboxed_to_boxed_non_dispatchable_VkDeviceMemory(memory))")
@@ -386,7 +386,6 @@ apiSpecialImplementation = {
     "vkBindImageMemory2KHR": api_special_implementation_vkBindImageMemory2,
     "vkMapMemoryIntoAddressSpaceGOOGLE": api_special_implementation_vkMapMemoryIntoAddressSpaceGOOGLE,
     "vkGetBlobGOOGLE": api_special_implementation_vkMapMemoryIntoAddressSpaceGOOGLE,
-    "vkQueueFlushCommandsGOOGLE": api_special_implementation_vkQueueFlushCommandsGOOGLE,
     "vkResetCommandBuffer": api_special_implementation_vkResetCommandBuffer,
     "vkResetCommandPool": api_special_implementation_vkResetCommandPool,
     "vkCmdBindVertexBuffers": api_special_implementation_vkCmdBindVertexBuffers,

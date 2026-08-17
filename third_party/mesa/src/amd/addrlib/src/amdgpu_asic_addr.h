@@ -1,7 +1,7 @@
 /*
 ************************************************************************************************************************
 *
-*  Copyright (C) 2017-2024 Advanced Micro Devices, Inc. All rights reserved.
+*  Copyright (C) 2017-2026 Advanced Micro Devices, Inc. All rights reserved.
 *  SPDX-License-Identifier: MIT
 *
 ***********************************************************************************************************************/
@@ -27,12 +27,13 @@
 #define FAMILY_NV      0x8F //# 143 / Navi: 10
 #define FAMILY_VGH     0x90 //# 144 / Van Gogh
 #define FAMILY_NV3     0x91 //# 145 / Navi: 3x
-#define FAMILY_GFX1150 0x96
+#define FAMILY_STX     0x96
 #define FAMILY_PHX     0x94 //# 148 / Phoenix
+#define FAMILY_GFX1170 0x9A
 #define FAMILY_RMB     0x92 //# 146 / Rembrandt
 #define FAMILY_RPL     0x95 //# 149 / Raphael
 #define FAMILY_MDN     0x97 //# 151 / Mendocino
-#define FAMILY_GFX12   0x98
+#define FAMILY_NV4     0x98
 
 // AMDGPU_FAMILY_IS(familyId, familyName)
 #define FAMILY_IS(f, fn)     (f == FAMILY_##fn)
@@ -90,7 +91,7 @@
 #define AMDGPU_NAVI10_RANGE     0x01, 0x0A //# 1  <= x < 10
 #define AMDGPU_NAVI12_RANGE     0x0A, 0x14 //# 10 <= x < 20
 #define AMDGPU_NAVI14_RANGE     0x14, 0x28 //# 20 <= x < 40
-#define AMDGPU_GFX1013_RANGE    0x84, 0x85 //# 132 <= x < 133
+#define AMDGPU_GFX1013_RANGE    0x82, 0x86 //# 130 <= x < 134
 #define AMDGPU_NAVI21_RANGE     0x28, 0x32 //# 40  <= x < 50
 #define AMDGPU_NAVI22_RANGE     0x32, 0x3C //# 50  <= x < 60
 #define AMDGPU_NAVI23_RANGE     0x3C, 0x46 //# 60  <= x < 70
@@ -101,14 +102,16 @@
 #define AMDGPU_NAVI31_RANGE     0x01, 0x10 //# 01 <= x < 16
 #define AMDGPU_NAVI32_RANGE     0x20, 0xFF //# 32 <= x < 255
 #define AMDGPU_NAVI33_RANGE     0x10, 0x20 //# 16 <= x < 32
-#define AMDGPU_GFX1150_RANGE    0x01, 0x40 //# 1 <= x < 64
-#define AMDGPU_GFX1151_RANGE    0xC0, 0xFF //# 192 <= x < 255
-#define AMDGPU_GFX1152_RANGE    0x40, 0x50 //# 64 <= x < 80
+#define AMDGPU_STRIX1_RANGE     0x01, 0x40 //# 1 <= x < 64
+#define AMDGPU_STRIX_HALO_RANGE 0xC0, 0xD0 //# 192 <= x < 208
+#define AMDGPU_GFX1156_RANGE    0xD0, 0xFF //# 208 <= x < 255
+#define AMDGPU_KRACKAN1_RANGE   0x40, 0x50 //# 64 <= x < 80
 #define AMDGPU_GFX1153_RANGE    0x50, 0xC0 //# 80 <= x < 192
 #define AMDGPU_PHOENIX1_RANGE      0x01, 0x80 //# 1 <= x < 128
 #define AMDGPU_PHOENIX2_RANGE      0x80, 0xC0 //# 128 <= x < 192
 #define AMDGPU_HAWK_POINT1_RANGE   0xC0, 0xF0 //# 192 <= x < 240
 #define AMDGPU_HAWK_POINT2_RANGE   0xF0, 0xFF //# 240 <= x < 255
+#define AMDGPU_GFX1170_RANGE        0x01, 0x40 //# 1 <= x < 64
 
 #define AMDGPU_REMBRANDT_RANGE  0x01, 0xFF //# 01 <= x < 255
 #define AMDGPU_RAPHAEL_RANGE    0x01, 0xFF //# 1 <= x < max
@@ -181,14 +184,16 @@
 #define ASICREV_IS_NAVI31_P(r)         ASICREV_IS(r, NAVI31)
 #define ASICREV_IS_NAVI32_P(r)         ASICREV_IS(r, NAVI32)
 #define ASICREV_IS_NAVI33_P(r)         ASICREV_IS(r, NAVI33)
-#define ASICREV_IS_GFX1150(r)          ASICREV_IS(r, GFX1150)
-#define ASICREV_IS_GFX1151(r)          ASICREV_IS(r, GFX1151)
-#define ASICREV_IS_GFX1152(r)          ASICREV_IS(r, GFX1152)
+#define ASICREV_IS_STRIX1(r)           ASICREV_IS(r, STRIX1)
+#define ASICREV_IS_STRIX_HALO(r)       ASICREV_IS(r, STRIX_HALO)
+#define ASICREV_IS_GFX1156(r)          ASICREV_IS(r, GFX1156)
+#define ASICREV_IS_KRACKAN1(r)         ASICREV_IS(r, KRACKAN1)
 #define ASICREV_IS_GFX1153(r)          ASICREV_IS(r, GFX1153)
 #define ASICREV_IS_PHOENIX(r)          ASICREV_IS(r, PHOENIX)
 #define ASICREV_IS_PHOENIX2(r)         ASICREV_IS(r, PHOENIX2)
 #define ASICREV_IS_HAWK_POINT1(r)      ASICREV_IS(r, HAWK_POINT1)
 #define ASICREV_IS_HAWK_POINT2(r)      ASICREV_IS(r, HAWK_POINT2)
+#define ASICREV_IS_GFX1170(r)         ASICREV_IS(r, GFX1170)
 
 #define ASICREV_IS_REMBRANDT(r)        ASICREV_IS(r, REMBRANDT)
 #define ASICREV_IS_RAPHAEL(r)          ASICREV_IS(r, RAPHAEL)

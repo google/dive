@@ -403,7 +403,7 @@ nir_format_unpack_11f11f10f(nir_builder *b, nir_def *packed)
    chans[2] = nir_mask_shift(b, packed, 0xffc00000, -17);
 
    for (unsigned i = 0; i < 3; i++)
-      chans[i] = nir_unpack_half_2x16_split_x(b, chans[i]);
+      chans[i] = nir_f2f32(b, nir_u2u16(b, chans[i]));
 
    return nir_vec(b, chans, 3);
 }
@@ -446,7 +446,7 @@ nir_format_unpack_r9g9b9e5(nir_builder *b, nir_def *packed)
    exp = nir_iadd_imm(b, exp, 127 - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS);
    nir_def *scale = nir_ishl_imm(b, exp, 23);
 
-   return nir_fmul(b, rgb, scale);
+   return nir_fmul(b, nir_u2f32(b, rgb), scale);
 }
 
 nir_def *
@@ -455,15 +455,14 @@ nir_format_pack_r9g9b9e5(nir_builder *b, nir_def *color)
    /* See also float3_to_rgb9e5 */
 
    /* First, we need to clamp it to range. The fmax(color, 0) will also flush
-    * NaN to 0.  We set exact to ensure that nothing optimizes this behavior
-    * away from us.
+    * NaN to 0.  We set fp_math_ctrl to ensure this.
     */
-   float exact_save = b->exact;
-   b->exact = true;
+   unsigned old_fp_math_ctrl = b->fp_math_ctrl;
+   b->fp_math_ctrl |= nir_fp_preserve_nan | nir_fp_preserve_inf;
    nir_def *clamped =
       nir_fmin(b, nir_fmax(b, color, nir_imm_float(b, 0)),
                nir_imm_float(b, MAX_RGB9E5));
-   b->exact = exact_save;
+   b->fp_math_ctrl = old_fp_math_ctrl;
 
    /* maxrgb.u = MAX3(rc.u, gc.u, bc.u); */
    nir_def *maxu = nir_umax(b, nir_channel(b, clamped, 0),
@@ -608,7 +607,7 @@ nir_format_unpack_rgba(nir_builder *b, nir_def *packed,
       case UTIL_FORMAT_TYPE_FLOAT:
          switch (chan->size) {
          case 16:
-            comps[c] = nir_unpack_half_2x16_split_x(b, raw);
+            comps[c] = nir_f2f32(b, nir_u2u16(b, raw));
             break;
 
          case 32:

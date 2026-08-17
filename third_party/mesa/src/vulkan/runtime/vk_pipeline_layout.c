@@ -29,7 +29,7 @@
 #include "vk_device.h"
 #include "vk_log.h"
 
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 static void
 vk_pipeline_layout_init(struct vk_device *device,

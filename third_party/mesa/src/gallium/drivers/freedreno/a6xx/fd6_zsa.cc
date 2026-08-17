@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "pipe/p_state.h"
 #include "util/u_memory.h"
 #include "util/u_string.h"
@@ -100,7 +98,7 @@ fd6_zsa_state_create(struct pipe_context *pctx,
     *  dEQP-VK.dynamic_state.ds_state.depth_bounds_1
     */
    if (cso->depth_bounds_test && !cso->depth_enabled &&
-       ctx->screen->info->a6xx.depth_bounds_require_depth_test_quirk) {
+       ctx->screen->info->props.depth_bounds_require_depth_test_quirk) {
       force_z_test_enable = true;
       depth_func = FUNC_ALWAYS;
    }
@@ -187,13 +185,19 @@ fd6_zsa_state_create(struct pipe_context *pctx,
       bool depth_clamp_enable = (i & FD6_ZSA_DEPTH_CLAMP);
       bool no_alpha = (i & FD6_ZSA_NO_ALPHA);
 
-      fd_crb crb(ctx->pipe, 9);
+      fd_crb crb(ctx->pipe, 10);
 
       crb.add(A6XX_RB_ALPHA_TEST_CNTL(
          .alpha_ref = (uint32_t)(cso->alpha_ref_value * 255.0f) & 0xff,
          .alpha_test = cso->alpha_enabled && !no_alpha,
          .alpha_test_func = (enum adreno_compare_func)cso->alpha_func,
       ));
+
+      if (CHIP >= A8XX) {
+         crb.add(SP_ALPHA_TEST_CNTL(CHIP,
+            .alpha_test = cso->alpha_enabled && !no_alpha,
+         ));
+      }
 
       crb.add(A6XX_RB_STENCIL_CNTL(
          .stencil_enable = fs->enabled,
@@ -220,6 +224,7 @@ fd6_zsa_state_create(struct pipe_context *pctx,
          .z_clamp_enable = depth_clamp_enable || CHIP >= A7XX,
          .z_read_enable = cso->depth_enabled || cso->depth_bounds_test,
          .z_bounds_enable = cso->depth_bounds_test,
+         .o_depth_01_clamp_en = CHIP >= A8XX,
       ));
 
       crb.add(GRAS_SU_DEPTH_CNTL(CHIP, cso->depth_enabled));
@@ -232,7 +237,7 @@ fd6_zsa_state_create(struct pipe_context *pctx,
          crb.add(A6XX_RB_DEPTH_BOUND_MAX(cso->depth_bounds_max));
       }
 
-      so->stateobj[i] = crb.ring();
+      so->stateobj[i] = crb;
    }
 
    return so;

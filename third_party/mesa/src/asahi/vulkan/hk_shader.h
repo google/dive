@@ -8,9 +8,9 @@
 #pragma once
 
 #include "asahi/compiler/agx_compile.h"
+#include "poly/nir/poly_nir.h"
 #include "util/macros.h"
 #include "agx_linker.h"
-#include "agx_nir_lower_gs.h"
 #include "agx_nir_lower_vbo.h"
 #include "agx_pack.h"
 #include "agx_usc.h"
@@ -20,7 +20,6 @@
 #include "hk_device_memory.h"
 #include "hk_private.h"
 
-#include "nir_xfb_info.h"
 #include "shader_enums.h"
 #include "vk_pipeline_cache.h"
 
@@ -94,7 +93,7 @@ struct hk_shader_info {
          struct hk_tess_info info;
       } tess;
 
-      struct agx_gs_info gs;
+      struct poly_gs_info gs;
 
       /* Used to initialize the union for other stages */
       uint8_t _pad[32];
@@ -342,7 +341,8 @@ hk_buffer_addr_format(VkPipelineRobustnessBufferBehaviorEXT robustness)
    }
 }
 
-bool hk_lower_uvs_index(nir_shader *s, unsigned vs_uniform_base);
+bool hk_lower_uvs_index(nir_shader *s, mesa_shader_stage sw_stage,
+                        unsigned nr_vbos);
 
 bool
 hk_nir_lower_descriptors(nir_shader *nir,
@@ -371,23 +371,3 @@ hk_get_nir_options(struct vk_physical_device *vk_pdev, mesa_shader_stage stage,
 struct hk_api_shader *hk_meta_shader(struct hk_device *dev,
                                      hk_internal_builder_t builder, void *data,
                                      size_t data_size);
-
-struct hk_passthrough_gs_key {
-   /* Bit mask of outputs written by the VS/TES, to be passed through */
-   uint64_t outputs;
-
-   /* Clip/cull sizes, implies clip/cull written in output */
-   uint8_t clip_distance_array_size;
-   uint8_t cull_distance_array_size;
-
-   /* Transform feedback buffer strides */
-   uint8_t xfb_stride[MAX_XFB_BUFFERS];
-
-   /* Decomposed primitive */
-   enum mesa_prim prim;
-
-   /* Transform feedback info. Must add nir_xfb_info_size to get the key size */
-   nir_xfb_info xfb_info;
-};
-
-void hk_nir_passthrough_gs(struct nir_builder *b, const void *key_);

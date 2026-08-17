@@ -240,14 +240,18 @@ isl_gfx20_choose_image_alignment_el(const struct isl_device *dev,
 
       /* WA_22018390030:
        *
-       * Don't choose VALIGN_4 on Xe2 for color, non-volumetric, Tile4 surfaces
-       * which can be fast cleared. We choose the next smallest option instead,
-       * VALIGN_8.
+       * Don't choose VALIGN_4 on Xe2 for color, non-volumetric, Tile4
+       * surfaces which can be fast cleared. We choose the next smallest
+       * option instead, VALIGN_8.
+       *
+       * Bspec 57340 and HSD 22021327133 state that this also applies to
+       * Xe3P+.
        */
       if (!INTEL_DEBUG(DEBUG_NO_FAST_CLEAR) &&
-          intel_needs_workaround(dev->info, 22018390030) &&
           tiling == ISL_TILING_4 &&
           info->dim != ISL_SURF_DIM_3D) {
+         assert(intel_needs_workaround(dev->info, 22018390030) ||
+                ISL_GFX_VER(dev) >= 35);
          image_align_el->h = 8;
       }
    } else if (fmtl->bpb >= 64) {

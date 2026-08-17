@@ -2,7 +2,7 @@
 
 set -ex
 
-uncollapsed_section_start llvm-spirv "Building LLVM-SPIRV-Translator"
+section_start llvm-spirv "Building LLVM-SPIRV-Translator"
 
 if [ "${LLVM_VERSION:?llvm version not set}" -ge 18 ]; then
   VER="${LLVM_VERSION}.1.0"

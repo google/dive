@@ -312,9 +312,9 @@ static inline void
 nvc0_resource_fence(struct nvc0_context *nvc0, struct nv04_resource *res, uint32_t flags)
 {
    if (res->mm) {
-      nouveau_fence_ref(nvc0->base.fence, &res->fence);
+      nouveau_fence_ref(nvc0->base.fence, &res->fence, nvc0->base.screen);
       if (flags & NOUVEAU_BO_WR)
-         nouveau_fence_ref(nvc0->base.fence, &res->fence_wr);
+         nouveau_fence_ref(nvc0->base.fence, &res->fence_wr, nvc0->base.screen);
    }
 }
 
@@ -378,6 +378,7 @@ bool nvc0_state_validate_3d(struct nvc0_context *, uint32_t);
 
 /* nvc0_surface.c */
 extern void nvc0_clear(struct pipe_context *, unsigned buffers,
+                       uint32_t color_clear_mask, uint8_t stencil_clear_mask,
                        const struct pipe_scissor_state *scissor_state,
                        const union pipe_color_union *color,
                        double depth, unsigned stencil);

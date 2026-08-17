@@ -5,11 +5,12 @@
 
 #include "v3d_pps_driver.h"
 
-#include <perfetto.h>
+#include "util/perf/u_perfetto.h"
 #include <string.h>
 #include <string>
 
 #include "perfcntrs/v3d_perfcntrs.h"
+#include "util/os_misc.h"
 #include <xf86drm.h>
 
 namespace pps
@@ -24,7 +25,7 @@ V3DDriver::get_min_sampling_period_ns()
 bool
 V3DDriver::init_perfcnt()
 {
-   const char *v3d_ds_counter_env = getenv("V3D_DS_COUNTER");
+   const char *v3d_ds_counter_env = os_get_option("V3D_DS_COUNTER");
    if (!v3d_ds_counter_env || v3d_ds_counter_env[0] == '\0')
       return false;
 

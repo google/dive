@@ -59,6 +59,7 @@ xe_exec_process_syncs(struct anv_queue *queue,
                       uint32_t extra_sync_count, const struct drm_xe_sync *extra_syncs,
                       struct anv_utrace_submit *utrace_submit,
                       bool is_companion_rcs_queue,
+                      bool skip_bind_timeline,
                       struct drm_xe_sync **ret, uint32_t *ret_count)
 {
    struct anv_device *device = queue->device;
@@ -71,7 +72,7 @@ xe_exec_process_syncs(struct anv_queue *queue,
    const uint32_t num_syncs = wait_count + signal_count + extra_sync_count +
                               (has_utrace_sync ? 1 : 0) +
                               ((queue->sync && !is_companion_rcs_queue) ? 1 : 0) +
-                              1 /* vm bind sync */;
+                              (!skip_bind_timeline ? 1 : 0) /* vm bind sync */;
    struct drm_xe_sync *xe_syncs = vk_zalloc(&device->vk.alloc,
                                             sizeof(*xe_syncs) * num_syncs, 8,
                                             VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
@@ -104,15 +105,17 @@ xe_exec_process_syncs(struct anv_queue *queue,
    if (queue->sync && !is_companion_rcs_queue)
       xe_syncs[count++] = vk_sync_to_drm_xe_sync(queue->sync, 0, TYPE_SIGNAL);
 
-   /* vm bind sync */
-   xe_syncs[count] = (struct drm_xe_sync) {
-      .type = DRM_XE_SYNC_TYPE_TIMELINE_SYNCOBJ,
-      .flags = 0 /* TYPE_WAIT */,
-      .addr = 0, /* init union to 0 before setting .handle */
-      .timeline_value = intel_bind_timeline_get_last_point(&device->bind_timeline),
-   };
-   xe_syncs[count++].handle =
-      intel_bind_timeline_get_syncobj(&device->bind_timeline);
+   if (!skip_bind_timeline) {
+      /* vm bind sync */
+      xe_syncs[count] = (struct drm_xe_sync) {
+         .type = DRM_XE_SYNC_TYPE_TIMELINE_SYNCOBJ,
+         .flags = 0 /* TYPE_WAIT */,
+         .addr = 0, /* init union to 0 before setting .handle */
+         .timeline_value = intel_bind_timeline_get_last_point(&device->bind_timeline),
+      };
+      xe_syncs[count++].handle =
+         intel_bind_timeline_get_syncobj(&device->bind_timeline);
+   }
 
    assert(count == num_syncs);
    *ret = xe_syncs;
@@ -142,8 +145,11 @@ xe_exec_ioctl_impl(struct anv_queue *queue, struct drm_xe_exec *exec,
    struct anv_device *device = queue->device;
 
    int ret = xe_gem_exec_ioctl(device->fd, device->info, exec);
-   if (ret)
-      return vk_queue_set_lost(&queue->vk, "%s(%d) failed: %m", func, line);
+   if (ret) {
+      if (anv_needs_printf_buffer())
+         vk_check_printf_status(&device->vk, &device->printf);
+      return anv_queue_set_lost(queue, errno, "%s(%d) failed: %m", func, line);
+   }
 
    return VK_SUCCESS;
 }
@@ -195,7 +201,7 @@ xe_queue_exec_async(struct anv_async_submit *submit,
    if (device->physical->memory.need_flush &&
        anv_bo_needs_host_cache_flush(device->utrace_bo_pool.bo_alloc_flags)) {
       util_dynarray_foreach(&submit->batch_bos, struct anv_bo *, bo)
-         intel_flush_range((*bo)->map, (*bo)->size);
+         util_flush_range((*bo)->map, (*bo)->size);
    }
 #endif
 
@@ -240,6 +246,7 @@ xe_companion_rcs_queue_exec_locked(struct anv_queue *queue,
                                   0, NULL, /* extra_syncs */
                                   NULL /* utrace_submit */,
                                   true /* is_companion_rcs_queue */,
+                                  false /* skip_bind_timeline */,
                                   &xe_syncs,
                                   &xe_syncs_count);
    if (result != VK_SUCCESS)
@@ -282,6 +289,11 @@ xe_queue_exec_locked(struct anv_queue *queue,
    struct anv_device *device = queue->device;
    VkResult result;
 
+   const bool can_skip_bind_timeline = cmd_buffer_count == 0;
+   const bool is_queue_wait_idle = can_skip_bind_timeline &&
+      wait_count == 0 && signal_count == 1 &&
+      !(signals[0].sync->flags & VK_SYNC_IS_SHAREABLE);
+
    struct drm_xe_sync *xe_syncs = NULL;
    uint32_t xe_syncs_count = 0;
    result = xe_exec_process_syncs(queue, wait_count, waits,
@@ -289,6 +301,7 @@ xe_queue_exec_locked(struct anv_queue *queue,
                                   0, NULL, /* extra_syncs */
                                   utrace_submit,
                                   false, /* is_companion_rcs_queue */
+                                  can_skip_bind_timeline,
                                   &xe_syncs, &xe_syncs_count);
    if (result != VK_SUCCESS)
       return result;
@@ -303,12 +316,13 @@ xe_queue_exec_locked(struct anv_queue *queue,
 
    struct drm_xe_exec exec = {
       .exec_queue_id = queue->exec_queue_id,
-      .num_batch_buffer = 1,
       .syncs = (uintptr_t)xe_syncs,
       .num_syncs = xe_syncs_count,
    };
 
    if (cmd_buffer_count) {
+      exec.num_batch_buffer = 1;
+
       if (unlikely(device->physical->measure_device.config)) {
          for (uint32_t i = 0; i < cmd_buffer_count; i++)
             anv_measure_submit(cmd_buffers[i]);
@@ -326,7 +340,8 @@ xe_queue_exec_locked(struct anv_queue *queue,
       struct anv_batch_bo *first_batch_bo = list_first_entry(&first_cmd_buffer->batch_bos,
                                                              struct anv_batch_bo, link);
       exec.address = first_batch_bo->bo->offset;
-   } else {
+   } else if (!is_queue_wait_idle) {
+      exec.num_batch_buffer = 1;
       exec.address = device->trivial_batch_bo->offset;
    }
 

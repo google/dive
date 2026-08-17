@@ -5,6 +5,7 @@
  */
 
 #include "ac_debug.h"
+#include "ac_cmdbuf.h"
 #include "ac_gpu_info.h"
 #include "ac_pm4.h"
 
@@ -397,17 +398,6 @@ void ac_pm4_set_reg(struct ac_pm4_state *state, unsigned reg, uint32_t val)
 }
 
 void
-ac_pm4_set_reg_idx3(struct ac_pm4_state *state, unsigned reg, uint32_t val)
-{
-   if (state->info->uses_kernel_cu_mask) {
-      assert(state->info->gfx_level >= GFX10);
-      ac_pm4_set_reg_custom(state, reg - SI_SH_REG_OFFSET, val, PKT3_SET_SH_REG_INDEX, 3);
-   } else {
-      ac_pm4_set_reg(state, reg, val);
-   }
-}
-
-void
 ac_pm4_clear_state(struct ac_pm4_state *state, const struct radeon_info *info,
                    bool debug_sqtt, bool is_compute_queue)
 {
@@ -446,4 +436,12 @@ ac_pm4_free_state(struct ac_pm4_state *state)
       return;
 
    free(state);
+}
+
+void
+ac_pm4_emit_commands(struct ac_cmdbuf *cs, const struct ac_pm4_state *state)
+{
+   ac_cmdbuf_begin(cs);
+   ac_cmdbuf_emit_array(state->pm4, state->ndw);
+   ac_cmdbuf_end();
 }

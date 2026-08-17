@@ -135,7 +135,7 @@ intel_get_urb_config(const struct intel_device_info *devinfo,
     * Round them all up.
     */
    for (int i = MESA_SHADER_VERTEX; i <= MESA_SHADER_GEOMETRY; i++) {
-      min_entries[i] = ALIGN(min_entries[i], granularity[i]);
+      min_entries[i] = align(min_entries[i], granularity[i]);
    }
 
    unsigned entry_size_bytes[4];
@@ -323,7 +323,7 @@ intel_get_mesh_urb_config(const struct intel_device_info *devinfo,
     *       in slices beyond Slice0) of the MESH URB allocation, specified in
     *       multiples of 8 KB.
     */
-   push_constant_kb = ALIGN(push_constant_kb, 8);
+   push_constant_kb = align(push_constant_kb, 8);
    total_urb_kb -= push_constant_kb;
    const unsigned total_urb_avail_mesh_task_kb = total_urb_kb;
 
@@ -353,16 +353,18 @@ intel_get_mesh_urb_config(const struct intel_device_info *devinfo,
       }
    }
 
+   const unsigned min_mesh = MAX2(devinfo->urb.min_entries[MESA_SHADER_MESH], 1);
+   const unsigned min_task = MAX2(devinfo->urb.min_entries[MESA_SHADER_TASK], 1);
    /* 3DSTATE_URB_ALLOC_MESH_BODY and 3DSTATE_URB_ALLOC_TASK_BODY says
     *
     *   MESH Number of URB Entries must be divisible by 8 if the MESH/TASK URB
     *   Entry Allocation Size is less than 9 512-bit URB entries.
     */
-   const unsigned min_mesh_entries = urb_cfg->size[MESA_SHADER_MESH] < 9 ? 8 : 1;
-   const unsigned min_task_entries = urb_cfg->size[MESA_SHADER_TASK] < 9 ? 8 : 1;
-   const unsigned min_mesh_urb_kb = ALIGN(urb_cfg->size[MESA_SHADER_MESH] *
+   const unsigned min_mesh_entries = urb_cfg->size[MESA_SHADER_MESH] < 9 ? 8 : min_mesh;
+   const unsigned min_task_entries = urb_cfg->size[MESA_SHADER_TASK] < 9 ? 8 : min_task;
+   const unsigned min_mesh_urb_kb = align(urb_cfg->size[MESA_SHADER_MESH] *
                                           min_mesh_entries * 64, 1024) / 1024;
-   const unsigned min_task_urb_kb = ALIGN(urb_cfg->size[MESA_SHADER_TASK] *
+   const unsigned min_task_urb_kb = align(urb_cfg->size[MESA_SHADER_TASK] *
                                           min_task_entries * 64, 1024) / 1024;
 
    total_urb_kb -= (min_mesh_urb_kb + min_task_urb_kb);
@@ -380,8 +382,8 @@ intel_get_mesh_urb_config(const struct intel_device_info *devinfo,
     *       in slices beyond Slice0) of the TASK URB allocation, specified in
     *       multiples of 8 KB.
     */
-   if ((total_urb_avail_mesh_task_kb - ALIGN(mesh_urb_kb, 8)) >= min_task_entries) {
-      mesh_urb_kb = ALIGN(mesh_urb_kb, 8);
+   if ((total_urb_avail_mesh_task_kb - align(mesh_urb_kb, 8)) >= min_task_entries) {
+      mesh_urb_kb = align(mesh_urb_kb, 8);
    } else {
       mesh_urb_kb = ROUND_DOWN_TO(mesh_urb_kb, 8);
    }
@@ -394,7 +396,7 @@ intel_get_mesh_urb_config(const struct intel_device_info *devinfo,
 
    urb_cfg->start[MESA_SHADER_MESH] = next_address_8kb;
    urb_cfg->entries[MESA_SHADER_MESH] =
-      MIN2((mesh_urb_kb * 16) / urb_cfg->size[MESA_SHADER_MESH], 1548);
+      MIN2((mesh_urb_kb * 16) / urb_cfg->size[MESA_SHADER_MESH], devinfo->urb.max_entries[MESA_SHADER_MESH]);
    urb_cfg->entries[MESA_SHADER_MESH] =
       urb_cfg->size[MESA_SHADER_MESH] < 9 ?
       ROUND_DOWN_TO(urb_cfg->entries[MESA_SHADER_MESH], 8) :
@@ -407,7 +409,7 @@ intel_get_mesh_urb_config(const struct intel_device_info *devinfo,
    task_urb_kb = total_urb_avail_mesh_task_kb - mesh_urb_kb;
    if (urb_cfg->size[MESA_SHADER_TASK] > 0) {
       urb_cfg->entries[MESA_SHADER_TASK] =
-         MIN2((task_urb_kb * 16) / urb_cfg->size[MESA_SHADER_TASK], 1548);
+         MIN2((task_urb_kb * 16) / urb_cfg->size[MESA_SHADER_TASK], devinfo->urb.max_entries[MESA_SHADER_TASK]);
       urb_cfg->entries[MESA_SHADER_TASK] =
          urb_cfg->size[MESA_SHADER_TASK] < 9 ?
          ROUND_DOWN_TO(urb_cfg->entries[MESA_SHADER_TASK], 8) :

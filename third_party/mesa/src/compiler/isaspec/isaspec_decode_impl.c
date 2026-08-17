@@ -523,7 +523,7 @@ isa_decode_field(struct decode_scope *scope, const char *field_name)
 	bitmask_t val;
 	const struct isa_field *field = resolve_field(scope, field_name, strlen(field_name), &val);
 	if (!field) {
-		decode_error(scope->state, "no field '%s'", field_name);
+		decode_error(scope->state, "no field '%s' in '%s'", field_name, scope->bitset->name);
 		return 0;
 	}
 
@@ -642,14 +642,31 @@ display_field(struct decode_scope *scope, const char *field_name)
 			isa_print(print, "+%"PRIu64, val);
 		}
 		break;
-	case TYPE_FLOAT:
+	case TYPE_FLOAT: {
+		float f;
+		const char *fmt;
 		if (width == 16) {
-			isa_print(print, "%f", _mesa_half_to_float(val));
+			f = _mesa_half_to_float(val);
+			fmt = "%.5g";
 		} else {
 			assert(width == 32);
-			isa_print(print, "%f", uif(val));
+			f = uif(val);
+			fmt = "%.9g";
+		}
+		if (isnan(f)) {
+			/* IEEE 754 declares the sign optional when converting
+			 * NaN to strings, so manually extract it from the raw
+			 * value and print it instead of relying on printf().
+			 */
+			bool negative = (width == 16) ? (val >> 15) & 1 : (val >> 31) & 1;
+			isa_print(print, "%snan", negative ? "-" : "");
+		} else if (f == truncf(f) && isfinite(f)) {
+			isa_print(print, "%.1f", f);
+		} else {
+			isa_print(print, fmt, f);
 		}
 		break;
+	}
 	case TYPE_BOOL:
 		if (field->display) {
 			if (val) {
@@ -971,10 +988,8 @@ isa_disasm(void *bin, int sz, FILE *out, const struct isa_decode_options *option
 	state->num_instr = sz / (BITMASK_WORDS * sizeof(BITSET_WORD));
 
 	if (state->options->branch_labels) {
-		state->branch_targets = rzalloc_size(state,
-				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
-		state->call_targets = rzalloc_size(state,
-				sizeof(BITSET_WORD) * BITSET_WORDS(state->num_instr));
+		state->branch_targets = BITSET_RZALLOC(state, state->num_instr);
+		state->call_targets = BITSET_RZALLOC(state, state->num_instr);
 
 		/* Do a pre-pass to find all the branch targets: */
 // GOOGLE: Windows uses NUL as the name for a null device.

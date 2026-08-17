@@ -48,6 +48,15 @@ nir_fixup_is_exported(nir_shader *nir)
    nir_foreach_function(func, nir) {
       if (_mesa_set_search(shadowed, func->name)) {
          func->is_exported = func->is_entrypoint;
+      } else {
+         /* Starting with LLVM-22 we don't see the wrappers anymore, so we
+          * can simply export every entrypoint.
+          *
+          * We could do an LLVM version check here, but that's going to be a
+          * mess making nir depending on LLVM in any way and this seems to work
+          * for both situations.
+          */
+         func->is_exported |= func->is_entrypoint;
       }
 
       if (func->name[0] == '_') {

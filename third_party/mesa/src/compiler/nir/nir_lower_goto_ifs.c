@@ -346,7 +346,9 @@ loop_routing_start(struct routes *routing, nir_builder *b,
       routing->brk.fork = fork;
       routing->brk.reachable = fork_reachable(fork);
    }
-   nir_push_loop(b);
+
+   nir_loop *loop = nir_push_loop(b);
+   nir_loop_add_continue_construct(loop);
 }
 
 /**
@@ -977,6 +979,9 @@ nir_lower_goto_ifs(nir_shader *shader)
       if (nir_lower_goto_ifs_impl(impl))
          progress = true;
    }
+
+   if (progress)
+      nir_lower_continue_constructs(shader);
 
    return progress;
 }

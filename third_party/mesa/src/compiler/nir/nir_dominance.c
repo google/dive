@@ -73,9 +73,7 @@ static bool
 calc_dominance(nir_block *block)
 {
    nir_block *new_idom = NULL;
-   set_foreach(&block->predecessors, entry) {
-      nir_block *pred = (nir_block *)entry->key;
-
+   nir_foreach_pred(pred, block) {
       if (pred->imm_dom) {
          if (new_idom)
             new_idom = intersect(pred, new_idom);
@@ -95,10 +93,8 @@ calc_dominance(nir_block *block)
 static bool
 calc_dom_frontier(nir_block *block)
 {
-   if (block->predecessors.entries > 1) {
-      set_foreach(&block->predecessors, entry) {
-         nir_block *runner = (nir_block *)entry->key;
-
+   if (nir_block_num_preds(block) > 1) {
+      nir_foreach_pred(runner, block) {
          /* Skip unreachable predecessors */
          if (runner->imm_dom == NULL)
             continue;
@@ -226,11 +222,9 @@ nir_calc_dominance(nir_shader *shader)
 bool
 nir_block_dominates(nir_block *parent, nir_block *child)
 {
-   assert(nir_cf_node_get_function(&parent->cf_node) ==
-          nir_cf_node_get_function(&child->cf_node));
+   assert(parent->impl == child->impl);
 
-   assert(nir_cf_node_get_function(&parent->cf_node)->valid_metadata &
-          nir_metadata_dominance);
+   assert(parent->impl->valid_metadata & nir_metadata_dominance);
 
    /* If a block is unreachable, then nir_block::dom_pre_index == UINT32_MAX
     * and nir_block::dom_post_index == 0.  This allows us to trivially handle
@@ -243,10 +237,8 @@ nir_block_dominates(nir_block *parent, nir_block *child)
 bool
 nir_block_is_unreachable(nir_block *block)
 {
-   assert(nir_cf_node_get_function(&block->cf_node)->valid_metadata &
-          nir_metadata_dominance);
-   assert(nir_cf_node_get_function(&block->cf_node)->valid_metadata &
-          nir_metadata_block_index);
+   assert(block->impl->valid_metadata & nir_metadata_dominance);
+   assert(block->impl->valid_metadata & nir_metadata_block_index);
 
    /* Unreachable blocks have no dominator.  The only reachable block with no
     * dominator is the start block which has index 0.

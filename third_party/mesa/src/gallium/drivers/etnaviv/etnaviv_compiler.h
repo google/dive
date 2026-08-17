@@ -35,6 +35,7 @@
 #include "pipe/p_shader_tokens.h"
 #include "compiler/shader_enums.h"
 #include "util/disk_cache.h"
+#include "util/u_shader_variant_cache.h"
 
 /* XXX some of these are pretty arbitrary limits, may be better to switch
  * to dynamic allocation at some point.
@@ -50,6 +51,7 @@
  * setup.
  */
 struct etna_compiler {
+   unsigned max_render_targets;
    uint32_t shader_count;
    struct ra_regs *regs;
 
@@ -72,10 +74,9 @@ struct etna_shader_io_file {
 
 /* shader object, for linking */
 struct etna_shader_variant {
-   uint32_t id; /* for debug */
+   struct util_shader_variant base;
 
-   /* shader variants form a linked list */
-   struct etna_shader_variant *next;
+   uint32_t id; /* for debug */
 
    /* replicated here to avoid passing extra ptrs everywhere */
    struct etna_shader *shader;
@@ -101,7 +102,6 @@ struct etna_shader_variant {
 
    mesa_shader_stage stage;
    uint32_t code_size; /* code size in uint32 words */
-   unsigned num_loops;
    unsigned num_temps;
 
    /* ETNA_DIRTY_* flags that, when set in context dirty, mean that the

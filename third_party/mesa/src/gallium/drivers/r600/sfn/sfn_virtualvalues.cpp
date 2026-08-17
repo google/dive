@@ -49,7 +49,7 @@ VirtualValue::VirtualValue(int sel, int chan, Pin pin):
     m_pins(pin)
 {
 #if __cpp_exceptions >= 199711L
-   ASSERT_OR_THROW(m_sel < virtual_register_base || pin != pin_fully,
+   ASSERT_OR_THROW(m_sel < g_registers_end || pin != pin_fully,
                    "Register is virtual but pinned to sel");
 #endif
 }
@@ -260,6 +260,19 @@ Register::can_switch_to_chan(int c)
          return false;
    }
    return true;
+}
+
+void
+Register::pin_to_chan()
+{
+   auto p = pin();
+   if (p == pin_fully || p == pin_chan || p == pin_chgr || p == pin_array)
+      return;
+
+   if (p != pin_group)
+      set_pin(pin_chan);
+   else
+      set_pin(pin_chgr);
 }
 
 void

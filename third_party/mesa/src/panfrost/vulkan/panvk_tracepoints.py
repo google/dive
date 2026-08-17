@@ -24,10 +24,11 @@ from u_trace import TracepointArgStruct as ArgStruct  # noqa: E402
 from u_trace import utrace_generate, utrace_generate_perfetto_utils  # noqa: E402
 
 Header('vulkan/vulkan_core.h', scope=HeaderScope.HEADER)
-ForwardDecl('struct pan_fb_info')
+ForwardDecl('struct pan_fb_layout')
 ForwardDecl('struct panvk_device')
 
-Header('pan_desc.h', scope=HeaderScope.SOURCE)
+Header('pan_fb.h', scope=HeaderScope.SOURCE)
+Header('util/format/u_format.h', scope=HeaderScope.SOURCE)
 
 
 def begin_end_tp(name, args=[], tp_struct=None):
@@ -68,25 +69,25 @@ def define_tracepoints():
                 var='flags',
                 c_format='0x%x',
             ),
-            ArgStruct(type='const struct pan_fb_info *', var='fb'),
+            ArgStruct(type='const struct pan_fb_layout *', var='fb'),
         ],
         tp_struct=[
             Arg(
                 type='uint16_t',
                 name='width',
-                var='fb->width',
+                var='fb->width_px',
                 c_format='%u',
             ),
             Arg(
                 type='uint16_t',
                 name='height',
-                var='fb->height',
+                var='fb->height_px',
                 c_format='%u',
             ),
             Arg(
                 type='uint8_t',
                 name='nr_samples',
-                var='fb->nr_samples',
+                var='fb->sample_count',
                 c_format='%u',
             ),
             Arg(
@@ -98,28 +99,28 @@ def define_tracepoints():
             Arg(
                 type='uint16_t',
                 name='rt0_format',
-                var='fb->rts[0].view ? fb->rts[0].view->format : PIPE_FORMAT_NONE',
+                var='fb->rt_formats[0]',
                 c_format='%s',
                 to_prim_type='util_format_description((enum pipe_format){})->name',
             ),
             Arg(
                 type='uint16_t',
                 name='zs_format',
-                var='fb->zs.view.zs ? fb->zs.view.zs->format : PIPE_FORMAT_NONE',
+                var='fb->z_format',
                 c_format='%s',
                 to_prim_type='util_format_description((enum pipe_format){})->name',
             ),
             Arg(
                 type='uint16_t',
                 name='s_format',
-                var='fb->zs.view.s ? fb->zs.view.s->format : PIPE_FORMAT_NONE',
+                var='fb->s_format',
                 c_format='%s',
                 to_prim_type='util_format_description((enum pipe_format){})->name',
             ),
             Arg(
                 type='uint32_t',
                 name='tile_size',
-                var='fb->tile_size',
+                var='fb->tile_size_px',
                 c_format='%u',
             ),
         ],

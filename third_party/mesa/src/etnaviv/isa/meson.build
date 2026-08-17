@@ -153,6 +153,7 @@ if with_tools.contains('etnaviv')
     'etnaviv_isa_proc',
     files('isa_proc.rs', 'isa.rs'),
     dependencies : [dep_indexmap, dep_roxmltree, dep_syn, dep_pest_generator],
+    rust_args : rust_global_args,
   )
 
   if with_tests
@@ -165,7 +166,13 @@ if with_tools.contains('etnaviv')
     files('lib.rs'),
     gnu_symbol_visibility : 'hidden',
     rust_abi : 'c',
-    dependencies: [dep_indexmap, dep_roxmltree, dep_pest],
+    rust_args : rust_global_args,
+    dependencies: [
+      dep_indexmap,
+      dep_roxmltree,
+      dep_pest,
+      idep_compiler_rs,
+    ],
     link_with: [_libetnaviv_isa_bindings_gen, _libetnaviv_isa_proc_rs],
   )
 
@@ -173,17 +180,18 @@ if with_tools.contains('etnaviv')
     'etnaviv-assembler',
     ['assembler.c'],
     gnu_symbol_visibility: 'hidden',
-    dependencies: [ idep_libetnaviv_decode, idep_etnaviv_enums_h ],
+    dependencies: [
+      idep_nir,
+      idep_libetnaviv_decode,
+      idep_etnaviv_enums_h
+    ],
     link_with: [libetnaviv_encode, libetnaviv_isa_rs],
   )
 else
   pre_args += '-DHAVE_ETNAVIV_NO_PEST'
 
-  # dummy library
-  libetnaviv_isa_rs = static_library(
-    'etnaviv_isa_rs',
-    sources: [],
-  )
+  # dummy link_with entry for etnaviv_isa_disasm test
+  libetnaviv_isa_rs = []
 endif
 
 subdir('tests')

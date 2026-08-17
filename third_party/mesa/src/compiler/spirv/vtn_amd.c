@@ -1,26 +1,7 @@
 /*
  * Copyright © 2018 Valve Corporation
  * Copyright © 2017 Red Hat
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "vtn_private.h"
@@ -39,7 +20,7 @@ vtn_handle_amd_gcn_shader_instruction(struct vtn_builder *b, SpvOp ext_opcode,
       def = nir_cube_amd(&b->nb, vtn_get_nir_ssa(b, w[5]));
       nir_def *st = nir_swizzle(&b->nb, def, (unsigned[]){1, 0}, 2);
       nir_def *invma = nir_frcp(&b->nb, nir_channel(&b->nb, def, 2));
-      def = nir_ffma_imm2(&b->nb, st, invma, 0.5);
+      def = nir_ffma_weak_imm2(&b->nb, st, invma, 0.5);
       break;
    }
    case TimeAMD: {

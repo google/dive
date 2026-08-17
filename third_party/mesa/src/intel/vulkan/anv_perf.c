@@ -31,7 +31,7 @@
 #include "perf/intel_perf.h"
 #include "perf/intel_perf_mdapi.h"
 
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 void
 anv_physical_device_init_perf(struct anv_physical_device *device, int fd)
@@ -221,24 +221,12 @@ VkResult anv_AcquirePerformanceConfigurationINTEL(
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
    if (!INTEL_DEBUG(DEBUG_NO_OACONFIG)) {
-      config->register_config =
-         intel_perf_load_configuration(device->physical->perf, device->fd,
-                                     INTEL_PERF_QUERY_GUID_MDAPI);
-      if (!config->register_config) {
+      config->config_id = intel_perf_get_configuration_id(device->physical->perf,
+                                                          INTEL_PERF_QUERY_GUID_MDAPI);
+      if (config->config_id == 0) {
          vk_object_free(&device->vk, NULL, config);
          return VK_INCOMPLETE;
       }
-
-      uint64_t ret =
-         intel_perf_store_configuration(device->physical->perf, device->fd,
-                                      config->register_config, NULL /* guid */);
-      if (ret == 0) {
-         ralloc_free(config->register_config);
-         vk_object_free(&device->vk, NULL, config);
-         return VK_INCOMPLETE;
-      }
-
-      config->config_id = ret;
    }
 
    *pConfiguration = anv_performance_configuration_intel_to_handle(config);
@@ -255,8 +243,6 @@ VkResult anv_ReleasePerformanceConfigurationINTEL(
 
    if (!INTEL_DEBUG(DEBUG_NO_OACONFIG))
       intel_perf_remove_configuration(device->physical->perf, device->fd, config->config_id);
-
-   ralloc_free(config->register_config);
 
    vk_object_free(&device->vk, NULL, config);
 
@@ -284,29 +270,35 @@ VkResult anv_QueueSetPerformanceConfigurationINTEL(
    ANV_FROM_HANDLE(anv_queue, queue, _queue);
    ANV_FROM_HANDLE(anv_performance_configuration_intel, config, _configuration);
    struct anv_device *device = queue->device;
+   VkResult result = VK_SUCCESS;
 
-   if (queue != anv_device_get_perf_queue(device))
-      return VK_ERROR_UNKNOWN;
+   vk_queue_lock(&queue->vk);
 
-   if (!INTEL_DEBUG(DEBUG_NO_OACONFIG)) {
-      if (device->perf_fd < 0) {
-         device->perf_fd = anv_device_perf_open(device, queue, config->config_id);
-         if (device->perf_fd < 0)
-            return VK_ERROR_INITIALIZATION_FAILED;
-      } else {
-         uint32_t context_or_exec_queue = anv_device_perf_get_queue_context_or_exec_queue_id(device->perf_queue);
-         int ret = intel_perf_stream_set_metrics_id(device->physical->perf,
-                                                    device->fd,
-                                                    device->perf_fd,
-                                                    context_or_exec_queue,
-                                                    config->config_id,
-                                                    &device->perf_timeline);
-         if (ret < 0)
-            return vk_device_set_lost(&device->vk, "i915-perf config failed: %m");
+   if (queue == anv_device_get_perf_queue(device)) {
+      if (!INTEL_DEBUG(DEBUG_NO_OACONFIG)) {
+         if (device->perf_fd < 0) {
+            device->perf_fd = anv_device_perf_open(device, queue, config->config_id);
+            if (device->perf_fd < 0)
+               result = VK_ERROR_INITIALIZATION_FAILED;
+         } else {
+            uint32_t context_or_exec_queue = anv_device_perf_get_queue_context_or_exec_queue_id(device->perf_queue);
+            int ret = intel_perf_stream_set_metrics_id(device->physical->perf,
+                                                       device->fd,
+                                                       device->perf_fd,
+                                                       context_or_exec_queue,
+                                                       config->config_id,
+                                                       &device->perf_timeline);
+            if (ret < 0)
+               result = vk_device_set_lost(&device->vk, "i915-perf config failed: %m");
+         }
       }
+   } else {
+      result = vk_error(device, VK_ERROR_UNKNOWN);
    }
 
-   return VK_SUCCESS;
+   vk_queue_unlock(&queue->vk);
+
+   return result;
 }
 
 void anv_UninitializePerformanceApiINTEL(
@@ -381,11 +373,11 @@ VkResult anv_EnumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR(
          counter->scope = VK_PERFORMANCE_COUNTER_SCOPE_COMMAND_KHR;
          counter->storage = intel_perf_counter_data_type_to_vk_storage[intel_counter->data_type];
 
-         unsigned char sha1_result[20];
-         _mesa_sha1_compute(intel_counter->symbol_name,
+         unsigned char blake3_result[BLAKE3_KEY_LEN];
+         _mesa_blake3_compute(intel_counter->symbol_name,
                             strlen(intel_counter->symbol_name),
-                            sha1_result);
-         memcpy(counter->uuid, sha1_result, sizeof(counter->uuid));
+                            blake3_result);
+         memcpy(counter->uuid, blake3_result, sizeof(counter->uuid));
       }
 
       vk_outarray_append_typed(VkPerformanceCounterDescriptionKHR, &out_desc, desc) {

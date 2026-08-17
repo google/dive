@@ -33,6 +33,7 @@
 #define BLEND_H
 
 
+#include "util/blend.h"
 #include "util/glheader.h"
 #include "context.h"
 #include "formats.h"
@@ -63,21 +64,21 @@ extern void
 _mesa_update_clamp_vertex_color(struct gl_context *ctx,
                                 const struct gl_framebuffer *drawFb);
 
-extern void  
+extern void
 _mesa_init_color( struct gl_context * ctx );
 
 
-static inline enum gl_advanced_blend_mode
+static inline enum pipe_advanced_blend_mode
 _mesa_get_advanced_blend_sh_constant(GLbitfield blend_enabled,
-                                     enum gl_advanced_blend_mode mode)
+                                     enum pipe_advanced_blend_mode mode)
 {
-   return blend_enabled ? mode : BLEND_NONE;
+   return blend_enabled ? mode : PIPE_ADVANCED_BLEND_NONE;
 }
 
 static inline bool
 _mesa_advanded_blend_sh_constant_changed(struct gl_context *ctx,
                                          GLbitfield new_blend_enabled,
-                                         enum gl_advanced_blend_mode new_mode)
+                                         enum pipe_advanced_blend_mode new_mode)
 {
    return _mesa_get_advanced_blend_sh_constant(new_blend_enabled, new_mode) !=
           _mesa_get_advanced_blend_sh_constant(ctx->Color.BlendEnabled,
@@ -94,7 +95,7 @@ _mesa_flush_vertices_for_blend_state(struct gl_context *ctx)
 static inline void
 _mesa_flush_vertices_for_blend_adv(struct gl_context *ctx,
                                    GLbitfield new_blend_enabled,
-                                   enum gl_advanced_blend_mode new_mode)
+                                   enum pipe_advanced_blend_mode new_mode)
 {
    /* The advanced blend mode needs _NEW_COLOR to update the state constant. */
    if (_mesa_has_KHR_blend_equation_advanced(ctx) &&

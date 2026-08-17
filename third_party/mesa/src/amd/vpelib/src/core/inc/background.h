@@ -33,9 +33,10 @@ void vpe_create_bg_segments(
     struct vpe_priv *vpe_priv, struct vpe_rect *gaps, uint16_t gaps_cnt, enum vpe_cmd_ops ops);
 
 uint16_t vpe_find_bg_gaps(struct vpe_priv *vpe_priv, const struct vpe_rect *target_rect,
-    struct vpe_rect *gaps, uint16_t max_gaps);
+    struct vpe_rect *gaps, uint32_t alignment, uint16_t max_gaps);
 
-void vpe_full_bg_gaps(struct vpe_rect *gaps, const struct vpe_rect *target_rect, uint16_t max_gaps);
+void vpe_full_bg_gaps(struct vpe_rect *gaps, const struct vpe_rect *target_rect, uint32_t alignment,
+    uint16_t max_gaps);
 
 #ifdef __cplusplus
 }

@@ -23,6 +23,7 @@
 
 #include "lvp_private.h"
 #include "pipe/p_context.h"
+#include "vk_render_pass.h"
 #include "vk_util.h"
 
 #include "vk_common_entrypoints.h"
@@ -48,14 +49,18 @@ lvp_create_cmd_buffer(struct vk_command_pool *pool,
    if (cmd_buffer == NULL)
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   VkResult result = vk_command_buffer_init(pool, &cmd_buffer->vk,
-                                            &lvp_cmd_buffer_ops, level);
+   VkResult result = vk_command_buffer_init_with_params(
+      &cmd_buffer->vk,
+      &(struct vk_command_buffer_init_params) {
+         .pool = pool,
+         .ops = &lvp_cmd_buffer_ops,
+         .level = level,
+         .needs_cmd_queue = true,
+      });
    if (result != VK_SUCCESS) {
       vk_free(&pool->alloc, cmd_buffer);
       return result;
    }
-
-   cmd_buffer->device = device;
 
    *cmd_buffer_out = &cmd_buffer->vk;
 
@@ -79,9 +84,15 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_BeginCommandBuffer(
    VkCommandBuffer                             commandBuffer,
    const VkCommandBufferBeginInfo*             pBeginInfo)
 {
-   LVP_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, commandBuffer);
+   VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, commandBuffer);
 
    vk_command_buffer_begin(&cmd_buffer->vk, pBeginInfo);
+   if (cmd_buffer->vk.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+      const VkCommandBufferInheritanceRenderingInfo *rendering_info =
+         vk_get_command_buffer_inheritance_rendering_info(VK_COMMAND_BUFFER_LEVEL_SECONDARY, pBeginInfo);
+      if (rendering_info)
+         cmd_buffer->rendering_info = *rendering_info;
+   }
 
    return VK_SUCCESS;
 }
@@ -89,7 +100,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_BeginCommandBuffer(
 VKAPI_ATTR VkResult VKAPI_CALL lvp_EndCommandBuffer(
    VkCommandBuffer                             commandBuffer)
 {
-   LVP_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, commandBuffer);
+   VK_FROM_HANDLE(lvp_cmd_buffer, cmd_buffer, commandBuffer);
 
    return vk_command_buffer_end(&cmd_buffer->vk);
 }

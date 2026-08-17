@@ -154,7 +154,7 @@ find_and_remove_unused(struct ir3 *ir, struct ir3_shader_variant *so)
                continue;
             if (instr->input.sysval == SYSTEM_VALUE_SAMPLE_MASK_IN &&
                 so->reads_shading_rate &&
-                ir->compiler->reading_shading_rate_requires_smask_quirk)
+                ir->compiler->info->props.reading_shading_rate_requires_smask_quirk)
                continue;
          }
 

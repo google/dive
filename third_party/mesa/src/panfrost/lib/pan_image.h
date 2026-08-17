@@ -3,7 +3,6 @@
  * Copyright (C) 2014 Broadcom
  * Copyright (C) 2018-2019 Alyssa Rosenzweig
  * Copyright (C) 2019-2020 Collabora, Ltd.
- *
  * SPDX-License-Identifier: MIT
  */
 
@@ -52,7 +51,8 @@ struct pan_image_view {
    enum pipe_format format;
    enum mali_texture_dimension dim;
    unsigned first_level, last_level;
-   unsigned first_layer, last_layer;
+   unsigned first_layer_or_z_slice, last_layer_or_z_slice;
+   float min_lod;
    unsigned char swizzle[4];
 
    /* planes 1 and 2 are NULL for single plane formats */
@@ -66,6 +66,12 @@ struct pan_image_view {
       unsigned narrow;
       unsigned hdr;
    } astc;
+
+   /* VkChromaLocation must be strictly honored. */
+   struct {
+      bool override_cr_siting;
+      unsigned cr_siting;
+   } yuv;
 };
 
 static inline struct pan_image_plane_ref
@@ -117,7 +123,57 @@ pan_image_view_get_nr_samples(const struct pan_image_view *iview)
    return pref.image->props.nr_samples;
 }
 
-static inline const struct pan_image_plane_ref
+static inline unsigned
+pan_image_view_first_layer(const struct pan_image_view *iview)
+{
+   return iview->dim != MALI_TEXTURE_DIMENSION_3D
+             ? iview->first_layer_or_z_slice
+             : 0;
+}
+
+static inline unsigned
+pan_image_view_last_layer(const struct pan_image_view *iview)
+{
+   return iview->dim != MALI_TEXTURE_DIMENSION_3D ? iview->last_layer_or_z_slice
+                                                  : 0;
+}
+
+static inline unsigned
+pan_image_view_layer_count(const struct pan_image_view *iview)
+{
+   return pan_image_view_last_layer(iview) - pan_image_view_first_layer(iview) +
+          1;
+}
+
+static inline unsigned
+pan_image_view_first_z_slice(const struct pan_image_view *iview)
+{
+   return iview->dim == MALI_TEXTURE_DIMENSION_3D
+             ? iview->first_layer_or_z_slice
+             : 0;
+}
+
+static inline unsigned
+pan_image_view_last_z_slice(const struct pan_image_view *iview)
+{
+   return iview->dim == MALI_TEXTURE_DIMENSION_3D ? iview->last_layer_or_z_slice
+                                                  : 0;
+}
+
+static inline unsigned
+pan_image_view_3d_slice_count(const struct pan_image_view *iview)
+{
+   return pan_image_view_last_z_slice(iview) -
+          pan_image_view_first_z_slice(iview) + 1;
+}
+
+static inline unsigned
+pan_image_view_layer_or_3d_slice_count(const struct pan_image_view *iview)
+{
+   return iview->last_layer_or_z_slice - iview->first_layer_or_z_slice + 1;
+}
+
+static inline struct pan_image_plane_ref
 pan_image_view_get_color_plane(const struct pan_image_view *iview)
 {
    /* We only support rendering to plane 0 */
@@ -133,7 +189,8 @@ pan_image_view_has_crc(const struct pan_image_view *iview)
    if (!p.image)
       return false;
 
-   return p.image->props.crc;
+   /* Only mip level 0 gets a CRC buffer allocated. */
+   return p.image->props.crc && iview->first_level == 0;
 }
 
 static inline struct pan_image_plane_ref
@@ -196,9 +253,13 @@ pan_image_view_check(const struct pan_image_view *iview)
          util_format_get_plane_format(pref.image->props.format, pref.plane_idx);
 
       /* View-based pixel re-interpretation only allowed if the formats
-       * blocksize match. */
-      assert(util_format_get_blocksize(view_format) ==
-             util_format_get_blocksize(img_format));
+       * blocksize match. Exception is for Z24X8 with AFBC enabled since then
+       * we can lower it to Z24 packed format internally. */
+      assert((util_format_get_blocksize(view_format) ==
+              util_format_get_blocksize(img_format)) ||
+             (view_format == PIPE_FORMAT_Z24X8_UNORM &&
+              img_format == PIPE_FORMAT_Z24_UNORM_PACKED &&
+              drm_is_afbc(pref.image->props.modifier)));
    }
 #endif
 }
@@ -256,14 +317,20 @@ struct pan_image_usage {
    /* PAN_BIND_xxx flags. */
    uint32_t bind;
 
+   /* Image needs to be mappable at standard sparse block granularity. */
+   bool standard_sparse_mapping_granularity;
+
    /* Image filled directly from the CPU. */
    bool host_copy;
 
    /* Image frequently updated with host data. */
    bool frequent_host_updates;
 
-   /* Scanout image. */
-   bool scanout;
+   /* Legacy scanout image. */
+   bool legacy_scanout;
+
+   /* Image created by WSI. */
+   bool wsi;
 };
 
 static inline enum pan_mod_support

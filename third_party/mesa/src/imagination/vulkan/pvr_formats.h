@@ -28,8 +28,12 @@
 #include <stdint.h>
 #include <vulkan/vulkan.h>
 
+#include "pvr_macros.h"
+
 #include "util/format/u_formats.h"
 #include "vk_format.h"
+
+struct pvr_device_info;
 
 /* This is based on VkClearColorValue which is an array of RGBA, and on the
  * output register usage for the biggest 32 bit 4 component formats which use up
@@ -38,8 +42,6 @@
  * packed according to the hardware (the accum format).
  */
 #define PVR_CLEAR_COLOR_ARRAY_SIZE 4
-
-#define PVR_TEX_FORMAT_COUNT (ROGUE_TEXSTATE_IMAGE_WORD0_TEXFORMAT_MAX_SIZE + 1)
 
 enum pvr_pbe_accum_format {
    PVR_PBE_ACCUM_FORMAT_INVALID = 0, /* Explicitly treat 0 as invalid. */
@@ -212,70 +214,31 @@ enum pvr_transfer_pbe_pixel_src {
    PVR_TRANSFER_PBE_PIXEL_SRC_NUM = 54,
 };
 
-/* FIXME: Replace all instances of uint32_t with ROGUE_TEXSTATE_FORMAT or
- * ROGUE_TEXSTATE_FORMAT_COMPRESSED after the pvr_common cleanup is complete.
- */
+#define PVR_BIND_VERTEX_BUFFER BITFIELD_BIT(0)
+#define PVR_BIND_SAMPLER_VIEW BITFIELD_BIT(1)
+#define PVR_BIND_RENDER_TARGET BITFIELD_BIT(2)
+#define PVR_BIND_DEPTH_STENCIL BITFIELD_BIT(3)
+#define PVR_BIND_STORAGE_IMAGE BITFIELD_BIT(4)
 
-struct pvr_tex_format_description {
+struct pvr_format {
    uint32_t tex_format;
-   enum pipe_format pipe_format_int;
-   enum pipe_format pipe_format_float;
+   uint32_t depth_tex_format;
+   uint32_t stencil_tex_format;
+   uint32_t bind;
 };
 
-struct pvr_tex_format_compressed_description {
-   uint32_t tex_format;
-   enum pipe_format pipe_format;
-   uint32_t tex_format_simple;
+struct pvr_format_table {
+   const struct pvr_format *formats;
+   unsigned count;
 };
-
-bool pvr_tex_format_is_supported(uint32_t tex_format);
-
-const struct pvr_tex_format_description *
-pvr_get_tex_format_description(uint32_t tex_format);
-
-#define pvr_foreach_supported_tex_format_(format)                             \
-   for (enum ROGUE_TEXSTATE_FORMAT format = 0; format < PVR_TEX_FORMAT_COUNT; \
-        format++)                                                             \
-      if (pvr_tex_format_is_supported(format))
-
-#define pvr_foreach_supported_tex_format(format, desc)     \
-   pvr_foreach_supported_tex_format_ (format)              \
-      for (const struct pvr_tex_format_description *desc = \
-              pvr_get_tex_format_description(format);      \
-           desc;                                           \
-           desc = NULL)
-
-bool pvr_tex_format_compressed_is_supported(uint32_t tex_format);
-
-const struct pvr_tex_format_compressed_description *
-pvr_get_tex_format_compressed_description(uint32_t tex_format);
-
-#define pvr_foreach_supported_tex_format_compressed_(format) \
-   for (enum ROGUE_TEXSTATE_FORMAT_COMPRESSED format = 0;    \
-        format < PVR_TEX_FORMAT_COUNT;                       \
-        format++)                                            \
-      if (pvr_tex_format_compressed_is_supported(format))
-
-#define pvr_foreach_supported_tex_format_compressed(format, desc)     \
-   pvr_foreach_supported_tex_format_compressed_ (format)              \
-      for (const struct pvr_tex_format_compressed_description *desc = \
-              pvr_get_tex_format_compressed_description(format);      \
-           desc;                                                      \
-           desc = NULL)
 
 struct util_format_description;
+
 const uint8_t *
 pvr_get_format_swizzle_for_tpu(const struct util_format_description *desc);
 const uint8_t *pvr_get_format_swizzle(VkFormat vk_format);
-uint32_t pvr_get_tex_format(VkFormat vk_format);
-uint32_t pvr_get_tex_format_aspect(VkFormat vk_format,
-                                   VkImageAspectFlags aspect_mask);
-uint32_t pvr_get_pbe_packmode(VkFormat vk_format);
-uint32_t pvr_get_pbe_accum_format(VkFormat vk_format);
+uint32_t pvr_rogue_get_pbe_accum_format(VkFormat vk_format);
 uint32_t pvr_get_pbe_accum_format_size_in_bytes(VkFormat vk_format);
-bool pvr_format_is_pbe_downscalable(const struct pvr_device_info *dev_info,
-                                    VkFormat vk_format);
-
 void pvr_get_hw_clear_color(VkFormat vk_format,
                             VkClearColorValue value,
                             uint32_t packed_out[static const 4]);
@@ -283,6 +246,7 @@ void pvr_get_hw_clear_color(VkFormat vk_format,
 uint32_t pvr_pbe_pixel_num_loads(enum pvr_transfer_pbe_pixel_src pbe_format);
 bool pvr_pbe_pixel_is_norm(enum pvr_transfer_pbe_pixel_src pbe_format);
 uint32_t pvr_pbe_pixel_size(enum pvr_transfer_pbe_pixel_src pbe_format);
+unsigned pvr_pbe_format_num_sample_components(enum pvr_transfer_pbe_pixel_src format);
 
 static inline bool pvr_vk_format_has_32bit_component(VkFormat vk_format)
 {
@@ -308,6 +272,12 @@ static inline bool pvr_vk_format_is_fully_normalized(VkFormat vk_format)
    }
 
    return true;
+}
+
+static inline bool
+pvr_vk_format_is_combined_ds(VkFormat format)
+{
+   return vk_format_has_depth(format) && vk_format_has_stencil(format);
 }
 
 static inline uint32_t
@@ -345,5 +315,31 @@ pvr_vk_format_get_common_color_channel_count(VkFormat src_format,
 
    return count;
 }
+
+#ifdef PVR_PER_ARCH
+
+struct pvr_format_table PVR_PER_ARCH(get_format_table)(void);
+#   define pvr_arch_get_format_table PVR_PER_ARCH(get_format_table)
+
+uint32_t PVR_PER_ARCH(get_tex_format)(VkFormat vk_format);
+#   define pvr_arch_get_tex_format PVR_PER_ARCH(get_tex_format)
+
+uint32_t PVR_PER_ARCH(get_tex_format_aspect)(VkFormat vk_format,
+                                             VkImageAspectFlags aspect_mask);
+#   define pvr_arch_get_tex_format_aspect PVR_PER_ARCH(get_tex_format_aspect)
+
+uint32_t PVR_PER_ARCH(get_pbe_packmode)(VkFormat vk_format);
+#   define pvr_arch_get_pbe_packmode PVR_PER_ARCH(get_pbe_packmode)
+
+uint32_t PVR_PER_ARCH(get_pbe_accum_format)(VkFormat vk_format);
+#   define pvr_arch_get_pbe_accum_format PVR_PER_ARCH(get_pbe_accum_format)
+
+bool PVR_PER_ARCH(format_is_pbe_downscalable)(
+   const struct pvr_device_info *dev_info,
+   VkFormat vk_format);
+#   define pvr_arch_format_is_pbe_downscalable \
+      PVR_PER_ARCH(format_is_pbe_downscalable)
+
+#endif /* PVR_PER_ARCH */
 
 #endif /* PVR_FORMATS_H */

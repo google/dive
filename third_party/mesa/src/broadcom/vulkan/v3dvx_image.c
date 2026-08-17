@@ -21,9 +21,11 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
-#include "broadcom/common/v3d_macros.h"
-#include "broadcom/cle/v3dx_pack.h"
+#include "v3dv_device.h"
+#include "v3dv_image.h"
+#include "v3dv_version_dispatch.h"
+#include "vk_format.h"
+#include "v3dv_format_table.h"
 #include "broadcom/compiler/v3d_compiler.h"
 
 /*
@@ -55,16 +57,12 @@ pack_texture_shader_state_helper(struct v3dv_device *device,
 
          tex.level_0_xor_enable = (image->planes[iplane].slices[0].tiling == V3D_TILING_UIF_XOR);
 
-         if (tex.level_0_is_strictly_uif)
-            tex.level_0_ub_pad = image->planes[iplane].slices[0].ub_pad;
-
-         /* FIXME: v3d never sets uif_xor_disable, but uses it on the following
-          * check so let's set the default value
+         /* If we ever set tex.uif_xor_disable we also need to flag
+          * tex.extended here.
           */
-         tex.uif_xor_disable = false;
-         if (tex.uif_xor_disable ||
-             tex.level_0_is_strictly_uif) {
-            tex.extended = true;
+         if (tex.level_0_is_strictly_uif) {
+             tex.level_0_ub_pad = image->planes[iplane].slices[0].ub_pad;
+             tex.extended = true;
          }
 
          tex.base_level = image_view->vk.base_mip_level;
@@ -231,6 +229,26 @@ v3dX(pack_texture_shader_state_from_buffer_view)(struct v3dv_device *device,
 #if V3D_VERSION >= 71
       tex.chroma_offset_x = 1;
       tex.chroma_offset_y = 1;
+      /* See comment in XML field definition for rationale of the shifts */
+      tex.texture_base_pointer_cb = base_offset >> 6;
+      tex.texture_base_pointer_cr = base_offset >> 6;
+#endif
+   }
+}
+
+void
+v3dX(pack_null_texture_state)(struct v3dv_device *device, void *map)
+{
+   assert(device->null_bo);
+   const uint32_t base_offset = device->null_bo->offset;
+
+   v3dvx_pack(map, TEXTURE_SHADER_STATE, tex) {
+      tex.image_width = 1;
+      tex.image_height = 1;
+      tex.image_depth = 1;
+      tex.array_stride_64_byte_aligned = 1;
+      tex.texture_base_pointer = v3dv_cl_address(NULL, base_offset);
+#if V3D_VERSION >= 71
       /* See comment in XML field definition for rationale of the shifts */
       tex.texture_base_pointer_cb = base_offset >> 6;
       tex.texture_base_pointer_cr = base_offset >> 6;

@@ -1,25 +1,7 @@
 /* -*- c++ -*- */
 /*
  * Copyright © 2021 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -37,14 +19,104 @@ void brw_alloc_reg_sets(struct brw_compiler *compiler);
 extern const char *const conditional_modifier[16];
 extern const char *const pred_ctrl_align16[16];
 
+const unsigned *brw_compile_vs(const struct brw_compiler *compiler,
+                               struct brw_compile_vs_params *params);
+const unsigned *brw_compile_tcs(const struct brw_compiler *compiler,
+                                struct brw_compile_tcs_params *params);
+const unsigned *brw_compile_tes(const struct brw_compiler *compiler,
+                                struct brw_compile_tes_params *params);
+const unsigned *brw_compile_gs(const struct brw_compiler *compiler,
+                               struct brw_compile_gs_params *params);
+const unsigned *brw_compile_task(const struct brw_compiler *compiler,
+                                 struct brw_compile_task_params *params);
+const unsigned *brw_compile_mesh(const struct brw_compiler *compiler,
+                                 struct brw_compile_mesh_params *params);
+const unsigned *brw_compile_fs(const struct brw_compiler *compiler,
+                               struct brw_compile_fs_params *params);
+const unsigned *brw_compile_cs(const struct brw_compiler *compiler,
+                               struct brw_compile_cs_params *params);
+const unsigned *brw_compile_bs(const struct brw_compiler *compiler,
+                               struct brw_compile_bs_params *params);
+
+typedef struct brw_pass_tracker {
+   nir_shader *nir;
+   unsigned dispatch_width;
+
+   const struct brw_compiler *compiler;
+
+   const struct brw_base_prog_key *key;
+
+   bool progress;
+
+   /* Filled with the last line that made progress.
+    * Used to perform early break in loops.
+    * See BRW_NIR_LOOP_PASS macros below.
+    */
+   unsigned long opt_line;
+
+   /* Tracking information for the debug archiver. */
+   unsigned pass_num;
+   debug_archiver *archiver;
+} brw_pass_tracker;
+
 #ifndef NDEBUG
-void brw_debug_archive_nir(debug_archiver *archiver, nir_shader *nir,
-                           unsigned dispatch_width, const char *step);
+void
+brw_pass_tracker_archive(brw_pass_tracker *pt, const char *pass_name);
 #else
 static inline void
-brw_debug_archive_nir(debug_archiver *archiver, nir_shader *nir,
-                      unsigned dispatch_width, const char *step) {}
+brw_pass_tracker_archive(brw_pass_tracker *pt, const char *pass_name)
+{}
 #endif
+
+/* To be used in conjunction to BRW_NIR_LOOP_* macros. */
+static inline void
+pass_tracker_new_loop(brw_pass_tracker *pt)
+{
+   pt->opt_line = 0;
+}
+
+/* To be used in conjunction to BRW_NIR_LOOP_* macros. */
+static inline void
+pass_tracker_new_iteration(brw_pass_tracker *pt)
+{
+   pt->progress = false;
+}
+
+#define BRW_NIR_SNAPSHOT(name) do {                        \
+   pt->pass_num++;                                         \
+   brw_pass_tracker_archive(pt, name);                     \
+} while (false);
+
+#define BRW_NIR_PASS(pass, ...) ({                         \
+   pt->pass_num++;                                         \
+   bool this_progress = false;                             \
+   NIR_PASS(this_progress, pt->nir, pass, ##__VA_ARGS__);  \
+   if (this_progress) {                                    \
+      pt->progress = true;                                 \
+      if (unlikely(pt->archiver))                          \
+         brw_pass_tracker_archive(pt, #pass);              \
+   }                                                       \
+   this_progress;                                          \
+})
+
+#define BRW_NIR_LOOP_PASS(pass, ...) ({                    \
+   const unsigned long this_line = __LINE__;               \
+   if (pt->opt_line == this_line) {                        \
+      pt->pass_num++;                                      \
+      break;                                               \
+   }                                                       \
+   bool this_progress = BRW_NIR_PASS(pass, ##__VA_ARGS__); \
+   if (this_progress)                                      \
+      pt->opt_line = this_line;                            \
+   this_progress;                                          \
+})
+
+#define BRW_NIR_LOOP_PASS_NOT_IDEMPOTENT(pass, ...) ({     \
+   bool this_progress = BRW_NIR_PASS(pass, ##__VA_ARGS__); \
+   if (this_progress)                                      \
+      pt->opt_line = 0;                                    \
+   this_progress;                                          \
+})
 
 #ifdef __cplusplus
 }
@@ -100,5 +172,8 @@ int brw_simd_select_for_workgroup_size(const struct intel_device_info *devinfo,
                                        const unsigned *sizes);
 
 bool brw_should_print_shader(const nir_shader *shader, uint64_t debug_flag, uint32_t source_hash);
+
+void brw_prog_data_init(struct brw_stage_prog_data *prog_data,
+                        const struct brw_compile_params *params);
 
 #endif // __cplusplus

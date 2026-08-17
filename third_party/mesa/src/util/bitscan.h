@@ -106,10 +106,11 @@ u_bit_scan(unsigned *mask)
    return i;
 }
 
-#define u_foreach_bit(b, dword)                          \
+#define u_foreach_bit(b, dword)                            \
    for (uint32_t __dword = (dword), b;                     \
-        ((b) = ffs(__dword) - 1, __dword);      \
-        __dword &= ~(1 << (b)))
+        ((b) = ffs(__dword) - 1, __dword);                 \
+        /* See util_bitcount below. */                     \
+        __dword &= __dword - 1)
 
 static inline int
 u_bit_scan64(uint64_t *mask)
@@ -121,8 +122,9 @@ u_bit_scan64(uint64_t *mask)
 
 #define u_foreach_bit64(b, dword)                          \
    for (uint64_t __dword = (dword), b;                     \
-        ((b) = ffsll(__dword) - 1, __dword);      \
-        __dword &= ~(1ull << (b)))
+        ((b) = ffsll(__dword) - 1, __dword);               \
+        /* See util_bitcount below. */                     \
+        __dword &= __dword - 1)
 
 /* Given two bitmasks, loop over all bits of both of them.
  * Bits of mask1 are: b = scan_bit(mask1);

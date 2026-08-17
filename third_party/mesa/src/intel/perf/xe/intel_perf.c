@@ -18,6 +18,28 @@
 
 #define FIELD_PREP_ULL(_mask, _val) (((_val) << (ffsll(_mask) - 1)) & (_mask))
 
+struct xe_eu_stall_data_decoded {
+   uint64_t ip_addr;
+   uint64_t tdr_count;
+   uint64_t other_count;
+   uint64_t control_count;
+   uint64_t pipestall_count;
+   uint64_t send_count;
+   uint64_t dist_acc_count;
+   uint64_t sbid_count;
+   uint64_t sync_count;
+   uint64_t inst_fetch_count;
+   uint64_t active_count;
+};
+
+/*
+ * BSpec 79847 shows, for EU Stall Sampling, the bit widths of the counters,
+ * along with the IP addr width. References to HAS mention that the IP addr and
+ * samples are accumulated into the Thread Dispatch Logic (TDL) buffer, stored
+ * in 8 bit counts. The buffer gets evicted to GTT memory, where the kernel
+ * passes the data into user space.
+ */
+
 /*
  * EU stall data format for Xe2 arch GPUs (LNL, BMG).
  */
@@ -37,7 +59,28 @@ struct xe_eu_stall_data_xe2 {
    uint64_t end_flag:1;          /* Bit  112 */
    uint64_t unused_bits:15;
    uint64_t unused[6];
-} __packed;
+} PACKED;
+
+/*
+ * EU stall data format for Xe3p arch GPUs.
+ */
+struct xe_eu_stall_data_xe3p {
+	uint64_t ip_addr:61;          /* Bits 0  to 60  */
+	uint64_t tdr_count:8;         /* Bits 61 to 68  */
+	uint64_t other_count:8;       /* Bits 69 to 76  */
+	uint64_t control_count:8;     /* Bits 77 to 84  */
+	uint64_t pipestall_count:8;   /* Bits 85 to 92  */
+	uint64_t send_count:8;        /* Bits 93 to 100 */
+	uint64_t dist_acc_count:8;    /* Bits 101 to 108 */
+	uint64_t sbid_count:8;        /* Bits 109 to 116 */
+	uint64_t sync_count:8;        /* Bits 117 to 124 */
+	uint64_t inst_fetch_count:8;  /* Bits 125 to 132 */
+	uint64_t active_count:8;      /* Bits 133 to 140 */
+	uint64_t ex_id:3;             /* Bits 141 to 143 */
+	uint64_t end_flag:1;          /* Bit  144 */
+	uint64_t unused_bits:47;
+	uint64_t unused[5];
+} PACKED;
 
 uint64_t xe_perf_get_oa_format(struct intel_perf_config *perf)
 {
@@ -88,6 +131,8 @@ xe_oa_metrics_available(struct intel_perf_config *perf, int fd, bool use_registe
       read_file_uint64("/proc/sys/dev/xe/observation_paranoid", &paranoid);
       if (paranoid == 0 || geteuid() == 0)
          perf_oa_available = true;
+      else
+         perf->features_supported |= INTEL_PERF_FEATURE_OA_BLOCKED_BY_POLICY;
    }
 
    if (!perf_oa_available)
@@ -501,19 +546,61 @@ xe_perf_eustall_stream_read_samples(int perf_stream_fd, uint8_t *buffer,
    return len < 0 ? -errno : len;
 }
 
+#define XE_EU_STALL_MEMBERS(FUNC) \
+   FUNC(ip_addr)                  \
+   FUNC(tdr_count)                \
+   FUNC(other_count)              \
+   FUNC(control_count)            \
+   FUNC(pipestall_count)          \
+   FUNC(send_count)               \
+   FUNC(dist_acc_count)           \
+   FUNC(sbid_count)               \
+   FUNC(sync_count)               \
+   FUNC(inst_fetch_count)         \
+   FUNC(active_count)
+
+#define XE_ASSIGN_MEMBER(name) \
+   stall_data->name = data->name;
+
+#define XE_DECODE_BY_TYPE(type)                             \
+   do {                                                     \
+      const struct type *data = (const struct type*)offset; \
+      XE_EU_STALL_MEMBERS(XE_ASSIGN_MEMBER);                \
+   } while (0)
+
+/*
+ * Decode EU stall data from a buffer offset, based on gfx version.
+ */
+static void
+xe_decode_data(const uint8_t *offset,
+               struct xe_eu_stall_data_decoded *stall_data,
+               int ver) {
+
+   if (ver >= 35) {
+      XE_DECODE_BY_TYPE(xe_eu_stall_data_xe3p);
+   } else {
+      XE_DECODE_BY_TYPE(xe_eu_stall_data_xe2);
+   }
+}
+
+#undef XE_DECODE_BY_TYPE
+#undef XE_ASSIGN_MEMBER
+#undef XE_EU_STALL_MEMBERS
+
 void
 xe_perf_eustall_accumulate_results(struct intel_perf_query_eustall_result *result,
                                    const uint8_t *start, const uint8_t *end,
-                                   size_t record_size)
+                                   size_t record_size,
+                                   int ver)
 {
    const uint8_t *offset;
    assert(((end - start) % record_size) == 0);
 
    for (offset = start; offset < end; offset += record_size) {
-      const struct xe_eu_stall_data_xe2* stall_data =
-         (const struct xe_eu_stall_data_xe2*)offset;
+      struct xe_eu_stall_data_decoded stall_data;
+      xe_decode_data(offset, &stall_data, ver);
       struct intel_perf_query_eustall_event* stall_result;
-      uint64_t ip_addr = stall_data->ip_addr;
+      uint64_t ip_addr = stall_data.ip_addr;
       struct hash_entry *e = _mesa_hash_table_search(result->accumulator,
                                                      (const void*)&ip_addr);
       if (e) {
@@ -525,18 +612,18 @@ xe_perf_eustall_accumulate_results(struct intel_perf_query_eustall_result *resul
                                  (const void*)&stall_result->ip_addr,
                                  stall_result);
       }
-      assert(stall_result->ip_addr == stall_data->ip_addr);
+      assert(stall_result->ip_addr == stall_data.ip_addr);
 
-      stall_result->tdr_count += stall_data->tdr_count;
-      stall_result->other_count += stall_data->other_count;
-      stall_result->control_count += stall_data->control_count;
-      stall_result->pipestall_count += stall_data->pipestall_count;
-      stall_result->send_count += stall_data->send_count;
-      stall_result->dist_acc_count += stall_data->dist_acc_count;
-      stall_result->sbid_count += stall_data->sbid_count;
-      stall_result->sync_count += stall_data->sync_count;
-      stall_result->inst_fetch_count += stall_data->inst_fetch_count;
-      stall_result->active_count += stall_data->active_count;
+      stall_result->tdr_count += stall_data.tdr_count;
+      stall_result->other_count += stall_data.other_count;
+      stall_result->control_count += stall_data.control_count;
+      stall_result->pipestall_count += stall_data.pipestall_count;
+      stall_result->send_count += stall_data.send_count;
+      stall_result->dist_acc_count += stall_data.dist_acc_count;
+      stall_result->sbid_count += stall_data.sbid_count;
+      stall_result->sync_count += stall_data.sync_count;
+      stall_result->inst_fetch_count += stall_data.inst_fetch_count;
+      stall_result->active_count += stall_data.active_count;
 
       result->records_accumulated++;
    }

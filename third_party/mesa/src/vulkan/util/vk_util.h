@@ -26,6 +26,7 @@
 #include "compiler/shader_enums.h"
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "util/stack_array.h"
 #include "c99_compat.h"
 
 #include <stdlib.h>
@@ -319,6 +320,41 @@ mesa_to_vk_shader_stage(mesa_shader_stage mesa_stage)
    return (VkShaderStageFlagBits) (1 << ((uint32_t) mesa_stage));
 }
 
+/* this needs spec fixes */
+#define MESA_VK_SHADER_STAGE_WORKGRAPH_HACK_BIT_FIXME (1<<30)
+
+/* Internal version of VK_SHADER_STAGE_ALL which only includes valid bits. */
+#define MESA_VK_SHADER_STAGE_ALL (VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT |              \
+                                  VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR |        \
+                                  VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR |      \
+                                  VK_SHADER_STAGE_INTERSECTION_BIT_KHR | VK_SHADER_STAGE_CALLABLE_BIT_KHR | \
+                                  VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT)
+
+static inline VkShaderStageFlags
+vk_shader_stages_from_bind_point(VkPipelineBindPoint pipelineBindPoint)
+{
+   switch (pipelineBindPoint) {
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+    case VK_PIPELINE_BIND_POINT_EXECUTION_GRAPH_AMDX:
+      return VK_SHADER_STAGE_COMPUTE_BIT | MESA_VK_SHADER_STAGE_WORKGRAPH_HACK_BIT_FIXME;
+#endif
+   case VK_PIPELINE_BIND_POINT_COMPUTE:
+      return VK_SHADER_STAGE_COMPUTE_BIT;
+   case VK_PIPELINE_BIND_POINT_GRAPHICS:
+      return VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT;
+   case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:
+      return VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+             VK_SHADER_STAGE_ANY_HIT_BIT_KHR |
+             VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+             VK_SHADER_STAGE_MISS_BIT_KHR |
+             VK_SHADER_STAGE_INTERSECTION_BIT_KHR |
+             VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+   default:
+      UNREACHABLE("unknown bind point!");
+   }
+   return 0;
+}
+
 /* iterate over a sequence of indexed multidraws for VK_EXT_multi_draw extension */
 /* 'i' must be explicitly declared */
 #define vk_foreach_multi_draw_indexed(_draw, _i, _pDrawInfo, _num_draws, _stride) \
@@ -337,24 +373,7 @@ mesa_to_vk_shader_stage(mesa_shader_stage mesa_stage)
 struct nir_spirv_specialization;
 
 struct nir_spirv_specialization*
-vk_spec_info_to_nir_spirv(const VkSpecializationInfo *spec_info,
-                          uint32_t *out_num_spec_entries);
-
-#define STACK_ARRAY_SIZE 8
-
-/* Sometimes gcc may claim -Wmaybe-uninitialized for the stack array in some
- * places it can't verify that when size is 0 nobody down the call chain reads
- * the array. Please don't try to fix it by zero-initializing the array here
- * since it's used in a lot of different places. An "if (size == 0) return;"
- * may work for you.
- */
-#define STACK_ARRAY(type, name, size) \
-   type _stack_##name[STACK_ARRAY_SIZE]; \
-   type *const name = \
-     ((size) <= STACK_ARRAY_SIZE ? _stack_##name : (type *)malloc((size) * sizeof(type)))
-
-#define STACK_ARRAY_FINISH(name) \
-   if (name != _stack_##name) free(name)
+vk_spec_info_to_nir_spirv(const VkSpecializationInfo *vk_spec_info);
 
 static inline uint8_t
 vk_index_type_to_bytes(VkIndexType type)
@@ -429,6 +448,11 @@ enum mesa_prim vk_topology_to_mesa(VkPrimitiveTopology topology);
 
 #define vk_add_exec_statistic_bool(out, name, description, value)               \
    vk_add_exec_statistic(out, name, description, BOOL32, b32, value)
+
+#define vk_add_exec_statistic_str(out, name, description, value)               \
+   do {                                                                        \
+      /* Ignore string statistics in Vulkan drivers, at least for now */       \
+   } while(0)
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,12 @@
 
 #include "vn_renderer_internal.h"
 
+#ifdef HAVE_LIBDRM
+#include <xf86drm.h>
+
+#include "drm-uapi/dma-buf.h"
+#endif
+
 /* 3 seconds */
 #define VN_RENDERER_SHMEM_CACHE_EXPIRACY (3ll * 1000 * 1000)
 
@@ -179,4 +185,41 @@ vn_renderer_shmem_cache_get(struct vn_renderer_shmem_cache *cache,
    simple_mtx_unlock(&cache->mutex);
 
    return shmem;
+}
+
+int
+vn_renderer_bo_export_sync_file_internal(struct vn_renderer *renderer,
+                                         struct vn_renderer_bo *bo)
+{
+#ifdef HAVE_LIBDRM
+   /* Don't keep trying an IOCTL that doesn't exist. */
+   static bool no_dma_buf_sync_file = false;
+   if (no_dma_buf_sync_file)
+      return -1;
+
+   /* For simplicity, export dma-buf here and rely on the dma-buf sync file
+    * export api. On legacy kernels without the new uapi, for virtgpu backend,
+    * we do have the fallback option of doing DRM_IOCTL_VIRTGPU_WAIT instead.
+    */
+   int dma_buf_fd = vn_renderer_bo_export_dma_buf(renderer, bo);
+   if (dma_buf_fd < 0)
+      return -1;
+
+   struct dma_buf_export_sync_file export = {
+      .flags = DMA_BUF_SYNC_RW,
+      .fd = -1,
+   };
+   int ret = drmIoctl(dma_buf_fd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &export);
+
+   close(dma_buf_fd);
+
+   if (ret && (errno == ENOTTY || errno == EBADF || errno == ENOSYS)) {
+      no_dma_buf_sync_file = true;
+      return -1;
+   }
+
+   return export.fd;
+#else  /* HAVE_LIBDRM */
+   return -1;
+#endif /* HAVE_LIBDRM */
 }

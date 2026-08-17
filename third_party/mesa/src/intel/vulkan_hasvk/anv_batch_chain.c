@@ -100,8 +100,7 @@ anv_reloc_list_init_clone(struct anv_reloc_list *list,
       list->deps =
          vk_alloc(alloc, list->dep_words * sizeof(BITSET_WORD), 8,
                   VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
-      memcpy(list->deps, other_list->deps,
-             list->dep_words * sizeof(BITSET_WORD));
+      __bitset_copy(list->deps, other_list->deps, list->dep_words);
    } else {
       list->deps = NULL;
    }
@@ -171,8 +170,7 @@ anv_reloc_list_grow_deps(struct anv_reloc_list *list,
    list->deps = new_deps;
 
    /* Zero out the new data */
-   memset(list->deps + list->dep_words, 0,
-          (new_length - list->dep_words) * sizeof(BITSET_WORD));
+   __bitset_zero(list->deps + list->dep_words, new_length - list->dep_words);
    list->dep_words = new_length;
 
    return VK_SUCCESS;
@@ -243,7 +241,7 @@ anv_reloc_list_clear(struct anv_reloc_list *list)
 {
    list->num_relocs = 0;
    if (list->dep_words > 0)
-      memset(list->deps, 0, list->dep_words * sizeof(BITSET_WORD));
+      __bitset_zero(list->deps, list->dep_words);
 }
 
 static VkResult
@@ -1895,7 +1893,7 @@ setup_execbuf_for_cmd_buffers(struct anv_execbuf *execbuf,
       __builtin_ia32_mfence();
       for (uint32_t i = 0; i < num_cmd_buffers; i++) {
          u_vector_foreach(bbo, &cmd_buffers[i]->seen_bbos) {
-            intel_flush_range_no_fence((*bbo)->bo->map, (*bbo)->length);
+            util_flush_range_no_fence((*bbo)->bo->map, (*bbo)->length);
          }
       }
       __builtin_ia32_mfence();
@@ -1981,7 +1979,7 @@ setup_utrace_execbuf(struct anv_execbuf *execbuf, struct anv_queue *queue,
 
 #ifdef SUPPORT_INTEL_INTEGRATED_GPUS
    if (device->physical->memory.need_flush)
-      intel_flush_range(flush->batch_bo->map, flush->batch_bo->size);
+      util_flush_range(flush->batch_bo->map, flush->batch_bo->size);
 #endif
 
    execbuf->execbuf = (struct drm_i915_gem_execbuffer2) {
@@ -2398,7 +2396,7 @@ anv_queue_submit_simple_batch(struct anv_queue *queue,
    memcpy(batch_bo->map, batch->start, batch_size);
 #ifdef SUPPORT_INTEL_INTEGRATED_GPUS
    if (device->physical->memory.need_flush)
-      intel_flush_range(batch_bo->map, batch_size);
+      util_flush_range(batch_bo->map, batch_size);
 #endif
 
    struct anv_execbuf execbuf = {

@@ -1,24 +1,6 @@
 /*
  * Copyright © 2014 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "../intel_nir.h"
@@ -167,7 +149,6 @@ static bool
 is_input(nir_intrinsic_instr *intrin)
 {
    return intrin->intrinsic == nir_intrinsic_load_input ||
-          intrin->intrinsic == nir_intrinsic_load_per_primitive_input ||
           intrin->intrinsic == nir_intrinsic_load_per_vertex_input ||
           intrin->intrinsic == nir_intrinsic_load_interpolated_input;
 }
@@ -201,15 +182,17 @@ remap_patch_urb_offsets(nir_block *block, nir_builder *b,
          if (remap_tess_levels(b, intrin, tes_primitive_mode))
             continue;
 
-         int vue_slot = vue_map->varying_to_slot[intrin->const_index[0]];
+         int vue_slot = vue_map->varying_to_slot[nir_intrinsic_base(intrin)];
          assert(vue_slot != -1);
-         intrin->const_index[0] = vue_slot;
+         nir_intrinsic_set_base(intrin, vue_slot);
 
          nir_src *vertex = nir_get_io_arrayed_index_src(intrin);
          if (vertex) {
             if (nir_src_is_const(*vertex)) {
-               intrin->const_index[0] += nir_src_as_uint(*vertex) *
-                                         vue_map->num_per_vertex_slots;
+               nir_intrinsic_set_base(intrin,
+                                      nir_intrinsic_base(intrin) +
+                                      nir_src_as_uint(*vertex) *
+                                      vue_map->num_per_vertex_slots);
             } else {
                b->cursor = nir_before_instr(&intrin->instr);
 
@@ -227,6 +210,13 @@ remap_patch_urb_offsets(nir_block *block, nir_builder *b,
                            offset->ssa);
 
                nir_src_rewrite(offset, total_offset);
+
+               /* Putting an address into offset_src requires that NIR
+                * validation of IO intrinsics is disabled.
+                */
+               nir_io_semantics io_sem = nir_intrinsic_io_semantics(intrin);
+               io_sem.no_validate = 1;
+               nir_intrinsic_set_io_semantics(intrin, io_sem);
             }
          }
       }
@@ -250,10 +240,8 @@ elk_nir_lower_vs_inputs(nir_shader *nir,
    nir_lower_io(nir, nir_var_shader_in, elk_type_size_vec4,
                 nir_lower_io_lower_64bit_to_32);
 
-   /* This pass needs actual constants */
+   /* Fold constant offset srcs for IO. */
    nir_opt_constant_folding(nir);
-
-   nir_io_add_const_offset_to_base(nir, nir_var_shader_in);
 
    elk_nir_apply_attribute_workarounds(nir, vs_attrib_wa_flags);
 
@@ -374,10 +362,8 @@ elk_nir_lower_vue_inputs(nir_shader *nir,
    nir_lower_io(nir, nir_var_shader_in, elk_type_size_vec4,
                 nir_lower_io_lower_64bit_to_32);
 
-   /* This pass needs actual constants */
+   /* Fold constant offset srcs for IO. */
    nir_opt_constant_folding(nir);
-
-   nir_io_add_const_offset_to_base(nir, nir_var_shader_in);
 
    nir_foreach_function_impl(impl, nir) {
       nir_foreach_block(block, impl) {
@@ -422,10 +408,8 @@ elk_nir_lower_tes_inputs(nir_shader *nir, const struct intel_vue_map *vue_map)
    nir_lower_io(nir, nir_var_shader_in, elk_type_size_vec4,
                 nir_lower_io_lower_64bit_to_32);
 
-   /* This pass needs actual constants */
+   /* Fold constant offset srcs for IO. */
    nir_opt_constant_folding(nir);
-
-   nir_io_add_const_offset_to_base(nir, nir_var_shader_in);
 
    nir_foreach_function_impl(impl, nir) {
       nir_builder b = nir_builder_create(impl);
@@ -562,7 +546,7 @@ elk_nir_lower_load_frag_coord_w_gfx4(nir_shader *shader)
 void
 elk_nir_lower_fs_inputs(nir_shader *nir,
                         const struct intel_device_info *devinfo,
-                        const struct elk_wm_prog_key *key)
+                        const struct elk_fs_prog_key *key)
 {
    nir_foreach_shader_in_variable(var, nir) {
       var->data.driver_location = var->data.location;
@@ -593,7 +577,10 @@ elk_nir_lower_fs_inputs(nir_shader *nir,
                 nir_lower_io_use_interpolated_input_intrinsics);
 
    if (key->multisample_fbo == ELK_NEVER) {
-      nir_lower_single_sampled(nir);
+      nir_lower_single_sampled_options lss_opts = {
+         .lower_sample_mask_in = true,
+      };
+      nir_lower_single_sampled(nir, &lss_opts);
    } else if (key->persample_interp == ELK_ALWAYS) {
       nir_shader_intrinsics_pass(nir, lower_barycentric_per_sample,
                                    nir_metadata_control_flow,
@@ -604,10 +591,8 @@ elk_nir_lower_fs_inputs(nir_shader *nir,
                                 nir_metadata_control_flow,
                                 NULL);
 
-   /* This pass needs actual constants */
+   /* Fold constant offset srcs for IO. */
    nir_opt_constant_folding(nir);
-
-   nir_io_add_const_offset_to_base(nir, nir_var_shader_in);
 }
 
 void
@@ -632,10 +617,8 @@ elk_nir_lower_tcs_outputs(nir_shader *nir, const struct intel_vue_map *vue_map,
    nir_lower_io(nir, nir_var_shader_out, elk_type_size_vec4,
                 nir_lower_io_lower_64bit_to_32);
 
-   /* This pass needs actual constants */
+   /* Fold constant offset srcs for IO. */
    nir_opt_constant_folding(nir);
-
-   nir_io_add_const_offset_to_base(nir, nir_var_shader_out);
 
    nir_foreach_function_impl(impl, nir) {
       nir_builder b = nir_builder_create(impl);
@@ -655,6 +638,7 @@ elk_nir_lower_fs_outputs(nir_shader *nir)
    }
 
    nir_lower_io(nir, nir_var_shader_out, elk_type_size_dvec4, 0);
+   nir->info.disable_output_offset_src_constant_folding = true;
 }
 
 #define OPT(pass, ...) ({                                  \
@@ -670,10 +654,8 @@ elk_nir_optimize(nir_shader *nir, bool is_scalar,
                  const struct intel_device_info *devinfo)
 {
    bool progress;
-   unsigned lower_flrp =
-      (nir->options->lower_flrp16 ? 16 : 0) |
-      (nir->options->lower_flrp32 ? 32 : 0) |
-      (nir->options->lower_flrp64 ? 64 : 0);
+
+   OPT(nir_opt_uub, &(nir_opt_uub_options){});
 
    do {
       progress = false;
@@ -700,13 +682,13 @@ elk_nir_optimize(nir_shader *nir, bool is_scalar,
          OPT(nir_opt_shrink_vectors, false);
       }
 
-      OPT(nir_copy_prop);
+      OPT(nir_opt_copy_prop);
 
       if (is_scalar) {
          OPT(nir_lower_phis_to_scalar, NULL, NULL);
       }
 
-      OPT(nir_copy_prop);
+      OPT(nir_opt_copy_prop);
       OPT(nir_opt_dce);
       OPT(nir_opt_cse);
       OPT(nir_opt_combine_stores, nir_var_all);
@@ -743,6 +725,7 @@ elk_nir_optimize(nir_shader *nir, bool is_scalar,
       OPT(nir_opt_peephole_select, &peephole_select_options);
 
       OPT(nir_opt_intrinsics);
+      OPT(nir_opt_fp_math_ctrl);
       OPT(nir_opt_idiv_const, 32);
       OPT(nir_opt_algebraic);
 
@@ -755,26 +738,13 @@ elk_nir_optimize(nir_shader *nir, bool is_scalar,
       OPT(nir_lower_constant_convert_alu_types);
       OPT(nir_opt_constant_folding);
 
-      if (lower_flrp != 0) {
-         if (OPT(nir_lower_flrp,
-                 lower_flrp,
-                 false /* always_precise */)) {
-            OPT(nir_opt_constant_folding);
-         }
-
-         /* Nothing should rematerialize any flrps, so we only need to do this
-          * lowering once.
-          */
-         lower_flrp = 0;
-      }
-
       OPT(nir_opt_dead_cf);
       if (OPT(nir_opt_loop)) {
          /* If nir_opt_loop makes progress, then we need to clean
           * things up if we want any hope of nir_opt_if or nir_opt_loop_unroll
           * to make progress.
           */
-         OPT(nir_copy_prop);
+         OPT(nir_opt_copy_prop);
          OPT(nir_opt_dce);
       }
       OPT(nir_opt_if, nir_opt_if_optimize_phi_true_false);
@@ -788,7 +758,7 @@ elk_nir_optimize(nir_shader *nir, bool is_scalar,
          OPT(nir_opt_loop_unroll);
       }
       OPT(nir_opt_remove_phis);
-      OPT(nir_opt_gcm, false);
+      OPT(nir_opt_gcm, false, true);
       OPT(nir_opt_undef);
       OPT(nir_lower_pack);
    } while (progress);
@@ -875,6 +845,8 @@ lower_bit_size_callback(const nir_instr *instr, UNUSED void *data)
       case nir_intrinsic_shuffle_xor:
       case nir_intrinsic_shuffle_up:
       case nir_intrinsic_shuffle_down:
+      case nir_intrinsic_shuffle_up_intel:
+      case nir_intrinsic_shuffle_down_intel:
       case nir_intrinsic_quad_broadcast:
       case nir_intrinsic_quad_swap_horizontal:
       case nir_intrinsic_quad_swap_vertical:
@@ -1048,6 +1020,13 @@ elk_preprocess_nir(const struct elk_compiler *compiler, nir_shader *nir,
 
    elk_nir_optimize(nir, is_scalar, devinfo);
 
+   const unsigned lower_flrp =
+      (nir->options->lower_flrp16 ? 16 : 0) |
+      (nir->options->lower_flrp32 ? 32 : 0) |
+      (nir->options->lower_flrp64 ? 64 : 0);
+
+   OPT(nir_lower_flrp, lower_flrp, false /* always_precise */);
+
    OPT(nir_lower_doubles, opts->softfp64, nir->options->lower_doubles_options);
    if (OPT(nir_lower_int64_float_conversions)) {
       OPT(nir_opt_algebraic);
@@ -1092,7 +1071,7 @@ elk_preprocess_nir(const struct elk_compiler *compiler, nir_shader *nir,
 
    nir_variable_mode indirect_mask =
       elk_nir_no_indirect_mask(compiler, nir->info.stage);
-   OPT(nir_lower_indirect_derefs, indirect_mask, UINT32_MAX);
+   OPT(nir_lower_indirect_derefs_to_if_else_trees, indirect_mask, UINT32_MAX);
 
    /* Even in cases where we can handle indirect temporaries via scratch, we
     * it can still be expensive.  Lower indirects on small arrays to
@@ -1108,7 +1087,7 @@ elk_preprocess_nir(const struct elk_compiler *compiler, nir_shader *nir,
     * that one kerbal space program shader.
     */
    if (is_scalar && !(indirect_mask & nir_var_function_temp))
-      OPT(nir_lower_indirect_derefs, nir_var_function_temp, 16);
+      OPT(nir_lower_indirect_derefs_to_if_else_trees, nir_var_function_temp, 16);
 
    /* Lower array derefs of vectors for SSBO and UBO loads.  For both UBOs and
     * SSBOs, our back-end is capable of loading an entire vec4 at a time and
@@ -1205,10 +1184,10 @@ elk_nir_link_shaders(const struct elk_compiler *compiler,
        * temporaries so we need to lower indirects on any of the
        * varyings we have demoted here.
        */
-      NIR_PASS(_, producer, nir_lower_indirect_derefs,
+      NIR_PASS(_, producer, nir_lower_indirect_derefs_to_if_else_trees,
                   elk_nir_no_indirect_mask(compiler, producer->info.stage),
                   UINT32_MAX);
-      NIR_PASS(_, consumer, nir_lower_indirect_derefs,
+      NIR_PASS(_, consumer, nir_lower_indirect_derefs_to_if_else_trees,
                   elk_nir_no_indirect_mask(compiler, consumer->info.stage),
                   UINT32_MAX);
 
@@ -1233,7 +1212,7 @@ elk_nir_link_shaders(const struct elk_compiler *compiler,
        * that we need to clean up.
        */
       NIR_PASS(_, producer, nir_lower_io_vars_to_temporaries,
-                 nir_shader_get_entrypoint(producer), true, false);
+                 nir_shader_get_entrypoint(producer), nir_var_shader_out);
       NIR_PASS(_, producer, nir_lower_global_vars_to_local);
       NIR_PASS(_, producer, nir_split_var_copies);
       NIR_PASS(_, producer, nir_lower_var_copies);
@@ -1440,7 +1419,7 @@ elk_vectorize_lower_mem_access(nir_shader *nir,
       progress = false;
 
       OPT(nir_lower_pack);
-      OPT(nir_copy_prop);
+      OPT(nir_opt_copy_prop);
       OPT(nir_opt_dce);
       OPT(nir_opt_cse);
       OPT(nir_opt_algebraic);
@@ -1476,7 +1455,7 @@ elk_postprocess_nir(nir_shader *nir, const struct elk_compiler *compiler,
 
    UNUSED bool progress; /* Written by OPT */
 
-   OPT(intel_nir_lower_sparse_intrinsics);
+   OPT(intel_nir_lower_sparse_intrinsics, false);
 
    OPT(nir_lower_bit_size, lower_bit_size_callback, (void *)compiler);
 
@@ -1522,7 +1501,7 @@ elk_postprocess_nir(nir_shader *nir, const struct elk_compiler *compiler,
       OPT(intel_nir_opt_peephole_imul32x16);
 
    if (OPT(nir_opt_comparison_pre)) {
-      OPT(nir_copy_prop);
+      OPT(nir_opt_copy_prop);
       OPT(nir_opt_dce);
       OPT(nir_opt_cse);
 
@@ -1558,7 +1537,7 @@ elk_postprocess_nir(nir_shader *nir, const struct elk_compiler *compiler,
          if (is_scalar)
             OPT(nir_opt_constant_folding);
 
-         OPT(nir_copy_prop);
+         OPT(nir_opt_copy_prop);
          OPT(nir_opt_dce);
          OPT(nir_opt_cse);
       }
@@ -1583,12 +1562,12 @@ elk_postprocess_nir(nir_shader *nir, const struct elk_compiler *compiler,
       if (is_scalar)
          OPT(nir_opt_constant_folding);
 
-      OPT(nir_copy_prop);
+      OPT(nir_opt_copy_prop);
       OPT(nir_opt_dce);
       OPT(nir_opt_cse);
    }
 
-   OPT(nir_copy_prop);
+   OPT(nir_opt_copy_prop);
    OPT(nir_opt_dce);
 
    nir_move_options common = nir_move_const_undef | nir_move_load_input |
@@ -1610,8 +1589,12 @@ elk_postprocess_nir(nir_shader *nir, const struct elk_compiler *compiler,
       };
       OPT(nir_lower_subgroups, &subgroups_options);
 
-      if (OPT(nir_lower_int64))
+      if (OPT(nir_lower_int64)) {
          elk_nir_optimize(nir, is_scalar, devinfo);
+
+         /* elk_nir_optimize undoes late lowerings. */
+         OPT(nir_opt_algebraic_late);
+      }
    }
 
    /* Do this only after the last opt_gcm. GCM will undo this lowering. */
@@ -1620,7 +1603,7 @@ elk_postprocess_nir(nir_shader *nir, const struct elk_compiler *compiler,
    }
 
    OPT(nir_lower_bool_to_int32);
-   OPT(nir_copy_prop);
+   OPT(nir_opt_copy_prop);
    OPT(nir_opt_dce);
 
    OPT(nir_lower_locals_to_regs, 32);
@@ -1948,7 +1931,6 @@ elk_nir_load_global_const(nir_builder *b, nir_intrinsic_instr *load_uniform,
 
    unsigned bit_size = load_uniform->def.bit_size;
    assert(bit_size >= 8 && bit_size % 8 == 0);
-   unsigned byte_size = bit_size / 8;
    nir_def *sysval;
 
    if (nir_src_is_const(load_uniform->src[0])) {
@@ -1957,7 +1939,7 @@ elk_nir_load_global_const(nir_builder *b, nir_intrinsic_instr *load_uniform,
                         nir_src_as_uint(load_uniform->src[0]);
 
       /* Things should be component-aligned. */
-      assert(offset % byte_size == 0);
+      assert(offset % (bit_size / 8) == 0);
 
       unsigned suboffset = offset % 64;
       uint64_t aligned_offset = offset - suboffset;
@@ -1976,8 +1958,7 @@ elk_nir_load_global_const(nir_builder *b, nir_intrinsic_instr *load_uniform,
          nir_iadd_imm(b, load_uniform->src[0].ssa,
                          off + nir_intrinsic_base(load_uniform));
       nir_def *addr = nir_iadd(b, base_addr, nir_u2u64(b, offset32));
-      sysval = nir_load_global_constant(b, addr, byte_size,
-                                        load_uniform->num_components, bit_size);
+      sysval = nir_load_global_constant(b, load_uniform->num_components, bit_size, addr);
    }
 
    return sysval;

@@ -134,6 +134,7 @@ typedef struct _pco_cs_data {
 
    pco_range shmem;
    bool zero_shmem;
+   bool global_shmem;
 } pco_cs_data;
 
 /** PCO image descriptor metadata. */
@@ -256,4 +257,6 @@ typedef struct PACKED _pco_precomp_data {
 static_assert(sizeof(pco_precomp_data) == 8, "sizeof(pco_precomp_data) != 8");
 
 pco_precomp_data pco_get_precomp_data(pco_shader *shader);
+
+struct pvr_stats pco_get_pvr_stats(pco_shader *shader);
 #endif /* PCO_DATA_H */

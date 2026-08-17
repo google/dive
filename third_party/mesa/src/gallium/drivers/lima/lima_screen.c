@@ -45,6 +45,8 @@
 
 #include "xf86drm.h"
 
+#include "pan_props.h"
+
 int lima_plb_max_blk = 0;
 int lima_plb_pp_stream_cache_size = 0;
 
@@ -168,7 +170,7 @@ lima_init_screen_caps(struct pipe_screen *screen)
    caps->max_texture_3d_levels =
    caps->max_texture_cube_levels = LIMA_MAX_MIP_LEVELS;
 
-   caps->vendor_id = 0x13B5;
+   caps->vendor_id = ARM_VENDOR_ID;
 
    caps->video_memory = 0;
 
@@ -579,8 +581,8 @@ lima_screen_create(int fd, const struct pipe_screen_config *config,
    lima_plb_pp_stream_cache_size = MAX2(128 * 1024 * lima_ctx_num_plb,
                                         lima_plb_pp_stream_cache_size);
 
-   driParseConfigFiles(config->options, config->options_info, 0,
-                       "lima", NULL, NULL, NULL, 0, NULL, 0);
+   driParseConfigFiles(config->options, config->options_info,
+                       &(driConfigFileParseParams) { .driverName = "lima" });
 
    if (!lima_screen_query_info(screen))
       goto err_out0;

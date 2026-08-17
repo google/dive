@@ -46,9 +46,19 @@ struct vk_features;
 struct vk_physical_device;
 struct vk_pipeline;
 struct vk_pipeline_robustness_state;
+struct vk_sampler_state;
+
+bool vk_validate_shader_binaries(void);
 
 int vk_shader_cmp_graphics_stages(mesa_shader_stage a, mesa_shader_stage b);
 int vk_shader_cmp_rt_stages(mesa_shader_stage a, mesa_shader_stage b);
+
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+#define MESA_VK_PIPELINE_RAY_TRACING_FLAGS_BETA ( \
+      VK_PIPELINE_CREATE_2_RAY_TRACING_DISPLACEMENT_MICROMAP_BIT_NV)
+#else
+#define MESA_VK_PIPELINE_RAY_TRACING_FLAGS_BETA (0)
+#endif
 
 #define MESA_VK_PIPELINE_RAY_TRACING_FLAGS ( \
    VK_PIPELINE_CREATE_2_RAY_TRACING_SKIP_BUILT_IN_PRIMITIVES_BIT_KHR | \
@@ -61,9 +71,8 @@ int vk_shader_cmp_rt_stages(mesa_shader_stage a, mesa_shader_stage b);
    VK_PIPELINE_CREATE_2_RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_BIT_KHR | \
    VK_PIPELINE_CREATE_2_RAY_TRACING_SHADER_GROUP_HANDLE_CAPTURE_REPLAY_BIT_KHR | \
    VK_PIPELINE_CREATE_2_RAY_TRACING_ALLOW_MOTION_BIT_NV | \
-   VK_PIPELINE_CREATE_2_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT | \
-   VK_PIPELINE_CREATE_2_RAY_TRACING_DISPLACEMENT_MICROMAP_BIT_NV | \
-   VK_PIPELINE_CREATE_2_DISALLOW_OPACITY_MICROMAP_BIT_ARM)
+   VK_PIPELINE_CREATE_2_DISALLOW_OPACITY_MICROMAP_BIT_ARM | \
+   MESA_VK_PIPELINE_RAY_TRACING_FLAGS_BETA)
 
 struct vk_shader_compile_info {
    mesa_shader_stage stage;
@@ -92,23 +101,14 @@ struct vk_shader_compile_info {
    uint32_t set_layout_count;
    struct vk_descriptor_set_layout * const *set_layouts;
 
+   uint32_t embedded_sampler_count;
+   const struct vk_sampler_state* embedded_samplers;
+
    uint32_t push_constant_range_count;
    const VkPushConstantRange *push_constant_ranges;
 };
 
 struct vk_shader_ops;
-
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic error "-Wpadded"
-#endif
-struct vk_shader_pipeline_cache_key {
-   mesa_shader_stage stage;
-   blake3_hash blake3;
-};
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 
 struct vk_shader {
    struct vk_object_base base;
@@ -131,7 +131,7 @@ struct vk_shader {
    /* Used for the generic VkPipeline implementation */
    struct {
       struct vk_pipeline_cache_object cache_obj;
-      struct vk_shader_pipeline_cache_key cache_key;
+      blake3_hash cache_key;
    } pipeline;
 };
 
@@ -203,6 +203,14 @@ void *vk_shader_multizalloc(struct vk_device *device,
 void vk_shader_free(struct vk_device *device,
                     const VkAllocationCallbacks *alloc,
                     struct vk_shader *shader);
+
+VkResult vk_compile_shaders(struct vk_device *device,
+                            uint32_t shader_count,
+                            struct vk_shader_compile_info *infos,
+                            const struct vk_graphics_pipeline_state *state,
+                            const struct vk_features *enabled_features,
+                            const VkAllocationCallbacks* pAllocator,
+                            struct vk_shader **shaders_out);
 
 static inline void
 vk_shader_destroy(struct vk_device *device,
@@ -315,6 +323,18 @@ struct vk_device_shader_ops {
                                                uint32_t shader_count,
                                                void *output);
 
+   /** Enable a RT shader for replay
+    *
+    * The @replay_data pointer is the pointer handed to
+    * VkRayTracingShaderGroupCreateInfoKHR::pShaderGroupCaptureReplayHandle on
+    * replay or NULL on capture.
+    */
+   void (*replay_rt_shader_group)(struct vk_device *vk_device,
+                                  VkRayTracingShaderGroupTypeKHR type,
+                                  uint32_t shader_count,
+                                  struct vk_shader **vk_shaders,
+                                  const void *replay_data);
+
    /** Bind a set of shaders
     *
     * This is roughly equivalent to vkCmdBindShadersEXT()
@@ -331,7 +351,8 @@ struct vk_device_shader_ops {
    /** Sets scratch size & ray query count for RT pipelines */
    void (*cmd_set_rt_state)(struct vk_command_buffer *cmd_buffer,
                             VkDeviceSize scratch_size,
-                            uint32_t ray_queries);
+                            uint32_t ray_queries,
+                            const uint8_t *dynamic_descriptor_offsets);
 
    /** Sets stack size for RT pipelines */
    void (*cmd_set_stack_size)(struct vk_command_buffer *cmd_buffer,

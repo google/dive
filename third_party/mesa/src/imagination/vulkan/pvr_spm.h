@@ -44,6 +44,7 @@
 
 #include "hwdef/rogue_hw_defs.h"
 #include "pvr_limits.h"
+#include "pvr_macros.h"
 #include "util/simple_mtx.h"
 
 struct pvr_bo;
@@ -51,6 +52,7 @@ struct pvr_device;
 struct pvr_framebuffer;
 struct pvr_render_pass;
 struct pvr_renderpass_hwsetup_render;
+struct pvr_render_state;
 struct pvr_spm_scratch_buffer;
 
 struct pvr_spm_scratch_buffer_store {
@@ -84,6 +86,21 @@ struct pvr_spm_bgobj_state {
 void pvr_spm_init_scratch_buffer_store(struct pvr_device *device);
 void pvr_spm_finish_scratch_buffer_store(struct pvr_device *device);
 
+VkResult pvr_spm_scratch_buffer_get_buffer(
+   struct pvr_device *device,
+   uint64_t size,
+   struct pvr_spm_scratch_buffer **const buffer_out);
+void pvr_spm_scratch_buffer_release(struct pvr_device *device,
+                                    struct pvr_spm_scratch_buffer *buffer);
+
+void pvr_spm_finish_eot_state(struct pvr_device *device,
+                              struct pvr_spm_eot_state *spm_eot_state);
+
+void pvr_spm_finish_bgobj_state(struct pvr_device *device,
+                                struct pvr_spm_bgobj_state *spm_bgobj_state);
+
+#ifdef PVR_PER_ARCH
+
 /* A scratch buffer is required in various situations:
  *
  *  - An MSAA workload which needs saving to a larger buffer than the output for
@@ -92,37 +109,43 @@ void pvr_spm_finish_scratch_buffer_store(struct pvr_device *device);
  *    VK_ATTACHMENT_STORE_OP_NONE, not currently supported) or lazily allocated
  *    attachments with no backing.
  */
-uint64_t
-pvr_spm_scratch_buffer_calc_required_size(const struct pvr_render_pass *pass,
-                                          uint32_t framebuffer_width,
-                                          uint32_t framebuffer_height);
-VkResult pvr_spm_scratch_buffer_get_buffer(
-   struct pvr_device *device,
-   uint64_t size,
-   struct pvr_spm_scratch_buffer **const buffer_out);
-void pvr_spm_scratch_buffer_release(struct pvr_device *device,
-                                    struct pvr_spm_scratch_buffer *buffer);
+uint64_t PVR_PER_ARCH(spm_scratch_buffer_calc_required_size)(
+   const struct pvr_renderpass_hwsetup_render *renders,
+   uint32_t render_count,
+   uint32_t sample_count,
+   uint32_t framebuffer_width,
+   uint32_t framebuffer_height);
+
+#   define pvr_arch_spm_scratch_buffer_calc_required_size \
+      PVR_PER_ARCH(spm_scratch_buffer_calc_required_size)
 
 /* The SPM load programs are needed for the SPM background object load op. */
-VkResult pvr_device_init_spm_load_state(struct pvr_device *device);
-void pvr_device_finish_spm_load_state(struct pvr_device *device);
+VkResult PVR_PER_ARCH(device_init_spm_load_state)(struct pvr_device *device);
 
-VkResult
-pvr_spm_init_eot_state(struct pvr_device *device,
-                       struct pvr_spm_eot_state *spm_eot_state,
-                       const struct pvr_framebuffer *framebuffer,
-                       const struct pvr_renderpass_hwsetup_render *hw_render);
+#   define pvr_arch_device_init_spm_load_state \
+      PVR_PER_ARCH(device_init_spm_load_state)
 
-void pvr_spm_finish_eot_state(struct pvr_device *device,
-                              struct pvr_spm_eot_state *spm_eot_state);
+void PVR_PER_ARCH(device_finish_spm_load_state)(struct pvr_device *device);
 
-VkResult
-pvr_spm_init_bgobj_state(struct pvr_device *device,
-                         struct pvr_spm_bgobj_state *spm_bgobj_state,
-                         const struct pvr_framebuffer *framebuffer,
-                         const struct pvr_renderpass_hwsetup_render *hw_render);
+#   define pvr_arch_device_finish_spm_load_state \
+      PVR_PER_ARCH(device_finish_spm_load_state)
 
-void pvr_spm_finish_bgobj_state(struct pvr_device *device,
-                                struct pvr_spm_bgobj_state *spm_bgobj_state);
+VkResult PVR_PER_ARCH(spm_init_eot_state)(
+   struct pvr_device *device,
+   struct pvr_spm_eot_state *spm_eot_state,
+   const struct pvr_render_state *rstate,
+   const struct pvr_renderpass_hwsetup_render *hw_render);
+
+#   define pvr_arch_spm_init_eot_state PVR_PER_ARCH(spm_init_eot_state)
+
+VkResult PVR_PER_ARCH(spm_init_bgobj_state)(
+   struct pvr_device *device,
+   struct pvr_spm_bgobj_state *spm_bgobj_state,
+   const struct pvr_render_state *rstate,
+   const struct pvr_renderpass_hwsetup_render *hw_render);
+
+#   define pvr_arch_spm_init_bgobj_state PVR_PER_ARCH(spm_init_bgobj_state)
+
+#endif /* PVR_PER_ARCH */
 
 #endif /* PVR_SPM_H */

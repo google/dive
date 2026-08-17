@@ -42,8 +42,11 @@ print_metric_set(const struct intel_perf_query_info *metric_set)
 {
    for (uint32_t c = 0; c < metric_set->n_counters; c++) {
       const struct intel_perf_query_counter *counter = &metric_set->counters[c];
-      fprintf(stdout, "   %s: offset=%zx/0x%zx name=%s\n",
-              counter->symbol_name, counter->offset, counter->offset, counter->name);
+      fprintf(stdout, "   %s: offset=%zx/0x%zx name=%s [%s, %s, %s]\n",
+              counter->symbol_name, counter->offset, counter->offset, counter->name,
+              intel_perf_counter_type_name(counter->type),
+              intel_perf_counter_data_type_name(counter->data_type),
+              intel_perf_counter_units_name(counter->units));
    }
 }
 
@@ -97,12 +100,6 @@ main(int argc, char *argv[])
 
    struct intel_perf_config *perf_cfg = intel_perf_new(NULL);
    intel_perf_init_metrics(perf_cfg, &devinfo, -1, true, true);
-
-   if (!(perf_cfg->features_supported & INTEL_PERF_FEATURE_QUERY_PERF)) {
-      fprintf(stderr, "No supported queries for platform.\n");
-      intel_perf_free(perf_cfg);
-      return EXIT_FAILURE;
-   }
 
    if (print_metric) {
       bool found = false;

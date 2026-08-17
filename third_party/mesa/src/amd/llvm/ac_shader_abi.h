@@ -7,10 +7,8 @@
 #ifndef AC_SHADER_ABI_H
 #define AC_SHADER_ABI_H
 
-#include "ac_shader_args.h"
 #include "ac_shader_util.h"
 #include "compiler/shader_enums.h"
-#include "nir_defines.h"
 #include <llvm-c/Core.h>
 
 #include <assert.h>
@@ -25,9 +23,10 @@ struct ac_shader_abi {
    LLVMValueRef outputs[AC_LLVM_MAX_OUTPUTS * 4];
    bool is_16bit[AC_LLVM_MAX_OUTPUTS * 4];
 
-   LLVMValueRef (*load_tess_varyings)(struct ac_shader_abi *abi, LLVMTypeRef type,
-                                      unsigned driver_location, unsigned component,
-                                      unsigned num_components);
+   /* The result must be either scalar or vector i16 or i32. */
+   LLVMValueRef (*load_tess_varyings)(struct ac_shader_abi *abi, unsigned num_components,
+                                      unsigned bit_size, gl_varying_slot slot, unsigned component,
+                                      bool high_16bits);
 
    LLVMValueRef (*load_ubo)(struct ac_shader_abi *abi, LLVMValueRef index);
 
@@ -62,9 +61,6 @@ struct ac_shader_abi {
 
    /* Clamp div by 0 (so it won't produce NaN) */
    bool clamp_div_by_zero;
-
-   /* Whether to inline the compute dispatch size in user sgprs. */
-   bool load_grid_size_from_user_sgpr;
 
    /* Whether to disable anisotropic filtering. */
    bool disable_aniso_single_level;

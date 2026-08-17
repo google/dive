@@ -42,10 +42,10 @@ lower_point_size_intrin(nir_builder *b, nir_intrinsic_instr *intr, void *data)
 
    if (intr->intrinsic == nir_intrinsic_store_deref) {
       nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
-      nir_variable *var = nir_deref_instr_get_variable(deref);
-      if (!var)
+      if (!nir_deref_mode_is(deref, nir_var_shader_out))
          return false;
 
+      nir_variable *var = nir_deref_instr_get_variable(deref);
       location = var->data.location;
       psiz_src = &intr->src[1];
    } else if (intr->intrinsic == nir_intrinsic_store_output ||
@@ -63,10 +63,10 @@ lower_point_size_intrin(nir_builder *b, nir_intrinsic_instr *intr, void *data)
    assert(psiz->num_components == 1);
 
    if (minmax[0] > 0.0f)
-      psiz = nir_fmax(b, psiz, nir_imm_float(b, minmax[0]));
+      psiz = nir_fmax(b, psiz, nir_imm_floatN_t(b, minmax[0], psiz->bit_size));
 
    if (minmax[1] > 0.0f)
-      psiz = nir_fmin(b, psiz, nir_imm_float(b, minmax[1]));
+      psiz = nir_fmin(b, psiz, nir_imm_floatN_t(b, minmax[1], psiz->bit_size));
 
    nir_src_rewrite(psiz_src, psiz);
 

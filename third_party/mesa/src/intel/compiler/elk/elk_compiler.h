@@ -1,24 +1,6 @@
 /*
- * Copyright © 2010 - 2015 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * Copyright © 2010-2015 Intel Corporation
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -28,7 +10,7 @@
 #include "dev/intel_device_info.h"
 #include "isl/isl.h"
 #include "util/macros.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "util/enum_operators.h"
 #include "util/ralloc.h"
 #include "util/u_math.h"
@@ -107,14 +89,6 @@ struct elk_compiler {
     * whether nir_opt_large_constants will be run.
     */
    bool supports_shader_constants;
-
-   /**
-    * Whether indirect UBO loads should use the sampler or go through the
-    * data/constant cache.  For the sampler, UBO surface states have to be set
-    * up with VK_FORMAT_R32G32B32A32_FLOAT whereas if it's going through the
-    * constant or data cache, UBOs must use VK_FORMAT_RAW.
-    */
-   bool indirect_ubos_use_sampler;
 
    /** Whether we have an original 965G/GM clipping bug */
    bool has_negative_rhw_bug;
@@ -480,7 +454,7 @@ elk_sometimes_invert(enum elk_sometimes x)
 }
 
 /** The program key for Fragment/Pixel Shaders. */
-struct elk_wm_prog_key {
+struct elk_fs_prog_key {
    struct elk_base_prog_key base;
 
    uint64_t input_slots_valid;
@@ -562,7 +536,7 @@ union elk_any_prog_key {
    struct elk_tcs_prog_key tcs;
    struct elk_tes_prog_key tes;
    struct elk_gs_prog_key gs;
-   struct elk_wm_prog_key wm;
+   struct elk_fs_prog_key fs;
    struct elk_cs_prog_key cs;
 };
 
@@ -750,13 +724,12 @@ enum elk_pixel_shader_computed_depth_mode {
 
 /* Data about a particular attempt to compile a program.  Note that
  * there can be many of these, each in a different GL state
- * corresponding to a different elk_wm_prog_key struct, with different
+ * corresponding to a different elk_fs_prog_key struct, with different
  * compiled programs.
  */
-struct elk_wm_prog_data {
+struct elk_fs_prog_data {
    struct elk_stage_prog_data base;
 
-   unsigned num_per_primitive_inputs;
    unsigned num_varying_inputs;
 
    uint8_t reg_blocks_8;
@@ -817,7 +790,7 @@ struct elk_wm_prog_data {
     */
    enum elk_sometimes alpha_to_coverage;
 
-   unsigned msaa_flags_param;
+   unsigned fs_config_param;
 
    /**
     * Mask of which interpolation modes are required by the fragment shader.
@@ -854,7 +827,6 @@ struct elk_wm_prog_data {
     * For varying slots that are not used by the FS, the value is -1.
     */
    int urb_setup[VARYING_SLOT_MAX];
-   int urb_setup_channel[VARYING_SLOT_MAX];
 
    /**
     * Cache structure into the urb_setup array above that contains the
@@ -907,7 +879,7 @@ elk_fs_simd_width_for_ksp(unsigned ksp_idx, bool simd8_enabled,
    (elk_wm_state_simd_width_for_ksp((wm_state), (ksp_idx)) != 0)
 
 static inline uint32_t
-_elk_wm_prog_data_prog_offset(const struct elk_wm_prog_data *prog_data,
+_elk_fs_prog_data_prog_offset(const struct elk_fs_prog_data *prog_data,
                               unsigned simd_width)
 {
    switch (simd_width) {
@@ -918,12 +890,12 @@ _elk_wm_prog_data_prog_offset(const struct elk_wm_prog_data *prog_data,
    }
 }
 
-#define elk_wm_prog_data_prog_offset(prog_data, wm_state, ksp_idx) \
-   _elk_wm_prog_data_prog_offset(prog_data, \
+#define elk_fs_prog_data_prog_offset(prog_data, wm_state, ksp_idx) \
+   _elk_fs_prog_data_prog_offset(prog_data, \
       elk_wm_state_simd_width_for_ksp(wm_state, ksp_idx))
 
 static inline uint8_t
-_elk_wm_prog_data_dispatch_grf_start_reg(const struct elk_wm_prog_data *prog_data,
+_elk_fs_prog_data_dispatch_grf_start_reg(const struct elk_fs_prog_data *prog_data,
                                          unsigned simd_width)
 {
    switch (simd_width) {
@@ -934,12 +906,12 @@ _elk_wm_prog_data_dispatch_grf_start_reg(const struct elk_wm_prog_data *prog_dat
    }
 }
 
-#define elk_wm_prog_data_dispatch_grf_start_reg(prog_data, wm_state, ksp_idx) \
-   _elk_wm_prog_data_dispatch_grf_start_reg(prog_data, \
+#define elk_fs_prog_data_dispatch_grf_start_reg(prog_data, wm_state, ksp_idx) \
+   _elk_fs_prog_data_dispatch_grf_start_reg(prog_data, \
       elk_wm_state_simd_width_for_ksp(wm_state, ksp_idx))
 
 static inline uint8_t
-_elk_wm_prog_data_reg_blocks(const struct elk_wm_prog_data *prog_data,
+_elk_fs_prog_data_reg_blocks(const struct elk_fs_prog_data *prog_data,
                              unsigned simd_width)
 {
    switch (simd_width) {
@@ -950,51 +922,30 @@ _elk_wm_prog_data_reg_blocks(const struct elk_wm_prog_data *prog_data,
    }
 }
 
-#define elk_wm_prog_data_reg_blocks(prog_data, wm_state, ksp_idx) \
-   _elk_wm_prog_data_reg_blocks(prog_data, \
+#define elk_fs_prog_data_reg_blocks(prog_data, wm_state, ksp_idx) \
+   _elk_fs_prog_data_reg_blocks(prog_data, \
       elk_wm_state_simd_width_for_ksp(wm_state, ksp_idx))
 
 static inline bool
-elk_wm_prog_data_is_persample(const struct elk_wm_prog_data *prog_data,
-                              enum intel_msaa_flags pushed_msaa_flags)
+elk_fs_prog_data_is_persample(const struct elk_fs_prog_data *prog_data,
+                              enum intel_fs_config pushed_fs_config)
 {
-   if (pushed_msaa_flags & INTEL_MSAA_FLAG_ENABLE_DYNAMIC) {
-      if (!(pushed_msaa_flags & INTEL_MSAA_FLAG_MULTISAMPLE_FBO))
-         return false;
-
-      if (prog_data->sample_shading)
-         assert(pushed_msaa_flags & INTEL_MSAA_FLAG_PERSAMPLE_DISPATCH);
-
-      if (pushed_msaa_flags & INTEL_MSAA_FLAG_PERSAMPLE_DISPATCH)
-         assert(prog_data->persample_dispatch != ELK_NEVER);
-      else
-         assert(prog_data->persample_dispatch != ELK_ALWAYS);
-
-      return (pushed_msaa_flags & INTEL_MSAA_FLAG_PERSAMPLE_DISPATCH) != 0;
-   }
-
-   assert(prog_data->persample_dispatch == ELK_ALWAYS ||
-          prog_data->persample_dispatch == ELK_NEVER);
-
    return prog_data->persample_dispatch;
 }
 
 static inline uint32_t
-elk_wm_prog_data_barycentric_modes(const struct elk_wm_prog_data *prog_data,
-                               enum intel_msaa_flags pushed_msaa_flags)
+elk_fs_prog_data_barycentric_modes(const struct elk_fs_prog_data *prog_data,
+                               enum intel_fs_config pushed_fs_config)
 {
    uint32_t modes = prog_data->barycentric_interp_modes;
 
    /* In the non dynamic case, we can just return the computed modes from
     * compilation time.
     */
-   if (!(pushed_msaa_flags & INTEL_MSAA_FLAG_ENABLE_DYNAMIC))
+   if (!(pushed_fs_config & INTEL_FS_CONFIG_ENABLE_DYNAMIC))
       return modes;
 
-   if (pushed_msaa_flags & INTEL_MSAA_FLAG_PERSAMPLE_INTERP) {
-      assert(prog_data->persample_dispatch == ELK_ALWAYS ||
-             (pushed_msaa_flags & INTEL_MSAA_FLAG_PERSAMPLE_DISPATCH));
-
+   if (prog_data->persample_dispatch == ELK_ALWAYS) {
       /* Making dynamic per-sample interpolation work is a bit tricky.  The
        * hardware will hang if SAMPLE is requested but per-sample dispatch is
        * not enabled.  This means we can't preemptively add SAMPLE to the
@@ -1029,6 +980,7 @@ elk_wm_prog_data_barycentric_modes(const struct elk_wm_prog_data *prog_data,
          modes |= BITFIELD_BIT(ELK_BARYCENTRIC_NONPERSPECTIVE_SAMPLE);
       }
    } else {
+      assert(prog_data->persample_dispatch == ELK_NEVER);
       /* If we're not using per-sample interpolation, we need to disable the
        * per-sample bits.
        *
@@ -1177,7 +1129,7 @@ void elk_compute_tess_vue_map(struct intel_vue_map *const vue_map,
 /* elk_interpolation_map.c */
 void elk_setup_vue_interpolation(const struct intel_vue_map *vue_map,
                                  struct nir_shader *nir,
-                                 struct elk_wm_prog_data *prog_data);
+                                 struct elk_fs_prog_data *prog_data);
 
 struct elk_vue_prog_data {
    struct elk_stage_prog_data base;
@@ -1332,7 +1284,7 @@ union elk_any_prog_data {
    struct elk_tcs_prog_data tcs;
    struct elk_tes_prog_data tes;
    struct elk_gs_prog_data gs;
-   struct elk_wm_prog_data wm;
+   struct elk_fs_prog_data fs;
    struct elk_cs_prog_data cs;
 };
 
@@ -1356,7 +1308,7 @@ DEFINE_PROG_DATA_DOWNCAST(vs,  prog_data->stage == MESA_SHADER_VERTEX)
 DEFINE_PROG_DATA_DOWNCAST(tcs, prog_data->stage == MESA_SHADER_TESS_CTRL)
 DEFINE_PROG_DATA_DOWNCAST(tes, prog_data->stage == MESA_SHADER_TESS_EVAL)
 DEFINE_PROG_DATA_DOWNCAST(gs,  prog_data->stage == MESA_SHADER_GEOMETRY)
-DEFINE_PROG_DATA_DOWNCAST(wm,  prog_data->stage == MESA_SHADER_FRAGMENT)
+DEFINE_PROG_DATA_DOWNCAST(fs,  prog_data->stage == MESA_SHADER_FRAGMENT)
 DEFINE_PROG_DATA_DOWNCAST(cs,  mesa_shader_stage_uses_workgroup(prog_data->stage))
 
 DEFINE_PROG_DATA_DOWNCAST(vue, prog_data->stage == MESA_SHADER_VERTEX ||
@@ -1549,8 +1501,8 @@ elk_compile_clip(const struct elk_compiler *compiler,
 struct elk_compile_fs_params {
    struct elk_compile_params base;
 
-   const struct elk_wm_prog_key *key;
-   struct elk_wm_prog_data *prog_data;
+   const struct elk_fs_prog_key *key;
+   struct elk_fs_prog_data *prog_data;
 
    const struct intel_vue_map *vue_map;
    const struct elk_mue_map *mue_map;
@@ -1661,10 +1613,10 @@ elk_stage_has_packed_dispatch(ASSERTED const struct intel_device_info *devinfo,
        * the SIMD thread, so dispatch of unlit samples cannot be avoided in
        * general and we should return false.
        */
-      const struct elk_wm_prog_data *wm_prog_data =
-         (const struct elk_wm_prog_data *)prog_data;
-      return !wm_prog_data->persample_dispatch &&
-             wm_prog_data->uses_vmask;
+      const struct elk_fs_prog_data *fs_prog_data =
+         (const struct elk_fs_prog_data *)prog_data;
+      return !fs_prog_data->persample_dispatch &&
+             fs_prog_data->uses_vmask;
    }
    case MESA_SHADER_COMPUTE:
       /* Compute shaders will be spawned with either a fully enabled dispatch

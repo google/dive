@@ -73,12 +73,13 @@ struct svga_screen
 
    struct svga_host_surface_cache cache;
 
-   /** HUD counters */
+   /** Atomic HUD counters */
    struct {
       /** Memory used by all resources (buffers and surfaces) */
       uint64_t total_resource_bytes;
-      uint64_t num_resources;
       uint64_t num_failed_allocations;
+      uint64_t __pad[6];
+      uint64_t num_resources;
    } hud;
 };
 

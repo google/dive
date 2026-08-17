@@ -59,10 +59,10 @@ dzn_nir_create_bo_desc(nir_builder *b,
    else
       b->shader->info.num_ssbos++;
 
-   VkDescriptorType desc_type =
+   nir_descriptor_type desc_type =
       var->data.mode == nir_var_mem_ubo ?
-      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
-      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      nir_descriptor_type_uniform_buffer :
+      nir_descriptor_type_storage_buffer;
    nir_address_format addr_format = nir_address_format_32bit_index_offset;
    nir_def *index =
       nir_vulkan_resource_index(b,
@@ -374,7 +374,8 @@ dzn_nir_triangle_fan_prim_restart_rewrite_index_shader(uint8_t old_index_size)
     * TODO: Might be a good thing to use use the CL compiler we have and turn
     * those shaders into CL kernels.
     */
-   nir_push_loop(&b);
+   nir_loop *loop = nir_push_loop(&b);
+   nir_loop_add_continue_construct(loop);
 
    old_index_ptr = nir_load_var(&b, old_index_ptr_var);
    nir_def *index0 = nir_load_var(&b, index0_var);
@@ -444,6 +445,8 @@ dzn_nir_triangle_fan_prim_restart_rewrite_index_shader(uint8_t old_index_size)
    nir_store_ssbo(&b, nir_load_var(&b, new_index_ptr_var),
                   new_index_count_ptr_desc, nir_imm_int(&b, 0),
                   .write_mask = 1, .access = ACCESS_NON_READABLE, .align_mul = 4);
+
+   nir_lower_continue_constructs(b.shader);
 
    return b.shader;
 }
@@ -810,12 +813,12 @@ load_dynamic_depth_bias(nir_builder *b, struct dzn_nir_point_gs_info *info)
       nir_imm_int(b, 0),
       .desc_set = info->runtime_data_cbv.register_space,
       .binding = info->runtime_data_cbv.base_shader_register,
-      .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *load_desc = nir_load_vulkan_descriptor(
       b, nir_address_format_num_components(ubo_format),
       nir_address_format_bit_size(ubo_format),
-      index, .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      index, .desc_type = nir_descriptor_type_uniform_buffer);
 
    return nir_load_ubo(
       b, 1, 32,

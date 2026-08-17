@@ -7,7 +7,6 @@ use crate::core::event::*;
 use crate::core::memory::*;
 use crate::core::platform::*;
 use crate::core::program::*;
-use crate::core::queue::*;
 use crate::impl_cl_type_trait;
 
 use mesa_rust::compiler::clc::*;
@@ -25,10 +24,12 @@ use spirv::SpirvKernelInfo;
 
 use std::borrow::Borrow;
 use std::cmp;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::ffi::CStr;
+use std::ffi::CString;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::ops::Index;
@@ -56,7 +57,10 @@ pub enum KernelArgValue {
     /// cl_ext_buffer_device_address
     BDA(u64),
     SVM(usize),
-    Buffer(Weak<Buffer>),
+    Buffer {
+        buffer: Weak<Buffer>,
+        offset: usize,
+    },
     Constant(Vec<u8>),
     Image(Weak<Image>),
     LocalMem(usize),
@@ -556,7 +560,7 @@ impl NirKernelBuild {
 pub struct Kernel {
     pub base: CLObjectBase<CL_INVALID_KERNEL>,
     pub prog: Arc<Program>,
-    pub name: String,
+    pub name: CString,
     values: Vec<Option<KernelArgValue>>,
     pub bdas: Vec<cl_mem_device_address_ext>,
     pub svms: HashSet<usize>,
@@ -619,7 +623,7 @@ fn opt_nir(nir: &mut NirShader, dev: &Device, has_explicit_types: bool) {
     while {
         let mut progress = false;
 
-        progress |= nir_pass!(nir, nir_copy_prop);
+        progress |= nir_pass!(nir, nir_opt_copy_prop);
         progress |= nir_pass!(nir, nir_opt_copy_prop_vars);
         progress |= nir_pass!(nir, nir_opt_dead_write_vars);
 
@@ -697,16 +701,8 @@ fn compile_nir_to_args(
     mut nir: NirShader,
     args: &[spirv::SPIRVKernelArg],
     lib_clc: &NirShader,
-) -> (Vec<KernelArg>, NirShader) {
-    // this is a hack until we support fp16 properly and check for denorms inside vstore/vload_half
-    nir.preserve_fp16_denorms();
-
-    // Set to rtne for now until drivers are able to report their preferred rounding mode, that also
-    // matches what we report via the API.
-    nir.set_fp_rounding_mode_rtne();
-
+) -> Result<(Vec<KernelArg>, NirShader), &'static CStr> {
     nir_pass!(nir, nir_scale_fdiv);
-    nir.set_workgroup_size_variable_if_zero();
     nir.structurize();
     nir_pass!(
         nir,
@@ -717,7 +713,7 @@ fn compile_nir_to_args(
     while {
         let mut progress = false;
         nir_pass!(nir, nir_split_var_copies);
-        progress |= nir_pass!(nir, nir_copy_prop);
+        progress |= nir_pass!(nir, nir_opt_copy_prop);
         progress |= nir_pass!(nir, nir_opt_copy_prop_vars);
         progress |= nir_pass!(nir, nir_opt_dead_write_vars);
         progress |= nir_pass!(nir, nir_opt_deref);
@@ -729,8 +725,13 @@ fn compile_nir_to_args(
         progress |= nir_pass!(nir, nir_opt_algebraic);
         progress
     } {}
+
+    nir_pass!(nir, rusticl_insert_libclc_config);
+
     nir.inline(lib_clc);
-    nir.cleanup_functions();
+    nir = nir
+        .cleanup_functions()
+        .ok_or(c"nir_shader not fully linked")?;
     // that should free up tons of memory
     nir.sweep_mem();
 
@@ -744,7 +745,7 @@ fn compile_nir_to_args(
 
     opt_nir(&mut nir, dev, false);
 
-    (KernelArg::from_spirv_nir(args, &mut nir), nir)
+    Ok((KernelArg::from_spirv_nir(args, &mut nir), nir))
 }
 
 fn compile_nir_prepare_for_variants(
@@ -827,7 +828,7 @@ fn compile_nir_variant(
     dev: &Device,
     variant: NirKernelVariant,
     args: &[KernelArg],
-    name: &str,
+    name: &CStr,
 ) {
     let mut lower_state = rusticl_lower_state::default();
     let compiled_args = &mut res.compiled_args;
@@ -838,10 +839,25 @@ fn compile_nir_variant(
     let global_address_format;
     let shared_address_format;
 
+    let nir_options = unsafe {
+        &*dev
+            .screen
+            .nir_shader_compiler_options(mesa_shader_stage::MESA_SHADER_COMPUTE)
+    };
+
     if dev.address_bits() == 64 {
         address_bits_ptr_type = unsafe { glsl_uint64_t_type() };
         address_bits_base_type = glsl_base_type::GLSL_TYPE_UINT64;
-        global_address_format = nir_address_format::nir_address_format_64bit_global;
+
+        // When load/store_global_offset is supported by the backend, we should use the
+        // 64bit_global_32bit_offset format to get the most efficient lowering from
+        // nir_lower_explicit_io.
+        global_address_format = if nir_options.has_global_offset {
+            nir_address_format::nir_address_format_64bit_global_32bit_offset
+        } else {
+            nir_address_format::nir_address_format_64bit_global
+        };
+
         shared_address_format = nir_address_format::nir_address_format_32bit_offset_as_64bit;
     } else {
         address_bits_ptr_type = unsafe { glsl_uint_type() };
@@ -849,12 +865,6 @@ fn compile_nir_variant(
         global_address_format = nir_address_format::nir_address_format_32bit_global;
         shared_address_format = nir_address_format::nir_address_format_32bit_offset;
     }
-
-    let nir_options = unsafe {
-        &*dev
-            .screen
-            .nir_shader_compiler_options(mesa_shader_stage::MESA_SHADER_COMPUTE)
-    };
 
     if variant == NirKernelVariant::Optimized {
         let wgsh = nir.workgroup_size_hint();
@@ -1022,6 +1032,18 @@ fn compile_nir_variant(
         Some(glsl_get_cl_type_size_align),
     );
 
+    if global_address_format == nir_address_format::nir_address_format_64bit_global_32bit_offset {
+        // We ingest global addresses as 64bit_global from SPIR-V so convert to the requested
+        // format.
+        nir_pass!(
+            nir,
+            nir_convert_address_format,
+            nir_variable_mode::nir_var_mem_global | nir_variable_mode::nir_var_mem_constant,
+            nir_address_format::nir_address_format_64bit_global,
+            global_address_format,
+        );
+    }
+
     nir_pass!(
         nir,
         nir_lower_explicit_io,
@@ -1048,7 +1070,12 @@ fn compile_nir_variant(
     }
     res.input_size = nir.uniform_size();
 
-    nir_pass!(nir, nir_lower_convert_alu_types, None);
+    nir_pass!(
+        nir,
+        nir_lower_convert_alu_types,
+        nir_options.lower_convert_alu_types
+    );
+    nir_pass!(nir, nir_opt_intrinsics);
 
     opt_nir(nir, dev, true);
 
@@ -1067,16 +1094,14 @@ fn compile_nir_variant(
     }));
 
     if Platform::dbg().nir {
-        eprintln!("=== Printing nir variant '{variant}' for '{name}' before driver finalization");
+        eprintln!("=== Printing nir variant {variant} for {name:?} before driver finalization");
         nir.print();
     }
 
     #[allow(clippy::collapsible_if)]
     if dev.screen.finalize_nir(nir) {
         if Platform::dbg().nir {
-            eprintln!(
-                "=== Printing nir variant '{variant}' for '{name}' after driver finalization"
-            );
+            eprintln!("=== Printing nir variant {variant} for {name:?} after driver finalization");
             nir.print();
         }
     }
@@ -1089,7 +1114,7 @@ fn compile_nir_remaining(
     dev: &Device,
     mut nir: NirShader,
     args: &[KernelArg],
-    name: &str,
+    name: &CStr,
 ) -> (CompilationResult, Option<CompilationResult>) {
     // add all API kernel args
     let mut compiled_args: Vec<_> = (0..args.len())
@@ -1102,7 +1127,7 @@ fn compile_nir_remaining(
 
     compile_nir_prepare_for_variants(dev, &mut nir, &mut compiled_args);
     if Platform::dbg().nir {
-        eprintln!("=== Printing nir for '{name}' before specialization");
+        eprintln!("=== Printing nir for {name:?} before specialization");
         nir.print();
     }
 
@@ -1219,28 +1244,30 @@ impl SPIRVToNirResult {
 
 pub(super) fn convert_spirv_to_nir(
     build: &DeviceProgramBuild,
-    name: &str,
+    name: &CStr,
     args: &[spirv::SPIRVKernelArg],
-    spec_constants: &HashMap<u32, nir_const_value>,
+    spec_constants: &mut HashMap<u32, Vec<u8>>,
     dev: &'static Device,
-) -> SPIRVToNirResult {
+) -> Result<SPIRVToNirResult, &'static CStr> {
     let cache = dev.screen().shader_cache();
     let key = build.hash_key(cache.as_ref(), name, spec_constants);
     let spirv_info = build.kernel_info(name).unwrap();
 
-    cache
+    match cache
         .as_ref()
         .and_then(|cache| cache.get(&mut key?))
         .and_then(|entry| SPIRVToNirResult::deserialize(&entry, dev, spirv_info))
-        .unwrap_or_else(|| {
-            let nir = build.to_nir(name, dev, spec_constants);
+    {
+        Some(entry) => Ok(entry),
+        None => {
+            let nir = build.to_nir(name, dev, spec_constants)?;
 
             if Platform::dbg().nir {
-                eprintln!("=== Printing nir for '{name}' after spirv_to_nir");
+                eprintln!("=== Printing nir for {name:?} after spirv_to_nir");
                 nir.print();
             }
 
-            let (mut args, nir) = compile_nir_to_args(dev, nir, args, &dev.lib_clc);
+            let (mut args, nir) = compile_nir_to_args(dev, nir, args, &dev.lib_clc)?;
             let (default_build, optimized) = compile_nir_remaining(dev, nir, &args, name);
 
             for build in [Some(&default_build), optimized.as_ref()].into_iter() {
@@ -1266,8 +1293,15 @@ pub(super) fn convert_spirv_to_nir(
                 }
             }
 
-            SPIRVToNirResult::new(dev, spirv_info, args, default_build, optimized)
-        })
+            Ok(SPIRVToNirResult::new(
+                dev,
+                spirv_info,
+                args,
+                default_build,
+                optimized,
+            ))
+        }
+    }
 }
 
 fn extract<'a, const S: usize>(buf: &'a mut &[u8]) -> &'a [u8; S] {
@@ -1375,7 +1409,7 @@ impl<'a> KernelExecBuilder<'a> {
 }
 
 impl Kernel {
-    pub fn new(name: String, prog: Arc<Program>, prog_build: &ProgramBuild) -> Arc<Kernel> {
+    pub fn new(name: CString, prog: Arc<Program>, prog_build: &ProgramBuild) -> Arc<Kernel> {
         let kernel_info = Arc::clone(prog_build.kernel_info.get(&name).unwrap());
         let builds = prog_build
             .builds_by_device
@@ -1433,6 +1467,159 @@ impl Kernel {
         Ok(unsafe { &mut *obj_ptr })
     }
 
+    /// Tries to increase the block size by finding GCDs between available threads and the requested
+    /// grid.
+    fn suggest_local_size_impl_gcd(
+        work_dim: usize,
+        grid: &[usize],
+        mut block: [usize; 3],
+        mut threads: usize,
+        dim_threads: [usize; 3],
+    ) -> [usize; 3] {
+        for i in 0..work_dim {
+            let t = cmp::min(threads, dim_threads[i]);
+            let gcd = gcd(t, grid[i]);
+
+            // update limits
+            block[i] *= gcd;
+            threads /= gcd;
+        }
+
+        block
+    }
+
+    /// Extracts POTs from the input grid to fill subgroups.
+    fn suggest_local_size_impl_pot(
+        work_dim: usize,
+        grid: &[usize],
+        mut block: [usize; 3],
+        mut threads: usize,
+        dim_threads: [usize; 3],
+    ) -> [usize; 3] {
+        for i in 0..work_dim {
+            // Round down to the next POT.
+            let pot_limit = cmp::min(threads, dim_threads[i]).ilog2();
+            let pot_grid = grid[i].trailing_zeros();
+
+            let pot = 1 << pot_limit.min(pot_grid);
+
+            // update limits
+            block[i] *= pot;
+            threads /= pot;
+        }
+
+        block
+    }
+
+    /// Just brute forces it...
+    fn suggest_local_size_impl_run_down(
+        work_dim: usize,
+        grid: &[usize],
+        mut block: [usize; 3],
+        mut threads: usize,
+        dim_threads: [usize; 3],
+    ) -> [usize; 3] {
+        for i in 0..work_dim {
+            for t in (2..=grid[i].min(threads).min(dim_threads[i])).rev() {
+                if grid[i] % t != 0 {
+                    continue;
+                }
+
+                block[i] *= t;
+                threads /= t;
+                break;
+            }
+        }
+        block
+    }
+
+    /// Tries to fill block to cover one entire subgroup.
+    fn suggest_local_size_prescale(
+        work_dim: usize,
+        grid: &mut [usize],
+        block: &mut [usize],
+        subgroup_size: usize,
+    ) {
+        let mut subgroup_log = subgroup_size.ilog2();
+        let grid_log = grid
+            .iter()
+            .take(work_dim)
+            .product::<usize>()
+            .trailing_zeros();
+
+        if grid_log < subgroup_log {
+            return;
+        }
+
+        for i in 0..work_dim {
+            let dim_log = grid[0].trailing_zeros().min(subgroup_log);
+            let dim_pot = 1 << dim_log;
+
+            subgroup_log -= dim_log;
+            grid[i] /= dim_pot;
+            block[i] = dim_pot;
+        }
+    }
+
+    fn suggest_local_size_impl(
+        work_dim: usize,
+        grid: &mut [usize],
+        block: &mut [usize],
+        mut threads: usize,
+        mut dim_threads: [usize; 3],
+        subgroup_size: usize,
+    ) {
+        // Make threads a multiple of subgroup_size
+        threads = (threads + 1 - subgroup_size).next_multiple_of(subgroup_size);
+
+        block.fill(1);
+        Self::suggest_local_size_prescale(work_dim, grid, block, subgroup_size);
+
+        threads /= block.iter().take(work_dim).product::<usize>();
+        for i in 0..work_dim {
+            dim_threads[i] /= block[i];
+        }
+
+        let block_inputs = [
+            block.get(0).copied().unwrap_or(1),
+            block.get(1).copied().unwrap_or(1),
+            block.get(2).copied().unwrap_or(1),
+        ];
+        let mut block_sizes = [
+            Self::suggest_local_size_impl_gcd,
+            Self::suggest_local_size_impl_pot,
+            Self::suggest_local_size_impl_run_down,
+        ]
+        .map(|f| f(work_dim, grid, block_inputs, threads, dim_threads));
+
+        block_sizes.sort_by(|blocka, blockb| {
+            let threadsa = blocka.iter().product::<usize>();
+            let threadsb = blockb.iter().product::<usize>();
+
+            let subgroup_frac_a =
+                threadsa as f32 / (subgroup_size * threadsa.div_ceil(subgroup_size)) as f32;
+            let subgroup_frac_b =
+                threadsb as f32 / (subgroup_size * threadsb.div_ceil(subgroup_size)) as f32;
+
+            let subgroup_ord = subgroup_frac_a.partial_cmp(&subgroup_frac_b).unwrap();
+            if subgroup_ord != Ordering::Equal {
+                return subgroup_ord;
+            }
+
+            threadsa.cmp(&threadsb)
+        });
+
+        for i in 0..work_dim {
+            grid[i] *= block[i];
+        }
+
+        let new_block = block_sizes.last().unwrap();
+        for i in 0..work_dim {
+            block[i] = new_block[i];
+            grid[i] /= block[i];
+        }
+    }
+
     pub fn suggest_local_size(
         &self,
         d: &Device,
@@ -1440,36 +1627,30 @@ impl Kernel {
         grid: &mut [usize],
         block: &mut [usize],
     ) {
-        let mut threads = self.max_threads_per_block(d);
+        // We have to use the required workgroup size if specified.
+        if self.work_group_size() != [0; 3] {
+            // This is not just a memcpy, clippy is wrong here
+            #[expect(clippy::manual_memcpy)]
+            for i in 0..work_dim {
+                block[i] = self.work_group_size()[i];
+                grid[i] /= block[i];
+            }
+            return;
+        }
+
+        let threads = self.max_threads_per_block(d);
         let dim_threads = d.max_block_sizes();
         let subgroups = self.preferred_simd_size(d);
-
-        for i in 0..work_dim {
-            let t = cmp::min(threads, dim_threads[i]);
-            let gcd = gcd(t, grid[i]);
-
-            block[i] = gcd;
-            grid[i] /= gcd;
-
-            // update limits
-            threads /= block[i];
-        }
-
-        // if we didn't fill the subgroup we can do a bit better if we have threads remaining
-        let total_threads = block.iter().take(work_dim).product::<usize>();
-        if threads != 1 && total_threads < subgroups {
-            for i in 0..work_dim {
-                if grid[i] * total_threads < threads && grid[i] * block[i] <= dim_threads[i] {
-                    block[i] *= grid[i];
-                    grid[i] = 1;
-                    // can only do it once as nothing is cleanly divisible
-                    break;
-                }
-            }
-        }
+        Self::suggest_local_size_impl(work_dim, grid, block, threads, dim_threads, subgroups);
     }
 
-    fn optimize_local_size(&self, d: &Device, grid: &mut [usize; 3], block: &mut [u32; 3]) {
+    fn optimize_local_size(
+        &self,
+        d: &Device,
+        work_dim: u32,
+        grid: &mut [usize; 3],
+        block: &mut [u32; 3],
+    ) {
         if !block.contains(&0) {
             for i in 0..3 {
                 // we already made sure everything is fine
@@ -1478,32 +1659,41 @@ impl Kernel {
             return;
         }
 
-        let mut usize_block = [0usize; 3];
-        for i in 0..3 {
-            usize_block[i] = block[i] as usize;
-        }
-
-        self.suggest_local_size(d, 3, grid, &mut usize_block);
+        let mut usize_block = [0; 3];
+        self.suggest_local_size(d, work_dim as usize, grid, &mut usize_block);
 
         for i in 0..3 {
-            block[i] = usize_block[i] as u32;
+            block[i] = 1.max(usize_block[i] as u32);
         }
     }
 
-    // the painful part is, that host threads are allowed to modify the kernel object once it was
-    // enqueued, so return a closure with all req data included.
     pub fn launch(
         self: &Arc<Self>,
-        q: &Arc<Queue>,
+        dev: &Device,
         work_dim: u32,
         block: &[usize],
         grid: &[usize],
         offsets: &[usize],
     ) -> CLResult<EventSig> {
+        let args = self.values.clone();
+        self.launch_with_args(dev, work_dim, block, grid, offsets, args)
+    }
+
+    // the painful part is, that host threads are allowed to modify the kernel object once it was
+    // enqueued, so return a closure with all req data included.
+    pub fn launch_with_args(
+        self: &Arc<Self>,
+        dev: &Device,
+        work_dim: u32,
+        block: &[usize],
+        grid: &[usize],
+        offsets: &[usize],
+        arg_values: Vec<Option<KernelArgValue>>,
+    ) -> CLResult<EventSig> {
         // Clone all the data we need to execute this kernel
-        let kernel_info = Arc::clone(&self.kernel_info);
-        let arg_values = self.values.clone();
-        let nir_kernel_builds = Arc::clone(&self.builds[q.device]);
+        let work_group_size_hint = self.kernel_info.work_group_size_hint;
+        let args = self.kernel_info.args.clone();
+        let nir_kernel_builds = Arc::clone(&self.builds[dev]);
         let mut bdas = self.bdas.clone();
         let svms = self.svms.clone();
 
@@ -1514,7 +1704,7 @@ impl Kernel {
         // event was processed.
         for arg in arg_values.iter() {
             match arg {
-                Some(KernelArgValue::Buffer(buffer)) => {
+                Some(KernelArgValue::Buffer { buffer, .. }) => {
                     buffer_arcs.insert(
                         // we use the ptr as the key, and also cast it to usize so we don't need to
                         // deal with Send + Sync here.
@@ -1539,7 +1729,7 @@ impl Kernel {
 
         let api_grid = grid;
 
-        self.optimize_local_size(q.device, &mut grid, &mut block);
+        self.optimize_local_size(dev, work_dim, &mut grid, &mut block);
 
         Ok(Box::new(move |cl_ctx, ctx| {
             let hw_max_grid = ctx.dev.max_grid_size();
@@ -1548,8 +1738,7 @@ impl Kernel {
                 && grid[0] <= hw_max_grid[0]
                 && grid[1] <= hw_max_grid[1]
                 && grid[2] <= hw_max_grid[2]
-                && (kernel_info.work_group_size_hint == [0; 3]
-                    || block == kernel_info.work_group_size_hint)
+                && (work_group_size_hint == [0; 3] || block == work_group_size_hint)
             {
                 NirKernelVariant::Optimized
             } else {
@@ -1603,7 +1792,7 @@ impl Kernel {
 
             for arg in &nir_kernel_build.compiled_args {
                 let is_opaque = if let CompiledKernelArgType::APIArg(idx) = arg.kind {
-                    kernel_info.args[idx].kind.is_opaque()
+                    args[idx].kind.is_opaque()
                 } else {
                     false
                 };
@@ -1614,7 +1803,7 @@ impl Kernel {
 
                 match arg.kind {
                     CompiledKernelArgType::APIArg(idx) => {
-                        let api_arg = &kernel_info.args[idx];
+                        let api_arg = &args[idx];
                         let Some(value) = &arg_values[idx] else {
                             continue;
                         };
@@ -1627,7 +1816,7 @@ impl Kernel {
                                     exec_builder.add_pointer(*address);
                                 }
                             }
-                            KernelArgValue::Buffer(buffer) => {
+                            KernelArgValue::Buffer { buffer, offset } => {
                                 let buffer = &buffer_arcs[&(buffer.as_ptr() as usize)];
                                 let rw = if api_arg.spirv.address_qualifier
                                     == clc_kernel_arg_address_qualifier::CLC_KERNEL_ARG_ADDRESS_CONSTANT
@@ -1650,7 +1839,7 @@ impl Kernel {
                                     }
                                 } else {
                                     let res = buffer.get_res_for_access(ctx, rw)?;
-                                    exec_builder.add_global(res, buffer.offset());
+                                    exec_builder.add_global(res, buffer.offset() + offset);
                                 }
                             }
                             &KernelArgValue::SVM(handle) => {
@@ -1823,7 +2012,7 @@ impl Kernel {
 
             ctx.clear_global_binding(globals.len() as u32);
 
-            ctx.memory_barrier(PIPE_BARRIER_GLOBAL_BUFFER);
+            ctx.memory_barrier(PIPE_BARRIER_SHADER_BUFFER);
 
             if let Some(printf_buf) = &printf_buf {
                 let tx = ctx
@@ -2031,4 +2220,93 @@ impl Clone for Kernel {
             kernel_info: Arc::clone(&self.kernel_info),
         }
     }
+}
+
+#[cfg(test)]
+struct SuggestLocalSizeTestDevice {
+    subgroup_size: usize,
+    max_threads: usize,
+    max_workgroup_sizes: [usize; 3],
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+struct SuggestLocalSizeTestCase {
+    global: [usize; 3],
+}
+
+#[test]
+fn test_suggest_local_size() {
+    let devices = [
+        SuggestLocalSizeTestDevice {
+            subgroup_size: 128,
+            max_threads: 2048,
+            max_workgroup_sizes: [1024, 1024, 64],
+        },
+        SuggestLocalSizeTestDevice {
+            subgroup_size: 16,
+            max_threads: 1024,
+            max_workgroup_sizes: [1024, 1024, 1024],
+        },
+    ];
+
+    let tests = [
+        SuggestLocalSizeTestCase {
+            global: [192, 128, 1],
+        },
+        SuggestLocalSizeTestCase {
+            global: [153, 124, 60],
+        },
+        SuggestLocalSizeTestCase {
+            global: [4800, 113, 97],
+        },
+    ];
+
+    let mut workgroup_stat = 0.0f64;
+    let mut subgroup_stat = 0.0f64;
+    let mut full_subgroups = 0;
+    let mut test_runs = 0;
+
+    for dev in devices {
+        for test in tests {
+            for threads in dev.subgroup_size..=dev.max_threads {
+                let mut grid = test.global;
+                let mut block = [0; 3];
+
+                Kernel::suggest_local_size_impl(
+                    3,
+                    &mut grid,
+                    &mut block,
+                    threads,
+                    dev.max_workgroup_sizes,
+                    dev.subgroup_size,
+                );
+
+                let block_threads: usize = block.iter().product();
+                let grid_threads: usize = grid.iter().product();
+
+                println!("{threads} {block:?} {grid:?}");
+
+                assert_eq!(block_threads * grid_threads, test.global.iter().product());
+                assert!(block_threads <= threads);
+                for i in 0..3 {
+                    assert!(block[i] <= dev.max_workgroup_sizes[i]);
+                }
+
+                workgroup_stat += block_threads as f64 / threads as f64;
+                subgroup_stat += block_threads as f64
+                    / (dev.subgroup_size * block_threads.div_ceil(dev.subgroup_size)) as f64;
+                if block_threads % dev.subgroup_size == 0 {
+                    full_subgroups += 1;
+                }
+
+                test_runs += 1;
+            }
+        }
+    }
+
+    let test_runs = test_runs as f64;
+    println!("avg workgroup fill rate: {}", workgroup_stat / test_runs);
+    println!("avg subgroup fill rate: {}", subgroup_stat / test_runs);
+    println!("full subgroup rate: {}", full_subgroups as f64 / test_runs);
 }

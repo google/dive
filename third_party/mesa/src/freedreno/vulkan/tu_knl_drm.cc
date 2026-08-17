@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "tu_knl_drm.h"
+
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <xf86drm.h>
 
-#include "tu_knl_drm.h"
 #include "tu_device.h"
 #include "tu_queue.h"
 #include "tu_rmv.h"
@@ -86,7 +87,10 @@ tu_bo_make_zombie(struct tu_device *dev, struct tu_bo *bo)
 #endif
    vma->iova = bo->iova;
    vma->size = bo->size;
-   vma->fence = p_atomic_read(&dev->queues[0]->fence);
+   if (dev->queue_count[0] > 0)
+      vma->fence = p_atomic_read(&dev->queues[0]->fence);
+   else
+      vma->fence = -1;
 
    /* Must be cleared under the VMA mutex, or another thread could race to
     * reap the VMA, closing the BO and letting a new GEM allocation produce
@@ -168,7 +172,6 @@ msm_submit_add_bind(struct tu_device *device,
       .range = size,
    };
 
-   util_dynarray_append(&submit->binds, struct drm_msm_vm_bind_op,
-                        bind);
+   util_dynarray_append(&submit->binds, bind);
 }
 

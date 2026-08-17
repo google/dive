@@ -51,11 +51,11 @@
 #include <time.h>
 
 #include "errno.h"
-#include "common/intel_mem.h"
 #include "dev/intel_debug.h"
 #include "common/intel_gem.h"
 #include "dev/intel_device_info.h"
 #include "util/u_debug.h"
+#include "util/cache_ops.h"
 #include "util/macros.h"
 #include "util/hash_table.h"
 #include "util/list.h"
@@ -164,6 +164,7 @@ struct crocus_bufmgr {
    bool has_mmap_offset:1;
    bool has_tiling_uapi:1;
    bool bo_reuse:1;
+   bool is_virtio:1;
 };
 
 static simple_mtx_t global_bufmgr_list_mutex = SIMPLE_MTX_INITIALIZER;
@@ -820,9 +821,14 @@ crocus_bo_gem_mmap_offset(struct util_debug_callback *dbg, struct crocus_bo *bo,
       return NULL;
    }
 
+   void *map;
+
    /* And map it */
-   void *map = mmap(0, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                    bufmgr->fd, mmap_arg.offset);
+   if (bufmgr->is_virtio)
+      map = intel_virtio_bo_mmap(bufmgr->fd, bo->gem_handle, bo->size, NULL);
+   else
+      map = mmap(0, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                 bufmgr->fd, mmap_arg.offset);
    if (map == MAP_FAILED) {
       DBG("%s:%d: Error mapping buffer %d (%s): %s .\n",
           __FILE__, __LINE__, bo->gem_handle, bo->name, strerror(errno));
@@ -896,7 +902,7 @@ crocus_bo_map_cpu(struct util_debug_callback *dbg,
        * out of any cache.)
        */
 #ifdef SUPPORT_INTEL_INTEGRATED_GPUS
-      intel_invalidate_range(bo->map_cpu, bo->size);
+      util_flush_inval_range(bo->map_cpu, bo->size);
 #endif
    }
 
@@ -1169,6 +1175,8 @@ crocus_bufmgr_destroy(struct crocus_bufmgr *bufmgr)
    _mesa_hash_table_destroy(bufmgr->name_table, NULL);
    _mesa_hash_table_destroy(bufmgr->handle_table, NULL);
 
+   intel_virtio_unref_fd(bufmgr->fd);
+
    close(bufmgr->fd);
 
    free(bufmgr);
@@ -1196,7 +1204,7 @@ bo_set_tiling_internal(struct crocus_bo *bo, uint32_t tiling_mode,
       set_tiling.tiling_mode = tiling_mode;
       set_tiling.stride = stride;
 
-      ret = ioctl(bufmgr->fd, DRM_IOCTL_I915_GEM_SET_TILING, &set_tiling);
+      ret = intel_ioctl(bufmgr->fd, DRM_IOCTL_I915_GEM_SET_TILING, &set_tiling);
    } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
    if (ret == -1)
       return -errno;
@@ -1216,6 +1224,23 @@ crocus_bo_get_tiling(struct crocus_bo *bo, uint32_t *tiling_mode,
    return 0;
 }
 
+static int
+crocus_bo_prime_fd_to_handle(int fd, int prime_fd, uint32_t *handle)
+{
+   struct drm_prime_handle prime_arg = {
+      .fd = prime_fd,
+   };
+
+   if (intel_ioctl(fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &prime_arg)) {
+      *handle = 0;
+      return -errno;
+   }
+
+   *handle = prime_arg.handle;
+
+   return 0;
+}
+
 struct crocus_bo *
 crocus_bo_import_dmabuf(struct crocus_bufmgr *bufmgr, int prime_fd,
                         uint64_t modifier)
@@ -1224,7 +1249,7 @@ crocus_bo_import_dmabuf(struct crocus_bufmgr *bufmgr, int prime_fd,
    struct crocus_bo *bo;
 
    simple_mtx_lock(&bufmgr->lock);
-   int ret = drmPrimeFDToHandle(bufmgr->fd, prime_fd, &handle);
+   int ret = crocus_bo_prime_fd_to_handle(bufmgr->fd, prime_fd, &handle);
    if (ret) {
       DBG("import_dmabuf: failed to obtain handle from fd: %s\n",
           strerror(errno));
@@ -1296,7 +1321,7 @@ crocus_bo_import_dmabuf_no_mods(struct crocus_bufmgr *bufmgr,
    struct crocus_bo *bo;
 
    simple_mtx_lock(&bufmgr->lock);
-   int ret = drmPrimeFDToHandle(bufmgr->fd, prime_fd, &handle);
+   int ret = crocus_bo_prime_fd_to_handle(bufmgr->fd, prime_fd, &handle);
    if (ret) {
       DBG("import_dmabuf: failed to obtain handle from fd: %s\n",
           strerror(errno));
@@ -1373,9 +1398,15 @@ crocus_bo_export_dmabuf(struct crocus_bo *bo, int *prime_fd)
 
    crocus_bo_make_external(bo);
 
-   if (drmPrimeHandleToFD(bufmgr->fd, bo->gem_handle,
-                          DRM_CLOEXEC | DRM_RDWR, prime_fd) != 0)
+   struct drm_prime_handle prime_arg = {
+      .handle = bo->gem_handle,
+      .flags = DRM_CLOEXEC | DRM_RDWR,
+   };
+
+   if (intel_ioctl(bufmgr->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime_arg))
       return -errno;
+
+   *prime_fd = prime_arg.fd;
 
    return 0;
 }
@@ -1444,7 +1475,7 @@ crocus_bo_export_gem_handle_for_device(struct crocus_bo *bo, int drm_fd,
    }
 
    simple_mtx_lock(&bufmgr->lock);
-   err = drmPrimeFDToHandle(drm_fd, dmabuf_fd, &export->gem_handle);
+   err = crocus_bo_prime_fd_to_handle(drm_fd, dmabuf_fd, &export->gem_handle);
    close(dmabuf_fd);
    if (err) {
       simple_mtx_unlock(&bufmgr->lock);
@@ -1617,6 +1648,8 @@ crocus_bufmgr_create(struct intel_device_info *devinfo, int fd, bool bo_reuse)
     */
    bufmgr->fd = os_dupfd_cloexec(fd);
 
+   intel_virtio_ref_fd(bufmgr->fd);
+
    p_atomic_set(&bufmgr->refcount, 1);
 
    simple_mtx_init(&bufmgr->lock, mtx_plain);
@@ -1627,6 +1660,7 @@ crocus_bufmgr_create(struct intel_device_info *devinfo, int fd, bool bo_reuse)
    bufmgr->has_tiling_uapi = devinfo->has_tiling_uapi;
    bufmgr->bo_reuse = bo_reuse;
    bufmgr->has_mmap_offset = devinfo->has_mmap_offset;
+   bufmgr->is_virtio = devinfo->is_virtio;
 
    init_cache_buckets(bufmgr);
 

@@ -91,6 +91,15 @@ _mesa_alloc_dispatch_tables(gl_api api, struct gl_dispatch *d, bool glthread);
 extern bool
 _mesa_initialize_dispatch_tables(struct gl_context *ctx);
 
+extern bool
+_mesa_init_dispatch_trace(struct gl_context *ctx);
+
+extern void
+_mesa_set_dispatch(struct gl_context *ctx, struct _glapi_table *t);
+
+extern struct _glapi_table *
+_mesa_get_dispatch(struct gl_context *ctx);
+
 extern struct _glapi_table *
 _mesa_new_nop_table(bool glthread);
 
@@ -481,6 +490,21 @@ _mesa_has_texture_cube_map_array(const struct gl_context *ctx)
 {
    return _mesa_has_ARB_texture_cube_map_array(ctx) ||
           _mesa_has_OES_texture_cube_map_array(ctx);
+}
+
+static inline bool
+_mesa_has_texture_buffer_object(const struct gl_context *ctx)
+{
+   return _mesa_has_ARB_texture_buffer_object(ctx) ||
+          _mesa_has_OES_texture_buffer(ctx) ||
+          (_mesa_is_desktop_gl(ctx) && ctx->Version >= 31);
+}
+
+static inline bool
+_mesa_has_texture_buffer_range(const struct gl_context *ctx)
+{
+   return _mesa_has_ARB_texture_buffer_range(ctx) ||
+          _mesa_has_OES_texture_buffer(ctx);
 }
 
 static inline bool

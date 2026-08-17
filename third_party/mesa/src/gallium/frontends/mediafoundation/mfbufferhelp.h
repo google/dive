@@ -51,11 +51,7 @@ MFCopySample( IMFSample *dest, IMFSample *src, IMFMediaType *pmt );
 HRESULT
 MFAttachPipeResourceAsSampleExtension( struct pipe_context *pPipeContext,
                                        struct pipe_resource *pPipeRes,
+                                       UINT PipeResourceReconstructedPictureSubresource,
                                        ID3D12CommandQueue *pSyncObjectQueue,
                                        REFGUID guidExtension,
                                        IMFSample *pSample );
-
-struct pipe_resource *
-AllocatePipeResourceFromAllocator( IMFVideoSampleAllocatorEx *pAllocator,
-                                   struct pipe_screen *pScreen,
-                                   const struct pipe_resource *templ );

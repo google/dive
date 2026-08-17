@@ -260,9 +260,9 @@ class State(object):
     def extractor_fallback(self, bitset, name):
         extr_name = bitset.name + '.' + name
         if extr_name not in self.warned_missing_extractors:
-            print('WARNING: no encode mapping for {}.{}'.format(bitset.name, name))
+            print('WARNING: no encode mapping for {}'.format(extr_name))
             self.warned_missing_extractors.append(extr_name)
-        return '0 /* XXX */'
+        return '0 /* XXX: missing encode mapping for {} */'.format(extr_name)
 
     def extractor(self, bitset, name):
         extr = self.extractor_impl(bitset, name)

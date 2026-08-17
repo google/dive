@@ -26,7 +26,7 @@ struct vn_image_memory_requirements {
 struct vn_image_reqs_cache_entry {
    struct vn_image_memory_requirements requirements[4];
    uint8_t plane_count;
-   uint8_t key[SHA1_DIGEST_LENGTH];
+   uint8_t key[BLAKE3_KEY_LEN];
    struct list_head head;
 };
 
@@ -42,32 +42,22 @@ struct vn_image_reqs_cache {
    } debug;
 };
 
-struct vn_image_create_deferred_info {
-   VkImageCreateInfo create;
-   VkImageFormatListCreateInfo list;
-   VkImageStencilUsageCreateInfo stencil;
-
-   /* track whether vn_image_init_deferred succeeds */
-   bool initialized;
-};
-
 struct vn_image {
    struct vn_image_base base;
 
    struct vn_image_memory_requirements requirements[4];
 
-   /* For VK_ANDROID_external_memory_android_hardware_buffer, real image
-    * creation is deferred until bind image memory.
+   /* track whether the image init has been deferred and whether the deferred
+    * init has succeeded (renderer side image created)
     */
-   struct vn_image_create_deferred_info *deferred_info;
+   bool deferred;
+   bool deferred_initialized;
 
    struct {
       bool is_prime_blit_src;
 
-      struct vn_device_memory *memory;
-
-      /* For VK_ANDROID_native_buffer, the WSI image owns the memory. */
-      bool memory_owned;
+      /* memory backing the prime blit dst buffer */
+      struct vn_device_memory *blit_mem;
    } wsi;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_image,

@@ -104,7 +104,7 @@ lookup_shader(struct st_context *st,
 
    unsigned inputs[2 + MAX_TEXTURE_UNITS];
 
-   for (int j = 0; j < num_attribs; j++) {
+   for (j = 0; j < num_attribs; j++) {
       inputs[j] = slot_to_vert_attrib(slots[j]);
    }
 
@@ -234,7 +234,7 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
             SET_ATTRIB(2, tex_attr, s1, t1, 0.0f, 1.0f);  /* upper right */
             SET_ATTRIB(3, tex_attr, s0, t1, 0.0f, 1.0f);  /* upper left */
 
-            slots[tex_attr] = st->needs_texcoord_semantic ?
+            slots[tex_attr] = st->screen->caps.tgsi_texcoord ?
                VARYING_SLOT_TEX0 : VARYING_SLOT_VAR0;
 
             tex_attr++;
@@ -246,15 +246,8 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
 #undef SET_ATTRIB
    }
 
-   cso_save_state(cso, (CSO_BIT_VIEWPORT |
-                        CSO_BIT_STREAM_OUTPUTS |
-                        CSO_BIT_VERTEX_SHADER |
-                        CSO_BIT_TESSCTRL_SHADER |
-                        CSO_BIT_TESSEVAL_SHADER |
-                        CSO_BIT_GEOMETRY_SHADER |
-                        CSO_BIT_TASK_SHADER |
-                        CSO_BIT_MESH_SHADER |
-                        CSO_BIT_VERTEX_ELEMENTS));
+   /* Save only states that have no st_atom — they can't be re-derived. */
+   cso_save_state(cso, CSO_BIT_STREAM_OUTPUTS);
 
    {
       void *vs = lookup_shader(st, numAttribs, slots);
@@ -263,7 +256,6 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    cso_set_tessctrl_shader_handle(cso, NULL);
    cso_set_tesseval_shader_handle(cso, NULL);
    cso_set_geometry_shader_handle(cso, NULL);
-   cso_set_task_shader_handle(cso, NULL);
    cso_set_mesh_shader_handle(cso, NULL);
 
    for (i = 0; i < numAttribs; i++) {
@@ -283,14 +275,14 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
    {
       const struct gl_framebuffer *fb = ctx->DrawBuffer;
       const GLboolean invert = (_mesa_fb_orientation(fb) == Y_0_TOP);
-      const GLfloat width = (GLfloat)_mesa_geometric_width(fb);
-      const GLfloat height = (GLfloat)_mesa_geometric_height(fb);
+      const GLfloat wfb = (GLfloat)_mesa_geometric_width(fb);
+      const GLfloat hfb = (GLfloat)_mesa_geometric_height(fb);
       struct pipe_viewport_state vp;
-      vp.scale[0] =  0.5f * width;
-      vp.scale[1] = height * (invert ? -0.5f : 0.5f);
+      vp.scale[0] =  0.5f * wfb;
+      vp.scale[1] = hfb * (invert ? -0.5f : 0.5f);
       vp.scale[2] = 1.0f;
-      vp.translate[0] = 0.5f * width;
-      vp.translate[1] = 0.5f * height;
+      vp.translate[0] = 0.5f * wfb;
+      vp.translate[1] = 0.5f * hfb;
       vp.translate[2] = 0.0f;
       vp.swizzle_x = PIPE_VIEWPORT_SWIZZLE_POSITIVE_X;
       vp.swizzle_y = PIPE_VIEWPORT_SWIZZLE_POSITIVE_Y;
@@ -307,10 +299,20 @@ st_DrawTex(struct gl_context *ctx, GLfloat x, GLfloat y, GLfloat z,
 
    pipe_resource_release(pipe, releasebuf);
 
-   /* restore state */
+   /* Restore atomless states via CSO. */
    cso_restore_state(cso, 0);
-   ctx->Array.NewVertexElements = true;
-   ST_SET_STATE(ctx->NewDriverState, ST_NEW_VERTEX_ARRAYS);
+
+   /* Invalidate all states this meta-op modified. The atoms will
+    * re-derive them from GL state before the next draw.
+    */
+   st_context_invalidate_state(st,
+                               ST_INVALIDATE_VIEWPORT |
+                               ST_INVALIDATE_VERTEX_BUFFERS |
+                               ST_INVALIDATE_VS_STATE |
+                               ST_INVALIDATE_GS_STATE |
+                               ST_INVALIDATE_TCS_STATE |
+                               ST_INVALIDATE_TES_STATE |
+                               ST_INVALIDATE_MESH_STATE);
 }
 
 /**

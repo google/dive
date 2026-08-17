@@ -39,12 +39,6 @@ struct pipe_resource;
 
 struct stw_shared_surface;
 
-typedef enum
-{
-   stw_pfd_gdi_support   = 1 << 0,
-   stw_pfd_double_buffer = 1 << 1,
-} stw_pfd_flag;
-
 struct stw_winsys_framebuffer
 {
    void

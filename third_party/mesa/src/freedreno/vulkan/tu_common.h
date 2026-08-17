@@ -26,56 +26,55 @@
 #define VG(x) ((void)0)
 #endif
 
+#undef MESA_LOG_TAG
 #define MESA_LOG_TAG "TU"
 
+#include "fd6_hw.h"
+#include "perfcntrs/freedreno_perfcntr.h"
+
+#include <vulkan/vk_icd.h>
+#include <vulkan/vulkan.h>
+
 #include "c11/threads.h"
-#include "util/rounding.h"
 #include "util/bitscan.h"
 #include "util/detect_os.h"
 #include "util/list.h"
 #include "util/log.h"
 #include "util/macros.h"
 #include "util/perf/cpu_trace.h"
+#include "util/perf/u_trace.h"
+#include "util/rounding.h"
 #include "util/sparse_array.h"
 #include "util/u_atomic.h"
 #include "util/u_dynarray.h"
 #include "util/xmlconfig.h"
-#include "util/perf/u_trace.h"
 #include "vk_alloc.h"
-#include "vk_debug_report.h"
-#include "vk_device.h"
-#include "vk_dispatch_table.h"
-#include "vk_extensions.h"
-#include "vk_instance.h"
-#include "vk_log.h"
-#include "vk_physical_device.h"
-#include "vk_pipeline_cache.h"
-#include "wsi_common.h"
-
-#include "ir3/ir3_compiler.h"
-#include "ir3/ir3_shader.h"
-
-#include "fd6_hw.h"
-#include "fdl/freedreno_layout.h"
-#include "common/freedreno_dev_info.h"
-#include "common/freedreno_common.h"
-#include "perfcntrs/freedreno_perfcntr.h"
-
-#include <vulkan/vk_icd.h>
-#include <vulkan/vulkan.h>
-
-#include "tu_entrypoints.h"
-
-#include "vk_format.h"
-#include "vk_image.h"
 #include "vk_command_buffer.h"
 #include "vk_command_pool.h"
 #include "vk_common_entrypoints.h"
-#include "vk_queue.h"
-#include "vk_object.h"
-#include "vk_sync.h"
+#include "vk_debug_report.h"
+#include "vk_device.h"
+#include "vk_dispatch_table.h"
 #include "vk_drm_syncobj.h"
+#include "vk_extensions.h"
+#include "vk_format.h"
+#include "vk_image.h"
+#include "vk_instance.h"
+#include "vk_log.h"
+#include "vk_object.h"
+#include "vk_physical_device.h"
+#include "vk_pipeline_cache.h"
+#include "vk_queue.h"
+#include "vk_sync.h"
 #include "vk_sync_timeline.h"
+#include "wsi_common.h"
+
+#include "common/freedreno_common.h"
+#include "common/freedreno_dev_info.h"
+#include "fdl/freedreno_layout.h"
+#include "ir3/ir3_compiler.h"
+#include "ir3/ir3_shader.h"
+#include "tu_entrypoints.h"
 
 #define MAX_VBS 32
 #define MAX_VERTEX_ATTRIBS 32
@@ -91,7 +90,9 @@
 #define MAX_DYNAMIC_STORAGE_BUFFERS 8
 #define MAX_DYNAMIC_BUFFERS_SIZE                                             \
    (MAX_DYNAMIC_UNIFORM_BUFFERS + 2 * MAX_DYNAMIC_STORAGE_BUFFERS) *         \
-   A6XX_TEX_CONST_DWORDS
+   FDL6_TEX_CONST_DWORDS
+
+#define TU_MAX_VIS_STREAMS 4
 
 /* With dynamic rendering, input attachment indices are shifted by 1 and
  * attachment 0 is used for input attachments without an InputAttachmentIndex
@@ -103,12 +104,13 @@
 #define SAMPLE_LOCATION_MAX 0.9375f
 
 #define TU_MAX_DRM_DEVICES 8
-#define MAX_VIEWS 16
+#define MAX_VIEWS 6
 #define MAX_HW_SCALED_VIEWS 6
 #define MAX_BIND_POINTS 2 /* compute + graphics */
-/* match the latest Qualcomm driver which is also a hw limit on later gens */
-#define MAX_STORAGE_BUFFER_RANGE (1u << 27)
-#define MAX_TEXEL_ELEMENTS (1u << 27)
+#define TU_D3D12_MAX_TEXEL_BUFFER_ELEMENTS ((1u << 29u) - 1u)
+#define TU_TEXEL_BUFFER_MAX_WIDTH (1u << 14)
+#define TU_TEXEL_BUFFER_MAX_HEIGHT (1u << 14)
+#define TU_D3D12_MAX_STORAGE_BUFFER_RANGE_BYTES ((1u << 31u) - 1u)
 /* We use ldc for uniform buffer loads, just like the Qualcomm driver, so
  * expose the same maximum range.
  * TODO: The SIZE bitfield is 15 bits, and in 4-dword units, so the actual
@@ -122,7 +124,6 @@
 #define MAX_INLINE_UBO_RANGE 256
 #define MAX_INLINE_UBOS 4
 
-#define A6XX_TEX_CONST_DWORDS 16
 #define A6XX_TEX_SAMP_DWORDS 4
 
 /* We sample the fragment density map on the CPU, so technically the
@@ -147,6 +148,44 @@
  * Choose 8 as a compromise between the two.
  */
 #define TU_FDM_OFFSET_GRANULARITY 8
+
+enum tu_predicate_bit {
+   TU_PREDICATE_LOAD_STORE = 0,
+   TU_PREDICATE_PERFCNTRS = 1,
+   TU_PREDICATE_CB_ENABLED = 2,
+   TU_PREDICATE_VTX_STATS_RUNNING = 3,
+   TU_PREDICATE_VTX_STATS_NOT_RUNNING = 4,
+   TU_PREDICATE_FIRST_TILE = 5,
+   TU_PREDICATE_FAST_STORE = 6,
+   TU_PREDICATE_NO_FAST_STORE = 7,
+};
+
+/* Onchip timestamp register layout. */
+enum tu_onchip_addr {
+   /* Registers 0-7 are defined by firmware to be shared between BR/BV.
+    */
+
+   /* See tu7_emit_concurrent_binning */
+   TU_ONCHIP_CB_BR_TIMESTAMP,
+   TU_ONCHIP_CB_BV_TIMESTAMP,
+   TU_ONCHIP_CB_BV_DETERMINATION_FINISHED_TIMESTAMP,
+   TU_ONCHIP_CB_BV_DISABLED_TIMESTAMP,
+   TU_ONCHIP_BARRIER,
+   TU_ONCHIP_CB_RESLIST_OVERFLOW,
+
+   TU_ONCHIP_BR_U_TRACE_BARRIER,
+   TU_ONCHIP_BV_U_TRACE_BARRIER,
+
+   /* Registers 8-15 are defined by firmware to be split between BR and BV.
+    * Each has their own copy.
+    */
+};
+
+struct tu_rect2d_float {
+   float x_start, y_start;
+   float x_end, y_end;
+};
+
 
 #define TU_GENX(FUNC_NAME) FD_GENX(FUNC_NAME)
 
@@ -183,5 +222,14 @@ struct tu_suballoc_bo;
 struct tu_suballocator;
 struct tu_subpass;
 struct tu_u_trace_submission_data;
+
+/* Helper for iterating over layers of an attachment that handles both
+ * multiview and layered rendering cases.
+ */
+#define for_each_layer(layer, layer_mask, layers) \
+   for (uint32_t layer = 0; \
+        layer < ((layer_mask) ? (util_logbase2(layer_mask) + 1) : (layers)); \
+        layer++) \
+      if (!(layer_mask) || ((layer_mask) & BIT(layer)))
 
 #endif /* TU_COMMON_H */

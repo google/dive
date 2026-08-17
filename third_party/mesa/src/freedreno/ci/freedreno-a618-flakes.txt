@@ -266,6 +266,7 @@ dEQP-VK.synchronization.*_tess_ctrl.*
 dEQP-VK.synchronization.*_tess_control.*
 dEQP-VK.synchronization.*_tess_eval.*
 dEQP-VK.tessellation.invariance.*
+dEQP-VK.tessellation.tesscoord.*
 
 # Updated by ci-collate
 spec@arb_gpu_shader_fp64@execution@arb_gpu_shader_fp64-wrong-type-setter
@@ -281,7 +282,9 @@ gmem-dEQP-GLES31.functional.image_load_store.cube.format_reinterpret.rgba16ui_rg
 gmem-dEQP-GLES31.functional.copy_image.mixed.viewclass_128_bits_mixed.rgba32i_srgb8_alpha8_astc_6x5_khr.cubemap_to_cubemap
 KHR-GL46.texture_view.view_classes
 gmem-dEQP-GLES31.functional.copy_image.mixed.viewclass_128_bits_mixed.rgba_astc_12x10_khr_rgba32ui.texture3d_to_texture3d
-gmem-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.srgb8_alpha8_rgb10_a2.texture3d_to_texture3d
+gmem-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.srgb8_alpha8_rgb10_a2.texture3d_to_texture3d0
+gmem-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgb10_a2_rgba8i.texture2d_to_texture2d_array
+gmem-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_8_bits.r8_snorm_r8ui.texture3d_to_texture2d_array
 gmem-dEQP-GLES31.functional.copy_image.mixed.viewclass_128_bits_mixed.rgba_astc_6x5_khr_rgba32ui.texture2d_array_to_texture3d
 gmem-dEQP-GLES31.functional.copy_image.mixed.viewclass_128_bits_mixed.rgba_astc_8x8_khr_rgba32ui.texture3d_to_texture2d
 gmem-dEQP-GLES31.functional.copy_image.mixed.viewclass_128_bits_mixed.srgb8_alpha8_astc_10x8_khr_rgba32i.cubemap_to_texture2d
@@ -336,35 +339,23 @@ gmem-dEQP-GLES31.functional.copy_image.mixed.viewclass_128_bits_mixed.rgba32ui_r
 KHR-GL46.shader_storage_buffer_object.advanced-switchBuffers
 
 # Initial ANGLE flakes
-angle-dEQP-GLES2.functional.texture.specification.teximage2d_align.cube_rgba4444_51_4
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16f_to_r8
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16f_to_rg16f
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16f_to_rg32f
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16f_to_rgba16f
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16f_to_rgba32f
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16i_to_r8i
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16i_to_rg16i
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16ui_to_r8ui
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16ui_to_r16ui
-angle-dEQP-GLES3.functional.fbo.blit.conversion.r16ui_to_r32ui
-angle-dEQP-GLES3.functional.fbo.blit.conversion.rgb565_to_rg8
-angle-dEQP-GLES3.functional.fbo.blit.conversion.rgb565_to_srgb8_alpha8
-angle-dEQP-GLES3.functional.texture.format.sized.cube.r16ui_npot
-angle-dEQP-GLES3.functional.texture.specification.basic_teximage3d.rgb565_2d_array
-angle-dEQP-GLES3.functional.texture.specification.basic_teximage3d.rgba4_2d_array
-angle-dEQP-GLES3.functional.texture.specification.texstorage2d.format.r16f_2d
-angle-dEQP-GLES3.functional.texture.specification.texstorage2d.format.rgba4_cube
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16f_r16ui.cubemap_to_texture3d
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16f_rg8.cubemap_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16i_rg8.cubemap_to_texture3d
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16f_rg8_snorm.cubemap_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16i_rg8i.cubemap_to_renderbuffer
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16f_rg8ui.cubemap_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16i_r16f.texture3d_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16ui_rg8_snorm.cubemap_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.r16ui_rg8ui.cubemap_to_texture2d_array
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16f.texture2d_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8_snorm_r16ui.texture2d_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8i_r16ui.texture2d_to_cubemap
-angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.rg8ui_r16i.texture2d_to_cubemap
-angle-dEQP-GLES31.functional.state_query.program.tesselation_shader_state_get_programiv
+angle-dEQP-GLES3.functional.fbo.blit.conversion.*
+angle-dEQP-GLES3.functional.texture.format.*
+angle-dEQP-GLES3.functional.texture.specification.*
+angle-dEQP-GLES31.functional.copy_image.non_compressed.viewclass_16_bits.*
+
+# Autotune regression
+angle-dEQP-GLES3.functional.fbo.msaa.4_samples.rgb5_a1
+
+# Android flakes
+android-dEQP-VK.binding_model.shader_access.primary_cmd_buf.bind.with_template.sampler_mutable.no_access.single_descriptor.2d_array_base_mip
+android-dEQP-VK.pipeline.fast_linked_library.stencil.nocolor.format.d24_unorm_s8_uint.states.fail_wrap.pass_decc.dfail_decc.comp_never.any
+android-dEQP-VK.pipeline.fast_linked_library.stencil.nocolor.format.s8_uint.states.fail_repl.pass_decw.dfail_inv.comp_never.any
+android-dEQP-VK.pipeline.pipeline_library.stencil.nocolor.format.d32_sfloat_s8_uint_separate_layouts.states.fail_incc.pass_decw.dfail_keep.comp_never.any
+android-dEQP-VK.renderpasses.renderpass1.dedicated_allocation.formats.r16g16_uint.input.clear.dont_care.self_dep_draw_use_input_aspect_ms
+
+# See this entry in the VKCTS 1.4.4.2 -> 1.4.5.3 uprev fails list.
+dEQP-VK.*.custom_resolve.*.fdm_subsampled
+
+# See this entry in the VKCTS 1.4.5.3 -> 1.4.6.1 uprev fails list.
+dEQP-VK.*.custom_resolve.*.fdm_nonsubsampled

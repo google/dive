@@ -3,13 +3,24 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <gtest/gtest.h>
-#include <cstring>
 #include "tar.h"
 
-TEST(Tar, RoundtripSmallFile)
+#include <gtest/gtest.h>
+
+#include <cstring>
+#include <vector>
+
+class TarTest : public testing::Test {
+  protected:
+   TarTest() : f{std::tmpfile()} {};
+   ~TarTest() { std::fclose(f); }
+
+   FILE *f;
+};
+
+
+TEST_F(TarTest, RoundtripSmallFile)
 {
-   FILE *f = tmpfile();
    const char *test = "TEST TEST TEST";
 
    {
@@ -27,15 +38,14 @@ TEST(Tar, RoundtripSmallFile)
    long size = ftell(f);
    ASSERT_TRUE(size > 0);
    ASSERT_TRUE(size % 512 == 0);
-   char *contents = new char[size];
+   std::vector<char> contents(size);
 
    fseek(f, 0, SEEK_SET);
-   fread(contents, size, 1, f);
-   fclose(f);
+   ASSERT_EQ(fread(contents.data(), size, 1, f), 1);
 
    {
       tar_reader ar;
-      tar_reader_init_from_bytes(&ar, contents, size);
+      tar_reader_init_from_bytes(&ar, contents.data(), size);
 
       tar_reader_entry entry;
 
@@ -51,14 +61,10 @@ TEST(Tar, RoundtripSmallFile)
       bool second_read = tar_reader_next(&ar, &entry);
       ASSERT_FALSE(second_read);
    }
-
-   delete[] contents;
 }
 
-TEST(Tar, RoundtripContentsWithRecordSize)
+TEST_F(TarTest, RoundtripContentsWithRecordSize)
 {
-   FILE *f = tmpfile();
-
    uint8_t test[512];
 
    for (unsigned i = 0; i < sizeof(test); i++) {
@@ -76,15 +82,14 @@ TEST(Tar, RoundtripContentsWithRecordSize)
    long size = ftell(f);
    ASSERT_TRUE(size > 0);
    ASSERT_TRUE(size % 512 == 0);
-   char *contents = new char[size];
+   std::vector<char> contents(size);
 
    fseek(f, 0, SEEK_SET);
-   fread(contents, size, 1, f);
-   fclose(f);
+   ASSERT_EQ(fread(contents.data(), size, 1, f), 1);
 
    {
       tar_reader ar;
-      tar_reader_init_from_bytes(&ar, contents, size);
+      tar_reader_init_from_bytes(&ar, contents.data(), size);
       ASSERT_FALSE(ar.error);
 
       tar_reader_entry entry;
@@ -101,14 +106,10 @@ TEST(Tar, RoundtripContentsWithRecordSize)
       bool second_read = tar_reader_next(&ar, &entry);
       ASSERT_FALSE(second_read);
    }
-
-   delete[] contents;
 }
 
-TEST(Tar, TimestampRoundtrip)
+TEST_F(TarTest, TimestampRoundtrip)
 {
-   FILE *f = tmpfile();
-
    const char *test = "TEST TIMESTAMP";
    const time_t test_timestamp = 1234567890; // Known timestamp (February 13, 2009)
 
@@ -125,15 +126,14 @@ TEST(Tar, TimestampRoundtrip)
    long size = ftell(f);
    ASSERT_TRUE(size > 0);
    ASSERT_TRUE(size % 512 == 0);
-   char *contents = new char[size];
+   std::vector<char> contents(size);
 
    fseek(f, 0, SEEK_SET);
-   fread(contents, size, 1, f);
-   fclose(f);
+   ASSERT_EQ(fread(contents.data(), size, 1, f), 1);
 
    {
       tar_reader ar;
-      tar_reader_init_from_bytes(&ar, contents, size);
+      tar_reader_init_from_bytes(&ar, contents.data(), size);
       ASSERT_FALSE(ar.error);
 
       tar_reader_entry entry;
@@ -153,6 +153,4 @@ TEST(Tar, TimestampRoundtrip)
       bool second_read = tar_reader_next(&ar, &entry);
       ASSERT_FALSE(second_read);
    }
-
-   delete[] contents;
 }

@@ -216,12 +216,13 @@ genX(cmd_buffer_flush_dynamic_state)(struct anv_cmd_buffer *cmd_buffer)
 #endif
          ib.IndexFormat           = cmd_buffer->state.gfx.index_type;
          ib.MOCS                  = anv_mocs(cmd_buffer->device,
-                                             buffer->address.bo,
+                                             buffer ? buffer->address.bo : NULL,
                                              ISL_SURF_USAGE_INDEX_BUFFER_BIT);
 
-         ib.BufferStartingAddress = anv_address_add(buffer->address, offset);
-         ib.BufferEndingAddress   = anv_address_add(buffer->address,
-                                                    buffer->vk.size);
+         if (buffer) {
+            ib.BufferStartingAddress = anv_address_add(buffer->address, offset);
+            ib.BufferEndingAddress   = anv_address_add(buffer->address, buffer->vk.size);
+         }
       }
    }
 

@@ -15,10 +15,10 @@ libamdgpuwinsys = static_library(
   ),
   include_directories : [
     inc_amd, inc_gallium, inc_gallium_aux, inc_include, inc_src,
-    inc_amd_common, inc_amd_common_llvm, inc_virtio_gpu
+    inc_amd_common, inc_virtio_gpu
   ],
   gnu_symbol_visibility : 'hidden',
   link_with : libamdgpu_addrlib,
-  dependencies : [dep_llvm, dep_libdrm_amdgpu, idep_amdgfxregs_h, idep_mesautil],
+  dependencies : [dep_libdrm_amdgpu, idep_amd_generated_headers, idep_mesautil],
   c_args : c_args
 )

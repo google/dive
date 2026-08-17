@@ -328,6 +328,10 @@ to upconvert to 32b float internally?
 	<value value="0x2"  name="R2D_SNORM8"/>
 	<value value="0x1"  name="R2D_UNORM8_SRGB"/>
 	<value value="0x0"  name="R2D_UNORM8"/>
+
+	<!-- Not a hw enum, used internally in driver -->
+	<!-- GOOGLE: Disable R2D_NONE, since Dive treats it as a a hw enum!-->
+	<!-- <value value="0xff" name="R2D_NONE"/> -->
 </enum>
 
 <enum name="a6xx_tex_type">

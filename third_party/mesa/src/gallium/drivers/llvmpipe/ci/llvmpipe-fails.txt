@@ -1,3 +1,6 @@
+KHR-Single-GL45.meshShader.propertyTests.max_mesh_output_size_with_payload_per_vertex_no_view_index,Fail
+KHR-Single-GL45.meshShader.propertyTests.max_mesh_output_size_without_payload_per_vertex_no_view_index,Fail
+
 x11-dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.query_status.compute,Fail
 x11-dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.query_status.vertex,Fail
 x11-dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.query_status.vertex_and_fragment,Fail
@@ -10,6 +13,7 @@ x11-dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.sync_stat
 
 spec@oes_shader_io_blocks@compiler@layout-location-aliasing.vert,Fail
 
+glx@glx-copy-sub-buffer,Fail
 glx@glx-make-current,Fail
 
 glx@glx-multi-window-single-context,Fail
@@ -93,12 +97,15 @@ spec@!opengl 1.1@polygon-mode-offset@config 4: Expected white pixel on right edg
 spec@!opengl 1.1@polygon-mode-offset@config 4: Expected white pixel on top edge,Fail
 
 # Seen in https://gitlab.freedesktop.org/mesa/mesa/-/pipelines/1364513
-dEQP-GLES31.functional.shaders.framebuffer_fetch.basic.last_frag_data,Fail
 spec@arb_framebuffer_object@execution@msaa-alpha-to-coverage_alpha-to-one_write-z,Fail
 spec@ovr_multiview@compiler@multiple-num-views-in-single-declaration-mismatch.vert,Fail
 
-# New failures with GL CTS 4.6.6.0
-KHR-GL45.direct_state_access.vertex_arrays_vertex_buffers_errors,Fail
-
 # src/compiler/nir/nir.h:2850: nir_src_comp_as_uint: Assertion `nir_src_is_const(src)' failed.
 spec@glsl-1.50@execution@geometry@dynamic_input_array_index,Crash
+
+spec@!opengl 1.1@large-tex,Crash
+spec@glsl-1.30@execution@glsl-packed-back-color,Fail
+
+# Nightly run expectations update
+spec@ext_image_dma_buf_import@ext_image_dma_buf_import-transcode-nv12-as-r8-gr88,Fail
+

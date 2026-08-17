@@ -404,7 +404,7 @@ pub struct Runner {
     qmd_heap: QMDHeap,
 }
 
-impl<'a> Runner {
+impl Runner {
     pub fn new(dev_id: Option<usize>) -> Runner {
         let dev = Device::new(dev_id).expect("Failed to create nouveau device");
         let ctx = Context::new(dev.clone()).expect("Failed to create context");
@@ -522,15 +522,15 @@ impl<'a> Runner {
         // Fill out the pushbuf
         let mut p = NvPush::new();
 
-        p.push_method(cla0c0::SetObject {
+        p.push_mthd(cla0c0::SetObject {
             class_id: self.dev_info().cls_compute.into(),
             engine_id: 0,
         });
         if self.dev_info().cls_compute < VOLTA_COMPUTE_A {
-            p.push_method(cla0c0::SetProgramRegionA {
+            p.push_mthd(cla0c0::SetProgramRegionA {
                 address_upper: (bo.addr >> 32) as u32,
             });
-            p.push_method(cla0c0::SetProgramRegionB {
+            p.push_mthd(cla0c0::SetProgramRegionB {
                 address_lower: bo.addr as u32,
             });
         }
@@ -543,41 +543,41 @@ impl<'a> Runner {
 
         let lmem_base_addr = 0xff000000_u32;
         if self.dev_info().cls_compute >= VOLTA_COMPUTE_A {
-            p.push_method(clc3c0::SetShaderSharedMemoryWindowA {
+            p.push_mthd(clc3c0::SetShaderSharedMemoryWindowA {
                 base_address_upper: (smem_base_addr >> 32) as u32,
             });
-            p.push_method(clc3c0::SetShaderSharedMemoryWindowB {
+            p.push_mthd(clc3c0::SetShaderSharedMemoryWindowB {
                 base_address: smem_base_addr as u32,
             });
 
-            p.push_method(clc3c0::SetShaderLocalMemoryWindowA {
+            p.push_mthd(clc3c0::SetShaderLocalMemoryWindowA {
                 base_address_upper: 0,
             });
-            p.push_method(clc3c0::SetShaderLocalMemoryWindowB {
+            p.push_mthd(clc3c0::SetShaderLocalMemoryWindowB {
                 base_address: lmem_base_addr,
             });
         } else {
-            p.push_method(cla0c0::SetShaderSharedMemoryWindow {
+            p.push_mthd(cla0c0::SetShaderSharedMemoryWindow {
                 base_address: smem_base_addr as u32,
             });
-            p.push_method(cla0c0::SetShaderLocalMemoryWindow {
+            p.push_mthd(cla0c0::SetShaderLocalMemoryWindow {
                 base_address: lmem_base_addr,
             });
         }
 
         if self.dev_info().cls_compute >= MAXWELL_COMPUTE_B {
-            p.push_method(clb1c0::InvalidateSkedCaches { v: 0 });
+            p.push_mthd(clb1c0::InvalidateSkedCaches { v: 0 });
         }
 
-        p.push_method(cla0c0::SendPcasA {
+        p.push_mthd(cla0c0::SendPcasA {
             qmd_address_shifted8: (qmd.addr >> 8) as u32,
         });
         if self.dev_info().cls_compute >= AMPERE_COMPUTE_A {
-            p.push_method(clc6c0::SendSignalingPcas2B {
+            p.push_mthd(clc6c0::SendSignalingPcas2B {
                 pcas_action: clc6c0::SendSignalingPcas2BPcasAction::InvalidateCopySchedule,
             });
         } else {
-            p.push_method(cla0c0::SendSignalingPcasB {
+            p.push_mthd(cla0c0::SendSignalingPcasB {
                 invalidate: true,
                 schedule: true,
             });
@@ -614,7 +614,7 @@ impl<'a> Runner {
                 data.len().try_into().unwrap(),
                 stride.try_into().unwrap(),
                 data.as_mut_ptr().cast(),
-                data.len() * stride,
+                size_of_val(data),
             )
         }
     }

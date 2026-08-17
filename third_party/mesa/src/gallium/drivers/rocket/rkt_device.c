@@ -24,6 +24,17 @@ static const struct debug_named_value rocket_debug_options[] = {
 DEBUG_GET_ONCE_FLAGS_OPTION(rocket_debug, "ROCKET_DEBUG", rocket_debug_options, 0)
 int rocket_debug = 0;
 
+struct rkt_transfer {
+   struct pipe_transfer base;
+   uint8_t *map;
+};
+
+static inline struct rkt_transfer *
+rkt_transfer(struct pipe_transfer *ptransfer)
+{
+   return (struct rkt_transfer *)ptransfer;
+}
+
 static void
 rkt_destroy_screen(struct pipe_screen *pscreen)
 {
@@ -61,12 +72,12 @@ rkt_buffer_map(struct pipe_context *pctx,
    assert(box->height == 1);
    assert(box->depth == 1);
 
-   struct pipe_transfer *transfer = rzalloc(NULL, struct pipe_transfer);
-   transfer->level = level;
-   transfer->usage = usage;
-   transfer->box = *box;
+   struct rkt_transfer *transfer = rzalloc(NULL, struct rkt_transfer);
+   transfer->base.level = level;
+   transfer->base.usage = usage;
+   transfer->base.box = *box;
 
-   pipe_resource_reference(&transfer->resource, prsc);
+   pipe_resource_reference(&transfer->base.resource, prsc);
 
    arg.handle = rsc->handle;
    arg.timeout_ns = INT64_MAX;
@@ -78,28 +89,32 @@ rkt_buffer_map(struct pipe_context *pctx,
                           screen->fd, rsc->fake_offset);
    assert(map != MAP_FAILED);
 
-   *out_transfer = transfer;
+   transfer->map = map;
+   *out_transfer = &transfer->base;
 
    return map + box->x;
 }
 
 static void
 rkt_buffer_unmap(struct pipe_context *pctx,
-                 struct pipe_transfer *transfer)
+                 struct pipe_transfer *ptransfer)
 {
    struct rkt_screen *screen = rkt_screen(pctx->screen);
-   struct rkt_resource *rsrc = rkt_resource(transfer->resource);
+   struct rkt_transfer *transfer = rkt_transfer(ptransfer);
+   struct rkt_resource *rsrc = rkt_resource(transfer->base.resource);
    struct drm_rocket_fini_bo arg = {0};
    int ret;
 
    arg.handle = rsrc->handle;
 
-   if (transfer->usage == PIPE_MAP_WRITE) {
+   if (transfer->base.usage == PIPE_MAP_WRITE) {
       ret = drmIoctl(screen->fd, DRM_IOCTL_ROCKET_FINI_BO, &arg);
       assert(ret >= 0);
    }
 
-   pipe_resource_reference(&transfer->resource, NULL);
+   os_munmap(transfer->map, transfer->base.resource->width0);
+
+   pipe_resource_reference(&transfer->base.resource, NULL);
    ralloc_free(transfer);
 }
 
@@ -124,11 +139,8 @@ rkt_create_context(struct pipe_screen *screen,
    pctx->buffer_subdata = u_default_buffer_subdata;
    pctx->clear_buffer = u_default_clear_buffer;
 
-   pctx->ml_operation_supported = rkt_ml_operation_supported;
-   pctx->ml_subgraph_create = rkt_ml_subgraph_create;
    pctx->ml_subgraph_invoke = rkt_ml_subgraph_invoke;
    pctx->ml_subgraph_read_output = rkt_ml_subgraph_read_outputs;
-   pctx->ml_subgraph_destroy = rkt_ml_subgraph_destroy;
 
    return pctx;
 }
@@ -204,6 +216,12 @@ rkt_screen_get_fd(struct pipe_screen *pscreen)
    return rkt_screen(pscreen)->fd;
 }
 
+static struct pipe_ml_device *
+rkt_get_ml_device(struct pipe_screen *pscreen)
+{
+   return &rkt_screen(pscreen)->ml_device.base;
+}
+
 struct pipe_screen *
 rkt_screen_create(int fd,
                   const struct pipe_screen_config *config,
@@ -227,6 +245,11 @@ rkt_screen_create(int fd,
    screen->context_create = rkt_create_context;
    screen->resource_create = rkt_resource_create;
    screen->resource_destroy = rkt_resource_destroy;
+
+   rkt_screen->ml_device.base.ml_operation_supported = rkt_ml_operation_supported;
+   rkt_screen->ml_device.base.ml_subgraph_create = rkt_ml_subgraph_create;
+   rkt_screen->ml_device.base.ml_subgraph_destroy = rkt_ml_subgraph_destroy;
+   screen->get_ml_device = rkt_get_ml_device;
 
    return screen;
 }

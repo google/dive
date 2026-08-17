@@ -46,9 +46,9 @@ extern "C" {
 static inline void
 intel_set_ps_dispatch_state(struct GENX(3DSTATE_PS) *ps,
                             const struct intel_device_info *devinfo,
-                            const struct elk_wm_prog_data *prog_data,
+                            const struct elk_fs_prog_data *prog_data,
                             unsigned rasterization_samples,
-                            enum intel_msaa_flags msaa_flags)
+                            enum intel_fs_config fs_config)
 {
    assert(rasterization_samples != 0);
 
@@ -73,7 +73,7 @@ intel_set_ps_dispatch_state(struct GENX(3DSTATE_PS) *ps,
 #endif
 
    const bool is_persample_dispatch =
-      elk_wm_prog_data_is_persample(prog_data, msaa_flags);
+      elk_fs_prog_data_is_persample(prog_data, fs_config);
 
    if (is_persample_dispatch) {
       /* Starting with SandyBridge (where we first get MSAA), the different

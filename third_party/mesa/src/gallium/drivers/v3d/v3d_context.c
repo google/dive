@@ -69,7 +69,7 @@ v3d_pipe_flush(struct pipe_context *pctx, struct pipe_fence_handle **fence,
                  */
                 drmSyncobjExportSyncFile(v3d->fd, v3d->out_sync, &fd);
                 if (fd == -1) {
-                        fprintf(stderr, "export failed\n");
+                        mesa_loge("Export failed");
                         *fence = NULL;
                         return;
                 }
@@ -100,7 +100,6 @@ v3d_memory_barrier(struct pipe_context *pctx, unsigned int flags)
          * else we flush the job automatically when we needed.
          */
         const unsigned int flush_flags = PIPE_BARRIER_SHADER_BUFFER |
-                                         PIPE_BARRIER_GLOBAL_BUFFER |
                                          PIPE_BARRIER_IMAGE;
 
 	if (!(flags & flush_flags))
@@ -317,6 +316,15 @@ v3d_context_destroy(struct pipe_context *pctx)
                 pipe_resource_reference(res, NULL);
         }
 
+        for (int i = 0; i < PIPE_MAX_ATTRIBS; i++)
+                pipe_vertex_buffer_unreference(&v3d->vertexbuf.vb[i]);
+
+        for (int s = 0; s < MESA_SHADER_STAGES; s++) {
+                for (int i = 0; i < PIPE_MAX_CONSTANT_BUFFERS; i++) {
+                        pipe_resource_reference(&v3d->constbuf[s].cb[i].buffer, NULL);
+                }
+        }
+
         if (v3d->blitter)
                 util_blitter_destroy(v3d->blitter);
 
@@ -476,7 +484,7 @@ v3d_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
         v3d->base.stream_uploader = v3d->uploader;
         v3d->base.const_uploader = v3d->uploader;
         v3d->state_uploader = u_upload_create(&v3d->base,
-                                              4096,
+                                              devinfo->page_size,
                                               PIPE_BIND_CONSTANT_BUFFER,
                                               PIPE_USAGE_STREAM, 0);
 

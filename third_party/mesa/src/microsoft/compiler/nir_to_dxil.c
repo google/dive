@@ -92,15 +92,13 @@ nir_options = {
    .compact_arrays = true,
    .lower_ineg = true,
    .lower_fneg = true,
-   .lower_ffma16 = true,
-   .lower_ffma32 = true,
+   .float_mul_add64 = nir_float_muladd_support_has_ffma,
    .lower_isign = true,
    .lower_fsign = true,
    .lower_iabs = true,
    .lower_fmod = true,
    .lower_fpow = true,
    .lower_scmp = true,
-   .lower_ldexp = true,
    .lower_flrp16 = true,
    .lower_flrp32 = true,
    .lower_flrp64 = true,
@@ -181,8 +179,10 @@ dxil_get_nir_compiler_options(nir_shader_compiler_options *options,
       options->lower_unpack_64_2x32_split = false;
       options->lower_int64_options = ~0;
    }
-   if (!(supported_float_sizes & 64))
+   if (!(supported_float_sizes & 64)) {
       options->lower_doubles_options = ~0;
+      options->float_mul_add64 = 0;
+   }
    if (shader_model_max >= SHADER_MODEL_6_4) {
       options->has_sdot_4x8 = true;
       options->has_udot_4x8 = true;
@@ -1312,7 +1312,7 @@ emit_srv(struct ntd_context *ctx, nir_variable *var, unsigned count)
    if (!srv_meta)
       return false;
 
-   util_dynarray_append(&ctx->srv_metadata_nodes, const struct dxil_mdnode *, srv_meta);
+   util_dynarray_append(&ctx->srv_metadata_nodes, srv_meta);
    add_resource(ctx, res_type, res_kind, &layout);
    if (res_type == DXIL_RES_SRV_RAW)
       ctx->mod.raw_and_structured_buffers = true;
@@ -1336,7 +1336,7 @@ emit_uav(struct ntd_context *ctx, unsigned binding, unsigned space, unsigned cou
    if (!uav_meta)
       return false;
 
-   util_dynarray_append(&ctx->uav_metadata_nodes, const struct dxil_mdnode *, uav_meta);
+   util_dynarray_append(&ctx->uav_metadata_nodes, uav_meta);
    if (ctx->mod.minor_validator < 6 &&
        util_dynarray_num_elements(&ctx->uav_metadata_nodes, const struct dxil_mdnode *) > 8)
       ctx->mod.feats.use_64uavs = 1;
@@ -1560,7 +1560,7 @@ emit_cbv(struct ntd_context *ctx, unsigned binding, unsigned space,
    if (!cbv_meta)
       return false;
 
-   util_dynarray_append(&ctx->cbv_metadata_nodes, const struct dxil_mdnode *, cbv_meta);
+   util_dynarray_append(&ctx->cbv_metadata_nodes, cbv_meta);
    add_resource(ctx, DXIL_RES_CBV, DXIL_RESOURCE_KIND_CBUFFER, &layout);
 
    return true;
@@ -1606,7 +1606,7 @@ emit_sampler(struct ntd_context *ctx, nir_variable *var, unsigned count)
    if (!sampler_meta)
       return false;
 
-   util_dynarray_append(&ctx->sampler_metadata_nodes, const struct dxil_mdnode *, sampler_meta);
+   util_dynarray_append(&ctx->sampler_metadata_nodes, sampler_meta);
    add_resource(ctx, DXIL_RES_SAMPLER, DXIL_RESOURCE_KIND_SAMPLER, &layout);
 
    return true;
@@ -1747,12 +1747,9 @@ get_tessellator_output_primitive(const struct shader_info *info)
       return DXIL_TESSELLATOR_OUTPUT_PRIMITIVE_POINT;
    if (info->tess._primitive_mode == TESS_PRIMITIVE_ISOLINES)
       return DXIL_TESSELLATOR_OUTPUT_PRIMITIVE_LINE;
-   /* Note: GL tessellation domain is inverted from D3D, which means triangle
-    * winding needs to be inverted.
-    */
    if (info->tess.ccw)
-      return DXIL_TESSELLATOR_OUTPUT_PRIMITIVE_TRIANGLE_CW;
-   return DXIL_TESSELLATOR_OUTPUT_PRIMITIVE_TRIANGLE_CCW;
+      return DXIL_TESSELLATOR_OUTPUT_PRIMITIVE_TRIANGLE_CCW;
+   return DXIL_TESSELLATOR_OUTPUT_PRIMITIVE_TRIANGLE_CW;
 }
 
 static const struct dxil_mdnode *
@@ -2140,7 +2137,7 @@ static bool
 is_phi_src(nir_def *ssa)
 {
    nir_foreach_use(src, ssa)
-      if (nir_src_parent_instr(src)->type == nir_instr_type_phi)
+      if (nir_src_use_instr(src)->type == nir_instr_type_phi)
          return true;
    return false;
 }
@@ -2275,7 +2272,7 @@ emit_binop(struct ntd_context *ctx, nir_alu_instr *alu,
    bool is_float_op = nir_alu_type_get_base_type(nir_op_infos[alu->op].output_type) == nir_type_float;
 
    enum dxil_opt_flags flags = 0;
-   if (is_float_op && !alu->exact)
+   if (is_float_op && !nir_alu_instr_is_exact(alu))
       flags |= DXIL_UNSAFE_ALGEBRA;
 
    const struct dxil_value *v = dxil_emit_binop(&ctx->mod, opcode, op0, op1, flags);
@@ -2718,15 +2715,8 @@ emit_b2f64(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_value 
 }
 
 static bool
-emit_f16tof32(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_value *val, bool shift)
+emit_f16tof32(struct ntd_context *ctx, nir_alu_instr *alu, const struct dxil_value *val)
 {
-   if (shift) {
-      val = dxil_emit_binop(&ctx->mod, DXIL_BINOP_LSHR, val,
-         dxil_module_get_int32_const(&ctx->mod, 16), 0);
-      if (!val)
-         return false;
-   }
-
    const struct dxil_func *func = dxil_get_function(&ctx->mod,
                                                     "dx.op.legacyF16ToF32",
                                                     DXIL_NONE);
@@ -3015,8 +3005,7 @@ emit_alu(struct ntd_context *ctx, nir_alu_instr *alu)
    case nir_op_ubfe: return emit_tertiary_intin(ctx, alu, DXIL_INTR_UBFE, src[2], src[1], src[0]);
    case nir_op_bitfield_insert: return emit_bitfield_insert(ctx, alu, src[0], src[1], src[2], src[3]);
 
-   case nir_op_unpack_half_2x16_split_x: return emit_f16tof32(ctx, alu, src[0], false);
-   case nir_op_unpack_half_2x16_split_y: return emit_f16tof32(ctx, alu, src[0], true);
+   case nir_op_unpack_half_x_dxil: return emit_f16tof32(ctx, alu, src[0]);
    case nir_op_pack_half_2x16_split: return emit_f32tof16(ctx, alu, src[0], src[1]);
 
    case nir_op_sdot_4x8_iadd: return emit_dot4add_packed(ctx, alu, DXIL_INTR_DOT4_ADD_I8_PACKED, src[0], src[1], src[2]);
@@ -3103,7 +3092,10 @@ emit_barrier_impl(struct ntd_context *ctx, nir_variable_mode modes, mesa_scope e
        (mem_scope > SCOPE_WORKGROUP || !is_compute)) {
       flags |= DXIL_BARRIER_MODE_UAV_FENCE_GLOBAL;
    } else {
-      flags |= DXIL_BARRIER_MODE_UAV_FENCE_THREAD_GROUP;
+      /* This used to be DXIL_BARRIER_MODE_UAV_FENCE_THREAD_GROUP. However, since 
+       * it's inaccessible in HLSL, certain drivers (eg. for Intel Iris Xe Graphics) 
+       * do not seem robust against it, and appear to ignore the barrier instruction. */
+      flags |= DXIL_BARRIER_MODE_UAV_FENCE_GLOBAL;
    }
 
    if ((modes & nir_var_mem_shared) && is_compute)
@@ -4482,11 +4474,11 @@ emit_load_vulkan_descriptor(struct ntd_context *ctx, nir_intrinsic_instr *intr)
    enum dxil_resource_class resource_class;
    enum dxil_resource_kind resource_kind;
    switch (nir_intrinsic_desc_type(intr)) {
-   case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+   case nir_descriptor_type_uniform_buffer:
       resource_class = DXIL_RESOURCE_CLASS_CBV;
       resource_kind = DXIL_RESOURCE_KIND_CBUFFER;
       break;
-   case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+   case nir_descriptor_type_storage_buffer:
       resource_class = DXIL_RESOURCE_CLASS_UAV;
       resource_kind = DXIL_RESOURCE_KIND_RAW_BUFFER;
       break;
@@ -5124,10 +5116,16 @@ emit_phi(struct ntd_context *ctx, nir_phi_instr *instr)
 {
    const struct dxil_type *type = NULL;
    nir_foreach_phi_src(src, instr) {
-      /* All sources have the same type, just use the first one */
-      type = dxil_value_get_type(ctx->defs[src->src.ssa->index].chans[0]);
-      break;
+      /* All sources have the same type, so use the first one that's already
+       * been emitted. Phi-source order is not stable, and back-edge sources
+       * (e.g. for a loop-header phi) won't have been emitted yet. */
+      const struct dxil_value *val = ctx->defs[src->src.ssa->index].chans[0];
+      if (val) {
+         type = dxil_value_get_type(val);
+         break;
+      }
    }
+   assert(type);
 
    struct phi_block *vphi = ralloc(ctx->phis, struct phi_block);
    vphi->num_components = instr->def.num_components;
@@ -6314,9 +6312,10 @@ optimize_nir(struct nir_shader *s, const struct nir_to_dxil_options *opts)
    do {
       progress = false;
       NIR_PASS(progress, s, nir_lower_vars_to_ssa);
-      NIR_PASS(progress, s, nir_lower_indirect_derefs, nir_var_function_temp, 4);
+      NIR_PASS(progress, s, nir_lower_indirect_derefs_to_if_else_trees,
+               nir_var_function_temp, 4);
       NIR_PASS(progress, s, nir_lower_alu_to_scalar, NULL, NULL);
-      NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, nir_opt_copy_prop);
       NIR_PASS(progress, s, nir_opt_copy_prop_vars);
       NIR_PASS(progress, s, nir_lower_bit_size, lower_bit_size_callback, (void*)opts);
       NIR_PASS(progress, s, dxil_nir_lower_8bit_conv);
@@ -6357,7 +6356,7 @@ optimize_nir(struct nir_shader *s, const struct nir_to_dxil_options *opts)
       NIR_PASS(progress, s, nir_opt_algebraic_late);
    } while (progress);
 
-   NIR_PASS(_, s, nir_lower_undef_to_zero);
+   NIR_PASS(_, s, nir_lower_undef_to_zero, NULL);
 }
 
 static
@@ -6541,7 +6540,7 @@ allocate_sysvalues(struct ntd_context *ctx)
    return true;
 }
 
-static int
+static unsigned
 type_size_vec4(const struct glsl_type *type, bool bindless)
 {
    return glsl_count_attribute_slots(type, false);
@@ -6635,6 +6634,8 @@ nir_to_dxil(struct nir_shader *s, const struct nir_to_dxil_options *opts,
    NIR_PASS(_, s, nir_lower_frexp);
    NIR_PASS(_, s, nir_lower_flrp, 16 | 32 | 64, true);
    NIR_PASS(_, s, nir_lower_io, nir_var_shader_in | nir_var_shader_out, type_size_vec4, nir_lower_io_lower_64bit_to_32);
+   s->info.disable_input_offset_src_constant_folding = true;
+   s->info.disable_output_offset_src_constant_folding = true;
    NIR_PASS(_, s, dxil_nir_ensure_position_writes);
    NIR_PASS(_, s, dxil_nir_lower_system_values);
    NIR_PASS(_, s, nir_lower_io_to_scalar, nir_var_shader_in | nir_var_system_value | nir_var_shader_out, NULL, NULL);

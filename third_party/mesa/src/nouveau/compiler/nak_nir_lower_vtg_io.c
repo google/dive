@@ -58,6 +58,21 @@ lower_vtg_io_intrin(nir_builder *b,
 
    nir_def *vtx = NULL, *offset = NULL, *data = NULL;
    switch (intrin->intrinsic) {
+   case nir_intrinsic_load_primitive_id:
+   case nir_intrinsic_load_instance_id:
+   case nir_intrinsic_load_vertex_id: {
+      /* These still input loads but they're a special case */
+      const gl_system_value sysval =
+         nir_system_value_from_intrinsic(intrin->intrinsic);
+      const uint32_t addr = nak_sysval_attr_addr(nak, sysval);
+      nir_def *val = nir_ald_nv(b, 1, nir_imm_int(b, 0), nir_imm_int(b, 0),
+                                .base = addr, .flags = 0,
+                                .range_base = addr, .range = 4,
+                                .access = ACCESS_CAN_REORDER);
+      nir_def_rewrite_uses(&intrin->def, val);
+      return true;
+   }
+
    case nir_intrinsic_load_input:
    case nir_intrinsic_load_output:
       offset = intrin->src[0].ssa;
@@ -144,7 +159,17 @@ lower_vtg_io_intrin(nir_builder *b,
          nir_def *lo = nir_extract_u8_imm(b, info, 0);
          nir_def *hi = nir_extract_u8_imm(b, info, 2);
          nir_def *idx = nir_iadd(b, nir_imul(b, lo, hi), vtx);
-         vtx = nir_isberd_nv(b, idx);
+
+         const struct nak_nir_isbe_flags flags = {
+            .access = NAK_ISBE_ACCESS_MAP,
+            .output = false,
+            .skew = false,
+            .per_primitive = false,
+         };
+
+         vtx = nir_isberd_nv(b, 8, idx,
+                             .flags = NAK_AS_U32(flags),
+                             .access = ACCESS_CAN_REORDER);
       } else {
          vtx = nir_vild_nv(b, vtx);
       }

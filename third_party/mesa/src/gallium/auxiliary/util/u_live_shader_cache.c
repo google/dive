@@ -33,17 +33,17 @@
 
 #include "util/blob.h"
 #include "util/hash_table.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 static uint32_t key_hash(const void *key)
 {
-   /* Take the first dword of SHA1. */
+   /* Take the first dword of BLAKE3. */
    return *(uint32_t*)key;
 }
 
 static bool key_equals(const void *a, const void *b)
 {
-   /* Compare SHA1s. */
+   /* Compare BLAKE3s. */
    return memcmp(a, b, 20) == 0;
 }
 
@@ -97,26 +97,26 @@ util_live_shader_cache_get(struct pipe_context *ctx,
       return NULL;
    }
 
-   /* Compute SHA1 of pipe_shader_state. */
-   struct mesa_sha1 sha1_ctx;
-   unsigned char sha1[20];
-   _mesa_sha1_init(&sha1_ctx);
-   _mesa_sha1_update(&sha1_ctx, ir_binary, ir_size);
+   /* Compute BLAKE3 of pipe_shader_state. */
+   blake3_hasher blake3_ctx;
+   unsigned char blake3[BLAKE3_KEY_LEN];
+   _mesa_blake3_init(&blake3_ctx);
+   _mesa_blake3_update(&blake3_ctx, ir_binary, ir_size);
    if ((stage == MESA_SHADER_VERTEX ||
         stage == MESA_SHADER_TESS_EVAL ||
         stage == MESA_SHADER_GEOMETRY) &&
        state->stream_output.num_outputs) {
-      _mesa_sha1_update(&sha1_ctx, &state->stream_output,
+      _mesa_blake3_update(&blake3_ctx, &state->stream_output,
                         sizeof(state->stream_output));
    }
-   _mesa_sha1_final(&sha1_ctx, sha1);
+   _mesa_blake3_final(&blake3_ctx, blake3);
 
    if (ir_binary == blob.data)
       blob_finish(&blob);
 
    /* Find the shader in the live cache. */
    simple_mtx_lock(&cache->lock);
-   struct hash_entry *entry = _mesa_hash_table_search(cache->hashtable, sha1);
+   struct hash_entry *entry = _mesa_hash_table_search(cache->hashtable, blake3);
    struct util_live_shader *shader = entry ? entry->data : NULL;
 
    /* Increase the refcount. */
@@ -144,13 +144,13 @@ util_live_shader_cache_get(struct pipe_context *ctx,
       return NULL;
 
    pipe_reference_init(&shader->reference, 1);
-   memcpy(shader->sha1, sha1, sizeof(sha1));
+   memcpy(shader->blake3, blake3, sizeof(blake3));
 
    simple_mtx_lock(&cache->lock);
    /* The same shader might have been created in parallel. This is rare.
     * If so, keep the one already in cache.
     */
-   struct hash_entry *entry2 = _mesa_hash_table_search(cache->hashtable, sha1);
+   struct hash_entry *entry2 = _mesa_hash_table_search(cache->hashtable, blake3);
    struct util_live_shader *shader2 = entry2 ? entry2->data : NULL;
 
    if (shader2) {
@@ -159,7 +159,7 @@ util_live_shader_cache_get(struct pipe_context *ctx,
       /* Increase the refcount. */
       pipe_reference(NULL, &shader->reference);
    } else {
-      _mesa_hash_table_insert(cache->hashtable, shader->sha1, shader);
+      _mesa_hash_table_insert(cache->hashtable, shader->blake3, shader);
    }
    cache->misses++;
    simple_mtx_unlock(&cache->lock);
@@ -182,7 +182,7 @@ util_shader_reference(struct pipe_context *ctx,
    bool destroy = pipe_reference(&dst_shader->reference, &src_shader->reference);
    if (destroy) {
       struct hash_entry *entry = _mesa_hash_table_search(cache->hashtable,
-                                                         dst_shader->sha1);
+                                                         dst_shader->blake3);
       assert(entry);
       _mesa_hash_table_remove(cache->hashtable, entry);
    }

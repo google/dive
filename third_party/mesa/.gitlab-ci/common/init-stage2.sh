@@ -41,6 +41,11 @@ trap cleanup INT TERM EXIT
 # background by this script
 BACKGROUND_PIDS=
 
+# Until we uniformize the install dir to /install, we need to make it
+# available to both possible CI_PROJECT_DIR paths.
+if [ "$GIT_STRATEGY" = empty ]; then
+  ln -s "$CI_PROJECT_DIR" "${CI_PROJECT_DIR%-empty}"
+fi
 
 for path in '/dut-env-vars.sh' '/set-job-env-vars.sh' './set-job-env-vars.sh'; do
     [ -f "$path" ] && source "$path"
@@ -53,6 +58,12 @@ echo
 echo
 
 section_switch init_stage2 "Pre-testing hardware setup"
+
+job_time=$(get_job_seconds)
+uptime=$(cut -d ' ' -f1 /proc/uptime)
+echo "$(get_current_minsec) after job start == $uptime sec after kernel boot time"
+printf -v uptime_rounded "%.0f" "$uptime"
+echo "Kernel boot occurred $((job_time-uptime_rounded)) seconds after job start"
 
 set -ex
 
@@ -89,6 +100,11 @@ if [ -n "$HWCI_ENABLE_X86_KVM" ]; then
       echo "WARNING: Failed to detect CPU virtualization extensions"
     } || \
         modprobe ${KVM_KERNEL_MODULE}
+fi
+
+if ! [ -e /install/ ] && ! [ -e $CI_PROJECT_DIR/install/ ]; then
+  echo "Missing install/ dir"
+  exit 1
 fi
 
 # Fix prefix confusion: the build installs to $CI_PROJECT_DIR, but we expect

@@ -124,7 +124,11 @@ const nir_op_info nir_op_infos[nir_num_opcodes] = {
    .algebraic_properties =
       ${ "0" if opcode.algebraic_properties == "" else " | ".join(
             "NIR_OP_IS_" + prop.upper() for prop in
-               opcode.algebraic_properties.strip().split(" ")) }
+               opcode.algebraic_properties.strip().split(" ")) },
+   .valid_fp_math_ctrl =
+      ${ "0" if opcode.valid_fp_math_ctrl == "" else " | ".join(
+            "nir_fp_" + prop for prop in
+               opcode.valid_fp_math_ctrl.strip().split(" ")) }
 },
 % endfor
 };

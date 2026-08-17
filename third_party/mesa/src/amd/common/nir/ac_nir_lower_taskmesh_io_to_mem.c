@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "ac_gpu_info.h"
 #include "ac_nir.h"
 #include "nir_builder.h"
-#include "amdgfxregs.h"
-#include "util/u_math.h"
 
 /*
  * These NIR passes are used to lower NIR cross-stage I/O intrinsics
@@ -17,13 +16,35 @@
  */
 
 typedef struct {
-   unsigned payload_entry_bytes;
-   unsigned draw_entry_bytes;
-   unsigned num_entries;
-
    /* True if the lowering needs to insert shader query. */
    bool has_query;
+   /* True if the mesh shader is linked with a task shader. */
+   bool has_task_shader;
 } lower_tsms_io_state;
+
+static nir_def *
+task_num_entries(nir_builder *b,
+                 lower_tsms_io_state *s)
+{
+   nir_def *ring = nir_load_ring_task_draw_amd(b);
+   nir_def *bytes = nir_channel(b, ring, 2);
+   return nir_udiv_imm(b, bytes, AC_TASK_DRAW_ENTRY_BYTES);
+}
+
+static nir_def *
+task_payload_entry_bytes(nir_builder *b,
+                         lower_tsms_io_state *s)
+{
+   nir_def *num_entries = task_num_entries(b, s);
+   nir_def *ring = nir_load_ring_task_payload_amd(b);
+   nir_def *bytes = nir_channel(b, ring, 2);
+
+   /* num_entries must be a power of two,
+    * use that to implement a division using a shift.
+    */
+   nir_def *lsb = nir_find_lsb(b, num_entries);
+   return nir_ushr(b, bytes, lsb);
+}
 
 static nir_def *
 task_workgroup_index(nir_builder *b,
@@ -58,8 +79,9 @@ task_ring_entry_index(nir_builder *b,
     *   Note that num_entries must be a power of two.
     */
    nir_def *ring_entry = nir_load_task_ring_entry_amd(b);
+   nir_def *num_entries = task_num_entries(b, s);
    nir_def *idx = nir_iadd_nuw(b, ring_entry, task_workgroup_index(b, s));
-   return nir_iand_imm(b, idx, s->num_entries - 1);
+   return nir_iand(b, idx, nir_isub(b, num_entries, nir_imm_int(b, 1)));
 }
 
 static nir_def *
@@ -90,10 +112,13 @@ task_draw_ready_bit(nir_builder *b,
     */
 
    nir_def *ring_entry = nir_load_task_ring_entry_amd(b);
+   nir_def *num_entries = task_num_entries(b, s);
    nir_def *workgroup_index = task_workgroup_index(b, s);
 
    nir_def *idx = nir_iadd_nuw(b, ring_entry, workgroup_index);
-   return nir_u2u8(b, nir_ubfe_imm(b, idx, util_bitcount(s->num_entries - 1), 1));
+   nir_def *one = nir_imm_int(b, 1);
+   nir_def *num_entries_minus_1 = nir_isub(b, num_entries, one);
+   return nir_u2u8(b, nir_ubfe(b, idx, nir_bit_count(b, num_entries_minus_1), one));
 }
 
 static nir_def *
@@ -109,7 +134,9 @@ mesh_ring_entry_index(nir_builder *b,
     *   AND with num_entries - 1 to get the correct meaning.
     *   Note that num_entries must be a power of two.
     */
-   return nir_iand_imm(b, nir_load_task_ring_entry_amd(b), s->num_entries - 1);
+   nir_def *num_entries = task_num_entries(b, s);
+   nir_def *num_entries_minus_1 = nir_isub(b, num_entries, nir_imm_int(b, 1));
+   return nir_iand(b, nir_load_task_ring_entry_amd(b), num_entries_minus_1);
 }
 
 static void
@@ -120,7 +147,7 @@ task_write_draw_ring(nir_builder *b,
 {
    nir_def *ptr = task_ring_entry_index(b, s);
    nir_def *ring = nir_load_ring_task_draw_amd(b);
-   nir_def *scalar_off = nir_imul_imm(b, ptr, s->draw_entry_bytes);
+   nir_def *scalar_off = nir_imul_imm(b, ptr, AC_TASK_DRAW_ENTRY_BYTES);
    nir_def *vector_off = nir_imm_int(b, 0);
    nir_def *zero = nir_imm_int(b, 0);
 
@@ -219,7 +246,7 @@ lower_task_payload_store(nir_builder *b,
    nir_def *addr = intrin->src[1].ssa;
    nir_def *ring = nir_load_ring_task_payload_amd(b);
    nir_def *ptr = task_ring_entry_index(b, s);
-   nir_def *ring_off = nir_imul_imm(b, ptr, s->payload_entry_bytes);
+   nir_def *ring_off = nir_imul(b, ptr, task_payload_entry_bytes(b, s));
    nir_def *zero = nir_imm_int(b, 0);
 
    nir_store_buffer_amd(b, store_val, ring, addr, ring_off, zero, .base = base,
@@ -239,6 +266,13 @@ lower_taskmesh_payload_load(nir_builder *b,
    unsigned num_components = intrin->def.num_components;
    unsigned bit_size = intrin->def.bit_size;
 
+   /* Lower payload to zeroes when the mesh shader isn't linked with a task
+    * shader because isn't going to be accessed.
+    */
+   if (b->shader->info.stage == MESA_SHADER_MESH && !s->has_task_shader) {
+      return nir_imm_zero(b, num_components, bit_size);
+   }
+
    nir_def *ptr =
       b->shader->info.stage == MESA_SHADER_TASK ?
       task_ring_entry_index(b, s) :
@@ -246,7 +280,7 @@ lower_taskmesh_payload_load(nir_builder *b,
 
    nir_def *addr = intrin->src[0].ssa;
    nir_def *ring = nir_load_ring_task_payload_amd(b);
-   nir_def *ring_off = nir_imul_imm(b, ptr, s->payload_entry_bytes);
+   nir_def *ring_off = nir_imul(b, ptr, task_payload_entry_bytes(b, s));
    nir_def *zero = nir_imm_int(b, 0);
 
    return nir_load_buffer_amd(b, num_components, bit_size, ring, addr, ring_off, zero, .base = base,
@@ -277,11 +311,8 @@ lower_task_intrinsics(nir_builder *b,
 
 bool
 ac_nir_lower_task_outputs_to_mem(nir_shader *shader,
-                                 unsigned task_payload_entry_bytes,
-                                 unsigned task_num_entries,
                                  bool has_query)
 {
-   assert(util_is_power_of_two_nonzero(task_num_entries));
    bool progress = false;
 
    nir_lower_task_shader_options lower_ts_opt = {
@@ -293,9 +324,6 @@ ac_nir_lower_task_outputs_to_mem(nir_shader *shader,
    progress |= nir_lower_vars_to_ssa(shader);
 
    lower_tsms_io_state state = {
-      .draw_entry_bytes = 16,
-      .payload_entry_bytes = task_payload_entry_bytes,
-      .num_entries = task_num_entries,
       .has_query = has_query,
    };
 
@@ -342,17 +370,11 @@ lower_mesh_intrinsics(nir_builder *b,
 }
 
 bool
-ac_nir_lower_mesh_inputs_to_mem(nir_shader *shader,
-                                unsigned task_payload_entry_bytes,
-                                unsigned task_num_entries)
+ac_nir_lower_mesh_inputs_to_mem(nir_shader *shader, bool has_task_shader)
 {
-   assert(util_is_power_of_two_nonzero(task_num_entries));
+   lower_tsms_io_state state = {0};
 
-   lower_tsms_io_state state = {
-      .draw_entry_bytes = 16,
-      .payload_entry_bytes = task_payload_entry_bytes,
-      .num_entries = task_num_entries,
-   };
+   state.has_task_shader = has_task_shader;
 
    return nir_shader_lower_instructions(shader,
                                         filter_mesh_input_load,

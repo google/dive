@@ -39,6 +39,8 @@ extern "C" {
 
 struct hash_entry {
    uint32_t hash;
+   bool present;
+   bool deleted;
    const void *key;
    void *data;
 };
@@ -48,7 +50,7 @@ struct hash_table {
    struct hash_entry *table;
    uint32_t (*key_hash_function)(const void *key);
    bool (*key_equals_function)(const void *a, const void *b);
-   const void *deleted_key;
+   void (*table_destructor)(void *data);
    uint32_t size;
    uint32_t rehash;
    uint64_t size_magic;
@@ -85,6 +87,7 @@ void
 _mesa_hash_table_fini(struct hash_table *ht,
                       void (*delete_function)(struct hash_entry *entry));
 
+/* It's preferred to use _mesa_hash_table_init_u32_keys instead of this to skip ralloc. */
 struct hash_table *
 _mesa_hash_table_create_u32_keys(void *mem_ctx);
 
@@ -100,8 +103,6 @@ void _mesa_hash_table_destroy(struct hash_table *ht,
                               void (*delete_function)(struct hash_entry *entry));
 void _mesa_hash_table_clear(struct hash_table *ht,
                             void (*delete_function)(struct hash_entry *entry));
-void _mesa_hash_table_set_deleted_key(struct hash_table *ht,
-                                      const void *deleted_key);
 
 static inline uint32_t _mesa_hash_table_num_entries(const struct hash_table *ht)
 {
@@ -176,10 +177,10 @@ _mesa_hash_table_reserve(struct hash_table *ht, unsigned size);
  * This foreach function destroys the table as it iterates.
  * It is not safe to use when inserting or removing entries.
  */
-#define hash_table_foreach_remove(ht, entry)                                      \
-   for (struct hash_entry *entry = _mesa_hash_table_next_entry_unsafe(ht, NULL);  \
-        (ht)->entries;                                                     \
-        entry->hash = 0, entry->key = (void*)NULL, entry->data = NULL,      \
+#define hash_table_foreach_remove(ht, entry)                                     \
+   for (struct hash_entry *entry = _mesa_hash_table_next_entry_unsafe(ht, NULL); \
+        (ht)->entries;                                                           \
+        entry->hash = 0, entry->present = false, entry->deleted = false, entry->data = NULL, \
         (ht)->entries--, entry = _mesa_hash_table_next_entry_unsafe(ht, entry))
 
 static inline void
@@ -223,8 +224,6 @@ hash_table_call_foreach(struct hash_table *ht,
  */
 struct hash_table_u64 {
    struct hash_table table;
-   void *freed_key_data;
-   void *deleted_key_data;
 };
 
 struct hash_entry_u64 {
@@ -264,8 +263,7 @@ _mesa_hash_table_u64_next_entry(struct hash_table_u64 *ht,
 static inline uint32_t
 _mesa_hash_table_u64_num_entries(struct hash_table_u64 *ht)
 {
-   return (!!ht->freed_key_data) + (!!ht->deleted_key_data) +
-          _mesa_hash_table_num_entries(&ht->table);
+   return _mesa_hash_table_num_entries(&ht->table);
 }
 
 /**

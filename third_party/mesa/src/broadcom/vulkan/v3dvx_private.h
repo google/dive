@@ -22,11 +22,11 @@
  */
 
 /* This file generates the per-v3d-version function prototypes.  It must only
- * be included from v3dv_private.h.
+ * be included from v3dv_version_dispatch.h.
  */
 
-#ifndef V3DV_PRIVATE_H
-#error This file is included by means other than v3dv_private.h
+#ifndef V3DV_VERSION_DISPATCH_H
+#error This file is included by means other than v3dv_version_dispatch.h
 #endif
 
 /* Used at v3dv_cmd_buffer */
@@ -166,23 +166,11 @@ v3dX(device_check_prepacked_sizes)(void);
 const struct v3dv_format *
 v3dX(get_format)(VkFormat);
 
-void
-v3dX(get_internal_type_bpp_for_output_format)(uint32_t format,
-                                              uint32_t *type,
-                                              uint32_t *bpp);
-
 bool
 v3dX(format_supports_tlb_resolve)(const struct v3dv_format *format);
 
 bool
 v3dX(format_supports_blending)(const struct v3dv_format *format);
-
-/* FIXME: tex_format should be `enum V3DX(Texture_Data_Formats)`, but using
- * that enum type in the header requires including v3dx_pack.h, which triggers
- * circular include dependencies issues, so we're using a `uint32_t` for now.
- */
-bool
-v3dX(tfu_supports_tex_format)(uint32_t tex_format);
 
 /* Used at v3dv_image */
 
@@ -199,9 +187,6 @@ v3dX(pack_texture_shader_state_from_buffer_view)(struct v3dv_device *device,
 uint32_t
 v3dX(zs_buffer_from_aspect_bits)(VkImageAspectFlags aspects);
 
-uint8_t
-v3dX(get_internal_depth_type)(VkFormat format);
-
 struct v3dv_meta_framebuffer;
 
 void
@@ -217,26 +202,6 @@ v3dX(meta_emit_resolve_image_rcl)(struct v3dv_job *job,
                                   struct v3dv_image *src,
                                   struct v3dv_meta_framebuffer *framebuffer,
                                   const VkImageResolve2 *region);
-
-void
-v3dX(meta_emit_copy_buffer)(struct v3dv_job *job,
-                            struct v3dv_bo *dst,
-                            struct v3dv_bo *src,
-                            uint32_t dst_offset,
-                            uint32_t src_offset,
-                            struct v3dv_meta_framebuffer *framebuffer,
-                            uint32_t format,
-                            uint32_t item_size);
-
-void
-v3dX(meta_emit_copy_buffer_rcl)(struct v3dv_job *job,
-                                struct v3dv_bo *dst,
-                                struct v3dv_bo *src,
-                                uint32_t dst_offset,
-                                uint32_t src_offset,
-                                struct v3dv_meta_framebuffer *framebuffer,
-                                uint32_t format,
-                                uint32_t item_size);
 
 void
 v3dX(meta_emit_copy_image_rcl)(struct v3dv_job *job,
@@ -315,12 +280,6 @@ v3dX(meta_framebuffer_init)(struct v3dv_meta_framebuffer *fb,
 /* Used at v3dv_pipeline */
 void
 v3dX(pipeline_pack_state)(struct v3dv_pipeline *pipeline,
-                          const VkPipelineColorBlendStateCreateInfo *cb_info,
-                          const VkPipelineDepthStencilStateCreateInfo *ds_info,
-                          const VkPipelineRasterizationStateCreateInfo *rs_info,
-                          const VkPipelineRasterizationProvokingVertexStateCreateInfoEXT *pv_info,
-                          const VkPipelineRasterizationLineStateCreateInfoEXT *ls_info,
-                          const VkPipelineMultisampleStateCreateInfo *ms_info,
                           const struct vk_graphics_pipeline_state *state);
 void
 v3dX(pipeline_pack_compile_state)(struct v3dv_pipeline *pipeline,
@@ -334,10 +293,6 @@ struct v3dv_bo *
 v3dX(create_default_attribute_values)(struct v3dv_device *device,
                                       struct v3dv_pipeline *pipeline);
 
-/* Used at v3dv_queue */
-void
-v3dX(job_emit_noop)(struct v3dv_job *job);
-
 /* Used at v3dv_descriptor_set, and other descriptor set utils */
 uint32_t v3dX(descriptor_bo_size)(VkDescriptorType type);
 
@@ -347,20 +302,11 @@ uint32_t v3dX(combined_image_sampler_texture_state_offset)(uint8_t plane);
 
 uint32_t v3dX(combined_image_sampler_sampler_state_offset)(uint8_t plane);
 
+void v3dX(pack_null_texture_state)(struct v3dv_device *device, void *map);
+
 /* General utils */
-
-uint32_t
-v3dX(clamp_for_format_and_type)(uint32_t rt_type,
-                                VkFormat vk_format);
-
-uint32_t
-v3dX(clamp_for_format_and_type)(uint32_t rt_type,
-                                VkFormat vk_format);
 
 void
 v3dX(viewport_compute_xform)(const VkViewport *viewport,
                              float scale[3],
                              float translate[3]);
-
-uint32_t
-v3dX(translate_stencil_op)(VkStencilOp op);

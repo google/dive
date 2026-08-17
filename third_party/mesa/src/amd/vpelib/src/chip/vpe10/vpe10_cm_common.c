@@ -527,7 +527,7 @@ bool vpe10_cm_helper_translate_curve_to_degamma_hw_format(
 
 #define REG_SET_CM(reg_offset, init_val, field, val)                                               \
     do {                                                                                           \
-        struct vpep_direct_config_packet packet;                                                   \
+        struct vpep_direct_config_packet packet = {0};                                             \
         packet.bits.INC                         = 0;                                               \
         packet.bits.VPEP_CONFIG_DATA_SIZE       = 0;                                               \
         packet.bits.VPEP_CONFIG_REGISTER_OFFSET = reg_offset;                                      \
@@ -538,7 +538,7 @@ bool vpe10_cm_helper_translate_curve_to_degamma_hw_format(
 
 #define REG_SET_2_CM(reg_offset, init_val, f1, v1, f2, v2)                                         \
     do {                                                                                           \
-        struct vpep_direct_config_packet packet;                                                   \
+        struct vpep_direct_config_packet packet = {0};                                             \
         packet.bits.INC                         = 0;                                               \
         packet.bits.VPEP_CONFIG_DATA_SIZE       = 0;                                               \
         packet.bits.VPEP_CONFIG_REGISTER_OFFSET = reg_offset;                                      \
@@ -550,7 +550,7 @@ bool vpe10_cm_helper_translate_curve_to_degamma_hw_format(
 
 #define REG_SET_4_CM(reg_offset, init_val, f1, v1, f2, v2, f3, v3, f4, v4)                         \
     do {                                                                                           \
-        struct vpep_direct_config_packet packet;                                                   \
+        struct vpep_direct_config_packet packet = {0};                                             \
         packet.bits.INC                         = 0;                                               \
         packet.bits.VPEP_CONFIG_DATA_SIZE       = 0;                                               \
         packet.bits.VPEP_CONFIG_REGISTER_OFFSET = reg_offset;                                      \
@@ -617,7 +617,7 @@ void vpe10_cm_helper_program_gamcor_xfer_func(struct config_writer *config_write
 
     // program all the *GAM_RAM?_REGION_start ~ region_end regs in one VPEP_DIRECT_CONFIG packet
     // with auto inc
-    struct vpep_direct_config_packet packet;
+    struct vpep_direct_config_packet packet = {0};
 
     packet.bits.INC                         = 1;
     packet.bits.VPEP_CONFIG_DATA_SIZE       = packet_data_size - 1;
@@ -652,7 +652,7 @@ void vpe10_cm_helper_program_pwl(struct config_writer *config_writer,
     uint32_t lut_data = 0;
 
     // For LUT, we keep write the same address with entire LUT data, so do not set INC bit
-    struct vpep_direct_config_packet packet;
+    struct vpep_direct_config_packet packet = {0};
 
     packet.bits.INC                         = 0;
     packet.bits.VPEP_CONFIG_DATA_SIZE       = num;
@@ -684,7 +684,7 @@ void vpe10_cm_helper_program_color_matrices(struct config_writer *config_writer,
     uint32_t     cur_csc_reg;
     unsigned int i                = 0;
     uint16_t     packet_data_size = (uint16_t)((reg->csc_c33_c34 - reg->csc_c11_c12 + 1));
-    struct vpep_direct_config_packet packet;
+    struct vpep_direct_config_packet packet = {0};
 
     packet.bits.INC                         = 1;
     packet.bits.VPEP_CONFIG_DATA_SIZE       = packet_data_size - 1;

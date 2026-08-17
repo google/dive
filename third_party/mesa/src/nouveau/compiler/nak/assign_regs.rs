@@ -685,7 +685,7 @@ impl<'a> VecRegAllocator<'a> {
 
         if let Some(reg) = self.ra.try_find_unused_reg_range(0, comps, align, 0)
         {
-            return self.assign_pin_vec_reg(&vec, reg);
+            return self.assign_pin_vec_reg(vec, reg);
         }
 
         let reg = self
@@ -695,7 +695,7 @@ impl<'a> VecRegAllocator<'a> {
         for c in 0..comps {
             self.evict_reg_if_used(reg + u32::from(c));
         }
-        self.assign_pin_vec_reg(&vec, reg)
+        self.assign_pin_vec_reg(vec, reg)
     }
 
     pub fn free_killed(&mut self, killed: &KillSet) {
@@ -846,12 +846,9 @@ fn instr_assign_regs_file(
         }
 
         let align = vec_dst.comps.next_power_of_two();
-        if let Some(reg) = ra.try_find_unused_reg_range(
-            next_dst_reg,
-            vec_dst.comps.try_into().unwrap(),
-            align,
-            0,
-        ) {
+        if let Some(reg) =
+            ra.try_find_unused_reg_range(next_dst_reg, vec_dst.comps, align, 0)
+        {
             vec_dst.reg = reg;
             next_dst_reg = reg + u32::from(vec_dst.comps);
         } else {

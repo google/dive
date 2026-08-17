@@ -366,3 +366,72 @@ Starting with Intel 12th generation/Alder Lake-P and Intel Arc Alchemist, the In
 - Manual download: You can download the firmware from the official repository: https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/i915. Place the downloaded files in the /lib/firmware/i915 directory.
 
 Important: For optimal performance, we recommend updating the GuC firmware to version 70.6.3 or later.
+
+Debugging tips
+--------------
+
+When running into rendering/hang issues here are a few things that can
+be experimented with to try to narrow down the issue :
+
+- Run with ``INTEL_DEBUG=stall`` : stall execution, flush and
+  invalidate all caches between draw/dispatch/trace operations,
+  helpful to detect synchronization issues between draw/dispatch/trace
+  operations
+
+- Run with ``INTEL_DEBUG=sync`` : wait for completion of previous
+  command buffers before submitting new ones, helpful to detect
+  synchronization between command buffers
+
+- Run with ``INTEL_DEBUG=noccs`` : disable compression, helpful to
+  detect compressed data handling issues in the driver
+
+- Run with ``ANV_QUEUE_OVERRIDE=c=0,b=0`` : disable the async compute
+  queue and transfer queue, helpful to identify synchronization issues
+  between queues
+
+- Run with ``INTEL_DEBUG=noccs-modifier`` : disable compressed
+  modifiers, helpful to identify compression data handling issues
+  between applications (application and compositor)
+
+- Run with ``INTEL_DEBUG=no-resource-barrier`` : disable use of the
+  new RESOURCE_BARRIER instruction on Xe2+, helpful to identify
+  synchronization issues associated to this instruction
+
+A combinaison of those can also be tried if the issue has multiple
+causes, for example : ``INTEL_DEBUG=stall,sync``
+
+Shader performance analysis
+---------------------------
+
+On Xe2+ GPUs a new feature call EU monitor is available to analyze hot
+paths in the shaders. To make use of this feature :
+
+1. Run the EU monitor tools in a terminal :
+
+.. code-block:: sh
+
+   mesa % intel_monitor -e > eustall.csv
+
+
+2. Launch you application with :
+
+.. code-block:: sh
+
+   mesa % ANV_DEBUG=shader-dump my_app
+
+3. Exit the application once enough data is captured
+
+4. Untar the ``anv-shaders.mda.tar`` file created in the ``NAME_PID_mda``
+   subdirectory, where ``NAME`` is the process name and ``PID`` is the process
+   ID. Set ``MDA_OUTPUT_DIR=.`` to create the file in the directory the
+   application was launched instead.
+
+.. code-block:: sh
+
+   mesa % tar xfv my_app_12345_mda/anv-shaders.mda.tar
+
+5. Look at the hot spots with ``intel_eu_stall_viewer`` :
+
+.. code-block:: sh
+
+   mesa % intel_eu_stall_viewer -s /path/to/untar/anv-shaders.mda -c /path/to/eustall.csv

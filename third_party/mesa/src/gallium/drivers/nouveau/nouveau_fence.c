@@ -351,19 +351,14 @@ _nouveau_fence_ref(struct nouveau_fence *fence, struct nouveau_fence **ref)
 }
 
 void
-nouveau_fence_ref(struct nouveau_fence *fence, struct nouveau_fence **ref)
+nouveau_fence_ref(struct nouveau_fence *fence, struct nouveau_fence **ref,
+                  struct nouveau_screen *screen)
 {
-   struct nouveau_fence_list *fence_list = NULL;
-   if (ref && *ref)
-      fence_list = &(*ref)->screen->fence;
+   struct nouveau_fence_list *fence_list = &screen->fence;
 
-   if (fence_list)
-      simple_mtx_lock(&fence_list->lock);
-
+   simple_mtx_lock(&fence_list->lock);
    _nouveau_fence_ref(fence, ref);
-
-   if (fence_list)
-      simple_mtx_unlock(&fence_list->lock);
+   simple_mtx_unlock(&fence_list->lock);
 }
 
 bool

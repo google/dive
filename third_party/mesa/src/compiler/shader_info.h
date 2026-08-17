@@ -37,6 +37,12 @@ extern "C" {
 #define MAX_XFB_BUFFERS        4
 #define MAX_INLINABLE_UNIFORMS 4
 
+enum shader_info_hash_type {
+   SHADER_INFO_HASH_TYPE_RAW = 0,
+   SHADER_INFO_HASH_TYPE_DXIL,
+   SHADER_INFO_HASH_TYPE_DXBC,
+};
+
 typedef struct shader_info {
    const char *name;
 
@@ -48,6 +54,9 @@ typedef struct shader_info {
 
    /* BLAKE3 of the original source, used by shader detection in drivers. */
    blake3_hash source_blake3;
+
+   /* Human-readable description of specialization constants passed to shader. */
+   const char *spec;
 
    /** The shader stage, such as MESA_SHADER_VERTEX. */
    mesa_shader_stage stage:8;
@@ -138,6 +147,9 @@ typedef struct shader_info {
    /** Bitfield of which textures are used by texelFetch() */
    BITSET_DECLARE(textures_used_by_txf, 128);
 
+   /** Bitfield of which textures are texel buffers */
+   BITSET_DECLARE(texture_buffers, 128);
+
    /** Bitfield of which samplers are used */
    BITSET_DECLARE(samplers_used, 32);
 
@@ -223,6 +235,9 @@ typedef struct shader_info {
    /* Whether texture size, levels, or samples is queried. */
    bool uses_resource_info_query:1;
 
+   /* Whether a shader abort instruction is used. */
+   bool uses_abort:1;
+
    /* Bitmask of bit-sizes used with ALU instructions. */
    uint8_t bit_sizes_float;
    uint8_t bit_sizes_int;
@@ -244,10 +259,27 @@ typedef struct shader_info {
    /* Whether flrp has been lowered. */
    bool flrp_lowered:1;
 
+   /* Whether nir_opt_constant_folding should not fold offset srcs of
+    * IO intrinsics.
+    */
+   bool disable_input_offset_src_constant_folding:1;
+   bool disable_output_offset_src_constant_folding:1;
+
    /* Whether nir_lower_io has been called to lower derefs.
     * nir_variables for inputs and outputs might not be present in the IR.
     */
    bool io_lowered:1;
+
+   /* If true, fail an assertion in nir_opt_dce if a dead input is eliminated.
+    *
+    * This is a debug aid to easily identify passes that cause shader inputs
+    * to become dead after nir_opt_varyings when it's preferrable that dead
+    * shader inputs are identified before nir_opt_varyings.
+    *
+    * It shouldn't be enabled by default because inputs can become dead late
+    * for all sorts of reasons.
+    */
+   bool assert_inputs_not_dead : 1;
 
    /** Has nir_lower_var_copies called. To avoid calling any
     * lowering/optimization that would introduce any copy_deref later.
@@ -266,6 +298,9 @@ typedef struct shader_info {
 
    /* Whether ARB_bindless_texture ops or variables are used */
    bool uses_bindless : 1;
+
+   /* Number of embedded samplers used by this shader */
+   bool uses_embedded_samplers : 1;
 
    /**
     * Shared memory types have explicit layout set.  Used for
@@ -340,6 +375,20 @@ typedef struct shader_info {
     */
    bool assume_no_data_races:1;
 
+   /* This shader requires occupancy-bounded forward progress guarantees
+    * between workgroups in order to be executed correctly. This means that
+    * each workgroup which has already executed at least one step (here
+    * defined as an atomic memory operation) must eventually execute another
+    * step or terminate. Algorithms that require this guarantee include
+    * spin-loops where each workgroup only waits for workgroups with a lower
+    * index and indices are assigned via atomicAdd() of a counter.
+    */
+   bool occupancy_bounded_workgroup_fairness:1;
+
+   /* Type of hash carried in source_blake3.
+    */
+   enum shader_info_hash_type hash_type:2;
+
    union {
       struct {
          /* Which inputs are doubles */
@@ -353,7 +402,7 @@ typedef struct shader_info {
          uint8_t blit_sgprs_amd:4;
 
          /* Software TES executing as HW VS */
-         bool tes_agx:1;
+         bool tes_poly:1;
 
          /* True if the shader writes position in window space coordinates pre-transform */
          bool window_space_position:1;
@@ -460,6 +509,20 @@ typedef struct shader_info {
          bool sample_interlock_unordered:1;
 
          /**
+          * Whether the original shader had sample_mask_in regardless of
+          * whether NIR lowered it or optimized it away. The presence of
+          * sample_mask_in has side effects such as
+          * fragmentShadingRateWithShaderSampleMask == VK_FALSE forcing FSR
+          * to be disabled even if sample_mask_in is later optimized away.
+          */
+         bool sample_mask_in_declared:1;
+
+         /**
+          * whether this shader has pixel_local_storage load/store instructions
+          */
+         bool accesses_pixel_local_storage:1;
+
+         /**
           * Flags whether NIR's base types on the FS color outputs should be
           * ignored.
           *
@@ -480,17 +543,6 @@ typedef struct shader_info {
 
          /** gl_FragDepth layout for ARB_conservative_depth. */
          enum gl_frag_depth_layout depth_layout:3;
-
-         /**
-          * Interpolation qualifiers for drivers that lowers color inputs
-          * to system values.
-          */
-         unsigned color0_interp:3; /* glsl_interp_mode */
-         bool color0_sample:1;
-         bool color0_centroid:1;
-         unsigned color1_interp:3; /* glsl_interp_mode */
-         bool color1_sample:1;
-         bool color1_centroid:1;
 
          /* Bitmask of gl_advanced_blend_mode values that may be used with this
           * shader.
@@ -520,6 +572,12 @@ typedef struct shader_info {
           * SPV_KHR_cooperative_matrix.
           */
          bool has_cooperative_matrix:1;
+
+         /*
+          * If the shader might have a control barrier with only one of
+          * NIR_MEMORY_CONTROL_ARRIVE/NIR_MEMORY_CONTROL_WAIT.
+          */
+         bool has_split_control_barriers:1;
 
          /**
           * Number of bytes of shared imageblock memory per thread. Currently,

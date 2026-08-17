@@ -26,6 +26,10 @@ pub fn instr_latency(_sm: u8, op: &Op, _dst_idx: usize) -> u32 {
     }
 }
 
+pub fn latency_upper_bound() -> u32 {
+    24
+}
+
 pub fn instr_exec_latency(sm: u8, op: &Op) -> u32 {
     let is_kepler_a = sm == 30;
     match op {
@@ -121,11 +125,8 @@ where
     // --- Real encoding ---
     // Create an instruction iterator and iterate it in chunks of 7.
     // fill the last chunk with a nop (it should never be executed).
-    let mut instr_iter = func
-        .blocks
-        .iter()
-        .flat_map(|b| b.instrs.iter().map(|x| &*x))
-        .peekable();
+    let mut instr_iter =
+        func.blocks.iter().flat_map(|b| b.instrs.iter()).peekable();
     let mut filling_instr = Instr {
         pred: true.into(),
         op: Op::Nop(OpNop { label: None }),
@@ -151,7 +152,7 @@ where
         debug_assert!(bv.bits() == 8 * 7);
 
         for (i, instr) in sched_chunk.iter().enumerate() {
-            encoder.encode_instr(&instr, &labels, &mut encoded);
+            encoder.encode_instr(instr, &labels, &mut encoded);
 
             let sched = calc_instr_sched(prev_op, &instr.op, &instr.deps);
             bv.set_field(i * 8..(i + 1) * 8, sched);

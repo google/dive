@@ -11,6 +11,7 @@
         "gl21_baseline": {
             "extensions": {
                 "VK_KHR_maintenance1": 1,
+                "VK_KHR_maintenance5": 1,
                 "VK_KHR_create_renderpass2": 1,
                 "VK_KHR_timeline_semaphore": 1,
                 "VK_EXT_custom_border_color": 1,
@@ -39,6 +40,9 @@
                 },
                 "VkPhysicalDeviceDynamicRenderingFeaturesKHR": {
                     "dynamicRendering": true
+                },
+                "VkPhysicalDeviceMaintenance5FeaturesKHR": {
+                    "maintenance5": true
                 }
             }
         },
@@ -155,8 +159,7 @@
             "extensions": {
                 "VK_KHR_maintenance2": 1,
                 "VK_KHR_maintenance3": 1,
-                "VK_KHR_maintenance4": 1,
-                "VK_KHR_maintenance5": 1
+                "VK_KHR_maintenance4": 1
             },
             "features": {
                 "VkPhysicalDeviceFeatures": {
@@ -166,9 +169,6 @@
                 },
                 "VkPhysicalDeviceMaintenance4FeaturesKHR": {
                     "maintenance4": true
-                },
-                "VkPhysicalDeviceMaintenance5FeaturesKHR": {
-                    "maintenance5": true
                 }
             },
             "formats": {
@@ -404,10 +404,12 @@
                 "VK_EXT_provoking_vertex": 1,
                 "VK_EXT_attachment_feedback_loop_layout": 1,
                 "VK_EXT_attachment_feedback_loop_dynamic_state": 1,
-                "VK_KHR_maintenance5": 1,
                 "VK_KHR_maintenance6": 1,
                 "VK_KHR_maintenance7": 1,
-                "VK_KHR_maintenance8": 1
+                "VK_KHR_maintenance8": 1,
+                "VK_KHR_maintenance10": 1,
+                "VK_KHR_device_address_commands": 1,
+                "VK_KHR_shader_float_controls2": 1
             },
             "features": {
                 "VkPhysicalDeviceExtendedDynamicStateFeaturesEXT": {
@@ -441,14 +443,14 @@
                 "VkPhysicalDeviceProvokingVertexFeaturesEXT": {
                     "provokingVertexLast": true
                 },
+                "VkPhysicalDeviceDeviceAddressCommandsFeaturesKHR": {
+                    "deviceAddressCommands": true
+                },
                 "VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT": {
                     "attachmentFeedbackLoopLayout": true
                 },
                 "VkPhysicalDeviceAttachmentFeedbackLoopDynamicStateFeaturesEXT": {
                     "attachmentFeedbackLoopDynamicState": true
-                },
-                "VkPhysicalDeviceMaintenance5FeaturesKHR": {
-                    "maintenance5": true
                 },
                 "VkPhysicalDeviceMaintenance6FeaturesKHR": {
                     "maintenance6": true
@@ -458,6 +460,9 @@
                 },
                 "VkPhysicalDeviceMaintenance8FeaturesKHR": {
                     "maintenance8": true
+                },
+                "VkPhysicalDeviceMaintenance10FeaturesKHR": {
+                    "maintenance10": true
                 }
             },
             "properties": {
@@ -500,7 +505,8 @@
                 "VK_EXT_primitives_generated_query": 1,
                 "VK_EXT_color_write_enable": 1,
                 "VK_EXT_extended_dynamic_state3": 1,
-                "VK_EXT_descriptor_buffer": 1
+                "VK_EXT_descriptor_buffer": 1,
+                "VK_EXT_primitive_restart_index": 1
             },
             "features": {
                 "VkPhysicalDevicePrimitivesGeneratedQueryFeaturesEXT": {
@@ -520,6 +526,9 @@
                 },
                 "VkPhysicalDeviceDescriptorBufferFeaturesEXT": {
                     "descriptorBuffer": true
+                },
+                "VkPhysicalDevicePrimitiveRestartIndexFeaturesEXT": {
+                    "primitiveRestartIndex": true
                 }
             }
         },

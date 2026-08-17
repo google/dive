@@ -24,6 +24,7 @@
 #define VK_BUFFER_H
 
 #include "vk_object.h"
+#include "vk_util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +40,7 @@ struct vk_buffer {
    VkDeviceSize size;
 
    /** VkBufferCreateInfo::usage or VkBufferUsageFlags2CreateInfoKHR::usage */
-   VkBufferUsageFlags2KHR usage;
+   VkBufferUsageFlags2 usage;
 
    /** Set by the implementation
     *
@@ -47,6 +48,12 @@ struct vk_buffer {
     * delay as far as the bind for non-sparse buffers.
     */
    VkDeviceAddress device_address;
+
+   /** Inferred address flags from create_flags */
+   VkAddressCommandFlagsKHR address_flags;
+
+   /** Inferred copy flags from create_flags */
+   VkAddressCopyFlagsKHR copy_flags;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vk_buffer, base, VkBuffer,
                                VK_OBJECT_TYPE_BUFFER);
@@ -84,6 +91,50 @@ vk_buffer_range(const struct vk_buffer *buffer,
       assert(range + offset <= buffer->size);
       return range;
    }
+}
+
+static inline VkDeviceAddressRangeKHR
+vk_device_address_range(const struct vk_buffer *buffer,
+                        VkDeviceSize offset,
+                        VkDeviceSize range)
+{
+   VkDeviceAddressRangeKHR addr_range = { 0 };
+
+   if (buffer) {
+      addr_range.address = vk_buffer_address(buffer, offset);
+      addr_range.size = vk_buffer_range(buffer, offset, range);
+   }
+
+   return addr_range;
+}
+
+static inline VkStridedDeviceAddressRangeKHR
+vk_strided_device_address_range(const struct vk_buffer *buffer,
+                                VkDeviceSize offset,
+                                VkDeviceSize range,
+                                VkDeviceSize stride)
+{
+   VkStridedDeviceAddressRangeKHR addr_range = { 0 };
+
+   if (buffer) {
+      addr_range.address = vk_buffer_address(buffer, offset);
+      addr_range.size = vk_buffer_range(buffer, offset, range);
+      addr_range.stride = stride;
+   }
+
+   return addr_range;
+}
+
+static inline VkBufferUsageFlags2
+vk_buffer_usage_flags(const VkBufferCreateInfo *info)
+{
+   const VkBufferUsageFlags2CreateInfo *usage2_info =
+      vk_find_struct_const(info->pNext,
+                           BUFFER_USAGE_FLAGS_2_CREATE_INFO);
+   if (usage2_info)
+      return usage2_info->usage;
+   else
+      return info->usage;
 }
 
 #ifdef __cplusplus

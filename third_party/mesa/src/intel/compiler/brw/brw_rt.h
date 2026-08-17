@@ -1,24 +1,6 @@
 /*
  * Copyright © 2020 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -38,11 +20,21 @@ extern "C" {
 /** RT_DISPATCH_GLOBALS size (see gen_rt.xml) */
 #define BRW_RT_DISPATCH_GLOBALS_SIZE 80
 
+/** RT_DISPATCH_GLOBALS alignment
+ *
+ * Use 256B to make sure we can access the pair of RT_DISPATCH_GLOBALS without
+ * 64bit math.
+ */
+#define BRW_RT_DISPATCH_GLOBALS_ALIGN 256
+
 /** Offset after the RT dispatch globals at which "push" constants live */
 #define BRW_RT_PUSH_CONST_OFFSET 128
 
 /** Stride of the resume SBT */
 #define BRW_BTD_RESUME_SBT_STRIDE 8
+
+/** Root node offset for BVH */
+#define BRW_RT_ROOT_NODE_OFFSET 256
 
 /* Vulkan always uses exactly two levels of BVH: world and object.  At the API
  * level, these are referred to as top and bottom.
@@ -194,12 +186,12 @@ struct brw_rt_raygen_trampoline_params {
     BRW_RT_SIZEOF_TRAV_STACK * BRW_RT_MAX_BVH_LEVELS)
 
 /* This is a mesa-defined region for hit attribute data */
-#define BRW_RT_SIZEOF_HIT_ATTRIB_DATA 64
+#define BRW_RT_SIZEOF_HIT_ATTRIB_DATA 32
 #define BRW_RT_OFFSETOF_HIT_ATTRIB_DATA BRW_RT_SIZEOF_HW_STACK
 
 #define BRW_RT_ASYNC_STACK_STRIDE \
    ALIGN_POT(BRW_RT_OFFSETOF_HIT_ATTRIB_DATA + \
-             BRW_RT_SIZEOF_HIT_ATTRIB_DATA, 64)
+             (BRW_RT_SIZEOF_HIT_ATTRIB_DATA * 2), 64)
 
 static inline void
 brw_rt_compute_scratch_layout(struct brw_rt_scratch_layout *layout,
@@ -233,7 +225,7 @@ brw_rt_compute_scratch_layout(struct brw_rt_scratch_layout *layout,
     */
    assert(size % 64 == 0);
    layout->sw_stack_start = size;
-   layout->sw_stack_size = ALIGN(sw_stack_size, 64);
+   layout->sw_stack_size = align(sw_stack_size, 64);
 
    /* Currently it's always the case that sw_stack_size is a power of
     * two, but power-of-two SW stack sizes are prone to causing
@@ -258,8 +250,32 @@ brw_rt_ray_queries_hw_stacks_size(const struct intel_device_info *devinfo)
     * which includes all the threads.
     */
    uint32_t max_eu_id = devinfo->max_scratch_ids[MESA_SHADER_COMPUTE];
-   uint32_t max_simd_size = 16; /* Cannot run in SIMD32 with ray queries */
+   uint32_t max_simd_size = 32;
    return max_eu_id * max_simd_size * BRW_RT_SIZEOF_RAY_QUERY;
+}
+
+static inline uint32_t
+brw_rt_ray_queries_stack_ids_per_dss(const struct intel_device_info *devinfo)
+{
+   /* ATSM PRMs Vol 9, "State Model for Ray Tracing - RTDispatchGlobals"
+    *
+    *    "For Sync Ray tracing (i.e. using RayQueries), SW must allocate
+    *    space assuming 2K StackIDs"
+    */
+   uint32_t num_stack_id_per_dss = 2048;
+
+   /* Wa_14021821874, Wa_14018813551, Wa_14026600921:
+    *
+    * "StackIDControlOverride_RTGlobals = 0 (i.e. 2k)". We
+    * already set stack size per ray to 64 in brw_nir_lower_rt_intrinsics
+    * as the workaround also requires.
+    */
+   if (intel_needs_workaround(devinfo, 14021821874) ||
+       intel_needs_workaround(devinfo, 14018813551) ||
+       intel_needs_workaround(devinfo, 14026600921))
+      num_stack_id_per_dss = 2048;
+
+   return num_stack_id_per_dss;
 }
 
 static inline uint32_t
@@ -269,7 +285,7 @@ brw_rt_ray_queries_shadow_stack_size(const struct intel_device_info *devinfo)
     * which includes all the threads.
     */
    uint32_t max_eu_id = devinfo->max_scratch_ids[MESA_SHADER_COMPUTE];
-   uint32_t max_simd_size = 16; /* Cannot run in SIMD32 with ray queries */
+   uint32_t max_simd_size = 32;
    return max_eu_id * max_simd_size * BRW_RT_SIZEOF_SHADOW_RAY_QUERY;
 }
 

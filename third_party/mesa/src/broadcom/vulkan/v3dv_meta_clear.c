@@ -21,12 +21,21 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
+#include "v3dv_device.h"
+#include "v3dv_cmd_buffer.h"
+#include "v3dv_image.h"
+#include "v3dv_entrypoints.h"
+#include "v3dv_version_dispatch.h"
+#include "vk_format.h"
+#include "vk_shader_module.h"
 #include "v3dv_meta_common.h"
 
 #include "compiler/nir/nir_builder.h"
 #include "util/u_pack_color.h"
 #include "vk_common_entrypoints.h"
+
+#define V3D_VERSION 42
+#include "v3dv_format_table.h"
 
 static void
 get_hw_clear_color(struct v3dv_device *device,
@@ -129,9 +138,8 @@ clear_image_tlb(struct v3dv_cmd_buffer *cmd_buffer,
       if (!job)
          return true;
 
-      v3dv_job_start_frame(job, width, height, max_layer,
-                           false, true, 1, internal_bpp,
-                           4 * v3d_internal_bpp_words(internal_bpp),
+      v3dv_job_start_frame(job, width, height, max_layer, false, 1,
+                           internal_bpp, 4 * v3d_internal_bpp_words(internal_bpp),
                            image->vk.samples > VK_SAMPLE_COUNT_1_BIT);
 
       struct v3dv_meta_framebuffer framebuffer;
@@ -140,6 +148,8 @@ clear_image_tlb(struct v3dv_cmd_buffer *cmd_buffer,
                                                  &job->frame_tiling);
 
       v3d_X((&job->device->devinfo), job_emit_binning_flush)(job);
+      if (!v3dv_job_allocate_tile_state(job))
+         return true;
 
       /* If this triggers it is an application bug: the spec requires
        * that any aspects to clear are present in the image.
@@ -1228,7 +1238,7 @@ v3dv_CmdClearAttachments(VkCommandBuffer commandBuffer,
 
    /* We can have at most max_color_RTs + 1 D/S attachments */
    assert(attachmentCount <=
-          V3D_MAX_RENDER_TARGETS(cmd_buffer->device->devinfo.ver) + 1);
+          cmd_buffer->device->devinfo.max_render_targets + 1);
 
    /* We can only clear attachments in the current subpass */
    struct v3dv_render_pass *pass = cmd_buffer->state.pass;

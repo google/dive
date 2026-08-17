@@ -71,6 +71,10 @@ intel_48b_address(uint64_t v)
    return (uint64_t)(v << shift) >> shift;
 }
 
+#ifdef HAVE_INTEL_VIRTIO
+extern int intel_virtio_ioctl(int fd, unsigned long request, void *arg);
+#endif
+
 /**
  * Call ioctl, restarting if it is interrupted
  */
@@ -80,7 +84,11 @@ intel_ioctl(int fd, unsigned long request, void *arg)
     int ret;
 
     do {
-        ret = ioctl(fd, request, arg);
+#ifdef HAVE_INTEL_VIRTIO
+      ret = intel_virtio_ioctl(fd, request, arg);
+#else
+      ret = ioctl(fd, request, arg);
+#endif
     } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
     return ret;
 }

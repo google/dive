@@ -34,15 +34,16 @@
 #   anholt           | (decommissioned)                 | @anholt
 #   austriancoder    | ci-tron                          | @austriancoder
 #   collabora        | lava                             | @daniels, @sergi
-#   google-freedreno | none (moving to LAVA)            | @daniels, @sergi
 #   igalia           | baremetal/poe-powered, ci-tron   | @jasuarez, @chema
+#   imagination      | ci-tron                          | @MTCoster
 #   lima             | lava                             | @enunes
+#   lumag            | ci-tron                          | @lumag
 #   microsoft        | custom                           | @jenatali, @alatiera
 #   ondracka         | ci-tron                          | @ondracka
 #   pengutronix      | lava                             | @hnez, @lynxeye
 #   valve-kws        | ci-tron                          | @mupuf, @eric
 #   valve-mupuf      | ci-tron                          | @mupuf, @eric
-#   vmware           | lava                             | @blu
+#   vmware           | lava                             | @mombasa, @bhenden
 
 .microsoft-farm-rules:
   rules:
@@ -293,70 +294,108 @@
     - !reference [.pengutronix-farm-rules, rules]
 
 
-# Temporary placeholder as the devices move across to LAVA.
-.google-freedreno-farm-rules:
+.lumag-farm-rules:
   rules:
-    - when: never
+    - exists: [ .ci-farms-disabled/lumag ]
+      when: never
+    - changes: [ .ci-farms-disabled/lumag ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: on_success
+    - changes: [ .ci-farms-disabled/* ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
 
-.google-freedreno-farm-manual-rules:
+.lumag-farm-manual-rules:
   rules:
-    - when: never
+    - exists: [ .ci-farms-disabled/lumag ]
+      when: never
+    - changes: [ .ci-farms-disabled/lumag ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+    - !reference [.lumag-farm-rules, rules]
+
+.imagination-farm-rules:
+  rules:
+    - exists: [ .ci-farms-disabled/imagination ]
+      when: never
+    - changes: [ .ci-farms-disabled/imagination ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: on_success
+    - changes: [ .ci-farms-disabled/* ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+
+.imagination-farm-manual-rules:
+  rules:
+    - exists: [ .ci-farms-disabled/imagination ]
+      when: never
+    - changes: [ .ci-farms-disabled/imagination ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+    - !reference [.imagination-farm-rules, rules]
 
 # Skip container & build jobs when disabling any farm, and run them if any
 # farm gets re-enabled.
-# Only apply these rules in MR context, because otherwise we get a false
-# positive on files being 'created' when pushing to a new branch, and break
-# our pipeline
-.disable-farm-mr-rules:
+# Just like above, don't apply these rules in scheduled pipelines (see comment
+# on line 23).
+.disable-farm-rules:
   rules:
     # changes(disabled) + exists(disabled) = disabling the farm
     # Note: this cannot be simplified into a single `.ci-farms-disabled/*` rule
     # because if there are more than one disabled farm and we only re-enable
     # one, the exits(.ci-farms-disabled/*) would match and what should be
     # a farm re-enable pipeline will be detected as a farm disable pipeline.
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/microsoft ]
+    - changes: [ .ci-farms-disabled/microsoft ]
       exists: [ .ci-farms-disabled/microsoft ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/collabora ]
+    - changes: [ .ci-farms-disabled/collabora ]
       exists: [ .ci-farms-disabled/collabora ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/igalia ]
+    - changes: [ .ci-farms-disabled/igalia ]
       exists: [ .ci-farms-disabled/igalia ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/lima ]
+    - changes: [ .ci-farms-disabled/lima ]
       exists: [ .ci-farms-disabled/lima ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/anholt ]
+    - changes: [ .ci-farms-disabled/anholt ]
       exists: [ .ci-farms-disabled/anholt ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/valve-mupuf ]
+    - changes: [ .ci-farms-disabled/valve-mupuf ]
       exists: [ .ci-farms-disabled/valve-mupuf ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/valve-kws ]
+    - changes: [ .ci-farms-disabled/valve-kws ]
       exists: [ .ci-farms-disabled/valve-kws ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/austriancoder ]
+    - changes: [ .ci-farms-disabled/austriancoder ]
       exists: [ .ci-farms-disabled/austriancoder ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/ondracka ]
+    - changes: [ .ci-farms-disabled/ondracka ]
       exists: [ .ci-farms-disabled/ondracka ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/vmware ]
+    - changes: [ .ci-farms-disabled/vmware ]
       exists: [ .ci-farms-disabled/vmware ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [ .ci-farms-disabled/pengutronix ]
+    - changes: [ .ci-farms-disabled/pengutronix ]
       exists: [ .ci-farms-disabled/pengutronix ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+    - changes: [ .ci-farms-disabled/lumag ]
+      exists: [ .ci-farms-disabled/lumag ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
+      when: never
+    - changes: [ .ci-farms-disabled/imagination ]
+      exists: [ .ci-farms-disabled/imagination ]
+      if: '$CI_PIPELINE_SOURCE != "schedule"'
       when: never
     # Any other change to ci-farms/* means some farm is getting re-enabled.
     # Run jobs in Marge pipelines (and let it fallback to manual otherwise)

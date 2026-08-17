@@ -276,9 +276,22 @@ lvp_pipe_export_sync_file(struct vk_device *vk_device,
     */
    vk_common_DeviceWaitIdle(vk_device_to_handle(vk_device));
    struct lvp_device *device = container_of(vk_device, struct lvp_device, vk);
-   *sync_file = device->pscreen->fence_get_fd(device->pscreen, sync->fence);
 
-   return *sync_file != -1 ? VK_SUCCESS : VK_ERROR_OUT_OF_HOST_MEMORY;
+   /* If native_fence_fd is supported we use the gallium context to perform the
+    * export, otherwise we return -1 which is still a valid sync fd in vulkan
+    */
+   if (device->pscreen->caps.native_fence_fd) {
+      *sync_file = device->pscreen->fence_get_fd(device->pscreen, sync->fence);
+      return *sync_file != -1 ? VK_SUCCESS : VK_ERROR_OUT_OF_HOST_MEMORY;
+   } else {
+      struct pipe_fence_handle *handle = NULL;
+      device->queue.ctx->flush(device->queue.ctx, &handle, 0);
+      device->pscreen->fence_finish(device->pscreen, NULL,
+                                    handle, OS_TIMEOUT_INFINITE);
+      device->pscreen->fence_reference(device->pscreen, &handle, NULL);
+      *sync_file = -1;
+      return VK_SUCCESS;
+   }
 }
 #endif
 

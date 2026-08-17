@@ -33,6 +33,7 @@
 #include "ralloc.h"
 #include "simple_mtx.h"
 #include "u_debug.h"
+#include "u_math.h"
 
 #include <stdarg.h>
 
@@ -56,8 +57,8 @@
 #if DETECT_OS_ANDROID
 #  define LOG_TAG "MESA"
 #  include <unistd.h>
-#  include <log/log.h>
-#  include <cutils/properties.h>
+#  include <android/log.h>
+#  include <sys/system_properties.h>
 #elif DETECT_OS_LINUX || DETECT_OS_CYGWIN || DETECT_OS_SOLARIS || DETECT_OS_HURD || DETECT_OS_MANAGARM
 #  include <unistd.h>
 #elif DETECT_OS_OPENBSD || DETECT_OS_FREEBSD
@@ -67,6 +68,7 @@
 #  include <sys/sysctl.h>
 #  if DETECT_OS_APPLE
 #    include <mach/mach_host.h>
+#    include <mach/mach_init.h>
 #    include <mach/vm_param.h>
 #    include <mach/vm_statistics.h>
 #   endif
@@ -132,7 +134,7 @@ os_log_message(const char *message)
    fputs(message, fout);
    fflush(fout);
 #  if DETECT_OS_ANDROID
-   LOG_PRI(ANDROID_LOG_ERROR, LOG_TAG, "%s", message);
+   __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, message);
 #  endif
 #endif
 }
@@ -140,6 +142,16 @@ os_log_message(const char *message)
 #if DETECT_OS_ANDROID
 #  include <ctype.h>
 #  include "c11/threads.h"
+
+/**
+ * In Android 26+ there is no restriction on the length of the name for a
+ * property, replace the default max length with one large enough to support
+ * all property names.
+ */
+#if ANDROID_API_LEVEL >= 26
+#undef PROP_NAME_MAX
+#define PROP_NAME_MAX 128
+#endif /* ANDROID_API_LEVEL >= 26 */
 
 /**
  * Get an option value from android's property system, as a fallback to
@@ -164,9 +176,9 @@ os_log_message(const char *message)
 static char *
 os_get_android_option(const char *name)
 {
-   static thread_local char os_android_option_value[PROPERTY_VALUE_MAX];
-   char key[PROPERTY_KEY_MAX];
-   char *p = key, *end = key + PROPERTY_KEY_MAX;
+   static thread_local char os_android_option_value[PROP_VALUE_MAX];
+   char key[PROP_NAME_MAX];
+   char *p = key, *end = key + PROP_NAME_MAX;
    /* add "mesa." prefix if necessary: */
    if (strstr(name, "MESA_") != name)
       p += strlcpy(p, "mesa.", end - p);
@@ -181,12 +193,12 @@ os_get_android_option(const char *name)
 
    /* prefixes to search sorted by preference */
    const char *prefices[] = { "debug.", "vendor.", "" };
-   char full_key[PROPERTY_KEY_MAX];
+   char full_key[PROP_NAME_MAX];
    int len = 0;
    for (int i = 0; i < ARRAY_SIZE(prefices); i++) {
-      strlcpy(full_key, prefices[i], PROPERTY_KEY_MAX);
-      strlcat(full_key, key, PROPERTY_KEY_MAX);
-      len = property_get(full_key, os_android_option_value, NULL);
+      strlcpy(full_key, prefices[i], PROP_NAME_MAX);
+      strlcat(full_key, key, PROP_NAME_MAX);
+      len = __system_property_get(full_key, os_android_option_value);
       if (len > 0)
          return os_android_option_value;
    }
@@ -200,20 +212,29 @@ os_get_android_option(const char *name)
  * that have been made during the process lifetime, if either the
  * setter uses a different CRT (e.g. due to static linking) or the
  * setter used the Win32 API directly. */
-const char *
-os_get_option(const char *name)
+static const char *
+os_get_option_internal(const char *name, UNUSED bool use_secure_getenv)
 {
    static thread_local char value[_MAX_ENV];
    DWORD size = GetEnvironmentVariableA(name, value, _MAX_ENV);
    return (size > 0 && size < _MAX_ENV) ? value : NULL;
 }
 
-#else
+#else /* !DETECT_OS_WINDOWS */
 
-const char *
-os_get_option(const char *name)
+static const char *
+os_get_option_internal(const char *name, bool use_secure_getenv)
 {
-   const char *opt = getenv(name);
+   const char *opt;
+   if (use_secure_getenv) {
+#ifdef HAVE_SECURE_GETENV
+      opt = secure_getenv(name);
+#else
+      opt = getenv(name);
+#endif
+   } else {
+      opt = getenv(name);
+   }
 #if DETECT_OS_ANDROID
    if (!opt) {
       opt = os_get_android_option(name);
@@ -222,18 +243,38 @@ os_get_option(const char *name)
    return opt;
 }
 
-#endif
+#endif /* DETECT_OS_WINDOWS */
+
+const char *
+os_get_option(const char *name)
+{
+   return os_get_option_internal(name, false);
+}
+
+char *
+os_get_option_dup(const char *name)
+{
+   const char *opt = os_get_option_internal(name, false);
+   if (opt) {
+      return strdup(opt);
+   }
+   return NULL;
+}
 
 const char *
 os_get_option_secure(const char *name)
 {
-   const char *opt = secure_getenv(name);
-#if DETECT_OS_ANDROID
-   if (!opt) {
-      opt = os_get_android_option(name);
+   return os_get_option_internal(name, true);
+}
+
+char *
+os_get_option_secure_dup(const char *name)
+{
+   const char *opt = os_get_option_internal(name, true);
+   if (opt) {
+      return strdup(opt);
    }
-#endif
-   return opt;
+   return NULL;
 }
 
 static struct hash_table *options_tbl;
@@ -287,6 +328,25 @@ os_get_option_cached(const char *name)
 exit_mutex:
    simple_mtx_unlock(&options_tbl_mtx);
    return opt;
+}
+
+void
+os_set_option(const char *name, const char *value, bool override)
+{
+   if (override == false) {
+      if (os_get_option(name)) {
+         return;
+      }
+   }
+#if DETECT_OS_WINDOWS
+   SetEnvironmentVariableA(name, value);
+#else
+   if (value == NULL) {
+      unsetenv(name);
+   } else {
+      setenv(name, value, 1);
+   }
+#endif
 }
 
 /**

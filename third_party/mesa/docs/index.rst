@@ -23,7 +23,7 @@ Linux, FreeBSD, and other operating systems.
 .. _Vulkan: https://www.vulkan.org/
 .. _EGL: https://www.khronos.org/egl/
 .. _Direct Rendering Infrastructure: https://dri.freedesktop.org/
-.. _X.org: https://x.org
+.. _X.org: https://www.x.org
 .. _Wayland: https://wayland.freedesktop.org
 
 .. toctree::
@@ -61,17 +61,15 @@ Linux, FreeBSD, and other operating systems.
    :caption: User Topics
    :hidden:
 
-   shading
+   glsl
    egl
    opengles
    envvars
-   debugging
    perf
    gpu-perf-tracing
    extensions
    application-issues
    viewperf
-   xlibdriver
    teflon
 
 .. toctree::
@@ -83,6 +81,7 @@ Linux, FreeBSD, and other operating systems.
    drivers/asahi
    drivers/d3d12
    drivers/freedreno
+   drivers/kosmickrisp
    drivers/lima
    drivers/llvmpipe
    drivers/nvk
@@ -95,6 +94,7 @@ Linux, FreeBSD, and other operating systems.
    drivers/venus
    drivers/virgl
    drivers/zink
+   xlibdriver
 
 .. toctree::
    :maxdepth: 1
@@ -105,12 +105,13 @@ Linux, FreeBSD, and other operating systems.
    sourcetree
    utilities
    helpwanted
-   devinfo
    codingstyle
    submittingpatches
+   developing-extensions
    rust
    releasing
    release-calendar
+   graphics-debugging/debugging-misrenderings-crashes
    dispatch
    gallium/index
    vulkan/index

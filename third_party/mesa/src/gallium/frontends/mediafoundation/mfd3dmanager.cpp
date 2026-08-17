@@ -61,28 +61,17 @@ CMFD3DManager::Shutdown( bool bReleaseDeviceManager )
 {
    HRESULT hr = S_OK;
 
-   m_spDevice = nullptr;
-   m_spVideoDevice = nullptr;
-   m_spDevice11 = nullptr;
-   m_spStagingQueue = nullptr;
+   m_spDevice.Reset();
+   m_spVideoDevice.Reset();
+   m_spDevice11.Reset();
+   m_spStagingQueue.Reset();
 
-   if( m_spVideoSampleAllocator )
-   {
-      m_spVideoSampleAllocator->UninitializeSampleAllocator();
-      m_spVideoSampleAllocator = nullptr;
-   }
+   ReleaseAllocators();
 
-   if( m_spSATDMapAllocator )
-   {
-      m_spSATDMapAllocator->UninitializeSampleAllocator();
-      m_spSATDMapAllocator = nullptr;
-   }
-
-   if( m_spBitsusedMapAllocator )
-   {
-      m_spBitsusedMapAllocator->UninitializeSampleAllocator();
-      m_spBitsusedMapAllocator = nullptr;
-   }
+   // Release scheduler registrations before closing the device handle
+   m_ContextPriorityMgr.m_registeredQueues.clear();
+   m_ContextPriorityMgr.m_spSchedulerClient.Reset();
+   m_ContextPriorityMgr.m_hDevice = NULL;
 
    if( m_spDeviceManager != nullptr )
    {
@@ -92,7 +81,7 @@ CMFD3DManager::Shutdown( bool bReleaseDeviceManager )
          m_hDevice = NULL;
       }
       if( bReleaseDeviceManager )
-         m_spDeviceManager = nullptr;
+         m_spDeviceManager.Reset();
    }
 
    if( m_pPipeContext )
@@ -123,6 +112,35 @@ CMFD3DManager::Shutdown( bool bReleaseDeviceManager )
    }
 
    return hr;
+}
+
+void CMFD3DManager::ReleaseAllocators()
+{
+   if( m_spVideoSampleAllocator )
+   {
+      m_spVideoSampleAllocator->UninitializeSampleAllocator();
+      m_spVideoSampleAllocator.Reset();
+   }
+
+   if( m_spSatdStatsBufferPool )
+   {
+      m_spSatdStatsBufferPool.Reset();
+   }
+
+   if( m_spBitsUsedStatsBufferPool )
+   {
+      m_spBitsUsedStatsBufferPool.Reset();
+   }
+
+   if( m_spQPMapStatsBufferPool )
+   {
+      m_spQPMapStatsBufferPool.Reset();
+   }
+
+   if( m_spReconstructedPictureBufferPool )
+   {
+      m_spReconstructedPictureBufferPool.Reset();
+   }
 }
 
 static inline HRESULT
@@ -156,12 +174,22 @@ CMFD3DManager::xReopenDeviceManager( bool bNewDevice )
       ComPtr<IDXGIDevice> spDXGIDevice;
       ComPtr<IDXGIAdapter> spDXGIAdapter;
       ComPtr<IUnknown> spAdapter;
+      ComPtr<ID3D11DeviceContext> spImmediaContext;
+      ComPtr<ID3D11Multithread> spMultithread;
       CHECKHR_GOTO( m_spDeviceManager->GetVideoService( m_hDevice, IID_ID3D11Device, &m_spDevice11 ), done );
       CHECKHR_GOTO( m_spDevice11.As( &spDXGIDevice ), done );
       CHECKHR_GOTO( spDXGIDevice->GetAdapter( &spDXGIAdapter ), done );
       CHECKHR_GOTO( spDXGIAdapter.As( &spAdapter ), done );
       // Create a D3D12 device off of the same adapter this 11 device is on
       CHECKHR_GOTO( CreateD3D12DeviceWithMinimumSupportedFeatureLevel( spAdapter.Get(), m_spDevice ), done );
+
+      // check if the D3D11 device is multithread protected and issue warning
+      m_spDevice11->GetImmediateContext( &spImmediaContext );
+      CHECKHR_GOTO( spImmediaContext.As( &spMultithread ), done );
+      if( !spMultithread->GetMultithreadProtected() )
+      {
+         MFE_WARNING( "[dx12 hmft 0x%p] D3D11 device was created without multithread protected\n", m_logId );
+      }
    }
    // Create a staging queue for MF to signal on input texture GPU completion
    CHECKHR_GOTO( m_spDevice->CreateCommandQueue( &commandQueueDesc, IID_PPV_ARGS( &m_spStagingQueue ) ), done );
@@ -259,7 +287,7 @@ CMFD3DManager::UpdateGPUFeatureFlags()
           m_deviceDriverVersion.part4 >= 9002 )
       {
          m_gpuFeatureFlags.m_bH264SendUnwrappedPOC = true;
-         MFE_INFO( "[dx12 hmft 0x%p] D3DManager: GPUFeature m_bH264SendUnwrappedPOC is set to true\n", m_logId );
+         MFE_INFO( "[dx12 hmft 0x%p] D3DManager: GPUFeature m_bH264SendUnwrappedPOC is set to true", m_logId );
       }
    }
    */
@@ -269,26 +297,38 @@ int
 MFTRegisterWorkQueue( struct d3d12_context_queue_priority_manager *manager, ID3D12CommandQueue *queue )
 {
    mft_context_queue_priority_manager *mft_mgr = (mft_context_queue_priority_manager *) manager;
-   mtx_lock( &mft_mgr->m_lock );
-
-   ComPtr<IUnknown> queue_unknown;
-   if( FAILED( queue->QueryInterface( IID_PPV_ARGS( &queue_unknown ) ) ) )
+   if( !queue )
    {
-      mtx_unlock( &mft_mgr->m_lock );
       return -1;
    }
 
-   // Only register the queue if not already registered
-   auto it = std::find( mft_mgr->m_registeredQueues.begin(), mft_mgr->m_registeredQueues.end(), queue );
-   if( it == mft_mgr->m_registeredQueues.end() )
+   mtx_lock( &mft_mgr->m_lock );
+
+   if( mft_mgr->m_spSchedulerClient )
    {
-      //
-      // Register the queue_unknown with the MFT.
-      //
+      if( mft_mgr->m_registeredQueues.find( queue ) == mft_mgr->m_registeredQueues.end() )
+      {
+         HRESULT hr = S_OK;
+         ComPtr<IMFDXGISchedulerRegistration> spRegistration;
 
-      mft_mgr->m_registeredQueues.push_back( queue );
+         hr = mft_mgr->m_spSchedulerClient->RegisterObject( mft_mgr->m_hDevice, queue, &spRegistration );
+         if( FAILED( hr ) )
+         {
+            MFE_ERROR( "[dx12 hmft 0x%p] D3DManager: RegisterObject failed for Queue 0x%p", mft_mgr->m_logId, queue );
+            mtx_unlock( &mft_mgr->m_lock );
+            return -1;
+         }
+         MFE_INFO( "[dx12 hmft 0x%p] D3DManager: RegisterObject succeeded for Queue 0x%p, spRegistration 0x%p",
+                   mft_mgr->m_logId,
+                   queue,
+                   spRegistration.Get() );
+         mft_mgr->m_registeredQueues[queue] = spRegistration;
+      }
    }
-
+   else
+   {
+      MFE_INFO( "[dx12 hmft 0x%p] D3DManager: m_spSchedulerClient is not supported -> no opt", mft_mgr->m_logId );
+   }
    mtx_unlock( &mft_mgr->m_lock );
    return 0;
 }
@@ -297,23 +337,47 @@ int
 MFTUnregisterWorkQueue( struct d3d12_context_queue_priority_manager *manager, ID3D12CommandQueue *queue )
 {
    mft_context_queue_priority_manager *mft_mgr = (mft_context_queue_priority_manager *) manager;
-   mtx_lock( &mft_mgr->m_lock );
-
-   ComPtr<IUnknown> queue_unknown;
-   if( FAILED( queue->QueryInterface( IID_PPV_ARGS( &queue_unknown ) ) ) )
+   if( !queue )
    {
-      mtx_unlock( &mft_mgr->m_lock );
       return -1;
    }
 
-   //
-   // Unregister the queue_unknown with the MFT.
-   //
+   mtx_lock( &mft_mgr->m_lock );
+   if( mft_mgr->m_spSchedulerClient )
+   {
+      auto item = mft_mgr->m_registeredQueues.find( queue );
+      if( item != mft_mgr->m_registeredQueues.end() )
+      {
+         MFE_INFO( "[dx12 hmft 0x%p] D3DManager: Releases spRegistration for Queue 0x%p, spRegistration 0x%p",
+                   mft_mgr->m_logId,
+                   queue,
+                   item->second.Get() );
 
-   auto it = std::find( mft_mgr->m_registeredQueues.begin(), mft_mgr->m_registeredQueues.end(), queue );
-   if( it != mft_mgr->m_registeredQueues.end() )
-      mft_mgr->m_registeredQueues.erase( it );
+#if MESA_DEBUG
+         {
+            uint32_t global_priority, local_priority;
+            mft_mgr->base.get_queue_priority( &mft_mgr->base, queue, &global_priority, &local_priority );
+            debug_printf( "[dx12 hmft 0x%p] D3DManager: ending queue = 0x%p, local_priority = %d, global_priority = %d\n",
+                          mft_mgr->m_logId,
+                          queue,
+                          local_priority,
+                          global_priority );
+         }
+#endif
 
+         mft_mgr->m_registeredQueues.erase( item );
+      }
+      else
+      {
+         MFE_WARNING( "[dx12 hmft 0x%p] D3DManager: Queue 0x%p is unexpectedly not found in m_registeredQueues",
+                      mft_mgr->m_logId,
+                      queue );
+      }
+   }
+   else
+   {
+      MFE_INFO( "[dx12 hmft 0x%p] D3DManager: m_spSchedulerClient is not supported -> no opt", mft_mgr->m_logId );
+   }
    mtx_unlock( &mft_mgr->m_lock );
    return 0;
 }
@@ -323,8 +387,6 @@ CMFD3DManager::xOnSetD3DManager( ULONG_PTR ulParam )
 {
    HRESULT hr = S_OK;
    Shutdown();
-
-   d3d12_interop_device_info1 screen_interop_info = {};
 
    if( ulParam == 0 )
    {
@@ -346,17 +408,27 @@ CMFD3DManager::xOnSetD3DManager( ULONG_PTR ulParam )
                    MF_E_DXGI_DEVICE_NOT_INITIALIZED,
                    done );
 
-   if( ( m_pVlScreen->pscreen->interop_query_device_info( m_pVlScreen->pscreen,
-                                                          sizeof( d3d12_interop_device_info1 ),
-                                                          &screen_interop_info ) != 0 ) &&
-       ( screen_interop_info.set_context_queue_priority_manager != NULL ) )
+   m_pVlScreen->pscreen->interop_query_device_info( m_pVlScreen->pscreen,
+                                                    sizeof( d3d12_interop_device_info1 ),
+                                                    &m_ScreenInteropInfo );
+   assert( m_ScreenInteropInfo.set_context_queue_priority_manager != NULL );
+
    {
       CHECKBOOL_GOTO( thrd_success == mtx_init( &m_ContextPriorityMgr.m_lock, mtx_plain ), MF_E_DXGI_DEVICE_NOT_INITIALIZED, done );
 
+      m_ContextPriorityMgr.m_logId = m_logId;
       m_ContextPriorityMgr.base.register_work_queue = MFTRegisterWorkQueue;
       m_ContextPriorityMgr.base.unregister_work_queue = MFTUnregisterWorkQueue;
 
-      CHECKBOOL_GOTO( screen_interop_info.set_context_queue_priority_manager( m_pPipeContext, &m_ContextPriorityMgr.base ) == 0,
+      // Query for scheduler client to register driver work queues with the MF scheduler
+      ComPtr<IMFDXGISchedulerClient> spScheduler;
+      if( SUCCEEDED( m_spDeviceManager->GetVideoService( m_hDevice, IID_PPV_ARGS( &spScheduler ) ) ) )
+      {
+         m_ContextPriorityMgr.m_spSchedulerClient = spScheduler;
+         m_ContextPriorityMgr.m_hDevice = m_hDevice;
+      }
+
+      CHECKBOOL_GOTO( m_ScreenInteropInfo.set_context_queue_priority_manager( m_pPipeContext, &m_ContextPriorityMgr.base ) == 0,
                       MF_E_DXGI_DEVICE_NOT_INITIALIZED,
                       done );
 
@@ -367,9 +439,6 @@ CMFD3DManager::xOnSetD3DManager( ULONG_PTR ulParam )
       CHECKNULL_GOTO( m_ContextPriorityMgr.base.set_queue_priority, MF_E_DXGI_DEVICE_NOT_INITIALIZED, done );
       CHECKNULL_GOTO( m_ContextPriorityMgr.base.get_queue_priority, MF_E_DXGI_DEVICE_NOT_INITIALIZED, done );
    }
-
-   CHECKHR_GOTO( MFCreateVideoSampleAllocatorEx( IID_PPV_ARGS( &m_spSATDMapAllocator ) ), done );
-   CHECKHR_GOTO( MFCreateVideoSampleAllocatorEx( IID_PPV_ARGS( &m_spBitsusedMapAllocator ) ), done );
 
    CHECKHR_GOTO( GetDeviceInfo(), done );
 

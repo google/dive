@@ -56,6 +56,8 @@ vk_queue_init(struct vk_queue *queue, struct vk_device *device,
    memset(queue, 0, sizeof(*queue));
    vk_object_base_init(device, &queue->base, VK_OBJECT_TYPE_QUEUE);
 
+   simple_mtx_init(&queue->lock, mtx_plain);
+
    list_addtail(&queue->link, &device->queues);
 
    queue->flags = pCreateInfo->flags;
@@ -94,7 +96,7 @@ vk_queue_init(struct vk_queue *queue, struct vk_device *device,
          goto fail_thread;
    }
 
-   util_dynarray_init(&queue->labels, NULL);
+   queue->labels = UTIL_DYNARRAY_INIT;
    queue->region_begin = true;
 
    return VK_SUCCESS;
@@ -145,7 +147,8 @@ vk_queue_submit_alloc(struct vk_queue *queue,
                       uint32_t image_bind_count,
                       uint32_t bind_entry_count,
                       uint32_t image_bind_entry_count,
-                      uint32_t signal_count)
+                      uint32_t signal_count,
+                      bool is_protected)
 {
    VK_MULTIALLOC(ma);
    VK_MULTIALLOC_DECL(&ma, struct vk_queue_submit, submit, 1);
@@ -189,6 +192,7 @@ vk_queue_submit_alloc(struct vk_queue *queue,
    submit->_wait_temps     = wait_temps;
    submit->_wait_points    = wait_points;
    submit->_signal_points  = signal_points;
+   submit->is_protected    = is_protected;
 
    return submit;
 }
@@ -455,6 +459,9 @@ vk_queue_submits_merge(struct vk_queue *queue,
       return second;
    }
 
+   if (first->is_protected != second->is_protected)
+      return NULL;
+
    struct vk_queue_submit *merged = vk_queue_submit_alloc(queue,
       first->wait_count + second->wait_count,
       first->command_buffer_count + second->command_buffer_count,
@@ -463,7 +470,8 @@ vk_queue_submits_merge(struct vk_queue *queue,
       first->image_bind_count + second->image_bind_count,
       first->_bind_entry_count + second->_bind_entry_count,
       first->_image_bind_entry_count + second->_image_bind_entry_count,
-      first->signal_count + second->signal_count);
+      first->signal_count + second->signal_count,
+      first->is_protected);
    if (merged == NULL)
       return NULL;
 
@@ -624,7 +632,23 @@ vk_queue_submit_final(struct vk_queue *queue,
          result = vk_queue_set_lost(queue, "Failed to unwrap sync signal");
    }
 
-   result = queue->driver_submit(queue, submit);
+   /* For queues participating in emulation, redirect the submission to the
+    * real underlying queue so that driver_submit always sees the queue with
+    * actual hardware resources. The lock on the real queue unconditionally
+    * serializes submissions across all aliases.
+    */
+   if (queue->real_queue) {
+      struct vk_queue *real_queue = queue->real_queue;
+
+      simple_mtx_lock(&real_queue->lock);
+      result = real_queue->driver_submit(real_queue, submit);
+      simple_mtx_unlock(&real_queue->lock);
+   } else {
+      vk_queue_lock(queue);
+      result = queue->driver_submit(queue, submit);
+      vk_queue_unlock(queue);
+   }
+
    if (unlikely(result != VK_SUCCESS))
       return result;
 
@@ -841,6 +865,8 @@ struct vulkan_submit_info {
    const VkSparseImageMemoryBindInfo *image_binds;
 
    struct vk_fence *fence;
+
+   bool is_protected;
 };
 
 static VkResult
@@ -872,7 +898,8 @@ vk_queue_submit_create(struct vk_queue *queue,
                             info->image_bind_count,
                             sparse_memory_bind_entry_count,
                             sparse_memory_image_bind_entry_count,
-                            signal_count);
+                            signal_count,
+                            info->is_protected);
    if (unlikely(submit == NULL))
       return vk_error(queue, VK_ERROR_OUT_OF_HOST_MEMORY);
 
@@ -1164,7 +1191,7 @@ vk_queue_signal_sync(struct vk_queue *queue,
                      uint32_t signal_value)
 {
    struct vk_queue_submit *submit = vk_queue_submit_alloc(queue, 0, 0, 0, 0, 0,
-                                                          0, 0, 1);
+                                                          0, 0, 1, false);
    if (unlikely(submit == NULL))
       return vk_error(queue, VK_ERROR_OUT_OF_HOST_MEMORY);
 
@@ -1224,7 +1251,24 @@ vk_queue_finish(struct vk_queue *queue)
       vk_free(&queue->base.device->alloc, (void *)label->pLabelName);
    util_dynarray_fini(&queue->labels);
    list_del(&queue->link);
+
+   simple_mtx_destroy(&queue->lock);
    vk_object_base_finish(&queue->base);
+}
+
+void
+vk_queue_set_emulated(struct vk_queue *emulated, struct vk_queue *real)
+{
+   assert(emulated != real);
+   assert(emulated->driver_submit == NULL);
+   assert(real->real_queue == NULL || real->real_queue == real);
+
+   /* Mark the real queue as owning emulated aliases. Runs at device-init
+    * time, single-threaded with respect to other queue setup, so no
+    * synchronization is needed here.
+    */
+   real->real_queue = real;
+   emulated->real_queue = real;
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -1258,7 +1302,8 @@ vk_common_QueueSubmit2(VkQueue _queue,
          .waits = pSubmits[i].pWaitSemaphoreInfos,
          .signal_count = pSubmits[i].signalSemaphoreInfoCount,
          .signals = pSubmits[i].pSignalSemaphoreInfos,
-         .fence = i == submitCount - 1 ? fence : NULL
+         .fence = i == submitCount - 1 ? fence : NULL,
+         .is_protected = !!(pSubmits[i].flags & VK_SUBMIT_PROTECTED_BIT),
       };
       struct vk_queue_submit *submit;
       result = vk_queue_submit_create(queue, &info, &submit);

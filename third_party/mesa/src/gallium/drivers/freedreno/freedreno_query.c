@@ -179,50 +179,17 @@ fd_set_active_query_state(struct pipe_context *pctx, bool enable) assert_dt
    fd_context_dirty(ctx, FD_DIRTY_QUERY);
 }
 
-static enum pipe_driver_query_type
-query_type(enum fd_perfcntr_type type)
-{
-#define ENUM(t)                                                                \
-   case FD_PERFCNTR_##t:                                                       \
-      return PIPE_DRIVER_QUERY_##t
-   switch (type) {
-      ENUM(TYPE_UINT64);
-      ENUM(TYPE_UINT);
-      ENUM(TYPE_FLOAT);
-      ENUM(TYPE_PERCENTAGE);
-      ENUM(TYPE_BYTES);
-      ENUM(TYPE_MICROSECONDS);
-      ENUM(TYPE_HZ);
-      ENUM(TYPE_DBM);
-      ENUM(TYPE_TEMPERATURE);
-      ENUM(TYPE_VOLTS);
-      ENUM(TYPE_AMPS);
-      ENUM(TYPE_WATTS);
-   default:
-      UNREACHABLE("bad type");
-      return 0;
-   }
-}
-
-static enum pipe_driver_query_result_type
-query_result_type(enum fd_perfcntr_result_type type)
-{
-   switch (type) {
-      ENUM(RESULT_TYPE_AVERAGE);
-      ENUM(RESULT_TYPE_CUMULATIVE);
-   default:
-      UNREACHABLE("bad type");
-      return 0;
-   }
-}
-
 static void
 setup_perfcntr_query_info(struct fd_screen *screen)
 {
    unsigned num_queries = 0;
 
-   for (unsigned i = 0; i < screen->num_perfcntr_groups; i++)
-      num_queries += screen->perfcntr_groups[i].num_countables;
+   for (unsigned i = 0; i < screen->num_perfcntr_groups; i++) {
+      const struct fd_perfcntr_group *g = &screen->perfcntr_groups[i];
+      if (g->pipe > PIPE_BR)
+         continue;
+      num_queries += g->num_countables;
+   }
 
    screen->perfcntr_queries =
       calloc(num_queries, sizeof(screen->perfcntr_queries[0]));
@@ -231,14 +198,16 @@ setup_perfcntr_query_info(struct fd_screen *screen)
    unsigned idx = 0;
    for (unsigned i = 0; i < screen->num_perfcntr_groups; i++) {
       const struct fd_perfcntr_group *g = &screen->perfcntr_groups[i];
+      if (g->pipe > PIPE_BR)
+         continue;
       for (unsigned j = 0; j < g->num_countables; j++) {
          struct pipe_driver_query_info *info = &screen->perfcntr_queries[idx];
          const struct fd_perfcntr_countable *c = &g->countables[j];
 
          info->name = c->name;
          info->query_type = FD_QUERY_FIRST_PERFCNTR + idx;
-         info->type = query_type(c->query_type);
-         info->result_type = query_result_type(c->result_type);
+         info->type = PIPE_DRIVER_QUERY_TYPE_UINT64;
+         info->result_type = PIPE_DRIVER_QUERY_RESULT_TYPE_AVERAGE;
          info->group_id = i;
          info->flags = PIPE_DRIVER_QUERY_FLAG_BATCH;
 

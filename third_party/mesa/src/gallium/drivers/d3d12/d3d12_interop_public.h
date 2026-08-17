@@ -33,6 +33,20 @@ extern "C" {
 struct ID3D12Device;
 struct ID3D12CommandQueue;
 struct ID3D12Resource;
+struct pipe_video_buffer;
+struct pipe_context;
+struct pipe_resource;
+
+struct d3d12_interop_video_buffer_associated_data
+{
+   /*
+    * Function to get read-only resource from video buffer.
+    */
+   bool (*get_read_only_resource)(struct pipe_video_buffer *buffer,
+                                  struct pipe_context *pipe,
+                                  struct pipe_resource **readonly_resource,
+                                  uint32_t *subresource_index);
+};
 
 struct d3d12_interop_device_info {
    uint64_t adapter_luid;
@@ -189,6 +203,26 @@ struct d3d12_interop_device_info1 {
     * Returns int (0 for success, error code otherwise)
     */
    int (*set_video_encoder_max_async_queue_depth)(struct pipe_context *context, uint32_t max_async_queue_depth);
+
+   /*
+   * Function pointer to get the last slice completion fence for a video encoder,
+   * which may happen before the entire frame is complete, including the stats.
+   * If this function is NULL, the driver does not support getting the last slice completion fence.
+   *
+   * Parameters:
+   *   - pipe_video_codec*: codec to query
+   *   - void*: feedback data to provide to the driver to indicate the frame feedback
+   *              from which to get the last slice completion fence returned by
+   *              pipe_video_codec::encode_bitstream/encode_bitstream_sliced.
+   *   - pipe_fence_handle**: pointer to a fence handle to be filled in by the driver
+   * 
+   * The caller must call pipe_video_codec::destroy_fence to destroy the returned fence handle
+   *
+   * Returns int (0 for success, error code otherwise)
+   */
+   int (*get_video_enc_last_slice_completion_fence)(struct pipe_video_codec *codec,
+                                                    void *feedback,
+                                                    struct pipe_fence_handle **fence);
 };
 
 #ifdef __cplusplus

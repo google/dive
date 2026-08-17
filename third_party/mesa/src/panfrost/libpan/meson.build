@@ -3,7 +3,7 @@
 
 
 libpan_shader_files = files(
-  'clear_afbc_metadata.cl',
+  'copy.cl',
   'query_pool.cl',
   'draw_helper.cl',
   'indirect_dispatch.cl',
@@ -11,7 +11,7 @@ libpan_shader_files = files(
 
 idep_libpan_per_arch = {}
 
-foreach ver : ['4', '5', '6', '7', '9', '10', '12', '13']
+foreach ver : ['4', '5', '6', '7', '9', '10', '12', '13', '14']
   libpan_spv = custom_target(
     input : libpan_shader_files,
     output : 'libpan_v' + ver + '.spv',

@@ -1239,8 +1239,21 @@ BEGIN_TEST(insert_nops.valu_mask_write)
    bld.sop1(aco_opcode::s_mov_b32, Definition(PhysReg(0), s1), Operand::zero());
    bld.sop1(aco_opcode::s_mov_b32, Definition(PhysReg(5), s1), Operand(PhysReg(0), s1));
 
+   /* VALU read of SALU result need an explicit wait. */
    //! p_unit_test 12
+   //! v1: %0:v[0] = v_cndmask_b32 0, 0, %0:s[0-1]
+   //! s1: %0:s[0] = s_mov_b32 0
+   //! s_waitcnt_depctr sa_sdst(0)
+   //! s2: %0:exec = v_cmpx_eq_i32 %0:s[0], %0:v[1]
    bld.pseudo(aco_opcode::p_unit_test, Operand::c32(12));
+   bld.vop2_e64(aco_opcode::v_cndmask_b32, Definition(PhysReg(256), v1), Operand::zero(),
+                Operand::zero(), Operand(PhysReg(0), s2));
+   bld.sop1(aco_opcode::s_mov_b32, Definition(PhysReg(0), s1), Operand::zero());
+   bld.vopc(aco_opcode::v_cmpx_eq_i32, Definition(exec, bld.lm), Operand(PhysReg(0), s1),
+            Operand(PhysReg(257), v1));
+
+   //! p_unit_test 13
+   bld.pseudo(aco_opcode::p_unit_test, Operand::c32(13));
 
    //! BB1
    //! /* logical preds: / linear preds: BB0, / kind: */
@@ -1754,6 +1767,16 @@ BEGIN_TEST(insert_nops.valu_read_sgpr.basic)
    bld.vop1(aco_opcode::v_mov_b32, Definition(PhysReg(256), v1), Operand(vcc_hi, s1));
    bld.vop1(aco_opcode::v_mov_b32, Definition(PhysReg(256), v1), Operand(PhysReg(4), s1));
 
+   /* VALU read of SALU result need an explicit wait. */
+   //! p_unit_test 24
+   //! s1: %0:s[4] = s_mov_b32 0
+   //! s_waitcnt_depctr sa_sdst(0)
+   //! s2: %0:exec = v_cmpx_eq_i32 %0:s[4], %0:v[0]
+   bld.pseudo(aco_opcode::p_unit_test, Operand::c32(24));
+   bld.sop1(aco_opcode::s_mov_b32, Definition(PhysReg(4), s1), Operand::zero(4));
+   bld.vop2(aco_opcode::v_cmpx_eq_i32, Definition(exec, bld.lm), Operand(PhysReg(4), s1),
+            Operand(PhysReg(256), v1));
+
    finish_insert_nops_test();
 END_TEST
 
@@ -1764,8 +1787,12 @@ BEGIN_TEST(insert_nops.valu_read_sgpr.previous_part)
    /* Raytracing shaders have a prolog and may also be split into several parts. */
    program->stage = raytracing_cs;
 
-   /* Despite the SGPR never being read by a VALU in this shader, a sa_sdst(0) is needed. */
+   /* Despite the SGPR never being read by a VALU in this shader, a sa_sdst(0) is needed.
+    * The first instruction is also a sa_sdst(0) in RT shaders to protect against reads of the
+    * setpc target.
+    */
    //>> p_unit_test 0
+   //! s_waitcnt_depctr sa_sdst(0)
    //! s1: %0:s[4] = s_mov_b32 0
    //! s_waitcnt_depctr sa_sdst(0)
    //! s1: %0:s[64] = s_mov_b32 %0:s[4]

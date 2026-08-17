@@ -203,6 +203,124 @@ vn_encode_VkCommandBufferInheritanceRenderingInfo(struct vn_cs_encoder *enc, con
     vn_encode_VkCommandBufferInheritanceRenderingInfo_self(enc, val);
 }
 
+/* struct VkBindHeapInfoEXT chain */
+
+static inline size_t
+vn_sizeof_VkBindHeapInfoEXT_pnext(const void *val)
+{
+    /* no known/supported struct */
+    return vn_sizeof_simple_pointer(NULL);
+}
+
+static inline size_t
+vn_sizeof_VkBindHeapInfoEXT_self(const VkBindHeapInfoEXT *val)
+{
+    size_t size = 0;
+    /* skip val->{sType,pNext} */
+    size += vn_sizeof_VkDeviceAddressRangeEXT(&val->heapRange);
+    size += vn_sizeof_VkDeviceSize(&val->reservedRangeOffset);
+    size += vn_sizeof_VkDeviceSize(&val->reservedRangeSize);
+    return size;
+}
+
+static inline size_t
+vn_sizeof_VkBindHeapInfoEXT(const VkBindHeapInfoEXT *val)
+{
+    size_t size = 0;
+
+    size += vn_sizeof_VkStructureType(&val->sType);
+    size += vn_sizeof_VkBindHeapInfoEXT_pnext(val->pNext);
+    size += vn_sizeof_VkBindHeapInfoEXT_self(val);
+
+    return size;
+}
+
+static inline void
+vn_encode_VkBindHeapInfoEXT_pnext(struct vn_cs_encoder *enc, const void *val)
+{
+    /* no known/supported struct */
+    vn_encode_simple_pointer(enc, NULL);
+}
+
+static inline void
+vn_encode_VkBindHeapInfoEXT_self(struct vn_cs_encoder *enc, const VkBindHeapInfoEXT *val)
+{
+    /* skip val->{sType,pNext} */
+    vn_encode_VkDeviceAddressRangeEXT(enc, &val->heapRange);
+    vn_encode_VkDeviceSize(enc, &val->reservedRangeOffset);
+    vn_encode_VkDeviceSize(enc, &val->reservedRangeSize);
+}
+
+static inline void
+vn_encode_VkBindHeapInfoEXT(struct vn_cs_encoder *enc, const VkBindHeapInfoEXT *val)
+{
+    assert(val->sType == VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT);
+    vn_encode_VkStructureType(enc, &(VkStructureType){ VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT });
+    vn_encode_VkBindHeapInfoEXT_pnext(enc, val->pNext);
+    vn_encode_VkBindHeapInfoEXT_self(enc, val);
+}
+
+/* struct VkCommandBufferInheritanceDescriptorHeapInfoEXT chain */
+
+static inline size_t
+vn_sizeof_VkCommandBufferInheritanceDescriptorHeapInfoEXT_pnext(const void *val)
+{
+    /* no known/supported struct */
+    return vn_sizeof_simple_pointer(NULL);
+}
+
+static inline size_t
+vn_sizeof_VkCommandBufferInheritanceDescriptorHeapInfoEXT_self(const VkCommandBufferInheritanceDescriptorHeapInfoEXT *val)
+{
+    size_t size = 0;
+    /* skip val->{sType,pNext} */
+    size += vn_sizeof_simple_pointer(val->pSamplerHeapBindInfo);
+    if (val->pSamplerHeapBindInfo)
+        size += vn_sizeof_VkBindHeapInfoEXT(val->pSamplerHeapBindInfo);
+    size += vn_sizeof_simple_pointer(val->pResourceHeapBindInfo);
+    if (val->pResourceHeapBindInfo)
+        size += vn_sizeof_VkBindHeapInfoEXT(val->pResourceHeapBindInfo);
+    return size;
+}
+
+static inline size_t
+vn_sizeof_VkCommandBufferInheritanceDescriptorHeapInfoEXT(const VkCommandBufferInheritanceDescriptorHeapInfoEXT *val)
+{
+    size_t size = 0;
+
+    size += vn_sizeof_VkStructureType(&val->sType);
+    size += vn_sizeof_VkCommandBufferInheritanceDescriptorHeapInfoEXT_pnext(val->pNext);
+    size += vn_sizeof_VkCommandBufferInheritanceDescriptorHeapInfoEXT_self(val);
+
+    return size;
+}
+
+static inline void
+vn_encode_VkCommandBufferInheritanceDescriptorHeapInfoEXT_pnext(struct vn_cs_encoder *enc, const void *val)
+{
+    /* no known/supported struct */
+    vn_encode_simple_pointer(enc, NULL);
+}
+
+static inline void
+vn_encode_VkCommandBufferInheritanceDescriptorHeapInfoEXT_self(struct vn_cs_encoder *enc, const VkCommandBufferInheritanceDescriptorHeapInfoEXT *val)
+{
+    /* skip val->{sType,pNext} */
+    if (vn_encode_simple_pointer(enc, val->pSamplerHeapBindInfo))
+        vn_encode_VkBindHeapInfoEXT(enc, val->pSamplerHeapBindInfo);
+    if (vn_encode_simple_pointer(enc, val->pResourceHeapBindInfo))
+        vn_encode_VkBindHeapInfoEXT(enc, val->pResourceHeapBindInfo);
+}
+
+static inline void
+vn_encode_VkCommandBufferInheritanceDescriptorHeapInfoEXT(struct vn_cs_encoder *enc, const VkCommandBufferInheritanceDescriptorHeapInfoEXT *val)
+{
+    assert(val->sType == VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_DESCRIPTOR_HEAP_INFO_EXT);
+    vn_encode_VkStructureType(enc, &(VkStructureType){ VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_DESCRIPTOR_HEAP_INFO_EXT });
+    vn_encode_VkCommandBufferInheritanceDescriptorHeapInfoEXT_pnext(enc, val->pNext);
+    vn_encode_VkCommandBufferInheritanceDescriptorHeapInfoEXT_self(enc, val);
+}
+
 /* struct VkCommandBufferInheritanceInfo chain */
 
 static inline size_t
@@ -218,7 +336,7 @@ vn_sizeof_VkCommandBufferInheritanceInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(((const VkCommandBufferInheritanceConditionalRenderingInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkCommandBufferInheritanceConditionalRenderingInfoEXT_self((const VkCommandBufferInheritanceConditionalRenderingInfoEXT *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO:
@@ -226,7 +344,7 @@ vn_sizeof_VkCommandBufferInheritanceInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(((const VkCommandBufferInheritanceRenderingInfo *)pnext)->pNext);
             size += vn_sizeof_VkCommandBufferInheritanceRenderingInfo_self((const VkCommandBufferInheritanceRenderingInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO:
@@ -234,7 +352,7 @@ vn_sizeof_VkCommandBufferInheritanceInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(((const VkRenderingAttachmentLocationInfo *)pnext)->pNext);
             size += vn_sizeof_VkRenderingAttachmentLocationInfo_self((const VkRenderingAttachmentLocationInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO:
@@ -242,8 +360,16 @@ vn_sizeof_VkCommandBufferInheritanceInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(((const VkRenderingInputAttachmentIndexInfo *)pnext)->pNext);
             size += vn_sizeof_VkRenderingInputAttachmentIndexInfo_self((const VkRenderingInputAttachmentIndexInfo *)pnext);
+            return size;
+        case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_DESCRIPTOR_HEAP_INFO_EXT:
+            if (!vn_cs_renderer_protocol_has_extension(136 /* VK_EXT_descriptor_heap */))
+                break;
+            size += vn_sizeof_simple_pointer(pnext);
+            size += vn_sizeof_VkStructureType(&pnext->sType);
+            size += vn_sizeof_VkCommandBufferInheritanceInfo_pnext(((const VkCommandBufferInheritanceDescriptorHeapInfoEXT *)pnext)->pNext);
+            size += vn_sizeof_VkCommandBufferInheritanceDescriptorHeapInfoEXT_self((const VkCommandBufferInheritanceDescriptorHeapInfoEXT *)pnext);
             return size;
         default:
             /* ignore unknown/unsupported struct */
@@ -293,7 +419,7 @@ vn_encode_VkCommandBufferInheritanceInfo_pnext(struct vn_cs_encoder *enc, const 
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, ((const VkCommandBufferInheritanceConditionalRenderingInfoEXT *)pnext)->pNext);
             vn_encode_VkCommandBufferInheritanceConditionalRenderingInfoEXT_self(enc, (const VkCommandBufferInheritanceConditionalRenderingInfoEXT *)pnext);
             return;
         case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO:
@@ -301,7 +427,7 @@ vn_encode_VkCommandBufferInheritanceInfo_pnext(struct vn_cs_encoder *enc, const 
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, ((const VkCommandBufferInheritanceRenderingInfo *)pnext)->pNext);
             vn_encode_VkCommandBufferInheritanceRenderingInfo_self(enc, (const VkCommandBufferInheritanceRenderingInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO:
@@ -309,7 +435,7 @@ vn_encode_VkCommandBufferInheritanceInfo_pnext(struct vn_cs_encoder *enc, const 
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, ((const VkRenderingAttachmentLocationInfo *)pnext)->pNext);
             vn_encode_VkRenderingAttachmentLocationInfo_self(enc, (const VkRenderingAttachmentLocationInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO:
@@ -317,8 +443,16 @@ vn_encode_VkCommandBufferInheritanceInfo_pnext(struct vn_cs_encoder *enc, const 
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, ((const VkRenderingInputAttachmentIndexInfo *)pnext)->pNext);
             vn_encode_VkRenderingInputAttachmentIndexInfo_self(enc, (const VkRenderingInputAttachmentIndexInfo *)pnext);
+            return;
+        case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_DESCRIPTOR_HEAP_INFO_EXT:
+            if (!vn_cs_renderer_protocol_has_extension(136 /* VK_EXT_descriptor_heap */))
+                break;
+            vn_encode_simple_pointer(enc, pnext);
+            vn_encode_VkStructureType(enc, &pnext->sType);
+            vn_encode_VkCommandBufferInheritanceInfo_pnext(enc, ((const VkCommandBufferInheritanceDescriptorHeapInfoEXT *)pnext)->pNext);
+            vn_encode_VkCommandBufferInheritanceDescriptorHeapInfoEXT_self(enc, (const VkCommandBufferInheritanceDescriptorHeapInfoEXT *)pnext);
             return;
         default:
             /* ignore unknown/unsupported struct */
@@ -417,7 +551,7 @@ vn_sizeof_VkCommandBufferBeginInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_COMMAND_BUFFER_BEGIN_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkCommandBufferBeginInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkCommandBufferBeginInfo_pnext(((const VkDeviceGroupCommandBufferBeginInfo *)pnext)->pNext);
             size += vn_sizeof_VkDeviceGroupCommandBufferBeginInfo_self((const VkDeviceGroupCommandBufferBeginInfo *)pnext);
             return size;
         default:
@@ -464,7 +598,7 @@ vn_encode_VkCommandBufferBeginInfo_pnext(struct vn_cs_encoder *enc, const void *
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_COMMAND_BUFFER_BEGIN_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkCommandBufferBeginInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkCommandBufferBeginInfo_pnext(enc, ((const VkDeviceGroupCommandBufferBeginInfo *)pnext)->pNext);
             vn_encode_VkDeviceGroupCommandBufferBeginInfo_self(enc, (const VkDeviceGroupCommandBufferBeginInfo *)pnext);
             return;
         default:
@@ -877,7 +1011,7 @@ vn_sizeof_VkBufferMemoryBarrier_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkBufferMemoryBarrier_pnext(pnext->pNext);
+            size += vn_sizeof_VkBufferMemoryBarrier_pnext(((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             size += vn_sizeof_VkExternalMemoryAcquireUnmodifiedEXT_self((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return size;
         default:
@@ -929,7 +1063,7 @@ vn_encode_VkBufferMemoryBarrier_pnext(struct vn_cs_encoder *enc, const void *val
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkBufferMemoryBarrier_pnext(enc, pnext->pNext);
+            vn_encode_VkBufferMemoryBarrier_pnext(enc, ((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             vn_encode_VkExternalMemoryAcquireUnmodifiedEXT_self(enc, (const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return;
         default:
@@ -979,7 +1113,7 @@ vn_sizeof_VkImageMemoryBarrier_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkImageMemoryBarrier_pnext(pnext->pNext);
+            size += vn_sizeof_VkImageMemoryBarrier_pnext(((const VkSampleLocationsInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkSampleLocationsInfoEXT_self((const VkSampleLocationsInfoEXT *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT:
@@ -987,7 +1121,7 @@ vn_sizeof_VkImageMemoryBarrier_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkImageMemoryBarrier_pnext(pnext->pNext);
+            size += vn_sizeof_VkImageMemoryBarrier_pnext(((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             size += vn_sizeof_VkExternalMemoryAcquireUnmodifiedEXT_self((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return size;
         default:
@@ -1040,7 +1174,7 @@ vn_encode_VkImageMemoryBarrier_pnext(struct vn_cs_encoder *enc, const void *val)
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkImageMemoryBarrier_pnext(enc, pnext->pNext);
+            vn_encode_VkImageMemoryBarrier_pnext(enc, ((const VkSampleLocationsInfoEXT *)pnext)->pNext);
             vn_encode_VkSampleLocationsInfoEXT_self(enc, (const VkSampleLocationsInfoEXT *)pnext);
             return;
         case VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT:
@@ -1048,7 +1182,7 @@ vn_encode_VkImageMemoryBarrier_pnext(struct vn_cs_encoder *enc, const void *val)
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkImageMemoryBarrier_pnext(enc, pnext->pNext);
+            vn_encode_VkImageMemoryBarrier_pnext(enc, ((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             vn_encode_VkExternalMemoryAcquireUnmodifiedEXT_self(enc, (const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return;
         default:
@@ -1409,7 +1543,7 @@ vn_sizeof_VkRenderPassBeginInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_RENDER_PASS_BEGIN_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRenderPassBeginInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkRenderPassBeginInfo_pnext(((const VkDeviceGroupRenderPassBeginInfo *)pnext)->pNext);
             size += vn_sizeof_VkDeviceGroupRenderPassBeginInfo_self((const VkDeviceGroupRenderPassBeginInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_RENDER_PASS_SAMPLE_LOCATIONS_BEGIN_INFO_EXT:
@@ -1417,13 +1551,13 @@ vn_sizeof_VkRenderPassBeginInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRenderPassBeginInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkRenderPassBeginInfo_pnext(((const VkRenderPassSampleLocationsBeginInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkRenderPassSampleLocationsBeginInfoEXT_self((const VkRenderPassSampleLocationsBeginInfoEXT *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRenderPassBeginInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkRenderPassBeginInfo_pnext(((const VkRenderPassAttachmentBeginInfo *)pnext)->pNext);
             size += vn_sizeof_VkRenderPassAttachmentBeginInfo_self((const VkRenderPassAttachmentBeginInfo *)pnext);
             return size;
         default:
@@ -1477,7 +1611,7 @@ vn_encode_VkRenderPassBeginInfo_pnext(struct vn_cs_encoder *enc, const void *val
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_RENDER_PASS_BEGIN_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRenderPassBeginInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkRenderPassBeginInfo_pnext(enc, ((const VkDeviceGroupRenderPassBeginInfo *)pnext)->pNext);
             vn_encode_VkDeviceGroupRenderPassBeginInfo_self(enc, (const VkDeviceGroupRenderPassBeginInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_RENDER_PASS_SAMPLE_LOCATIONS_BEGIN_INFO_EXT:
@@ -1485,13 +1619,13 @@ vn_encode_VkRenderPassBeginInfo_pnext(struct vn_cs_encoder *enc, const void *val
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRenderPassBeginInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkRenderPassBeginInfo_pnext(enc, ((const VkRenderPassSampleLocationsBeginInfoEXT *)pnext)->pNext);
             vn_encode_VkRenderPassSampleLocationsBeginInfoEXT_self(enc, (const VkRenderPassSampleLocationsBeginInfoEXT *)pnext);
             return;
         case VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRenderPassBeginInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkRenderPassBeginInfo_pnext(enc, ((const VkRenderPassAttachmentBeginInfo *)pnext)->pNext);
             vn_encode_VkRenderPassAttachmentBeginInfo_self(enc, (const VkRenderPassAttachmentBeginInfo *)pnext);
             return;
         default:
@@ -2529,7 +2663,7 @@ vn_sizeof_VkBufferMemoryBarrier2_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkBufferMemoryBarrier2_pnext(pnext->pNext);
+            size += vn_sizeof_VkBufferMemoryBarrier2_pnext(((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             size += vn_sizeof_VkExternalMemoryAcquireUnmodifiedEXT_self((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return size;
         default:
@@ -2583,7 +2717,7 @@ vn_encode_VkBufferMemoryBarrier2_pnext(struct vn_cs_encoder *enc, const void *va
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkBufferMemoryBarrier2_pnext(enc, pnext->pNext);
+            vn_encode_VkBufferMemoryBarrier2_pnext(enc, ((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             vn_encode_VkExternalMemoryAcquireUnmodifiedEXT_self(enc, (const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return;
         default:
@@ -2635,7 +2769,7 @@ vn_sizeof_VkImageMemoryBarrier2_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkImageMemoryBarrier2_pnext(pnext->pNext);
+            size += vn_sizeof_VkImageMemoryBarrier2_pnext(((const VkSampleLocationsInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkSampleLocationsInfoEXT_self((const VkSampleLocationsInfoEXT *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT:
@@ -2643,7 +2777,7 @@ vn_sizeof_VkImageMemoryBarrier2_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkImageMemoryBarrier2_pnext(pnext->pNext);
+            size += vn_sizeof_VkImageMemoryBarrier2_pnext(((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             size += vn_sizeof_VkExternalMemoryAcquireUnmodifiedEXT_self((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return size;
         default:
@@ -2698,7 +2832,7 @@ vn_encode_VkImageMemoryBarrier2_pnext(struct vn_cs_encoder *enc, const void *val
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkImageMemoryBarrier2_pnext(enc, pnext->pNext);
+            vn_encode_VkImageMemoryBarrier2_pnext(enc, ((const VkSampleLocationsInfoEXT *)pnext)->pNext);
             vn_encode_VkSampleLocationsInfoEXT_self(enc, (const VkSampleLocationsInfoEXT *)pnext);
             return;
         case VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_ACQUIRE_UNMODIFIED_EXT:
@@ -2706,7 +2840,7 @@ vn_encode_VkImageMemoryBarrier2_pnext(struct vn_cs_encoder *enc, const void *val
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkImageMemoryBarrier2_pnext(enc, pnext->pNext);
+            vn_encode_VkImageMemoryBarrier2_pnext(enc, ((const VkExternalMemoryAcquireUnmodifiedEXT *)pnext)->pNext);
             vn_encode_VkExternalMemoryAcquireUnmodifiedEXT_self(enc, (const VkExternalMemoryAcquireUnmodifiedEXT *)pnext);
             return;
         default:
@@ -2982,7 +3116,7 @@ vn_sizeof_VkRenderingInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_RENDER_PASS_BEGIN_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRenderingInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkRenderingInfo_pnext(((const VkDeviceGroupRenderPassBeginInfo *)pnext)->pNext);
             size += vn_sizeof_VkDeviceGroupRenderPassBeginInfo_self((const VkDeviceGroupRenderPassBeginInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT:
@@ -2990,7 +3124,7 @@ vn_sizeof_VkRenderingInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRenderingInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkRenderingInfo_pnext(((const VkMultisampledRenderToSingleSampledInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkMultisampledRenderToSingleSampledInfoEXT_self((const VkMultisampledRenderToSingleSampledInfoEXT *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR:
@@ -2998,7 +3132,7 @@ vn_sizeof_VkRenderingInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkRenderingInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkRenderingInfo_pnext(((const VkRenderingFragmentShadingRateAttachmentInfoKHR *)pnext)->pNext);
             size += vn_sizeof_VkRenderingFragmentShadingRateAttachmentInfoKHR_self((const VkRenderingFragmentShadingRateAttachmentInfoKHR *)pnext);
             return size;
         default:
@@ -3059,7 +3193,7 @@ vn_encode_VkRenderingInfo_pnext(struct vn_cs_encoder *enc, const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_RENDER_PASS_BEGIN_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRenderingInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkRenderingInfo_pnext(enc, ((const VkDeviceGroupRenderPassBeginInfo *)pnext)->pNext);
             vn_encode_VkDeviceGroupRenderPassBeginInfo_self(enc, (const VkDeviceGroupRenderPassBeginInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT:
@@ -3067,7 +3201,7 @@ vn_encode_VkRenderingInfo_pnext(struct vn_cs_encoder *enc, const void *val)
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRenderingInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkRenderingInfo_pnext(enc, ((const VkMultisampledRenderToSingleSampledInfoEXT *)pnext)->pNext);
             vn_encode_VkMultisampledRenderToSingleSampledInfoEXT_self(enc, (const VkMultisampledRenderToSingleSampledInfoEXT *)pnext);
             return;
         case VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR:
@@ -3075,7 +3209,7 @@ vn_encode_VkRenderingInfo_pnext(struct vn_cs_encoder *enc, const void *val)
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkRenderingInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkRenderingInfo_pnext(enc, ((const VkRenderingFragmentShadingRateAttachmentInfoKHR *)pnext)->pNext);
             vn_encode_VkRenderingFragmentShadingRateAttachmentInfoKHR_self(enc, (const VkRenderingFragmentShadingRateAttachmentInfoKHR *)pnext);
             return;
         default:
@@ -3134,7 +3268,7 @@ vn_sizeof_VkDepthBiasInfoEXT_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDepthBiasInfoEXT_pnext(pnext->pNext);
+            size += vn_sizeof_VkDepthBiasInfoEXT_pnext(((const VkDepthBiasRepresentationInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkDepthBiasRepresentationInfoEXT_self((const VkDepthBiasRepresentationInfoEXT *)pnext);
             return size;
         default:
@@ -3182,7 +3316,7 @@ vn_encode_VkDepthBiasInfoEXT_pnext(struct vn_cs_encoder *enc, const void *val)
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDepthBiasInfoEXT_pnext(enc, pnext->pNext);
+            vn_encode_VkDepthBiasInfoEXT_pnext(enc, ((const VkDepthBiasRepresentationInfoEXT *)pnext)->pNext);
             vn_encode_VkDepthBiasRepresentationInfoEXT_self(enc, (const VkDepthBiasRepresentationInfoEXT *)pnext);
             return;
         default:
@@ -3226,7 +3360,7 @@ vn_sizeof_VkBindDescriptorSetsInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkBindDescriptorSetsInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkBindDescriptorSetsInfo_pnext(((const VkPipelineLayoutCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkPipelineLayoutCreateInfo_self((const VkPipelineLayoutCreateInfo *)pnext);
             return size;
         default:
@@ -3287,7 +3421,7 @@ vn_encode_VkBindDescriptorSetsInfo_pnext(struct vn_cs_encoder *enc, const void *
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkBindDescriptorSetsInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkBindDescriptorSetsInfo_pnext(enc, ((const VkPipelineLayoutCreateInfo *)pnext)->pNext);
             vn_encode_VkPipelineLayoutCreateInfo_self(enc, (const VkPipelineLayoutCreateInfo *)pnext);
             return;
         default:
@@ -3346,7 +3480,7 @@ vn_sizeof_VkPushConstantsInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkPushConstantsInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkPushConstantsInfo_pnext(((const VkPipelineLayoutCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkPipelineLayoutCreateInfo_self((const VkPipelineLayoutCreateInfo *)pnext);
             return size;
         default:
@@ -3399,7 +3533,7 @@ vn_encode_VkPushConstantsInfo_pnext(struct vn_cs_encoder *enc, const void *val)
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkPushConstantsInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkPushConstantsInfo_pnext(enc, ((const VkPipelineLayoutCreateInfo *)pnext)->pNext);
             vn_encode_VkPipelineLayoutCreateInfo_self(enc, (const VkPipelineLayoutCreateInfo *)pnext);
             return;
         default:
@@ -3450,7 +3584,7 @@ vn_sizeof_VkPushDescriptorSetInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkPushDescriptorSetInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkPushDescriptorSetInfo_pnext(((const VkPipelineLayoutCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkPipelineLayoutCreateInfo_self((const VkPipelineLayoutCreateInfo *)pnext);
             return size;
         default:
@@ -3504,7 +3638,7 @@ vn_encode_VkPushDescriptorSetInfo_pnext(struct vn_cs_encoder *enc, const void *v
         case VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkPushDescriptorSetInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkPushDescriptorSetInfo_pnext(enc, ((const VkPipelineLayoutCreateInfo *)pnext)->pNext);
             vn_encode_VkPipelineLayoutCreateInfo_self(enc, (const VkPipelineLayoutCreateInfo *)pnext);
             return;
         default:
@@ -3541,6 +3675,61 @@ vn_encode_VkPushDescriptorSetInfo(struct vn_cs_encoder *enc, const VkPushDescrip
     vn_encode_VkStructureType(enc, &(VkStructureType){ VK_STRUCTURE_TYPE_PUSH_DESCRIPTOR_SET_INFO });
     vn_encode_VkPushDescriptorSetInfo_pnext(enc, val->pNext);
     vn_encode_VkPushDescriptorSetInfo_self(enc, val);
+}
+
+/* struct VkPushDataInfoEXT chain */
+
+static inline size_t
+vn_sizeof_VkPushDataInfoEXT_pnext(const void *val)
+{
+    /* no known/supported struct */
+    return vn_sizeof_simple_pointer(NULL);
+}
+
+static inline size_t
+vn_sizeof_VkPushDataInfoEXT_self(const VkPushDataInfoEXT *val)
+{
+    size_t size = 0;
+    /* skip val->{sType,pNext} */
+    size += vn_sizeof_uint32_t(&val->offset);
+    size += vn_sizeof_VkHostAddressRangeConstEXT(&val->data);
+    return size;
+}
+
+static inline size_t
+vn_sizeof_VkPushDataInfoEXT(const VkPushDataInfoEXT *val)
+{
+    size_t size = 0;
+
+    size += vn_sizeof_VkStructureType(&val->sType);
+    size += vn_sizeof_VkPushDataInfoEXT_pnext(val->pNext);
+    size += vn_sizeof_VkPushDataInfoEXT_self(val);
+
+    return size;
+}
+
+static inline void
+vn_encode_VkPushDataInfoEXT_pnext(struct vn_cs_encoder *enc, const void *val)
+{
+    /* no known/supported struct */
+    vn_encode_simple_pointer(enc, NULL);
+}
+
+static inline void
+vn_encode_VkPushDataInfoEXT_self(struct vn_cs_encoder *enc, const VkPushDataInfoEXT *val)
+{
+    /* skip val->{sType,pNext} */
+    vn_encode_uint32_t(enc, &val->offset);
+    vn_encode_VkHostAddressRangeConstEXT(enc, &val->data);
+}
+
+static inline void
+vn_encode_VkPushDataInfoEXT(struct vn_cs_encoder *enc, const VkPushDataInfoEXT *val)
+{
+    assert(val->sType == VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT);
+    vn_encode_VkStructureType(enc, &(VkStructureType){ VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT });
+    vn_encode_VkPushDataInfoEXT_pnext(enc, val->pNext);
+    vn_encode_VkPushDataInfoEXT_self(enc, val);
 }
 
 static inline size_t vn_sizeof_vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pAllocateInfo, VkCommandBuffer* pCommandBuffers)
@@ -7779,6 +7968,178 @@ static inline void vn_decode_vkCmdDrawIndirectByteCountEXT_reply(struct vn_cs_de
     /* skip vertexStride */
 }
 
+static inline size_t vn_sizeof_vkCmdDrawMeshTasksEXT(VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksEXT_EXT;
+    const VkFlags cmd_flags = 0;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type) + vn_sizeof_VkFlags(&cmd_flags);
+
+    cmd_size += vn_sizeof_VkCommandBuffer(&commandBuffer);
+    cmd_size += vn_sizeof_uint32_t(&groupCountX);
+    cmd_size += vn_sizeof_uint32_t(&groupCountY);
+    cmd_size += vn_sizeof_uint32_t(&groupCountZ);
+
+    return cmd_size;
+}
+
+static inline void vn_encode_vkCmdDrawMeshTasksEXT(struct vn_cs_encoder *enc, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksEXT_EXT;
+
+    vn_encode_VkCommandTypeEXT(enc, &cmd_type);
+    vn_encode_VkFlags(enc, &cmd_flags);
+
+    vn_encode_VkCommandBuffer(enc, &commandBuffer);
+    vn_encode_uint32_t(enc, &groupCountX);
+    vn_encode_uint32_t(enc, &groupCountY);
+    vn_encode_uint32_t(enc, &groupCountZ);
+}
+
+static inline size_t vn_sizeof_vkCmdDrawMeshTasksEXT_reply(VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksEXT_EXT;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type);
+
+    /* skip commandBuffer */
+    /* skip groupCountX */
+    /* skip groupCountY */
+    /* skip groupCountZ */
+
+    return cmd_size;
+}
+
+static inline void vn_decode_vkCmdDrawMeshTasksEXT_reply(struct vn_cs_decoder *dec, VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    VkCommandTypeEXT command_type;
+    vn_decode_VkCommandTypeEXT(dec, &command_type);
+    assert(command_type == VK_COMMAND_TYPE_vkCmdDrawMeshTasksEXT_EXT);
+
+    /* skip commandBuffer */
+    /* skip groupCountX */
+    /* skip groupCountY */
+    /* skip groupCountZ */
+}
+
+static inline size_t vn_sizeof_vkCmdDrawMeshTasksIndirectEXT(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectEXT_EXT;
+    const VkFlags cmd_flags = 0;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type) + vn_sizeof_VkFlags(&cmd_flags);
+
+    cmd_size += vn_sizeof_VkCommandBuffer(&commandBuffer);
+    cmd_size += vn_sizeof_VkBuffer(&buffer);
+    cmd_size += vn_sizeof_VkDeviceSize(&offset);
+    cmd_size += vn_sizeof_uint32_t(&drawCount);
+    cmd_size += vn_sizeof_uint32_t(&stride);
+
+    return cmd_size;
+}
+
+static inline void vn_encode_vkCmdDrawMeshTasksIndirectEXT(struct vn_cs_encoder *enc, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectEXT_EXT;
+
+    vn_encode_VkCommandTypeEXT(enc, &cmd_type);
+    vn_encode_VkFlags(enc, &cmd_flags);
+
+    vn_encode_VkCommandBuffer(enc, &commandBuffer);
+    vn_encode_VkBuffer(enc, &buffer);
+    vn_encode_VkDeviceSize(enc, &offset);
+    vn_encode_uint32_t(enc, &drawCount);
+    vn_encode_uint32_t(enc, &stride);
+}
+
+static inline size_t vn_sizeof_vkCmdDrawMeshTasksIndirectEXT_reply(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectEXT_EXT;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type);
+
+    /* skip commandBuffer */
+    /* skip buffer */
+    /* skip offset */
+    /* skip drawCount */
+    /* skip stride */
+
+    return cmd_size;
+}
+
+static inline void vn_decode_vkCmdDrawMeshTasksIndirectEXT_reply(struct vn_cs_decoder *dec, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    VkCommandTypeEXT command_type;
+    vn_decode_VkCommandTypeEXT(dec, &command_type);
+    assert(command_type == VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectEXT_EXT);
+
+    /* skip commandBuffer */
+    /* skip buffer */
+    /* skip offset */
+    /* skip drawCount */
+    /* skip stride */
+}
+
+static inline size_t vn_sizeof_vkCmdDrawMeshTasksIndirectCountEXT(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectCountEXT_EXT;
+    const VkFlags cmd_flags = 0;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type) + vn_sizeof_VkFlags(&cmd_flags);
+
+    cmd_size += vn_sizeof_VkCommandBuffer(&commandBuffer);
+    cmd_size += vn_sizeof_VkBuffer(&buffer);
+    cmd_size += vn_sizeof_VkDeviceSize(&offset);
+    cmd_size += vn_sizeof_VkBuffer(&countBuffer);
+    cmd_size += vn_sizeof_VkDeviceSize(&countBufferOffset);
+    cmd_size += vn_sizeof_uint32_t(&maxDrawCount);
+    cmd_size += vn_sizeof_uint32_t(&stride);
+
+    return cmd_size;
+}
+
+static inline void vn_encode_vkCmdDrawMeshTasksIndirectCountEXT(struct vn_cs_encoder *enc, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectCountEXT_EXT;
+
+    vn_encode_VkCommandTypeEXT(enc, &cmd_type);
+    vn_encode_VkFlags(enc, &cmd_flags);
+
+    vn_encode_VkCommandBuffer(enc, &commandBuffer);
+    vn_encode_VkBuffer(enc, &buffer);
+    vn_encode_VkDeviceSize(enc, &offset);
+    vn_encode_VkBuffer(enc, &countBuffer);
+    vn_encode_VkDeviceSize(enc, &countBufferOffset);
+    vn_encode_uint32_t(enc, &maxDrawCount);
+    vn_encode_uint32_t(enc, &stride);
+}
+
+static inline size_t vn_sizeof_vkCmdDrawMeshTasksIndirectCountEXT_reply(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectCountEXT_EXT;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type);
+
+    /* skip commandBuffer */
+    /* skip buffer */
+    /* skip offset */
+    /* skip countBuffer */
+    /* skip countBufferOffset */
+    /* skip maxDrawCount */
+    /* skip stride */
+
+    return cmd_size;
+}
+
+static inline void vn_decode_vkCmdDrawMeshTasksIndirectCountEXT_reply(struct vn_cs_decoder *dec, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+{
+    VkCommandTypeEXT command_type;
+    vn_decode_VkCommandTypeEXT(dec, &command_type);
+    assert(command_type == VK_COMMAND_TYPE_vkCmdDrawMeshTasksIndirectCountEXT_EXT);
+
+    /* skip commandBuffer */
+    /* skip buffer */
+    /* skip offset */
+    /* skip countBuffer */
+    /* skip countBufferOffset */
+    /* skip maxDrawCount */
+    /* skip stride */
+}
+
 static inline size_t vn_sizeof_vkCmdCopyAccelerationStructureKHR(VkCommandBuffer commandBuffer, const VkCopyAccelerationStructureInfoKHR* pInfo)
 {
     const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdCopyAccelerationStructureKHR_EXT;
@@ -11567,6 +11928,147 @@ static inline void vn_decode_vkCmdSetDepthClampRangeEXT_reply(struct vn_cs_decod
     /* skip pDepthClampRange */
 }
 
+static inline size_t vn_sizeof_vkCmdBindSamplerHeapEXT(VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdBindSamplerHeapEXT_EXT;
+    const VkFlags cmd_flags = 0;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type) + vn_sizeof_VkFlags(&cmd_flags);
+
+    cmd_size += vn_sizeof_VkCommandBuffer(&commandBuffer);
+    cmd_size += vn_sizeof_simple_pointer(pBindInfo);
+    if (pBindInfo)
+        cmd_size += vn_sizeof_VkBindHeapInfoEXT(pBindInfo);
+
+    return cmd_size;
+}
+
+static inline void vn_encode_vkCmdBindSamplerHeapEXT(struct vn_cs_encoder *enc, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdBindSamplerHeapEXT_EXT;
+
+    vn_encode_VkCommandTypeEXT(enc, &cmd_type);
+    vn_encode_VkFlags(enc, &cmd_flags);
+
+    vn_encode_VkCommandBuffer(enc, &commandBuffer);
+    if (vn_encode_simple_pointer(enc, pBindInfo))
+        vn_encode_VkBindHeapInfoEXT(enc, pBindInfo);
+}
+
+static inline size_t vn_sizeof_vkCmdBindSamplerHeapEXT_reply(VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdBindSamplerHeapEXT_EXT;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type);
+
+    /* skip commandBuffer */
+    /* skip pBindInfo */
+
+    return cmd_size;
+}
+
+static inline void vn_decode_vkCmdBindSamplerHeapEXT_reply(struct vn_cs_decoder *dec, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    VkCommandTypeEXT command_type;
+    vn_decode_VkCommandTypeEXT(dec, &command_type);
+    assert(command_type == VK_COMMAND_TYPE_vkCmdBindSamplerHeapEXT_EXT);
+
+    /* skip commandBuffer */
+    /* skip pBindInfo */
+}
+
+static inline size_t vn_sizeof_vkCmdBindResourceHeapEXT(VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdBindResourceHeapEXT_EXT;
+    const VkFlags cmd_flags = 0;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type) + vn_sizeof_VkFlags(&cmd_flags);
+
+    cmd_size += vn_sizeof_VkCommandBuffer(&commandBuffer);
+    cmd_size += vn_sizeof_simple_pointer(pBindInfo);
+    if (pBindInfo)
+        cmd_size += vn_sizeof_VkBindHeapInfoEXT(pBindInfo);
+
+    return cmd_size;
+}
+
+static inline void vn_encode_vkCmdBindResourceHeapEXT(struct vn_cs_encoder *enc, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdBindResourceHeapEXT_EXT;
+
+    vn_encode_VkCommandTypeEXT(enc, &cmd_type);
+    vn_encode_VkFlags(enc, &cmd_flags);
+
+    vn_encode_VkCommandBuffer(enc, &commandBuffer);
+    if (vn_encode_simple_pointer(enc, pBindInfo))
+        vn_encode_VkBindHeapInfoEXT(enc, pBindInfo);
+}
+
+static inline size_t vn_sizeof_vkCmdBindResourceHeapEXT_reply(VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdBindResourceHeapEXT_EXT;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type);
+
+    /* skip commandBuffer */
+    /* skip pBindInfo */
+
+    return cmd_size;
+}
+
+static inline void vn_decode_vkCmdBindResourceHeapEXT_reply(struct vn_cs_decoder *dec, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    VkCommandTypeEXT command_type;
+    vn_decode_VkCommandTypeEXT(dec, &command_type);
+    assert(command_type == VK_COMMAND_TYPE_vkCmdBindResourceHeapEXT_EXT);
+
+    /* skip commandBuffer */
+    /* skip pBindInfo */
+}
+
+static inline size_t vn_sizeof_vkCmdPushDataEXT(VkCommandBuffer commandBuffer, const VkPushDataInfoEXT* pPushDataInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdPushDataEXT_EXT;
+    const VkFlags cmd_flags = 0;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type) + vn_sizeof_VkFlags(&cmd_flags);
+
+    cmd_size += vn_sizeof_VkCommandBuffer(&commandBuffer);
+    cmd_size += vn_sizeof_simple_pointer(pPushDataInfo);
+    if (pPushDataInfo)
+        cmd_size += vn_sizeof_VkPushDataInfoEXT(pPushDataInfo);
+
+    return cmd_size;
+}
+
+static inline void vn_encode_vkCmdPushDataEXT(struct vn_cs_encoder *enc, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, const VkPushDataInfoEXT* pPushDataInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdPushDataEXT_EXT;
+
+    vn_encode_VkCommandTypeEXT(enc, &cmd_type);
+    vn_encode_VkFlags(enc, &cmd_flags);
+
+    vn_encode_VkCommandBuffer(enc, &commandBuffer);
+    if (vn_encode_simple_pointer(enc, pPushDataInfo))
+        vn_encode_VkPushDataInfoEXT(enc, pPushDataInfo);
+}
+
+static inline size_t vn_sizeof_vkCmdPushDataEXT_reply(VkCommandBuffer commandBuffer, const VkPushDataInfoEXT* pPushDataInfo)
+{
+    const VkCommandTypeEXT cmd_type = VK_COMMAND_TYPE_vkCmdPushDataEXT_EXT;
+    size_t cmd_size = vn_sizeof_VkCommandTypeEXT(&cmd_type);
+
+    /* skip commandBuffer */
+    /* skip pPushDataInfo */
+
+    return cmd_size;
+}
+
+static inline void vn_decode_vkCmdPushDataEXT_reply(struct vn_cs_decoder *dec, VkCommandBuffer commandBuffer, const VkPushDataInfoEXT* pPushDataInfo)
+{
+    VkCommandTypeEXT command_type;
+    vn_decode_VkCommandTypeEXT(dec, &command_type);
+    assert(command_type == VK_COMMAND_TYPE_vkCmdPushDataEXT_EXT);
+
+    /* skip commandBuffer */
+    /* skip pPushDataInfo */
+}
+
 static inline void vn_submit_vkAllocateCommandBuffers(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkDevice device, const VkCommandBufferAllocateInfo* pAllocateInfo, VkCommandBuffer* pCommandBuffers, struct vn_ring_submit_command *submit)
 {
     uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
@@ -13010,6 +13512,69 @@ static inline void vn_submit_vkCmdDrawIndirectByteCountEXT(struct vn_ring *vn_ri
     struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
     if (cmd_size) {
         vn_encode_vkCmdDrawIndirectByteCountEXT(enc, cmd_flags, commandBuffer, instanceCount, firstInstance, counterBuffer, counterBufferOffset, counterOffset, vertexStride);
+        vn_ring_submit_command(vn_ring, submit);
+        if (cmd_data != local_cmd_data)
+            free(cmd_data);
+    }
+}
+
+static inline void vn_submit_vkCmdDrawMeshTasksEXT(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ, struct vn_ring_submit_command *submit)
+{
+    uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
+    void *cmd_data = local_cmd_data;
+    size_t cmd_size = vn_sizeof_vkCmdDrawMeshTasksEXT(commandBuffer, groupCountX, groupCountY, groupCountZ);
+    if (cmd_size > sizeof(local_cmd_data)) {
+        cmd_data = malloc(cmd_size);
+        if (!cmd_data)
+            cmd_size = 0;
+    }
+    const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCmdDrawMeshTasksEXT_reply(commandBuffer, groupCountX, groupCountY, groupCountZ) : 0;
+
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
+    if (cmd_size) {
+        vn_encode_vkCmdDrawMeshTasksEXT(enc, cmd_flags, commandBuffer, groupCountX, groupCountY, groupCountZ);
+        vn_ring_submit_command(vn_ring, submit);
+        if (cmd_data != local_cmd_data)
+            free(cmd_data);
+    }
+}
+
+static inline void vn_submit_vkCmdDrawMeshTasksIndirectEXT(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride, struct vn_ring_submit_command *submit)
+{
+    uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
+    void *cmd_data = local_cmd_data;
+    size_t cmd_size = vn_sizeof_vkCmdDrawMeshTasksIndirectEXT(commandBuffer, buffer, offset, drawCount, stride);
+    if (cmd_size > sizeof(local_cmd_data)) {
+        cmd_data = malloc(cmd_size);
+        if (!cmd_data)
+            cmd_size = 0;
+    }
+    const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCmdDrawMeshTasksIndirectEXT_reply(commandBuffer, buffer, offset, drawCount, stride) : 0;
+
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
+    if (cmd_size) {
+        vn_encode_vkCmdDrawMeshTasksIndirectEXT(enc, cmd_flags, commandBuffer, buffer, offset, drawCount, stride);
+        vn_ring_submit_command(vn_ring, submit);
+        if (cmd_data != local_cmd_data)
+            free(cmd_data);
+    }
+}
+
+static inline void vn_submit_vkCmdDrawMeshTasksIndirectCountEXT(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride, struct vn_ring_submit_command *submit)
+{
+    uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
+    void *cmd_data = local_cmd_data;
+    size_t cmd_size = vn_sizeof_vkCmdDrawMeshTasksIndirectCountEXT(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+    if (cmd_size > sizeof(local_cmd_data)) {
+        cmd_data = malloc(cmd_size);
+        if (!cmd_data)
+            cmd_size = 0;
+    }
+    const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCmdDrawMeshTasksIndirectCountEXT_reply(commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride) : 0;
+
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
+    if (cmd_size) {
+        vn_encode_vkCmdDrawMeshTasksIndirectCountEXT(enc, cmd_flags, commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
         vn_ring_submit_command(vn_ring, submit);
         if (cmd_data != local_cmd_data)
             free(cmd_data);
@@ -14549,6 +15114,69 @@ static inline void vn_submit_vkCmdSetDepthClampRangeEXT(struct vn_ring *vn_ring,
     }
 }
 
+static inline void vn_submit_vkCmdBindSamplerHeapEXT(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo, struct vn_ring_submit_command *submit)
+{
+    uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
+    void *cmd_data = local_cmd_data;
+    size_t cmd_size = vn_sizeof_vkCmdBindSamplerHeapEXT(commandBuffer, pBindInfo);
+    if (cmd_size > sizeof(local_cmd_data)) {
+        cmd_data = malloc(cmd_size);
+        if (!cmd_data)
+            cmd_size = 0;
+    }
+    const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCmdBindSamplerHeapEXT_reply(commandBuffer, pBindInfo) : 0;
+
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
+    if (cmd_size) {
+        vn_encode_vkCmdBindSamplerHeapEXT(enc, cmd_flags, commandBuffer, pBindInfo);
+        vn_ring_submit_command(vn_ring, submit);
+        if (cmd_data != local_cmd_data)
+            free(cmd_data);
+    }
+}
+
+static inline void vn_submit_vkCmdBindResourceHeapEXT(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo, struct vn_ring_submit_command *submit)
+{
+    uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
+    void *cmd_data = local_cmd_data;
+    size_t cmd_size = vn_sizeof_vkCmdBindResourceHeapEXT(commandBuffer, pBindInfo);
+    if (cmd_size > sizeof(local_cmd_data)) {
+        cmd_data = malloc(cmd_size);
+        if (!cmd_data)
+            cmd_size = 0;
+    }
+    const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCmdBindResourceHeapEXT_reply(commandBuffer, pBindInfo) : 0;
+
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
+    if (cmd_size) {
+        vn_encode_vkCmdBindResourceHeapEXT(enc, cmd_flags, commandBuffer, pBindInfo);
+        vn_ring_submit_command(vn_ring, submit);
+        if (cmd_data != local_cmd_data)
+            free(cmd_data);
+    }
+}
+
+static inline void vn_submit_vkCmdPushDataEXT(struct vn_ring *vn_ring, VkCommandFlagsEXT cmd_flags, VkCommandBuffer commandBuffer, const VkPushDataInfoEXT* pPushDataInfo, struct vn_ring_submit_command *submit)
+{
+    uint8_t local_cmd_data[VN_SUBMIT_LOCAL_CMD_SIZE];
+    void *cmd_data = local_cmd_data;
+    size_t cmd_size = vn_sizeof_vkCmdPushDataEXT(commandBuffer, pPushDataInfo);
+    if (cmd_size > sizeof(local_cmd_data)) {
+        cmd_data = malloc(cmd_size);
+        if (!cmd_data)
+            cmd_size = 0;
+    }
+    const size_t reply_size = cmd_flags & VK_COMMAND_GENERATE_REPLY_BIT_EXT ? vn_sizeof_vkCmdPushDataEXT_reply(commandBuffer, pPushDataInfo) : 0;
+
+    struct vn_cs_encoder *enc = vn_ring_submit_command_init(vn_ring, submit, cmd_data, cmd_size, reply_size);
+    if (cmd_size) {
+        vn_encode_vkCmdPushDataEXT(enc, cmd_flags, commandBuffer, pPushDataInfo);
+        vn_ring_submit_command(vn_ring, submit);
+        if (cmd_data != local_cmd_data)
+            free(cmd_data);
+    }
+}
+
 static inline VkResult vn_call_vkAllocateCommandBuffers(struct vn_ring *vn_ring, VkDevice device, const VkCommandBufferAllocateInfo* pAllocateInfo, VkCommandBuffer* pCommandBuffers)
 {
     VN_TRACE_FUNC();
@@ -15027,6 +15655,24 @@ static inline void vn_async_vkCmdDrawIndirectByteCountEXT(struct vn_ring *vn_rin
     vn_submit_vkCmdDrawIndirectByteCountEXT(vn_ring, 0, commandBuffer, instanceCount, firstInstance, counterBuffer, counterBufferOffset, counterOffset, vertexStride, &submit);
 }
 
+static inline void vn_async_vkCmdDrawMeshTasksEXT(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCmdDrawMeshTasksEXT(vn_ring, 0, commandBuffer, groupCountX, groupCountY, groupCountZ, &submit);
+}
+
+static inline void vn_async_vkCmdDrawMeshTasksIndirectEXT(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride)
+{
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCmdDrawMeshTasksIndirectEXT(vn_ring, 0, commandBuffer, buffer, offset, drawCount, stride, &submit);
+}
+
+static inline void vn_async_vkCmdDrawMeshTasksIndirectCountEXT(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride)
+{
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCmdDrawMeshTasksIndirectCountEXT(vn_ring, 0, commandBuffer, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride, &submit);
+}
+
 static inline void vn_async_vkCmdCopyAccelerationStructureKHR(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, const VkCopyAccelerationStructureInfoKHR* pInfo)
 {
     struct vn_ring_submit_command submit;
@@ -15463,6 +16109,24 @@ static inline void vn_async_vkCmdSetDepthClampRangeEXT(struct vn_ring *vn_ring, 
 {
     struct vn_ring_submit_command submit;
     vn_submit_vkCmdSetDepthClampRangeEXT(vn_ring, 0, commandBuffer, depthClampMode, pDepthClampRange, &submit);
+}
+
+static inline void vn_async_vkCmdBindSamplerHeapEXT(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCmdBindSamplerHeapEXT(vn_ring, 0, commandBuffer, pBindInfo, &submit);
+}
+
+static inline void vn_async_vkCmdBindResourceHeapEXT(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, const VkBindHeapInfoEXT* pBindInfo)
+{
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCmdBindResourceHeapEXT(vn_ring, 0, commandBuffer, pBindInfo, &submit);
+}
+
+static inline void vn_async_vkCmdPushDataEXT(struct vn_ring *vn_ring, VkCommandBuffer commandBuffer, const VkPushDataInfoEXT* pPushDataInfo)
+{
+    struct vn_ring_submit_command submit;
+    vn_submit_vkCmdPushDataEXT(vn_ring, 0, commandBuffer, pPushDataInfo, &submit);
 }
 
 #endif /* VN_PROTOCOL_DRIVER_COMMAND_BUFFER_H */

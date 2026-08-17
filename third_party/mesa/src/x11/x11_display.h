@@ -26,12 +26,19 @@
 
 #include <stdbool.h>
 #include <X11/Xlib.h>
+#ifdef HAVE_SYS_SHM_H
+#include <xcb/xcb.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 bool x11_xlib_display_is_thread_safe(Display *dpy);
+
+#ifdef HAVE_SYS_SHM_H
+bool x11_xcb_display_supports_xshm(xcb_connection_t *con, int *xshm_opcode);
+#endif
 
 #ifdef __cplusplus
 } /* extern C */

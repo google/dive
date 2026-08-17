@@ -106,13 +106,16 @@ create_ivci(struct zink_screen *screen,
 }
 
 static void
-apply_view_usage_for_format(struct zink_screen *screen, struct pipe_resource *pres, enum pipe_format format, VkImageViewCreateInfo *ivci, VkImageViewUsageCreateInfo *usage_info)
+apply_view_usage_for_format(struct zink_screen *screen, struct pipe_resource *pres, enum pipe_format format, VkImageViewCreateInfo *ivci, VkImageViewUsageCreateInfo *usage_info, bool rp_draw)
 {
    struct zink_resource *res = zink_resource(pres);
+   /* if this is a renderpass with no draws (i.e., clear-only), allow rendering to emulated alpha */
+   if (!rp_draw && zink_format_is_emulated_alpha(format))
+      format = zink_format_get_emulated_alpha(format);
    VkFormatFeatureFlags feats = res->linear ?
                                 zink_get_format_props(screen, format)->linearTilingFeatures :
                                 zink_get_format_props(screen, format)->optimalTilingFeatures;
-   VkImageUsageFlags attachment = (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+   uint64_t attachment = (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
    usage_info->usage = res->obj->vkusage & ~attachment;
    if (res->obj->modifier_aspect) {
       feats = res->obj->vkfeats;
@@ -137,6 +140,7 @@ create_surface(struct pipe_context *pctx,
                const struct zink_surface_key *templ,
                VkImageViewCreateInfo *ivci)
 {
+   struct zink_context *ctx = zink_context(pctx);
    struct zink_screen *screen = zink_screen(pctx->screen);
 
    struct zink_surface *surface = CALLOC_STRUCT(zink_surface);
@@ -145,7 +149,7 @@ create_surface(struct pipe_context *pctx,
 
    assert(ivci->image);
    VkImageViewUsageCreateInfo usage_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO };
-   apply_view_usage_for_format(screen, pres, templ->format, ivci, &usage_info);
+   apply_view_usage_for_format(screen, pres, templ->format, ivci, &usage_info, ctx->rp_draw);
    VkResult result = VKSCR(CreateImageView)(screen->dev, ivci, NULL,
                                             &surface->image_view);
    if (result != VK_SUCCESS) {
@@ -237,7 +241,7 @@ zink_get_surface(struct zink_context *ctx,
    /* not acquired */
    if (res->obj->dt && res->obj->dt_idx == UINT32_MAX)
       return NULL;
-   if (!res->obj->dt && zink_format_needs_mutable(res->base.b.format, templ->format))
+   if (!res->obj->dt && zink_format_needs_mutable(res->base.b.format, templ->format, (res->obj->vkflags & VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT) > 0))
       /* mutable not set by default */
       zink_resource_object_init_mutable(ctx, res);
    /* reset for mutable obj switch */
@@ -290,15 +294,16 @@ zink_create_transient_surface(struct zink_context *ctx, const struct pipe_surfac
 {
    struct zink_resource *res = zink_resource(psurf->texture);
    struct zink_resource *transient = res->transient;
-   assert(nr_samples > 1);
-   if (!res->transient) {
+   if (!res->transient || res->transient->base.b.nr_samples != nr_samples) {
       /* transient fb attachment: not cached */
       struct pipe_resource rtempl = *psurf->texture;
+      rtempl.next = NULL;
       rtempl.nr_samples = nr_samples;
       rtempl.bind &= ~(PIPE_BIND_LINEAR | ZINK_BIND_DMABUF);
       rtempl.bind |= ZINK_BIND_TRANSIENT;
-      if (zink_format_needs_mutable(rtempl.format, psurf->format))
+      if (zink_format_needs_mutable(rtempl.format, psurf->format, true))
          rtempl.bind |= ZINK_BIND_MUTABLE;
+      zink_resource_reference(&res->transient, NULL);
       res->transient = zink_resource(ctx->base.screen->resource_create(ctx->base.screen, &rtempl));
       transient = res->transient;
       if (unlikely(!transient)) {

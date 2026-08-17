@@ -49,9 +49,6 @@ struct hk_descriptor_set_layout {
    /* Does not contain the size needed for variable count descriptors */
    uint32_t non_variable_descriptor_buffer_size;
 
-   /* Number of dynamic UBO bindings in this set */
-   uint8_t dynamic_buffer_count;
-
    /* Number of bindings in this descriptor set */
    uint32_t binding_count;
 

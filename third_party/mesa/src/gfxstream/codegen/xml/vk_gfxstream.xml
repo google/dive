@@ -10,6 +10,7 @@ This file, vk_gfxstream.xml, is the Vulkan API Registry for gfxstream
 specific entries.
     </comment>
         <types comment="Vulkan type definitions">
+
         <!-- b/295587347 VkNativeBufferANDROID diverged from upstream -->
         <type category="struct" name="VkNativeBufferANDROID" structextends="VkImageCreateInfo">
             <member values="VK_STRUCTURE_TYPE_NATIVE_BUFFER_ANDROID"><type>VkStructureType</type> <name>sType</name></member>
@@ -20,6 +21,8 @@ specific entries.
             <member><type>int</type> <name>usage</name></member>
             <member><type>VkNativeBufferUsage2ANDROID</type> <name>usage2</name></member>
         </type>
+
+        <!-- VK_GOOGLE_gfxstream -->
         <type category="struct" name="VkImportColorBufferGOOGLE" structextends="VkMemoryAllocateInfo">
             <member values="VK_STRUCTURE_TYPE_IMPORT_COLOR_BUFFER_GOOGLE"><type>VkStructureType</type> <name>sType</name></member>
             <member><type>void</type>*                  <name>pNext</name></member>
@@ -37,6 +40,40 @@ specific entries.
             <member><type>uint32_t</type>   <name>blobFlags</name></member>
             <member><type>uint64_t</type>   <name>blobId</name></member>
         </type>
+        <type category="struct" name="VkDebugMetadataGOOGLE">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_METADATA_GOOGLE"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>* <name>pNext</name></member>
+        </type>
+        <type category="struct" name="VkDebugMetadataGuestProcessNameGOOGLE" structextends="VkDebugMetadataGOOGLE">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_PROCESS_NAME_GOOGLE"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>* <name>pNext</name></member>
+            <member optional="true" len="null-terminated">const <type>char</type>*     <name>pName</name></member>
+        </type>
+        <type category="struct" name="VkDebugMetadataGuestProcessIdGOOGLE" structextends="VkDebugMetadataGOOGLE">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_PROCESS_ID_GOOGLE"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>* <name>pNext</name></member>
+            <member><type>uint64_t</type>                    <name>id</name></member>
+        </type>
+        <type category="struct" name="VkDebugMetadataGuestThreadNameGOOGLE" structextends="VkDebugMetadataGOOGLE">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_THREAD_NAME_GOOGLE"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>* <name>pNext</name></member>
+            <member optional="true" len="null-terminated">const <type>char</type>*     <name>pName</name></member>
+        </type>
+        <type category="struct" name="VkDebugMetadataGuestThreadIdGOOGLE" structextends="VkDebugMetadataGOOGLE">
+            <member values="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_THREAD_ID_GOOGLE"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>* <name>pNext</name></member>
+            <member><type>uint64_t</type>                    <name>id</name></member>
+        </type>
+
+        <!-- b/519606352: removes `optional` from `pUserData` to avoid a backwards incompatible guest to host protocol change. -->
+        <type category="struct" name="VkDeviceDeviceMemoryReportCreateInfoEXT" allowduplicate="true" structextends="VkDeviceCreateInfo">
+            <member values="VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT"><type>VkStructureType</type> <name>sType</name></member>
+            <member optional="true">const <type>void</type>*         <name>pNext</name></member>
+            <member><type>VkDeviceMemoryReportFlagsEXT</type>        <name>flags</name></member>
+            <member><type>PFN_vkDeviceMemoryReportCallbackEXT</type> <name>pfnUserCallback</name></member>
+            <member><type>void</type>*               <name>pUserData</name></member>
+        </type>
+
     </types>
 
     <commands comment="Vulkan command definitions">
@@ -245,6 +282,10 @@ specific entries.
             <proto><type>void</type> <name>vkTraceAsyncGOOGLE</name></proto>
             <param><type>uint64_t</type> <name>id</name></param>
         </command>
+        <command>
+            <proto><type>void</type> <name>vkSetDebugMetadataAsyncGOOGLE</name></proto>
+            <param>const <type>VkDebugMetadataGOOGLE</type>* <name>pDebugMetadata</name></param>
+        </command>
     </commands>
     <extensions comment="Vulkan extension interface definitions">
         <extension name="VK_ANDROID_native_buffer" supported="vulkan"/>
@@ -256,9 +297,19 @@ specific entries.
                 <enum offset="0" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_IMPORT_COLOR_BUFFER_GOOGLE"/>
                 <enum offset="1" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_IMPORT_BUFFER_GOOGLE"/>
                 <enum offset="2" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_CREATE_BLOB_GOOGLE"/>
+                <enum offset="3" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_DEBUG_METADATA_GOOGLE"/>
+                <enum offset="4" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_PROCESS_NAME_GOOGLE"/>
+                <enum offset="5" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_PROCESS_ID_GOOGLE"/>
+                <enum offset="6" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_THREAD_NAME_GOOGLE"/>
+                <enum offset="7" extends="VkStructureType"                  name="VK_STRUCTURE_TYPE_DEBUG_METADATA_GUEST_THREAD_ID_GOOGLE"/>
                 <type name="VkImportColorBufferGOOGLE"/>
                 <type name="VkImportBufferGOOGLE"/>
                 <type name="VkCreateBlobGOOGLE"/>
+                <type name="VkDebugMetadataGuestGOOGLE"/>
+                <type name="VkDebugMetadataGuestProcessNameGOOGLE"/>
+                <type name="VkDebugMetadataGuestProcessIdGOOGLE"/>
+                <type name="VkDebugMetadataGuestThreadNameGOOGLE"/>
+                <type name="VkDebugMetadataGuestThreadIdGOOGLE"/>
                 <command name="vkMapMemoryIntoAddressSpaceGOOGLE"/>
                 <command name="vkUpdateDescriptorSetWithTemplateSizedGOOGLE"/>
                 <command name="vkBeginCommandBufferAsyncGOOGLE"/>
@@ -285,6 +336,7 @@ specific entries.
                 <command name="vkQueueSubmitAsync2GOOGLE"/>
                 <command name="vkGetSemaphoreGOOGLE"/>
                 <command name="vkTraceAsyncGOOGLE"/>
+                <command name="vkSetDebugMetadataAsyncGOOGLE"/>
             </require>
         </extension>
     </extensions>

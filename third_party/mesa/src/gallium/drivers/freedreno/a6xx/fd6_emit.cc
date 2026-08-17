@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "pipe/p_state.h"
 #include "util/format/u_format.h"
 #include "util/u_helpers.h"
@@ -21,6 +19,7 @@
 #include "freedreno_state.h"
 #include "freedreno_stompable_regs.h"
 #include "freedreno_tracepoints.h"
+#include "freedreno_vrs.h"
 
 #include "fd6_blend.h"
 #include "fd6_const.h"
@@ -31,6 +30,7 @@
 #include "fd6_pack.h"
 #include "fd6_program.h"
 #include "fd6_rasterizer.h"
+#include "fd6_screen.h"
 #include "fd6_texture.h"
 #include "fd6_zsa.h"
 
@@ -72,7 +72,7 @@ build_vbo_state(struct fd6_emit *emit) assert_dt
       }
    }
 
-   return crb.ring();
+   return crb;
 }
 
 static enum a6xx_ztest_mode
@@ -225,39 +225,23 @@ build_lrz(struct fd6_emit *emit) assert_dt
 
    fd6_ctx->last.lrz = lrz;
 
-   unsigned nregs = (CHIP >= A7XX) ? 5 : 4;
+   unsigned nregs = 4;
    fd_crb crb(ctx->batch->submit, nregs);
 
-   if (CHIP >= A7XX) {
-      crb.add(GRAS_LRZ_CNTL(CHIP,
-                  .enable = lrz.enable,
-                  .lrz_write = lrz.write,
-                  .greater = lrz.direction == FD_LRZ_GREATER,
-                  .z_write_enable = lrz.test,
-                  .z_bounds_enable = lrz.z_bounds_enable,
-         ))
-         .add(GRAS_LRZ_CNTL2(CHIP,
-                  .disable_on_wrong_dir = false,
-                  .fc_enable = false,
-         ));
-   } else {
-      crb.add(GRAS_LRZ_CNTL(CHIP,
-                  .enable = lrz.enable,
-                  .lrz_write = lrz.write,
-                  .greater = lrz.direction == FD_LRZ_GREATER,
-                  .fc_enable = false,
-                  .z_write_enable = lrz.test,
-                  .z_bounds_enable = lrz.z_bounds_enable,
-                  .disable_on_wrong_dir = false,
-         )
-      );
-   }
-
-   crb.add(A6XX_RB_LRZ_CNTL(.enable = lrz.enable, ))
+   crb.add(GRAS_LRZ_CNTL(CHIP,
+               .enable = lrz.enable,
+               .lrz_write = lrz.write,
+               .greater = lrz.direction == FD_LRZ_GREATER,
+               .z_write_enable = lrz.test,
+               .z_bounds_enable = lrz.z_bounds_enable,
+               .fc_enable = false,   /* a6xx only */
+               .disable_on_wrong_dir = false,  /* a6xx only */
+      ))
+      .add(A6XX_RB_LRZ_CNTL(.enable = lrz.enable, ))
       .add(A6XX_RB_DEPTH_PLANE_CNTL(.z_mode = lrz.z_mode, ))
       .add(GRAS_SU_DEPTH_PLANE_CNTL(CHIP, .z_mode = lrz.z_mode, ));
 
-   return crb.ring();
+   return crb;
 }
 
 template <chip CHIP>
@@ -275,7 +259,7 @@ build_scissor(struct fd6_emit *emit) assert_dt
          .add(GRAS_SC_SCREEN_SCISSOR_BR(CHIP, i, .x = scissors[i].maxx, .y = scissors[i].maxy));
    }
 
-   return crb.ring();
+   return crb;
 }
 
 /* Combination of FD_DIRTY_FRAMEBUFFER | FD_DIRTY_RASTERIZER_DISCARD |
@@ -326,7 +310,7 @@ build_prog_fb_rast(struct fd6_emit *emit) assert_dt
    crb.add(A6XX_SP_PS_OUTPUT_MASK(.dword = mrt_components))
       .add(A6XX_RB_PS_OUTPUT_MASK(.dword = mrt_components));
 
-   return crb.ring();
+   return crb;
 }
 
 static struct fd_ringbuffer *
@@ -339,8 +323,7 @@ build_blend_color(struct fd6_emit *emit) assert_dt
       .add(A6XX_RB_BLEND_CONSTANT_RED_FP32(bcolor->color[0]))
       .add(A6XX_RB_BLEND_CONSTANT_GREEN_FP32(bcolor->color[1]))
       .add(A6XX_RB_BLEND_CONSTANT_BLUE_FP32(bcolor->color[2]))
-      .add(A6XX_RB_BLEND_CONSTANT_ALPHA_FP32(bcolor->color[3]))
-      .ring();
+      .add(A6XX_RB_BLEND_CONSTANT_ALPHA_FP32(bcolor->color[3]));
 }
 
 template <chip CHIP>
@@ -368,14 +351,18 @@ build_sample_locations(struct fd6_emit *emit)
           A6XX_RB_PROGRAMMABLE_MSAA_POS_0_SAMPLE_0_Y(y)) << i*8;
    }
 
-   return fd_crb(ctx->batch->submit, 6)
-      .add(GRAS_SC_MSAA_SAMPLE_POS_CNTL(CHIP, .location_enable = true))
+   fd_crb crb(ctx->batch->submit, 6);
+
+   crb.add(GRAS_SC_MSAA_SAMPLE_POS_CNTL(CHIP, .location_enable = true))
       .add(GRAS_SC_PROGRAMMABLE_MSAA_POS_0(CHIP, .dword = sample_locations))
       .add(A6XX_RB_MSAA_SAMPLE_POS_CNTL(.location_enable = true))
       .add(A6XX_RB_PROGRAMMABLE_MSAA_POS_0(.dword = sample_locations))
-      .add(TPL1_MSAA_SAMPLE_POS_CNTL(CHIP, .location_enable = true))
-      .add(A6XX_TPL1_PROGRAMMABLE_MSAA_POS_0(.dword = sample_locations))
-      .ring();
+      .add(TPL1_MSAA_SAMPLE_POS_CNTL(CHIP, .location_enable = true));
+
+   if (CHIP <= A7XX)
+      crb.add(TPL1_PROGRAMMABLE_MSAA_POS_0(CHIP, .dword = sample_locations));
+
+   return crb;
 }
 
 template <chip CHIP>
@@ -476,7 +463,7 @@ fd6_emit_non_group(fd_cs &cs, struct fd6_emit *emit) assert_dt
    const enum fd_dirty_3d_state dirty = ctx->dirty;
    unsigned num_viewports = emit->prog->num_viewports;
 
-   fd_crb crb(cs, 324);
+   fd_crb crb(cs, 2 + (12 * num_viewports));
 
    if (dirty & FD_DIRTY_STENCIL_REF) {
       struct pipe_stencil_ref *sr = &ctx->stencil_ref;
@@ -518,8 +505,11 @@ fd6_emit_non_group(fd_cs &cs, struct fd6_emit *emit) assert_dt
          crb.add(GRAS_CL_VIEWPORT_ZCLAMP_MIN(CHIP, i, zmin));
          crb.add(GRAS_CL_VIEWPORT_ZCLAMP_MAX(CHIP, i, zmax));
 
-         /* TODO: what to do about this and multi viewport ? */
-         if (i == 0) {
+         if (CHIP >= A8XX) {
+            crb.add(RB_VIEWPORT_ZCLAMP_MIN_REG(CHIP, i, zmin));
+            crb.add(RB_VIEWPORT_ZCLAMP_MAX_REG(CHIP, i, zmax));
+         } else if (i == 0) {
+            /* TODO: what to do about this and multi viewport ? */
             crb.add(RB_VIEWPORT_ZCLAMP_MIN(CHIP, zmin));
             crb.add(RB_VIEWPORT_ZCLAMP_MAX(CHIP, zmax));
          }
@@ -546,13 +536,13 @@ build_prim_mode(struct fd6_emit *emit, struct fd_context *ctx, bool gmem)
 
    return fd_crb(ctx->batch->submit, 1)
       .add(GRAS_SC_CNTL(CHIP,
+         .single_prim_mode = (enum a6xx_single_prim_mode)prim_mode,
          .ccusinglecachelinesize = 2,
-         .single_prim_mode = (enum a6xx_single_prim_mode)prim_mode)
       )
-      .ring();
+   );
 }
 
-template <chip CHIP, fd6_pipeline_type PIPELINE>
+template <fd6_pipeline_type PIPELINE, chip CHIP>
 void
 fd6_emit_3d_state(fd_cs &cs, struct fd6_emit *emit)
 {
@@ -560,8 +550,6 @@ fd6_emit_3d_state(fd_cs &cs, struct fd6_emit *emit)
    struct pipe_framebuffer_state *pfb = &ctx->batch->framebuffer;
    const struct fd6_program_state *prog = fd6_emit_get_prog(emit);
    const struct ir3_shader_variant *fs = emit->fs;
-
-   emit_marker6<CHIP>(cs, 5);
 
    /* Special case, we need to re-emit bindless FS state w/ the
     * fb-read state appended:
@@ -655,11 +643,11 @@ fd6_emit_3d_state(fd_cs &cs, struct fd6_emit *emit)
          fd6_state_take_group(&emit->state, state, FD6_GROUP_FS_BINDLESS);
          break;
       case FD6_GROUP_CONST:
-         state = fd6_build_user_consts<CHIP, PIPELINE>(emit);
+         state = fd6_build_user_consts<PIPELINE, CHIP>(emit);
          fd6_state_take_group(&emit->state, state, FD6_GROUP_CONST);
          break;
       case FD6_GROUP_DRIVER_PARAMS:
-         state = fd6_build_driver_params<CHIP, PIPELINE>(emit);
+         state = fd6_build_driver_params<PIPELINE, CHIP>(emit);
          fd6_state_take_group(&emit->state, state, FD6_GROUP_DRIVER_PARAMS);
          break;
       case FD6_GROUP_PRIMITIVE_PARAMS:
@@ -709,11 +697,8 @@ fd6_emit_3d_state(fd_cs &cs, struct fd6_emit *emit)
 
    fd6_state_emit(&emit->state, cs);
 }
-
-template void fd6_emit_3d_state<A6XX, NO_TESS_GS>(fd_cs &cs, struct fd6_emit *emit);
-template void fd6_emit_3d_state<A7XX, NO_TESS_GS>(fd_cs &cs, struct fd6_emit *emit);
-template void fd6_emit_3d_state<A6XX, HAS_TESS_GS>(fd_cs &cs, struct fd6_emit *emit);
-template void fd6_emit_3d_state<A7XX, HAS_TESS_GS>(fd_cs &cs, struct fd6_emit *emit);
+FD_GENX2(fd6_emit_3d_state, fd6_pipeline_type, NO_TESS_GS);
+FD_GENX2(fd6_emit_3d_state, fd6_pipeline_type, HAS_TESS_GS);
 
 template <chip CHIP>
 void
@@ -764,20 +749,41 @@ fd6_emit_cs_state(struct fd_context *ctx, fd_cs &cs, struct fd6_compute_state *c
 }
 FD_GENX(fd6_emit_cs_state);
 
+/**
+ * Configure RB_CCU_CNTL and various caches that reside in GMEM for either
+ * GMEM or sysmem mode.
+ */
 template <chip CHIP>
 void
-fd6_emit_ccu_cntl(fd_cs &cs, struct fd_screen *screen, bool gmem)
+fd6_emit_gmem_cache_cntl(fd_cs &cs, struct fd_screen *screen, bool gmem)
 {
    const struct fd6_gmem_config *cfg = gmem ? &screen->config_gmem : &screen->config_sysmem;
    enum a6xx_ccu_cache_size color_cache_size = !gmem ? CCU_CACHE_SIZE_FULL :
-      (enum a6xx_ccu_cache_size)(screen->info->a6xx.gmem_ccu_color_cache_fraction);
+      (enum a6xx_ccu_cache_size)(screen->info->props.gmem_ccu_color_cache_fraction);
    uint32_t color_offset = cfg->color_ccu_offset & 0x1fffff;
    uint32_t color_offset_hi = cfg->color_ccu_offset >> 21;
 
    uint32_t depth_offset = cfg->depth_ccu_offset & 0x1fffff;
    uint32_t depth_offset_hi = cfg->depth_ccu_offset >> 21;
 
-   if (CHIP == A7XX) {
+   if (CHIP == A8XX) {
+      fd_crb(cs, 10)
+         .add(RB_CCU_CACHE_CNTL(CHIP,
+               .depth_cache_size = (enum a6xx_ccu_cache_size)cfg->depth_cache_fraction,
+               .depth_offset = cfg->depth_ccu_offset,
+               .color_cache_size = (enum a6xx_ccu_cache_size)cfg->color_cache_fraction,
+               .color_offset = cfg->color_ccu_offset,
+         ))
+         .add(VPC_ATTR_BUF_GMEM_SIZE(CHIP, cfg->vpc_attr_buf_size))
+         .add(VPC_ATTR_BUF_GMEM_BASE(CHIP, cfg->vpc_attr_buf_offset))
+         .add(PC_ATTR_BUF_GMEM_SIZE(CHIP, cfg->vpc_attr_buf_size))
+         .add(VPC_POS_BUF_GMEM_SIZE(CHIP, cfg->vpc_pos_buf_size))
+         .add(VPC_POS_BUF_GMEM_BASE(CHIP, cfg->vpc_pos_buf_offset))
+         .add(PC_POS_BUF_GMEM_SIZE(CHIP, cfg->vpc_pos_buf_size))
+         .add(VPC_BV_POS_BUF_GMEM_BASE(CHIP, cfg->vpc_bv_pos_buf_offset))
+         .add(VPC_BV_POS_BUF_GMEM_SIZE(CHIP, cfg->vpc_bv_pos_buf_size))
+         .add(PC_BV_POS_BUF_GMEM_SIZE(CHIP, cfg->vpc_bv_pos_buf_size));
+   } else if (CHIP == A7XX) {
       fd_pkt4(cs, 1)
          .add(RB_CCU_CACHE_CNTL(CHIP,
             .depth_offset_hi = depth_offset_hi,
@@ -789,7 +795,7 @@ fd6_emit_ccu_cntl(fd_cs &cs, struct fd_screen *screen, bool gmem)
          )
       );
 
-      if (screen->info->a7xx.has_gmem_vpc_attr_buf) {
+      if (screen->info->props.has_gmem_vpc_attr_buf) {
          fd_crb(cs, 3)
             .add(VPC_ATTR_BUF_GMEM_SIZE(CHIP, cfg->vpc_attr_buf_size))
             .add(VPC_ATTR_BUF_GMEM_BASE(CHIP, cfg->vpc_attr_buf_offset))
@@ -801,9 +807,9 @@ fd6_emit_ccu_cntl(fd_cs &cs, struct fd_screen *screen, bool gmem)
       fd_pkt4(cs, 1)
          .add(RB_CCU_CNTL(CHIP,
             .gmem_fast_clear_disable =
-               !screen->info->a6xx.has_gmem_fast_clear,
+               !screen->info->props.has_gmem_fast_clear,
             .concurrent_resolve =
-               screen->info->a6xx.concurrent_resolve,
+               screen->info->props.concurrent_resolve,
             .depth_offset_hi = depth_offset_hi,
             .color_offset_hi = color_offset_hi,
             .depth_cache_size = CCU_CACHE_SIZE_FULL,
@@ -814,7 +820,7 @@ fd6_emit_ccu_cntl(fd_cs &cs, struct fd_screen *screen, bool gmem)
       );
    }
 }
-FD_GENX(fd6_emit_ccu_cntl);
+FD_GENX(fd6_emit_gmem_cache_cntl);
 
 template <chip CHIP>
 static void
@@ -832,9 +838,9 @@ fd6_emit_static_non_context_regs(struct fd_context *ctx, fd_cs &cs)
 {
    struct fd_screen *screen = ctx->screen;
 
-   fd_ncrb<CHIP> ncrb(cs, 28 + ARRAY_SIZE(screen->info->a6xx.magic_raw));
+   fd_ncrb<CHIP> ncrb(cs, 29 + ARRAY_SIZE(screen->info->magic_raw));
 
-   if (CHIP >= A7XX) {
+   if (CHIP == A7XX) {
       /* On A7XX, RB_CCU_CNTL was broken into two registers, RB_CCU_CNTL which has
        * static properties that can be set once, this requires a WFI to take effect.
        * While the newly introduced register RB_CCU_CACHE_CNTL has properties that may
@@ -842,22 +848,34 @@ fd6_emit_static_non_context_regs(struct fd_context *ctx, fd_cs &cs)
        * events are required.
        */
       ncrb.add(RB_CCU_CNTL(CHIP,
-         .gmem_fast_clear_disable = true, // !screen->info->a6xx.has_gmem_fast_clear,
-         .concurrent_resolve = screen->info->a6xx.concurrent_resolve,
+         .gmem_fast_clear_disable = true, // !screen->info->props.has_gmem_fast_clear,
+         .concurrent_resolve = screen->info->props.concurrent_resolve,
       ));
    }
 
-   for (size_t i = 0; i < ARRAY_SIZE(screen->info->a6xx.magic_raw); i++) {
-      auto magic_reg = screen->info->a6xx.magic_raw[i];
+   for (size_t i = 0; i < ARRAY_SIZE(screen->info->magic_raw); i++) {
+      auto magic_reg = screen->info->magic_raw[i];
       if (!magic_reg.reg)
          break;
 
       uint32_t value = magic_reg.value;
       switch(magic_reg.reg) {
+         case REG_A6XX_TPL1_DBG_ECO_CNTL:
+            value = (value & ~A6XX_TPL1_DBG_ECO_CNTL_LINEAR_MIPMAP_FALLBACK_IN_BLOCKS) |
+                    (screen->info->props.supports_linear_mipmap_threshold_in_blocks
+                        ? A6XX_TPL1_DBG_ECO_CNTL_LINEAR_MIPMAP_FALLBACK_IN_BLOCKS
+                        : 0);
+            break;
          case REG_A6XX_TPL1_DBG_ECO_CNTL1:
             value = (value & ~A6XX_TPL1_DBG_ECO_CNTL1_TP_UBWC_FLAG_HINT) |
-                    (screen->info->a7xx.enable_tp_ubwc_flag_hint
+                    (screen->info->props.enable_tp_ubwc_flag_hint
                         ? A6XX_TPL1_DBG_ECO_CNTL1_TP_UBWC_FLAG_HINT
+                        : 0);
+            break;
+         case REG_A6XX_SP_CHICKEN_BITS:
+            value = (value & ~A6XX_SP_CHICKEN_BITS_EOLM_ENABLE) |
+                    (screen->info->props.has_eolm_eogm
+                        ? A6XX_SP_CHICKEN_BITS_EOLM_ENABLE
                         : 0);
             break;
       }
@@ -865,27 +883,23 @@ fd6_emit_static_non_context_regs(struct fd_context *ctx, fd_cs &cs)
       ncrb.add({ .reg = magic_reg.reg, .value = value });
    }
 
-   ncrb.add(A6XX_RB_DBG_ECO_CNTL(.dword = screen->info->a6xx.magic.RB_DBG_ECO_CNTL));
-   ncrb.add(A6XX_SP_NC_MODE_CNTL_2(.f16_no_inf = true));
+   /* gen8 moves magic reg setup to KMD and blocks access from UMD:
+    */
+   if (CHIP < A8XX) {
+      ncrb.add(A6XX_RB_DBG_ECO_CNTL(.dword = screen->info->magic.RB_DBG_ECO_CNTL));
+      ncrb.add(A6XX_SP_NC_MODE_CNTL_2(.f16_no_inf = true));
+      ncrb.add(VPC_LB_MODE_CNTL(CHIP));
+      ncrb.add(PC_CONTEXT_SWITCH_GFX_PREEMPTION_MODE(CHIP));
+   }
 
-   ncrb.add(A6XX_SP_DBG_ECO_CNTL(.dword = screen->info->a6xx.magic.SP_DBG_ECO_CNTL));
    ncrb.add(A6XX_SP_PERFCTR_SHADER_MASK(.dword = 0x3f));
-   if (CHIP == A6XX && !screen->info->a6xx.is_a702)
+   if (CHIP == A6XX && !screen->info->props.is_a702)
       ncrb.add(TPL1_UNKNOWN_B605(CHIP, .dword = 0x44));
-   ncrb.add(A6XX_TPL1_DBG_ECO_CNTL(.dword = screen->info->a6xx.magic.TPL1_DBG_ECO_CNTL));
+
    if (CHIP == A6XX) {
       ncrb.add(HLSQ_UNKNOWN_BE00(CHIP, .dword = 0x80));
       ncrb.add(HLSQ_UNKNOWN_BE01(CHIP));
    }
-
-   ncrb.add(VPC_DBG_ECO_CNTL(CHIP, .dword = screen->info->a6xx.magic.VPC_DBG_ECO_CNTL));
-   ncrb.add(GRAS_DBG_ECO_CNTL(CHIP, .dword = screen->info->a6xx.magic.GRAS_DBG_ECO_CNTL));
-   if (CHIP == A6XX)
-      ncrb.add(HLSQ_DBG_ECO_CNTL(CHIP, .dword = screen->info->a6xx.magic.HLSQ_DBG_ECO_CNTL));
-   ncrb.add(A6XX_SP_CHICKEN_BITS(.dword = screen->info->a6xx.magic.SP_CHICKEN_BITS));
-
-   ncrb.add(UCHE_UNKNOWN_0E12(CHIP, .dword = screen->info->a6xx.magic.UCHE_UNKNOWN_0E12));
-   ncrb.add(UCHE_CLIENT_PF(CHIP, .dword = screen->info->a6xx.magic.UCHE_CLIENT_PF));
 
    if (CHIP == A6XX) {
       ncrb.add(HLSQ_SHARED_CONSTS(CHIP));
@@ -893,10 +907,9 @@ fd6_emit_static_non_context_regs(struct fd_context *ctx, fd_cs &cs)
    }
 
    ncrb.add(GRAS_SC_SCREEN_SCISSOR_CNTL(CHIP));
-   ncrb.add(VPC_LB_MODE_CNTL(CHIP));
 
-   /* These regs are blocked (CP_PROTECT) on a6xx: */
-   if (CHIP >= A7XX) {
+   /* These regs are blocked (CP_PROTECT) on a6xx, written by KMD on a8xx: */
+   if (CHIP == A7XX) {
       ncrb.add(TPL1_BICUBIC_WEIGHTS_TABLE_REG(CHIP, 0, 0));
       ncrb.add(TPL1_BICUBIC_WEIGHTS_TABLE_REG(CHIP, 1, 0x3fe05ff4));
       ncrb.add(TPL1_BICUBIC_WEIGHTS_TABLE_REG(CHIP, 2, 0x3fa0ebee));
@@ -904,15 +917,16 @@ fd6_emit_static_non_context_regs(struct fd_context *ctx, fd_cs &cs)
       ncrb.add(TPL1_BICUBIC_WEIGHTS_TABLE_REG(CHIP, 4, 0x3f0243f0));
    }
 
-   if (screen->info->a7xx.has_hw_bin_scaling) {
+   if (screen->info->props.has_hw_bin_scaling) {
       ncrb.add(GRAS_BIN_FOVEAT(CHIP));
       ncrb.add(RB_BIN_FOVEAT(CHIP));
    }
 
-   ncrb.add(PC_CONTEXT_SWITCH_GFX_PREEMPTION_MODE(CHIP));
-
    if (CHIP == A7XX)
-      ncrb.add(RB_UNKNOWN_8E09(CHIP, 0x4));
+      ncrb.add(RB_UNKNOWN_8E09(CHIP, 0x7));
+
+   if (CHIP >= A7XX)
+      ncrb.add(RB_A2D_DEST_BUFFER_ARRAY_PITCH(CHIP));
 }
 
 /**
@@ -926,26 +940,22 @@ fd6_emit_static_context_regs(struct fd_context *ctx, fd_cs &cs)
 {
    struct fd_screen *screen = ctx->screen;
 
-   fd_crb crb(cs, 80);
+   fd_crb crb(cs, 84);
 
    crb.add(SP_GFX_USIZE(CHIP));
    crb.add(A6XX_TPL1_PS_ROTATION_CNTL());
 
-   crb.add(A6XX_RB_RBP_CNTL(.dword = screen->info->a6xx.magic.RB_RBP_CNTL));
-   crb.add(A6XX_SP_UNKNOWN_A9A8());
+   /* gen8 moves magic reg programming to KMD and blocks access for UMD: */
+   if (CHIP < A8XX) {
+      crb.add(A6XX_RB_RBP_CNTL(.dword = screen->info->magic.RB_RBP_CNTL));
+   }
 
-   crb.add(A6XX_SP_MODE_CNTL(
-         .constant_demotion_enable = true,
-         .isammode = ISAMMODE_GL,
-         .shared_consts_enable = false,
-      )
-   );
+   crb.add(A6XX_SP_UNKNOWN_A9A8());
 
    crb.add(A6XX_VFD_MODE_CNTL(.vertex = true, .instance = true));
    if (CHIP == A6XX)
       crb.add(VPC_UNKNOWN_9107(CHIP));
    crb.add(A6XX_RB_MODE_CNTL(.dword = 0x00000010));
-   crb.add(PC_MODE_CNTL(CHIP, .dword=screen->info->a6xx.magic.PC_MODE_CNTL));
    crb.add(GRAS_LRZ_PS_INPUT_CNTL(CHIP));
    crb.add(A6XX_GRAS_LRZ_PS_SAMPLEFREQ_CNTL());
    crb.add(GRAS_MODE_CNTL(CHIP, .dword = 0x2));
@@ -959,9 +969,10 @@ fd6_emit_static_context_regs(struct fd_context *ctx, fd_cs &cs)
       crb.add(A6XX_RB_UNKNOWN_881C());
       crb.add(A6XX_RB_UNKNOWN_881D());
       crb.add(A6XX_RB_UNKNOWN_881E());
+
+      crb.add(RB_UNKNOWN_88F0(CHIP));
    }
 
-   crb.add(A6XX_RB_UNKNOWN_88F0());
    crb.add(VPC_REPLACE_MODE_CNTL(CHIP));
    crb.add(VPC_ROTATION_CNTL(CHIP));
    crb.add(VPC_SO_OVERRIDE(CHIP, true));
@@ -980,13 +991,6 @@ fd6_emit_static_context_regs(struct fd_context *ctx, fd_cs &cs)
    if (CHIP == A6XX) {
       crb.add(VPC_UNKNOWN_9210(CHIP));
    }
-
-   crb.add(A6XX_TPL1_MODE_CNTL(
-         .isammode = ISAMMODE_GL,
-         .texcoordroundmode = COORD_TRUNCATE,
-         .nearestmipsnap = CLAMP_ROUND_TRUNCATE,
-         .destdatatypeoverride = true,
-   ));
 
    crb.add(SP_REG_PROG_ID_3(
          CHIP,
@@ -1021,13 +1025,21 @@ fd6_emit_static_context_regs(struct fd_context *ctx, fd_cs &cs)
    crb.add(PC_DGEN_SU_CONSERVATIVE_RAS_CNTL(CHIP));
 
    if (CHIP >= A7XX) {
+      crb.add(VPC_UNKNOWN_CNTL(CHIP));
+
       /* Blob sets these two per draw. */
-      crb.add(PC_HS_BUFFER_SIZE(CHIP, FD6_TESS_PARAM_SIZE));
+      crb.add(PC_HS_BUFFER_SIZE(CHIP, FD6_TESS<CHIP>::PARAM_SIZE));
       /* Blob adds a bit more space ({0x10, 0x20, 0x30, 0x40} bytes)
        * but the meaning of this additional space is not known,
        * so we play safe and don't add it.
        */
-      crb.add(PC_TF_BUFFER_SIZE(CHIP, FD6_TESS_FACTOR_SIZE));
+      crb.add(PC_TF_BUFFER_SIZE(CHIP, FD6_TESS<CHIP>::FACTOR_SIZE));
+
+      if (screen->info->props.has_attachment_shading_rate) {
+         for (int i = 0; i < 2; i++) {
+            crb.add(GRAS_LRZ_QUALITY_LOOKUP_TABLE_REG(CHIP, i, fd_gras_shading_rate_lut(i)));
+         }
+      }
    }
 
    /* There is an optimization to skip executing draw states for draws with no
@@ -1045,7 +1057,7 @@ fd6_emit_static_context_regs(struct fd_context *ctx, fd_cs &cs)
     * so any leftover early preamble doesn't get executed. Other stages don't
     * seem to be affected.
     */
-   if (screen->info->a6xx.has_early_preamble) {
+   if (screen->info->props.has_early_preamble) {
       crb.add(A6XX_SP_PS_CNTL_0());
    }
 }
@@ -1074,12 +1086,15 @@ fd6_emit_restore(fd_cs &cs, struct fd_batch *batch)
    struct fd_screen *screen = ctx->screen;
 
    if (!batch->nondraw) {
-      trace_start_state_restore(&batch->trace, cs.ring());
+      trace_start_state_restore(&batch->trace, cs);
    }
 
    if (FD_DBG(STOMP)) {
-      fd6_emit_stomp<CHIP>(cs, &RP_BLIT_REGS<CHIP>[0], ARRAY_SIZE(RP_BLIT_REGS<CHIP>));
+      fd6_emit_stomp<CHIP>(cs, &DRAW_REGS<CHIP>[0], ARRAY_SIZE(DRAW_REGS<CHIP>));
+      fd6_emit_stomp<CHIP>(cs, &COMPUTE_REGS<CHIP>[0], ARRAY_SIZE(COMPUTE_REGS<CHIP>));
+      fd6_emit_stomp<CHIP>(cs, &BLIT_REGS<CHIP>[0], ARRAY_SIZE(BLIT_REGS<CHIP>));
       fd6_emit_stomp<CHIP>(cs, &CMD_REGS<CHIP>[0], ARRAY_SIZE(CMD_REGS<CHIP>));
+      fd6_emit_stomp<CHIP>(cs, &RESOLVE_REGS<CHIP>[0], ARRAY_SIZE(RESOLVE_REGS<CHIP>));
    }
 
    fd_pkt7(cs, CP_SET_MODE, 1)
@@ -1094,9 +1109,17 @@ fd6_emit_restore(fd_cs &cs, struct fd_batch *batch)
             .concurrent_bin_disable = true,
          ));
 
+      if (CHIP == A8XX) {
+         fd6_lrz_inv<CHIP>(ctx, cs);
+      }
+
       fd6_event_write<CHIP>(ctx, cs, FD_CCU_INVALIDATE_COLOR);
       fd6_event_write<CHIP>(ctx, cs, FD_CCU_INVALIDATE_DEPTH);
-      fd6_event_write<CHIP>(ctx, cs, FD_LRZ_INVALIDATE);
+      if (CHIP == A8XX) {
+         fd_pkt7(cs, CP_CCHE_INVALIDATE, 0);
+      } else {
+         fd6_event_write<CHIP>(ctx, cs, FD_LRZ_INVALIDATE);
+      }
       fd6_event_write<CHIP>(ctx, cs, FD_CACHE_INVALIDATE);
 
       fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
@@ -1117,24 +1140,10 @@ fd6_emit_restore(fd_cs &cs, struct fd_batch *batch)
    fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
 
    fd6_emit_ib<CHIP>(cs, fd6_context(ctx)->restore);
-   fd6_emit_ccu_cntl<CHIP>(cs, screen, false);
-
-   uint32_t dwords;
-
-   fd_pkt7(cs, CP_SET_AMBLE, 3)
-      .add(fd6_context(ctx)->preamble, 0, &dwords)
-      .add(CP_SET_AMBLE_2(.dwords = dwords, .type = BIN_PREAMBLE_AMBLE_TYPE));
-
-   fd_pkt7(cs, CP_SET_AMBLE, 3)
-      .add(CP_SET_AMBLE_ADDR())
-      .add(CP_SET_AMBLE_2(.type = PREAMBLE_AMBLE_TYPE));
-
-   fd_pkt7(cs, CP_SET_AMBLE, 3)
-      .add(CP_SET_AMBLE_ADDR())
-      .add(CP_SET_AMBLE_2(.type = POSTAMBLE_AMBLE_TYPE));
+   fd6_emit_gmem_cache_cntl<CHIP>(cs, screen, false);
 
    if (!batch->nondraw) {
-      trace_end_state_restore(&batch->trace, cs.ring());
+      trace_end_state_restore(&batch->trace, cs);
    }
 }
 FD_GENX(fd6_emit_restore);

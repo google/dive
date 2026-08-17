@@ -86,7 +86,7 @@ static bool propagate_liveness_block(gpir_block *block, struct regalloc_ctx *ctx
       }
    }
 
-   memcpy(ctx->live, block->live_out, ctx->bitset_words * sizeof(BITSET_WORD));
+   __bitset_copy(ctx->live, block->live_out, ctx->bitset_words);
 
    list_for_each_entry_rev(gpir_node, node, &block->node_list, list) {
       propagate_liveness_node(node, ctx->live, block->comp);
@@ -161,8 +161,8 @@ static void add_interference(struct regalloc_ctx *ctx, unsigned i, unsigned j)
 
    a->num_conflicts++;
    b->num_conflicts++;
-   util_dynarray_append(&a->conflict_list, unsigned, j);
-   util_dynarray_append(&b->conflict_list, unsigned, i);
+   util_dynarray_append(&a->conflict_list, j);
+   util_dynarray_append(&b->conflict_list, i);
 }
 
 /* Make the register or node "i" interfere with all the other live registers

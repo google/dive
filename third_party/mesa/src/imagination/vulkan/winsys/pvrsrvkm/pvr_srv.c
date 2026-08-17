@@ -30,6 +30,7 @@
 #include "pvr_csb.h"
 #include "pvr_device.h"
 #include "pvr_device_info.h"
+#include "pvr_physical_device.h"
 #include "pvr_srv.h"
 #include "pvr_srv_bo.h"
 #include "pvr_srv_bridge.h"
@@ -250,38 +251,39 @@ static VkResult pvr_srv_memctx_init(struct pvr_srv_winsys *srv_ws)
       if (result != VK_SUCCESS)
          goto err_pvr_srv_int_ctx_destroy;
 
-      if (general_heap_idx == -1 &&
-          strncmp(heap_name,
-                  PVR_SRV_GENERAL_HEAP_IDENT,
-                  sizeof(PVR_SRV_GENERAL_HEAP_IDENT)) == 0) {
+#define pvr_srv_heap_needs_init(heap_index, name1, name2) \
+   ((heap_index) == -1 &&                                 \
+       strncmp((name1),                                   \
+               (name2),                                   \
+               sizeof((name2))) == 0)
+
+      if (pvr_srv_heap_needs_init(general_heap_idx, heap_name,
+                                  PVR_SRV_GENERAL_HEAP_IDENT)) {
          general_heap_idx = i;
-      } else if (pds_heap_idx == -1 &&
-                 strncmp(heap_name,
-                         PVR_SRV_PDSCODEDATA_HEAP_IDENT,
-                         sizeof(PVR_SRV_PDSCODEDATA_HEAP_IDENT)) == 0) {
+
+      } else if (pvr_srv_heap_needs_init(pds_heap_idx, heap_name,
+                                         PVR_SRV_PDSCODEDATA_HEAP_IDENT)) {
          pds_heap_idx = i;
-      } else if (rgn_hdr_heap_idx == -1 &&
-                 strncmp(heap_name,
-                         PVR_SRV_RGNHDR_BRN_63142_HEAP_IDENT,
-                         sizeof(PVR_SRV_RGNHDR_BRN_63142_HEAP_IDENT)) == 0) {
+
+      } else if (pvr_srv_heap_needs_init(rgn_hdr_heap_idx, heap_name,
+                                         PVR_SRV_RGNHDR_BRN_63142_HEAP_IDENT)) {
          rgn_hdr_heap_idx = i;
-      } else if (transfer_3d_heap_idx == -1 &&
-                 strncmp(heap_name,
-                         PVR_SRV_TRANSFER_3D_HEAP_IDENT,
-                         sizeof(PVR_SRV_TRANSFER_3D_HEAP_IDENT)) == 0) {
+
+      } else if (pvr_srv_heap_needs_init(transfer_3d_heap_idx, heap_name,
+                                         PVR_SRV_TRANSFER_3D_HEAP_IDENT)) {
          transfer_3d_heap_idx = i;
-      } else if (usc_heap_idx == -1 &&
-                 strncmp(heap_name,
-                         PVR_SRV_USCCODE_HEAP_IDENT,
-                         sizeof(PVR_SRV_USCCODE_HEAP_IDENT)) == 0) {
+
+      } else if (pvr_srv_heap_needs_init(usc_heap_idx, heap_name,
+                                         PVR_SRV_USCCODE_HEAP_IDENT)) {
          usc_heap_idx = i;
-      } else if (vis_test_heap_idx == -1 &&
-                 strncmp(heap_name,
-                         PVR_SRV_VISIBILITY_TEST_HEAP_IDENT,
-                         sizeof(PVR_SRV_VISIBILITY_TEST_HEAP_IDENT)) == 0) {
+
+      } else if (pvr_srv_heap_needs_init(vis_test_heap_idx, heap_name,
+                                         PVR_SRV_VISIBILITY_TEST_HEAP_IDENT)) {
          vis_test_heap_idx = i;
       }
    }
+
+#undef pvr_srv_heap_needs_init
 
    /* Check for and initialise required heaps. */
    if (general_heap_idx == -1 || pds_heap_idx == -1 ||
@@ -529,10 +531,10 @@ pvr_srv_get_max_coeffs(const struct pvr_device_info *dev_info)
       pending_allocation_coeff_regs = 2U * 1024U;
    }
 
-   if (PVR_HAS_ERN(dev_info, 38748))
+   if (PVR_HAS_ENHANCEMENT(dev_info, 38748))
       pending_allocation_shared_regs = 0U;
 
-   if (PVR_HAS_ERN(dev_info, 38020)) {
+   if (PVR_HAS_ENHANCEMENT(dev_info, 38020)) {
       max_coeff_additional_portion +=
          rogue_max_compute_shared_registers(dev_info);
    }
@@ -572,18 +574,8 @@ pvr_srv_winsys_device_info_init(struct pvr_winsys *ws,
 {
    struct pvr_srv_winsys *srv_ws = to_pvr_srv_winsys(ws);
    VkResult result;
-   int ret;
 
-   ret = pvr_device_info_init(dev_info, srv_ws->bvnc);
-   if (ret) {
-      return vk_errorf(NULL,
-                       VK_ERROR_INCOMPATIBLE_DRIVER,
-                       "Unsupported BVNC: %u.%u.%u.%u\n",
-                       PVR_BVNC_UNPACK_B(srv_ws->bvnc),
-                       PVR_BVNC_UNPACK_V(srv_ws->bvnc),
-                       PVR_BVNC_UNPACK_N(srv_ws->bvnc),
-                       PVR_BVNC_UNPACK_C(srv_ws->bvnc));
-   }
+   *dev_info = srv_ws->dev_info;
 
    runtime_info->min_free_list_size = pvr_srv_get_min_free_list_size(dev_info);
    runtime_info->max_free_list_size = PVR_SRV_FREE_LIST_MAX_SIZE;
@@ -627,35 +619,67 @@ static void pvr_srv_winsys_get_heaps_info(struct pvr_winsys *ws,
       heaps->rgn_hdr_heap = &srv_ws->general_heap.base;
 }
 
-static const struct pvr_winsys_ops srv_winsys_ops = {
-   .destroy = pvr_srv_winsys_destroy,
-   .device_info_init = pvr_srv_winsys_device_info_init,
-   .get_heaps_info = pvr_srv_winsys_get_heaps_info,
-   .buffer_create = pvr_srv_winsys_buffer_create,
-   .buffer_create_from_fd = pvr_srv_winsys_buffer_create_from_fd,
-   .buffer_destroy = pvr_srv_winsys_buffer_destroy,
-   .buffer_get_fd = pvr_srv_winsys_buffer_get_fd,
-   .buffer_map = pvr_srv_winsys_buffer_map,
-   .buffer_unmap = pvr_srv_winsys_buffer_unmap,
-   .heap_alloc = pvr_srv_winsys_heap_alloc,
-   .heap_free = pvr_srv_winsys_heap_free,
-   .vma_map = pvr_srv_winsys_vma_map,
-   .vma_unmap = pvr_srv_winsys_vma_unmap,
-   .free_list_create = pvr_srv_winsys_free_list_create,
-   .free_list_destroy = pvr_srv_winsys_free_list_destroy,
-   .render_target_dataset_create = pvr_srv_render_target_dataset_create,
-   .render_target_dataset_destroy = pvr_srv_render_target_dataset_destroy,
-   .render_ctx_create = pvr_srv_winsys_render_ctx_create,
-   .render_ctx_destroy = pvr_srv_winsys_render_ctx_destroy,
-   .render_submit = pvr_srv_winsys_render_submit,
-   .compute_ctx_create = pvr_srv_winsys_compute_ctx_create,
-   .compute_ctx_destroy = pvr_srv_winsys_compute_ctx_destroy,
-   .compute_submit = pvr_srv_winsys_compute_submit,
-   .transfer_ctx_create = pvr_srv_winsys_transfer_ctx_create,
-   .transfer_ctx_destroy = pvr_srv_winsys_transfer_ctx_destroy,
-   .transfer_submit = pvr_srv_winsys_transfer_submit,
-   .null_job_submit = pvr_srv_winsys_null_job_submit,
-};
+#define PER_ARCH_FUNCS(arch)                                       \
+   VkResult pvr_##arch##_srv_render_target_dataset_create(         \
+      struct pvr_winsys *ws,                                       \
+      const struct pvr_winsys_rt_dataset_create_info *create_info, \
+      const struct pvr_device_info *dev_info,                      \
+      struct pvr_winsys_rt_dataset **const rt_dataset_out);        \
+                                                                   \
+   VkResult pvr_##arch##_srv_winsys_render_submit(                 \
+      const struct pvr_winsys_render_ctx *ctx,                     \
+      const struct pvr_winsys_render_submit_info *submit_info,     \
+      const struct pvr_device_info *dev_info,                      \
+      struct vk_sync *signal_sync_geom,                            \
+      struct vk_sync *signal_sync_frag);                           \
+                                                                   \
+   VkResult pvr_##arch##_srv_winsys_transfer_submit(               \
+      const struct pvr_winsys_transfer_ctx *ctx,                   \
+      const struct pvr_winsys_transfer_submit_info *submit_info,   \
+      const struct pvr_device_info *const dev_info,                \
+      struct vk_sync *signal_sync);                                \
+                                                                   \
+   VkResult pvr_##arch##_srv_winsys_compute_submit(                \
+      const struct pvr_winsys_compute_ctx *ctx,                    \
+      const struct pvr_winsys_compute_submit_info *submit_info,    \
+      const struct pvr_device_info *dev_info,                      \
+      struct vk_sync *signal_sync)
+
+PER_ARCH_FUNCS(rogue);
+
+#define SRV_WINSYS(arch)                                                      \
+   static const struct pvr_winsys_ops pvr_##arch##_srv_winsys_ops = {         \
+      .destroy = pvr_srv_winsys_destroy,                                      \
+      .device_info_init = pvr_srv_winsys_device_info_init,                    \
+      .get_heaps_info = pvr_srv_winsys_get_heaps_info,                        \
+      .buffer_create = pvr_srv_winsys_buffer_create,                          \
+      .buffer_create_from_fd = pvr_srv_winsys_buffer_create_from_fd,          \
+      .buffer_destroy = pvr_srv_winsys_buffer_destroy,                        \
+      .buffer_get_fd = pvr_srv_winsys_buffer_get_fd,                          \
+      .buffer_map = pvr_srv_winsys_buffer_map,                                \
+      .buffer_unmap = pvr_srv_winsys_buffer_unmap,                            \
+      .heap_alloc = pvr_srv_winsys_heap_alloc,                                \
+      .heap_free = pvr_srv_winsys_heap_free,                                  \
+      .vma_map = pvr_srv_winsys_vma_map,                                      \
+      .vma_unmap = pvr_srv_winsys_vma_unmap,                                  \
+      .free_list_create = pvr_srv_winsys_free_list_create,                    \
+      .free_list_destroy = pvr_srv_winsys_free_list_destroy,                  \
+      .render_target_dataset_create =                                         \
+         pvr_##arch##_srv_render_target_dataset_create,                       \
+      .render_target_dataset_destroy = pvr_srv_render_target_dataset_destroy, \
+      .render_ctx_create = pvr_srv_winsys_render_ctx_create,                  \
+      .render_ctx_destroy = pvr_srv_winsys_render_ctx_destroy,                \
+      .render_submit = pvr_##arch##_srv_winsys_render_submit,                 \
+      .compute_ctx_create = pvr_srv_winsys_compute_ctx_create,                \
+      .compute_ctx_destroy = pvr_srv_winsys_compute_ctx_destroy,              \
+      .compute_submit = pvr_##arch##_srv_winsys_compute_submit,               \
+      .transfer_ctx_create = pvr_srv_winsys_transfer_ctx_create,              \
+      .transfer_ctx_destroy = pvr_srv_winsys_transfer_ctx_destroy,            \
+      .transfer_submit = pvr_##arch##_srv_winsys_transfer_submit,             \
+      .null_job_submit = pvr_srv_winsys_null_job_submit,                      \
+   }
+
+SRV_WINSYS(rogue);
 
 static bool pvr_is_driver_compatible(int render_fd)
 {
@@ -665,7 +689,7 @@ static bool pvr_is_driver_compatible(int render_fd)
    if (!version)
       return false;
 
-   assert(strcmp(version->name, "pvr") == 0);
+   assert(strcmp(version->name, PVR_SRV_DRIVER_NAME) == 0);
 
    /* Only the 1.17 driver is supported for now. */
    if (version->version_major != PVR_SRV_VERSION_MAJ ||
@@ -712,12 +736,26 @@ VkResult pvr_srv_winsys_create(const int render_fd,
       goto err_pvr_srv_connection_destroy;
    }
 
-   srv_ws->base.ops = &srv_winsys_ops;
+   int ret = pvr_device_info_init(&srv_ws->dev_info, bvnc);
+   if (ret) {
+      return vk_errorf(NULL,
+                       VK_ERROR_INCOMPATIBLE_DRIVER,
+                       "Unsupported BVNC: %u.%u.%u.%u\n",
+                       PVR_BVNC_UNPACK_B(bvnc),
+                       PVR_BVNC_UNPACK_V(bvnc),
+                       PVR_BVNC_UNPACK_N(bvnc),
+                       PVR_BVNC_UNPACK_C(bvnc));
+   }
+
+   switch (srv_ws->dev_info.ident.arch) {
+   case PVR_DEVICE_ARCH_ROGUE:
+      srv_ws->base.ops = &pvr_rogue_srv_winsys_ops;
+      break;
+   }
+
    srv_ws->base.render_fd = render_fd;
    srv_ws->base.display_fd = display_fd;
    srv_ws->base.alloc = alloc;
-
-   srv_ws->bvnc = bvnc;
 
    srv_ws->base.syncobj_type = pvr_srv_sync_type;
    srv_ws->base.sync_types[0] = &srv_ws->base.syncobj_type;

@@ -30,7 +30,7 @@ enum bool_type {
 static inline uint8_t
 src_pass_flags(nir_src *src)
 {
-   return src->ssa->parent_instr->pass_flags;
+   return nir_def_instr(src->ssa)->pass_flags;
 }
 
 static inline nir_block *
@@ -95,8 +95,6 @@ get_bool_types_alu(nir_alu_instr *alu)
    case nir_op_b2i32:
    case nir_op_b2i64:
       return bool_type_single_bit;
-   case nir_op_b2b8:
-   case nir_op_b2b16:
    case nir_op_b2b32:
       return bool_type_all_bits;
    case nir_op_b2f16:
@@ -188,8 +186,8 @@ phi_to_bool(nir_builder *b, nir_phi_instr *phi, void *unused)
       UNREACHABLE("invalid bool_type");
 
    nir_foreach_use_safe(src, &phi->def) {
-      if (nir_src_parent_instr(src) == &phi->instr ||
-          nir_src_parent_instr(src) == res->parent_instr)
+      if (nir_src_use_instr(src) == &phi->instr ||
+          nir_src_use_instr(src) == nir_def_instr(res))
          continue;
       nir_src_rewrite(src, res);
    }
@@ -227,7 +225,7 @@ nir_opt_phi_to_bool(nir_shader *shader)
       if (instr->pass_flags != bool_types) {
          instr->pass_flags = bool_types;
          nir_foreach_use(use, nir_instr_def(instr))
-            nir_instr_worklist_push_tail(&worklist, nir_src_parent_instr(use));
+            nir_instr_worklist_push_tail(&worklist, nir_src_use_instr(use));
       }
    }
 

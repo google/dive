@@ -68,6 +68,7 @@ static inline void config_writer_new(struct config_writer *writer)
     if (writer->status != VPE_STATUS_OK)
         return;
 
+    // For VPE 2.0 all config and plane descriptors gpu address must be 6 bit aligned
     uint16_t alignment           = writer->gpu_addr_alignment;
     uint64_t aligned_gpu_address = (writer->buf->gpu_va + alignment) & ~alignment;
     uint64_t alignment_offset    = aligned_gpu_address - writer->buf->gpu_va;
@@ -103,7 +104,8 @@ void config_writer_set_type(struct config_writer *writer, enum config_type type,
     if (writer->status != VPE_STATUS_OK)
         return;
 
-    if ((writer->type != type) || (writer->pipe_idx != pipe_idx)) {
+    if ((writer->type != type) || ((writer->pipe_idx != pipe_idx)
+                                      )) {
         if (writer->type == CONFIG_TYPE_UNKNOWN) {
             // new header or only pipe change. do not need to fill it yet until completion
             writer->pipe_idx = pipe_idx;
@@ -119,7 +121,8 @@ void config_writer_set_type(struct config_writer *writer, enum config_type type,
     }
 }
 
-void config_writer_force_new_with_type(struct config_writer *writer, enum config_type type)
+void config_writer_force_new_with_type(
+    struct config_writer *writer, enum config_type type, uint32_t pipe_idx)
 {
     VPE_ASSERT(type != CONFIG_TYPE_UNKNOWN);
 
@@ -130,10 +133,12 @@ void config_writer_force_new_with_type(struct config_writer *writer, enum config
 
     if (writer->type == CONFIG_TYPE_UNKNOWN) {
         // new header. do not need to fill it yet until completion
+        writer->pipe_idx = pipe_idx;
         config_writer_new(writer);
     } else if (size > 0) {
         // command not empty, close the previous one
         config_writer_complete(writer);
+        writer->pipe_idx = pipe_idx;
         config_writer_new(writer);
     }
     writer->type = type;
@@ -207,14 +212,6 @@ void config_writer_fill_direct_config_packet_header(
         return;
     }
 
-#ifdef VPE_REGISTER_PROFILE
-    writer->total_register_count += packet->bits.VPEP_CONFIG_DATA_SIZE + 1;
-    if (packet->bits.VPEP_CONFIG_DATA_SIZE == 0) {
-        writer->nonBurstMode_register_count++;
-    } else {
-        writer->burstMode_register_count += packet->bits.VPEP_CONFIG_DATA_SIZE + 1;
-    }
-#endif
     cmd_space    = (uint32_t *)(uintptr_t)writer->buf->cpu_va;
     *cmd_space++ = packet->u32all;
     writer->buf->cpu_va += w_size;
@@ -249,10 +246,6 @@ void config_writer_fill_direct_config_packet(
         return;
     }
 
-#ifdef VPE_REGISTER_PROFILE
-    writer->total_register_count++;
-    writer->nonBurstMode_register_count++;
-#endif
     cmd_space    = (uint32_t *)(uintptr_t)writer->buf->cpu_va;
     *cmd_space++ = packet->u32all; // Write header
     writer->buf->cpu_va += sizeof(uint32_t);
@@ -268,11 +261,10 @@ void config_writer_fill_indirect_data_array(
     struct config_writer *writer, const uint64_t data_gpuva, uint32_t size)
 {
     VPE_ASSERT(writer->type == CONFIG_TYPE_INDIRECT);
-    VPE_ASSERT(size > 0);
 
     // the DATA_ARRAY_SIZE is 1-based, hence -1 from actual size
     config_writer_fill(writer, VPEC_FIELD_VALUE(VPE_IND_CFG_DATA_ARRAY_SIZE, size - 1));
-    config_writer_fill(writer, ADDR_LO(data_gpuva));
+    config_writer_fill(writer, (ADDR_LO(data_gpuva) & VPE_IND_CFG_DATA_ARRAY_ADDR_LOW_MASK));
     config_writer_fill(writer, ADDR_HI(data_gpuva));
 }
 
@@ -283,6 +275,23 @@ void config_writer_fill_indirect_destination(struct config_writer *writer,
     config_writer_fill(writer, VPEC_FIELD_VALUE(VPE_IND_CFG_PKT_REGISTER_OFFSET, offset_index));
     config_writer_fill(writer, start_index);
     config_writer_fill(writer, VPEC_FIELD_VALUE(VPE_IND_CFG_PKT_REGISTER_OFFSET, offset_data));
+}
+
+void config_writer_fill_3dlut_fl_addr(struct config_writer *writer, const uint64_t data_gpuva,
+    enum vpe_3dlut_addr_mode addr_mode, enum vpe_3dlut_mem_align mem_align, uint32_t size,
+    bool comp_mode, uint8_t tmz)
+{
+    VPE_ASSERT(writer->type == CONFIG_TYPE_3DLUT_FL);
+    VPE_ASSERT(size > 0);
+    uint32_t tmp_code =
+            ((comp_mode <<VPE_3DLUT_CFG_COMP_MODE__SHIFT) & VPE_3DLUT_CFG_COMP_MODE_MASK) | (tmz & 0xf);
+    uint32_t *cmd_space = (uint32_t *)(uintptr_t)writer->base_cpu_va;
+
+    *cmd_space = VPE_3DLUT_CFG_CMD_HEADER(addr_mode, mem_align); //---> this is DW0
+
+    config_writer_fill(writer, ADDR_LO(data_gpuva) | tmp_code);  //----->This is DW1
+    config_writer_fill(writer, ADDR_HI(data_gpuva));             //---------------->This is DW2
+    config_writer_fill(writer, size - 1); //--------------------------->this is DW3
 }
 
 void config_writer_complete(struct config_writer *writer)
@@ -308,7 +317,7 @@ void config_writer_complete(struct config_writer *writer)
         // -4 for exclude header
         // VPEP_DIRECT_CONFIG_ARRAY_SIZE is 1-based, hence need -1
         *cmd_space = VPE_DIR_CFG_CMD_HEADER(((size - 4) / sizeof(uint32_t) - 1));
-    } else {
+    } else if (writer->type != CONFIG_TYPE_3DLUT_FL) {
         // -4 DW for header, data array size, data array lo and data array hi
         // /3 DW for each destination reg
         // NUM_DST is 1-based, hence need -1

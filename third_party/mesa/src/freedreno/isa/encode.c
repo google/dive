@@ -66,7 +66,14 @@ __instruction_case(struct encode_state *s, const struct ir3_instruction *instr)
 	 */
 	if (instr->opc == OPC_MOV) {
 		struct ir3_register *src = instr->srcs[0];
-		if (src->flags & IR3_REG_IMMED) {
+		if ((instr->dsts[0]->num == regid(REG_A0, 0)) &&
+				(instr->cat1.r[0] || instr->cat1.r[1])) {
+			if (src->flags & IR3_REG_IMMED) {
+				return OPC_MOVA_R_IMMED;
+			} else {
+				return OPC_MOVA_R_GPR;
+			}
+		} else if (src->flags & IR3_REG_IMMED) {
 			return OPC_MOV_IMMED;
 		} if (src->flags & IR3_REG_RELATIV) {
 			if (src->flags & IR3_REG_CONST) {
@@ -270,6 +277,8 @@ __multisrc_case(struct encode_state *s, const struct ir3_register *reg)
 
 typedef enum {
 	REG_CAT3_SRC_GPR,
+	REG_CAT3_SRC_ALT_IMMED,
+	REG_CAT3_SRC_FLUT,
 	REG_CAT3_SRC_CONST_OR_IMMED,
 	REG_CAT3_SRC_RELATIVE_GPR,
 	REG_CAT3_SRC_RELATIVE_CONST,
@@ -284,7 +293,26 @@ __cat3_src_case(struct encode_state *s, const struct ir3_register *reg)
 		} else {
 			return REG_CAT3_SRC_RELATIVE_GPR;
 		}
-	} else if (reg->flags & (IR3_REG_CONST | IR3_REG_IMMED)) {
+	} else if (reg->flags & IR3_REG_IMMED) {
+		if (ir3_cat3_int(s->instr->opc)) {
+			switch (s->instr->opc) {
+			case OPC_SHRM:
+			case OPC_SHLM:
+			case OPC_SHRG:
+			case OPC_SHLG:
+			case OPC_ANDG:
+			case OPC_WMM:
+			case OPC_WMM_ACCU:
+				return REG_CAT3_SRC_CONST_OR_IMMED;
+			default:
+				assert(s->gen >= 800);
+				return REG_CAT3_SRC_ALT_IMMED;
+			}
+		} else {
+			assert(s->gen >= 800);
+			return REG_CAT3_SRC_FLUT;
+		}
+	} else if (reg->flags & IR3_REG_CONST) {
 		return REG_CAT3_SRC_CONST_OR_IMMED;
 	} else {
 		return REG_CAT3_SRC_GPR;

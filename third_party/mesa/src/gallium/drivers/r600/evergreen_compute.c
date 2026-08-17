@@ -321,7 +321,7 @@ static void compute_emit_cs(struct r600_context *rctx,
 	}
 
 	bool need_buf_const = current->shader.uses_tex_buffers ||
-		current->shader.has_txq_cube_array_z_comp;
+		current->shader.has_resinfo_via_uniform;
 
 	if (info->indirect) {
 		struct r600_resource *indirect_resource = r600_as_resource(info->indirect);
@@ -346,15 +346,9 @@ static void compute_emit_cs(struct r600_context *rctx,
 	r600_need_cs_space(rctx, 0, true, global_atomic_count);
 
 	if (need_buf_const) {
-		eg_setup_buffer_constants(rctx, MESA_SHADER_COMPUTE);
+		rctx->setup_buffer_constants(rctx, MESA_SHADER_COMPUTE);
 	}
 	r600_update_driver_const_buffers(rctx, true);
-
-	evergreen_emit_atomic_buffer_setup(rctx, true, combined_atomics, global_atomic_count);
-	if (global_atomic_count) {
-		radeon_emit(cs, PKT3(PKT3_EVENT_WRITE, 0, 0));
-		radeon_emit(cs, EVENT_TYPE(EVENT_TYPE_CS_PARTIAL_FLUSH) | EVENT_INDEX(4));
-	}
 
 	/* Initialize all the compute-related registers.
 	 *
@@ -374,6 +368,12 @@ static void compute_emit_cs(struct r600_context *rctx,
 
 	rctx->b.flags |= R600_CONTEXT_WAIT_3D_IDLE | R600_CONTEXT_FLUSH_AND_INV;
 	r600_flush_emit(rctx);
+
+	evergreen_emit_atomic_buffer_setup(rctx, true, combined_atomics, global_atomic_count);
+	if (global_atomic_count) {
+		radeon_emit(cs, PKT3(PKT3_EVENT_WRITE, 0, 0));
+		radeon_emit(cs, EVENT_TYPE(EVENT_TYPE_CS_PARTIAL_FLUSH) | EVENT_INDEX(4));
+	}
 
 	uint32_t rat_mask;
 
@@ -553,6 +553,12 @@ void evergreen_init_atom_start_compute_cs(struct r600_context *rctx)
 	/* We're setting config registers here. */
 	r600_store_value(cb, PKT3(PKT3_EVENT_WRITE, 0, 0));
 	r600_store_value(cb, EVENT_TYPE(EVENT_TYPE_CS_PARTIAL_FLUSH) | EVENT_INDEX(4));
+
+	if (rctx->b.screen->info.r600_has_virtual_memory) {
+		/* Avoid a GPU hang when using virtual memory */
+		r600_store_value(cb, PKT3(PKT3_CLEAR_STATE, 0, 0));
+		r600_store_value(cb, 0);
+	}
 
 	switch (rctx->b.family) {
 	case CHIP_CEDAR:

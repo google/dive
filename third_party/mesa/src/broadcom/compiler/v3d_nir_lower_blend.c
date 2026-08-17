@@ -40,7 +40,7 @@ v3d_nir_lower_blend(nir_shader *nir, struct v3d_compile *c)
       /* Colour write mask is handled by the hardware. */
       options.rt[rt].colormask = 0xf;
 
-      options.format[rt] = c->fs_key->color_fmt[rt].format;
+      options.rt[rt].format = c->fs_key->color_fmt[rt].format;
 
       options.rt[rt].rgb.func = c->fs_key->blend[rt].rgb_func;
       options.rt[rt].alpha.func = c->fs_key->blend[rt].alpha_func;

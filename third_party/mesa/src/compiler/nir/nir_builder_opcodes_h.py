@@ -159,6 +159,10 @@ _nir_build_${name}(nir_builder *build${intrinsic_decl_list(opcode)})
    if (!indices.src_type)
       indices.src_type = (nir_alu_type)(nir_type_float | src0->bit_size);
    % endif
+   % if FP_MATH_CTRL in opcode.indices:
+   if (!indices.fp_math_ctrl)
+      indices.fp_math_ctrl = build->fp_math_ctrl;
+   % endif
    % for index in opcode.indices:
    nir_intrinsic_set_${index.name}(intrin, indices.${index.name});
    % endfor

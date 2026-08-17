@@ -34,6 +34,14 @@ fd_context_flush(struct pipe_context *pctx, struct pipe_fence_handle **fencep,
    DBG("%p: %p: flush: flags=%x, fencep=%p", ctx, batch, flags, fencep);
 
    if (fencep && !batch) {
+      if (!(flags & TC_FLUSH_ASYNC) && ctx->last_fence &&
+          (fd_pipe_fence_is_fd(ctx->last_fence) ||
+           !(flags & PIPE_FLUSH_FENCE_FD))) {
+         fd_pipe_fence_ref(&fence, ctx->last_fence);
+         fd_bc_dump(ctx, "%p: reuse last_fence, remaining:\n", ctx);
+         goto out;
+      }
+      fd_bc_dump(ctx, "need fence, last_fence=%p", ctx->last_fence);
       batch = fd_context_batch(ctx);
    } else if (!batch) {
       return;
@@ -377,6 +385,9 @@ fd_context_destroy(struct pipe_context *pctx)
 
    DBG("");
 
+   if (!(ctx->flags & FD_CONTEXT_FLAG_AUX))
+      p_atomic_dec(&pctx->screen->num_contexts);
+
    for (unsigned i = 0; i < ARRAY_SIZE(ctx->f16_blit_fs); i++)
       if (ctx->f16_blit_fs[i])
          pctx->delete_fs_state(pctx, ctx->f16_blit_fs[i]);
@@ -389,11 +400,6 @@ fd_context_destroy(struct pipe_context *pctx)
 
    if (ctx->in_fence_fd != -1)
       close(ctx->in_fence_fd);
-
-   for (i = 0; i < ARRAY_SIZE(ctx->pvtmem); i++) {
-      if (ctx->pvtmem[i].bo)
-         fd_bo_del(ctx->pvtmem[i].bo);
-   }
 
    util_copy_framebuffer_state(&ctx->framebuffer, NULL);
    fd_batch_reference(&ctx->batch, NULL); /* unref current batch */
@@ -498,7 +504,7 @@ fd_get_device_reset_status(struct pipe_context *pctx)
    return status;
 }
 
-static void
+static bool
 fd_trace_record_ts(struct u_trace *ut, void *cs, void *timestamps,
                    uint64_t offset_B, uint32_t flags)
 {
@@ -509,11 +515,13 @@ fd_trace_record_ts(struct u_trace *ut, void *cs, void *timestamps,
    if (ring->cur == batch->last_timestamp_cmd) {
       uint64_t *ts = fd_bo_map(fd_resource(buffer)->bo) + offset_B;
       *ts = U_TRACE_NO_TIMESTAMP;
-      return;
+      return true;
    }
 
    batch->ctx->record_timestamp(ring, fd_resource(buffer)->bo, offset_B);
    batch->last_timestamp_cmd = ring->cur;
+
+   return true;
 }
 
 static uint64_t
@@ -697,7 +705,7 @@ fd_context_init(struct fd_context *ctx, struct pipe_screen *pscreen,
    slab_create_child(&ctx->transfer_pool, &screen->transfer_pool);
    slab_create_child(&ctx->transfer_pool_unsync, &screen->transfer_pool);
 
-   util_dynarray_init(&ctx->global_bindings, NULL);
+   ctx->global_bindings = UTIL_DYNARRAY_INIT;
 
    fd_draw_init(pctx);
    fd_resource_context_init(pctx);
@@ -730,6 +738,9 @@ fd_context_init(struct fd_context *ctx, struct pipe_screen *pscreen,
                              fd_trace_delete_flush_data);
 
    fd_autotune_init(&ctx->autotune, screen->dev);
+
+   if (!(ctx->flags & FD_CONTEXT_FLAG_AUX))
+      p_atomic_inc(&pctx->screen->num_contexts);
 
    return pctx;
 

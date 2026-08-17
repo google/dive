@@ -20,12 +20,6 @@
 #include "util/u_atomic.h"
 #include "util/u_debug.h"
 
-#if DETECT_OS_ANDROID
-static const char *fd_rd_output_base_path = "/data/local/tmp";
-#else
-static const char *fd_rd_output_base_path = "/tmp";
-#endif
-
 static const struct debug_control fd_rd_dump_options[] = {
    { "enable", FD_RD_DUMP_ENABLE },
    { "combine", FD_RD_DUMP_COMBINE },
@@ -52,6 +46,18 @@ fd_rd_dump_env_init_once(void)
     */
    if (fd_rd_dump_env.flags & ~FD_RD_DUMP_ENABLE)
       fd_rd_dump_env.flags |= FD_RD_DUMP_ENABLE;
+
+   const char *output_path_value = os_get_option("FD_RD_DUMP_PATH");
+   if (!output_path_value) {
+      output_path_value =
+#if DETECT_OS_ANDROID
+         "/data/local/tmp";
+#else
+         "/tmp";
+#endif
+   }
+   snprintf(fd_rd_dump_env.output_path, sizeof(fd_rd_dump_env.output_path),
+      "%s", output_path_value);
 }
 
 void
@@ -78,7 +84,7 @@ fd_rd_output_sanitize_name(char *name)
 static void
 fd_rd_parse_dump_range(const char *option_name, struct util_dynarray *range_array)
 {
-   util_dynarray_init(range_array, NULL);
+   *range_array = UTIL_DYNARRAY_INIT;
    const char *range_value = os_get_option(option_name);
    if (!range_value)
       return;
@@ -102,7 +108,7 @@ fd_rd_parse_dump_range(const char *option_name, struct util_dynarray *range_arra
          p = ep;
       }
 
-      util_dynarray_append(range_array, struct fd_rd_dump_range, range);
+      util_dynarray_append(range_array, range);
 
       if (*p == ',')
          ++p;
@@ -125,7 +131,7 @@ fd_rd_parse_dump_range(const char *option_name, struct util_dynarray *range_arra
          .range_begin = UINT_MAX,
          .range_end = UINT_MAX,
       };
-      util_dynarray_append(range_array, struct fd_rd_dump_range, invalid_range);
+      util_dynarray_append(range_array, invalid_range);
    }
 }
 
@@ -172,14 +178,14 @@ fd_rd_output_init(struct fd_rd_output *output, const char* output_name)
 
       char file_path[PATH_MAX];
       snprintf(file_path, sizeof(file_path), "%s/%s_combined.rd.gz",
-               fd_rd_output_base_path, output->name);
+               fd_rd_dump_env.output_path, output->name);
       output->file = gzopen(file_path, "w");
    }
 
    if (FD_RD_DUMP(TRIGGER)) {
       char file_path[PATH_MAX];
       snprintf(file_path, sizeof(file_path), "%s/%s_trigger",
-               fd_rd_output_base_path, output->name);
+               fd_rd_dump_env.output_path, output->name);
       output->trigger_fd = open(file_path, O_RDWR | O_CREAT | O_TRUNC, 0600);
    }
 
@@ -190,8 +196,7 @@ fd_rd_output_init(struct fd_rd_output *output, const char* output_name)
 void
 fd_rd_output_fini(struct fd_rd_output *output)
 {
-   if (output->name != NULL)
-      free(output->name);
+   free(output->name);
 
    if (output->file != NULL) {
       assert(output->combine);
@@ -206,7 +211,7 @@ fd_rd_output_fini(struct fd_rd_output *output)
        */
       char file_path[PATH_MAX];
       snprintf(file_path, sizeof(file_path), "%s/%s_trigger",
-               fd_rd_output_base_path, output->name);
+               fd_rd_dump_env.output_path, output->name);
       unlink(file_path);
    }
 
@@ -303,10 +308,10 @@ fd_rd_output_begin(struct fd_rd_output *output, uint32_t frame, uint32_t submit)
    char file_path[PATH_MAX];
    if (frame != UINT_MAX) {
       snprintf(file_path, sizeof(file_path), "%s/%s_frame%.5d_submit%.5d.rd",
-               fd_rd_output_base_path, output->name, frame, submit);
+               fd_rd_dump_env.output_path, output->name, frame, submit);
    } else {
       snprintf(file_path, sizeof(file_path), "%s/%s_submit%.5d.rd",
-               fd_rd_output_base_path, output->name, submit);
+               fd_rd_dump_env.output_path, output->name, submit);
    }
    output->file = gzopen(file_path, "w");
    return true;

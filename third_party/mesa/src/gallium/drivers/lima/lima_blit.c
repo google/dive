@@ -113,7 +113,7 @@ lima_pack_blit_cmd(struct lima_job *job,
       }
    }
 
-   uint16_t width, height;
+   unsigned width, height;
    if (job->key.cbuf.texture)
       pipe_surface_size(&job->key.cbuf, &width, &height);
    else
@@ -202,7 +202,6 @@ lima_set_blit_surface(struct pipe_surface *psurf,
                       unsigned level)
 {
    memset(psurf, 0, sizeof(*psurf));
-   psurf->context = pctx;
    psurf->format = prsc->format;
    psurf->level = level;
    psurf->first_layer = 0;

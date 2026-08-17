@@ -8,7 +8,7 @@
 #include "util/format/u_format.h"
 #include <radeon_surface.h>
 
-static unsigned cik_get_macro_tile_index(struct radeon_surf *surf)
+static unsigned cik_get_macro_tile_index(const struct radeon_surf *surf)
 {
    unsigned index, tileb;
 
@@ -204,7 +204,8 @@ static void si_compute_cmask(const struct radeon_info *info,
                              const struct ac_surf_config *config,
                              struct radeon_surf *surf)
 {
-   unsigned pipe_interleave_bytes = info->pipe_interleave_bytes;
+   unsigned pipe_interleave_bytes = info->gfx_level >= GFX6 ? AMD_MEMCHANNEL_INTERLEAVE_BYTES :
+                                                              info->r600_pipe_interleave_bytes;
    unsigned num_pipes = info->num_tile_pipes;
    unsigned cl_width, cl_height;
 
@@ -315,7 +316,8 @@ static void si_compute_htile(const struct radeon_info *info,
    slice_elements = (width * height) / (8 * 8);
    slice_bytes = slice_elements * 4;
 
-   pipe_interleave_bytes = info->pipe_interleave_bytes;
+   pipe_interleave_bytes = info->gfx_level >= GFX6 ? AMD_MEMCHANNEL_INTERLEAVE_BYTES :
+                                                     info->r600_pipe_interleave_bytes;
    base_align = num_pipes * pipe_interleave_bytes;
 
    surf->meta_alignment_log2 = util_logbase2(base_align);

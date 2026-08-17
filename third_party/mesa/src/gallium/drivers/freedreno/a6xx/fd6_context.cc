@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "freedreno_query_acc.h"
 #include "freedreno_state.h"
 
@@ -44,8 +42,11 @@ fd6_context_destroy(struct pipe_context *pctx) in_dt
    if (fd6_ctx->sample_locations_disable_stateobj)
       fd_ringbuffer_del(fd6_ctx->sample_locations_disable_stateobj);
 
-   if (fd6_ctx->preamble)
-      fd_ringbuffer_del(fd6_ctx->preamble);
+   if (fd6_ctx->sysmem_preamble)
+      fd_ringbuffer_del(fd6_ctx->sysmem_preamble);
+
+   if (fd6_ctx->gmem_preamble)
+      fd_ringbuffer_del(fd6_ctx->gmem_preamble);
 
    if (fd6_ctx->restore)
       fd_ringbuffer_del(fd6_ctx->restore);
@@ -102,7 +103,7 @@ fd6_vertex_state_create(struct pipe_context *pctx, unsigned num_elements,
       crb.add(A6XX_VFD_VERTEX_BUFFER_STRIDE(elem->vertex_buffer_index, elem->src_stride));
    }
 
-   state->stateobj = crb.ring();
+   state->stateobj = crb;
 
    return state;
 }
@@ -310,16 +311,19 @@ fd6_context_create(struct pipe_screen *pscreen, void *priv,
    fd_crb crb(fd6_ctx->base.pipe, 3);
 
    crb.add(GRAS_SC_MSAA_SAMPLE_POS_CNTL(CHIP))
-      .add(A6XX_RB_MSAA_SAMPLE_POS_CNTL())
-      .add(TPL1_MSAA_SAMPLE_POS_CNTL(CHIP));
+      .add(A6XX_RB_MSAA_SAMPLE_POS_CNTL());
 
-   fd6_ctx->sample_locations_disable_stateobj = crb.ring();
+   if (CHIP < A8XX)
+      crb.add(TPL1_MSAA_SAMPLE_POS_CNTL(CHIP));
 
-   fd6_ctx->preamble = fd6_build_preemption_preamble<CHIP>(&fd6_ctx->base);
+   fd6_ctx->sample_locations_disable_stateobj = crb;
+
+   fd6_ctx->sysmem_preamble = fd6_build_preemption_preamble<CHIP>(&fd6_ctx->base, false);
+   fd6_ctx->gmem_preamble = fd6_build_preemption_preamble<CHIP>(&fd6_ctx->base, true);
 
    fd_cs restore(fd6_ctx->base.pipe, 0x1000);
    fd6_emit_static_regs<CHIP>(restore, &fd6_ctx->base);
-   fd6_ctx->restore = restore.ring();
+   fd6_ctx->restore = restore;
 
    return fd_context_init_tc(pctx, flags);
 }

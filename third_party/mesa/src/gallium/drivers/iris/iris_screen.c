@@ -1,26 +1,7 @@
 /*
  * Copyright © 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
-
-/**
  * @file iris_screen.c
  *
  * Screen related driver hooks and capability lists.
@@ -62,6 +43,9 @@
 
 #define genX_call(devinfo, func, ...)             \
    switch ((devinfo)->verx10) {                   \
+   case 350:                                      \
+      gfx35_##func(__VA_ARGS__);                  \
+      break;                                      \
    case 300:                                      \
       gfx30_##func(__VA_ARGS__);                  \
       break;                                      \
@@ -215,7 +199,8 @@ iris_init_shader_caps(struct iris_screen *screen)
 
       /* Lie about these to avoid st/mesa's GLSL IR lowering of indirects,
        * which we don't want.  Our compiler backend will check brw_compiler's
-       * options and call nir_lower_indirect_derefs appropriately anyway.
+       * options and call nir_lower_indirect_derefs_to_if_else_trees
+       * appropriately anyway.
        */
       caps->indirect_temp_addr = true;
       caps->indirect_const_addr = true;
@@ -348,7 +333,6 @@ iris_init_screen_caps(struct iris_screen *screen)
    caps->polygon_offset_clamp = true;
    caps->query_so_overflow = true;
    caps->query_buffer_object = true;
-   caps->tgsi_tex_txf_lz = true;
    caps->texture_query_samples = true;
    caps->shader_clock = true;
    caps->shader_ballot = true;
@@ -410,7 +394,7 @@ iris_init_screen_caps(struct iris_screen *screen)
    caps->constant_buffer_offset_alignment = 32;
    caps->min_map_buffer_alignment = IRIS_MAP_BUFFER_ALIGNMENT;
    caps->shader_buffer_offset_alignment = 4;
-   caps->max_shader_buffer_size = (unsigned)MIN2(screen->isl_dev.max_buffer_size, INT32_MAX); // INT32_MAX is correct.
+   caps->max_shader_buffer_size = ROUND_DOWN_TO((unsigned)MIN2(screen->isl_dev.max_buffer_size, INT32_MAX), 256);
    caps->texture_buffer_offset_alignment = 16; // XXX: u_screen says 256 is the minimum value...
    caps->linear_image_pitch_alignment = 1;
    caps->linear_image_base_address_alignment = 1;
@@ -440,7 +424,7 @@ iris_init_screen_caps(struct iris_screen *screen)
     * extensive checking in the driver for correctness, e.g. to prevent
     * illegal snoop <-> snoop transfers.
     */
-   caps->resource_from_user_memory = devinfo->has_llc;
+   caps->resource_from_user_memory = devinfo->has_llc && devinfo->has_userptr_uapi;
    caps->throttle = !screen->driconf.disable_throttling;
 
    caps->context_priority_mask =
@@ -453,11 +437,10 @@ iris_init_screen_caps(struct iris_screen *screen)
 
    caps->frontend_noop = true;
 
-   // XXX: don't hardcode 00:00:02.0 PCI here
-   caps->pci_group = 0;
-   caps->pci_bus = 0;
-   caps->pci_device = 2;
-   caps->pci_function = 0;
+   caps->pci_group = devinfo->pci_domain;
+   caps->pci_bus = devinfo->pci_bus;
+   caps->pci_device = devinfo->pci_dev;
+   caps->pci_function = devinfo->pci_func;
 
    caps->opencl_integer_functions =
    caps->integer_multiply_32x16 = true;
@@ -499,6 +482,28 @@ iris_init_screen_caps(struct iris_screen *screen)
     * shift it right by one, so the highest valid address bit gets unset.
     */
    caps->max_vma = intel_48b_address(UINT64_MAX) >> 1;
+
+   /* We could implement two-sided color via SBE attribute swizzling but
+    * opt to use common NIR lowering instead of maintaining the complexity
+    * for a minor improvement for a long deprecated feature.
+    */
+   caps->two_sided_color = false;
+
+   if (devinfo->ver >= 9) {
+      caps->shader_subgroup_size = 32;
+      caps->shader_subgroup_supported_stages = BITFIELD_MASK(MESA_SHADER_STAGES);
+      caps->shader_subgroup_supported_features =
+         devinfo->has_64bit_float ? PIPE_SHADER_SUBGROUP_FEATURE_MASK
+                                  : (PIPE_SHADER_SUBGROUP_FEATURE_BASIC |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_VOTE |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_BALLOT |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_ROTATE |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_ROTATE_CLUSTERED |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_SHUFFLE |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_SHUFFLE_RELATIVE |
+                                     PIPE_SHADER_SUBGROUP_FEATURE_QUAD);
+      caps->shader_subgroup_quad_all_stages = true;
+   }
 }
 
 static uint64_t
@@ -528,6 +533,7 @@ iris_screen_destroy(struct iris_screen *screen)
    u_transfer_helper_destroy(screen->base.transfer_helper);
    iris_bufmgr_unref(screen->bufmgr);
    disk_cache_destroy(screen->disk_cache);
+   intel_virtio_unref_fd(screen->winsys_fd);
    close(screen->winsys_fd);
    ralloc_free(screen);
 }
@@ -603,7 +609,7 @@ iris_init_identifier_bo(struct iris_screen *screen)
 
    screen->workaround_address = (struct iris_address) {
       .bo = screen->workaround_bo,
-      .offset = ALIGN(
+      .offset = align(
          intel_debug_write_identifiers(bo_map, 4096, "Iris"), 32),
    };
 
@@ -659,8 +665,8 @@ iris_screen_create(int fd, const struct pipe_screen_config *config)
    if (!screen)
       return NULL;
 
-   driParseConfigFiles(config->options, config->options_info, 0, "iris",
-                       NULL, NULL, NULL, 0, NULL, 0);
+   driParseConfigFiles(config->options, config->options_info,
+                       &(driConfigFileParseParams) { .driverName = "iris" });
 
    bool bo_reuse = false;
    int bo_reuse_mode = driQueryOptioni(config->options, "bo_reuse");
@@ -671,6 +677,9 @@ iris_screen_create(int fd, const struct pipe_screen_config *config)
       bo_reuse = true;
       break;
    }
+
+   if (intel_virtio_init_fd(fd) < 0)
+      return NULL;
 
    process_intel_debug_variable();
 
@@ -729,6 +738,12 @@ iris_screen_create(int fd, const struct pipe_screen_config *config)
       driQueryOptionf(config->options, "lower_depth_range_rate");
    screen->driconf.intel_enable_wa_14018912822 =
       driQueryOptionb(config->options, "intel_enable_wa_14018912822");
+   screen->driconf.intel_enable_wa_14024015672_msaa =
+      driQueryOptionb(config->options, "intel_enable_wa_14024015672_msaa");
+   screen->driconf.force_sampler_prefetch =
+      driQueryOptionb(config->options, "intel_force_sampler_prefetch");
+   screen->driconf.force_compute_surface_prefetch =
+      driQueryOptionb(config->options, "intel_force_compute_surface_prefetch");
    screen->driconf.enable_tbimr =
       driQueryOptionb(config->options, "intel_tbimr");
    screen->driconf.enable_vf_distribution =
@@ -737,6 +752,8 @@ iris_screen_create(int fd, const struct pipe_screen_config *config)
       driQueryOptionb(config->options, "intel_te_distribution");
    screen->driconf.generated_indirect_threshold =
       driQueryOptioni(config->options, "generated_indirect_threshold");
+   screen->driconf.disable_threaded_context =
+      driQueryOptionb(config->options, "intel_disable_threaded_context");
 
    screen->precompile = debug_get_bool_option("shader_precompile", true);
 

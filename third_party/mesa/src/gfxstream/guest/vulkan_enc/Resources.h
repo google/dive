@@ -5,7 +5,7 @@
 #pragma once
 #include "util/detect_os.h"
 
-#if DETECT_OS_ANDROID || DETECT_OS_FUCHSIA
+#if DETECT_OS_ANDROID
 #include <hardware/hwvulkan.h>
 #elif DETECT_OS_LINUX
 #include <vulkan/vk_icd.h>
@@ -39,7 +39,7 @@ struct goldfish_vk_object_list {
     struct goldfish_vk_object_list* next;
 };
 
-#if DETECT_OS_ANDROID || DETECT_OS_FUCHSIA
+#if DETECT_OS_ANDROID
 #define DECLARE_HWVULKAN_DISPATCH hwvulkan_dispatch_t dispatch;
 #elif DETECT_OS_LINUX
 #define DECLARE_HWVULKAN_DISPATCH VK_LOADER_DATA loaderData;

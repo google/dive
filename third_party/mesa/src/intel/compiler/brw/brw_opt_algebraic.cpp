@@ -411,22 +411,35 @@ brw_opt_algebraic(brw_shader &s)
          if (inst->src[0].file != IMM)
             break;
 
-         if (inst->saturate) {
-            /* Full mixed-type saturates don't happen.  However, we can end up
-             * with things like:
-             *
-             *    mov.sat(8) g21<1>DF       -1F
-             *
-             * Other mixed-size-but-same-base-type cases may also be possible.
-             */
-            if (inst->dst.type != inst->src[0].type &&
-                inst->dst.type != BRW_TYPE_DF &&
-                inst->src[0].type != BRW_TYPE_F)
-               UNREACHABLE("unimplemented: saturate mixed types");
-
-            if (brw_reg_saturate_immediate(&inst->src[0])) {
+         if (inst->saturate && brw_type_is_float(inst->dst.type)) {
+            switch (inst->src[0].type) {
+            case BRW_TYPE_UW:
+            case BRW_TYPE_UD:
+            case BRW_TYPE_UQ:
+               inst->src[0] = brw_imm_f(src_as_uint(inst->src[0]) != 0);
                inst->saturate = false;
                progress = true;
+               break;
+
+            case BRW_TYPE_W:
+            case BRW_TYPE_D:
+            case BRW_TYPE_Q:
+               inst->src[0] = brw_imm_f((int64_t)src_as_uint(inst->src[0]) > 0);
+               inst->saturate = false;
+               progress = true;
+               break;
+
+            case BRW_TYPE_HF:
+            case BRW_TYPE_F:
+            case BRW_TYPE_DF:
+               inst->src[0] = brw_imm_f(SATURATE(src_as_float(inst->src[0])));
+               inst->saturate = false;
+               progress = true;
+               break;
+
+            default:
+               /* VF, BF, BF8, HF8 and others are not handled. */
+               break;
             }
          }
          break;
@@ -553,39 +566,6 @@ brw_opt_algebraic(brw_shader &s)
             inst->predicate_inverse = false;
             inst->conditional_mod = BRW_CONDITIONAL_NONE;
             progress = true;
-         } else if (inst->saturate && inst->src[1].file == IMM) {
-            switch (inst->conditional_mod) {
-            case BRW_CONDITIONAL_LE:
-            case BRW_CONDITIONAL_L:
-               switch (inst->src[1].type) {
-               case BRW_TYPE_F:
-                  if (inst->src[1].f >= 1.0f) {
-                     inst = brw_transform_inst(s, inst, BRW_OPCODE_MOV);
-                     inst->conditional_mod = BRW_CONDITIONAL_NONE;
-                     progress = true;
-                  }
-                  break;
-               default:
-                  break;
-               }
-               break;
-            case BRW_CONDITIONAL_GE:
-            case BRW_CONDITIONAL_G:
-               switch (inst->src[1].type) {
-               case BRW_TYPE_F:
-                  if (inst->src[1].f <= 0.0f) {
-                     inst = brw_transform_inst(s, inst, BRW_OPCODE_MOV);
-                     inst->conditional_mod = BRW_CONDITIONAL_NONE;
-                     progress = true;
-                  }
-                  break;
-               default:
-                  break;
-               }
-               break;
-            default:
-               break;
-            }
          }
          break;
       case BRW_OPCODE_CSEL:

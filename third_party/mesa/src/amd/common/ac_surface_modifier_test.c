@@ -6,17 +6,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "drm-uapi/amdgpu_drm.h"
 #include "drm-uapi/drm_fourcc.h"
 
 #include "ac_surface.h"
+#include "util/format/u_format.h"
 #include "util/macros.h"
 #include "util/u_math.h"
 #include "util/u_vector.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "addrlib/inc/addrinterface.h"
 
-#include "ac_fake_hw_db.h"
+#include "ac_surface_test.h"
 
 /*
  * The main goal of this test is making sure that we do
@@ -31,17 +31,17 @@ struct test_entry {
    enum pipe_format format;
 
    /* debug info */
-   const char *name;
    uint8_t pipes;
    uint8_t rb;
    uint8_t banks_or_pkrs;
    uint8_t se;
+   const char *name;
 
    /* value to determine uniqueness */
-   unsigned char hash[20];
+   unsigned char hash[BLAKE3_KEY_LEN];
 
    /* u_vector requires power of two sizing */
-   char padding[sizeof(void*) == 8 ? 8 : 16];
+   char padding[sizeof(void*) == 8 ? 0 : 4];
 };
 
 static uint64_t
@@ -117,13 +117,13 @@ static void gfx9_generate_hash(struct ac_addrlib *ac_addrlib,
    ADDR_HANDLE addrlib = ac_addrlib_get_handle(ac_addrlib);
 
    srandom(53);
-   struct mesa_sha1 ctx;
-   _mesa_sha1_init(&ctx);
+   blake3_hasher ctx;
+   _mesa_blake3_init(&ctx);
 
-   _mesa_sha1_update(&ctx, &surf->total_size, sizeof(surf->total_size));
-   _mesa_sha1_update(&ctx, &surf->meta_offset, sizeof(surf->meta_offset));
-   _mesa_sha1_update(&ctx, &surf->display_dcc_offset, sizeof(surf->display_dcc_offset));
-   _mesa_sha1_update(&ctx, &surf->u.gfx9.color.display_dcc_pitch_max,
+   _mesa_blake3_update(&ctx, &surf->total_size, sizeof(surf->total_size));
+   _mesa_blake3_update(&ctx, &surf->meta_offset, sizeof(surf->meta_offset));
+   _mesa_blake3_update(&ctx, &surf->display_dcc_offset, sizeof(surf->display_dcc_offset));
+   _mesa_blake3_update(&ctx, &surf->u.gfx9.color.display_dcc_pitch_max,
                      sizeof(surf->u.gfx9.color.display_dcc_pitch_max));
 
    ADDR2_COMPUTE_SURFACE_ADDRFROMCOORD_INPUT input = {0};
@@ -168,7 +168,7 @@ static void gfx9_generate_hash(struct ac_addrlib *ac_addrlib,
       ADDR_E_RETURNCODE ret = Addr2ComputeSurfaceAddrFromCoord(addrlib, &input, &output);
       assert(ret == ADDR_OK);
 
-      _mesa_sha1_update(&ctx, &output.addr, sizeof(output.addr));
+      _mesa_blake3_update(&ctx, &output.addr, sizeof(output.addr));
 
       if (surf->meta_offset) {
          dcc_input.x = (x & INT_MAX) % entry->w;
@@ -180,7 +180,7 @@ static void gfx9_generate_hash(struct ac_addrlib *ac_addrlib,
          ret = Addr2ComputeDccAddrFromCoord(addrlib, &dcc_input, &dcc_output);
          assert(ret == ADDR_OK);
 
-         _mesa_sha1_update(&ctx, &dcc_output.addr, sizeof(dcc_output.addr));
+         _mesa_blake3_update(&ctx, &dcc_output.addr, sizeof(dcc_output.addr));
       }
 
       if (surf->display_dcc_offset) {
@@ -193,11 +193,11 @@ static void gfx9_generate_hash(struct ac_addrlib *ac_addrlib,
          ret = Addr2ComputeDccAddrFromCoord(addrlib, &display_dcc_input, &dcc_output);
          assert(ret == ADDR_OK);
 
-         _mesa_sha1_update(&ctx, &dcc_output.addr, sizeof(dcc_output.addr));
+         _mesa_blake3_update(&ctx, &dcc_output.addr, sizeof(dcc_output.addr));
       }
    }
 
-   _mesa_sha1_final(&ctx, entry->hash);
+   _mesa_blake3_final(&ctx, entry->hash);
 }
 
 static void gfx12_generate_hash(struct ac_addrlib *ac_addrlib,
@@ -207,14 +207,14 @@ static void gfx12_generate_hash(struct ac_addrlib *ac_addrlib,
    ADDR_HANDLE addrlib = ac_addrlib_get_handle(ac_addrlib);
 
    srandom(53);
-   struct mesa_sha1 ctx;
-   _mesa_sha1_init(&ctx);
+   blake3_hasher ctx;
+   _mesa_blake3_init(&ctx);
 
-   _mesa_sha1_update(&ctx, &surf->total_size, sizeof(surf->total_size));
+   _mesa_blake3_update(&ctx, &surf->total_size, sizeof(surf->total_size));
    /* We need to hash these even though they are not used by gfx12. */
-   _mesa_sha1_update(&ctx, &surf->meta_offset, sizeof(surf->meta_offset));
-   _mesa_sha1_update(&ctx, &surf->display_dcc_offset, sizeof(surf->display_dcc_offset));
-   _mesa_sha1_update(&ctx, &surf->u.gfx9.color.display_dcc_pitch_max,
+   _mesa_blake3_update(&ctx, &surf->meta_offset, sizeof(surf->meta_offset));
+   _mesa_blake3_update(&ctx, &surf->display_dcc_offset, sizeof(surf->display_dcc_offset));
+   _mesa_blake3_update(&ctx, &surf->u.gfx9.color.display_dcc_pitch_max,
                      sizeof(surf->u.gfx9.color.display_dcc_pitch_max));
 
    ADDR3_COMPUTE_SURFACE_ADDRFROMCOORD_INPUT input = {0};
@@ -243,10 +243,10 @@ static void gfx12_generate_hash(struct ac_addrlib *ac_addrlib,
       ADDR_E_RETURNCODE ret = Addr3ComputeSurfaceAddrFromCoord(addrlib, &input, &output);
       assert(ret == ADDR_OK);
 
-      _mesa_sha1_update(&ctx, &output.addr, sizeof(output.addr));
+      _mesa_blake3_update(&ctx, &output.addr, sizeof(output.addr));
    }
 
-   _mesa_sha1_final(&ctx, entry->hash);
+   _mesa_blake3_final(&ctx, entry->hash);
 }
 
 static void test_modifier(const struct radeon_info *info,
@@ -276,6 +276,10 @@ static void test_modifier(const struct radeon_info *info,
             .num_channels = 3,
             .array_size = 1
          },
+         .blk_w = 1,
+         .blk_h = 1,
+         .bpe = util_format_get_blocksize(format),
+         .modifier = modifier,
       };
 
       struct test_entry entry = {
@@ -292,12 +296,7 @@ static void test_modifier(const struct radeon_info *info,
             G_0098F8_NUM_PKRS(info->gb_addr_config) : G_0098F8_NUM_BANKS(info->gb_addr_config)
       };
 
-      struct radeon_surf surf = (struct radeon_surf) {
-         .blk_w = 1,
-         .blk_h = 1,
-         .bpe = util_format_get_blocksize(format),
-         .modifier = modifier,
-      };
+      struct radeon_surf surf;
 
       int r = ac_compute_surface(addrlib, info, &config, RADEON_SURF_MODE_2D, &surf);
       assert(!r);
@@ -513,12 +512,12 @@ int main()
    struct u_vector test_entries;
    u_vector_init_pow2(&test_entries, 64, sizeof(struct test_entry));
 
-   for (unsigned i = 0; i < ARRAY_SIZE(ac_fake_hw_db); ++i) {
+   for (unsigned i = 0; i < ARRAY_SIZE(ac_surface_fake_devices); ++i) {
       struct radeon_info info = { .drm_major = 0 };
 
-      get_radeon_info(&info, &ac_fake_hw_db[i]);
+      get_radeon_info(&info, &ac_surface_fake_devices[i]);
 
-      run_modifier_test(&test_entries, ac_fake_hw_db[i].name, &info);
+      run_modifier_test(&test_entries, ac_surface_fake_devices[i].name, &info);
    }
 
    qsort(u_vector_tail(&test_entries),

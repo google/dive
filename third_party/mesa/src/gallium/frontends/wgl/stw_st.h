@@ -49,7 +49,8 @@ stw_st_flush(struct st_context *st, struct pipe_frontend_drawable *drawable,
              unsigned flags);
 
 bool
-stw_st_swap_framebuffer_locked(HDC hdc,
+stw_st_swap_framebuffer_locked(struct st_context *st,
+                               HDC hdc,
                                struct pipe_frontend_drawable *drawable);
 
 struct pipe_resource *

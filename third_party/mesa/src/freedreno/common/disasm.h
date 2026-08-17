@@ -20,7 +20,26 @@ enum debug_t {
    EXPAND_REPEAT = 0x8,
 };
 
+/* bitmask of sampler/memobj descriptor usage per bindless/bindfull
+ * bases.  If the sampler/texture is not immediate (such as .s2en)
+ * then the corresponding bitmask is set to ~0 (ie. all used).  For
+ * simplicity, #tN immediate > 64 marks all used (~0)
+ */
+struct descriptor_stats {
+   uint64_t img;             /* img/img_bindless descriptor usage */
+   uint64_t tex;             /* non img/img_bindless cat5/cat6 descriptor usage */
+   uint64_t samp;            /* cat5 sampler usage */
+   uint64_t ubo;             /* ubo descriptor usage */
+};
+
+/* Keep in sync with domain "ir3_shader_stats" in xml */
 struct shader_stats {
+   /* desc[0] is bindfull, desc[N+1] is .baseN: */
+   struct descriptor_stats desc[9];
+   uint32_t has_img;
+   uint32_t has_tex;
+   uint32_t has_samp;
+   uint32_t has_ubo;
    /* instructions counts rpnN, and instlen does not */
    int instructions, instlen;
    int nops;
@@ -35,14 +54,17 @@ struct shader_stats {
    uint16_t instrs_per_cat[8];
 };
 
-int disasm_a2xx(uint32_t *dwords, int sizedwords, int level,
+int disasm_a2xx(const uint32_t *dwords, int sizedwords, int level,
                 mesa_shader_stage type);
-int disasm_a3xx(uint32_t *dwords, int sizedwords, int level, FILE *out,
+int disasm_a3xx(const uint32_t *dwords, int sizedwords, int level, FILE *out,
                 unsigned gpu_id);
-int disasm_a3xx_stat(uint32_t *dwords, int sizedwords, int level, FILE *out,
-                     unsigned gpu_id, struct shader_stats *stats);
-int try_disasm_a3xx(uint32_t *dwords, int sizedwords, int level, FILE *out,
-                    unsigned gpu_id);
+int disasm_a3xx_stat(const uint32_t *dwords, int sizedwords, int level,
+                     FILE *out, unsigned gpu_id, struct shader_stats *stats);
+int try_disasm_a3xx(const uint32_t *dwords, int sizedwords, int level,
+                    FILE *out, unsigned gpu_id);
+int try_disasm_a3xx_stat(const uint32_t *dwords, int sizedwords, int level,
+                         FILE *out, unsigned gpu_id,
+                         struct shader_stats *stats);
 
 // GOOGLE: thread safe version of disasm_a3xx_stat
 int disasm_a3xx_stat_with_debug(uint32_t *dwords, int sizedwords,

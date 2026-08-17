@@ -166,7 +166,7 @@ vn_sizeof_VkFramebufferCreateInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkFramebufferCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkFramebufferCreateInfo_pnext(((const VkFramebufferAttachmentsCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkFramebufferAttachmentsCreateInfo_self((const VkFramebufferAttachmentsCreateInfo *)pnext);
             return size;
         default:
@@ -222,7 +222,7 @@ vn_encode_VkFramebufferCreateInfo_pnext(struct vn_cs_encoder *enc, const void *v
         case VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkFramebufferCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkFramebufferCreateInfo_pnext(enc, ((const VkFramebufferAttachmentsCreateInfo *)pnext)->pNext);
             vn_encode_VkFramebufferAttachmentsCreateInfo_self(enc, (const VkFramebufferAttachmentsCreateInfo *)pnext);
             return;
         default:

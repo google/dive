@@ -126,7 +126,7 @@ typedef BITSET_DECLARE(st_state_bitset, ST_NUM_ATOMS);
    } while (0)
 
 #define ST_SET_ALL_STATES(bitset) \
-   BITSET_SET_RANGE(bitset, 0, ST_NUM_ATOMS - 1)
+   BITSET_SET_COUNT(bitset, 0, ST_NUM_ATOMS)
 
 #define ST_SHADER_STATE_MASK(bitset, shader) \
    ST_SET_STATE4(bitset, ST_NEW_##shader##_STATE, ST_NEW_##shader##_SAMPLER_VIEWS, \
@@ -134,6 +134,13 @@ typedef BITSET_DECLARE(st_state_bitset, ST_NUM_ATOMS);
    ST_SET_STATE4(bitset, ST_NEW_##shader##_UBOS, ST_NEW_##shader##_ATOMICS, \
                  ST_NEW_##shader##_SSBOS, ST_NEW_##shader##_IMAGES);
 
+/* This is in fact states for vertex pipeline (as opposite to mesh pipeline).
+ * But we still include mesh shader states to ensure mesh shader is not set
+ * when using vertex pipeline (so does the mesh pipeline) to simplify driver
+ * implementation.
+ *
+ * TODO: remove mesh shader states from this macro once driver is ready.
+ */
 #define ST_PIPELINE_RENDER_STATE_MASK(bitset) \
    st_state_bitset bitset = {0}; \
    ST_SHADER_STATE_MASK(bitset, CS); \

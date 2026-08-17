@@ -27,8 +27,7 @@
 #include "util/u_math.h"
 #include "util/u_pack_color.h"
 
-#include "adreno_common.xml.h"
-#include "adreno_pm4.xml.h"
+#include "fd_hw_common.h"
 #include "disasm.h"
 
 #ifdef __cplusplus
@@ -101,7 +100,7 @@ extern bool fd_binning_enabled;
 #define DBG(fmt, ...)                                                          \
    do {                                                                        \
       if (FD_DBG(MSGS))                                                        \
-         mesa_logi("%5d: %s:%d: " fmt, ((pid_t)syscall(SYS_gettid)),           \
+         mesa_logd("%5d: %s:%d: " fmt, ((pid_t)syscall(SYS_gettid)),           \
                                         __func__, __LINE__,                    \
                                         ##__VA_ARGS__);                        \
    } while (0)
@@ -324,11 +323,10 @@ OUT_RINGP(struct fd_ringbuffer *ring, uint32_t data, struct util_dynarray *buf)
       DBG("ring[%p]: OUT_RINGP  %04x:  %08x", ring,
           (uint32_t)(ring->cur - ring->start), data);
    }
-   util_dynarray_append(buf, struct fd_cs_patch,
-                        ((struct fd_cs_patch){
-                           .cs = ring->cur++,
-                           .val = data,
-                        }));
+   util_dynarray_append(buf, ((struct fd_cs_patch){
+            .cs = ring->cur++,
+            .val = data,
+         }));
 }
 
 static inline void

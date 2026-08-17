@@ -25,6 +25,7 @@
  */
 
 #include "etnaviv_format.h"
+#include "etnaviv_screen.h"
 
 #include "hw/common_3d.xml.h"
 #include "hw/state.xml.h"
@@ -138,6 +139,8 @@ static struct etna_format formats[PIPE_FORMAT_COUNT] = {
    V_(R32_SSCALED, INT,          NONE),
    VT(R32_FLOAT,   FLOAT,        EXT_R32F | EXT_FORMAT, R32F),
    V_(R32_FIXED,   FIXED,        NONE),
+   _T(Z32_FLOAT,   EXT_R32F | EXT_FORMAT, NONE),  /* emulated format */
+   _T(Z32_FLOAT_S8X24_UINT,  EXT_R32F | EXT_FORMAT, NONE),  /* emulated format */
 
    V_(R16G16_UNORM,   UNSIGNED_SHORT, NONE),
    V_(R16G16_SNORM,   SHORT,          NONE),
@@ -149,9 +152,9 @@ static struct etna_format formats[PIPE_FORMAT_COUNT] = {
 
    V_(A8B8G8R8_UNORM,   UNSIGNED_BYTE, NONE),
 
-   VT(R8G8B8A8_UNORM,   UNSIGNED_BYTE, A8B8G8R8, A8B8G8R8),
+   VT(R8G8B8A8_UNORM,   UNSIGNED_BYTE, A8R8G8B8, A8B8G8R8),
    VT(R8G8B8A8_SNORM,   BYTE,          EXT_A8B8G8R8_SNORM | EXT_FORMAT, NONE),
-   _T(R8G8B8X8_UNORM,   X8B8G8R8,      X8B8G8R8),
+   _T(R8G8B8X8_UNORM,   X8R8G8B8,      X8B8G8R8),
    _T(R8G8B8X8_SNORM,                  EXT_X8B8G8R8_SNORM | EXT_FORMAT, NONE),
    VT(R8G8B8A8_UINT,    BYTE_I,        EXT_A8B8G8R8I | EXT_FORMAT,      A8B8G8R8I),
    VT(R8G8B8A8_SINT,    BYTE_I,        EXT_A8B8G8R8I | EXT_FORMAT,      A8B8G8R8I),
@@ -168,10 +171,17 @@ static struct etna_format formats[PIPE_FORMAT_COUNT] = {
    V_(R10G10B10A2_USCALED, UNSIGNED_INT_2_10_10_10_REV, NONE),
    V_(R10G10B10A2_SSCALED, INT_2_10_10_10_REV,          NONE),
 
+   V_(B10G10R10A2_UNORM,   UNSIGNED_INT_10_10_10_2,   NONE),
+   V_(B10G10R10A2_SNORM,   INT_10_10_10_2,            NONE),
+   V_(B10G10R10A2_USCALED, UNSIGNED_INT_10_10_10_2,   NONE),
+   V_(B10G10R10A2_SSCALED, INT_10_10_10_2,            NONE),
+
    _T(X8Z24_UNORM,       D24X8, NONE),
    _T(S8_UINT_Z24_UNORM, D24X8, NONE),
 
+   _T(S8_UINT,    EXT_R8I | EXT_FORMAT, NONE),
    _T(S8X24_UINT, EXT_D24S8 | EXT_FORMAT, NONE),
+   _T(X32_S8X24_UINT, EXT_D24S8 | EXT_FORMAT, NONE),
 
    _T(R9G9B9E5_FLOAT,  E5B9G9R9,                    NONE),
    _T(R11G11B10_FLOAT, EXT_B10G11R11F | EXT_FORMAT, B10G11R11F),
@@ -216,8 +226,8 @@ static struct etna_format formats[PIPE_FORMAT_COUNT] = {
    /* 128-bit */
    V_(R32G32B32A32_UNORM,   UNSIGNED_INT, NONE),
    V_(R32G32B32A32_SNORM,   INT,          NONE),
-   VT(R32G32B32A32_UINT,    INT,          EXT_G32R32I | EXT_FORMAT, G32R32F), /* emulated format */
-   VT(R32G32B32A32_SINT,    INT,          EXT_G32R32I | EXT_FORMAT, G32R32F), /* emulated format */
+   VT(R32G32B32A32_UINT,    FLOAT,        EXT_G32R32I | EXT_FORMAT, G32R32F), /* emulated format */
+   VT(R32G32B32A32_SINT,    FLOAT,        EXT_G32R32I | EXT_FORMAT, G32R32F), /* emulated format */
    V_(R32G32B32A32_USCALED, UNSIGNED_INT, NONE),
    V_(R32G32B32A32_SSCALED, INT,          NONE),
    VT(R32G32B32A32_FLOAT,   FLOAT,        EXT_G32R32F | EXT_FORMAT, G32R32F), /* emulated format */
@@ -263,14 +273,24 @@ static struct etna_format formats[PIPE_FORMAT_COUNT] = {
 };
 
 uint32_t
-translate_texture_format(enum pipe_format fmt)
+translate_texture_format(enum pipe_format fmt, const struct etna_screen *screen)
 {
    fmt = util_format_linear(fmt);
+   fmt = translate_emulated_format_z32f(fmt);
 
    if (!formats[fmt].present)
       return ETNA_NO_MATCH;
 
-   return formats[fmt].tex;
+   uint32_t format = formats[fmt].tex;
+
+   if (screen->info->halti >= 5) {
+      if (fmt == PIPE_FORMAT_R32_SINT || fmt == PIPE_FORMAT_R32_UINT)
+         format = TEXTURE_FORMAT_EXT_R32I | EXT_FORMAT;
+      else if (fmt == PIPE_FORMAT_R32G32_SINT || fmt == PIPE_FORMAT_R32G32_UINT)
+         format = TEXTURE_FORMAT_EXT_G32R32I | EXT_FORMAT;
+   }
+
+   return format;
 }
 
 bool
@@ -383,7 +403,41 @@ translate_pe_format_rb_swap(enum pipe_format fmt)
    fmt = util_format_linear(fmt);
    assert(formats[fmt].present);
 
+   if (formats[fmt].pe == ETNA_NO_MATCH)
+      return 0;
+
    return formats[fmt].pe & PE_FORMAT_RB_SWAP;
+}
+
+/* For RB_SWAP formats, remaps the HW texture format to the one matching
+ * native byte order in memory (e.g., A8B8G8R8 for RGBA data). Normally we
+ * use A8R8G8B8 to match PE-internal BGRA byte order, but shared resources
+ * that have been flushed store data in the standard byte order.
+ */
+uint32_t
+remap_texture_format_rb_swap(uint32_t format)
+{
+   switch (format) {
+   case TEXTURE_FORMAT_A8R8G8B8: return TEXTURE_FORMAT_A8B8G8R8;
+   case TEXTURE_FORMAT_X8R8G8B8: return TEXTURE_FORMAT_X8B8G8R8;
+   default: return format;
+   }
+}
+
+enum pipe_format
+translate_pe_internal_format(enum pipe_format fmt)
+{
+   if (!translate_pe_format_rb_swap(fmt))
+      return fmt;
+
+   switch (fmt) {
+   case PIPE_FORMAT_R8G8B8A8_UNORM: return PIPE_FORMAT_B8G8R8A8_UNORM;
+   case PIPE_FORMAT_R8G8B8X8_UNORM: return PIPE_FORMAT_B8G8R8X8_UNORM;
+   case PIPE_FORMAT_R8G8B8A8_SRGB:  return PIPE_FORMAT_B8G8R8A8_SRGB;
+   case PIPE_FORMAT_R8G8B8X8_SRGB:  return PIPE_FORMAT_B8G8R8X8_SRGB;
+   default:
+      UNREACHABLE("unexpected rb_swap format");
+   }
 }
 
 /* Return type flags for vertex element format */

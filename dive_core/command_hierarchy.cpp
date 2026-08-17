@@ -1563,9 +1563,14 @@ void CommandHierarchyCreator::AppendRegNodes(const IMemoryManager& mem_manager,
         const RegInfo* reg_info_ptr = GetRegInfo(reg_offset);
 
         RegInfo temp = {};
-        temp.m_name = "Unknown";
-        temp.m_enum_handle = UINT8_MAX;
-        if (reg_info_ptr == nullptr) reg_info_ptr = &temp;
+        std::ostringstream reg_string_stream;
+        if (reg_info_ptr == nullptr)
+        {
+            reg_string_stream << "Unknown " << " 0x" << std::hex << reg_offset << std::dec;
+            temp.m_name = reg_string_stream.str().c_str();
+            temp.m_enum_handle = UINT8_MAX;
+            reg_info_ptr = &temp;
+        }
 
         uint32_t size_to_read = sizeof(uint32_t);
         if (reg_info_ptr->m_is_64_bit) size_to_read = sizeof(uint64_t);
@@ -1847,7 +1852,7 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager&
             if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
                 AppendSharps("A6XX_TEX_SAMP", bindless ? 16 : sizeof(A6XX_TEX_SAMP));
             else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
-                AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
+                AppendSharps("A6XX_TEX_MEMOBJ", sizeof(A6XX_TEX_MEMOBJ));
             else if (packet.bitfields0.STATE_TYPE == ST6_UBO)
                 AppendSharps("A6XX_UBO", bindless ? 16 : sizeof(A6XX_UBO));
             break;
@@ -1873,12 +1878,12 @@ void CommandHierarchyCreator::AppendLoadStateExtBufferNode(const IMemoryManager&
             else if (packet.bitfields0.STATE_TYPE == ST6_UAV)
             {
                 DIVE_ASSERT(packet.bitfields0.STATE_BLOCK == SB6_CS_SHADER);
-                AppendSharps("A6XX_TEX_CONST", sizeof(A6XX_TEX_CONST));
+                AppendSharps("A6XX_TEX_MEMOBJ", sizeof(A6XX_TEX_MEMOBJ));
             }
             break;
         case StateBlockCat::kUAV:
             if (packet.bitfields0.STATE_TYPE == ST6_SHADER)
-                AppendSharps("A6XX_TEX_CONST", bindless ? 16 : sizeof(A6XX_TEX_CONST));
+                AppendSharps("A6XX_TEX_MEMOBJ", bindless ? 16 : sizeof(A6XX_TEX_MEMOBJ));
             else if (packet.bitfields0.STATE_TYPE == ST6_CONSTANTS)
             {
                 // NUM_UNIT is in unit of 2 dwords

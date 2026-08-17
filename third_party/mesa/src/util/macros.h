@@ -103,7 +103,7 @@
 #ifndef __GNUC__
    /* a grown-up compiler is required for the extra type checking: */
 #  define container_of(ptr, type, member)                               \
-      (type*)((uint8_t *)ptr - offsetof(type, member))
+      ((type*)((uint8_t *)ptr - offsetof(type, member)))
 #else
 #  define __same_type(a, b) \
       __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
@@ -509,18 +509,24 @@ typedef int lock_cap_t;
 #define PRAGMA_DIAGNOSTIC_ERROR(X)   DO_PRAGMA( clang diagnostic error #X )
 #define PRAGMA_DIAGNOSTIC_WARNING(X) DO_PRAGMA( clang diagnostic warning #X )
 #define PRAGMA_DIAGNOSTIC_IGNORED(X) DO_PRAGMA( clang diagnostic ignored #X )
+#define PRAGMA_DIAGNOSTIC_IGNORED_CLANG(X) DO_PRAGMA( clang diagnostic ignored #X )
+#define PRAGMA_DIAGNOSTIC_IGNORED_GCC(X)
 #elif defined(__GNUC__)
 #define PRAGMA_DIAGNOSTIC_PUSH       _Pragma("GCC diagnostic push")
 #define PRAGMA_DIAGNOSTIC_POP        _Pragma("GCC diagnostic pop")
 #define PRAGMA_DIAGNOSTIC_ERROR(X)   DO_PRAGMA( GCC diagnostic error #X )
 #define PRAGMA_DIAGNOSTIC_WARNING(X) DO_PRAGMA( GCC diagnostic warning #X )
 #define PRAGMA_DIAGNOSTIC_IGNORED(X) DO_PRAGMA( GCC diagnostic ignored #X )
+#define PRAGMA_DIAGNOSTIC_IGNORED_CLANG(X)
+#define PRAGMA_DIAGNOSTIC_IGNORED_GCC(X) DO_PRAGMA( GCC diagnostic ignored #X )
 #else
 #define PRAGMA_DIAGNOSTIC_PUSH
 #define PRAGMA_DIAGNOSTIC_POP
 #define PRAGMA_DIAGNOSTIC_ERROR(X)
 #define PRAGMA_DIAGNOSTIC_WARNING(X)
 #define PRAGMA_DIAGNOSTIC_IGNORED(X)
+#define PRAGMA_DIAGNOSTIC_IGNORED_CLANG(X)
+#define PRAGMA_DIAGNOSTIC_IGNORED_GCC(X)
 #endif
 
 #define PASTE2(a, b) a ## b
@@ -542,24 +548,12 @@ typedef int lock_cap_t;
 /*
  * SWAP - swap value of @a and @b
  */
-#if !defined(_MSC_VER) || _MSC_VER >= 1939 /* MSVC 17.9 or later for __typeof__ */
 #define SWAP(a, b)                                                             \
    do {                                                                        \
       __typeof__(a) __tmp = (a);                                               \
       (a) = (b);                                                               \
       (b) = __tmp;                                                             \
    } while (0)
-#else
-#define SWAP(a, b)                                                             \
-   do {                                                                        \
-      /* NOLINTBEGIN(bugprone-sizeof-expression) */                            \
-      char __tmp[sizeof(a) == sizeof(b) ? (ptrdiff_t)sizeof(a) : -1];          \
-      memcpy(__tmp, &(b), sizeof(a));                                          \
-      memcpy(&(b), &(a), sizeof(a));                                           \
-      memcpy(&(a), __tmp, sizeof(a));                                          \
-      /* NOLINTEND(bugprone-sizeof-expression) */                              \
-   } while (0)
-#endif
 
 #define typed_memcpy(dest, src, count) do { \
    STATIC_ASSERT(sizeof(*(src)) == sizeof(*(dest))); \

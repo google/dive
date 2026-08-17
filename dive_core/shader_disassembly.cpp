@@ -29,9 +29,15 @@
 // To avoid warning from disasm.h
 #pragma warning(disable : 4996)
 #endif
+
+// Pre-include the header containing C++ templates before the extern "C" block.
+// This triggers its include guard so it is skipped when disasm.h includes it,
+// preventing the "template with C linkage" compiler error.
+#include "compiler/shader_enums.h"
+
 extern "C"
 {
-#include "third_party/mesa/src/freedreno/common/disasm.h"
+#include "freedreno/common/disasm.h"
 }
 
 namespace Dive

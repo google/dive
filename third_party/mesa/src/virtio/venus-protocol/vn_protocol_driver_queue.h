@@ -249,19 +249,19 @@ vn_sizeof_VkSubmitInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_SUBMIT_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkSubmitInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkSubmitInfo_pnext(((const VkDeviceGroupSubmitInfo *)pnext)->pNext);
             size += vn_sizeof_VkDeviceGroupSubmitInfo_self((const VkDeviceGroupSubmitInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_PROTECTED_SUBMIT_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkSubmitInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkSubmitInfo_pnext(((const VkProtectedSubmitInfo *)pnext)->pNext);
             size += vn_sizeof_VkProtectedSubmitInfo_self((const VkProtectedSubmitInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkSubmitInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkSubmitInfo_pnext(((const VkTimelineSemaphoreSubmitInfo *)pnext)->pNext);
             size += vn_sizeof_VkTimelineSemaphoreSubmitInfo_self((const VkTimelineSemaphoreSubmitInfo *)pnext);
             return size;
         default:
@@ -335,19 +335,19 @@ vn_encode_VkSubmitInfo_pnext(struct vn_cs_encoder *enc, const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_SUBMIT_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkSubmitInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkSubmitInfo_pnext(enc, ((const VkDeviceGroupSubmitInfo *)pnext)->pNext);
             vn_encode_VkDeviceGroupSubmitInfo_self(enc, (const VkDeviceGroupSubmitInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_PROTECTED_SUBMIT_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkSubmitInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkSubmitInfo_pnext(enc, ((const VkProtectedSubmitInfo *)pnext)->pNext);
             vn_encode_VkProtectedSubmitInfo_self(enc, (const VkProtectedSubmitInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkSubmitInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkSubmitInfo_pnext(enc, ((const VkTimelineSemaphoreSubmitInfo *)pnext)->pNext);
             vn_encode_VkTimelineSemaphoreSubmitInfo_self(enc, (const VkTimelineSemaphoreSubmitInfo *)pnext);
             return;
         default:
@@ -620,13 +620,13 @@ vn_sizeof_VkBindSparseInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_BIND_SPARSE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkBindSparseInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkBindSparseInfo_pnext(((const VkDeviceGroupBindSparseInfo *)pnext)->pNext);
             size += vn_sizeof_VkDeviceGroupBindSparseInfo_self((const VkDeviceGroupBindSparseInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkBindSparseInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkBindSparseInfo_pnext(((const VkTimelineSemaphoreSubmitInfo *)pnext)->pNext);
             size += vn_sizeof_VkTimelineSemaphoreSubmitInfo_self((const VkTimelineSemaphoreSubmitInfo *)pnext);
             return size;
         default:
@@ -709,13 +709,13 @@ vn_encode_VkBindSparseInfo_pnext(struct vn_cs_encoder *enc, const void *val)
         case VK_STRUCTURE_TYPE_DEVICE_GROUP_BIND_SPARSE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkBindSparseInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkBindSparseInfo_pnext(enc, ((const VkDeviceGroupBindSparseInfo *)pnext)->pNext);
             vn_encode_VkDeviceGroupBindSparseInfo_self(enc, (const VkDeviceGroupBindSparseInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkBindSparseInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkBindSparseInfo_pnext(enc, ((const VkTimelineSemaphoreSubmitInfo *)pnext)->pNext);
             vn_encode_VkTimelineSemaphoreSubmitInfo_self(enc, (const VkTimelineSemaphoreSubmitInfo *)pnext);
             return;
         default:

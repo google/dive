@@ -6,6 +6,7 @@
 #include "nvkmd_nouveau.h"
 
 #include "nouveau_device.h"
+#include "util/cache_ops.h"
 #include "util/os_misc.h"
 #include "util/drm_is_nouveau.h"
 #include "vk_log.h"
@@ -14,6 +15,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <xf86drm.h>
+
+#include "clc697.h"
 
 static bool
 drm_device_is_nouveau(const char *path)
@@ -98,7 +101,12 @@ nvkmd_nouveau_try_create_pdev(struct _drmDevice *drm_device,
       .has_alloc_tiled = nouveau_ws_device_has_tiled_bo(ws_dev),
       .has_map_fixed = true,
       .has_overmap = true,
+      .has_compression = ws_dev->nouveau_version >= 0x01000402 &&
+                         ws_dev->info.cls_eng3d >= AMPERE_A,
    };
+
+   /* We get this ourselves */
+   pdev->base.dev_info.nc_atom_size_B = util_cache_granularity();
 
    /* Nouveau uses the OS page size for all pages, regardless of whether they
     * come from VRAM or system RAM.

@@ -36,7 +36,7 @@ BEGIN_TEST(setup_reduce_temp.divergent_if_phi)
          //>> s1: %_, s2: %_, s1: %_:scc = p_reduce %a, %lv, lv1: undef op:umin32 cluster_size:64
          Instruction* reduce =
             bld.reduction(aco_opcode::p_reduce, bld.def(s1), bld.def(bld.lm), bld.def(s1, scc),
-                          inputs[1], Operand(v1.as_linear()), Operand(v1.as_linear()), umin32);
+                          inputs[1], Operand(lv1), Operand(lv1), umin32);
          reduce->reduction().cluster_size = bld.lm.bytes() * 8;
       },
       [&]() -> void

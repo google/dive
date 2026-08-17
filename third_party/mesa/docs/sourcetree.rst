@@ -40,6 +40,15 @@ each directory.
    -  **gbm** - Generic Buffer Manager is a memory allocator for
       device buffers
 
+   -  **imagination** - Imagination-specific sources
+
+      -  **common** - common utility sources and hardware information
+      -  **csbgen** - code generator for pack/unpack functions used by
+         Control Stream Builder
+      -  **include** - common header files
+      -  **pco** - shader compiler for PowerVR Rogue and newer
+      -  **vulkan** - Vulkan implementation for PowerVR Rogue and newer
+
    -  **intel** - Intel-specific sources
 
       -  **blorp** - BLit Or Resolve Pass is a blit and HiZ resolve framework

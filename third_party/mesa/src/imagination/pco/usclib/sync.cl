@@ -13,43 +13,44 @@
 #include "hwdef/rogue_hw_defs.h"
 #include "libcl.h"
 
+/*
+ * Emulates atomic operations by serializing execution to each slot via a 
+ * mutex, and to each instance via a per-instance loop.
+ */
+#define usclib_foreach_instance_atomic()                                                                                   \
+   nir_mutex_pco(PCO_MUTEX_ID_ATOMIC_EMU, PCO_MUTEX_OP_LOCK);                                                              \
+   for (bool __done = false; !__done; ({ nir_mutex_pco(PCO_MUTEX_ID_ATOMIC_EMU, PCO_MUTEX_OP_RELEASE); __done = true; }))  \
+      for (uint __u = 0; __u < ROGUE_MAX_INSTANCES_PER_TASK; ++__u)                                                        \
+         if (__u == nir_load_instance_num_pco())                                                                           
+
 uint32_t
 usclib_emu_ssbo_atomic_comp_swap(uint2 ssbo_buffer, uint ssbo_offset, uint compare, uint data)
 {
    uint32_t result;
 
-   nir_mutex_pco(PCO_MUTEX_ID_ATOMIC_EMU, PCO_MUTEX_OP_LOCK);
-   for (uint u = 0; u < ROGUE_MAX_INSTANCES_PER_TASK; ++u) {
-      if (u == nir_load_instance_num_pco()) {
-         uint32_t pre_val = nir_load_ssbo(ssbo_buffer, ssbo_offset, ACCESS_COHERENT, 4, 0, 0);
-         result = pre_val;
+   usclib_foreach_instance_atomic() {
+      uint32_t pre_val = nir_load_ssbo(ssbo_buffer, ssbo_offset, ACCESS_COHERENT, 4, 0, 0);
+      result = pre_val;
 
-         uint32_t post_val = (pre_val == compare) ? data : pre_val;
-         nir_store_ssbo(post_val, ssbo_buffer, ssbo_offset, 0x1, ACCESS_COHERENT, 4, 0, 0);
-      }
+      uint32_t post_val = (pre_val == compare) ? data : pre_val;
+      nir_store_ssbo(post_val, ssbo_buffer, ssbo_offset, 0x1, ACCESS_COHERENT, 4, 0, 0);
    }
-   nir_mutex_pco(PCO_MUTEX_ID_ATOMIC_EMU, PCO_MUTEX_OP_RELEASE);
 
    return result;
 }
 
 uint32_t
-usclib_emu_global_atomic_comp_swap(uint32_t addr_lo, uint32_t addr_hi, uint compare, uint data)
+usclib_emu_global_atomic_comp_swap(uint2 addr, uint compare, uint data)
 {
    uint32_t result;
 
-   nir_mutex_pco(PCO_MUTEX_ID_ATOMIC_EMU, PCO_MUTEX_OP_LOCK);
-   for (uint u = 0; u < ROGUE_MAX_INSTANCES_PER_TASK; ++u) {
-      if (u == nir_load_instance_num_pco()) {
-         uint2 addr = (uint2)(addr_lo, addr_hi);
-         uint32_t pre_val = nir_dma_ld_pco(1, addr);
-         result = pre_val;
+   usclib_foreach_instance_atomic() {
+      uint32_t pre_val = nir_dma_ld_pco(1, addr);
+      result = pre_val;
 
-         uint32_t post_val = (pre_val == compare) ? data : pre_val;
-         nir_dma_st_pco(false, addr, post_val);
-      }
+      uint32_t post_val = (pre_val == compare) ? data : pre_val;
+      nir_dma_st_pco(false, addr, post_val); 
    }
-   nir_mutex_pco(PCO_MUTEX_ID_ATOMIC_EMU, PCO_MUTEX_OP_RELEASE);
 
    return result;
 }

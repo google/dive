@@ -33,15 +33,13 @@
 #define CTX      vpe10_opp
 
 static struct opp_funcs opp_funcs = {
-    .program_pipe_alpha          = vpe10_opp_program_pipe_alpha,
-    .program_pipe_bypass         = vpe10_opp_program_pipe_bypass,
-    .program_pipe_crc            = vpe10_opp_program_pipe_crc,
     .set_clamping                = vpe10_opp_set_clamping,
-    .set_truncation              = vpe10_opp_set_truncation,
-    .set_spatial_dither          = vpe10_opp_set_spatial_dither,
-    .program_bit_depth_reduction = vpe10_opp_program_bit_depth_reduction,
     .set_dyn_expansion           = vpe10_opp_set_dyn_expansion,
+    .program_bit_depth_reduction = vpe10_opp_program_bit_depth_reduction,
     .program_fmt                 = vpe10_opp_program_fmt,
+    .program_fmt_control         = vpe10_opp_program_fmt_control,
+    .program_pipe_control        = vpe10_opp_program_pipe_control,
+    .program_pipe_crc            = vpe10_opp_program_pipe_crc,
 };
 
 void vpe10_construct_opp(struct vpe_priv *vpe_priv, struct opp *opp)
@@ -98,40 +96,21 @@ void vpe10_opp_set_dyn_expansion(struct opp *opp, bool enable, enum color_depth 
     }
 }
 
-void vpe10_opp_set_truncation(struct opp *opp, const struct bit_depth_reduction_params *params)
+void vpe10_opp_program_bit_depth_reduction(
+    struct opp *opp, const struct bit_depth_reduction_params *params)
 {
     PROGRAM_ENTRY();
 
-    REG_UPDATE_3(VPFMT_BIT_DEPTH_CONTROL, VPFMT_TRUNCATE_EN, params->flags.TRUNCATE_ENABLED,
-        VPFMT_TRUNCATE_DEPTH, params->flags.TRUNCATE_DEPTH, VPFMT_TRUNCATE_MODE,
-        params->flags.TRUNCATE_MODE);
-}
+    if (params->flags.SPATIAL_DITHER_ENABLED == 0) {
+        /*Disable spatial (random) dithering*/
+        REG_SET_9(VPFMT_BIT_DEPTH_CONTROL, REG_DEFAULT(VPFMT_BIT_DEPTH_CONTROL), VPFMT_TRUNCATE_EN,
+            params->flags.TRUNCATE_ENABLED, VPFMT_TRUNCATE_DEPTH, params->flags.TRUNCATE_DEPTH,
+            VPFMT_TRUNCATE_MODE, params->flags.TRUNCATE_MODE, VPFMT_SPATIAL_DITHER_EN, 0,
+            VPFMT_SPATIAL_DITHER_MODE, 0, VPFMT_SPATIAL_DITHER_DEPTH, 0,
+            VPFMT_HIGHPASS_RANDOM_ENABLE, 0, VPFMT_FRAME_RANDOM_ENABLE, 0, VPFMT_RGB_RANDOM_ENABLE,
+            0);
 
-void vpe10_opp_set_spatial_dither(struct opp *opp, const struct bit_depth_reduction_params *params)
-{
-    PROGRAM_ENTRY();
-
-    /*Disable spatial (random) dithering*/
-    REG_UPDATE_6(VPFMT_BIT_DEPTH_CONTROL, VPFMT_SPATIAL_DITHER_EN, 0, VPFMT_SPATIAL_DITHER_MODE, 0,
-        VPFMT_SPATIAL_DITHER_DEPTH, 0, VPFMT_HIGHPASS_RANDOM_ENABLE, 0, VPFMT_FRAME_RANDOM_ENABLE,
-        0, VPFMT_RGB_RANDOM_ENABLE, 0);
-
-    if (params->flags.SPATIAL_DITHER_ENABLED == 0)
         return;
-
-    /* only use FRAME_COUNTER_MAX if frameRandom == 1*/
-    if (params->flags.FRAME_RANDOM == 1) {
-        if (params->flags.SPATIAL_DITHER_DEPTH == 0 || params->flags.SPATIAL_DITHER_DEPTH == 1) {
-            REG_UPDATE_2(VPFMT_CONTROL, VPFMT_SPATIAL_DITHER_FRAME_COUNTER_MAX, 15,
-                VPFMT_SPATIAL_DITHER_FRAME_COUNTER_BIT_SWAP, 2);
-        } else if (params->flags.SPATIAL_DITHER_DEPTH == 2) {
-            REG_UPDATE_2(VPFMT_CONTROL, VPFMT_SPATIAL_DITHER_FRAME_COUNTER_MAX, 3,
-                VPFMT_SPATIAL_DITHER_FRAME_COUNTER_BIT_SWAP, 1);
-        } else
-            return;
-    } else {
-        REG_UPDATE_2(VPFMT_CONTROL, VPFMT_SPATIAL_DITHER_FRAME_COUNTER_MAX, 0,
-            VPFMT_SPATIAL_DITHER_FRAME_COUNTER_BIT_SWAP, 0);
     }
 
     /* Set seed for random values for
@@ -159,7 +138,9 @@ void vpe10_opp_set_spatial_dither(struct opp *opp, const struct bit_depth_reduct
      * 0x80000 YCbCr.
      */
 
-    REG_UPDATE_6(VPFMT_BIT_DEPTH_CONTROL,
+    REG_SET_9(VPFMT_BIT_DEPTH_CONTROL, REG_DEFAULT(VPFMT_BIT_DEPTH_CONTROL), VPFMT_TRUNCATE_EN,
+        params->flags.TRUNCATE_ENABLED, VPFMT_TRUNCATE_DEPTH, params->flags.TRUNCATE_DEPTH,
+        VPFMT_TRUNCATE_MODE, params->flags.TRUNCATE_MODE,
         /*Enable spatial dithering*/
         VPFMT_SPATIAL_DITHER_EN, params->flags.SPATIAL_DITHER_ENABLED,
         /* Set spatial dithering mode
@@ -176,35 +157,52 @@ void vpe10_opp_set_spatial_dither(struct opp *opp, const struct bit_depth_reduct
         VPFMT_RGB_RANDOM_ENABLE, params->flags.RGB_RANDOM);
 }
 
-void vpe10_opp_program_bit_depth_reduction(
-    struct opp *opp, const struct bit_depth_reduction_params *fmt_bit_depth)
+void vpe10_opp_program_fmt_control(struct opp *opp, struct fmt_control_params *fmt_ctrl)
 {
-    opp->funcs->set_truncation(opp, fmt_bit_depth);
-    opp->funcs->set_spatial_dither(opp, fmt_bit_depth);
+    PROGRAM_ENTRY();
+
+    REG_SET_2(VPFMT_CONTROL, REG_DEFAULT(VPFMT_CONTROL), VPFMT_SPATIAL_DITHER_FRAME_COUNTER_MAX,
+        fmt_ctrl->fmt_spatial_dither_frame_counter_max, VPFMT_SPATIAL_DITHER_FRAME_COUNTER_BIT_SWAP,
+        fmt_ctrl->fmt_spatial_dither_frame_counter_bit_swap);
 }
 
 void vpe10_opp_program_fmt(struct opp *opp, struct bit_depth_reduction_params *fmt_bit_depth,
-    struct clamping_and_pixel_encoding_params *clamping)
+    struct fmt_control_params *fmt_ctrl, struct clamping_and_pixel_encoding_params *clamping)
 {
     opp->funcs->program_bit_depth_reduction(opp, fmt_bit_depth);
+
+    /* only use FRAME_COUNTER_MAX if frameRandom == 1*/
+    if (fmt_bit_depth->flags.FRAME_RANDOM == 1) {
+        if (fmt_bit_depth->flags.SPATIAL_DITHER_DEPTH == 0 ||
+            fmt_bit_depth->flags.SPATIAL_DITHER_DEPTH == 1) {
+            fmt_ctrl->fmt_spatial_dither_frame_counter_max      = 15;
+            fmt_ctrl->fmt_spatial_dither_frame_counter_bit_swap = 2;
+        } else if (fmt_bit_depth->flags.SPATIAL_DITHER_DEPTH == 2) {
+            fmt_ctrl->fmt_spatial_dither_frame_counter_max      = 3;
+            fmt_ctrl->fmt_spatial_dither_frame_counter_bit_swap = 1;
+        } else {
+            fmt_ctrl->fmt_spatial_dither_frame_counter_max      = 0;
+            fmt_ctrl->fmt_spatial_dither_frame_counter_bit_swap = 0;
+        }
+    } else {
+        fmt_ctrl->fmt_spatial_dither_frame_counter_max      = 0;
+        fmt_ctrl->fmt_spatial_dither_frame_counter_bit_swap = 0;
+    }
+
+    opp->funcs->program_fmt_control(opp, fmt_ctrl);
     opp->funcs->set_clamping(opp, clamping);
 }
 
-void vpe10_opp_program_pipe_alpha(struct opp *opp, uint16_t alpha)
+void vpe10_opp_program_pipe_control(struct opp *opp, const struct opp_pipe_control_params *params)
 {
     PROGRAM_ENTRY();
-    REG_UPDATE(VPOPP_PIPE_CONTROL, VPOPP_PIPE_ALPHA, alpha);
-}
-
-void vpe10_opp_program_pipe_bypass(struct opp *opp, bool enable)
-{
-    PROGRAM_ENTRY();
-    REG_UPDATE(VPOPP_PIPE_CONTROL, VPOPP_PIPE_DIGITAL_BYPASS_EN, enable);
+    REG_SET_2(VPOPP_PIPE_CONTROL, REG_DEFAULT(VPOPP_PIPE_CONTROL), VPOPP_PIPE_ALPHA, params->alpha,
+        VPOPP_PIPE_DIGITAL_BYPASS_EN, params->bypass_enable);
 }
 
 void vpe10_opp_program_pipe_crc(struct opp *opp, bool enable)
 {
     PROGRAM_ENTRY();
-    REG_UPDATE(VPOPP_PIPE_CRC_CONTROL, VPOPP_PIPE_CRC_EN, enable);
+    REG_SET(VPOPP_PIPE_CRC_CONTROL, REG_DEFAULT(VPOPP_PIPE_CRC_CONTROL), VPOPP_PIPE_CRC_EN, enable);
 }
 

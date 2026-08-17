@@ -149,12 +149,12 @@ intel_device_info_from_json(const char *path,
                             struct intel_device_info *devinfo) {
    JSON_Value *root = json_parse_file(path);
    JSON_Object *obj = json_object(root);
-   const char *devinfo_type_sha1 = "${checksum}";
+   const char *devinfo_type_blake3 = "${checksum}";
 
    /* verify that json was generated with a compatible driver */
-   if (strncmp(devinfo_type_sha1,
-               json_object_get_string(obj, "devinfo_type_sha1"),
-               strlen(devinfo_type_sha1)))
+   if (strncmp(devinfo_type_blake3,
+               json_object_get_string(obj, "devinfo_type_blake3"),
+               strlen(devinfo_type_blake3)))
       return false;
    load_intel_device_info(obj, devinfo);
 
@@ -174,7 +174,7 @@ intel_device_info_dump_json(const struct intel_device_info *devinfo) {
     * an incompatible driver
     */
    JSON_Object *obj = json_object(root);
-   json_object_set_string(obj, "devinfo_type_sha1", "${checksum}");
+   json_object_set_string(obj, "devinfo_type_blake3", "${checksum}");
 
    return root;
 }

@@ -27,7 +27,6 @@
 
 #include "compiler/nir/nir.h"
 #include "draw/draw_context.h"
-#include "nir/nir_to_tgsi.h"
 #include "util/format/u_format.h"
 #include "util/format/u_format_s3tc.h"
 #include "util/os_misc.h"
@@ -109,7 +108,7 @@ i915_get_name(struct pipe_screen *screen)
 
 static const nir_shader_compiler_options i915_compiler_options = {
    .fdot_replicates = true,
-   .fuse_ffma32 = true,
+   .float_mul_add32 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
    .lower_bitops = true, /* required for !CAP_INTEGERS nir_to_tgsi */
    .lower_extract_byte = true,
    .lower_extract_word = true,
@@ -119,7 +118,6 @@ static const nir_shader_compiler_options i915_compiler_options = {
    .lower_fmod = true,
    .lower_sincos = true,
    .lower_uniforms_to_ubo = true,
-   .lower_vector_cmp = true,
    .force_indirect_unrolling = nir_var_all,
    .force_indirect_unrolling_sampler = true,
    .max_unroll_iterations = 32,
@@ -128,7 +126,6 @@ static const nir_shader_compiler_options i915_compiler_options = {
 };
 
 static const struct nir_shader_compiler_options gallivm_nir_options = {
-   .fdot_replicates = true,
    .lower_bitops = true, /* required for !CAP_INTEGERS nir_to_tgsi */
    .lower_scmp = true,
    .lower_flrp32 = true,
@@ -137,15 +134,11 @@ static const struct nir_shader_compiler_options gallivm_nir_options = {
    .lower_bitfield_insert = true,
    .lower_bitfield_extract = true,
    .lower_fdph = true,
-   .lower_ffma16 = true,
-   .lower_ffma32 = true,
-   .lower_ffma64 = true,
    .lower_fmod = true,
    .lower_hadd = true,
    .lower_uadd_sat = true,
    .lower_usub_sat = true,
    .lower_iadd_sat = true,
-   .lower_ldexp = true,
    .lower_pack_snorm_2x16 = true,
    .lower_pack_snorm_4x8 = true,
    .lower_pack_unorm_2x16 = true,
@@ -166,12 +159,12 @@ static const struct nir_shader_compiler_options gallivm_nir_options = {
    .max_unroll_iterations = 32,
    .lower_cs_local_index_to_id = true,
    .lower_uniforms_to_ubo = true,
-   .lower_vector_cmp = true,
    .lower_device_index_to_zero = true,
    /* .support_16bit_alu = true, */
    .support_indirect_inputs = (uint8_t)BITFIELD_MASK(MESA_SHADER_STAGES),
    .support_indirect_outputs = (uint8_t)BITFIELD_MASK(MESA_SHADER_STAGES),
    .no_integers = true,
+   .has_fused_comp_and_csel = true,
 };
 
 static void
@@ -183,7 +176,7 @@ i915_optimize_nir(struct nir_shader *s)
       progress = false;
 
       NIR_PASS(progress, s, nir_lower_vars_to_ssa);
-      NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, nir_opt_copy_prop);
       NIR_PASS(progress, s, nir_opt_algebraic);
       NIR_PASS(progress, s, nir_opt_constant_folding);
       NIR_PASS(progress, s, nir_opt_remove_phis);
@@ -212,6 +205,7 @@ i915_optimize_nir(struct nir_shader *s)
       NIR_PASS(progress, s, nir_opt_loop);
       NIR_PASS(progress, s, nir_opt_undef);
       NIR_PASS(progress, s, nir_opt_loop_unroll);
+      NIR_PASS(progress, s, nir_opt_licm, NULL);
 
    } while (progress);
 
@@ -225,7 +219,8 @@ i915_optimize_nir(struct nir_shader *s)
 }
 
 static void
-i915_finalize_nir(struct pipe_screen *pscreen, struct nir_shader *s)
+i915_finalize_nir(struct pipe_screen *pscreen, struct nir_shader *s,
+                  bool optimize)
 {
    if (s->info.stage == MESA_SHADER_FRAGMENT)
       i915_optimize_nir(s);

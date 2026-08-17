@@ -219,18 +219,19 @@ dri2_drm_destroy_surface(_EGLDisplay *disp, _EGLSurface *surf)
 static void
 destroy_oldest_unused_bo(struct dri2_egl_surface *dri2_surf)
 {
-   int max_age = 0;
    struct dri2_egl_buffer *oldest_buffer = NULL;
 
    for (unsigned i = 0; i < ARRAY_SIZE(dri2_surf->color_buffers); i++) {
-      if (dri2_surf->color_buffers[i].locked ||
-          dri2_surf->back == &dri2_surf->color_buffers[i])
+      struct dri2_egl_buffer *buffer = &dri2_surf->color_buffers[i];
+
+      if (!buffer->bo ||
+          buffer->locked ||
+          buffer == dri2_surf->back ||
+          buffer == dri2_surf->current)
          continue;
 
-      if (!max_age || dri2_surf->color_buffers[i].age > max_age) {
-         oldest_buffer = &dri2_surf->color_buffers[i];
-         max_age = dri2_surf->color_buffers[i].age;
-      }
+      if (!oldest_buffer || buffer->age > oldest_buffer->age)
+         oldest_buffer = buffer;
    }
 
    gbm_bo_destroy(oldest_buffer->bo);
@@ -246,24 +247,26 @@ get_back_bo(struct dri2_egl_surface *dri2_surf)
    struct dri2_egl_display *dri2_dpy =
       dri2_egl_display(dri2_surf->base.Resource.Display);
    struct gbm_dri_surface *surf = dri2_surf->gbm_surf;
-   int min_age = 0, max_age = 0;
+   int min_age = 0;
 
    if (dri2_surf->back == NULL) {
       for (unsigned i = 0; i < ARRAY_SIZE(dri2_surf->color_buffers); i++) {
-         if (!dri2_surf->color_buffers[i].locked) {
-            int age = dri2_surf->color_buffers[i].age;
+         struct dri2_egl_buffer *buffer = &dri2_surf->color_buffers[i];
 
-            if (!min_age || age < min_age)
-               min_age = age;
+         if (buffer->locked ||
+             dri2_surf->current == buffer)
+            continue;
 
-            if (!max_age || age > max_age) {
-               dri2_surf->back = &dri2_surf->color_buffers[i];
-               max_age = age;
-            }
-         }
+         if (buffer->bo &&
+             (!min_age || buffer->age < min_age))
+            min_age = buffer->age;
+
+         if (!dri2_surf->back ||
+             buffer->age > dri2_surf->back->age)
+            dri2_surf->back = buffer;
       }
 
-      if (min_age && min_age < max_age) {
+      if (min_age && min_age < dri2_surf->back->age) {
          if (++dri2_surf->excess_bo_frames == 1000)
             destroy_oldest_unused_bo(dri2_surf);
       } else {
@@ -540,13 +543,22 @@ drm_add_configs_for_visuals(_EGLDisplay *disp)
 
       for (unsigned j = 0; j < num_visuals; j++) {
          struct dri2_egl_config *dri2_conf;
+         EGLint config_group = 0;
 
          if (visuals[j].pipe_format != gl_config->color_format)
             continue;
 
+         /* Put the 16 bpc rgb[a] unorm formats into a lower priority EGL config
+          * group 1, so they don't get preferably chosen by eglChooseConfig().
+          */
+         if (util_format_is_unorm16(util_format_description(visuals[j].pipe_format)))
+            config_group = 1;
+
          const EGLint attr_list[] = {
             EGL_NATIVE_VISUAL_ID,
             visuals[j].gbm_format,
+            EGL_CONFIG_SELECT_GROUP_EXT,
+            config_group,
             EGL_NONE,
          };
 

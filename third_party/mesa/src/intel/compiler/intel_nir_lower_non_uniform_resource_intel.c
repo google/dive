@@ -1,24 +1,6 @@
 /*
  * Copyright © 2023 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "compiler/nir/nir_builder.h"
@@ -38,11 +20,11 @@ add_src_instr(nir_src *src, void *state)
 {
    struct util_dynarray *inst_array = state;
    util_dynarray_foreach(inst_array, nir_instr *, instr_ptr) {
-      if (*instr_ptr == src->ssa->parent_instr)
+      if (*instr_ptr == nir_def_instr(src->ssa))
          return true;
    }
 
-   util_dynarray_append(inst_array, nir_instr *, src->ssa->parent_instr);
+   util_dynarray_append(inst_array, nir_def_instr(src->ssa));
 
    return true;
 }
@@ -54,10 +36,10 @@ find_resource_intel(struct util_dynarray *inst_array,
    /* If resouce_intel is already directly in front of the instruction, there
     * is nothing to do.
     */
-   if (nir_instr_is_resource_intel(def->parent_instr))
+   if (nir_instr_is_resource_intel(nir_def_instr(def)))
       return NULL;
 
-   util_dynarray_append(inst_array, nir_instr *, def->parent_instr);
+   util_dynarray_append(inst_array, nir_def_instr(def));
 
    unsigned idx = 0, scan_index = 0;
    while (idx < util_dynarray_num_elements(inst_array, nir_instr *)) {
@@ -146,8 +128,13 @@ intel_nir_lower_non_uniform_tex(nir_builder *b,
 
    bool progress = false;
    for (unsigned s = 0; s < tex->num_srcs; s++) {
-      if (tex->src[s].src_type != nir_tex_src_texture_handle &&
-          tex->src[s].src_type != nir_tex_src_sampler_handle)
+      const bool needs_lowering =
+         tex->src[s].src_type == nir_tex_src_texture_handle ||
+         tex->src[s].src_type == nir_tex_src_sampler_handle ||
+         tex->src[s].src_type == nir_tex_src_texture_heap_offset ||
+         tex->src[s].src_type == nir_tex_src_sampler_heap_offset;
+
+      if (!needs_lowering)
          continue;
 
       util_dynarray_clear(inst_array);
@@ -287,7 +274,7 @@ intel_nir_cleanup_resource_intel_instr(nir_builder *b,
 
    bool progress = false;
    nir_foreach_use_safe(src, &intrin->def) {
-      if (!nir_src_is_if(src) && skip_resource_intel_cleanup(nir_src_parent_instr(src)))
+      if (!nir_src_is_if(src) && skip_resource_intel_cleanup(nir_src_use_instr(src)))
          continue;
 
       progress = true;

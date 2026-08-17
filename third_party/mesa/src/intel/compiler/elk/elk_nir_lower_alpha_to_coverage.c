@@ -1,24 +1,6 @@
 /*
  * Copyright © 2019 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "compiler/nir/nir_builder.h"
@@ -80,8 +62,8 @@ build_dither_mask(nir_builder *b, nir_def *color)
 
 bool
 elk_nir_lower_alpha_to_coverage(nir_shader *shader,
-                                const struct elk_wm_prog_key *key,
-                                const struct elk_wm_prog_data *prog_data)
+                                const struct elk_fs_prog_key *key,
+                                const struct elk_fs_prog_data *prog_data)
 {
    assert(shader->info.stage == MESA_SHADER_FRAGMENT);
    assert(key->alpha_to_coverage != ELK_NEVER);
@@ -174,9 +156,9 @@ elk_nir_lower_alpha_to_coverage(nir_shader *shader,
 
    if (key->alpha_to_coverage == ELK_SOMETIMES) {
       nir_def *push_flags =
-         nir_load_uniform(&b, 1, 32, nir_imm_int(&b, prog_data->msaa_flags_param * 4));
+         nir_load_uniform(&b, 1, 32, nir_imm_int(&b, prog_data->fs_config_param * 4));
       nir_def *alpha_to_coverage =
-         nir_test_mask(&b, push_flags, INTEL_MSAA_FLAG_ALPHA_TO_COVERAGE);
+         nir_test_mask(&b, push_flags, INTEL_FS_CONFIG_ALPHA_TO_COVERAGE);
       dither_mask = nir_bcsel(&b, alpha_to_coverage,
                               dither_mask, sample_mask_write->src[0].ssa);
    }

@@ -52,7 +52,7 @@ ac_create_clear_copy_buffer_cs(struct ac_cs_clear_copy_buffer_options *options,
       fprintf(stderr, "   key.is_clear = %u\n", key->is_clear);
       fprintf(stderr, "   key.dwords_per_thread = %u\n", key->dwords_per_thread);
       fprintf(stderr, "   key.clear_value_size_is_12 = %u\n", key->clear_value_size_is_12);
-      fprintf(stderr, "   key.src_is_sparse = %u\n", key->src_is_sparse);
+      fprintf(stderr, "   key.src_scalarize_for_sparse = %u\n", key->src_scalarize_for_sparse);
       fprintf(stderr, "   key.src_align_offset = %u\n", key->src_align_offset);
       fprintf(stderr, "   key.dst_align_offset = %u\n", key->dst_align_offset);
       fprintf(stderr, "   key.dst_last_thread_bytes = %u\n", key->dst_last_thread_bytes);
@@ -167,7 +167,7 @@ ac_create_clear_copy_buffer_cs(struct ac_cs_clear_copy_buffer_options *options,
                                          .access = ACCESS_RESTRICT,
                                          .align_mul = 4,
                                          .align_offset = 0
-                                      }, key->src_is_sparse);
+                                      }, key->src_scalarize_for_sparse);
 
             /* Add the components that we didn't load as undef. */
             nir_def *comps[16];
@@ -189,7 +189,7 @@ ac_create_clear_copy_buffer_cs(struct ac_cs_clear_copy_buffer_options *options,
                                   .access = ACCESS_RESTRICT,
                                   .align_mul = 4,
                                   .align_offset = (unsigned)realign_offset % 4
-                               }, key->src_is_sparse);
+                               }, key->src_scalarize_for_sparse);
 
 
       if (if_first_thread) {
@@ -351,8 +351,11 @@ ac_prepare_cs_clear_copy_buffer(const struct ac_cs_clear_copy_buffer_options *op
 
    /* This doesn't fail very often because the only possible fallback is CP DMA, which doesn't
     * support the render condition.
+    *
+    * CP DMA doesn't support sparse on GFX6-9, so we must use compute for that.
     */
    if (options->fail_if_slow && !info->render_condition_enabled && options->info->has_cp_dma &&
+       ((!info->src_is_sparse && !info->dst_is_sparse) || options->info->cp_dma_supports_sparse) &&
        !options->info->cp_sdma_ge_use_system_memory_scope) {
       switch (options->info->gfx_level) {
       /* GFX6-8: CP DMA clears are so slow that we risk getting a GPU timeout. CP DMA copies
@@ -486,11 +489,16 @@ ac_prepare_cs_clear_copy_buffer(const struct ac_cs_clear_copy_buffer_options *op
       case GFX10:
       case GFX10_3:
       case GFX11:
-      case GFX12:
-         /* Optimal for Gfx12xx, Navi31, Navi21, Navi10. */
+      case GFX11_5:
+      case GFX11_7:
+         /* Optimal for Navi31, Navi21, Navi10. */
          break;
 
       default:
+      case GFX12:
+         /* Optimal for Navi48. */
+         if (!is_copy && clear_value_size == 12 && info->size <= 512 * 1024)
+            dwords_per_thread = 3;
          break;
       }
    }
@@ -498,6 +506,17 @@ ac_prepare_cs_clear_copy_buffer(const struct ac_cs_clear_copy_buffer_options *op
    /* dwords_per_thread must be at least the size of the clear value. */
    if (!is_copy)
       dwords_per_thread = MAX2(dwords_per_thread, clear_value_size / 4);
+
+   if (info->dst_is_sparse) {
+      /* If dst is sparse, stores mustn't straddle a page boundary, which means the store size must
+       * be 2^n. It can only be a non-power-of-two and 3 with GL buffer clears because VK doesn't
+       * have 12-byte clear values.
+       */
+      if (dwords_per_thread == 3)
+         dwords_per_thread = 4;
+
+      assert(util_is_power_of_two_nonzero(dwords_per_thread));
+   }
 
    /* Validate dwords_per_thread. */
    if (dwords_per_thread > 4) {
@@ -553,7 +572,18 @@ ac_prepare_cs_clear_copy_buffer(const struct ac_cs_clear_copy_buffer_options *op
    assert(dwords_per_thread && dwords_per_thread <= 4);
    out->shader_key.dwords_per_thread = dwords_per_thread;
    out->shader_key.clear_value_size_is_12 = !is_copy && clear_value_size == 12;
-   out->shader_key.src_is_sparse = info->src_is_sparse;
+   /* If the src load size is aligned to 2^n and the src load address in every invocation is aligned
+    * to the load size, loads are guaranteed to never be partially non-resident, so we don't have to
+    * scalarize them. Every sparse buffer is aligned to a page, so we don't need to check whether the
+    * buffer base address is aligned.
+    */
+   out->shader_key.src_scalarize_for_sparse =
+      is_copy && info->src_is_sparse &&
+      /* Each invocation must increment the offset by 2^n. */
+      (!util_is_power_of_two_nonzero(dwords_per_thread) ||
+       /* The buffer range bounds must be divisible by the copy size per invocation. */
+       ((info->src_offset - src_align_offset) % (dwords_per_thread * 4) != 0 ||
+        (info->src_offset + info->size) % (dwords_per_thread * 4) != 0));
    out->shader_key.src_align_offset = src_align_offset;
    out->shader_key.dst_align_offset = dst_align_offset;
 
@@ -570,8 +600,11 @@ ac_prepare_cs_clear_copy_buffer(const struct ac_cs_clear_copy_buffer_options *op
     * Clearing/copying whole 256B blocks per wave isn't possible if dwords_per_thread isn't 2^n.
     */
    unsigned start_thread =
-      dst_offset_bound % 256 && util_is_power_of_two_nonzero(dwords_per_thread) ?
-            DIV_ROUND_UP(256 - dst_offset_bound % 256, dwords_per_thread * 4) : 0;
+      dst_offset_bound % AMD_MEMCHANNEL_INTERLEAVE_BYTES &&
+      util_is_power_of_two_nonzero(dwords_per_thread) ?
+            DIV_ROUND_UP(AMD_MEMCHANNEL_INTERLEAVE_BYTES -
+                         dst_offset_bound % AMD_MEMCHANNEL_INTERLEAVE_BYTES,
+                         dwords_per_thread * 4) : 0;
    out->shader_key.has_start_thread = start_thread != 0;
 
    /* Set the value of the last thread ID, so that the shader knows which thread is the last one. */
@@ -598,5 +631,14 @@ ac_prepare_cs_clear_copy_buffer(const struct ac_cs_clear_copy_buffer_options *op
    out->num_ssbos = is_copy ? 2 : 1;
    out->workgroup_size = 64;
    out->num_threads = start_thread + num_threads;
+
+   /* Determine optimal COMPUTE_DISPATCH_INTERLEAVE.INTERLEAVE/INTERLEAVE_1D.
+    * Verified on Navi48.
+    */
+   if (is_copy)
+      out->dispatch_interleave = info->size <= 2048 ? 64 : 256;
+   else
+      out->dispatch_interleave = info->size <= 256 * 1024 ? 64 : 256;
+
    return true;
 }

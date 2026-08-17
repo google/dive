@@ -163,7 +163,9 @@ fn generate_from_rule_impl_opc(isa: &ISA) -> TokenStream2 {
 /// Main derive function to generate the parser
 fn derive_parser(input: TokenStream) -> TokenStream {
     let mut ast: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let root = Path::new(file!()).parent().expect("Failed to located parent");
+    let root = Path::new(file!())
+        .parent()
+        .expect("Failed to located parent");
     let (isa_filename, static_rules_filename) = parse_derive(&ast);
     let isa_path = Path::new(&root).join(isa_filename);
     let static_rules_path = Path::new(&root).join(static_rules_filename);
@@ -322,7 +324,11 @@ fn generate_peg_grammar_instructions(isa: &ISA) -> String {
             rule_parts.push("TexSrc ~ \",\"".to_string());
         }
 
-        let possible_srcs = if type_ == "cf" { 2 } else { 3 };
+        let possible_srcs = if matches!(type_, "cf" | "cf_cond") {
+            2
+        } else {
+            3
+        };
         let valid_srcs: Vec<_> = meta
             .get("valid_srcs")
             .unwrap_or(&"")
@@ -341,7 +347,7 @@ fn generate_peg_grammar_instructions(isa: &ISA) -> String {
             }
         }
 
-        if type_ == "cf" {
+        if matches!(type_, "cf" | "cf_cond") {
             rule_parts.push("\",\"".to_string());
             rule_parts.push("Target".to_string());
         }

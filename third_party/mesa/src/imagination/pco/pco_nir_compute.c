@@ -63,9 +63,6 @@ bool pco_nir_compute_instance_check(nir_shader *shader)
 {
    assert(shader->info.stage == MESA_SHADER_COMPUTE);
 
-   if (shader->info.internal)
-      return false;
-
    nir_function_impl *entrypoint = nir_shader_get_entrypoint(shader);
 
    if (nir_cf_list_is_empty_block(&entrypoint->body))
@@ -82,5 +79,5 @@ bool pco_nir_compute_instance_check(nir_shader *shader)
    /* Re-insert the entrypoint inside the instance check. */
    nir_cf_reinsert(&cf_list, cursor);
 
-   return true;
+   return nir_progress(true, entrypoint, nir_metadata_none);
 }

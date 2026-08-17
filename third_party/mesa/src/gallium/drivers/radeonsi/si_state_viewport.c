@@ -9,7 +9,7 @@
 #include "util/u_viewport.h"
 
 #define GFX6_MAX_VIEWPORT_SIZE   16384
-#define GFX12_MAX_VIEWPORT_SIZE  32768 /* TODO: this should be 64K, but maxx/maxy doesn't have enough bits */
+#define GFX12_MAX_VIEWPORT_SIZE  65536
 
 static void si_get_small_prim_cull_info(struct si_context *sctx, struct si_small_prim_cull_info *out)
 {
@@ -247,8 +247,7 @@ static void si_emit_guardband(struct si_context *sctx, unsigned index)
 {
    const struct si_state_rasterizer *rs = sctx->queued.named.rasterizer;
    struct si_signed_scissor vp_as_scissor;
-   struct pipe_viewport_state vp;
-   float left, top, right, bottom, max_range, guardband_x, guardband_y;
+   struct ac_guardband guardband;
 
    if (sctx->vs_writes_viewport_index) {
       /* Shaders can draw to any viewport. Make a union of all
@@ -266,96 +265,20 @@ static void si_emit_guardband(struct si_context *sctx, unsigned index)
     * how large the viewport is. Assume the worst case.
     */
    if (sctx->vs_disables_clipping_viewport)
-      vp_as_scissor.quant_mode = SI_QUANT_MODE_16_8_FIXED_POINT_1_256TH;
+      vp_as_scissor.quant_mode = AC_QUANT_MODE_16_8_FIXED_POINT_1_256TH;
 
-   /* Determine the optimal hardware screen offset to center the viewport
-    * within the viewport range in order to maximize the guardband size.
-    */
-   int hw_screen_offset_x = (vp_as_scissor.maxx + vp_as_scissor.minx) / 2;
-   int hw_screen_offset_y = (vp_as_scissor.maxy + vp_as_scissor.miny) / 2;
-
-   /* GFX6-GFX7 need to align the offset to an ubertile consisting of all SEs. */
-   const unsigned hw_screen_offset_alignment =
-      sctx->gfx_level >= GFX11 ? 32 :
-      sctx->gfx_level >= GFX8 ? 16 : MAX2(sctx->screen->se_tile_repeat, 16);
-   const unsigned max_hw_screen_offset = sctx->gfx_level >= GFX12 ? 32752 : 8176;
-
-   /* Indexed by quantization modes */
-   static int max_viewport_size[] = {65536, 16384, 4096};
-
-   /* Ensure that the whole viewport stays representable in
-    * absolute coordinates.
-    * See comment in si_set_viewport_states.
-    */
-   assert(vp_as_scissor.maxx <= max_viewport_size[vp_as_scissor.quant_mode] &&
-          vp_as_scissor.maxy <= max_viewport_size[vp_as_scissor.quant_mode]);
-
-   hw_screen_offset_x = CLAMP(hw_screen_offset_x, 0, max_hw_screen_offset);
-   hw_screen_offset_y = CLAMP(hw_screen_offset_y, 0, max_hw_screen_offset);
-
-   /* Align the screen offset by dropping the low bits. */
-   hw_screen_offset_x &= ~(hw_screen_offset_alignment - 1);
-   hw_screen_offset_y &= ~(hw_screen_offset_alignment - 1);
-
-   /* Apply the offset to center the viewport and maximize the guardband. */
-   vp_as_scissor.minx -= hw_screen_offset_x;
-   vp_as_scissor.maxx -= hw_screen_offset_x;
-   vp_as_scissor.miny -= hw_screen_offset_y;
-   vp_as_scissor.maxy -= hw_screen_offset_y;
-
-   /* Reconstruct the viewport transformation from the scissor. */
-   vp.translate[0] = (vp_as_scissor.minx + vp_as_scissor.maxx) / 2.0;
-   vp.translate[1] = (vp_as_scissor.miny + vp_as_scissor.maxy) / 2.0;
-   vp.scale[0] = vp_as_scissor.maxx - vp.translate[0];
-   vp.scale[1] = vp_as_scissor.maxy - vp.translate[1];
-
-   /* Treat a 0x0 viewport as 1x1 to prevent division by zero. */
-   if (vp_as_scissor.minx == vp_as_scissor.maxx)
-      vp.scale[0] = 0.5;
-   if (vp_as_scissor.miny == vp_as_scissor.maxy)
-      vp.scale[1] = 0.5;
-
-   /* Find the biggest guard band that is inside the supported viewport
-    * range. The guard band is specified as a horizontal and vertical
-    * distance from (0,0) in clip space.
-    *
-    * This is done by applying the inverse viewport transformation
-    * on the viewport limits to get those limits in clip space.
-    *
-    * The viewport range is [-max_viewport_size/2 - 1, max_viewport_size/2].
-    * (-1 to the min coord because max_viewport_size is odd and ViewportBounds
-    * Min/Max are -32768, 32767).
-    */
-   assert(vp_as_scissor.quant_mode < ARRAY_SIZE(max_viewport_size));
-   max_range = max_viewport_size[vp_as_scissor.quant_mode] / 2;
-   left = (-max_range - 1 - vp.translate[0]) / vp.scale[0];
-   right = (max_range - vp.translate[0]) / vp.scale[0];
-   top = (-max_range - 1 - vp.translate[1]) / vp.scale[1];
-   bottom = (max_range - vp.translate[1]) / vp.scale[1];
-
-   assert(left <= -1 && top <= -1 && right >= 1 && bottom >= 1);
-
-   guardband_x = MIN2(-left, right);
-   guardband_y = MIN2(-top, bottom);
-
-   float discard_x = 1.0;
-   float discard_y = 1.0;
-   float distance = sctx->current_clip_discard_distance;
-
-   /* Add half the point size / line width */
-   discard_x += distance / (2.0 * vp.scale[0]);
-   discard_y += distance / (2.0 * vp.scale[1]);
-
-   /* Discard primitives that would lie entirely outside the viewport area. */
-   discard_x = MIN2(discard_x, guardband_x);
-   discard_y = MIN2(discard_y, guardband_y);
+   ac_compute_guardband(&sctx->screen->info, vp_as_scissor.minx, vp_as_scissor.miny,
+                        vp_as_scissor.maxx, vp_as_scissor.maxy,
+                        vp_as_scissor.quant_mode, sctx->current_clip_discard_distance,
+                        &guardband);
 
    unsigned pa_su_vtx_cntl = S_028BE4_PIX_CENTER(rs->half_pixel_center) |
                              S_028BE4_ROUND_MODE(V_028BE4_X_ROUND_TO_EVEN) |
                              S_028BE4_QUANT_MODE(V_028BE4_X_16_8_FIXED_POINT_1_256TH +
                                                  vp_as_scissor.quant_mode);
-   unsigned pa_su_hardware_screen_offset = S_028234_HW_SCREEN_OFFSET_X(hw_screen_offset_x >> 4) |
-                                           S_028234_HW_SCREEN_OFFSET_Y(hw_screen_offset_y >> 4);
+   unsigned pa_su_hardware_screen_offset =
+      S_028234_HW_SCREEN_OFFSET_X(guardband.hw_screen_offset_x >> 4) |
+      S_028234_HW_SCREEN_OFFSET_Y(guardband.hw_screen_offset_y >> 4);
 
    /* If any of the GB registers is updated, all of them must be updated.
     * R_028BE8_PA_CL_GB_VERT_CLIP_ADJ, R_028BEC_PA_CL_GB_VERT_DISC_ADJ
@@ -364,39 +287,39 @@ static void si_emit_guardband(struct si_context *sctx, unsigned index)
    if (sctx->gfx_level >= GFX12) {
       radeon_begin(&sctx->gfx_cs);
       gfx12_begin_context_regs();
-      gfx12_opt_set_context_reg(R_028BE4_PA_SU_VTX_CNTL, SI_TRACKED_PA_SU_VTX_CNTL,
+      gfx12_opt_set_context_reg(R_028BE4_PA_SU_VTX_CNTL, AC_TRACKED_PA_SU_VTX_CNTL,
                                 pa_su_vtx_cntl);
       gfx12_opt_set_context_reg4(R_02842C_PA_CL_GB_VERT_CLIP_ADJ,
-                                 SI_TRACKED_PA_CL_GB_VERT_CLIP_ADJ,
-                                 fui(guardband_y), fui(discard_y),
-                                 fui(guardband_x), fui(discard_x));
+                                 AC_TRACKED_PA_CL_GB_VERT_CLIP_ADJ,
+                                 fui(guardband.clip_y), fui(guardband.discard_y),
+                                 fui(guardband.clip_x), fui(guardband.discard_x));
       gfx12_opt_set_context_reg(R_028234_PA_SU_HARDWARE_SCREEN_OFFSET,
-                                SI_TRACKED_PA_SU_HARDWARE_SCREEN_OFFSET,
+                                AC_TRACKED_PA_SU_HARDWARE_SCREEN_OFFSET,
                                 pa_su_hardware_screen_offset);
       gfx12_end_context_regs();
       radeon_end(); /* don't track context rolls on GFX12 */
    } else if (sctx->screen->info.has_set_context_pairs_packed) {
       radeon_begin(&sctx->gfx_cs);
       gfx11_begin_packed_context_regs();
-      gfx11_opt_set_context_reg(R_028BE4_PA_SU_VTX_CNTL, SI_TRACKED_PA_SU_VTX_CNTL,
+      gfx11_opt_set_context_reg(R_028BE4_PA_SU_VTX_CNTL, AC_TRACKED_PA_SU_VTX_CNTL,
                                 pa_su_vtx_cntl);
       gfx11_opt_set_context_reg4(R_028BE8_PA_CL_GB_VERT_CLIP_ADJ,
-                                 SI_TRACKED_PA_CL_GB_VERT_CLIP_ADJ,
-                                 fui(guardband_y), fui(discard_y),
-                                 fui(guardband_x), fui(discard_x));
+                                 AC_TRACKED_PA_CL_GB_VERT_CLIP_ADJ,
+                                 fui(guardband.clip_y), fui(guardband.discard_y),
+                                 fui(guardband.clip_x), fui(guardband.discard_x));
       gfx11_opt_set_context_reg(R_028234_PA_SU_HARDWARE_SCREEN_OFFSET,
-                                SI_TRACKED_PA_SU_HARDWARE_SCREEN_OFFSET,
+                                AC_TRACKED_PA_SU_HARDWARE_SCREEN_OFFSET,
                                 pa_su_hardware_screen_offset);
       gfx11_end_packed_context_regs();
       radeon_end(); /* don't track context rolls on GFX11 */
    } else {
       radeon_begin(&sctx->gfx_cs);
-      radeon_opt_set_context_reg5(R_028BE4_PA_SU_VTX_CNTL, SI_TRACKED_PA_SU_VTX_CNTL,
+      radeon_opt_set_context_reg5(R_028BE4_PA_SU_VTX_CNTL, AC_TRACKED_PA_SU_VTX_CNTL,
                                   pa_su_vtx_cntl,
-                                  fui(guardband_y), fui(discard_y),
-                                  fui(guardband_x), fui(discard_x));
+                                  fui(guardband.clip_y), fui(guardband.discard_y),
+                                  fui(guardband.clip_x), fui(guardband.discard_x));
       radeon_opt_set_context_reg(R_028234_PA_SU_HARDWARE_SCREEN_OFFSET,
-                                 SI_TRACKED_PA_SU_HARDWARE_SCREEN_OFFSET,
+                                 AC_TRACKED_PA_SU_HARDWARE_SCREEN_OFFSET,
                                  pa_su_hardware_screen_offset);
       radeon_end_update_context_roll();
    }
@@ -477,11 +400,11 @@ static void si_set_viewport_states(struct pipe_context *pctx, unsigned start_slo
        */
 
       if (max_corner <= 1024) /* 4K scanline area for guardband */
-         scissor->quant_mode = SI_QUANT_MODE_12_12_FIXED_POINT_1_4096TH;
+         scissor->quant_mode = AC_QUANT_MODE_12_12_FIXED_POINT_1_4096TH;
       else if (max_corner <= 4096) /* 16K scanline area for guardband */
-         scissor->quant_mode = SI_QUANT_MODE_14_10_FIXED_POINT_1_1024TH;
+         scissor->quant_mode = AC_QUANT_MODE_14_10_FIXED_POINT_1_1024TH;
       else /* 64K scanline area for guardband */
-         scissor->quant_mode = SI_QUANT_MODE_16_8_FIXED_POINT_1_256TH;
+         scissor->quant_mode = AC_QUANT_MODE_16_8_FIXED_POINT_1_256TH;
    }
 
    if (start_slot == 0) {
@@ -720,7 +643,7 @@ static void si_emit_window_rectangles(struct si_context *sctx, unsigned index)
    if (sctx->gfx_level >= GFX12) {
       radeon_begin(cs);
       gfx12_begin_context_regs();
-      gfx12_opt_set_context_reg(R_02820C_PA_SC_CLIPRECT_RULE, SI_TRACKED_PA_SC_CLIPRECT_RULE, rule);
+      gfx12_opt_set_context_reg(R_02820C_PA_SC_CLIPRECT_RULE, AC_TRACKED_PA_SC_CLIPRECT_RULE, rule);
 
       if (num_rectangles) {
          for (unsigned i = 0; i < num_rectangles; i++) {
@@ -742,7 +665,7 @@ static void si_emit_window_rectangles(struct si_context *sctx, unsigned index)
       radeon_end();
    } else {
       radeon_begin(cs);
-      radeon_opt_set_context_reg(R_02820C_PA_SC_CLIPRECT_RULE, SI_TRACKED_PA_SC_CLIPRECT_RULE,
+      radeon_opt_set_context_reg(R_02820C_PA_SC_CLIPRECT_RULE, AC_TRACKED_PA_SC_CLIPRECT_RULE,
                                  rule);
       if (num_rectangles) {
          radeon_set_context_reg_seq(R_028210_PA_SC_CLIPRECT_0_TL, num_rectangles * 2);
@@ -786,5 +709,5 @@ void si_init_viewport_functions(struct si_context *ctx)
    ctx->b.set_window_rectangles = si_set_window_rectangles;
 
    for (unsigned i = 0; i < 16; i++)
-      ctx->viewports.as_scissor[i].quant_mode = SI_QUANT_MODE_16_8_FIXED_POINT_1_256TH;
+      ctx->viewports.as_scissor[i].quant_mode = AC_QUANT_MODE_16_8_FIXED_POINT_1_256TH;
 }

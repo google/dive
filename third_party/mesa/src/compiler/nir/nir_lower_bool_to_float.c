@@ -107,41 +107,18 @@ lower_alu_instr(nir_builder *b, nir_alu_instr *alu, bool has_fcsel_ne,
       break;
 
    case nir_op_ball_fequal2:
-      alu->op = nir_op_fall_equal2;
-      break;
    case nir_op_ball_fequal3:
-      alu->op = nir_op_fall_equal3;
-      break;
    case nir_op_ball_fequal4:
-      alu->op = nir_op_fall_equal4;
-      break;
    case nir_op_bany_fnequal2:
-      alu->op = nir_op_fany_nequal2;
-      break;
    case nir_op_bany_fnequal3:
-      alu->op = nir_op_fany_nequal3;
-      break;
    case nir_op_bany_fnequal4:
-      alu->op = nir_op_fany_nequal4;
-      break;
    case nir_op_ball_iequal2:
-      alu->op = nir_op_fall_equal2;
-      break;
    case nir_op_ball_iequal3:
-      alu->op = nir_op_fall_equal3;
-      break;
    case nir_op_ball_iequal4:
-      alu->op = nir_op_fall_equal4;
-      break;
    case nir_op_bany_inequal2:
-      alu->op = nir_op_fany_nequal2;
-      break;
    case nir_op_bany_inequal3:
-      alu->op = nir_op_fany_nequal3;
-      break;
    case nir_op_bany_inequal4:
-      alu->op = nir_op_fany_nequal4;
-      break;
+      UNREACHABLE("vector comparisons should be lowered");
 
    case nir_op_bcsel:
       if (has_fcsel_gt)
@@ -188,6 +165,7 @@ lower_alu_instr(nir_builder *b, nir_alu_instr *alu, bool has_fcsel_ne,
    } else {
       if (alu->def.bit_size == 1)
          alu->def.bit_size = 32;
+      alu->fp_math_ctrl = nir_op_valid_fp_math_ctrl(alu->op, alu->fp_math_ctrl);
    }
 
    return true;

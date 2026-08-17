@@ -36,21 +36,62 @@ extern "C" {
 
 /* TODO: Consider compression? ZSTD_error_dstSize_tooSmall */
 
-#define INTEL_HANG_DUMP_VERSION (1)
+#define INTEL_HANG_DUMP_VERSION (2)
 #define INTEL_HANG_DUMP_MAGIC   (0x4245012345676463)
 
 enum intel_hang_dump_block_type {
-   INTEL_HANG_DUMP_BLOCK_TYPE_HEADER    = 1,
-   INTEL_HANG_DUMP_BLOCK_TYPE_BO        = 2,
-   INTEL_HANG_DUMP_BLOCK_TYPE_MAP       = 3,
-   INTEL_HANG_DUMP_BLOCK_TYPE_EXEC      = 4,
-   INTEL_HANG_DUMP_BLOCK_TYPE_HW_IMAGE  = 5,
+   INTEL_HANG_DUMP_BLOCK_TYPE_HEADER      = 1,
+   INTEL_HANG_DUMP_BLOCK_TYPE_BO          = 2,
+   INTEL_HANG_DUMP_BLOCK_TYPE_MAP         = 3,
+   INTEL_HANG_DUMP_BLOCK_TYPE_EXEC        = 4,
+   INTEL_HANG_DUMP_BLOCK_TYPE_HW_IMAGE    = 5,
+   INTEL_HANG_DUMP_BLOCK_TYPE_VM_FLAGS    = 6,
+};
+
+enum intel_hang_dump_block_mem_permission {
+   INTEL_HANG_DUMP_BLOCK_MEM_TYPE_READ_ONLY   = 1,
+   INTEL_HANG_DUMP_BLOCK_MEM_TYPE_READ_WRITE  = 2,
+};
+
+enum intel_hang_dump_block_mem_type {
+   INTEL_HANG_DUMP_BLOCK_MEM_TYPE_BO          = 1,
+   INTEL_HANG_DUMP_BLOCK_MEM_TYPE_USERPTR     = 2,
+   INTEL_HANG_DUMP_BLOCK_MEM_TYPE_NULL_SPARSE = 3,
+};
+
+enum intel_hang_dump_block_cpu_caching_mode {
+   INTEL_HANG_DUMP_BLOCK_CPU_CACHING_MODE_WB = 1,
+   INTEL_HANG_DUMP_BLOCK_CPU_CACHING_MODE_WC = 2,
 };
 
 struct intel_hang_dump_block_base {
    uint32_t type; /* enum intel_hang_dump_block_type */
 
    uint32_t pad;
+};
+
+struct intel_hang_dump_block_vm_flags {
+   struct intel_hang_dump_block_base base;
+
+   /* Flags used when creating a VM, defaults to scratch page */
+   uint32_t vm_flags;
+};
+
+struct intel_hang_dump_block_vm_properties {
+   /* Two options: 'read_only' or 'read_write' */
+   enum intel_hang_dump_block_mem_permission mem_permission;
+
+   /* Three options: 'userptr', 'null_sparse' or 'bo' */
+   enum intel_hang_dump_block_mem_type mem_type;
+
+   /* Bit mask to specify where the memory is located  */
+   uint32_t mem_region;
+
+   /* Corresponds to the value setup upon VM bind */
+   uint32_t pat_index;
+
+   /* Indicates BO caching properties */
+   enum intel_hang_dump_block_cpu_caching_mode cpu_caching;
 };
 
 struct intel_hang_dump_block_header {
@@ -64,6 +105,7 @@ struct intel_hang_dump_block_header {
 
 struct intel_hang_dump_block_bo {
    struct intel_hang_dump_block_base base;
+   struct intel_hang_dump_block_vm_properties props;
 
    /* Helpful */
    char name[64];
@@ -103,6 +145,9 @@ struct intel_hang_dump_block_hw_image {
    /* Buffer size */
    uint64_t size;
 
+   /* PPGTT location */
+   uint64_t offset;
+
    /* Data follows */
 };
 
@@ -113,6 +158,7 @@ union intel_hang_dump_block_all {
    struct intel_hang_dump_block_map      map;
    struct intel_hang_dump_block_exec     exec;
    struct intel_hang_dump_block_hw_image hw_img;
+   struct intel_hang_dump_block_vm_flags vm_flags;
 };
 
 #ifdef __cplusplus

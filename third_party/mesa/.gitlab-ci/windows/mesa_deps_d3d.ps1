@@ -8,7 +8,7 @@ $depsInstallPath="C:\mesa-deps"
 
 Write-Host "Downloading DirectX 12 Agility SDK at:"
 Get-Date
-Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.618.1 -OutFile 'agility.zip'
+Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.619.1 -OutFile 'agility.zip'
 Expand-Archive -Path 'agility.zip' -DestinationPath 'C:\agility'
 # Copy Agility SDK into mesa-deps\bin\D3D12
 New-Item -ErrorAction SilentlyContinue -ItemType Directory -Path $depsInstallPath\bin -Name 'D3D12'
@@ -18,10 +18,10 @@ Remove-Item -Recurse 'C:\agility'
 
 Write-Host "Downloading Updated WARP at:"
 Get-Date
-Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.11 -OutFile 'warp.zip'
+Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.20 -OutFile 'warp.zip'
 Expand-Archive -Path 'warp.zip' -DestinationPath 'C:\warp'
 # Copy WARP into mesa-deps\bin
-Copy-Item 'C:\warp\build\native\amd64\d3d10warp.dll' -Destination $depsInstallPath\bin
+Copy-Item 'C:\warp\build\native\bin\x64\d3d10warp.dll' -Destination $depsInstallPath\bin
 Remove-Item 'warp.zip'
 Remove-Item -Recurse 'C:\warp'
 

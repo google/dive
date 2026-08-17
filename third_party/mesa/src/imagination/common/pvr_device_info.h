@@ -46,6 +46,10 @@
 #define PVR_BVNC_PACK_MASK_N UINT64_C(0x00000000FFFF0000)
 #define PVR_BVNC_PACK_MASK_C UINT64_C(0x000000000000FFFF)
 
+enum pvr_device_arch {
+   PVR_DEVICE_ARCH_ROGUE,
+};
+
 /**
  * Packs B, V, N and C values into a 64-bit unsigned integer.
  *
@@ -222,7 +226,8 @@
  *  * true if the enhancement is present in the hardware.
  *  * false if the enhancement is not present in the hardware.
  */
-#define PVR_HAS_ERN(dev_info, number) ((dev_info)->enhancements.has_ern##number)
+#define PVR_HAS_ENHANCEMENT(dev_info, number) \
+   ((dev_info)->enhancements.has_ern##number)
 
 /**
  * Tests whether a physical device has a given quirk.
@@ -241,6 +246,7 @@
 #define PVR_HAS_QUIRK(dev_info, number) ((dev_info)->quirks.has_brn##number)
 
 struct pvr_device_ident {
+   enum pvr_device_arch arch;
    uint16_t b, v, n, c;
    uint32_t device_id;
    const char *series_name;
@@ -256,7 +262,7 @@ struct pvr_device_features {
    bool has_compute_overlap : 1;
    bool has_eight_output_registers : 1;
    bool has_fb_cdc_v4 : 1;
-   bool has_fbcdc_algorithm;
+   bool has_fbcdc_algorithm : 1;
    bool has_gpu_multicore_support : 1;
    bool has_gs_rta_support : 1;
    bool has_ipf_creq_pf : 1;
@@ -271,6 +277,7 @@ struct pvr_device_features {
    bool has_paired_tiles : 1;
    bool has_pbe2_in_xe : 1;
    bool has_pbe_filterable_f16 : 1;
+   bool has_pbe_stride_align_1pixel : 1;
    bool has_pbe_yuv : 1;
    bool has_pds_ddmadt : 1;
    bool has_roguexe : 1;
@@ -297,6 +304,7 @@ struct pvr_device_features {
    bool has_usc_f16sop_u8 : 1;
    bool has_usc_itrsmp : 1;
    bool has_usc_itrsmp_enhanced : 1;
+   bool has_usc_itr_parallel_instances : 1;
    bool has_usc_min_output_registers_per_pix : 1;
    bool has_usc_pixel_partition_mask : 1;
    bool has_usc_slots : 1;
@@ -325,6 +333,7 @@ struct pvr_device_features {
    uint32_t tile_size_y;
    uint32_t tpu_parallel_instances;
    uint32_t unified_store_depth;
+   uint32_t usc_itr_parallel_instances;
    uint32_t usc_min_output_registers_per_pix;
    uint32_t usc_slots;
    uint32_t uvs_banks;
@@ -336,9 +345,6 @@ struct pvr_device_features {
    /* Derived features. */
    bool has_requires_fb_cdc_zls_setup : 1;
    bool has_s8xe : 1;
-   bool has_usc_itr_parallel_instances : 1;
-
-   uint32_t usc_itr_parallel_instances;
 };
 
 struct pvr_device_enhancements {

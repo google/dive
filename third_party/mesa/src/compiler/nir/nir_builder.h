@@ -37,11 +37,11 @@ struct exec_list;
 typedef struct nir_builder {
    nir_cursor cursor;
 
-   /* Whether new ALU instructions will be marked "exact" */
-   bool exact;
+   /* Whether new ALU instruction will be constanst-folded if possible. */
+   bool constant_fold_alu;
 
    /* Float_controls2 bits. See nir_alu_instr for details. */
-   uint32_t fp_fast_math;
+   uint32_t fp_math_ctrl;
 
    nir_shader *shader;
    nir_function_impl *impl;
@@ -52,7 +52,7 @@ nir_builder_create(nir_function_impl *impl)
 {
    nir_builder b;
    memset(&b, 0, sizeof(b));
-   b.exact = false;
+   b.fp_math_ctrl = nir_fp_fast_math;
    b.impl = impl;
    b.shader = impl->function->shader;
    return b;
@@ -62,9 +62,9 @@ nir_builder_create(nir_function_impl *impl)
 static inline nir_builder
 nir_builder_at(nir_cursor cursor)
 {
-   nir_cf_node *current_block = &nir_cursor_current_block(cursor)->cf_node;
+   nir_block *current_block = nir_cursor_current_block(cursor);
 
-   nir_builder b = nir_builder_create(nir_cf_node_get_function(current_block));
+   nir_builder b = nir_builder_create(current_block->impl);
    b.cursor = cursor;
    return b;
 }
@@ -83,6 +83,8 @@ typedef bool (*nir_tex_pass_cb)(struct nir_builder *,
                                 nir_tex_instr *, void *);
 typedef bool (*nir_phi_pass_cb)(struct nir_builder *,
                                 nir_phi_instr *, void *);
+typedef bool (*nir_deref_pass_cb)(struct nir_builder *,
+                                  nir_deref_instr *, void *);
 
 /**
  * Iterates over all the instructions in a NIR function and calls the given pass
@@ -264,6 +266,32 @@ nir_shader_phi_pass(nir_shader *shader,
       nir_foreach_block_safe(block, impl) {
          nir_foreach_phi_safe(phi, block) {
             func_progress |= pass(&b, phi, cb_data);
+         }
+      }
+
+      progress |= nir_progress(func_progress, impl, preserved);
+   }
+
+   return progress;
+}
+
+/* As above, but for derefs */
+static inline bool
+nir_shader_deref_pass(nir_shader *shader, nir_deref_pass_cb pass,
+                      nir_metadata preserved, void *cb_data)
+{
+   bool progress = false;
+
+   nir_foreach_function_impl(impl, shader) {
+      bool func_progress = false;
+      nir_builder b = nir_builder_create(impl);
+
+      nir_foreach_block_safe(block, impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type == nir_instr_type_deref) {
+               nir_deref_instr *deref = nir_instr_as_deref(instr);
+               func_progress |= pass(&b, deref, cb_data);
+            }
          }
       }
 
@@ -718,16 +746,32 @@ nir_mov_alu(nir_builder *build, nir_alu_src src, unsigned num_components)
          return src.src.ssa;
    }
 
+   if (build->constant_fold_alu && nir_src_is_const(src.src)) {
+      nir_const_value dest[NIR_MAX_VEC_COMPONENTS];
+      nir_load_const_instr *load_const = nir_src_as_load_const(src.src);
+      for (unsigned i = 0; i < num_components; i++)
+         dest[i] = load_const->value[src.swizzle[i]];
+
+      return nir_build_imm(build, num_components,
+                           nir_src_bit_size(src.src),
+                           dest);
+   }
+
    nir_alu_instr *mov = nir_alu_instr_create(build->shader, nir_op_mov);
    nir_def_init(&mov->instr, &mov->def, num_components,
                 nir_src_bit_size(src.src));
-   mov->exact = build->exact;
-   mov->fp_fast_math = build->fp_fast_math;
+   assert(nir_op_infos[nir_op_mov].valid_fp_math_ctrl == 0);
    mov->src[0] = src;
    nir_builder_instr_insert(build, &mov->instr);
 
    return &mov->def;
 }
+
+/* Tries to avoid inserting a mov for the replacement,
+ * but if it has to insert one to handle non-alu, it's return instead of NULL.
+ */
+nir_def *
+nir_def_rewrite_uses_with_alu_src(nir_builder *build, nir_def *def, nir_alu_src src);
 
 /**
  * Construct a mov that reswizzles the source's components.
@@ -1024,7 +1068,7 @@ static inline nir_def *
 nir_iadd_imm_nuw(nir_builder *b, nir_def *x, uint64_t y)
 {
    nir_def *d = nir_iadd_imm(b, x, y);
-   if (d != x && d->parent_instr->type == nir_instr_type_alu)
+   if (d != x && nir_def_is_alu(d))
       nir_def_as_alu(d)->no_unsigned_wrap = true;
    return d;
 }
@@ -1033,7 +1077,8 @@ static inline nir_def *
 nir_iadd_nuw(nir_builder *b, nir_def *x, nir_def *y)
 {
    nir_def *d = nir_iadd(b, x, y);
-   nir_def_as_alu(d)->no_unsigned_wrap = true;
+   if (nir_def_is_alu(d))
+      nir_def_as_alu(d)->no_unsigned_wrap = true;
    return d;
 }
 
@@ -1108,6 +1153,24 @@ static inline nir_def *
 nir_imul_imm(nir_builder *build, nir_def *x, uint64_t y)
 {
    return _nir_mul_imm(build, x, y, false);
+}
+
+static inline nir_def *
+nir_imul_imm_nuw(nir_builder *build, nir_def *x, uint64_t y)
+{
+   nir_def *d = nir_imul_imm(build, x, y);
+   if (d != x && nir_def_is_alu(d))
+      nir_def_as_alu(d)->no_unsigned_wrap = true;
+   return d;
+}
+
+static inline nir_def *
+nir_imul_nuw(nir_builder *build, nir_def *x, nir_def *y)
+{
+   nir_def *d = nir_imul(build, x, y);
+   if (nir_def_is_alu(d))
+      nir_def_as_alu(d)->no_unsigned_wrap = true;
+   return d;
 }
 
 static inline nir_def *
@@ -1326,33 +1389,33 @@ nir_uclamp(nir_builder *b,
 }
 
 static inline nir_def *
-nir_ffma_imm12(nir_builder *build, nir_def *src0, double src1, double src2)
+nir_ffma_weak_imm12(nir_builder *build, nir_def *src0, double src1, double src2)
 {
    if (build->shader->options &&
        build->shader->options->avoid_ternary_with_two_constants)
       return nir_fadd_imm(build, nir_fmul_imm(build, src0, src1), src2);
    else
-      return nir_ffma(build, src0, nir_imm_floatN_t(build, src1, src0->bit_size),
-                      nir_imm_floatN_t(build, src2, src0->bit_size));
+      return nir_ffma_weak(build, src0, nir_imm_floatN_t(build, src1, src0->bit_size),
+                                  nir_imm_floatN_t(build, src2, src0->bit_size));
 }
 
 static inline nir_def *
-nir_ffma_imm1(nir_builder *build, nir_def *src0, double src1, nir_def *src2)
+nir_ffma_weak_imm1(nir_builder *build, nir_def *src0, double src1, nir_def *src2)
 {
-   return nir_ffma(build, src0, nir_imm_floatN_t(build, src1, src0->bit_size), src2);
+   return nir_ffma_weak(build, src0, nir_imm_floatN_t(build, src1, src0->bit_size), src2);
 }
 
 static inline nir_def *
-nir_ffma_imm2(nir_builder *build, nir_def *src0, nir_def *src1, double src2)
+nir_ffma_weak_imm2(nir_builder *build, nir_def *src0, nir_def *src1, double src2)
 {
-   return nir_ffma(build, src0, src1, nir_imm_floatN_t(build, src2, src0->bit_size));
+   return nir_ffma_weak(build, src0, src1, nir_imm_floatN_t(build, src2, src0->bit_size));
 }
 
 static inline nir_def *
 nir_a_minus_bc(nir_builder *build, nir_def *src0, nir_def *src1,
                nir_def *src2)
 {
-   return nir_ffma(build, nir_fneg(build, src1), src2, src0);
+   return nir_ffma_weak(build, nir_fneg(build, src1), src2, src0);
 }
 
 static inline nir_def *
@@ -1623,9 +1686,9 @@ nir_resize_vector(nir_builder *b, nir_def *src, unsigned num_components)
       return nir_trim_vector(b, src, num_components);
 }
 
-/* Shift channels to the left or right. Fill undefined components with .x.
+/* Shift channels to the left or right. Fill undefined components with undef.
  * Examples:
- *    channel_shift =  1, new_num_components = 4: .xyzw -> .xxyz
+ *    channel_shift =  1, new_num_components = 4: .xyzw -> ._xyz
  *    channel_shift = -1, new_num_components = 3: .xyzw -> .yzw
  */
 static inline nir_def *
@@ -1635,15 +1698,18 @@ nir_shift_channels(nir_builder *b, nir_def *def, int channel_shift,
    if (channel_shift == 0)
       return nir_resize_vector(b, def, new_num_components);
 
-   assert(abs(channel_shift) < NIR_MAX_VEC_COMPONENTS);
-   unsigned swizzle[NIR_MAX_VEC_COMPONENTS] = {0};
+   nir_def *chan[NIR_MAX_VEC_COMPONENTS];
 
-   for (int i = 1; i < def->num_components; i++) {
-      if (i + channel_shift >= 0)
-         swizzle[i + channel_shift] = i;
+   for (int i = 0; i < (int)new_num_components; i++) {
+      int src_index = i - channel_shift;
+
+      if (src_index >= 0 && src_index < def->num_components)
+         chan[i] = nir_channel(b, def, src_index);
+      else
+         chan[i] = nir_undef(b, 1, def->bit_size);
    }
 
-   return nir_swizzle(b, def, swizzle, new_num_components);
+   return nir_vec(b, chan, new_num_components);
 }
 
 nir_def *
@@ -2062,52 +2128,6 @@ nir_store_array_var_imm(nir_builder *build, nir_variable *var, int64_t index,
    nir_store_deref(build, deref, value, writemask);
 }
 
-#undef nir_load_global
-static inline nir_def *
-nir_load_global(nir_builder *build, nir_def *addr, unsigned align,
-                unsigned num_components, unsigned bit_size)
-{
-   nir_intrinsic_instr *load =
-      nir_intrinsic_instr_create(build->shader, nir_intrinsic_load_global);
-   load->num_components = (uint8_t)num_components;
-   load->src[0] = nir_src_for_ssa(addr);
-   nir_intrinsic_set_align(load, align, 0);
-   nir_def_init(&load->instr, &load->def, num_components, bit_size);
-   nir_builder_instr_insert(build, &load->instr);
-   return &load->def;
-}
-
-#undef nir_store_global
-static inline void
-nir_store_global(nir_builder *build, nir_def *addr, unsigned align,
-                 nir_def *value, nir_component_mask_t write_mask)
-{
-   nir_intrinsic_instr *store =
-      nir_intrinsic_instr_create(build->shader, nir_intrinsic_store_global);
-   store->num_components = value->num_components;
-   store->src[0] = nir_src_for_ssa(value);
-   store->src[1] = nir_src_for_ssa(addr);
-   nir_intrinsic_set_write_mask(store,
-                                write_mask & BITFIELD_MASK(value->num_components));
-   nir_intrinsic_set_align(store, align, 0);
-   nir_builder_instr_insert(build, &store->instr);
-}
-
-#undef nir_load_global_constant
-static inline nir_def *
-nir_load_global_constant(nir_builder *build, nir_def *addr, unsigned align,
-                         unsigned num_components, unsigned bit_size)
-{
-   nir_intrinsic_instr *load =
-      nir_intrinsic_instr_create(build->shader, nir_intrinsic_load_global_constant);
-   load->num_components = (uint8_t)num_components;
-   load->src[0] = nir_src_for_ssa(addr);
-   nir_intrinsic_set_align(load, align, 0);
-   nir_def_init(&load->instr, &load->def, num_components, bit_size);
-   nir_builder_instr_insert(build, &load->instr);
-   return &load->def;
-}
-
 #undef nir_load_param
 static inline nir_def *
 nir_load_param(nir_builder *build, uint32_t param_idx)
@@ -2182,17 +2202,18 @@ nir_tex_src_for_ssa(nir_tex_src_type src_type, nir_def *def)
 static inline nir_def *
 nir_build_deriv(nir_builder *b, nir_def *x, nir_intrinsic_op intrin)
 {
+   struct _nir_ddx_indices indices = { 0 };
    if (b->shader->options->scalarize_ddx && x->num_components > 1) {
       nir_def *res[NIR_MAX_VEC_COMPONENTS] = { NULL };
 
       for (unsigned i = 0; i < x->num_components; ++i) {
-         res[i] = _nir_build_ddx(b, x->bit_size, nir_channel(b, x, i));
+         res[i] = _nir_build_ddx(b, x->bit_size, nir_channel(b, x, i), indices);
          nir_def_as_intrinsic(res[i])->intrinsic = intrin;
       }
 
       return nir_vec(b, res, x->num_components);
    } else {
-      nir_def *res = _nir_build_ddx(b, x->bit_size, x);
+      nir_def *res = _nir_build_ddx(b, x->bit_size, x, indices);
       nir_def_as_intrinsic(res)->intrinsic = intrin;
       return res;
    }
@@ -2214,13 +2235,16 @@ DEF_DERIV(ddy_coarse)
 
 struct nir_tex_builder {
    nir_def *coord, *ms_index, *lod, *bias, *comparator;
+   nir_def *backend1, *backend2;
    unsigned texture_index, sampler_index;
    nir_def *texture_offset, *sampler_offset;
+   nir_def *texture_heap_offset, *sampler_heap_offset;
    nir_def *texture_handle, *sampler_handle;
    nir_deref_instr *texture_deref, *sampler_deref;
    enum glsl_sampler_dim dim;
    nir_alu_type dest_type;
    bool is_array;
+   bool is_sparse;
    bool can_speculate;
    uint32_t backend_flags;
 };
@@ -2234,19 +2258,11 @@ nir_def *nir_build_tex_struct(nir_builder *build, nir_texop op,
 #define nir_tex(build, coord_, ...)                                            \
    nir_build_tex(build, nir_texop_tex, .coord = coord_, __VA_ARGS__)
 
-#define nir_txl(build, coord_, lod_, ...)                                      \
-   nir_build_tex(build, nir_texop_txl, .coord = coord_, .lod = lod_,           \
-                 __VA_ARGS__)
-
-#define nir_txb(build, coord_, bias_, ...)                                     \
-   nir_build_tex(build, nir_texop_txb, .coord = coord_, .bias = bias,          \
-                 __VA_ARGS__)
-
 #define nir_txf(build, coord_, ...)                                            \
    nir_build_tex(build, nir_texop_txf, .coord = coord_, __VA_ARGS__)
 
-#define nir_txf_ms(build, coord_, ms_index_, ...)                              \
-   nir_build_tex(build, nir_texop_txf_ms, .coord = coord_,                     \
+#define nir_txf_ms(build, coord_, ms_index_, ...)       \
+   nir_build_tex(build, nir_texop_txf, .coord = coord_, \
                  .ms_index = ms_index_, __VA_ARGS__)
 
 #define nir_txs(build, ...) nir_build_tex(build, nir_texop_txs, __VA_ARGS__)
@@ -2370,6 +2386,9 @@ nir_inverse_ballot_imm(nir_builder *build, uint64_t imm, unsigned bit_size)
 {
    return nir_inverse_ballot(build, nir_imm_intN_t(build, imm, bit_size));
 }
+
+nir_def *
+nir_build_frag_coord(nir_builder *b, unsigned num_components);
 
 nir_def *
 nir_build_string(nir_builder *build, const char *value);

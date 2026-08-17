@@ -39,12 +39,12 @@ etna_disk_cache_init(struct etna_compiler *compiler, const char *renderer)
 
    const struct build_id_note *note =
          build_id_find_nhdr_for_addr(etna_disk_cache_init);
-   assert(note && build_id_length(note) == 20); /* sha1 */
+   assert(note && build_id_length(note) == BUILD_ID_EXPECTED_HASH_LENGTH); /* sha1 */
 
    const uint8_t *id_sha1 = build_id_data(note);
    assert(id_sha1);
 
-   char timestamp[41];
+   char timestamp[BLAKE3_HEX_LEN];
    _mesa_sha1_format(timestamp, id_sha1);
 
    compiler->disk_cache = disk_cache_create(renderer, timestamp, etna_mesa_debug);
@@ -56,9 +56,9 @@ etna_disk_cache_init_shader_key(struct etna_compiler *compiler, struct etna_shad
    if (!compiler->disk_cache)
       return;
 
-   struct mesa_sha1 ctx;
+   blake3_hasher ctx;
 
-   _mesa_sha1_init(&ctx);
+   _mesa_blake3_init(&ctx);
 
    /* Serialize the NIR to a binary blob that we can hash for the disk
     * cache.  Drop unnecessary information (like variable names)
@@ -69,10 +69,10 @@ etna_disk_cache_init_shader_key(struct etna_compiler *compiler, struct etna_shad
 
    blob_init(&blob);
    nir_serialize(&blob, shader->nir, true);
-   _mesa_sha1_update(&ctx, blob.data, blob.size);
+   _mesa_blake3_update(&ctx, blob.data, blob.size);
    blob_finish(&blob);
 
-   _mesa_sha1_final(&ctx, shader->cache_key);
+   _mesa_blake3_final(&ctx, shader->cache_key);
 }
 
 static void
@@ -131,10 +131,10 @@ etna_disk_cache_retrieve(struct etna_compiler *compiler, struct etna_shader_vari
    compute_variant_key(compiler, v, cache_key);
 
    if (debug) {
-      char sha1[41];
+      char blake3[BLAKE3_HEX_LEN];
 
-      _mesa_sha1_format(sha1, cache_key);
-      fprintf(stderr, "[mesa disk cache] retrieving variant %s: ", sha1);
+      _mesa_blake3_format(blake3, cache_key);
+      fprintf(stderr, "[mesa disk cache] retrieving variant %s: ", blake3);
    }
 
    size_t size;
@@ -167,10 +167,10 @@ etna_disk_cache_store(struct etna_compiler *compiler, struct etna_shader_variant
    compute_variant_key(compiler, v, cache_key);
 
    if (debug) {
-      char sha1[41];
+      char blake3[BLAKE3_HEX_LEN];
 
-      _mesa_sha1_format(sha1, cache_key);
-      fprintf(stderr, "[mesa disk cache] storing variant %s\n", sha1);
+      _mesa_blake3_format(blake3, cache_key);
+      fprintf(stderr, "[mesa disk cache] storing variant %s\n", blake3);
    }
 
    struct blob blob;

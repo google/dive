@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 /* NOTE: see https://gitlab.freedesktop.org/freedreno/freedreno/-/wikis/A5xx-Queries */
 
 #include "freedreno_query_acc.h"
@@ -19,6 +17,17 @@
 #include "fd6_query.h"
 
 #include "fd6_pack.h"
+
+template <chip CHIP>
+static void
+emit_counter_barrier(fd_cs &cs)
+{
+   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+
+   if (CHIP >= A8XX) {
+      fd_pkt7(cs, CP_BARRIER, 1).add(1);
+   }
+}
 
 /* g++ is a picky about offsets that cannot be resolved at compile time, so
  * roll our own __offsetof()
@@ -66,7 +75,7 @@ occlusion_resume(struct fd_acc_query *aq, struct fd_batch *batch)
    fd_pkt4(cs, 1)
       .add(A6XX_RB_SAMPLE_COUNTER_CNTL(.copy = true));
 
-   if (!ctx->screen->info->a7xx.has_event_write_sample_count) {
+   if (!ctx->screen->info->props.has_event_write_sample_count) {
       fd_pkt4(cs, 2)
          .add(A6XX_RB_SAMPLE_COUNTER_BASE(query_sample(aq, start)));
 
@@ -109,7 +118,7 @@ occlusion_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
    struct fd_context *ctx = batch->ctx;
    fd_cs cs(batch->draw);
 
-   if (!ctx->screen->info->a7xx.has_event_write_sample_count) {
+   if (!ctx->screen->info->props.has_event_write_sample_count) {
       fd_pkt7(cs, CP_MEM_WRITE, 4)
          .add(A5XX_CP_MEM_WRITE_ADDR(query_sample(aq, stop)))
          .add(0xffffffff)
@@ -123,7 +132,7 @@ occlusion_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 
    ASSERT_ALIGNED(struct fd6_query_sample, stop, 16);
 
-   if (!ctx->screen->info->a7xx.has_event_write_sample_count) {
+   if (!ctx->screen->info->props.has_event_write_sample_count) {
       fd_pkt4(cs, 2)
          .add(A6XX_RB_SAMPLE_COUNTER_BASE(query_sample(aq, stop)));
 
@@ -236,7 +245,7 @@ occlusion_predicate_result_resource(struct fd_acc_query *aq, struct fd_ringbuffe
       .add(1)
       .add(0);
 
-   copy_result(cs.ring(), result_type, dst, offset, fd_resource(aq->prsc),
+   copy_result(cs, result_type, dst, offset, fd_resource(aq->prsc),
                offsetof(struct fd6_query_sample, result));
 }
 
@@ -291,7 +300,7 @@ time_elapsed_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 
    fd6_record_ts<CHIP>(cs, query_sample(aq, stop));
 
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    /* result += stop - start: */
    fd_pkt7(cs, CP_MEM_TO_MEM, 9)
@@ -359,6 +368,16 @@ timestamp_result_resource(struct fd_acc_query *aq, struct fd_ringbuffer *ring,
                offsetof(struct fd6_query_sample, start));
 }
 
+static void
+timestamp_raw_result_resource(struct fd_acc_query *aq, struct fd_ringbuffer *ring,
+                              enum pipe_query_value_type result_type,
+                              int index, struct fd_resource *dst,
+                              unsigned offset)
+{
+   copy_result(ring, result_type, dst, offset, fd_resource(aq->prsc),
+               offsetof(struct fd6_query_sample, start));
+}
+
 template <chip CHIP>
 static const struct fd_acc_sample_provider time_elapsed = {
    .query_type = PIPE_QUERY_TIME_ELAPSED,
@@ -386,6 +405,17 @@ static const struct fd_acc_sample_provider timestamp = {
    .pause = timestamp_pause,
    .result = timestamp_accumulate_result,
    .result_resource = timestamp_result_resource,
+};
+
+template <chip CHIP>
+static const struct fd_acc_sample_provider timestamp_raw = {
+   .query_type = PIPE_QUERY_TIMESTAMP_RAW,
+   .always = true,
+   .size = sizeof(struct fd6_query_sample),
+   .resume = timestamp_resume<CHIP>,
+   .pause = timestamp_pause,
+   .result = timestamp_accumulate_result,
+   .result_resource = timestamp_raw_result_resource,
 };
 
 struct PACKED fd6_pipeline_stats_sample {
@@ -443,51 +473,31 @@ get_stats_type(struct fd_acc_query *aq)
    }
 }
 
+template <chip CHIP>
 static unsigned
-stats_counter_index(struct fd_acc_query *aq)
+stats_counter_reg(struct fd_acc_query *aq)
 {
+#define COUNTER_REG(name) __RBBM_PIPESTAT_ ## name <CHIP>({}).reg
+
    if (aq->provider->query_type == PIPE_QUERY_PRIMITIVES_GENERATED)
-      return 7;
+      return COUNTER_REG(CINVOCATIONS);
 
    switch (aq->base.index) {
-   case PIPE_STAT_QUERY_IA_VERTICES:    return 0;
-   case PIPE_STAT_QUERY_IA_PRIMITIVES:  return 1;
-   case PIPE_STAT_QUERY_VS_INVOCATIONS: return 2;
-   case PIPE_STAT_QUERY_GS_INVOCATIONS: return 5;
-   case PIPE_STAT_QUERY_GS_PRIMITIVES:  return 6;
-   case PIPE_STAT_QUERY_C_INVOCATIONS:  return 7;
-   case PIPE_STAT_QUERY_C_PRIMITIVES:   return 8;
-   case PIPE_STAT_QUERY_PS_INVOCATIONS: return 9;
-   case PIPE_STAT_QUERY_HS_INVOCATIONS: return 3;
-   case PIPE_STAT_QUERY_DS_INVOCATIONS: return 4;
-   case PIPE_STAT_QUERY_CS_INVOCATIONS: return 10;
+   case PIPE_STAT_QUERY_IA_VERTICES:    return COUNTER_REG(IAVERTICES);
+   case PIPE_STAT_QUERY_IA_PRIMITIVES:  return COUNTER_REG(IAPRIMITIVES);
+   case PIPE_STAT_QUERY_VS_INVOCATIONS: return COUNTER_REG(VSINVOCATIONS);
+   case PIPE_STAT_QUERY_GS_INVOCATIONS: return COUNTER_REG(GSINVOCATIONS);
+   case PIPE_STAT_QUERY_GS_PRIMITIVES:  return COUNTER_REG(GSPRIMITIVES);
+   case PIPE_STAT_QUERY_C_INVOCATIONS:  return COUNTER_REG(CINVOCATIONS);
+   case PIPE_STAT_QUERY_C_PRIMITIVES:   return COUNTER_REG(CPRIMITIVES);
+   case PIPE_STAT_QUERY_PS_INVOCATIONS: return COUNTER_REG(PSINVOCATIONS);
+   case PIPE_STAT_QUERY_HS_INVOCATIONS: return COUNTER_REG(HSINVOCATIONS);
+   case PIPE_STAT_QUERY_DS_INVOCATIONS: return COUNTER_REG(DSINVOCATIONS);
+   case PIPE_STAT_QUERY_CS_INVOCATIONS: return COUNTER_REG(CSINVOCATIONS);
    default:
       return 0;
    }
-}
-
-static void
-log_pipeline_stats(struct fd6_pipeline_stats_sample *ps, unsigned idx)
-{
-#ifdef DEBUG_COUNTERS
-   const char *labels[] = {
-      "IA_VERTICES",
-      "IA_PRIMITIVES",
-      "VS_INVOCATIONS",
-      "HS_INVOCATIONS",
-      "DS_INVOCATIONS",
-      "GS_INVOCATIONS",
-      "GS_PRIMITIVES",
-      "C_INVOCATIONS",
-      "C_PRIMITIVES",
-      "PS_INVOCATIONS",
-      "CS_INVOCATIONS",
-   };
-
-   mesa_logd("  counter\t\tstart\t\t\tstop\t\t\tdiff");
-   mesa_logd("  RBBM_PRIMCTR_%d\t0x%016" PRIx64 "\t0x%016" PRIx64 "\t%" PRIi64 "\t%s",
-             idx, ps->start, ps->stop, ps->stop - ps->start, labels[idx]);
-#endif
+#undef COUNTER_REG
 }
 
 template <chip CHIP>
@@ -496,11 +506,10 @@ pipeline_stats_resume(struct fd_acc_query *aq, struct fd_batch *batch)
    assert_dt
 {
    enum stats_type type = get_stats_type(aq);
-   unsigned idx = stats_counter_index(aq);
-   unsigned reg = REG_A6XX_RBBM_PIPESTAT_IAVERTICES + (2 * idx);
+   unsigned reg = stats_counter_reg<CHIP>(aq);
    fd_cs cs(batch->draw);
 
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    /* snapshot the start value: */
    fd_pkt7(cs, CP_REG_TO_MEM, 3)
@@ -520,11 +529,10 @@ pipeline_stats_pause(struct fd_acc_query *aq, struct fd_batch *batch)
    assert_dt
 {
    enum stats_type type = get_stats_type(aq);
-   unsigned idx = stats_counter_index(aq);
-   unsigned reg = REG_A6XX_RBBM_PIPESTAT_IAVERTICES + (2 * idx);
+   unsigned reg = stats_counter_reg<CHIP>(aq);
    fd_cs cs(batch->draw);
 
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    /* snapshot the end values: */
    fd_pkt7(cs, CP_REG_TO_MEM, 3)
@@ -557,8 +565,6 @@ pipeline_stats_result(struct fd_acc_query *aq,
                       union pipe_query_result *result)
 {
    struct fd6_pipeline_stats_sample *ps = fd6_pipeline_stats_sample(s);
-
-   log_pipeline_stats(ps, stats_counter_index(aq));
 
    result->u64 = ps->result;
 }
@@ -637,7 +643,7 @@ primitives_emitted_resume(struct fd_acc_query *aq,
 {
    fd_cs cs(batch->draw);
 
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    ASSERT_ALIGNED(struct fd6_primitives_sample, start[0], 32);
 
@@ -678,7 +684,7 @@ primitives_emitted_pause(struct fd_acc_query *aq,
 {
    fd_cs cs(batch->draw);
 
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    ASSERT_ALIGNED(struct fd6_primitives_sample, stop[0], 32);
 
@@ -818,6 +824,7 @@ static const struct fd_acc_sample_provider so_overflow_predicate = {
 struct fd_batch_query_entry {
    uint8_t gid; /* group-id */
    uint8_t cid; /* countable-id within the group */
+   const struct fd_perfcntr_counter *counter;
 };
 
 struct fd_batch_query_data {
@@ -826,6 +833,7 @@ struct fd_batch_query_data {
    struct fd_batch_query_entry query_entries[];
 };
 
+template <chip CHIP>
 static void
 perfcntr_resume(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 {
@@ -833,33 +841,32 @@ perfcntr_resume(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
    struct fd_screen *screen = data->screen;
    fd_cs cs(batch->draw);
 
-   unsigned counters_per_group[screen->num_perfcntr_groups];
-   memset(counters_per_group, 0, sizeof(counters_per_group));
-
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    /* configure performance counters for the requested queries: */
    for (unsigned i = 0; i < data->num_query_entries; i++) {
       struct fd_batch_query_entry *entry = &data->query_entries[i];
       const struct fd_perfcntr_group *g = &screen->perfcntr_groups[entry->gid];
-      unsigned counter_idx = counters_per_group[entry->gid]++;
-
-      assert(counter_idx < g->num_counters);
 
       fd_pkt4(cs, 1).add((fd_reg_pair){
-         .reg = g->counters[counter_idx].select_reg,
+         .reg = entry->counter->select_reg,
          .value = g->countables[entry->cid].selector,
       });
-   }
 
-   memset(counters_per_group, 0, sizeof(counters_per_group));
+      for (unsigned s = 0; s < ARRAY_SIZE(entry->counter->slice_select_regs); s++) {
+         if (!entry->counter->slice_select_regs[s])
+            break;
+         fd_pkt4(cs, 1).add((fd_reg_pair){
+            .reg = entry->counter->slice_select_regs[s],
+            .value = g->countables[entry->cid].selector,
+         });
+      }
+   }
 
    /* and snapshot the start values */
    for (unsigned i = 0; i < data->num_query_entries; i++) {
       struct fd_batch_query_entry *entry = &data->query_entries[i];
-      const struct fd_perfcntr_group *g = &screen->perfcntr_groups[entry->gid];
-      unsigned counter_idx = counters_per_group[entry->gid]++;
-      const struct fd_perfcntr_counter *counter = &g->counters[counter_idx];
+      const struct fd_perfcntr_counter *counter = entry->counter;
 
       fd_pkt7(cs, CP_REG_TO_MEM, 3)
          .add(CP_REG_TO_MEM_0(.reg = counter->counter_reg_lo, ._64b = true))
@@ -867,26 +874,21 @@ perfcntr_resume(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
    }
 }
 
+template <chip CHIP>
 static void
 perfcntr_pause(struct fd_acc_query *aq, struct fd_batch *batch) assert_dt
 {
    struct fd_batch_query_data *data = (struct fd_batch_query_data *)aq->query_data;
-   struct fd_screen *screen = data->screen;
    fd_cs cs(batch->draw);
 
-   unsigned counters_per_group[screen->num_perfcntr_groups];
-   memset(counters_per_group, 0, sizeof(counters_per_group));
-
-   fd_pkt7(cs, CP_WAIT_FOR_IDLE, 0);
+   emit_counter_barrier<CHIP>(cs);
 
    /* TODO do we need to bother to turn anything off? */
 
    /* snapshot the end values: */
    for (unsigned i = 0; i < data->num_query_entries; i++) {
       struct fd_batch_query_entry *entry = &data->query_entries[i];
-      const struct fd_perfcntr_group *g = &screen->perfcntr_groups[entry->gid];
-      unsigned counter_idx = counters_per_group[entry->gid]++;
-      const struct fd_perfcntr_counter *counter = &g->counters[counter_idx];
+      const struct fd_perfcntr_counter *counter = entry->counter;
 
       fd_pkt7(cs, CP_REG_TO_MEM, 3)
          .add(CP_REG_TO_MEM_0(.reg = counter->counter_reg_lo, ._64b = true))
@@ -919,14 +921,28 @@ perfcntr_accumulate_result(struct fd_acc_query *aq,
    }
 }
 
+static void
+perfcntr_cleanup(void *query_data)
+{
+   struct fd_batch_query_data *data = (struct fd_batch_query_data *)query_data;
+
+   for (unsigned i = 0; i < data->num_query_entries; i++) {
+      struct fd_batch_query_entry *entry = &data->query_entries[i];
+      fd_perfcntr_release(data->screen->perfcntrs, entry->counter);
+   }
+}
+
+template <chip CHIP>
 static const struct fd_acc_sample_provider perfcntr = {
    .query_type = FD_QUERY_FIRST_PERFCNTR,
    .always = true,
-   .resume = perfcntr_resume,
-   .pause = perfcntr_pause,
+   .resume = perfcntr_resume<CHIP>,
+   .pause = perfcntr_pause<CHIP>,
    .result = perfcntr_accumulate_result,
+   .cleanup = perfcntr_cleanup,
 };
 
+template <chip CHIP>
 static struct pipe_query *
 fd6_create_batch_query(struct pipe_context *pctx, unsigned num_queries,
                        unsigned *query_types)
@@ -942,13 +958,6 @@ fd6_create_batch_query(struct pipe_context *pctx, unsigned num_queries,
 
    data->screen = screen;
    data->num_query_entries = num_queries;
-
-   /* validate the requested query_types and ensure we don't try
-    * to request more query_types of a given group than we have
-    * counters:
-    */
-   unsigned counters_per_group[screen->num_perfcntr_groups];
-   memset(counters_per_group, 0, sizeof(counters_per_group));
 
    for (unsigned i = 0; i < num_queries; i++) {
       unsigned idx = query_types[i] - FD_QUERY_FIRST_PERFCNTR;
@@ -979,16 +988,18 @@ fd6_create_batch_query(struct pipe_context *pctx, unsigned num_queries,
             entry->cid++;
       }
 
-      if (counters_per_group[entry->gid] >=
-          screen->perfcntr_groups[entry->gid].num_counters) {
-         mesa_loge("too many counters for group %u", entry->gid);
+      const struct fd_perfcntr_group *g = &screen->perfcntr_groups[entry->gid];
+      const struct fd_perfcntr_countable *c = &g->countables[entry->cid];
+
+      entry->counter = fd_perfcntr_reserve(screen->perfcntrs, g, c);
+
+      if (!entry->counter) {
+         mesa_loge("Could not reserve counter for %s.%s", g->name, c->name);
          goto error;
       }
-
-      counters_per_group[entry->gid]++;
    }
 
-   q = fd_acc_create_query2(ctx, 0, 0, &perfcntr);
+   q = fd_acc_create_query2(ctx, 0, 0, &perfcntr<CHIP>);
    aq = fd_acc_query(q);
 
    /* sample buffer size is based on # of queries: */
@@ -998,6 +1009,7 @@ fd6_create_batch_query(struct pipe_context *pctx, unsigned num_queries,
    return (struct pipe_query *)q;
 
 error:
+   perfcntr_cleanup(data);
    free(data);
    return NULL;
 }
@@ -1014,7 +1026,7 @@ fd6_query_context_init(struct pipe_context *pctx) disable_thread_safety_analysis
    ctx->record_timestamp = record_timestamp<CHIP>;
    ctx->ts_to_ns = ticks_to_ns;
 
-   pctx->create_batch_query = fd6_create_batch_query;
+   pctx->create_batch_query = fd6_create_batch_query<CHIP>;
 
    fd_acc_query_register_provider(pctx, &occlusion_counter<CHIP>);
    fd_acc_query_register_provider(pctx, &occlusion_predicate<CHIP>);
@@ -1022,6 +1034,7 @@ fd6_query_context_init(struct pipe_context *pctx) disable_thread_safety_analysis
 
    fd_acc_query_register_provider(pctx, &time_elapsed<CHIP>);
    fd_acc_query_register_provider(pctx, &timestamp<CHIP>);
+   fd_acc_query_register_provider(pctx, &timestamp_raw<CHIP>);
 
    fd_acc_query_register_provider(pctx, &primitives_generated<CHIP>);
    fd_acc_query_register_provider(pctx, &pipeline_statistics_single<CHIP>);

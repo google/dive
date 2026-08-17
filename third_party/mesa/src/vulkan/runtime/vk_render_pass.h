@@ -178,6 +178,9 @@ struct vk_render_pass_attachment {
    /** VkAttachmentDescription2::format */
    VkFormat format;
 
+   /** VkAttachmentDescription2::flags */
+   VkAttachmentDescriptionFlags flags;
+
    /** Aspects contained in format */
    VkImageAspectFlags aspects;
 
@@ -379,6 +382,9 @@ vk_get_command_buffer_inheritance_rendering_info(
    VkCommandBufferLevel level,
    const VkCommandBufferBeginInfo *pBeginInfo);
 
+VkRenderingAttachmentFlagsKHR
+vk_get_rendering_attachment_flags(const VkRenderingAttachmentInfo *att);
+
 struct vk_gcbiarr_data {
    VkRenderingInfo rendering;
    VkRenderingFragmentShadingRateAttachmentInfoKHR fsr_att;
@@ -387,7 +393,8 @@ struct vk_gcbiarr_data {
 
 #define VK_GCBIARR_DATA_SIZE(max_color_rts) (\
    sizeof(struct vk_gcbiarr_data) + \
-   sizeof(VkRenderingAttachmentInfo) * ((max_color_rts) + 2) \
+   sizeof(VkRenderingAttachmentInfo) * ((max_color_rts) + 2) + \
+   sizeof(VkRenderingAttachmentFlagsInfoKHR) * ((max_color_rts) + 2) \
 )
 
 /**

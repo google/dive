@@ -184,6 +184,7 @@ struct d3d12_context {
    ID3D12GraphicsCommandList8 *cmdlist8;
    ID3D12GraphicsCommandList *state_fixup_cmdlist;
    struct hash_table_u64 *bo_state_table;
+   struct set *local_state_bos;
    struct blitter_context *blitter;
    uint flags;
    bool queries_disabled;
@@ -333,8 +334,15 @@ d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags);
 int
 d3d12_context_set_queue_priority_manager(struct pipe_context *ctx, struct d3d12_context_queue_priority_manager *priority_manager);
 
+#ifdef HAVE_GALLIUM_D3D12_VIDEO
 int
 d3d12_video_encoder_set_max_async_queue_depth(struct pipe_context *ctx, uint32_t max_async_depth);
+
+int
+d3d12_video_encoder_get_last_slice_completion_fence(struct pipe_video_codec *codec,
+                                                    void *feedback,
+                                                    pipe_fence_handle **last_slice_completion_fence);
+#endif // HAVE_GALLIUM_D3D12_VIDEO
 
 bool
 d3d12_enable_fake_so_buffers(struct d3d12_context *ctx, unsigned factor);

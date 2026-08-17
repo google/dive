@@ -11,8 +11,8 @@
 struct svga_shader_buffer {
    struct pipe_shader_buffer desc;
    struct pipe_resource *resource;
-   unsigned uav_index;
    struct svga_winsys_surface *handle;
+   unsigned uav_index;
    bool writeAccess;
 };
 

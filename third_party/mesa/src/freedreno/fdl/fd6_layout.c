@@ -34,14 +34,17 @@ fdl6_get_ubwc_blockwidth(const struct fdl_layout *layout,
       {  0, 0 }, /* cpp = 128 */
    };
 
-   /* special case for r8g8: */
-   if (fdl6_is_r8g8_layout(layout)) {
+   /* special case for r8g8 and plane 1 of r8_g8b8_420_unorm (NV12) */
+   if (fdl6_is_r8g8_layout(layout) ||
+      ((layout->format == PIPE_FORMAT_R8_G8B8_420_UNORM) && (layout->plane == 1))) {
       *blockwidth = 16;
       *blockheight = 8;
       return;
    }
 
-   if (layout->format == PIPE_FORMAT_Y8_UNORM) {
+   /* special handling for y8_unorm and plane 0 of r8_g8b8_420_unorm (NV12) */
+   if ((layout->format == PIPE_FORMAT_Y8_UNORM) ||
+      ((layout->format == PIPE_FORMAT_R8_G8B8_420_UNORM) && (layout->plane == 0))) {
       *blockwidth = 32;
       *blockheight = 8;
       return;
@@ -85,19 +88,7 @@ fdl6_tile_alignment(struct fdl_layout *layout, uint32_t *heightalign)
       layout->pitchalign = 2;
    }
 
-   /* Empirical evidence suggests that images with UBWC could have much
-    * looser alignment requirements, however the validity of alignment is
-    * heavily undertested and the "officially" supported alignment is 4096b.
-    */
-   if (layout->ubwc || util_format_is_depth_or_stencil(layout->format) ||
-       fdl6_is_r8g8_layout(layout))
-      layout->base_align = 4096;
-   else if (layout->cpp == 1)
-      layout->base_align = 64;
-   else if (layout->cpp == 2)
-      layout->base_align = 128;
-   else
-      layout->base_align = 256;
+   layout->base_align = 4096;
 }
 
 /* NOTE: good way to test this is:  (for example)
@@ -132,6 +123,7 @@ fdl6_layout_image(struct fdl_layout *layout, const struct fd_dev_info *info,
 
    layout->ubwc = params->ubwc;
    layout->tile_mode = params->tile_mode;
+   layout->plane = params->plane;
    uint32_t sparse_blocksize = 65536;
 
    if (!util_is_power_of_two_or_zero(layout->cpp)) {
@@ -157,7 +149,11 @@ fdl6_layout_image(struct fdl_layout *layout, const struct fd_dev_info *info,
 
    assert(!params->force_ubwc || layout->ubwc);
 
-   if (!params->force_ubwc && params->width0 < FDL_MIN_UBWC_WIDTH) {
+   layout->linear_fallback_threshold_texels =
+      fdl_linear_fallback_threshold_texels(layout, info);
+
+   if (!params->force_ubwc &&
+       layout->width0 < layout->linear_fallback_threshold_texels) {
       layout->ubwc = false;
       /* Linear D/S is not supported by HW. */
       if (!util_format_is_depth_or_stencil(params->format))
@@ -168,8 +164,13 @@ fdl6_layout_image(struct fdl_layout *layout, const struct fd_dev_info *info,
    if (util_format_is_depth_or_stencil(params->format))
       layout->tile_all = true;
 
-   if (layout->ubwc && !info->a6xx.has_ubwc_linear_mipmap_fallback)
+   if (layout->ubwc && !info->props.has_ubwc_linear_mipmap_fallback)
       layout->tile_all = true;
+
+   if (layout->tile_mode != TILE6_LINEAR &&
+       params->force_disable_linear_fallback) {
+      layout->tile_all = true;
+   }
 
    /* in layer_first layout, the level (slice) contains just one
     * layer (since in fact the layer contains the slices)
@@ -224,20 +225,27 @@ fdl6_layout_image(struct fdl_layout *layout, const struct fd_dev_info *info,
    uint32_t ubwc_width0 = params->width0;
    uint32_t ubwc_height0 = params->height0;
    uint32_t ubwc_tile_height_alignment = RGB_TILE_HEIGHT_ALIGNMENT;
-   if (params->mip_levels > 1) {
-      /* With mipmapping enabled, UBWC layout is power-of-two sized,
-       * specified in log2 width/height in the descriptors.  The height
-       * alignment is 64 for mipmapping, but for buffer sharing (always
-       * single level) other participants expect 16.
-       */
-      ubwc_width0 = util_next_power_of_two(params->width0);
-      ubwc_height0 = util_next_power_of_two(params->height0);
-      ubwc_tile_height_alignment = 64;
+   if (layout->ubwc) {
+      if (params->mip_levels > 1) {
+         /* With mipmapping enabled, UBWC layout is power-of-two sized,
+          * specified in log2 width/height in the descriptors.  The height
+          * alignment is 64 for mipmapping, but for buffer sharing (always
+          * single level) other participants expect 16.
+          */
+         ubwc_width0 = util_next_power_of_two(params->width0);
+         ubwc_height0 = util_next_power_of_two(params->height0);
+         ubwc_tile_height_alignment = 64;
+      }
+
+      layout->ubwc_width0 = align(DIV_ROUND_UP(ubwc_width0, ubwc_blockwidth),
+                                  RGB_TILE_WIDTH_ALIGNMENT);
+      ubwc_height0 = align(DIV_ROUND_UP(ubwc_height0, ubwc_blockheight),
+                           ubwc_tile_height_alignment);
+   } else {
+      layout->ubwc_width0 = 0;
+      ubwc_height0 = 0;
+      layout->ubwc_layer_size = 0;
    }
-   layout->ubwc_width0 = align(DIV_ROUND_UP(ubwc_width0, ubwc_blockwidth),
-                               RGB_TILE_WIDTH_ALIGNMENT);
-   ubwc_height0 = align(DIV_ROUND_UP(ubwc_height0, ubwc_blockheight),
-                        ubwc_tile_height_alignment);
 
    uint32_t min_3d_layer_size = 0;
    bool in_sparse_miptail = false;
@@ -331,9 +339,10 @@ fdl6_layout_image(struct fdl_layout *layout, const struct fd_dev_info *info,
       }
    }
 
-   if (layout->layer_first && !explicit_layout) {
+   if (layout->layer_first)
       layout->layer_size = align64(layout->size, 4096);
 
+   if (layout->layer_first && !explicit_layout) {
       if (params->sparse) {
          if (!in_sparse_miptail) {
             layout->mip_tail_first_lod = layout->mip_levels;

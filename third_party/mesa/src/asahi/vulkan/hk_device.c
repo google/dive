@@ -19,8 +19,8 @@
 #include "asahi/genxml/agx_pack.h"
 #include "asahi/lib/agx_bo.h"
 #include "asahi/lib/agx_device.h"
-#include "asahi/libagx/geometry.h"
 #include "compiler/nir/nir_builder.h"
+#include "poly/geometry.h"
 #include "util/hash_table.h"
 #include "util/ralloc.h"
 #include "util/simple_mtx.h"
@@ -86,7 +86,7 @@ hk_upload_rodata(struct hk_device *dev)
     */
    offs = align(offs, sizeof(uint64_t));
    dev->rodata.heap = dev->rodata.bo->va->addr + offs;
-   offs += sizeof(struct agx_heap);
+   offs += sizeof(struct poly_heap);
 
    return VK_SUCCESS;
 }
@@ -326,7 +326,7 @@ hk_CreateDevice(VkPhysicalDevice physicalDevice,
 
    dev->perftest = debug_get_flags_option("HK_PERFTEST", hk_perf_options, 0);
 
-   if (instance->no_border) {
+   if (instance->drirc.misc.disable_border_emulation) {
       dev->perftest |= HK_PERF_NOBORDER;
    }
 
@@ -400,8 +400,8 @@ hk_CreateDevice(VkPhysicalDevice physicalDevice,
    struct vk_pipeline_cache_create_info cache_info = {
       .weak_ref = true,
    };
-   dev->mem_cache = vk_pipeline_cache_create(&dev->vk, &cache_info, NULL);
-   if (dev->mem_cache == NULL) {
+   dev->vk.mem_cache = vk_pipeline_cache_create(&dev->vk, &cache_info, NULL);
+   if (dev->vk.mem_cache == NULL) {
       result = VK_ERROR_OUT_OF_HOST_MEMORY;
       goto fail_queues;
    }
@@ -435,15 +435,15 @@ hk_CreateDevice(VkPhysicalDevice physicalDevice,
    agx_scratch_init(&dev->dev, &dev->scratch.cs);
 
    u_rwlock_init(&dev->external_bos.lock);
-   util_dynarray_init(&dev->external_bos.counts, NULL);
-   util_dynarray_init(&dev->external_bos.list, NULL);
+   dev->external_bos.counts = UTIL_DYNARRAY_INIT;
+   dev->external_bos.list = UTIL_DYNARRAY_INIT;
 
    return VK_SUCCESS;
 
 fail_meta:
    hk_device_finish_meta(dev);
 fail_mem_cache:
-   vk_pipeline_cache_destroy(dev->mem_cache, NULL);
+   vk_pipeline_cache_destroy(dev->vk.mem_cache, NULL);
 fail_queues:
    vk_foreach_queue_safe(iter, &dev->vk) {
       struct hk_queue *queue = container_of(iter, struct hk_queue, vk);
@@ -487,7 +487,7 @@ hk_DestroyDevice(VkDevice _device, const VkAllocationCallbacks *pAllocator)
    hk_destroy_internal_shaders(dev, &dev->kernels, false);
    hk_destroy_internal_shaders(dev, &dev->prolog_epilog, true);
 
-   vk_pipeline_cache_destroy(dev->mem_cache, NULL);
+   vk_pipeline_cache_destroy(dev->vk.mem_cache, NULL);
 
    vk_foreach_queue_safe(iter, &dev->vk) {
       struct hk_queue *queue = container_of(iter, struct hk_queue, vk);

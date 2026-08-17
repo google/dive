@@ -728,9 +728,7 @@ get_buffer_target(struct gl_context *ctx, GLenum target, bool no_error)
       }
       break;
    case GL_TEXTURE_BUFFER:
-      if (no_error ||
-          _mesa_has_ARB_texture_buffer_object(ctx) ||
-          _mesa_has_OES_texture_buffer(ctx)) {
+      if (no_error || _mesa_has_texture_buffer_object(ctx)) {
          return &ctx->Texture.BufferObject;
       }
       break;
@@ -1529,11 +1527,6 @@ _mesa_BindBuffer(GLenum target, GLuint buffer)
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "glBindBuffer(%s, %u)\n",
-                  _mesa_enum_to_string(target), buffer);
-   }
-
    struct gl_buffer_object **bindTarget = get_buffer_target(ctx, target, false);
    if (!bindTarget) {
       _mesa_error(ctx, GL_INVALID_ENUM, "glBindBufferARB(target %s)",
@@ -1825,16 +1818,15 @@ delete_buffers(struct gl_context *ctx, GLsizei n, const GLuint *ids)
          }
          for (j = 0; j < MAX_FEEDBACK_BUFFERS; j++) {
             if (ctx->TransformFeedback.CurrentObject->Buffers[j] == bufObj) {
-               _mesa_bind_buffer_base_transform_feedback(ctx,
-                                           ctx->TransformFeedback.CurrentObject,
-                                           j, NULL, false);
+               _mesa_set_transform_feedback_binding(ctx, ctx->TransformFeedback.CurrentObject,
+                                                    j, NULL, 0, 0);
             }
          }
 
          /* unbind UBO binding points */
          for (j = 0; j < ctx->Const.MaxUniformBufferBindings; j++) {
             if (ctx->UniformBufferBindings[j].BufferObject == bufObj) {
-               bind_buffer_base_uniform_buffer(ctx, j, NULL);
+               bind_uniform_buffer(ctx, j, NULL, -1, -1, GL_TRUE);
             }
          }
 
@@ -1845,7 +1837,7 @@ delete_buffers(struct gl_context *ctx, GLsizei n, const GLuint *ids)
          /* unbind SSBO binding points */
          for (j = 0; j < ctx->Const.MaxShaderStorageBufferBindings; j++) {
             if (ctx->ShaderStorageBufferBindings[j].BufferObject == bufObj) {
-               bind_buffer_base_shader_storage_buffer(ctx, j, NULL);
+               bind_shader_storage_buffer(ctx, j, NULL, -1, -1, GL_TRUE);
             }
          }
 
@@ -1853,10 +1845,10 @@ delete_buffers(struct gl_context *ctx, GLsizei n, const GLuint *ids)
             bind_buffer_object(ctx, &ctx->ShaderStorageBuffer, 0, false);
          }
 
-         /* unbind Atomci Buffer binding points */
+         /* unbind Atomic Buffer binding points */
          for (j = 0; j < ctx->Const.MaxAtomicBufferBindings; j++) {
             if (ctx->AtomicBufferBindings[j].BufferObject == bufObj) {
-               bind_buffer_base_atomic_buffer(ctx, j, NULL);
+               bind_atomic_buffer(ctx, j, NULL, -1, -1, GL_TRUE);
             }
          }
 
@@ -1998,12 +1990,8 @@ create_buffers(struct gl_context *ctx, GLsizei n, GLuint *buffers, bool dsa)
 static void
 create_buffers_err(struct gl_context *ctx, GLsizei n, GLuint *buffers, bool dsa)
 {
-   const char *func = dsa ? "glCreateBuffers" : "glGenBuffers";
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "%s(%d)\n", func, n);
-
    if (n < 0) {
+      const char *func = dsa ? "glCreateBuffers" : "glGenBuffers";
       _mesa_error(ctx, GL_INVALID_VALUE, "%s(n %d < 0)", func, n);
       return;
    }
@@ -2340,14 +2328,6 @@ buffer_data(struct gl_context *ctx, struct gl_buffer_object *bufObj,
 {
    bool valid_usage;
 
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "%s(%s, %ld, %p, %s)\n",
-                  func,
-                  _mesa_enum_to_string(target),
-                  (long int) size, data,
-                  _mesa_enum_to_string(usage));
-   }
-
    if (!no_error) {
       if (size < 0) {
          _mesa_error(ctx, GL_INVALID_VALUE, "%s(size < 0)", func);
@@ -2356,7 +2336,7 @@ buffer_data(struct gl_context *ctx, struct gl_buffer_object *bufObj,
 
       switch (usage) {
       case GL_STREAM_DRAW_ARB:
-         valid_usage = (ctx->API != API_OPENGLES);
+         valid_usage = (!_mesa_is_gles1(ctx));
          break;
       case GL_STATIC_DRAW_ARB:
       case GL_DYNAMIC_DRAW_ARB:
@@ -4880,12 +4860,6 @@ bind_buffer_range(GLenum target, GLuint index, GLuint buffer, GLintptr offset,
    GET_CURRENT_CONTEXT(ctx);
    struct gl_buffer_object *bufObj;
 
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "glBindBufferRange(%s, %u, %u, %lu, %lu)\n",
-                  _mesa_enum_to_string(target), index, buffer,
-                  (unsigned long) offset, (unsigned long) size);
-   }
-
    if (buffer == 0) {
       bufObj = NULL;
    } else {
@@ -4973,11 +4947,6 @@ _mesa_BindBufferBase(GLenum target, GLuint index, GLuint buffer)
    GET_CURRENT_CONTEXT(ctx);
    struct gl_buffer_object *bufObj;
 
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "glBindBufferBase(%s, %u, %u)\n",
-                  _mesa_enum_to_string(target), index, buffer);
-   }
-
    if (buffer == 0) {
       bufObj = NULL;
    } else {
@@ -5041,12 +5010,6 @@ _mesa_BindBuffersRange(GLenum target, GLuint first, GLsizei count,
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "glBindBuffersRange(%s, %u, %d, %p, %p, %p)\n",
-                  _mesa_enum_to_string(target), first, count,
-                  buffers, offsets, sizes);
-   }
-
    switch (target) {
    case GL_TRANSFORM_FEEDBACK_BUFFER:
       bind_xfb_buffers(ctx, first, count, buffers, true, offsets, sizes,
@@ -5076,11 +5039,6 @@ _mesa_BindBuffersBase(GLenum target, GLuint first, GLsizei count,
                       const GLuint *buffers)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API) {
-      _mesa_debug(ctx, "glBindBuffersBase(%s, %u, %d, %p)\n",
-                  _mesa_enum_to_string(target), first, count, buffers);
-   }
 
    switch (target) {
    case GL_TRANSFORM_FEEDBACK_BUFFER:

@@ -63,11 +63,11 @@ static void amdvgpu_device_reference(struct amdvgpu_device **dst,
       dev = *dst;
 
       /* Destroy BOs before closing vdrm */
-      hash_table_foreach(dev->handle_to_vbo, entry) {
-         struct amdvgpu_bo *bo = entry->data;
+      hash_table_u64_foreach(dev->handle_to_vbo, entry) {
+         struct amdvgpu_bo *bo = entry.data;
          amdvgpu_bo_free(dev, bo);
       }
-      _mesa_hash_table_destroy(dev->handle_to_vbo, NULL);
+      _mesa_hash_table_u64_destroy(dev->handle_to_vbo);
       /* Destroy contextx. */
       hash_table_foreach(&dev->contexts, entry)
          amdvgpu_cs_ctx_free(dev, (uint32_t)(uintptr_t)entry->key);
@@ -99,6 +99,8 @@ int amdvgpu_device_initialize(int fd, uint32_t *drm_major, uint32_t *drm_minor,
                               struct util_sync_provider **p) {
    simple_mtx_lock(&dev_mutex);
    amdvgpu_device_handle dev;
+   uint8_t gfx_ip_version_major = 0;
+   uint32_t va_mgr_flags = 0;
 
    for (dev = dev_list; dev; dev = dev->next)
       if (fd_compare(dev->fd, fd) == 0)
@@ -136,7 +138,7 @@ int amdvgpu_device_initialize(int fd, uint32_t *drm_major, uint32_t *drm_minor,
    simple_mtx_init(&dev->handle_to_vbo_mutex, mtx_plain);
    simple_mtx_init(&dev->contexts_mutex, mtx_plain);
 
-   dev->handle_to_vbo = _mesa_hash_table_create_u32_keys(NULL);
+   dev->handle_to_vbo = _mesa_hash_table_u64_create(NULL);
 
    p_atomic_set(&dev->next_blob_id, 1);
 
@@ -166,17 +168,25 @@ int amdvgpu_device_initialize(int fd, uint32_t *drm_major, uint32_t *drm_minor,
          int count = util_bitcount(ip_info.available_rings);
          dev->virtio_ring_mapping[i] = next_ring_idx;
          next_ring_idx += count;
+
+         if (i == AMD_IP_GFX)
+            gfx_ip_version_major = ip_info.hw_ip_version_major;
       }
    }
    /* VIRTGPU_CONTEXT_PARAM_NUM_RINGS is hardcoded for now. */
    assert(next_ring_idx <= 64);
    dev->num_virtio_rings = next_ring_idx - 1;
 
+   if (gfx_ip_version_major >= 6 && gfx_ip_version_major <= 12 &&
+       gfx_ip_version_major != 9)
+      va_mgr_flags |= AMDGPU_VA_MGR_RESERVE_HALF_VA_FOR_PRT;
+
    dev->va_mgr = amdgpu_va_manager_alloc();
-   amdgpu_va_manager_init(dev->va_mgr,
+   amdgpu_va_manager_init2(dev->va_mgr,
       dev->dev_info.virtual_address_offset, dev->dev_info.virtual_address_max,
       dev->dev_info.high_va_offset, dev->dev_info.high_va_max,
-      dev->dev_info.virtual_address_alignment);
+      dev->dev_info.virtual_address_alignment,
+      va_mgr_flags);
 
    _mesa_hash_table_init(&dev->contexts, NULL,
                          _mesa_hash_pointer, _mesa_key_pointer_equal);
@@ -189,7 +199,7 @@ int amdvgpu_device_initialize(int fd, uint32_t *drm_major, uint32_t *drm_minor,
 init_sync_provider:
    *p = vdrm_vpipe_get_sync(dev->vdev);
    if (!(*p))
-      *p = util_sync_provider_drm(fd);
+      *p = util_sync_provider_drm(dev->fd);
 
    return 0;
 }

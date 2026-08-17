@@ -25,6 +25,7 @@
 #define BLORP_PRIV_H
 
 #include <stdint.h>
+#include <string.h>
 
 #include "common/intel_measure.h"
 #include "compiler/nir/nir.h"
@@ -34,6 +35,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+#define BLORP_INLINE_PARAM_THREAD_GROUP_ID_Z_DIMENSION (0)
 
 void blorp_init(struct blorp_context *blorp, void *driver_ctx,
                 struct isl_device *isl_dev, const struct blorp_config *config);
@@ -49,12 +53,15 @@ struct blorp_compiler {
                                       struct nir_shader *nir,
                                       bool multisample_fbo,
                                       bool is_fast_clear,
-                                      bool use_repclear);
+                                      bool use_repclear,
+                                      const void *key, uint32_t key_size);
    struct blorp_program (*compile_vs)(struct blorp_context *blorp, void *mem_ctx,
-                                      struct nir_shader *nir);
+                                      struct nir_shader *nir,
+                                      const void *key, uint32_t key_size);
 
    struct blorp_program (*compile_cs)(struct blorp_context *blorp, void *mem_ctx,
-                                      struct nir_shader *nir);
+                                      struct nir_shader *nir,
+                                      const void *key, uint32_t key_size);
 
    bool (*ensure_sf_program)(struct blorp_batch *batch,
                              struct blorp_params *params);
@@ -69,6 +76,7 @@ struct blorp_compiler {
 enum {
    BLORP_RENDERBUFFER_BT_INDEX,
    BLORP_TEXTURE_BT_INDEX,
+   BLORP_TEXBUF_BT_INDEX,
    BLORP_NUM_BT_ENTRIES
 };
 
@@ -78,15 +86,24 @@ struct blorp_surface_info
 {
    bool enabled;
 
+   /* Should we unpack the last few rows using a texel buffer? */
+   bool buffer;
+   uint32_t buffer_rows;
+
    struct isl_surf surf;
    struct blorp_address addr;
+
+   /* Inferred page boundaries of the surface address */
+   uint64_t page_base, page_limit;
 
    struct isl_surf aux_surf;
    struct blorp_address aux_addr;
    enum isl_aux_usage aux_usage;
+   enum isl_format aux_format;
 
    union isl_color_value clear_color;
    struct blorp_address clear_color_addr;
+   bool has_replicated_pixel;
 
    struct isl_view view;
 
@@ -98,10 +115,10 @@ struct blorp_surface_info
 
 void
 blorp_surface_info_init(struct blorp_batch *batch,
-                            struct blorp_surface_info *info,
-                            const struct blorp_surf *surf,
-                            unsigned int level, float layer,
-                            enum isl_format format, bool is_dest);
+                        struct blorp_surface_info *info,
+                        const struct blorp_surf *surf,
+                        unsigned int level, float layer,
+                        enum isl_format format, bool is_dest);
 void
 blorp_surf_convert_to_single_slice(const struct isl_device *isl_dev,
                                    struct blorp_surface_info *info);
@@ -161,10 +178,9 @@ struct blorp_surf_offset {
    uint32_t y;
 };
 
-struct blorp_wm_inputs
+/* Parameters used in blorp_blit.c. */
+struct blorp_wm_inputs_blit
 {
-   uint32_t clear_color[4];
-
    struct blorp_bounds_rect bounds_rect;
    struct blorp_rect_grid rect_grid;
    struct blorp_coord_transform coord_transform[2];
@@ -175,15 +191,70 @@ struct blorp_wm_inputs
    /* (1/width, 1/height) for the source surface */
    float src_inv_size[2];
 
+   uint32_t src_buffer_first_row;
+   uint32_t src_buffer_row_pitch;
+
    /* Minimum layer setting works for all the textures types but texture_3d
     * for which the setting has no effect. Use the z-coordinate instead.
     */
    float src_z;
+};
+
+/* Parameters used in blorp_clear.c. */
+struct blorp_wm_inputs_clear {
+   uint32_t clear_color[4];
+   struct blorp_bounds_rect bounds_rect;
+};
+
+/* Parameters using in blorp_indirect_copy.c */
+struct blorp_wm_inputs_indirect {
+   /* The address of the indirect buffer containing the information about the
+    * indirect copy.
+    */
+   uint64_t indirect_buf_addr;
+
+   /* How far apart the information about each copy is inside the indirect
+    * buffer.
+    */
+   uint64_t indirect_buf_stride;
+
+   /* How many copies we have to do. */
+   uint32_t copy_count;
+
+   /* For memory to image copies, we do a single copy per shader. This
+    * represents the index of the copy to be done.
+    */
+   uint32_t copy_idx;
+
+   /* How many dimensions does our image have? 1, 2 or 3. */
+   uint32_t dimensions;
+
+   /* The maximum array layer of the image. */
+   uint32_t max_layer;
+
+   /* When compressed formats are used, we pretend they are a non-compressed
+    * format, of the same bpb. Since we can't maintain the exact same layout
+    * of mipmap and layer offsets, we're forced to make adjustments to where X
+    * and Y actually start, and are also forced to copy only one layer (or Z
+    * axis position) per shader invocation.
+    */
+   uint32_t x_offset;
+   uint32_t y_offset;
+   int forced_layer_or_z;
+};
+
+struct blorp_wm_inputs
+{
+   union {
+      struct blorp_wm_inputs_blit blit;
+      struct blorp_wm_inputs_clear clear;
+      struct blorp_wm_inputs_indirect indirect;
+   };
 
    /* Note: Pad out to an integral number of registers when extending, but
     * make sure subgroup_id is the last 32-bit item.
     */
-   /* uint32_t pad[?]; */
+   uint32_t pad[1];
    uint32_t subgroup_id;
 };
 
@@ -225,6 +296,7 @@ enum blorp_shader_type {
    BLORP_SHADER_TYPE_MCS_PARTIAL_RESOLVE,
    BLORP_SHADER_TYPE_LAYER_OFFSET_VS,
    BLORP_SHADER_TYPE_GFX4_SF,
+   BLORP_SHADER_TYPE_COPY_INDIRECT,
 };
 
 enum blorp_shader_pipeline {
@@ -235,39 +307,49 @@ enum blorp_shader_pipeline {
 struct blorp_params
 {
    enum blorp_op op;
+
    uint32_t x0;
    uint32_t y0;
    uint32_t x1;
    uint32_t y1;
    float z;
-   uint8_t stencil_mask;
-   uint8_t stencil_ref;
-   struct blorp_surface_info depth;
-   struct blorp_surface_info stencil;
-   uint32_t depth_format;
+
    struct blorp_surface_info src;
    struct blorp_surface_info dst;
-   enum isl_aux_op hiz_op;
+   struct blorp_surface_info depth;
+   struct blorp_surface_info stencil;
+
+   uint32_t depth_format;
+   uint8_t stencil_mask;
+   uint8_t stencil_ref;
+
    bool full_surface_hiz_op;
-   enum isl_aux_op fast_clear_op;
    uint8_t color_write_disable;
+   enum isl_aux_op fast_clear_op;
+   enum isl_aux_op hiz_op;
+
    struct blorp_wm_inputs wm_inputs;
    struct blorp_vs_inputs vs_inputs;
-   bool dst_clear_color_as_input;
+
    unsigned num_samples;
    unsigned num_draw_buffers;
    unsigned num_layers;
-   uint32_t vs_prog_kernel;
-   void *vs_prog_data;
-   uint32_t sf_prog_kernel;
-   void *sf_prog_data;
-   uint32_t wm_prog_kernel;
-   void *wm_prog_data;
-   uint32_t cs_prog_kernel;
-   void *cs_prog_data;
+   bool dst_clear_color_as_input;
 
    bool use_pre_baked_binding_table;
    uint32_t pre_baked_binding_table_offset;
+
+   uint32_t vs_prog_kernel;
+   uint32_t sf_prog_kernel;
+   uint32_t wm_prog_kernel;
+   uint32_t cs_prog_kernel;
+
+   /* These are pointers to struct {brw,elk}_stage_prog_data. */
+   void *vs_prog_data;
+   void *sf_prog_data;
+   void *fs_prog_data;
+   void *cs_prog_data;
+
    enum blorp_shader_type shader_type;
    enum blorp_shader_pipeline shader_pipeline;
 };
@@ -279,145 +361,29 @@ const char *blorp_op_to_name(enum blorp_op op);
 
 void blorp_params_init(struct blorp_params *params);
 
+#pragma pack(push, 1)
 struct blorp_base_key
 {
    char name[8];
    enum blorp_shader_type shader_type;
    enum blorp_shader_pipeline shader_pipeline;
 };
+#pragma pack(pop)
 
-#define BLORP_BASE_KEY_INIT(_type)                      \
-   (struct blorp_base_key) {                            \
-      .name = "blorp",                                  \
-      .shader_type = _type,                             \
-      .shader_pipeline = BLORP_SHADER_PIPELINE_RENDER,  \
-   }
 
-struct blorp_blit_prog_key
-{
-   struct blorp_base_key base;
-
-   /* Number of samples per pixel that have been configured in the surface
-    * state for texturing from.
-    */
-   unsigned tex_samples;
-
-   /* MSAA layout that has been configured in the surface state for texturing
-    * from.
-    */
-   enum isl_msaa_layout tex_layout;
-
-   enum isl_aux_usage tex_aux_usage;
-
-   /* Actual number of samples per pixel in the source image. */
-   unsigned src_samples;
-
-   /* Actual MSAA layout used by the source image. */
-   enum isl_msaa_layout src_layout;
-
-   /* The swizzle to apply to the source in the shader */
-   struct isl_swizzle src_swizzle;
-
-   /* The format of the source if format-specific workarounds are needed
-    * and 0 (ISL_FORMAT_R32G32B32A32_FLOAT) if the destination is natively
-    * renderable.
-    */
-   enum isl_format src_format;
-
-   /* True if the source requires normalized coordinates */
-   bool src_coords_normalized;
-
-   /* Number of samples per pixel that have been configured in the render
-    * target.
-    */
-   unsigned rt_samples;
-
-   /* MSAA layout that has been configured in the render target. */
-   enum isl_msaa_layout rt_layout;
-
-   /* Actual number of samples per pixel in the destination image. */
-   unsigned dst_samples;
-
-   /* Actual MSAA layout used by the destination image. */
-   enum isl_msaa_layout dst_layout;
-
-   /* The swizzle to apply to the destination in the shader */
-   struct isl_swizzle dst_swizzle;
-
-   /* The format of the destination if format-specific workarounds are needed
-    * and 0 (ISL_FORMAT_R32G32B32A32_FLOAT) if the destination is natively
-    * renderable.
-    */
-   enum isl_format dst_format;
-
-   /* Whether or not the format workarounds are a bitcast operation */
-   bool format_bit_cast;
-
-   /** True if we need to perform SINT -> UINT clamping. */
-   bool sint32_to_uint;
-
-   /** True if we need to perform UINT -> SINT clamping. */
-   bool uint32_to_sint;
-
-   /* Type of the data to be read from the texture (one of
-    * nir_type_(int|uint|float)).
-    */
-   nir_alu_type texture_data_type;
-
-   /* True if the source image is W tiled.  If true, the surface state for the
-    * source image must be configured as Y tiled, and tex_samples must be 0.
-    */
-   bool src_tiled_w;
-
-   /* True if the destination image is W tiled.  If true, the surface state
-    * for the render target must be configured as Y tiled, and rt_samples must
-    * be 0.
-    */
-   bool dst_tiled_w;
-
-   /* True if the destination is an RGB format.  If true, the surface state
-    * for the render target must be configured as red with three times the
-    * normal width.  We need to do this because you cannot render to
-    * non-power-of-two formats.
-    */
-   bool dst_rgb;
-
-   isl_surf_usage_flags_t dst_usage;
-
-   enum blorp_filter filter;
-
-   /* True if the rectangle being sent through the rendering pipeline might be
-    * larger than the destination rectangle, so the WM program should kill any
-    * pixels that are outside the destination rectangle.
-    */
-   bool use_kill;
-
-   /**
-    * True if the WM program should be run in MSDISPMODE_PERSAMPLE with more
-    * than one sample per pixel.
-    */
-   bool persample_msaa_dispatch;
-
-   /* True if this blit operation may involve intratile offsets on the source.
-    * In this case, we need to add the offset before texturing.
-    */
-   bool need_src_offset;
-
-   /* True if this blit operation may involve intratile offsets on the
-    * destination.  In this case, we need to add the offset to gl_FragCoord.
-    */
-   bool need_dst_offset;
-
-   /* Scale factors between the pixel grid and the grid of samples. We're
-    * using grid of samples for bilinear filetring in multisample scaled blits.
-    */
-   float x_scale;
-   float y_scale;
-
-   /* If a compute shader is used, this is the local size y dimension.
-    */
-   uint8_t local_y;
-};
+/* Since keys get memcmp()'d as part of the shader cache lookup, we really
+ * want to ensure that all their bytes - not just fields, but also holes and
+ * padding - get properly initialized. That's why we do a memset() here.
+ */
+#define BLORP_KEY_INIT(_key, _shader_type, _pipeline) do { \
+   __typeof(_key) *_k = &(_key); \
+   memset(_k, 0, sizeof(*_k)); \
+   _k->base = (struct blorp_base_key) { \
+      .name = "blorp", \
+      .shader_type = (_shader_type), \
+      .shader_pipeline = (_pipeline), \
+   }; \
+} while(0)
 
 /**
  * \name BLORP internals
@@ -445,17 +411,19 @@ blorp_compile_fs(struct blorp_context *blorp, void *mem_ctx,
                  struct nir_shader *nir,
                  bool multisample_fbo,
                  bool is_fast_clear,
-                 bool use_repclear)
+                 bool use_repclear,
+                 const void *key, uint32_t key_size)
 {
    return blorp->compiler->compile_fs(blorp, mem_ctx, nir, multisample_fbo,
-                                      is_fast_clear, use_repclear);
+                                      is_fast_clear, use_repclear,
+                                      key, key_size);
 }
 
 static inline struct blorp_program
 blorp_compile_vs(struct blorp_context *blorp, void *mem_ctx,
-                 struct nir_shader *nir)
+                 struct nir_shader *nir, const void *key, uint32_t key_size)
 {
-   return blorp->compiler->compile_vs(blorp, mem_ctx, nir);
+   return blorp->compiler->compile_vs(blorp, mem_ctx, nir, key, key_size);
 }
 
 static inline bool
@@ -474,9 +442,9 @@ blorp_get_cs_local_y(struct blorp_params *params)
 {
    uint32_t height = params->y1 - params->y0;
    uint32_t or_ys = params->y0 | params->y1;
-   if (height > 32 || (or_ys & 3) == 0) {
+   if (height > 32 || util_is_aligned(or_ys, 4)) {
       return 4;
-   } else if ((or_ys & 1) == 0) {
+   } else if (util_is_aligned(or_ys, 2)) {
       return 2;
    } else {
       return 1;
@@ -494,9 +462,9 @@ blorp_set_cs_dims(struct nir_shader *nir, uint8_t local_y)
 
 static inline struct blorp_program
 blorp_compile_cs(struct blorp_context *blorp, void *mem_ctx,
-                 struct nir_shader *nir)
+                 struct nir_shader *nir, const void *key, uint32_t key_size)
 {
-   return blorp->compiler->compile_cs(blorp, mem_ctx, nir);
+   return blorp->compiler->compile_cs(blorp, mem_ctx, nir, key, key_size);
 }
 
 static inline bool
@@ -505,6 +473,74 @@ blorp_params_get_layer_offset_vs(struct blorp_batch *batch,
 {
    return batch->blorp->compiler->params_get_layer_offset_vs(batch, params);
 }
+
+/* This means: blorp_params->wm_inputs.blit should be used. */
+static inline bool
+blorp_op_type_is_blit(enum blorp_op op)
+{
+   switch (op) {
+   case BLORP_OP_BLIT:
+   case BLORP_OP_COPY:
+      return true;
+   default:
+      return false;
+   }
+}
+
+/* This means: blorp_params->wm_inputs.clear should be used. */
+static inline bool
+blorp_op_type_is_clear(enum blorp_op op)
+{
+   switch (op) {
+   case BLORP_OP_CCS_AMBIGUATE:
+   case BLORP_OP_CCS_COLOR_CLEAR:
+   case BLORP_OP_CCS_PARTIAL_RESOLVE:
+   case BLORP_OP_CCS_RESOLVE:
+   case BLORP_OP_FAST_STENCIL_CLEAR:
+   case BLORP_OP_HIZ_AMBIGUATE:
+   case BLORP_OP_HIZ_CLEAR:
+   case BLORP_OP_HIZ_RESOLVE:
+   case BLORP_OP_HIZ_STENCIL_CLEAR:
+   case BLORP_OP_MCS_AMBIGUATE:
+   case BLORP_OP_MCS_COLOR_CLEAR:
+   case BLORP_OP_MCS_PARTIAL_RESOLVE:
+   case BLORP_OP_LINEAR_SURFACE_CLEAR:
+   case BLORP_OP_SLOW_COLOR_CLEAR:
+   case BLORP_OP_SLOW_STENCIL_CLEAR:
+   case BLORP_OP_SLOW_DEPTH_STENCIL_CLEAR:
+   case BLORP_OP_SLOW_DEPTH_CLEAR:
+      return true;
+   default:
+      return false;
+   }
+}
+
+/* This means: blorp->wm_inputs.indirect should be used. */
+static inline bool
+blorp_op_type_is_indirect(enum blorp_op op)
+{
+   switch (op) {
+   case BLORP_OP_COPY_INDIRECT:
+   case BLORP_OP_COPY_IMAGE_INDIRECT:
+      return true;
+   default:
+      return false;
+   }
+}
+
+/* Asserts unless the surface is a buffer to image copy */
+#define blorp_assert_is_buffer(surf, view)                     \
+   do {                                                        \
+      assert((surf).dim == ISL_SURF_DIM_2D);                   \
+      assert((surf).tiling == ISL_TILING_LINEAR);              \
+      assert((surf).logical_level0_px.d == 1);                 \
+      assert((surf).logical_level0_px.array_len == 1);         \
+      assert((surf).samples == 1);                             \
+      assert((surf).levels == 1);                              \
+      UNUSED const struct isl_format_layout *fmtl =            \
+         isl_format_get_layout((view).format);                 \
+      assert((surf).row_pitch_B % (fmtl->bpb / 8) == 0);       \
+   } while (false)
 
 /** \} */
 

@@ -29,7 +29,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateIndirectExecutionSetEXT(
     const VkAllocationCallbacks*               pAllocator,
     VkIndirectExecutionSetEXT*                 pIndirectExecutionSet)
 {
-   LVP_FROM_HANDLE(lvp_device, device, _device);
+   VK_FROM_HANDLE(lvp_device, device, _device);
    bool is_shaders = pCreateInfo->type == VK_INDIRECT_EXECUTION_SET_INFO_TYPE_SHADER_OBJECTS_EXT;
    size_t size = 0;
    if (is_shaders) {
@@ -65,7 +65,7 @@ VKAPI_ATTR void VKAPI_CALL lvp_DestroyIndirectExecutionSetEXT(
     VkIndirectExecutionSetEXT     indirectExecutionSet,
     const VkAllocationCallbacks*  pAllocator)
 {
-   LVP_FROM_HANDLE(lvp_device, device, _device);
+   VK_FROM_HANDLE(lvp_device, device, _device);
    VK_FROM_HANDLE(lvp_indirect_execution_set, iset, indirectExecutionSet);
 
    if (!iset)
@@ -111,6 +111,8 @@ get_token_info_size(VkIndirectCommandsTokenTypeEXT type)
       return sizeof(VkIndirectCommandsVertexBufferTokenEXT);
    case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT:
    case VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT:
+   case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_EXT:
+   case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_SEQUENCE_INDEX_EXT:
       return sizeof(VkIndirectCommandsPushConstantTokenEXT);
    case VK_INDIRECT_COMMANDS_TOKEN_TYPE_INDEX_BUFFER_EXT:
       return sizeof(VkIndirectCommandsIndexBufferTokenEXT);
@@ -138,7 +140,7 @@ VKAPI_ATTR VkResult VKAPI_CALL lvp_CreateIndirectCommandsLayoutEXT(
     const VkAllocationCallbacks*                 pAllocator,
     VkIndirectCommandsLayoutEXT*                 pIndirectCommandsLayout)
 {
-   LVP_FROM_HANDLE(lvp_device, device, _device);
+   VK_FROM_HANDLE(lvp_device, device, _device);
    struct lvp_indirect_command_layout_ext *elayout;
    size_t token_size = pCreateInfo->tokenCount * sizeof(VkIndirectCommandsLayoutTokenEXT);
 
@@ -203,7 +205,7 @@ VKAPI_ATTR void VKAPI_CALL lvp_DestroyIndirectCommandsLayoutEXT(
     VkIndirectCommandsLayoutEXT                  indirectCommandsLayout,
     const VkAllocationCallbacks*                pAllocator)
 {
-   LVP_FROM_HANDLE(lvp_device, device, _device);
+   VK_FROM_HANDLE(lvp_device, device, _device);
    VK_FROM_HANDLE(lvp_indirect_command_layout_ext, elayout, indirectCommandsLayout);
 
    if (!elayout)
@@ -221,6 +223,8 @@ lvp_ext_dgc_token_to_cmd_type(const struct lvp_indirect_command_layout_ext *elay
       return VK_CMD_BIND_VERTEX_BUFFERS2;
    case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT:
    case VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT:
+   case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_EXT:
+   case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_SEQUENCE_INDEX_EXT:
       return VK_CMD_PUSH_CONSTANTS2;
    case VK_INDIRECT_COMMANDS_TOKEN_TYPE_INDEX_BUFFER_EXT:
       return VK_CMD_BIND_INDEX_BUFFER2;
@@ -257,7 +261,10 @@ lvp_ext_dgc_token_size(const struct lvp_indirect_command_layout_ext *elayout, co
    UNUSED struct vk_cmd_queue_entry *cmd;
    enum vk_cmd_type type = lvp_ext_dgc_token_to_cmd_type(elayout, token);
    size_t size = vk_cmd_queue_type_sizes[type];
-   if (token->type == VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT || token->type == VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT) {
+   if (token->type == VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT ||
+       token->type == VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT ||
+       token->type == VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_EXT ||
+       token->type == VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_SEQUENCE_INDEX_EXT) {
       size += sizeof(*cmd->u.push_constants2.push_constants_info);
       size += token->data.pPushConstant->updateRange.size;
       return size;

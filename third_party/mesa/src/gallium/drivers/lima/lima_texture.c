@@ -29,6 +29,7 @@
 #include "util/u_math.h"
 #include "util/u_debug.h"
 #include "util/u_transfer.h"
+#include "util/format_srgb.h"
 
 #include "lima_bo.h"
 #include "lima_context.h"
@@ -226,10 +227,20 @@ lima_update_tex_desc(struct lima_context *ctx, struct lima_sampler_state *sample
       desc.wrap_t = pipe_wrap_to_lima(sampler->base.wrap_t, using_nearest);
       desc.wrap_r = pipe_wrap_to_lima(sampler->base.wrap_r, using_nearest);
 
-      desc.border_red = sampler->base.border_color.f[0];
-      desc.border_green = sampler->base.border_color.f[1];
-      desc.border_blue = sampler->base.border_color.f[2];
-      desc.border_alpha = sampler->base.border_color.f[3];
+      float border_color[4];
+      for (int i = 0; i < 4; i++)
+         border_color[i] = sampler->base.border_color.f[i];
+
+      if (util_format_is_srgb(texture->base.format)) {
+         for (int i = 0; i < 3; i++)
+            border_color[i] =
+               util_format_linear_to_srgb_float(border_color[i]);
+      }
+
+      desc.border_red = border_color[0];
+      desc.border_green = border_color[1];
+      desc.border_blue = border_color[2];
+      desc.border_alpha = border_color[3];
 
       if (desc.min_img_filter_nearest && desc.mag_img_filter_nearest &&
           desc.mipfilter == 0 &&

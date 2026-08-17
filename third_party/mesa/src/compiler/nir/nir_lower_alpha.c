@@ -8,19 +8,67 @@
 #include "nir_builder.h"
 
 static nir_def *
-alpha_to_coverage(nir_builder *b, nir_def *alpha, uint8_t nr_samples, bool has_intrinsic)
+alpha_to_coverage(nir_builder *b, nir_def *alpha, bool has_intrinsic)
 {
    if (has_intrinsic)
       return nir_alpha_to_coverage(b, alpha);
 
-   /* Calculate a coverage mask (alpha * nr_samples) bits set. The way we do
-    * this isn't particularly clever:
+   /* The following formula is used to compute final sample mask:
+    *  m = int(round(16.0 * clamp(src0_alpha, 0.0, 1.0)))
+    *  dither_mask = 0x1111 * ((0xf7540 >> (m & ~3)) & 0xf) |
+    *     0x0404 * (m & 2) | 0x0080 * (m & 1)
+    *  sample_mask = sample_mask & dither_mask
     *
-    *    # of bits = (unsigned int) (alpha * nr_samples)
-    *    mask = (1 << (# of bits)) - 1
+    * It gives a number of ones proportional to the alpha for 2, 4, 8 or 16
+    * least significant bits of the result:
+    *
+    *  0.0000 0000000000000000
+    *  0.0625 0000000010000000
+    *  0.1250 0000100000001000
+    *  0.1875 0000100010001000
+    *  0.2500 0100010001000100
+    *  0.3125 0100010011000100
+    *  0.3750 0100110001001100
+    *  0.4375 0100110011001100
+    *  0.5000 0101010101010101
+    *  0.5625 0101010111010101
+    *  0.6250 0101110101011101
+    *  0.6875 0101110111011101
+    *  0.7500 0111011101110111
+    *  0.8125 0111011111110111
+    *  0.8750 0111111101111111
+    *  0.9375 0111111111111111
+    *  1.0000 1111111111111111
+    *
+    *  We use 16-bit math for the multiplies because the result always fits
+    *  into 16 bits and that is typically way cheaper than full 32-bit
+    *  multiplies.
     */
-   nir_def *bits = nir_f2u32(b, nir_fmul_imm(b, alpha, nr_samples));
-   return nir_iadd_imm(b, nir_ishl(b, nir_imm_intN_t(b, 1, 16), bits), -1);
+   nir_def *m =
+      nir_f2i32(b, nir_fround_even(b, nir_fmul_imm(b, nir_fsat(b, alpha), 16.0)));
+
+   nir_def *part_a =
+      nir_u2u16(b, nir_iand_imm(b, nir_ushr(b, nir_imm_int(b, 0xf7540),
+                                  nir_iand_imm(b, m, ~3)),
+                                0xf));
+
+   nir_def *part_b = nir_iand_imm(b, nir_u2u16(b, m), 2);
+   nir_def *part_c = nir_iand_imm(b, nir_u2u16(b, m), 1);
+
+   nir_def *mask = nir_ior(b, nir_imul_imm(b, part_a, 0x1111),
+                           nir_ior(b, nir_imul_imm(b, part_b, 0x0404),
+                                   nir_imul_imm(b, part_c, 0x0080)));
+
+   /* Rotate the mask based on (pixel.x % 2) + (pixel.y % 2). This provides
+    * dithering and randomizes the sample locations.
+    */
+   nir_def *pixel = nir_f2u32(b, nir_build_frag_coord(b, 2));
+   nir_def *rotate_amount =
+      nir_iadd(b, nir_iand_imm(b, nir_channel(b, pixel, 0), 0x1),
+                  nir_iand_imm(b, nir_channel(b, pixel, 1), 0x1));
+   mask = nir_ior(b, nir_ushr(b, mask, rotate_amount),
+                  nir_ishl(b, mask, nir_isub_imm(b, 16, rotate_amount)));
+   return nir_u2u32(b, mask);
 }
 
 /*
@@ -28,11 +76,8 @@ alpha_to_coverage(nir_builder *b, nir_def *alpha, uint8_t nr_samples, bool has_i
  * monolithic pixel shader or a fragment epilogue.
  */
 bool
-nir_lower_alpha_to_coverage(nir_shader *shader, uint8_t nr_samples, bool has_intrinsic, nir_def *dyn_enable)
+nir_lower_alpha_to_coverage(nir_shader *shader, bool has_intrinsic, nir_def *dyn_enable)
 {
-   /* If we are not using the intrinsic we need to know the sample count. */
-   assert(has_intrinsic || nr_samples);
-
    /* nir_lower_io_to_temporaries ensures that stores are in the last block */
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
    nir_block *block = nir_impl_last_block(impl);
@@ -74,7 +119,7 @@ nir_lower_alpha_to_coverage(nir_shader *shader, uint8_t nr_samples, bool has_int
    nir_def *alpha = nir_channel(b, rgba, 3);
    if (dyn_enable)
       alpha = nir_bcsel(b, dyn_enable, alpha, nir_imm_floatN_t(b, 1.0f, alpha->bit_size));
-   nir_def *mask = alpha_to_coverage(b, alpha, nr_samples, has_intrinsic);
+   nir_def *mask = alpha_to_coverage(b, alpha, has_intrinsic);
 
    /* Discard samples that aren't covered */
    nir_demote_samples(b, nir_inot(b, mask));

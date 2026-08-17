@@ -17,6 +17,7 @@
 #include "util/bitscan.h"
 #include "util/list.h"
 #include "util/macros.h"
+#include "util/shader_stats.h"
 #include "util/u_hexdump.h"
 
 #include <assert.h>
@@ -1186,8 +1187,10 @@ static void pco_print_func(pco_print_state *state, pco_func *func)
 {
    pco_printfi(state, "func");
    pco_print_func_sig(state, func, false);
-   if (state->is_grouped)
+   if (state->is_grouped) {
       pco_printf(state, " /* temps: %u */", func->temps);
+      pco_printf(state, " /* vtxins: %u */", func->vtxins);
+   }
    pco_printf(state, "\n");
 
    pco_printfi(state, "{\n");
@@ -1239,7 +1242,30 @@ static void _pco_print_shader_info(pco_print_state *state, pco_shader *shader)
       pco_printfi(state, "name: \"%s\"\n", shader->name);
    pco_printfi(state, "stage: %s\n", mesa_shader_stage_name(shader->stage));
    pco_printfi(state, "internal: %s\n", true_false_str(shader->is_internal));
-   /* TODO: more info/stats, e.g. temps/other regs used, etc.? */
+}
+
+/**
+ * \brief Print PCO shader stats.
+ *
+ * \param[in] shader PCO state.
+ * \param[in] fp Print target file pointer.
+ */
+void pco_print_shader_stats(pco_shader *shader, FILE *fp)
+{
+   pco_print_state state = {
+      .fp = fp,
+      .shader = shader,
+      .indent = 0,
+      .is_grouped = shader->is_grouped,
+      .verbose = PCO_DEBUG_PRINT(VERBOSE),
+   };
+
+   _pco_print_shader_info(&state, shader);
+
+   struct pvr_stats stats = pco_get_pvr_stats(shader);
+   pvr_stats_fprintf(fp,
+                     _mesa_shader_stage_to_abbrev(shader->nir->info.stage),
+                     &stats);
 }
 
 /**

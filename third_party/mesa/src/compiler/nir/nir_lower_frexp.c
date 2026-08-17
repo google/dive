@@ -168,6 +168,7 @@ lower_frexp_instr(nir_builder *b, nir_instr *instr, UNUSED void *cb_data)
    nir_def *lower;
 
    b->cursor = nir_before_instr(instr);
+   b->fp_math_ctrl = alu_instr->fp_math_ctrl;
 
    switch (alu_instr->op) {
    case nir_op_frexp_sig:

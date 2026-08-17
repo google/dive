@@ -294,7 +294,7 @@ svga_create_surface_view(struct pipe_context *pipe,
 
    pipe_reference_init(&s->base.reference, 1);
    pipe_resource_reference(&s->base.texture, pt);
-   s->base.context = pipe;
+   s->context = pipe;
    s->base.format = surf_tmpl->format;
    s->base.level = surf_tmpl->level;
    s->base.first_layer = surf_tmpl->first_layer;
@@ -491,7 +491,7 @@ create_backed_surface_view(struct svga_context *svga, struct svga_surface *s,
    svga_mark_surface_dirty(s->backed);
    s->backed->age = tex->age;
 
-   assert(s->backed->base.context == &svga->pipe);
+   assert(s->backed->context == &svga->pipe);
 
 done:
    return s->backed;
@@ -541,7 +541,7 @@ svga_validate_surface_view(struct svga_context *svga, struct svga_surface *s)
     * Create an alternate surface view for the specified context if the
     * view was created for another context.
     */
-   if (s && s->base.context != &svga->pipe) {
+   if (s && s->context != &svga->pipe) {
       s = create_backed_surface_view(svga, s, false);
 
       if (s)
@@ -627,7 +627,7 @@ svga_validate_surface_view(struct svga_context *svga, struct svga_surface *s)
 }
 
 
-static void
+void
 svga_surface_destroy(struct pipe_context *pipe,
                      struct pipe_surface *surf)
 {
@@ -660,7 +660,7 @@ svga_surface_destroy(struct pipe_context *pipe,
        * Similar to shader resource view, in this case, we will skip
        * the destroy for now.
        */
-      if (surf->context != pipe) {
+      if (s->context != pipe) {
          _debug_printf("context mismatch in %s\n", __func__);
       }
       else {
@@ -956,7 +956,5 @@ svga_get_sample_position(struct pipe_context *context,
 void
 svga_init_surface_functions(struct svga_context *svga)
 {
-   svga->pipe.create_surface = svga_create_surface;
-   svga->pipe.surface_destroy = svga_surface_destroy;
    svga->pipe.get_sample_position = svga_get_sample_position;
 }

@@ -34,12 +34,14 @@ void _rnn_init(struct rnn *rnn, int nocolor);
 struct rnn *rnn_new(int nocolor);
 void rnn_load_file(struct rnn *rnn, char *file, char *domain);
 void rnn_load(struct rnn *rnn, const char *gpuname);
+void rnn_varadd(struct rnn *rnn, char *varset, const char *variant);
 uint32_t rnn_regbase(struct rnn *rnn, const char *name);
 const char *rnn_regname(struct rnn *rnn, uint32_t regbase, int color);
 struct rnndecaddrinfo *rnn_reginfo(struct rnn *rnn, uint32_t regbase);
 void rnn_reginfo_free(struct rnndecaddrinfo *info);
 const char *rnn_enumname(struct rnn *rnn, const char *name, uint32_t val);
 int rnn_enumval(struct rnn *rnn, const char *enumname, const char *enumval);
+struct rnnenum *rnn_enumelem(struct rnn *rnn, const char *enumname);
 
 struct rnndelem *rnn_regelem(struct rnn *rnn, const char *name);
 struct rnndelem *rnn_regoff(struct rnn *rnn, uint32_t offset);

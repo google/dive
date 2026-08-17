@@ -263,7 +263,7 @@ class TestRE:
             """)
 
             backport_to = core.IS_BACKPORT.findall(message)
-            assert backport_to == [('19.2', '')]
+            assert backport_to == [('19.2', '', '')]
 
         def test_multiple_release_space(self):
             """Tests commit with more than one branch specified"""
@@ -278,7 +278,7 @@ class TestRE:
             """)
 
             backport_to = core.IS_BACKPORT.findall(message)
-            assert backport_to == [('19.1', '19.2')]
+            assert backport_to == [('19.1', '19.2', '')]
 
         def test_multiple_release_comma(self):
             """Tests commit with more than one branch specified"""
@@ -293,7 +293,7 @@ class TestRE:
             """)
 
             backport_to = core.IS_BACKPORT.findall(message)
-            assert backport_to == [('19.1', '19.2')]
+            assert backport_to == [('19.1', '19.2', '')]
 
         def test_multiple_release_lines(self):
             """Tests commit with more than one branch specified in mulitple tags"""
@@ -305,7 +305,7 @@ class TestRE:
             """)
 
             backport_to = core.IS_BACKPORT.findall(message)
-            assert backport_to == [('19.0', ''), ('19.1', '19.2')]
+            assert backport_to == [('19.0', '', ''), ('19.1', '19.2', '')]
 
 
 class TestResolveNomination:
@@ -401,6 +401,17 @@ class TestResolveNomination:
 
         with mock.patch('bin.pick.core.asyncio.create_subprocess_exec', s.mock):
             await core.resolve_nomination(c, '16.2')
+
+        assert c.nominated
+        assert c.nomination_type is core.NominationType.BACKPORT
+
+    @pytest.mark.asyncio
+    async def test_backport_all_is_nominated(self):
+        s = self.FakeSubprocess(b'Backport-to: *')
+        c = core.Commit('abcdef1234567890', 'a commit')
+
+        with mock.patch('bin.pick.core.asyncio.create_subprocess_exec', s.mock):
+            await core.resolve_nomination(c, '0.0')
 
         assert c.nominated
         assert c.nomination_type is core.NominationType.BACKPORT

@@ -1,24 +1,6 @@
 /*
  * Copyright © 2013 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 /**
@@ -120,7 +102,7 @@ vec4_gs_visitor::setup_varying_inputs(int payload_reg,
       }
    }
 
-   int regs_used = ALIGN(input_array_stride * num_input_vertices,
+   int regs_used = align(input_array_stride * num_input_vertices,
                          attributes_per_reg) / attributes_per_reg;
    return payload_reg + regs_used;
 }
@@ -672,7 +654,7 @@ elk_compile_gs(const struct elk_compiler *compiler,
 
    /* 1 HWORD = 32 bytes = 256 bits */
    prog_data->control_data_header_size_hwords =
-      ALIGN(c.control_data_header_size_bits, 256) / 256;
+      align(c.control_data_header_size_bits, 256) / 256;
 
    /* Compute the output vertex size.
     *
@@ -726,7 +708,7 @@ elk_compile_gs(const struct elk_compiler *compiler,
    assert(compiler->devinfo->ver == 6 ||
           output_vertex_size_bytes <= GFX7_MAX_GS_OUTPUT_VERTEX_SIZE_BYTES);
    prog_data->output_vertex_size_hwords =
-      ALIGN(output_vertex_size_bytes, 32) / 32;
+      align(output_vertex_size_bytes, 32) / 32;
 
    /* Compute URB entry size.  The maximum allowed URB entry size is 32k.
     * That divides up as follows:
@@ -793,9 +775,9 @@ elk_compile_gs(const struct elk_compiler *compiler,
     * a multiple of 128 bytes in gfx6.
     */
    if (compiler->devinfo->ver >= 7) {
-      prog_data->base.urb_entry_size = ALIGN(output_size_bytes, 64) / 64;
+      prog_data->base.urb_entry_size = align(output_size_bytes, 64) / 64;
    } else {
-      prog_data->base.urb_entry_size = ALIGN(output_size_bytes, 128) / 128;
+      prog_data->base.urb_entry_size = align(output_size_bytes, 128) / 128;
    }
 
    assert(nir->info.gs.output_primitive < ARRAY_SIZE(elk::gl_prim_to_hw_prim));

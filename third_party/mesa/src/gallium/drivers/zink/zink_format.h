@@ -50,14 +50,16 @@ zink_format_clamp_channel_srgb(const struct util_format_description *desc, union
 enum pipe_format
 zink_format_emulate_x8(enum pipe_format format);
 static inline bool
-zink_format_needs_mutable(enum pipe_format a, enum pipe_format b)
+zink_format_needs_mutable(enum pipe_format a, enum pipe_format b, bool has_srgb_mutable)
 {
    if (a == b)
       return false;
-   if (util_format_is_srgb(a))
-      return util_format_linear(a) != b;
-   if (util_format_is_srgb(b))
-      return util_format_linear(b) != a;
+   if (has_srgb_mutable) {
+      if (util_format_is_srgb(a))
+         return util_format_linear(a) != b;
+      if (util_format_is_srgb(b))
+         return util_format_linear(b) != a;
+   }
    if (zink_format_emulate_x8(b) == a || zink_format_emulate_x8(a) == b ||
        zink_format_get_emulated_alpha(b) == a || zink_format_get_emulated_alpha(a) == b)
       return false;

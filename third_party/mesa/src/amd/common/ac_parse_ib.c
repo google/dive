@@ -5,7 +5,10 @@
  */
 
 #include "ac_debug.h"
+#include "amd_cp_print_packet_gfx11.h"
+#include "amd_cp_print_packet_gfx12.h"
 #include "sid.h"
+#define SID_TABLE_IMPLEMENTATION
 #include "sid_tables.h"
 #include "ac_vcn.h"
 #include "ac_vcn_dec.h"
@@ -96,6 +99,21 @@ static void print_string_value(FILE *file, const char *name, const char *value)
    fprintf(file, "%s\n", value);
 }
 
+void ac_print_data_dword(FILE *file, uint32_t value, const char *comment)
+{
+   print_data_dword(file, value, comment);
+}
+
+void ac_print_named_value(FILE *file, const char *name, uint32_t value, int bits)
+{
+   print_named_value(file, name, value, bits);
+}
+
+void ac_print_string_value(FILE *file, const char *name, const char *value)
+{
+   print_string_value(file, name, value);
+}
+
 void ac_dump_reg(FILE *file, enum amd_gfx_level gfx_level, enum radeon_family family,
                  unsigned offset, uint32_t value, uint32_t field_mask)
 {
@@ -139,7 +157,7 @@ void ac_dump_reg(FILE *file, enum amd_gfx_level gfx_level, enum radeon_family fa
            O_COLOR_RESET, value);
 }
 
-static uint32_t ac_ib_get(struct ac_ib_parser *ib)
+uint32_t ac_ib_get(struct ac_ib_parser *ib)
 {
    uint32_t v = 0;
 
@@ -227,17 +245,8 @@ static void ac_parse_set_reg_pairs_packed_packet(FILE *f, unsigned count, unsign
 
 #define AC_ADDR_SIZE_NOT_MEMORY 0xFFFFFFFF
 
-static void print_addr(struct ac_ib_parser *ib, const char *name, uint64_t addr, uint32_t size)
+static const char *check_address(struct ac_ib_parser *ib, uint64_t addr, uint32_t size)
 {
-   FILE *f = ib->f;
-
-   print_spaces(f, INDENT_PKT);
-   fprintf(f, "%s%s%s <- ",
-           O_COLOR_YELLOW, name,
-           O_COLOR_RESET);
-
-   fprintf(f, "0x%llx", (unsigned long long)addr);
-
    if (ib->addr_callback && size != AC_ADDR_SIZE_NOT_MEMORY) {
       struct ac_addr_info addr_info;
       ib->addr_callback(ib->addr_callback_data, addr, &addr_info);
@@ -249,14 +258,54 @@ static void print_addr(struct ac_ib_parser *ib, const char *name, uint64_t addr,
       uint32_t invalid_count = !addr_info.valid + !addr_info2.valid;
 
       if (addr_info.use_after_free && addr_info2.use_after_free)
-         fprintf(f, " used after free");
+         return " used after free";
       else if (invalid_count == 2)
-         fprintf(f, " invalid");
+         return " invalid";
       else if (invalid_count == 1)
-         fprintf(f, " out of bounds");
+         return " out of bounds";
    }
 
+   return NULL;
+}
+
+void ac_ib_handle_address(struct ac_ib_parser *ib, uint32_t addr_lo, uint32_t addr_hi, uint32_t size)
+{
+   uint64_t addr = addr_lo | ((uint64_t)addr_hi << 32);
+   const char *addr_message = check_address(ib, addr, size);
+
+   print_spaces(ib->f, INDENT_PKT);
+   fprintf(ib->f, "%s(FULL ADDRESS)%s <- 0x%"PRIx64, O_COLOR_YELLOW, O_COLOR_RESET, addr);
+
+   if (addr_message)
+      fprintf(ib->f, "%s", addr_message);
+
+   fprintf(ib->f, "\n");
+}
+
+static void print_addr(struct ac_ib_parser *ib, const char *name, uint64_t addr, uint32_t size)
+{
+   FILE *f = ib->f;
+
+   print_spaces(f, INDENT_PKT);
+   fprintf(f, "%s%s%s <- ",
+           O_COLOR_YELLOW, name,
+           O_COLOR_RESET);
+
+   fprintf(f, "0x%llx", (unsigned long long)addr);
+
+   const char *addr_message = check_address(ib, addr, size);
+   if (addr_message)
+      fprintf(f, "%s", addr_message);
+
    fprintf(f, "\n");
+}
+
+static void ac_cp_print_packet_generated(struct ac_ib_parser *ib, unsigned opcode, unsigned count)
+{
+   if (ib->gfx_level >= GFX12)
+      amd_cp_print_packet_gfx12(ib, opcode, count);
+   else
+      amd_cp_print_packet_gfx11(ib, opcode, count);
 }
 
 static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
@@ -269,17 +318,16 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
    const char *predicated = PKT3_PREDICATE(header) ? "(predicated)" : "";
    const char *reset_filter_cam = PKT3_RESET_FILTER_CAM_G(header) ? "(reset_filter_cam)" : "";
    int i;
-   unsigned tmp;
 
    /* Print the name first. */
-   for (i = 0; i < ARRAY_SIZE(packet3_table); i++)
+   for (i = 0; i < packet3_table_size; i++)
       if (packet3_table[i].op == op)
          break;
 
    char unknown_name[32];
    const char *pkt_name;
 
-   if (i < ARRAY_SIZE(packet3_table)) {
+   if (i < packet3_table_size) {
       pkt_name = sid_strings + packet3_table[i].name_offset;
    } else {
       snprintf(unknown_name, sizeof(unknown_name), "UNKNOWN(0x%02X)", op);
@@ -291,7 +339,7 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       color = O_COLOR_PURPLE;
    else if (strstr(pkt_name, "SET") == pkt_name && strstr(pkt_name, "REG"))
       color = O_COLOR_CYAN;
-   else if (i >= ARRAY_SIZE(packet3_table))
+   else if (i >= packet3_table_size)
       color = O_COLOR_RED;
    else
       color = O_COLOR_GREEN;
@@ -331,39 +379,8 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
    case PKT3_SET_SH_REG_PAIRS_PACKED_N:
       ac_parse_set_reg_pairs_packed_packet(f, count, SI_SH_REG_OFFSET, ib);
       break;
-   case PKT3_ACQUIRE_MEM:
-      if (ib->gfx_level >= GFX11) {
-         if (G_585_PWS_ENA(ib->ib[ib->cur_dw + 5])) {
-            ac_dump_reg(f, ib->gfx_level, ib->family, R_580_ACQUIRE_MEM_PWS_2, ac_ib_get(ib), ~0);
-            print_named_value(f, "GCR_SIZE", ac_ib_get(ib), 32);
-            print_named_value(f, "GCR_SIZE_HI", ac_ib_get(ib), 25);
-            print_named_value(f, "GCR_BASE_LO", ac_ib_get(ib), 32);
-            print_named_value(f, "GCR_BASE_HI", ac_ib_get(ib), 32);
-            ac_dump_reg(f, ib->gfx_level, ib->family, R_585_ACQUIRE_MEM_PWS_7, ac_ib_get(ib), ~0);
-            ac_dump_reg(f, ib->gfx_level, ib->family, R_586_GCR_CNTL, ac_ib_get(ib), ~0);
-         } else {
-            print_string_value(f, "ENGINE_SEL", ac_ib_get(ib) & 0x80000000 ? "ME" : "PFP");
-            print_named_value(f, "GCR_SIZE", ac_ib_get(ib), 32);
-            print_named_value(f, "GCR_SIZE_HI", ac_ib_get(ib), 25);
-            print_named_value(f, "GCR_BASE_LO", ac_ib_get(ib), 32);
-            print_named_value(f, "GCR_BASE_HI", ac_ib_get(ib), 32);
-            print_named_value(f, "POLL_INTERVAL", ac_ib_get(ib), 16);
-            ac_dump_reg(f, ib->gfx_level, ib->family, R_586_GCR_CNTL, ac_ib_get(ib), ~0);
-         }
-      } else {
-         tmp = ac_ib_get(ib);
-         ac_dump_reg(f, ib->gfx_level, ib->family, R_0301F0_CP_COHER_CNTL, tmp, 0x7fffffff);
-         print_string_value(f, "ENGINE_SEL", tmp & 0x80000000 ? "ME" : "PFP");
-         ac_dump_reg(f, ib->gfx_level, ib->family, R_0301F4_CP_COHER_SIZE, ac_ib_get(ib), ~0);
-         ac_dump_reg(f, ib->gfx_level, ib->family, R_030230_CP_COHER_SIZE_HI, ac_ib_get(ib), ~0);
-         ac_dump_reg(f, ib->gfx_level, ib->family, R_0301F8_CP_COHER_BASE, ac_ib_get(ib), ~0);
-         ac_dump_reg(f, ib->gfx_level, ib->family, R_0301E4_CP_COHER_BASE_HI, ac_ib_get(ib), ~0);
-         print_named_value(f, "POLL_INTERVAL", ac_ib_get(ib), 16);
-         if (ib->gfx_level >= GFX10)
-            ac_dump_reg(f, ib->gfx_level, ib->family, R_586_GCR_CNTL, ac_ib_get(ib), ~0);
-      }
-      break;
    case PKT3_SURFACE_SYNC:
+      /* GFX6-8 */
       if (ib->gfx_level >= GFX7) {
          ac_dump_reg(f, ib->gfx_level, ib->family, R_0301F0_CP_COHER_CNTL, ac_ib_get(ib), ~0);
          ac_dump_reg(f, ib->gfx_level, ib->family, R_0301F4_CP_COHER_SIZE, ac_ib_get(ib), ~0);
@@ -375,18 +392,8 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       }
       print_named_value(f, "POLL_INTERVAL", ac_ib_get(ib), 16);
       break;
-   case PKT3_EVENT_WRITE: {
-      uint32_t event_dw = ac_ib_get(ib);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_028A90_VGT_EVENT_INITIATOR, event_dw,
-                  S_028A90_EVENT_TYPE(~0));
-      print_named_value(f, "EVENT_INDEX", (event_dw >> 8) & 0xf, 4);
-      print_named_value(f, "INV_L2", (event_dw >> 20) & 0x1, 1);
-      if (count > 0)
-         print_addr(ib, "ADDR", ac_ib_get64(ib), 0);
-
-      break;
-   }
    case PKT3_EVENT_WRITE_EOP: {
+      /* GFX6-8 */
       uint32_t event_dw = ac_ib_get(ib);
       ac_dump_reg(f, ib->gfx_level, ib->family, R_028A90_VGT_EVENT_INITIATOR, event_dw,
                   S_028A90_EVENT_TYPE(~0));
@@ -420,10 +427,13 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       break;
    }
    case PKT3_RELEASE_MEM: {
-      uint32_t event_dw = ac_ib_get(ib);
       if (ib->gfx_level >= GFX10) {
-         ac_dump_reg(f, ib->gfx_level, ib->family, R_490_RELEASE_MEM_OP, event_dw, ~0u);
-      } else {
+         ac_cp_print_packet_generated(ib, op, count);
+         break;
+      }
+      /* GFX6-9 */
+      uint32_t event_dw = ac_ib_get(ib);
+      {
          ac_dump_reg(f, ib->gfx_level, ib->family, R_028A90_VGT_EVENT_INITIATOR, event_dw,
                      S_028A90_EVENT_TYPE(~0));
          print_named_value(f, "EVENT_INDEX", (event_dw >> 8) & 0xf, 4);
@@ -447,74 +457,24 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       print_named_value(f, "CTXID", ac_ib_get(ib), 32);
       break;
    }
-   case PKT3_WAIT_REG_MEM:
-      print_named_value(f, "OP", ac_ib_get(ib), 32);
-      print_named_value(f, "ADDRESS_LO", ac_ib_get(ib), 32);
-      print_named_value(f, "ADDRESS_HI", ac_ib_get(ib), 32);
-      print_named_value(f, "REF", ac_ib_get(ib), 32);
-      print_named_value(f, "MASK", ac_ib_get(ib), 32);
-      print_named_value(f, "POLL_INTERVAL", ac_ib_get(ib), 16);
-      break;
-   case PKT3_DRAW_INDEX_AUTO:
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_030930_VGT_NUM_INDICES, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR, ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DRAW_INDEX_2:
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_028A78_VGT_DMA_MAX_SIZE, ac_ib_get(ib), ~0);
-      print_addr(ib, "INDEX_ADDR", ac_ib_get64(ib), 0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_030930_VGT_NUM_INDICES, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR, ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DRAW_INDIRECT:
-   case PKT3_DRAW_INDEX_INDIRECT:
-      print_named_value(f, "OFFSET", ac_ib_get(ib), 32);
-      print_named_value(f, "VERTEX_OFFSET_REG", ac_ib_get(ib), 32);
-      print_named_value(f, "START_INSTANCE_REG", ac_ib_get(ib), 32);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR, ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DRAW_INDIRECT_MULTI:
-   case PKT3_DRAW_INDEX_INDIRECT_MULTI:
-      print_named_value(f, "OFFSET", ac_ib_get(ib), 32);
-      print_named_value(f, "VERTEX_OFFSET_REG", ac_ib_get(ib), 32);
-      print_named_value(f, "START_INSTANCE_REG", ac_ib_get(ib), 32);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "DRAW_ID_REG", tmp & 0xFFFF, 16);
-      print_named_value(f, "DRAW_ID_ENABLE", tmp >> 31, 1);
-      print_named_value(f, "COUNT_INDIRECT_ENABLE", (tmp >> 30) & 1, 1);
-      print_named_value(f, "DRAW_COUNT", ac_ib_get(ib), 32);
-      print_addr(ib, "COUNT_ADDR", ac_ib_get64(ib), 0);
-      print_named_value(f, "STRIDE", ac_ib_get(ib), 32);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR, ac_ib_get(ib), ~0);
-      break;
-   case PKT3_INDEX_BASE:
-      print_addr(ib, "ADDR", ac_ib_get64(ib), 0);
-      break;
    case PKT3_INDEX_TYPE:
+      /* GFX6-8 */
       ac_dump_reg(f, ib->gfx_level, ib->family, R_028A7C_VGT_DMA_INDEX_TYPE, ac_ib_get(ib), ~0);
       break;
-   case PKT3_NUM_INSTANCES:
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_030934_VGT_NUM_INSTANCES, ac_ib_get(ib), ~0);
-      break;
-   case PKT3_WRITE_DATA: {
-      uint32_t control = ac_ib_get(ib);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_370_CONTROL, control, ~0);
-      uint32_t dst_sel = G_370_DST_SEL(control);
-      uint64_t addr = ac_ib_get64(ib);
-      uint32_t dword_count = first_dw + count + 1 - ib->cur_dw;
-      bool writes_memory = dst_sel == V_370_MEM_GRBM || dst_sel == V_370_TC_L2 || dst_sel == V_370_MEM;
-      print_addr(ib, "DST_ADDR", addr, writes_memory ? dword_count * 4 : AC_ADDR_SIZE_NOT_MEMORY);
-      for (uint32_t i = 0; i < dword_count; i++)
-          print_data_dword(f, ac_ib_get(ib), "data");
-      break;
-   }
    case PKT3_CP_DMA:
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_410_CP_DMA_WORD0, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_411_CP_DMA_WORD1, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_412_CP_DMA_WORD2, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_413_CP_DMA_WORD3, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_415_COMMAND, ac_ib_get(ib), ~0);
+      /* GFX6 */
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_411_CP_DMA_WORD0, ac_ib_get(ib), ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_412_CP_DMA_WORD1, ac_ib_get(ib), ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_413_CP_DMA_WORD2, ac_ib_get(ib), ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_414_CP_DMA_WORD3, ac_ib_get(ib), ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_415_CP_DMA_COMMAND, ac_ib_get(ib), ~0);
       break;
    case PKT3_DMA_DATA: {
+      if (ib->gfx_level >= GFX9) {
+         ac_cp_print_packet_generated(ib, op, count);
+         break;
+      }
+      /* GFX7-8 */
       uint32_t header = ac_ib_get(ib);
       ac_dump_reg(f, ib->gfx_level, ib->family, R_501_DMA_DATA_WORD0, header, ~0);
 
@@ -522,31 +482,29 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       uint64_t dst_addr = ac_ib_get64(ib);
 
       uint32_t command = ac_ib_get(ib);
-      uint32_t size = ib->gfx_level >= GFX9 ? G_415_BYTE_COUNT_GFX9(command)
-                                            : G_415_BYTE_COUNT_GFX6(command);
+      uint32_t size = G_415_BYTE_COUNT(command);
 
       uint32_t src_sel = G_501_SRC_SEL(header);
       bool src_mem = (src_sel == V_501_SRC_ADDR && G_415_SAS(command) == V_415_MEMORY) ||
-                      src_sel == V_411_SRC_ADDR_TC_L2;
+                      src_sel == V_501_SRC_ADDR_USING_L2;
 
       uint32_t dst_sel = G_501_DST_SEL(header);
       bool dst_mem = (dst_sel == V_501_DST_ADDR && G_415_DAS(command) == V_415_MEMORY) ||
-                      dst_sel == V_411_DST_ADDR_TC_L2;
+                      dst_sel == V_501_DST_ADDR_USING_L2;
 
       print_addr(ib, "SRC_ADDR", src_addr, src_mem ? size : AC_ADDR_SIZE_NOT_MEMORY);
       print_addr(ib, "DST_ADDR", dst_addr, dst_mem ? size : AC_ADDR_SIZE_NOT_MEMORY);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_415_COMMAND, command, ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_415_CP_DMA_COMMAND, command, ~0);
       break;
    }
    case PKT3_INDIRECT_BUFFER_SI:
-   case PKT3_INDIRECT_BUFFER_CONST:
    case PKT3_INDIRECT_BUFFER: {
       uint32_t base_lo_dw = ac_ib_get(ib);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_3F0_IB_BASE_LO, base_lo_dw, ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_3F1_IB_BASE_LO, base_lo_dw, ~0);
       uint32_t base_hi_dw = ac_ib_get(ib);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_3F1_IB_BASE_HI, base_hi_dw, ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_3F2_IB_BASE_HI, base_hi_dw, ~0);
       uint32_t control_dw = ac_ib_get(ib);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_3F2_IB_CONTROL, control_dw, ~0);
+      ac_dump_reg(f, ib->gfx_level, ib->family, R_3F3_IB_CONTROL, control_dw, ~0);
 
       if (!ib->addr_callback)
          break;
@@ -558,9 +516,9 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       if (!data)
          break;
 
-      if (G_3F2_CHAIN(control_dw)) {
+      if (G_3F3_CHAIN(control_dw)) {
          ib->ib = data;
-         ib->num_dw = G_3F2_IB_SIZE(control_dw);
+         ib->num_dw = G_3F3_IB_SIZE(control_dw);
          ib->cur_dw = 0;
          return;
       }
@@ -568,7 +526,7 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       struct ac_ib_parser ib_recurse;
       memcpy(&ib_recurse, ib, sizeof(ib_recurse));
       ib_recurse.ib = data;
-      ib_recurse.num_dw = G_3F2_IB_SIZE(control_dw);
+      ib_recurse.num_dw = G_3F3_IB_SIZE(control_dw);
       ib_recurse.cur_dw = 0;
       if (ib_recurse.trace_id_count) {
          if (*current_trace_id == *ib->trace_ids) {
@@ -584,11 +542,6 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
       fprintf(f, "\n\035<------------------- nested end -------------------\n");
       break;
    }
-   case PKT3_CLEAR_STATE:
-   case PKT3_INCREMENT_DE_COUNTER:
-   case PKT3_PFP_SYNC_ME:
-      print_data_dword(f, ac_ib_get(ib), "reserved");
-      break;
    case PKT3_NOP:
       if (header == PKT3_NOP_PAD) {
          count = -1; /* One dword NOP. */
@@ -625,128 +578,8 @@ static void ac_parse_packet3(FILE *f, uint32_t header, struct ac_ib_parser *ib,
              print_data_dword(f, ac_ib_get(ib), "unused");
       }
       break;
-   case PKT3_DISPATCH_DIRECT:
-   case PKT3_DISPATCH_DIRECT_INTERLEAVED:
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_00B804_COMPUTE_DIM_X, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_00B808_COMPUTE_DIM_Y, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_00B80C_COMPUTE_DIM_Z, ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_00B800_COMPUTE_DISPATCH_INITIATOR,
-                  ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DISPATCH_INDIRECT:
-   case PKT3_DISPATCH_INDIRECT_INTERLEAVED:
-      if (count > 1)
-         print_addr(ib, "ADDR", ac_ib_get64(ib), 12);
-      else
-         print_named_value(f, "DATA_OFFSET", ac_ib_get(ib), 32);
-
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_00B800_COMPUTE_DISPATCH_INITIATOR,
-                  ac_ib_get(ib), ~0);
-      break;
-   case PKT3_SET_BASE:
-      tmp = ac_ib_get(ib);
-      print_string_value(f, "BASE_INDEX", tmp == 1 ? "INDIRECT_BASE" : COLOR_RED "UNKNOWN" COLOR_RESET);
-      print_addr(ib, "ADDR", ac_ib_get64(ib), 0);
-      break;
-   case PKT3_PRIME_UTCL2:
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "CACHE_PERM[rwx]", tmp & 0x7, 3);
-      print_string_value(f, "PRIME_MODE", tmp & 0x8 ? "WAIT_FOR_XACK" : "DONT_WAIT_FOR_XACK");
-      print_named_value(f, "ENGINE_SEL", tmp >> 30, 2);
-      print_addr(ib, "ADDR", ac_ib_get64(ib), 0);
-      print_named_value(f, "REQUESTED_PAGES", ac_ib_get(ib), 14);
-      break;
-   case PKT3_ATOMIC_MEM:
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "ATOMIC", tmp & 0x7f, 7);
-      print_named_value(f, "COMMAND", (tmp >> 8) & 0xf, 4);
-      print_named_value(f, "CACHE_POLICY", (tmp >> 25) & 0x3, 2);
-      print_named_value(f, "ENGINE_SEL", tmp >> 30, 2);
-      print_addr(ib, "ADDR", ac_ib_get64(ib), 8);
-      print_named_value(f, "SRC_DATA_LO", ac_ib_get(ib), 32);
-      print_named_value(f, "SRC_DATA_HI", ac_ib_get(ib), 32);
-      print_named_value(f, "CMP_DATA_LO", ac_ib_get(ib), 32);
-      print_named_value(f, "CMP_DATA_HI", ac_ib_get(ib), 32);
-      print_named_value(f, "LOOP_INTERVAL", ac_ib_get(ib) & 0x1fff, 13);
-      break;
-   case PKT3_INDEX_BUFFER_SIZE:
-      print_named_value(f, "COUNT", ac_ib_get(ib), 32);
-      break;
-   case PKT3_COND_EXEC: {
-      uint32_t size = ac_ib_get(ib) * 4;
-      print_addr(ib, "ADDR", ac_ib_get64(ib), size);
-      print_named_value(f, "SIZE", size, 32);
-      break;
-   }
-   case PKT3_DISPATCH_TASKMESH_GFX:
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "RING_ENTRY_REG", (tmp >> 16) & 0xffff, 16);
-      print_named_value(f, "XYZ_DIM_REG", (tmp & 0xffff), 16);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "THREAD_TRACE_MARKER_ENABLE", (tmp >> 31) & 0x1, 1);
-      if (ib->gfx_level >= GFX11) {
-         print_named_value(f, "XYZ_DIM_ENABLE", (tmp >> 30) & 0x1, 1);
-         print_named_value(f, "MODE1_ENABLE", (tmp >> 29) & 0x1, 1);
-         print_named_value(f, "LINEAR_DISPATCH_ENABLED", (tmp >> 28) & 0x1, 1);
-      }
-      print_named_value(f, "DI_SRC_SEL_AUTO_INDEX", ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DISPATCH_TASKMESH_DIRECT_ACE:
-      print_named_value(f, "X_DIM", ac_ib_get(ib), ~0);
-      print_named_value(f, "Y_DIM", ac_ib_get(ib), ~0);
-      print_named_value(f, "Z_DIM", ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_00B800_COMPUTE_DISPATCH_INITIATOR,
-                  ac_ib_get(ib), ~0);
-      print_named_value(f, "RING_ENTRY_REG", ac_ib_get(ib), 16);
-      break;
-   case PKT3_DISPATCH_MESH_DIRECT:
-      print_named_value(f, "X_DIM", ac_ib_get(ib), ~0);
-      print_named_value(f, "Y_DIM", ac_ib_get(ib), ~0);
-      print_named_value(f, "Z_DIM", ac_ib_get(ib), ~0);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR,
-                  ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DISPATCH_MESH_INDIRECT_MULTI:
-      print_named_value(f, "DATA_OFFSET", ac_ib_get(ib), 32);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "DRAW_INDEX_LOC", (tmp >> 16) & 0xffff, 16);
-      print_named_value(f, "XYZ_DIM_LOC", tmp & 0xffff, 16);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "DRAW_INDEX_ENABLE", tmp >> 31, 1);
-      print_named_value(f, "COUNT_INDIRECT_ENABLE", (tmp >> 30) & 1, 1);
-      print_named_value(f, "THREAD_TRACE_MARKER_ENABLE", (tmp >> 29) & 1, 1);
-      if (ib->gfx_level >= GFX11) {
-         print_named_value(f, "XYZ_DIM_ENABLE", (tmp >> 28) & 1, 1);
-         print_named_value(f, "MODE1_ENABLE", (tmp >> 27) & 1, 1);
-      } else {
-         print_named_value(f, "USE_VGPRS", (tmp >> 28) & 1, 1);
-      }
-      print_named_value(f, "COUNT", ac_ib_get(ib), 32);
-      print_addr(ib, "COUNT_ADDR", ac_ib_get64(ib), 0);
-      print_named_value(f, "STRIDE", ac_ib_get(ib), 32);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR,
-                  ac_ib_get(ib), ~0);
-      break;
-   case PKT3_DISPATCH_TASK_STATE_INIT:
-      print_addr(ib, "CONTROL_BUF_ADDR", ac_ib_get64(ib), 0);
-      break;
-   case PKT3_DISPATCH_TASKMESH_INDIRECT_MULTI_ACE:
-      print_addr(ib, "DATA_ADDR", ac_ib_get64(ib), 0);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "RING_ENTRY_LOC", tmp & 0xffff, 16);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "DRAW_INDEX_LOC", (tmp >> 16) & 0xffff, 16);
-      print_named_value(f, "XYZ_DIM_ENABLE", (tmp >> 3) & 1, 1);
-      print_named_value(f, "DRAW_INDEX_ENABLE", (tmp >> 2), 1);
-      print_named_value(f, "COUNT_INDIRECT_ENABLE", (tmp >> 1) & 1, 1);
-      print_named_value(f, "THREAD_TRACE_MARKER_ENABLE", tmp & 1, 1);
-      tmp = ac_ib_get(ib);
-      print_named_value(f, "XYZ_DIM_LOC", tmp & 0xffff, 16);
-      print_named_value(f, "COUNT", ac_ib_get(ib), 32);
-      print_addr(ib, "COUNT_ADDR", ac_ib_get64(ib), 0);
-      print_named_value(f, "STRIDE", ac_ib_get(ib), 32);
-      ac_dump_reg(f, ib->gfx_level, ib->family, R_0287F0_VGT_DRAW_INITIATOR,
-                  ac_ib_get(ib), ~0);
+   default:
+      ac_cp_print_packet_generated(ib, op, count);
       break;
    }
 
@@ -881,6 +714,25 @@ static void parse_sdma_ib(FILE *f, struct ac_ib_parser *ib)
 
          break;
       }
+      case SDMA_OPCODE_POLL_REGMEM:{
+         fprintf(f, "POLL_REGMEM\n");
+
+         /* VA */
+         uint32_t va_lo = ac_ib_get(ib);
+         fprintf(f, "    va lo = %08x\n", va_lo);
+         uint32_t va_hi = ac_ib_get(ib);
+         fprintf(f, "    va hi = %08x\n", va_hi);
+
+         uint32_t ref = ac_ib_get(ib);
+         fprintf(f, "    ref = %08x\n", ref);
+         uint32_t mask = ac_ib_get(ib);
+         fprintf(f, "    mask = %08x\n", mask);
+
+         uint32_t flags = ac_ib_get(ib);
+         fprintf(f, "    interval = %08x, retry_count = %08x\n",
+                 (flags & 0xffff), (flags >> 16) & 0xfff);
+         break;
+      }
       case SDMA_OPCODE_COPY: {
          switch (sub_op) {
          case SDMA_COPY_SUB_OPCODE_LINEAR: {
@@ -949,12 +801,17 @@ static void parse_sdma_ib(FILE *f, struct ac_ib_parser *ib)
             fprintf(f, "    copy depth = %u\n", dw13 + 1);
 
             if (dcc) {
-               ac_ib_get(ib);
-               fprintf(f, "    metadata VA low\n");
-               ac_ib_get(ib);
-               fprintf(f, "    metadata VA high\n");
-               ac_ib_get(ib);
-               fprintf(f, "    (metadata config)\n");
+               if (ib->gfx_level >= GFX12) {
+                  ac_ib_get(ib);
+                  fprintf(f, "    (metadata config)\n");
+               } else {
+                  ac_ib_get(ib);
+                  fprintf(f, "    metadata VA low\n");
+                  ac_ib_get(ib);
+                  fprintf(f, "    metadata VA high\n");
+                  ac_ib_get(ib);
+                  fprintf(f, "    (metadata config)\n");
+               }
             }
             break;
          }
@@ -968,12 +825,17 @@ static void parse_sdma_ib(FILE *f, struct ac_ib_parser *ib)
             }
 
             if (dcc) {
-               ac_ib_get(ib);
-               fprintf(f, "    metadata VA low\n");
-               ac_ib_get(ib);
-               fprintf(f, "    metadata VA high\n");
-               ac_ib_get(ib);
-               fprintf(f, "    (metadata config)\n");
+               if (ib->gfx_level >= GFX12) {
+                  ac_ib_get(ib);
+                  fprintf(f, "    (metadata config)\n");
+               } else {
+                  ac_ib_get(ib);
+                  fprintf(f, "    metadata VA low\n");
+                  ac_ib_get(ib);
+                  fprintf(f, "    metadata VA high\n");
+                  ac_ib_get(ib);
+                  fprintf(f, "    (metadata config)\n");
+               }
             }
             break;
          }
@@ -1091,18 +953,496 @@ static const char *vcn_color_bit_depth(uint32_t bit_depth)
    }
 }
 
-static void print_vcn_addr(FILE *f, struct ac_ib_parser *ib, const char *prefix_format, ...)
+static void print_vcn_msg_buffer_contents(FILE *f, struct ac_ib_parser *ib, uint64_t msg_buffer_va)
+{
+   if (!ib->addr_callback)
+      return;
+
+   struct ac_addr_info addr_info;
+   ib->addr_callback(ib->addr_callback_data, msg_buffer_va, &addr_info);
+
+   if (!addr_info.cpu_addr || !addr_info.valid) {
+      fprintf(f, "        %s(unable to read message buffer contents)%s\n", O_COLOR_RED, O_COLOR_RESET);
+      return;
+   }
+
+   rvcn_dec_message_header_t *header = (rvcn_dec_message_header_t *)addr_info.cpu_addr;
+
+   fprintf(f, "    %sMESSAGE BUFFER CONTENTS:%s\n", O_COLOR_CYAN, O_COLOR_RESET);
+   fprintf(f, "        header_size = %u\n", header->header_size);
+   fprintf(f, "        total_size = %u\n", header->total_size);
+   fprintf(f, "        num_buffers = %u\n", header->num_buffers);
+   fprintf(f, "        msg_type = %s (0x%x)\n",
+           header->msg_type == RDECODE_MSG_CREATE ? "CREATE" :
+           header->msg_type == RDECODE_MSG_DECODE ? "DECODE" :
+           header->msg_type == RDECODE_MSG_DESTROY ? "DESTROY" :
+           "UNKNOWN",
+           header->msg_type);
+   fprintf(f, "        stream_handle = 0x%x\n", header->stream_handle);
+   fprintf(f, "        status_report_feedback_number = %u\n", header->status_report_feedback_number);
+
+   for (unsigned i = 0; i < header->num_buffers && i < 16; i++) {
+      rvcn_dec_message_index_t *index = &header->index[i];
+      fprintf(f, "        index[%u]:\n", i);
+      fprintf(f, "            message_id = %s (0x%x)\n",
+              index->message_id == RDECODE_MESSAGE_CREATE ? "CREATE" :
+              index->message_id == RDECODE_MESSAGE_DECODE ? "DECODE" :
+              index->message_id == RDECODE_MESSAGE_AVC ? "AVC" :
+              index->message_id == RDECODE_MESSAGE_HEVC ? "HEVC" :
+              index->message_id == RDECODE_MESSAGE_VP9 ? "VP9" :
+              index->message_id == RDECODE_MESSAGE_AV1 ? "AV1" :
+              index->message_id == RDECODE_MESSAGE_DYNAMIC_DPB ? "DYNAMIC_DPB" :
+              "UNKNOWN",
+              index->message_id);
+      fprintf(f, "            offset = %u\n", index->offset);
+      fprintf(f, "            size = %u\n", index->size);
+      fprintf(f, "            filled = %u\n", index->filled);
+
+      if (index->message_id == RDECODE_MESSAGE_CREATE &&
+          index->size >= sizeof(rvcn_dec_message_create_t)) {
+         rvcn_dec_message_create_t *create = (rvcn_dec_message_create_t *)((char *)header + index->offset);
+         fprintf(f, "            %sCREATE message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                stream_type = 0x%x\n", create->stream_type);
+         fprintf(f, "                session_flags = 0x%x\n", create->session_flags);
+         fprintf(f, "                width_in_samples = %u\n", create->width_in_samples);
+         fprintf(f, "                height_in_samples = %u\n", create->height_in_samples);
+      } else if (index->message_id == RDECODE_MESSAGE_DECODE &&
+                 index->size >= sizeof(rvcn_dec_message_decode_t)) {
+         rvcn_dec_message_decode_t *decode = (rvcn_dec_message_decode_t *)((char *)header + index->offset);
+         fprintf(f, "            %sDECODE message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                stream_type = 0x%x\n", decode->stream_type);
+         fprintf(f, "                decode_flags = 0x%x\n", decode->decode_flags);
+         fprintf(f, "                width_in_samples = %u\n", decode->width_in_samples);
+         fprintf(f, "                height_in_samples = %u\n", decode->height_in_samples);
+         fprintf(f, "                bsd_size = %u\n", decode->bsd_size);
+         fprintf(f, "                dpb_size = %u\n", decode->dpb_size);
+         fprintf(f, "                dt_size = %u\n", decode->dt_size);
+         fprintf(f, "                sct_size = %u\n", decode->sct_size);
+         fprintf(f, "                sc_coeff_size = %u\n", decode->sc_coeff_size);
+         fprintf(f, "                hw_ctxt_size = %u\n", decode->hw_ctxt_size);
+         fprintf(f, "                sw_ctxt_size = %u\n", decode->sw_ctxt_size);
+         fprintf(f, "                pic_param_size = %u\n", decode->pic_param_size);
+         fprintf(f, "                mb_cntl_size = %u\n", decode->mb_cntl_size);
+         fprintf(f, "                decode_buffer_flags = 0x%x\n", decode->decode_buffer_flags);
+         fprintf(f, "                db_pitch = %u\n", decode->db_pitch);
+         fprintf(f, "                db_aligned_height = %u\n", decode->db_aligned_height);
+         fprintf(f, "                db_tiling_mode = %u\n", decode->db_tiling_mode);
+         fprintf(f, "                db_swizzle_mode = %u\n", decode->db_swizzle_mode);
+         fprintf(f, "                db_array_mode = %u\n", decode->db_array_mode);
+         fprintf(f, "                db_field_mode = %u\n", decode->db_field_mode);
+         fprintf(f, "                db_surf_tile_config = 0x%x\n", decode->db_surf_tile_config);
+         fprintf(f, "                dt_pitch = %u\n", decode->dt_pitch);
+         fprintf(f, "                dt_uv_pitch = %u\n", decode->dt_uv_pitch);
+         fprintf(f, "                dt_tiling_mode = %u\n", decode->dt_tiling_mode);
+         fprintf(f, "                dt_swizzle_mode = %u\n", decode->dt_swizzle_mode);
+         fprintf(f, "                dt_array_mode = %u\n", decode->dt_array_mode);
+         fprintf(f, "                dt_field_mode = %u\n", decode->dt_field_mode);
+         fprintf(f, "                dt_out_format = %u\n", decode->dt_out_format);
+         fprintf(f, "                dt_surf_tile_config = 0x%x\n", decode->dt_surf_tile_config);
+         fprintf(f, "                dt_uv_surf_tile_config = 0x%x\n", decode->dt_uv_surf_tile_config);
+         fprintf(f, "                dt_luma_top_offset = %u\n", decode->dt_luma_top_offset);
+         fprintf(f, "                dt_luma_bottom_offset = %u\n", decode->dt_luma_bottom_offset);
+         fprintf(f, "                dt_chroma_top_offset = %u\n", decode->dt_chroma_top_offset);
+         fprintf(f, "                dt_chroma_bottom_offset = %u\n", decode->dt_chroma_bottom_offset);
+         fprintf(f, "                dt_chromaV_top_offset = %u\n", decode->dt_chromaV_top_offset);
+         fprintf(f, "                dt_chromaV_bottom_offset = %u\n", decode->dt_chromaV_bottom_offset);
+         fprintf(f, "                mif_wrc_en = %u\n", decode->mif_wrc_en);
+         fprintf(f, "                db_pitch_uv = %u\n", decode->db_pitch_uv);
+      } else if (index->message_id == RDECODE_MESSAGE_AVC &&
+                 index->size >= sizeof(rvcn_dec_message_avc_t)) {
+         rvcn_dec_message_avc_t *avc = (rvcn_dec_message_avc_t *)((char *)header + index->offset);
+         fprintf(f, "            %sAVC message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                profile = %u\n", avc->profile);
+         fprintf(f, "                level = %u\n", avc->level);
+         fprintf(f, "                sps_info_flags = 0x%x\n", avc->sps_info_flags);
+         fprintf(f, "                pps_info_flags = 0x%x\n", avc->pps_info_flags);
+         fprintf(f, "                chroma_format = %u\n", avc->chroma_format);
+         fprintf(f, "                bit_depth_luma_minus8 = %u\n", avc->bit_depth_luma_minus8);
+         fprintf(f, "                bit_depth_chroma_minus8 = %u\n", avc->bit_depth_chroma_minus8);
+         fprintf(f, "                log2_max_frame_num_minus4 = %u\n", avc->log2_max_frame_num_minus4);
+         fprintf(f, "                pic_order_cnt_type = %u\n", avc->pic_order_cnt_type);
+         fprintf(f, "                log2_max_pic_order_cnt_lsb_minus4 = %u\n", avc->log2_max_pic_order_cnt_lsb_minus4);
+         fprintf(f, "                num_ref_frames = %u\n", avc->num_ref_frames);
+         fprintf(f, "                pic_init_qp_minus26 = %d\n", avc->pic_init_qp_minus26);
+         fprintf(f, "                pic_init_qs_minus26 = %d\n", avc->pic_init_qs_minus26);
+         fprintf(f, "                chroma_qp_index_offset = %d\n", avc->chroma_qp_index_offset);
+         fprintf(f, "                second_chroma_qp_index_offset = %d\n", avc->second_chroma_qp_index_offset);
+         fprintf(f, "                num_slice_groups_minus1 = %u\n", avc->num_slice_groups_minus1);
+         fprintf(f, "                slice_group_map_type = %u\n", avc->slice_group_map_type);
+         fprintf(f, "                num_ref_idx_l0_active_minus1 = %u\n", avc->num_ref_idx_l0_active_minus1);
+         fprintf(f, "                num_ref_idx_l1_active_minus1 = %u\n", avc->num_ref_idx_l1_active_minus1);
+         fprintf(f, "                slice_group_change_rate_minus1 = %u\n", avc->slice_group_change_rate_minus1);
+         fprintf(f, "                frame_num = %u\n", avc->frame_num);
+         fprintf(f, "                frame_num_list = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "%u%s", avc->frame_num_list[j], j < 15 ? ", " : "]\n");
+         }
+         fprintf(f, "                curr_field_order_cnt_list = [%d, %d]\n",
+                 avc->curr_field_order_cnt_list[0], avc->curr_field_order_cnt_list[1]);
+         fprintf(f, "                field_order_cnt_list = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "[%d, %d]%s", avc->field_order_cnt_list[j][0], avc->field_order_cnt_list[j][1], j < 15 ? ", " : "]\n");
+         }
+         fprintf(f, "                decoded_pic_idx = %u\n", avc->decoded_pic_idx);
+         fprintf(f, "                curr_pic_ref_frame_num = %u\n", avc->curr_pic_ref_frame_num);
+         fprintf(f, "                ref_frame_list = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "0x%02x%s", avc->ref_frame_list[j], j < 15 ? ", " : "]\n");
+         }
+         fprintf(f, "                non_existing_frame_flags = 0x%x\n", avc->non_existing_frame_flags);
+         fprintf(f, "                used_for_reference_flags = 0x%x\n", avc->used_for_reference_flags);
+      } else if (index->message_id == RDECODE_MESSAGE_HEVC &&
+                 index->size >= sizeof(rvcn_dec_message_hevc_t)) {
+         rvcn_dec_message_hevc_t *hevc = (rvcn_dec_message_hevc_t *)((char *)header + index->offset);
+         fprintf(f, "            %sHEVC message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                sps_info_flags = 0x%x\n", hevc->sps_info_flags);
+         fprintf(f, "                pps_info_flags = 0x%x\n", hevc->pps_info_flags);
+         fprintf(f, "                chroma_format = %u\n", hevc->chroma_format);
+         fprintf(f, "                bit_depth_luma_minus8 = %u\n", hevc->bit_depth_luma_minus8);
+         fprintf(f, "                bit_depth_chroma_minus8 = %u\n", hevc->bit_depth_chroma_minus8);
+         fprintf(f, "                log2_max_pic_order_cnt_lsb_minus4 = %u\n", hevc->log2_max_pic_order_cnt_lsb_minus4);
+         fprintf(f, "                sps_max_dec_pic_buffering_minus1 = %u\n", hevc->sps_max_dec_pic_buffering_minus1);
+         fprintf(f, "                log2_min_luma_coding_block_size_minus3 = %u\n", hevc->log2_min_luma_coding_block_size_minus3);
+         fprintf(f, "                log2_diff_max_min_luma_coding_block_size = %u\n", hevc->log2_diff_max_min_luma_coding_block_size);
+         fprintf(f, "                log2_min_transform_block_size_minus2 = %u\n", hevc->log2_min_transform_block_size_minus2);
+         fprintf(f, "                log2_diff_max_min_transform_block_size = %u\n", hevc->log2_diff_max_min_transform_block_size);
+         fprintf(f, "                max_transform_hierarchy_depth_inter = %u\n", hevc->max_transform_hierarchy_depth_inter);
+         fprintf(f, "                max_transform_hierarchy_depth_intra = %u\n", hevc->max_transform_hierarchy_depth_intra);
+         fprintf(f, "                pcm_sample_bit_depth_luma_minus1 = %u\n", hevc->pcm_sample_bit_depth_luma_minus1);
+         fprintf(f, "                pcm_sample_bit_depth_chroma_minus1 = %u\n", hevc->pcm_sample_bit_depth_chroma_minus1);
+         fprintf(f, "                log2_min_pcm_luma_coding_block_size_minus3 = %u\n", hevc->log2_min_pcm_luma_coding_block_size_minus3);
+         fprintf(f, "                log2_diff_max_min_pcm_luma_coding_block_size = %u\n", hevc->log2_diff_max_min_pcm_luma_coding_block_size);
+         fprintf(f, "                num_extra_slice_header_bits = %u\n", hevc->num_extra_slice_header_bits);
+         fprintf(f, "                num_short_term_ref_pic_sets = %u\n", hevc->num_short_term_ref_pic_sets);
+         fprintf(f, "                num_long_term_ref_pic_sps = %u\n", hevc->num_long_term_ref_pic_sps);
+         fprintf(f, "                num_ref_idx_l0_default_active_minus1 = %u\n", hevc->num_ref_idx_l0_default_active_minus1);
+         fprintf(f, "                num_ref_idx_l1_default_active_minus1 = %u\n", hevc->num_ref_idx_l1_default_active_minus1);
+         fprintf(f, "                pps_cb_qp_offset = %d\n", hevc->pps_cb_qp_offset);
+         fprintf(f, "                pps_cr_qp_offset = %d\n", hevc->pps_cr_qp_offset);
+         fprintf(f, "                pps_beta_offset_div2 = %d\n", hevc->pps_beta_offset_div2);
+         fprintf(f, "                pps_tc_offset_div2 = %d\n", hevc->pps_tc_offset_div2);
+         fprintf(f, "                diff_cu_qp_delta_depth = %u\n", hevc->diff_cu_qp_delta_depth);
+         fprintf(f, "                num_tile_columns_minus1 = %u\n", hevc->num_tile_columns_minus1);
+         fprintf(f, "                num_tile_rows_minus1 = %u\n", hevc->num_tile_rows_minus1);
+         fprintf(f, "                log2_parallel_merge_level_minus2 = %u\n", hevc->log2_parallel_merge_level_minus2);
+         fprintf(f, "                column_width_minus1 = [");
+         for (unsigned j = 0; j < 19; j++) {
+            fprintf(f, "%u%s", hevc->column_width_minus1[j], j < 18 ? ", " : "]\n");
+         }
+         fprintf(f, "                row_height_minus1 = [");
+         for (unsigned j = 0; j < 21; j++) {
+            fprintf(f, "%u%s", hevc->row_height_minus1[j], j < 20 ? ", " : "]\n");
+         }
+         fprintf(f, "                init_qp_minus26 = %d\n", hevc->init_qp_minus26);
+         fprintf(f, "                num_delta_pocs_ref_rps_idx = %u\n", hevc->num_delta_pocs_ref_rps_idx);
+         fprintf(f, "                curr_idx = %u\n", hevc->curr_idx);
+         fprintf(f, "                curr_poc = %d\n", hevc->curr_poc);
+         fprintf(f, "                ref_pic_list = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "0x%02x%s", hevc->ref_pic_list[j], j < 15 ? ", " : "]\n");
+         }
+         fprintf(f, "                poc_list = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "%d%s", hevc->poc_list[j], j < 15 ? ", " : "]\n");
+         }
+         fprintf(f, "                ref_pic_set_st_curr_before = [");
+         for (unsigned j = 0; j < 8; j++) {
+            fprintf(f, "0x%02x%s", hevc->ref_pic_set_st_curr_before[j], j < 7 ? ", " : "]\n");
+         }
+         fprintf(f, "                ref_pic_set_st_curr_after = [");
+         for (unsigned j = 0; j < 8; j++) {
+            fprintf(f, "0x%02x%s", hevc->ref_pic_set_st_curr_after[j], j < 7 ? ", " : "]\n");
+         }
+         fprintf(f, "                ref_pic_set_lt_curr = [");
+         for (unsigned j = 0; j < 8; j++) {
+            fprintf(f, "0x%02x%s", hevc->ref_pic_set_lt_curr[j], j < 7 ? ", " : "]\n");
+         }
+         fprintf(f, "                ucScalingListDCCoefSizeID2 = [");
+         for (unsigned j = 0; j < 6; j++) {
+            fprintf(f, "%u%s", hevc->ucScalingListDCCoefSizeID2[j], j < 5 ? ", " : "]\n");
+         }
+         fprintf(f, "                ucScalingListDCCoefSizeID3 = [%u, %u]\n",
+                 hevc->ucScalingListDCCoefSizeID3[0], hevc->ucScalingListDCCoefSizeID3[1]);
+         fprintf(f, "                highestTid = %u\n", hevc->highestTid);
+         fprintf(f, "                isNonRef = %u\n", hevc->isNonRef);
+         fprintf(f, "                p010_mode = %u\n", hevc->p010_mode);
+         fprintf(f, "                msb_mode = %u\n", hevc->msb_mode);
+         fprintf(f, "                luma_10to8 = %u\n", hevc->luma_10to8);
+         fprintf(f, "                chroma_10to8 = %u\n", hevc->chroma_10to8);
+         fprintf(f, "                direct_reflist[0] = [");
+         for (unsigned j = 0; j < 15; j++) {
+            fprintf(f, "0x%02x%s", hevc->direct_reflist[0][j], j < 14 ? ", " : "]\n");
+         }
+         fprintf(f, "                direct_reflist[1] = [");
+         for (unsigned j = 0; j < 15; j++) {
+            fprintf(f, "0x%02x%s", hevc->direct_reflist[1][j], j < 14 ? ", " : "]\n");
+         }
+         fprintf(f, "                st_rps_bits = %u\n", hevc->st_rps_bits);
+      } else if (index->message_id == RDECODE_MESSAGE_AV1 &&
+                 index->size >= sizeof(rvcn_dec_message_av1_t)) {
+         rvcn_dec_message_av1_t *av1 = (rvcn_dec_message_av1_t *)((char *)header + index->offset);
+         fprintf(f, "            %sAV1 message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                frame_header_flags = 0x%x\n", av1->frame_header_flags);
+         fprintf(f, "                current_frame_id = %u\n", av1->current_frame_id);
+         fprintf(f, "                frame_offset = %u\n", av1->frame_offset);
+         fprintf(f, "                profile = %u\n", av1->profile);
+         fprintf(f, "                is_annexb = %u\n", av1->is_annexb);
+         fprintf(f, "                frame_type = %u\n", av1->frame_type);
+         fprintf(f, "                primary_ref_frame = %u\n", av1->primary_ref_frame);
+         fprintf(f, "                curr_pic_idx = %u\n", av1->curr_pic_idx);
+         fprintf(f, "                sb_size = %u\n", av1->sb_size);
+         fprintf(f, "                interp_filter = %u\n", av1->interp_filter);
+         fprintf(f, "                filter_level = [%u, %u]\n", av1->filter_level[0], av1->filter_level[1]);
+         fprintf(f, "                filter_level_u = %u\n", av1->filter_level_u);
+         fprintf(f, "                filter_level_v = %u\n", av1->filter_level_v);
+         fprintf(f, "                sharpness_level = %u\n", av1->sharpness_level);
+         fprintf(f, "                ref_deltas = [");
+         for (unsigned j = 0; j < 8; j++) {
+            fprintf(f, "%d%s", av1->ref_deltas[j], j < 7 ? ", " : "]\n");
+         }
+         fprintf(f, "                mode_deltas = [%d, %d]\n", av1->mode_deltas[0], av1->mode_deltas[1]);
+         fprintf(f, "                base_qindex = %u\n", av1->base_qindex);
+         fprintf(f, "                y_dc_delta_q = %d\n", av1->y_dc_delta_q);
+         fprintf(f, "                u_dc_delta_q = %d\n", av1->u_dc_delta_q);
+         fprintf(f, "                v_dc_delta_q = %d\n", av1->v_dc_delta_q);
+         fprintf(f, "                u_ac_delta_q = %d\n", av1->u_ac_delta_q);
+         fprintf(f, "                v_ac_delta_q = %d\n", av1->v_ac_delta_q);
+         fprintf(f, "                qm_y = %d\n", av1->qm_y);
+         fprintf(f, "                qm_u = %d\n", av1->qm_u);
+         fprintf(f, "                qm_v = %d\n", av1->qm_v);
+         fprintf(f, "                delta_q_res = %d\n", av1->delta_q_res);
+         fprintf(f, "                delta_lf_res = %d\n", av1->delta_lf_res);
+         fprintf(f, "                tile_cols = %u\n", av1->tile_cols);
+         fprintf(f, "                tile_rows = %u\n", av1->tile_rows);
+         fprintf(f, "                tx_mode = %u\n", av1->tx_mode);
+         fprintf(f, "                reference_mode = %u\n", av1->reference_mode);
+         fprintf(f, "                chroma_format = %u\n", av1->chroma_format);
+         fprintf(f, "                tile_size_bytes = %u\n", av1->tile_size_bytes);
+         fprintf(f, "                context_update_tile_id = %u\n", av1->context_update_tile_id);
+         fprintf(f, "                max_width = %u\n", av1->max_width);
+         fprintf(f, "                max_height = %u\n", av1->max_height);
+         fprintf(f, "                width = %u\n", av1->width);
+         fprintf(f, "                height = %u\n", av1->height);
+         fprintf(f, "                superres_upscaled_width = %u\n", av1->superres_upscaled_width);
+         fprintf(f, "                superres_scale_denominator = %u\n", av1->superres_scale_denominator);
+         fprintf(f, "                order_hint_bits = %u\n", av1->order_hint_bits);
+         fprintf(f, "                ref_frame_map = [");
+         for (unsigned j = 0; j < 8; j++) {
+            fprintf(f, "%u%s", av1->ref_frame_map[j], j < 7 ? ", " : "]\n");
+         }
+         fprintf(f, "                frame_refs = [");
+         for (unsigned j = 0; j < 7; j++) {
+            fprintf(f, "%u%s", av1->frame_refs[j], j < 6 ? ", " : "]\n");
+         }
+         fprintf(f, "                bit_depth_luma_minus8 = %u\n", av1->bit_depth_luma_minus8);
+         fprintf(f, "                bit_depth_chroma_minus8 = %u\n", av1->bit_depth_chroma_minus8);
+         fprintf(f, "                cdef_damping = %u\n", av1->cdef_damping);
+         fprintf(f, "                cdef_bits = %u\n", av1->cdef_bits);
+         fprintf(f, "                frame_restoration_type = [%u, %u, %u]\n",
+                 av1->frame_restoration_type[0], av1->frame_restoration_type[1], av1->frame_restoration_type[2]);
+         fprintf(f, "                log2_restoration_unit_size_minus5 = [%u, %u, %u]\n",
+                 av1->log2_restoration_unit_size_minus5[0], av1->log2_restoration_unit_size_minus5[1],
+                 av1->log2_restoration_unit_size_minus5[2]);
+         fprintf(f, "                p010_mode = %u\n", av1->p010_mode);
+         fprintf(f, "                msb_mode = %u\n", av1->msb_mode);
+         fprintf(f, "                luma_10to8 = %u\n", av1->luma_10to8);
+         fprintf(f, "                chroma_10to8 = %u\n", av1->chroma_10to8);
+         fprintf(f, "                preskip_segid = %u\n", av1->preskip_segid);
+         fprintf(f, "                last_active_segid = %u\n", av1->last_active_segid);
+         fprintf(f, "                seg_lossless_flag = %u\n", av1->seg_lossless_flag);
+         fprintf(f, "                coded_lossless = %u\n", av1->coded_lossless);
+         fprintf(f, "                uncompressed_header_size = %u\n", av1->uncompressed_header_size);
+         fprintf(f, "                av1_intrabc_workaround = %u\n", av1->av1_intrabc_workaround);
+      } else if (index->message_id == RDECODE_MESSAGE_VP9 &&
+                 index->size >= sizeof(rvcn_dec_message_vp9_t)) {
+         rvcn_dec_message_vp9_t *vp9 = (rvcn_dec_message_vp9_t *)((char *)header + index->offset);
+         fprintf(f, "            %sVP9 message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                frame_header_flags = 0x%x\n", vp9->frame_header_flags);
+         fprintf(f, "                frame_context_idx = %u\n", vp9->frame_context_idx);
+         fprintf(f, "                reset_frame_context = %u\n", vp9->reset_frame_context);
+         fprintf(f, "                curr_pic_idx = %u\n", vp9->curr_pic_idx);
+         fprintf(f, "                interp_filter = %u\n", vp9->interp_filter);
+         fprintf(f, "                filter_level = %u\n", vp9->filter_level);
+         fprintf(f, "                sharpness_level = %u\n", vp9->sharpness_level);
+         fprintf(f, "                lf_adj_level[0][0] = [%u, %u]\n", vp9->lf_adj_level[0][0][0], vp9->lf_adj_level[0][0][1]);
+         fprintf(f, "                lf_adj_level[0][1] = [%u, %u]\n", vp9->lf_adj_level[0][1][0], vp9->lf_adj_level[0][1][1]);
+         fprintf(f, "                lf_adj_level[0][2] = [%u, %u]\n", vp9->lf_adj_level[0][2][0], vp9->lf_adj_level[0][2][1]);
+         fprintf(f, "                lf_adj_level[0][3] = [%u, %u]\n", vp9->lf_adj_level[0][3][0], vp9->lf_adj_level[0][3][1]);
+         fprintf(f, "                base_qindex = %u\n", vp9->base_qindex);
+         fprintf(f, "                y_dc_delta_q = %d\n", vp9->y_dc_delta_q);
+         fprintf(f, "                uv_ac_delta_q = %d\n", vp9->uv_ac_delta_q);
+         fprintf(f, "                uv_dc_delta_q = %d\n", vp9->uv_dc_delta_q);
+         fprintf(f, "                log2_tile_cols = %u\n", vp9->log2_tile_cols);
+         fprintf(f, "                log2_tile_rows = %u\n", vp9->log2_tile_rows);
+         fprintf(f, "                tx_mode = %u\n", vp9->tx_mode);
+         fprintf(f, "                reference_mode = %u\n", vp9->reference_mode);
+         fprintf(f, "                chroma_format = %u\n", vp9->chroma_format);
+         fprintf(f, "                ref_frame_map = [");
+         for (unsigned j = 0; j < 8; j++) {
+            fprintf(f, "%u%s", vp9->ref_frame_map[j], j < 7 ? ", " : "]\n");
+         }
+         fprintf(f, "                frame_refs = [%u, %u, %u]\n",
+                 vp9->frame_refs[0], vp9->frame_refs[1], vp9->frame_refs[2]);
+         fprintf(f, "                ref_frame_sign_bias = [%u, %u, %u]\n",
+                 vp9->ref_frame_sign_bias[0], vp9->ref_frame_sign_bias[1], vp9->ref_frame_sign_bias[2]);
+         fprintf(f, "                frame_to_show = %u\n", vp9->frame_to_show);
+         fprintf(f, "                bit_depth_luma_minus8 = %u\n", vp9->bit_depth_luma_minus8);
+         fprintf(f, "                bit_depth_chroma_minus8 = %u\n", vp9->bit_depth_chroma_minus8);
+         fprintf(f, "                p010_mode = %u\n", vp9->p010_mode);
+         fprintf(f, "                msb_mode = %u\n", vp9->msb_mode);
+         fprintf(f, "                luma_10to8 = %u\n", vp9->luma_10to8);
+         fprintf(f, "                chroma_10to8 = %u\n", vp9->chroma_10to8);
+         fprintf(f, "                vp9_frame_size = %u\n", vp9->vp9_frame_size);
+         fprintf(f, "                compressed_header_size = %u\n", vp9->compressed_header_size);
+         fprintf(f, "                uncompressed_header_size = %u\n", vp9->uncompressed_header_size);
+      } else if (index->message_id == RDECODE_MESSAGE_DYNAMIC_DPB &&
+                 index->size == sizeof(rvcn_dec_message_dynamic_dpb_t)) {
+         rvcn_dec_message_dynamic_dpb_t *dpb = (rvcn_dec_message_dynamic_dpb_t *)((char *)header + index->offset);
+         fprintf(f, "            %sDYNAMIC_DPB (tier1) message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                dpbConfigFlags = 0x%x\n", dpb->dpbConfigFlags);
+         fprintf(f, "                dpbLumaPitch = %u\n", dpb->dpbLumaPitch);
+         fprintf(f, "                dpbLumaAlignedHeight = %u\n", dpb->dpbLumaAlignedHeight);
+         fprintf(f, "                dpbLumaAlignedSize = %u\n", dpb->dpbLumaAlignedSize);
+         fprintf(f, "                dpbChromaPitch = %u\n", dpb->dpbChromaPitch);
+         fprintf(f, "                dpbChromaAlignedHeight = %u\n", dpb->dpbChromaAlignedHeight);
+         fprintf(f, "                dpbChromaAlignedSize = %u\n", dpb->dpbChromaAlignedSize);
+         fprintf(f, "                dpbArraySize = %u\n", dpb->dpbArraySize);
+         fprintf(f, "                dpbCurArraySlice = %u\n", dpb->dpbCurArraySlice);
+         fprintf(f, "                dpbRefArraySlice = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "%u%s", dpb->dpbRefArraySlice[j], j < 15 ? ", " : "]\n");
+         }
+         fprintf(f, "                dpbCurrOffset = %u\n", dpb->dpbCurrOffset);
+         fprintf(f, "                dpbAddrOffset = [");
+         for (unsigned j = 0; j < 16; j++) {
+            fprintf(f, "%u%s", dpb->dpbAddrOffset[j], j < 15 ? ", " : "]\n");
+         }
+      } else if (index->message_id == RDECODE_MESSAGE_DYNAMIC_DPB &&
+                 index->size == sizeof(rvcn_dec_message_dynamic_dpb_t2_t)) {
+         rvcn_dec_message_dynamic_dpb_t2_t *dpb = (rvcn_dec_message_dynamic_dpb_t2_t *)((char *)header + index->offset);
+         fprintf(f, "            %sDYNAMIC_DPB (tier2) message contents:%s\n", O_COLOR_YELLOW, O_COLOR_RESET);
+         fprintf(f, "                dpbConfigFlags = 0x%x\n", dpb->dpbConfigFlags);
+         fprintf(f, "                dpbLumaPitch = %u\n", dpb->dpbLumaPitch);
+         fprintf(f, "                dpbLumaAlignedHeight = %u\n", dpb->dpbLumaAlignedHeight);
+         fprintf(f, "                dpbLumaAlignedSize = %u\n", dpb->dpbLumaAlignedSize);
+         fprintf(f, "                dpbChromaPitch = %u\n", dpb->dpbChromaPitch);
+         fprintf(f, "                dpbChromaAlignedHeight = %u\n", dpb->dpbChromaAlignedHeight);
+         fprintf(f, "                dpbChromaAlignedSize = %u\n", dpb->dpbChromaAlignedSize);
+         fprintf(f, "                dpbArraySize = %u\n", dpb->dpbArraySize);
+         fprintf(f, "                dpbCurr VA = 0x%x%08x\n", dpb->dpbCurrHi, dpb->dpbCurrLo);
+         for (unsigned j = 0; j < dpb->dpbArraySize && j < 16; j++) {
+            fprintf(f, "                dpbAddr[%u] VA = 0x%x%08x\n", j, dpb->dpbAddrHi[j], dpb->dpbAddrLo[j]);
+         }
+      }
+   }
+}
+
+static void parse_vcn_dec_ib(FILE *f, struct ac_ib_parser *ib)
+{
+   uint32_t data0 = 0;
+   uint32_t data1 = 0;
+   uint32_t data2 = 0;
+   struct ac_vcn_dec_reg reg;
+   ac_vcn_dec_init_regs(&reg, ib->vcn_version);
+
+   while (ib->cur_dw < ib->num_dw) {
+      const uint32_t dw = ac_ib_get(ib);
+      const uint32_t idx = RDECODE_PKT0_BASE_INDEX_G(dw) << 2;
+      if (dw == 0x81FF) {
+         fprintf(f, "NOP\n");
+      } else if (idx == reg.data0) {
+         fprintf(f, "VCPU_DATA0\n");
+         data0 = ac_ib_get(ib);
+         fprintf(f, "\n");
+      } else if (idx == reg.data1) {
+         fprintf(f, "VCPU_DATA1\n");
+         data1 = ac_ib_get(ib);
+         fprintf(f, "\n");
+      } else if (idx == reg.data2) {
+         fprintf(f, "VCPU_DATA2\n");
+         data2 = ac_ib_get(ib);
+         fprintf(f, "\n");
+      } else if (idx == reg.cmd) {
+         fprintf(f, "VCPU_CMD\n");
+         uint32_t cmd = ac_ib_get(ib) >> 1;
+         const char *name = NULL;
+         switch (cmd) {
+         case RDECODE_CMD_MSG_BUFFER:
+            name = "MSG BUFFER";
+            break;
+         case RDECODE_CMD_DPB_BUFFER:
+            name = "DPB BUFFER";
+            break;
+         case RDECODE_CMD_DECODING_TARGET_BUFFER:
+            name = "DECODING TARGET BUFFER";
+            break;
+         case RDECODE_CMD_FEEDBACK_BUFFER:
+            name = "FEEDBACK BUFFER";
+            break;
+         case RDECODE_CMD_PROB_TBL_BUFFER:
+            name = "PROB TBL BUFFER";
+            break;
+         case RDECODE_CMD_SESSION_CONTEXT_BUFFER:
+            name = "SESSION CONTEXT BUFFER";
+            break;
+         case RDECODE_CMD_BITSTREAM_BUFFER:
+            name = "BITSTREAM BUFFER";
+            break;
+         case RDECODE_CMD_IT_SCALING_TABLE_BUFFER:
+            name = "IT SCALING BUFFER";
+            break;
+         case RDECODE_CMD_CONTEXT_BUFFER:
+            name = "CONTEXT BUFFER";
+            break;
+         case RDECODE_CMD_SUBSAMPLE:
+            name = "SUBSAMPLE BUFFER";
+            break;
+         case RDECODE_CMD_WRITE_MEMORY:
+            name = "WRITE MEMORY";
+            break;
+         default:
+            name = "UNKNOWN";
+            break;
+         }
+         uint64_t va = ((uint64_t)data1 << 32) | data0;
+         fprintf(f, "%s%s%s VA=0x%"PRIx64, O_COLOR_GREEN, name, O_COLOR_RESET, va);
+         if (cmd == RDECODE_CMD_WRITE_MEMORY)
+            fprintf(f, " val=%u", data2);
+         fprintf(f, "\n");
+         if (cmd == RDECODE_CMD_MSG_BUFFER)
+            print_vcn_msg_buffer_contents(f, ib, va);
+      } else if (idx == reg.cntl) {
+         fprintf(f, "VCPU_CNTL\n");
+         uint32_t cntl = ac_ib_get(ib);
+         if (cntl == 1)
+            fprintf(f, "%sDECODE%s", O_COLOR_PURPLE, O_COLOR_RESET);
+         fprintf(f, "\n");
+      } else {
+         fprintf(f, "UNKNOWN\n");
+         ac_ib_get(ib);
+         fprintf(f, "\n");
+      }
+   }
+}
+
+static uint64_t print_vcn_addr(FILE *f, struct ac_ib_parser *ib, bool high_first, const char *prefix_format, ...)
 {
    uint32_t high = ac_ib_get(ib);
    fprintf(f, "\n");
    uint32_t low = ac_ib_get(ib);
+
+   if (!high_first)
+      SWAP(high, low);
 
    va_list args;
    va_start(args, prefix_format);
    vfprintf(f, prefix_format, args);
    va_end(args);
 
-   fprintf(f, " VA = 0x%"PRIx64"\n", ((uint64_t)high << 32) | low);
+   uint64_t va = ((uint64_t)high << 32) | low;
+   fprintf(f, " VA = 0x%"PRIx64"\n", va);
+
+   return va;
 }
 
 static void print_vcn_ref_pic_info(FILE *f, struct ac_ib_parser *ib, const char *prefix)
@@ -1127,18 +1467,18 @@ static void print_vcn_reconstructed_picture(FILE *f, struct ac_ib_parser *ib, bo
 
    if (ib->vcn_version >= VCN_5_0_0) {
       if (valid) {
-         print_vcn_addr(f, ib, "%s luma", prefix);
+         print_vcn_addr(f, ib, true, "%s luma", prefix);
          uint32_t luma_pitch = ac_ib_get(ib);
          fprintf(f, "%s luma pitch = %u\n", prefix, luma_pitch);
-         print_vcn_addr(f, ib, "%s chroma", prefix);
+         print_vcn_addr(f, ib, true, "%s chroma", prefix);
          uint32_t chroma_pitch = ac_ib_get(ib);
          fprintf(f, "%s chroma pitch = %u\n", prefix, chroma_pitch);
-         print_vcn_addr(f, ib, "%s chroma V", prefix);
+         print_vcn_addr(f, ib, true, "%s chroma V", prefix);
          uint32_t chroma_v_pitch = ac_ib_get(ib);
          fprintf(f, "%s chroma V pitch = %u\n", prefix, chroma_v_pitch);
          uint32_t swizzle = ac_ib_get(ib);
          fprintf(f, "%s swizzle mode = %u\n", prefix, swizzle);
-         print_vcn_addr(f, ib, "%s frame context buffer", prefix);
+         print_vcn_addr(f, ib, true, "%s frame context buffer", prefix);
          uint32_t frame_context_offset = ac_ib_get(ib);
          fprintf(f, "%s AV1 cdf frame context offset / colloc buffer offset = %u\n", prefix, frame_context_offset);
          uint32_t cdef_offset = ac_ib_get(ib);
@@ -1180,12 +1520,14 @@ static void print_vcn_preencode_input_picture(FILE *f, struct ac_ib_parser *ib, 
    fprintf(f, "%s blue offset = %u\n", prefix, b_offset);
 }
 
-static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
+static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib, uint32_t num_dw)
 {
    rvcn_enc_cmd_t cmd = { 0 };
    ac_vcn_enc_init_cmds(&cmd, ib->vcn_version);
 
-   while (ib->cur_dw < ib->num_dw) {
+   uint32_t last_dw = num_dw ? ib->cur_dw + num_dw : ib->num_dw;
+
+   while (ib->cur_dw < last_dw) {
       const uint32_t start_dw = ib->cur_dw;
       const uint32_t size = ac_ib_get(ib);
       const uint32_t op = ac_ib_get(ib);
@@ -1214,7 +1556,7 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          fprintf(f, "    interface version = %u.%u\n",
                  (version & RENCODE_IF_MAJOR_VERSION_MASK) >> RENCODE_IF_MAJOR_VERSION_SHIFT,
                  (version & RENCODE_IF_MINOR_VERSION_MASK) >> RENCODE_IF_MINOR_VERSION_SHIFT);
-         print_vcn_addr(f, ib, "    sw context");
+         print_vcn_addr(f, ib, true, "    sw context");
          if (ib->vcn_version < VCN_3_0_0) {
             uint32_t engine = ac_ib_get(ib);
             fprintf(f, "    engine type = %s\n",
@@ -1327,13 +1669,38 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          fprintf(f, "    slice control mode = %s\n",
                  mode == RENCODE_HEVC_SLICE_CONTROL_MODE_FIXED_CTBS ? "FIXED CTBS" :
                  mode == RENCODE_HEVC_SLICE_CONTROL_MODE_FIXED_BITS ? "FIXED BITS" :
+                 mode == RENCODE_HEVC_SLICE_CONTROL_MODE_VARIABLE_CTBS ? "VARIABLE CTBS" :
                  "???");
          uint32_t per_slice = ac_ib_get(ib);
-         fprintf(f, "    num %s per slice = %u\n",
-                 mode == RENCODE_HEVC_SLICE_CONTROL_MODE_FIXED_CTBS ? "ctbs" : "bits", per_slice);
+         if (mode != RENCODE_HEVC_SLICE_CONTROL_MODE_VARIABLE_CTBS)
+            fprintf(f, "    num %s per slice = %u\n",
+                    mode == RENCODE_HEVC_SLICE_CONTROL_MODE_FIXED_CTBS ? "ctbs" : "bits", per_slice);
+         else
+            fprintf(f, "    num ctbs/bits per slice (ignored)\n");
          uint32_t per_slice_segment = ac_ib_get(ib);
-         fprintf(f, "    num %s per slice segment = %u\n",
-                 mode == RENCODE_HEVC_SLICE_CONTROL_MODE_FIXED_CTBS ? "ctbs" : "bits", per_slice_segment);
+         if (mode != RENCODE_HEVC_SLICE_CONTROL_MODE_VARIABLE_CTBS)
+            fprintf(f, "    num %s per slice segment = %u\n",
+                    mode == RENCODE_HEVC_SLICE_CONTROL_MODE_FIXED_CTBS ? "ctbs" : "bits", per_slice_segment);
+         else
+            fprintf(f, "    num ctbs/bits per slice segment (ignored)\n");
+      } else if (op == cmd.slice_info_hevc) {
+         fprintf(f, "%sHEVC_SLICE_INFO%s\n", O_COLOR_GREEN, O_COLOR_RESET);
+         uint32_t num_slice_segments = ac_ib_get(ib);
+         fprintf(f, "    num_slice_segments = %u\n", num_slice_segments);
+         uint32_t i;
+         for (i = 0; i < num_slice_segments; i++) {
+            uint32_t num_ctbs_per_segment = ac_ib_get(ib);
+            fprintf(f, "    num_ctbs_per_segment[%u] = %u\n", i, num_ctbs_per_segment);
+            uint32_t is_independent = ac_ib_get(ib);
+            fprintf(f, "    is_independent[%u] = %u\n", i, is_independent);
+         }
+         while (i < RENCODE_MAX_NUM_SLICES && ib->cur_dw < start_dw + size / 4) {
+            ac_ib_get(ib);
+            fprintf(f, "    num_ctbs_per_segment[%u] (ignored)\n", i);
+            ac_ib_get(ib);
+            fprintf(f, "    is_independent[%u] (ignored)\n", i);
+            i++;
+         }
       } else if (op == cmd.spec_misc_hevc) {
          fprintf(f, "%sHEVC_SPEC_MISC%s\n", O_COLOR_GREEN, O_COLOR_RESET);
          uint32_t min_coding_block_size = ac_ib_get(ib);
@@ -1386,10 +1753,28 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          fprintf(f, "    slice control mode = %s\n",
                  mode == RENCODE_H264_SLICE_CONTROL_MODE_FIXED_MBS ? "FIXED MBS" :
                  mode == RENCODE_H264_SLICE_CONTROL_MODE_FIXED_BITS ? "FIXED BITS" :
+                 mode == RENCODE_H264_SLICE_CONTROL_MODE_VARIABLE_MBS ? "VARIABLE MBS" :
                  "???");
          uint32_t per_slice = ac_ib_get(ib);
-         fprintf(f, "    num %s per slice = %u\n",
-                 mode == RENCODE_H264_SLICE_CONTROL_MODE_FIXED_MBS ? "mbs" : "bits", per_slice);
+         if (mode != RENCODE_H264_SLICE_CONTROL_MODE_VARIABLE_MBS)
+            fprintf(f, "    num %s per slice = %u\n",
+                    mode == RENCODE_H264_SLICE_CONTROL_MODE_FIXED_MBS ? "mbs" : "bits", per_slice);
+         else
+            fprintf(f, "    num mbs/bits per slice (ignored) \n");
+      } else if (op == cmd.slice_info_h264) {
+         fprintf(f, "%sH264_SLICE_INFO%s\n", O_COLOR_GREEN, O_COLOR_RESET);
+         uint32_t num_slices = ac_ib_get(ib);
+         fprintf(f, "    num_slices = %u\n", num_slices);
+         uint32_t i;
+         for (i = 0; i < num_slices; i++) {
+            uint32_t num_mbs_per_slice = ac_ib_get(ib);
+            fprintf(f, "    num_mbs_per_slice[%u] = %u\n", i, num_mbs_per_slice);
+         }
+         while (i < RENCODE_MAX_NUM_SLICES && ib->cur_dw < start_dw + size / 4) {
+            ac_ib_get(ib);
+            fprintf(f, "    num_mbs_per_slice[%u] (ignored)\n", i);
+            i++;
+         }
       } else if (op == cmd.spec_misc_h264) {
          fprintf(f, "%sH264_SPEC_MISC%s\n", O_COLOR_GREEN, O_COLOR_RESET);
          uint32_t constrained_intra = ac_ib_get(ib);
@@ -1576,8 +1961,8 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          fprintf(f, "    picture type = %s\n", vcn_picture_type(pic_type));
          uint32_t bs_size = ac_ib_get(ib);
          fprintf(f, "    allowed max bitstream size = %u\n", bs_size);
-         print_vcn_addr(f, ib, "    input picture luma");
-         print_vcn_addr(f, ib, "    input picture chroma");
+         print_vcn_addr(f, ib, true, "    input picture luma");
+         print_vcn_addr(f, ib, true, "    input picture chroma");
          uint32_t luma_pitch = ac_ib_get(ib);
          fprintf(f, "    input picture luma pitch = %u\n", luma_pitch);
          uint32_t chroma_pitch = ac_ib_get(ib);
@@ -1609,13 +1994,13 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          fprintf(f, "    region size = %u\n", region_size);
       } else if (op == cmd.ctx) {
          fprintf(f, "%sENCODE_CONTEXT_BUFFER%s\n", O_COLOR_GREEN, O_COLOR_RESET);
-         print_vcn_addr(f, ib, "    encode context buffer");
+         print_vcn_addr(f, ib, true, "    encode context buffer");
          if (ib->vcn_version < VCN_5_0_0) {
             uint32_t swizzle = ac_ib_get(ib);
             fprintf(f, "    swizzle mode = %s\n",
                     swizzle == RENCODE_REC_SWIZZLE_MODE_LINEAR ? "LINEAR" :
-                    (ib->vcn_version < VCN_5_0_0 && swizzle == RENCODE_REC_SWIZZLE_MODE_256B_D) ||
-                    (ib->vcn_version >= VCN_5_0_0 && swizzle == RENCODE_REC_SWIZZLE_MODE_256B_D_VCN5) ? "256B D" :
+                    (ib->gfx_level < GFX12 && swizzle == RENCODE_REC_SWIZZLE_MODE_256B_D) ||
+                    (ib->gfx_level >= GFX12 && swizzle == RENCODE_REC_SWIZZLE_MODE_256B_D_GFX12) ? "256B D" :
                     swizzle == RENCODE_REC_SWIZZLE_MODE_256B_S ? "256B S" :
                     swizzle == RENCODE_REC_SWIZZLE_MODE_8x8_1D_THIN_12_24BPP ? "8x8 1D THIN 12 24BPP" :
                     "???");
@@ -1672,7 +2057,7 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
                  mode == RENCODE_VIDEO_BITSTREAM_BUFFER_MODE_LINEAR ? "LINEAR" :
                  mode == RENCODE_VIDEO_BITSTREAM_BUFFER_MODE_CIRCULAR ? "CIRCULAR" :
                  "???");
-         print_vcn_addr(f, ib, "    video bitstream buffer");
+         print_vcn_addr(f, ib, true, "    video bitstream buffer");
          uint32_t size = ac_ib_get(ib);
          fprintf(f, "    video bitstream buffer size = %u\n", size);
          uint32_t offset = ac_ib_get(ib);
@@ -1684,7 +2069,7 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
                  mode == RENCODE_FEEDBACK_BUFFER_MODE_LINEAR ? "LINEAR" :
                  mode == RENCODE_FEEDBACK_BUFFER_MODE_CIRCULAR ? "CIRCULAR" :
                  "???");
-         print_vcn_addr(f, ib, "    feedback buffer");
+         print_vcn_addr(f, ib, true, "    feedback buffer");
          uint32_t size = ac_ib_get(ib);
          fprintf(f, "    feedback buffer size = %u\n", size);
          uint32_t data_size = ac_ib_get(ib);
@@ -1697,14 +2082,14 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
                  type == RENCODE_QP_MAP_TYPE_DELTA ? "DELTA" :
                  type == RENCODE_QP_MAP_TYPE_MAP_PA ? "PA" :
                  "???");
-         print_vcn_addr(f, ib, "    QP map buffer");
+         print_vcn_addr(f, ib, true, "    QP map buffer");
          uint32_t pitch = ac_ib_get(ib);
          fprintf(f, "    QP map buffer pitch = %u\n", pitch);
       } else if (op == cmd.enc_statistics) {
          fprintf(f, "%sENCODE_STATISTICS%s\n", O_COLOR_GREEN, O_COLOR_RESET);
          uint32_t type = ac_ib_get(ib);
          fprintf(f, "    encode statistics type = %u\n", type);
-         print_vcn_addr(f, ib, "    encode statistics buffer");
+         print_vcn_addr(f, ib, true, "    encode statistics buffer");
       } else if (op == cmd.enc_latency) {
          fprintf(f, "%sENCODE_LATENCY%s\n", O_COLOR_GREEN, O_COLOR_RESET);
          uint32_t latency = ac_ib_get(ib);
@@ -1753,10 +2138,7 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          fprintf(f, "%sCDF_DEFAULT_TABLE_BUFFER%s\n", O_COLOR_GREEN, O_COLOR_RESET);
          uint32_t use_default = ac_ib_get(ib);
          fprintf(f, "    use cdf default = %u\n", use_default);
-         ac_ib_get(ib);
-         fprintf(f, "    cdf default buffer VA low\n");
-         ac_ib_get(ib);
-         fprintf(f, "    cdf default buffer VA high\n");
+         print_vcn_addr(f, ib, ib->vcn_version >= VCN_5_0_0, "    cdf default table buffer");
       } else if (op == cmd.spec_misc_av1) {
          fprintf(f, "%sAV1_SPEC_MISC%s\n", O_COLOR_GREEN, O_COLOR_RESET);
          uint32_t palette = ac_ib_get(ib);
@@ -1869,7 +2251,7 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
          }
       } else if (op == cmd.metadata) {
          fprintf(f, "%sMETADATA_BUFFER%s\n", O_COLOR_GREEN, O_COLOR_RESET);
-         print_vcn_addr(f, ib, "    metadata buffer");
+         print_vcn_addr(f, ib, true, "    metadata buffer");
          uint32_t search_offset = ac_ib_get(ib);
          fprintf(f, "    2-pass search center map offset = %u\n", search_offset);
       } else if (op == cmd.enc_params_hevc) {
@@ -1933,6 +2315,7 @@ static void parse_vcn_enc_ib(FILE *f, struct ac_ib_parser *ib)
 static void parse_vcn_ib(FILE *f, struct ac_ib_parser *ib)
 {
    uint32_t engine = 0;
+   uint32_t total_size = 0;
 
    if (ib->vcn_version >= VCN_4_0_0) {
       while (ib->cur_dw < ib->num_dw) {
@@ -1949,7 +2332,7 @@ static void parse_vcn_ib(FILE *f, struct ac_ib_parser *ib)
                     engine == RADEON_VCN_ENGINE_TYPE_ENCODE ? "ENCODE" :
                     engine == RADEON_VCN_ENGINE_TYPE_DECODE ? "DECODE" :
                     "???");
-            uint32_t total_size = ac_ib_get(ib);
+            total_size = ac_ib_get(ib);
             fprintf(f, "    size of all packages = %u\n", total_size);
             break;
          }
@@ -1962,10 +2345,31 @@ static void parse_vcn_ib(FILE *f, struct ac_ib_parser *ib)
             break;
          }
          case RADEON_VCN_IB_COMMON_OP_WRITEMEMORY: {
-            fprintf(f, "%sOP_WRITEMEMORY%s\n", O_COLOR_CYAN, O_COLOR_RESET);
-            print_vcn_addr(f, ib, "    dest");
+            fprintf(f, "%sWRITEMEMORY%s\n", O_COLOR_CYAN, O_COLOR_RESET);
+            print_vcn_addr(f, ib, false, "    dest");
             uint32_t data = ac_ib_get(ib);
             fprintf(f, "    data = %u\n", data);
+            break;
+         }
+         case RADEON_VCN_IB_COMMON_OP_TIMESTAMP: {
+            fprintf(f, "%sTIMESTAMP%s\n", O_COLOR_CYAN, O_COLOR_RESET);
+            print_vcn_addr(f, ib, false, "    dest");
+            break;
+         }
+         case RADEON_VCN_IB_COMMON_OP_RESOLVEINPUTPARAMLAYOUT: {
+            fprintf(f, "%sRESOLVEINPUTPARAMLAYOUT%s\n", O_COLOR_CYAN, O_COLOR_RESET);
+            uint32_t type = ac_ib_get(ib);
+            fprintf(f, "    map type = %u\n", type);
+            uint32_t width = ac_ib_get(ib);
+            fprintf(f, "    map width = %u\n", width);
+            uint32_t height = ac_ib_get(ib);
+            fprintf(f, "    map height = %u\n", height);
+            print_vcn_addr(f, ib, false, "    input");
+            uint32_t pitch = ac_ib_get(ib);
+            fprintf(f, "    input pitch = %u\n", pitch);
+            uint32_t swizzle = ac_ib_get(ib);
+            fprintf(f, "    input swizzle = %u\n", swizzle);
+            print_vcn_addr(f, ib, false, "    output");
             break;
          }
          case RDECODE_IB_PARAM_DECODE_BUFFER: {
@@ -2049,22 +2453,23 @@ static void parse_vcn_ib(FILE *f, struct ac_ib_parser *ib)
                   break;
                }
             }
-            print_vcn_addr(f, ib, "    msg buffer");
-            print_vcn_addr(f, ib, "    dpb buffer");
-            print_vcn_addr(f, ib, "    target buffer");
-            print_vcn_addr(f, ib, "    session context buffer");
-            print_vcn_addr(f, ib, "    bitstream buffer");
-            print_vcn_addr(f, ib, "    context buffer");
-            print_vcn_addr(f, ib, "    feedback buffer");
-            print_vcn_addr(f, ib, "    luma hist buffer");
-            print_vcn_addr(f, ib, "    prob tbl buffer");
-            print_vcn_addr(f, ib, "    sclr coeff buffer");
-            print_vcn_addr(f, ib, "    it sclr table buffer");
-            print_vcn_addr(f, ib, "    sclr target buffer");
-            print_vcn_addr(f, ib, "    reserved size info buffer");
-            print_vcn_addr(f, ib, "    mpeg2 pic param buffer");
-            print_vcn_addr(f, ib, "    mpeg2 mb control buffer");
-            print_vcn_addr(f, ib, "    mpeg2 idct coeff buffer");
+            uint64_t msg_buffer_va = print_vcn_addr(f, ib, true, "    msg buffer");
+            print_vcn_msg_buffer_contents(f, ib, msg_buffer_va);
+            print_vcn_addr(f, ib, true, "    dpb buffer");
+            print_vcn_addr(f, ib, true, "    target buffer");
+            print_vcn_addr(f, ib, true, "    session context buffer");
+            print_vcn_addr(f, ib, true, "    bitstream buffer");
+            print_vcn_addr(f, ib, true, "    context buffer");
+            print_vcn_addr(f, ib, true, "    feedback buffer");
+            print_vcn_addr(f, ib, true, "    luma hist buffer");
+            print_vcn_addr(f, ib, true, "    prob tbl buffer");
+            print_vcn_addr(f, ib, true, "    sclr coeff buffer");
+            print_vcn_addr(f, ib, true, "    it sclr table buffer");
+            print_vcn_addr(f, ib, true, "    sclr target buffer");
+            print_vcn_addr(f, ib, true, "    reserved size info buffer");
+            print_vcn_addr(f, ib, true, "    mpeg2 pic param buffer");
+            print_vcn_addr(f, ib, true, "    mpeg2 mb control buffer");
+            print_vcn_addr(f, ib, true, "    mpeg2 idct coeff buffer");
             break;
          }
          case RDECODE_IB_PARAM_DYNAMIC_REFLIST_BUFFER: {
@@ -2082,21 +2487,21 @@ static void parse_vcn_ib(FILE *f, struct ac_ib_parser *ib)
                fprintf(f, "    ref[%u] Y aligned height = %u\n", i, y_aligned_height);
                uint32_t y_aligned_size = ac_ib_get(ib);
                fprintf(f, "    ref[%u] Y aligned size = %u\n", i, y_aligned_size);
-               print_vcn_addr(f, ib, "    ref[%u] Y buffer", i);
+               print_vcn_addr(f, ib, true, "    ref[%u] Y buffer", i);
                uint32_t uv_pitch = ac_ib_get(ib);
                fprintf(f, "    ref[%u] UV pitch = %u\n", i, uv_pitch);
                uint32_t uv_aligned_height = ac_ib_get(ib);
                fprintf(f, "    ref[%u] UV aligned height = %u\n", i, uv_aligned_height);
                uint32_t uv_aligned_size = ac_ib_get(ib);
                fprintf(f, "    ref[%u] UV aligned size = %u\n", i, uv_aligned_size);
-               print_vcn_addr(f, ib, "    ref[%u] UV buffer", i);
+               print_vcn_addr(f, ib, true, "    ref[%u] UV buffer", i);
                uint32_t v_pitch = ac_ib_get(ib);
                fprintf(f, "    ref[%u] V pitch = %u\n", i, v_pitch);
                uint32_t v_aligned_height = ac_ib_get(ib);
                fprintf(f, "    ref[%u] V aligned height = %u\n", i, v_aligned_height);
                uint32_t v_aligned_size = ac_ib_get(ib);
                fprintf(f, "    ref[%u] V aligned size = %u\n", i, v_aligned_size);
-               print_vcn_addr(f, ib, "    ref[%u] V buffer", i);
+               print_vcn_addr(f, ib, true, "    ref[%u] V buffer", i);
             }
             break;
          }
@@ -2104,18 +2509,18 @@ static void parse_vcn_ib(FILE *f, struct ac_ib_parser *ib)
             fprintf(f, "%sUNRECOGNIZED%s\n", O_COLOR_RED, O_COLOR_RESET);
             break;
          }
-         print_vcn_unrecognized_params(f, ib, start_dw, size);
-
          if (engine == RADEON_VCN_ENGINE_TYPE_ENCODE) {
-            parse_vcn_enc_ib(f, ib);
-            return;
+            engine = 0;
+            /* total_size also includes signature size (4 dwords) */
+            parse_vcn_enc_ib(f, ib, (total_size / 4) - 4);
+         } else {
+            print_vcn_unrecognized_params(f, ib, start_dw, size);
          }
       }
-   } else {
-      if (ib->ip_type == AMD_IP_VCN_ENC) {
-         parse_vcn_enc_ib(f, ib);
-         return;
-      }
+   } else if (ib->ip_type == AMD_IP_VCN_DEC) {
+      parse_vcn_dec_ib(f, ib);
+   } else if (ib->ip_type == AMD_IP_VCN_ENC) {
+      parse_vcn_enc_ib(f, ib, 0);
    }
 }
 

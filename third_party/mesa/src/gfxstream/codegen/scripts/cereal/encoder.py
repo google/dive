@@ -73,7 +73,6 @@ ENCODER_CUSTOM_RESOURCE_POSTPROCESS = [
     "vkCreateDevice",
     "vkMapMemoryIntoAddressSpaceGOOGLE",
     "vkGetPhysicalDeviceFeatures2",
-    "vkGetPhysicalDeviceProperties2",
     "vkCreateDescriptorUpdateTemplate",
     "vkGetPhysicalDeviceExternalSemaphoreProperties",
 ]

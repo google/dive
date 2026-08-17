@@ -197,6 +197,7 @@ _mesa_init_gl_program(struct gl_program *prog, mesa_shader_stage stage,
    prog->Format = GL_PROGRAM_FORMAT_ASCII_ARB;
    prog->info.stage = stage;
    prog->info.use_legacy_math_rules = is_arb_asm;
+   prog->is_arb_asm = is_arb_asm;
 
    /* Uniforms that lack an initializer in the shader code have an initial
     * value of zero.  This includes sampler uniforms.
@@ -259,22 +260,12 @@ _mesa_delete_program(struct gl_context *ctx, struct gl_program *prog)
       _mesa_free_parameter_list(prog->Parameters);
    }
 
-   if (prog->nir) {
-      ralloc_free(prog->nir);
-   }
-
-   if (prog->sh.BindlessSamplers) {
+   ralloc_free(prog->nir);
+   if (!prog->is_arb_asm) {
       ralloc_free(prog->sh.BindlessSamplers);
-   }
-
-   if (prog->sh.BindlessImages) {
       ralloc_free(prog->sh.BindlessImages);
    }
-
-   if (prog->driver_cache_blob) {
-      ralloc_free(prog->driver_cache_blob);
-   }
-
+   ralloc_free(prog->driver_cache_blob);
    ralloc_free(prog);
 }
 
@@ -327,7 +318,8 @@ _mesa_reference_program_(struct gl_context *ctx,
 
       if (p_atomic_dec_zero(&oldProg->RefCount)) {
          assert(ctx);
-         _mesa_reference_shader_program_data(&oldProg->sh.data, NULL);
+         if (!oldProg->is_arb_asm)
+            _mesa_reference_shader_program_data(&oldProg->sh.data, NULL);
          _mesa_delete_program(ctx, oldProg);
       }
 
@@ -386,6 +378,7 @@ gl_external_samplers(const struct gl_program *prog)
    GLbitfield external_samplers = 0;
    GLbitfield mask = prog->SamplersUsed;
 
+   assert(!prog->is_arb_asm);
    while (mask) {
       int idx = u_bit_scan(&mask);
       if (prog->sh.SamplerTargets[idx] == TEXTURE_EXTERNAL_INDEX)

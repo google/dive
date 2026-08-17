@@ -23,8 +23,7 @@ option(
   type : 'combo',
   value : 'auto',
   choices : [
-    'auto', 'x11', 'wayland', 'haiku', 'android', 'windows',
-    'surfaceless', 'drm',
+    'auto', 'x11', 'haiku', 'android', 'surfaceless',
   ],
   description : 'the window system EGL assumes for EGL_DEFAULT_DISPLAY',
 )
@@ -86,7 +85,7 @@ option(
   value : ['auto'],
   choices : [
     'all', 'auto',
-    'asahi', 'crocus', 'd3d12', 'etnaviv', 'freedreno', 'i915', 'iris',
+    'asahi', 'crocus', 'd3d12', 'ethosu', 'etnaviv', 'freedreno', 'i915', 'iris',
     'lima', 'llvmpipe', 'nouveau', 'panfrost', 'r300', 'r600', 'radeonsi',
     'rocket', 'softpipe', 'svga', 'tegra', 'v3d', 'vc4', 'virgl', 'zink',
   ],
@@ -147,7 +146,8 @@ option(
 option(
   'gallium-rusticl-enable-drivers',
   type : 'array',
-  value : ['auto', 'asahi', 'freedreno', 'radeonsi'],
+  value : ['auto'],
+  choices : ['auto', 'asahi', 'freedreno', 'panfrost', 'radeonsi'],
   description : 'List of gallium drivers for which rusticl will be enabled ' +
                 'by default',
 )
@@ -209,15 +209,15 @@ option(
   choices : ['auto', 'amd', 'broadcom', 'freedreno', 'intel', 'intel_hasvk',
              'panfrost', 'swrast', 'virtio', 'imagination',
              'microsoft-experimental', 'nouveau', 'asahi', 'gfxstream',
-             'all'],
+             'kosmickrisp', 'all'],
   description : 'List of vulkan drivers to build. If this is set to auto ' +
                 'all drivers applicable to the target OS/architecture ' +
                 'will be built'
 )
 
-# Note that currently turnip supports msm and kgsl, while the gallium driver
-# support msm and virtio.  This is a temporary situation with virtio support
-# for turnip and kgsl support for gallium planned/in-progress.
+# Note that the freedreno gallium driver doesn't support KGSL.
+# On those systems, zink with Turnip should be used instead.
+# WSL is only supported for the replay tool.
 option(
   'freedreno-kmds',
   type : 'array',
@@ -287,10 +287,31 @@ option(
 )
 
 option(
+  'vulkan-manifest-per-architecture',
+  type : 'boolean',
+  value : true,
+  description : 'If true, Vulkan ICDs have a separate JSON manifest per ' +
+                'architecture, for example lvp_icd.x86_64.json. ' +
+                '(Recommended for non-default ${prefix}.) ' +
+                'If false, all architectures share a single JSON manifest, ' +
+                'for example lvp_icd.json, referencing the library by its ' +
+                'basename. ' +
+                '(Recommended for Unix OS distros installing into /usr.)'
+)
+
+option(
   'moltenvk-dir',
   type : 'string',
   value : '',
   description : 'Location of the MoltenVk SDK. Default: '
+)
+
+option(
+  'vulkan-loader-rpath',
+  type : 'string',
+  value : '/usr/local/lib',
+  description : 'The path where the vulkan loader (libvulkan.1.dylib) exists at runtime.' +
+                'Defaults to /usr/local/lib since that is where the Vulkan SDK installs it to by default.'
 )
 
 option(
@@ -536,9 +557,9 @@ option(
   'tools',
   type : 'array',
   value : [],
-  choices : ['drm-shim', 'etnaviv', 'freedreno', 'glsl', 'intel', 'intel-ui',
-             'nir', 'nouveau', 'lima', 'panfrost', 'asahi', 'imagination',
-             'zink', 'all', 'dlclose-skip'],
+  choices : ['amd', 'asahi', 'dlclose-skip', 'drm-shim', 'etnaviv', 'freedreno',  
+             'gamma', 'glsl', 'imagination', 'intel', 'intel-ui', 'lima', 'nir',
+             'nouveau', 'panfrost', 'zink', 'all'],
   description : 'List of tools to build. (Note: `intel-ui` selects `intel`)',
 )
 
@@ -581,8 +602,8 @@ option(
   type : 'integer',
   min : 25,
   max : 10000,
-  value : 34,
-  description : 'Android Platform SDK version. Default: Android14 version.'
+  value : 35,
+  description : 'Android Platform SDK version. Default: Android15 version.'
 )
 
 option(
@@ -705,7 +726,8 @@ option(
   type : 'array',
   value : ['all_free'],
   choices: [
-    'all', 'all_free', 'vc1dec', 'h264dec', 'h264enc', 'h265dec', 'h265enc', 'av1dec', 'av1enc', 'vp9dec'
+    'all', 'all_free', 'vc1dec', 'h264dec', 'h264enc', 'h265dec', 'h265enc',
+    'av1dec', 'av1enc', 'vp9dec', 'mpeg12dec', 'jpegdec'
   ],
   description : 'List of codecs to build support for. ' +
                 'Distros might want to consult their legal department before ' +
@@ -738,7 +760,29 @@ option(
 )
 
 option(
+  'radv-u_trace',
+  type : 'boolean',
+  value : false,
+  description : 'Enable u_trace profiling features.'
+)
+
+option(
   'radeonsi-build-id',
+  type : 'string',
+  value : '',
+  description : 'Override build id for shader cache keys (hex string). ' +
+                'Can be extracted with readelf -x .note.gnu.build-id'
+)
+
+option(
+  'tu-build-id',
+  type : 'string',
+  value : '',
+  description : 'Override build id for shader cache keys (hex string). '
+)
+
+option(
+  'nvk-build-id',
   type : 'string',
   value : '',
   description : 'Override build id for shader cache keys (hex string). ' +
@@ -833,7 +877,7 @@ option(
   type : 'array',
   value : ['perfetto'],
   choices : [
-    'libdrm', 'perfetto',
+    'libdrm', 'libva', 'perfetto',
   ],
   description : 'Allows the fallback mechanism if the dependency is not available on the system, or too old.'
 )
@@ -849,4 +893,25 @@ option(
   'spirv-tools',
   type : 'feature',
   description : 'Use SPIRV-Tools for dumping SPIR-V for debugging purposes (required by CLC)'
+)
+
+option(
+  'allow-broken-lto',
+  type : 'boolean',
+  value : false,
+  description : 'Manual override switch to enable LTO, which is unsupported due to being broken. WARNING: This option may break your driver randomly!'
+)
+
+option(
+  'intel-virtio-experimental',
+  type : 'boolean',
+  value : false,
+  description : 'use experimental virtio backend for intel driver',
+)
+
+option(
+  'panfrost-rust',
+  type : 'boolean',
+  value : false,
+  description : 'Build panfrost Rust components.'
 )

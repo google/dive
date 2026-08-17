@@ -11,6 +11,7 @@ libpowervr_common = static_library(
     'pvr_dump.c',
     'pvr_dump_info.c',
     'pvr_util.c',
+    'pvr_ycbcr.c',
     sha1_h,
   ],
   include_directories : [

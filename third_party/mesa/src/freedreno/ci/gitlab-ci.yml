@@ -1,6 +1,17 @@
 include:
   - local: 'src/freedreno/ci/gitlab-ci-inc.yml'
 
+a200-gl:
+  extends:
+    - .ci-tron-arm32-test-gl
+    - .a200
+    - .lumag-freedreno-manual-rules
+  timeout: 180m
+  parallel: 3
+  variables:
+    CI_TRON_TIMEOUT__OVERALL__MINUTES: 180
+    DEQP_SUITE: freedreno-a200
+
 a306-gl:
   extends:
     - .lava-arm64-test-gl
@@ -103,30 +114,18 @@ a618-angle:
 a618-vk:
   extends:
     - .lava-arm64-test-vk
-    - .lava-sc7180-trogdor-kingoftown:arm64
+    - .lava-sc7180-trogdor-wormdingler-rev1-boe:arm64
     - .collabora-turnip-rules
-  parallel: 8
+  parallel: 11
   variables:
     DEQP_SUITE: freedreno-a618-vk
     FLAKES_CHANNEL: "#freedreno-ci"
-    MESA_VK_IGNORE_CONFORMANCE_WARNING: 1
-
-a618-vk-full:
-  extends:
-    - a618-vk
-    - .collabora-turnip-manual-rules
-  # We use a longer timeout to keep the parallel down so that we don't lock up
-  # too many runners for a long time when a dev is trying out at full VK status.
-  timeout: 2h
-  parallel: 3
-  variables:
-    DEQP_SUITE: freedreno-a618-vk-full
 
 a618-vk-asan:
   extends:
     - .lava-arm64-test-asan-vk
     - .lava-sc7180-trogdor-kingoftown:arm64
-    - .collabora-turnip-manual-rules
+    - .collabora-turnip-rules
   timeout: 2h
   variables:
     DEQP_SUITE: freedreno-a618-vk-asan
@@ -137,7 +136,7 @@ a618-gles-asan:
   extends:
     - .lava-arm64-test-asan-gl
     - .lava-sc7180-trogdor-kingoftown:arm64
-    - .collabora-turnip-manual-rules
+    - .collabora-freedreno-manual-rules
   variables:
     DEQP_SUITE: freedreno-a618-gles-asan
     FLAKES_CHANNEL: "#freedreno-ci"
@@ -148,7 +147,7 @@ a618-gles-asan:
 a618-gl:
   extends:
     - .lava-arm64-test-gl
-    - .lava-sc7180-trogdor-lazor-limozeen:arm64
+    - .lava-sc7180-trogdor-kingoftown:arm64
     - .collabora-freedreno-rules
   variables:
     DEQP_SUITE: freedreno-a618
@@ -180,7 +179,7 @@ a618-skqp:
 a618-piglit:
   extends:
     - .lava-arm64-test-gl
-    - .lava-sc7180-trogdor-lazor-limozeen:arm64
+    - .lava-sc7180-trogdor-kingoftown:arm64
     - .test-piglit
     # Note that piglit has GL+VK integration testing.
     - .collabora-freedreno-turnip-rules
@@ -237,6 +236,29 @@ a618-traces-performance:
     # a618 tag starts with cbg-1 (not cbg-0) for some reason
     LAVA_TAGS: "cbg-1"
 
+a618-android:
+  extends:
+    - .lava-arm64-test-android
+    - .lava-sc7180-trogdor-kingoftown:arm64
+    - .collabora-freedreno-turnip-rules
+    - .test-angle
+  variables:
+    CUTTLEFISH_GPU_MODE: drm_nctx_guest_angle
+    DEQP_SUITE: tu-android
+    FDO_CI_CONCURRENT: 6  # We get OOMkills if we go too wide since VKCTS 1.4.4.0
+
+a618-android-cts:
+  extends:
+    - .lava-arm64-test-android
+    - .lava-sc7180-trogdor-kingoftown:arm64
+    - .collabora-turnip-manual-rules
+    - .test-android-cts
+    - .test-angle
+  timeout: 2h
+  variables:
+    CUTTLEFISH_GPU_MODE: drm_nctx_guest_angle
+    DEVICE_HANGING_TIMEOUT_SEC: 5400  # Android CTS might not print anything for minutes
+
 a660-angle:
   extends:
     - .lava-arm64-test-gl
@@ -252,11 +274,11 @@ a660-gl-cl:
     - .lava-arm64-test-gl
     - .lava-sm8350-hdk:arm64
     - .test-piglit
-    - .collabora-freedreno-manual-rules
+    - .collabora-freedreno-rules
   rules:
-    - !reference [.collabora-freedreno-manual-rules, rules]
-    - !reference [.rusticl-manual-rules, rules]
-  parallel: 3
+    - !reference [.collabora-freedreno-rules, rules]
+    - !reference [.rusticl-rules, rules]
+  parallel: 2
   variables:
     DEQP_SUITE: freedreno-a660
     HWCI_START_WESTON: 1
@@ -270,7 +292,6 @@ a660-vk:
   variables:
     DEQP_SUITE: freedreno-a660-vk
     FLAKES_CHANNEL: "#freedreno-ci"
-    DEQP_FRACTION: 6
 
 a660-vk-full:
   extends:
@@ -281,6 +302,19 @@ a660-vk-full:
   variables:
     DEQP_SUITE: freedreno-a660-vk-full
     DEQP_FRACTION: 1
+
+a660-vk-traces-restricted:
+  extends:
+    - .lava-arm64-test-vk
+    - .collabora-turnip-restricted-rules
+    - .lava-sm8350-hdk:arm64
+    - .traces-test
+    - .test-wine
+  variables:
+    REPLAY_CONFIG: traces-freedreno-restricted.toml
+    ANGLE_TRACE_FILES_TAG: "2025-03-28"
+    HWCI_START_WESTON: 1
+  allow_failure: true
 
 a750-angle:
   extends:
@@ -311,22 +345,34 @@ a750-gl-cl:
 
 a750-vk:
   extends:
+    - .test-vkd3d-proton # must come before other extends, since we don't want its HWCI_TEST_SCRIPT
     - .ci-tron-arm64-test-vk
     - .a750-kws
     - .valve-turnip-rules
-  parallel: 4
-  timeout: 18m  # base runtime is 12.5, 11min of testing
+  parallel: 3
+  timeout: 18m  # base runtime is 11 minutes, 9.5 min of testing
   variables:
     CI_TRON_TIMEOUT__OVERALL__MINUTES: 16
     DEQP_SUITE: freedreno-a750-vk
+    DEQP_FRACTION: 2
 
-a750-vkd3d:
+# A750 VK traces are disabled because they time out -- we have a lot of:
+# [  465.720843] adreno 3d00000.gpu: CP | protected mode error | WRITE | addr=0x0000930A | status=0x0060930A
+# [  465.982685] adreno 3d00000.gpu: [drm:a6xx_irq] *ERROR* gpu fault ring 0 fence ffffff25 status 00800005 rb 0072/009e ib1 0000000101655000/0043 ib2 0000000100404900/0000
+# [  465.998171] msm_dpu ae01000.display-controller: [drm:recover_worker] *ERROR* 67.5.20.1: hangcheck recover!
+# [  466.008147] msm_dpu ae01000.display-controller: [drm:recover_worker] *ERROR* 67.5.20.1: offending task: weston (weston --config=/install/common/weston.ini --socket=wayland-0 --log /builds/anholt/mesa/results/weston.log --logger-scopes=log,xwm-wm-x11 --renderer=gl)
+# and maybe that's the problem -- let's try this (and rebalance core VK coverage) once we figure it out.
+.a750-vk-restricted-traces:
   extends:
     - .ci-tron-arm64-test-vk
-    - .a750-mupuf
-    - .valve-turnip-manual-rules
-    - .test-vkd3d-proton
-  timeout: 15m  # base runtime 3min
+    - .a750-kws
+    - .valve-turnip-restricted-rules
+    - .traces-test
+    - .test-wine
+  timeout: 20m
   variables:
-    CI_TRON_TIMEOUT__OVERALL__MINUTES: 12
-    FDO_CI_CONCURRENT: 1
+    MESA_LOADER_DRIVER_OVERRIDE: "zink"
+    CI_TRON_TIMEOUT__OVERALL__MINUTES: 16
+    REPLAY_CONFIG: traces-freedreno-restricted.toml
+    HWCI_START_WESTON: 1
+  allow_failure: true

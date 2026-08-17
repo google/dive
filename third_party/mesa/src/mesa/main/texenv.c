@@ -202,7 +202,7 @@ set_combiner_source(struct gl_context *ctx,
       return false;
    }
 
-   if ((term == 3) && (ctx->API != API_OPENGL_COMPAT
+   if ((term == 3) && (!_mesa_is_desktop_gl_compat(ctx)
                        || !ctx->Extensions.NV_texture_env_combine4)) {
       TE_ERROR(GL_INVALID_ENUM, "glTexEnv(pname=%s)", pname);
       return false;
@@ -290,7 +290,7 @@ set_combiner_operand(struct gl_context *ctx,
       return false;
    }
 
-   if ((term == 3) && (ctx->API != API_OPENGL_COMPAT
+   if ((term == 3) && (!_mesa_is_desktop_gl_compat(ctx)
                        || !ctx->Extensions.NV_texture_env_combine4)) {
       TE_ERROR(GL_INVALID_ENUM, "glTexEnv(pname=%s)", pname);
       return false;
@@ -493,13 +493,6 @@ _mesa_texenvfv_indexed( struct gl_context* ctx, GLuint texunit, GLenum target,
                   _mesa_enum_to_string(target));
       return;
    }
-
-   if (MESA_VERBOSE&(VERBOSE_API|VERBOSE_TEXTURE))
-      _mesa_debug(ctx, "glTexEnv %s %s %.1f(%s) ...\n",
-                  _mesa_enum_to_string(target),
-                  _mesa_enum_to_string(pname),
-                  *param,
-                  _mesa_enum_to_string((GLenum) iparam0));
 }
 
 

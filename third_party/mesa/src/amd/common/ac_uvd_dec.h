@@ -9,6 +9,7 @@
 #ifndef AC_UVD_DEC_H
 #define AC_UVD_DEC_H
 
+#include "ac_video_dec.h"
 
 /* UVD uses PM4 packet type 0 and 2 */
 #define RUVD_PKT_TYPE_S(x)        (((unsigned)(x)&0x3) << 30)
@@ -319,6 +320,18 @@ struct ruvd_mpeg4 {
    } divx_311_config;
 };
 
+struct ruvd_avc_its {
+   unsigned char scaling_list_4x4[6][16];
+   unsigned char scaling_list_8x8[2][64];
+};
+
+struct ruvd_hevc_its {
+   unsigned char scaling_list_4x4[6][16];
+   unsigned char scaling_list_8x8[6][64];
+   unsigned char scaling_list_16x16[6][64];
+   unsigned char scaling_list_32x32[2][64];
+};
+
 /* message between driver and hardware */
 struct ruvd_msg {
 
@@ -413,5 +426,9 @@ struct ac_uvd_stream_handle {
 
 void ac_uvd_init_stream_handle(struct ac_uvd_stream_handle *handle);
 unsigned ac_uvd_alloc_stream_handle(struct ac_uvd_stream_handle *handle);
+
+uint32_t ac_uvd_dec_dpb_size(const struct radeon_info *info, struct ac_video_dec_session_param *param);
+uint32_t ac_uvd_dec_dpb_alignment(const struct radeon_info *info, struct ac_video_dec_session_param *param);
+struct ac_video_dec *ac_uvd_create_video_decoder(const struct radeon_info *info, struct ac_video_dec_session_param *param);
 
 #endif

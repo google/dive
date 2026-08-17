@@ -273,7 +273,7 @@ read_i915_data_file(FILE *err_file, FILE *hang_file, bool verbose, enum intel_en
    write_buffer(hang_file, batch_bo->addr, batch_bo->data, batch_bo->size, "batch");
    fprintf(stderr, "writing image buffer 0x%016"PRIx64" size=0x%016"PRIx64"\n",
            hw_image_bo->addr, hw_image_bo->size);
-   write_hw_image_buffer(hang_file, hw_image_bo->data, hw_image_bo->size);
+   write_hw_image_buffer(hang_file, hw_image_bo->data, hw_image_bo->size, 0);
    write_exec(hang_file, batch_bo->addr);
 
    /* Cleanup */

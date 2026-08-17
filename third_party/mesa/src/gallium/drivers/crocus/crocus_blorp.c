@@ -56,11 +56,11 @@ stream_state(struct crocus_batch *batch,
              uint32_t *out_offset,
              struct crocus_bo **out_bo)
 {
-   uint32_t offset = ALIGN(batch->state.used, alignment);
+   uint32_t offset = align(batch->state.used, alignment);
 
    if (offset + size >= STATE_SZ && !batch->no_wrap) {
       crocus_batch_flush(batch);
-      offset = ALIGN(batch->state.used, alignment);
+      offset = align(batch->state.used, alignment);
    } else if (offset + size >= batch->state.bo->size) {
       const unsigned new_size =
          MIN2(batch->state.bo->size + batch->state.bo->size / 2,
@@ -391,7 +391,7 @@ crocus_blorp_exec(struct blorp_batch *blorp_batch,
    if (blorp_batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL)
       skip_bits |= CROCUS_DIRTY_DEPTH_BUFFER;
 
-   if (!params->wm_prog_data)
+   if (!params->fs_prog_data)
       skip_bits |= CROCUS_DIRTY_GEN6_BLEND_STATE;
 
    ice->state.dirty |= ~skip_bits;
@@ -447,5 +447,6 @@ genX(crocus_init_blorp)(struct crocus_context *ice)
    blorp_init_elk(&ice->blorp, ice, &screen->isl_dev, screen->compiler, NULL);
    ice->blorp.lookup_shader = crocus_blorp_lookup_shader;
    ice->blorp.upload_shader = crocus_blorp_upload_shader;
+   ice->blorp.get_surface_address = blorp_get_surface_address;
    ice->blorp.exec = crocus_blorp_exec;
 }

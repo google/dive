@@ -81,10 +81,6 @@ stw_pf_color[] = {
    /* alpha */
    { PIPE_FORMAT_B8G8R8A8_UNORM,     { 8,  8,  8,  8}, {16,  8,  0, 24} },
    { PIPE_FORMAT_A8R8G8B8_UNORM,     { 8,  8,  8,  8}, { 8, 16, 24,  0} },
-   /* shallow bit depths */
-   { PIPE_FORMAT_B5G6R5_UNORM,       { 5,  6,  5,  0}, {11,  5,  0,  0} },
-   { PIPE_FORMAT_B5G5R5A1_UNORM,     { 5,  5,  5,  1}, {10,  5,  0, 15} },
-   { PIPE_FORMAT_B4G4R4A4_UNORM,     { 4,  4,  4,  4}, {16,  4,  0, 12} },
    /* HDR bit depths */
    { PIPE_FORMAT_R16G16B16A16_FLOAT, {16, 16, 16, 16}, { 0, 16, 32, 48 }},
    { PIPE_FORMAT_R10G10B10A2_UNORM,  {10, 10, 10,  2}, { 0, 10, 20, 30} },
@@ -92,7 +88,12 @@ stw_pf_color[] = {
 
 static const struct stw_pf_color_info
 stw_pf_color_extended[] = {
-   { PIPE_FORMAT_R32G32B32A32_FLOAT, {32, 32, 32, 32}, {0, 32, 64, 96} }
+   /* shallow bit depths */
+   { PIPE_FORMAT_B5G6R5_UNORM,       { 5,  6,  5,  0}, {11,  5,  0,  0} },
+   { PIPE_FORMAT_B5G5R5A1_UNORM,     { 5,  5,  5,  1}, {10,  5,  0, 15} },
+   { PIPE_FORMAT_B4G4R4A4_UNORM,     { 4,  4,  4,  4}, {16,  4,  0, 12} },
+   /* high bit depths */
+   { PIPE_FORMAT_R32G32B32A32_FLOAT, {32, 32, 32, 32}, { 0, 32, 64, 96} }
 };
 
 static const struct stw_pf_depth_info
@@ -107,12 +108,14 @@ stw_pf_depth_stencil[] = {
    { PIPE_FORMAT_S8_UINT_Z24_UNORM, {24, 8} }
 };
 
-static const stw_pfd_flag
+static const unsigned
 stw_pf_flag[] = {
    0,
-   stw_pfd_double_buffer,
-   stw_pfd_gdi_support,
-   stw_pfd_double_buffer | stw_pfd_gdi_support,
+   PFD_DOUBLEBUFFER | PFD_SWAP_EXCHANGE,
+   PFD_SUPPORT_GDI,
+   PFD_DOUBLEBUFFER | PFD_SWAP_EXCHANGE | PFD_SUPPORT_GDI,
+   PFD_DOUBLEBUFFER | PFD_SWAP_COPY,
+   PFD_DOUBLEBUFFER | PFD_SWAP_COPY | PFD_SUPPORT_GDI,
 };
 
 
@@ -124,15 +127,13 @@ stw_pf_multisample[] = {
    16
 };
 
-
 static void
 stw_pixelformat_add(struct stw_device *stw_dev,
                     bool extended,
                     const struct stw_pf_color_info *color,
                     const struct stw_pf_depth_info *depth,
                     unsigned accum,
-                    bool doublebuffer,
-                    bool gdi,
+                    unsigned flags,
                     unsigned samples)
 {
    struct stw_pixelformat_info *pfi;
@@ -163,12 +164,7 @@ stw_pixelformat_add(struct stw_device *stw_dev,
 
    /* See http://www.opengl.org/pipeline/article/vol003_7/ */
    pfi->pfd.dwFlags |= PFD_SUPPORT_COMPOSITION;
-
-   if (doublebuffer)
-      pfi->pfd.dwFlags |= PFD_DOUBLEBUFFER | PFD_SWAP_EXCHANGE;
-
-   if (gdi)
-      pfi->pfd.dwFlags |= PFD_SUPPORT_GDI;
+   pfi->pfd.dwFlags |= flags;
 
    pfi->pfd.iPixelType = PFD_TYPE_RGBA;
 
@@ -202,7 +198,7 @@ stw_pixelformat_add(struct stw_device *stw_dev,
     * kopper requires that we allocate depth/stencil through the winsys
     */
    pfi->stvis.buffer_mask = ST_ATTACHMENT_FRONT_LEFT_MASK;
-   if (doublebuffer)
+   if (flags & PFD_DOUBLEBUFFER)
       pfi->stvis.buffer_mask |= ST_ATTACHMENT_BACK_LEFT_MASK;
 
    pfi->stvis.color_format = color->format;
@@ -250,10 +246,10 @@ add_color_format_variants(const struct stw_pf_color_info *color_formats,
     * to force all pixel formats to have a particular number of samples.
     */
    {
-      const char *samples = getenv("WGL_FORCE_MSAA");
+      const char *samples = os_get_option("WGL_FORCE_MSAA");
       if (!samples) {
          static bool warned = false;
-         samples = getenv("SVGA_FORCE_MSAA");
+         samples = os_get_option("SVGA_FORCE_MSAA");
          if (samples && !warned) {
             fprintf(stderr, "*** SVGA_FORCE_MSAA is deprecated; "
                     "use WGL_FORCE_MSAA instead ***\n");
@@ -268,6 +264,9 @@ add_color_format_variants(const struct stw_pf_color_info *color_formats,
    if (!extended) {
       bind_flags |= PIPE_BIND_DISPLAY_TARGET;
    }
+
+   bool require_gdi_compat =
+      driQueryOptionb(&stw_dev->option_cache, "wgl_require_gdi_compat");
 
    for (ms = 0; ms < ARRAY_SIZE(stw_pf_multisample); ms++) {
       unsigned samples = stw_pf_multisample[ms];
@@ -293,12 +292,11 @@ add_color_format_variants(const struct stw_pf_color_info *color_formats,
             }
 
             for (f = 0; f < ARRAY_SIZE(stw_pf_flag); f++) {
-               stw_pfd_flag flag = stw_pf_flag[f];
+               if (require_gdi_compat && (stw_pf_flag[f] & PFD_SUPPORT_GDI) == 0)
+                  continue;
                for (acc = 0; acc < 2; acc++) {
                   stw_pixelformat_add(stw_dev, extended, &color_formats[cfmt],
-                                       depth, acc * 16,
-                                       (flag & stw_pfd_double_buffer) != 0,
-                                       (flag & stw_pfd_gdi_support) != 0, samples);
+                                       depth, acc * 16, stw_pf_flag[f], samples);
                   num_added++;
                }
             }
@@ -317,7 +315,7 @@ stw_pixelformat_init(void)
 
    assert(!stw_dev->pixelformat_count);
 
-   util_dynarray_init(&stw_dev->pixelformats, NULL);
+   stw_dev->pixelformats = UTIL_DYNARRAY_INIT;
 
    /* normal, displayable formats */
    num_formats = add_color_format_variants(stw_pf_color,

@@ -216,6 +216,11 @@ the correct layout is:
 VOP2 `v_pk_fmac_f16`. But like all other packed math opcodes, DPP does not function in practice.
 RDNA1 and RDNA2 support `v_pk_fmac_f16_dpp`.
 
+## DPP with integer `subrev` and shifts
+
+No documentation mentions this, but DPP is seemingly applied to src1 instead of src0 for
+integer reverse subtract and shift opcodes.
+
 ## ds_swizzle_b32 rotate/fft modes
 
 These are first mentioned in the GFX9 (Vega) ISA doc, information from the LLVM bug tracker
@@ -337,6 +342,17 @@ Only `s_waitcnt_vscnt null, 0`. Needed even if the first instruction is a load.
 
 NSA MIMG instructions should be limited to 3 dwords before GFX10.3 to avoid
 stability issues: https://reviews.llvm.org/D103348
+
+## RDNA2 / GFX10.3 hazards
+
+### SALU EXEC write followed by NSA MIMG instruction
+
+Triggered-by:
+Potential stability issues can occur if an SALU instruction changes exec from 0
+to non-zero immediately before an NSA MIMG instruction with 4+ dwords.
+
+Mitigated-by: Any instruction, including `s_nop`.
+
 
 ## RDNA3 / GFX11 hazards
 

@@ -3,7 +3,7 @@
  * Copyright (C) 2014 Broadcom
  * Copyright (C) 2018-2019 Alyssa Rosenzweig
  * Copyright (C) 2019-2020 Collabora, Ltd.
- *
+ * Copyright (C) 2026 Google LLC
  * SPDX-License-Identifier: MIT
  */
 
@@ -206,14 +206,18 @@ pan_linear_or_tiled_row_align_req(unsigned arch, enum pipe_format format,
    }
 
    switch (format) {
-   /* For v7+, NV12/NV21/I420 have a looser alignment requirement of 16 bytes */
+   /* For v7+, below have a looser alignment requirement of 16 bytes */
    case PIPE_FORMAT_R8G8B8_420_UNORM_PACKED:
    case PIPE_FORMAT_R8_G8B8_420_UNORM:
    case PIPE_FORMAT_G8_B8R8_420_UNORM:
    case PIPE_FORMAT_R8_G8_B8_420_UNORM:
    case PIPE_FORMAT_R8_B8_G8_420_UNORM:
+   case PIPE_FORMAT_G8_B8_R8_420_UNORM:
+   case PIPE_FORMAT_Y8_U8_V8_422_UNORM:
    case PIPE_FORMAT_R8_G8B8_422_UNORM:
    case PIPE_FORMAT_R8_B8G8_422_UNORM:
+   case PIPE_FORMAT_Y8_U8V8_422_UNORM:
+   case PIPE_FORMAT_X6G10_X6B10X6R10_420_UNORM:
       return 16;
    /* the 10 bit formats have even looser alignment */
    case PIPE_FORMAT_R10G10B10_420_UNORM_PACKED:
@@ -242,6 +246,22 @@ pan_u_interleaved_tile_size_el(enum pipe_format format)
          .width = 16 / util_format_get_blockwidth(format),
          .height = 16 / util_format_get_blockheight(format),
       };
+   }
+}
+
+/* Given a format, determine the tile size used for interleaved 64k. */
+static inline struct pan_image_block_size
+pan_interleaved_64k_tile_size_el(enum pipe_format format)
+{
+   switch (util_format_get_blocksize(format)) {
+   case 1: return (struct pan_image_block_size){256, 256};
+   case 2: return (struct pan_image_block_size){256, 128};
+   case 4: return (struct pan_image_block_size){128, 128};
+   case 8: return (struct pan_image_block_size){128, 64};
+   case 16: return (struct pan_image_block_size){64, 64};
+   default:
+      UNREACHABLE("unsupported format");
+      return (struct pan_image_block_size){0, 0};
    }
 }
 

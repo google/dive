@@ -39,15 +39,13 @@ glx@glx_arb_sync_control@waitformsc,Fail
 spec@arb_shader_texture_lod@execution@arb_shader_texture_lod-texgradcube,Fail
 
 # rusticl
-api@clbuildprogram,Fail
-api@clcompileprogram,Fail
 api@clgetcommandqueueinfo,Fail
 api@clgetdeviceinfo,Fail
 api@clgetextensionfunctionaddressforplatform,Fail
 api@clgetkernelarginfo,Fail
+api@clsetkernelarg,Fail
+api@clsetkernelarg@Input checks,Fail
 api@cllinkprogram,Fail
-custom@r600 create release buffer bug,Fail
-program@build@vector-data-types,Fail
 program@execute@builtin@builtin-float-nextafter-1.0.generated,Fail
 program@execute@builtin@builtin-float-nextafter-1.0.generated@nextafter float1,Fail
 program@execute@builtin@builtin-float-nextafter-1.0.generated@nextafter float16,Fail
@@ -71,5 +69,4 @@ program@run kernel with max work item sizes,Fail
 # uprev Piglit in Mesa
 spec@ext_external_objects@vk-semaphores,Crash
 spec@ext_external_objects@vk-semaphores-2,Crash
-spec@glsl-es-1.00@linker@glsl-mismatched-uniform-precision-unused,Fail
 

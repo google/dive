@@ -57,9 +57,8 @@
 #else
 
 /* Valhall has native support for descriptor sets, and allows a maximum
- * of 16 sets, but we reserve one for our internal use, so we have 15
- * left. */
-#define MAX_SETS 15
+ * of 16 sets, but we reserve 9 for our internal use, so we have 7 left. */
+#define MAX_SETS 7
 
 /* Hardware limit is 2^24 each of buffer, texture, and sampler descriptors. We
  * use the same hardware descriptors for multiple kinds of vulkan descriptors,
@@ -102,6 +101,9 @@ struct panvk_descriptor_set_layout {
    unsigned desc_count;
    unsigned dyn_buf_count;
 
+   /* Bitmask of which dynamic buffers are SSBOs */
+   uint32_t dyn_ssbos;
+
    /* Number of bindings in this descriptor set */
    uint32_t binding_count;
 
@@ -119,7 +121,7 @@ to_panvk_descriptor_set_layout(const struct vk_descriptor_set_layout *layout)
    return container_of(layout, const struct panvk_descriptor_set_layout, vk);
 }
 
-static inline const uint32_t
+static inline uint32_t
 panvk_get_desc_stride(const struct panvk_descriptor_set_binding_layout *layout)
 {
    /* One descriptor for each sampler plane, and one for each texture. */
@@ -127,7 +129,7 @@ panvk_get_desc_stride(const struct panvk_descriptor_set_binding_layout *layout)
       ? layout->textures_per_desc + layout->samplers_per_desc : 1;
 }
 
-static inline const uint32_t
+static inline uint32_t
 panvk_get_iub_desc_count(uint32_t size)
 {
    /* Each inline uniform block contains an internal buffer descriptor, in
@@ -136,7 +138,7 @@ panvk_get_iub_desc_count(uint32_t size)
    return DIV_ROUND_UP(size, PANVK_DESCRIPTOR_SIZE) + 1;
 }
 
-static inline const uint32_t
+static inline uint32_t
 panvk_get_iub_size(uint32_t desc_count)
 {
    assert(desc_count >= 1);

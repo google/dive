@@ -169,7 +169,9 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
 #if GFX_VER >= 7
       db.DepthWriteEnable = true;
 #endif
+#if GFX_VER >= 9
       assert(info->depth_address % info->depth_surf->alignment_B == 0);
+#endif
       db.SurfaceBaseAddress = info->depth_address;
 
 #if GFX_VERx10 >= 125
@@ -271,7 +273,9 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
 #elif GFX_VERx10 >= 75
       sb.StencilBufferEnable = true;
 #endif
+#if GFX_VER >= 9
       assert(info->stencil_address % info->stencil_surf->alignment_B == 0);
+#endif
       sb.SurfaceBaseAddress = info->stencil_address;
       sb.SurfacePitch = info->stencil_surf->row_pitch_B - 1;
 #if GFX_VER >= 8
@@ -308,12 +312,15 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
 #endif
 
    assert(info->hiz_usage == ISL_AUX_USAGE_NONE ||
+          (GFX_VERx10 >= 125 && info->hiz_usage == ISL_AUX_USAGE_ZCS) ||
           isl_aux_usage_has_hiz(info->hiz_usage));
    if (isl_aux_usage_has_hiz(info->hiz_usage)) {
       assert(GFX_VER >= 12 || info->hiz_usage == ISL_AUX_USAGE_HIZ);
       db.HierarchicalDepthBufferEnable = true;
 
+#if GFX_VER >= 9
       assert(info->hiz_address % info->hiz_surf->alignment_B == 0);
+#endif
       hiz.SurfaceBaseAddress = info->hiz_address;
       hiz.SurfacePitch = info->hiz_surf->row_pitch_B - 1;
 
@@ -355,12 +362,13 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
       hiz.HierarchicalDepthBufferWriteThruEnable =
          info->hiz_usage == ISL_AUX_USAGE_HIZ_CCS_WT;
 
-#if GFX_VER == 12
+#if GFX_VERx10 == 120
       /* The bspec docs up to GFX 12 for this bit are fairly unclear about
        * exactly what is and isn't supported with HiZ write-through.  It's
        * fairly clear that you can't sample from a multisampled depth buffer
-       * with CCS.  This limitation isn't called out explicitly but the docs
-       * for the CCS_E value of RENDER_SURFACE_STATE::AuxiliarySurfaceMode say:
+       * with CCS on GFX12.0. This limitation isn't called out explicitly but
+       * the docs for the CCS_E value of
+       * RENDER_SURFACE_STATE::AuxiliarySurfaceMode say:
        *
        *    "If Number of multisamples > 1, programming this value means MSAA
        *    compression is enabled for that surface. Auxiliary surface is MSC
@@ -387,7 +395,7 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
        */
       if (hiz.HierarchicalDepthBufferWriteThruEnable)
          assert(info->depth_surf->samples == 1);
-#endif /* #if GFX_VER == 12 */
+#endif /* #if GFX_VERx10 == 120 */
 #endif /* #if GFX_VER >= 12 */
 
 #if GFX_VER >= 8
@@ -407,7 +415,9 @@ isl_genX(emit_depth_stencil_hiz_s)(const struct isl_device *dev, void *batch,
       hiz.SurfaceQPitch =
          isl_surf_get_array_pitch_sa_rows(info->hiz_surf) >> 2;
 #endif
+   }
 
+   if (info->hiz_usage != ISL_AUX_USAGE_NONE) {
 #if GFX_VER < 20
       clear.DepthClearValueValid = true;
 #if GFX_VER >= 8

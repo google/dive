@@ -40,7 +40,7 @@ nir_intrinsic_${name}(const nir_intrinsic_instr *instr)
    assert(info->index_map[${enum}] > 0);
 % if "struct" in data_type:
    ${data_type} res;
-   STATIC_ASSERT(sizeof(instr->const_index[0]) == sizeof(res));
+   STATIC_ASSERT(sizeof(instr->const_index[0]) * ${index.size} == sizeof(res));
    memcpy(&res, &instr->const_index[info->index_map[${enum}] - 1], sizeof(res));
    return res;
 % else:
@@ -54,8 +54,12 @@ nir_intrinsic_set_${name}(nir_intrinsic_instr *instr, ${data_type} val)
    const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
    assert(info->index_map[${enum}] > 0);
 % if "struct" in data_type:
-   STATIC_ASSERT(sizeof(instr->const_index[0]) == sizeof(val));
+   STATIC_ASSERT(sizeof(instr->const_index[0]) * ${index.size} == sizeof(val));
+   /* NOTE: gcc has a a false positive here, silenced with the pragmas */
+   PRAGMA_DIAGNOSTIC_PUSH
+   PRAGMA_DIAGNOSTIC_IGNORED_GCC(-Wstringop-overflow)
    memcpy(&instr->const_index[info->index_map[${enum}] - 1], &val, sizeof(val));
+   PRAGMA_DIAGNOSTIC_POP
 % else:
    instr->const_index[info->index_map[${enum}] - 1] = val;
 % endif
@@ -68,6 +72,19 @@ nir_intrinsic_has_${name}(const nir_intrinsic_instr *instr)
    return info->index_map[${enum}] > 0;
 }
 % endfor
+
+static inline unsigned
+nir_intrinsic_index_size(nir_intrinsic_index_flag index)
+{
+   switch (index) {
+% for index in INTR_INDICES:
+% if index.size != 1:
+   case ${"NIR_INTRINSIC_" + index.name.upper()}: return ${index.size};
+% endif
+% endfor
+   default: return 1;
+   }
+}
 
 #endif /* _NIR_INTRINSICS_INDICES_ */
 """

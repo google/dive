@@ -598,7 +598,13 @@ dzn_cmd_buffer_create(const VkCommandBufferAllocateInfo *info,
       return vk_error(pool->base.device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
    VkResult result =
-      vk_command_buffer_init(pool, &cmdbuf->vk, &cmd_buffer_ops, info->level);
+      vk_command_buffer_init_with_params(&cmdbuf->vk,
+                                         &(struct vk_command_buffer_init_params) {
+                                            .pool = pool,
+                                            .ops = &cmd_buffer_ops,
+                                            .level = info->level,
+                                            .needs_cmd_queue = info->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                         });
    if (result != VK_SUCCESS) {
       vk_free(&pool->alloc, cmdbuf);
       return result;
@@ -609,9 +615,9 @@ dzn_cmd_buffer_create(const VkCommandBufferAllocateInfo *info,
    cmdbuf->state.multiview.view_mask = 1;
    for (uint32_t bucket = 0; bucket < DZN_INTERNAL_BUF_BUCKET_COUNT; ++bucket)
       list_inithead(&cmdbuf->internal_bufs[bucket]);
-   util_dynarray_init(&cmdbuf->events.signal, NULL);
-   util_dynarray_init(&cmdbuf->queries.reset, NULL);
-   util_dynarray_init(&cmdbuf->queries.signal, NULL);
+   cmdbuf->events.signal = UTIL_DYNARRAY_INIT;
+   cmdbuf->queries.reset = UTIL_DYNARRAY_INIT;
+   cmdbuf->queries.signal = UTIL_DYNARRAY_INIT;
    dzn_descriptor_heap_pool_init(&cmdbuf->rtvs.pool, device,
                                  D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
                                  false, &pool->alloc);
@@ -798,7 +804,7 @@ dzn_cmd_buffer_dynbitset_set_range(struct dzn_cmd_buffer *cmdbuf,
    if (result != VK_SUCCESS)
       return result;
 
-   BITSET_SET_RANGE(util_dynarray_element(array, BITSET_WORD, 0), bit, bit + count - 1);
+   BITSET_SET_COUNT(util_dynarray_element(array, BITSET_WORD, 0), bit, count);
    return VK_SUCCESS;
 }
 
@@ -816,7 +822,8 @@ dzn_cmd_buffer_dynbitset_clear_range(struct dzn_cmd_buffer *cmdbuf,
 
    while (bit <= end) {
       uint32_t subcount = MIN2(end + 1 - bit, 32 - (bit % 32));
-      BITSET_CLEAR_RANGE(util_dynarray_element(array, BITSET_WORD, 0), bit, bit + subcount - 1);
+      BITSET_CLEAR_COUNT(util_dynarray_element(array, BITSET_WORD, 0), bit,
+                        subcount);
       bit += subcount;
    }
 }
@@ -832,10 +839,10 @@ dzn_cmd_buffer_create_query_pool_state(struct dzn_cmd_buffer *cmdbuf)
       return NULL;
    }
 
-   util_dynarray_init(&state->reset, NULL);
-   util_dynarray_init(&state->collect, NULL);
-   util_dynarray_init(&state->signal, NULL);
-   util_dynarray_init(&state->zero, NULL);
+   state->reset = UTIL_DYNARRAY_INIT;
+   state->collect = UTIL_DYNARRAY_INIT;
+   state->signal = UTIL_DYNARRAY_INIT;
+   state->zero = UTIL_DYNARRAY_INIT;
    return state;
 }
 
@@ -3516,7 +3523,7 @@ dzn_cmd_buffer_update_push_constants(struct dzn_cmd_buffer *cmdbuf, uint32_t bin
       &cmdbuf->state.push_constant.gfx : &cmdbuf->state.push_constant.compute;
 
    uint32_t offset = state->offset / 4;
-   uint32_t end = ALIGN(state->end, 4) / 4;
+   uint32_t end = align(state->end, 4) / 4;
    uint32_t count = end - offset;
 
    if (!count)
@@ -5142,7 +5149,7 @@ dzn_CmdBindPipeline(VkCommandBuffer commandBuffer,
          cmdbuf->state.vb.views[vb].StrideInBytes = gfx->vb.strides[vb];
 
       if (gfx->vb.count > 0)
-         BITSET_SET_RANGE(cmdbuf->state.vb.dirty, 0, gfx->vb.count - 1);
+         BITSET_SET_COUNT(cmdbuf->state.vb.dirty, 0, gfx->vb.count);
    }
 }
 
@@ -5482,8 +5489,7 @@ dzn_CmdBindVertexBuffers(VkCommandBuffer commandBuffer,
       vbviews[firstBinding + i].SizeInBytes = buf->size - pOffsets[i];
    }
 
-   BITSET_SET_RANGE(cmdbuf->state.vb.dirty, firstBinding,
-                    firstBinding + bindingCount - 1);
+   BITSET_SET_COUNT(cmdbuf->state.vb.dirty, firstBinding, bindingCount);
 }
 
 VKAPI_ATTR void VKAPI_CALL

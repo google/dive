@@ -211,3 +211,41 @@ uint16_t _mesa_uint16_div_64k_to_half(uint16_t v)
 
    return (e << 10) | m;
 }
+
+static uint16_t
+util_nextafter16(uint16_t x, bool up)
+{
+   uint16_t sign_mask = 1ull << 15;
+   uint16_t min_abs = 1;
+
+   float f = _mesa_half_to_float(x);
+   if (isnan(f) || (f == INFINITY && up) || (f == -INFINITY && !up))
+      return x;
+
+   /* beware of: +/-0.0 - 1 == NaN */
+   uint16_t xn = f == 0 ? (sign_mask | min_abs) : x - 1;
+
+   /* beware of -0.0 + 1 == -0x1p-149 */
+   uint16_t xp = f == 0 ? min_abs : x + 1;
+
+   /* nextafter can be implemented by just +/- 1 on the int value */
+   return (up ^ (f < 0)) ? xp : xn;
+}
+
+uint16_t
+_mesa_float_to_float16_ru(float val)
+{
+   uint16_t half = _mesa_float_to_half(val);
+   if (_mesa_half_to_float(half) < val)
+      return util_nextafter16(half, true);
+   return half;
+}
+
+uint16_t
+_mesa_float_to_float16_rd(float val)
+{
+   uint16_t half = _mesa_float_to_half(val);
+   if (_mesa_half_to_float(half) > val)
+      return util_nextafter16(half, false);
+   return half;
+}

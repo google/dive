@@ -134,7 +134,8 @@ static int parse_reg(const char *str)
 "(1/log2(10))"                    ir3_yylval.num = 9;  return T_FLUT_INV_LOG2_10;
 "(log2(10))"                      ir3_yylval.num = 10; return T_FLUT_LOG2_10;
 "(4.0)"                           ir3_yylval.num = 11; return T_FLUT_4_0;
-[0-9]+"."[0-9]+                   ir3_yylval.flt = strtod(yytext, NULL);       return T_FLOAT;
+[0-9]+"."[0-9]+([eE][+-]?[0-9]+)?  ir3_yylval.flt = strtod(yytext, NULL);       return T_FLOAT;
+[0-9]+[eE][+-]?[0-9]+             ir3_yylval.flt = strtod(yytext, NULL);       return T_FLOAT;
 [0-9]*                            ir3_yylval.num = strtoul(yytext, NULL, 0);    return T_INT;
 "0x"[0-9a-fA-F]*                  ir3_yylval.num = strtoul(yytext, NULL, 0);    return T_HEX;
 "raw 0x"[0-9a-fA-F]*              ir3_yylval.u64 = strtoull(yytext + 4, NULL, 0); return T_RAW;
@@ -151,6 +152,7 @@ static int parse_reg(const char *str)
 "@tex"                            return TOKEN(T_A_TEX);
 "@pvtmem"                         return TOKEN(T_A_PVTMEM);
 "@localmem"                       return TOKEN(T_A_LOCALMEM);
+"@constlen"                       return TOKEN(T_A_CONSTLEN);
 "@earlypreamble"                  return TOKEN(T_A_EARLYPREAMBLE);
 "@fullnopstart"                   return TOKEN(T_A_FULLNOPSTART);
 "@fullnopend"                     return TOKEN(T_A_FULLNOPEND);
@@ -173,6 +175,7 @@ static int parse_reg(const char *str)
 "(sat)"                           return TOKEN(T_SAT);
 "(eolm)"                          return TOKEN(T_EOLM);
 "(eogm)"                          return TOKEN(T_EOGM);
+"(eostsc)"                        return TOKEN(T_EOSTSC);
 "(rpt"[0-7]")"                    ir3_yylval.num = strtol(yytext+4, NULL, 10); return T_RPT;
 "(nop"[0-7]")"                    ir3_yylval.num = strtol(yytext+4, NULL, 10); return T_NOP;
 "("[x]?[y]?[z]?[w]?")"            ir3_yylval.num = parse_wrmask(yytext); return T_WRMASK;
@@ -225,6 +228,7 @@ static int parse_reg(const char *str)
 "movmsk"                          return TOKEN(T_OP_MOVMSK);
 "mova1"                           return TOKEN(T_OP_MOVA1);
 "mova"                            return TOKEN(T_OP_MOVA);
+"mova.r"                          return TOKEN(T_OP_MOVA_R);
 "mov"                             return TOKEN(T_OP_MOV);
 "cov"                             return TOKEN(T_OP_COV);
 "swz"                             return TOKEN(T_OP_SWZ);
@@ -233,6 +237,9 @@ static int parse_reg(const char *str)
 "movs"                            return TOKEN(T_OP_MOVS);
 
 ("f16"|"f32"|"u16"|"u32"|"s16"|"s32"|"u8"|"u8_32"|"u64"){2} ir3_yylval.str = yytext; return T_CAT1_TYPE_TYPE;
+
+".mul2"                           return TOKEN(T_MUL2);
+".div2"                           return TOKEN(T_DIV2);
                                   /* category 2: */
 "add.f"                           return TOKEN(T_OP_ADD_F);
 "min.f"                           return TOKEN(T_OP_MIN_F);
@@ -356,6 +363,9 @@ static int parse_reg(const char *str)
 "quad_shuffle.vert"               return TOKEN(T_OP_QSHUFFLE_V);
 "quad_shuffle.diag"               return TOKEN(T_OP_QSHUFFLE_DIAG);
 "tcinv"                           return TOKEN(T_OP_TCINV);
+"img_bindless.hof"                return TOKEN(T_OP_IMG_BINDLESS_HOF);
+"img_bindless.pcmn"               return TOKEN(T_OP_IMG_BINDLESS_PCMN);
+"img_bindless"                    return TOKEN(T_OP_IMG_BINDLESS);
 
                                   /* category 6: */
 "ldg"                             return TOKEN(T_OP_LDG);
@@ -477,6 +487,9 @@ static int parse_reg(const char *str)
 "2d"                              return TOKEN(T_2D);
 "3d"                              return TOKEN(T_3D);
 "4d"                              return TOKEN(T_4D);
+
+"sad"                             return TOKEN(T_SAD);
+"ssd"                             return TOKEN(T_SSD);
 
 "lt"                              return TOKEN(T_LT);
 "le"                              return TOKEN(T_LE);

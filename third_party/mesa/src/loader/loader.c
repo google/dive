@@ -125,6 +125,16 @@ loader_get_kernel_driver_name(int fd)
 }
 
 bool
+amd_predicate(int fd, const char *driver)
+{
+   char *kernel_driver = loader_get_kernel_driver_name(fd);
+   bool ret = kernel_driver && (strcmp(kernel_driver, "amdgpu") == 0);
+
+   free(kernel_driver);
+   return ret;
+}
+
+bool
 iris_predicate(int fd, const char *driver)
 {
    char *kernel_driver = loader_get_kernel_driver_name(fd);
@@ -139,6 +149,9 @@ iris_predicate(int fd, const char *driver)
 bool
 nouveau_zink_predicate(int fd, const char *driver)
 {
+#ifndef HAVE_LIBDRM
+   return true;
+#else
    /* Never load on nv proprietary driver */
    if (!drm_fd_is_nouveau(fd))
       return false;
@@ -191,6 +204,7 @@ nouveau_zink_predicate(int fd, const char *driver)
    if (!use_zink && !strcmp(driver, "nouveau"))
       return true;
    return false;
+#endif
 }
 
 
@@ -230,7 +244,6 @@ loader_open_render_node_platform_devices(const char * const drivers[],
    drmDevicePtr devices[MAX_DRM_DEVICES], device;
    int num_devices, fd = -1;
    int i, j;
-   bool found = false;
    int *result;
 
    num_devices = drmGetDevices2(0, devices, MAX_DRM_DEVICES);
@@ -239,7 +252,7 @@ loader_open_render_node_platform_devices(const char * const drivers[],
       return NULL;
    }
 
-   result = calloc(n_drivers, num_devices);
+   result = calloc(num_devices, sizeof(int));
 
    *n_devices = 0;
    for (i = 0; i < num_devices; i++) {
@@ -248,6 +261,7 @@ loader_open_render_node_platform_devices(const char * const drivers[],
       if ((device->available_nodes & (1 << DRM_NODE_RENDER)) &&
           (device->bustype == DRM_BUS_PLATFORM)) {
          drmVersionPtr version;
+         bool found = false;
 
          fd = loader_open_device(device->nodes[DRM_NODE_RENDER]);
          if (fd < 0)
@@ -260,7 +274,9 @@ loader_open_render_node_platform_devices(const char * const drivers[],
          }
 
          for (j = 0; j < n_drivers; j++) {
-            if (strcmp(version->name, drivers[j]) == 0) {
+            /* Always try to open the render device with Zink if requested */
+            if (strcmp("zink", drivers[j]) == 0 ||
+                strcmp(version->name, drivers[j]) == 0) {
                found = true;
                break;
             }
@@ -337,8 +353,11 @@ static char *loader_get_dri_config_driver(int fd)
 
    driParseOptionInfo(&defaultInitOptions, __driConfigOptionsLoader,
                       ARRAY_SIZE(__driConfigOptionsLoader));
-   driParseConfigFiles(&userInitOptions, &defaultInitOptions, 0,
-                       "loader", kernel_driver, NULL, NULL, 0, NULL, 0);
+   driParseConfigFiles(&userInitOptions, &defaultInitOptions,
+                       &(driConfigFileParseParams) {
+                          .driverName = "loader",
+                          .kernelDriverName = kernel_driver,
+                       });
    if (driCheckOption(&userInitOptions, "dri_driver", DRI_STRING)) {
       char *opt = driQueryOptionstr(&userInitOptions, "dri_driver");
       /* not an empty string */
@@ -360,8 +379,10 @@ static char *loader_get_dri_config_device_id(void)
 
    driParseOptionInfo(&defaultInitOptions, __driConfigOptionsLoader,
                       ARRAY_SIZE(__driConfigOptionsLoader));
-   driParseConfigFiles(&userInitOptions, &defaultInitOptions, 0,
-                       "loader", NULL, NULL, NULL, 0, NULL, 0);
+   driParseConfigFiles(&userInitOptions, &defaultInitOptions,
+                       &(driConfigFileParseParams) {
+                          .driverName = "loader",
+                       });
    if (driCheckOption(&userInitOptions, "device_id", DRI_STRING)) {
       char *opt = driQueryOptionstr(&userInitOptions, "device_id");
       if (*opt)
@@ -446,7 +467,7 @@ static char *drm_get_id_path_tag_for_fd(int fd)
 
 bool loader_get_user_preferred_fd(int *fd_render_gpu, int *original_fd)
 {
-   const char *dri_prime = getenv("DRI_PRIME");
+   const char *dri_prime = os_get_option("DRI_PRIME");
    bool debug = debug_get_bool_option("DRI_PRIME_DEBUG", false);
    char *default_tag = NULL;
    drmDevicePtr devices[MAX_DRM_DEVICES];
@@ -766,7 +787,7 @@ loader_get_driver_for_fd(int fd)
     */
    if (__normal_user()) {
       const char *override = os_get_option("MESA_LOADER_DRIVER_OVERRIDE");
-      if (override)
+      if (override && strlen(override))
          return strdup(override);
    }
 

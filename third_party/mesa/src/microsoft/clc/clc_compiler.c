@@ -156,8 +156,8 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
       nir_foreach_use_safe(src, &context->deref->def) {
          enum image_type type;
 
-         if (nir_src_parent_instr(src)->type == nir_instr_type_intrinsic) {
-            nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(nir_src_parent_instr(src));
+         if (nir_src_use_instr(src)->type == nir_instr_type_intrinsic) {
+            nir_intrinsic_instr *intrinsic = nir_instr_as_intrinsic(nir_src_use_instr(src));
             nir_alu_type dest_type;
 
             b->cursor = nir_before_instr(&intrinsic->instr);
@@ -182,7 +182,8 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                }
 
                assert((in_var->data.access & ACCESS_NON_WRITEABLE) == 0);
-               nir_rewrite_image_intrinsic(intrinsic, nir_imm_int(b, image_binding), false);
+               nir_rewrite_image_intrinsic(intrinsic, nir_imm_int(b, image_binding),
+                                           nir_image_intrinsic_type_default);
                break;
             }
 
@@ -205,7 +206,8 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
                }
 
                assert((in_var->data.access & ACCESS_NON_WRITEABLE) == 0);
-               nir_rewrite_image_intrinsic(intrinsic, nir_imm_int(b, image_binding), false);
+               nir_rewrite_image_intrinsic(intrinsic, nir_imm_int(b, image_binding),
+                                           nir_image_intrinsic_type_default);
                break;
             }
 
@@ -245,9 +247,9 @@ clc_lower_input_image_deref(nir_builder *b, struct clc_image_lower_context *cont
             default:
                UNREACHABLE("Unsupported image intrinsic");
             }
-         } else if (nir_src_parent_instr(src)->type == nir_instr_type_tex) {
+         } else if (nir_src_use_instr(src)->type == nir_instr_type_tex) {
             assert(in_var->data.access & ACCESS_NON_WRITEABLE);
-            nir_tex_instr *tex = nir_instr_as_tex(nir_src_parent_instr(src));
+            nir_tex_instr *tex = nir_instr_as_tex(nir_src_use_instr(src));
 
             switch (nir_alu_type_get_base_type(tex->dest_type)) {
             case nir_type_float: type = FLOAT4; break;
@@ -367,7 +369,7 @@ clc_lower_nonnormalized_samplers(nir_shader *nir,
                continue;
 
             nir_src *sampler_src = &tex->src[sampler_src_idx].src;
-            assert(sampler_src->ssa->parent_instr->type == nir_instr_type_deref);
+            assert(nir_def_is_deref(sampler_src->ssa));
             nir_variable *sampler = nir_deref_instr_get_variable(nir_def_as_deref(sampler_src->ssa));
 
             // If the sampler returns ints, we'll handle this in the int lowering pass
@@ -791,17 +793,24 @@ clc_spirv_to_dxil(struct clc_libclc *lib,
 
    glsl_type_singleton_init_or_ref();
 
+   struct nir_spirv_specialization *spec = NULL;
+   if (consts && consts->num_specializations > 0) {
+      spec = vtn_alloc_specialization(consts->num_specializations);
+
+      for (unsigned i = 0; i < consts->num_specializations; i++) {
+         vtn_add_specialization_entry(spec, i, consts->specializations[i].id,
+                                      sizeof(consts->specializations[i].value),
+                                      &consts->specializations[i].value, false);
+      }
+   }
    nir = spirv_to_nir(linked_spirv->data, linked_spirv->size / 4,
-                      consts ? (struct nir_spirv_specialization *)consts->specializations : NULL,
-                      consts ? consts->num_specializations : 0,
-                      MESA_SHADER_KERNEL, entrypoint,
-                      &spirv_options,
-                      &nir_options);
+                      spec, MESA_SHADER_KERNEL, entrypoint,
+                      &spirv_options, &nir_options);
+   vtn_free_specialization(spec);
    if (!nir) {
       clc_error(logger, "spirv_to_nir() failed");
       goto err_free_dxil;
    }
-   nir->info.workgroup_size_variable = true;
 
    NIR_PASS(_, nir, nir_lower_goto_ifs);
    NIR_PASS(_, nir, nir_opt_dead_cf);
@@ -820,7 +829,7 @@ clc_spirv_to_dxil(struct clc_libclc *lib,
       do
       {
          progress = false;
-         NIR_PASS(progress, nir, nir_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
          NIR_PASS(progress, nir, nir_opt_copy_prop_vars);
          NIR_PASS(progress, nir, nir_opt_deref);
          NIR_PASS(progress, nir, nir_opt_dce);
@@ -849,7 +858,7 @@ clc_spirv_to_dxil(struct clc_libclc *lib,
       do
       {
          progress = false;
-         NIR_PASS(progress, nir, nir_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
          NIR_PASS(progress, nir, nir_opt_copy_prop_vars);
          NIR_PASS(progress, nir, nir_opt_deref);
          NIR_PASS(progress, nir, nir_opt_dce);
@@ -953,7 +962,7 @@ clc_spirv_to_dxil(struct clc_libclc *lib,
       do {
          progress = false;
          NIR_PASS(progress, nir, nir_opt_memcpy);
-         NIR_PASS(progress, nir, nir_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
          NIR_PASS(progress, nir, nir_opt_copy_prop_vars);
          NIR_PASS(progress, nir, nir_opt_deref);
          NIR_PASS(progress, nir, nir_opt_dce);

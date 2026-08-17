@@ -34,36 +34,6 @@ TEST_F(drirc, override_uniform_offset_alignment)
    destroy_device();
 }
 
-TEST_F(drirc, disable_depth_storage)
-{
-   create_device();
-
-   const VkFormatFeatureFlags2 storage_features = VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT |
-                                                  VK_FORMAT_FEATURE_2_STORAGE_READ_WITHOUT_FORMAT_BIT |
-                                                  VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT;
-
-   VkFormatProperties2 format_props = {
-      .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
-   };
-
-   get_physical_device_format_properties2(VK_FORMAT_D32_SFLOAT, &format_props);
-   const VkFormatFeatureFlags2 tiled_storage_features = format_props.formatProperties.optimalTilingFeatures;
-
-   EXPECT_TRUE(tiled_storage_features & storage_features);
-
-   destroy_device();
-
-   add_envvar("radv_disable_depth_storage", "true");
-
-   create_device();
-
-   get_physical_device_format_properties2(VK_FORMAT_D32_SFLOAT, &format_props);
-   const VkFormatFeatureFlags2 tiled_storage_features_override = format_props.formatProperties.optimalTilingFeatures;
-
-   EXPECT_FALSE(tiled_storage_features_override & storage_features);
-   destroy_device();
-}
-
 TEST_F(drirc, override_compute_shader_version)
 {
    create_device();
@@ -105,18 +75,17 @@ TEST_F(drirc, override_compute_shader_version)
       0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0xf8, 0x00,
       0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x01, 0x00, 0x38, 0x00, 0x01, 0x00};
 
-   uint64_t pipeline_hash;
+   VkPipelineBinaryKeyKHR pipeline_keys[3];
 
-   /* Create a simple compute pipeline to get the pipeline hash. */
-   create_compute_pipeline(ARRAY_SIZE(code), (uint32_t *)code, VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR);
-   pipeline_hash = get_pipeline_hash(VK_SHADER_STAGE_COMPUTE_BIT);
-   EXPECT_NE(pipeline_hash, 0);
-   destroy_pipeline();
+   /* Create a simple compute pipeline to get the pipeline key. */
+   get_pipeline_key(ARRAY_SIZE(code), (uint32_t *)code, &pipeline_keys[0],
+                    VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR);
 
-   /* Verify that re-creating the exact same pipeline returns the same pipeline hash. */
-   create_compute_pipeline(ARRAY_SIZE(code), (uint32_t *)code, VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR);
-   EXPECT_EQ(pipeline_hash, get_pipeline_hash(VK_SHADER_STAGE_COMPUTE_BIT));
-   destroy_pipeline();
+   /* Verify that re-creating the exact same pipeline returns the same pipeline key. */
+   get_pipeline_key(ARRAY_SIZE(code), (uint32_t *)code, &pipeline_keys[1],
+                    VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR);
+   EXPECT_EQ(pipeline_keys[0].keySize, pipeline_keys[1].keySize);
+   EXPECT_FALSE(memcmp(pipeline_keys[0].key, pipeline_keys[1].key, pipeline_keys[0].keySize));
 
    destroy_device();
 
@@ -124,10 +93,11 @@ TEST_F(drirc, override_compute_shader_version)
 
    create_device();
 
-   /* Verify that overwriting the compute pipeline version returns a different hash. */
-   create_compute_pipeline(ARRAY_SIZE(code), (uint32_t *)code, VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR);
-   EXPECT_NE(pipeline_hash, get_pipeline_hash(VK_SHADER_STAGE_COMPUTE_BIT));
-   destroy_pipeline();
+   /* Verify that overwriting the compute pipeline version returns a different key. */
+   get_pipeline_key(ARRAY_SIZE(code), (uint32_t *)code, &pipeline_keys[2],
+                    VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR);
+   EXPECT_EQ(pipeline_keys[1].keySize, pipeline_keys[2].keySize);
+   EXPECT_TRUE(memcmp(pipeline_keys[1].key, pipeline_keys[2].key, pipeline_keys[1].keySize));
 
    destroy_device();
 }

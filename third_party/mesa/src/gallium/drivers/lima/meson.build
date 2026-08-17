@@ -35,6 +35,7 @@ files_lima = files(
   'ir/lima_nir_split_load_input.c',
   'ir/lima_nir_split_loads.c',
   'ir/lima_nir_lower_txp.c',
+  'ir/lima_nir_lower_framebuffer.c',
 
   'ir/lima_ir.h',
 

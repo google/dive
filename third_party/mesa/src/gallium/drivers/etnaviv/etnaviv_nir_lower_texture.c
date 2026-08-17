@@ -118,7 +118,7 @@ lower_tex_offset(nir_builder *b, nir_tex_instr *tex, UNUSED void *data)
     * value, matching the expected behaviour of Vivante GPU.
     */
    nir_def *lod_raw = nir_flog2(b, max_derivative);
-   nir_def *lod_fixed_point = nir_ffma(b, lod_raw, nir_imm_float(b, 0.5f),
+   nir_def *lod_fixed_point = nir_fmad(b, lod_raw, nir_imm_float(b, 0.5f),
                                        nir_imm_float(b, 393216.0f));
 
    /* Extract 16-bit fractional part */
@@ -135,7 +135,7 @@ lower_tex_offset(nir_builder *b, nir_tex_instr *tex, UNUSED void *data)
     * This reverses the fixed-point encoding to get final LOD value
     */
    nir_def *lod_float = nir_u2f32(b, lod_quantized);
-   lod = nir_ffma(b, lod_float, nir_imm_float(b, 1.0f/32.0f), nir_imm_float(b, 0.5f));
+   lod = nir_fmad(b, lod_float, nir_imm_float(b, 1.0f/32.0f), nir_imm_float(b, 0.5f));
 
    /* floor and convert to int */
    lod = nir_ffloor(b, lod);
@@ -464,7 +464,7 @@ etna_nir_lower_texture(nir_shader *s, struct etna_shader_key *key, const struct 
       NIR_PASS(progress, s, nir_lower_tex_shadow, key->num_texture_states,
                                                   key->tex_compare_func,
                                                   key->tex_swizzle,
-                                                  true);
+                                                  !key->shadow_compare_no_clamp);
 
    NIR_PASS(progress, s, nir_shader_tex_pass, lower_txs,
          nir_metadata_control_flow, NULL);

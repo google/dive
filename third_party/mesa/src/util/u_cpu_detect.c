@@ -92,6 +92,15 @@
 #include <sched.h>
 #endif
 
+#if DETECT_OS_LINUX && DETECT_ARCH_RISCV && __has_include(<asm/hwprobe.h>)
+#include <asm/hwprobe.h>
+#include <sys/syscall.h>
+#if !defined(__NR_riscv_hwprobe)
+#define __NR_riscv_hwprobe 258
+#endif
+#define HAVE_RISCV_HWPROBE
+#endif
+
 // prevent inadvert infinite recursion
 #define util_get_cpu_caps() util_get_cpu_caps_DO_NOT_USE()
 
@@ -170,7 +179,7 @@ check_os_altivec_support(void)
       }
    }
 #elif DETECT_OS_LINUX /* !DETECT_OS_APPLE && !DETECT_OS_NETBSD && !DETECT_OS_OPENBSD */
-   char *env_vsx = getenv("GALLIVM_VSX");
+   const char *env_vsx = os_get_option("GALLIVM_VSX");
    uint64_t hwcap = getauxval(AT_HWCAP);
    util_cpu_caps.has_altivec = (hwcap >> 28) & 1;
    if (!env_vsx || env_vsx[0] != '0')
@@ -190,13 +199,13 @@ check_os_altivec_support(void)
        * lp_build_create_jit_compiler_for_module().
        * If you want to disable Altivec code generation, the best place to do it is here.
        */
-      char *env_control = getenv("GALLIVM_ALTIVEC");    /* 1=enable (default); 0=disable */
+      const char *env_control = os_get_option("GALLIVM_ALTIVEC");    /* 1=enable (default); 0=disable */
       if (env_control && env_control[0] == '0') {
          enable_altivec = false;
       }
 #endif
       /* VSX instructions can be explicitly enabled/disabled via GALLIVM_VSX=1 or 0 */
-      char *env_vsx = getenv("GALLIVM_VSX");
+      const char *env_vsx = os_get_option("GALLIVM_VSX");
       if (env_vsx && env_vsx[0] == '0') {
          enable_vsx = false;
       }
@@ -441,6 +450,69 @@ check_os_loongarch64_support(void)
 }
 #endif /* DETECT_ARCH_LOONGARCH64 */
 
+#if DETECT_ARCH_RISCV
+static void
+check_os_riscv_support_default(void)
+{
+   /* Failed to use hwprobe, assume GC (IMAFDC) */
+   util_cpu_caps.has_rv_fd = 1;
+   util_cpu_caps.has_rv_c = 1;
+}
+static void
+check_os_riscv_support(void)
+{
+#ifdef HAVE_RISCV_HWPROBE
+   struct riscv_hwprobe probes[] = {
+      /*
+       * IMA_EXT_0 come in the same kernel version with with the hwprobe
+       * interface (v6.4).
+       */
+      {RISCV_HWPROBE_KEY_IMA_EXT_0, 0},
+   };
+   int ret;
+
+   ret = syscall(__NR_riscv_hwprobe, probes, ARRAY_SIZE(probes), 0, NULL, 0);
+
+   if (ret != 0) {
+      /* Kernel might be too old to have hwprobe */
+      check_os_riscv_support_default();
+      return;
+   }
+
+   for (unsigned i = 0; i < ARRAY_SIZE(probes); i++) {
+      switch(probes[i].key) {
+      case RISCV_HWPROBE_KEY_IMA_EXT_0:
+	 /* IMA_FD/IMA_C definition appear in v6.4 */
+         if (probes[i].value & RISCV_HWPROBE_IMA_FD)
+            util_cpu_caps.has_rv_fd = 1;
+         if (probes[i].value & RISCV_HWPROBE_IMA_C)
+            util_cpu_caps.has_rv_c = 1;
+         /* IMA_V/EXT_ZBA/EXT_ZBB/EXT_ZBS definition appear in v6.5 */
+#if defined(RISCV_HWPROBE_IMA_V)
+         if (probes[i].value & RISCV_HWPROBE_IMA_V)
+            util_cpu_caps.has_rv_v = 1;
+#endif
+#if defined(RISCV_HWPROBE_EXT_ZBA)
+         if (probes[i].value & RISCV_HWPROBE_EXT_ZBA)
+            util_cpu_caps.has_rv_zba = 1;
+#endif
+#if defined(RISCV_HWPROBE_EXT_ZBB)
+         if (probes[i].value & RISCV_HWPROBE_EXT_ZBB)
+            util_cpu_caps.has_rv_zbb = 1;
+#endif
+#if defined(RISCV_HWPROBE_EXT_ZBS)
+         if (probes[i].value & RISCV_HWPROBE_EXT_ZBS)
+            util_cpu_caps.has_rv_zbs = 1;
+#endif
+         break;
+      }
+   }
+#else
+   /* Toolchain might be too old to have hwprobe */
+   check_os_riscv_support_default();
+#endif
+}
+#endif
 
 static void
 get_cpu_topology(bool zen)
@@ -886,6 +958,10 @@ _util_cpu_detect_once(void)
    check_os_loongarch64_support();
 #endif /* DETECT_ARCH_LOONGARCH64 */
 
+#if DETECT_ARCH_RISCV
+   check_os_riscv_support();
+#endif /* DETECT_ARCH_RISCV */
+
    check_cpu_caps_override();
 
    /* max_vector_bits should be checked after cpu caps override */
@@ -916,6 +992,12 @@ _util_cpu_detect_once(void)
       printf("util_cpu_caps.has_daz = %u\n", util_cpu_caps.has_daz);
       printf("util_cpu_caps.has_lsx = %u\n", util_cpu_caps.has_lsx);
       printf("util_cpu_caps.has_lasx = %u\n", util_cpu_caps.has_lasx);
+      printf("util_cpu_caps.has_rv_fd = %u\n", util_cpu_caps.has_rv_fd);
+      printf("util_cpu_caps.has_rv_c = %u\n", util_cpu_caps.has_rv_c);
+      printf("util_cpu_caps.has_rv_v = %u\n", util_cpu_caps.has_rv_v);
+      printf("util_cpu_caps.has_rv_zba = %u\n", util_cpu_caps.has_rv_zba);
+      printf("util_cpu_caps.has_rv_zbb = %u\n", util_cpu_caps.has_rv_zbb);
+      printf("util_cpu_caps.has_rv_zbs = %u\n", util_cpu_caps.has_rv_zbs);
       printf("util_cpu_caps.has_avx512f = %u\n", util_cpu_caps.has_avx512f);
       printf("util_cpu_caps.has_avx512dq = %u\n", util_cpu_caps.has_avx512dq);
       printf("util_cpu_caps.has_avx512ifma = %u\n", util_cpu_caps.has_avx512ifma);

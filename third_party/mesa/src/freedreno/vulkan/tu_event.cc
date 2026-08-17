@@ -9,6 +9,8 @@
 
 #include "tu_event.h"
 
+#include "vk_synchronization.h"
+
 #include "tu_cmd_buffer.h"
 #include "tu_rmv.h"
 
@@ -109,14 +111,15 @@ tu_CmdSetEvent2(VkCommandBuffer commandBuffer,
 {
    VK_FROM_HANDLE(tu_cmd_buffer, cmd, commandBuffer);
    VK_FROM_HANDLE(tu_event, event, _event);
-   VkPipelineStageFlags2 src_stage_mask = 0;
+   VkPipelineStageFlags2 src_stage_mask =
+      vk_collect_dependency_info_src_stages(pDependencyInfo);
 
-   for (uint32_t i = 0; i < pDependencyInfo->memoryBarrierCount; i++)
-      src_stage_mask |= pDependencyInfo->pMemoryBarriers[i].srcStageMask;
-   for (uint32_t i = 0; i < pDependencyInfo->bufferMemoryBarrierCount; i++)
-      src_stage_mask |= pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask;
-   for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; i++)
-      src_stage_mask |= pDependencyInfo->pImageMemoryBarriers[i].srcStageMask;
+   if (!(pDependencyInfo->dependencyFlags &
+         VK_DEPENDENCY_ASYMMETRIC_EVENT_BIT_KHR)) {
+      tu_barrier(cmd, 1, pDependencyInfo, true);
+      /* Force emit any flushes before the RB_DONE_TS is emitted below. */
+      tu_emit_cache_flush<CHIP>(cmd);
+   }
 
    tu_write_event<CHIP>(cmd, event, src_stage_mask, 1);
 }
@@ -135,6 +138,7 @@ tu_CmdResetEvent2(VkCommandBuffer commandBuffer,
 }
 TU_GENX(tu_CmdResetEvent2);
 
+template <chip CHIP>
 VKAPI_ATTR void VKAPI_CALL
 tu_CmdWaitEvents2(VkCommandBuffer commandBuffer,
                   uint32_t eventCount,
@@ -144,8 +148,32 @@ tu_CmdWaitEvents2(VkCommandBuffer commandBuffer,
    VK_FROM_HANDLE(tu_cmd_buffer, cmd, commandBuffer);
    struct tu_cs *cs = cmd->state.pass ? &cmd->draw_cs : &cmd->cs;
 
+   bool skip_barrier = true;
+
    for (uint32_t i = 0; i < eventCount; i++) {
       VK_FROM_HANDLE(tu_event, event, pEvents[i]);
+
+      /* If the dependency info in CmdSetEvent is the same, we can rely on all
+       * flushes/invalidates landing by the time the event is signalled.
+       * Otherwise, we have to do a full pipeline barrier.
+       */
+      if (pDependencyInfos->dependencyFlags &
+          VK_DEPENDENCY_ASYMMETRIC_EVENT_BIT_KHR)
+         skip_barrier = false;
+
+      /* If concurrent binning is enabled, and the dstStage includes vertex
+       * stages, make BV also wait for the event.
+       */
+      bool wait_bv = false;
+      if (CHIP >= A7XX) {
+         VkPipelineStageFlags2 dst_stage_mask =
+            vk_collect_dependency_info_dst_stages(&pDependencyInfos[i]);
+         enum tu_stage dst_stage = vk2tu_dst_stage(cmd->device, dst_stage_mask);
+         if (dst_stage <= TU_STAGE_BV) {
+            wait_bv = true;
+            tu7_set_thread_both_patchpoint(cmd, cs);
+         }
+      }
 
       tu_cs_emit_pkt7(cs, CP_WAIT_REG_MEM, 6);
       tu_cs_emit(cs, CP_WAIT_REG_MEM_0_FUNCTION(WRITE_EQ) |
@@ -154,7 +182,12 @@ tu_CmdWaitEvents2(VkCommandBuffer commandBuffer,
       tu_cs_emit(cs, CP_WAIT_REG_MEM_3_REF(1));
       tu_cs_emit(cs, CP_WAIT_REG_MEM_4_MASK(~0u));
       tu_cs_emit(cs, CP_WAIT_REG_MEM_5_DELAY_LOOP_CYCLES(20));
+
+      if (wait_bv)
+         tu7_set_thread_br_patchpoint(cmd, cs, false);
    }
 
-   tu_barrier(cmd, eventCount, pDependencyInfos);
+   if (!skip_barrier)
+      tu_barrier(cmd, eventCount, pDependencyInfos, false);
 }
+TU_GENX(tu_CmdWaitEvents2);

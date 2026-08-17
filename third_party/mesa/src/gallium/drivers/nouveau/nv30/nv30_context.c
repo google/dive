@@ -73,7 +73,8 @@ nv30_context_flush(struct pipe_context *pipe, struct pipe_fence_handle **fence,
 
    if (fence)
       nouveau_fence_ref(nv30->base.fence,
-                        (struct nouveau_fence **)fence);
+                        (struct nouveau_fence **)fence,
+                        nv30->base.screen);
 
    PUSH_KICK(push);
 

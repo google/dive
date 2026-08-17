@@ -12,7 +12,8 @@
 #include "pvr_device_info.h"
 
 #define PVR_DEVICE_IDENT_36_V_104_182 \
-   .device_id = 0x36104182, .series_name = "B-Series", .public_name = "BXM-4-64"
+   .device_id = 0x36104182, .series_name = "B-Series", \
+   .public_name = "BXM-4-64", .arch = PVR_DEVICE_ARCH_ROGUE
 
 static const struct pvr_device_features pvr_device_features_36_V_104_182 = {
    .has_astc = true,
@@ -21,7 +22,7 @@ static const struct pvr_device_features pvr_device_features_36_V_104_182 = {
    .has_compute_overlap = true,
    .has_fbcdc_algorithm = true,
    .has_gpu_multicore_support = true,
-   .has_gs_rta_support = true,
+   /* .has_gs_rta_support = true, */
    .has_ipf_creq_pf = true,
    .has_isp_max_tiles_in_flight = true,
    .has_isp_samples_per_pixel = true,
@@ -51,9 +52,11 @@ static const struct pvr_device_features pvr_device_features_36_V_104_182 = {
    .has_tpu_image_state_v2 = true,
    .has_tpu_parallel_instances = true,
    .has_unified_store_depth = true,
+   .has_usc_alu_roundingmode_rne = true,
    .has_usc_f16sop_u8 = true,
    .has_usc_itrsmp = true,
    .has_usc_itrsmp_enhanced = true,
+   .has_usc_itr_parallel_instances = true,
    .has_usc_min_output_registers_per_pix = true,
    .has_usc_pixel_partition_mask = true,
    .has_usc_slots = true,
@@ -79,6 +82,7 @@ static const struct pvr_device_features pvr_device_features_36_V_104_182 = {
    .tile_size_y = 16U,
    .tpu_parallel_instances = 4U,
    .unified_store_depth = 256U,
+   .usc_itr_parallel_instances = 16U,
    .usc_min_output_registers_per_pix = 2U,
    .usc_slots = 64U,
    .uvs_banks = 8U,
@@ -89,9 +93,6 @@ static const struct pvr_device_features pvr_device_features_36_V_104_182 = {
 
    /* Derived features. */
    .has_s8xe = true,
-   .has_usc_itr_parallel_instances = true,
-
-   .usc_itr_parallel_instances = 16U,
 };
 
 static const struct pvr_device_enhancements
@@ -133,7 +134,7 @@ static const struct pvr_device_features pvr_device_features_36_V_104_183 = {
    .has_compute_overlap = true,
    .has_fbcdc_algorithm = true,
    .has_gpu_multicore_support = true,
-   .has_gs_rta_support = true,
+   /* .has_gs_rta_support = true, */
    .has_ipf_creq_pf = true,
    .has_isp_max_tiles_in_flight = true,
    .has_isp_samples_per_pixel = true,
@@ -163,6 +164,7 @@ static const struct pvr_device_features pvr_device_features_36_V_104_183 = {
    .has_tpu_image_state_v2 = true,
    .has_tpu_parallel_instances = true,
    .has_unified_store_depth = true,
+   .has_usc_alu_roundingmode_rne = true,
    .has_usc_f16sop_u8 = true,
    .has_usc_itrsmp = true,
    .has_usc_itrsmp_enhanced = true,

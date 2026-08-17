@@ -24,18 +24,20 @@ dEQP-GLES2.functional.rasterization.primitives.lines_wide,Fail
 dEQP-GLES2.functional.shaders.builtin_variable.frontfacing,Fail
 
 dEQP-GLES2.functional.shaders.functions.control_flow.mixed_return_break_continue_fragment,Fail
-dEQP-GLES2.functional.shaders.functions.control_flow.return_after_continue_fragment,Fail
 
 dEQP-GLES2.functional.shaders.loops.for_constant_iterations.101_iterations_fragment,Fail
-dEQP-GLES2.functional.shaders.loops.for_constant_iterations.conditional_continue_fragment,Fail
-dEQP-GLES2.functional.shaders.loops.for_constant_iterations.double_continue_fragment,Fail
 dEQP-GLES2.functional.shaders.loops.for_constant_iterations.mixed_break_continue_fragment,Fail
 
 dEQP-GLES2.functional.shaders.random.all_features.fragment.5,Fail
+dEQP-GLES2.functional.shaders.random.all_features.fragment.22,Fail
+dEQP-GLES2.functional.shaders.random.all_features.fragment.32,Fail
+dEQP-GLES2.functional.shaders.random.all_features.fragment.79,Fail
 dEQP-GLES2.functional.shaders.random.all_features.fragment.93,Fail
 dEQP-GLES2.functional.shaders.random.all_features.fragment.97,Fail
 dEQP-GLES2.functional.shaders.random.trigonometric.fragment.15,Fail
+dEQP-GLES2.functional.shaders.random.trigonometric.fragment.26,Fail
 dEQP-GLES2.functional.shaders.random.trigonometric.fragment.45,Fail
+dEQP-GLES2.functional.shaders.random.trigonometric.fragment.81,Fail
 
 # Need to port the DP3 trick for all_equal from st_glsl_to_tgsi.
 dEQP-GLES2.functional.shaders.struct.uniform.equal_fragment,Fail
@@ -58,6 +60,7 @@ dEQP-GLES2.functional.uniform_api.info_query.basic_array.mat4_both,Fail
 dEQP-GLES2.functional.uniform_api.info_query.basic_array.mat4_fragment,Fail
 dEQP-GLES2.functional.uniform_api.info_query.multiple_nested_structs_arrays.both,Fail
 dEQP-GLES2.functional.uniform_api.info_query.multiple_nested_structs_arrays.fragment,Fail
+dEQP-GLES2.functional.uniform_api.info_query.nested_structs_arrays.int_ivec4_both,Fail
 dEQP-GLES2.functional.uniform_api.info_query.nested_structs_arrays.mat4_mat2_fragment,Fail
 dEQP-GLES2.functional.uniform_api.info_query.struct_in_array.mat4_mat2_both,Fail
 dEQP-GLES2.functional.uniform_api.info_query.struct_in_array.mat4_mat2_fragment,Fail
@@ -91,6 +94,7 @@ dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.basic_ar
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.basic_array_first_elem_without_brackets.mat4_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.multiple_nested_structs_arrays.both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.multiple_nested_structs_arrays.fragment,Fail
+dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.nested_structs_arrays.int_ivec4_both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.nested_structs_arrays.mat4_mat2_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.struct_in_array.mat4_mat2_both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.get_uniform.struct_in_array.mat4_mat2_fragment,Fail
@@ -102,6 +106,7 @@ dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.basic_array.m
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.basic_array.mat4_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.multiple_nested_structs_arrays.both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.multiple_nested_structs_arrays.fragment,Fail
+dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.nested_structs_arrays.int_ivec4_both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.nested_structs_arrays.mat4_mat2_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.struct_in_array.mat4_mat2_both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.struct_in_array.mat4_mat2_fragment,Fail
@@ -109,10 +114,12 @@ dEQP-GLES2.functional.uniform_api.value.assigned.by_pointer.render.struct_in_arr
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.get_uniform.array_in_struct.sampler2D_samplerCube_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.get_uniform.multiple_nested_structs_arrays.both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.get_uniform.multiple_nested_structs_arrays.fragment,Fail
+dEQP-GLES2.functional.uniform_api.value.assigned.by_value.get_uniform.nested_structs_arrays.int_ivec4_both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.get_uniform.struct_in_array.sampler2D_samplerCube_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.render.array_in_struct.sampler2D_samplerCube_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.render.multiple_nested_structs_arrays.both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.render.multiple_nested_structs_arrays.fragment,Fail
+dEQP-GLES2.functional.uniform_api.value.assigned.by_value.render.nested_structs_arrays.int_ivec4_both,Fail
 dEQP-GLES2.functional.uniform_api.value.assigned.by_value.render.struct_in_array.sampler2D_samplerCube_fragment,Fail
 dEQP-GLES2.functional.uniform_api.value.initial.get_uniform.array_in_struct.mat4_mat2_both,Fail
 dEQP-GLES2.functional.uniform_api.value.initial.get_uniform.array_in_struct.mat4_mat2_fragment,Fail
@@ -324,10 +331,6 @@ spec@arb_depth_texture@texwrap formats bordercolor@GL_DEPTH_COMPONENT32- border 
 spec@arb_es2_compatibility@texwrap formats bordercolor,Fail
 spec@arb_es2_compatibility@texwrap formats bordercolor@GL_RGB565- border color only,Fail
 
-# Unexpected GL error: GL_INVALID_OPERATION 0x502
-# (Error at tests/spec/arb_framebuffer_object/same-attachment-tex2d-depth_stencil.c:135)
-spec@arb_framebuffer_object@same-attachment-tex2d-depth_stencil,Fail
-
 # fails at 4 samples (for our 4 supported indirections) because the 1D coordinate workaround
 # causes an extra texture indirection phase.
 spec@arb_fragment_program@fp-indirections2,Fail
@@ -357,7 +360,6 @@ spec@arb_occlusion_query@occlusion_query_conform,Fail
 spec@arb_occlusion_query@occlusion_query_conform@GetObjivAval_multi2,Fail
 
 spec@arb_pixel_buffer_object@fbo-pbo-readpixels-small,Fail
-spec@arb_pixel_buffer_object@pbo-getteximage,Fail
 
 spec@arb_provoking_vertex@arb-provoking-vertex-render,Fail
 spec@arb_sampler_objects@gl_ext_texture_srgb_decode,Fail
@@ -379,7 +381,6 @@ spec@arb_texture_compression@texwrap formats bordercolor@GL_COMPRESSED_RGBA- bor
 spec@ati_texture_compression_3dc@texwrap formats bordercolor,Fail
 spec@ati_texture_compression_3dc@texwrap formats bordercolor@GL_COMPRESSED_LUMINANCE_ALPHA_3DC_ATI- border color only,Fail
 
-spec@arb_texture_cube_map@copyteximage cube,Fail
 spec@arb_texture_rectangle@glsl-fs-shadow2drect,Fail
 spec@arb_texture_rectangle@glsl-fs-shadow2drect-01,Fail
 spec@arb_texture_rectangle@glsl-fs-shadow2drect-03,Fail
@@ -403,8 +404,6 @@ spec@ati_fragment_shader@ati_fragment_shader-render-ops,Fail
 spec@ati_fragment_shader@ati_fragment_shader-render-ops@mov 8*c0,Fail
 
 spec@egl 1.4@eglterminate then unbind context,Fail
-spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_depth_component24,Fail
-spec@egl_khr_gl_image@egl_khr_gl_renderbuffer_image-clear-shared-image gl_rgba,Fail
 spec@egl_khr_surfaceless_context@viewport,Fail
 
 spec@ext_direct_state_access@program-uniform,Fail
@@ -505,7 +504,6 @@ spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_yuyv,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_yvu420,Fail
 spec@ext_image_dma_buf_import@ext_image_dma_buf_import-sample_yvyu,Fail
 
-spec@ext_packed_depth_stencil@depth_stencil texture,Fail
 spec@ext_packed_depth_stencil@fbo-clear-formats,Fail
 spec@ext_packed_depth_stencil@fbo-clear-formats@GL_DEPTH24_STENCIL8,Fail
 spec@ext_packed_depth_stencil@fbo-clear-formats@GL_DEPTH_STENCIL,Fail
@@ -777,7 +775,6 @@ spec@glsl-1.10@execution@interpolation@interpolation-none-gl_frontcolor-smooth-v
 spec@glsl-1.10@execution@interpolation@interpolation-none-gl_frontsecondarycolor-smooth-fixed,Fail
 spec@glsl-1.10@execution@interpolation@interpolation-none-gl_frontsecondarycolor-smooth-none,Fail
 spec@glsl-1.10@execution@interpolation@interpolation-none-gl_frontsecondarycolor-smooth-vertex,Fail
-spec@glsl-1.10@execution@loops@glsl-fs-continue-inside-do-while,Fail
 spec@glsl-1.10@execution@loops@glsl-fs-loop-300,Fail
 
 # Failed to link: error: looping not supported i915 fragment shaders, all loops must be statically unrollable.
@@ -802,7 +799,6 @@ spec@glsl-1.10@execution@samplers@glsl-fs-shadow2dproj,Fail
 spec@glsl-1.10@execution@samplers@glsl-fs-shadow2dproj-bias,Fail
 
 spec@glsl-1.10@execution@temp-array-indexing@glsl-fs-vec4-indexing-temp-dst-in-nested-loop-combined,Fail
-spec@glsl-1.10@execution@temp-array-indexing@glsl-fs-vec4-indexing-temp-src-in-loop,Fail
 spec@glsl-1.10@execution@temp-array-indexing@glsl-fs-vec4-indexing-temp-src-in-nested-loop-combined,Fail
 spec@glsl-1.10@execution@temp-array-indexing@glsl-fs-vec4-indexing-temp-src-in-nested-loop-inner,Fail
 spec@glsl-1.10@execution@temp-array-indexing@glsl-fs-vec4-indexing-temp-src-in-nested-loop-outer,Fail
@@ -972,6 +968,9 @@ spec@glsl-1.20@execution@fs-vec4-const-array-indirect-access-048-elements,Fail
 spec@glsl-1.20@execution@fs-vec4-const-array-indirect-access-128-elements,Fail
 spec@glsl-1.20@execution@fs-vec4-const-array-indirect-access-256-elements,Fail
 
+# Loop unrolling regression
+spec@glsl-1.20@execution@fs-function-inout-array-of-structs,Fail
+
 # https://gitlab.freedesktop.org/mesa/mesa/-/issues/4980
 spec@glsl-1.20@execution@glsl-fs-frontfacing,Fail
 spec@glsl-1.20@execution@glsl-fs-frontfacing-not,Fail
@@ -1028,3 +1027,10 @@ spec@intel_performance_query@intel_performance_query-issue_2235,Fail
 spec@nv_primitive_restart@primitive-restart-draw-mode-lines,Fail
 spec@nv_primitive_restart@primitive-restart-draw-mode-quad_strip,Fail
 spec@nv_primitive_restart@primitive-restart-draw-mode-quads,Fail
+
+# uprev Piglit in Mesa
+spec@arb_texture_cube_map@copyteximage cube,Fail
+
+# Nightly run expectations update
+spec@glsl-1.10@execution@samplers@glsl-fs-shadow2d-consecutive-draws,Fail
+

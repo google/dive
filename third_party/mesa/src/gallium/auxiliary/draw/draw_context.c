@@ -163,6 +163,9 @@ draw_init(struct draw_context *draw)
    if (!draw_gs_init(draw))
       return false;
 
+   if (!draw_tess_init(draw))
+      return false;
+
    draw->quads_always_flatshade_last =
       !draw->pipe->screen->caps.quads_follow_provoking_vertex_convention;
 
@@ -183,7 +186,7 @@ draw_init(struct draw_context *draw)
 void
 draw_new_instance(struct draw_context *draw)
 {
-   draw_geometry_shader_new_instance(draw->gs.geometry_shader);
+   draw_geometry_shader_new_instance(draw);
    draw_prim_assembler_new_instance(draw->ia);
 }
 
@@ -222,6 +225,7 @@ draw_destroy(struct draw_context *draw)
    draw_pt_destroy(draw);
    draw_vs_destroy(draw);
    draw_gs_destroy(draw);
+   draw_tess_destroy(draw);
 #if DRAW_LLVM_AVAILABLE
    if (draw->llvm)
       draw_llvm_destroy(draw->llvm);
@@ -1055,7 +1059,7 @@ draw_set_sampler_views(struct draw_context *draw,
                        struct pipe_sampler_view **views,
                        unsigned num)
 {
-   assert(shader_stage < DRAW_MAX_SHADER_STAGE);
+   assert(shader_stage >= 0 && shader_stage < DRAW_MAX_SHADER_STAGE);
    assert(num <= PIPE_MAX_SHADER_SAMPLER_VIEWS);
 
    draw_do_flush(draw, DRAW_FLUSH_STATE_CHANGE);
@@ -1276,10 +1280,10 @@ draw_set_disk_cache_callbacks(struct draw_context *draw,
                               void *data_cookie,
                               void (*find_shader)(void *cookie,
                                                   struct lp_cached_code *cache,
-                                                  unsigned char ir_sha1_cache_key[20]),
+                                                  unsigned char ir_blake3_cache_key[BLAKE3_KEY_LEN]),
                               void (*insert_shader)(void *cookie,
                                                     struct lp_cached_code *cache,
-                                                    unsigned char ir_sha1_cache_key[20]))
+                                                    unsigned char ir_blake3_cache_key[BLAKE3_KEY_LEN]))
 {
    draw->disk_cache_find_shader = find_shader;
    draw->disk_cache_insert_shader = insert_shader;

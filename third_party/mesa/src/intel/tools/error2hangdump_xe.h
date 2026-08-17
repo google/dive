@@ -7,5 +7,6 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 void read_xe_data_file(FILE *dump_file, FILE *hang_dump_file, bool verbose);

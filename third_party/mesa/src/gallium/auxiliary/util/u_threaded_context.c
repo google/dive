@@ -77,6 +77,15 @@ enum tc_call_id {
    TC_END_BATCH = TC_NUM_CALLS,
 };
 
+struct tc_buffer_unmap {
+   struct tc_call_base base;
+   bool was_staging_transfer;
+   union {
+      struct pipe_transfer *transfer;
+      struct pipe_resource *resource;
+   };
+};
+
 static void
 tc_batch_execute(void *job, UNUSED void *gdata, int thread_index);
 
@@ -123,6 +132,8 @@ struct tc_batch_rp_info {
    struct tc_renderpass_info info;
    /* determines whether the info can be "safely" read by drivers or if it may still be in use */
    struct util_queue_fence ready;
+   /* the call that set 'ended' (increment info after) */
+   void *end_call;
    /* when a batch is full, the rp info rollsover onto 'next' */
    struct tc_batch_rp_info *next;
    /* when rp info has rolled over onto this struct, 'prev' is used to update pointers for realloc */
@@ -272,6 +283,7 @@ tc_batch_increment_renderpass_info(struct threaded_context *tc, unsigned batch_i
       if (tc->renderpass_info_recording) {
          tc_info[batch->renderpass_info_idx].info.data = tc->renderpass_info_recording->data;
          memcpy(tc_info[batch->renderpass_info_idx].info.resolve, tc->renderpass_info_recording->resolve, sizeof(tc->renderpass_info_recording->resolve));
+         memcpy(&tc_info[batch->renderpass_info_idx].info.resolve_geometry, &tc->renderpass_info_recording->resolve_geometry, sizeof(tc->renderpass_info_recording->resolve_geometry));
          memset(tc->renderpass_info_recording->resolve, 0, sizeof(tc->renderpass_info_recording->resolve));
          tc_batch_rp_info(tc->renderpass_info_recording)->next = &tc_info[batch->renderpass_info_idx];
          tc_info[batch->renderpass_info_idx].prev = tc_batch_rp_info(tc->renderpass_info_recording);
@@ -301,6 +313,7 @@ tc_batch_increment_renderpass_info(struct threaded_context *tc, unsigned batch_i
    util_queue_fence_reset(&tc_info[batch->renderpass_info_idx].ready);
    /* guard against deadlock scenario */
    assert(tc->renderpass_info_recording != &tc_info[batch->renderpass_info_idx].info);
+   tc_info[batch->renderpass_info_idx].end_call = NULL;
    /* this is now the current recording renderpass info */
    tc->renderpass_info_recording = &tc_info[batch->renderpass_info_idx].info;
    batch->max_renderpass_info_idx = batch->renderpass_info_idx;
@@ -314,13 +327,13 @@ tc_get_renderpass_info(struct threaded_context *tc)
    return tc->renderpass_info_recording;
 }
 
-static void
+static bool
 tc_check_fb_access(struct threaded_context *tc, struct pipe_resource *src, struct pipe_resource *dst)
 {
    bool fb_access = false;
 
    if (tc->renderpass_info_recording->ended)
-      return;
+      return false;
 
    for (unsigned i = 0; i < tc->nr_cbufs; i++) {
       fb_access |= tc->fb_resources[i] && (tc->fb_resources[i] == src || tc->fb_resources[i] == dst);
@@ -331,7 +344,9 @@ tc_check_fb_access(struct threaded_context *tc, struct pipe_resource *src, struc
       tc->in_renderpass = false;
       tc->renderpass_info_recording->ended = true;
       tc_signal_renderpass_info_ready(tc);
+      return true;
    }
+   return false;
 }
 
 /* update metadata at draw time */
@@ -456,14 +471,6 @@ tc_drop_resource_reference(struct pipe_resource *dst)
 
 /* Unreference dst but don't touch the dst pointer. */
 static inline void
-tc_drop_surface_reference(struct pipe_surface *dst)
-{
-   if (pipe_reference(&dst->reference, NULL)) /* only decrement refcount */
-      dst->context->surface_destroy(dst->context, dst);
-}
-
-/* Unreference dst but don't touch the dst pointer. */
-static inline void
 tc_drop_so_target_reference(struct pipe_stream_output_target *dst)
 {
    if (pipe_reference(&dst->reference, NULL)) /* only decrement refcount */
@@ -550,6 +557,10 @@ tc_batch_flush(struct threaded_context *tc, bool full_copy)
    struct tc_batch *next = &tc->batch_slots[tc->next];
    unsigned next_id = (tc->next + 1) % TC_MAX_BATCHES;
 
+#if !defined(NDEBUG)
+   assert(!next->tc_set_vertex_elements_for_call_pending);
+#endif
+
    tc_assert(next->num_total_slots != 0);
    tc_add_call_end(next);
 
@@ -588,14 +599,14 @@ tc_batch_flush(struct threaded_context *tc, bool full_copy)
  */
 static void *
 tc_add_sized_call(struct threaded_context *tc, enum tc_call_id id,
-                  unsigned num_slots, bool full_copy)
+                  unsigned num_slots, unsigned resv_slots, bool full_copy)
 {
    TC_TRACE_SCOPE(id);
    struct tc_batch *next = &tc->batch_slots[tc->next];
    assert(num_slots <= TC_SLOTS_PER_BATCH - 1);
    tc_debug_check(tc);
 
-   if (unlikely(next->num_total_slots + num_slots > TC_SLOTS_PER_BATCH - 1)) {
+   if (unlikely(next->num_total_slots + num_slots + resv_slots > TC_SLOTS_PER_BATCH - 1)) {
       /* copy existing renderpass info during flush */
       tc_batch_flush(tc, full_copy);
       tc->seen_fb_state = false;
@@ -627,14 +638,19 @@ tc_add_sized_call(struct threaded_context *tc, enum tc_call_id id,
 }
 
 #define tc_add_call(tc, execute, type) \
-   ((struct type*)tc_add_sized_call(tc, execute, call_size(type), true))
+   ((struct type*)tc_add_sized_call(tc, execute, call_size(type), 0, true))
 
 #define tc_add_call_no_copy(tc, execute, type) \
-   ((struct type*)tc_add_sized_call(tc, execute, call_size(type), false))
+   ((struct type*)tc_add_sized_call(tc, execute, call_size(type), 0, false))
 
 #define tc_add_slot_based_call(tc, execute, type, num_slots) \
    ((struct type*)tc_add_sized_call(tc, execute, \
-                                    call_size_with_slots(type, num_slots), true))
+                                    call_size_with_slots(type, num_slots), 0, true))
+
+#define tc_add_slot_based_call_and_reserve(tc, execute, type, num_slots, num_slot_resv) \
+   ((struct type*)tc_add_sized_call(tc, execute, \
+                                    call_size_with_slots(type, num_slots), num_slot_resv, \
+                                    true))
 
 /* Returns the last mergeable call that was added to the unflushed
  * batch, or NULL if the address of that call is not currently known
@@ -991,10 +1007,10 @@ tc_rebind_buffer(struct threaded_context *tc, uint32_t old_id, uint32_t new_id, 
 }
 
 static bool
-tc_is_buffer_bound_with_mask(uint32_t id, uint32_t *bindings, unsigned binding_mask)
+tc_is_buffer_bound_with_mask(uint32_t id, uint32_t *bindings, uint64_t binding_mask)
 {
    while (binding_mask) {
-      if (bindings[u_bit_scan(&binding_mask)] == id)
+      if (bindings[u_bit_scan64(&binding_mask)] == id)
          return true;
    }
    return false;
@@ -2025,7 +2041,7 @@ tc_set_shader_images(struct pipe_context *_pipe,
    struct tc_shader_images *p =
       tc_add_slot_based_call(tc, TC_CALL_set_shader_images, tc_shader_images,
                              images ? count : 0);
-   unsigned writable_buffers = 0;
+   uint64_t writable_buffers = 0;
 
    p->shader = shader;
    p->start = start;
@@ -2052,7 +2068,7 @@ tc_set_shader_images(struct pipe_context *_pipe,
                   util_range_add(&tres->b, &tres->valid_buffer_range,
                                  images[i].u.buf.offset,
                                  images[i].u.buf.offset + images[i].u.buf.size);
-                  writable_buffers |= BITFIELD_BIT(start + i);
+                  writable_buffers |= BITFIELD64_BIT(start + i);
                }
             } else {
                tc_set_resource_batch_usage(tc, resource);
@@ -2074,7 +2090,7 @@ tc_set_shader_images(struct pipe_context *_pipe,
                         count + unbind_num_trailing_slots);
    }
 
-   tc->image_buffers_writeable_mask[shader] &= ~BITFIELD_RANGE(start, count);
+   tc->image_buffers_writeable_mask[shader] &= ~BITFIELD64_RANGE(start, count);
    tc->image_buffers_writeable_mask[shader] |= writable_buffers;
 }
 
@@ -2255,19 +2271,39 @@ tc_call_set_vertex_elements_and_buffers(struct pipe_context *pipe, void *call)
  */
 struct pipe_vertex_buffer *
 tc_add_set_vertex_elements_and_buffers_call(struct pipe_context *_pipe,
-                                            unsigned count)
+                                            unsigned count,
+                                            bool account_for_unmaps)
 {
    struct threaded_context *tc = threaded_context(_pipe);
+   unsigned extra_slots = 0;
 
    /* We don't need to unbind trailing buffers because we never touch bindings
     * after num_vertex_buffers.
     */
    tc->num_vertex_buffers = count;
 
+   if (account_for_unmaps) {
+      /* st_update_array_templ is the only user of this function and since it's
+       * calling st_setup_current in between the call to __func__ and the call
+       * to tc_set_vertex_elements_for_call we need to make sure that no batch
+       * flush occurs in between.
+       * The tc_buffer_unmap calls can come from u_upload_unmap and u_upload_alloc
+       * (calling u_upload_release_buffer).
+       */
+      extra_slots = call_size(tc_buffer_unmap) * 2;
+   }
+
    struct tc_vertex_elements_and_buffers *p =
-      tc_add_slot_based_call(tc, TC_CALL_set_vertex_elements_and_buffers,
-                             tc_vertex_elements_and_buffers, count);
+      tc_add_slot_based_call_and_reserve(tc, TC_CALL_set_vertex_elements_and_buffers,
+                                         tc_vertex_elements_and_buffers, count,
+                                         extra_slots);
    p->count = count;
+
+#if !defined(NDEBUG)
+   struct tc_batch *next = &tc->batch_slots[tc->next];
+   next->tc_set_vertex_elements_for_call_pending = true;
+#endif
+
    return p->slot;
 }
 
@@ -2957,15 +2993,6 @@ tc_transfer_flush_region(struct pipe_context *_pipe,
    p->box = *rel_box;
 }
 
-struct tc_buffer_unmap {
-   struct tc_call_base base;
-   bool was_staging_transfer;
-   union {
-      struct pipe_transfer *transfer;
-      struct pipe_resource *resource;
-   };
-};
-
 static uint16_t ALWAYS_INLINE
 tc_call_buffer_unmap(struct pipe_context *pipe, void *call)
 {
@@ -3274,8 +3301,9 @@ tc_texture_subdata(struct pipe_context *_pipe,
    if (!size)
       return;
 
+   bool ended = false;
    if (tc->options.parse_renderpass_info && tc->in_renderpass)
-      tc_check_fb_access(tc, NULL, resource);
+      ended = tc_check_fb_access(tc, NULL, resource);
 
    /* Small uploads can be enqueued, big uploads must sync. */
    if (size <= TC_MAX_SUBDATA_BYTES) {
@@ -3290,6 +3318,8 @@ tc_texture_subdata(struct pipe_context *_pipe,
       p->stride = stride;
       p->layer_stride = layer_stride;
       memcpy(p->slot, data, size);
+      if (ended)
+         tc_batch_rp_info(tc->renderpass_info_recording)->end_call = p;
    } else {
       struct pipe_context *pipe = tc->pipe;
       struct threaded_resource *tres = threaded_resource(resource);
@@ -4478,8 +4508,9 @@ tc_image_copy_buffer(struct pipe_context *_pipe,
 
    if (dst->target == PIPE_BUFFER)
       tc_buffer_disable_cpu_storage(&tbuf->b);
+   bool ended = false;
    if (tc->options.parse_renderpass_info && tc->in_renderpass)
-      tc_check_fb_access(tc, NULL, &timg->b);
+      ended = tc_check_fb_access(tc, NULL, &timg->b);
 
    tc_set_resource_batch_usage(tc, dst);
    tc_set_resource_reference(&p->dst, dst);
@@ -4488,6 +4519,8 @@ tc_image_copy_buffer(struct pipe_context *_pipe,
    p->buffer_layer_stride = buffer_layer_stride;
    p->level = level;
    p->box = *box;
+   if (ended)
+      tc_batch_rp_info(tc->renderpass_info_recording)->end_call = p;
    tc_set_resource_batch_usage(tc, src);
    tc_set_resource_reference(&p->src, src);
 
@@ -4525,10 +4558,11 @@ tc_resource_copy_region(struct pipe_context *_pipe,
       tc_add_call(tc, TC_CALL_resource_copy_region,
                   tc_resource_copy_region);
 
+   bool ended = false;
    if (dst->target == PIPE_BUFFER)
       tc_buffer_disable_cpu_storage(dst);
    else if (tc->options.parse_renderpass_info && tc->in_renderpass)
-      tc_check_fb_access(tc, src, dst);
+      ended = tc_check_fb_access(tc, src, dst);
 
    tc_set_resource_batch_usage(tc, dst);
    tc_set_resource_reference(&p->dst, dst);
@@ -4540,6 +4574,8 @@ tc_resource_copy_region(struct pipe_context *_pipe,
    tc_set_resource_reference(&p->src, src);
    p->src_level = src_level;
    p->src_box = *src_box;
+   if (ended)
+      tc_batch_rp_info(tc->renderpass_info_recording)->end_call = p;
 
    if (dst->target == PIPE_BUFFER) {
       struct tc_buffer_list *next = &tc->buffer_lists[tc->next_buf_list];
@@ -4621,15 +4657,19 @@ tc_blit(struct pipe_context *_pipe, const struct pipe_blit_info *info)
 #endif
        (info->dst.resource->array_size && info->dst.resource->array_size != tc->fb_layers) ||
        (!tc->renderpass_info_recording->has_draw && !tc->renderpass_info_recording->cbuf_clear && !tc->renderpass_info_recording->zsbuf_clear)) {
+      bool ended = false;
       if (tc->options.parse_renderpass_info && tc->in_renderpass)
-         tc_check_fb_access(tc, info->src.resource, info->dst.resource);
-      tc_blit_enqueue(tc, info);
+         ended = tc_check_fb_access(tc, info->src.resource, info->dst.resource);
+      struct tc_blit_call *blit = tc_blit_enqueue(tc, info);
+      if (ended)
+         tc_batch_rp_info(tc->renderpass_info_recording)->end_call = blit;
       return;
    }
 
    bool is_depth = util_format_is_depth_or_stencil(info->src.format);
    struct pipe_resource *src = !is_depth ? tc->fb_resources[0] : tc->fb_resources[PIPE_MAX_COLOR_BUFS];
    bool is_resolve = false;
+   bool ended = tc->renderpass_info_recording->ended;
    if (tc->fb_resolve == info->dst.resource) {
 #if TC_DEBUG >= 3
       tc_printf("WSI RESOLVE MERGE");
@@ -4658,8 +4698,17 @@ tc_blit(struct pipe_context *_pipe, const struct pipe_blit_info *info)
       tc_check_fb_access(tc, info->src.resource, info->dst.resource);
    }
    struct tc_blit_call *blit = tc_blit_enqueue(tc, info);
-   if (is_resolve)
+   if (ended != tc->renderpass_info_recording->ended)
+      tc_batch_rp_info(tc->renderpass_info_recording)->end_call = blit;
+   if (is_resolve) {
+      tc->renderpass_info_recording->resolve_geometry.x = info->src.box.x;
+      tc->renderpass_info_recording->resolve_geometry.y = info->src.box.y;
+      tc->renderpass_info_recording->resolve_geometry.z = info->src.box.z;
+      tc->renderpass_info_recording->resolve_geometry.width = info->src.box.width;
+      tc->renderpass_info_recording->resolve_geometry.height = info->src.box.height;
+      tc->renderpass_info_recording->resolve_geometry.depth = info->src.box.depth;
       blit->base.call_id = TC_CALL_resolve;
+   }
 }
 
 struct tc_generate_mipmap {
@@ -4796,6 +4845,8 @@ struct tc_clear {
    bool scissor_state_set;
    uint8_t stencil;
    uint16_t buffers;
+   uint32_t color_clear_mask;
+   uint8_t stencil_clear_mask;
    float depth;
    struct pipe_scissor_state scissor_state;
    union pipe_color_union color;
@@ -4806,12 +4857,14 @@ tc_call_clear(struct pipe_context *pipe, void *call)
 {
    struct tc_clear *p = to_call(call, tc_clear);
 
-   pipe->clear(pipe, p->buffers, p->scissor_state_set ? &p->scissor_state : NULL, &p->color, p->depth, p->stencil);
+   pipe->clear(pipe, p->buffers, p->color_clear_mask, p->stencil_clear_mask, p->scissor_state_set ? &p->scissor_state : NULL, &p->color, p->depth, p->stencil);
    return call_size(tc_clear);
 }
 
 static void
-tc_clear(struct pipe_context *_pipe, unsigned buffers, const struct pipe_scissor_state *scissor_state,
+tc_clear(struct pipe_context *_pipe, unsigned buffers,
+         uint32_t color_clear_mask, uint8_t stencil_clear_mask,
+         const struct pipe_scissor_state *scissor_state,
          const union pipe_color_union *color, double depth,
          unsigned stencil)
 {
@@ -4819,6 +4872,8 @@ tc_clear(struct pipe_context *_pipe, unsigned buffers, const struct pipe_scissor
    struct tc_clear *p = tc_add_call(tc, TC_CALL_clear, tc_clear);
 
    p->buffers = buffers;
+   p->color_clear_mask = color_clear_mask;
+   p->stencil_clear_mask = stencil_clear_mask;
    tc->seen_fb_state = true;
    if (scissor_state) {
       p->scissor_state = *scissor_state;
@@ -5271,6 +5326,7 @@ batch_execute(struct tc_batch *batch, struct pipe_context *pipe, bool parsing)
     * begin incrementing renderpass info on the first set_framebuffer_state call
     */
    bool increment_rp_info_on_fb = batch->increment_rp_info_on_fb;
+   bool increment_rp_info_on_draw_clear = false;
    uint64_t *iter = batch->slots;
 
    while (1) {
@@ -5299,6 +5355,7 @@ batch_execute(struct tc_batch *batch, struct pipe_context *pipe, bool parsing)
          if (call->call_id == TC_CALL_flush) {
             /* always increment renderpass info for non-deferred flushes */
             batch->tc->renderpass_info = incr_rp_info(batch->tc->renderpass_info);
+            increment_rp_info_on_draw_clear = false;
          } else if (call->call_id == TC_CALL_set_framebuffer_state) {
             /* the renderpass info pointer is already set at the start of the batch,
              * so don't increment on the first set_framebuffer_state call
@@ -5307,11 +5364,22 @@ batch_execute(struct tc_batch *batch, struct pipe_context *pipe, bool parsing)
                batch->tc->renderpass_info = incr_rp_info(batch->tc->renderpass_info);
             /* only ever keep base rp info if set_framebuffer_state is the literal first call in a batch */
             increment_rp_info_on_fb = true;
-         } else if (call->call_id == TC_CALL_draw_single ||
-                    call->call_id == TC_CALL_draw_multi ||
-                    call->call_id == TC_CALL_clear ||
-                    (call->call_id >= TC_CALL_draw_single_drawid &&
-                     call->call_id <= TC_CALL_draw_vstate_multi)) {
+            increment_rp_info_on_draw_clear = false;
+         } else if (call == tc_batch_rp_info(batch->tc->renderpass_info)->end_call) {
+            increment_rp_info_on_draw_clear = true;
+         } else if (increment_rp_info_on_draw_clear) {
+            switch (call->call_id) {
+            case TC_CALL_clear:
+            case TC_CALL_draw_single:
+            case TC_CALL_draw_multi:
+            case TC_CALL_draw_single_drawid:
+            case TC_CALL_draw_vstate_multi:
+               batch->tc->renderpass_info = incr_rp_info(batch->tc->renderpass_info);
+               increment_rp_info_on_draw_clear = false;
+               break;
+            default:
+               break;
+            }
          }
       }
    }
@@ -5326,6 +5394,9 @@ tc_batch_execute(void *job, UNUSED void *gdata, int thread_index)
    tc_batch_check(batch);
    tc_set_driver_thread(batch->tc);
 
+#if !defined(NDEBUG)
+   assert(!batch->tc_set_vertex_elements_for_call_pending);
+#endif
    assert(!batch->token);
 
    /* setup renderpass info */
@@ -5465,6 +5536,10 @@ threaded_context_create(struct pipe_context *pipe,
    if (!pipe)
       return NULL;
 
+#ifndef HAVE_GFX_COMPUTE
+   return pipe;
+#endif
+
    if (!debug_get_bool_option("GALLIUM_THREAD", true))
       return pipe;
 
@@ -5528,7 +5603,7 @@ threaded_context_create(struct pipe_context *pipe,
       util_queue_fence_init(&tc->batch_slots[i].fence);
       tc->batch_slots[i].renderpass_info_idx = -1;
       if (tc->options.parse_renderpass_info) {
-         util_dynarray_init(&tc->batch_slots[i].renderpass_infos, NULL);
+         tc->batch_slots[i].renderpass_infos = UTIL_DYNARRAY_INIT;
          tc_batch_renderpass_infos_resize(tc, &tc->batch_slots[i]);
       }
    }

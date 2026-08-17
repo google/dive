@@ -18,13 +18,14 @@
 #include "asahi/lib/agx_tilebuffer.h"
 #include "asahi/lib/agx_uvs.h"
 #include "asahi/lib/pool.h"
-#include "asahi/libagx/geometry.h"
 #include "compiler/shader_enums.h"
 #include "gallium/auxiliary/util/u_blitter.h"
 #include "gallium/include/pipe/p_context.h"
 #include "gallium/include/pipe/p_screen.h"
 #include "gallium/include/pipe/p_state.h"
 #include "pipe/p_defines.h"
+#include "poly/geometry.h"
+#include "poly/nir/poly_nir.h"
 #include "util/bitset.h"
 #include "util/disk_cache.h"
 #include "util/hash_table.h"
@@ -32,7 +33,6 @@
 #include "util/u_range.h"
 #include "agx_bg_eot.h"
 #include "agx_helpers.h"
-#include "agx_nir_lower_gs.h"
 #include "agx_nir_texture.h"
 
 #ifdef __GLIBC__
@@ -117,18 +117,11 @@ struct PACKED agx_draw_uniforms {
    /* Addresses for the results of pipeline statistics queries */
    uint64_t pipeline_statistics[PIPE_STAT_QUERY_MS_INVOCATIONS];
 
-   /* Pointer to base address of the VS->TCS, VS->GS, or TES->GS buffer.
-    * Indirected so it can be written to in an indirect setup kernel. G13
-    * appears to prefetch uniforms across dispatches, but does not pre-run
-    * preambles, so this indirection saves us from splitting the batch.
-    */
-   uint64_t vertex_output_buffer_ptr;
-
    /* Mask of outputs flowing VS->TCS, VS->GS, or TES->GS . */
    uint64_t vertex_outputs;
 
    /* Address of input assembly buffer if geom/tess is used, else 0 */
-   uint64_t input_assembly;
+   uint64_t vertex_params;
 
    /* Address of tessellation param buffer if tessellation is used, else 0 */
    uint64_t tess_params;
@@ -248,7 +241,7 @@ struct agx_compiled_shader {
    struct agx_compiled_shader *gs_count, *pre_gs;
    struct agx_compiled_shader *gs_copy;
 
-   struct agx_gs_info gs;
+   struct poly_gs_info gs;
 
    /* Logical shader stage used for descriptor access. This may differ from the
     * physical shader stage of the compiled shader, for example when executing a
@@ -277,7 +270,7 @@ struct agx_uncompiled_shader {
    mesa_shader_stage type;
    struct blob early_serialized_nir;
    struct blob serialized_nir;
-   uint8_t nir_sha1[20];
+   uint8_t nir_blake3[BLAKE3_KEY_LEN];
 
    struct {
       uint64_t inputs_flat_shaded;
@@ -414,10 +407,6 @@ struct agx_batch {
 
    struct agx_draw_uniforms uniforms;
    struct agx_stage_uniforms stage_uniforms[MESA_SHADER_STAGES];
-
-   /* Indirect buffer allocated for geometry shader */
-   uint64_t geom_indirect;
-   struct agx_bo *geom_indirect_bo;
 
    /* Heap descriptor if dynamic allocation is required */
    uint64_t heap;
@@ -888,6 +877,8 @@ struct agx_screen {
 
    /* Lock to protect syncobj usage vs. destruction in context destroy */
    struct u_rwlock destroy_lock;
+
+   float heap_memory_percent;
 };
 
 static inline struct agx_screen *
@@ -971,9 +962,15 @@ agx_map_texture_cpu(struct agx_resource *rsrc, unsigned level, unsigned z)
 }
 
 static inline uint64_t
+agx_map_gpu(struct agx_resource *rsrc)
+{
+   return rsrc->bo->va->addr + rsrc->layout.level_offsets_B[0];
+}
+
+static inline uint64_t
 agx_map_texture_gpu(struct agx_resource *rsrc, unsigned z)
 {
-   return rsrc->bo->va->addr +
+   return agx_map_gpu(rsrc) +
           (uint64_t)ail_get_layer_offset_B(&rsrc->layout, z);
 }
 

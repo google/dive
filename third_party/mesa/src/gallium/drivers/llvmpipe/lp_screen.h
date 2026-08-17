@@ -38,6 +38,9 @@
 #include "pipe/p_defines.h"
 #include "util/u_thread.h"
 #include "util/list.h"
+#include "util/mesa-blake3.h"
+#include "util/simple_mtx.h"
+#include "util/u_shader_variant_cache.h"
 #include "util/vma.h"
 #include "gallivm/lp_bld.h"
 #include "gallivm/lp_bld_misc.h"
@@ -69,7 +72,16 @@ struct llvmpipe_screen
    mtx_t ctx_mutex;
    struct list_head ctx_list;
 
+   struct lp_context_ref llvm_context;
+
+   struct util_shader_variant_cache_options fs_variant_opts;
+   struct util_shader_variant_cache_options setup_variant_opts;
+   struct util_shader_variant_cache_options cs_variant_opts;
+   struct util_shader_variant_list setup_variants;
+
    char renderer_string[100];
+
+   unsigned char empty_mesh_payload[16384];
 
    struct disk_cache *disk_shader_cache;
 
@@ -92,16 +104,21 @@ struct llvmpipe_screen
 void
 lp_disk_cache_find_shader(struct llvmpipe_screen *screen,
                           struct lp_cached_code *cache,
-                          unsigned char ir_sha1_cache_key[20]);
+                          unsigned char ir_blake3_cache_key[BLAKE3_KEY_LEN]);
 
 
 void
 lp_disk_cache_insert_shader(struct llvmpipe_screen *screen,
                             struct lp_cached_code *cache,
-                            unsigned char ir_sha1_cache_key[20]);
+                            unsigned char ir_blake3_cache_key[BLAKE3_KEY_LEN]);
 
 bool
 llvmpipe_screen_late_init(struct llvmpipe_screen *screen);
+
+void llvmpipe_screen_init_fs_cache(struct llvmpipe_screen *screen);
+void llvmpipe_screen_init_setup_cache(struct llvmpipe_screen *screen);
+void llvmpipe_screen_destroy_setup_cache(struct llvmpipe_screen *screen);
+void llvmpipe_screen_init_cs_cache(struct llvmpipe_screen *screen);
 
 
 static inline struct llvmpipe_screen *

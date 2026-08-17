@@ -14,12 +14,22 @@ export LD_LIBRARY_PATH=$LIBDIR
 
 cd /usr/local/shader-db
 
-for driver in freedreno intel lima v3d vc4; do
+for driver in freedreno lima v3d vc4; do
     section_start shader-db-${driver} "Running shader-db for $driver"
     env LD_PRELOAD="$LIBDIR/lib${driver}_noop_drm_shim.so" \
         ./run -j"${FDO_CI_CONCURRENT:-4}" ./shaders \
             > "$ARTIFACTSDIR/${driver}-shader-db.txt"
     section_end shader-db-${driver}
+done
+
+# Run shader-db over a number of supported platforms for crocus/iris
+for platform in hsw bdw skl mtl lnl ptl; do
+    section_start "shader-db-intel-${platform}" "Running shader-db for intel - ${platform}"
+    env LD_PRELOAD="$LIBDIR/libintel_noop_drm_shim.so" \
+        INTEL_STUB_GPU_PLATFORM="${platform}" \
+        ./run -j"${FDO_CI_CONCURRENT:-4}" ./shaders \
+            > "$ARTIFACTSDIR/intel-${platform}-shader-db.txt"
+    section_end "shader-db-intel-${platform}"
 done
 
 # Run shader-db over a number of supported chipsets for nouveau
@@ -40,4 +50,14 @@ for chipset in 0x5460 0x7140; do
         ./run -j"${FDO_CI_CONCURRENT:-4}" -o r300 ./shaders \
             > "$ARTIFACTSDIR/r300-${chipset}-shader-db.txt"
     section_end shader-db-r300-${chipset}
+done
+
+# Run shader-db for radeonsi
+for device in pitcairn bonaire navi21 navi31 gfx1150 gfx1201; do
+    section_start shader-db-radeonsi-${device} "Running shader-db for radeonsi - ${device}"
+    env LD_PRELOAD="$LIBDIR/libamdgpu_noop_drm_shim.so" \
+        RADEON_GPU_ID=${device} \
+        ./run -j"${FDO_CI_CONCURRENT:-4}" -o radeonsi ./shaders \
+            > "$ARTIFACTSDIR/radeonsi-${device}-shader-db.txt"
+    section_end shader-db-radeonsi-${device}
 done

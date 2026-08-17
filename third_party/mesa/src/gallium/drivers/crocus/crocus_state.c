@@ -329,11 +329,11 @@ stream_state(struct crocus_batch *batch,
              unsigned alignment,
              uint32_t *out_offset)
 {
-   uint32_t offset = ALIGN(batch->state.used, alignment);
+   uint32_t offset = align(batch->state.used, alignment);
 
    if (offset + size >= STATE_SZ && !batch->no_wrap) {
       crocus_batch_flush(batch);
-      offset = ALIGN(batch->state.used, alignment);
+      offset = align(batch->state.used, alignment);
    } else if (offset + size >= batch->state.bo->size) {
       const unsigned new_size =
          MIN2(batch->state.bo->size + batch->state.bo->size / 2,
@@ -1547,9 +1547,9 @@ set_blend_entry_bits(struct crocus_batch *batch, BLEND_ENTRY_GENXML *entry,
    } else if (blend_enabled) {
       if (idx == 0) {
          struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
-         struct elk_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
+         struct elk_fs_prog_data *fs_prog_data = (void *) shader->prog_data;
          entry->ColorBufferBlendEnable =
-            (!cso_blend->dual_color_blending || wm_prog_data->dual_src_blend);
+            (!cso_blend->dual_color_blending || fs_prog_data->dual_src_blend);
       } else
          entry->ColorBufferBlendEnable = 1;
 
@@ -1566,8 +1566,8 @@ set_blend_entry_bits(struct crocus_batch *batch, BLEND_ENTRY_GENXML *entry,
     * when a dual src blend shader is in use. Setup dummy blending.
     */
    struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
-   struct elk_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
-   if (idx == 0 && !blend_enabled && wm_prog_data->dual_src_blend) {
+   struct elk_fs_prog_data *fs_prog_data = (void *) shader->prog_data;
+   if (idx == 0 && !blend_enabled && fs_prog_data->dual_src_blend) {
       entry->ColorBufferBlendEnable = 1;
       entry->ColorBlendFunction = PIPE_BLEND_ADD;
       entry->AlphaBlendFunction = PIPE_BLEND_ADD;
@@ -1795,7 +1795,7 @@ want_pma_fix(struct crocus_context *ice)
 {
    UNUSED struct crocus_screen *screen = (void *) ice->ctx.screen;
    UNUSED const struct intel_device_info *devinfo = &screen->devinfo;
-   const struct elk_wm_prog_data *wm_prog_data = (void *)
+   const struct elk_fs_prog_data *fs_prog_data = (void *)
       ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data;
    const struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
    const struct crocus_depth_stencil_alpha_state *cso_zsa = ice->state.cso_zsa;
@@ -1873,7 +1873,7 @@ want_pma_fix(struct crocus_context *ice)
       return false;
 
    /* 3DSTATE_WM::EDSC_Mode != EDSC_PREPS */
-   if (wm_prog_data->early_fragment_tests)
+   if (fs_prog_data->early_fragment_tests)
       return false;
 
    /* 3DSTATE_WM::ForceKillPix != ForceOff &&
@@ -1883,7 +1883,7 @@ want_pma_fix(struct crocus_context *ice)
     *  3DSTATE_PS_BLEND::AlphaTestEnable ||
     *  3DSTATE_WM_CHROMAKEY::ChromaKeyKillEnable)
     */
-   bool killpixels = wm_prog_data->uses_kill || wm_prog_data->uses_omask ||
+   bool killpixels = fs_prog_data->uses_kill || fs_prog_data->uses_omask ||
                      cso_blend->cso.alpha_to_coverage || cso_zsa->cso.alpha_enabled;
 
    /* The Gfx8 depth PMA equation becomes:
@@ -1907,7 +1907,7 @@ want_pma_fix(struct crocus_context *ice)
    if (!cso_zsa->cso.depth_enabled)
       return false;
 
-   return wm_prog_data->computed_depth_mode != PSCDEPTH_OFF ||
+   return fs_prog_data->computed_depth_mode != PSCDEPTH_OFF ||
           (killpixels && (cso_zsa->depth_writes_enabled ||
                           (sres && cso_zsa->stencil_writes_enabled)));
 }
@@ -2814,9 +2814,17 @@ crocus_sampler_view_destroy(struct pipe_context *ctx,
    free(isv);
 }
 
+static void
+crocus_surface_destroy(struct pipe_context *ctx, struct pipe_surface *p_surf)
+{
+   struct crocus_surface *surf = (void *) p_surf;
+   pipe_resource_reference(&p_surf->texture, NULL);
+
+   pipe_resource_reference(&surf->align_res, NULL);
+   free(surf);
+}
+
 /**
- * The pipe->create_surface() driver hook.
- *
  * In Gallium nomenclature, "surfaces" are a view of a resource that
  * can be bound as a render target or depth/stencil buffer.
  */
@@ -2855,7 +2863,6 @@ crocus_create_surface(struct pipe_context *ctx,
 
    pipe_reference_init(&psurf->reference, 1);
    pipe_resource_reference(&psurf->texture, tex);
-   psurf->context = ctx;
    psurf->format = tmpl->format;
    psurf->first_layer = tmpl->first_layer;
    psurf->last_layer = tmpl->last_layer;
@@ -2940,7 +2947,7 @@ crocus_create_surface(struct pipe_context *ctx,
    assert(view->levels == 1);
 
    /* TODO: compressed pbo uploads aren't working here */
-   pipe_surface_reference(&psurf, NULL);
+   crocus_surface_destroy(ctx, psurf);
    return NULL;
 
    uint64_t offset_B = 0;
@@ -2962,7 +2969,7 @@ crocus_create_surface(struct pipe_context *ctx,
        */
       // TODO: check if the gen7 check is right, originally gen8
       if (view->array_len > 1 || GFX_VER == 7) {
-         pipe_surface_reference(&psurf, NULL);
+         crocus_surface_destroy(ctx, psurf);
          return NULL;
       }
 
@@ -3192,16 +3199,6 @@ crocus_set_patch_vertices(struct pipe_context *ctx, uint8_t patch_vertices)
 }
 
 static void
-crocus_surface_destroy(struct pipe_context *ctx, struct pipe_surface *p_surf)
-{
-   struct crocus_surface *surf = (void *) p_surf;
-   pipe_resource_reference(&p_surf->texture, NULL);
-
-   pipe_resource_reference(&surf->align_res, NULL);
-   free(surf);
-}
-
-static void
 crocus_set_clip_state(struct pipe_context *ctx,
                       const struct pipe_clip_state *state)
 {
@@ -3252,19 +3249,19 @@ crocus_set_sample_mask(struct pipe_context *ctx, unsigned sample_mask)
 static void
 crocus_fill_scissor_rect(struct crocus_context *ice,
                          int idx,
-                         struct pipe_scissor_state *ss)
+                         struct crocus_scissor_state *ss)
 {
    struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
    struct pipe_rasterizer_state *cso_state = &ice->state.cso_rast->cso;
    const struct pipe_viewport_state *vp = &ice->state.viewports[idx];
-   struct pipe_scissor_state scissor = (struct pipe_scissor_state) {
+   struct crocus_scissor_state scissor = (struct crocus_scissor_state) {
       .minx = MAX2(-fabsf(vp->scale[0]) + vp->translate[0], 0),
       .maxx = MIN2( fabsf(vp->scale[0]) + vp->translate[0], cso_fb->width) - 1,
       .miny = MAX2(-fabsf(vp->scale[1]) + vp->translate[1], 0),
       .maxy = MIN2( fabsf(vp->scale[1]) + vp->translate[1], cso_fb->height) - 1,
    };
    if (cso_state->scissor) {
-      struct pipe_scissor_state *s = &ice->state.scissors[idx];
+      struct crocus_scissor_state *s = &ice->state.scissors[idx];
       scissor.minx = MAX2(scissor.minx, s->minx);
       scissor.miny = MAX2(scissor.miny, s->miny);
       scissor.maxx = MIN2(scissor.maxx, s->maxx);
@@ -3295,11 +3292,11 @@ crocus_set_scissor_states(struct pipe_context *ctx,
           * a min > max scissor inside the bounds, which produces the expected
           * no rendering.
           */
-         ice->state.scissors[start_slot + i] = (struct pipe_scissor_state) {
+         ice->state.scissors[start_slot + i] = (struct crocus_scissor_state) {
             .minx = 1, .maxx = 0, .miny = 1, .maxy = 0,
          };
       } else {
-         ice->state.scissors[start_slot + i] = (struct pipe_scissor_state) {
+         ice->state.scissors[start_slot + i] = (struct crocus_scissor_state) {
             .minx = rects[i].minx,     .miny = rects[i].miny,
             .maxx = rects[i].maxx - 1, .maxy = rects[i].maxy - 1,
          };
@@ -4578,7 +4575,7 @@ calculate_attr_overrides(
    uint32_t *urb_entry_read_length,
    uint32_t *urb_entry_read_offset)
 {
-   const struct elk_wm_prog_data *wm_prog_data = (void *)
+   const struct elk_fs_prog_data *fs_prog_data = (void *)
       ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data;
    const struct intel_vue_map *vue_map = ice->shaders.last_vue_map;
    const struct crocus_rasterizer_state *cso_rast = ice->state.cso_rast;
@@ -4595,7 +4592,7 @@ calculate_attr_overrides(
    *point_sprite_enables = 0;
 
    for (int fs_attr = 0; fs_attr < VARYING_SLOT_MAX; fs_attr++) {
-      const int input_index = wm_prog_data->urb_setup[fs_attr];
+      const int input_index = fs_prog_data->urb_setup[fs_attr];
 
       if (input_index < 0)
          continue;
@@ -4655,7 +4652,7 @@ static void
 crocus_emit_sbe(struct crocus_batch *batch, const struct crocus_context *ice)
 {
    const struct crocus_rasterizer_state *cso_rast = ice->state.cso_rast;
-   const struct elk_wm_prog_data *wm_prog_data = (void *)
+   const struct elk_fs_prog_data *fs_prog_data = (void *)
       ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data;
 #if GFX_VER >= 8
    struct GENX(SF_OUTPUT_ATTRIBUTE_DETAIL) attr_overrides[16] = { { 0 } };
@@ -4669,7 +4666,7 @@ crocus_emit_sbe(struct crocus_batch *batch, const struct crocus_context *ice)
 
    crocus_emit_cmd(batch, GENX(3DSTATE_SBE), sbe) {
       sbe.AttributeSwizzleEnable = true;
-      sbe.NumberofSFOutputAttributes = wm_prog_data->num_varying_inputs;
+      sbe.NumberofSFOutputAttributes = fs_prog_data->num_varying_inputs;
       sbe.PointSpriteTextureCoordinateOrigin = cso_rast->cso.sprite_coord_mode;
 
       calculate_attr_overrides(ice,
@@ -4679,7 +4676,7 @@ crocus_emit_sbe(struct crocus_batch *batch, const struct crocus_context *ice)
                                &urb_entry_read_offset);
       sbe.VertexURBEntryReadOffset = urb_entry_read_offset;
       sbe.VertexURBEntryReadLength = urb_entry_read_length;
-      sbe.ConstantInterpolationEnable = wm_prog_data->flat_inputs;
+      sbe.ConstantInterpolationEnable = fs_prog_data->flat_inputs;
       sbe.PointSpriteTextureCoordinateEnable = point_sprite_enables;
 #if GFX_VER >= 8
       sbe.ForceVertexURBEntryReadLength = true;
@@ -4793,7 +4790,7 @@ crocus_populate_gs_key(const struct crocus_context *ice,
 static void
 crocus_populate_fs_key(const struct crocus_context *ice,
                        const struct shader_info *info,
-                       struct elk_wm_prog_key *key)
+                       struct elk_fs_prog_key *key)
 {
    struct crocus_screen *screen = (void *) ice->ctx.screen;
    const struct pipe_framebuffer_state *fb = &ice->state.framebuffer;
@@ -4975,8 +4972,8 @@ emit_null_fb_surface(struct crocus_batch *batch,
    layer = 0;
 
    if (cso->nr_cbufs == 0 && ice->state.fb_zsbuf) {
-      width = ((struct crocus_surface*)ice->state.fb_zsbuf)->surf.logical_level0_px.width;
-      height = ((struct crocus_surface*)ice->state.fb_zsbuf)->surf.logical_level0_px.height;
+      width = MAX2(((struct crocus_surface*)ice->state.fb_zsbuf)->surf.logical_level0_px.width, 1);
+      height = MAX2(((struct crocus_surface*)ice->state.fb_zsbuf)->surf.logical_level0_px.height, 1);
       level = cso->zsbuf.level;
       layer = cso->zsbuf.first_layer;
    }
@@ -5414,13 +5411,13 @@ crocus_populate_binding_table(struct crocus_context *ice,
             const struct pipe_rt_blend_state *rt =
                &ice->state.cso_blend->cso.rt[ice->state.cso_blend->cso.independent_blend_enable ? i : 0];
             struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
-            struct elk_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
+            struct elk_fs_prog_data *fs_prog_data = (void *) shader->prog_data;
             write_disables |= (rt->colormask & PIPE_MASK_A) ? 0x0 : 0x8;
             write_disables |= (rt->colormask & PIPE_MASK_R) ? 0x0 : 0x4;
             write_disables |= (rt->colormask & PIPE_MASK_G) ? 0x0 : 0x2;
             write_disables |= (rt->colormask & PIPE_MASK_B) ? 0x0 : 0x1;
             /* Gen4/5 can't handle blending off when a dual src blend wm is enabled. */
-            blend_enable = rt->blend_enable || wm_prog_data->dual_src_blend;
+            blend_enable = rt->blend_enable || fs_prog_data->dual_src_blend;
 #endif
             if (cso_fb->cbufs[i].texture) {
                surf_offsets[s] = emit_surface(batch,
@@ -6006,7 +6003,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             vp.ViewportMatrixElementm31 = state->translate[1];
             vp.ViewportMatrixElementm32 = state->translate[2];
 #if GFX_VER < 6
-            struct pipe_scissor_state scissor;
+            struct crocus_scissor_state scissor;
             crocus_fill_scissor_rect(ice, 0, &scissor);
             vp.ScissorRectangle.ScissorRectangleXMin = scissor.minx;
             vp.ScissorRectangle.ScissorRectangleXMax = scissor.maxx;
@@ -6448,7 +6445,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
    if ((stage_dirty & CROCUS_STAGE_DIRTY_FS) && shader) {
       struct elk_stage_prog_data *prog_data = shader->prog_data;
-      struct elk_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
+      struct elk_fs_prog_data *fs_prog_data = (void *) shader->prog_data;
 
       crocus_emit_cmd(batch, GENX(3DSTATE_PS), ps) {
 
@@ -6456,26 +6453,26 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
           * incorrect for subspans where some of the pixels are unlit.  We believe
           * the bit just didn't take effect in previous generations.
           */
-         ps.VectorMaskEnable = GFX_VER >= 8 && wm_prog_data->uses_vmask;
+         ps.VectorMaskEnable = GFX_VER >= 8 && fs_prog_data->uses_vmask;
 
          intel_set_ps_dispatch_state(&ps, &batch->screen->devinfo,
-                                     wm_prog_data,
+                                     fs_prog_data,
                                      ice->state.framebuffer.samples,
-                                     0 /* msaa_flags */);
+                                     0 /* fs_config */);
 
          ps.DispatchGRFStartRegisterForConstantSetupData0 =
-            elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 0);
+            elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 0);
          ps.DispatchGRFStartRegisterForConstantSetupData1 =
-            elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 1);
+            elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 1);
          ps.DispatchGRFStartRegisterForConstantSetupData2 =
-            elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 2);
+            elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 2);
 
          ps.KernelStartPointer0 = KSP(ice, shader) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, ps, 0);
+            elk_fs_prog_data_prog_offset(fs_prog_data, ps, 0);
          ps.KernelStartPointer1 = KSP(ice, shader) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, ps, 1);
+            elk_fs_prog_data_prog_offset(fs_prog_data, ps, 1);
          ps.KernelStartPointer2 = KSP(ice, shader) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, ps, 2);
+            elk_fs_prog_data_prog_offset(fs_prog_data, ps, 2);
 
 #if GFX_VERx10 == 75
          ps.SampleMask = determine_sample_mask(ice);
@@ -6493,9 +6490,9 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          ps.PushConstantEnable = prog_data->ubo_ranges[0].length > 0;
 
 #if GFX_VER < 8
-         ps.oMaskPresenttoRenderTarget = wm_prog_data->uses_omask;
-         ps.DualSourceBlendEnable = wm_prog_data->dual_src_blend && ice->state.cso_blend->dual_color_blending;
-         ps.AttributeEnable = (wm_prog_data->num_varying_inputs != 0);
+         ps.oMaskPresenttoRenderTarget = fs_prog_data->uses_omask;
+         ps.DualSourceBlendEnable = fs_prog_data->dual_src_blend && ice->state.cso_blend->dual_color_blending;
+         ps.AttributeEnable = (fs_prog_data->num_varying_inputs != 0);
 #endif
          /* From the documentation for this packet:
           * "If the PS kernel does not need the Position XY Offsets to
@@ -6511,11 +6508,11 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
           * look useful at the moment.  We might need this in future.
           */
          ps.PositionXYOffsetSelect =
-            wm_prog_data->uses_pos_offset ? POSOFFSET_SAMPLE : POSOFFSET_NONE;
+            fs_prog_data->uses_pos_offset ? POSOFFSET_SAMPLE : POSOFFSET_NONE;
 
-         if (wm_prog_data->base.total_scratch) {
-            struct crocus_bo *bo = crocus_get_scratch_space(ice, wm_prog_data->base.total_scratch, MESA_SHADER_FRAGMENT);
-            ps.PerThreadScratchSpace = ffs(wm_prog_data->base.total_scratch) - 11;
+         if (fs_prog_data->base.total_scratch) {
+            struct crocus_bo *bo = crocus_get_scratch_space(ice, fs_prog_data->base.total_scratch, MESA_SHADER_FRAGMENT);
+            ps.PerThreadScratchSpace = ffs(fs_prog_data->base.total_scratch) - 11;
             ps.ScratchSpaceBasePointer = rw_bo(bo, 0);
          }
       }
@@ -6524,19 +6521,19 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          crocus_get_shader_info(ice, MESA_SHADER_FRAGMENT);
       crocus_emit_cmd(batch, GENX(3DSTATE_PS_EXTRA), psx) {
          psx.PixelShaderValid = true;
-         psx.PixelShaderComputedDepthMode = wm_prog_data->computed_depth_mode;
-         psx.PixelShaderKillsPixel = wm_prog_data->uses_kill;
-         psx.AttributeEnable = wm_prog_data->num_varying_inputs != 0;
-         psx.PixelShaderUsesSourceDepth = wm_prog_data->uses_src_depth;
-         psx.PixelShaderUsesSourceW = wm_prog_data->uses_src_w;
+         psx.PixelShaderComputedDepthMode = fs_prog_data->computed_depth_mode;
+         psx.PixelShaderKillsPixel = fs_prog_data->uses_kill;
+         psx.AttributeEnable = fs_prog_data->num_varying_inputs != 0;
+         psx.PixelShaderUsesSourceDepth = fs_prog_data->uses_src_depth;
+         psx.PixelShaderUsesSourceW = fs_prog_data->uses_src_w;
          psx.PixelShaderIsPerSample =
-            elk_wm_prog_data_is_persample(wm_prog_data, 0);
+            elk_fs_prog_data_is_persample(fs_prog_data, 0);
 
          /* _NEW_MULTISAMPLE | ELK_NEW_CONSERVATIVE_RASTERIZATION */
-         if (wm_prog_data->uses_sample_mask)
+         if (fs_prog_data->uses_sample_mask)
             psx.PixelShaderUsesInputCoverageMask = true;
 
-         psx.oMaskPresenttoRenderTarget = wm_prog_data->uses_omask;
+         psx.oMaskPresenttoRenderTarget = fs_prog_data->uses_omask;
 
          /* The stricter cross-primitive coherency guarantees that the hardware
           * gives us with the "Accesses UAV" bit set for at least one shader stage
@@ -6566,7 +6563,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
           * attachments, we need to force-enable here.
           *
           */
-         if ((wm_prog_data->has_side_effects || wm_prog_data->uses_kill) &&
+         if ((fs_prog_data->has_side_effects || fs_prog_data->uses_kill) &&
              !(has_writeable_rt(ice->state.cso_blend, fs_info)))
             psx.PixelShaderHasUAV = true;
       }
@@ -6591,7 +6588,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             struct crocus_resource *res = (void *) tgt->base.buffer;
             uint32_t start = tgt->base.buffer_offset;
 #if GFX_VER < 8
-            uint32_t end = ALIGN(start + tgt->base.buffer_size, 4);
+            uint32_t end = align(start + tgt->base.buffer_size, 4);
 #endif
             crocus_emit_cmd(batch, GENX(3DSTATE_SO_BUFFER), sob) {
                sob.SOBufferIndex = i;
@@ -6726,7 +6723,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
 #else //if GFX_VER >= 6
       struct crocus_rasterizer_state *cso_rast = ice->state.cso_rast;
-      const struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data );
+      const struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data );
       struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
       bool gs_or_tes = ice->shaders.prog[MESA_SHADER_GEOMETRY] ||
                        ice->shaders.prog[MESA_SHADER_TESS_EVAL];
@@ -6749,7 +6746,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          cl.UserClipDistanceCullTestEnableBitmask =
             elk_vue_prog_data(ice->shaders.prog[MESA_SHADER_VERTEX]->prog_data)->cull_distance_mask;
 
-         cl.NonPerspectiveBarycentricEnable = wm_prog_data->uses_nonperspective_interp_modes;
+         cl.NonPerspectiveBarycentricEnable = fs_prog_data->uses_nonperspective_interp_modes;
 
          cl.ForceZeroRTAIndexEnable = cso_fb->layers <= 1;
          cl.MaximumVPIndex = ice->state.num_viewports - 1;
@@ -7120,7 +7117,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          sf.ViewportTransformEnable = !ice->state.window_space_position;
 
 #if GFX_VER == 6
-         const struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data);
+         const struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data);
          uint32_t urb_entry_read_length;
          uint32_t urb_entry_read_offset;
          uint32_t point_sprite_enables;
@@ -7130,8 +7127,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          sf.VertexURBEntryReadLength = urb_entry_read_length;
          sf.VertexURBEntryReadOffset = urb_entry_read_offset;
          sf.PointSpriteTextureCoordinateEnable = point_sprite_enables;
-         sf.ConstantInterpolationEnable = wm_prog_data->flat_inputs;
-         sf.NumberofSFOutputAttributes = wm_prog_data->num_varying_inputs;
+         sf.ConstantInterpolationEnable = fs_prog_data->flat_inputs;
+         sf.NumberofSFOutputAttributes = fs_prog_data->num_varying_inputs;
 #endif
 
 #if GFX_VER >= 6 && GFX_VER < 8
@@ -7161,8 +7158,8 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
    if (dirty & CROCUS_DIRTY_WM) {
       struct crocus_rasterizer_state *cso = ice->state.cso_rast;
-      const struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data);
-      UNUSED bool writes_depth = wm_prog_data->computed_depth_mode != ELK_PSCDEPTH_OFF;
+      const struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(ice->shaders.prog[MESA_SHADER_FRAGMENT]->prog_data);
+      UNUSED bool writes_depth = fs_prog_data->computed_depth_mode != ELK_PSCDEPTH_OFF;
       UNUSED const struct shader_info *fs_info =
          crocus_get_shader_info(ice, MESA_SHADER_FRAGMENT);
 
@@ -7184,51 +7181,51 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 #endif
      {
 #if GFX_VER <= 6
-         wm._8PixelDispatchEnable = wm_prog_data->dispatch_8;
-         wm._16PixelDispatchEnable = wm_prog_data->dispatch_16;
-         wm._32PixelDispatchEnable = wm_prog_data->dispatch_32;
+         wm._8PixelDispatchEnable = fs_prog_data->dispatch_8;
+         wm._16PixelDispatchEnable = fs_prog_data->dispatch_16;
+         wm._32PixelDispatchEnable = fs_prog_data->dispatch_32;
 #endif
 #if GFX_VER == 4
       /* On gen4, we only have one shader kernel */
          if (elk_wm_state_has_ksp(wm, 0)) {
             wm.KernelStartPointer0 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]);
-            wm.GRFRegisterCount0 = elk_wm_prog_data_reg_blocks(wm_prog_data, wm, 0);
+            wm.GRFRegisterCount0 = elk_fs_prog_data_reg_blocks(fs_prog_data, wm, 0);
             wm.DispatchGRFStartRegisterForConstantSetupData0 =
-               wm_prog_data->base.dispatch_grf_start_reg;
+               fs_prog_data->base.dispatch_grf_start_reg;
          }
 #elif GFX_VER == 5
          wm.KernelStartPointer0 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, wm, 0);
+            elk_fs_prog_data_prog_offset(fs_prog_data, wm, 0);
          wm.KernelStartPointer1 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, wm, 1);
+            elk_fs_prog_data_prog_offset(fs_prog_data, wm, 1);
          wm.KernelStartPointer2 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, wm, 2);
+            elk_fs_prog_data_prog_offset(fs_prog_data, wm, 2);
 
-         wm.GRFRegisterCount0 = elk_wm_prog_data_reg_blocks(wm_prog_data, wm, 0);
-         wm.GRFRegisterCount1 = elk_wm_prog_data_reg_blocks(wm_prog_data, wm, 1);
-         wm.GRFRegisterCount2 = elk_wm_prog_data_reg_blocks(wm_prog_data, wm, 2);
+         wm.GRFRegisterCount0 = elk_fs_prog_data_reg_blocks(fs_prog_data, wm, 0);
+         wm.GRFRegisterCount1 = elk_fs_prog_data_reg_blocks(fs_prog_data, wm, 1);
+         wm.GRFRegisterCount2 = elk_fs_prog_data_reg_blocks(fs_prog_data, wm, 2);
 
          wm.DispatchGRFStartRegisterForConstantSetupData0 =
-            wm_prog_data->base.dispatch_grf_start_reg;
+            fs_prog_data->base.dispatch_grf_start_reg;
 #elif GFX_VER == 6
          wm.KernelStartPointer0 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, wm, 0);
+            elk_fs_prog_data_prog_offset(fs_prog_data, wm, 0);
          wm.KernelStartPointer1 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, wm, 1);
+            elk_fs_prog_data_prog_offset(fs_prog_data, wm, 1);
          wm.KernelStartPointer2 = KSP(ice, ice->shaders.prog[MESA_SHADER_FRAGMENT]) +
-            elk_wm_prog_data_prog_offset(wm_prog_data, wm, 2);
+            elk_fs_prog_data_prog_offset(fs_prog_data, wm, 2);
 
          wm.DispatchGRFStartRegisterForConstantSetupData0 =
-           elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 0);
+           elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, wm, 0);
          wm.DispatchGRFStartRegisterForConstantSetupData1 =
-           elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 1);
+           elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, wm, 1);
          wm.DispatchGRFStartRegisterForConstantSetupData2 =
-           elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, wm, 2);
+           elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, wm, 2);
 #endif
 #if GFX_VER <= 5
-         wm.ConstantURBEntryReadLength = wm_prog_data->base.curb_read_length;
+         wm.ConstantURBEntryReadLength = fs_prog_data->base.curb_read_length;
          wm.ConstantURBEntryReadOffset = ice->curbe.wm_start * 2;
-         wm.SetupURBEntryReadLength = wm_prog_data->num_varying_inputs * 2;
+         wm.SetupURBEntryReadLength = fs_prog_data->num_varying_inputs * 2;
          wm.SetupURBEntryReadOffset = 0;
          wm.EarlyDepthTestEnable = true;
          wm.LineAntialiasingRegionWidth = _05pixels;
@@ -7258,13 +7255,13 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          wm.LineEndCapAntialiasingRegionWidth = _05pixels;
 
          wm.PointRasterizationRule = RASTRULE_UPPER_RIGHT;
-         wm.BarycentricInterpolationMode = wm_prog_data->barycentric_interp_modes;
+         wm.BarycentricInterpolationMode = fs_prog_data->barycentric_interp_modes;
 #endif
 #if GFX_VER == 6
-      wm.DualSourceBlendEnable = wm_prog_data->dual_src_blend &&
+      wm.DualSourceBlendEnable = fs_prog_data->dual_src_blend &&
          ice->state.cso_blend->dual_color_blending;
-      wm.oMaskPresenttoRenderTarget = wm_prog_data->uses_omask;
-      wm.NumberofSFOutputAttributes = wm_prog_data->num_varying_inputs;
+      wm.oMaskPresenttoRenderTarget = fs_prog_data->uses_omask;
+      wm.NumberofSFOutputAttributes = fs_prog_data->num_varying_inputs;
 
       /* From the SNB PRM, volume 2 part 1, page 281:
        * "If the PS kernel does not need the Position XY Offsets
@@ -7278,7 +7275,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
        * We only require XY sample offsets. So, this recommendation doesn't
        * look useful at the moment. We might need this in future.
        */
-      if (wm_prog_data->uses_pos_offset)
+      if (fs_prog_data->uses_pos_offset)
          wm.PositionXYOffsetSelect = POSOFFSET_SAMPLE;
       else
          wm.PositionXYOffsetSelect = POSOFFSET_NONE;
@@ -7287,7 +7284,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          wm.PolygonStippleEnable = cso->cso.poly_stipple_enable;
 
 #if GFX_VER < 7
-         if (wm_prog_data->base.use_alt_mode)
+         if (fs_prog_data->base.use_alt_mode)
             wm.FloatingPointMode = FLOATING_POINT_MODE_Alternate;
          wm.BindingTableEntryCount = ice->shaders.prog[MESA_SHADER_FRAGMENT]->bt.size_bytes / 4;
          wm.MaximumNumberofThreads = batch->screen->devinfo.max_wm_threads - 1;
@@ -7295,7 +7292,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
 #if GFX_VER < 8
 #if GFX_VER >= 6
-         wm.PixelShaderUsesSourceW = wm_prog_data->uses_src_w;
+         wm.PixelShaderUsesSourceW = fs_prog_data->uses_src_w;
 
          struct pipe_framebuffer_state *fb = &ice->state.framebuffer;
          if (fb->samples > 1) {
@@ -7304,7 +7301,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
             else
                wm.MultisampleRasterizationMode = MSRASTMODE_OFF_PIXEL;
 
-            if (elk_wm_prog_data_is_persample(wm_prog_data, 0))
+            if (elk_fs_prog_data_is_persample(fs_prog_data, 0))
                wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
             else
                wm.MultisampleDispatchMode = MSDISPMODE_PERPIXEL;
@@ -7314,27 +7311,27 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          }
 #endif
 
-         wm.PixelShaderUsesSourceDepth = wm_prog_data->uses_src_depth;
+         wm.PixelShaderUsesSourceDepth = fs_prog_data->uses_src_depth;
 
-         if (wm_prog_data->uses_kill ||
+         if (fs_prog_data->uses_kill ||
              ice->state.cso_zsa->cso.alpha_enabled ||
              ice->state.cso_blend->cso.alpha_to_coverage ||
-             (GFX_VER >= 6 && wm_prog_data->uses_omask))
+             (GFX_VER >= 6 && fs_prog_data->uses_omask))
             wm.PixelShaderKillsPixel = true;
 
          if (has_writeable_rt(ice->state.cso_blend, fs_info) ||
              writes_depth || wm.PixelShaderKillsPixel ||
-             (GFX_VER >= 6 && wm_prog_data->has_side_effects))
+             (GFX_VER >= 6 && fs_prog_data->has_side_effects))
             wm.ThreadDispatchEnable = true;
 
 #if GFX_VER >= 7
-         wm.PixelShaderComputedDepthMode = wm_prog_data->computed_depth_mode;
-         wm.PixelShaderUsesInputCoverageMask = wm_prog_data->uses_sample_mask;
+         wm.PixelShaderComputedDepthMode = fs_prog_data->computed_depth_mode;
+         wm.PixelShaderUsesInputCoverageMask = fs_prog_data->uses_sample_mask;
 #else
-         if (wm_prog_data->base.total_scratch) {
-            struct crocus_bo *bo = crocus_get_scratch_space(ice, wm_prog_data->base.total_scratch,
+         if (fs_prog_data->base.total_scratch) {
+            struct crocus_bo *bo = crocus_get_scratch_space(ice, fs_prog_data->base.total_scratch,
                                                             MESA_SHADER_FRAGMENT);
-            wm.PerThreadScratchSpace = ffs(wm_prog_data->base.total_scratch) - 11;
+            wm.PerThreadScratchSpace = ffs(fs_prog_data->base.total_scratch) - 11;
             wm.ScratchSpaceBasePointer = rw_bo(bo, 0);
          }
 
@@ -7352,20 +7349,20 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
           */
 #if GFX_VERx10 == 75
          if (!(has_writeable_rt(ice->state.cso_blend, fs_info) || writes_depth) &&
-             wm_prog_data->has_side_effects)
+             fs_prog_data->has_side_effects)
             wm.PSUAVonly = ON;
 #endif
 #endif
 #if GFX_VER >= 7
       /* ELK_NEW_FS_PROG_DATA */
-         if (wm_prog_data->early_fragment_tests)
+         if (fs_prog_data->early_fragment_tests)
            wm.EarlyDepthStencilControl = EDSC_PREPS;
-         else if (wm_prog_data->has_side_effects)
+         else if (fs_prog_data->has_side_effects)
            wm.EarlyDepthStencilControl = EDSC_PSEXEC;
 #endif
 #if GFX_VER == 8
          /* We could skip this bit if color writes are enabled. */
-         if (wm_prog_data->has_side_effects || wm_prog_data->uses_kill)
+         if (fs_prog_data->has_side_effects || fs_prog_data->uses_kill)
             wm.ForceThreadDispatchEnable = ForceON;
 #endif
       };
@@ -7391,7 +7388,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
       struct crocus_compiled_shader *shader = ice->shaders.prog[MESA_SHADER_FRAGMENT];
       struct crocus_blend_state *cso_blend = ice->state.cso_blend;
       struct crocus_depth_stencil_alpha_state *cso_zsa = ice->state.cso_zsa;
-      struct elk_wm_prog_data *wm_prog_data = (void *) shader->prog_data;
+      struct elk_fs_prog_data *fs_prog_data = (void *) shader->prog_data;
       const struct shader_info *fs_info =
          crocus_get_shader_info(ice, MESA_SHADER_FRAGMENT);
       uint32_t dynamic_pb[GENX(3DSTATE_PS_BLEND_length)];
@@ -7399,7 +7396,7 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
          pb.HasWriteableRT = has_writeable_rt(cso_blend, fs_info);
          pb.AlphaTestEnable = cso_zsa->cso.alpha_enabled;
          pb.ColorBufferBlendEnable = (cso_blend->blend_enables & 1) &&
-            (!cso_blend->dual_color_blending || wm_prog_data->dual_src_blend);
+            (!cso_blend->dual_color_blending || fs_prog_data->dual_src_blend);
       }
       crocus_emit_merge(batch, cso_blend->ps_blend, dynamic_pb,
                         ARRAY_SIZE(cso_blend->ps_blend));
@@ -7438,11 +7435,11 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
    if (dirty & CROCUS_DIRTY_GEN6_SCISSOR_RECT) {
       /* Align to 64-byte boundary as per anv. */
       uint32_t scissor_offset;
-      struct pipe_scissor_state *scissor_map = (void *)
-         stream_state(batch, sizeof(struct pipe_scissor_state) * ice->state.num_viewports,
+      struct crocus_scissor_state *scissor_map = (void *)
+         stream_state(batch, sizeof(struct crocus_scissor_state) * ice->state.num_viewports,
                       64, &scissor_offset);
       for (int i = 0; i < ice->state.num_viewports; i++) {
-         struct pipe_scissor_state scissor;
+         struct crocus_scissor_state scissor;
          crocus_fill_scissor_rect(ice, i, &scissor);
          scissor_map[i] = scissor;
       }
@@ -8143,7 +8140,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
          vfe.URBEntryAllocationSize = GFX_VER == 8 ? 2 : 0;
 
          vfe.CURBEAllocationSize =
-            ALIGN(cs_prog_data->push.per_thread.regs * dispatch.threads +
+            align(cs_prog_data->push.per_thread.regs * dispatch.threads +
                   cs_prog_data->push.cross_thread.regs, 2);
       }
    }
@@ -8159,15 +8156,15 @@ crocus_upload_compute_state(struct crocus_context *ice,
          elk_cs_push_const_total_size(cs_prog_data, dispatch.threads);
       uint32_t *curbe_data_map =
          stream_state(batch,
-                      ALIGN(push_const_size, 64), 64,
+                      align(push_const_size, 64), 64,
                       &curbe_data_offset);
       assert(curbe_data_map);
-      memset(curbe_data_map, 0x5a, ALIGN(push_const_size, 64));
+      memset(curbe_data_map, 0x5a, align(push_const_size, 64));
       crocus_fill_cs_push_const_buffer(cs_prog_data, dispatch.threads,
                                        curbe_data_map);
 
       crocus_emit_cmd(batch, GENX(MEDIA_CURBE_LOAD), curbe) {
-         curbe.CURBETotalDataLength = ALIGN(push_const_size, 64);
+         curbe.CURBETotalDataLength = align(push_const_size, 64);
          curbe.CURBEDataStartAddress = curbe_data_offset;
       }
    }
@@ -9293,7 +9290,6 @@ genX(crocus_init_state)(struct crocus_context *ice)
    ctx->sampler_view_destroy = crocus_sampler_view_destroy;
    ctx->sampler_view_release = u_default_sampler_view_release;
    ctx->resource_release = u_default_resource_release;
-   ctx->surface_destroy = crocus_surface_destroy;
    ctx->draw_vbo = crocus_draw_vbo;
    ctx->launch_grid = crocus_launch_grid;
 
@@ -9319,7 +9315,7 @@ genX(crocus_init_state)(struct crocus_context *ice)
 
    /* Default all scissor rectangles to be empty regions. */
    for (int i = 0; i < CROCUS_MAX_VIEWPORTS; i++) {
-      ice->state.scissors[i] = (struct pipe_scissor_state) {
+      ice->state.scissors[i] = (struct crocus_scissor_state) {
          .minx = 1, .maxx = 0, .miny = 1, .maxy = 0,
       };
    }

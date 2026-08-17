@@ -40,6 +40,7 @@
 #include "util/os_time.h"
 #include <inttypes.h>
 #include "util/detect.h"
+#include "c99_alloca.h"
 
 void
 dd_get_debug_filename_and_mkdir(char *buf, size_t buflen, bool verbose)
@@ -1601,7 +1602,9 @@ dd_context_flush_resource(struct pipe_context *_pipe,
 }
 
 static void
-dd_context_clear(struct pipe_context *_pipe, unsigned buffers, const struct pipe_scissor_state *scissor_state,
+dd_context_clear(struct pipe_context *_pipe, unsigned buffers,
+                 uint32_t color_clear_mask, uint8_t stencil_clear_mask,
+                 const struct pipe_scissor_state *scissor_state,
                  const union pipe_color_union *color, double depth,
                  unsigned stencil)
 {
@@ -1611,6 +1614,8 @@ dd_context_clear(struct pipe_context *_pipe, unsigned buffers, const struct pipe
 
    record->call.type = CALL_CLEAR;
    record->call.info.clear.buffers = buffers;
+   record->call.info.clear.color_clear_mask = color_clear_mask;
+   record->call.info.clear.stencil_clear_mask = stencil_clear_mask;
    if (scissor_state)
       record->call.info.clear.scissor_state = *scissor_state;
    record->call.info.clear.color = *color;
@@ -1618,7 +1623,7 @@ dd_context_clear(struct pipe_context *_pipe, unsigned buffers, const struct pipe
    record->call.info.clear.stencil = stencil;
 
    dd_before_draw(dctx, record);
-   pipe->clear(pipe, buffers, scissor_state, color, depth, stencil);
+   pipe->clear(pipe, buffers, color_clear_mask, stencil_clear_mask, scissor_state, color, depth, stencil);
    dd_after_draw(dctx, record);
 }
 

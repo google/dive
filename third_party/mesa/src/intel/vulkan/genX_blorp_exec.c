@@ -56,7 +56,9 @@ static void blorp_measure_end(struct blorp_batch *_batch,
                          params->y1 - params->y0,
                          params->num_samples,
                          params->shader_pipeline,
-                         params->dst.view.format,
+                         params->depth.enabled ? params->depth.view.format :
+                         params->stencil.enabled ? params->stencil.view.format :
+                                                   params->dst.view.format,
                          params->src.view.format,
                          (_batch->flags & BLORP_BATCH_PREDICATE_ENABLE));
 }
@@ -93,25 +95,14 @@ blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
       anv_batch_set_error(&cmd_buffer->batch, result);
 }
 
-static uint64_t
-blorp_get_surface_address(struct blorp_batch *blorp_batch,
-                          struct blorp_address address)
-{
-   struct anv_address anv_addr = {
-      .bo = address.buffer,
-      .offset = address.offset,
-   };
-   return anv_address_physical(anv_addr);
-}
-
 #if GFX_VER == 9
 static struct blorp_address
 blorp_get_surface_base_address(struct blorp_batch *batch)
 {
    struct anv_cmd_buffer *cmd_buffer = batch->driver_batch;
    return (struct blorp_address) {
-      .buffer = cmd_buffer->device->internal_surface_state_pool.block_pool.bo,
-      .offset = -cmd_buffer->device->internal_surface_state_pool.start_offset,
+      .buffer = anv_device_get_internal_surface_state_pool(cmd_buffer->device)->block_pool.bo,
+      .offset = -anv_device_get_internal_surface_state_pool(cmd_buffer->device)->start_offset,
    };
 }
 #endif
@@ -302,6 +293,15 @@ blorp_exec_on_render(struct blorp_batch *batch,
    genX(cmd_buffer_emit_hashing_mode)(cmd_buffer, params->x1 - params->x0,
                                       params->y1 - params->y0, scale);
 
+   /* With Wa_14024015672, RHWO is initially disabled. We enable it for MSAA
+    * draws and disable for single sample unless explicitly disabled via drirc
+    * key.
+    */
+#if INTEL_WA_14024015672_GFX_VER
+   if (blorp_uses_bti_rt_writes(batch, params))
+      genX(cmd_buffer_rhwo_wa_14024015672)(cmd_buffer, params->num_samples > 1);
+#endif
+
 #if GFX_VER >= 11
    /* The PIPE_CONTROL command description says:
     *
@@ -311,10 +311,12 @@ blorp_exec_on_render(struct blorp_batch *batch,
     *     is set due to new association of BTI, PS Scoreboard Stall bit must
     *     be set in this packet."
     */
-   if (blorp_uses_bti_rt_writes(batch, params)) {
+   if (blorp_uses_bti_rt_writes(batch, params) &&
+       cmd_buffer->device->physical->rt_change_needs_flush) {
       anv_add_pending_pipe_bits(cmd_buffer,
-                                ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT |
-                                ANV_PIPE_STALL_AT_SCOREBOARD_BIT,
+                                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                ANV_PIPE_RT_BTI_CHANGE,
                                 "before blorp BTI change");
    }
 #endif
@@ -330,12 +332,11 @@ blorp_exec_on_render(struct blorp_batch *batch,
          hw_state->ds_write_state = blorp_ds_state;
          BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_WA_18019816803);
 
-         /* Add the stall that will flush prior to the blorp operation by
-          * genX(cmd_buffer_apply_pipe_flushes)
-          */
-         anv_add_pending_pipe_bits(cmd_buffer,
-                                   ANV_PIPE_PSS_STALL_SYNC_BIT,
-                                   "Wa_18019816803");
+         genX(batch_emit_pipe_control)(&cmd_buffer->batch,
+                                       cmd_buffer->device->info,
+                                       cmd_buffer->state.current_pipeline,
+                                       ANV_PIPE_PSS_STALL_SYNC_BIT,
+                                       "Wa_18019816803");
       }
    }
 #endif
@@ -352,8 +353,24 @@ blorp_exec_on_render(struct blorp_batch *batch,
 #endif
 
    if (params->depth.enabled &&
-       !(batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL))
-      genX(cmd_buffer_emit_gfx12_depth_wa)(cmd_buffer, &params->depth.surf);
+       !(batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL)) {
+      if (INTEL_NEEDS_WA_1808121037 && params->num_samples == 1 &&
+          params->depth.surf.format == ISL_FORMAT_R16_UNORM) {
+         /* Disable HiZ planes on D16 1x MSAA to avoid sporadic corruption. */
+         genX(cmd_buffer_disable_hiz_planes)(cmd_buffer);
+      }
+   }
+
+   if (params->depth.enabled &&
+       (batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL)) {
+      /* BLORP expects that the depth buffer aux usage matches the
+       * attachment's. Undo any temporary modification.
+       */
+      enum isl_aux_usage depth_aux_usage =
+         cmd_buffer->state.gfx.depth_att.aux_usage;
+      if (cmd_buffer->state.gfx.hiz_usage != depth_aux_usage)
+         genX(cmd_buffer_emit_depth_stencil)(cmd_buffer, depth_aux_usage);
+   }
 
    genX(flush_pipeline_select_3d)(cmd_buffer);
 
@@ -379,10 +396,12 @@ blorp_exec_on_render(struct blorp_batch *batch,
     *     is set due to new association of BTI, PS Scoreboard Stall bit must
     *     be set in this packet."
     */
-   if (blorp_uses_bti_rt_writes(batch, params)) {
+   if (blorp_uses_bti_rt_writes(batch, params) &&
+       cmd_buffer->device->physical->rt_change_needs_flush) {
       anv_add_pending_pipe_bits(cmd_buffer,
-                                ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT |
-                                ANV_PIPE_STALL_AT_SCOREBOARD_BIT,
+                                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                ANV_PIPE_RT_BTI_CHANGE,
                                 "after blorp BTI change");
    }
 #endif
@@ -424,10 +443,13 @@ blorp_exec_on_render(struct blorp_batch *batch,
       BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_MESH_CONTROL);
       BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_TASK_CONTROL);
    }
-   if (params->wm_prog_data) {
+   if (params->fs_prog_data) {
       BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_CC_STATE);
       BITSET_SET(hw_state->emit_dirty, ANV_GFX_STATE_PS_BLEND);
    }
+
+   /* Add the flagged instructions as emitted */
+   BITSET_OR(hw_state->emitted, hw_state->emitted, hw_state->emit_dirty);
 
    anv_cmd_dirty_mask_t dirty = ~(ANV_CMD_DIRTY_INDEX_BUFFER |
                                   ANV_CMD_DIRTY_XFB_ENABLE |
@@ -436,6 +458,8 @@ blorp_exec_on_render(struct blorp_batch *batch,
 
    cmd_buffer->state.gfx.vb_dirty = ~0;
    cmd_buffer->state.gfx.dirty |= dirty;
+   if (blorp_uses_bti_rt_writes(batch, params))
+      cmd_buffer->state.descriptors_pointers_dirty |= VK_SHADER_STAGE_ALL_GRAPHICS;
    cmd_buffer->state.push_constants_dirty |= VK_SHADER_STAGE_ALL_GRAPHICS;
 }
 
@@ -448,16 +472,21 @@ blorp_exec_on_compute(struct blorp_batch *batch,
    struct anv_cmd_buffer *cmd_buffer = batch->driver_batch;
    assert(cmd_buffer->queue_family->queueFlags & VK_QUEUE_COMPUTE_BIT);
 
-   genX(flush_pipeline_select_gpgpu)(cmd_buffer);
+   genX(flush_pipeline_select_gpgpu)(cmd_buffer, false);
 
    /* Apply any outstanding flushes in case pipeline select haven't. */
    genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
 
    blorp_exec(batch, params);
 
-   cmd_buffer->state.descriptors_dirty |= VK_SHADER_STAGE_COMPUTE_BIT;
+   anv_cmd_buffer_dirty_descriptors(cmd_buffer,
+                                    VK_SHADER_STAGE_COMPUTE_BIT,
+                                    "blorp compute");
+   cmd_buffer->state.descriptors_pointers_dirty |= VK_SHADER_STAGE_COMPUTE_BIT;
    cmd_buffer->state.push_constants_dirty |= VK_SHADER_STAGE_COMPUTE_BIT;
    cmd_buffer->state.compute.pipeline_dirty = true;
+
+   genX(cmd_buffer_post_dispatch_wa)(cmd_buffer);
 }
 
 static void
@@ -472,32 +501,36 @@ blorp_exec_on_blitter(struct blorp_batch *batch,
    blorp_exec(batch, params);
 }
 
-static enum isl_aux_op
+static enum anv_color_aux_op_class
 get_color_aux_op(const struct blorp_params *params)
 {
    switch (params->op) {
-   case BLORP_OP_CCS_RESOLVE:
-   case BLORP_OP_CCS_PARTIAL_RESOLVE:
    case BLORP_OP_CCS_COLOR_CLEAR:
    case BLORP_OP_MCS_COLOR_CLEAR:
       assert(params->fast_clear_op != ISL_AUX_OP_NONE);
-      return params->fast_clear_op;
+      return ANV_COLOR_AUX_OP_CLASS_FAST_CLEAR;
 
    /* Some auxiliary surface operations are not provided by hardware. To
     * provide that functionality, BLORP sometimes tries to emulate what
-    * hardware would do with custom pixel shaders. For now, we assume that
-    * BLORP's implementation has the same cache invalidation and flushing
-    * requirements as similar hardware operations.
+    * hardware would do with custom pixel shaders..
     */
    case BLORP_OP_CCS_AMBIGUATE:
-      assert(GFX_VER >= 11 || params->fast_clear_op == ISL_AUX_OP_NONE);
-      return ISL_AUX_OP_AMBIGUATE;
+      if (params->fast_clear_op == ISL_AUX_OP_NONE) {
+         return ANV_COLOR_AUX_OP_CLASS_SW_AMBIGUATE;
+      } else {
+         assert(GFX_VER >= 11);
+         return ANV_COLOR_AUX_OP_CLASS_HW_AMBIGUATE;
+      }
    case BLORP_OP_MCS_AMBIGUATE:
       assert(params->fast_clear_op == ISL_AUX_OP_NONE);
-      return ISL_AUX_OP_AMBIGUATE;
+      return ANV_COLOR_AUX_OP_CLASS_SW_AMBIGUATE;
+   case BLORP_OP_CCS_RESOLVE:
+   case BLORP_OP_CCS_PARTIAL_RESOLVE:
+      assert(params->fast_clear_op != ISL_AUX_OP_NONE);
+      return ANV_COLOR_AUX_OP_CLASS_HW_RESOLVE;
    case BLORP_OP_MCS_PARTIAL_RESOLVE:
       assert(params->fast_clear_op == ISL_AUX_OP_NONE);
-      return ISL_AUX_OP_PARTIAL_RESOLVE;
+      return ANV_COLOR_AUX_OP_CLASS_SW_RESOLVE;
 
    /* If memory aliasing is being done on an image, a pending fast clear
     * could hit the destination address at an unknown time. Go back to the
@@ -505,17 +538,25 @@ get_color_aux_op(const struct blorp_params *params)
     */
    case BLORP_OP_HIZ_AMBIGUATE:
    case BLORP_OP_HIZ_CLEAR:
+   case BLORP_OP_HIZ_STENCIL_CLEAR:
    case BLORP_OP_HIZ_RESOLVE:
+   case BLORP_OP_HIZ_PARTIAL_RESOLVE:
+   case BLORP_OP_FAST_STENCIL_CLEAR:
+   case BLORP_OP_SLOW_STENCIL_CLEAR:
+   case BLORP_OP_SLOW_DEPTH_STENCIL_CLEAR:
    case BLORP_OP_SLOW_DEPTH_CLEAR:
       assert(params->fast_clear_op == ISL_AUX_OP_NONE);
-      return ISL_AUX_OP_NONE;
+      return ANV_COLOR_AUX_OP_CLASS_NONE;
 
    /* The remaining operations are considered regular draws. */
+   case BLORP_OP_LINEAR_SURFACE_CLEAR:
    case BLORP_OP_SLOW_COLOR_CLEAR:
    case BLORP_OP_BLIT:
    case BLORP_OP_COPY:
+   case BLORP_OP_COPY_INDIRECT:
+   case BLORP_OP_COPY_IMAGE_INDIRECT:
       assert(params->fast_clear_op == ISL_AUX_OP_NONE);
-      return ISL_AUX_OP_NONE;
+      return ANV_COLOR_AUX_OP_CLASS_NONE;
    }
 
    UNREACHABLE("Invalid value in params->op");
@@ -538,7 +579,7 @@ genX(blorp_exec)(struct blorp_batch *batch,
    }
 
    /* Flush any in-progress CCS/MCS operations as needed. */
-   const enum isl_aux_op aux_op = get_color_aux_op(params);
+   const enum anv_color_aux_op_class aux_op = get_color_aux_op(params);
    genX(cmd_buffer_update_color_aux_op(cmd_buffer, aux_op));
 
    if (batch->flags & BLORP_BATCH_USE_BLITTER)
@@ -575,4 +616,11 @@ void
 genX(blorp_init_dynamic_states)(struct blorp_context *context)
 {
    blorp_init_dynamic_states(context);
+}
+
+static bool *
+blorp_get_write_fencing_status(struct blorp_batch *blorp_batch)
+{
+   struct anv_cmd_buffer *cmd_buffer = blorp_batch->driver_batch;
+   return &cmd_buffer->batch.write_fence_status;
 }

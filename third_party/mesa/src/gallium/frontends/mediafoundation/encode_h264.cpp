@@ -22,8 +22,6 @@
  */
 #if MFT_CODEC_H264ENC
 #include "hmft_entrypoints.h"
-#include "mfbufferhelp.h"
-#include "mfpipeinterop.h"
 #include "reference_frames_tracker_h264.h"
 #include "wpptrace.h"
 
@@ -113,92 +111,120 @@ ConstraintSetFlagsFromProfile( eAVEncH264VProfile profile )
 }
 
 // utility function to fill in encoder picture descriptor (pPicInfo) which is used to pass information to DX12 encoder
-static void
-UpdateH264EncPictureDesc( pipe_h264_enc_picture_desc *pPicInfo,
-                          const pipe_video_codec *pPipeVideoCodec,
-                          const encoder_capabilities &EncoderCapabilities,
-                          const eAVEncH264VProfile uiProfile,
-                          const enum pipe_video_profile outputPipeProfile,
-                          const VUInfo &VUIInfo,
-                          const MFRatio &FrameRate,
-                          BOOL bCabacEnable )
+HRESULT
+CDX12EncHMFT::UpdateH264EncPictureDesc( pipe_h264_enc_picture_desc *pPicInfo, const uint32_t intra_period, const uint32_t ip_period )
 {
-   if( EncoderCapabilities.m_bHWSupportsH264CABACEncode )
+   HRESULT hr = S_OK;
+
+   // fields are arranged in the same order as pipe_h264_enc_picture_desc
+   // base
+   pPicInfo->base.profile = m_outputPipeProfile;
+
+   // seq
+   pPicInfo->seq.enc_frame_cropping_flag = m_bFrameCroppingFlag;
+   pPicInfo->seq.vui_parameters_present_flag = 1;   // VUI Data - always true because we have timing_info_present_flag = 1
+   pPicInfo->seq.video_full_range_flag = m_VUIInfo.stVidSigType.bVideoFullRangeFlag;
+
+   pPicInfo->seq.enc_constraint_set_flags = ConstraintSetFlagsFromProfile( m_uiProfile );
+   pPicInfo->seq.level_idc = m_pPipeVideoCodec->level;
+
+   pPicInfo->seq.enc_frame_crop_right_offset = m_uiFrameCropRightOffset;
+   pPicInfo->seq.enc_frame_crop_bottom_offset = m_uiFrameCropBottomOffset;
+
+   /* TODO: check if we need this in gop_info.
+   pPicInfo->seq.pic_order_cnt_type = cur_frame_desc->gop_info->pic_order_cnt_type;
+   pPicInfo->seq.log2_max_frame_num_minus4 = cur_frame_desc->gop_info->log2_max_frame_num_minus4;
+   pPicInfo->seq.log2_max_pic_order_cnt_lsb_minus4 = cur_frame_desc->gop_info->log2_max_pic_order_cnt_lsb_minus4;
+   */
+
+   pPicInfo->seq.pic_order_cnt_type = ( ip_period > 2 ) ? 0u : 2u;   // 2 consecutive non reference frames -> 0u
+   pPicInfo->seq.log2_max_frame_num_minus4 = AVC_LOG2_MAX_FRAME_NUM_MINUS4;
+   pPicInfo->seq.log2_max_pic_order_cnt_lsb_minus4 = pPicInfo->seq.log2_max_frame_num_minus4 + 1;
+
+   pPicInfo->seq.num_temporal_layers = m_bLayerCountSet ? HMFT_MAX_TEMPORAL_LAYERS : 1;
+
+
+   if( m_EncoderCapabilities.m_bHWSupportsH264CABACEncode )
    {
       pPicInfo->pic_ctrl.enc_cabac_enable = ( ( pPicInfo->base.profile == PIPE_VIDEO_PROFILE_MPEG4_AVC_MAIN ) ||
                                               ( pPicInfo->base.profile == PIPE_VIDEO_PROFILE_MPEG4_AVC_HIGH ) ) &&
-                                                  bCabacEnable ?
+                                                  m_bCabacEnable ?
                                                true :
                                                false;
    }
 
-   pPicInfo->base.profile = outputPipeProfile;
-   pPicInfo->seq.level_idc = pPipeVideoCodec->level;
-   pPicInfo->seq.max_num_ref_frames = pPipeVideoCodec->max_references;
+   pPicInfo->seq.max_num_ref_frames = m_pPipeVideoCodec->max_references;
 
-   // VUI Data - always true because we have timing_info_present_flag = 1
-   pPicInfo->seq.vui_parameters_present_flag = 1;
-
-   // SAR - aspect ratio
-   pPicInfo->seq.vui_flags.aspect_ratio_info_present_flag = VUIInfo.bEnableSAR;
-   pPicInfo->seq.aspect_ratio_idc = 255 /* EXTENDED_SAR */;
-   pPicInfo->seq.sar_width = VUIInfo.stSARInfo.usWidth;
-   pPicInfo->seq.sar_height = VUIInfo.stSARInfo.usHeight;
-
-   // VST - video signal type
-   pPicInfo->seq.vui_flags.video_signal_type_present_flag = VUIInfo.bEnableVST;
-   pPicInfo->seq.video_format = VUIInfo.stVidSigType.eVideoFormat;
-   pPicInfo->seq.video_full_range_flag = VUIInfo.stVidSigType.bVideoFullRangeFlag;
-   pPicInfo->seq.vui_flags.colour_description_present_flag = VUIInfo.stVidSigType.bColorInfoPresent;
-   pPicInfo->seq.colour_primaries = VUIInfo.stVidSigType.eColorPrimary;
-   pPicInfo->seq.transfer_characteristics = VUIInfo.stVidSigType.eColorTransfer;
-   pPicInfo->seq.matrix_coefficients = VUIInfo.stVidSigType.eColorMatrix;
-
+   pPicInfo->seq.vui_flags.aspect_ratio_info_present_flag = m_VUIInfo.bEnableSAR;
    pPicInfo->seq.vui_flags.timing_info_present_flag = 1;
-   pPicInfo->seq.vui_flags.fixed_frame_rate_flag = 1;
-   pPicInfo->seq.num_units_in_tick = FrameRate.Denominator;
-   pPicInfo->seq.time_scale = FrameRate.Numerator * 2;
-
+   pPicInfo->seq.vui_flags.video_signal_type_present_flag = m_VUIInfo.bEnableVST;
+   pPicInfo->seq.vui_flags.colour_description_present_flag = m_VUIInfo.stVidSigType.bColorInfoPresent;
    pPicInfo->seq.vui_flags.chroma_loc_info_present_flag = 0;
-   pPicInfo->seq.chroma_sample_loc_type_top_field = 0;
-   pPicInfo->seq.chroma_sample_loc_type_bottom_field = 0;
-
    pPicInfo->seq.vui_flags.overscan_info_present_flag = 0;
    pPicInfo->seq.vui_flags.overscan_appropriate_flag = 0;
-
+   pPicInfo->seq.vui_flags.fixed_frame_rate_flag = 1;
    pPicInfo->seq.vui_flags.nal_hrd_parameters_present_flag = 0;
-   memset( &pPicInfo->seq.nal_hrd_parameters, 0, sizeof( pipe_h264_enc_hrd_params ) );
-
    pPicInfo->seq.vui_flags.vcl_hrd_parameters_present_flag = 0;
-   memset( &pPicInfo->seq.vcl_hrd_parameters, 0, sizeof( pipe_h264_enc_hrd_params ) );
-
    pPicInfo->seq.vui_flags.low_delay_hrd_flag = 0;
    pPicInfo->seq.vui_flags.pic_struct_present_flag = 0;
-
    pPicInfo->seq.vui_flags.bitstream_restriction_flag = 1;
    if( pPicInfo->seq.vui_flags.bitstream_restriction_flag )
    {
       pPicInfo->seq.vui_flags.motion_vectors_over_pic_boundaries_flag = 0;
+   }
+
+   pPicInfo->seq.aspect_ratio_idc = 255;   // EXTENDED_SAR
+   pPicInfo->seq.sar_width = m_VUIInfo.stSARInfo.usWidth;
+   pPicInfo->seq.sar_height = m_VUIInfo.stSARInfo.usHeight;
+
+   pPicInfo->seq.num_units_in_tick = m_FrameRate.Denominator;
+   pPicInfo->seq.time_scale = m_FrameRate.Numerator * 2;
+
+   pPicInfo->seq.video_format = m_VUIInfo.stVidSigType.eVideoFormat;   // VST - video signal type
+   pPicInfo->seq.colour_primaries = m_VUIInfo.stVidSigType.eColorPrimary;
+   pPicInfo->seq.transfer_characteristics = m_VUIInfo.stVidSigType.eColorTransfer;
+   pPicInfo->seq.matrix_coefficients = m_VUIInfo.stVidSigType.eColorMatrix;
+   pPicInfo->seq.chroma_sample_loc_type_top_field = 0;
+   pPicInfo->seq.chroma_sample_loc_type_bottom_field = 0;
+   if( pPicInfo->seq.vui_flags.bitstream_restriction_flag )
+   {
+      pPicInfo->seq.max_num_reorder_frames = 0;
+   }
+   memset( &pPicInfo->seq.nal_hrd_parameters, 0, sizeof( pipe_h264_enc_hrd_params ) );
+   memset( &pPicInfo->seq.vcl_hrd_parameters, 0, sizeof( pipe_h264_enc_hrd_params ) );
+   if( pPicInfo->seq.vui_flags.bitstream_restriction_flag )
+   {
       pPicInfo->seq.max_bytes_per_pic_denom = 0;
       pPicInfo->seq.max_bits_per_mb_denom = 0;
-      pPicInfo->seq.log2_max_mv_length_horizontal = 0;
       pPicInfo->seq.log2_max_mv_length_vertical = 0;
-      pPicInfo->seq.max_num_reorder_frames = 0;
+      pPicInfo->seq.log2_max_mv_length_horizontal = 0;
       pPicInfo->seq.max_dec_frame_buffering = pPicInfo->seq.max_num_ref_frames;   // TODO: compute a more accurate value.
    }
 
-   pPicInfo->seq.enc_constraint_set_flags = ConstraintSetFlagsFromProfile( uiProfile );
+   pPicInfo->seq.enc_constraint_set_flags = ConstraintSetFlagsFromProfile( m_uiProfile );
+
+   pPicInfo->intra_idr_period = intra_period;
+   pPicInfo->ip_period = ip_period;
+   pPicInfo->gop_size = intra_period;
+
+   return hr;
 }
 
 // internal function which contains the codec specific portion of PrepareForEncode
 HRESULT
-CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bool dirtyRectFrameNumSet, uint32_t dirtyRectFrameNum )
+CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext,
+                                      bool dirtyRectFrameNumSet,
+                                      uint32_t dirtyRectFrameNum,
+                                      bool moveRegionFrameNumSet,
+                                      uint32_t moveRegionFrameNum )
 {
    HRESULT hr = S_OK;
-   const reference_frames_tracker_frame_descriptor_h264 *cur_frame_desc = nullptr;
    pipe_h264_enc_picture_desc *pPicInfo = &pDX12EncodeContext->encoderPicInfo.h264enc;
+   const reference_frames_tracker_frame_descriptor_h264 *cur_frame_desc =
+      (const reference_frames_tracker_frame_descriptor_h264 *) m_pGOPTracker->get_frame_descriptor();
+
    // Initialize raw headers array
-   util_dynarray_init( &pPicInfo->raw_headers, NULL );
+   pPicInfo->raw_headers = UTIL_DYNARRAY_INIT;
 
    uint32_t height_in_blocks = 0;
    uint32_t width_in_blocks = 0;
@@ -207,18 +233,7 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
    pPicInfo->requested_metadata = m_EncoderCapabilities.m_HWSupportedMetadataFlags;
    pPicInfo->base.input_format = pDX12EncodeContext->pPipeVideoBuffer->buffer_format;
 
-   UpdateH264EncPictureDesc( pPicInfo,
-                             m_pPipeVideoCodec,
-                             m_EncoderCapabilities,
-                             m_uiProfile,
-                             m_outputPipeProfile,
-                             m_VUIInfo,
-                             m_FrameRate,
-                             m_bCabacEnable );
-
-   pPicInfo->seq.enc_frame_cropping_flag = m_bFrameCroppingFlag;
-   pPicInfo->seq.enc_frame_crop_right_offset = m_uiFrameCropRightOffset;
-   pPicInfo->seq.enc_frame_crop_bottom_offset = m_uiFrameCropBottomOffset;
+   UpdateH264EncPictureDesc( pPicInfo, cur_frame_desc->gop_info->intra_period, cur_frame_desc->gop_info->ip_period );
 
    if( pDX12EncodeContext->bROI )
    {
@@ -242,7 +257,6 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
       pPicInfo->dbk.disable_deblocking_filter_idc =
          D3D12_VIDEO_ENCODER_CODEC_CONFIGURATION_H264_SLICES_DEBLOCKING_MODE_0_ALL_LUMA_CHROMA_SLICE_BLOCK_EDGES_ALWAYS_FILTERED;
 
-   cur_frame_desc = (const reference_frames_tracker_frame_descriptor_h264 *) m_pGOPTracker->get_frame_descriptor();
    // Set the IDR exclusive long_term_reference_flag flag in the slice header or reset it to zero
    pPicInfo->slice.long_term_reference_flag =
       ( cur_frame_desc->gop_info->reference_type == frame_descriptor_reference_type_long_term &&
@@ -256,11 +270,6 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
    pPicInfo->frame_num = cur_frame_desc->gop_info->frame_num;
    pPicInfo->slice.frame_num = cur_frame_desc->gop_info->frame_num;
    pPicInfo->idr_pic_id = cur_frame_desc->gop_info->idr_pic_id;
-   pPicInfo->intra_idr_period = cur_frame_desc->gop_info->intra_period;
-   pPicInfo->seq.pic_order_cnt_type = cur_frame_desc->gop_info->pic_order_cnt_type;
-   pPicInfo->ip_period = cur_frame_desc->gop_info->ip_period;
-
-   pPicInfo->seq.num_temporal_layers = m_bLayerCountSet ? HMFT_MAX_TEMPORAL_LAYERS : 1;
 
    // Insert new headers on IDR
    if( pPicInfo->picture_type == PIPE_H2645_ENC_PICTURE_TYPE_IDR )
@@ -268,28 +277,26 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
       if( pPicInfo->seq.num_temporal_layers > 1 )
       {
          struct pipe_enc_raw_header header_sei = { /* type */ 6 /*NAL_TYPE_SEI*/ };
-         util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_sei );
+         util_dynarray_append( &pPicInfo->raw_headers, header_sei );
       }
 
       struct pipe_enc_raw_header header_sps = { /* type */ PIPE_H264_NAL_SPS };
-      util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_sps );
+      util_dynarray_append( &pPicInfo->raw_headers, header_sps );
       struct pipe_enc_raw_header header_pps = { /* type */ PIPE_H264_NAL_PPS };
-      util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_pps );
+      util_dynarray_append( &pPicInfo->raw_headers, header_pps );
    }
 
    // Always insert AUD
    struct pipe_enc_raw_header header_aud = { /* type */ PIPE_H264_NAL_AUD };
-   util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_aud );
+   util_dynarray_append( &pPicInfo->raw_headers, header_aud );
 
    // Always insert svc prefix slice header nal if num_temporal_layers > 1
    if( pPicInfo->seq.num_temporal_layers > 1 )
    {
       struct pipe_enc_raw_header header_svc_prefix = { /* type */ 14 /*NAL_TYPE_PREFIX*/ };
-      util_dynarray_append( &pPicInfo->raw_headers, struct pipe_enc_raw_header, header_svc_prefix );
+      util_dynarray_append( &pPicInfo->raw_headers, header_svc_prefix );
    }
 
-   pPicInfo->seq.log2_max_frame_num_minus4 = cur_frame_desc->gop_info->log2_max_frame_num_minus4;
-   pPicInfo->seq.log2_max_pic_order_cnt_lsb_minus4 = cur_frame_desc->gop_info->log2_max_pic_order_cnt_lsb_minus4;
    pPicInfo->not_referenced = ( cur_frame_desc->gop_info->reference_type == frame_descriptor_reference_type_none );
    pPicInfo->is_ltr = ( cur_frame_desc->gop_info->reference_type == frame_descriptor_reference_type_long_term );
    pPicInfo->ltr_index = cur_frame_desc->gop_info->ltr_index;
@@ -319,7 +326,8 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
       if( cur_frame_desc->ref_list0_mod_operations.size() > PIPE_H264_MAX_NUM_LIST_REF )
       {
          assert( false );
-         return E_UNEXPECTED;
+         hr = E_UNEXPECTED;
+         goto done;
       }
       pPicInfo->slice.num_ref_list0_mod_operations = static_cast<uint8_t>( cur_frame_desc->ref_list0_mod_operations.size() );
       for( uint32_t i = 0; i < pPicInfo->slice.num_ref_list0_mod_operations; i++ )
@@ -329,7 +337,8 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
    if( cur_frame_desc->mmco_operations.size() > PIPE_H264_MAX_NUM_LIST_REF )
    {
       assert( false );
-      return E_UNEXPECTED;
+      hr = E_UNEXPECTED;
+      goto done;
    }
    pPicInfo->slice.num_ref_pic_marking_operations = static_cast<uint8_t>( cur_frame_desc->mmco_operations.size() );
    if( pPicInfo->slice.num_ref_pic_marking_operations > 0 )
@@ -339,23 +348,28 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
          pPicInfo->slice.ref_pic_marking_operations[i] = cur_frame_desc->mmco_operations[i];
    }
 
+   if( !m_EncoderCapabilities.m_bHWSupportsAppControlledSlicePartitioning && m_EncoderCapabilities.m_bHWSupportSliceModeAuto )
+   {
+      pPicInfo->slice_mode = PIPE_VIDEO_SLICE_MODE_AUTO;
+   }
+
    if( m_uiDirtyRectEnabled )
    {
-      if( m_EncoderCapabilities.m_HWSupportDirtyRects.bits.supports_require_auto_slice_mode )
-      {
-         pPicInfo->slice_mode = PIPE_VIDEO_SLICE_MODE_AUTO;
-      }
-
       if( dirtyRectFrameNumSet )
       {
          DIRTYRECT_INFO *pDirtyRectInfo = (DIRTYRECT_INFO *) m_pDirtyRectBlob.data();
-         UINT uiNumDirtyRects = min( pDirtyRectInfo->NumDirtyRects, (UINT) PIPE_ENC_DIRTY_RECTS_NUM_MAX );
+         UINT uiNumDirtyRects = std::min( pDirtyRectInfo->NumDirtyRects, (UINT) PIPE_ENC_DIRTY_RECTS_NUM_MAX );
 
          if( uiNumDirtyRects > 0 )
          {
             bool foundSurfaceIndex = false;
             uint8_t surfaceIndex = UINT8_MAX;
             uint32_t search = dirtyRectFrameNum - 1;
+
+            if( m_EncoderCapabilities.m_HWSupportDirtyRects.bits.supports_require_auto_slice_mode )
+            {
+               pPicInfo->slice_mode = PIPE_VIDEO_SLICE_MODE_AUTO;
+            }
 
             CHECKHR_GOTO( ValidateDirtyRects( pDX12EncodeContext, pDirtyRectInfo ), done );
 
@@ -395,6 +409,68 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
                   pPicInfo->dirty_info.rects[i].bottom = pDirtyRectInfo->DirtyRects[i].bottom;
                   pPicInfo->dirty_info.rects[i].left = pDirtyRectInfo->DirtyRects[i].left;
                   pPicInfo->dirty_info.rects[i].right = pDirtyRectInfo->DirtyRects[i].right;
+               }
+            }
+         }
+      }
+   }
+
+   // ----------------------------
+   // Move Regions (motion hints)
+   // ----------------------------
+
+   // Always reset per-frame optional hint structures
+   memset( &pPicInfo->move_info, 0, sizeof( pPicInfo->move_info ) );
+
+   if( moveRegionFrameNumSet && m_EncoderCapabilities.m_HWSupportMoveRects.bits.max_motion_hints > 0 &&
+       m_EncoderCapabilities.m_HWSupportMoveRects.bits.supports_precision_full_pixel &&
+       pPicInfo->picture_type == PIPE_H2645_ENC_PICTURE_TYPE_P )   // P-frames only
+   {
+      uint32_t current_poc = pPicInfo->pic_order_cnt;
+
+      // Validate frame number first
+      // Due to the way the move region frame number is generated, there can be cases where the frame number doesn't match the
+      // current POC. In those cases, we will log a warning but still try to use the move regions.
+      if( m_uiGopSize > 0 && ( moveRegionFrameNum % m_uiGopSize ) != current_poc )
+      {
+         debug_printf( "[dx12 hmft 0x%p] WARNING: MoveRegions frame mismatch (MRFN=%u, cur POC=%u, GOPSize=%u)\n",
+                       this,
+                       moveRegionFrameNum,
+                       current_poc,
+                       m_uiGopSize );
+      }
+
+      {
+         MOVEREGION_INFO *pMoveInfo = reinterpret_cast<MOVEREGION_INFO *>( m_pMoveRegionBlob.data() );
+         uint32_t maxRects = m_EncoderCapabilities.m_HWSupportMoveRects.bits.max_motion_hints;
+         uint32_t numRects = std::min( pMoveInfo->NumMoveRegions, maxRects );
+
+         if( numRects > 0 )
+         {
+            uint8_t surfaceIndex = pPicInfo->ref_list0[0];
+
+            if( surfaceIndex == PIPE_H2645_LIST_REF_INVALID_ENTRY )
+            {
+               debug_printf( "[dx12 hmft 0x%p] MoveRegions: invalid L0 reference, ignoring\n", this );
+            }
+            else
+            {
+               pPicInfo->move_info.input_mode = PIPE_ENC_MOVE_INFO_INPUT_MODE_RECTS;
+               pPicInfo->move_info.num_rects = numRects;
+               pPicInfo->move_info.dpb_reference_index = surfaceIndex;
+               pPicInfo->move_info.precision = PIPE_ENC_MOVE_INFO_PRECISION_UNIT_FULL_PIXEL;
+
+               for( uint32_t i = 0; i < numRects; i++ )
+               {
+                  const MOVE_RECT &mr = pMoveInfo->MoveRegions[i];
+
+                  pPicInfo->move_info.rects[i].source_point.x = mr.SourcePoint.x;
+                  pPicInfo->move_info.rects[i].source_point.y = mr.SourcePoint.y;
+
+                  pPicInfo->move_info.rects[i].dest_rect.left = mr.DestRect.left;
+                  pPicInfo->move_info.rects[i].dest_rect.top = mr.DestRect.top;
+                  pPicInfo->move_info.rects[i].dest_rect.right = mr.DestRect.right;
+                  pPicInfo->move_info.rects[i].dest_rect.bottom = mr.DestRect.bottom;
                }
             }
          }
@@ -639,6 +715,10 @@ CDX12EncHMFT::PrepareForEncodeHelper( LPDX12EncodeContext pDX12EncodeContext, bo
                  pPicInfo->num_slice_descriptors );
 
 done:
+   if( FAILED( hr ) )
+   {
+      MFE_ERROR( "[dx12 hmft 0x%p] PrepareForEncodeHelper - hr=0x%x", this, hr );
+   }
    return hr;
 }
 
@@ -651,21 +731,11 @@ CDX12EncHMFT::GetCodecPrivateData( LPBYTE pSPSPPSData, DWORD dwSPSPPSDataLen, LP
    UINT alignedHeight = static_cast<UINT>( std::ceil( m_uiOutputHeight / 16.0 ) ) * 16;
    int ret = EINVAL;
    unsigned buf_size = dwSPSPPSDataLen;
+   const uint32_t intra_period = m_uiGopSize;
+   const uint32_t ip_period = m_uiBFrameCount + 1;
 
    pipe_h264_enc_picture_desc h264_pic_desc = {};
-   memset( &h264_pic_desc, 0, sizeof( h264_pic_desc ) );
 
-   uint32_t gop_length = m_uiGopSize;
-   uint32_t p_picture_period = m_uiBFrameCount + 1;
-
-   UpdateH264EncPictureDesc( &h264_pic_desc,
-                             m_pPipeVideoCodec,
-                             m_EncoderCapabilities,
-                             m_uiProfile,
-                             m_outputPipeProfile,
-                             m_VUIInfo,
-                             m_FrameRate,
-                             m_bCabacEnable );
    ComputeCroppingRect( alignedWidth,
                         alignedHeight,
                         m_uiOutputWidth,
@@ -674,25 +744,29 @@ CDX12EncHMFT::GetCodecPrivateData( LPBYTE pSPSPPSData, DWORD dwSPSPPSDataLen, LP
                         m_bFrameCroppingFlag,
                         m_uiFrameCropRightOffset,
                         m_uiFrameCropBottomOffset );
-   h264_pic_desc.seq.enc_frame_cropping_flag = m_bFrameCroppingFlag;
-   h264_pic_desc.seq.enc_frame_crop_right_offset = m_uiFrameCropRightOffset;
-   h264_pic_desc.seq.enc_frame_crop_bottom_offset = m_uiFrameCropBottomOffset;
+
+   UpdateH264EncPictureDesc( &h264_pic_desc, intra_period, ip_period );
 
    h264_pic_desc.pic_order_cnt = 0;                                // cur_frame_desc->gop_info->picture_order_count;
-   h264_pic_desc.intra_idr_period = gop_length;                    // cur_frame_desc->gop_info->base.intra_period;
-   h264_pic_desc.ip_period = p_picture_period;                     // cur_frame_desc->gop_info->base.ip_period;
    h264_pic_desc.picture_type = PIPE_H2645_ENC_PICTURE_TYPE_IDR;   // cur_frame_desc->gop_info->frame_type;
    h264_pic_desc.frame_num = 0;                                    // cur_frame_desc->gop_info->frame_num;
    h264_pic_desc.idr_pic_id = 0;                                   // cur_frame_desc->gop_info->idr_pic_id;
-   h264_pic_desc.gop_size = gop_length;
-   h264_pic_desc.seq.pic_order_cnt_type = ( p_picture_period > 2 ) ? 0u : 2u;   // 2 consecutive non reference frames -> 0u
-   h264_pic_desc.seq.log2_max_frame_num_minus4 = 4;
-   h264_pic_desc.seq.log2_max_pic_order_cnt_lsb_minus4 = h264_pic_desc.seq.log2_max_frame_num_minus4 + 1;
 
-   h264_pic_desc.rate_ctrl[0].rate_ctrl_method = PIPE_H2645_ENC_RATE_CONTROL_METHOD_DISABLE;
-   h264_pic_desc.rate_ctrl[0].vbr_quality_factor = static_cast<unsigned int>( ( ( ( 100 - m_uiQuality[0] ) / 100.0 ) * 50 ) + 1 );
-   h264_pic_desc.rate_ctrl[0].frame_rate_num = m_FrameRate.Numerator;
-   h264_pic_desc.rate_ctrl[0].frame_rate_den = m_FrameRate.Denominator;
+   // Rate Control
+   if( m_uiRateControlMode == eAVEncCommonRateControlMode_CBR )
+   {
+      h264_pic_desc.rate_ctrl[0].rate_ctrl_method = PIPE_H2645_ENC_RATE_CONTROL_METHOD_CONSTANT;
+      h264_pic_desc.rate_ctrl[0].target_bitrate = m_bMeanBitRateSet ? m_uiMeanBitRate : m_uiOutputBitrate;
+      h264_pic_desc.rate_ctrl[0].peak_bitrate = m_bMeanBitRateSet ? m_uiMeanBitRate : m_uiOutputBitrate;
+   }
+   else
+   {
+      h264_pic_desc.rate_ctrl[0].rate_ctrl_method = PIPE_H2645_ENC_RATE_CONTROL_METHOD_DISABLE;
+      h264_pic_desc.rate_ctrl[0].vbr_quality_factor =
+         static_cast<unsigned int>( ( ( ( 100 - m_uiQuality[0] ) / 100.0 ) * 50 ) + 1 );
+      h264_pic_desc.rate_ctrl[0].frame_rate_num = m_FrameRate.Numerator;
+      h264_pic_desc.rate_ctrl[0].frame_rate_den = m_FrameRate.Denominator;
+   }
    // Set default valid CQP 26 with 30 fps, doesn't affect header building
    // but needs to be valid, otherwise some drivers segfault
    h264_pic_desc.quant_i_frames = m_uiEncodeFrameTypeIQP[0];
@@ -704,6 +778,10 @@ CDX12EncHMFT::GetCodecPrivateData( LPBYTE pSPSPPSData, DWORD dwSPSPPSDataLen, LP
 
    *lpdwSPSPPSDataLen = (DWORD) buf_size;
 done:
+   if( FAILED( hr ) )
+   {
+      MFE_ERROR( "[dx12 hmft 0x%p] GetCodecPrivateData - hr=0x%x", this, hr );
+   }
    return hr;
 }
 
@@ -1071,8 +1149,12 @@ GetMaxDPBSize( int width, int height, eAVEncH264VLevel level_idc )
 UINT32
 CDX12EncHMFT::GetMaxReferences( unsigned int width, unsigned int height )
 {
-   int maxDPBSize = GetMaxDPBSize( width, height, m_uiLevel );
-   UINT32 uiMaxReferences = std::min( (int) m_EncoderCapabilities.m_uiMaxHWSupportedDPBCapacity, maxDPBSize );
+   UINT32 uiMaxReferences = m_EncoderCapabilities.m_uiMaxHWSupportedDPBCapacity;
+   if( width != 0 && height != 0 )
+   {
+      int maxDPBSize = GetMaxDPBSize( width, height, m_uiLevel );
+      uiMaxReferences = std::min( (int) m_EncoderCapabilities.m_uiMaxHWSupportedDPBCapacity, maxDPBSize );
+   }
    return uiMaxReferences;
 }
 
@@ -1083,14 +1165,12 @@ CDX12EncHMFT::CreateGOPTracker( uint32_t textureWidth, uint32_t textureHeight )
 {
    HRESULT hr = S_OK;
    uint32_t MaxHWL0Ref = m_EncoderCapabilities.m_uiMaxHWSupportedL0References;
-   uint32_t MaxHWL1Ref = m_EncoderCapabilities.m_uiMaxHWSupportedL1References;
    MaxHWL0Ref = std::min( 1u, MaxHWL0Ref );   // we only support 1
-   MaxHWL1Ref = 0;
    std::unique_ptr<dpb_buffer_manager> upTwoPassDPBManager;
 
    SAFE_DELETE( m_pGOPTracker );
-   // B Frame not supported by HW
-   CHECKBOOL_GOTO( ( m_uiBFrameCount == 0 ) || ( MaxHWL1Ref > 0 ), E_INVALIDARG, done );
+   // B Frame not supported
+   CHECKBOOL_GOTO( ( m_uiBFrameCount == 0 ), E_INVALIDARG, done );
    // Requested number of temporal layers higher than max supported by HW
    CHECKBOOL_GOTO( m_uiLayerCount <= m_EncoderCapabilities.m_uiMaxTemporalLayers, MF_E_OUT_OF_RANGE, done );
    // Validate logic expression (m_uiLayerCount > 1) => (m_uiBFrameCount == 0)
@@ -1112,21 +1192,23 @@ CDX12EncHMFT::CreateGOPTracker( uint32_t textureWidth, uint32_t textureHeight )
    assert( m_uiMaxNumRefFrame == m_pPipeVideoCodec->max_references );
    assert( 1 + m_uiMaxLongTermReferences <= m_uiMaxNumRefFrame );
    assert( MaxHWL0Ref <= m_uiMaxNumRefFrame );
-   assert( MaxHWL1Ref <= m_uiMaxNumRefFrame );
 
    if( m_pPipeVideoCodec->two_pass.enable && ( m_pPipeVideoCodec->two_pass.pow2_downscale_factor > 0 ) )
    {
       upTwoPassDPBManager = std::make_unique<dpb_buffer_manager>(
+         this,
          m_pPipeVideoCodec,
          static_cast<unsigned>( std::ceil( textureWidth / ( 1 << m_pPipeVideoCodec->two_pass.pow2_downscale_factor ) ) ),
          static_cast<unsigned>( std::ceil( textureHeight / ( 1 << m_pPipeVideoCodec->two_pass.pow2_downscale_factor ) ) ),
          ConvertProfileToFormat( m_pPipeVideoCodec->profile ),
          m_pPipeVideoCodec->max_references + 1 /*curr pic*/ +
-            ( m_bLowLatency ? 0 :
-                              MFT_INPUT_QUEUE_DEPTH ) /*MFT process input queue depth for delayed in flight recon pic release*/ );
+            ( m_bLowLatency ? 0 : MFT_INPUT_QUEUE_DEPTH ), /*MFT process input queue depth for delayed in flight recon pic release*/
+         hr );
+      CHECKHR_GOTO( hr, done );
    }
 
-   m_pGOPTracker = new reference_frames_tracker_h264( m_pPipeVideoCodec,
+   m_pGOPTracker = new reference_frames_tracker_h264( this,
+                                                      m_pPipeVideoCodec,
                                                       textureWidth,
                                                       textureHeight,
                                                       m_uiGopSize,
@@ -1135,15 +1217,18 @@ CDX12EncHMFT::CreateGOPTracker( uint32_t textureWidth, uint32_t textureHeight )
                                                       m_uiLayerCount,
                                                       m_bLowLatency,
                                                       MaxHWL0Ref,
-                                                      MaxHWL1Ref,
                                                       m_pPipeVideoCodec->max_references,
                                                       m_uiMaxLongTermReferences,
                                                       m_gpuFeatureFlags.m_bH264SendUnwrappedPOC,
-                                                      std::move( upTwoPassDPBManager ) );
-
-   CHECKNULL_GOTO( m_pGOPTracker, MF_E_INVALIDMEDIATYPE, done );
+                                                      std::move( upTwoPassDPBManager ),
+                                                      hr );
+   CHECKHR_GOTO( hr, done );
 
 done:
+   if( FAILED( hr ) )
+   {
+      MFE_ERROR( "[dx12 hmft 0x%p] CreateGOPTracker - hr=0x%x", this, hr );
+   }
    return hr;
 }
 

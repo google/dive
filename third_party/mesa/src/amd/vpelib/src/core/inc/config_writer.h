@@ -40,7 +40,8 @@ extern "C" {
 enum config_type {
     CONFIG_TYPE_UNKNOWN,
     CONFIG_TYPE_DIRECT,
-    CONFIG_TYPE_INDIRECT
+    CONFIG_TYPE_INDIRECT,
+    CONFIG_TYPE_3DLUT_FL,
 };
 
 typedef void (*config_callback_t)(
@@ -92,13 +93,6 @@ struct config_writer {
     config_callback_t callback;
     enum vpe_status   status;
 
-#ifdef VPE_REGISTER_PROFILE
-    uint64_t total_register_count;
-    uint64_t burstMode_register_count;
-    uint64_t nonBurstMode_register_count;
-    uint64_t total_config_count;
-    uint64_t reused_config_count;
-#endif
 };
 
 /** initialize the config writer.
@@ -129,6 +123,7 @@ void config_writer_set_callback(
  *
  * /param   writer      writer instance
  * /param   type        config type
+ * /param   pipe_idx    pipe instance
  */
 void config_writer_set_type(struct config_writer *writer, enum config_type type, uint32_t pipe_idx);
 
@@ -145,7 +140,8 @@ void config_writer_set_type(struct config_writer *writer, enum config_type type,
  * /param   type        config type
  * /param   pipe_idx    pipe instance
  */
-void config_writer_force_new_with_type(struct config_writer *writer, enum config_type type);
+void config_writer_force_new_with_type(
+    struct config_writer *writer, enum config_type type, uint32_t pipe_idx);
 
 /** fill the value to the buffer.
  * If the dword exceeds the config packet size limit,
@@ -184,6 +180,10 @@ void config_writer_fill_indirect_data_array(
 
 void config_writer_fill_indirect_destination(struct config_writer *writer,
     const uint32_t offset_index, const uint32_t start_index, const uint32_t offset_data);
+
+void config_writer_fill_3dlut_fl_addr(struct config_writer *writer, const uint64_t data_gpuva,
+    enum vpe_3dlut_addr_mode addr_mode, enum vpe_3dlut_mem_align mem_align, uint32_t size,
+    bool comp_mode, uint8_t tmz);
 
 /** explicitly complete the config */
 void config_writer_complete(struct config_writer *writer);

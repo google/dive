@@ -8,6 +8,7 @@
 #include "pipe/p_state.h"
 #include "renderonly/renderonly.h"
 #include "util/log.h"
+#include "util/macros.h"
 
 #ifndef RKT_SCREEN_H
 #define RKT_SCREEN_H
@@ -29,17 +30,36 @@ extern int rocket_debug;
                    ##__VA_ARGS__);                    \
    } while (0)
 
+struct rkt_ml_device {
+   struct pipe_ml_device base;
+   struct pipe_context *context;
+};
+
+static inline struct rkt_ml_device *
+rkt_ml_device(struct pipe_ml_device *dev)
+{
+   return (struct rkt_ml_device *)dev;
+}
+
 struct rkt_screen {
    struct pipe_screen pscreen;
 
    int fd;
    struct renderonly *ro;
+   struct rkt_ml_device ml_device;
 };
 
 static inline struct rkt_screen *
 rkt_screen(struct pipe_screen *p)
 {
    return (struct rkt_screen *)p;
+}
+
+static inline struct rkt_screen *
+rkt_ml_device_screen(struct pipe_ml_device *pdevice)
+{
+   struct rkt_ml_device *dev = rkt_ml_device(pdevice);
+   return container_of(dev, struct rkt_screen, ml_device);
 }
 
 struct rkt_context {

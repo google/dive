@@ -40,6 +40,24 @@ pub enum GOBType {
     /// `CopyGOBFermi` implements CPU copies for Fermi color GOBs.
     FermiColor,
 
+    /// The Tegra GOB format for color images
+    ///
+    /// A `TegraColor` GOB is 512 bytes, arranged in a 64x8 layout and split
+    /// into Sectors. Each Sector is 32 Bytes, and the Sectors in a GOB are
+    /// arranged in a 16x2 layout (i.e., two 16B lines on top of each other).
+    /// It's then arranged into two columns that are 2 sectors by 4, leading to
+    /// a 4x4 grid of sectors:
+    ///
+    /// |           |           |           |           |
+    /// |-----------|-----------|-----------|-----------|
+    /// | Sector  0 | Sector  1 | Sector  8 | Sector  9 |
+    /// | Sector  2 | Sector  3 | Sector 10 | Sector 11 |
+    /// | Sector  4 | Sector  5 | Sector 12 | Sector 13 |
+    /// | Sector  6 | Sector  7 | Sector 14 | Sector 15 |
+    ///
+    /// `CopyGOBTegra` implements CPU copies for Tegra color GOBs.
+    TegraColor,
+
     /// The Turing 2D GOB format for color images
     ///
     /// A `TuringColor2D` GOB is 512 bytes, arranged in a 64x8 layout and split
@@ -126,6 +144,8 @@ impl GOBType {
         } else if dev.cls_eng3d >= cl9097::FERMI_A {
             if format.is_depth_or_stencil() {
                 GOBType::FermiZS
+            } else if dev.type_ == NV_DEVICE_TYPE_SOC {
+                GOBType::TegraColor
             } else {
                 GOBType::FermiColor
             }
@@ -139,11 +159,17 @@ impl GOBType {
             GOBType::Linear => Extent4D::new(1, 1, 1, 1),
             GOBType::FermiZS
             | GOBType::FermiColor
+            | GOBType::TegraColor
             | GOBType::TuringColor2D
             | GOBType::Blackwell8Bit
             | GOBType::Blackwell16Bit
             | GOBType::BlackwellZ24 => Extent4D::new(64, 8, 1, 1),
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn nil_gob_type_extent_B(self) -> Extent4D<units::Bytes> {
+        self.extent_B()
     }
 
     #[no_mangle]
@@ -352,6 +378,7 @@ impl Tiling {
 
     pub fn choose(
         dev: &nil_rs_bindings::nv_device_info,
+        dim: ImageDim,
         extent_px: Extent4D<units::Pixels>,
         format: Format,
         sample_layout: SampleLayout,
@@ -363,11 +390,39 @@ impl Tiling {
         let mut tiling = Tiling {
             gob_type: GOBType::choose(dev, format),
             x_log2: 0,
-            y_log2: 5,
-            z_log2: 5,
+            y_log2: 0,
+            z_log2: 0,
         };
 
+        /*
+         * This heuristic aims to match what the proprietary driver picks.
+         * The corresponding reverse engineering work is here:
+         * https://gitlab.freedesktop.org/mhenning/re/-/tree/main/image_descriptor
+         */
+        match dim {
+            ImageDim::_1D => (),
+            ImageDim::_2D => {
+                tiling.y_log2 = match extent_px.height {
+                    86.. => 4,
+                    43.. => 3,
+                    22.. => 2,
+                    11.. => 1,
+                    0.. => 0,
+                };
+            }
+            ImageDim::_3D => {
+                tiling.z_log2 = match extent_px.depth {
+                    11.. => 4,
+                    6.. => 3,
+                    3.. => 2,
+                    2.. => 1,
+                    0.. => 0,
+                };
+            }
+        }
+
         if (usage & IMAGE_USAGE_2D_VIEW_BIT) != 0 {
+            /* TODO: The proprietary driver doesn't have this restriction */
             tiling.z_log2 = 0;
         }
 

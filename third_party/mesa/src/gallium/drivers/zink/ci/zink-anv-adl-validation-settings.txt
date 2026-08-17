@@ -1,6 +1,6 @@
 # Please include a comment with the log message and a testcase triggering each
 # VUID at the bottom of the file.
-khronos_validation.message_id_filter = VUID-VkPhysicalDeviceProperties2-pNext-pNext,VUID-VkDeviceCreateInfo-pNext-pNext,VUID-RuntimeSpirv-Location-06272,VUID-vkCmdDrawMultiIndexedEXT-format-07753,VUID-RuntimeSpirv-OpEntryPoint-08743,VUID-vkCmdDrawMultiIndexedEXT-None-10909,VUID-vkDestroyDevice-device-05137,VUID-vkCmdDrawMultiEXT-None-08879,VUID-VkShaderCreateInfoEXT-pSetLayouts-parameter,VUID-vkCmdDrawMultiIndexedEXT-None-08879,VUID-VkPhysicalDeviceMeshShaderFeaturesEXT-primitiveFragmentShadingRateMeshShader-07033
+khronos_validation.message_id_filter = VUID-VkPhysicalDeviceProperties2-pNext-pNext,VUID-VkDeviceCreateInfo-pNext-pNext,VUID-RuntimeSpirv-Location-06272,VUID-vkCmdDrawMultiIndexedEXT-format-07753,VUID-RuntimeSpirv-OpEntryPoint-08743,VUID-vkCmdDrawMultiIndexedEXT-None-10909,VUID-vkDestroyDevice-device-05137,VUID-vkCmdDrawMultiEXT-None-08879,VUID-vkCmdDrawMultiIndexedEXT-None-08879,VUID-vkCmdBindVertexBuffers2-pStrides-06209,VUID-VkDeviceAddress-size-11364,VUID-VkStridedDeviceAddressRangeKHR-address-11365
 khronos_validation.report_flags = error
 khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG,VK_DBG_LAYER_ACTION_BREAK
 VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT
@@ -55,3 +55,16 @@ khronos_validation.log_filename = stdout
 # (https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#VUID-RuntimeSpirv-OpEntryPoint-08743)
 #
 # VVL bug https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5735
+
+# dEQP-GLES3.functional.vertex_array_objects.diff_stride
+#
+# Validation Error: [ VUID-vkCmdBindVertexBuffers2-pStrides-06209 ] | MessageID = 0x9e5db3a3
+# vkCmdDrawMultiEXT(): (attribute binding 0, attribute location 0) The pStrides value (2) parameter in the last call to vkCmdDrawMultiEXT is not 0 and is less than the extent of the binding for the attribute (4).
+# The Vulkan spec states: If pStrides is not NULL each element of pStrides must be either 0 or greater than or equal to the maximum extent of all vertex input attributes fetched from the corresponding binding, where the extent is calculated as the VkVertexInputAttributeDescription::offset plus VkVertexInputAttributeDescription::format size (https://docs.vulkan.org/spec/latest/chapters/fxvertex.html#VUID-vkCmdBindVertexBuffers2-pStrides-06209)
+# Objects: 3
+#     [0] VkCommandBuffer 0x563b09acbb90[zink cmdbuf]
+#     [1] VkShaderEXT 0x26eb00000026eb
+#     [2] VkShaderEXT 0x26ec00000026ec
+
+# VUID-VkDeviceAddress-size-11364,VUID-VkStridedDeviceAddressRangeKHR-address-11365
+# needs vk extension

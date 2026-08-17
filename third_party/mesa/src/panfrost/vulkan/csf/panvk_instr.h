@@ -1,6 +1,5 @@
 /*
  * Copyright 2025 Arm Ltd.
- *
  * SPDX-License-Identifier: MIT
  */
 
@@ -35,7 +34,7 @@ struct panvk_instr_end_args {
 
       struct {
          VkRenderingFlags flags;
-         const struct pan_fb_info *fb;
+         const struct pan_fb_layout *fb;
       } render;
 
       struct {

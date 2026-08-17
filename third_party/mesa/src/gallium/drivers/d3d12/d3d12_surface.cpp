@@ -257,8 +257,9 @@ d3d12_create_surface(struct d3d12_screen *screen,
 }
 
 void
-d3d12_surface_destroy(struct d3d12_surface *surface)
+d3d12_surface_destroy(struct pipe_context *ctx, struct pipe_surface *psurf)
 {
+   struct d3d12_surface *surface = (struct d3d12_surface *)psurf;
    struct d3d12_screen *screen = surface->screen;
 
    mtx_lock(&screen->descriptor_pool_mutex);

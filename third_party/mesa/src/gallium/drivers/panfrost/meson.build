@@ -23,6 +23,7 @@ files_panfrost = files(
   'pan_mempool.c',
   'pan_mempool.h',
   'pan_nir_remove_fragcolor_stores.c',
+  'pan_nir_lower_pls.c',
   'pan_nir_lower_sysvals.c',
   'pan_nir_lower_res_indices.c',
 )
@@ -33,6 +34,7 @@ panfrost_includes = [
   inc_include,
   inc_src,
   inc_panfrost,
+  include_directories('.'),
 ]
 
 compile_args_panfrost = [
@@ -40,7 +42,48 @@ compile_args_panfrost = [
   '-Wno-pointer-arith'
 ]
 
-panfrost_versions = ['4', '5', '6', '7', '9', '10', '12', '13']
+panfrost_tracepoints = custom_target(
+  'panfrost_tracepoints.[ch]',
+  input: 'panfrost_tracepoints.py',
+  output: ['panfrost_tracepoints.c', 'panfrost_tracepoints.h',
+           'panfrost_tracepoints_perfetto.h'],
+  command: [
+    prog_python, '@INPUT@',
+    '-p', join_paths(dir_source_root, 'src/util/perf/'),
+    '-C', '@OUTPUT0@',
+    '-H', '@OUTPUT1@',
+    '-P', '@OUTPUT2@',
+  ],
+  depend_files: u_trace_py,
+)
+
+files_panfrost += panfrost_tracepoints
+
+idep_panfrost_tracepoints = declare_dependency(
+  sources: panfrost_tracepoints,
+)
+
+panfrost_deps = [
+  dep_thread,
+  dep_libdrm,
+  idep_mesautil,
+  idep_nir,
+  idep_pan_packers,
+  idep_u_tracepoints,
+]
+
+panfrost_cpp_args = cpp.get_supported_arguments([
+  '-fno-exceptions',
+  '-fno-rtti',
+  '-Wno-c99-designator',
+])
+
+if with_perfetto
+  panfrost_deps += dep_perfetto
+  files_panfrost += 'panfrost_perfetto.cc'
+endif
+
+panfrost_versions = ['4', '5', '6', '7', '9', '10', '12', '13', '14']
 libpanfrost_versions = []
 
 foreach ver : panfrost_versions
@@ -53,7 +96,7 @@ foreach ver : panfrost_versions
   ]
   if ver in ['4', '5', '6', '7', '9']
     files_panfrost_vx += ['pan_jm.c']
-  elif ver in ['10', '12', '13']
+  elif ver in ['10', '12', '13', '14']
     files_panfrost_vx += ['pan_csf.c']
   endif
   libpanfrost_versions += static_library(
@@ -61,27 +104,24 @@ foreach ver : panfrost_versions
     include_directories : panfrost_includes,
     c_args : ['-DPAN_ARCH=' + ver],
     gnu_symbol_visibility : 'hidden',
-    dependencies : [idep_pan_packers, idep_nir, dep_libdrm, idep_mesautil, idep_libpan_per_arch[ver]],
+    dependencies : [idep_pan_packers, idep_nir, dep_libdrm, idep_mesautil,
+                    idep_libpan_per_arch[ver], idep_u_tracepoints,
+                    idep_panfrost_tracepoints],
 )
 endforeach
 
 libpanfrost = static_library(
   'panfrost',
   files_panfrost,
-  dependencies: [
-    dep_thread,
-    dep_libdrm,
-    idep_mesautil,
-    idep_nir,
-    idep_pan_packers
-  ],
+  dependencies: panfrost_deps,
   include_directories : panfrost_includes,
   c_args : [c_msvc_compat_args, compile_args_panfrost],
+  cpp_args : [panfrost_cpp_args],
   gnu_symbol_visibility : 'hidden',
   link_with: [libpanfrost_versions],
 )
 
 driver_panfrost = declare_dependency(
   compile_args : compile_args_panfrost,
-  link_with : [libpanfrost, libpanfrostwinsys, libpanfrost_shared, libpanfrost_midgard, libpanfrost_bifrost, libpanfrost_decode, libpanfrost_lib],
+  link_with : [libpanfrost, libpanfrostwinsys, libpanfrost_shared, libpanfrost_compiler, libpanfrost_decode, libpanfrost_lib],
 )

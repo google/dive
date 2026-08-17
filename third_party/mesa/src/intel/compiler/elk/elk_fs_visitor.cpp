@@ -1,24 +1,6 @@
 /*
  * Copyright © 2010 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 /** @file elk_fs_visitor.cpp
@@ -50,45 +32,14 @@ elk_fs_visitor::interp_reg(const fs_builder &bld, unsigned location,
                        unsigned channel, unsigned comp)
 {
    assert(stage == MESA_SHADER_FRAGMENT);
-   assert(BITFIELD64_BIT(location) & ~nir->info.per_primitive_inputs);
 
-   const struct elk_wm_prog_data *prog_data = elk_wm_prog_data(this->prog_data);
+   const struct elk_fs_prog_data *prog_data = elk_fs_prog_data(this->prog_data);
 
    assert(prog_data->urb_setup[location] >= 0);
-   unsigned nr = prog_data->urb_setup[location];
-   channel += prog_data->urb_setup_channel[location];
 
-   /* Adjust so we start counting from the first per_vertex input. */
-   assert(nr >= prog_data->num_per_primitive_inputs);
-   nr -= prog_data->num_per_primitive_inputs;
-
-   const unsigned per_vertex_start = prog_data->num_per_primitive_inputs;
-   const unsigned regnr = per_vertex_start + (nr * 4) + channel;
+   const unsigned regnr = 4 * prog_data->urb_setup[location] + channel;
 
    return component(elk_fs_reg(ATTR, regnr, ELK_REGISTER_TYPE_F), comp);
-}
-
-/* The register location here is relative to the start of the URB
- * data.  It will get adjusted to be a real location before
- * generate_code() time.
- */
-elk_fs_reg
-elk_fs_visitor::per_primitive_reg(const fs_builder &bld, int location, unsigned comp)
-{
-   assert(stage == MESA_SHADER_FRAGMENT);
-   assert(BITFIELD64_BIT(location) & nir->info.per_primitive_inputs);
-
-   const struct elk_wm_prog_data *prog_data = elk_wm_prog_data(this->prog_data);
-
-   comp += prog_data->urb_setup_channel[location];
-
-   assert(prog_data->urb_setup[location] >= 0);
-
-   const unsigned regnr = prog_data->urb_setup[location] + comp / 4;
-
-   assert(regnr < prog_data->num_per_primitive_inputs);
-
-   return component(elk_fs_reg(ATTR, regnr, ELK_REGISTER_TYPE_F), comp % 4);
 }
 
 /** Emits the interpolation for the varying inputs. */
@@ -133,7 +84,7 @@ elk_fs_visitor::emit_interpolation_setup_gfx4()
    this->pixel_z = fetch_payload_reg(bld, fs_payload().source_depth_reg);
 
    /* The SF program automatically handles doing the perspective correction or
-    * not based on wm_prog_data::interp_mode[] so we can use the same pixel
+    * not based on fs_prog_data::interp_mode[] so we can use the same pixel
     * offsets for both perspective and non-perspective.
     */
    this->delta_xy[ELK_BARYCENTRIC_NONPERSPECTIVE_PIXEL] =
@@ -149,8 +100,8 @@ elk_fs_visitor::emit_interpolation_setup_gfx6()
    const fs_builder bld = fs_builder(this).at_end();
    fs_builder abld = bld.annotate("compute pixel centers");
 
-   const struct elk_wm_prog_key *wm_key = (elk_wm_prog_key*) this->key;
-   struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(prog_data);
+   const struct elk_fs_prog_key *wm_key = (elk_fs_prog_key*) this->key;
+   struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(prog_data);
 
    elk_fs_reg int_sample_offset_x, int_sample_offset_y; /* Used on Gen12HP+ */
    elk_fs_reg int_sample_offset_xy; /* Used on Gen8+ */
@@ -264,64 +215,17 @@ elk_fs_visitor::emit_interpolation_setup_gfx6()
    }
 
    abld = bld.annotate("compute pos.z");
-   if (wm_prog_data->uses_src_depth)
+   if (fs_prog_data->uses_src_depth)
       this->pixel_z = fetch_payload_reg(bld, fs_payload().source_depth_reg);
 
-   if (wm_key->persample_interp == ELK_SOMETIMES) {
-      assert(!elk_needs_unlit_centroid_workaround(devinfo));
-
-      const fs_builder ubld = bld.exec_all().group(16, 0);
-      bool loaded_flag = false;
-
-      for (int i = 0; i < ELK_BARYCENTRIC_MODE_COUNT; ++i) {
-         if (!(wm_prog_data->barycentric_interp_modes & BITFIELD_BIT(i)))
-            continue;
-
-         /* The sample mode will always be the top bit set in the perspective
-          * or non-perspective section.  In the case where no SAMPLE mode was
-          * requested, elk_wm_prog_data_barycentric_modes() will swap out the top
-          * mode for SAMPLE so this works regardless of whether SAMPLE was
-          * requested or not.
-          */
-         int sample_mode;
-         if (BITFIELD_BIT(i) & ELK_BARYCENTRIC_NONPERSPECTIVE_BITS) {
-            sample_mode = util_last_bit(wm_prog_data->barycentric_interp_modes &
-                                        ELK_BARYCENTRIC_NONPERSPECTIVE_BITS) - 1;
-         } else {
-            sample_mode = util_last_bit(wm_prog_data->barycentric_interp_modes &
-                                        ELK_BARYCENTRIC_PERSPECTIVE_BITS) - 1;
-         }
-         assert(wm_prog_data->barycentric_interp_modes &
-                BITFIELD_BIT(sample_mode));
-
-         if (i == sample_mode)
-            continue;
-
-         uint8_t *barys = fs_payload().barycentric_coord_reg[i];
-
-         uint8_t *sample_barys = fs_payload().barycentric_coord_reg[sample_mode];
-         assert(barys[0] && sample_barys[0]);
-
-         if (!loaded_flag) {
-            check_dynamic_msaa_flag(ubld, wm_prog_data,
-                                    INTEL_MSAA_FLAG_PERSAMPLE_INTERP);
-         }
-
-         for (unsigned j = 0; j < dispatch_width / 8; j++) {
-            set_predicate(
-               ELK_PREDICATE_NORMAL,
-               ubld.MOV(elk_vec8_grf(barys[j / 2] + (j % 2) * 2, 0),
-                        elk_vec8_grf(sample_barys[j / 2] + (j % 2) * 2, 0)));
-         }
-      }
-   }
+   assert(wm_key->persample_interp != ELK_SOMETIMES);
 
    for (int i = 0; i < ELK_BARYCENTRIC_MODE_COUNT; ++i) {
       this->delta_xy[i] = fetch_barycentric_reg(
          bld, fs_payload().barycentric_coord_reg[i]);
    }
 
-   uint32_t centroid_modes = wm_prog_data->barycentric_interp_modes &
+   uint32_t centroid_modes = fs_prog_data->barycentric_interp_modes &
       (1 << ELK_BARYCENTRIC_PERSPECTIVE_CENTROID |
        1 << ELK_BARYCENTRIC_NONPERSPECTIVE_CENTROID);
 
@@ -387,7 +291,7 @@ void
 elk_fs_visitor::emit_alpha_test()
 {
    assert(stage == MESA_SHADER_FRAGMENT);
-   elk_wm_prog_key *key = (elk_wm_prog_key*) this->key;
+   elk_fs_prog_key *key = (elk_fs_prog_key*) this->key;
    const fs_builder bld = fs_builder(this).at_end();
    const fs_builder abld = bld.annotate("Alpha test");
 
@@ -419,7 +323,7 @@ elk_fs_visitor::emit_single_fb_write(const fs_builder &bld,
                                  elk_fs_reg src0_alpha, unsigned components)
 {
    assert(stage == MESA_SHADER_FRAGMENT);
-   struct elk_wm_prog_data *prog_data = elk_wm_prog_data(this->prog_data);
+   struct elk_fs_prog_data *prog_data = elk_fs_prog_data(this->prog_data);
 
    /* Hand over gl_FragDepth or the payload depth. */
    const elk_fs_reg dst_depth = fetch_payload_reg(bld, fs_payload().dest_depth_reg);
@@ -504,8 +408,8 @@ void
 elk_fs_visitor::emit_fb_writes()
 {
    assert(stage == MESA_SHADER_FRAGMENT);
-   struct elk_wm_prog_data *prog_data = elk_wm_prog_data(this->prog_data);
-   elk_wm_prog_key *key = (elk_wm_prog_key*) this->key;
+   struct elk_fs_prog_data *prog_data = elk_fs_prog_data(this->prog_data);
+   elk_fs_prog_key *key = (elk_fs_prog_key*) this->key;
 
    if (source_depth_to_render_target && devinfo->ver == 6) {
       /* For outputting oDepth on gfx6, SIMD8 writes have to be used.  This
@@ -863,8 +767,8 @@ elk_fs_visitor::elk_fs_visitor(const struct elk_compiler *compiler,
 
 elk_fs_visitor::elk_fs_visitor(const struct elk_compiler *compiler,
                        const struct elk_compile_params *params,
-                       const elk_wm_prog_key *key,
-                       struct elk_wm_prog_data *prog_data,
+                       const elk_fs_prog_key *key,
+                       struct elk_fs_prog_data *prog_data,
                        const nir_shader *shader,
                        unsigned dispatch_width,
                        bool needs_register_pressure,

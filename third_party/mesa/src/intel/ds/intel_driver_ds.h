@@ -65,6 +65,22 @@ enum intel_ds_stall_flag {
    INTEL_DS_L3_FABRIC_FLUSH_BIT              = BITFIELD_BIT(17),
 };
 
+enum intel_ds_barrier_type {
+   INTEL_DS_BARRIER_TYPE_IMMEDIATE,
+   INTEL_DS_BARRIER_TYPE_SIGNAL,
+   INTEL_DS_BARRIER_TYPE_WAIT,
+};
+
+enum intel_ds_stages {
+   INTEL_DS_STAGES_TOP_BIT    = BITFIELD_BIT(0),
+   INTEL_DS_STAGES_GEOM_BIT   = BITFIELD_BIT(1),
+   INTEL_DS_STAGES_RASTER_BIT = BITFIELD_BIT(2),
+   INTEL_DS_STAGES_DEPTH_BIT  = BITFIELD_BIT(3),
+   INTEL_DS_STAGES_PIXEL_BIT  = BITFIELD_BIT(4),
+   INTEL_DS_STAGES_COLOR_BIT  = BITFIELD_BIT(5),
+   INTEL_DS_STAGES_GPGPU_BIT  = BITFIELD_BIT(6),
+};
+
 enum intel_ds_tracepoint_flags {
    /**
     * Whether the tracepoint's timestamp must be recorded with as an
@@ -84,6 +100,9 @@ enum intel_ds_tracepoint_flags {
 
 /* Convert internal driver PIPE_CONTROL stall bits to intel_ds_stall_flag. */
 typedef enum intel_ds_stall_flag (*intel_ds_stall_cb_t)(uint32_t flags);
+
+/* Convert internal driver RESOUCE_BARRIER stages bits to intel_ds_stage. */
+typedef enum intel_ds_stages (*intel_ds_stages_cb_t)(uint8_t stages);
 
 enum intel_ds_queue_stage {
    INTEL_DS_QUEUE_STAGE_QUEUE,
@@ -128,7 +147,7 @@ struct intel_ds_device {
    uint64_t event_id;
 
    /* Tracepoint name perfetto identifiers for each of the events. */
-   uint64_t tracepoint_iids[96];
+   uint64_t tracepoint_iids[97];
 
    /* Protects submissions of u_trace data to trace_context */
    simple_mtx_t trace_context_mutex;

@@ -467,8 +467,7 @@ new_performance_monitor(struct gl_context *ctx, GLuint index)
    for (i = 0; i < ctx->PerfMonitor.NumGroups; i++) {
       const struct gl_perf_monitor_group *g = &ctx->PerfMonitor.Groups[i];
 
-      m->ActiveCounters[i] = rzalloc_array(m->ActiveCounters, BITSET_WORD,
-                                           BITSET_WORDS(g->NumCounters));
+      m->ActiveCounters[i] = BITSET_RZALLOC(m->ActiveCounters, g->NumCounters);
       if (m->ActiveCounters[i] == NULL)
          goto fail;
    }
@@ -721,9 +720,6 @@ _mesa_GenPerfMonitorsAMD(GLsizei n, GLuint *monitors)
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glGenPerfMonitorsAMD(%d)\n", n);
-
    init_groups(ctx);
 
    if (n < 0) {
@@ -756,9 +752,6 @@ _mesa_DeletePerfMonitorsAMD(GLsizei n, GLuint *monitors)
 {
    GLint i;
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glDeletePerfMonitorsAMD(%d)\n", n);
 
    if (n < 0) {
       _mesa_error(ctx, GL_INVALID_VALUE, "glDeletePerfMonitorsAMD(n < 0)");

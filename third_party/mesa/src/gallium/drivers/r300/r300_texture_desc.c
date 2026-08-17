@@ -138,6 +138,14 @@ static unsigned r300_texture_get_stride(struct r300_screen *screen,
                                               tex->b.bind & PIPE_BIND_SCANOUT);
         width = align(width, tile_width);
 
+        /* NPOT textures use stride addressing (TX_PITCH_EN). Keep macro-tiled
+         * strides at an even number of macro tiles in X to prevent flakes. */
+        if (tex->b.target != PIPE_TEXTURE_3D &&
+            tex->tex.macrotile[level] &&
+            tex->tex.uses_stride_addressing) {
+            width = align(width, tile_width * 2);
+        }
+
         stride = util_format_get_stride(tex->b.format, width);
         /* The alignment to 32 bytes is sort of implied by the layout... */
         return stride;
@@ -358,11 +366,7 @@ static void r300_setup_hyperz_properties(struct r300_screen *screen,
         tex->tex.microtile) {
         unsigned i, pipes;
 
-        if (screen->caps.family == CHIP_RV530) {
-            pipes = screen->info.r300_num_z_pipes;
-        } else {
-            pipes = screen->info.r300_num_gb_pipes;
-        }
+        pipes = r300_hyperz_pipe_count(screen);
 
         for (i = 0; i <= tex->b.last_level; i++) {
             unsigned zcomp_numdw, zcompsize, hiz_numdw, stride, height;

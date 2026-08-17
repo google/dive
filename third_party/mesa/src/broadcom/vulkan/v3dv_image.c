@@ -21,14 +21,21 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
+#include "v3dv_device.h"
+#include "v3dv_image.h"
+#include "v3dv_entrypoints.h"
+#include "v3dv_version_dispatch.h"
+#include "vk_format.h"
+#include "vk_log.h"
 
 #include "drm-uapi/drm_fourcc.h"
 #include "util/format/u_format.h"
 #include "util/u_math.h"
 #include "vk_util.h"
-#include "vulkan/wsi/wsi_common.h"
 #include "vk_android.h"
+
+#define V3D_VERSION 42
+#include "v3dv_format_table.h"
 
 /**
  * Computes the HW's UIFblock padding for a given height/cpp.
@@ -93,8 +100,8 @@ v3d_get_dimension_mpad(uint32_t dimension, uint32_t level, uint32_t block_dimens
 }
 
 static bool
-v3d_setup_plane_slices(struct v3dv_image *image, uint8_t plane,
-                       uint32_t plane_offset,
+v3d_setup_plane_slices(struct v3dv_device *device, struct v3dv_image *image,
+                       uint8_t plane, uint32_t plane_offset,
                        const VkSubresourceLayout *plane_layouts)
 {
    assert(image->planes[plane].cpp > 0);
@@ -242,6 +249,17 @@ v3d_setup_plane_slices(struct v3dv_image *image, uint8_t plane,
                (2 * v3d_utile_height(image->planes[plane].cpp));
       }
 
+#if USE_V3D_SIMULATOR
+      /* Ensure stride alignment matches the one required by the GPU that
+       * drives the display.
+       */
+      if (image->from_wsi) {
+         slice->stride =
+            align(slice->stride,
+                  v3d_simulator_get_raster_stride_align(device->pdevice->render_fd));
+      }
+#endif
+
       slice->size = level_height * slice->stride;
       uint32_t slice_total_size = slice->size * level_depth;
 
@@ -327,8 +345,8 @@ v3d_setup_plane_slices(struct v3dv_image *image, uint8_t plane,
 }
 
 static VkResult
-v3d_setup_slices(struct v3dv_image *image, bool disjoint,
-                 const VkSubresourceLayout *plane_layouts)
+v3d_setup_slices(struct v3dv_device *device, struct v3dv_image *image,
+                 bool disjoint, const VkSubresourceLayout *plane_layouts)
 {
    if (disjoint && image->plane_count == 1)
       disjoint = false;
@@ -336,7 +354,7 @@ v3d_setup_slices(struct v3dv_image *image, bool disjoint,
    uint64_t offset = 0;
    for (uint8_t plane = 0; plane < image->plane_count; plane++) {
       offset = disjoint ? 0 : offset;
-      if (!v3d_setup_plane_slices(image, plane, offset, plane_layouts)) {
+      if (!v3d_setup_plane_slices(device, image, plane, offset, plane_layouts)) {
          assert(plane_layouts);
          return VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT;
       }
@@ -387,7 +405,7 @@ v3dv_update_image_layout(struct v3dv_device *device,
 
    image->vk.drm_format_mod = modifier;
 
-   return v3d_setup_slices(image, disjoint,
+   return v3d_setup_slices(device, image, disjoint,
                            explicit_mod_info ? explicit_mod_info->pPlaneLayouts :
                                                NULL);
 }
@@ -424,6 +442,10 @@ v3dv_image_init(struct v3dv_device *device,
       explicit_mod_info = &eci;
       modifier = eci.drmFormatModifier;
    }
+
+   const struct wsi_image_create_info *wsi_info =
+      vk_find_struct_const(pCreateInfo->pNext, WSI_IMAGE_CREATE_INFO_MESA);
+   image->from_wsi = wsi_info != NULL;
 
    if (tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
       mod_info =
@@ -503,8 +525,11 @@ v3dv_image_init(struct v3dv_device *device,
     * Image layout will be filled up during vkBindImageMemory2
     * This section is removed by the optimizer for non-ANDROID builds
     */
-   if (vk_image_is_android_hardware_buffer(&image->vk))
-      return VK_SUCCESS;
+   if (vk_image_is_android_hardware_buffer(&image->vk) ||
+       vk_image_is_android_native_buffer_alias(&image->vk)) {
+      return vk_android_init_deferred_image(&device->vk, &image->vk,
+                                            pCreateInfo, pAllocator);
+   }
 
    bool disjoint = image->vk.create_flags & VK_IMAGE_CREATE_DISJOINT_BIT;
 
@@ -518,19 +543,35 @@ create_image(struct v3dv_device *device,
              const VkAllocationCallbacks *pAllocator,
              VkImage *pImage)
 {
-#if !DETECT_OS_ANDROID
-   const VkImageSwapchainCreateInfoKHR *swapchain_info =
-      vk_find_struct_const(pCreateInfo->pNext, IMAGE_SWAPCHAIN_CREATE_INFO_KHR);
-   if (swapchain_info && swapchain_info->swapchain != VK_NULL_HANDLE) {
+   if (wsi_common_is_swapchain_image(pCreateInfo)) {
       return wsi_common_create_swapchain_image(&device->pdevice->wsi_device,
                                                pCreateInfo,
-                                               swapchain_info->swapchain,
                                                pImage);
    }
-#endif
 
    VkResult result;
    struct v3dv_image *image = NULL;
+
+   /* With V3D_WEBGPU_OVERRIDE=1 we advertise maxImageDimension2D=8192
+    * (and larger limits for 1D/3D/Cube), but the real HW rendering
+    * limit is V3D_MAX_FRAMEBUFFER_DIMENSION (7680 on RPi5, 4096 on
+    * RPi4). Storage/sampled images above that limit work fine (TMU
+    * supports up to 16384), but framebuffer attachments will fail.
+    * Only warn for images that could be used as render targets.
+    */
+   const uint32_t max_hw_fb_size = device->devinfo.max_framebuffer_size;
+   const bool is_attachment = pCreateInfo->usage &
+      (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+       VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+   if (is_attachment &&
+       (pCreateInfo->extent.width > max_hw_fb_size ||
+        pCreateInfo->extent.height > max_hw_fb_size)) {
+      mesa_loge("V3D_WEBGPU_OVERRIDE: vkCreateImage %ux%u with attachment "
+                "usage exceeds real HW framebuffer limit %ux%u",
+                pCreateInfo->extent.width,
+                pCreateInfo->extent.height,
+                max_hw_fb_size, max_hw_fb_size);
+   }
 
    image = vk_image_create(&device->vk, pCreateInfo, pAllocator, sizeof(*image));
    if (image == NULL)

@@ -26,6 +26,7 @@ enum fd_rd_dump_flags {
 
 struct fd_rd_dump_env {
    uint32_t flags;
+   char output_path[PATH_MAX];
 };
 
 extern struct fd_rd_dump_env fd_rd_dump_env;

@@ -53,6 +53,14 @@ radeon_winsys(struct pipe_screen *screen) {
     return r300_screen(screen)->rws;
 }
 
+static inline unsigned
+r300_hyperz_pipe_count(const struct r300_screen *screen)
+{
+   if (screen->caps.family == CHIP_RV530)
+      return screen->info.r300_num_z_pipes;
+   return screen->info.r300_num_gb_pipes;
+}
+
 /* Debug functionality. */
 
 /**

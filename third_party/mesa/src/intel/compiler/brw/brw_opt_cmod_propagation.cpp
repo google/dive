@@ -1,24 +1,6 @@
 /*
  * Copyright © 2014 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "brw_shader.h"
@@ -117,10 +99,22 @@ cmod_propagate_cmp_to_add(const intel_device_info *devinfo, brw_inst *inst)
    }
 
    foreach_inst_in_block_reverse_starting_from(brw_inst, scan_inst, inst) {
+      /* If either of the sources of the CMP is modified, the optimization
+       * cannot occur. This is the case even if the instruction modifying the
+       * value is an ADD of the appropriate form.
+       */
+      if (regions_overlap(scan_inst->dst, scan_inst->size_written,
+                          inst->src[0], inst->size_read(devinfo, 0)) ||
+          regions_overlap(scan_inst->dst, scan_inst->size_written,
+                          inst->src[1], inst->size_read(devinfo, 1))) {
+         break;
+      }
+
       if (scan_inst->opcode == BRW_OPCODE_ADD &&
           !scan_inst->predicate &&
           scan_inst->dst.is_contiguous() &&
-          scan_inst->exec_size == inst->exec_size) {
+          scan_inst->exec_size == inst->exec_size &&
+          scan_inst->group == inst->group) {
          bool negate;
 
          /* A CMP is basically a subtraction.  The result of the
@@ -233,6 +227,43 @@ cmod_propagate_cmp_to_add(const intel_device_info *devinfo, brw_inst *inst)
 }
 
 static bool
+comparison_is_same(enum brw_conditional_mod m1, enum brw_reg_type t1,
+                   enum brw_conditional_mod m2, enum brw_reg_type t2)
+{
+   return m1 == m2 && (t1 == t2 ||
+                       ((m1 == BRW_CONDITIONAL_Z || m1 == BRW_CONDITIONAL_NZ) &&
+                        brw_type_is_int(t1) &&
+                        brw_type_is_int(t2) &&
+                        brw_type_size_bytes(t1) == brw_type_size_bytes(t2)));
+}
+
+/**
+ * Slightly relaxed version of brw_regs_equal
+ *
+ * brw_regs_equal requires that the types match exactly. For the uses here, if
+ * there are no source modifiers it is only required that integer types have
+ * the same sizes.
+ */
+static bool
+regs_are_same(const brw_reg a, const brw_reg b)
+{
+   if (a.type == b.type) {
+      return brw_regs_equal(&a, &b);
+   } else {
+      if ((!a.negate && !a.abs) &&
+          (!b.negate && !b.abs) &&
+          brw_type_is_int(a.type) &&
+          brw_type_is_int(b.type) &&
+          brw_type_size_bytes(a.type) == brw_type_size_bytes(b.type)) {
+         brw_reg c = retype(a, b.type);
+         return brw_regs_equal(&c, &b);
+      } else {
+         return false;
+      }
+   }
+}
+
+static bool
 opt_cmod_propagation_local(const intel_device_info *devinfo, bblock_t *block)
 {
    bool progress = false;
@@ -243,8 +274,7 @@ opt_cmod_propagation_local(const intel_device_info *devinfo, bblock_t *block)
            inst->opcode != BRW_OPCODE_MOV) ||
           inst->predicate != BRW_PREDICATE_NONE ||
           !inst->dst.is_null() ||
-          (inst->src[0].file != VGRF && inst->src[0].file != ATTR &&
-           inst->src[0].file != UNIFORM))
+          !inst->src[0].is_grf())
          continue;
 
       /* An ABS source modifier can only be handled when processing a compare
@@ -294,8 +324,12 @@ opt_cmod_propagation_local(const intel_device_info *devinfo, bblock_t *block)
 
             if (scan_inst->predicate ||
                 !scan_inst->dst.is_contiguous() ||
-                scan_inst->dst.offset != inst->src[0].offset ||
-                scan_inst->exec_size != inst->exec_size)
+                (scan_inst->dst.file != FIXED_GRF &&
+                 scan_inst->dst.offset != inst->src[0].offset) ||
+                (scan_inst->dst.file == FIXED_GRF &&
+                 scan_inst->dst.subnr != inst->src[0].subnr) ||
+                scan_inst->exec_size != inst->exec_size ||
+                scan_inst->group != inst->group)
                break;
 
             /* If the write mask is different we can't propagate. */
@@ -543,6 +577,43 @@ opt_cmod_propagation_local(const intel_device_info *devinfo, bblock_t *block)
                inst->remove();
                progress = true;
             }
+            break;
+         }
+
+         /* Detect cases like
+          *
+          *    mov.nz.f0.0(8)  null<1>D       g66<8,8,1>D
+          *    (+f0.0) sel(8)  g123<1>UD      g87<8,8,1>UD   g84<8,8,1>UD
+          *    mov.nz.f0.0(8)  null<1>D       g66<8,8,1>D
+          *    (+f0.0) sel(8)  g124<1>UD      g88<8,8,1>UD   g85<8,8,1>UD
+          *
+          * Either (or both) MOV can also be an equivalent CMP.
+          */
+         if ((inst->opcode == BRW_OPCODE_MOV ||
+              (inst->opcode == BRW_OPCODE_CMP && inst->src[1].is_zero())) &&
+             (scan_inst->opcode == BRW_OPCODE_MOV ||
+              (scan_inst->opcode == BRW_OPCODE_CMP && scan_inst->src[1].is_zero())) &&
+             scan_inst->flags_written(devinfo) == flags_written &&
+             !scan_inst->predicate &&
+             scan_inst->exec_size == inst->exec_size &&
+             scan_inst->group == inst->group &&
+             scan_inst->force_writemask_all == inst->force_writemask_all &&
+
+             /* If both instructions are MOV, propagation can still happen if
+              * both have saturate set. Otherwise neither can have saturate
+              * set.
+              */
+             ((inst->opcode == BRW_OPCODE_MOV &&
+               scan_inst->opcode == BRW_OPCODE_MOV &&
+               inst->saturate == scan_inst->saturate) ||
+              (!inst->saturate && !scan_inst->saturate)) &&
+             comparison_is_same(inst->conditional_mod,
+                                inst->src[0].type,
+                                scan_inst->conditional_mod,
+                                scan_inst->src[0].type) &&
+             regs_are_same(inst->src[0], scan_inst->src[0])) {
+            inst->remove();
+            progress = true;
             break;
          }
 

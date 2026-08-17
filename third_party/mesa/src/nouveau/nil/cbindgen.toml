@@ -14,6 +14,7 @@ renaming_overrides_prefixing = true
 # See https://github.com/mozilla/cbindgen/issues/621
 [export.rename]
 "nv_device_info" = "struct nv_device_info"
+"nv_zcull_device_info" = "struct nv_zcull_device_info"
 "pipe_format" = "enum pipe_format"
 "pipe_swizzle" = "enum pipe_swizzle"
 "MAX_LEVELS" = "NIL_MAX_LEVELS"
@@ -35,6 +36,7 @@ renaming_overrides_prefixing = true
 "View" = "nil_view"
 "ViewAccess" = "nil_view_access"
 "ViewType" = "nil_view_type"
+"ZCull" = "nil_zcull"
 
 # There's just no good solution for this one
 "ImageUsageFlags" = "nil_image_usage_flags"
@@ -42,6 +44,7 @@ renaming_overrides_prefixing = true
 "IMAGE_USAGE_LINEAR_BIT" = "NIL_IMAGE_USAGE_LINEAR_BIT"
 "IMAGE_USAGE_SPARSE_RESIDENCY_BIT" = "NIL_IMAGE_USAGE_SPARSE_RESIDENCY_BIT"
 "IMAGE_USAGE_VIDEO_BIT" = "NIL_IMAGE_USAGE_VIDEO_BIT"
+"IMAGE_USAGE_UNCOMPRESSED_BIT" = "NIL_IMAGE_USAGE_UNCOMPRESSED_BIT"
 
 [macro_expansion]
 bitflags = true # We need this for the bitflags crate

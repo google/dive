@@ -84,6 +84,14 @@ upload_blorp_shader(struct blorp_batch *batch, uint32_t stage,
    return true;
 }
 
+static uint64_t
+blorp_get_surface_address(struct blorp_batch *blorp_batch,
+                          struct blorp_address address)
+{
+   /* We'll let blorp_surface_reloc write the address. */
+   return 0;
+}
+
 void
 anv_device_init_blorp(struct anv_device *device)
 {
@@ -93,6 +101,7 @@ anv_device_init_blorp(struct anv_device *device)
                   device->physical->compiler, &config);
    device->blorp.lookup_shader = lookup_blorp_shader;
    device->blorp.upload_shader = upload_blorp_shader;
+   device->blorp.get_surface_address = blorp_get_surface_address;
    switch (device->info->verx10) {
    case 70:
       device->blorp.exec = gfx7_blorp_exec;
@@ -1300,7 +1309,7 @@ anv_image_msaa_resolve(struct anv_cmd_buffer *cmd_buffer,
                        const struct anv_image *dst_image,
                        enum isl_format dst_format_override,
                        enum isl_aux_usage dst_aux_usage,
-                       uint32_t dst_level, uint32_t dst_base_layer,
+                       uint32_t dst_level, uint32_t dst_base_layer_or_z,
                        VkImageAspectFlagBits aspect,
                        uint32_t src_x, uint32_t src_y,
                        uint32_t dst_x, uint32_t dst_y,
@@ -1314,9 +1323,6 @@ anv_image_msaa_resolve(struct anv_cmd_buffer *cmd_buffer,
 
    assert(src_image->vk.image_type == VK_IMAGE_TYPE_2D);
    assert(src_image->vk.samples > 1);
-   assert((dst_image->vk.image_type == VK_IMAGE_TYPE_2D) ||
-          (dst_image->vk.image_type == VK_IMAGE_TYPE_3D &&
-           dst_base_layer == 0 && layer_count == 1));
    assert(dst_image->vk.samples == 1);
 
    struct blorp_surf src_surf, dst_surf;
@@ -1335,7 +1341,7 @@ anv_image_msaa_resolve(struct anv_cmd_buffer *cmd_buffer,
                                 dst_aux_usage, &dst_surf);
    anv_cmd_buffer_mark_image_written(cmd_buffer, dst_image,
                                      aspect, dst_aux_usage,
-                                     dst_level, dst_base_layer, layer_count);
+                                     dst_level, dst_base_layer_or_z, layer_count);
 
    if (filter == BLORP_FILTER_NONE) {
       /* If no explicit filter is provided, then it's implied by the type of
@@ -1354,7 +1360,7 @@ anv_image_msaa_resolve(struct anv_cmd_buffer *cmd_buffer,
       blorp_blit(&batch,
                  &src_surf, src_level, src_base_layer + l,
                  src_format_override, ISL_SWIZZLE_IDENTITY,
-                 &dst_surf, dst_level, dst_base_layer + l,
+                 &dst_surf, dst_level, dst_base_layer_or_z + l,
                  dst_format_override, ISL_SWIZZLE_IDENTITY,
                  src_x, src_y, src_x + width, src_y + height,
                  dst_x, dst_y, dst_x + width, dst_y + height,
@@ -1467,6 +1473,10 @@ resolve_image(struct anv_cmd_buffer *cmd_buffer,
    const uint32_t layer_count =
       vk_image_subresource_layer_count(&dst_image->vk, &region->dstSubresource);
 
+   assert((dst_image->vk.image_type == VK_IMAGE_TYPE_2D) ||
+          (dst_image->vk.image_type == VK_IMAGE_TYPE_3D &&
+           region->dstSubresource.baseArrayLayer == 0 && layer_count == 1));
+
    anv_foreach_image_aspect_bit(aspect_bit, src_image,
                                 region->srcSubresource.aspectMask) {
       enum isl_aux_usage src_aux_usage =
@@ -1486,7 +1496,8 @@ resolve_image(struct anv_cmd_buffer *cmd_buffer,
                              region->srcSubresource.baseArrayLayer,
                              dst_image, ISL_FORMAT_UNSUPPORTED, dst_aux_usage,
                              region->dstSubresource.mipLevel,
-                             region->dstSubresource.baseArrayLayer,
+                             MAX2(region->dstSubresource.baseArrayLayer,
+                                  region->dstOffset.z),
                              (1 << aspect_bit),
                              region->srcOffset.x,
                              region->srcOffset.y,

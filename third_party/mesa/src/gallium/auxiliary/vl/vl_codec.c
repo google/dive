@@ -32,7 +32,7 @@ bool vl_codec_supported(struct pipe_screen *screen,
                         enum pipe_video_profile profile,
                         bool encode)
 {
-   static_assert(PIPE_VIDEO_PROFILE_MAX == 30, "Update table below when adding new video profiles");
+   static_assert(PIPE_VIDEO_PROFILE_MAX == 28, "Update table below when adding new video profiles");
    if (profile == PIPE_VIDEO_PROFILE_AV1_MAIN ||
        profile == PIPE_VIDEO_PROFILE_AV1_PROFILE2) {
       if (encode) {
@@ -41,6 +41,10 @@ bool vl_codec_supported(struct pipe_screen *screen,
       } else if (!VIDEO_CODEC_AV1DEC) {
          return false;
       }
+   }
+   if (profile == PIPE_VIDEO_PROFILE_JPEG_BASELINE) {
+      if (!VIDEO_CODEC_JPEGDEC)
+         return false;
    }
    if (profile == PIPE_VIDEO_PROFILE_VP9_PROFILE0 ||
        profile == PIPE_VIDEO_PROFILE_VP9_PROFILE2) {
@@ -51,6 +55,11 @@ bool vl_codec_supported(struct pipe_screen *screen,
        profile == PIPE_VIDEO_PROFILE_VC1_MAIN ||
        profile == PIPE_VIDEO_PROFILE_VC1_ADVANCED) {
       if (!VIDEO_CODEC_VC1DEC)
+         return false;
+   }
+   if (profile >= PIPE_VIDEO_PROFILE_MPEG1 &&
+       profile <= PIPE_VIDEO_PROFILE_MPEG2_MAIN) {
+      if (!VIDEO_CODEC_MPEG12DEC)
          return false;
    }
    if (profile >= PIPE_VIDEO_PROFILE_MPEG4_AVC_BASELINE &&

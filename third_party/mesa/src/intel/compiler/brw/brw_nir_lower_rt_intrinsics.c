@@ -1,46 +1,10 @@
 /*
- * Copyright (c) 2020 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * Copyright © 2020 Intel Corporation
+ * SPDX-License-Identifier: MIT
  */
 
 #include "brw_nir_rt.h"
 #include "brw_nir_rt_builder.h"
-
-static nir_def *
-nir_build_vec3_mat_mult_col_major(nir_builder *b, nir_def *vec,
-                                  nir_def *matrix[], bool translation)
-{
-   nir_def *result_components[3] = {
-      nir_channel(b, matrix[3], 0),
-      nir_channel(b, matrix[3], 1),
-      nir_channel(b, matrix[3], 2),
-   };
-   for (unsigned i = 0; i < 3; ++i) {
-      for (unsigned j = 0; j < 3; ++j) {
-         nir_def *v = nir_fmul(b, nir_channels(b, vec, 1 << j), nir_channels(b, matrix[j], 1 << i));
-         result_components[i] = (translation || j) ? nir_fadd(b, result_components[i], v) : v;
-      }
-   }
-   return nir_vec(b, result_components, 3);
-}
 
 static nir_def *
 build_leaf_is_procedural(nir_builder *b, struct brw_nir_rt_mem_hit_defs *hit)
@@ -76,7 +40,7 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
    brw_nir_rt_load_globals(b, &globals, devinfo);
 
    nir_def *hotzone_addr = brw_nir_rt_sw_hotzone_addr(b, devinfo);
-   nir_def *hotzone = nir_load_global(b, hotzone_addr, 16, 4, 32);
+   nir_def *hotzone = nir_load_global(b, 4, 32, hotzone_addr, .align_mul = 16);
 
    mesa_shader_stage stage = b->shader->info.stage;
    struct brw_nir_rt_mem_ray_defs world_ray_in = {};
@@ -130,7 +94,7 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
             if (stack_size > 0) {
                nir_def *child_stack_offset =
                   nir_iadd_imm(b, stack_base_offset, stack_size);
-               nir_store_global(b, hotzone_addr, 16, child_stack_offset, 0x1);
+               nir_store_global(b, child_stack_offset, hotzone_addr, .align_mul = 16);
             }
             nir_instr_remove(instr);
             break;
@@ -146,29 +110,11 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
             if (stack_size > 0) {
                stack_base_offset =
                   nir_iadd_imm(b, stack_base_offset, -stack_size);
-               nir_store_global(b, hotzone_addr, 16, stack_base_offset, 0x1);
+               nir_store_global(b, stack_base_offset, hotzone_addr, .align_mul = 16);
                stack_base_addr = nir_iadd(b, thread_stack_base_addr,
                                           nir_u2u64(b, stack_base_offset));
             }
             nir_instr_remove(instr);
-            break;
-
-         case nir_intrinsic_load_uniform:
-         case nir_intrinsic_load_push_constant:
-            /* We don't want to lower this in the launch trampoline.
-             *
-             * Also if the driver chooses to use an inline push address, we
-             * can do all the loading of the push constant in
-             * assign_curb_setup() (more efficient as we can do NoMask
-             * instructions for address calculations).
-             */
-            if (stage == MESA_SHADER_COMPUTE || key->uses_inline_push_addr)
-               break;
-
-            sysval = brw_nir_load_global_const(b, intrin,
-                        nir_load_btd_global_arg_addr_intel(b),
-                        BRW_RT_PUSH_CONST_OFFSET);
-
             break;
 
          case nir_intrinsic_load_ray_launch_id:
@@ -193,7 +139,7 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
                brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr,
                                                  devinfo);
 
-               sysval = nir_build_vec3_mat_mult_col_major(
+               sysval = brw_nir_build_vec3_mat_mult_col_major(
                   b, world_ray_in.orig, leaf.world_to_object, true);
             } else {
                sysval = object_ray_in.orig;
@@ -206,7 +152,7 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
                brw_nir_rt_load_bvh_instance_leaf(b, &leaf, hit_in.inst_leaf_ptr,
                                                  devinfo);
 
-               sysval = nir_build_vec3_mat_mult_col_major(
+               sysval = brw_nir_build_vec3_mat_mult_col_major(
                   b, world_ray_in.dir, leaf.world_to_object, false);
             } else {
                sysval = object_ray_in.dir;
@@ -280,8 +226,7 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
 
          case nir_intrinsic_load_ray_geometry_index: {
             nir_def *geometry_index_dw =
-               nir_load_global(b, nir_iadd_imm(b, hit_in.prim_leaf_ptr, 4), 4,
-                               1, 32);
+               nir_load_global(b, 1, 32, nir_iadd_imm(b, hit_in.prim_leaf_ptr, 4));
             sysval = nir_iand_imm(b, geometry_index_dw, BITFIELD_MASK(24));
             break;
          }
@@ -369,8 +314,7 @@ lower_rt_intrinsics_impl(nir_function_impl *impl,
                sysval = hit_in.front_face;
             } else {
                nir_def *flags_dw =
-                  nir_load_global(b, nir_iadd_imm(b, hit_in.prim_leaf_ptr, 4), 4,
-                                  1, 32);
+                  nir_load_global(b, 1, 32, nir_iadd_imm(b, hit_in.prim_leaf_ptr, 4));
                sysval = nir_i2b(b, nir_iand_imm(b, flags_dw, 1u << 30));
             }
             break;

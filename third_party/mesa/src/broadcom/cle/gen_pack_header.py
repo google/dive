@@ -522,6 +522,11 @@ class Parser(object):
         print("static inline void\n%s_pack(__gen_user_data *data, uint8_t * restrict cl,\n%sconst struct %s * restrict values)\n{" %
               (name, ' ' * (len(name) + 6), name))
 
+        if name in ("V3D71_TILE_BINNING_MODE_CFG",
+                    "V3D71_TILE_RENDERING_MODE_CFG_COMMON"):
+            print("   assert(values->log2_tile_width == values->log2_tile_height ||")
+            print("          values->log2_tile_width == values->log2_tile_height + 1);")
+
         group.emit_pack_function(0)
 
         print("}\n")

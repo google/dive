@@ -34,9 +34,9 @@
 #include "util/perf/cpu_trace.h"
 
 void
-st_get_program_binary_driver_sha1(struct gl_context *ctx, uint8_t *sha1)
+st_get_program_binary_driver_blake3(struct gl_context *ctx, uint8_t *blake3)
 {
-   disk_cache_compute_key(ctx->Cache, NULL, 0, sha1);
+   disk_cache_compute_key(ctx->Cache, NULL, 0, blake3);
 }
 
 static void
@@ -115,8 +115,8 @@ st_store_nir_in_disk_cache(struct st_context *st, struct gl_program *prog)
    /* Exit early when we are dealing with a ff shader with no source file to
     * generate a source from.
     */
-   static const char zero[sizeof(prog->sh.data->sha1)] = {0};
-   if (memcmp(prog->sh.data->sha1, zero, sizeof(prog->sh.data->sha1)) == 0)
+   static const char zero[sizeof(prog->sh.data->blake3)] = {0};
+   if (memcmp(prog->sh.data->blake3, zero, sizeof(prog->sh.data->blake3)) == 0)
       return;
 
    st_serialise_nir_program(st->ctx, prog);

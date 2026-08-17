@@ -41,6 +41,11 @@ void vpe_create_bg_segments(
     uint16_t            dst_h_div  = vpe_is_yuv420(vpe_priv->output_ctx.surface.format) ? 2 : 1;
     uint16_t            dst_v_div  = vpe_is_yuv420(vpe_priv->output_ctx.surface.format) ? 2 : 1;
 
+    if (vpe_is_yuv422(stream_ctx->stream.surface_info.format))
+        src_h_div = 2;
+    if (vpe_is_yuv422(vpe_priv->output_ctx.surface.format))
+        dst_h_div = 2;
+
     for (gap_index = 0; gap_index < gaps_cnt; gap_index++) {
 
         /* format */
@@ -61,6 +66,10 @@ void vpe_create_bg_segments(
         if (vpe_is_yuv420(scaler_data->format)) {
             scaler_data->ratios.horz_c = vpe_fixpt_from_fraction(1, 2);
             scaler_data->ratios.vert_c = vpe_fixpt_from_fraction(1, 2);
+        }
+        else if (vpe_is_yuv422(scaler_data->format)) {
+            scaler_data->ratios.horz_c = vpe_fixpt_from_fraction(1, 2);
+            scaler_data->ratios.vert_c = vpe_fixpt_one;
         }
         else {
             scaler_data->ratios.horz_c = vpe_fixpt_one;
@@ -117,41 +126,40 @@ void vpe_create_bg_segments(
         cmd_info.num_inputs = 1;
         cmd_info.ops        = ops;
         cmd_info.cd         = (uint16_t)(gaps_cnt - gap_index - 1);
-        cmd_info.tm_enabled = false; // currently only support frontend tm
+        cmd_info.lut3d_type = LUT3D_TYPE_NONE; // currently only support frontend tm
         vpe_vector_push(vpe_priv->vpe_cmd_vector, &cmd_info);
     }
 }
 
-void vpe_full_bg_gaps(struct vpe_rect *gaps, const struct vpe_rect *target_rect, uint16_t max_gaps)
+void vpe_full_bg_gaps(struct vpe_rect *gaps, const struct vpe_rect *target_rect, uint32_t alignment,
+    uint16_t max_gaps)
 {
-    uint16_t gap_index;
-    int32_t  last_covered;
-    uint32_t gap_width, gap_remainder;
-
     if (max_gaps == 0) {
         VPE_ASSERT(0);
         return;
     }
-    last_covered  = target_rect->x;
-    gap_width     = target_rect->width / max_gaps;
-    gap_remainder = target_rect->width % max_gaps;
 
-    for (gap_index = 0; gap_index < max_gaps; gap_index++) {
-        gaps[gap_index].x     = last_covered;
-        gaps[gap_index].y     = target_rect->y;
-        gaps[gap_index].width = gap_width;
-        if (gap_index >= max_gaps - gap_remainder) {
-            gaps[gap_index].width += 1;
-        }
-        gaps[gap_index].height = target_rect->height;
-        last_covered           = last_covered + (int32_t)gaps[gap_index].width;
+    uint32_t gap_width_unaligned = (target_rect->width / max_gaps);
+    uint32_t gap_width_aligned   = vpe_align_seg(gap_width_unaligned, alignment);
+    uint32_t start_x             = target_rect->x;
+
+    for (int i = 0; i < max_gaps - 1; i++) {
+        gaps[i].x      = i * gap_width_aligned + start_x;
+        gaps[i].width  = gap_width_aligned;
+        gaps[i].y      = target_rect->y;
+        gaps[i].height = target_rect->height;
     }
+
+    gaps[max_gaps - 1].x      = (max_gaps - 1) * gap_width_aligned + start_x;
+    gaps[max_gaps - 1].width  = (start_x + target_rect->width) - gaps[max_gaps - 1].x;
+    gaps[max_gaps - 1].y      = target_rect->y;
+    gaps[max_gaps - 1].height = target_rect->height;
 }
 
 /* calculates the gaps in target_rect which are not covered by the first stream
    and returns the number of gaps */
 uint16_t vpe_find_bg_gaps(struct vpe_priv *vpe_priv, const struct vpe_rect *target_rect,
-    struct vpe_rect *gaps, uint16_t max_gaps)
+    struct vpe_rect *gaps, uint32_t alignment, uint16_t max_gaps)
 {
     uint16_t            num_gaps = 0;
     uint16_t            bg_index = vpe_priv->resource.get_bg_stream_idx(vpe_priv);
@@ -219,6 +227,6 @@ uint16_t vpe_find_bg_gaps(struct vpe_priv *vpe_priv, const struct vpe_rect *targ
     return num_gaps;
 
 full_bg:
-    vpe_full_bg_gaps(gaps, target_rect, max_gaps);
+    vpe_full_bg_gaps(gaps, target_rect, alignment, max_gaps);
     return max_gaps;
 }

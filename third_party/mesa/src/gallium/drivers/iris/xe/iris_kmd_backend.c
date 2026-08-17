@@ -31,6 +31,7 @@
 #include "iris/iris_bufmgr.h"
 #include "iris/iris_batch.h"
 #include "iris/iris_context.h"
+#include "util/u_debug.h"
 
 #include "drm-uapi/xe_drm.h"
 
@@ -72,6 +73,10 @@ xe_gem_create(struct iris_bufmgr *bufmgr,
         heap_flags == IRIS_HEAP_DEVICE_LOCAL_CPU_VISIBLE_SMALL_BAR))
       flags |= DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM;
 
+   if (iris_heap_is_compressed(heap_flags) == false &&
+       iris_bufmgr_get_device_info(bufmgr)->xe2_has_no_compression_hint)
+      flags |= DRM_XE_GEM_CREATE_FLAG_NO_COMPRESSION;
+
    struct drm_xe_gem_create gem_create = {
      .vm_id = vm_id,
      .size = align64(size, devinfo->mem_alignment),
@@ -89,9 +94,9 @@ xe_gem_create(struct iris_bufmgr *bufmgr,
    case INTEL_DEVICE_INFO_MMAP_MODE_WB:
       gem_create.cpu_caching = DRM_XE_GEM_CPU_CACHING_WB;
       break;
-   default:
-      UNREACHABLE("missing");
+   case INTEL_DEVICE_INFO_MMAP_MODE_INVALID:
       gem_create.cpu_caching = DRM_XE_GEM_CPU_CACHING_WC;
+      break;
    }
 
    if (alloc_flags & BO_ALLOC_PROTECTED)
@@ -110,6 +115,11 @@ xe_gem_mmap(struct iris_bufmgr *bufmgr, struct iris_bo *bo)
    struct drm_xe_gem_mmap_offset args = {
       .handle = bo->gem_handle,
    };
+   UNUSED const struct intel_device_info *devinfo = iris_bufmgr_get_device_info(bufmgr);
+
+   assert(iris_heap_to_pat_entry(devinfo, bo->real.heap, bo->real.scanout)->mmap !=
+          INTEL_DEVICE_INFO_MMAP_MODE_INVALID);
+
    if (intel_ioctl(iris_bufmgr_get_fd(bufmgr), DRM_IOCTL_XE_GEM_MMAP_OFFSET, &args))
       return NULL;
 
@@ -193,12 +203,31 @@ xe_gem_vm_unbind(struct iris_bo *bo)
 static bool
 xe_bo_madvise(struct iris_bo *bo, enum iris_madvice state)
 {
-   /* Only applicable if VM was created with DRM_XE_VM_CREATE_FAULT_MODE but
-    * that is not compatible with DRM_XE_VM_CREATE_SCRATCH_PAGE
-    *
-    * So returning as retained.
-    */
-   return true;
+   struct iris_bufmgr *bufmgr = bo->bufmgr;
+   const struct intel_device_info *devinfo = iris_bufmgr_get_device_info(bufmgr);
+   struct drm_xe_madvise madvise = {};
+   uint32_t retained_val = 0;
+
+   /* If not supported bo are always retained */
+   if (!devinfo->has_madvise_purgeable)
+      return true;
+
+   madvise.start = bo->address;
+   madvise.range = bo->size;
+   madvise.vm_id = iris_bufmgr_get_global_vm_id(bufmgr);
+   madvise.type = DRM_XE_VMA_ATTR_PURGEABLE_STATE;
+   /* Same values between iris_madvice and Xe KMD */
+   STATIC_ASSERT(IRIS_MADVICE_WILL_NEED == DRM_XE_VMA_PURGEABLE_STATE_WILLNEED);
+   STATIC_ASSERT(IRIS_MADVICE_DONT_NEED == DRM_XE_VMA_PURGEABLE_STATE_DONTNEED);
+   madvise.purge_state_val.val = state;
+   madvise.purge_state_val.retained_ptr = (uintptr_t)&retained_val;
+
+   if (intel_ioctl(iris_bufmgr_get_fd(bufmgr), DRM_IOCTL_XE_MADVISE, &madvise)) {
+      debug_warn_once("DRM_XE_VMA_ATTR_PURGEABLE_STATE failed at least once\n");
+      return false;
+   }
+
+   return retained_val;
 }
 
 static int

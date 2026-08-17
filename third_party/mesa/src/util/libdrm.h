@@ -131,6 +131,18 @@ drmFreeDevices(drmDevicePtr devices[], int count) {}
 static inline char*
 drmGetDeviceNameFromFd2(int fd) { return NULL;}
 
+static inline int
+drmGetNodeTypeFromFd(int fd)
+{
+   return -1;
+}
+
+static inline char *
+drmGetRenderDeviceNameFromFd(int fd)
+{
+   return NULL;
+}
+
 typedef struct _drmVersion {
     int     version_major;        /**< Major version */
     int     version_minor;        /**< Minor version */

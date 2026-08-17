@@ -41,6 +41,14 @@ fdo_log_section_end variables
 
 fdo_log_section_start_collapsed lava_submit "Submitting job for scheduling"
 
+# GitLab jobs use a default 1-hour timeout, which can allow jobs to run longer than intended.
+# CI_JOB_TIMEOUT (GitLab timeout in seconds) is used here to set the LAVA job timeout.
+# For Marge, we override this to 25 minutes (with 5 minutes subtracted below for lava-job-submitter),
+# giving a still conservative, but safer timeout to avoid jobs running for too long.
+if [ $GITLAB_USER_LOGIN == "marge-bot" ]; then
+	export CI_JOB_TIMEOUT=1500
+fi
+
 touch results/lava.log
 tail -f results/lava.log &
 # Ensure that we are printing the commands that are being executed,
@@ -48,6 +56,8 @@ tail -f results/lava.log &
 set -x
 
 # List of optional overlays
+# NOTE: If you encounter "Attempted path traversal in tar file at /dev/ttyS1",
+# that is an indication that one of your rootfs and overlays contain a duplicate file.
 LAVA_EXTRA_OVERLAYS=()
 if [ -n "${LAVA_FIRMWARE:-}" ]; then
     for fw in $LAVA_FIRMWARE; do
@@ -73,7 +83,17 @@ if [ -n "${ANDROID_CTS_TAG:-}" ]; then
 	LAVA_EXTRA_OVERLAYS+=(
 		- append-overlay
 		  --name=android-cts
-		  --url="$(fdo_find_s3_path "${DATA_STORAGE_PATH}/android-cts/${ANDROID_CTS_TAG}.tar.zst")"
+		  --url="$(fdo_find_s3_path "${DATA_STORAGE_PATH}/android-cts/${DEBIAN_ARCH}/${ANDROID_CTS_TAG}.tar.zst")"
+		  --path="/"
+		  --format=tar
+		  --compression=zstd
+	)
+fi
+if [ -n "${OPENCL_CTS_TAG:-}" ]; then
+	LAVA_EXTRA_OVERLAYS+=(
+		- append-overlay
+		  --name=opencl-cts
+		  --url="$(fdo_find_s3_path "${DATA_STORAGE_PATH}/opencl-cts/${DEBIAN_ARCH}/${OPENCL_CTS_TAG}.tar.zst")"
 		  --path="/"
 		  --format=tar
 		  --compression=zstd
@@ -82,7 +102,7 @@ fi
 if [ -n "${FLUSTER_TAG:-}" ]; then
 	LAVA_EXTRA_OVERLAYS+=(
 		- append-overlay
-		  --name=vkd3d-proton
+		  --name=fluster
 		  --url="$(fdo_find_s3_path "${DATA_STORAGE_PATH}/fluster/${FLUSTER_TAG}/vectors.tar.zst")"
 		  --path="/"
 		  --format=tar
@@ -94,6 +114,16 @@ if [ -n "${VKD3D_PROTON_TAG:-}" ]; then
 		- append-overlay
 		  --name=vkd3d-proton
 		  --url="$(fdo_find_s3_path "${DATA_STORAGE_PATH}/vkd3d-proton/${VKD3D_PROTON_TAG}/${MESA_IMAGE_PATH}/vkd3d-proton.tar.zst")"
+		  --path="/"
+		  --format=tar
+		  --compression=zstd
+	)
+fi
+if [ -n "${WINE_TAG:-}" ]; then
+	LAVA_EXTRA_OVERLAYS+=(
+		- append-overlay
+		  --name=wine
+		  --url="$(fdo_find_s3_path "${DATA_STORAGE_PATH}/wine/${DEBIAN_TEST_VK_TAG}-${WINE_TAG}/${MESA_IMAGE_PATH}/wine.tar.zst")"
 		  --path="/"
 		  --format=tar
 		  --compression=zstd
@@ -113,16 +143,6 @@ if [ -n "${S3_ANDROID_ARTIFACT_NAME:-}" ]; then
 		  --path="/cuttlefish"
 		  --format=tar
 		  --compression=zstd
-		- append-overlay
-		  --name=android-kernel
-		  --url="https://${S3_BASE_PATH}/${AOSP_KERNEL_PROJECT_PATH}/aosp-kernel-common-${AOSP_KERNEL_BUILD_VERSION_TAGS}.${AOSP_KERNEL_BUILD_NUMBER}/bzImage"
-		  --path="/cuttlefish"
-		  --format=file
-		- append-overlay
-		  --name=android-initramfs
-		  --url="https://${S3_BASE_PATH}/${AOSP_KERNEL_PROJECT_PATH}/aosp-kernel-common-${AOSP_KERNEL_BUILD_VERSION_TAGS}.${AOSP_KERNEL_BUILD_NUMBER}/initramfs.img"
-		  --path="/cuttlefish"
-		  --format=file
 	)
 fi
 

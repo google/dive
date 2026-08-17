@@ -142,7 +142,7 @@ mark_array_elements_referenced(const struct array_deref_range *dr,
          BITSET_SET(bits, dr[0].index);
       } else {
          /* Accessed by non-constant index so set everything as referenced */
-         BITSET_SET_RANGE(bits, 0, dr[0].size - 1);
+         BITSET_SET_COUNT(bits, 0, dr[0].size);
       }
 
       return;
@@ -281,7 +281,7 @@ setup_uniform_remap_tables(const struct gl_constants *consts,
     * that we can keep track of unused uniforms with explicit locations.
     */
    assert(!prog->data->spirv ||
-          (prog->data->spirv && list_is_empty(prog->UniformRemapTable)));
+          (prog->data->spirv && list_is_empty(&prog->UniformRemapTable->r_list)));
 
    union gl_constant_value *data =
       rzalloc_array(prog->data,
@@ -322,7 +322,7 @@ setup_uniform_remap_tables(const struct gl_constants *consts,
       /* Set remap table entry to the correct gl_uniform_storage. */
       util_range_insert_remap(uniform->remap_location,
                               uniform->remap_location + entries - 1,
-                              prog->UniformRemapTable, uniform);
+                              prog->UniformRemapTable, uniform, true);
    }
 
    /* Reserve locations for rest of the uniforms. */
@@ -376,8 +376,10 @@ setup_uniform_remap_tables(const struct gl_constants *consts,
       /* Set remap table entry to the correct gl_uniform_storage. */
       util_range_insert_remap(uniform->remap_location,
                               uniform->remap_location + entries - 1,
-                              prog->UniformRemapTable, uniform);
+                              prog->UniformRemapTable, uniform, true);
    }
+
+   util_range_switch_to_sorted_array(prog->UniformRemapTable);
 
    /* Verify that total amount of entries for explicit and implicit locations
     * is less than MAX_UNIFORM_LOCATIONS.
@@ -565,7 +567,7 @@ add_var_use_deref(nir_deref_instr *deref, struct hash_table *live,
       ainfo = ralloc(live, struct uniform_array_info);
 
       unsigned num_bits = MAX2(1, glsl_get_aoa_size(deref->var->type));
-      ainfo->indices = rzalloc_array(live, BITSET_WORD, BITSET_WORDS(num_bits));
+      ainfo->indices = BITSET_RZALLOC(live, num_bits);
 
       ainfo->deref_list = ralloc(live, struct util_dynarray);
       util_dynarray_init(ainfo->deref_list, live);
@@ -586,7 +588,7 @@ add_var_use_deref(nir_deref_instr *deref, struct hash_table *live,
       mark_array_elements_referenced(*derefs, num_derefs, array_depth,
                                      ainfo->indices);
 
-      util_dynarray_append(ainfo->deref_list, nir_deref_instr *, deref);
+      util_dynarray_append(ainfo->deref_list, deref);
    }
 
    assert(deref->modes == deref->var->data.mode);

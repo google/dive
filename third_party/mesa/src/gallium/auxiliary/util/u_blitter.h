@@ -98,6 +98,7 @@ struct blitter_context
    bool running;
 
    bool use_index_buffer;
+   bool use_single_triangle;
 
    /* Private members, really. */
    struct pipe_context *pipe; /**< pipe context */
@@ -107,13 +108,12 @@ struct blitter_context
    void *saved_velem_state;   /**< vertex elements state */
    void *saved_rs_state;      /**< rasterizer state */
    void *saved_fs, *saved_vs, *saved_gs, *saved_tcs, *saved_tes; /**< shaders */
-   void *saved_ts, *saved_ms;
+   void *saved_ms;
 
    struct pipe_framebuffer_state saved_fb_state;  /**< framebuffer state */
    struct pipe_stencil_ref saved_stencil_ref;     /**< stencil ref */
    struct pipe_viewport_state saved_viewport;
    struct pipe_scissor_state saved_scissor;
-   bool skip_viewport_restore;
    bool is_sample_mask_saved;
    unsigned saved_sample_mask;
    unsigned saved_min_samples;
@@ -402,7 +402,7 @@ void util_blitter_custom_resolve_color(struct blitter_context *blitter,
 /* Used by vc4 for 8/16-bit linear-to-tiled blits */
 void util_blitter_custom_shader(struct blitter_context *blitter,
                                 struct pipe_surface *dstsurf,
-                                uint16_t width, uint16_t height,
+                                unsigned width, unsigned height,
                                 void *custom_vs, void *custom_fs);
 
 /* Used by D3D12 for non-MSAA -> MSAA stencil blits */
@@ -484,13 +484,6 @@ util_blitter_save_tesseval_shader(struct blitter_context *blitter,
                                   void *sh)
 {
    blitter->saved_tes = sh;
-}
-
-static inline void
-util_blitter_save_task_shader(struct blitter_context *blitter,
-                              void *sh)
-{
-   blitter->saved_ts = sh;
 }
 
 static inline void

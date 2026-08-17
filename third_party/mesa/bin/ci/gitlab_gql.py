@@ -10,7 +10,7 @@ from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import accumulate
-from os import get_terminal_size
+from os import get_terminal_size, getenv
 from pathlib import Path
 from subprocess import check_output
 from textwrap import dedent
@@ -18,7 +18,7 @@ from typing import Any, Iterable, Optional, TypedDict, Union
 
 import yaml
 from filecache import DAY, filecache
-from gitlab_common import get_token_from_default_dir
+from gitlab_common import get_token_from_default_dir, is_gitlab_job
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import DocumentNode
@@ -41,7 +41,10 @@ Dag = dict[str, DagNode]
 
 StageSeq = OrderedDict[str, set[str]]
 
-console = Console(highlight=False)
+if is_gitlab_job():
+    console = Console(highlight=False, no_color=False, color_system="truecolor", width=120)
+else:
+    console = Console(highlight=False)
 print = console.print
 
 
@@ -106,7 +109,6 @@ class GitlabGQL:
             logging.error(traceback_str)
             self.invalidate_query_cache()
             logging.error("Cache invalidated, retrying without cache")
-        finally:
             return run_uncached()
 
     def _query(

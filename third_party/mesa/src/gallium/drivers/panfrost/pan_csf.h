@@ -1,25 +1,6 @@
 /*
  * Copyright (C) 2023 Collabora Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __PAN_CSF_H__
@@ -48,7 +29,8 @@ struct pan_csf_tiler_oom_ctx {
    /* Alternative framebuffer descriptors for incremental rendering */
    struct pan_ptr fbds[PAN_INCREMENTAL_RENDERING_PASS_COUNT];
 
-   /* Bounding Box (Register 42 and 43) */
+   /* Bounding Box (Register MALI_FRAGMENT_SR_BBOX_MIN and
+    * MALI_FRAGMENT_SR_BBOX_MAX) */
    uint32_t bbox_min;
    uint32_t bbox_max;
 
@@ -59,6 +41,30 @@ struct pan_csf_tiler_oom_ctx {
    uint64_t dump_addr;
 } PACKED;
 
+/*
+ * On CSF GPUs each GPU work submission targets a scoreboard slot (via
+ * cs_select_endpoint_sb). The slot signals when that work completes, allowing
+ * other CS queue operations to synchronize against it with cs_wait_slot(), or
+ * to defer a side-effect (such as a timestamp write) until completion via
+ * cs_defer() / sb_wait_mask.
+ *
+ * Render and compute work can be in flight at the same time, so they must
+ * each signal a distinct slot. Without separate slots it would be impossible
+ * to defer a timestamp until only the render (or only the compute) job
+ * finishes; cs_wait_slot() on a shared slot would stall until both are done.
+ *
+ * Slot 0 is reserved for internal CS memory operations (loads/stores). Slot 1
+ * is assigned for deferred sync. Slots 2-4 are assigned here to the three
+ * work categories that panfrost issues concurrently.
+ */
+enum panfrost_scoreboard_slot {
+   PANFROST_SB_LS       = 0,
+   PANFROST_SB_DEFERRED = 1,
+   PANFROST_SB_RENDER   = 2,
+   PANFROST_SB_COMPUTE  = 3,
+   PANFROST_SB_AUX      = 4,
+};
+
 struct panfrost_csf_batch {
    /* CS related fields. */
    struct {
@@ -68,6 +74,12 @@ struct panfrost_csf_batch {
       /* CS state, written through the CS, and checked when PAN_MESA_DEBUG=sync.
        */
       struct pan_ptr state;
+
+      /* Currently selected endpoint scoreboard slot, or ~0u if none has
+       * been selected yet. Used to skip redundant cs_select_endpoint_sb
+       * calls.
+       */
+      unsigned current_ep_sb;
    } cs;
 
    /* Pool used to allocate CS chunks. */
@@ -105,6 +117,7 @@ struct panfrost_csf_context {
 
 struct panfrost_batch;
 struct panfrost_context;
+struct panfrost_resource;
 struct pan_fb_info;
 struct pan_tls_info;
 struct pipe_draw_info;
@@ -142,8 +155,55 @@ void GENX(csf_launch_draw_indirect)(struct panfrost_batch *batch,
 
 void GENX(csf_emit_write_timestamp)(struct panfrost_batch *batch,
                                     struct panfrost_resource *dst,
-                                    unsigned offset);
+                                    unsigned offset,
+                                    uint16_t sb_wait_mask);
+
+void GENX(csf_emit_copy_data)(struct panfrost_batch *batch,
+                              struct panfrost_resource *dst,
+                              uint64_t dst_offset_B,
+                              uint64_t src_gpu_addr,
+                              uint32_t size_B);
 
 #endif /* PAN_ARCH >= 10 */
+
+#if PAN_ARCH >= 14
+/* Framebuffer state. Keep this structure 64-byte aligned, since
+ * we want the adjacent ZS_CRC_EXTENSION and RENDER_TARGET descriptors
+ * aligned. */
+struct pan_fb_state {
+   /** GPU address to the tiler descriptor. */
+   uint64_t tiler;
+
+   /** Frame argument. */
+   uint64_t frame_argument;
+
+   /** An instance of Fragment Flags 0. */
+   struct mali_fragment_flags_0_packed flags0;
+
+   /** An instance of Fragment Flags 2. */
+   struct mali_fragment_flags_2_packed flags2;
+
+   /** Z clear value. */
+   uint32_t z_clear;
+
+   /** GPU address to the draw call descriptors. It may be 0. */
+   uint64_t dcd_pointer;
+
+   /** GPU address to the ZS_CRC_EXTENSION descriptor. It may be 0. */
+   uint64_t dbd_pointer;
+
+   /** GPU address to the RENDER_TARGET descriptors. */
+   uint64_t rtd_pointer;
+
+   /** An instance of Frame Size. */
+   struct mali_frame_size_packed frame_size;
+
+   /** GPU address to the sample position array. */
+   uint64_t sample_positions;
+
+   /** An instance of Fragment Flags 1. */
+   struct mali_fragment_flags_1_packed flags1;
+} __attribute__((aligned(64)));
+#endif /* PAN_ARCH >= 14 */
 
 #endif /* __PAN_CSF_H__ */

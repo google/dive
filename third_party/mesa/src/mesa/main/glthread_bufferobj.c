@@ -25,8 +25,6 @@
 #include "dispatch.h"
 #include "main/bufferobj.h"
 
-#define PRIVATE_REFCOUNT 1000000
-
 /**
  * Create an upload buffer. This is called from the app thread, so everything
  * has to be thread-safe in the driver.
@@ -64,8 +62,15 @@ new_upload_buffer(struct gl_context *ctx, GLsizeiptr size, uint8_t **ptr)
    return obj;
 }
 
+void GLAPIENTRY _mesa_InternalReleaseBufferMESA(GLvoid *buffer)
+{
+   GET_CURRENT_CONTEXT(ctx);
+   struct gl_buffer_object *buf = buffer;
+   _mesa_reference_buffer_object(ctx, &buf, NULL);
+}
+
 void
-_mesa_glthread_release_upload_buffer(struct gl_context *ctx)
+_mesa_glthread_release_upload_buffer(struct gl_context *ctx, bool async_release)
 {
    struct glthread_state *glthread = &ctx->GLThread;
 
@@ -74,12 +79,14 @@ _mesa_glthread_release_upload_buffer(struct gl_context *ctx)
                    -glthread->upload_buffer_private_refcount);
       glthread->upload_buffer_private_refcount = 0;
    }
-   if (glthread->upload_buffer) {
-      glthread->upload_buffer->Ctx = NULL;
-      p_atomic_add(&glthread->upload_buffer->RefCount,
-                   -(PRIVATE_REFCOUNT - glthread->upload_buffer->CtxRefCount));
+
+   if (async_release) {
+      /* Defer to avoid calling tc_resource_release from this thread. */
+      _mesa_marshal_InternalReleaseBufferMESA(glthread->upload_buffer);
+      glthread->upload_buffer = NULL;
+   } else {
+      _mesa_reference_buffer_object(ctx, &glthread->upload_buffer, NULL);
    }
-   _mesa_reference_buffer_object(ctx, &glthread->upload_buffer, NULL);
 }
 
 void
@@ -120,7 +127,7 @@ _mesa_glthread_upload(struct gl_context *ctx, const void *data,
          return;
       }
 
-      _mesa_glthread_release_upload_buffer(ctx);
+      _mesa_glthread_release_upload_buffer(ctx, true);
 
       glthread->upload_buffer =
          new_upload_buffer(ctx, default_size, &glthread->upload_ptr);
@@ -149,8 +156,6 @@ _mesa_glthread_upload(struct gl_context *ctx, const void *data,
        */
       glthread->upload_buffer->RefCount += default_size;
       glthread->upload_buffer_private_refcount = default_size;
-      glthread->upload_buffer->Ctx = ctx;
-      glthread->upload_buffer->CtxRefCount = PRIVATE_REFCOUNT;
    }
 
    /* Upload data. */

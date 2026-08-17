@@ -949,7 +949,7 @@ class Group:
             if dw.addresses:
                 if len(dw.fields) > address_count:
                     print("    dw[%d] = %s | %s;" % (index, v_accumulated_addr, v))
-                    print("    dw[%d] = (%s >> 32) | (%s >> 32);" % (index + 1, v_accumulated_addr, v))
+                    print("    dw[%d] = ((%s) >> 32) | (%s >> 32);" % (index + 1, v_accumulated_addr, v))
                     continue
                 else:
                     v = v_accumulated_addr

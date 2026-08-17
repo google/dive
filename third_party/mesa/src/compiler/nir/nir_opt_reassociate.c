@@ -173,8 +173,8 @@ struct chain {
    nir_alu_instr *root;
    unsigned length;
    nir_scalar srcs[MAX_CHAIN_LENGTH];
-   bool do_global_cse, exact;
-   unsigned fp_fast_math;
+   bool do_global_cse;
+   unsigned fp_math_ctrl;
 };
 
 UNUSED static void
@@ -203,7 +203,7 @@ can_reassociate(nir_alu_instr *alu)
 
    return (props & NIR_OP_IS_2SRC_COMMUTATIVE) &&
           ((props & NIR_OP_IS_ASSOCIATIVE) ||
-           (!alu->exact && (props & NIR_OP_IS_INEXACT_ASSOCIATIVE)));
+           (!nir_alu_instr_no_reassoc(alu) && (props & NIR_OP_IS_INEXACT_ASSOCIATIVE)));
 }
 
 /*
@@ -216,13 +216,10 @@ build_chain(struct chain *c, nir_scalar def, unsigned reserved_count)
 {
    nir_alu_instr *alu = nir_def_as_alu(def.def);
 
-   /* Conservative fast math handling: if ANY instruction along the chain is
-    * exact, treat the whole chain as exact. Likewise for float controls.
-    *
-    * It is safe to add `exact` or float control bits, but not the reverse.
+   /* Conservative fast math handling: take the union of all float controls
+    * along the chain. Float controls may be safely added but not removed.
     */
-   c->exact |= alu->exact;
-   c->fp_fast_math |= alu->fp_fast_math;
+   c->fp_math_ctrl |= alu->fp_math_ctrl;
 
    for (unsigned i = 0; i < 2; ++i) {
       nir_scalar src = nir_scalar_chase_alu_src(def, i);
@@ -230,11 +227,12 @@ build_chain(struct chain *c, nir_scalar def, unsigned reserved_count)
       unsigned reserved_plus_remaining = reserved_count + remaining;
 
       if (nir_scalar_is_alu(src) && nir_scalar_alu_op(src) == alu->op &&
+          can_reassociate(nir_def_as_alu(src.def)) &&
           list_is_singular(&src.def->uses) &&
           c->length + reserved_plus_remaining + 2 <= MAX_CHAIN_LENGTH) {
 
          /* Any interior nodes cannot be the root */
-         src.def->parent_instr->pass_flags = PASS_FLAG_INTERIOR;
+         nir_def_instr(src.def)->pass_flags = PASS_FLAG_INTERIOR;
 
          /* Recurse, reserving space for the next sources */
          build_chain(c, src, reserved_count + remaining);
@@ -397,8 +395,9 @@ find_chains(nir_function_impl *impl, struct hash_table *pair_freq,
          sort_by_rank &= nr_highest != (c.length - 1);
 
          /* Reassociate the chain if one of our heuristics can improve it */
-         if (sort_by_rank || c.do_global_cse)
-            util_dynarray_append(chains, struct chain, c);
+         if (sort_by_rank || c.do_global_cse) {
+            util_dynarray_append(chains, c);
+         }
       }
    }
 }
@@ -449,8 +448,7 @@ static bool
 reassociate_chain(struct chain *c, void *pair_freq)
 {
    nir_builder b = nir_builder_at(nir_before_instr(&c->root->instr));
-   b.exact = c->exact;
-   b.fp_fast_math = c->fp_fast_math;
+   b.fp_math_ctrl = c->fp_math_ctrl;
 
    /* Pick a new order using sort-by-rank and possibly the CSE heuristics */
    unsigned pinned = 0;
@@ -501,8 +499,7 @@ reassociate_chain(struct chain *c, void *pair_freq)
 
    /* Set flags conservatively, matching the rest of the chain */
    c->root->no_signed_wrap = c->root->no_unsigned_wrap = false;
-   c->root->exact = c->exact;
-   c->root->fp_fast_math = c->fp_fast_math;
+   c->root->fp_math_ctrl = c->fp_math_ctrl;
    return true;
 }
 
@@ -518,7 +515,7 @@ nir_opt_reassociate(nir_shader *nir, nir_reassociate_options opts)
    /* Clear pass flags. All instructions are possible roots, a priori. Interior
     * nodes are indicated with a non-zero pass flags, set as we go.
     */
-   util_dynarray_init(&chains, NULL);
+   chains = UTIL_DYNARRAY_INIT;
    nir_shader_clear_pass_flags(nir);
 
    /* We use nir_def indices, which are function-local, so the algorithm runs on
@@ -589,7 +586,7 @@ nir_opt_reassociate_loop(nir_shader *nir, nir_reassociate_options in_opts)
 
             NIR_PASS(progress, nir, nir_opt_algebraic);
             NIR_PASS(progress, nir, nir_opt_constant_folding);
-            NIR_PASS(progress, nir, nir_copy_prop);
+            NIR_PASS(progress, nir, nir_opt_copy_prop);
             NIR_PASS(progress, nir, nir_opt_cse);
             NIR_PASS(progress, nir, nir_opt_dce);
             any_progress |= progress;

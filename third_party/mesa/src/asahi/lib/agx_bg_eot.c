@@ -82,9 +82,8 @@ build_background_op(nir_builder *b, enum agx_bg_eot_op op, unsigned rt,
 
       b->shader->info.fs.uses_sample_shading |= msaa;
 
-      nir_def *tex = nir_build_tex(
-         b, msaa ? nir_texop_txf_ms : nir_texop_txf, coord,
-         .ms_index = msaa ? nir_load_sample_id(b) : NULL,
+      nir_def *tex = nir_txf(
+         b, coord, .ms_index = msaa ? nir_load_sample_id(b) : NULL,
          .texture_index = rt * 2,
          .dim = msaa ? GLSL_SAMPLER_DIM_MS : GLSL_SAMPLER_DIM_2D,
          .is_array = layered,

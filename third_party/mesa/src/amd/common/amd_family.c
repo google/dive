@@ -5,7 +5,6 @@
  */
 
 #include "amd_family.h"
-#include "addrlib/src/amdgpu_asic_addr.h"
 #include "util/macros.h"
 #include "ac_gpu_info.h"
 
@@ -56,12 +55,15 @@ const char *ac_get_family_name(enum radeon_family family)
    CASE(NAVI33);
    CASE(PHOENIX);
    CASE(PHOENIX2);
-   CASE(GFX1150);
-   CASE(GFX1151);
-   CASE(GFX1152);
+   CASE(STRIX1);
+   CASE(STRIX_HALO);
+   CASE(GFX1156);
+   CASE(KRACKAN1);
    CASE(GFX1153);
+   CASE(GFX1170);
    CASE(GFX1200);
    CASE(GFX1201);
+   CASE(GFX1210);
 #undef CASE
    default:
       UNREACHABLE("Unknown GPU family");
@@ -70,9 +72,13 @@ const char *ac_get_family_name(enum radeon_family family)
 
 enum amd_gfx_level ac_get_gfx_level(enum radeon_family family)
 {
+   if (family >= CHIP_GFX1210)
+      return GFX12_1;
    if (family >= CHIP_GFX1200)
       return GFX12;
-   if (family >= CHIP_GFX1150)
+   if (family >= CHIP_GFX1170)
+      return GFX11_7;
+   if (family >= CHIP_STRIX1)
       return GFX11_5;
    if (family >= CHIP_NAVI31)
       return GFX11;
@@ -175,14 +181,17 @@ const char *ac_get_llvm_processor_name(enum radeon_family family)
    case CHIP_PHOENIX:
    case CHIP_PHOENIX2:
       return "gfx1103";
-   case CHIP_GFX1150:
+   case CHIP_STRIX1:
       return "gfx1150";
-   case CHIP_GFX1151:
+   case CHIP_STRIX_HALO:
       return "gfx1151";
-   case CHIP_GFX1152:
+   case CHIP_KRACKAN1:
       return "gfx1152";
    case CHIP_GFX1153:
+   case CHIP_GFX1156:
       return "gfx1153";
+   case CHIP_GFX1170:
+      return "gfx1170";
    case CHIP_GFX1200:
       return "gfx1200";
    case CHIP_GFX1201:

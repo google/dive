@@ -48,6 +48,7 @@ struct stw_st_framebuffer {
 
    struct stw_framebuffer *fb;
    struct st_visual stvis;
+   unsigned pfd_flags;
 
    struct pipe_resource *textures[ST_ATTACHMENT_COUNT];
    struct pipe_resource *msaa_textures[ST_ATTACHMENT_COUNT];
@@ -177,6 +178,11 @@ stw_st_framebuffer_validate_locked(struct st_context *st,
       else
          mask |= ST_ATTACHMENT_BACK_LEFT_MASK;
    }
+
+   /* If we're being asked to use a copy swap mode, make sure we have a front buffer */
+   if ((mask & ST_ATTACHMENT_BACK_LEFT_MASK) &&
+      (stwfb->pfd_flags & PFD_SWAP_COPY))
+      mask |= ST_ATTACHMENT_FRONT_LEFT_MASK;
 
    /* remove outdated textures */
    if (stwfb->texture_width != width || stwfb->texture_height != height) {
@@ -447,8 +453,9 @@ stw_st_framebuffer_present_locked(HDC hdc,
    assert(stw_own_mutex(&stwfb->fb->mutex));
 
    resource = stwfb->textures[statt];
+   bool ret = false;
    if (resource) {
-      stw_framebuffer_present_locked(hdc, stwfb->fb, resource);
+      ret = stw_framebuffer_present_locked(hdc, stwfb->fb, resource);
    }
    else {
       stw_framebuffer_unlock(stwfb->fb);
@@ -456,7 +463,7 @@ stw_st_framebuffer_present_locked(HDC hdc,
 
    assert(!stw_own_mutex(&stwfb->fb->mutex));
 
-   return true;
+   return ret;
 }
 
 static bool
@@ -468,40 +475,32 @@ stw_st_framebuffer_flush_front(struct st_context *st,
    struct pipe_context *pipe = st->pipe;
    bool ret;
    HDC hDC;
-   bool need_swap_textures = false;
 
    if (statt != ST_ATTACHMENT_FRONT_LEFT)
       return false;
 
    stw_framebuffer_lock(stwfb->fb);
+   
+   enum st_attachment_type flush_statt = statt;
 
    /* Resolve the front buffer. */
    if (stwfb->stvis.samples > 1) {
-      enum st_attachment_type blit_target = statt;
-      if (stwfb->fb->winsys_framebuffer) {
-         blit_target = ST_ATTACHMENT_BACK_LEFT;
-         need_swap_textures = true;
-      }
+      if (stwfb->fb->winsys_framebuffer)
+         flush_statt = ST_ATTACHMENT_BACK_LEFT;
 
-      stw_pipe_blit(pipe, stwfb->textures[blit_target],
+      stw_pipe_blit(pipe, stwfb->textures[flush_statt],
                     stwfb->msaa_textures[statt]);
    } else if (stwfb->needs_fake_front) {
       /* fake front texture is now invalid */
       p_atomic_inc(&stwfb->base.stamp);
-      need_swap_textures = true;
+      flush_statt = ST_ATTACHMENT_BACK_LEFT;
    } else if (stwfb->fb->winsys_framebuffer &&
               stwfb->fb->winsys_framebuffer->flush_frontbuffer) {
       stwfb->fb->winsys_framebuffer->flush_frontbuffer(stwfb->fb->winsys_framebuffer, pipe);
    }
 
-   if (need_swap_textures) {
-      struct pipe_resource *ptex = stwfb->textures[ST_ATTACHMENT_FRONT_LEFT];
-      stwfb->textures[ST_ATTACHMENT_FRONT_LEFT] = stwfb->textures[ST_ATTACHMENT_BACK_LEFT];
-      stwfb->textures[ST_ATTACHMENT_BACK_LEFT] = ptex;
-   }
-
-   if (stwfb->textures[statt])
-      pipe->flush_resource(pipe, stwfb->textures[statt]);
+   if (stwfb->textures[flush_statt])
+      pipe->flush_resource(pipe, stwfb->textures[flush_statt]);
 
    pipe->flush(pipe, NULL, 0);
 
@@ -510,9 +509,15 @@ stw_st_framebuffer_flush_front(struct st_context *st,
 
    hDC = GetDC(stwfb->fb->hWnd);
 
-   ret = stw_st_framebuffer_present_locked(hDC, &stwfb->base, statt);
+   ret = stw_st_framebuffer_present_locked(hDC, &stwfb->base, flush_statt);
 
    ReleaseDC(stwfb->fb->hWnd, hDC);
+
+   if (flush_statt != statt && ret) {
+      struct pipe_resource *ptex = stwfb->textures[ST_ATTACHMENT_FRONT_LEFT];
+      stwfb->textures[ST_ATTACHMENT_FRONT_LEFT] = stwfb->textures[ST_ATTACHMENT_BACK_LEFT];
+      stwfb->textures[ST_ATTACHMENT_BACK_LEFT] = ptex;
+   }
 
    return ret;
 }
@@ -531,6 +536,7 @@ stw_st_create_framebuffer(struct stw_framebuffer *fb, struct pipe_frontend_scree
 
    stwfb->fb = fb;
    stwfb->stvis = fb->pfi->stvis;
+   stwfb->pfd_flags = fb->pfi->pfd.dwFlags;
    stwfb->base.ID = p_atomic_inc_return(&stwfb_ID);
    stwfb->base.fscreen = fscreen;
 
@@ -569,13 +575,18 @@ stw_st_destroy_framebuffer_locked(struct pipe_frontend_drawable *drawable)
  * Swap the buffers of the given framebuffer.
  */
 bool
-stw_st_swap_framebuffer_locked(HDC hdc,
+stw_st_swap_framebuffer_locked(struct st_context *st,
+                               HDC hdc,
                                struct pipe_frontend_drawable *drawable)
 {
    struct stw_st_framebuffer *stwfb = stw_st_framebuffer(drawable);
    unsigned front = ST_ATTACHMENT_FRONT_LEFT, back = ST_ATTACHMENT_BACK_LEFT;
    struct pipe_resource *ptex;
    unsigned mask;
+
+   bool ret = stw_st_framebuffer_present_locked(hdc, &stwfb->base, back);
+   if (!ret)
+      return false;
 
    /* swap the textures */
    ptex = stwfb->textures[front];
@@ -586,7 +597,19 @@ stw_st_swap_framebuffer_locked(HDC hdc,
    ptex = stwfb->msaa_textures[front];
    stwfb->msaa_textures[front] = stwfb->msaa_textures[back];
    stwfb->msaa_textures[back] = ptex;
-
+   
+   /* If doing a copy swap, blit front to back after swapping to preserve back contents.
+    * This is best effort. Most likely the app doesn't actually care about this copy-back,
+    * so if they do a swap with no context bound, and somehow still care about this,
+    * that's on them or we'll need to figure out another solution.
+    */
+   if ((stwfb->pfd_flags & PFD_SWAP_COPY) && st) {
+      assert((stwfb->texture_mask & (front | back)) == (front | back));
+      if (stwfb->stvis.samples > 1)
+         stw_pipe_blit(st->pipe, stwfb->msaa_textures[back], stwfb->textures[front]);
+      else
+         stw_pipe_blit(st->pipe, stwfb->textures[back], stwfb->textures[front]);
+   }
 
    /* Fake front texture is now dirty */
    if (stwfb->needs_fake_front)
@@ -604,8 +627,7 @@ stw_st_swap_framebuffer_locked(HDC hdc,
       mask |= front;
    stwfb->texture_mask = mask;
 
-   front = ST_ATTACHMENT_FRONT_LEFT;
-   return stw_st_framebuffer_present_locked(hdc, &stwfb->base, front);
+   return true;
 }
 
 

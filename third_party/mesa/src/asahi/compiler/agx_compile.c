@@ -184,7 +184,7 @@ gather_cf(nir_builder *b, nir_intrinsic_instr *intr, void *data)
       unsigned location = sem.location + nir_src_as_uint(*offset);
       unsigned start_comp = (location * 4) + nir_intrinsic_component(intr);
 
-      BITSET_SET_RANGE(set, start_comp, start_comp + nr - 1);
+      BITSET_SET_COUNT(set, start_comp, nr);
    } else {
       unsigned start_comp = (sem.location * 4) + nir_intrinsic_component(intr);
       bool compact = sem.location == VARYING_SLOT_CLIP_DIST0 ||
@@ -197,8 +197,7 @@ gather_cf(nir_builder *b, nir_intrinsic_instr *intr, void *data)
       nr = stride;
 
       for (unsigned i = 0; i < sem.num_slots; ++i) {
-         BITSET_SET_RANGE(set, start_comp + (i * stride),
-                          start_comp + (i * stride) + nr - 1);
+         BITSET_SET_COUNT(set, start_comp + (i * stride), nr);
       }
    }
 
@@ -242,10 +241,9 @@ assign_coefficient_regs(nir_shader *nir, struct agx_varyings_fs *var)
    static_assert(VARYING_SLOT_POS == 0, "special and handled first");
 
    for (unsigned i = VARYING_SLOT_POS + 1; i < VARYING_SLOT_MAX; ++i) {
-      bool smooth = BITSET_TEST_RANGE(info.smooth, i * 4, (i * 4) + 3);
-      bool flat = BITSET_TEST_RANGE(info.flat, i * 4, (i * 4) + 3);
-      bool noperspective =
-         BITSET_TEST_RANGE(info.noperspective, i * 4, (i * 4) + 3);
+      bool smooth = BITSET_TEST_COUNT(info.smooth, i * 4, 4);
+      bool flat = BITSET_TEST_COUNT(info.flat, i * 4, 4);
+      bool noperspective = BITSET_TEST_COUNT(info.noperspective, i * 4, 4);
 
       if (!(smooth || flat || noperspective))
          continue;
@@ -472,7 +470,7 @@ agx_block_add_successor(agx_block *block, agx_block *successor)
       }
 
       block->successors[i] = successor;
-      util_dynarray_append(&successor->predecessors, agx_block *, block);
+      util_dynarray_append(&successor->predecessors, block);
       return;
    }
 
@@ -2264,7 +2262,13 @@ agx_emit_tex(agx_builder *b, nir_tex_instr *instr)
          break;
       case nir_tex_src_sampler_handle:
          b->shader->out->uses_sampler_heap = true;
-         sampler = index;
+         nir_intrinsic_instr *intr = nir_src_as_intrinsic(instr->src[i].src);
+         if (intr && intr->intrinsic == nir_intrinsic_bindless_sampler_agx) {
+            /* Heap offset */
+            sampler = agx_src_index(&intr->src[1]);
+         } else {
+            sampler = index;
+         }
          break;
 
       case nir_tex_src_texture_handle:
@@ -2372,85 +2376,18 @@ agx_emit_tex(agx_builder *b, nir_tex_instr *instr)
    I->mask = agx_expand_tex_to(b, &instr->def, tmp, masked);
 }
 
-/*
- * Determine if a NIR loop (CF list) uses a continue jump, including within
- * if-else statements but not including nested loops.
- */
-static bool
-cf_list_uses_continue(struct exec_list *list)
-{
-   foreach_list_typed(nir_cf_node, node, node, list) {
-      if (node->type == nir_cf_node_block) {
-         nir_block *block = nir_cf_node_as_block(node);
-
-         nir_foreach_instr(instr, block) {
-            if (instr->type == nir_instr_type_jump &&
-                nir_instr_as_jump(instr)->type == nir_jump_continue)
-               return true;
-         }
-      } else if (node->type == nir_cf_node_if) {
-         nir_if *nif = nir_cf_node_as_if(node);
-
-         if (cf_list_uses_continue(&nif->then_list) ||
-             cf_list_uses_continue(&nif->else_list))
-            return true;
-      } else {
-         assert(node->type == nir_cf_node_loop && "don't care about nesting");
-      }
-   }
-
-   return false;
-}
-
-static bool
-loop_uses_continue(nir_loop *loop)
-{
-   return cf_list_uses_continue(&loop->body);
-}
-
-/*
- * NIR loops are treated as a pair of AGX loops:
- *
- *    do {
- *       do {
- *          ...
- *       } while (0);
- *    } while (cond);
- *
- * By manipulating the nesting counter, we may break out of nested loops, so
- * under the model, both break and continue may be implemented as breaks, where
- * break breaks out of the outer loop (2 layers) and continue breaks out of the
- * inner loop (1 layer).
- *
- * After manipulating the nesting counter directly, pop_exec #0 must be used to
- * flush the update to the execution mask.
- */
 static void
 agx_emit_jump(agx_builder *b, nir_jump_instr *instr)
 {
-   agx_context *ctx = b->shader;
-
    if (instr->type == nir_jump_halt) {
       agx_stop(b);
-      ctx->current_block->unconditional_jumps = true;
-      return;
+   } else {
+      assert(instr->type == nir_jump_break);
+      agx_block_add_successor(b->shader->current_block, b->shader->break_block);
+      agx_break(b, b->shader->loop_nesting + 1, b->shader->break_block);
    }
 
-   assert(instr->type == nir_jump_break || instr->type == nir_jump_continue);
-
-   /* Break out of either one or two loops */
-   unsigned nestings = b->shader->loop_nesting;
-
-   if (instr->type == nir_jump_continue) {
-      nestings += 1;
-      agx_block_add_successor(ctx->current_block, ctx->continue_block);
-   } else if (instr->type == nir_jump_break) {
-      nestings += ctx->loop_continues ? 2 : 1;
-      agx_block_add_successor(ctx->current_block, ctx->break_block);
-   }
-
-   agx_break(b, nestings, ctx->break_block);
-   ctx->current_block->unconditional_jumps = true;
+   b->shader->current_block->unconditional_jumps = true;
 }
 
 static void
@@ -2595,19 +2532,6 @@ emit_block(agx_context *ctx, nir_block *block)
 
 static agx_block *emit_cf_list(agx_context *ctx, struct exec_list *list);
 
-/* Emit if-else as
- *
- *    if_icmp cond != 0
- *       ...
- *    else_icmp cond == 0
- *       ...
- *    pop_exec
- *
- * If the else is empty, we can omit the else_icmp. This happens elsewhere, as
- * an empty else block can become nonempty after RA due to phi lowering. This is
- * not usually optimal, but it's a start.
- */
-
 static void
 emit_if(agx_context *ctx, nir_if *nif)
 {
@@ -2662,14 +2586,10 @@ emit_loop(agx_context *ctx, nir_loop *nloop)
    ctx->loop_nesting = 0;
    ctx->total_nesting++;
 
-   bool old_continues = ctx->loop_continues;
-   ctx->loop_continues = loop_uses_continue(nloop);
-
    agx_block *popped_break = ctx->break_block;
-   agx_block *popped_continue = ctx->continue_block;
 
    ctx->break_block = agx_create_block(ctx);
-   ctx->continue_block = agx_create_block(ctx);
+   agx_block *loop_header = agx_create_block(ctx);
 
    /* If we are emitting a loop inside other control flow, there might be
     * threads masked off (TODO: divergence analysis), so push_exec them so
@@ -2677,42 +2597,24 @@ emit_loop(agx_context *ctx, nir_loop *nloop)
     */
    agx_builder _b = agx_init_builder(ctx, agx_after_block(ctx->current_block));
    if (ctx->total_nesting > 1)
-      agx_push_exec(&_b, ctx->loop_continues ? 2 : 1);
+      agx_push_exec(&_b, 1);
 
-   /* Fallthrough to body */
-   agx_block_add_successor(ctx->current_block, ctx->continue_block);
+   /* Fallthrough to loop header */
+   agx_block_add_successor(ctx->current_block, loop_header);
 
-   /* Emit the body */
-   ctx->after_block = ctx->continue_block;
-   ctx->after_block->loop_header = true;
+   /* Emit the loop */
+   ctx->after_block = loop_header;
+   loop_header->loop_header = true;
    agx_block *start_block = emit_cf_list(ctx, &nloop->body);
 
-   /* If we used any continue jumps, we need to reactivate the continued
-    * threads. We do this with an always true while_icmp, which behaves like:
-    *
-    *    if (r0l == 1) {
-    *       r0l = 0;
-    *    }
-    *    update_exec
-    *
-    * If we did not use continue, this would be a no-op so it is omitted.
-    */
    _b.cursor = agx_after_block(ctx->current_block);
-
-   if (ctx->loop_continues) {
-      agx_while_icmp(
-         &_b, agx_zero(), agx_zero(), 2, AGX_ICOND_UEQ, false,
-         NULL /* no semantic target, used purely for side effects */);
-   }
-
    agx_jmp_exec_any(&_b, start_block);
-   agx_pop_exec(&_b, ctx->loop_continues ? 2 : 1);
-   agx_block_add_successor(ctx->current_block, ctx->continue_block);
+   agx_pop_exec(&_b, 1);
+   agx_block_add_successor(ctx->current_block, loop_header);
 
    /* Pop off */
    ctx->after_block = ctx->break_block;
    ctx->break_block = popped_break;
-   ctx->continue_block = popped_continue;
 
    /* Update shader-db stats */
    ++ctx->loop_count;
@@ -2723,7 +2625,6 @@ emit_loop(agx_context *ctx, nir_loop *nloop)
    /* Restore loop nesting (we might be inside an if inside an outer loop) */
    ctx->loop_nesting = pushed_nesting;
    ctx->total_nesting--;
-   ctx->loop_continues = old_continues;
 }
 
 /* Before the first control flow structure, the nesting counter needs to be
@@ -2890,7 +2791,7 @@ agx_optimize_loop_nir(nir_shader *nir)
    do {
       progress = false;
 
-      NIR_PASS(progress, nir, nir_copy_prop);
+      NIR_PASS(progress, nir, nir_opt_copy_prop);
       NIR_PASS(progress, nir, nir_opt_remove_phis);
       NIR_PASS(progress, nir, nir_opt_dce);
       NIR_PASS(progress, nir, nir_opt_dead_cf);
@@ -3064,7 +2965,11 @@ agx_optimize_nir(nir_shader *nir, bool soft_fault, uint16_t *preamble_size,
     */
    NIR_PASS(_, nir, agx_nir_lower_fminmax);
 
-   if (preamble_size && (!(agx_compiler_debug & AGX_DBG_NOPREAMBLE))) {
+   /* Force preamble generation for internal shaders since hk's meta copies
+    * depend on it for correctness with imgwblk intrinsics.
+    */
+   if (preamble_size &&
+       (!(agx_compiler_debug & AGX_DBG_NOPREAMBLE) || nir->info.internal)) {
       unsigned sizes[] = {
          *preamble_size,
          ts_count ? *ts_count : 1000 /* large finite */,
@@ -3118,7 +3023,7 @@ agx_optimize_nir(nir_shader *nir, bool soft_fault, uint16_t *preamble_size,
    /* Before optimizing bounds checks, we need to clean up and index defs so
     * optimize_bounds does the right thing.
     */
-   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_copy_prop);
    NIR_PASS(_, nir, nir_opt_dce);
 
    nir_foreach_function_impl(impl, nir) {
@@ -3132,7 +3037,7 @@ agx_optimize_nir(nir_shader *nir, bool soft_fault, uint16_t *preamble_size,
    NIR_PASS(_, nir, agx_nir_fuse_selects);
    NIR_PASS(_, nir, nir_opt_constant_folding);
    NIR_PASS(_, nir, nir_opt_combine_barriers, NULL, NULL);
-   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_copy_prop);
    NIR_PASS(_, nir, nir_opt_dce);
    NIR_PASS(_, nir, nir_opt_cse);
    NIR_PASS(_, nir, nir_lower_alu_to_scalar, NULL, NULL);
@@ -3152,7 +3057,7 @@ agx_optimize_nir(nir_shader *nir, bool soft_fault, uint16_t *preamble_size,
     * can't deal with dead phis.
     */
    do {
-      NIR_PASS(progress, nir, nir_copy_prop);
+      NIR_PASS(progress, nir, nir_opt_copy_prop);
       NIR_PASS(progress, nir, nir_opt_dce);
       progress = false;
    } while (progress);
@@ -3164,38 +3069,23 @@ agx_optimize_nir(nir_shader *nir, bool soft_fault, uint16_t *preamble_size,
  * conformant not to, but every app gets this wrong.
  */
 static bool
-gather_texcoords(nir_builder *b, nir_instr *instr, void *data)
+gather_texcoords(nir_builder *b, nir_tex_instr *tex, void *data)
 {
-   uint64_t *mask = data;
-
-   if (instr->type != nir_instr_type_tex)
+   nir_def *coord = nir_get_tex_src(tex, nir_tex_src_coord);
+   if (!coord)
       return false;
 
-   nir_tex_instr *tex = nir_instr_as_tex(instr);
+   nir_scalar x = nir_scalar_resolved(coord, 0);
+   nir_scalar y = nir_scalar_resolved(coord, 1);
+   nir_intrinsic_instr *intr = nir_scalar_as_intrinsic(x);
 
-   int coord_idx = nir_tex_instr_src_index(tex, nir_tex_src_coord);
-   if (coord_idx < 0)
-      return false;
+   if (x.def == y.def && intr &&
+       intr->intrinsic == nir_intrinsic_load_interpolated_input) {
 
-   nir_src src = tex->src[coord_idx].src;
-   nir_scalar x = nir_scalar_resolved(src.ssa, 0);
-   nir_scalar y = nir_scalar_resolved(src.ssa, 1);
+      uint64_t *mask = data;
+      *mask |= BITFIELD64_BIT(nir_intrinsic_io_semantics(intr).location);
+   }
 
-   if (x.def != y.def)
-      return false;
-
-   nir_instr *parent = x.def->parent_instr;
-
-   if (parent->type != nir_instr_type_intrinsic)
-      return false;
-
-   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(parent);
-
-   if (intr->intrinsic != nir_intrinsic_load_interpolated_input)
-      return false;
-
-   nir_io_semantics sem = nir_intrinsic_io_semantics(intr);
-   *mask |= BITFIELD64_BIT(sem.location);
    return false;
 }
 
@@ -3209,7 +3099,7 @@ agx_gather_texcoords(nir_shader *nir)
    assert(nir->info.stage == MESA_SHADER_FRAGMENT);
 
    uint64_t mask = 0;
-   nir_shader_instructions_pass(nir, gather_texcoords, nir_metadata_all, &mask);
+   nir_shader_tex_pass(nir, gather_texcoords, nir_metadata_all, &mask);
    return mask;
 }
 
@@ -3299,6 +3189,30 @@ lower_load_from_texture_handle(nir_builder *b, nir_intrinsic_instr *intr,
 
    nir_def_rewrite_uses(&intr->def, nir_iadd(b, base, offset));
    return true;
+}
+
+static bool
+lower_sink_address(nir_builder *b, nir_intrinsic_instr *intr, UNUSED void *data)
+{
+   switch (intr->intrinsic) {
+   case nir_intrinsic_load_ro_sink_address_poly:
+      b->cursor = nir_before_instr(&intr->instr);
+      nir_def_replace(&intr->def, nir_imm_int64(b, AGX_ZERO_PAGE_ADDRESS));
+      return true;
+   case nir_intrinsic_ro_to_rw_poly: {
+      b->cursor = nir_before_instr(&intr->instr);
+      nir_def_replace(
+         &intr->def,
+         nir_bcsel(b, nir_ieq_imm(b, intr->src[0].ssa, AGX_ZERO_PAGE_ADDRESS),
+                   nir_imm_int64(b, AGX_SCRATCH_PAGE_ADDRESS),
+                   intr->src[0].ssa));
+      return true;
+   }
+   default:
+      break;
+   }
+
+   return false;
 }
 
 static void
@@ -3441,7 +3355,7 @@ agx_compile_function_nir(nir_shader *nir, nir_function_impl *impl,
     */
    if (ctx->any_scratch) {
       assert(!ctx->is_preamble && "preambles don't use scratch");
-      ctx->scratch_size_B = ALIGN(nir->scratch_size, 16);
+      ctx->scratch_size_B = align(nir->scratch_size, 16);
    }
 
    /* Stop the main shader or preamble shader after the exit block. For real
@@ -3500,7 +3414,7 @@ agx_compile_function_nir(nir_shader *nir, nir_function_impl *impl,
 
    if (ctx->scratch_size_B > 0) {
       /* Apple always allocate 40 more bytes in the entrypoint and align to 4. */
-      uint64_t stack_size = ALIGN(DIV_ROUND_UP(ctx->scratch_size_B, 4) + 10, 4);
+      uint64_t stack_size = align(DIV_ROUND_UP(ctx->scratch_size_B, 4) + 10, 4);
 
       assert(stack_size < INT16_MAX);
 
@@ -3660,7 +3574,8 @@ libagx_frcp(nir_builder *b, nir_def *x)
 static bool
 agx_nir_lower_fdiv(nir_builder *b, nir_alu_instr *alu, void *_)
 {
-   if (alu->op != nir_op_frcp || !alu->exact || alu->def.bit_size != 32)
+   if (alu->op != nir_op_frcp || !nir_alu_instr_is_exact(alu) ||
+       alu->def.bit_size != 32)
       return false;
 
    b->cursor = nir_before_instr(&alu->instr);
@@ -3672,12 +3587,16 @@ agx_nir_lower_fdiv(nir_builder *b, nir_alu_instr *alu, void *_)
 void
 agx_preprocess_nir(nir_shader *nir)
 {
+   if (!nir)
+      return;
+
    NIR_PASS(_, nir, nir_lower_vars_to_ssa);
 
    /* Lower large arrays to scratch and small arrays to csel */
-   NIR_PASS(_, nir, nir_lower_vars_to_scratch, nir_var_function_temp, 256,
+   NIR_PASS(_, nir, nir_lower_vars_to_scratch, 256,
             glsl_get_natural_size_align_bytes, glsl_get_word_size_align_bytes);
-   NIR_PASS(_, nir, nir_lower_indirect_derefs, nir_var_function_temp, ~0);
+   NIR_PASS(_, nir, nir_lower_indirect_derefs_to_if_else_trees,
+            nir_var_function_temp, ~0);
    NIR_PASS(_, nir, nir_split_var_copies);
    NIR_PASS(_, nir, nir_lower_global_vars_to_local);
    NIR_PASS(_, nir, nir_lower_var_copies);
@@ -3700,8 +3619,6 @@ agx_preprocess_nir(nir_shader *nir)
             nir_metadata_control_flow, NULL);
    NIR_PASS(_, nir, agx_nir_lower_subgroups);
    NIR_PASS(_, nir, nir_lower_all_phis_to_scalar);
-   NIR_PASS(_, nir, nir_shader_alu_pass, agx_nir_lower_fdiv,
-            nir_metadata_control_flow, NULL);
 
    /* After lowering, run through the standard suite of NIR optimizations. We
     * will run through the loop later, once we have the shader key, but if we
@@ -3719,6 +3636,11 @@ agx_preprocess_nir(nir_shader *nir)
    };
 
    NIR_PASS(_, nir, nir_lower_idiv, &idiv_options);
+
+   /* Has to run after nir_lower_idiv */
+   NIR_PASS(_, nir, nir_shader_alu_pass, agx_nir_lower_fdiv,
+            nir_metadata_control_flow, NULL);
+
    NIR_PASS(_, nir, nir_opt_deref);
    NIR_PASS(_, nir, nir_lower_vars_to_ssa);
 
@@ -3760,8 +3682,7 @@ agx_compile_shader_nir(nir_shader *nir, struct agx_shader_key *key,
    agx_compiler_debug = agx_get_compiler_debug();
    struct agx_shader_info *info = &out->info;
 
-   struct util_dynarray binary;
-   util_dynarray_init(&binary, NULL);
+   struct util_dynarray binary = UTIL_DYNARRAY_INIT;
 
    memset(out, 0, sizeof *out);
 
@@ -3791,10 +3712,11 @@ agx_compile_shader_nir(nir_shader *nir, struct agx_shader_key *key,
    /* Optimize scratch access for silly internal CL shaders */
    if (nir->info.internal) {
       NIR_PASS(_, nir, nir_lower_scratch_to_var);
-      NIR_PASS(_, nir, nir_lower_vars_to_scratch, nir_var_function_temp, 256,
+      NIR_PASS(_, nir, nir_lower_vars_to_scratch, 256,
                glsl_get_natural_size_align_bytes,
                glsl_get_natural_size_align_bytes);
-      NIR_PASS(_, nir, nir_lower_indirect_derefs, nir_var_function_temp, ~0);
+      NIR_PASS(_, nir, nir_lower_indirect_derefs_to_if_else_trees,
+               nir_var_function_temp, ~0);
    }
 
    /* Cleanup 8-bit math before lowering */
@@ -3818,6 +3740,9 @@ agx_compile_shader_nir(nir_shader *nir, struct agx_shader_key *key,
 
    NIR_PASS(_, nir, nir_opt_constant_folding);
    NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_load_from_texture_handle,
+            nir_metadata_control_flow, NULL);
+
+   NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_sink_address,
             nir_metadata_control_flow, NULL);
 
    info->push_count = key->reserved_preamble;

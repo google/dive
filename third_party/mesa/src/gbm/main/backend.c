@@ -35,12 +35,11 @@
 #include <assert.h>
 #include <dlfcn.h>
 #include <xf86drm.h>
+#include "util/os_misc.h"
+#include "util/macros.h"
 
 #include "loader.h"
 #include "backend.h"
-
-#define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
-#define VER_MIN(a, b) ((a) < (b) ? (a) : (b))
 
 struct gbm_backend_desc {
    const char *name;
@@ -90,8 +89,8 @@ create_backend_desc(const char *name,
 static struct gbm_device *
 backend_create_device(const struct gbm_backend_desc *bd, int fd)
 {
-   const uint32_t abi_ver = VER_MIN(GBM_BACKEND_ABI_VERSION,
-                                    bd->backend->v0.backend_version);
+   const uint32_t abi_ver = MIN2(GBM_BACKEND_ABI_VERSION,
+                                 bd->backend->v0.backend_version);
    struct gbm_device *dev = bd->backend->v0.create_device(fd, abi_ver);
 
    if (dev) {
@@ -149,7 +148,7 @@ _gbm_create_device(int fd)
 {
    struct gbm_device *dev = NULL;
 
-   const char *b = getenv("GBM_BACKEND");
+   const char *b = os_get_option("GBM_BACKEND");
    if (b) {
       dev = load_backend_by_name(b, fd, true);
       if (dev) return dev;

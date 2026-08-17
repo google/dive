@@ -92,69 +92,6 @@ i915_perf_stream_open(struct intel_perf_config *perf_config, int drm_fd,
    return fd > -1 ? fd : 0;
 }
 
-static bool
-i915_query_perf_config_supported(struct intel_perf_config *perf, int fd)
-{
-   int32_t length = 0;
-   return !intel_i915_query_flags(fd, DRM_I915_QUERY_PERF_CONFIG,
-                                  DRM_I915_QUERY_PERF_CONFIG_LIST,
-                                  NULL, &length);
-}
-
-static bool
-i915_query_perf_config_data(struct intel_perf_config *perf,
-                            int fd, const char *guid,
-                            struct drm_i915_perf_oa_config *config)
-{
-   char data[sizeof(struct drm_i915_query_perf_config) +
-             sizeof(struct drm_i915_perf_oa_config)] = {};
-   struct drm_i915_query_perf_config *i915_query = (void *)data;
-   struct drm_i915_perf_oa_config *i915_config = (void *)data + sizeof(*i915_query);
-
-   memcpy(i915_query->uuid, guid, sizeof(i915_query->uuid));
-   memcpy(i915_config, config, sizeof(*config));
-
-   int32_t item_length = sizeof(data);
-   if (intel_i915_query_flags(fd, DRM_I915_QUERY_PERF_CONFIG,
-                              DRM_I915_QUERY_PERF_CONFIG_DATA_FOR_UUID,
-                              i915_query, &item_length))
-      return false;
-
-   memcpy(config, i915_config, sizeof(*config));
-
-   return true;
-}
-
-struct intel_perf_registers *
-i915_perf_load_configurations(struct intel_perf_config *perf_cfg, int fd, const char *guid)
-{
-   struct drm_i915_perf_oa_config i915_config = { 0, };
-   if (!i915_query_perf_config_data(perf_cfg, fd, guid, &i915_config))
-      return NULL;
-
-   struct intel_perf_registers *config = rzalloc(NULL, struct intel_perf_registers);
-   config->n_flex_regs = i915_config.n_flex_regs;
-   config->flex_regs = rzalloc_array(config, struct intel_perf_query_register_prog, config->n_flex_regs);
-   config->n_mux_regs = i915_config.n_mux_regs;
-   config->mux_regs = rzalloc_array(config, struct intel_perf_query_register_prog, config->n_mux_regs);
-   config->n_b_counter_regs = i915_config.n_boolean_regs;
-   config->b_counter_regs = rzalloc_array(config, struct intel_perf_query_register_prog, config->n_b_counter_regs);
-
-   /*
-    * struct intel_perf_query_register_prog maps exactly to the tuple of
-    * (register offset, register value) returned by the i915.
-    */
-   i915_config.flex_regs_ptr = to_const_user_pointer(config->flex_regs);
-   i915_config.mux_regs_ptr = to_const_user_pointer(config->mux_regs);
-   i915_config.boolean_regs_ptr = to_const_user_pointer(config->b_counter_regs);
-   if (!i915_query_perf_config_data(perf_cfg, fd, guid, &i915_config)) {
-      ralloc_free(config);
-      return NULL;
-   }
-
-   return config;
-}
-
 static int
 i915_perf_version(int drm_fd)
 {
@@ -181,9 +118,6 @@ i915_oa_metrics_available(struct intel_perf_config *perf, int fd, bool use_regis
    int version = i915_perf_version(fd);
    bool i915_perf_oa_available = false;
    struct stat sb;
-
-   if (i915_query_perf_config_supported(perf, fd))
-      perf->features_supported |= INTEL_PERF_FEATURE_QUERY_PERF;
 
    if (version >= 4)
       perf->features_supported |= INTEL_PERF_FEATURE_GLOBAL_SSEU;
@@ -214,6 +148,8 @@ i915_oa_metrics_available(struct intel_perf_config *perf, int fd, bool use_regis
 
          if (paranoid == 0 || geteuid() == 0)
             i915_perf_oa_available = true;
+         else
+            perf->features_supported |= INTEL_PERF_FEATURE_OA_BLOCKED_BY_POLICY;
       }
    }
 

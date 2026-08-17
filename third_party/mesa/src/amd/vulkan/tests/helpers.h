@@ -13,6 +13,10 @@
 #include <string>
 #include <unordered_map>
 
+#include "util/os_misc.h"
+
+#include "common/amd_family.h"
+
 #define FUNCTION_LIST                                                                                                  \
    ITEM(CreateInstance)                                                                                                \
    ITEM(DestroyInstance)                                                                                               \
@@ -29,7 +33,8 @@
    ITEM(CreatePipelineLayout)                                                                                          \
    ITEM(DestroyPipelineLayout)                                                                                         \
    ITEM(GetPipelineExecutableStatisticsKHR)                                                                            \
-   ITEM(GetPipelineExecutablePropertiesKHR)
+   ITEM(GetPipelineExecutablePropertiesKHR)                                                                            \
+   ITEM(GetPipelineKeyKHR)
 
 class radv_test : public testing::Test {
 public:
@@ -47,11 +52,16 @@ public:
    void create_compute_pipeline(uint32_t code_size, const uint32_t *code, VkPipelineCreateFlags flags = 0);
    void destroy_pipeline();
 
+   void get_pipeline_key(uint32_t code_size, const uint32_t *code, VkPipelineBinaryKeyKHR *pipeline_key,
+                         VkPipelineCreateFlags flags = 0);
+
+   void get_global_pipeline_key(enum radeon_family family, VkPipelineBinaryKeyKHR *pipeline_key);
+
    uint64_t get_pipeline_hash(VkShaderStageFlags stage);
 
    void add_envvar(std::string name, std::string value)
    {
-      setenv(name.c_str(), value.c_str(), 1);
+      os_set_option(name.c_str(), value.c_str(), true);
 
       envvars.insert(std::make_pair<std::string, std::string>(std::move(name), std::move(value)));
    }
@@ -59,7 +69,7 @@ public:
    void unset_envvars()
    {
       for (auto &envvar : envvars)
-         unsetenv(envvar.first.c_str());
+         os_unset_option(envvar.first.c_str());
       envvars.clear();
    }
 

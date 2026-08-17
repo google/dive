@@ -48,7 +48,7 @@ Compare(const void *l, const void *r)
 static int
 FindProcIndex(const char *name)
 {
-   const char **match =
+   const char * const *match =
       bsearch(name, __EGL_DISPATCH_FUNC_NAMES, __EGL_DISPATCH_COUNT,
               sizeof(const char *), Compare);
 

@@ -9,7 +9,6 @@
  */
 
 #include "ac_descriptors.h"
-#include "gfx10_format_table.h"
 
 #include "radv_buffer.h"
 #include "radv_buffer_view.h"
@@ -50,6 +49,7 @@ radv_make_texel_buffer_descriptor(struct radv_device *device, uint64_t va, VkFor
          },
       .stride = stride,
       .gfx10_oob_select = V_008F0C_OOB_SELECT_STRUCTURED_WITH_OFFSET,
+      .has_desc_resource_level = pdev->info.compiler_info.has_desc_resource_level,
    };
 
    ac_build_buffer_descriptor(pdev->info.gfx_level, &ac_state, state);

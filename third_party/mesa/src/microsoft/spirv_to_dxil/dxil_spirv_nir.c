@@ -30,6 +30,7 @@
 #include "spirv/spirv_info.h"
 #include "util/blob.h"
 #include "dxil_spirv_nir.h"
+#include "nir_xfb_info.h"
 
 #include "git_sha1.h"
 #include "vulkan/vulkan.h"
@@ -119,7 +120,7 @@ dxil_spirv_nir_prep(nir_shader *nir)
    NIR_PASS(_, nir, nir_lower_variable_initializers, nir_var_function_temp);
    NIR_PASS(_, nir, nir_lower_returns);
    NIR_PASS(_, nir, nir_inline_functions);
-   NIR_PASS(_, nir, nir_copy_prop);
+   NIR_PASS(_, nir, nir_opt_copy_prop);
    NIR_PASS(_, nir, nir_opt_deref);
 
    /* Pick off the single entrypoint that we want */
@@ -142,6 +143,18 @@ dxil_spirv_nir_prep(nir_shader *nir)
               nir_var_shader_in | nir_var_shader_out | nir_var_system_value |
               nir_var_shader_call_data | nir_var_ray_hit_attrib,
               NULL);
+   
+   /* This needs to happen after remove_dead_vars because GLSLang likes to
+    * insert dead clip/cull vars and we don't want to clip/cull based on
+    * uninitialized garbage.
+    */
+   nir_gather_clip_cull_distance_sizes_from_vars(nir);
+   NIR_PASS(_, nir, nir_merge_clip_cull_distance_vars);
+
+   if (nir->info.stage == MESA_SHADER_VERTEX ||
+       nir->info.stage == MESA_SHADER_TESS_EVAL ||
+       nir->info.stage == MESA_SHADER_GEOMETRY)
+      nir_shader_gather_xfb_info(nir);
 
    NIR_PASS(_, nir, nir_propagate_invariant, false);
 }
@@ -271,12 +284,12 @@ lower_shader_system_values(struct nir_builder *builder, nir_instr *instr,
       nir_imm_int(builder, 0),
       .desc_set = conf->runtime_data_cbv.register_space,
       .binding = conf->runtime_data_cbv.base_shader_register,
-      .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *load_desc = nir_load_vulkan_descriptor(
       builder, nir_address_format_num_components(ubo_format),
       nir_address_format_bit_size(ubo_format),
-      index, .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      index, .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *load_data = nir_load_ubo(
       builder, 
@@ -358,12 +371,12 @@ lower_load_push_constant(struct nir_builder *builder, nir_instr *instr,
       nir_address_format_bit_size(ubo_format),
       nir_imm_int(builder, 0),
       .desc_set = data->desc_set, .binding = data->binding,
-      .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *load_desc = nir_load_vulkan_descriptor(
       builder, nir_address_format_num_components(ubo_format),
       nir_address_format_bit_size(ubo_format),
-      index, .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      index, .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *offset = intrin->src[0].ssa;
    nir_def *load_data = nir_load_ubo(
@@ -452,12 +465,12 @@ lower_yz_flip(struct nir_builder *builder, nir_instr *instr,
          nir_imm_int(builder, 0),
          .desc_set = rt_conf->runtime_data_cbv.register_space,
          .binding = rt_conf->runtime_data_cbv.base_shader_register,
-         .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+         .desc_type = nir_descriptor_type_uniform_buffer);
 
       nir_def *load_desc = nir_load_vulkan_descriptor(
          builder, nir_address_format_num_components(ubo_format),
          nir_address_format_bit_size(ubo_format),
-         index, .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+         index, .desc_type = nir_descriptor_type_uniform_buffer);
 
       dyn_yz_flip_mask =
          nir_load_ubo(builder, 1, 32,
@@ -607,12 +620,12 @@ write_pntc_with_pos(nir_builder *b, nir_instr *instr, void *_data)
       nir_imm_int(b, 0),
       .desc_set = data->conf->runtime_data_cbv.register_space,
       .binding = data->conf->runtime_data_cbv.base_shader_register,
-      .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *load_desc = nir_load_vulkan_descriptor(
       b, nir_address_format_num_components(ubo_format),
       nir_address_format_bit_size(ubo_format),
-      index, .desc_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+      index, .desc_type = nir_descriptor_type_uniform_buffer);
 
    nir_def *transform = nir_channels(b,
                                          nir_load_ubo(b, 4, 32,
@@ -791,30 +804,26 @@ dxil_spirv_nir_link(nir_shader *nir, nir_shader *prev_stage_nir,
             NIR_PASS(_, nir, dxil_spirv_compute_pntc);
             metadata->requires_runtime_data = true;
          }
+
+         dxil_nir_propagate_interp_to_outputs(prev_stage_nir, nir);
       }
 
       NIR_PASS(_, nir, dxil_nir_kill_undefined_varyings, prev_stage_nir->info.outputs_written, prev_stage_nir->info.patch_outputs_written, NULL);
       NIR_PASS(_, prev_stage_nir, dxil_nir_kill_unused_outputs, nir->info.inputs_read, nir->info.patch_inputs_read, NULL);
 
-      dxil_reassign_driver_locations(nir, nir_var_shader_in, prev_stage_nir->info.outputs_written, NULL);
-      dxil_reassign_driver_locations(prev_stage_nir, nir_var_shader_out, nir->info.inputs_read, NULL);
-
+      /* Tess metadata flows TCS->TES so the placeholder helper below knows
+       * the per-vertex input array length, and TCS gets the domain config. */
       if (nir->info.stage == MESA_SHADER_TESS_EVAL) {
          assert(prev_stage_nir->info.stage == MESA_SHADER_TESS_CTRL);
          nir->info.tess.tcs_vertices_out = prev_stage_nir->info.tess.tcs_vertices_out;
          prev_stage_nir->info.tess = nir->info.tess;
 
-         for (uint32_t i = 0; i < 2; ++i) {
-            unsigned loc = i == 0 ? VARYING_SLOT_TESS_LEVEL_OUTER : VARYING_SLOT_TESS_LEVEL_INNER;
-            nir_variable *var = nir_find_variable_with_location(nir, nir_var_shader_in, loc);
-            if (!var) {
-               var = nir_variable_create(nir, nir_var_shader_in, glsl_array_type(glsl_float_type(), i == 0 ? 4 : 2, 0), i == 0 ? "outer" : "inner");
-               var->data.location = loc;
-               var->data.patch = true;
-               var->data.compact = true;
-            }
-         }
+         /* Pad TES input signature so HS<->DS match for D3D12 pipeline validation. */
+         dxil_nir_pad_tes_input_signature(nir, prev_stage_nir);
       }
+
+      dxil_reassign_driver_locations(nir, nir_var_shader_in, prev_stage_nir->info.outputs_written, NULL);
+      dxil_reassign_driver_locations(prev_stage_nir, nir_var_shader_out, nir->info.inputs_read, NULL);
    }
 
    glsl_type_singleton_decref();
@@ -905,6 +914,8 @@ dxil_spirv_nir_passes(nir_shader *nir,
       .frag_coord = true,
       .point_coord = true,
       .front_face = true,
+      .layer_id = true,
+      .primitive_id = nir->info.stage == MESA_SHADER_FRAGMENT,
    };
    NIR_PASS(_, nir, nir_lower_sysvals_to_varyings, &sysvals_to_varyings);
 
@@ -966,10 +977,11 @@ dxil_spirv_nir_passes(nir_shader *nir,
    if (nir->info.stage == MESA_SHADER_FRAGMENT) {
       NIR_PASS(_, nir, nir_lower_input_attachments,
                  &(nir_input_attachment_options){
-                     .use_fragcoord_sysval = false,
-                     .use_layer_id_sysval = !conf->lower_view_index,
                      .use_view_id_for_layer = !conf->lower_view_index,
                  });
+
+      /* Lower sysvals again to get rid of load_layer_id */
+      NIR_PASS(_, nir, nir_lower_sysvals_to_varyings, &sysvals_to_varyings);
 
       NIR_PASS(_, nir, dxil_nir_lower_discard_and_terminate);
       NIR_PASS(_, nir, nir_lower_returns);
@@ -1026,8 +1038,8 @@ dxil_spirv_nir_passes(nir_shader *nir,
 
    NIR_PASS(_, nir, dxil_nir_lower_int_cubemaps, false);
 
-   NIR_PASS(_, nir, nir_lower_clip_cull_distance_array_vars);
-   NIR_PASS(_, nir, nir_lower_io_vars_to_temporaries, nir_shader_get_entrypoint(nir), true, true);
+   NIR_PASS(_, nir, nir_lower_io_vars_to_temporaries, nir_shader_get_entrypoint(nir),
+            nir_var_shader_out | nir_var_shader_in);
    NIR_PASS(_, nir, nir_lower_global_vars_to_local);
    NIR_PASS(_, nir, nir_split_var_copies);
    NIR_PASS(_, nir, nir_lower_var_copies);
@@ -1064,7 +1076,7 @@ dxil_spirv_nir_passes(nir_shader *nir,
       do
       {
          progress = false;
-         NIR_PASS(progress, nir, nir_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
          NIR_PASS(progress, nir, nir_opt_copy_prop_vars);
          NIR_PASS(progress, nir, nir_opt_deref);
          NIR_PASS(progress, nir, nir_opt_dce);
@@ -1073,7 +1085,7 @@ dxil_spirv_nir_passes(nir_shader *nir,
          NIR_PASS(progress, nir, nir_opt_cse);
          if (nir_opt_loop(nir)) {
             progress = true;
-            NIR_PASS(progress, nir, nir_copy_prop);
+            NIR_PASS(progress, nir, nir_opt_copy_prop);
             NIR_PASS(progress, nir, nir_opt_dce);
          }
          NIR_PASS(progress, nir, nir_lower_vars_to_ssa);

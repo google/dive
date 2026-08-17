@@ -9,7 +9,8 @@
 #include "compiler/nir/nir.h"
 #include "compiler/nir/nir_builder.h"
 #include "pan_shader.h"
-#include "panfrost/util/pan_lower_framebuffer.h"
+#include "panfrost/compiler/pan_compiler.h"
+#include "panfrost/compiler/pan_nir.h"
 #include "pan_context.h"
 
 #ifndef PAN_ARCH
@@ -18,7 +19,7 @@ DERIVE_HASH_TABLE(pan_blend_shader_key);
 
 void
 pan_blend_shader_cache_init(struct pan_blend_shader_cache *cache,
-                            unsigned gpu_id, uint32_t gpu_variant,
+                            uint64_t gpu_id, uint32_t gpu_variant,
                             struct pan_pool *bin_pool)
 {
    cache->gpu_id = gpu_id;
@@ -99,32 +100,24 @@ GENX(pan_blend_get_shader_locked)(struct pan_blend_shader_cache *cache,
       .gpu_id = cache->gpu_id,
       .gpu_variant = cache->gpu_variant,
       .is_blend = true,
-      .blend.nr_samples = key.nr_samples,
-      .pushable_ubos = BITFIELD_BIT(PAN_UBO_SYSVALS),
+      .fau.pushable_ubos = BITFIELD_BIT(PAN_UBO_SYSVALS),
    };
 
-   enum pipe_format rt_formats[8] = {0};
-   rt_formats[rt] = key.format;
-
-#if PAN_ARCH >= 6
-   inputs.blend.bifrost_blend_desc =
-      GENX(pan_blend_get_internal_desc)(key.format, key.rt, 0, false);
-#endif
-
    struct pan_shader_info info;
-   pan_shader_preprocess(nir, inputs.gpu_id);
-   pan_shader_postprocess(nir, inputs.gpu_id);
+   pan_preprocess_nir(nir, inputs.gpu_id);
 
-#if PAN_ARCH >= 6
-   NIR_PASS(_, nir, GENX(pan_inline_rt_conversion), rt_formats);
-#else
-   NIR_PASS(_, nir, pan_lower_framebuffer, rt_formats,
+#if PAN_ARCH < 6
+   enum pipe_format rt_formats[8] = {0};
+   rt_formats[rt] = GENX(pan_blend_shader_fmt)(key.format);
+   NIR_PASS(_, nir, pan_nir_lower_framebuffer, rt_formats,
             pan_raw_format_mask_midgard(rt_formats), MAX2(key.nr_samples, 1),
-            (cache->gpu_id >> 16) < 0x700);
+            pan_prod_id(cache->gpu_id) < 0x700);
 #endif
+
+   pan_postprocess_nir(nir, &inputs, &info);
 
    struct util_dynarray binary;
-   util_dynarray_init(&binary, NULL);
+   binary = UTIL_DYNARRAY_INIT;
    pan_shader_compile(nir, &inputs, &binary, &info);
 
    struct pan_ptr bin =

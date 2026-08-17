@@ -6,10 +6,15 @@ _compiler_rs_sources = [
   'bitset.rs',
   'cfg.rs',
   'dataflow.rs',
+  'depth_first_search.rs',
+  'enum_as_u8.rs',
+  'float16.rs',
+  'lower_bounded.rs',
   'memstream.rs',
   'nir_instr_printer.rs',
   'nir.rs',
   'smallvec.rs',
+  'vec_pair.rs',
 ]
 
 _compiler_binding_types = [
@@ -26,6 +31,7 @@ _compiler_binding_types = [
   'gl_tess_spacing',
   'gl_varying_slot',
   'gl_vert_attrib',
+  'glsl_sampler_dim',
   'glsl_type',
   'glsl_matrix_layout',
   'nir_.*',
@@ -35,9 +41,11 @@ _compiler_binding_types = [
   'shader_info',
   'tess_primitive_mode',
   'u_printf_info',
+  'util_dynarray',
 ]
 
 _compiler_rust_args = [
+  rust_global_args,
   rust_2024_lint_args,
   '-Aclippy::identity_op',
   '-Aclippy::len_zero',
@@ -61,12 +69,16 @@ _compiler_bindgen_args = [
   '--allowlist-var', 'rust_.*',
   '--allowlist-function', 'glsl_.*',
   '--allowlist-function', '_mesa_shader_stage_to_string',
+  '--allowlist-function', '_mesa_.*half.*',
+  '--allowlist-function', '_mesa_.*float16.*',
   '--allowlist-function', 'nir_.*',
   '--allowlist-function', 'compiler_rs.*',
   '--allowlist-function', 'u_memstream.*',
+  '--allowlist-function', 'util_dynarray.*',
   '--allowlist-type', 'u_memstream',
   '--no-prepend-enum-name',
   '--with-derive-default',
+  '--wrap-static-fns-suffix', '_compiler_rs_extern'
 ]
 
 foreach type : _compiler_binding_types
@@ -91,10 +103,28 @@ _idep_libcompiler_c = declare_dependency(
 _compiler_bindings_rs = rust.bindgen(
   input : ['bindings.h'],
   output : 'bindings.rs',
+  output_inline_wrapper : 'bindings.c',
   c_args : [
     pre_args,
   ],
   args : _compiler_bindgen_args,
+  dependencies : [
+    idep_nir_headers,
+    idep_mesautil,
+  ],
+)
+
+_libcompiler_bindings = static_library(
+  'compiler_bindings',
+  ['bindings.h', _compiler_bindings_rs[1]],
+  gnu_symbol_visibility : 'hidden',
+  include_directories : [
+    fs.relative_to(meson.project_build_root(), meson.current_source_dir()),
+  ],
+  c_args : [
+    pre_args,
+    cc.get_supported_arguments('-Wno-missing-prototypes'),
+  ],
   dependencies : [
     idep_nir_headers,
     idep_mesautil,
@@ -119,6 +149,7 @@ _libcompiler_rs = static_library(
   gnu_symbol_visibility : 'hidden',
   rust_abi : 'rust',
   dependencies: [_idep_libcompiler_c],
+  link_with: [_libcompiler_bindings],
   rust_args: _compiler_rust_args,
 )
 
@@ -142,6 +173,18 @@ if with_tests and get_option('b_sanitize') == 'none'
   )
 endif
 
+_libacorn_rs = static_library(
+  'acorn',
+  files('acorn/lib.rs'),
+  gnu_symbol_visibility : 'hidden',
+  rust_abi : 'rust',
+  rust_args : _compiler_rust_args,
+)
+
+idep_acorn_rs = declare_dependency(
+  link_with : _libacorn_rs,
+)
+
 idep_compiler_rs = declare_dependency(
   link_with : _libcompiler_rs,
 )
@@ -158,6 +201,7 @@ _libcompiler_proc_rs = static_library(
   gnu_symbol_visibility : 'hidden',
   dependencies : [dep_syn],
   rust_abi : 'rust',
+  rust_args : rust_global_args,
   native : true,
 )
 

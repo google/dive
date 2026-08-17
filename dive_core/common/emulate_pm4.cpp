@@ -453,6 +453,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
             if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks)) return false;
         }
     }
+    /*
     else if ((header.type == 7) && (header.type7.opcode == CP_START_BIN))
     {
         PM4_CP_START_BIN packet{};
@@ -527,6 +528,7 @@ bool EmulatePM4::AdvanceCb(const IMemoryManager& mem_manager, EmulateState* emu_
         }
         if (!AdvanceToQueuedIB(mem_manager, emu_state_ptr, callbacks)) return false;
     }
+        */
     else if ((header.type == 7) && (header.type7.opcode == CP_FIXED_STRIDE_DRAW_TABLE))
     {
         // CP_FIXED_STRIDE_DRAW_TABLE only availabe at a7xx+

@@ -43,8 +43,7 @@ lower_alu_instr(nir_builder *b, nir_alu_instr *instr, UNUSED void *cb_data)
    nir_def *lowered = NULL;
 
    b->cursor = nir_before_instr(&instr->instr);
-   b->exact = instr->exact;
-   b->fp_fast_math = instr->fp_fast_math;
+   b->fp_math_ctrl = instr->fp_math_ctrl;
 
    switch (instr->op) {
    case nir_op_bitfield_reverse:
@@ -176,9 +175,9 @@ lower_alu_instr(nir_builder *b, nir_alu_instr *instr, UNUSED void *cb_data)
        * nir_lower_alu is idempotent, and allows the backend to implement
        * soundly the no_signed_zero subset of fmin/fmax.
        */
-      b->fp_fast_math &= ~FLOAT_CONTROLS_SIGNED_ZERO_PRESERVE;
+      b->fp_math_ctrl &= ~nir_fp_preserve_signed_zero;
       nir_def *fminmax = max ? nir_fmax(b, s0, s1) : nir_fmin(b, s0, s1);
-      b->fp_fast_math = instr->fp_fast_math;
+      b->fp_math_ctrl = instr->fp_math_ctrl;
 
       /* If we have a constant source, we can usually optimize */
       if (s0->num_components == 1 && s0->bit_size == 32) {
@@ -198,18 +197,23 @@ lower_alu_instr(nir_builder *b, nir_alu_instr *instr, UNUSED void *cb_data)
                 */
                lowered = fminmax;
             } else if (pos_zero && max) {
+               b->fp_math_ctrl &= ~nir_fp_preserve_signed_zero;
                /* max(x, +0.0) = +0.0 < x ? x : +0.0 */
                lowered = nir_bcsel(b, nir_flt(b, zero, other), other, zero);
             } else if (neg_zero && !max) {
+               b->fp_math_ctrl &= ~nir_fp_preserve_signed_zero;
                /* min(x, -0.0) = x < -0.0 ? x : -0.0 */
                lowered = nir_bcsel(b, nir_flt(b, other, zero), other, zero);
             }
          }
       }
 
+      b->fp_math_ctrl = instr->fp_math_ctrl;
+
       /* Fallback on the emulation */
       if (!lowered) {
          nir_def *iminmax = max ? nir_imax(b, s0, s1) : nir_imin(b, s0, s1);
+         iminmax = nir_fcanonicalize(b, iminmax);
          lowered = nir_bcsel(b, nir_feq(b, s0, s1), iminmax, fminmax);
       }
 

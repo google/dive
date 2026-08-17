@@ -390,90 +390,6 @@ spec@!opengl 1.1@linestipple@Factor 2x,Fail
 spec@!opengl 1.1@linestipple@Factor 3x,Fail
 spec@!opengl 1.1@linestipple@Line loop,Fail
 
-spec@!opengl 1.1@teximage-colors gl_sluminance8,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_ABGR_EXT and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGR and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_INT_10_10_10_2,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_INT_2_10_10_10_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_INT_8_8_8_8,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_INT_8_8_8_8_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_SHORT_1_5_5_5_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_SHORT_4_4_4_4,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_SHORT_4_4_4_4_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_BGRA and GL_UNSIGNED_SHORT_5_5_5_1,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_LUMINANCE_ALPHA and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RED and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RG and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_BYTE_2_3_3_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_BYTE_3_3_2,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_SHORT_5_6_5,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGB and GL_UNSIGNED_SHORT_5_6_5_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_FLOAT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_BYTE,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_INT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_INT_10_10_10_2,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_INT_2_10_10_10_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_INT_8_8_8_8,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_INT_8_8_8_8_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_SHORT,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_SHORT_1_5_5_5_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_SHORT_4_4_4_4,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_SHORT_4_4_4_4_REV,Fail
-spec@!opengl 1.1@teximage-colors gl_sluminance8@GL_SLUMINANCE8 texture with GL_RGBA and GL_UNSIGNED_SHORT_5_5_5_1,Fail
 spec@ext_texture_srgb_r8@teximage-colors gl_sr8_ext,Fail
 spec@ext_texture_srgb_r8@teximage-colors gl_sr8_ext@GL_SR8_EXT texture with GL_ABGR_EXT and GL_BYTE,Fail
 spec@ext_texture_srgb_r8@teximage-colors gl_sr8_ext@GL_SR8_EXT texture with GL_ABGR_EXT and GL_FLOAT,Fail
@@ -638,8 +554,6 @@ spec@arb_fragment_layer_viewport@viewport-vs-write-gs-no-write-simple,Fail
 
 spec@arb_framebuffer_object@fbo-attachments-blit-scaled-linear,Fail
 spec@arb_framebuffer_object@fbo-blit-scaled-linear,Fail
-
-spec@arb_framebuffer_srgb@fbo-fast-clear,Fail
 
 spec@arb_pipeline_statistics_query@arb_pipeline_statistics_query-vert,Fail
 
@@ -811,8 +725,6 @@ spec@ext_texture_snorm@fbo-blending-formats,Fail
 spec@ext_texture_snorm@fbo-blending-formats@GL_RGB16_SNORM,Fail
 spec@ext_texture_snorm@fbo-blending-formats@GL_RGB8_SNORM,Fail
 spec@ext_texture_snorm@fbo-blending-formats@GL_RGB_SNORM,Fail
-
-spec@ext_texture_srgb@fbo-fast-clear,Fail
 
 spec@ext_transform_feedback@immediate-reuse-index-buffer,Fail
 

@@ -60,10 +60,15 @@ struct d3d12_bo {
     */
    uint64_t unique_id;
 
+#ifndef NDEBUG
+   bool is_front_buffer;
+#endif
+
    struct list_head residency_list_entry;
    uint64_t estimated_size;
    int64_t last_used_timestamp;
    uint64_t last_used_fence;
+   uint64_t last_used_periodic_notification_index;
    enum d3d12_residency_status residency_status;
    uint16_t local_needs_resolve_state;
 
@@ -152,6 +157,18 @@ d3d12_bo_map(struct d3d12_bo *bo, D3D12_RANGE *range);
 
 void
 d3d12_bo_unmap(struct d3d12_bo *bo, D3D12_RANGE *range);
+
+struct d3d12_pending_free_entry {
+   struct list_head link;
+   struct d3d12_bo *bo;
+   uint64_t fence_value;
+};
+
+bool
+d3d12_screen_reclaim_completed(struct d3d12_screen *screen);
+
+bool
+d3d12_screen_reclaim_one(struct d3d12_screen *screen);
 
 struct pb_manager *
 d3d12_bufmgr_create(struct d3d12_screen *screen);

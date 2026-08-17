@@ -8,6 +8,10 @@
 #include "radeon_drm_bo.h"
 #include "radeon_drm_cs.h"
 
+#ifdef HAVE_GALLIUM_RADEONSI
+#include "amdgfxregs.h"
+#endif
+
 #include "util/os_file.h"
 #include "util/simple_mtx.h"
 #include "util/thread_sched.h"
@@ -105,6 +109,73 @@ static bool radeon_get_drm_value(int fd, unsigned request,
    return true;
 }
 
+static void get_hs_info(struct radeon_info *info)
+{
+   /* This is the size of all TCS outputs in memory per workgroup.
+    * Hawaii can't handle num_workgroups > 256 with 8K per workgroup, so use 4K.
+    */
+   unsigned max_hs_out_vram_dwords_per_wg = info->family == CHIP_HAWAII ? 4096 : 8192;
+   unsigned max_workgroups_per_se;
+
+#ifdef HAVE_GALLIUM_RADEONSI /* for gfx6+ register definitions */
+   unsigned max_hs_out_vram_dwords_enum = 0;
+
+   switch (max_hs_out_vram_dwords_per_wg) {
+   case 8192:
+      max_hs_out_vram_dwords_enum = V_03093C_X_8K_DWORDS;
+      break;
+   case 4096:
+      max_hs_out_vram_dwords_enum = V_03093C_X_4K_DWORDS;
+      break;
+   case 2048:
+      max_hs_out_vram_dwords_enum = V_03093C_X_2K_DWORDS;
+      break;
+   case 1024:
+      max_hs_out_vram_dwords_enum = V_03093C_X_1K_DWORDS;
+      break;
+   default:
+      UNREACHABLE("invalid TCS workgroup size");
+   }
+#endif
+
+   /* Gfx7 should limit num_workgroups to 508 (127 per SE)
+    * Gfx6 should limit num_workgroups to 126 (63 per SE)
+    */
+   if (info->gfx_level == GFX7) {
+      max_workgroups_per_se = 127;
+   } else {
+      max_workgroups_per_se = 63;
+   }
+
+   /* Limit to 4 workgroups per CU for TCS, which exhausts LDS if each workgroup occupies 16KB.
+    * Note that the offchip allocation isn't deallocated until the corresponding TES waves finish.
+    */
+   unsigned num_offchip_wg_per_cu = 4;
+   unsigned num_workgroups_per_se = MIN2(num_offchip_wg_per_cu * info->max_good_cu_per_sa *
+                                         info->max_sa_per_se, max_workgroups_per_se);
+   unsigned num_workgroups = num_workgroups_per_se * info->max_se;
+
+#ifdef HAVE_GALLIUM_RADEONSI /* for gfx6+ register definitions */
+   if (info->gfx_level == GFX7) {
+      info->hs_offchip_param = S_03093C_OFFCHIP_BUFFERING_GFX7(num_workgroups) |
+                               S_03093C_OFFCHIP_GRANULARITY_GFX7(max_hs_out_vram_dwords_enum);
+   } else {
+      info->hs_offchip_param = S_0089B0_OFFCHIP_BUFFERING(num_workgroups) |
+                               S_0089B0_OFFCHIP_GRANULARITY(max_hs_out_vram_dwords_enum);
+   }
+#endif
+
+   /* The typical size of tess factors of 1 TCS workgroup if all patches are triangles. */
+   unsigned typical_tess_factor_size_per_wg = (192 / 3) * 16;
+   unsigned num_tess_factor_wg_per_cu = 3;
+
+   info->hs_offchip_workgroup_dw_size = max_hs_out_vram_dwords_per_wg;
+   info->tess_offchip_ring_size = num_workgroups * max_hs_out_vram_dwords_per_wg * 4;
+   info->tess_factor_ring_size = typical_tess_factor_size_per_wg * num_tess_factor_wg_per_cu *
+                                 info->max_good_cu_per_sa * info->max_sa_per_se * info->max_se;
+   info->total_tess_ring_size = info->tess_offchip_ring_size + info->tess_factor_ring_size;
+}
+
 /* Helper function to do the ioctls needed for setup and init. */
 static bool do_winsys_init(struct radeon_drm_winsys *ws)
 {
@@ -173,7 +244,6 @@ static bool do_winsys_init(struct radeon_drm_winsys *ws)
 #define CHIPSET(pci_id, cfamily) \
    case pci_id: \
    ws->info.family = CHIP_##cfamily; \
-   ws->info.name = #cfamily; \
    ws->gen = DRV_SI; \
    break;
 #include "pci_ids/radeonsi_pci_ids.h"
@@ -395,13 +465,13 @@ static bool do_winsys_init(struct radeon_drm_winsys *ws)
                4 << ((tiling_config & 0xf0) >> 4) :
                     4 << ((tiling_config & 0x30) >> 4);
 
-      ws->info.pipe_interleave_bytes =
+      ws->info.r600_pipe_interleave_bytes =
             ws->info.gfx_level >= EVERGREEN ?
                256 << ((tiling_config & 0xf00) >> 8) :
                       256 << ((tiling_config & 0xc0) >> 6);
 
-      if (!ws->info.pipe_interleave_bytes)
-         ws->info.pipe_interleave_bytes =
+      if (!ws->info.r600_pipe_interleave_bytes)
+         ws->info.r600_pipe_interleave_bytes =
                ws->info.gfx_level >= EVERGREEN ? 512 : 256;
 
       radeon_get_drm_value(ws->fd, RADEON_INFO_NUM_TILE_PIPES, NULL,
@@ -556,16 +626,11 @@ static bool do_winsys_init(struct radeon_drm_winsys *ws)
                                      ws->accel_working2 < 3);
    ws->info.has_cp_dma = true;
    ws->info.tcc_cache_line_size = 64; /* TC L2 line size on GCN */
-   ws->info.has_bo_metadata = false;
    ws->info.has_eqaa_surface_allocator = false;
-   ws->info.has_sparse_vm_mappings = false;
+   ws->info.has_sparse = false;
    ws->info.max_alignment = 1024*1024;
    ws->info.has_graphics = true;
    ws->info.cpdma_prefetch_writes_memory = true;
-   ws->info.max_waves_per_simd = 10;
-   ws->info.num_physical_sgprs_per_simd = 512;
-   ws->info.num_physical_wave64_vgprs_per_simd = 256;
-   ws->info.has_3d_cube_border_color_mipmap = true;
    ws->info.has_image_opcodes = true;
    ws->info.spi_cu_en_has_effect = false;
    ws->info.spi_cu_en = 0xffff;
@@ -574,16 +639,10 @@ static bool do_winsys_init(struct radeon_drm_winsys *ws)
    ws->info.max_gflops = 128 * ws->info.num_cu * ws->info.max_gpu_freq_mhz / 1000;
    ws->info.num_tcc_blocks = ws->info.max_tcc_blocks;
    ws->info.tcp_cache_size = 16 * 1024;
-   ws->info.num_simd_per_compute_unit = 4;
-   ws->info.min_sgpr_alloc = 8;
-   ws->info.max_sgpr_alloc = 104;
-   ws->info.sgpr_alloc_granularity = 8;
-   ws->info.min_wave64_vgpr_alloc = 4;
-   ws->info.max_vgpr_alloc = 256;
-   ws->info.wave64_vgpr_alloc_granularity = 4;
-   ws->info.lds_size_per_workgroup = ws->info.gfx_level == GFX7 ? 64 * 1024 : 32 * 1024;
-   ws->info.lds_encode_granularity = ws->info.gfx_level == GFX7 ? 128 * 4 : 64 * 4;
-   ws->info.lds_alloc_granularity = ws->info.lds_encode_granularity;
+
+#ifdef HAVE_GALLIUM_RADEONSI
+   ac_fill_compiler_info(&ws->info, NULL, false);
+#endif
 
    for (unsigned se = 0; se < ws->info.max_se; se++) {
       for (unsigned sa = 0; sa < ws->info.max_sa_per_se; sa++)
@@ -640,6 +699,9 @@ static bool do_winsys_init(struct radeon_drm_winsys *ws)
       break;
    default:;
    }
+
+   if (ws->gen == DRV_SI)
+      get_hs_info(&ws->info);
 
    ws->check_vm = strstr(debug_get_option("R600_DEBUG", ""), "check_vm") != NULL ||
                                                                             strstr(debug_get_option("AMD_DEBUG", ""), "check_vm") != NULL;

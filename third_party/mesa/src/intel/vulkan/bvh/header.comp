@@ -7,7 +7,9 @@
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-#include "anv_build_interface.h"
+#include "anv_bvh_defines.h"
+#define VK_USED_BUILD_FLAGS (0)
+#include "anv_bvh_helpers.h"
 
 layout(push_constant) uniform CONSTS
 {
@@ -17,10 +19,13 @@ layout(push_constant) uniform CONSTS
 void
 main(void)
 {
-   uint32_t compacted_size =
-      args.bvh_offset + DEREF(args.src).dst_node_offset * ANV_RT_BLOCK_SIZE;
+   uint64_t compacted_size = args.bvh_size;
+   if (args.is_compacted == uint8_t(1)) {
+      compacted_size =
+         args.bvh_offset + DEREF(args.src).dst_node_offset * ANV_RT_BLOCK_SIZE;
+   }
 
-   uint32_t serialization_size = compacted_size +
+   uint64_t serialization_size = compacted_size +
       SIZEOF(vk_accel_struct_serialization_header) + SIZEOF(uint64_t) *
       args.instance_count;
 
@@ -29,11 +34,13 @@ main(void)
    DEREF(args.dst).serialization_size = serialization_size;
    DEREF(args.dst).self_ptr = uint64_t(args.dst);
    DEREF(args.dst).instance_count = args.instance_count;
+   DEREF(args.dst).instance_leaves_offset = args.instance_leaves_offset;
 
-   /* 128 is local_size_x in copy.comp shader, 8 is the amount of data
+   /* 128 is local_size_x in copy.comp shader, 16bytes is the amount of data
     * copied by each iteration of that shader's loop
     */
-   DEREF(args.dst).copy_dispatch_size[0] = DIV_ROUND_UP(compacted_size, 8 * 128);
+   DEREF(args.dst).copy_dispatch_size[0] =
+      uint32_t(DIV_ROUND_UP(compacted_size, 16 * 128));
    DEREF(args.dst).copy_dispatch_size[1] = 1;
    DEREF(args.dst).copy_dispatch_size[2] = 1;
 #if GFX_VERx10 >= 300

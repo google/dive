@@ -10,7 +10,7 @@
 #include "vk_object.h"
 
 #include "util/mesa-blake3.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 struct radv_device;
 struct radv_ray_tracing_stage_info;
@@ -34,7 +34,7 @@ VkResult radv_create_pipeline_binary_from_shader(struct radv_device *device, con
 
 VkResult radv_create_pipeline_binary_from_rt_shader(struct radv_device *device, const VkAllocationCallbacks *pAllocator,
                                                     struct radv_shader *shader, bool is_traversal_shader,
-                                                    const uint8_t stage_sha1[SHA1_DIGEST_LENGTH],
+                                                    const uint8_t stage_blake3[BLAKE3_KEY_LEN],
                                                     const struct radv_ray_tracing_stage_info *rt_stage_info,
                                                     uint32_t stack_size, struct vk_pipeline_cache_object *nir,
                                                     struct util_dynarray *pipeline_binaries, uint32_t *num_binaries);

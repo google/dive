@@ -70,7 +70,7 @@ legal_src_factor(const struct gl_context *ctx, GLenum factor)
    case GL_SRC1_ALPHA:
    case GL_ONE_MINUS_SRC1_COLOR:
    case GL_ONE_MINUS_SRC1_ALPHA:
-      return ctx->API != API_OPENGLES
+      return !_mesa_is_gles1(ctx)
          && ctx->Extensions.ARB_blend_func_extended;
    default:
       return GL_FALSE;
@@ -103,14 +103,14 @@ legal_dst_factor(const struct gl_context *ctx, GLenum factor)
    case GL_ONE_MINUS_CONSTANT_ALPHA:
       return _mesa_is_desktop_gl(ctx) || _mesa_is_gles2(ctx);
    case GL_SRC_ALPHA_SATURATE:
-      return (ctx->API != API_OPENGLES
+      return (!_mesa_is_gles1(ctx)
               && ctx->Extensions.ARB_blend_func_extended)
          || _mesa_is_gles3(ctx);
    case GL_SRC1_COLOR:
    case GL_SRC1_ALPHA:
    case GL_ONE_MINUS_SRC1_COLOR:
    case GL_ONE_MINUS_SRC1_ALPHA:
-      return ctx->API != API_OPENGLES
+      return !_mesa_is_gles1(ctx)
          && ctx->Extensions.ARB_blend_func_extended;
    default:
       return GL_FALSE;
@@ -317,15 +317,6 @@ _mesa_BlendFuncSeparate( GLenum sfactorRGB, GLenum dfactorRGB,
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glBlendFuncSeparate %s %s %s %s\n",
-                  _mesa_enum_to_string(sfactorRGB),
-                  _mesa_enum_to_string(dfactorRGB),
-                  _mesa_enum_to_string(sfactorA),
-                  _mesa_enum_to_string(dfactorA));
-
-
-
    if (skip_blend_state_update(ctx, sfactorRGB, dfactorRGB, sfactorA, dfactorA))
       return;
 
@@ -455,61 +446,62 @@ legal_simple_blend_equation(const struct gl_context *ctx, GLenum mode)
    }
 }
 
-static enum gl_advanced_blend_mode
+static enum pipe_advanced_blend_mode
 advanced_blend_mode_from_gl_enum(GLenum mode)
 {
    switch (mode) {
    case GL_MULTIPLY_KHR:
-      return BLEND_MULTIPLY;
+      return PIPE_ADVANCED_BLEND_MULTIPLY;
    case GL_SCREEN_KHR:
-      return BLEND_SCREEN;
+      return PIPE_ADVANCED_BLEND_SCREEN;
    case GL_OVERLAY_KHR:
-      return BLEND_OVERLAY;
+      return PIPE_ADVANCED_BLEND_OVERLAY;
    case GL_DARKEN_KHR:
-      return BLEND_DARKEN;
+      return PIPE_ADVANCED_BLEND_DARKEN;
    case GL_LIGHTEN_KHR:
-      return BLEND_LIGHTEN;
+      return PIPE_ADVANCED_BLEND_LIGHTEN;
    case GL_COLORDODGE_KHR:
-      return BLEND_COLORDODGE;
+      return PIPE_ADVANCED_BLEND_COLORDODGE;
    case GL_COLORBURN_KHR:
-      return BLEND_COLORBURN;
+      return PIPE_ADVANCED_BLEND_COLORBURN;
    case GL_HARDLIGHT_KHR:
-      return BLEND_HARDLIGHT;
+      return PIPE_ADVANCED_BLEND_HARDLIGHT;
    case GL_SOFTLIGHT_KHR:
-      return BLEND_SOFTLIGHT;
+      return PIPE_ADVANCED_BLEND_SOFTLIGHT;
    case GL_DIFFERENCE_KHR:
-      return BLEND_DIFFERENCE;
+      return PIPE_ADVANCED_BLEND_DIFFERENCE;
    case GL_EXCLUSION_KHR:
-      return BLEND_EXCLUSION;
+      return PIPE_ADVANCED_BLEND_EXCLUSION;
    case GL_HSL_HUE_KHR:
-      return BLEND_HSL_HUE;
+      return PIPE_ADVANCED_BLEND_HSL_HUE;
    case GL_HSL_SATURATION_KHR:
-      return BLEND_HSL_SATURATION;
+      return PIPE_ADVANCED_BLEND_HSL_SATURATION;
    case GL_HSL_COLOR_KHR:
-      return BLEND_HSL_COLOR;
+      return PIPE_ADVANCED_BLEND_HSL_COLOR;
    case GL_HSL_LUMINOSITY_KHR:
-      return BLEND_HSL_LUMINOSITY;
+      return PIPE_ADVANCED_BLEND_HSL_LUMINOSITY;
    default:
-      return BLEND_NONE;
+      return PIPE_ADVANCED_BLEND_NONE;
    }
 }
 
 /**
  * If \p mode is one of the advanced blending equations defined by
  * GL_KHR_blend_equation_advanced (and the extension is supported),
- * return the corresponding BLEND_* enum.  Otherwise, return BLEND_NONE
- * (which can also be treated as false).
+ * return the corresponding PIPE_ADVANCED_BLEND_* enum.
+ * Otherwise, return PIPE_ADVANCED_BLEND_NONE (which can also be
+ * treated as false).
  */
-static enum gl_advanced_blend_mode
+static enum pipe_advanced_blend_mode
 advanced_blend_mode(const struct gl_context *ctx, GLenum mode)
 {
    return _mesa_has_KHR_blend_equation_advanced(ctx) ?
-          advanced_blend_mode_from_gl_enum(mode) : BLEND_NONE;
+          advanced_blend_mode_from_gl_enum(mode) : PIPE_ADVANCED_BLEND_NONE;
 }
 
 static void
 set_advanced_blend_mode(struct gl_context *ctx,
-                        enum gl_advanced_blend_mode advanced_mode)
+                        enum pipe_advanced_blend_mode advanced_mode)
 {
    if (ctx->Color._AdvancedBlendMode != advanced_mode) {
       ctx->Color._AdvancedBlendMode = advanced_mode;
@@ -525,11 +517,7 @@ _mesa_BlendEquation( GLenum mode )
    const unsigned numBuffers = num_buffers(ctx);
    unsigned buf;
    bool changed = false;
-   enum gl_advanced_blend_mode advanced_mode = advanced_blend_mode(ctx, mode);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glBlendEquation(%s)\n",
-                  _mesa_enum_to_string(mode));
+   enum pipe_advanced_blend_mode advanced_mode = advanced_blend_mode(ctx, mode);
 
    if (ctx->Color._BlendEquationPerBuffer) {
       /* Check all per-buffer states */
@@ -575,7 +563,7 @@ _mesa_BlendEquation( GLenum mode )
  */
 static void
 blend_equationi(struct gl_context *ctx, GLuint buf, GLenum mode,
-                enum gl_advanced_blend_mode advanced_mode)
+                enum pipe_advanced_blend_mode advanced_mode)
 {
    if (ctx->Color.Blend[buf].EquationRGB == mode &&
        ctx->Color.Blend[buf].EquationA == mode)
@@ -597,7 +585,7 @@ _mesa_BlendEquationiARB_no_error(GLuint buf, GLenum mode)
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   enum gl_advanced_blend_mode advanced_mode = advanced_blend_mode(ctx, mode);
+   enum pipe_advanced_blend_mode advanced_mode = advanced_blend_mode(ctx, mode);
    blend_equationi(ctx, buf, mode, advanced_mode);
 }
 
@@ -606,11 +594,7 @@ void GLAPIENTRY
 _mesa_BlendEquationiARB(GLuint buf, GLenum mode)
 {
    GET_CURRENT_CONTEXT(ctx);
-   enum gl_advanced_blend_mode advanced_mode = advanced_blend_mode(ctx, mode);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glBlendEquationi(%u, %s)\n",
-                  buf, _mesa_enum_to_string(mode));
+   enum pipe_advanced_blend_mode advanced_mode = advanced_blend_mode(ctx, mode);
 
    if (buf >= ctx->Const.MaxDrawBuffers) {
       _mesa_error(ctx, GL_INVALID_VALUE, "glBlendEquationi(buffer=%u)",
@@ -687,7 +671,7 @@ blend_equation_separate(struct gl_context *ctx, GLenum modeRGB, GLenum modeA,
       ctx->Color.Blend[buf].EquationA = modeA;
    }
    ctx->Color._BlendEquationPerBuffer = GL_FALSE;
-   set_advanced_blend_mode(ctx, BLEND_NONE);
+   set_advanced_blend_mode(ctx, PIPE_ADVANCED_BLEND_NONE);
 }
 
 
@@ -703,11 +687,6 @@ void GLAPIENTRY
 _mesa_BlendEquationSeparate(GLenum modeRGB, GLenum modeA)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glBlendEquationSeparateEXT(%s %s)\n",
-                  _mesa_enum_to_string(modeRGB),
-                  _mesa_enum_to_string(modeA));
 
    blend_equation_separate(ctx, modeRGB, modeA, false);
 }
@@ -743,7 +722,7 @@ blend_equation_separatei(struct gl_context *ctx, GLuint buf, GLenum modeRGB,
    ctx->Color.Blend[buf].EquationRGB = modeRGB;
    ctx->Color.Blend[buf].EquationA = modeA;
    ctx->Color._BlendEquationPerBuffer = GL_TRUE;
-   set_advanced_blend_mode(ctx, BLEND_NONE);
+   set_advanced_blend_mode(ctx, PIPE_ADVANCED_BLEND_NONE);
 }
 
 
@@ -763,11 +742,6 @@ void GLAPIENTRY
 _mesa_BlendEquationSeparateiARB(GLuint buf, GLenum modeRGB, GLenum modeA)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glBlendEquationSeparatei(%u, %s %s)\n", buf,
-                  _mesa_enum_to_string(modeRGB),
-                  _mesa_enum_to_string(modeA));
 
    if (buf >= ctx->Const.MaxDrawBuffers) {
       _mesa_error(ctx, GL_INVALID_VALUE, "glBlendEquationSeparatei(buffer=%u)",
@@ -824,7 +798,7 @@ _mesa_BlendColor( GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha )
  * \param func alpha comparison function.
  * \param ref reference value.
  *
- * Verifies the parameters and updates gl_colorbuffer_attrib. 
+ * Verifies the parameters and updates gl_colorbuffer_attrib.
  * On a change, flushes the vertices and notifies the driver via
  * dd_function_table::AlphaFunc callback.
  */
@@ -832,10 +806,6 @@ void GLAPIENTRY
 _mesa_AlphaFunc( GLenum func, GLclampf ref )
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glAlphaFunc(%s, %f)\n",
-                  _mesa_enum_to_string(func), ref);
 
    if (ctx->Color.AlphaFunc == func && ctx->Color.AlphaRefUnclamped == ref)
       return; /* no change */
@@ -935,9 +905,6 @@ _mesa_LogicOp( GLenum opcode )
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glLogicOp(%s)\n", _mesa_enum_to_string(opcode));
-
    logic_op(ctx, opcode, false);
 }
 
@@ -984,10 +951,6 @@ _mesa_ColorMask( GLboolean red, GLboolean green,
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glColorMask(%d, %d, %d, %d)\n",
-                  red, green, blue, alpha);
-
    GLbitfield mask = (!!red) |
                      ((!!green) << 1) |
                      ((!!blue) << 2) |
@@ -1012,10 +975,6 @@ _mesa_ColorMaski(GLuint buf, GLboolean red, GLboolean green,
                  GLboolean blue, GLboolean alpha)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glColorMaski %u %d %d %d %d\n",
-                  buf, red, green, blue, alpha);
 
    if (buf >= ctx->Const.MaxDrawBuffers) {
       _mesa_error(ctx, GL_INVALID_VALUE, "glColorMaski(buf=%u)", buf);

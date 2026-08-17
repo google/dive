@@ -59,7 +59,7 @@
 
 #define PVR_NEED_SW_COMPUTE_PDS_BARRIER(dev_info)       \
    PVR_HAS_FEATURE(dev_info, compute_morton_capable) && \
-      !PVR_HAS_ERN(dev_info, 45493)
+      !PVR_HAS_ENHANCEMENT(dev_info, 45493)
 
 /* FIXME: Change BIL to SPV. */
 /* Any variable location can have at most 4 32-bit components. */
@@ -927,6 +927,7 @@ struct pvr_pds_descriptor_set {
 #define PVR_BUFFER_TYPE_SPILL_INFO (12)
 #define PVR_BUFFER_TYPE_SCRATCH_INFO (13)
 #define PVR_BUFFER_TYPE_SAMPLE_LOCATIONS (14)
+#define PVR_BUFFER_TYPE_GLOBAL_SHMEM (15)
 #define PVR_BUFFER_TYPE_INVALID (~0)
 
 struct pvr_pds_buffer {
@@ -947,6 +948,32 @@ struct pvr_pds_buffer {
 };
 
 #define PVR_PDS_MAX_BUFFERS (24)
+
+/* Maximum memory allocation needed for const map entries in
+ * pvr_pds_generate_descriptor_upload_program().
+ * It must be >= 688 bytes. This size is calculated as the sum of:
+ *
+ *  1. Max. number of descriptor sets (8) * (
+ *         size of descriptor entry
+ *             (pvr_const_map_entry_descriptor_set) +
+ *         size of Common Store burst entry
+ *             (pvr_const_map_entry_literal32))
+ *
+ *  2. Max. number of PDS program buffers (24) * (
+ *         size of the largest buffer structure
+ *             (pvr_const_map_entry_constant_buffer) +
+ *         size of Common Store burst entry
+ *             (pvr_const_map_entry_literal32)
+ *
+ *  3. Size of DOUTU entry (pvr_const_map_entry_doutu_address)
+ */
+#define PVR_PDS_MAX_DESC_UPLOAD_BYTES                               \
+   (8 * (sizeof(struct pvr_const_map_entry_descriptor_set) +        \
+         sizeof(struct pvr_const_map_entry_literal32)) +            \
+           PVR_PDS_MAX_BUFFERS *                                    \
+              (sizeof(struct pvr_const_map_entry_constant_buffer) + \
+               sizeof(struct pvr_const_map_entry_literal32)) +      \
+           sizeof(struct pvr_const_map_entry_doutu_address));
 
 struct pvr_pds_descriptor_program_input {
    /* User-specified descriptor sets. */
@@ -991,7 +1018,7 @@ struct pvr_pds_vertex_dma {
 
    uint8_t flags;
    uint8_t size_in_dwords;
-   uint8_t component_size_in_bytes;
+   uint8_t attrib_size_in_bytes;
    uint8_t destination;
    uint8_t binding_index;
    uint32_t divisor;
@@ -1143,7 +1170,7 @@ struct pvr_const_map_entry_robust_vertex_attribute_address {
    uint8_t binding_index;
    uint8_t size_in_dwords;
    uint16_t robustness_buffer_offset;
-   uint8_t component_size_in_bytes;
+   uint8_t attrib_size_in_bytes;
 } PVR_PACKED;
 
 struct pvr_const_map_entry_vertex_attribute_max_index {
@@ -1154,7 +1181,7 @@ struct pvr_const_map_entry_vertex_attribute_max_index {
    uint8_t size_in_dwords;
    uint16_t offset;
    uint16_t stride;
-   uint8_t component_size_in_bytes;
+   uint8_t attrib_size_in_bytes;
 } PVR_PACKED;
 
 struct pvr_const_map_entry_base_instance {
@@ -1177,6 +1204,9 @@ struct pvr_pds_const_map_entry_vertex_attr_ddmadt_oob_buffer_size {
    uint8_t type;
    uint8_t const_offset;
    uint8_t binding_index;
+   uint8_t size_in_dwords;
+   uint16_t offset;
+   uint8_t attrib_size_in_bytes;
 } PVR_PACKED;
 
 struct pvr_pds_const_map_entry_cond_render {

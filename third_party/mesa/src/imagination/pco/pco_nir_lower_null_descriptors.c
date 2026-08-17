@@ -34,20 +34,6 @@ static nir_def *get_is_null(nir_builder *b,
          is_deref = true;
          break;
 
-      case nir_intrinsic_load_global:
-      case nir_intrinsic_load_global_2x32:
-      case nir_intrinsic_load_global_constant:
-      case nir_intrinsic_global_atomic:
-      case nir_intrinsic_global_atomic_2x32:
-      case nir_intrinsic_global_atomic_swap:
-      case nir_intrinsic_global_atomic_swap_2x32:
-      case nir_intrinsic_store_global:
-      case nir_intrinsic_store_global_2x32:
-         if (!(options & pco_nir_lower_null_descriptor_global))
-            return NULL;
-
-         break;
-
       case nir_intrinsic_get_ubo_size:
       case nir_intrinsic_load_ubo:
          if (!(options & pco_nir_lower_null_descriptor_ubo))
@@ -124,7 +110,7 @@ static bool lower(nir_builder *b, nir_instr *instr, void *data)
        */
       nir_def_rewrite_uses(def, phi);
 
-      nir_instr *phi_instr = phi->parent_instr;
+      nir_instr *phi_instr = nir_def_instr(phi);
       nir_phi_instr *phi_as_phi = nir_instr_as_phi(phi_instr);
       nir_phi_src *phi_src =
          nir_phi_get_src_from_block(phi_as_phi, instr->block);

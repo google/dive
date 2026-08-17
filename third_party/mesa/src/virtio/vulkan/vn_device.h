@@ -46,6 +46,9 @@ struct vn_device {
    struct vn_image_reqs_cache image_reqs_cache;
 
    bool has_sync2;
+
+   simple_mtx_t mutex;
+   struct list_head chains;
 };
 VK_DEFINE_HANDLE_CASTS(vn_device,
                        base.vk.base,

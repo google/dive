@@ -24,7 +24,9 @@
 #define EGL_X11_DRI3_INCLUDED
 
 #include "platform_x11.h"
-
+#if !defined(HAVE_LIBDRM)
+#include "loader_dri3_helper.h"
+#endif
 _EGL_DRIVER_TYPECAST(dri3_egl_surface, _EGLSurface, obj)
 
 struct dri3_egl_surface {

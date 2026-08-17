@@ -1,24 +1,6 @@
 /*
  * Copyright © 2012 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #define XXH_INLINE_ALL
@@ -94,7 +76,6 @@ is_expression(const brw_shader *v, const brw_inst *const inst)
    case SHADER_OPCODE_CLUSTER_BROADCAST:
    case SHADER_OPCODE_MOV_INDIRECT:
    case SHADER_OPCODE_SAMPLER:
-   case SHADER_OPCODE_GET_BUFFER_SIZE:
    case FS_OPCODE_PACK:
    case FS_OPCODE_PACK_HALF_2x16_SPLIT:
    case SHADER_OPCODE_RCP:
@@ -113,7 +94,7 @@ is_expression(const brw_shader *v, const brw_inst *const inst)
    case FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET:
       return true;
    case SHADER_OPCODE_MEMORY_LOAD_LOGICAL:
-      return inst->as_mem()->mode == MEMORY_MODE_CONSTANT;
+      return inst->as_mem()->flags & MEMORY_FLAG_CAN_REORDER;
    case SHADER_OPCODE_LOAD_PAYLOAD:
       return !is_coalescing_payload(*v, inst);
    case SHADER_OPCODE_SEND:
@@ -162,8 +143,8 @@ local_only(const brw_inst *inst)
 static bool
 operands_match(const brw_inst *a, const brw_inst *b, bool *negate)
 {
-   brw_reg *xs = a->src;
-   brw_reg *ys = b->src;
+   const brw_reg *xs = a->src;
+   const brw_reg *ys = b->src;
 
    if (a->opcode == BRW_OPCODE_MAD) {
       return xs[0].equals(ys[0]) &&
@@ -176,30 +157,23 @@ operands_match(const brw_inst *a, const brw_inst *b, bool *negate)
       bool ys0_negate = ys[0].negate;
       bool ys1_negate = ys[1].file == IMM ? ys[1].f < 0.0f
                                           : ys[1].negate;
-      float xs1_imm = xs[1].f;
-      float ys1_imm = ys[1].f;
+      /* Work on copies to avoid modifying the original instructions. */
+      brw_reg src[4] = { xs[0], xs[1], ys[0], ys[1] };
 
-      xs[0].negate = false;
-      xs[1].negate = false;
-      ys[0].negate = false;
-      ys[1].negate = false;
-      xs[1].f = fabsf(xs[1].f);
-      ys[1].f = fabsf(ys[1].f);
-
-      bool ret = (xs[0].equals(ys[0]) && xs[1].equals(ys[1])) ||
-                 (xs[1].equals(ys[0]) && xs[0].equals(ys[1]));
-
-      xs[0].negate = xs0_negate;
-      xs[1].negate = xs[1].file == IMM ? false : xs1_negate;
-      ys[0].negate = ys0_negate;
-      ys[1].negate = ys[1].file == IMM ? false : ys1_negate;
-      xs[1].f = xs1_imm;
-      ys[1].f = ys1_imm;
+      src[0].negate = false;
+      src[1].negate = false;
+      src[2].negate = false;
+      src[3].negate = false;
+      if (src[1].file == IMM)
+         src[1].f = fabsf(src[1].f);
+      if (src[3].file == IMM)
+         src[3].f = fabsf(src[3].f);
 
       *negate = (xs0_negate != xs1_negate) != (ys0_negate != ys1_negate);
       if (*negate && (a->saturate || b->saturate))
          return false;
-      return ret;
+      return (src[0].equals(src[2]) && src[1].equals(src[3])) ||
+             (src[1].equals(src[2]) && src[0].equals(src[3]));
    } else if (!a->is_commutative()) {
       bool match = true;
       for (int i = 0; i < a->sources; i++) {
@@ -239,12 +213,16 @@ static bool
 tex_inst_match(brw_tex_inst *a, brw_tex_inst *b)
 {
    return a->sampler_opcode == b->sampler_opcode &&
-          a->offset == b->offset &&
           a->surface_bindless == b->surface_bindless &&
           a->sampler_bindless == b->sampler_bindless &&
+          a->residency == b->residency &&
+          a->required_params == b->required_params &&
           a->coord_components == b->coord_components &&
-          a->grad_components == b->grad_components &&
-          a->residency == b->residency;
+          a->gather_component == b->gather_component &&
+          a->has_const_offsets == b->has_const_offsets &&
+          a->const_offsets[0] == b->const_offsets[0] &&
+          a->const_offsets[1] == b->const_offsets[1] &&
+          a->const_offsets[2] == b->const_offsets[2];
 }
 
 static bool
@@ -389,12 +367,13 @@ hash_inst(const void *v)
    case BRW_KIND_TEX: {
       const brw_tex_inst *tex = inst->as_tex();
       const uint8_t tex_u8data[] = {
-         tex->coord_components,
-         tex->grad_components,
-         tex->bits,
+         tex->sampler_opcode,
+         (uint8_t)tex->const_offsets[0],
+         (uint8_t)tex->const_offsets[1],
+         (uint8_t)tex->const_offsets[2],
       };
       const uint32_t tex_u32data[] = {
-         tex->sampler_opcode,
+         tex->bits,
       };
       hash = HASH(hash, tex_u8data);
       hash = HASH(hash, tex_u32data);
@@ -469,6 +448,9 @@ hash_inst(const void *v)
    case BRW_KIND_BASE:
       /* Nothing else to do. */
       break;
+
+   case BRW_KIND_SCRATCH:
+      UNREACHABLE("Spill and fills should not exist yet.");
    }
 
    if (inst->opcode == BRW_OPCODE_MAD) {

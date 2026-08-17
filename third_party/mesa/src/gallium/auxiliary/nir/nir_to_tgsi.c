@@ -75,7 +75,6 @@ struct ntt_compile {
 
    bool needs_texcoord_semantic;
    bool native_integers;
-   bool has_txf_lz;
 
    bool addr_declared[3];
    struct ureg_dst addr_reg[3];
@@ -143,7 +142,7 @@ ntt_insn(struct ntt_compile *c, enum tgsi_opcode opcode,
       .src = { src0, src1, src2, src3 },
       .precise = c->precise,
    };
-   util_dynarray_append(&c->cur_block->insns, struct ntt_insn, insn);
+   util_dynarray_append(&c->cur_block->insns, insn);
    return util_dynarray_top_ptr(&c->cur_block->insns, struct ntt_insn);
 }
 
@@ -448,10 +447,8 @@ ntt_live_regs(struct ntt_compile *c, nir_function_impl *impl)
                                ~bs->livein[i]);
          if (new_livein) {
             bs->livein[i] |= new_livein;
-            set_foreach(&block->predecessors, entry) {
-               nir_block *pred = (void *)entry->key;
+            nir_foreach_pred(pred, block)
                nir_block_worklist_push_tail(&state.worklist, pred);
-            }
 
             if (new_livein & state.blocks[block->index].defin[i])
                c->liveness[i].start = MIN2(c->liveness[i].start, ntt_block->start_ip);
@@ -484,7 +481,7 @@ ntt_allocate_regs(struct ntt_compile *c, nir_function_impl *impl)
    ntt_live_regs(c, impl);
 
    unsigned *ra_map = ralloc_array(c, unsigned, c->num_temps);
-   unsigned *released = rzalloc_array(c, BITSET_WORD, BITSET_WORDS(c->num_temps));
+   unsigned *released = BITSET_RZALLOC(c, c->num_temps);
 
    /* No RA on NIR array regs */
    for (int i = 0; i < c->first_non_array_temp; i++)
@@ -764,10 +761,10 @@ ntt_try_store_in_tgsi_output_with_use(struct ntt_compile *c,
    if (nir_src_is_if(src))
       return false;
 
-   if (nir_src_parent_instr(src)->type != nir_instr_type_intrinsic)
+   if (nir_src_use_instr(src)->type != nir_instr_type_intrinsic)
       return false;
 
-   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(nir_src_parent_instr(src));
+   nir_intrinsic_instr *intr = nir_instr_as_intrinsic(nir_src_use_instr(src));
    if (intr->intrinsic != nir_intrinsic_store_output ||
        !nir_src_is_const(intr->src[1])) {
       return false;
@@ -795,7 +792,7 @@ ntt_try_store_reg_in_tgsi_output(struct ntt_compile *c, struct ureg_dst *dst,
    /* Look for a single use for try_store_in_tgsi_output */
    nir_src *use = NULL;
    nir_foreach_reg_load(src, reg_decl) {
-      nir_intrinsic_instr *load = nir_instr_as_intrinsic(nir_src_parent_instr(src));
+      nir_intrinsic_instr *load = nir_instr_as_intrinsic(nir_src_use_instr(src));
       nir_foreach_use_including_if(load_use, &load->def) {
          /* We can only have one use */
          if (use != NULL)
@@ -1223,7 +1220,7 @@ static struct ureg_src
 ntt_get_chased_src(struct ntt_compile *c, nir_legacy_src *src)
 {
    if (src->is_ssa) {
-      if (src->ssa->parent_instr->type == nir_instr_type_load_const)
+      if (nir_def_is_const(src->ssa))
          return ntt_get_load_const_src(c, nir_def_as_load_const(src->ssa));
 
       return c->ssa_temp[src->ssa->index];
@@ -1267,7 +1264,7 @@ ntt_get_alu_src(struct ntt_compile *c, nir_alu_instr *instr, int i)
     * the specific swizzles from an undef don't matter)
     */
    if (nir_src_bit_size(instr->src[i].src) == 64 &&
-      !(src.src.is_ssa && src.src.ssa->parent_instr->type == nir_instr_type_undef)) {
+      !(src.src.is_ssa && nir_def_is_undef(src.src.ssa))) {
       int chan1 = 1;
       if (nir_op_infos[instr->op].input_sizes[i] == 0) {
          chan1 = instr->def.num_components > 1 ? 1 : 0;
@@ -1449,7 +1446,23 @@ ntt_emit_alu(struct ntt_compile *c, nir_alu_instr *instr)
    if (instr->op == nir_op_fsat && nir_legacy_fsat_folds(instr))
       return;
 
-   c->precise = instr->exact;
+   switch (instr->op) {
+   case nir_op_flt32:
+   case nir_op_fge32:
+   case nir_op_feq32:
+   case nir_op_fneu32:
+   case nir_op_slt:
+   case nir_op_sge:
+   case nir_op_seq:
+   case nir_op_sne:
+   case nir_op_fmin:
+   case nir_op_fmax:
+      c->precise = nir_alu_instr_is_nan_preserve(instr);
+      break;
+   default:
+      c->precise = nir_alu_instr_is_exact(instr);
+      break;
+   }
 
    assert(num_srcs <= ARRAY_SIZE(src));
    for (i = 0; i < num_srcs; i++)
@@ -1557,7 +1570,9 @@ ntt_emit_alu(struct ntt_compile *c, nir_alu_instr *instr)
       [nir_op_fmax] = { TGSI_OPCODE_MAX, TGSI_OPCODE_DMAX },
       [nir_op_imax] = { TGSI_OPCODE_IMAX, TGSI_OPCODE_I64MAX },
       [nir_op_umax] = { TGSI_OPCODE_UMAX, TGSI_OPCODE_U64MAX },
-      [nir_op_ffma] = { TGSI_OPCODE_MAD, TGSI_OPCODE_DMAD },
+      /* This is fine as long as drivers implement TGSI MAD as fmad */
+      [nir_op_fmad] = { TGSI_OPCODE_MAD, TGSI_OPCODE_DMAD },
+      [nir_op_ffma_weak] = { TGSI_OPCODE_MAD, TGSI_OPCODE_DMAD },
       [nir_op_ldexp] = { TGSI_OPCODE_LDEXP, 0 },
    };
 
@@ -1991,7 +2006,7 @@ ntt_emit_mem(struct ntt_compile *c, nir_intrinsic_instr *instr,
       next_src = 1;
       break;
    case nir_var_mem_shared:
-      memory = ureg_src_register(TGSI_FILE_MEMORY, 0);
+      memory = ureg_src_register(TGSI_FILE_MEMORY, TGSI_MEMORY_TYPE_SHARED);
       next_src = 0;
       break;
    case nir_var_uniform: { /* HW atomic buffers */
@@ -2772,15 +2787,6 @@ ntt_emit_texture(struct ntt_compile *c, nir_tex_instr *instr)
    case nir_texop_txf:
    case nir_texop_txf_ms:
       tex_opcode = TGSI_OPCODE_TXF;
-
-      if (c->has_txf_lz) {
-         int lod_src = nir_tex_instr_src_index(instr, nir_tex_src_lod);
-         if (lod_src >= 0 &&
-             nir_src_is_const(instr->src[lod_src].src) &&
-             ntt_src_as_uint(c, instr->src[lod_src].src) == 0) {
-            tex_opcode = TGSI_OPCODE_TXF_LZ;
-         }
-      }
       break;
    case nir_texop_txl:
       tex_opcode = TGSI_OPCODE_TXL;
@@ -3200,7 +3206,7 @@ ntt_emit_impl(struct ntt_compile *c, nir_function_impl *impl)
 
 }
 
-static int
+static unsigned
 type_size(const struct glsl_type *type, bool bindless)
 {
    return glsl_count_attribute_slots(type, false);
@@ -3314,7 +3320,7 @@ ntt_optimize_nir(struct nir_shader *s, struct pipe_screen *screen,
       NIR_PASS(progress, s, nir_lower_vars_to_ssa);
       NIR_PASS(progress, s, nir_split_64bit_vec3_and_vec4);
 
-      NIR_PASS(progress, s, nir_copy_prop);
+      NIR_PASS(progress, s, nir_opt_copy_prop);
       NIR_PASS(progress, s, nir_opt_algebraic);
       NIR_PASS(progress, s, nir_opt_constant_folding);
       NIR_PASS(progress, s, nir_opt_remove_phis);
@@ -3379,11 +3385,28 @@ ntt_optimize_nir(struct nir_shader *s, struct pipe_screen *screen,
 
 /* Scalarizes all 64-bit ALU ops.  Note that we only actually need to
  * scalarize vec3/vec4s, should probably fix that.
+ * Also lower vector comparisons.
  */
 static bool
-scalarize_64bit(const nir_instr *instr, const void *data)
+ntt_scalarize_cb(const nir_instr *instr, const void *data)
 {
    const nir_alu_instr *alu = nir_instr_as_alu(instr);
+
+   switch (alu->op) {
+   case nir_op_ball_fequal2:
+   case nir_op_ball_fequal3:
+   case nir_op_ball_fequal4:
+   case nir_op_bany_fnequal2:
+   case nir_op_bany_fnequal3:
+   case nir_op_bany_fnequal4:
+   case nir_op_ball_iequal2:
+   case nir_op_ball_iequal3:
+   case nir_op_ball_iequal4:
+   case nir_op_bany_inequal2:
+   case nir_op_bany_inequal3:
+   case nir_op_bany_inequal4: return true;
+   default: break;
+   }
 
    return (alu->def.bit_size == 64 ||
            nir_src_bit_size(alu->src[0].src) == 64);
@@ -3688,7 +3711,6 @@ ntt_fix_nir_options(struct pipe_screen *screen, struct nir_shader *s,
        !options->lower_uadd_sat ||
        !options->lower_usub_sat ||
        !options->lower_uniforms_to_ubo ||
-       !options->lower_vector_cmp ||
        options->has_rotate8 ||
        options->has_rotate16 ||
        options->has_rotate32 ||
@@ -3710,7 +3732,6 @@ ntt_fix_nir_options(struct pipe_screen *screen, struct nir_shader *s,
       new_options->lower_uadd_sat = true;
       new_options->lower_usub_sat = true;
       new_options->lower_uniforms_to_ubo = true;
-      new_options->lower_vector_cmp = true;
       new_options->lower_fsqrt = lower_fsqrt;
       new_options->has_rotate8 = false;
       new_options->has_rotate16 = false;
@@ -3889,7 +3910,8 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
     * having matching declarations.
     */
    if (s->info.stage == MESA_SHADER_FRAGMENT) {
-      NIR_PASS(_, s, nir_lower_indirect_derefs, nir_var_shader_in, UINT32_MAX);
+      NIR_PASS(_, s, nir_lower_indirect_derefs_to_if_else_trees,
+               nir_var_shader_in, UINT32_MAX);
       NIR_PASS(_, s, nir_remove_dead_variables, nir_var_shader_in, NULL);
    }
 
@@ -3899,7 +3921,7 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
     */
    if (s->info.stage == MESA_SHADER_TESS_CTRL ||
        s->info.stage == MESA_SHADER_TESS_EVAL) {
-      NIR_PASS(_, s, nir_lower_indirect_derefs, 0 , UINT32_MAX);
+      NIR_PASS(_, s, nir_lower_indirect_derefs_to_if_else_trees, 0, UINT32_MAX);
    }
 
    NIR_PASS(_, s, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
@@ -3928,7 +3950,7 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
     * TGSI stores up to a vec2 in each slot, so to avoid a whole bunch of op
     * duplication logic we just make it so that we only see vec2s.
     */
-   NIR_PASS(_, s, nir_lower_alu_to_scalar, scalarize_64bit, NULL);
+   NIR_PASS(_, s, nir_lower_alu_to_scalar, ntt_scalarize_cb, NULL);
    NIR_PASS(_, s, nir_to_tgsi_lower_64bit_to_vec2);
 
    if (!screen->caps.load_constbuf)
@@ -3936,7 +3958,8 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
 
    ntt_optimize_nir(s, screen, options);
 
-   NIR_PASS(_, s, nir_lower_indirect_derefs, no_indirects_mask, UINT32_MAX);
+   NIR_PASS(_, s, nir_lower_indirect_derefs_to_if_else_trees,
+            no_indirects_mask, UINT32_MAX);
 
    /* Lower demote_if to if (cond) { demote } because TGSI doesn't have a DEMOTE_IF. */
    NIR_PASS(_, s, nir_lower_discard_if, nir_lower_demote_if_to_cf);
@@ -3948,7 +3971,7 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
       progress = false;
       NIR_PASS(progress, s, nir_opt_algebraic_late);
       if (progress) {
-         NIR_PASS(_, s, nir_copy_prop);
+         NIR_PASS(_, s, nir_opt_copy_prop);
          NIR_PASS(_, s, nir_opt_dce);
          NIR_PASS(_, s, nir_opt_cse);
       }
@@ -3963,7 +3986,7 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
       NIR_PASS(_, s, nir_lower_bool_to_float,
                !options->lower_cmp && !options->lower_fabs);
       /* bool_to_float generates MOVs for b2f32 that we want to clean up. */
-      NIR_PASS(_, s, nir_copy_prop);
+      NIR_PASS(_, s, nir_opt_copy_prop);
       NIR_PASS(_, s, nir_opt_dce);
    }
 
@@ -3995,8 +4018,6 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
 
    c->needs_texcoord_semantic =
       screen->caps.tgsi_texcoord;
-   c->has_txf_lz =
-      screen->caps.tgsi_tex_txf_lz;
 
    c->s = s;
    c->native_integers = native_integers;
@@ -4046,8 +4067,6 @@ const void *nir_to_tgsi_options(struct nir_shader *s,
 
 const nir_shader_compiler_options nir_to_tgsi_compiler_options = {
    .fdot_replicates = true,
-   .fuse_ffma32 = true,
-   .fuse_ffma64 = true,
    .lower_extract_byte = true,
    .lower_extract_word = true,
    .lower_insert_byte = true,
@@ -4060,7 +4079,6 @@ const nir_shader_compiler_options nir_to_tgsi_compiler_options = {
    .lower_usub_borrow = true,
    .lower_uadd_sat = true,
    .lower_usub_sat = true,
-   .lower_vector_cmp = true,
    .lower_int64_options = nir_lower_imul_2x32_64,
 
    /* TGSI doesn't have a semantic for local or global index, just local and

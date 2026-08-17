@@ -29,7 +29,7 @@
 #include "drm-uapi/dma-buf.h"
 #include "util/blob.h"
 #include "util/log.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "util/os_file.h"
 #include "util/os_mman.h"
 #include "util/os_time.h"
@@ -375,8 +375,8 @@ agx_bo_make_shared(struct agx_device *dev, struct agx_bo *bo)
    bo->flags |= AGX_BO_SHARED;
    assert(bo->prime_fd == -1);
 
-   int ret =
-      drmPrimeHandleToFD(dev->fd, bo->handle, DRM_CLOEXEC | DRM_RDWR, &bo->prime_fd);
+   int ret = drmPrimeHandleToFD(dev->fd, bo->handle, DRM_CLOEXEC | DRM_RDWR,
+                                &bo->prime_fd);
    assert(ret == 0);
    assert(bo->prime_fd >= 0);
 
@@ -887,28 +887,28 @@ agx_get_gpu_timestamp(struct agx_device *dev)
 void
 agx_get_device_uuid(const struct agx_device *dev, void *uuid)
 {
-   struct mesa_sha1 sha1_ctx;
-   _mesa_sha1_init(&sha1_ctx);
+   blake3_hasher blake3_ctx;
+   _mesa_blake3_init(&blake3_ctx);
 
    /* The device UUID uniquely identifies the given device within the machine.
     * Since we never have more than one device, this doesn't need to be a real
-    * UUID, so we use SHA1("agx" + gpu_generation + gpu_variant + gpu_revision).
+    * UUID, so we use BLAKE3("agx" + gpu_generation + gpu_variant + gpu_revision).
     */
    static const char *device_name = "agx";
-   _mesa_sha1_update(&sha1_ctx, device_name, strlen(device_name));
+   _mesa_blake3_update(&blake3_ctx, device_name, strlen(device_name));
 
-   _mesa_sha1_update(&sha1_ctx, &dev->params.gpu_generation,
+   _mesa_blake3_update(&blake3_ctx, &dev->params.gpu_generation,
                      sizeof(dev->params.gpu_generation));
-   _mesa_sha1_update(&sha1_ctx, &dev->params.gpu_variant,
+   _mesa_blake3_update(&blake3_ctx, &dev->params.gpu_variant,
                      sizeof(dev->params.gpu_variant));
-   _mesa_sha1_update(&sha1_ctx, &dev->params.gpu_revision,
+   _mesa_blake3_update(&blake3_ctx, &dev->params.gpu_revision,
                      sizeof(dev->params.gpu_revision));
 
-   uint8_t sha1[SHA1_DIGEST_LENGTH];
-   _mesa_sha1_final(&sha1_ctx, sha1);
+   uint8_t blake3[BLAKE3_KEY_LEN];
+   _mesa_blake3_final(&blake3_ctx, blake3);
 
-   assert(SHA1_DIGEST_LENGTH >= UUID_SIZE);
-   memcpy(uuid, sha1, UUID_SIZE);
+   assert(BLAKE3_KEY_LEN >= UUID_SIZE);
+   memcpy(uuid, blake3, UUID_SIZE);
 }
 
 void
@@ -922,16 +922,16 @@ agx_get_driver_uuid(void *uuid)
     * driver. People who want to share memory need to also check the device
     * UUID.
     */
-   struct mesa_sha1 sha1_ctx;
-   _mesa_sha1_init(&sha1_ctx);
+   blake3_hasher blake3_ctx;
+   _mesa_blake3_init(&blake3_ctx);
 
-   _mesa_sha1_update(&sha1_ctx, driver_id, strlen(driver_id));
+   _mesa_blake3_update(&blake3_ctx, driver_id, strlen(driver_id));
 
-   uint8_t sha1[SHA1_DIGEST_LENGTH];
-   _mesa_sha1_final(&sha1_ctx, sha1);
+   uint8_t blake3[BLAKE3_KEY_LEN];
+   _mesa_blake3_final(&blake3_ctx, blake3);
 
-   assert(SHA1_DIGEST_LENGTH >= UUID_SIZE);
-   memcpy(uuid, sha1, UUID_SIZE);
+   assert(BLAKE3_KEY_LEN >= UUID_SIZE);
+   memcpy(uuid, blake3, UUID_SIZE);
 }
 
 unsigned

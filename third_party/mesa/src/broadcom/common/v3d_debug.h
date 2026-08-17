@@ -67,7 +67,6 @@ extern uint32_t v3d_mesa_debug;
 #define V3D_DEBUG_DOUBLE_BUFFER     (1 << 22)
 #define V3D_DEBUG_CACHE             (1 << 23)
 #define V3D_DEBUG_NO_MERGE_JOBS     (1 << 24)
-#define V3D_DEBUG_OPT_COMPILE_TIME  (1 << 25)
 #define V3D_DEBUG_DISABLE_TFU       (1 << 26)
 #define V3D_DEBUG_SYNC              (1 << 27)
 #define V3D_DEBUG_SOFT_BLEND        (1 << 28)
@@ -77,21 +76,6 @@ extern uint32_t v3d_mesa_debug;
                                      V3D_DEBUG_FS | V3D_DEBUG_GS | \
                                      V3D_DEBUG_VS | V3D_DEBUG_CS | \
                                      V3D_DEBUG_RA)
-
-#ifdef HAVE_ANDROID_PLATFORM
-#define LOG_TAG "BROADCOM-MESA"
-#if ANDROID_API_LEVEL >= 26
-#include <log/log.h>
-#else
-#include <cutils/log.h>
-#endif /* use log/log.h start from android 8 major version */
-#ifndef ALOGW
-#define ALOGW LOGW
-#endif
-#define dbg_printf(...)	ALOGW(__VA_ARGS__)
-#else
-#define dbg_printf(...)	fprintf(stderr, __VA_ARGS__)
-#endif /* HAVE_ANDROID_PLATFORM */
 
 extern bool v3d_debug_flag_for_shader_stage(mesa_shader_stage stage);
 

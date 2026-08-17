@@ -1,3 +1,71 @@
+spec:
+  inputs:
+    hw_jobs:
+      description: >-
+        List of hw job tags to restrict hardware testing to. Defaults to `all`.
+      type: array
+      default:
+        - all
+
+      # WARNING: This list is part of our interface with developers and
+      # upstream pipelines, no renaming please!
+      options:
+        - all
+        - none
+
+        - -- mesa drivers --
+        - anv
+        - crocus
+        - d3d12
+        - dozen
+        - etnaviv
+        - freedreno
+        - hasvk
+        - i915g
+        - imagination
+        - iris
+        - lavapipe
+        - lima
+        - llvmpipe
+        - nvk
+        - panfrost
+        - panvk
+        - r300
+        - radeonsi
+        - radv
+        - softpipe
+        - spirv2dxil
+        - svga
+        - turnip
+        - v3d
+        - v3dv
+        - vc4
+        - venus
+        - virgl
+        - vmware
+        - zink
+
+        - -- linux drivers --
+        - amdgpu.ko
+        - etnaviv.ko
+        - i915.ko
+        - lima.ko
+        - msm.ko
+        - nouveau.ko
+        - panfrost.ko
+        - panthor.ko
+        - powervr.ko
+        - radeon.ko
+        - v3d.ko
+        - vc4.ko
+        - virtio.ko
+        - vmwgfx.ko
+        - xe.ko
+        # WARNING: This list is part of our interface with developers and
+        # upstream pipelines, no renaming please!
+
+---
+
 # Types of CI pipelines:
 # | pipeline name        | context   | description                                                 |
 # |----------------------|-----------|-------------------------------------------------------------|
@@ -41,7 +109,7 @@ workflow:
         FDO_RUNNER_JOB_PRIORITY_TAG_X86_64: priority:high
         FDO_RUNNER_JOB_PRIORITY_TAG_X86_64_KVM: priority:high-kvm
         FDO_RUNNER_JOB_PRIORITY_TAG_AARCH64: priority:high-aarch64
-        CI_TRON_JOB_PRIORITY_TAG: ""  # Empty tags are ignored by gitlab
+        CI_TRON_JOB_PRIORITY: high
         JOB_PRIORITY: 75
         # fast-fail in merge pipelines: stop early if we get this many unexpected fails/crashes
         DEQP_RUNNER_MAX_FAILS: 40
@@ -61,6 +129,7 @@ workflow:
         FDO_RUNNER_JOB_PRIORITY_TAG_X86_64: priority:low
         FDO_RUNNER_JOB_PRIORITY_TAG_X86_64_KVM: priority:low-kvm
         FDO_RUNNER_JOB_PRIORITY_TAG_AARCH64: priority:low-aarch64
+        CI_TRON_JOB_PRIORITY: low
         JOB_PRIORITY: 45
         # (some) nightly builds perform LTO, so they take much longer than the
         # short timeout allowed in other pipelines.
@@ -123,7 +192,7 @@ variables:
   FDO_RUNNER_JOB_PRIORITY_TAG_X86_64: ""  # Empty tags are ignored by gitlab
   FDO_RUNNER_JOB_PRIORITY_TAG_X86_64_KVM: kvm
   FDO_RUNNER_JOB_PRIORITY_TAG_AARCH64: aarch64
-  CI_TRON_JOB_PRIORITY_TAG: ci-tron:priority:low
+  CI_TRON_JOB_PRIORITY: default
   JOB_PRIORITY: 50
   DATA_STORAGE_PATH: data_storage
   KERNEL_IMAGE_BASE: "https://$S3_HOST/$S3_KERNEL_BUCKET/$KERNEL_REPO/$KERNEL_TAG"
@@ -134,6 +203,10 @@ variables:
   CI_TRON_JOB_TEMPLATE_COMMIT: &ci-tron-template-commit d649a2829517b078a3cb8f3c2e6c8775a5992abb
   CI_TRON_JOB_TEMPLATE_PROJECT_URL: "https://gitlab.freedesktop.org/$CI_TRON_JOB_TEMPLATE_PROJECT"
 
+  # Convert the pipeline inputs to variables that can be referenced throughout the codebase
+  # NOTE: we prefix the variable with a space to make gitlab happy (variable definition must
+  #       be either a string or a hash)
+  INPUT_HW_JOBS: ' $[[ inputs.hw_jobs ]]'
 
 default:
   timeout: 1m  # catch any jobs which don't specify a timeout
@@ -183,6 +256,7 @@ stages:
   - freedreno-nightly
   - etnaviv
   - etnaviv-nightly
+  - imagination-nightly
   - software-renderer
   - software-renderer-nightly
   - layered-backends
@@ -232,13 +306,14 @@ include:
   rules:
     - !reference [.common-rules, rules]
     # Run when re-enabling a disabled farm, but not when disabling it
-    - !reference [.disable-farm-mr-rules, rules]
+    - !reference [.disable-farm-rules, rules]
     # Never run immediately after merging, as we just ran everything
     - !reference [.never-post-merge-rules, rules]
     # Only rebuild containers in merge pipelines if any tags have been
     # changed, else we'll just use the already-built containers
     - if: *is-merge-attempt
       changes: &image_tags_path
+        - .gitlab-ci.yml
         - .gitlab-ci/image-tags.yml
       when: on_success
     # Skip everything for pre-merge and merge pipelines which don't change
@@ -282,7 +357,7 @@ include:
   rules:
     - !reference [.common-rules, rules]
     # Run when re-enabling a disabled farm, but not when disabling it
-    - !reference [.disable-farm-mr-rules, rules]
+    - !reference [.disable-farm-rules, rules]
     # Never run immediately after merging, as we just ran everything
     - !reference [.never-post-merge-rules, rules]
     # Build everything in merge pipelines, if any files affecting the pipeline
@@ -341,7 +416,7 @@ include:
   rules:
     - !reference [.common-rules, rules]
     # Run when re-enabling a disabled farm, but not when disabling it
-    - !reference [.disable-farm-mr-rules, rules]
+    - !reference [.disable-farm-rules, rules]
     # Never run immediately after merging, as we just ran everything
     - !reference [.never-post-merge-rules, rules]
     # Build everything in merge pipelines, if any files affecting the pipeline
@@ -422,4 +497,3 @@ sanity:
     when: on_failure
     reports:
       junit: check-*.xml
-

@@ -604,7 +604,7 @@ ttn_src_for_file_and_index(struct ttn_compile *c, unsigned file, unsigned index,
          break;
       case TGSI_SEMANTIC_POSITION:
          assert(c->cap_position_is_sysval);
-         load = nir_load_frag_coord(b);
+         load = nir_build_frag_coord(b, 4);
          break;
       case TGSI_SEMANTIC_PCOORD:
          assert(c->cap_point_is_sysval);
@@ -967,10 +967,10 @@ ttn_kill(nir_builder *b)
 static void
 ttn_kill_if(nir_builder *b, nir_def **src)
 {
-   /* flt must be exact, because NaN shouldn't discard. (apps rely on this) */
-   b->exact = true;
+   /* Apps rely on NaN not discarding. */
+   b->fp_math_ctrl = nir_fp_preserve_nan | nir_fp_preserve_inf;
    nir_def *cmp = nir_bany(b, nir_flt_imm(b, src[0], 0.0));
-   b->exact = false;
+   b->fp_math_ctrl = nir_fp_fast_math;
 
    nir_discard_if(b, cmp);
    b->shader->info.fs.uses_discard = true;
@@ -1195,7 +1195,6 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
       samp = 2;
       break;
    case TGSI_OPCODE_TXL:
-   case TGSI_OPCODE_TEX_LZ:
       op = nir_texop_txl;
       num_srcs = 2;
       break;
@@ -1205,7 +1204,6 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
       samp = 2;
       break;
    case TGSI_OPCODE_TXF:
-   case TGSI_OPCODE_TXF_LZ:
       if (tgsi_inst->Texture.Texture == TGSI_TEXTURE_2D_MSAA ||
           tgsi_inst->Texture.Texture == TGSI_TEXTURE_2D_ARRAY_MSAA) {
          op = nir_texop_txf_ms;
@@ -1322,12 +1320,8 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
       src_number++;
    }
 
-   if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXL ||
-       tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TEX_LZ) {
-      if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TEX_LZ)
-         instr->src[src_number].src = nir_src_for_ssa(nir_imm_int(b, 0));
-      else
-         instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[0], W));
+   if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXL) {
+      instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[0], W));
       instr->src[src_number].src_type = nir_tex_src_lod;
       src_number++;
    }
@@ -1338,16 +1332,12 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
       src_number++;
    }
 
-   if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF ||
-       tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF_LZ) {
+   if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF) {
       if (op == nir_texop_txf_ms) {
          instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_ms_index,
                                                       ttn_channel(b, src[0], W));
       } else {
-         if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF_LZ)
-            instr->src[src_number].src = nir_src_for_ssa(nir_imm_int(b, 0));
-         else
-            instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[0], W));
+         instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[0], W));
          instr->src[src_number].src_type = nir_tex_src_lod;
       }
       src_number++;
@@ -1660,12 +1650,10 @@ static const nir_op op_trans[TGSI_OPCODE_LAST] = {
    [TGSI_OPCODE_MAX] = nir_op_fmax,
    [TGSI_OPCODE_SLT] = nir_op_slt,
    [TGSI_OPCODE_SGE] = nir_op_sge,
-   [TGSI_OPCODE_MAD] = nir_op_ffma,
-   [TGSI_OPCODE_TEX_LZ] = 0,
+   [TGSI_OPCODE_MAD] = nir_op_ffma_weak,
    [TGSI_OPCODE_LRP] = 0,
    [TGSI_OPCODE_SQRT] = nir_op_fsqrt,
    [TGSI_OPCODE_FRC] = nir_op_ffract,
-   [TGSI_OPCODE_TXF_LZ] = 0,
    [TGSI_OPCODE_FLR] = nir_op_ffloor,
    [TGSI_OPCODE_ROUND] = nir_op_fround_even,
    [TGSI_OPCODE_EX2] = nir_op_fexp2,
@@ -1951,7 +1939,6 @@ ttn_emit_instruction(struct ttn_compile *c)
       break;
 
    case TGSI_OPCODE_TEX:
-   case TGSI_OPCODE_TEX_LZ:
    case TGSI_OPCODE_TXP:
    case TGSI_OPCODE_TXL:
    case TGSI_OPCODE_TXB:
@@ -1960,7 +1947,6 @@ ttn_emit_instruction(struct ttn_compile *c)
    case TGSI_OPCODE_TXL2:
    case TGSI_OPCODE_TXB2:
    case TGSI_OPCODE_TXF:
-   case TGSI_OPCODE_TXF_LZ:
    case TGSI_OPCODE_TG4:
    case TGSI_OPCODE_LODQ:
       dst = ttn_tex(c, src);
@@ -1995,7 +1981,7 @@ ttn_emit_instruction(struct ttn_compile *c)
       break;
 
    case TGSI_OPCODE_BGNLOOP:
-      nir_push_loop(&c->build);
+      nir_loop_add_continue_construct(nir_push_loop(&c->build));
       break;
 
    case TGSI_OPCODE_BRK:
@@ -2202,6 +2188,11 @@ ttn_parse_tgsi(struct ttn_compile *c, const void *tgsi_tokens)
          break;
 
       case TGSI_TOKEN_TYPE_INSTRUCTION:
+         if (parser.FullToken.FullInstruction.Instruction.Opcode == TGSI_OPCODE_RET) {
+            /* We have to be conservative and add output stores before each return.
+             * Hopefully stores will be optimized out later if not actually required */
+            ttn_add_output_stores(c);
+         }
          ttn_emit_instruction(c);
          break;
 
@@ -2410,12 +2401,12 @@ ttn_optimize_nir(nir_shader *nir)
 
       NIR_PASS(progress, nir, nir_lower_alu);
       NIR_PASS(progress, nir, nir_lower_pack);
-      NIR_PASS(progress, nir, nir_copy_prop);
+      NIR_PASS(progress, nir, nir_opt_copy_prop);
       NIR_PASS(progress, nir, nir_opt_remove_phis);
       NIR_PASS(progress, nir, nir_opt_dce);
       if (nir_opt_loop(nir)) {
          progress = true;
-         NIR_PASS(progress, nir, nir_copy_prop);
+         NIR_PASS(progress, nir, nir_opt_copy_prop);
          NIR_PASS(progress, nir, nir_opt_dce);
       }
       NIR_PASS(progress, nir, nir_opt_if, nir_opt_if_optimize_phi_true_false);
@@ -2440,16 +2431,8 @@ ttn_optimize_nir(nir_shader *nir)
             (nir->options->lower_flrp64 ? 64 : 0);
 
          if (lower_flrp) {
-            bool lower_flrp_progress = false;
-
-            NIR_PASS(lower_flrp_progress, nir, nir_lower_flrp,
-                     lower_flrp,
-                     false /* always_precise */);
-            if (lower_flrp_progress) {
-               NIR_PASS(progress, nir,
-                        nir_opt_constant_folding);
-               progress = true;
-            }
+            NIR_PASS(progress, nir, nir_lower_flrp,
+                     lower_flrp, false /* always_precise */);
          }
 
          /* Nothing should rematerialize any flrps, so we only need to do this
@@ -2540,6 +2523,7 @@ ttn_finalize_nir(struct ttn_compile *c, struct pipe_screen *screen)
 
    MESA_TRACE_FUNC();
 
+   NIR_PASS(_, nir, nir_lower_continue_constructs);
    NIR_PASS(_, nir, nir_lower_returns);
    NIR_PASS(_, nir, nir_lower_vars_to_ssa);
    NIR_PASS(_, nir, nir_lower_reg_intrinsics_to_ssa);
@@ -2572,7 +2556,7 @@ ttn_finalize_nir(struct ttn_compile *c, struct pipe_screen *screen)
       NIR_PASS(_, nir, nir_lower_samplers);
 
    if (screen->finalize_nir) {
-      screen->finalize_nir(screen, nir);
+      screen->finalize_nir(screen, nir, true);
    } else {
       ttn_optimize_nir(nir);
    }

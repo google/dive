@@ -479,8 +479,8 @@ d3d12_video_bitstream_builder_hevc::build_sps(const HevcVideoParameterSet& paren
    viewport.Width = crop_window_upper_layer.front /* passes width */ - ((crop_window_upper_layer.left + crop_window_upper_layer.right) * SubWidthC);
    viewport.Height = crop_window_upper_layer.back /* passes height */- ((crop_window_upper_layer.top + crop_window_upper_layer.bottom) * SubHeightC);
 
-   m_latest_sps.pic_width_in_luma_samples = ALIGN(encodeResolution.Width, picDimensionMultipleRequirement);
-   m_latest_sps.pic_height_in_luma_samples = ALIGN(encodeResolution.Height, picDimensionMultipleRequirement);
+   m_latest_sps.pic_width_in_luma_samples = align(encodeResolution.Width, picDimensionMultipleRequirement);
+   m_latest_sps.pic_height_in_luma_samples = align(encodeResolution.Height, picDimensionMultipleRequirement);
    m_latest_sps.conf_win_right_offset = (m_latest_sps.pic_width_in_luma_samples - viewport.Width) / SubWidthC;
    m_latest_sps.conf_win_bottom_offset = (m_latest_sps.pic_height_in_luma_samples - viewport.Height) / SubHeightC;
 
@@ -898,7 +898,7 @@ d3d12_video_bitstream_builder_hevc::print_rps(const HevcSeqParameterSet* sps, UI
       int32_t RefRpsIdx = stRpsIdx - 1 - rps->delta_idx_minus1;
       const HEVCReferencePictureSet* rpsRef = &(sps->rpsShortTerm[RefRpsIdx]);
       auto numberOfPictures = rpsRef->num_negative_pics + rpsRef->num_positive_pics;
-      for (uint8_t j = 0; j <= numberOfPictures; j++) {
+      for (int32_t j = 0; j <= numberOfPictures; j++) {
          debug_printf("used_by_curr_pic_flag[%d]: %d\n", j, rps->used_by_curr_pic_flag[j]);
          if (!rps->used_by_curr_pic_flag[j]) {
                debug_printf("use_delta_flag[%d]: %d\n", j, rps->use_delta_flag[j]);
@@ -908,7 +908,7 @@ d3d12_video_bitstream_builder_hevc::print_rps(const HevcSeqParameterSet* sps, UI
    else
    {
       debug_printf("num_negative_pics: %d\n", rps->num_negative_pics);        
-      for (uint8_t i = 0; i < rps->num_negative_pics; i++) {
+      for (int32_t i = 0; i < rps->num_negative_pics; i++) {
          debug_printf("delta_poc_s0_minus1[%d]: %d\n", i, rps->delta_poc_s0_minus1[i]);
          debug_printf("used_by_curr_pic_s0_flag[%d]: %d\n", i, rps->used_by_curr_pic_s0_flag[i]);
       }

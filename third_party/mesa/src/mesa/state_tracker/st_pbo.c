@@ -57,6 +57,10 @@ st_pbo_addresses_setup(struct st_context *st,
 {
    unsigned skip_pixels;
 
+   /* image_size is int32_t */
+   if ((size_t)addr->pixels_per_row * addr->image_height > INT32_MAX)
+      return false;
+
    /* Check alignment against texture buffer requirements. */
    {
       unsigned ofs = (buf_offset * addr->bytes_per_pixel) % st->ctx->Const.TextureBufferOffsetAlignment;
@@ -76,7 +80,7 @@ st_pbo_addresses_setup(struct st_context *st,
    addr->buffer = buf;
    addr->first_element = buf_offset;
    addr->last_element = buf_offset + skip_pixels + addr->width - 1
-         + (addr->height - 1 + (addr->depth - 1) * addr->image_height) * addr->pixels_per_row;
+         + (addr->height - 1 + (size_t)(addr->depth - 1) * addr->image_height) * addr->pixels_per_row;
 
    if (addr->last_element - addr->first_element > st->ctx->Const.MaxTextureBufferSize - 1)
       return false;
@@ -210,11 +214,10 @@ st_pbo_draw(struct st_context *st, const struct st_pbo_addresses *addr,
 
    cso_set_tesseval_shader_handle(cso, NULL);
 
-   cso_set_task_shader_handle(cso, NULL);
    cso_set_mesh_shader_handle(cso, NULL);
 
    /* Upload vertices */
-   struct pipe_resource *releasebuf = NULL;
+   struct pipe_resource *vb_releasebuf = NULL;
    {
       struct pipe_vertex_buffer vbo = {0};
       struct cso_velems_state velem;
@@ -227,7 +230,7 @@ st_pbo_draw(struct st_context *st, const struct st_pbo_addresses *addr,
       float *verts = NULL;
 
       u_upload_alloc(st->pipe->stream_uploader, 0, 8 * sizeof(float), 4,
-                     &vbo.buffer_offset, &vbo.buffer.resource, &releasebuf, (void **) &verts);
+                     &vbo.buffer_offset, &vbo.buffer.resource, &vb_releasebuf, (void **) &verts);
       if (!verts)
          return false;
 
@@ -255,6 +258,7 @@ st_pbo_draw(struct st_context *st, const struct st_pbo_addresses *addr,
    }
 
    /* Upload constants */
+   struct pipe_resource *cb_releasebuf = NULL;
    {
       struct pipe_constant_buffer cb;
 
@@ -263,7 +267,7 @@ st_pbo_draw(struct st_context *st, const struct st_pbo_addresses *addr,
       cb.buffer_offset = 0;
       cb.buffer_size = sizeof(addr->constants);
 
-      pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_FRAGMENT, &cb);
+      pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_FRAGMENT, &cb, &cb_releasebuf);
    }
 
    /* Rasterizer state */
@@ -278,7 +282,8 @@ st_pbo_draw(struct st_context *st, const struct st_pbo_addresses *addr,
       cso_draw_arrays_instanced(cso, MESA_PRIM_TRIANGLE_STRIP,
                                 0, 4, 0, addr->depth);
    }
-   pipe_resource_release(st->pipe, releasebuf);
+   pipe_resource_release(st->pipe, cb_releasebuf);
+   pipe_resource_release(st->pipe, vb_releasebuf);
 
    return true;
 }
@@ -564,7 +569,7 @@ create_fs(struct st_context *st, bool download,
                             .image_dim = GLSL_SAMPLER_DIM_BUF);
    } else {
       nir_store_output(&b, result, nir_imm_int(&b, 0),
-                       .io_semantics.location = FRAG_RESULT_COLOR);
+                       .io_semantics.location = FRAG_RESULT_COLOR, .src_type = tex->dest_type);
    }
 
    return st_nir_finish_builtin_shader(st, b.shader);

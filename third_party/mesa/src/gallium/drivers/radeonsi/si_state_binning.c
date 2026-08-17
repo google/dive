@@ -7,7 +7,6 @@
 /* This file handles register programming of primitive binning. */
 
 #include "si_build_pm4.h"
-#include "sid.h"
 
 struct uvec2 {
    unsigned x, y;
@@ -391,10 +390,15 @@ static void si_emit_dpbb_disable(struct si_context *sctx)
    radeon_begin(&sctx->gfx_cs);
 
    if (sctx->gfx_level >= GFX12) {
+      /* GFX12+ notes:
+       * - The minimum size is 128x128 for greater than 16K framebuffers.
+       *   (GFX12 always requires at least 128 regardless of the size)
+       * - BIN_SIZE_X and BIN_SIZE_Y must be 0 and are unsupported.
+       */
       struct uvec2 bin_size = {128, 128};
 
       radeon_opt_set_context_reg(R_028C44_PA_SC_BINNER_CNTL_0,
-                                 SI_TRACKED_PA_SC_BINNER_CNTL_0,
+                                 AC_TRACKED_PA_SC_BINNER_CNTL_0,
                                  S_028C44_BINNING_MODE(V_028C44_BINNING_DISABLED) |
                                  S_028C44_BIN_SIZE_X_EXTEND(util_logbase2(bin_size.x) - 5) |
                                  S_028C44_BIN_SIZE_Y_EXTEND(util_logbase2(bin_size.y) - 5) |
@@ -418,7 +422,7 @@ static void si_emit_dpbb_disable(struct si_context *sctx)
          bin_size_extend.y = util_logbase2(bin_size.y) - 5;
 
       radeon_opt_set_context_reg(R_028C44_PA_SC_BINNER_CNTL_0,
-                                 SI_TRACKED_PA_SC_BINNER_CNTL_0,
+                                 AC_TRACKED_PA_SC_BINNER_CNTL_0,
                                  S_028C44_BINNING_MODE(binning_disabled) |
                                  S_028C44_BIN_SIZE_X(bin_size.x == 16) |
                                  S_028C44_BIN_SIZE_Y(bin_size.y == 16) |
@@ -430,7 +434,7 @@ static void si_emit_dpbb_disable(struct si_context *sctx)
                                  S_028C44_FLUSH_ON_BINNING_TRANSITION(1));
    } else {
       radeon_opt_set_context_reg(R_028C44_PA_SC_BINNER_CNTL_0,
-                                 SI_TRACKED_PA_SC_BINNER_CNTL_0,
+                                 AC_TRACKED_PA_SC_BINNER_CNTL_0,
                                  S_028C44_BINNING_MODE(V_028C44_DISABLE_BINNING_USE_LEGACY_SC) |
                                  S_028C44_DISABLE_START_OF_PRIM(1) |
                                  S_028C44_FLUSH_ON_BINNING_TRANSITION(sctx->family == CHIP_VEGA12 ||
@@ -511,8 +515,18 @@ void si_emit_dpbb_state(struct si_context *sctx, unsigned index)
    if (bin_size.y >= 32)
       bin_size_extend.y = util_logbase2(bin_size.y) - 5;
 
+   if (sctx->gfx_level >= GFX12) {
+      /* GFX12+ notes:
+       * - The minimum size is 128x128 for greater than 16K framebuffers.
+       *   (GFX12 always requires at least 128 regardless of the size)
+       * - BIN_SIZE_X and BIN_SIZE_Y must be 0 and are unsupported.
+       */
+      bin_size.x = MAX2(bin_size.x, 128);
+      bin_size.y = MAX2(bin_size.y, 128);
+   }
+
    radeon_begin(&sctx->gfx_cs);
-   radeon_opt_set_context_reg(R_028C44_PA_SC_BINNER_CNTL_0, SI_TRACKED_PA_SC_BINNER_CNTL_0,
+   radeon_opt_set_context_reg(R_028C44_PA_SC_BINNER_CNTL_0, AC_TRACKED_PA_SC_BINNER_CNTL_0,
                               S_028C44_BINNING_MODE(V_028C44_BINNING_ALLOWED) |
                               S_028C44_BIN_SIZE_X(bin_size.x == 16) |
                               S_028C44_BIN_SIZE_Y(bin_size.y == 16) |

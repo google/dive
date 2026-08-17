@@ -36,20 +36,26 @@
 #define RADEON_VCN_SIGNATURE_SIZE                                     (0x00000010)
 
 #define RADEON_VCN_IB_COMMON_OP_WRITEMEMORY                           (0x33000001)
+#define RADEON_VCN_IB_COMMON_OP_TIMESTAMP                             (0x31000001)
 #define RADEON_VCN_IB_COMMON_OP_RESOLVEINPUTPARAMLAYOUT               (0x31000007)
 
 #define RADEON_VCN_RESOLVE_INPUT_PARAM_LAYOUT_TYPE_QPMAP_INT8         1
 #define RADEON_VCN_RESOLVE_INPUT_PARAM_LAYOUT_TYPE_QPMAP_INT16        2
 
+struct ac_cmdbuf;
+
 struct rvcn_sq_var {
-   unsigned int *signature_ib_checksum;
-   unsigned int *signature_ib_total_size_in_dw;
    unsigned int *engine_ib_size_of_packages;
 };
 
 struct rvcn_cmn_engine_ib_package {
    unsigned int package_size;
    unsigned int package_type;
+};
+
+struct rvcn_cmn_engine_op_timestamp {
+   unsigned int timestamp_addr_lo;       /* Low address of Timestamp */
+   unsigned int timestamp_addr_hi;       /* High address of Timestamp */
 };
 
 struct rvcn_cmn_engine_op_writememory {
@@ -69,5 +75,8 @@ struct rvcn_cmn_engine_op_resolveinputparamlayout {
    unsigned int output_buffer_address_lo;  /* Low address of output buffer */
    unsigned int output_buffer_address_hi;  /* High address of output buffer */
 };
+
+void ac_vcn_sq_header(struct ac_cmdbuf *cs, struct rvcn_sq_var *sq, unsigned type);
+void ac_vcn_sq_tail(struct ac_cmdbuf *cs, struct rvcn_sq_var *sq);
 
 #endif

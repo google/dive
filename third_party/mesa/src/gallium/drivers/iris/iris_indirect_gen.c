@@ -1,4 +1,5 @@
-/* Copyright © 2023 Intel Corporation
+/*
+ * Copyright © 2023 Intel Corporation
  * SPDX-License-Identifier: MIT
  */
 
@@ -57,19 +58,28 @@
 # include "intel_gfx200_shaders_binding.h"
 #elif GFX_VERx10 == 300
 # include "intel_gfx300_shaders_binding.h"
+#elif GFX_VERx10 == 350
+# include "intel_gfx350_shaders_binding.h"
 #else
 # error "Unsupported generation"
 #endif
 
+#if GFX_VER < 9
 #define load_param(b, bit_size, struct_name, field_name)          \
    nir_load_uniform(b, 1, bit_size, nir_imm_int(b, 0),            \
-                    .base = offsetof(struct_name, field_name),   \
+                    .base = offsetof(struct_name, field_name),    \
                     .range = bit_size / 8)
+#else
+#define load_param(b, bit_size, struct_name, field_name)                \
+   nir_load_push_data_intel(b, 1, bit_size, nir_imm_int(b, 0),          \
+                            .base = offsetof(struct_name, field_name),  \
+                            .range = bit_size / 8)
+#endif
 
 static nir_def *
 load_fragment_index(nir_builder *b)
 {
-   nir_def *pos_in = nir_f2i32(b, nir_trim_vector(b, nir_load_frag_coord(b), 2));
+   nir_def *pos_in = nir_f2i32(b, nir_build_frag_coord(b, 2));
    return nir_iadd(b,
                    nir_imul_imm(b, nir_channel(b, pos_in, 1), 8192),
                    nir_channel(b, pos_in, 0));
@@ -279,59 +289,58 @@ emit_indirect_generate_draw(struct iris_batch *batch,
 
    iris_emit_cmd(batch, GENX(3DSTATE_PS), ps) {
 #if GFX_VER >= 9
-      struct brw_wm_prog_data *wm_prog_data = brw_wm_prog_data(shader->brw_prog_data);
+      struct brw_fs_prog_data *fs_prog_data = brw_fs_prog_data(shader->brw_prog_data);
 #else
-      struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(shader->elk_prog_data);
+      struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(shader->elk_prog_data);
 #endif
-      intel_set_ps_dispatch_state(&ps, devinfo, wm_prog_data,
+      intel_set_ps_dispatch_state(&ps, devinfo, fs_prog_data,
                                   1 /* rasterization_samples */,
-                                  0 /* msaa_flags */);
+                                  0 /* fs_config */);
 
       ps.VectorMaskEnable       = fs_data->uses_vmask;
 
       ps.BindingTableEntryCount = GFX_VER == 9 ? 1 : 0;
 #if GFX_VER < 20
-      ps.PushConstantEnable     = shader->nr_params > 0 ||
-                                  shader->ubo_ranges[0].length;
+      ps.PushConstantEnable     = shader->push_sizes[0] > 0;
 #endif
 
 #if GFX_VER >= 9
       ps.DispatchGRFStartRegisterForConstantSetupData0 =
-         brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 0);
+         brw_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 0);
       ps.DispatchGRFStartRegisterForConstantSetupData1 =
-         brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 1);
+         brw_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 1);
 #if GFX_VER < 20
       ps.DispatchGRFStartRegisterForConstantSetupData2 =
-         brw_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 2);
+         brw_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 2);
 #endif
 
       ps.KernelStartPointer0 = KSP(ice->draw.generation.shader) +
-         brw_wm_prog_data_prog_offset(wm_prog_data, ps, 0);
+         brw_fs_prog_data_prog_offset(fs_prog_data, ps, 0);
       ps.KernelStartPointer1 = KSP(ice->draw.generation.shader) +
-         brw_wm_prog_data_prog_offset(wm_prog_data, ps, 1);
+         brw_fs_prog_data_prog_offset(fs_prog_data, ps, 1);
 #if GFX_VER < 20
       ps.KernelStartPointer2 = KSP(ice->draw.generation.shader) +
-         brw_wm_prog_data_prog_offset(wm_prog_data, ps, 2);
+         brw_fs_prog_data_prog_offset(fs_prog_data, ps, 2);
 #endif
 
 #if GFX_VER >= 30
-      ps.RegistersPerThread = ptl_register_blocks(wm_prog_data->base.grf_used);
+      ps.RegistersPerThread = ptl_register_blocks(fs_prog_data->base.grf_used);
 #endif
 
 #else
       ps.DispatchGRFStartRegisterForConstantSetupData0 =
-         elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 0);
+         elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 0);
       ps.DispatchGRFStartRegisterForConstantSetupData1 =
-         elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 1);
+         elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 1);
       ps.DispatchGRFStartRegisterForConstantSetupData2 =
-         elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 2);
+         elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 2);
 
       ps.KernelStartPointer0 = KSP(ice->draw.generation.shader) +
-         elk_wm_prog_data_prog_offset(wm_prog_data, ps, 0);
+         elk_fs_prog_data_prog_offset(fs_prog_data, ps, 0);
       ps.KernelStartPointer1 = KSP(ice->draw.generation.shader) +
-         elk_wm_prog_data_prog_offset(wm_prog_data, ps, 1);
+         elk_fs_prog_data_prog_offset(fs_prog_data, ps, 1);
       ps.KernelStartPointer2 = KSP(ice->draw.generation.shader) +
-         elk_wm_prog_data_prog_offset(wm_prog_data, ps, 2);
+         elk_fs_prog_data_prog_offset(fs_prog_data, ps, 2);
 #endif
 
       ps.MaximumNumberofThreadsPerPSD = devinfo->max_threads_per_psd - 1;
@@ -398,7 +407,7 @@ emit_indirect_generate_draw(struct iris_batch *batch,
    float *vertices =
       upload_state(batch, ice->state.dynamic_uploader,
                    &ice->draw.generation.vertices,
-                   ALIGN(9 * sizeof(float), 8), 8);
+                   align(9 * sizeof(float), 8), 8);
 
    vertices[0] = x1; vertices[1] = y1; vertices[2] = z; /* v0 */
    vertices[3] = x0; vertices[4] = y1; vertices[5] = z; /* v1 */

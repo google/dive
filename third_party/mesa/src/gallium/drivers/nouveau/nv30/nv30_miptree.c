@@ -557,7 +557,6 @@ nv30_miptree_surface_new(struct pipe_context *pipe,
    ps = &ns->base;
 
    pipe_resource_reference(&ps->texture, pt);
-   ps->context = pipe;
    ps->format = tmpl->format;
    ps->level = tmpl->level;
    ps->first_layer = tmpl->first_layer;

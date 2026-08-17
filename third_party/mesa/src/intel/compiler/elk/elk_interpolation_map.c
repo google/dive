@@ -1,24 +1,6 @@
 /*
  * Copyright © 2013 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_compiler.h"
@@ -36,7 +18,7 @@ static char const *get_qual_name(int mode)
 }
 
 static void
-gfx4_frag_prog_set_interp_modes(struct elk_wm_prog_data *prog_data,
+gfx4_frag_prog_set_interp_modes(struct elk_fs_prog_data *prog_data,
                                 const struct intel_vue_map *vue_map,
                                 unsigned location, unsigned slot_count,
                                 enum glsl_interp_mode interp)
@@ -58,7 +40,7 @@ gfx4_frag_prog_set_interp_modes(struct elk_wm_prog_data *prog_data,
 /* Set up interpolation modes for every element in the VUE */
 void
 elk_setup_vue_interpolation(const struct intel_vue_map *vue_map, nir_shader *nir,
-                            struct elk_wm_prog_data *prog_data)
+                            struct elk_fs_prog_data *prog_data)
 {
    /* Initialise interp_mode. INTERP_MODE_NONE == 0 */
    memset(prog_data->interp_mode, 0, sizeof(prog_data->interp_mode));

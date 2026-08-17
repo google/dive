@@ -204,16 +204,6 @@ isl_gfx6_filter_tiling(const struct isl_device *dev,
    if (info->usage & ISL_SURF_USAGE_SOFTWARE_DETILING)
       *flags &= (1 << dev->shader_tiling) | ISL_TILING_LINEAR_BIT;
 
-   /* TODO: Investigate Yf failures (~5000 VK CTS failures at the time of this
-    *       writing).
-    */
-   if (isl_format_is_compressed(info->format) ||
-       info->samples > 1 ||
-       info->dim == ISL_SURF_DIM_3D) {
-      *flags &= ~ISL_TILING_SKL_Yf_BIT; /* FINISHME[SKL]: Support Yf */
-      *flags &= ~ISL_TILING_ICL_Yf_BIT; /* FINISHME[ICL]: Support Yf */
-   }
-
    if (isl_surf_usage_is_depth(info->usage)) {
       /* Depth requires Y. */
       *flags &= ISL_TILING_ANY_Y_MASK;

@@ -107,24 +107,3 @@ blorp_nir_mcs_is_clear_color(nir_builder *b,
       UNREACHABLE("Invalid sample count");
    }
 }
-
-static inline nir_def *
-blorp_check_in_bounds(nir_builder *b,
-                      nir_def *bounds_rect,
-                      nir_def *pos)
-{
-   nir_def *x0 = nir_channel(b, bounds_rect, 0);
-   nir_def *x1 = nir_channel(b, bounds_rect, 1);
-   nir_def *y0 = nir_channel(b, bounds_rect, 2);
-   nir_def *y1 = nir_channel(b, bounds_rect, 3);
-
-   nir_def *c0 = nir_uge(b, nir_channel(b, pos, 0), x0);
-   nir_def *c1 = nir_ult(b, nir_channel(b, pos, 0), x1);
-   nir_def *c2 = nir_uge(b, nir_channel(b, pos, 1), y0);
-   nir_def *c3 = nir_ult(b, nir_channel(b, pos, 1), y1);
-
-   nir_def *in_bounds =
-      nir_iand(b, nir_iand(b, c0, c1), nir_iand(b, c2, c3));
-
-   return in_bounds;
-}

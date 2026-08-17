@@ -10,7 +10,7 @@
 
 set -uex
 
-uncollapsed_section_start skqp "Building SkQP"
+section_start skqp "Building SkQP"
 
 SKQP_BRANCH=android-cts-12.1_r5
 

@@ -213,6 +213,11 @@ nvk_queue_submit_exec(struct nvk_queue *queue,
    VkResult result;
 
    if (submit->command_buffer_count > 0) {
+      nvk_descriptor_table_flush_map(dev, &dev->images);
+      nvk_descriptor_table_flush_map(dev, &dev->samplers);
+      nvk_heap_flush_maps(dev, &dev->shader_heap);
+      assert(dev->event_heap.arena.mem_flags & NVKMD_MEM_COHERENT);
+
       result = nvk_queue_state_update(queue, &queue->state);
       if (result != VK_SUCCESS)
          return result;
@@ -326,7 +331,7 @@ nvk_queue_init_context_state(struct nvk_queue *queue)
    const struct nvk_physical_device *pdev = nvk_device_physical(dev);
    VkResult result;
 
-   uint32_t push_data[4096];
+   uint32_t push_data[4096 + 1024];
    struct nv_push push;
    nv_push_init(&push, push_data, ARRAY_SIZE(push_data),
                 nvk_queue_subchannels_from_engines(queue->engines));
@@ -426,12 +431,6 @@ nvk_queue_create(struct nvk_device *dev,
                                    &queue->draw_cb0);
       if (result != VK_SUCCESS)
          goto fail_exec_ctx;
-
-      result = nvk_upload_queue_fill(dev, &dev->upload,
-                                     queue->draw_cb0->va->addr, 0,
-                                     queue->draw_cb0->size_B);
-      if (result != VK_SUCCESS)
-         goto fail_draw_cb0;
    }
 
    if (queue_family->queue_flags & VK_QUEUE_SPARSE_BINDING_BIT) {

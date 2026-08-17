@@ -180,19 +180,15 @@ void vpe10_opp_set_clamping(
 
 void vpe10_opp_set_dyn_expansion(struct opp *opp, bool enable, enum color_depth color_dpth);
 
-void vpe10_opp_set_truncation(struct opp *opp, const struct bit_depth_reduction_params *params);
-
-void vpe10_opp_set_spatial_dither(struct opp *opp, const struct bit_depth_reduction_params *params);
-
 void vpe10_opp_program_bit_depth_reduction(
-    struct opp *opp, const struct bit_depth_reduction_params *fmt_bit_depth);
+    struct opp *opp, const struct bit_depth_reduction_params *params);
 
 void vpe10_opp_program_fmt(struct opp *opp, struct bit_depth_reduction_params *fmt_bit_depth,
-    struct clamping_and_pixel_encoding_params *clamping);
+    struct fmt_control_params *fmt_ctrl, struct clamping_and_pixel_encoding_params *clamping);
 
-void vpe10_opp_program_pipe_alpha(struct opp *opp, uint16_t alpha);
+void vpe10_opp_program_fmt_control(struct opp *opp, struct fmt_control_params *fmt_ctrl);
 
-void vpe10_opp_program_pipe_bypass(struct opp *opp, bool enable);
+void vpe10_opp_program_pipe_control(struct opp *opp, const struct opp_pipe_control_params *params);
 
 void vpe10_opp_program_pipe_crc(struct opp *opp, bool enable);
 #ifdef __cplusplus

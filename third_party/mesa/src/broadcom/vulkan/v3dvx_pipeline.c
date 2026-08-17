@@ -21,12 +21,14 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
-#include "broadcom/common/v3d_macros.h"
-#include "broadcom/cle/v3dx_pack.h"
+#include "v3dv_device.h"
+#include "v3dv_version_dispatch.h"
+#include "vk_format.h"
+#include "v3dv_format_table.h"
+#include "v3dvx_format_table.h"
 #include "broadcom/compiler/v3d_compiler.h"
 
-static uint8_t
+static enum V3DX(Blend_Factor)
 blend_factor(VkBlendFactor factor, bool dst_alpha_one, bool *needs_constants,
              bool *needs_dual_src)
 {
@@ -71,7 +73,7 @@ blend_factor(VkBlendFactor factor, bool dst_alpha_one, bool *needs_constants,
 
 static void
 pack_blend(struct v3dv_pipeline *pipeline,
-           const VkPipelineColorBlendStateCreateInfo *cb_info)
+           const struct vk_color_blend_state *cb)
 {
    /* By default, we are not enabling blending and all color channel writes are
     * enabled. Color write enables are independent of whether blending is
@@ -83,29 +85,31 @@ pack_blend(struct v3dv_pipeline *pipeline,
    pipeline->blend.enables = 0;
    pipeline->blend.color_write_masks = 0; /* All channels enabled */
 
-   if (!cb_info)
+   if (!cb)
       return;
 
    const struct vk_render_pass_state *ri = &pipeline->rendering_info;
    if (ri->color_attachment_count == 0)
       return;
 
-   assert(ri->color_attachment_count == cb_info->attachmentCount);
+   assert(ri->color_attachment_count == cb->attachment_count);
    pipeline->blend.needs_color_constants = false;
    uint32_t color_write_masks = 0;
 
    bool needs_dual_src = false;
+   bool needs_software_blend = false;
    for (uint32_t i = 0; i < ri->color_attachment_count; i++) {
-      const VkPipelineColorBlendAttachmentState *b_state =
-         &cb_info->pAttachments[i];
+      const struct vk_color_blend_attachment_state *b_state =
+         &cb->attachments[i];
 
       const VkFormat vk_format = ri->color_attachment_formats[i];
       if (vk_format == VK_FORMAT_UNDEFINED)
          continue;
 
-      color_write_masks |= (~b_state->colorWriteMask & 0xf) << (4 * i);
+      color_write_masks |= (~b_state->write_mask & 0xf) << (4 * i);
 
-      if (!b_state->blendEnable)
+      /* Vulkan requires ignoring blending if logic operations are enabled */
+      if (!b_state->blend_enable || cb->logic_op_enable)
          continue;
 
       const struct v3dv_format *format = v3dX(get_format)(vk_format);
@@ -116,38 +120,43 @@ pack_blend(struct v3dv_pipeline *pipeline,
       assert(format->plane_count == 1);
       bool dst_alpha_one = (format->planes[0].swizzle[3] == PIPE_SWIZZLE_1);
 
+      /* HW blend cannot operate on render targets configured as 16-bit
+       * integer (used for our software-packed UNORM16/SNORM16 formats).
+       * Fall back to NIR-lowered blending for those attachments.
+       */
+      if (format->planes[0].sw_unorm || format->planes[0].sw_snorm)
+         needs_software_blend = true;
+
       uint8_t rt_mask = 1 << i;
       pipeline->blend.enables |= rt_mask;
 
       v3dvx_pack(pipeline->blend.cfg[i], BLEND_CFG, config) {
          config.render_target_mask = rt_mask;
 
-         config.color_blend_mode = b_state->colorBlendOp;
+         config.color_blend_mode = b_state->color_blend_op;
          config.color_blend_dst_factor =
-            blend_factor(b_state->dstColorBlendFactor, dst_alpha_one,
+            blend_factor(b_state->dst_color_blend_factor, dst_alpha_one,
                          &pipeline->blend.needs_color_constants,
                          &needs_dual_src);
          config.color_blend_src_factor =
-            blend_factor(b_state->srcColorBlendFactor, dst_alpha_one,
+            blend_factor(b_state->src_color_blend_factor, dst_alpha_one,
                          &pipeline->blend.needs_color_constants,
                          &needs_dual_src);
 
-         config.alpha_blend_mode = b_state->alphaBlendOp;
+         config.alpha_blend_mode = b_state->alpha_blend_op;
          config.alpha_blend_dst_factor =
-            blend_factor(b_state->dstAlphaBlendFactor, dst_alpha_one,
+            blend_factor(b_state->dst_alpha_blend_factor, dst_alpha_one,
                          &pipeline->blend.needs_color_constants,
                          &needs_dual_src);
          config.alpha_blend_src_factor =
-            blend_factor(b_state->srcAlphaBlendFactor, dst_alpha_one,
+            blend_factor(b_state->src_alpha_blend_factor, dst_alpha_one,
                          &pipeline->blend.needs_color_constants,
                          &needs_dual_src);
       }
    }
 
-   /* We may want to fallback to software in other cases in the future such
-    * as for formats not supported by the blend hardware.
-    */
-   pipeline->blend.use_software = V3D_DBG(SOFT_BLEND) || needs_dual_src;
+   pipeline->blend.use_software =
+      V3D_DBG(SOFT_BLEND) || needs_dual_src || needs_software_blend;
    pipeline->blend.color_write_masks = color_write_masks;
 }
 
@@ -156,32 +165,29 @@ pack_blend(struct v3dv_pipeline *pipeline,
  */
 static void
 pack_cfg_bits(struct v3dv_pipeline *pipeline,
-              const VkPipelineDepthStencilStateCreateInfo *ds_info,
-              const VkPipelineRasterizationStateCreateInfo *rs_info,
-              const VkPipelineRasterizationProvokingVertexStateCreateInfoEXT *pv_info,
-              const VkPipelineRasterizationLineStateCreateInfoEXT *ls_info,
-              const VkPipelineMultisampleStateCreateInfo *ms_info)
+              const struct vk_rasterization_state *rs,
+              const struct vk_multisample_state *ms)
 {
    assert(sizeof(pipeline->cfg_bits) == cl_packet_length(CFG_BITS));
 
    pipeline->msaa =
-      ms_info && ms_info->rasterizationSamples > VK_SAMPLE_COUNT_1_BIT;
+      ms && ms->rasterization_samples > VK_SAMPLE_COUNT_1_BIT;
 
    v3dvx_pack(pipeline->cfg_bits, CFG_BITS, config) {
       /* This is required to pass line rasterization tests in CTS while
        * exposing, at least, a minimum of 4-bits of subpixel precision
        * (the minimum requirement).
        */
-      if (ls_info &&
-          ls_info->lineRasterizationMode == VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT)
+      if (rs &&
+          rs->line.mode == VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT)
          config.line_rasterization = V3D_LINE_RASTERIZATION_DIAMOND_EXIT;
       else
          config.line_rasterization = V3D_LINE_RASTERIZATION_PERP_END_CAPS;
 
-      if (rs_info && rs_info->polygonMode != VK_POLYGON_MODE_FILL) {
+      if (rs && rs->polygon_mode != VK_POLYGON_MODE_FILL) {
          config.direct3d_wireframe_triangles_mode = true;
          config.direct3d_point_fill_mode =
-            rs_info->polygonMode == VK_POLYGON_MODE_POINT;
+            rs->polygon_mode == VK_POLYGON_MODE_POINT;
       }
 
       /* diamond-exit rasterization does not support oversample */
@@ -200,13 +206,8 @@ pack_cfg_bits(struct v3dv_pipeline *pipeline,
        * First vertex is the Direct3D style for provoking vertex. OpenGL uses
        * the last vertex by default.
        */
-      if (pv_info) {
-         config.direct3d_provoking_vertex =
-            pv_info->provokingVertexMode ==
-               VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT;
-      } else {
-         config.direct3d_provoking_vertex = true;
-      }
+      config.direct3d_provoking_vertex = !rs ||
+         rs->provoking_vertex == VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT;
 
       config.blend_enable = pipeline->blend.enables != 0 &&
          !pipeline->blend.use_software;
@@ -222,16 +223,8 @@ pack_cfg_bits(struct v3dv_pipeline *pipeline,
        *     Otherwise depth clipping is controlled by the state set in
        *     VkPipelineRasterizationDepthClipStateCreateInfoEXT."
        */
-      bool z_clamp_enable = rs_info && rs_info->depthClampEnable;
-      bool z_clip_enable = false;
-      const VkPipelineRasterizationDepthClipStateCreateInfoEXT *clip_info =
-         rs_info ? vk_find_struct_const(rs_info->pNext,
-                                        PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT) :
-                   NULL;
-      if (clip_info)
-         z_clip_enable = clip_info->depthClipEnable;
-      else if (!z_clamp_enable)
-         z_clip_enable = true;
+      bool z_clamp_enable = rs && rs->depth_clamp_enable;
+      bool z_clip_enable = rs && vk_rasterization_state_depth_clip_enable(rs);
 
       if (z_clip_enable) {
          config.z_clipping_mode = pipeline->negative_one_to_one ?
@@ -245,7 +238,7 @@ pack_cfg_bits(struct v3dv_pipeline *pipeline,
    };
 }
 
-uint32_t
+enum V3DX(Stencil_Op)
 v3dX(translate_stencil_op)(VkStencilOp op)
 {
    switch (op) {
@@ -275,8 +268,7 @@ pack_single_stencil_cfg(struct v3dv_pipeline *pipeline,
                         uint8_t *stencil_cfg,
                         bool is_front,
                         bool is_back,
-                        const VkStencilOpState *stencil_state,
-                        const struct vk_graphics_pipeline_state *state)
+                        const struct vk_stencil_test_face_state *stencil_state)
 {
    /* From the Vulkan spec:
     *
@@ -292,27 +284,26 @@ pack_single_stencil_cfg(struct v3dv_pipeline *pipeline,
    v3dvx_pack(stencil_cfg, STENCIL_CFG, config) {
       config.front_config = is_front;
       config.back_config = is_back;
-      config.stencil_write_mask = stencil_state->writeMask & 0xff;
-      config.stencil_test_mask = stencil_state->compareMask & 0xff;
-      config.stencil_test_function = stencil_state->compareOp;
+      config.stencil_write_mask = stencil_state->write_mask & 0xff;
+      config.stencil_test_mask = stencil_state->compare_mask & 0xff;
+      config.stencil_test_function = stencil_state->op.compare;
       config.stencil_pass_op =
-         v3dX(translate_stencil_op)(stencil_state->passOp);
+         v3dX(translate_stencil_op)(stencil_state->op.pass);
       config.depth_test_fail_op =
-         v3dX(translate_stencil_op)(stencil_state->depthFailOp);
+         v3dX(translate_stencil_op)(stencil_state->op.depth_fail);
       config.stencil_test_fail_op =
-         v3dX(translate_stencil_op)(stencil_state->failOp);
+         v3dX(translate_stencil_op)(stencil_state->op.fail);
       config.stencil_ref_value = stencil_state->reference & 0xff;
    }
 }
 
 static void
 pack_stencil_cfg(struct v3dv_pipeline *pipeline,
-                 const VkPipelineDepthStencilStateCreateInfo *ds_info,
                  const struct vk_graphics_pipeline_state *state)
 {
    assert(sizeof(pipeline->stencil_cfg) == 2 * cl_packet_length(STENCIL_CFG));
 
-   if (!ds_info || !ds_info->stencilTestEnable)
+   if (!state->ds || !state->ds->stencil.test_enable)
       return;
 
    const struct vk_render_pass_state *ri = &pipeline->rendering_info;
@@ -331,7 +322,8 @@ pack_stencil_cfg(struct v3dv_pipeline *pipeline,
     */
    bool needs_front_and_back = false;
    if ((any_dynamic_stencil_states) ||
-       memcmp(&ds_info->front, &ds_info->back, sizeof(ds_info->front))) {
+         memcmp(&state->ds->stencil.front, &state->ds->stencil.back,
+                sizeof(state->ds->stencil.front))) {
       needs_front_and_back = true;
    }
 
@@ -341,35 +333,24 @@ pack_stencil_cfg(struct v3dv_pipeline *pipeline,
    pipeline->emit_stencil_cfg[0] = true;
    if (!needs_front_and_back) {
       pack_single_stencil_cfg(pipeline, pipeline->stencil_cfg[0],
-                              true, true, &ds_info->front, state);
+                              true, true, &state->ds->stencil.front);
    } else {
       pipeline->emit_stencil_cfg[1] = true;
       pack_single_stencil_cfg(pipeline, pipeline->stencil_cfg[0],
-                              true, false, &ds_info->front, state);
+                              true, false, &state->ds->stencil.front);
       pack_single_stencil_cfg(pipeline, pipeline->stencil_cfg[1],
-                              false, true, &ds_info->back, state);
+                              false, true, &state->ds->stencil.back);
    }
 }
 
 
-/* FIXME: Now that we are passing the vk_graphics_pipeline_state we could
- * avoid passing all those parameters. But doing that we would need to change
- * all the code that uses the VkXXX structures, and use instead the equivalent
- * vk_xxx
- */
 void
 v3dX(pipeline_pack_state)(struct v3dv_pipeline *pipeline,
-                          const VkPipelineColorBlendStateCreateInfo *cb_info,
-                          const VkPipelineDepthStencilStateCreateInfo *ds_info,
-                          const VkPipelineRasterizationStateCreateInfo *rs_info,
-                          const VkPipelineRasterizationProvokingVertexStateCreateInfoEXT *pv_info,
-                          const VkPipelineRasterizationLineStateCreateInfoEXT *ls_info,
-                          const VkPipelineMultisampleStateCreateInfo *ms_info,
                           const struct vk_graphics_pipeline_state *state)
 {
-   pack_blend(pipeline, cb_info);
-   pack_cfg_bits(pipeline, ds_info, rs_info, pv_info, ls_info, ms_info);
-   pack_stencil_cfg(pipeline, ds_info, state);
+   pack_blend(pipeline, state->cb);
+   pack_cfg_bits(pipeline, state->rs, state->ms);
+   pack_stencil_cfg(pipeline, state);
 }
 
 static void

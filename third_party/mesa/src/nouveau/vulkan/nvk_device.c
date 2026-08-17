@@ -10,10 +10,14 @@
 #include "nvk_physical_device.h"
 #include "nvk_sampler.h"
 #include "nvk_shader.h"
+#include "layers/nvk_app_workarounds.h"
 #include "nvkmd/nvkmd.h"
 
+#include "vk_common_entrypoints.h"
 #include "vk_drm_syncobj.h"
 #include "vk_pipeline_cache.h"
+#include "vk_debug_utils.h"
+#include "util/u_printf.h"
 #include "vulkan/wsi/wsi_common.h"
 
 #include "cl9097.h"
@@ -122,11 +126,102 @@ nvk_slm_area_ensure(struct nvk_device *dev,
 }
 
 static VkResult
+nvk_init_printf(struct nvk_device *dev)
+{
+   VkResult result;
+   struct nvkmd_mem *mem;
+   const uint64_t mem_size = NAK_PRINTF_BUFFER_SIZE;
+
+   result = nvkmd_dev_alloc_mapped_mem(dev->nvkmd, &dev->vk.base,
+                                       mem_size, 0 /* align_B */,
+                                       NVKMD_MEM_GART | NVKMD_MEM_COHERENT,
+                                       NVKMD_MEM_MAP_RDWR,
+                                       &mem);
+
+   if (result != VK_SUCCESS)
+      return result;
+
+   u_printf_init(&dev->printf, mem, mem->map);
+
+   return VK_SUCCESS;
+}
+
+static void
+nvk_destroy_printf(struct nvk_device *dev) {
+   struct nvkmd_mem *mem = dev->printf.bo;
+   u_printf_destroy(&dev->printf);
+   nvkmd_mem_unref(mem);
+}
+
+static VkResult
+nvk_device_check_status(struct vk_device *vk_dev)
+{
+   VkResult status = VK_SUCCESS;
+   struct nvk_device *dev = container_of(vk_dev, struct nvk_device, vk);
+
+   if (NAK_CAN_PRINTF)
+      status = vk_check_printf_status(&dev->vk, &dev->printf);
+
+   return status;
+}
+
+static VkResult
 nvk_device_get_timestamp(struct vk_device *vk_dev, uint64_t *timestamp)
 {
    struct nvk_device *dev = container_of(vk_dev, struct nvk_device, vk);
    *timestamp = nvkmd_dev_get_gpu_timestamp(dev->nvkmd);
    return VK_SUCCESS;
+}
+
+struct dispatch_table_builder {
+   struct vk_device_dispatch_table *tables[NVK_DISPATCH_TABLE_COUNT];
+   bool used[NVK_DISPATCH_TABLE_COUNT];
+   bool initialized[NVK_DISPATCH_TABLE_COUNT];
+};
+
+static void
+add_entrypoints(struct dispatch_table_builder *b, const struct vk_device_entrypoint_table *entrypoints,
+                enum nvk_dispatch_table table)
+{
+   for (int32_t i = table - 1; i >= NVK_DEVICE_DISPATCH_TABLE; i--) {
+      if (i == NVK_DEVICE_DISPATCH_TABLE || b->used[i]) {
+         vk_device_dispatch_table_from_entrypoints(b->tables[i], entrypoints, !b->initialized[i]);
+         b->initialized[i] = true;
+      }
+   }
+
+   if (table < NVK_DISPATCH_TABLE_COUNT)
+      b->used[table] = true;
+}
+
+static void
+init_app_workarounds_entrypoints(struct nvk_device *device, struct dispatch_table_builder *b)
+{
+   const struct nvk_physical_device *pdev = nvk_device_physical(device);
+   const struct nvk_instance *instance = nvk_physical_device_instance(pdev);
+   struct vk_device_entrypoint_table table = {0};
+
+#define SET_ENTRYPOINT(app_layer, entrypoint) table.entrypoint = app_layer##_##entrypoint;
+   if (!strcmp(instance->drirc.debug.app_layer, "metroexodus")) {
+      SET_ENTRYPOINT(metro_exodus, GetSemaphoreCounterValue);
+   }
+#undef SET_ENTRYPOINT
+
+   add_entrypoints(b, &table, NVK_APP_DISPATCH_TABLE);
+}
+
+static void
+init_dispatch_tables(struct nvk_device *dev)
+{
+   struct dispatch_table_builder b = {0};
+   b.tables[NVK_DEVICE_DISPATCH_TABLE] = &dev->vk.dispatch_table;
+   b.tables[NVK_APP_DISPATCH_TABLE] = &dev->layer_dispatch.app;
+
+   init_app_workarounds_entrypoints(dev, &b);
+
+   add_entrypoints(&b, &nvk_device_entrypoints, NVK_DISPATCH_TABLE_COUNT);
+   add_entrypoints(&b, &wsi_device_entrypoints, NVK_DISPATCH_TABLE_COUNT);
+   add_entrypoints(&b, &vk_common_device_entrypoints, NVK_DISPATCH_TABLE_COUNT);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -144,18 +239,14 @@ nvk_CreateDevice(VkPhysicalDevice physicalDevice,
    if (!dev)
       return vk_error(pdev, VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   struct vk_device_dispatch_table dispatch_table;
-   vk_device_dispatch_table_from_entrypoints(&dispatch_table,
-                                             &nvk_device_entrypoints, true);
-   vk_device_dispatch_table_from_entrypoints(&dispatch_table,
-                                             &wsi_device_entrypoints, false);
-
-   result = vk_device_init(&dev->vk, &pdev->vk, &dispatch_table,
-                           pCreateInfo, pAllocator);
+   result = vk_device_init(&dev->vk, &pdev->vk, NULL, pCreateInfo, pAllocator);
    if (result != VK_SUCCESS)
       goto fail_alloc;
 
+   init_dispatch_tables(dev);
+
    dev->vk.shader_ops = &nvk_device_shader_ops;
+   dev->vk.check_status = &nvk_device_check_status;
 
    uint32_t queue_count = 0;
    for (uint32_t i = 0; i < pCreateInfo->queueCreateInfoCount; i++)
@@ -183,6 +274,7 @@ nvk_CreateDevice(VkPhysicalDevice physicalDevice,
          goto fail_upload;
 
       memset(dev->zero_page->map, 0, 0x1000);
+      nvkmd_mem_sync_map_to_gpu(dev->zero_page, 0, 0x1000);
       nvkmd_mem_unmap(dev->zero_page, 0);
 
       result = nvk_descriptor_table_init(dev, &dev->images,
@@ -249,7 +341,8 @@ nvk_CreateDevice(VkPhysicalDevice physicalDevice,
          goto fail_edb_bview_cache;
 
       result = nvk_heap_init(dev, &dev->event_heap,
-                             NVKMD_MEM_LOCAL, NVKMD_MEM_MAP_WR,
+                             NVKMD_MEM_LOCAL | NVKMD_MEM_COHERENT,
+                             NVKMD_MEM_MAP_WR,
                              0 /* overalloc */, false /* contiguous */);
       if (result != VK_SUCCESS)
          goto fail_shader_heap;
@@ -294,6 +387,12 @@ nvk_CreateDevice(VkPhysicalDevice physicalDevice,
 
    if (queue_count > 0) {
       result = nvk_device_init_meta(dev);
+      if (result != VK_SUCCESS)
+         goto fail_mem_cache;
+   }
+
+   if (queue_count > 0 && NAK_CAN_PRINTF) {
+      result = nvk_init_printf(dev);
       if (result != VK_SUCCESS)
          goto fail_mem_cache;
    }
@@ -347,6 +446,9 @@ nvk_DestroyDevice(VkDevice _device, const VkAllocationCallbacks *pAllocator)
       return;
 
    const struct nvk_physical_device *pdev = nvk_device_physical(dev);
+
+   if (dev->nvkmd && NAK_CAN_PRINTF)
+      nvk_destroy_printf(dev);
 
    if (dev->copy_queries)
       vk_shader_destroy(&dev->vk, &dev->copy_queries->vk, &dev->vk.alloc);

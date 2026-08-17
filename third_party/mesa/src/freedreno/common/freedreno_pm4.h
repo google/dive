@@ -11,15 +11,11 @@
 
 #include <stdint.h>
 
+#include "adreno_pm4.xml.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define CP_TYPE0_PKT 0x00000000
-#define CP_TYPE2_PKT 0x80000000
-#define CP_TYPE3_PKT 0xc0000000
-#define CP_TYPE4_PKT 0x40000000
-#define CP_TYPE7_PKT 0x70000000
 
 #define CP_NOP_MESG 0x4D455347
 #define CP_NOP_BEGN 0x4245474E
@@ -58,6 +54,7 @@ static inline uint32_t
 pm4_pkt4_hdr(uint16_t regindx, uint16_t cnt)
 {
    assert(cnt < 0x7f);
+   assert (cnt > 0);
    assert(regindx);
    return CP_TYPE4_PKT | cnt | (pm4_odd_parity_bit(cnt) << 7) |
          ((regindx & 0x3ffff) << 8) |

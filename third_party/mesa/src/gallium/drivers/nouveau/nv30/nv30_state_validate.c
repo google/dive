@@ -522,13 +522,13 @@ nv30_state_validate(struct nv30_context *nv30, uint32_t mask, bool hwtnl)
    LIST_FOR_EACH_ENTRY(bref, &bctx->current, thead) {
       struct nv04_resource *res = bref->priv;
       if (res && res->mm) {
-         nouveau_fence_ref(nv30->base.fence, &res->fence);
+         nouveau_fence_ref(nv30->base.fence, &res->fence, nv30->base.screen);
 
          if (bref->flags & NOUVEAU_BO_RD)
             res->status |= NOUVEAU_BUFFER_STATUS_GPU_READING;
 
          if (bref->flags & NOUVEAU_BO_WR) {
-            nouveau_fence_ref(nv30->base.fence, &res->fence_wr);
+            nouveau_fence_ref(nv30->base.fence, &res->fence_wr, nv30->base.screen);
             res->status |= NOUVEAU_BUFFER_STATUS_GPU_WRITING;
          }
       }

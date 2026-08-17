@@ -1,26 +1,7 @@
 /*
  * Copyright (C) 2019-2021 Collabora, Ltd.
  * Copyright (C) 2019 Alyssa Rosenzweig
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "genxml/gen_macros.h"
@@ -103,13 +84,15 @@ pan_pack_raw(uint32_t *packed, const union pipe_color_union *color,
    util_pack_color(color->f, format, &out);
 
    if (size == 1) {
-      unsigned s = out.ui[0] | (out.ui[0] << 8);
-      pan_pack_color_32(packed, s | (s << 16));
-   } else if (size == 2)
-      pan_pack_color_32(packed, out.ui[0] | (out.ui[0] << 16));
-   else if (size <= 4)
+      unsigned b = out.ui[0] & 0xff;
+      unsigned w = b | (b << 8);
+      pan_pack_color_32(packed, w | (w << 16));
+   } else if (size == 2) {
+      unsigned w = out.ui[0] & 0xffff;
+      pan_pack_color_32(packed, w | (w << 16));
+   } else if (size <= 4) {
       pan_pack_color_32(packed, out.ui[0]);
-   else if (size <= 8) {
+   } else if (size <= 8) {
       memcpy(packed + 0, out.ui, 8);
       memcpy(packed + 2, out.ui, 8);
    } else {
@@ -125,7 +108,8 @@ pan_pack_color(const struct pan_blendable_format *blendable_formats,
    enum mali_color_buffer_internal_format internal =
       blendable_formats[format].internal;
 
-   if (internal == MALI_COLOR_BUFFER_INTERNAL_FORMAT_RAW_VALUE) {
+   if (util_format_is_float(format) ||
+       internal == MALI_COLOR_BUFFER_INTERNAL_FORMAT_RAW_VALUE) {
       pan_pack_raw(packed, color, format);
       return;
    }

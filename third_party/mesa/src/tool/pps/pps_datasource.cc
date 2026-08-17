@@ -16,11 +16,10 @@
 #include <thread>
 #include <variant>
 #include <inttypes.h>
+#include <util/bitscan.h>
 
 // Minimum supported sampling period in nanoseconds
-#define MIN_SAMPLING_PERIOD_NS 50000
-
-#define CORRELATION_TIMESTAMP_PERIOD (1000000000ull)
+#define MIN_SAMPLING_PERIOD_NS 5000
 
 namespace pps
 {
@@ -128,7 +127,7 @@ void GpuDataSource::wait_started()
    }
 }
 
-template <typename GpuCounterDescriptor> void add_group(GpuCounterDescriptor *desc,
+template <typename GpuCounterDescriptor> void add_block(GpuCounterDescriptor *desc,
    const CounterGroup &group,
    const std::string &prefix,
    int32_t gpu_num)
@@ -148,7 +147,7 @@ template <typename GpuCounterDescriptor> void add_group(GpuCounterDescriptor *de
    for (auto const &sub : group.subgroups) {
       // Perfetto doesnt currently support nested groups.
       // Flatten group hierarchy, using dot separator
-      add_group(desc, sub, prefix + "." + group.name, gpu_num);
+      add_block(desc, sub, prefix + "." + group.name, gpu_num);
    }
 }
 
@@ -159,7 +158,7 @@ template <typename GpuCounterDescriptor> void add_descriptors(GpuCounterDescript
 {
    // Add the groups
    for (auto const &group : groups) {
-      add_group(desc, group, driver.drm_device.name, driver.drm_device.gpu_num);
+      add_block(desc, group, driver.drm_device.name, driver.drm_device.gpu_num);
    }
 
    // Add the counters
@@ -167,6 +166,11 @@ template <typename GpuCounterDescriptor> void add_descriptors(GpuCounterDescript
       auto spec = desc->add_specs();
       spec->set_counter_id(counter.id);
       spec->set_name(counter.name);
+      spec->set_description(counter.description);
+
+      // These counters describe the interval starting at the sample timestamp.
+      spec->set_value_direction(
+         GpuCounterDescriptor::GpuCounterSpec::VALUE_DIRECTION_FORWARDS_LOOKING);
 
       auto units = GpuCounterDescriptor::NONE;
       switch (counter.units) {
@@ -182,30 +186,56 @@ template <typename GpuCounterDescriptor> void add_descriptors(GpuCounterDescript
       case Counter::Units::None:
          units = GpuCounterDescriptor::NONE;
          break;
+      case Counter::Units::Primitive:
+         units = GpuCounterDescriptor::PRIMITIVE;
+         break;
+      case Counter::Units::Instruction:
+         units = GpuCounterDescriptor::INSTRUCTION;
+         break;
+      case Counter::Units::Pixel:
+         units = GpuCounterDescriptor::PIXEL;
+         break;
+      case Counter::Units::Fragment:
+         units = GpuCounterDescriptor::FRAGMENT;
+         break;
       default:
          assert(false && "Missing counter units type!");
          break;
       }
+
+      u_foreach_bit(b, counter.group_mask) {
+         spec->add_groups(static_cast<typename GpuCounterDescriptor::GpuCounterGroup>(b));
+      }
+
       spec->add_numerator_units(units);
+      spec->set_select_by_default(true);
    }
 }
 
-void add_samples(perfetto::protos::pbzero::GpuCounterEvent &event, const Driver &driver)
+void add_samples(perfetto::protos::pbzero::GpuCounterEvent &event, const Driver &driver,
+   std::unordered_map<uint32_t, double>& last_counter_vals)
 {
    if (driver.enabled_counters.size() == 0) {
       PPS_LOG_FATAL("There are no counters enabled");
    }
 
    for (const auto &counter : driver.enabled_counters) {
-      auto counter_event = event.add_counters();
-
-      counter_event->set_counter_id(counter.id);
-
+      auto it = last_counter_vals.find(counter.id);
       auto value = counter.get_value(driver);
       if (auto d_value = std::get_if<double>(&value)) {
+         if (it != last_counter_vals.end() && it->second == 0 && *d_value == 0)
+            continue;
+         auto counter_event = event.add_counters();
+         counter_event->set_counter_id(counter.id);
          counter_event->set_double_value(*d_value);
+         last_counter_vals[counter.id] = *d_value;
       } else if (auto i_value = std::get_if<int64_t>(&value)) {
+         if (it != last_counter_vals.end() && it->second == 0 && *i_value == 0)
+            continue;
+         auto counter_event = event.add_counters();
+         counter_event->set_counter_id(counter.id);
          counter_event->set_int_value(*i_value);
+         last_counter_vals[counter.id] = static_cast<double>(*i_value);
       } else {
          PPS_LOG_ERROR("Failed to get value for counter %s", counter.name.c_str());
       }
@@ -247,7 +277,9 @@ void GpuDataSource::trace(TraceContext &ctx)
 {
    using namespace perfetto::protos::pbzero;
 
-   if (auto state = ctx.GetIncrementalState(); state->was_cleared) {
+   auto state = ctx.GetIncrementalState();
+
+   if (state->was_cleared) {
       descriptor_timestamp = perfetto::base::GetBootTimeNs().count();
 
       {
@@ -262,8 +294,6 @@ void GpuDataSource::trace(TraceContext &ctx)
       {
          // Counter descriptions
          auto packet = ctx.NewTracePacket();
-         packet->set_timestamp_clock_id(perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
-         packet->set_timestamp(descriptor_timestamp);
          auto event = packet->set_gpu_counter_event();
          event->set_gpu_id(driver->drm_device.gpu_num);
 
@@ -279,7 +309,6 @@ void GpuDataSource::trace(TraceContext &ctx)
          auto packet = ctx.NewTracePacket();
          packet->set_timestamp_clock_id(perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
          packet->set_timestamp(descriptor_timestamp);
-         last_correlation_timestamp = perfetto::base::GetBootTimeNs().count();
          auto event = packet->set_clock_snapshot();
          add_timestamp(event, driver);
       }
@@ -288,10 +317,28 @@ void GpuDataSource::trace(TraceContext &ctx)
       // be discarded.
       descriptor_gpu_timestamp = driver->gpu_timestamp();
       state->was_cleared = false;
+      state->last_counter_vals.clear();
+      state->has_prev_sample_end_timestamp = false;
+      state->prev_sample_end_timestamp = 0;
    }
 
    if (driver->dump_perfcnt()) {
-      while (auto gpu_timestamp = driver->next()) {
+      while (auto sample_timestamp = driver->next()) {
+         uint64_t gpu_timestamp = sample_timestamp;
+
+         if (!driver->sample_timestamps_are_interval_starts()) {
+            if (!state->has_prev_sample_end_timestamp) {
+               state->has_prev_sample_end_timestamp = true;
+               state->prev_sample_end_timestamp = sample_timestamp;
+               continue;
+            }
+
+            // Convert end-of-interval timestamps to start-of-interval
+            // for VALUE_DIRECTION_FORWARDS_LOOKING counters.
+            gpu_timestamp = state->prev_sample_end_timestamp;
+            state->prev_sample_end_timestamp = sample_timestamp;
+         }
+
          if (gpu_timestamp <= descriptor_gpu_timestamp) {
             // Do not send counter values before counter descriptors
             PPS_LOG_ERROR("Skipping counter values coming before descriptors");
@@ -310,18 +357,19 @@ void GpuDataSource::trace(TraceContext &ctx)
          auto event = packet->set_gpu_counter_event();
          event->set_gpu_id(driver->drm_device.gpu_num);
 
-         add_samples(*event, *driver);
+         add_samples(*event, *driver, state->last_counter_vals);
+
+         samples_since_correlation++;
       }
    }
 
-   uint64_t cpu_ts = perfetto::base::GetBootTimeNs().count();
-   if ((cpu_ts - last_correlation_timestamp) > CORRELATION_TIMESTAMP_PERIOD) {
+   if (samples_since_correlation > 3) {
       auto packet = ctx.NewTracePacket();
       packet->set_timestamp_clock_id(perfetto::protos::pbzero::BUILTIN_CLOCK_BOOTTIME);
-      packet->set_timestamp(cpu_ts);
+      packet->set_timestamp(perfetto::base::GetBootTimeNs().count());
       auto event = packet->set_clock_snapshot();
       add_timestamp(event, driver);
-      last_correlation_timestamp = cpu_ts;
+      samples_since_correlation = 0;
    }
 }
 
@@ -384,7 +432,7 @@ void GpuDataSource::register_data_source(const std::string &driver_name)
    // Start a counter descriptor
    perfetto::protos::gen::GpuCounterDescriptor desc;
    auto &groups = driver->groups;
-   auto &counters = driver->enabled_counters;
+   auto &counters = driver->counters;
    add_descriptors(&desc, groups, counters, *driver);
    dsd.set_gpu_counter_descriptor_raw(desc.SerializeAsString());
    Register(dsd);

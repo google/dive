@@ -9,16 +9,15 @@
 #ifndef TU_UTIL_H
 #define TU_UTIL_H
 
-#include <atomic>
-
 #include "tu_common.h"
 
-#include "util/macros.h"
-#include "util/u_math.h"
+#include <atomic>
+
+#include "compiler/shader_enums.h"
 #include "util/format/u_format_pack.h"
 #include "util/format/u_format_zs.h"
-#include "compiler/shader_enums.h"
-
+#include "util/macros.h"
+#include "util/u_math.h"
 #include "vk_util.h"
 
 /*
@@ -73,6 +72,9 @@ enum tu_debug_flags : uint64_t
    TU_DEBUG_CHECK_CMD_BUFFER_STATUS  = BITFIELD64_BIT(32),
    TU_DEBUG_COMM                     = BITFIELD64_BIT(33),
    TU_DEBUG_NOFDM                    = BITFIELD64_BIT(34),
+   TU_DEBUG_NO_CONCURRENT_BINNING    = BITFIELD64_BIT(35),
+   TU_DEBUG_FORCE_CONCURRENT_BINNING = BITFIELD64_BIT(36),
+   TU_DEBUG_COMPUTE_ROUND_ROBIN      = BITFIELD64_BIT(37),
 };
 
 struct tu_env {
@@ -134,9 +136,16 @@ __tu_finishme(const char *file, int line, const char *format, ...)
    } while (0)
 
 void
-tu_framebuffer_tiling_config(struct tu_framebuffer *fb,
-                             const struct tu_device *device,
-                             const struct tu_render_pass *pass);
+tu_framebuffer_init_tiling_config(struct tu_framebuffer *fb,
+                                  const struct tu_device *device,
+                                  const struct tu_render_pass *pass);
+
+const struct tu_tiling_config *
+tu_framebuffer_get_tiling_config(struct tu_framebuffer *fb,
+                                 const struct tu_device *device,
+                                 const struct tu_render_pass *pass,
+                                 int gmem_layout,
+                                 uint32_t divisor);
 
 #define TU_STAGE_MASK ((1 << MESA_SHADER_STAGES) - 1)
 

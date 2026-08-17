@@ -98,17 +98,6 @@ enum mesa_vk_command_buffer_state {
    MESA_VK_COMMAND_BUFFER_STATE_PENDING,
 };
 
-/* this needs spec fixes */
-#define MESA_VK_SHADER_STAGE_WORKGRAPH_HACK_BIT_FIXME (1<<30)
-VkShaderStageFlags vk_shader_stages_from_bind_point(VkPipelineBindPoint pipelineBindPoint);
-
-/* Internal version of VK_SHADER_STAGE_ALL which only includes valid bits. */
-#define MESA_VK_SHADER_STAGE_ALL (VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT |              \
-                                  VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR |        \
-                                  VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR |      \
-                                  VK_SHADER_STAGE_INTERSECTION_BIT_KHR | VK_SHADER_STAGE_CALLABLE_BIT_KHR | \
-                                  VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT)
-
 struct vk_command_buffer {
    struct vk_object_base base;
 
@@ -204,6 +193,17 @@ struct vk_command_buffer {
 
 VK_DEFINE_HANDLE_CASTS(vk_command_buffer, base, VkCommandBuffer,
                        VK_OBJECT_TYPE_COMMAND_BUFFER)
+
+struct vk_command_buffer_init_params {
+   struct vk_command_pool *pool;
+   const struct vk_command_buffer_ops *ops;
+   VkCommandBufferLevel level;
+   bool needs_cmd_queue;
+};
+
+VkResult MUST_CHECK
+vk_command_buffer_init_with_params(struct vk_command_buffer *command_buffer,
+                                   struct vk_command_buffer_init_params *params);
 
 VkResult MUST_CHECK
 vk_command_buffer_init(struct vk_command_pool *pool,

@@ -55,6 +55,12 @@ enum write_behavior {
     */
    WRITES_COMPRESS_CLEAR,
 
+   /* Writes using the 3D engine are compressed and potentially update
+    * the contents of the hierarchical depth buffer causing it to end
+    * up in non-passthrough state.
+    */
+   WRITES_COMPRESS_HIZ,
+
    /* Writes implicitly fully resolve the compression block and write the data
     * uncompressed into the main surface. The resolved aux blocks are
     * ambiguated and left in the pass-through state.
@@ -87,8 +93,9 @@ struct aux_usage_info {
 #define x false
 static const struct aux_usage_info info[] = {
 /*         write_behavior c fc pr fra */
-   AUX(         COMPRESS, Y, Y, x, x, HIZ)
-   AUX(         COMPRESS, Y, Y, x, x, HIZ_CCS)
+   AUX(         COMPRESS, Y, x, x, x, ZCS)
+   AUX(     COMPRESS_HIZ, Y, Y, x, x, HIZ)
+   AUX(     COMPRESS_HIZ, Y, Y, x, x, HIZ_CCS)
    AUX(         COMPRESS, Y, Y, x, x, HIZ_CCS_WT)
    AUX(         COMPRESS, Y, Y, Y, x, MCS)
    AUX(         COMPRESS, Y, Y, Y, x, MCS_CCS)
@@ -112,6 +119,8 @@ aux_state_possible(enum isl_aux_state state,
       return info[usage].fast_clear;
    case ISL_AUX_STATE_COMPRESSED_CLEAR:
       return info[usage].fast_clear && info[usage].compressed;
+   case ISL_AUX_STATE_COMPRESSED_HIER_DEPTH:
+      return info[usage].write_behavior == WRITES_COMPRESS_HIZ;
    case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
       return info[usage].compressed;
    case ISL_AUX_STATE_RESOLVED:
@@ -136,14 +145,7 @@ isl_aux_get_initial_state(const struct intel_device_info *devinfo,
    case ISL_AUX_USAGE_HIZ:
    case ISL_AUX_USAGE_HIZ_CCS:
    case ISL_AUX_USAGE_HIZ_CCS_WT:
-      if (devinfo->ver >= 20) {
-         /* According to HSD 22011236099, there are no illegal values for HiZ.
-          * As neither the main and aux surfaces contain anything of interest,
-          * treat them as being in sync. This state can avoid the need to
-          * ambiguate in some cases.
-          */
-         return ISL_AUX_STATE_RESOLVED;
-      } else if (zeroed && devinfo->ver <= 11) {
+      if (zeroed && devinfo->ver <= 11) {
          /* On ICL and prior, fast-clearing a HiZ block fills it with zeroes.
           * On gfx12+, it is filled with a non-zero value.
           */
@@ -172,6 +174,7 @@ isl_aux_get_initial_state(const struct intel_device_info *devinfo,
    case ISL_AUX_USAGE_CCS_E:
    case ISL_AUX_USAGE_FCV_CCS_E:
    case ISL_AUX_USAGE_STC_CCS:
+   case ISL_AUX_USAGE_ZCS:
       if (zeroed) {
          /* From the Sky Lake PRM, "MCS Buffer for Render Target(s)":
           *
@@ -230,17 +233,31 @@ isl_aux_prepare_access(enum isl_aux_state initial_state,
 {
    if (usage != ISL_AUX_USAGE_NONE) {
       UNUSED const enum isl_aux_usage state_superset_usage =
-         usage == ISL_AUX_USAGE_CCS_D ? ISL_AUX_USAGE_CCS_E : usage;
+         usage == ISL_AUX_USAGE_CCS_D ? ISL_AUX_USAGE_CCS_E :
+         usage == ISL_AUX_USAGE_HIZ_CCS_WT ? ISL_AUX_USAGE_HIZ_CCS : usage;
       assert(aux_state_possible(initial_state, state_superset_usage));
    }
    assert(!fast_clear_supported || info[usage].fast_clear);
 
    switch (initial_state) {
+   case ISL_AUX_STATE_CLEAR:
+      if (!fast_clear_supported)
+         return info[usage].partial_resolve ?
+                ISL_AUX_OP_PARTIAL_RESOLVE : ISL_AUX_OP_FULL_RESOLVE;
+      else if (usage == ISL_AUX_USAGE_HIZ_CCS_WT)
+         return ISL_AUX_OP_PARTIAL_RESOLVE;
+      else
+         return ISL_AUX_OP_NONE;
+   case ISL_AUX_STATE_COMPRESSED_HIER_DEPTH:
+      if (!fast_clear_supported)
+         return ISL_AUX_OP_FULL_RESOLVE;
+      else if (info[usage].write_behavior != WRITES_COMPRESS_HIZ)
+         return ISL_AUX_OP_PARTIAL_RESOLVE;
+      FALLTHROUGH;
    case ISL_AUX_STATE_COMPRESSED_CLEAR:
       if (!info[usage].compressed)
          return ISL_AUX_OP_FULL_RESOLVE;
       FALLTHROUGH;
-   case ISL_AUX_STATE_CLEAR:
    case ISL_AUX_STATE_PARTIAL_CLEAR:
       return fast_clear_supported ?
                 ISL_AUX_OP_NONE :
@@ -280,11 +297,26 @@ isl_aux_state_transition_aux_op(enum isl_aux_state initial_state,
       return ISL_AUX_STATE_CLEAR;
    case ISL_AUX_OP_PARTIAL_RESOLVE:
       assert(isl_aux_state_has_valid_aux(initial_state));
-      assert(info[usage].partial_resolve);
-      return initial_state == ISL_AUX_STATE_CLEAR ||
-             initial_state == ISL_AUX_STATE_PARTIAL_CLEAR ||
-             initial_state == ISL_AUX_STATE_COMPRESSED_CLEAR ?
-             ISL_AUX_STATE_COMPRESSED_NO_CLEAR : initial_state;
+      if (isl_aux_usage_has_hiz(usage)) {
+         assert(initial_state != ISL_AUX_STATE_PARTIAL_CLEAR);
+         if (isl_aux_usage_has_ccs(usage)) {
+            return initial_state == ISL_AUX_STATE_COMPRESSED_HIER_DEPTH ||
+                   initial_state == ISL_AUX_STATE_CLEAR ?
+                   ISL_AUX_STATE_COMPRESSED_CLEAR : initial_state;
+         } else {
+            return initial_state == ISL_AUX_STATE_COMPRESSED_HIER_DEPTH ||
+                   initial_state == ISL_AUX_STATE_COMPRESSED_CLEAR ||
+                   initial_state == ISL_AUX_STATE_COMPRESSED_NO_CLEAR  ||
+                   initial_state == ISL_AUX_STATE_CLEAR ?
+                   ISL_AUX_STATE_RESOLVED : initial_state;
+         }
+      } else {
+         assert(info[usage].partial_resolve);
+         return initial_state == ISL_AUX_STATE_CLEAR ||
+                initial_state == ISL_AUX_STATE_PARTIAL_CLEAR ||
+                initial_state == ISL_AUX_STATE_COMPRESSED_CLEAR ?
+                ISL_AUX_STATE_COMPRESSED_NO_CLEAR : initial_state;
+      }
    case ISL_AUX_OP_FULL_RESOLVE:
       assert(isl_aux_state_has_valid_aux(initial_state));
       return info[usage].full_resolves_ambiguate ||
@@ -317,28 +349,41 @@ isl_aux_state_transition_write(enum isl_aux_state initial_state,
    assert(aux_state_possible(initial_state, usage));
    assert(info[usage].write_behavior == WRITES_COMPRESS ||
           info[usage].write_behavior == WRITES_COMPRESS_CLEAR ||
+          info[usage].write_behavior == WRITES_COMPRESS_HIZ ||
           info[usage].write_behavior == WRITES_RESOLVE_AMBIGUATE);
 
    if (full_surface) {
       return info[usage].write_behavior == WRITES_COMPRESS ?
                 ISL_AUX_STATE_COMPRESSED_NO_CLEAR :
              info[usage].write_behavior == WRITES_COMPRESS_CLEAR ?
-                ISL_AUX_STATE_COMPRESSED_CLEAR : ISL_AUX_STATE_PASS_THROUGH;
+                ISL_AUX_STATE_COMPRESSED_CLEAR :
+             info[usage].write_behavior == WRITES_COMPRESS_HIZ ?
+                ISL_AUX_STATE_COMPRESSED_HIER_DEPTH :
+             ISL_AUX_STATE_PASS_THROUGH;
    }
 
    switch (initial_state) {
    case ISL_AUX_STATE_CLEAR:
    case ISL_AUX_STATE_PARTIAL_CLEAR:
       return info[usage].write_behavior == WRITES_RESOLVE_AMBIGUATE ?
-             ISL_AUX_STATE_PARTIAL_CLEAR : ISL_AUX_STATE_COMPRESSED_CLEAR;
+                ISL_AUX_STATE_PARTIAL_CLEAR :
+             info[usage].write_behavior == WRITES_COMPRESS_HIZ ?
+                ISL_AUX_STATE_COMPRESSED_HIER_DEPTH :
+             ISL_AUX_STATE_COMPRESSED_CLEAR;
    case ISL_AUX_STATE_RESOLVED:
    case ISL_AUX_STATE_PASS_THROUGH:
    case ISL_AUX_STATE_COMPRESSED_NO_CLEAR:
       return info[usage].write_behavior == WRITES_COMPRESS ?
                 ISL_AUX_STATE_COMPRESSED_NO_CLEAR :
              info[usage].write_behavior == WRITES_COMPRESS_CLEAR ?
-                ISL_AUX_STATE_COMPRESSED_CLEAR : initial_state;
+                ISL_AUX_STATE_COMPRESSED_CLEAR :
+             info[usage].write_behavior == WRITES_COMPRESS_HIZ ?
+                ISL_AUX_STATE_COMPRESSED_HIER_DEPTH :
+             initial_state;
    case ISL_AUX_STATE_COMPRESSED_CLEAR:
+      return info[usage].write_behavior == WRITES_COMPRESS_HIZ ?
+                ISL_AUX_STATE_COMPRESSED_HIER_DEPTH : initial_state;
+   case ISL_AUX_STATE_COMPRESSED_HIER_DEPTH:
    case ISL_AUX_STATE_AUX_INVALID:
       return initial_state;
 #ifdef IN_UNIT_TEST

@@ -376,6 +376,19 @@ fd_batch_reference(struct fd_batch **ptr, struct fd_batch *batch)
 }
 
 /**
+ * Check if batch belongs to same ctx, and is not already flushed.
+ * The screen lock is held when a batch is destroyed, but not
+ * necessarily when the last unref happens.  Checking whether
+ * the batch is flushed avoids resurrecting zombie batches.
+ */
+static inline bool
+check_batch(struct fd_batch *batch, struct fd_context *ctx)
+{
+   fd_screen_assert_locked(ctx->screen);
+   return (batch->ctx == ctx) && !batch->flushed;
+}
+
+/**
  * Mark the batch as having something worth flushing (rendering, blit, query,
  * etc)
  */

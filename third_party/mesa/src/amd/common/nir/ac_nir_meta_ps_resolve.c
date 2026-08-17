@@ -87,7 +87,7 @@ ac_create_resolve_ps(const struct ac_ps_resolve_options *options,
    }
 
    /* Use samples_identical if it's supported. */
-   bool uses_samples_identical = options->info->gfx_level < GFX11 && !options->no_fmask;
+   bool uses_samples_identical = options->info->compiler_info.has_fmask && !options->no_fmask;
    nir_def *sample0 = NULL;
    nir_if *if_identical = NULL;
 

@@ -416,12 +416,11 @@ load_store_formatted(nir_builder *b, nir_def *base, nir_def *index,
             raw = nir_trim_vector(b, raw, blocksize_B / 4);
          }
 
-         nir_store_global(b, addr, blocksize_B, raw,
-                          nir_component_mask(raw->num_components));
+         nir_store_global(b, raw, addr, .align_mul = blocksize_B);
       } else {
-         nir_def *raw =
-            nir_load_global(b, addr, blocksize_B, DIV_ROUND_UP(blocksize_B, 4),
-                            MIN2(32, blocksize_B * 8));
+         nir_def *raw = nir_load_global(b, DIV_ROUND_UP(blocksize_B, 4),
+                                        MIN2(32, blocksize_B * 8), addr,
+                                        .align_mul = blocksize_B);
 
          return nir_format_unpack_rgba(b, raw, format);
       }
@@ -542,13 +541,8 @@ build_image_copy_shader(const struct vk_meta_image_copy_key *key)
             value1 = load_store_formatted(b, get_push(b, buffer), src_coord,
                                           NULL, key->dst_format);
          } else {
-            if (msaa) {
-               value1 =
-                  nir_txf_ms(b, src_coord, ms_index, .texture_deref = deref);
-            } else {
-               value1 = nir_txf(b, src_coord, .texture_deref = deref);
-            }
-
+            value1 = nir_txf(b, src_coord, .texture_deref = deref,
+                             .ms_index = msaa ? ms_index : NULL);
             nir_def_as_tex(value1)->backend_flags = AGX_TEXTURE_FLAG_NO_CLAMP;
 
             /* Munge according to the implicit conversions so we get a bit copy */
@@ -1499,7 +1493,12 @@ hk_CmdFillBuffer(VkCommandBuffer commandBuffer, VkBuffer dstBuffer,
    uint64_t addr =
       vk_meta_buffer_address(&dev->vk, dstBuffer, dstOffset, dstRange);
 
-   libagx_fill(cmd, agx_1d(range / 4), AGX_BARRIER_ALL, addr, data);
+   if (util_is_aligned(addr, 16) && util_is_aligned(range, 16)) {
+      libagx_fill_uint4(cmd, agx_2d(range / 16, 1), AGX_BARRIER_ALL,
+                        addr, 0, data, data, data, data);
+   } else {
+      libagx_fill(cmd, agx_1d(range / 4), AGX_BARRIER_ALL, addr, data);
+   }
 }
 
 VKAPI_ATTR void VKAPI_CALL

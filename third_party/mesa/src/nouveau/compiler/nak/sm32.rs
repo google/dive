@@ -8,7 +8,7 @@ use crate::legalize::{
 };
 use crate::sm30_instr_latencies::{
     encode_kepler_shader, instr_exec_latency, instr_latency,
-    KeplerInstructionEncoder,
+    latency_upper_bound, KeplerInstructionEncoder,
 };
 use bitview::{
     BitMutView, BitMutViewable, BitView, BitViewable, SetBit, SetField,
@@ -110,6 +110,10 @@ impl ShaderModel for ShaderModel32 {
         instr_latency(self.sm, write, dst_idx)
     }
 
+    fn latency_upper_bound(&self) -> u32 {
+        latency_upper_bound()
+    }
+
     fn max_instr_delay(&self) -> u8 {
         32
     }
@@ -125,7 +129,6 @@ impl ShaderModel for ShaderModel32 {
 
 trait SM32Op {
     fn legalize(&mut self, b: &mut LegalizeBuilder);
-    #[allow(dead_code)]
     fn encode(&self, e: &mut SM32Encoder<'_>);
 }
 
@@ -137,7 +140,6 @@ fn true_reg() -> RegRef {
     RegRef::new(RegFile::Pred, 7, 1)
 }
 
-#[allow(dead_code)]
 struct SM32Encoder<'a> {
     sm: &'a ShaderModel32,
     ip: usize,
@@ -228,7 +230,7 @@ impl SM32Encoder<'_> {
     }
 
     fn set_reg_src(&mut self, range: Range<usize>, src: &Src) {
-        assert!(src.src_swizzle.is_none());
+        assert!(src.src_swizzle.is_none() || src.src_swizzle == SrcSwizzle::Yy);
         self.set_reg_src_ref(range, &src.src_ref);
     }
 
@@ -317,7 +319,7 @@ enum AluSrc {
 
 impl AluSrc {
     fn from_src(src: &Src) -> AluSrc {
-        assert!(src.src_swizzle.is_none());
+        assert!(src.src_swizzle.is_none() || src.src_swizzle == SrcSwizzle::Yy);
         // do not assert src_mod, can be encoded by opcode.
 
         match &src.src_ref {
@@ -354,7 +356,7 @@ impl SM32Encoder<'_> {
             RRR,
         }
         let src1 = AluSrc::from_src(src1);
-        let src2 = src2.map(|s| AluSrc::from_src(s));
+        let src2 = src2.map(AluSrc::from_src);
 
         if let Some(dst) = dst {
             self.set_dst(dst);
@@ -638,7 +640,7 @@ impl SM32Op for OpRro {
             }
             SrcRef::CBuf(cb) => {
                 e.set_opcode(0x648, 2);
-                e.set_src_cbuf(23..42, &cb);
+                e.set_src_cbuf(23..42, cb);
             }
             _ => panic!("Invalid Rro src"),
         }
@@ -1049,7 +1051,7 @@ impl SM32Op for OpBfe {
         use RegFile::GPR;
         b.copy_alu_src_if_not_reg(&mut self.base, GPR, SrcType::ALU);
         if let SrcRef::Imm32(imm) = &mut self.range.src_ref {
-            *imm = *imm & 0xffff; // Only the lower 2 bytes matter
+            *imm &= 0xffff; // Only the lower 2 bytes matter
         }
     }
 
@@ -1083,7 +1085,7 @@ impl SM32Op for OpFlo {
             }
             SrcRef::CBuf(cb) => {
                 e.set_opcode(0x618, 2);
-                e.set_src_cbuf(23..42, &cb);
+                e.set_src_cbuf(23..42, cb);
             }
             _ => panic!("Invalid flo src"),
         }
@@ -1555,10 +1557,12 @@ impl SM32Op for OpF2F {
 
         e.set_dst(&self.dst);
 
-        match &self.src.src_ref {
+        // The swizzle is handled by the .high bit below.
+        let src = self.src.clone().without_swizzle();
+        match &src.src_ref {
             SrcRef::Zero | SrcRef::Reg(_) => {
                 e.set_opcode(0xe54, 2);
-                e.set_reg_src(23..31, &self.src);
+                e.set_reg_src(23..31, &src);
             }
             SrcRef::CBuf(cb) => {
                 e.set_opcode(0x654, 2);
@@ -1576,12 +1580,12 @@ impl SM32Op for OpF2F {
         e.set_field(12..14, (self.src_type.bits() / 8).ilog2());
 
         e.set_rnd_mode(42..44, self.rnd_mode);
-        e.set_bit(44, self.high);
+        e.set_bit(44, self.src.src_swizzle == SrcSwizzle::Yy);
         e.set_bit(45, self.integer_rnd);
         e.set_bit(47, self.ftz);
-        e.set_bit(48, self.src.src_mod.has_fneg());
+        e.set_bit(48, src.src_mod.has_fneg());
         e.set_bit(50, false); // dst.CC
-        e.set_bit(52, self.src.src_mod.has_fabs());
+        e.set_bit(52, src.src_mod.has_fabs());
         e.set_bit(53, false); // saturate
     }
 }
@@ -1619,7 +1623,7 @@ impl SM32Op for OpF2I {
         e.set_bit(14, self.dst_type.is_signed());
 
         e.set_rnd_mode(42..44, self.rnd_mode);
-        // 44: .h1
+        e.set_bit(44, self.src.src_swizzle == SrcSwizzle::Yy);
         e.set_bit(47, self.ftz);
         e.set_bit(48, self.src.src_mod.has_fneg());
         e.set_bit(50, false); // dst.CC
@@ -2383,7 +2387,7 @@ impl SM32Op for OpSuLdGa {
                 e.set_mem_type(56..59, self.mem_type);
 
                 e.set_ld_cache_op(54..56, self.cache_op);
-                e.set_src_cbuf(23..42, &cb);
+                e.set_src_cbuf(23..42, cb);
             }
             SrcRef::Zero | SrcRef::Reg(_) => {
                 e.set_opcode(0x798, 2);
@@ -2436,7 +2440,7 @@ impl SM32Op for OpSuStGa {
                 };
 
                 e.set_su_ga_offset_mode(8..10, self.offset_mode);
-                e.set_src_cbuf(23..42, &cb);
+                e.set_src_cbuf(23..42, cb);
                 e.set_st_cache_op(54..56, self.cache_op);
             }
             SrcRef::Zero | SrcRef::Reg(_) => {
@@ -2499,7 +2503,7 @@ fn legalize_ext_instr(op: &mut impl SrcsAsSlice, _b: &mut LegalizeBuilder) {
                 panic!("ALU srcs must be legalized explicitly");
             }
             SrcType::Pred => {
-                panic!("Predicates must be legalized explicitly");
+                assert!(src_is_reg(src, RegFile::Pred));
             }
             SrcType::Carry => {
                 panic!("Carry values must be legalized explicitly");
@@ -2545,6 +2549,8 @@ impl SM32Op for OpLd {
     }
 
     fn encode(&self, e: &mut SM32Encoder<'_>) {
+        assert_eq!(self.stride, OffsetStride::X1);
+        assert!(self.pred.is_true());
         // Missing:
         // 0x7c8 for indirect const load
         match self.access.space {
@@ -2629,6 +2635,7 @@ impl SM32Op for OpSt {
     }
 
     fn encode(&self, e: &mut SM32Encoder<'_>) {
+        assert_eq!(self.stride, OffsetStride::X1);
         match self.access.space {
             MemSpace::Global(_) => {
                 e.set_opcode(0xe00, 0);
@@ -2735,6 +2742,7 @@ impl SM32Op for OpAtom {
     }
 
     fn encode(&self, e: &mut SM32Encoder<'_>) {
+        assert_eq!(self.addr_stride, OffsetStride::X1);
         match self.mem_space {
             MemSpace::Global(addr_type) => {
                 if let AtomOp::CmpExch(cmp_src) = self.atom_op {

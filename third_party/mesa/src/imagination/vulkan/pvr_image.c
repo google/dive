@@ -28,13 +28,14 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "drm-uapi/drm_fourcc.h"
 #include "pvr_buffer.h"
-#include "pvr_csb.h"
 #include "pvr_device.h"
 #include "pvr_device_info.h"
 #include "pvr_entrypoints.h"
 #include "pvr_formats.h"
 #include "pvr_macros.h"
+#include "pvr_physical_device.h"
 #include "pvr_tex_state.h"
 #include "util/macros.h"
 #include "util/u_math.h"
@@ -51,7 +52,8 @@ static void pvr_image_init_memlayout(struct pvr_image *image)
    default:
       UNREACHABLE("bad VkImageTiling");
    case VK_IMAGE_TILING_OPTIMAL:
-      if (image->vk.wsi_legacy_scanout)
+      if (image->vk.wsi_legacy_scanout ||
+          vk_format_get_ycbcr_info(image->vk.format))
          image->memlayout = PVR_MEMLAYOUT_LINEAR;
       else if (image->vk.image_type == VK_IMAGE_TYPE_3D)
          image->memlayout = PVR_MEMLAYOUT_3DTWIDDLED;
@@ -61,63 +63,107 @@ static void pvr_image_init_memlayout(struct pvr_image *image)
    case VK_IMAGE_TILING_LINEAR:
       image->memlayout = PVR_MEMLAYOUT_LINEAR;
       break;
+   case VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT:
+      /* Support only LINEAR now */
+      assert(image->vk.drm_format_mod == DRM_FORMAT_MOD_LINEAR);
+      image->memlayout = PVR_MEMLAYOUT_LINEAR;
+      break;
    }
 }
 
-static void pvr_image_init_physical_extent(struct pvr_image *image)
+static void pvr_image_plane_init_physical_extent(
+   struct pvr_image *image,
+   const VkImageCreateInfo *pCreateInfo,
+   unsigned pbe_stride_align,
+   const struct vk_format_ycbcr_info *ycbcr_info,
+   uint8_t i)
 {
-   assert(image->memlayout != PVR_MEMLAYOUT_UNDEFINED);
-
+   struct pvr_image_plane *plane = &image->planes[i];
    /* clang-format off */
    if (image->vk.mip_levels > 1 ||
       image->memlayout == PVR_MEMLAYOUT_TWIDDLED ||
       image->memlayout == PVR_MEMLAYOUT_3DTWIDDLED) {
       /* clang-format on */
-      image->physical_extent.width =
+      plane->physical_extent.width =
          util_next_power_of_two(image->vk.extent.width);
-      image->physical_extent.height =
+      plane->physical_extent.height =
          util_next_power_of_two(image->vk.extent.height);
-      image->physical_extent.depth =
+      plane->physical_extent.depth =
          util_next_power_of_two(image->vk.extent.depth);
    } else {
       assert(image->memlayout == PVR_MEMLAYOUT_LINEAR);
-      image->physical_extent = image->vk.extent;
+      plane->physical_extent = image->vk.extent;
 
-      /* If the image is being rendered to (written by the PBE) make sure the
-       * width is aligned correctly.
-       */
-      if (image->vk.usage & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                             VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
-         image->physical_extent.width =
-            ALIGN(image->physical_extent.width,
-                  ROGUE_PBESTATE_REG_WORD0_LINESTRIDE_UNIT_SIZE);
+      /* Align the image for being rendered to (written by the PBE). */
+      plane->physical_extent.width =
+         align(plane->physical_extent.width, pbe_stride_align);
+
+      if (image->vk.tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
+         const VkImageDrmFormatModifierExplicitCreateInfoEXT *explicit_mod =
+            vk_find_struct_const(
+               pCreateInfo->pNext,
+               IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT);
+         if (explicit_mod) {
+            const uint32_t bpp =
+              vk_format_get_blocksize(image->vk.format);
+            plane->physical_extent.width =
+              explicit_mod->pPlaneLayouts[i].rowPitch / bpp;
+         }
       }
+   }
+
+   if (ycbcr_info) {
+      plane->physical_extent.width /=
+         ycbcr_info->planes[i].denominator_scales[0];
+      plane->physical_extent.height /=
+         ycbcr_info->planes[i].denominator_scales[1];
    }
 }
 
-static void pvr_image_setup_mip_levels(struct pvr_image *image)
+static void pvr_image_init_physical_extent(struct pvr_image *image,
+                                           const VkImageCreateInfo *pCreateInfo,
+                                           unsigned pbe_stride_align)
 {
+   assert(image->memlayout != PVR_MEMLAYOUT_UNDEFINED);
+
+   const struct vk_format_ycbcr_info *ycbcr_info =
+      vk_format_get_ycbcr_info(image->vk.format);
+
+   for (uint8_t plane = 0; plane < image->plane_count; plane++) {
+      pvr_image_plane_init_physical_extent(image,
+                                           pCreateInfo,
+                                           pbe_stride_align,
+                                           ycbcr_info,
+                                           plane);
+   }
+}
+
+static void pvr_image_plane_setup_mip_levels(struct pvr_image *image, uint8_t i)
+{
+   struct pvr_image_plane *plane = &image->planes[i];
+   VkFormat plane_format = vk_format_get_plane_format(image->vk.format, i);
+
    const uint32_t extent_alignment =
       image->vk.image_type == VK_IMAGE_TYPE_3D ? 4 : 1;
-   const unsigned int cpp = vk_format_get_blocksize(image->vk.format);
+   const unsigned int cpp = vk_format_get_blocksize(plane_format);
    VkExtent3D extent =
-      vk_image_extent_to_elements(&image->vk, image->physical_extent);
+      vk_image_extent_to_elements(&image->vk, plane->physical_extent);
 
-   assert(image->vk.mip_levels <= ARRAY_SIZE(image->mip_levels));
+   assert(image->vk.mip_levels <= ARRAY_SIZE(plane->mip_levels));
 
-   image->layer_size = 0;
+   plane->layer_size = 0;
 
    for (uint32_t i = 0; i < image->vk.mip_levels; i++) {
-      struct pvr_mip_level *mip_level = &image->mip_levels[i];
+      struct pvr_mip_level *mip_level = &plane->mip_levels[i];
 
-      mip_level->pitch = cpp * ALIGN(extent.width, extent_alignment);
-      mip_level->height_pitch = ALIGN(extent.height, extent_alignment);
+      mip_level->pitch = cpp * align(extent.width, extent_alignment);
+      mip_level->height_pitch = align(extent.height, extent_alignment);
       mip_level->size = image->vk.samples * mip_level->pitch *
                         mip_level->height_pitch *
-                        ALIGN(extent.depth, extent_alignment);
-      mip_level->offset = image->layer_size;
+                        align(extent.depth, extent_alignment);
+      mip_level->offset = plane->layer_size;
 
-      image->layer_size += mip_level->size;
+      plane->layer_size += mip_level->size;
 
       extent.height = u_minify(extent.height, 1);
       extent.width = u_minify(extent.width, 1);
@@ -129,11 +175,11 @@ static void pvr_image_setup_mip_levels(struct pvr_image *image)
        * were present so we need to account for that in the `layer_size`.
        */
       while (extent.height != 1 || extent.width != 1 || extent.depth != 1) {
-         const uint32_t height_pitch = ALIGN(extent.height, extent_alignment);
-         const uint32_t pitch = cpp * ALIGN(extent.width, extent_alignment);
+         const uint32_t height_pitch = align(extent.height, extent_alignment);
+         const uint32_t pitch = cpp * align(extent.width, extent_alignment);
 
-         image->layer_size += image->vk.samples * pitch * height_pitch *
-                              ALIGN(extent.depth, extent_alignment);
+         plane->layer_size += image->vk.samples * pitch * height_pitch *
+                              align(extent.depth, extent_alignment);
 
          extent.height = u_minify(extent.height, 1);
          extent.width = u_minify(extent.width, 1);
@@ -147,9 +193,69 @@ static void pvr_image_setup_mip_levels(struct pvr_image *image)
     * requirement comes from.
     */
    if (image->vk.array_layers > 1)
-      image->layer_size = align64(image->layer_size, image->alignment);
+      plane->layer_size = align64(plane->layer_size, image->alignment);
 
-   image->size = image->layer_size * image->vk.array_layers;
+   plane->size = plane->layer_size * image->vk.array_layers;
+}
+
+static void pvr_image_setup_mip_levels(struct pvr_image *image)
+{
+   VkDeviceSize offset = 0;
+   for (uint8_t plane = 0; plane < image->plane_count; plane++) {
+      pvr_image_plane_setup_mip_levels(image, plane);
+
+      offset = align(offset, image->alignment);
+      image->planes[plane].offset = offset;
+      offset += image->planes[plane].size;
+   }
+
+   image->total_size = offset;
+}
+
+static unsigned get_pbe_stride_align(const struct pvr_device_info *dev_info);
+
+static VkResult pvr_pick_modifier(const VkImageCreateInfo *pCreateInfo,
+                                  unsigned pbe_stride_align,
+                                  uint64_t *modifier)
+{
+   const VkImageDrmFormatModifierListCreateInfoEXT *mod_list =
+         vk_find_struct_const(pCreateInfo->pNext,
+                              IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT);
+
+   const VkImageDrmFormatModifierExplicitCreateInfoEXT *explicit_mod =
+      vk_find_struct_const(
+         pCreateInfo->pNext,
+         IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT);
+
+   /* Only support LINEAR now */
+   *modifier = DRM_FORMAT_MOD_INVALID;
+
+   if (mod_list)
+      for (unsigned i = 0; i < mod_list->drmFormatModifierCount; i++)
+         if (mod_list->pDrmFormatModifiers[i] == DRM_FORMAT_MOD_LINEAR)
+            *modifier = DRM_FORMAT_MOD_LINEAR;
+
+   if (explicit_mod) {
+      const uint32_t bpp = vk_format_get_blocksize(pCreateInfo->format);
+      assert(explicit_mod->drmFormatModifier == DRM_FORMAT_MOD_LINEAR &&
+             explicit_mod->drmFormatModifierPlaneCount == 1);
+      *modifier = explicit_mod->drmFormatModifier;
+
+      if (explicit_mod->pPlaneLayouts[0].offset != 0)
+         return VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT;
+
+      if (explicit_mod->pPlaneLayouts[0].rowPitch %
+          (bpp * pbe_stride_align) != 0) {
+         return VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT;
+      }
+
+      if (explicit_mod->pPlaneLayouts[0].rowPitch <
+          pCreateInfo->extent.width * bpp) {
+         return VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT;
+      }
+   }
+
+   return VK_SUCCESS;
 }
 
 VkResult pvr_CreateImage(VkDevice _device,
@@ -160,31 +266,18 @@ VkResult pvr_CreateImage(VkDevice _device,
    VK_FROM_HANDLE(pvr_device, device, _device);
    struct pvr_image *image;
 
-#if defined(PVR_USE_WSI_PLATFORM)
-   const VkImageSwapchainCreateInfoKHR *swapchain_info =
-      vk_find_struct_const(pCreateInfo->pNext, IMAGE_SWAPCHAIN_CREATE_INFO_KHR);
-   if (swapchain_info && swapchain_info->swapchain != VK_NULL_HANDLE) {
+   if (wsi_common_is_swapchain_image(pCreateInfo)) {
       return wsi_common_create_swapchain_image(&device->pdevice->wsi_device,
                                                pCreateInfo,
-                                               swapchain_info->swapchain,
                                                pImage);
    }
-#endif
 
    image =
       vk_image_create(&device->vk, pCreateInfo, pAllocator, sizeof(*image));
    if (!image)
       return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   /* All images aligned to 4k, in case of arrays/CEM.
-    * Refer: pvr_GetImageMemoryRequirements for further details.
-    */
-   image->alignment = 4096U;
-
-   /* Initialize the image using the saved information from pCreateInfo */
-   pvr_image_init_memlayout(image);
-   pvr_image_init_physical_extent(image);
-   pvr_image_setup_mip_levels(image);
+   pvr_image_init(device, pCreateInfo, image);
 
    *pImage = pvr_image_to_handle(image);
 
@@ -201,10 +294,38 @@ void pvr_DestroyImage(VkDevice _device,
    if (!image)
       return;
 
+   pvr_image_fini(device, image);
+   vk_image_destroy(&device->vk, pAllocator, &image->vk);
+}
+
+void pvr_image_init(struct pvr_device *device,
+                    const VkImageCreateInfo *pCreateInfo,
+                    struct pvr_image *image)
+{
+   unsigned pbe_stride_align = get_pbe_stride_align(&device->pdevice->dev_info);
+
+   image->plane_count = vk_format_get_plane_count(image->vk.format);
+   image->alignment = device->pdevice->ws->page_size;
+
+   if (pCreateInfo->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
+      VkResult res = pvr_pick_modifier(pCreateInfo,
+                                       pbe_stride_align,
+                                       &image->vk.drm_format_mod);
+      if (res != VK_SUCCESS)
+         assert(res == VK_SUCCESS);
+
+      assert(image->vk.drm_format_mod == DRM_FORMAT_MOD_LINEAR);
+   }
+
+   pvr_image_init_memlayout(image);
+   pvr_image_init_physical_extent(image, pCreateInfo, pbe_stride_align);
+   pvr_image_setup_mip_levels(image);
+}
+
+void pvr_image_fini(struct pvr_device *device, struct pvr_image *image)
+{
    if (image->vma)
       pvr_unbind_memory(device, image->vma);
-
-   vk_image_destroy(&device->vk, pAllocator, &image->vk);
 }
 
 /* clang-format off */
@@ -271,7 +392,7 @@ VkResult pvr_BindImageMemory2(VkDevice _device,
       result = pvr_bind_memory(device,
                                mem,
                                offset,
-                               image->size,
+                               image->total_size,
                                image->alignment,
                                &image->vma,
                                &image->dev_addr);
@@ -293,285 +414,59 @@ void pvr_get_image_subresource_layout(const struct pvr_image *image,
                                       const VkImageSubresource *subresource,
                                       VkSubresourceLayout *layout)
 {
+   const struct pvr_image_plane *plane =
+      pvr_plane_from_aspect_const(image, subresource->aspectMask);
    const struct pvr_mip_level *mip_level =
-      &image->mip_levels[subresource->mipLevel];
+      &plane->mip_levels[subresource->mipLevel];
 
-   pvr_assert(subresource->mipLevel < image->vk.mip_levels);
-   pvr_assert(subresource->arrayLayer < image->vk.array_layers);
-
-   layout->offset =
-      subresource->arrayLayer * image->layer_size + mip_level->offset;
+   layout->offset = plane->offset +
+                    subresource->arrayLayer * plane->layer_size +
+                    mip_level->offset;
    layout->rowPitch = mip_level->pitch;
    layout->depthPitch = mip_level->pitch * mip_level->height_pitch;
-   layout->arrayPitch = image->layer_size;
+   layout->arrayPitch = plane->layer_size;
    layout->size = mip_level->size;
 }
 
-void pvr_GetImageSubresourceLayout(VkDevice device,
-                                   VkImage _image,
-                                   const VkImageSubresource *subresource,
-                                   VkSubresourceLayout *layout)
+void pvr_GetImageSubresourceLayout2(VkDevice device,
+                                    VkImage _image,
+                                    const VkImageSubresource2 *pSubresource,
+                                    VkSubresourceLayout2 *pLayout)
 {
    VK_FROM_HANDLE(pvr_image, image, _image);
 
-   pvr_get_image_subresource_layout(image, subresource, layout);
+   pvr_get_image_subresource_layout(image,
+                                    &pSubresource->imageSubresource,
+                                    &pLayout->subresourceLayout);
 }
 
-static void pvr_adjust_non_compressed_view(const struct pvr_image *image,
-                                           struct pvr_texture_state_info *info)
-{
-   const uint32_t base_level = info->base_level;
-
-   if (!vk_format_is_compressed(image->vk.format) ||
-       vk_format_is_compressed(info->format)) {
-      return;
-   }
-
-   /* Cannot use the image state, as the miplevel sizes for an
-    * uncompressed chain view may not decrease by 2 each time compared to the
-    * compressed one e.g. (22x22,11x11,5x5) -> (6x6,3x3,2x2)
-    * Instead manually apply an offset and patch the size
-    */
-   info->extent.width = u_minify(info->extent.width, base_level);
-   info->extent.height = u_minify(info->extent.height, base_level);
-   info->extent.depth = u_minify(info->extent.depth, base_level);
-   info->extent = vk_image_extent_to_elements(&image->vk, info->extent);
-   info->offset += image->mip_levels[base_level].offset;
-   info->base_level = 0;
-}
-
-VkResult pvr_CreateImageView(VkDevice _device,
-                             const VkImageViewCreateInfo *pCreateInfo,
-                             const VkAllocationCallbacks *pAllocator,
-                             VkImageView *pView)
+void pvr_GetDeviceImageSubresourceLayout(
+   VkDevice _device,
+   const VkDeviceImageSubresourceInfo *pInfo,
+   VkSubresourceLayout2 *pLayout)
 {
    VK_FROM_HANDLE(pvr_device, device, _device);
-   struct pvr_texture_state_info info = { 0 };
-   unsigned char input_swizzle[4];
-   const uint8_t *format_swizzle;
-   const struct pvr_image *image;
-   struct pvr_image_view *iview;
-   VkResult result;
+   struct pvr_image image = { 0 };
 
-   iview = vk_image_view_create(&device->vk,
-                                pCreateInfo,
-                                pAllocator,
-                                sizeof(*iview));
-   if (!iview)
-      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
+   vk_image_init(&device->vk, &image.vk, pInfo->pCreateInfo);
+   pvr_image_init(device, pInfo->pCreateInfo, &image);
 
-   image = pvr_image_view_get_image(iview);
+   pvr_GetImageSubresourceLayout2(_device,
+                                  pvr_image_to_handle(&image),
+                                  pInfo->pSubresource,
+                                  pLayout);
 
-   if (image->vk.image_type == VK_IMAGE_TYPE_3D &&
-       (iview->vk.view_type == VK_IMAGE_VIEW_TYPE_2D_ARRAY ||
-        iview->vk.view_type == VK_IMAGE_VIEW_TYPE_2D)) {
-      iview->vk.layer_count = image->vk.extent.depth;
-   }
-
-   info.type = iview->vk.view_type;
-   info.base_level = iview->vk.base_mip_level;
-   info.mip_levels = iview->vk.level_count;
-   info.extent = image->vk.extent;
-   info.aspect_mask = iview->vk.aspects;
-   info.is_cube = (info.type == VK_IMAGE_VIEW_TYPE_CUBE ||
-                   info.type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
-   info.array_size = iview->vk.layer_count;
-   info.offset = iview->vk.base_array_layer * image->layer_size;
-   info.mipmaps_present = (image->vk.mip_levels > 1) ? true : false;
-   info.stride = image->physical_extent.width;
-   info.tex_state_type = PVR_TEXTURE_STATE_SAMPLE;
-   info.mem_layout = image->memlayout;
-   info.flags = 0;
-   info.sample_count = image->vk.samples;
-   info.addr = image->dev_addr;
-
-   info.format = pCreateInfo->format;
-   info.layer_size = image->layer_size;
-
-   if (image->vk.create_flags & VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT) {
-      info.offset = 0;
-      info.z_slice = iview->vk.base_array_layer;
-   }
-
-   pvr_adjust_non_compressed_view(image, &info);
-
-   vk_component_mapping_to_pipe_swizzle(iview->vk.swizzle, input_swizzle);
-
-   enum pipe_format pipe_format =
-      vk_format_to_pipe_format(iview->vk.view_format);
-   if (util_format_is_depth_or_stencil(pipe_format)) {
-      switch (pipe_format) {
-      case PIPE_FORMAT_S8_UINT:
-         pipe_format = PIPE_FORMAT_R8_UINT;
-         break;
-
-      case PIPE_FORMAT_Z16_UNORM:
-         pipe_format = PIPE_FORMAT_R16_UINT;
-         break;
-
-      case PIPE_FORMAT_Z32_FLOAT:
-         pipe_format = PIPE_FORMAT_R32_FLOAT;
-         break;
-
-      default:
-         break;
-      }
-   }
-   format_swizzle = util_format_description(pipe_format)->swizzle;
-
-   util_format_compose_swizzles(format_swizzle, input_swizzle, info.swizzle);
-
-   result = pvr_pack_tex_state(device,
-                               &info,
-                               &iview->image_state[info.tex_state_type]);
-   if (result != VK_SUCCESS)
-      goto err_vk_image_view_destroy;
-
-   /* Create an additional texture state for cube type if storage
-    * usage flag is set.
-    */
-   if (info.is_cube && image->vk.usage & VK_IMAGE_USAGE_STORAGE_BIT) {
-      info.tex_state_type = PVR_TEXTURE_STATE_STORAGE;
-
-      result = pvr_pack_tex_state(device,
-                                  &info,
-                                  &iview->image_state[info.tex_state_type]);
-      if (result != VK_SUCCESS)
-         goto err_vk_image_view_destroy;
-   }
-
-   if (image->vk.usage & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) {
-      /* Attachment state is created as if the mipmaps are not supported, so the
-       * baselevel is set to zero and num_mip_levels is set to 1. Which gives an
-       * impression that this is the only level in the image. This also requires
-       * that width, height and depth be adjusted as well. Given
-       * iview->vk.extent is already adjusted for base mip map level we use it
-       * here.
-       */
-      /* TODO: Investigate and document the reason for above approach. */
-      info.extent = iview->vk.extent;
-
-      info.mip_levels = 1;
-      info.mipmaps_present = false;
-      info.stride = u_minify(image->physical_extent.width, info.base_level);
-      info.base_level = 0;
-      info.tex_state_type = PVR_TEXTURE_STATE_ATTACHMENT;
-
-      if (image->vk.image_type == VK_IMAGE_TYPE_3D &&
-          iview->vk.view_type == VK_IMAGE_VIEW_TYPE_2D) {
-         info.type = VK_IMAGE_VIEW_TYPE_3D;
-      } else {
-         info.type = iview->vk.view_type;
-      }
-
-      result = pvr_pack_tex_state(device,
-                                  &info,
-                                  &iview->image_state[info.tex_state_type]);
-      if (result != VK_SUCCESS)
-         goto err_vk_image_view_destroy;
-   }
-
-   *pView = pvr_image_view_to_handle(iview);
-
-   return VK_SUCCESS;
-
-err_vk_image_view_destroy:
-   vk_image_view_destroy(&device->vk, pAllocator, &iview->vk);
-
-   return result;
+   pvr_image_fini(device, &image);
+   vk_image_finish(&image.vk);
 }
 
-void pvr_DestroyImageView(VkDevice _device,
-                          VkImageView _iview,
-                          const VkAllocationCallbacks *pAllocator)
+/* Leave this at the very end, to avoid leakage of HW-defs here */
+#define PVR_BUILD_ARCH_ROGUE
+#include "pvr_csb.h"
+
+static unsigned get_pbe_stride_align(const struct pvr_device_info *dev_info)
 {
-   VK_FROM_HANDLE(pvr_device, device, _device);
-   VK_FROM_HANDLE(pvr_image_view, iview, _iview);
-
-   if (!iview)
-      return;
-
-   vk_image_view_destroy(&device->vk, pAllocator, &iview->vk);
-}
-
-VkResult pvr_CreateBufferView(VkDevice _device,
-                              const VkBufferViewCreateInfo *pCreateInfo,
-                              const VkAllocationCallbacks *pAllocator,
-                              VkBufferView *pView)
-{
-   VK_FROM_HANDLE(pvr_buffer, buffer, pCreateInfo->buffer);
-   VK_FROM_HANDLE(pvr_device, device, _device);
-   struct pvr_texture_state_info info = { 0 };
-   const uint8_t *format_swizzle;
-   struct pvr_buffer_view *bview;
-   VkResult result;
-
-   bview = vk_buffer_view_create(&device->vk,
-                                 pCreateInfo,
-                                 pAllocator,
-                                 sizeof(*bview));
-   if (!bview)
-      return vk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
-
-   /* If the remaining size of the buffer is not a multiple of the element
-    * size of the format, the nearest smaller multiple is used.
-    */
-   bview->vk.range -=
-      bview->vk.range % vk_format_get_blocksize(bview->vk.format);
-
-   /* The range of the buffer view shouldn't be smaller than one texel. */
-   assert(bview->vk.range >= vk_format_get_blocksize(bview->vk.format));
-
-   bview->num_rows = DIV_ROUND_UP(bview->vk.elements, PVR_BUFFER_VIEW_WIDTH);
-
-   info.base_level = 0U;
-   info.mip_levels = 1U;
-   info.mipmaps_present = false;
-   info.extent.width = PVR_BUFFER_VIEW_WIDTH;
-   info.extent.height = bview->num_rows;
-   info.extent.depth = 0U;
-   info.sample_count = 1U;
-   info.stride = PVR_BUFFER_VIEW_WIDTH;
-   info.offset = 0U;
-   info.addr = PVR_DEV_ADDR_OFFSET(buffer->dev_addr, pCreateInfo->offset);
-   info.mem_layout = PVR_MEMLAYOUT_LINEAR;
-   info.is_cube = false;
-   info.type = VK_IMAGE_VIEW_TYPE_2D;
-   info.tex_state_type = PVR_TEXTURE_STATE_SAMPLE;
-   info.format = bview->vk.format;
-   info.flags = PVR_TEXFLAGS_INDEX_LOOKUP;
-   info.aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
-   info.buffer_elems = bview->vk.elements;
-
-   if (PVR_HAS_FEATURE(&device->pdevice->dev_info, tpu_array_textures))
-      info.array_size = 1U;
-
-   format_swizzle = pvr_get_format_swizzle(info.format);
-   memcpy(info.swizzle, format_swizzle, sizeof(info.swizzle));
-
-   result = pvr_pack_tex_state(device, &info, &bview->image_state);
-   if (result != VK_SUCCESS)
-      goto err_vk_buffer_view_destroy;
-
-   *pView = pvr_buffer_view_to_handle(bview);
-
-   return VK_SUCCESS;
-
-err_vk_buffer_view_destroy:
-   vk_object_free(&device->vk, pAllocator, bview);
-
-   return result;
-}
-
-void pvr_DestroyBufferView(VkDevice _device,
-                           VkBufferView bufferView,
-                           const VkAllocationCallbacks *pAllocator)
-{
-   VK_FROM_HANDLE(pvr_buffer_view, bview, bufferView);
-   VK_FROM_HANDLE(pvr_device, device, _device);
-
-   if (!bview)
-      return;
-
-   vk_buffer_view_destroy(&device->vk, pAllocator, &bview->vk);
+   return PVR_HAS_FEATURE(dev_info, pbe_stride_align_1pixel)
+             ? 1
+             : ROGUE_PBESTATE_REG_WORD0_LINESTRIDE_UNIT_SIZE;
 }

@@ -32,6 +32,27 @@
 #include "drm-uapi/gpu_scheduler.h"
 #include "drm-uapi/xe_drm.h"
 
+static bool
+is_slab_parent_memory_mapped_placeable(struct anv_device *device,
+                                       enum anv_bo_alloc_flags alloc_flags)
+{
+   if ((alloc_flags & ANV_BO_ALLOC_SLAB_PARENT) == false)
+      return false;
+   if (ANV_DEBUG(NO_SLAB))
+      return false;
+   if (!device->vk.enabled_features.memoryMapPlaced)
+      return false;
+
+   /* Not subject to vkMapMemory*() */
+   enum anv_bo_alloc_flags no_vk_map_memory =  ANV_BO_ALLOC_COMPRESSED |
+                                               ANV_BO_ALLOC_INTERNAL |
+                                               ANV_BO_ALLOC_DESCRIPTOR_POOL;
+   if (alloc_flags & no_vk_map_memory)
+      return false;
+
+   return true;
+}
+
 static uint32_t
 xe_gem_create(struct anv_device *device,
               const struct intel_memory_class_instance **regions,
@@ -66,12 +87,21 @@ xe_gem_create(struct anv_device *device,
        device->physical->vram_non_mappable.size > 0)
       flags |= DRM_XE_GEM_CREATE_FLAG_NEEDS_VISIBLE_VRAM;
 
+   if ((alloc_flags & ANV_BO_ALLOC_COMPRESSED) == 0 &&
+       device->info->xe2_has_no_compression_hint)
+      flags |= DRM_XE_GEM_CREATE_FLAG_NO_COMPRESSION;
+
+   /* From xe_drm.h: If a VM is specified, this BO must:
+    * 1. Only ever be bound to that VM.
+    * 2. Cannot be exported as a PRIME fd.
+    */
+   uint32_t vm_id = device->vm_id;
+   if ((alloc_flags & ANV_BO_ALLOC_EXTERNAL) ||
+       is_slab_parent_memory_mapped_placeable(device, alloc_flags))
+      vm_id = 0;
+
    struct drm_xe_gem_create gem_create = {
-     /* From xe_drm.h: If a VM is specified, this BO must:
-      * 1. Only ever be bound to that VM.
-      * 2. Cannot be exported as a PRIME fd.
-      */
-     .vm_id = alloc_flags & ANV_BO_ALLOC_EXTERNAL ? 0 : device->vm_id,
+     .vm_id = vm_id,
      .size = align64(size, device->info->mem_alignment),
      .flags = flags,
    };
@@ -87,9 +117,9 @@ xe_gem_create(struct anv_device *device,
    case INTEL_DEVICE_INFO_MMAP_MODE_WB:
       gem_create.cpu_caching = DRM_XE_GEM_CPU_CACHING_WB;
       break;
-   default:
-      UNREACHABLE("missing");
+   case INTEL_DEVICE_INFO_MMAP_MODE_INVALID:
       gem_create.cpu_caching = DRM_XE_GEM_CPU_CACHING_WC;
+      break;
    }
 
    if (alloc_flags & ANV_BO_ALLOC_PROTECTED)
@@ -121,6 +151,10 @@ xe_gem_mmap(struct anv_device *device, struct anv_bo *bo, uint64_t offset,
    struct drm_xe_gem_mmap_offset args = {
       .handle = bo->gem_handle,
    };
+
+   assert(anv_device_get_pat_entry(device, bo->alloc_flags)->mmap !=
+          INTEL_DEVICE_INFO_MMAP_MODE_INVALID);
+
    if (intel_ioctl(device->fd, DRM_IOCTL_XE_GEM_MMAP_OFFSET, &args))
       return MAP_FAILED;
 
@@ -309,8 +343,8 @@ xe_vm_bind_op(struct anv_device *device,
       if (errno_ == ENOMEM || errno_ == ENOBUFS)
          result = VK_ERROR_OUT_OF_HOST_MEMORY;
       else
-         result = vk_device_set_lost(&device->vk,
-                                     "vm_bind failed with errno %d", errno_);
+         result = anv_device_set_lost(device, errno_,
+                                      "vm_bind failed with errno %d", errno_);
       goto out_stackarray;
    }
 
@@ -356,13 +390,26 @@ xe_vm_bind_bo(struct anv_device *device, struct anv_bo *bo)
 static VkResult
 xe_vm_unbind_bo(struct anv_device *device, struct anv_bo *bo)
 {
-   struct anv_vm_bind bind = {
-      .bo = bo,
-      .address = 0,
-      .bo_offset = 0,
-      .size = 0,
-      .op = ANV_VM_UNBIND_ALL,
-   };
+   struct anv_vm_bind bind;
+   if (bo->alloc_flags & ANV_BO_ALLOC_NULL_INITIALIZED_HEAP) {
+      bind = (struct anv_vm_bind) {
+         .address = bo->offset,
+         .size = bo->actual_size,
+         .op = ANV_VM_BIND,
+      };
+   } else if (bo->from_host_ptr) {
+      bind = (struct anv_vm_bind) {
+         .bo = bo,
+         .address = bo->offset,
+         .size = bo->actual_size,
+         .op = ANV_VM_UNBIND,
+      };
+   } else {
+      bind = (struct anv_vm_bind) {
+         .bo = bo,
+         .op = ANV_VM_UNBIND_ALL,
+      };
+   }
    struct anv_sparse_submission submit = {
       .queue = NULL,
       .binds = &bind,
@@ -371,11 +418,6 @@ xe_vm_unbind_bo(struct anv_device *device, struct anv_bo *bo)
       .wait_count = 0,
       .signal_count = 0,
    };
-   if (bo->from_host_ptr) {
-      bind.address = bo->offset;
-      bind.size = bo->actual_size;
-      bind.op = ANV_VM_UNBIND;
-   }
    return xe_vm_bind_op(device, &submit,
                         ANV_VM_BIND_FLAG_SIGNAL_BIND_TIMELINE);
 }

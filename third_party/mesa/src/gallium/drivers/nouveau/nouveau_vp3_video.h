@@ -56,7 +56,6 @@ struct nouveau_vp3_video_buffer {
 union pipe_desc {
    struct pipe_picture_desc *base;
    struct pipe_mpeg12_picture_desc *mpeg12;
-   struct pipe_mpeg4_picture_desc *mpeg4;
    struct pipe_vc1_picture_desc *vc1;
    struct pipe_h264_picture_desc *h264;
 };

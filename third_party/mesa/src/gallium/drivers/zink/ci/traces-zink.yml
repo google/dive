@@ -1,29 +1,29 @@
 %YAML 1.2
 ---
 traces-db:
-  download-url: "https://s3.freedesktop.org/mesa-tracie-public/"
+  download-url: https://s3.freedesktop.org/mesa-tracie-public/
 
 traces:
   0ad/0ad-v2.trace:
     gl-zink-anv-adl:
       label: [no-perf]
-      checksum: 0d04e54fa259d407433a7925c739900a
+      checksum: 9dc55abb7806f0116770a5a1a389c342
     gl-zink-anv-tgl:
-      checksum: 0d04e54fa259d407433a7925c739900a
+      checksum: 9dc55abb7806f0116770a5a1a389c342
     zink-radv-vangogh:
-      checksum: 52cabbe16a14628f92df31e0fb4c109e
+      checksum: 6bff1b79451bae925314952a8e5303cf
     zink-radv-gfx1201:
-      checksum: 52cabbe16a14628f92df31e0fb4c109e
+      checksum: 6bff1b79451bae925314952a8e5303cf
 
   behdad-glyphy/glyphy-v2.trace:
     gl-zink-anv-adl:
-      checksum: b743608724c13bc4105e95385fc2b810
+      checksum: d1976bf8d7d93d7cdaea5ff8330a73ab
     gl-zink-anv-tgl:
-      checksum: b743608724c13bc4105e95385fc2b810
+      checksum: d1976bf8d7d93d7cdaea5ff8330a73ab
     zink-radv-vangogh:
-      checksum: 94022b587403bf5cf68ee6aeb7dd436f
+      checksum: bff5ee39e735d9f9fd432af4b311e288
     zink-radv-gfx1201:
-      checksum: 94022b587403bf5cf68ee6aeb7dd436f
+      checksum: bff5ee39e735d9f9fd432af4b311e288
 
   blender/blender-demo-cube_diorama.trace:
     gl-zink-anv-adl:
@@ -38,21 +38,25 @@ traces:
     gl-zink-anv-tgl:
       label: [skip, flakes]
       checksum: 5bfd510c1298c71ccd3c24c0662b857e
-      text: "Very flaky trace"
+      text: Very flaky trace
     zink-radv-vangogh:
+      label: [skip, flakes]
       checksum: 58e2d6ea105ca2735b05ce06709691fb
+      text: Clear color for the background can be black or grey
     zink-radv-gfx1201:
-      checksum: ef6775705fb8c9f2d0c8a29ae6ab0efd
+      label: [skip, flakes]
+      checksum: 9c55251c2979a107ba852719d7e41889
+      text: Clear color for the background can be black or grey
 
   blender/blender-demo-ellie_pose.trace:
     gl-zink-anv-adl:
-      checksum: ca8df31308386674816c0e801f220565
+      checksum: 0098bb7945cf985524358f1becd7dc96
     gl-zink-anv-tgl:
-      checksum: ca8df31308386674816c0e801f220565
+      checksum: 0098bb7945cf985524358f1becd7dc96
     zink-radv-vangogh:
-      checksum: 4670acc17f40e2d20ecf355a64b5612e
+      checksum: 04050fd3b0285aedfe6b139d3a900fc5
     zink-radv-gfx1201:
-      checksum: 4670acc17f40e2d20ecf355a64b5612e
+      checksum: 04050fd3b0285aedfe6b139d3a900fc5
 
   glxgears/glxgears-2-v2.trace:
     gl-zink-anv-adl:
@@ -67,13 +71,13 @@ traces:
   gputest/furmark-v2.trace:
     gl-zink-anv-adl:
       label: [no-perf]
-      checksum: 2d3f45cda72a1f8a54fd115fb27ee8d6
+      checksum: fc9dcf473b7367efeec392d2d431855b
     gl-zink-anv-tgl:
-      checksum: 2d3f45cda72a1f8a54fd115fb27ee8d6
+      checksum: fc9dcf473b7367efeec392d2d431855b
     zink-radv-vangogh:
-      checksum: 6466543da6b14d7e35630c6ed3e90e5f
+      checksum: 01bec2999198ac47efca155732595858
     zink-radv-gfx1201:
-      checksum: 6466543da6b14d7e35630c6ed3e90e5f
+      checksum: 01bec2999198ac47efca155732595858
 
   gputest/triangle-v2.trace:
     gl-zink-anv-adl:
@@ -95,9 +99,9 @@ traces:
       checksum: dbe1de4e2e812413f173ea6c423117ff
       text: "'egl_platform.cpp( 227) - Error   - Couldn't find a suitable EGL config' -- revisit when we can turn on X11?"
     zink-radv-vangogh:
-      checksum: ce00befe0c44ca739f63adaf00dc4795
+      checksum: 2d0e0b21259a3f97e04516111fe3372e
     zink-radv-gfx1201:
-      checksum: a38bcbf992b60f883f41a6068331ec3e
+      checksum: 476c35f541bf1dcf59e2448fcc4a0921
 
   gputest/pixmark-julia-fp32-v2.trace:
     gl-zink-anv-adl:
@@ -105,9 +109,9 @@ traces:
     gl-zink-anv-tgl:
       checksum: 83a21aa3f856af2d38e8be8391f58611
     zink-radv-vangogh:
-      checksum: aebd0199cbac91915f407242e955e823
+      checksum: f0c9eed59a70fe69a2ba36e3fdbee297
     zink-radv-gfx1201:
-      checksum: aebd0199cbac91915f407242e955e823
+      checksum: f0c9eed59a70fe69a2ba36e3fdbee297
 
   gputest/pixmark-julia-fp64-v2.trace:
     gl-zink-anv-adl:
@@ -122,56 +126,56 @@ traces:
   gputest/pixmark-volplosion-v2.trace:
     gl-zink-anv-adl:
       label: [no-perf]
-      checksum: 7e49248ad9dc4c052c04b11246c4bd33
+      checksum: c4ae80a143de76e137e5dd406586a459
       text: Different rendering from iris, but still looks correct (common result with this trace)
     gl-zink-anv-tgl:
-      checksum: 7e49248ad9dc4c052c04b11246c4bd33
+      checksum: c4ae80a143de76e137e5dd406586a459
       text: Different rendering from iris, but still looks correct (common result with this trace)
     zink-radv-vangogh:
-      checksum: 0e88ecbe19a7d2fbd98767709c43d0bb
+      checksum: 00ca21f3a459555080b6e7f1bfee4fde
     zink-radv-gfx1201:
-      checksum: 0e88ecbe19a7d2fbd98767709c43d0bb
+      checksum: 00ca21f3a459555080b6e7f1bfee4fde
 
   gputest/plot3d-v2.trace:
     gl-zink-anv-adl:
-      checksum: 56f11d133f72712a6df13855ec00cdb0
+      checksum: 8d32486f770f91a2a7cb13cda9f7da07
     gl-zink-anv-tgl:
-      checksum: 56f11d133f72712a6df13855ec00cdb0
+      checksum: 8d32486f770f91a2a7cb13cda9f7da07
     zink-radv-vangogh:
-      checksum: 97f929220cf05c7782c6f9ecc94b76f0
+      checksum: b7a42807586d2d36693ac2315076ecdf
     zink-radv-gfx1201:
-      checksum: a291560e348925432e968ba520b97eb3
+      checksum: a4ca5f0c35e59b57b928aacf18a6f9d9
 
   gputest/tessmark-v2.trace:
     gl-zink-anv-adl:
       label: [no-perf]
-      checksum: 04a5a9b7cbc88d8a66c33b5f1c08294d
+      checksum: 1b80c021a7a80d9fb4d7bc23a564a8f6
     gl-zink-anv-tgl:
-      checksum: 04a5a9b7cbc88d8a66c33b5f1c08294d
+      checksum: 1b80c021a7a80d9fb4d7bc23a564a8f6
     zink-radv-vangogh:
-      checksum: a3249012049c14506894584e649c5274
+      checksum: 86d6ab6a977d71524dc46f9190cb9735
     zink-radv-gfx1201:
-      checksum: a3249012049c14506894584e649c5274
+      checksum: 86d6ab6a977d71524dc46f9190cb9735
 
   humus/AmbientAperture-v2.trace:
     gl-zink-anv-adl:
-      checksum: 0f3b7351a84e1e6f15430f8766af4b4c
+      checksum: 0bb0e9caf5820f4ead2391ed69791505
     gl-zink-anv-tgl:
-      checksum: 0f3b7351a84e1e6f15430f8766af4b4c
+      checksum: 0bb0e9caf5820f4ead2391ed69791505
     zink-radv-vangogh:
-      checksum: db8b820f4146d04f86c288da92f5846a
+      checksum: dfeb213e38da66ca03ef481f2e905999
     zink-radv-gfx1201:
-      checksum: db8b820f4146d04f86c288da92f5846a
+      checksum: 69e220e66f8221ffcbee3bf6b3e2dbac
 
   humus/Portals-v2.trace:
     gl-zink-anv-adl:
-      checksum: a37699d09e61a842fc909f0c4fb72cf1
+      checksum: ae4dd23b6d3eac332d61cf3e28e968a4
     gl-zink-anv-tgl:
-      checksum: a37699d09e61a842fc909f0c4fb72cf1
+      checksum: ae4dd23b6d3eac332d61cf3e28e968a4
     zink-radv-vangogh:
-      checksum: 1f7035779a0ac731cded23801e1f3283
+      checksum: 85beddc755ed184782bbb19e41972683
     zink-radv-gfx1201:
-      checksum: 1f7035779a0ac731cded23801e1f3283
+      checksum: 2bce2f16aef741a657e931c05d867398
 
   humus/CelShading-v2.trace:
     gl-zink-anv-adl:
@@ -179,9 +183,9 @@ traces:
     gl-zink-anv-tgl:
       checksum: 68f20f660b9d812083066342398fe1b0
     zink-radv-vangogh:
-      checksum: 12a801d2fb5458c76101af537f98dadb
+      checksum: 08fc5c03874fb15c3d2c77c921093c67
     zink-radv-gfx1201:
-      checksum: 0ac0c9af59e9f269bdef3af1f903d49c
+      checksum: 665fdbc83cf9b3c623be605eaf6aada5
 
   humus/DynamicBranching3-v2.trace:
     gl-zink-anv-adl:
@@ -189,9 +193,9 @@ traces:
     gl-zink-anv-tgl:
       checksum: 0eb6c37cb88b48513e217012edf1ad32
     zink-radv-vangogh:
-      checksum: 8d28a386a06910c5e0a187146c69baf5
+      checksum: d124abd0096104d94077aeb55bf4b718
     zink-radv-gfx1201:
-      checksum: 8d28a386a06910c5e0a187146c69baf5
+      checksum: d124abd0096104d94077aeb55bf4b718
 
   humus/HDR-v2.trace:
     gl-zink-anv-adl:
@@ -199,9 +203,9 @@ traces:
     gl-zink-anv-tgl:
       checksum: b09d83a5887b19ceaaaf0ac69c6a0af4
     zink-radv-vangogh:
-      checksum: 5c9df331e49f519d34a47c848bd8e667
+      checksum: 9099e51d2414e639ff60a9644307f780
     zink-radv-gfx1201:
-      checksum: 5c9df331e49f519d34a47c848bd8e667
+      checksum: 9099e51d2414e639ff60a9644307f780
 
   humus/RaytracedShadows-v2.trace:
     gl-zink-anv-adl:
@@ -211,10 +215,10 @@ traces:
     zink-radv-vangogh:
       # checksum: c04caac15209f09a7f88de14c45f9899
       # checksum: 6cee4922acd96cc47083f622813d5a65
-      text: "oscillates between the two checksums above"
+      text: oscillates between the two checksums above
       label: [skip, flakes]
     zink-radv-gfx1201:
-      checksum: c04caac15209f09a7f88de14c45f9899
+      checksum: be4f37153200f03674134578238f679c
 
   humus/VolumetricFogging2-v2.trace:
     gl-zink-anv-adl:
@@ -229,13 +233,13 @@ traces:
 
   neverball/neverball-v2.trace:
     gl-zink-anv-adl:
-      checksum: 476a3e154a2564c9b136705cfdcf36de
+      checksum: 0f2d9664dc0983f87068a7e487b3824d
     gl-zink-anv-tgl:
-      checksum: 476a3e154a2564c9b136705cfdcf36de
+      checksum: 0f2d9664dc0983f87068a7e487b3824d
     zink-radv-vangogh:
-      checksum: 4256ad77b627950edcaaea6c6fd6f5c0
+      checksum: 1d22695672992477e6ce8ee9ac05231e
     zink-radv-gfx1201:
-      checksum: 4256ad77b627950edcaaea6c6fd6f5c0
+      checksum: 6d405aeea76ec497feeaf19bb380957d
 
   paraview/pv-manyspheres-v2.trace:
     gl-zink-anv-adl:
@@ -245,38 +249,41 @@ traces:
     gl-zink-anv-tgl:
       checksum: 190153b6437f7063a6853ca94e5914f2
     zink-radv-vangogh:
-      checksum: 862889bb790b8e13592146c0ba809c72
+      checksum: ba9b8bb88ba6bd746eea211aa86d0652
     zink-radv-gfx1201:
-      checksum: 862889bb790b8e13592146c0ba809c72
+      checksum: ba9b8bb88ba6bd746eea211aa86d0652
 
   paraview/pv-waveletcontour-v2.trace:
     gl-zink-anv-adl:
       label: [skip, broken, crash]
       checksum: be4aba8a24e2bd2beb068d0c9c89dfcb
-      text: "Crashes on nissa, but seemed to pass on brya"
+      text: Crashes on nissa, but seemed to pass on brya
     gl-zink-anv-tgl:
-      checksum: be4aba8a24e2bd2beb068d0c9c89dfcb
+      checksum: 3a733fc18bee55c4a4d97a44761ec6ed
     zink-radv-vangogh:
-      checksum: f74edfef3872c7367fec48d4a28002c4
+      checksum: dfcb410c0eaef9fab065908a8c9175b3
     zink-radv-gfx1201:
-      checksum: f74edfef3872c7367fec48d4a28002c4
+      checksum: dfcb410c0eaef9fab065908a8c9175b3
 
   paraview/pv-waveletvolume-v2.trace:
     gl-zink-anv-adl:
       label: [skip, broken, crash]
       checksum: b36c25e52624cbf8dab73b6acecb8e84
-      text: "Crashes on nissa, but seemed to pass on brya"
+      text: Crashes on nissa, but seemed to pass on brya
     gl-zink-anv-tgl:
       checksum: b36c25e52624cbf8dab73b6acecb8e84
     zink-radv-vangogh:
-      checksum: efafc2996298a0c3f91a8dd0a718b32d
+      checksum: 300b70c951f44e6d321a97626ca52b8a
     zink-radv-gfx1201:
-      checksum: efafc2996298a0c3f91a8dd0a718b32d
+      checksum: 300b70c951f44e6d321a97626ca52b8a
 
   pathfinder/demo-v2.trace:
     gl-zink-anv-adl:
       checksum: 558c3d2b1b7acc782b3908c579ce0ce8
     gl-zink-anv-tgl:
+      # The rendered image has a smaller resolution this looks like a
+      # window system issue in zink
+      label: [skip, broken]
       checksum: 558c3d2b1b7acc782b3908c579ce0ce8
     zink-radv-vangogh:
       checksum: e673334ff967e1998c0a445e11066998
@@ -287,6 +294,8 @@ traces:
     gl-zink-anv-adl:
       checksum: 1706229fca06c1d7946ebc94e3b0a66d
     gl-zink-anv-tgl:
+      # Flaky, looks like a window system issue in zink
+      label: [skip, broken]
       checksum: 1706229fca06c1d7946ebc94e3b0a66d
     zink-radv-vangogh:
       checksum: 8b8a99c7828481fd6a126192ee4a4594
@@ -306,13 +315,13 @@ traces:
   ror/ror-default.trace:
     gl-zink-anv-adl:
       label: [no-perf]
-      checksum: d7b07cb1f6fdc6949bdaf84d2173e24b
+      checksum: 037eef0b288cc6e9e37bb2334edb7368
     gl-zink-anv-tgl:
-      checksum: d7b07cb1f6fdc6949bdaf84d2173e24b
+      checksum: 037eef0b288cc6e9e37bb2334edb7368
     zink-radv-vangogh:
-      checksum: 7494a9336f0d6467223f3d0e7b15071b
+      checksum: f7d6140727ab868bbac1989654af4d47
     zink-radv-gfx1201:
-      checksum: 7494a9336f0d6467223f3d0e7b15071b
+      checksum: f7d6140727ab868bbac1989654af4d47
 
   supertuxkart/supertuxkart-antediluvian-abyss.rdc:
     gl-zink-anv-adl:
@@ -324,9 +333,9 @@ traces:
       checksum: 0af2faa0d9183c1bc4dc7612befe1f0a
       text: "'egl_platform.cpp( 227) - Error   - Couldn't find a suitable EGL config' -- revisit when we can turn on X11?"
     zink-radv-vangogh:
-      checksum: dcd475693bab6c6acedb721d84faa6c7
+      checksum: 22a15ac808f8b7d091f1da935f723d17
     zink-radv-gfx1201:
-      checksum: 15f10ce94fe9ee793e6b80a3b652f052
+      checksum: e6eb90fd6ca9d1e128d03d0769396aab
 
   supertuxkart/supertuxkart-menu.rdc:
     gl-zink-anv-adl:
@@ -352,9 +361,9 @@ traces:
       checksum: ca0b64f1a62e01765146be8391eae636
       text: "'egl_platform.cpp( 227) - Error   - Couldn't find a suitable EGL config' -- revisit when we can turn on X11?"
     zink-radv-vangogh:
-      checksum: ee5bc60979e40f7c314ae90fd50815c9
+      checksum: 3e93519cd680bb6191e909dbf489128b
     zink-radv-gfx1201:
-      checksum: ffc7d4219aaed854c60263ca6627bf3f
+      checksum: 489491fbc3395c922c3a7da6896ff459
 
   unvanquished/unvanquished-lowest.trace:
     gl-zink-anv-adl:
@@ -362,39 +371,45 @@ traces:
     gl-zink-anv-tgl:
       checksum: 7789205e8b4d160dc81e3684f0627a38
     zink-radv-vangogh:
-      checksum: b7393d5d8c0aa09485880ccd6310fed8
+      # checksum: b7393d5d8c0aa09485880ccd6310fed8
+      # checksum: 8697a6c6d4f360bfdc008d6a30588799
+      text: oscillates between the two checksums above
+      label: [skip, flakes]
     zink-radv-gfx1201:
       # checksum: b7393d5d8c0aa09485880ccd6310fed8
       # checksum: 870de613d477af42e9b3f81a081d4e7f
-      text: "oscillates between the two checksums above"
+      text: oscillates between the two checksums above
       label: [skip, flakes]
 
   unvanquished/unvanquished-ultra.trace:
     gl-zink-anv-adl:
-      checksum: 026dde18e934e7ce3e36eb13ea8e975c
+      checksum: 7791755c957b55bfc5d30befe1e1f20d
     gl-zink-anv-tgl:
-      checksum: 026dde18e934e7ce3e36eb13ea8e975c
+      checksum: 7791755c957b55bfc5d30befe1e1f20d
     zink-radv-vangogh:
-      checksum: 08f44ba93a13220f5e6db3a00e6449ea
+      # checksum: 9df8f5c18d8dfc09530071dedcf87120
+      # checksum: b6d277fe54db66c7651c9f847146cb73
+      text: oscillates between the two checksums above
+      label: [skip, flakes]
     zink-radv-gfx1201:
       # checksum: 08f44ba93a13220f5e6db3a00e6449ea
       # checksum: 5078d9c5d272fa231da4d960c90baead
-      text: "oscillates between the two checksums above"
+      text: oscillates between the two checksums above
       label: [skip, flakes]
 
   valve/counterstrike-v2.trace:
     gl-zink-anv-adl:
       label: [skip, broken]
       checksum: 148ec1105f5f14c90cb756a178cef264
-      text: "MESA: error: ZINK: vkQueueSubmit failed (VK_ERROR_DEVICE_LOST)"
+      text: 'MESA: error: ZINK: vkQueueSubmit failed (VK_ERROR_DEVICE_LOST)'
     gl-zink-anv-tgl:
       label: [skip, flakes]
       checksum: 148ec1105f5f14c90cb756a178cef264
-      text: "note that this trace is stable on freedreno"
+      text: note that this trace is stable on freedreno
     zink-radv-vangogh:
-      checksum: 78fc23919ecc301aef4fb0c3ddc5c195
+      checksum: 38649d137f8f530d354406bc1ffd6257
     zink-radv-gfx1201:
-      checksum: 78fc23919ecc301aef4fb0c3ddc5c195
+      checksum: 38649d137f8f530d354406bc1ffd6257
 
   valve/counterstrike-source-v2.trace:
     gl-zink-anv-adl:
@@ -410,51 +425,51 @@ traces:
       checksum: d5eb7d064ca31cb316e853a082a3950d
       text: occasional segfaults
     zink-radv-vangogh:
-      checksum: 6d8131d9a552e68a1e615e8946b021b4
+      checksum: 35acc6074be4f9947561f98a812107d2
     zink-radv-gfx1201:
-      checksum: 868013fe76218ab0488d4b9f03915dfb
+      checksum: 84e272f12cce5d4cddb198906de5b5ea
 
   valve/half-life-2-v2.trace:
     gl-zink-anv-adl:
       label: [no-perf]
-      checksum: 01392d862e0535e317e8744b5f9fe7a2
+      checksum: 54149c9a6560176436600bfe8fe2ae1f
     gl-zink-anv-tgl:
-      checksum: 01392d862e0535e317e8744b5f9fe7a2
+      checksum: 54149c9a6560176436600bfe8fe2ae1f
     zink-radv-vangogh:
-      checksum: 5f8dd092eb6ff7384293c183b045b6dd
+      checksum: 051011af02dd7972f55db7d01d38a200
     zink-radv-gfx1201:
-      checksum: 0a759871268e82672c3a63a15bf52639
+      checksum: 94e49e3e92171c6a1cb2a2ba3ef8c023
 
   valve/portal-2-v2.trace:
     gl-zink-anv-adl:
       label: [skip, broken]
       checksum: 3683fd5bb2224d6f4a1c47c1eab277d9
-      text: "MESA: error: ZINK: vkQueueSubmit failed (VK_ERROR_DEVICE_LOST)"
+      text: 'MESA: error: ZINK: vkQueueSubmit failed (VK_ERROR_DEVICE_LOST)'
     gl-zink-anv-tgl:
-      checksum: 3683fd5bb2224d6f4a1c47c1eab277d9
+      checksum: a10392dbca5b15cc76468a3a819b9d4d
     zink-radv-vangogh:
-      checksum: 2503e601983b38421bac6f6888fd25d9
+      checksum: a5705312e346cec828fe26b1c19b4cfe
     zink-radv-gfx1201:
-      checksum: e54cf7b20d26d4aaecd194b09844ff3b
+      checksum: 828e564c05cd126cffbef6779dd4cd84
 
   warzone2100/warzone2100-default.trace:
     gl-zink-anv-adl:
-      checksum: 56f1f06bdca3d5352b5e6c0c3d572f43
+      checksum: be68b8d39e665a64824ea37703654a8a
     gl-zink-anv-tgl:
       label: [skip, flakes]
-      checksum: 56f1f06bdca3d5352b5e6c0c3d572f43
+      checksum: be68b8d39e665a64824ea37703654a8a
       text: occasional checksum change
     zink-radv-vangogh:
-      checksum: 51d4649b2e415cfe595ae0243472fdd7
+      checksum: d2495122c17635c89fb002ca0f44e061
     zink-radv-gfx1201:
-      checksum: 51d4649b2e415cfe595ae0243472fdd7
+      checksum: d2495122c17635c89fb002ca0f44e061
 
   xonotic/xonotic-keybench-high-v2.trace:
     gl-zink-anv-adl:
-      checksum: 659ef8c91d9eeccd0dc603b196c2577c
+      checksum: 181424f3afd256108be63d8ea0669b6b
     gl-zink-anv-tgl:
-      checksum: 659ef8c91d9eeccd0dc603b196c2577c
+      checksum: 181424f3afd256108be63d8ea0669b6b
     zink-radv-vangogh:
-      checksum: f57b45209e0b685eda202e4c538a3695
+      checksum: c55186a47ee9ee89e8cc398a4e94a6dd
     zink-radv-gfx1201:
-      checksum: f57b45209e0b685eda202e4c538a3695
+      checksum: c55186a47ee9ee89e8cc398a4e94a6dd

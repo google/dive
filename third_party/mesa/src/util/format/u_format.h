@@ -141,6 +141,16 @@ struct util_format_channel_description
 };
 
 
+enum pipe_video_chroma_format {
+   PIPE_VIDEO_CHROMA_FORMAT_NONE = 0,
+   PIPE_VIDEO_CHROMA_FORMAT_400 = 1,
+   PIPE_VIDEO_CHROMA_FORMAT_420 = 2,
+   PIPE_VIDEO_CHROMA_FORMAT_422 = 3,
+   PIPE_VIDEO_CHROMA_FORMAT_440 = 4,
+   PIPE_VIDEO_CHROMA_FORMAT_444 = 5,
+};
+
+
 struct util_format_description
 {
    enum pipe_format format;
@@ -237,6 +247,11 @@ struct util_format_description
     * Colorspace transformation.
     */
    enum util_format_colorspace colorspace;
+
+   /**
+    * subsampling.
+    */
+   enum pipe_video_chroma_format subsampling;
 
    /**
     * For sRGB formats, equivalent linear format; for linear formats,
@@ -1086,6 +1101,12 @@ util_format_get_component_shift(enum pipe_format format,
    }
 }
 
+static inline unsigned
+util_format_get_depth_bits(enum pipe_format format)
+{
+   return util_format_get_component_bits(format, UTIL_FORMAT_COLORSPACE_ZS, 0);
+}
+
 /**
  * Given a linear RGB colorspace format, return the corresponding SRGB
  * format, or PIPE_FORMAT_NONE if none.
@@ -1348,6 +1369,17 @@ util_format_is_unorm8(const struct util_format_description *desc)
 }
 
 static inline bool
+util_format_is_unorm16(const struct util_format_description *desc)
+{
+   int c = util_format_get_first_non_void_channel(desc->format);
+
+   if (c == -1)
+      return false;
+
+   return desc->is_unorm && desc->is_array && desc->channel[c].size == 16;
+}
+
+static inline bool
 util_format_is_int64(const struct util_format_description *desc)
 {
    int c = util_format_get_first_non_void_channel(desc->format);
@@ -1560,6 +1592,12 @@ util_format_rgb_to_bgr(enum pipe_format format);
 
 enum pipe_format
 util_format_rgbx_to_rgba(enum pipe_format format);
+
+static inline enum pipe_video_chroma_format
+pipe_format_to_chroma_format(enum pipe_format format)
+{
+   return util_format_description(format)->subsampling;
+}
 
 /* Returns the pipe format for the given array type, bitsize and component count. */
 enum pipe_format

@@ -56,7 +56,7 @@ static const VkPresentModeKHR present_modes[] = {
 static VkResult
 wsi_headless_surface_get_capabilities(VkIcdSurfaceBase *surface,
                                       struct wsi_device *wsi_device,
-                                      VkSurfaceCapabilitiesKHR* caps)
+                                      VkSurfaceCapabilities2KHR* caps)
 {
    /* For true mailbox mode, we need at least 4 images:
     *  1) One to scan out from
@@ -64,30 +64,42 @@ wsi_headless_surface_get_capabilities(VkIcdSurfaceBase *surface,
     *  3) One to be currently held by the Wayland compositor
     *  4) One to render to
     */
-   caps->minImageCount = 4;
+   caps->surfaceCapabilities.minImageCount = 4;
    /* There is no real maximum */
-   caps->maxImageCount = 0;
+   caps->surfaceCapabilities.maxImageCount = 0;
 
-   caps->currentExtent = (VkExtent2D) { -1, -1 };
-   caps->minImageExtent = (VkExtent2D) { 1, 1 };
-   caps->maxImageExtent = (VkExtent2D) {
+   caps->surfaceCapabilities.currentExtent = (VkExtent2D) { -1, -1 };
+   caps->surfaceCapabilities.minImageExtent = (VkExtent2D) { 1, 1 };
+   caps->surfaceCapabilities.maxImageExtent = (VkExtent2D) {
       wsi_device->maxImageDimension2D,
       wsi_device->maxImageDimension2D,
    };
 
-   caps->supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   caps->currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-   caps->maxImageArrayLayers = 1;
+   caps->surfaceCapabilities.supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+   caps->surfaceCapabilities.currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+   caps->surfaceCapabilities.maxImageArrayLayers = 1;
 
-   caps->supportedCompositeAlpha =
+   caps->surfaceCapabilities.supportedCompositeAlpha =
       VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR |
       VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
 
-   caps->supportedUsageFlags = wsi_caps_get_image_usage();
+   VkImageUsageFlags image_usage = wsi_caps_get_image_usage();
 
    VK_FROM_HANDLE(vk_physical_device, pdevice, wsi_device->pdevice);
    if (pdevice->supported_extensions.EXT_attachment_feedback_loop_layout)
-      caps->supportedUsageFlags |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;
+      image_usage |= VK_IMAGE_USAGE_ATTACHMENT_FEEDBACK_LOOP_BIT_EXT;
+
+   VkSwapchainFlagsSurfaceCapabilitiesEXT *surface_caps = vk_find_struct(caps, SWAPCHAIN_FLAGS_SURFACE_CAPABILITIES_EXT);
+   if (surface_caps && pdevice->supported_extensions.EXT_multisampled_render_to_swapchain)
+      surface_caps->swapchainSupportedFlags |= VK_SWAPCHAIN_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT;
+
+   VkImageUsageFlags2CreateInfoKHR *usage2 =
+      vk_find_struct(caps->pNext, IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR);
+   if (usage2) {
+      usage2->usage = image_usage;
+   } else {
+      caps->surfaceCapabilities.supportedUsageFlags = image_usage;
+   }
 
    return VK_SUCCESS;
 }
@@ -100,15 +112,55 @@ wsi_headless_surface_get_capabilities2(VkIcdSurfaceBase *surface,
 {
    assert(caps->sType == VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR);
 
+   const VkSurfacePresentModeKHR *present_mode =
+      vk_find_struct_const(info_next, SURFACE_PRESENT_MODE_EXT);
+
    VkResult result =
       wsi_headless_surface_get_capabilities(surface, wsi_device,
-                                      &caps->surfaceCapabilities);
+                                      caps);
 
    vk_foreach_struct(ext, caps->pNext) {
       switch (ext->sType) {
       case VK_STRUCTURE_TYPE_SURFACE_PROTECTED_CAPABILITIES_KHR: {
          VkSurfaceProtectedCapabilitiesKHR *protected = (void *)ext;
          protected->supportsProtected = VK_FALSE;
+         break;
+      }
+      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_KHR: {
+         /* Unsupported */
+         VkSurfacePresentScalingCapabilitiesKHR *scaling = (void *)ext;
+         scaling->supportedPresentScaling = 0;
+         scaling->supportedPresentGravityX = 0;
+         scaling->supportedPresentGravityY = 0;
+         scaling->minScaledImageExtent = caps->surfaceCapabilities.minImageExtent;
+         scaling->maxScaledImageExtent = caps->surfaceCapabilities.maxImageExtent;
+         break;
+      }
+      case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_KHR: {
+         /* Unsupported */
+         VkSurfacePresentModeCompatibilityKHR *compat = (void *)ext;
+         if (compat->pPresentModes == NULL) {
+            if (!present_mode) {
+               wsi_common_vk_warn_once("Use of VkSurfacePresentModeCompatibilityKHR "
+                                       "without a VkSurfacePresentModeKHR set. This is an "
+                                       "application bug.\n");
+            }
+            compat->presentModeCount = 1;
+         } else if (compat->presentModeCount) {
+            assert(present_mode);
+            compat->presentModeCount = 1;
+            compat->pPresentModes[0] = present_mode->presentMode;
+         }
+         break;
+      }
+
+      case VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT: {
+         VkPresentTimingSurfaceCapabilitiesEXT *wait = (void *)ext;
+
+         wait->presentStageQueries = 0;
+         wait->presentTimingSupported = VK_FALSE;
+         wait->presentAtAbsoluteTimeSupported = VK_FALSE;
+         wait->presentAtRelativeTimeSupported = VK_FALSE;
          break;
       }
 
@@ -138,6 +190,14 @@ wsi_headless_surface_get_formats(VkIcdSurfaceBase *icd_surface,
          out_fmt->format = VK_FORMAT_R8G8B8A8_UNORM;
          out_fmt->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
       }
+      vk_outarray_append_typed(VkSurfaceFormatKHR, &out, out_fmt) {
+         out_fmt->format = VK_FORMAT_B8G8R8A8_SRGB;
+         out_fmt->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+      vk_outarray_append_typed(VkSurfaceFormatKHR, &out, out_fmt) {
+         out_fmt->format = VK_FORMAT_R8G8B8A8_SRGB;
+         out_fmt->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
    } else {
       vk_outarray_append_typed(VkSurfaceFormatKHR, &out, out_fmt) {
          out_fmt->format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -145,6 +205,14 @@ wsi_headless_surface_get_formats(VkIcdSurfaceBase *icd_surface,
       }
       vk_outarray_append_typed(VkSurfaceFormatKHR, &out, out_fmt) {
          out_fmt->format = VK_FORMAT_B8G8R8A8_UNORM;
+         out_fmt->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+      vk_outarray_append_typed(VkSurfaceFormatKHR, &out, out_fmt) {
+         out_fmt->format = VK_FORMAT_R8G8B8A8_SRGB;
+         out_fmt->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+      vk_outarray_append_typed(VkSurfaceFormatKHR, &out, out_fmt) {
+         out_fmt->format = VK_FORMAT_B8G8R8A8_SRGB;
          out_fmt->colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
       }
    }
@@ -170,6 +238,14 @@ wsi_headless_surface_get_formats2(VkIcdSurfaceBase *icd_surface,
          out_fmt->surfaceFormat.format = VK_FORMAT_R8G8B8A8_UNORM;
          out_fmt->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
       }
+      vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, out_fmt) {
+         out_fmt->surfaceFormat.format = VK_FORMAT_B8G8R8A8_SRGB;
+         out_fmt->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+      vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, out_fmt) {
+         out_fmt->surfaceFormat.format = VK_FORMAT_R8G8B8A8_SRGB;
+         out_fmt->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
    } else {
       vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, out_fmt) {
          out_fmt->surfaceFormat.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -177,6 +253,14 @@ wsi_headless_surface_get_formats2(VkIcdSurfaceBase *icd_surface,
       }
       vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, out_fmt) {
          out_fmt->surfaceFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
+         out_fmt->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+      vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, out_fmt) {
+         out_fmt->surfaceFormat.format = VK_FORMAT_R8G8B8A8_SRGB;
+         out_fmt->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      }
+      vk_outarray_append_typed(VkSurfaceFormat2KHR, &out, out_fmt) {
+         out_fmt->surfaceFormat.format = VK_FORMAT_B8G8R8A8_SRGB;
          out_fmt->surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
       }
    }
@@ -256,6 +340,23 @@ wsi_headless_swapchain_get_wsi_image(struct wsi_swapchain *wsi_chain,
 }
 
 static VkResult
+wsi_headless_swapchain_release_images(struct wsi_swapchain *wsi_chain,
+                                      uint32_t count, const uint32_t *indices)
+{
+   struct wsi_headless_swapchain *chain =
+      (struct wsi_headless_swapchain *)wsi_chain;
+
+   for (uint32_t i = 0; i < count; i++) {
+      uint32_t index = indices[i];
+      assert(index < chain->base.image_count);
+      chain->images[index].busy_on_device = false;
+      chain->images[index].busy_on_host = false;
+   }
+
+   return VK_SUCCESS;
+}
+
+static VkResult
 wsi_headless_swapchain_acquire_next_image(struct wsi_swapchain *wsi_chain,
                                           const VkAcquireNextImageInfoKHR *info,
                                           uint32_t *image_index)
@@ -313,6 +414,15 @@ wsi_headless_swapchain_queue_present(struct wsi_swapchain *wsi_chain,
 }
 
 static VkResult
+wsi_headless_swapchain_wait_for_present(struct wsi_swapchain *wsi_chain,
+                                        uint64_t waitValue,
+                                        uint64_t timeout)
+{
+   return wsi_swapchain_wait_for_present_semaphore(
+      wsi_chain, waitValue, timeout);
+}
+
+static VkResult
 wsi_headless_swapchain_destroy(struct wsi_swapchain *wsi_chain,
                                const VkAllocationCallbacks *pAllocator)
 {
@@ -358,7 +468,7 @@ wsi_headless_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
       .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
       .pNext = &mod_list,
    };
-   if (wsi_device->supports_modifiers) {
+   if (!wsi_device->sw && wsi_device->supports_modifiers) {
       wsi_device->GetPhysicalDeviceFormatProperties2(
          wsi_device->pdevice, pCreateInfo->imageFormat, &props);
       assert(mod_list.drmFormatModifierCount > 0);
@@ -377,48 +487,64 @@ wsi_headless_surface_create_swapchain(VkIcdSurfaceBase *icd_surface,
          mods[i] = mod_props[i].drmFormatModifier;
    }
 
-   struct wsi_drm_image_params drm_params = {
-      .base.image_type = WSI_IMAGE_TYPE_DRM,
-      .same_gpu = true,
-      .num_modifier_lists = mod_list.drmFormatModifierCount > 0 ? 1 : 0,
-      .num_modifiers = &mod_list.drmFormatModifierCount,
-      .modifiers = (const uint64_t **)&mods,
-   };
+   struct wsi_base_image_params *image_params = NULL;
+   struct wsi_cpu_image_params cpu_params;
+   struct wsi_drm_image_params drm_params;
+   if (wsi_device->sw) {
+      cpu_params = (struct wsi_cpu_image_params) {
+         .base.image_type = WSI_IMAGE_TYPE_CPU,
+      };
+      image_params = &cpu_params.base;
+   } else {
+      drm_params = (struct wsi_drm_image_params) {
+         .base.image_type = WSI_IMAGE_TYPE_DRM,
+         .same_gpu = true,
+         .num_modifier_lists = mod_list.drmFormatModifierCount > 0 ? 1 : 0,
+         .num_modifiers = &mod_list.drmFormatModifierCount,
+         .modifiers = (const uint64_t **)&mods,
+      };
+      image_params = &drm_params.base;
+   }
 
    result = wsi_swapchain_init(wsi_device, &chain->base, device,
-                               pCreateInfo, &drm_params.base, pAllocator);
+                               pCreateInfo, image_params, pAllocator);
 
    STACK_ARRAY_FINISH(mods);
    STACK_ARRAY_FINISH(mod_props);
 
-   if (result != VK_SUCCESS) {
-      vk_free(pAllocator, chain);
-      return result;
-   }
+   if (result != VK_SUCCESS)
+      goto fail_free_chain;
 
    chain->base.destroy = wsi_headless_swapchain_destroy;
    chain->base.get_wsi_image = wsi_headless_swapchain_get_wsi_image;
    chain->base.acquire_next_image = wsi_headless_swapchain_acquire_next_image;
+   chain->base.release_images = wsi_headless_swapchain_release_images;
    chain->base.queue_present = wsi_headless_swapchain_queue_present;
+   chain->base.wait_for_present = wsi_headless_swapchain_wait_for_present;
    chain->base.present_mode = wsi_swapchain_get_present_mode(wsi_device, pCreateInfo);
    chain->base.image_count = num_images;
 
-   for (uint32_t i = 0; i < chain->base.image_count; i++) {
+   uint32_t image = 0;
+   for (; image < chain->base.image_count; image++) {
       result = wsi_create_image(&chain->base, &chain->base.image_info,
-                                &chain->images[i].base);
+                                &chain->images[image].base);
       if (result != VK_SUCCESS)
-         goto fail;
+         goto fail_destroy_images;
 
-      chain->images[i].busy_on_host = false;
-      chain->images[i].busy_on_device = false;
+      chain->images[image].busy_on_host = false;
+      chain->images[image].busy_on_device = false;
    }
 
    *swapchain_out = &chain->base;
 
    return VK_SUCCESS;
 
-fail:
-   wsi_headless_swapchain_destroy(&chain->base, pAllocator);
+fail_destroy_images:
+   for (uint32_t i = 0; i < image; i++)
+      wsi_destroy_image(&chain->base, &chain->images[i].base);
+   wsi_swapchain_finish(&chain->base);
+fail_free_chain:
+   vk_free(pAllocator, chain);
 
    return result;
 }

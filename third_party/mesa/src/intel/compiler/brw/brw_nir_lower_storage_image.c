@@ -1,24 +1,6 @@
 /*
  * Copyright © 2018 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "isl/isl.h"
@@ -127,7 +109,7 @@ convert_color_for_load(nir_builder *b, const struct intel_device_info *devinfo,
 
    case ISL_SFLOAT:
       if (image.bits[0] == 16)
-         color = nir_unpack_half_2x16_split_x(b, color);
+         color = nir_f2f32(b, nir_u2u16(b, color));
       break;
 
    case ISL_UINT:
@@ -223,15 +205,18 @@ lower_image_load_instr_without_format(nir_builder *b,
 
    assert(nir_intrinsic_format(intrin) == PIPE_FORMAT_NONE);
 
-   nir_def *image_fmt = nir_image_deref_load_param_intel(
-      b, 1, 32, img, .base = ISL_SURF_PARAM_FORMAT);
+   nir_def *image_fmt =
+      (intrin->intrinsic == nir_intrinsic_image_heap_load ||
+       intrin->intrinsic == nir_intrinsic_image_heap_sparse_load) ?
+      nir_image_heap_load_param_intel(
+         b, 1, 32, img, .base = ISL_SURF_PARAM_FORMAT) :
+      nir_image_deref_load_param_intel(
+         b, 1, 32, img, .base = ISL_SURF_PARAM_FORMAT);
 
    nir_def *color = convert_color_for_load_format(
       b, state->compiler, &intrin->def, image_fmt);
 
-   nir_def_rewrite_uses(placeholder, color);
-   nir_instr_remove(placeholder->parent_instr);
-
+   nir_def_replace(placeholder, color);
    return true;
 }
 
@@ -290,9 +275,7 @@ lower_image_load_instr(nir_builder *b,
       color = nir_vec(b, sparse_color, dest_components + 1);
    }
 
-   nir_def_rewrite_uses(placeholder, color);
-   nir_instr_remove(placeholder->parent_instr);
-
+   nir_def_replace(placeholder, color);
    return true;
 }
 
@@ -416,7 +399,8 @@ lower(nir_builder *b, nir_intrinsic_instr *intrin, void *cb_data)
    const struct brw_nir_lower_storage_image_state *state = cb_data;
 
    switch (intrin->intrinsic) {
-   case nir_intrinsic_image_deref_load: {
+   case nir_intrinsic_image_deref_load:
+   case nir_intrinsic_image_heap_load:
       if (nir_intrinsic_format(intrin) == PIPE_FORMAT_NONE) {
          if (state->opts.lower_loads_without_formats)
             return lower_image_load_instr_without_format(b, state, intrin);
@@ -427,9 +411,9 @@ lower(nir_builder *b, nir_intrinsic_instr *intrin, void *cb_data)
          }
       }
       return false;
-   }
 
-   case nir_intrinsic_image_deref_sparse_load: {
+   case nir_intrinsic_image_deref_sparse_load:
+   case nir_intrinsic_image_heap_sparse_load:
       if (nir_intrinsic_format(intrin) == PIPE_FORMAT_NONE) {
          if (state->opts.lower_loads_without_formats)
             return lower_image_load_instr_without_format(b, state, intrin);
@@ -440,9 +424,9 @@ lower(nir_builder *b, nir_intrinsic_instr *intrin, void *cb_data)
          }
       }
       return false;
-   }
 
    case nir_intrinsic_image_deref_store:
+   case nir_intrinsic_image_heap_store:
       return lower_image_store_instr(
          b, &state->opts, state->compiler->devinfo, intrin);
 

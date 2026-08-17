@@ -6,15 +6,21 @@
 #ifndef TU_BUFFER_VIEW_H
 #define TU_BUFFER_VIEW_H
 
-#include "tu_common.h"
+#include <stdint.h>
 
 #include "vk_buffer_view.h"
+#include "vk_object.h"
+#include "vulkan/vulkan_core.h"
+
+#include "fdl/freedreno_layout.h"
+
+struct tu_buffer;
 
 struct tu_buffer_view
 {
    struct vk_buffer_view vk;
 
-   uint32_t descriptor[A6XX_TEX_CONST_DWORDS];
+   uint32_t descriptor[FDL6_TEX_CONST_DWORDS];
 
    struct tu_buffer *buffer;
 };

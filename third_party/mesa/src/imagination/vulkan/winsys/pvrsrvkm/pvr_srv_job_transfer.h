@@ -26,12 +26,23 @@
 
 #include <vulkan/vulkan.h>
 
+#include "pvr_macros.h"
+#include "pvr_winsys.h"
+
+struct rogue_fwif_cmd_transfer;
 struct pvr_device_info;
-struct pvr_winsys;
-struct pvr_winsys_transfer_ctx;
-struct pvr_winsys_transfer_ctx_create_info;
-struct pvr_winsys_transfer_submit_info;
 struct vk_sync;
+
+struct pvr_srv_winsys_transfer_ctx {
+   struct pvr_winsys_transfer_ctx base;
+
+   void *handle;
+
+   int timeline_3d;
+};
+
+#define to_pvr_srv_winsys_transfer_ctx(ctx) \
+   container_of(ctx, struct pvr_srv_winsys_transfer_ctx, base)
 
 /*******************************************
    Function prototypes
@@ -43,10 +54,12 @@ VkResult pvr_srv_winsys_transfer_ctx_create(
    struct pvr_winsys_transfer_ctx **const ctx_out);
 void pvr_srv_winsys_transfer_ctx_destroy(struct pvr_winsys_transfer_ctx *ctx);
 
-VkResult pvr_srv_winsys_transfer_submit(
+#ifdef PVR_PER_ARCH
+VkResult PVR_PER_ARCH(srv_winsys_transfer_submit)(
    const struct pvr_winsys_transfer_ctx *ctx,
    const struct pvr_winsys_transfer_submit_info *submit_info,
-   const struct pvr_device_info *dev_info,
+   const struct pvr_device_info *const dev_info,
    struct vk_sync *signal_sync);
+#endif
 
 #endif /* PVR_SRV_JOB_TRANSFER_H */

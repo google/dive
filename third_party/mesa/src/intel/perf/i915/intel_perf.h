@@ -23,8 +23,6 @@ int i915_perf_stream_read_samples(struct intel_perf_config *perf_config, int per
 int i915_perf_stream_set_state(int perf_stream_fd, bool enable);
 int i915_perf_stream_set_metrics_id(int perf_stream_fd, uint64_t metrics_set_id);
 
-struct intel_perf_registers *i915_perf_load_configurations(struct intel_perf_config *perf_cfg, int fd, const char *guid);
-
 bool i915_oa_metrics_available(struct intel_perf_config *perf, int fd, bool use_register_snapshots);
 
 bool i915_has_dynamic_config_support(struct intel_perf_config *perf, int fd);

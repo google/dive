@@ -12,8 +12,9 @@
 #include "vulkan/wsi/wsi_common.h"
 
 #include "util/build_id.h"
-#include "util/driconf.h"
-#include "util/mesa-sha1.h"
+#include "hk_drirc.h"
+#include "util/mesa-blake3.h"
+#include "util/os_misc.h"
 
 VKAPI_ATTR VkResult VKAPI_CALL
 hk_EnumerateInstanceVersion(uint32_t *pApiVersion)
@@ -29,6 +30,7 @@ static const struct vk_instance_extension_table instance_extensions = {
 #ifdef HK_USE_WSI_PLATFORM
    .KHR_get_surface_capabilities2 = true,
    .KHR_surface = true,
+   .KHR_surface_maintenance1 = true,
    .KHR_surface_protected_capabilities = true,
    .EXT_surface_maintenance1 = true,
    .EXT_swapchain_colorspace = true,
@@ -76,51 +78,17 @@ hk_EnumerateInstanceExtensionProperties(const char *pLayerName,
       &instance_extensions, pPropertyCount, pProperties);
 }
 
-/* clang-format off */
-static const driOptionDescription hk_dri_options[] = {
-   DRI_CONF_SECTION_PERFORMANCE
-      DRI_CONF_ADAPTIVE_SYNC(true)
-      DRI_CONF_VK_X11_OVERRIDE_MIN_IMAGE_COUNT(0)
-      DRI_CONF_VK_X11_STRICT_IMAGE_COUNT(false)
-      DRI_CONF_VK_X11_ENSURE_MIN_IMAGE_COUNT(false)
-      DRI_CONF_VK_XWAYLAND_WAIT_READY(false)
-   DRI_CONF_SECTION_END
-
-   DRI_CONF_SECTION_DEBUG
-      DRI_CONF_FORCE_VK_VENDOR()
-      DRI_CONF_VK_WSI_FORCE_SWAPCHAIN_TO_CURRENT_EXTENT(false)
-      DRI_CONF_VK_X11_IGNORE_SUBOPTIMAL(false)
-   DRI_CONF_SECTION_END
-
-   DRI_CONF_SECTION_MISCELLANEOUS
-      DRI_CONF_HK_DISABLE_BORDER_EMULATION(false)
-      DRI_CONF_HK_FAKE_MINMAX(false)
-      DRI_CONF_HK_IMAGE_VIEW_MIN_LOD(false)
-   DRI_CONF_SECTION_END
-};
-/* clang-format on */
-
 static void
 hk_init_dri_options(struct hk_instance *instance)
 {
-   driParseOptionInfo(&instance->available_dri_options, hk_dri_options,
-                      ARRAY_SIZE(hk_dri_options));
-   driParseConfigFiles(
-      &instance->dri_options, &instance->available_dri_options, 0, "hk", NULL,
-      NULL, instance->vk.app_info.app_name, instance->vk.app_info.app_version,
-      instance->vk.app_info.engine_name, instance->vk.app_info.engine_version);
-
-   instance->force_vk_vendor =
-      driQueryOptioni(&instance->dri_options, "force_vk_vendor");
-
-   instance->no_border =
-      driQueryOptionb(&instance->dri_options, "hk_disable_border_emulation");
-
-   instance->fake_minmax =
-      driQueryOptionb(&instance->dri_options, "hk_fake_minmax");
-
-   instance->image_view_min_lod =
-      driQueryOptionb(&instance->dri_options, "hk_image_view_min_lod");
+   hk_parse_dri_options(&instance->drirc,
+                        &(driConfigFileParseParams) {
+                           .driverName = "hk",
+                           .applicationName = instance->vk.app_info.app_name,
+                           .applicationVersion = instance->vk.app_info.app_version,
+                           .engineName = instance->vk.app_info.engine_name,
+                           .engineVersion = instance->vk.app_info.engine_version,
+                        });
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -165,14 +133,14 @@ hk_CreateInstance(const VkInstanceCreateInfo *pCreateInfo,
    }
 
    unsigned build_id_len = build_id_length(note);
-   if (build_id_len < SHA1_DIGEST_LENGTH) {
+   if (build_id_len < BUILD_ID_EXPECTED_HASH_LENGTH) {
       result = vk_errorf(NULL, VK_ERROR_INITIALIZATION_FAILED,
                          "build-id too short.  It needs to be a SHA");
       goto fail_init;
    }
 
-   static_assert(sizeof(instance->driver_build_sha) == SHA1_DIGEST_LENGTH);
-   memcpy(instance->driver_build_sha, build_id_data(note), SHA1_DIGEST_LENGTH);
+   static_assert(sizeof(instance->driver_build_sha) == BLAKE3_KEY_LEN);
+   copy_build_id_to_sha1(instance->driver_build_sha, note);
 
    *pInstance = hk_instance_to_handle(instance);
    return VK_SUCCESS;
@@ -194,8 +162,8 @@ hk_DestroyInstance(VkInstance _instance,
    if (!instance)
       return;
 
-   driDestroyOptionCache(&instance->dri_options);
-   driDestroyOptionInfo(&instance->available_dri_options);
+   driDestroyOptionCache(&instance->drirc.options);
+   driDestroyOptionInfo(&instance->drirc.available_options);
 
    vk_instance_finish(&instance->vk);
    vk_free(&instance->vk.alloc, instance);

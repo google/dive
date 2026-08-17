@@ -23,7 +23,7 @@
 
 #include "intel_uuid.h"
 #include "git_sha1.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 void
 intel_uuid_compute_device_id(uint8_t *uuid,
@@ -75,10 +75,10 @@ intel_uuid_compute_driver_id(uint8_t *uuid,
                              size_t size)
 {
    const char* intelDriver = PACKAGE_VERSION MESA_GIT_SHA1;
-   struct mesa_sha1 sha1_ctx;
-   uint8_t sha1[20];
+   blake3_hasher blake3_ctx;
+   uint8_t blake3[BLAKE3_KEY_LEN];
 
-   assert(size <= sizeof(sha1));
+   assert(size <= sizeof(blake3));
 
    /* The driver UUID is used for determining sharability of images and memory
     * between two Vulkan instances in separate processes, but also to
@@ -86,10 +86,10 @@ intel_uuid_compute_driver_id(uint8_t *uuid,
     * driver. People who want to share memory need to also check the device
     * UUID.
     */
-   _mesa_sha1_init(&sha1_ctx);
-   _mesa_sha1_update(&sha1_ctx, intelDriver, strlen(intelDriver));
-   _mesa_sha1_update(&sha1_ctx, &devinfo->has_bit6_swizzle,
+   _mesa_blake3_init(&blake3_ctx);
+   _mesa_blake3_update(&blake3_ctx, intelDriver, strlen(intelDriver));
+   _mesa_blake3_update(&blake3_ctx, &devinfo->has_bit6_swizzle,
                      sizeof(devinfo->has_bit6_swizzle));
-   _mesa_sha1_final(&sha1_ctx, sha1);
-   memcpy(uuid, sha1, size);
+   _mesa_blake3_final(&blake3_ctx, blake3);
+   memcpy(uuid, blake3, size);
 }

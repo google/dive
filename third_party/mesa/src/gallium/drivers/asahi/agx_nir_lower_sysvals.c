@@ -5,10 +5,10 @@
 
 #include "compiler/nir/nir_builder.h"
 #include "pipe/p_defines.h"
+#include "poly/nir/poly_nir.h"
 #include "util/bitset.h"
 #include "util/u_dynarray.h"
 #include "agx_abi.h"
-#include "agx_nir_lower_gs.h"
 #include "agx_state.h"
 #include "nir.h"
 #include "nir_builder_opcodes.h"
@@ -88,7 +88,7 @@ load_sysval_indirect(nir_builder *b, unsigned dim, unsigned bitsize,
       /* Index into the table and load */
       nir_def *address = nir_iadd(
          b, array_base, nir_u2u64(b, nir_imul_imm(b, offset_el, stride)));
-      return nir_load_global_constant(b, address, bitsize / 8, dim, bitsize);
+      return nir_load_global_constant(b, dim, bitsize, address);
    }
 }
 
@@ -96,7 +96,7 @@ static unsigned
 stage_table(nir_builder *b)
 {
    mesa_shader_stage stage = b->shader->info.stage;
-   if (stage == MESA_SHADER_VERTEX && b->shader->info.vs.tes_agx)
+   if (stage == MESA_SHADER_VERTEX && b->shader->info.vs.tes_poly)
       stage = MESA_SHADER_TESS_EVAL;
 
    assert(stage < MESA_SHADER_STAGES);
@@ -111,8 +111,9 @@ load_ubo(nir_builder *b, nir_intrinsic_instr *intr, void *bases)
 
    nir_def *address = nir_iadd(b, base, nir_u2u64(b, intr->src[1].ssa));
 
-   return nir_load_global_constant(b, address, nir_intrinsic_align(intr),
-                                   intr->num_components, intr->def.bit_size);
+   return nir_load_global_constant(b, intr->num_components, intr->def.bit_size,
+                                   address,
+                                   .align_mul = nir_intrinsic_align(intr));
 }
 
 static nir_def *
@@ -166,7 +167,7 @@ lower_intrinsic(nir_builder *b, nir_intrinsic_instr *intr,
       return load_sysval_root(b, 1, 16, &u->sample_mask);
    case nir_intrinsic_load_sample_positions_agx:
       return load_sysval_root(b, 1, 32, &u->ppp_multisamplectl);
-   case nir_intrinsic_load_stat_query_address_agx:
+   case nir_intrinsic_load_stat_query_address_poly:
       return load_sysval_root(
          b, 1, 64, &u->pipeline_statistics[nir_intrinsic_base(intr)]);
    case nir_intrinsic_load_ssbo_address:
@@ -179,13 +180,10 @@ lower_intrinsic(nir_builder *b, nir_intrinsic_instr *intr,
    case nir_intrinsic_get_ssbo_size:
       return load_sysval_indirect(b, 1, 32, stage_table(b), &s->ssbo_size,
                                   intr->src[0].ssa);
-   case nir_intrinsic_load_input_assembly_buffer_poly:
-      return load_sysval_root(b, 1, 64, &u->input_assembly);
+   case nir_intrinsic_load_vertex_param_buffer_poly:
+      return load_sysval_root(b, 1, 64, &u->vertex_params);
    case nir_intrinsic_load_geometry_param_buffer_poly:
       return load_sysval_root(b, 1, 64, &u->geometry_params);
-   case nir_intrinsic_load_vs_output_buffer_poly:
-      return nir_load_global_constant(
-         b, load_sysval_root(b, 1, 64, &u->vertex_output_buffer_ptr), 8, 1, 64);
    case nir_intrinsic_load_vs_outputs_poly:
       return load_sysval_root(b, 1, 64, &u->vertex_outputs);
    case nir_intrinsic_load_tess_param_buffer_poly:
@@ -196,7 +194,7 @@ lower_intrinsic(nir_builder *b, nir_intrinsic_instr *intr,
       return load_sysval_root(b, 1, 16, &u->sprite_mask);
    case nir_intrinsic_load_shader_part_tests_zs_agx:
       return load_sysval_root(b, 1, 16, &u->no_epilog_discard);
-   case nir_intrinsic_load_clip_z_coeff_agx:
+   case nir_intrinsic_load_clip_z_coeff:
       return nir_f2f32(b, load_sysval_root(b, 1, 16, &u->clip_z_coeff));
    case nir_intrinsic_load_rasterization_stream:
       return nir_imm_int(b, 0);
@@ -295,7 +293,7 @@ record_loads(nir_builder *b, nir_intrinsic_instr *intr, void *data)
    unsigned offset = nir_intrinsic_binding(intr);
    assert((offset % 2) == 0 && "all entries are aligned by ABI");
 
-   BITSET_SET_RANGE(table->pushed, (offset / 2), (offset / 2) + length - 1);
+   BITSET_SET_COUNT(table->pushed, (offset / 2), length);
 
    for (unsigned i = 0; i < length; ++i) {
       if (table->element_size[(offset / 2) + i])
@@ -304,7 +302,7 @@ record_loads(nir_builder *b, nir_intrinsic_instr *intr, void *data)
          table->element_size[(offset / 2) + i] = element_size;
    }
 
-   util_dynarray_append(&state->loads, nir_intrinsic_instr *, intr);
+   util_dynarray_append(&state->loads, intr);
    return false;
 }
 
@@ -414,9 +412,9 @@ lay_out_uniforms(struct agx_compiled_shader *shader, struct state *state)
       bool sw = state->hw_stage == MESA_SHADER_COMPUTE;
       if (sw) {
          shader->push[shader->push_range_count++] = (struct agx_push_range){
-            .uniform = AGX_ABI_VUNI_INPUT_ASSEMBLY(count),
+            .uniform = AGX_ABI_VUNI_VERTEX_PARAMS(count),
             .table = AGX_SYSVAL_TABLE_ROOT,
-            .offset = (uintptr_t)&u->input_assembly,
+            .offset = (uintptr_t)&u->vertex_params,
             .length = 4,
          };
       }

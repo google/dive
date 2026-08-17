@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 use crate::api::{GetDebugFlags, DEBUG};
+use crate::const_tracker::ConstTracker;
 use crate::ir::*;
 use crate::liveness::{BlockLiveness, Liveness, SimpleLiveness};
 
 use rustc_hash::{FxHashMap, FxHashSet};
-
-pub type LegalizeBuilder<'a> = SSAInstrBuilder<'a>;
 
 pub fn src_is_upred_reg(src: &Src) -> bool {
     match &src.src_ref {
@@ -375,12 +374,78 @@ pub trait LegalizeBuildHelpers: SSABuilder {
             }
         }
     }
+
+    fn copy_src_if_uniform(&mut self, src: &mut Src) {
+        match &mut src.src_ref {
+            SrcRef::SSA(ssa) => self.copy_ssa_ref_if_uniform(ssa),
+            SrcRef::Imm32(_) | SrcRef::False | SrcRef::True | SrcRef::Zero => {}
+            _ => panic!("Unsupported source reference"),
+        }
+    }
+}
+
+pub struct LegalizeBuilder<'a> {
+    b: SSAInstrBuilder<'a>,
+    const_tracker: &'a mut ConstTracker,
+}
+
+impl<'a> LegalizeBuilder<'a> {
+    fn new(
+        sm: &'a ShaderModelInfo,
+        alloc: &'a mut SSAValueAllocator,
+        const_tracker: &'a mut ConstTracker,
+    ) -> Self {
+        LegalizeBuilder {
+            b: SSAInstrBuilder::new(sm, alloc),
+            const_tracker,
+        }
+    }
+
+    pub fn into_vec(self) -> Vec<Instr> {
+        self.b.into_vec()
+    }
+
+    #[allow(dead_code)]
+    pub fn into_mapped_instrs(self) -> MappedInstrs {
+        self.b.into_mapped_instrs()
+    }
+}
+
+impl<'a> Builder for LegalizeBuilder<'a> {
+    fn push_instr(&mut self, instr: Instr) -> &mut Instr {
+        self.b.push_instr(instr)
+    }
+
+    fn sm(&self) -> u8 {
+        self.b.sm()
+    }
+
+    fn copy_to(&mut self, dst: Dst, mut src: Src) {
+        if let Some(ssa_ref) = src.as_ssa() {
+            if let &[ssa_value] = &ssa_ref[..] {
+                if let Some(new_src) = self.const_tracker.get(&ssa_value) {
+                    src = new_src.clone().into();
+                }
+            }
+        };
+        self.b.copy_to(dst, src);
+    }
+}
+
+impl<'a> SSABuilder for LegalizeBuilder<'a> {
+    fn alloc_ssa(&mut self, file: RegFile) -> SSAValue {
+        self.b.alloc_ssa(file)
+    }
+
+    fn alloc_ssa_vec(&mut self, file: RegFile, comps: u8) -> SSARef {
+        self.b.alloc_ssa_vec(file, comps)
+    }
 }
 
 impl LegalizeBuildHelpers for LegalizeBuilder<'_> {}
 
 fn legalize_instr(
-    sm: &dyn ShaderModel,
+    sm: &ShaderModelInfo,
     b: &mut LegalizeBuilder,
     bl: &impl BlockLiveness,
     block_uniform: bool,
@@ -519,6 +584,7 @@ impl Shader<'_> {
         for f in &mut self.functions {
             let live = SimpleLiveness::for_function(f);
             let mut pinned: FxHashSet<_> = Default::default();
+            let mut const_tracker = ConstTracker::new();
 
             for (bi, b) in f.blocks.iter_mut().enumerate() {
                 let bl = live.block_live(bi);
@@ -526,13 +592,23 @@ impl Shader<'_> {
 
                 let mut instrs = Vec::new();
                 for (ip, mut instr) in b.instrs.drain(..).enumerate() {
-                    if let Op::Pin(pin) = &instr.op {
-                        if let Dst::SSA(ssa) = &pin.dst {
-                            pinned.insert(ssa.clone());
+                    match &instr.op {
+                        Op::Pin(pin) => {
+                            if let Dst::SSA(ssa) = &pin.dst {
+                                pinned.insert(ssa.clone());
+                            }
                         }
+                        Op::Copy(copy) => {
+                            const_tracker.add_copy(copy);
+                        }
+                        _ => (),
                     }
 
-                    let mut b = SSAInstrBuilder::new(sm, &mut f.ssa_alloc);
+                    let mut b = LegalizeBuilder::new(
+                        sm,
+                        &mut f.ssa_alloc,
+                        &mut const_tracker,
+                    );
                     legalize_instr(sm, &mut b, bl, bu, &pinned, ip, &mut instr);
                     b.push_instr(instr);
                     instrs.append(&mut b.into_vec());

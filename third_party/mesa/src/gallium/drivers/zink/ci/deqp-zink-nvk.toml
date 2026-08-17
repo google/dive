@@ -60,3 +60,10 @@ timeout = 180.0
   PIGLIT_NO_WINDOW = "1"
   PIGLIT_PLATFORM = "gbm"
   WAFFLE_PLATFORM = "gbm"
+
+[[piglit]]
+piglit_folder = "/piglit"
+profile = "cl"
+process_isolation = true
+  [piglit.env]
+  RUSTICL_ENABLE = "zink"

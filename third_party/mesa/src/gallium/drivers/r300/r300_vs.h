@@ -8,7 +8,6 @@
 #define R300_VS_H
 
 #include "pipe/p_state.h"
-#include "tgsi/tgsi_scan.h"
 #include "compiler/radeon_code.h"
 
 #include "r300_context.h"
@@ -16,17 +15,24 @@
 
 struct r300_context;
 
+struct r300_vertex_shader_key {
+    bool wpos;
+    bool frontface;
+};
+static_assert(sizeof(struct r300_vertex_shader_key) == 2 * sizeof(bool),
+              "r300_vertex_shader_key must not contain padding");
+
 struct r300_vertex_shader_code {
     /* Parent class */
 
-    struct tgsi_shader_info info;
+    unsigned num_inputs;
     struct r300_shader_semantics outputs;
 
     /* Whether the shader was replaced by a dummy one due to a shader
      * compilation failure. */
     bool dummy;
 
-    bool wpos;
+    struct r300_vertex_shader_key key;
 
     /* Numbers of constants for each type. */
     unsigned externals_count;
@@ -35,6 +41,9 @@ struct r300_vertex_shader_code {
     /* HWTCL-specific.  */
     /* Machine code (if translated) */
     struct r300_vertex_program_code code;
+
+    /* SWTCL-specific. */
+    void *draw_vs;
 
     struct r300_vertex_shader_code *next;
 
@@ -52,14 +61,8 @@ struct r300_vertex_shader {
     /* List of the same shaders compiled with different states. */
     struct r300_vertex_shader_code *first;
 
-    /* SWTCL-specific. */
-    void *draw_vs;
+    bool can_emulate_frontface;
 };
-
-struct nir_shader;
-
-void r300_init_vs_outputs(struct r300_context *r300,
-                          struct r300_vertex_shader *vs);
 
 void r300_translate_vertex_shader(struct r300_context *r300,
                                   struct r300_vertex_shader *vs);

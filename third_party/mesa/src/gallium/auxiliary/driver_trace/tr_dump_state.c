@@ -94,11 +94,9 @@ void trace_dump_video_codec_template(const struct pipe_video_codec *templat)
    trace_dump_member_enum(pipe_video_profile, templat, profile);
    trace_dump_member(uint, templat, level);
    trace_dump_member_enum(pipe_video_entrypoint, templat, entrypoint);
-   trace_dump_member(chroma_format, templat, chroma_format);
    trace_dump_member(uint, templat, width);
    trace_dump_member(uint, templat, height);
    trace_dump_member(uint, templat, max_references);
-   trace_dump_member(bool, templat, expect_chunked_decode);
 
    trace_dump_struct_end();
 }
@@ -560,6 +558,7 @@ void trace_dump_framebuffer_state(const struct pipe_framebuffer_state *state)
    trace_dump_member(uint, state, samples);
    trace_dump_member(uint, state, layers);
    trace_dump_member(uint, state, nr_cbufs);
+   trace_dump_member(bool, state, pls_enabled);
    trace_dump_member_begin("cbufs");
    trace_dump_array_impl(surface, state->cbufs, state->nr_cbufs, &);
    trace_dump_member_end();
@@ -580,6 +579,7 @@ void trace_dump_framebuffer_state_deep(const struct pipe_framebuffer_state *stat
    trace_dump_member(uint, state, samples);
    trace_dump_member(uint, state, layers);
    trace_dump_member(uint, state, nr_cbufs);
+   trace_dump_member(bool, state, pls_enabled);
    trace_dump_member_begin("cbufs");
    trace_dump_array_impl(surface, state->cbufs, state->nr_cbufs, &);
    trace_dump_member_end();

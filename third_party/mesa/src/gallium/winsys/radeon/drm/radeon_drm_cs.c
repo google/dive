@@ -831,7 +831,8 @@ static struct pipe_fence_handle *radeon_drm_cs_get_next_fence(struct radeon_cmdb
 
 static void
 radeon_drm_cs_add_fence_dependency(struct radeon_cmdbuf *rcs,
-                                   struct pipe_fence_handle *fence)
+                                   struct pipe_fence_handle *fence,
+                                   uint64_t timeline_point)
 {
    /* TODO: Handle the following unlikely multi-threaded scenario:
     *

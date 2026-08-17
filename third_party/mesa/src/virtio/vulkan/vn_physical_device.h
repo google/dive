@@ -15,6 +15,7 @@
 
 #include "util/sparse_array.h"
 
+#include "vn_descriptor.h"
 #include "vn_wsi.h"
 
 struct vn_format_properties_entry {
@@ -37,7 +38,7 @@ struct vn_image_format_properties {
 
 struct vn_image_format_cache_entry {
    struct vn_image_format_properties properties;
-   uint8_t key[SHA1_DIGEST_LENGTH];
+   uint8_t key[BLAKE3_KEY_LEN];
    struct list_head head;
 };
 
@@ -94,6 +95,7 @@ struct vn_physical_device {
    uint32_t wa_min_fb_align;
 
    VkDriverId renderer_driver_id;
+   uint32_t renderer_driver_version;
 
    /* Static storage so that host copy properties query can be done once. */
    VkImageLayout copy_src_layouts[64];
@@ -119,7 +121,6 @@ struct vn_physical_device {
    struct {
       bool fence_exportable;
       bool semaphore_exportable;
-      bool semaphore_importable;
    } renderer_sync_fd;
 
    VkExternalFenceHandleTypeFlags external_fence_handles;
@@ -128,10 +129,13 @@ struct vn_physical_device {
 
    struct wsi_device wsi_device;
 
-   simple_mtx_t format_update_mutex;
+   simple_mtx_t mutex;
    struct util_sparse_array format_properties;
 
    struct vn_image_format_properties_cache image_format_cache;
+
+   bool descriptor_sizes_initialized;
+   VkDeviceSize descriptor_sizes[VN_NUM_DESCRIPTOR_TYPES];
 };
 VK_DEFINE_HANDLE_CASTS(vn_physical_device,
                        base.vk.base,
@@ -140,5 +144,21 @@ VK_DEFINE_HANDLE_CASTS(vn_physical_device,
 
 void
 vn_physical_device_fini(struct vn_physical_device *physical_dev);
+
+static inline bool
+vn_queue_family_can_feedback(struct vn_physical_device *physical_dev,
+                             uint32_t queue_family_index)
+{
+   /* Feedback requires transfer capability, so we must skip feedback cmd pool
+    * initialization on incompatible queue families. Meanwhile, rely on the
+    * pool_handle for all validity check needed.
+    */
+   assert(queue_family_index < physical_dev->queue_family_count);
+   const struct VkQueueFamilyProperties2 *props =
+      &physical_dev->queue_family_properties[queue_family_index];
+   const VkQueueFlags transfer_flags =
+      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+   return props->queueFamilyProperties.queueFlags & transfer_flags;
+}
 
 #endif /* VN_PHYSICAL_DEVICE_H */

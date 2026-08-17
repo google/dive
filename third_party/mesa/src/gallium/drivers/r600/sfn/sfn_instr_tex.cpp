@@ -577,50 +577,51 @@ bool
 TexInstr::emit_buf_txf(nir_tex_instr *tex, Inputs& src, Shader& shader)
 {
    auto& vf = shader.value_factory();
-   auto dst = vf.dest_vec4(tex->def, pin_group);
 
    PRegister tex_offset = nullptr;
    if (src.sampler_offset)
       tex_offset = shader.emit_load_to_register(src.sampler_offset);
 
-   auto *real_dst = &dst;
-   RegisterVec4 tmp = vf.temp_vec4(pin_group);
+   RegisterVec4 buf_dest = shader.chip_class() >= ISA_CC_EVERGREEN ?
+                         vf.dest_vec4(tex->def, pin_group) :
+                         vf.temp_vec4(pin_group);
 
-   if (shader.chip_class() < ISA_CC_EVERGREEN) {
-      real_dst = &tmp;
-   }
-
-   auto ir = new LoadFromBuffer(*real_dst,
+   auto ir = new LoadFromBuffer(buf_dest,
                                 {0, 1, 2, 3},
                                 src.coord[0],
                                 0,
                                 tex->texture_index + R600_MAX_CONST_BUFFERS,
                                 tex_offset,
                                 fmt_invalid);
+
    ir->set_fetch_flag(FetchInstr::use_const_field);
-   shader.emit_instruction(ir);
    shader.set_flag(Shader::sh_uses_tex_buffer);
+
+
+   shader.emit_instruction(ir);
 
    if (shader.chip_class() < ISA_CC_EVERGREEN) {
       auto tmp_w = vf.temp_register();
-      int buf_sel = (512 + R600_BUFFER_INFO_OFFSET / 16) + 2 * tex->texture_index;
-      AluInstr *ir = nullptr;
+      int buf_sel = R600_SHADER_BUFFER_INFO_SEL + 2 * tex->texture_index;
       for (int i = 0; i < 4; ++i) {
-         auto d = i < 3 ? dst[i] : tmp_w;
-         ir = new AluInstr(op2_and_int,
-                           d,
-                           tmp[i],
-                           vf.uniform(buf_sel, i, R600_BUFFER_INFO_CONST_BUFFER),
-                           AluInstr::write);
-         shader.emit_instruction(ir);
-      }
+         auto dst  = vf.dest(tex->def, i, pin_free);
 
-      shader.emit_instruction(
-         new AluInstr(op2_or_int,
-                      dst[3],
-                      tmp_w,
-                      vf.uniform(buf_sel + 1, 0, R600_BUFFER_INFO_CONST_BUFFER),
-                      AluInstr::write));
+         auto d = i < 3 ? dst : tmp_w;
+         shader.emit_instruction(
+            new AluInstr(op2_and_int,
+                         d,
+                         buf_dest[i],
+                         vf.uniform(buf_sel, i, R600_BUFFER_INFO_CONST_BUFFER),
+                               AluInstr::write));
+
+         if (i == 3)
+            shader.emit_instruction(
+               new AluInstr(op2_or_int,
+                            dst,
+                            tmp_w,
+                            vf.uniform(buf_sel + 1, 0, R600_BUFFER_INFO_CONST_BUFFER),
+                            AluInstr::write));
+      }
    }
 
    return true;
@@ -654,14 +655,25 @@ TexInstr::emit_tex_txs(nir_tex_instr *tex,
    auto dest = vf.dest_vec4(tex->def, pin_group);
 
    if (tex->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
-      if (shader.chip_class() >= ISA_CC_EVERGREEN) {
-         shader.emit_instruction(new QueryBufferSizeInstr(
-            dest, {0, 7, 7, 7}, tex->texture_index + R600_MAX_CONST_BUFFERS));
-      } else {
-         int id = 2 * tex->texture_index + (512 + R600_BUFFER_INFO_OFFSET / 16) + 1;
+      if (shader.chip_family() >= CHIP_PALM) {
+         shader.emit_instruction(new QueryBufferSizeInstr(dest,
+                                                          {0, 7, 7, 7},
+                                                          tex->texture_index +
+                                                             R600_MAX_CONST_BUFFERS));
+      } else if (shader.chip_family() < CHIP_CEDAR) {
+         int id = 2 * tex->texture_index + R600_SHADER_BUFFER_INFO_SEL + 1;
          auto src = vf.uniform(id, 1, R600_BUFFER_INFO_CONST_BUFFER);
          shader.emit_instruction(new AluInstr(op1_mov, dest[0], src, AluInstr::write));
          shader.set_flag(Shader::sh_uses_tex_buffer);
+      } else {
+         shader.set_flag(Shader::sh_resinfo_via_uniform);
+         shader.emit_instruction(new AluInstr(op1_mov,
+                                              dest[0],
+                                              vf.uniform(tex->texture_index / 4 +
+                                                            R600_SHADER_BUFFER_INFO_SEL,
+                                                         tex->texture_index % 4,
+                                                         R600_BUFFER_INFO_CONST_BUFFER),
+                                              AluInstr::write));
       }
    } else {
 
@@ -684,13 +696,14 @@ TexInstr::emit_tex_txs(nir_tex_instr *tex,
       shader.emit_instruction(ir);
 
       if (tex->is_array && tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE) {
-         auto src_loc = vf.uniform(512 + R600_BUFFER_INFO_OFFSET / 16 + (tex->texture_index >> 2),
-                                   tex->texture_index & 3,
-                                   R600_BUFFER_INFO_CONST_BUFFER);
+         auto src_loc =
+            vf.uniform(R600_SHADER_BUFFER_INFO_SEL + (tex->texture_index >> 2),
+                       tex->texture_index & 3,
+                       R600_BUFFER_INFO_CONST_BUFFER);
 
          auto alu = new AluInstr(op1_mov, dest[2], src_loc, AluInstr::write);
          shader.emit_instruction(alu);
-         shader.set_flag(Shader::sh_txs_cube_array_comp);
+         shader.set_flag(Shader::sh_resinfo_via_uniform);
       }
    }
 
@@ -745,6 +758,10 @@ TexInstr::prepare_source(nir_tex_instr *tex, const Inputs& inputs, Shader& shade
 
    return src_coord;
 }
+
+enum backend2_ucm {
+   backend2_ucm_lz = 1 << 8,
+};
 
 TexInstr::Inputs::Inputs(const nir_tex_instr& instr, ValueFactory& vf):
     sampler_deref(nullptr),
@@ -842,6 +859,12 @@ TexInstr::Inputs::get_opcode(const nir_tex_instr& instr) -> Opcode
    case nir_texop_txb:
       return instr.is_shadow ? sample_c_lb : sample_lb;
    case nir_texop_txl:
+      if (backend2) {
+         const auto params = nir_src_as_const_value(*backend2);
+         const int32_t coord_mask = params[0].i32;
+         if (unlikely(coord_mask & backend2_ucm_lz))
+            return instr.is_shadow ? sample_c_lz : sample_lz;
+      }
       return instr.is_shadow ? sample_c_l : sample_l;
    case nir_texop_txs:
       return get_resinfo;
@@ -1183,10 +1206,19 @@ LowerTexToBackend::prepare_coord(nir_tex_instr *tex,
       int idx = tex->op == nir_texop_txl ? nir_tex_instr_src_index(tex, nir_tex_src_lod)
                                          : nir_tex_instr_src_index(tex, nir_tex_src_bias);
       assert(idx != -1);
-      new_coord[3] = tex->src[idx].src.ssa;
 
-      if (comp_idx >= 0)
-         new_coord[2] = tex->src[comp_idx].src.ssa;
+      if (unlikely(tex->op == nir_texop_txl && nir_src_is_const(tex->src[idx].src) &&
+                   nir_src_as_uint(tex->src[idx].src) == 0)) {
+         used_coord_mask |= backend2_ucm_lz;
+
+         if (comp_idx >= 0)
+            new_coord[3] = tex->src[comp_idx].src.ssa;
+      } else {
+         new_coord[3] = tex->src[idx].src.ssa;
+
+         if (comp_idx >= 0)
+            new_coord[2] = tex->src[comp_idx].src.ssa;
+      }
    } else if (comp_idx >= 0) {
       new_coord[3] = tex->src[comp_idx].src.ssa;
    }

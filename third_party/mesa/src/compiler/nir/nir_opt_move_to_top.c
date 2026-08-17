@@ -12,9 +12,9 @@
  * of instructions that are moved.
  *
  * Used either as a scheduling optimization or to accommodate hw or compiler
- * backend limitations. You would typically use this if you don't use
- * nir_lower_io_vars_to_temporaries and want to move input loads to top,
- * but note that such global code motion passes often increase register usage.
+ * backend limitations. It would typically be used if
+ * nir_lower_io_vars_to_temporaries isn't used and it's desirable to move input
+ * loads to top, but such global code motion often increases register usage.
  */
 
 #include "nir.h"
@@ -33,7 +33,7 @@ static bool
 can_move_src_to_top(nir_src *src, void *_state)
 {
    opt_move_to_top_state *state = (opt_move_to_top_state *)_state;
-   nir_instr *instr = src->ssa->parent_instr;
+   nir_instr *instr = nir_def_instr(src->ssa);
 
    assert(util_bitcount(instr->pass_flags & (PASS_FLAG_CANT_MOVE |
                                              PASS_FLAG_CAN_MOVE)) <= 1);
@@ -73,6 +73,7 @@ can_move_src_to_top(nir_src *src, void *_state)
       case nir_intrinsic_load_per_primitive_input:
       case nir_intrinsic_load_per_vertex_input:
       case nir_intrinsic_load_scalar_arg_amd:
+      case nir_intrinsic_load_scalar_arg_wg_div_amd:
          break;
       case nir_intrinsic_load_global_amd:
          if (!(nir_intrinsic_access(nir_instr_as_intrinsic(instr)) &
@@ -111,7 +112,7 @@ can_move_src_to_top(nir_src *src, void *_state)
 static bool
 move_src(nir_src *src, void *_state)
 {
-   nir_instr *instr = src->ssa->parent_instr;
+   nir_instr *instr = nir_def_instr(src->ssa);
    nir_builder *b = (nir_builder *)_state;
 
    if (instr->pass_flags & PASS_FLAG_MOVED)
@@ -138,10 +139,29 @@ handle_load(nir_builder *b, nir_intrinsic_instr *intr, void *_state)
     * an input load. The specific intrinsics that are moved are
     * listed in can_move_src_to_top.
     */
-   move |= state->options & nir_move_to_top_input_loads &&
-           nir_intrinsic_has_io_semantics(intr) &&
-           nir_intrinsic_infos[intr->intrinsic].has_dest &&
-           !nir_is_output_load(intr);
+   if (state->options & (nir_move_to_top_input_loads_simple |
+                         nir_move_to_top_input_loads_complex_baryc) &&
+       nir_intrinsic_has_io_semantics(intr) &&
+       nir_intrinsic_infos[intr->intrinsic].has_dest &&
+       !nir_is_output_load(intr)) {
+
+      if (intr->intrinsic == nir_intrinsic_load_interpolated_input) {
+         nir_intrinsic_instr *baryc =
+            nir_def_as_intrinsic_or_null(intr->src[0].ssa);
+
+         nir_opt_move_to_top_options baryc_option =
+            baryc &&
+            (baryc->intrinsic == nir_intrinsic_load_barycentric_pixel ||
+             baryc->intrinsic == nir_intrinsic_load_barycentric_centroid ||
+             baryc->intrinsic == nir_intrinsic_load_barycentric_sample) ?
+                  nir_move_to_top_input_loads_simple :
+                  nir_move_to_top_input_loads_complex_baryc;
+
+         move |= !!(state->options & baryc_option);
+      } else {
+         move |= !!(state->options & nir_move_to_top_input_loads_simple);
+      }
+   }
 
    move |= state->options & nir_move_to_top_load_smem_amd &&
            (intr->intrinsic == nir_intrinsic_load_global_amd &&

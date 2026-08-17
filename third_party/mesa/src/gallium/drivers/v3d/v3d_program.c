@@ -181,7 +181,7 @@ v3d_set_transform_feedback_outputs(struct v3d_uncompiled_shader *so,
         memcpy(so->tf_outputs, slots, sizeof(*slots) * slot_count);
 }
 
-static int
+static unsigned
 type_size(const struct glsl_type *type, bool bindless)
 {
         return glsl_count_attribute_slots(type, false);
@@ -347,10 +347,8 @@ v3d_uncompiled_shader_create(struct pipe_context *pctx,
                 assert(type == PIPE_SHADER_IR_TGSI);
 
                 if (V3D_DBG(TGSI)) {
-                        fprintf(stderr, "prog %d TGSI:\n",
-                                so->program_id);
+                        mesa_logd("prog %d TGSI:", so->program_id);
                         tgsi_dump(ir, 0);
-                        fprintf(stderr, "\n");
                 }
                 s = tgsi_to_nir(ir, pctx->screen, false);
         }
@@ -395,8 +393,6 @@ v3d_uncompiled_shader_create(struct pipe_context *pctx,
 
         NIR_PASS(_, s, nir_remove_dead_variables, nir_var_function_temp, NULL);
 
-        NIR_PASS(_, s, nir_lower_frexp);
-
         /* Since we can't expose pipe_caps.packed_uniforms the state tracker
          * will produce uniform intrinsics with offsets in vec4 units but
          * our compiler expects to work in units of bytes.
@@ -411,20 +407,19 @@ v3d_uncompiled_shader_create(struct pipe_context *pctx,
         so->base.type = PIPE_SHADER_IR_NIR;
         so->base.ir.nir = s;
 
-        /* Generate sha1 from NIR for caching */
+        /* Generate blake3 from NIR for caching */
         struct blob blob;
         blob_init(&blob);
         nir_serialize(&blob, s, true);
         assert(!blob.out_of_memory);
-        _mesa_sha1_compute(blob.data, blob.size, so->sha1);
+        _mesa_blake3_compute(blob.data, blob.size, so->blake3);
         blob_finish(&blob);
 
         if (V3D_DBG(NIR) || v3d_debug_flag_for_shader_stage(s->info.stage)) {
-                fprintf(stderr, "%s prog %d NIR:\n",
-                        mesa_shader_stage_name(s->info.stage),
-                        so->program_id);
-                nir_print_shader(s, stderr);
-                fprintf(stderr, "\n");
+                mesa_logi("%s prog %d NIR:",
+                          mesa_shader_stage_name(s->info.stage),
+                          so->program_id);
+                nir_log_shaderi(s);
         }
 
         if (V3D_DBG(PRECOMPILE))
@@ -460,7 +455,7 @@ v3d_shader_state_create(struct pipe_context *pctx,
 /* Key ued with the RAM cache */
 struct v3d_cache_key {
         struct v3d_key *key;
-        unsigned char sha1[20];
+        unsigned char blake3[BLAKE3_KEY_LEN];
 };
 
 struct v3d_compiled_shader *
@@ -473,7 +468,7 @@ v3d_get_compiled_shader(struct v3d_context *v3d,
         struct hash_table *ht = v3d->prog.cache[s->info.stage];
         struct v3d_cache_key cache_key;
         cache_key.key = key;
-        memcpy(cache_key.sha1, uncompiled->sha1, sizeof(cache_key.sha1));
+        memcpy(cache_key.blake3, uncompiled->blake3, sizeof(cache_key.blake3));
         struct hash_entry *entry = _mesa_hash_table_search(ht, &cache_key);
         if (entry)
                 return entry->data;
@@ -528,7 +523,7 @@ v3d_get_compiled_shader(struct v3d_context *v3d,
                         ralloc_size(shader, sizeof(struct v3d_cache_key));
                 dup_cache_key->key = ralloc_memdup(shader, cache_key.key,
                                                    key_size);
-                memcpy(dup_cache_key->sha1, cache_key.sha1 ,sizeof(dup_cache_key->sha1));
+                memcpy(dup_cache_key->blake3, cache_key.blake3 ,sizeof(dup_cache_key->blake3));
                 _mesa_hash_table_insert(ht, dup_cache_key, shader);
         }
 
@@ -621,6 +616,11 @@ v3d_update_compiled_fs(struct v3d_context *v3d, uint8_t prim_mode)
                 key->msaa = v3d->rasterizer->base.multisample;
                 key->sample_alpha_to_coverage = v3d->blend->base.alpha_to_coverage;
                 key->sample_alpha_to_one = v3d->blend->base.alpha_to_one;
+        } else {
+                /* Unlike Vulkan, OpenGL CTS tests require that SampleMask is
+                 * ignored when MSAA is disabled.
+                 */
+                key->ignore_sample_mask =  true;
         }
 
         key->swap_color_rb = v3d->swap_color_rb;
@@ -969,13 +969,13 @@ cache_hash(const void *_key, uint32_t key_size)
 {
         const struct v3d_cache_key *key = (struct v3d_cache_key *) _key;
 
-        struct mesa_sha1 ctx;
-        unsigned char sha1[20];
-        _mesa_sha1_init(&ctx);
-        _mesa_sha1_update(&ctx, key->key, key_size);
-        _mesa_sha1_update(&ctx, key->sha1, 20);
-        _mesa_sha1_final(&ctx, sha1);
-        return _mesa_hash_data(sha1, 20);
+        blake3_hasher ctx;
+        unsigned char blake3[BLAKE3_KEY_LEN];
+        _mesa_blake3_init(&ctx);
+        _mesa_blake3_update(&ctx, key->key, key_size);
+        _mesa_blake3_update(&ctx, key->blake3, BLAKE3_KEY_LEN);
+        _mesa_blake3_final(&ctx, blake3);
+        return _mesa_hash_data(blake3, BLAKE3_KEY_LEN);
 }
 
 static inline bool
@@ -987,7 +987,7 @@ cache_compare(const void *_key1, const void *_key2, uint32_t key_size)
         if (memcmp(key1->key, key2->key, key_size) != 0)
             return false;
 
-        return memcmp(key1->sha1, key2->sha1, 20) == 0;
+        return memcmp(key1->blake3, key2->blake3, BLAKE3_KEY_LEN) == 0;
 }
 
 static uint32_t
@@ -1049,7 +1049,7 @@ v3d_shader_state_delete(struct pipe_context *pctx, void *hwcso)
                 const struct v3d_cache_key *cache_key = entry->key;
                 struct v3d_compiled_shader *shader = entry->data;
 
-                if (memcmp(cache_key->sha1, so->sha1, 20) != 0)
+                if (memcmp(cache_key->blake3, so->blake3, BLAKE3_KEY_LEN) != 0)
                         continue;
 
                 if (v3d->prog.fs == shader)

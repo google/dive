@@ -1,9 +1,5 @@
 /*
  * Copyright © 2020-2021 Collabora, Ltd.
- * Author: Antonio Caggiano <antonio.caggiano@collabora.com>
- * Author: Rohan Garg <rohan.garg@collabora.com>
- * Author: Robert Beckett <bob.beckett@collabora.com>
- *
  * SPDX-License-Identifier: MIT
  */
 

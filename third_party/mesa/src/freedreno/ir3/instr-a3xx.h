@@ -109,6 +109,8 @@ typedef enum {
    OPC_MOV_RELCONST    = _OPC(1, 44),
    OPC_MOVS_IMMED      = _OPC(1, 45),
    OPC_MOVS_A0         = _OPC(1, 46),
+   OPC_MOVA_R_IMMED    = _OPC(1, 47),
+   OPC_MOVA_R_GPR      = _OPC(1, 48),
 
    /* Macros that expand to an if statement + move */
    OPC_BALLOT_MACRO    = _OPC(1, 50),
@@ -159,6 +161,10 @@ typedef enum {
    /* 32 - invalid */
    OPC_CMPV_U          = _OPC(2, 33),
    OPC_CMPV_S          = _OPC(2, 34),
+   OPC_MUL_F_MUL2      = _OPC(2, 35),
+   OPC_ADD_F_MUL2      = _OPC(2, 36),
+   OPC_MUL_F_DIV2      = _OPC(2, 37),
+   OPC_ADD_F_DIV2      = _OPC(2, 38),
    /* 35-47 - invalid */
    OPC_MUL_U24         = _OPC(2, 48), /* 24b mul into 32b result */
    OPC_MUL_S24         = _OPC(2, 49), /* 24b mul into 32b result with sign extension */
@@ -204,6 +210,10 @@ typedef enum {
    OPC_DP4ACC          = _OPC(3, 22),
    OPC_WMM             = _OPC(3, 23),
    OPC_WMM_ACCU        = _OPC(3, 24),
+   OPC_MAD_F16_MUL2    = _OPC(3, 25),
+   OPC_MAD_F32_MUL2    = _OPC(3, 26),
+   OPC_MAD_F16_DIV2    = _OPC(3, 27),
+   OPC_MAD_F32_DIV2    = _OPC(3, 28),
 
    /* category 4: */
    OPC_RCP             = _OPC(4, 0),
@@ -257,9 +267,12 @@ typedef enum {
    OPC_QUAD_SHUFFLE_VERT   = _OPC(5, 31),
    OPC_QUAD_SHUFFLE_DIAG   = _OPC(5, 32),
    OPC_TCINV               = _OPC(5, 33),
+   OPC_IMG_BINDLESS_HOF  = _OPC(5, 34),
+   OPC_IMG_BINDLESS_PCMN = _OPC(5, 35),
+   OPC_IMG_BINDLESS      = _OPC(5, 36),
    /* cat5 meta instructions, placed above the cat5 opc field's size */
-   OPC_DSXPP_MACRO     = _OPC(5, 35),
-   OPC_DSYPP_MACRO     = _OPC(5, 36),
+   OPC_DSXPP_MACRO     = _OPC(5, 37),
+   OPC_DSYPP_MACRO     = _OPC(5, 38),
 
    /* category 6: */
    OPC_LDG             = _OPC(6, 0),        /* load-global */

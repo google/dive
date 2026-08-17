@@ -110,6 +110,10 @@ spirv_builder_emit_decoration(struct spirv_builder *b, SpvId target,
                               SpvDecoration decoration);
 
 void
+spirv_builder_emit_fp_fast_math_mode(struct spirv_builder *b, SpvId target,
+                                     SpvFPFastMathModeMask fp_mode);
+
+void
 spirv_builder_emit_rounding_mode(struct spirv_builder *b, SpvId target,
                                  SpvFPRoundingMode rounding);
 
@@ -166,6 +170,14 @@ spirv_builder_emit_member_offset(struct spirv_builder *b, SpvId target,
                                  uint32_t member, uint32_t offset);
 
 void
+spirv_builder_emit_member_matrix_stride(struct spirv_builder *b, SpvId target,
+                                        uint32_t member, uint32_t stride);
+
+void
+spirv_builder_emit_member_matrix_major(struct spirv_builder *b, SpvId target,
+                                       uint32_t member, bool rowmajor);
+
+void
 spirv_builder_emit_entry_point(struct spirv_builder *b,
                                SpvExecutionModel exec_model, SpvId entry_point,
                                const char *name, const SpvId interfaces[],
@@ -177,8 +189,9 @@ void
 spirv_builder_emit_exec_mode_literal3(struct spirv_builder *b, SpvId entry_point,
                                      SpvExecutionMode exec_mode, uint32_t param[3]);
 void
-spirv_builder_emit_exec_mode_id3(struct spirv_builder *b, SpvId entry_point,
-                                 SpvExecutionMode exec_mode, SpvId param[3]);
+spirv_builder_emit_exec_mode_id(struct spirv_builder *b, SpvId entry_point,
+                                SpvExecutionMode exec_mode,
+                                SpvId *param, size_t num_params);
 void
 spirv_builder_emit_exec_mode(struct spirv_builder *b, SpvId entry_point,
                              SpvExecutionMode exec_mode);
@@ -467,6 +480,9 @@ spirv_builder_spec_const_uint(struct spirv_builder *b, int width);
 
 SpvId
 spirv_builder_const_float(struct spirv_builder *b, int width, double val);
+
+SpvId
+spirv_builder_const_null(struct spirv_builder *b, SpvId result_type);
 
 SpvId
 spirv_builder_const_composite(struct spirv_builder *b, SpvId result_type,

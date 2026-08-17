@@ -28,9 +28,11 @@ import gitlab.v4.objects
 from gitlab_common import (
     GITLAB_URL,
     TOKEN_DIR,
+    get_server_and_project_from_url,
     get_gitlab_pipeline_from_url,
     get_gitlab_project,
     get_token_from_default_dir,
+    is_gitlab_job,
     pretty_duration,
     read_token,
     wait_for_pipeline,
@@ -45,22 +47,33 @@ REFRESH_WAIT_LOG = 10
 REFRESH_WAIT_JOBS = 6
 MAX_ENABLE_JOB_ATTEMPTS = 3
 
-STATUS_COLORS = {
-    "created": "",
+STATUS_COLORS = defaultdict(lambda: "", {
     "running": "[blue]",
     "success": "[green]",
     "failed": "[red]",
     "canceled": "[magenta]",
     "canceling": "[magenta]",
-    "manual": "",
-    "pending": "",
-    "skipped": "",
-}
+})
 
 COMPLETED_STATUSES = frozenset({"success", "failed"})
 RUNNING_STATUSES = frozenset({"created", "pending", "running"})
 
-console = Console(highlight=False)
+PROFILES: dict[str, dict] = {
+    # a750-vk runs both VKCTS and vkd3d together.
+    "uprev_vkd3d": {
+        "target": [".*vkd3d.*|a750-vk"],
+        "stress": 15,
+    },
+    "uprev_vkcts_main": {
+        "target": ["radv-.*-vkcts(-asan|-full)?"],
+        "stress": 25
+    }
+}
+
+if is_gitlab_job():
+    console = Console(highlight=False, no_color=False, color_system="truecolor", width=120)
+else:
+    console = Console(highlight=False)
 print = console.print
 
 
@@ -111,6 +124,9 @@ def job_duration(job: gitlab.v4.objects.ProjectPipelineJob) -> float:
 
 def pretty_wait(sec: int) -> None:
     """shows progressbar in dots"""
+    if is_gitlab_job():
+        time.sleep(sec)
+        return
     for val in range(sec, 0, -1):
         print(f"⏲  {val:2d} seconds", end="\r")  # U+23F2 Timer clock
         time.sleep(1)
@@ -145,6 +161,8 @@ def monitor_pipeline(
     job_filter: callable,
     dependencies: set[str],
     stress: int,
+    inhibit_single_target_trace: int = False,
+    polling_period: int = REFRESH_WAIT_JOBS,
 ) -> tuple[Optional[int], Optional[int], Dict[str, Dict[int, Tuple[float, str, str]]]]:
     """Monitors pipeline and delegate canceling jobs"""
     statuses: dict[str, str] = defaultdict(str)
@@ -172,8 +190,8 @@ def monitor_pipeline(
     # jobs_waiting is a list of job names that are waiting for status update.
     # It occurs when a job that we want to run depends on another job that is not yet finished.
     jobs_waiting = []
-    # Dictionary to track the number of attempts made for each job
-    enable_attempts: dict[int, int] = {}
+    # Dictionary to track the number of attempts made for each job for a given status
+    enable_attempts: dict[tuple[int, str], int] = {}
     # FIXME: This function has too many parameters, consider refactoring.
     enable_job_fn = partial(
         enable_job,
@@ -238,17 +256,18 @@ def monitor_pipeline(
                     enough = False
 
             if not enough:
-                pretty_wait(REFRESH_WAIT_JOBS)
+                pretty_wait(polling_period)
                 continue
 
         if jobs_waiting:
             print(f"[yellow]Waiting for jobs to update status:")
             print_formatted_list(jobs_waiting, indentation=8, color="[yellow]")
-            pretty_wait(REFRESH_WAIT_JOBS)
+            pretty_wait(polling_period)
             continue
 
         if (
-            stress in [0, 1]
+            not inhibit_single_target_trace
+            and stress in [0, 1]
             and len(target_statuses) == 1
             and RUNNING_STATUSES.intersection(target_statuses.values())
         ):
@@ -272,13 +291,13 @@ def monitor_pipeline(
         if skip_follow_statuses.issuperset(target_statuses.values()):
             return None, 0, execution_times
 
-        pretty_wait(REFRESH_WAIT_JOBS)
+        pretty_wait(polling_period)
 
 
 def enable_job(
     project: gitlab.v4.objects.Project,
     job: gitlab.v4.objects.ProjectPipelineJob,
-    enable_attempts: dict[int, int],
+    enable_attempts: dict[tuple[int, str], int],
     action_type: Literal["target", "dep", "retry"],
     jobs_waiting: list[str] = list,
 ) -> bool:
@@ -286,7 +305,7 @@ def enable_job(
     Enable a job to run.
     :param project: The GitLab project.
     :param job: The job to enable.
-    :param enable_attempts: A dictionary to track the number of attempts made for each job.
+    :param enable_attempts: A dictionary to track the number of attempts made for each job for a give status.
     :param action_type: The type of action to perform.
     :param jobs_waiting:
     :return: True if the job was enabled, False otherwise.
@@ -304,14 +323,20 @@ def enable_job(
         return False
 
     # Get current attempt number
-    attempt_count = enable_attempts.get(job.id, 0)
+    attempt_count = enable_attempts.get((job.id, job.status), 0)
     # Check if we've exceeded max attempts to avoid infinite loop
-    if attempt_count >= MAX_ENABLE_JOB_ATTEMPTS:
-        raise RuntimeError(
-            f"Maximum enabling attempts ({MAX_ENABLE_JOB_ATTEMPTS}) reached for job {job.name} "
-            f"({link2print(job.web_url, job.id)}). Giving up."
+    if attempt_count == MAX_ENABLE_JOB_ATTEMPTS:
+        print(
+            f"[yellow]WARNING: "
+            f"Maximum enabling attempts ({MAX_ENABLE_JOB_ATTEMPTS}) reached for job {job.name} in {job.status} status"
+            f"({link2print(job.web_url, job.id)})."
         )
-    enable_attempts[job.id] = attempt_count + 1
+        enable_attempts[(job.id, job.status)] = attempt_count + 1
+        return False
+    elif attempt_count > MAX_ENABLE_JOB_ATTEMPTS:
+        return False
+
+    enable_attempts[(job.id, job.status)] = attempt_count + 1
 
     pjob = project.jobs.get(job.id, lazy=True)
 
@@ -403,7 +428,7 @@ def print_log(
         # GitLab's REST API doesn't offer pagination for logs, so we have to refetch it all
         lines = job.trace().decode().splitlines()
         for line in lines[printed_lines:]:
-            print(line)
+            print(line, markup=False)
         printed_lines = len(lines)
 
         if job.status in COMPLETED_STATUSES:
@@ -417,7 +442,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Tool to trigger a subset of container jobs "
         + "and monitor the progress of a test job",
-        epilog="Example: mesa-monitor.py --rev $(git rev-parse HEAD) "
+        epilog="Example: %(prog)s --rev $(git rev-parse HEAD) "
         + '--target ".*traces" ',
     )
     parser.add_argument(
@@ -433,8 +458,15 @@ def parse_args() -> argparse.Namespace:
         help="Target job regex. For multiple targets, pass multiple values, "
              "eg. `--target foo bar`. Only jobs in the target stage(s) "
              "supplied, and their dependencies, will be considered.",
-        required=True,
+        required=False,
+        default=[],
         nargs=argparse.ONE_OR_MORE,
+    )
+    parser.add_argument(
+        "--profile",
+        metavar="name",
+        choices=PROFILES,
+        help="Use a predefined set of target jobs",
     )
     parser.add_argument(
         "--include-stage",
@@ -484,7 +516,7 @@ def parse_args() -> argparse.Namespace:
         "--stress",
         metavar="n",
         type=int,
-        default=0,
+        default=None,
         help="Stresstest job(s). Specify the number of times to rerun the selected jobs, "
              "or use -1 for indefinite. Defaults to 0. If jobs have already been executed, "
              "this will ensure the total run count respects the specified number.",
@@ -501,6 +533,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exit after printing target jobs and dependencies",
     )
+    parser.add_argument(
+        "--no-job-log",
+        action="store_true",
+        help="When there is only one target job, inhibit the job trace output in the console.",
+    )
+    parser.add_argument(
+        "--polling-period",
+        type=int,
+        default=REFRESH_WAIT_JOBS,
+        help=f"Specify the waiting seconds between monitor loops. (Default: {REFRESH_WAIT_JOBS})",
+     )
+
 
     mutex_group1 = parser.add_mutually_exclusive_group()
     mutex_group1.add_argument(
@@ -525,12 +569,27 @@ def parse_args() -> argparse.Namespace:
 
     args = parser.parse_args()
 
+    if args.profile:
+        if not args.target:
+            args.target = PROFILES[args.profile]["target"]
+        if args.stress is None:
+            args.stress = PROFILES[args.profile].get("stress", 0)
+    elif not args.target:
+        parser.error("one of --target or --profile is required")
+
+    if args.stress is None:
+        args.stress = 0
+
     # argparse doesn't support groups inside add_mutually_exclusive_group(),
     # which means we can't just put `--project` and `--rev` in a group together,
     # we have to do this by heand instead.
     if args.pipeline_url and args.project != parser.get_default("project"):
         # weird phrasing but it's the error add_mutually_exclusive_group() gives
-        parser.error("argument --project: not allowed with argument --pipeline-url")
+        parser.error("argument --project: not allowed with argument --pipeline-url. It is implicit in the url.")
+    # argparse neither support the exclude `--server` when this information is
+    # included in the url of the `--pipeline-url`.
+    if args.pipeline_url and args.server != parser.get_default("server"):
+        parser.error("argument --server: not allowed with argument --pipeline-url. It is implicit in the url.")
 
     return args
 
@@ -635,7 +694,10 @@ def __job_duration_record(dict_item: tuple) -> str:
 def link2print(url: str, text: str, text_pad: int = 0) -> str:
     text = str(text)
     text_pad = len(text) if text_pad < 1 else text_pad
-    return f"[link={url}]{text:{text_pad}}[/link]"
+    if console.is_terminal:
+        return f"[link={url}]{text:{text_pad}}[/link]"
+    else:
+        return f"{text:{text_pad}}"
 
 
 def main() -> None:
@@ -646,22 +708,35 @@ def main() -> None:
 
         token = read_token(args.token)
 
-        gl = gitlab.Gitlab(url=args.server,
+        if args.pipeline_url:
+            server_url, project_name = get_server_and_project_from_url(args.pipeline_url)
+        else:
+            server_url = args.server
+            project_name = args.project
+
+        gl = gitlab.Gitlab(url=server_url,
                            private_token=token,
                            retry_transient_errors=True)
 
         REV: str = args.rev
 
         if args.pipeline_url:
-            pipe, cur_project = get_gitlab_pipeline_from_url(gl, args.pipeline_url)
+            pipe, cur_project = get_gitlab_pipeline_from_url(gl, args.pipeline_url, server_url)
             REV = pipe.sha
+            print(f"Using the revision from pipeline {pipe.id}: {REV}.")
         else:
-            mesa_project = gl.projects.get("mesa/mesa")
-            projects = [mesa_project]
-            if args.mr:
-                REV = mesa_project.mergerequests.get(args.mr).sha
+            if server_url == GITLAB_URL and project_name == "mesa":  # the default valut
+                gl_project = gl.projects.get("mesa/mesa")
             else:
+                gl_project = get_gitlab_project(gl, project_name)
+            projects = {gl_project}
+            if args.mr:
+                REV = gl_project.mergerequests.get(args.mr).sha
+                print(f"Using the revision from {args.mr}: {REV}.")
+            else:
+                print(f"Using the revision from {REV}: ",end="")
                 REV = check_output(['git', 'rev-parse', REV]).decode('ascii').strip()
+                print(f"{REV}.")
 
                 if args.rev == 'HEAD':
                     try:
@@ -691,7 +766,7 @@ def main() -> None:
                                 )
                                 print("Did you forget to `git push` ?")
 
-                projects.append(get_gitlab_project(gl, args.project))
+            projects.add(get_gitlab_project(gl, project_name))
             (pipe, cur_project) = wait_for_pipeline(projects, REV)
 
         print(f"Revision: {REV}")
@@ -747,7 +822,7 @@ def main() -> None:
             return True
 
         deps = find_dependencies(
-            server=args.server,
+            server=server_url,
             token=token,
             job_filter=job_filter,
             iid=pipe.iid,
@@ -762,7 +837,9 @@ def main() -> None:
             pipe,
             job_filter,
             deps,
-            args.stress
+            args.stress,
+            args.no_job_log,
+            args.polling_period,
         )
 
         if target_job_id:
@@ -771,6 +848,8 @@ def main() -> None:
         print_monitor_summary(exec_t, t_start)
 
         sys.exit(ret)
+    except gitlab.exceptions.GitlabAuthenticationError as exception:
+        print(f"[yellow]Gitlab authentication error {exception.error_message}.\n[red]Check the token!")
     except KeyboardInterrupt:
         sys.exit(1)
 

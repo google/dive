@@ -9,19 +9,17 @@ section_start rust "Building Rust toolchain"
 
 # When changing this file, you need to bump the following
 # .gitlab-ci/image-tags.yml tags:
+# ALPINE_X86_64_BUILD_TAG
 # DEBIAN_BUILD_BASE_TAG
 # DEBIAN_TEST_BASE_TAG
+# FEDORA_X86_64_BUILD_TAG
 
-# This version number should match what we require in meson.build so we catch
-# build issues from patches relying on new features in newer Rust versions.
-# Keep this is sync with the `rustc.version()` check in meson.build, and with
-# the `rustup default` line in .gitlab-ci/meson/build.sh
-MINIMUM_SUPPORTED_RUST_VERSION=1.82.0
+MINIMUM_SUPPORTED_RUST_VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("clippy.toml", "rb"))["msrv"])')
 
 # This version number can be bumped freely, to benefit from the latest
 # diagnostics in CI `build-only` jobs, and for building external CI
 # components.
-LATEST_RUST_VERSION=1.90.0
+LATEST_RUST_VERSION=1.96.0
 
 # For rust in Mesa, we use rustup to install.  This lets us pick an arbitrary
 # version of the compiler, rather than whatever the container's Debian comes
@@ -39,7 +37,7 @@ curl -L --retry 4 -f --retry-all-errors --retry-delay 60 \
 
 if [ "$1" = "build" ]
 then
-  rustup toolchain install --profile minimal --component clippy,rustfmt $MINIMUM_SUPPORTED_RUST_VERSION
+  rustup toolchain install --profile minimal --component clippy,rustfmt "$MINIMUM_SUPPORTED_RUST_VERSION"
 fi
 
 find "$HOME"/.rustup/toolchains/*/lib -type f -name "*.so" -exec strip {} \;

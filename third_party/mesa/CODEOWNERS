@@ -26,6 +26,7 @@ meson.build @dbaker @eric
 
 # Build system - Android
 /android/ @roman.stratiienko
+/bin/update-android-headers.sh @zzyiwei
 
 # Compatibility headers
 /include/c99* @xexaxo
@@ -46,6 +47,8 @@ meson.build @dbaker @eric
 /src/vulkan/ @gfxstrand
 /include/vulkan/ @gfxstrand
 
+# Android Gralloc
+/src/util/u_gralloc/ @roman.stratiienko @zzyiwei
 
 #############
 # PLATFORMS #
@@ -94,6 +97,9 @@ meson.build @dbaker @eric
 /src/vulkan/wsi/wsi_common_display.* @keithp
 /src/*/vulkan/*_wsi_display.c @keithp
 
+# Vulkan - Android
+/include/vulkan/vk_android_native_buffer.h @zzyiwei
+/src/vulkan/runtime/vk_android.* @zzyiwei
 
 ######
 # CI #
@@ -106,6 +112,8 @@ gitlab-ci*.yml @eric
 # Broadcom
 /src/broadcom/ci/ @jasuarez @chema
 
+# Lima
+/src/gallium/drivers/lima/ci/ @enunes
 
 ###########
 # Drivers #
@@ -116,9 +124,9 @@ gitlab-ci*.yml @eric
 /src/gallium/drivers/asahi/ @alyssa
 
 # Broadcom
-/src/broadcom/ @itoral @apinheiro
-/src/gallium/drivers/v3d/ @itoral @chema @jasuarez
-/src/gallium/drivers/vc4/ @itoral @chema @jasuarez
+/src/broadcom/ @chema @jasuarez @itoral @apinheiro
+/src/gallium/drivers/v3d/ @chema @jasuarez @itoral @apinheiro
+/src/gallium/drivers/vc4/ @chema @jasuarez @itoral @apinheiro
 
 # Freedreno
 /src/gallium/drivers/freedreno/ @robclark
@@ -133,16 +141,24 @@ gitlab-ci*.yml @eric
 /include/drm-uapi/i915_drm.h @kwg @llandwerlin @idr
 /include/pci_ids/i*_pci_ids.h @kwg @llandwerlin @idr
 /src/intel/ @kwg @llandwerlin @idr
+/src/intel/compiler/jay/ @alyssa @kwg
 /src/gallium/winsys/iris/ @kwg @llandwerlin @idr
 /src/gallium/drivers/iris/ @kwg @llandwerlin @idr
 /src/gallium/drivers/i915/ @anholt
+
+# KosmicKrisp
+/src/kosmickrisp @aitor
+/src/kosmickrisp/compiler @agoldmints
+
+# Lima
+/src/gallium/drivers/lima/ @enunes @anarsoul
 
 # Microsoft
 /src/microsoft/ @jenatali
 /src/gallium/drivers/d3d12/ @jenatali
 
 # Panfrost
-/src/panfrost/ @bbrezillon
+/src/panfrost/ @bbrezillon @larsivsi @chrpil
 /src/panfrost/midgard @italove
 /src/gallium/drivers/panfrost/ @bbrezillon
 
@@ -162,5 +178,5 @@ gitlab-ci*.yml @eric
 /src/gallium/drivers/svga/ @brianp @charmainel
 /src/gallium/winsys/svga/ @thomash @drawat
 
-# Rust util: peripherally uploaded to crates.io
-src/util/rust @gurchetansingh @aruby @jmacnak @dextero1
+# Magma GPU experimental crate: peripherally uploaded to crates.io
+src/virtio/magma-gpu-rs @gurchetansingh @aruby @jmacnak @dextero1

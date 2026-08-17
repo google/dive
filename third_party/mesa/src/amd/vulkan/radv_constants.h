@@ -30,7 +30,6 @@
 #define MAX_DYNAMIC_BUFFERS            (MAX_DYNAMIC_UNIFORM_BUFFERS + MAX_DYNAMIC_STORAGE_BUFFERS)
 #define MAX_SAMPLES_LOG2               4
 #define NUM_META_FS_KEYS               12
-#define MAX_VIEWS                      8
 #define MAX_SO_STREAMS                 4
 #define MAX_SO_BUFFERS                 4
 #define MAX_SO_OUTPUTS                 128
@@ -146,5 +145,17 @@
 #define RADV_STORAGE_IMAGE_DESC_SIZE 32
 #define RADV_BUFFER_DESC_SIZE        16
 #define RADV_ACCEL_STRUCT_DESC_SIZE  16
+
+/* Descriptor heaps */
+#define RADV_HEAP_RESOURCE  0
+#define RADV_HEAP_SAMPLER   1
+
+/* Number of descriptor heaps */
+#define RADV_MAX_HEAPS (RADV_HEAP_SAMPLER + 1)
+
+#define RADV_MAX_SHADER_ABORT_MESSAGE_SIZE 65536
+
+/* Don't use 4K alignment for sparse because 4K pages (both sparse and non-sparse) are super slow. */
+#define RADV_SPARSE_BUFFER_ALIGNMENT (64 * 1024)
 
 #endif /* RADV_CONSTANTS_H */

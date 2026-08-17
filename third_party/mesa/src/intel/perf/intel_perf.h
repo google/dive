@@ -99,6 +99,10 @@ enum ENUM_PACKED intel_perf_counter_units {
    INTEL_PERF_COUNTER_UNITS_MAX
 };
 
+const char *intel_perf_counter_type_name(enum intel_perf_counter_type type);
+const char *intel_perf_counter_data_type_name( enum intel_perf_counter_data_type type);
+const char *intel_perf_counter_units_name(enum intel_perf_counter_units units);
+
 struct intel_pipeline_stat {
    uint32_t reg;
    uint32_t numerator;
@@ -429,9 +433,12 @@ struct intel_perf_query_counter_info {
 enum intel_perf_features {
    INTEL_PERF_FEATURE_HOLD_PREEMPTION = (1 << 0),
    INTEL_PERF_FEATURE_GLOBAL_SSEU = (1 << 1),
-   /* Whether i915 has DRM_I915_QUERY_PERF_CONFIG support. */
-   INTEL_PERF_FEATURE_QUERY_PERF = (1 << 2),
-   INTEL_PERF_FEATURE_METRIC_SYNC = (1 << 3),
+   INTEL_PERF_FEATURE_METRIC_SYNC = (1 << 2),
+   /* OA metrics are supported by the kernel but access is blocked by system
+    * policy (observation_paranoid on xe, perf_stream_paranoid on i915).
+    * Set when the sysctl exists but the process lacks the required privilege.
+    */
+   INTEL_PERF_FEATURE_OA_BLOCKED_BY_POLICY = (1 << 3),
 };
 
 struct intel_perf_config {
@@ -479,6 +486,9 @@ struct intel_perf_config {
       uint64_t n_l3_banks;          /** $L3BankTotalCount */
       uint64_t n_l3_nodes;          /** $L3NodeTotalCount */
       uint64_t n_sq_idis;           /** $SqidiTotalCount */
+      uint64_t n_depth_pipes;       /** $DepthPipeTotalCount */
+      uint64_t n_geom_pipes;        /** $GeometryPipeTotalCount */
+      uint64_t n_color_pipes;       /** $ColorPipeTotalCount */
       uint64_t slice_mask;          /** $SliceMask */
       uint64_t subslice_mask;       /** $SubsliceMask */
       uint64_t gt_min_freq;         /** $GpuMinFrequency */
@@ -564,10 +574,10 @@ bool intel_perf_load_metric_id(struct intel_perf_config *perf_cfg,
                                const char *guid,
                                uint64_t *metric_id);
 
-/** Load a configuation's content from i915 using a guid.
+/** Load a configuration's id from KMD using a guid.
  */
-struct intel_perf_registers *intel_perf_load_configuration(struct intel_perf_config *perf_cfg,
-                                                           int fd, const char *guid);
+uint64_t
+intel_perf_get_configuration_id(struct intel_perf_config *perf_cfg, const char *guid);
 
 /** Store a configuration into i915 using guid and return a new metric id.
  *
@@ -636,7 +646,8 @@ void intel_perf_query_result_accumulate_fields(struct intel_perf_query_result *r
 void intel_perf_eustall_accumulate_results(struct intel_perf_query_eustall_result *result,
                                            const void *start,
                                            const void *end,
-                                           size_t record_size);
+                                           size_t record_size,
+                                           int ver);
 
 void intel_perf_query_result_clear(struct intel_perf_query_result *result);
 void intel_perf_query_eustall_result_clear(struct intel_perf_query_eustall_result *result);

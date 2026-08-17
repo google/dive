@@ -24,10 +24,16 @@
 #ifndef IRIS_DRM_PUBLIC_H
 #define IRIS_DRM_PUBLIC_H
 
+#include <stdbool.h>
+
 struct pipe_screen;
 struct pipe_screen_config;
+struct virgl_renderer_capset_drm;
 
 struct pipe_screen *
 iris_drm_screen_create(int drm_fd, const struct pipe_screen_config *config);
+
+bool
+iris_drm_probe_nctx(int fd, const struct virgl_renderer_capset_drm *caps);
 
 #endif /* IRIS_DRM_PUBLIC_H */

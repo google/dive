@@ -35,8 +35,10 @@
 #define EXT_FORMAT (1 << 31)
 #define ASTC_FORMAT (1 << 30)
 
+struct etna_screen;
+
 uint32_t
-translate_texture_format(enum pipe_format fmt);
+translate_texture_format(enum pipe_format fmt, const struct etna_screen *screen);
 
 bool
 texture_use_int_filter(const struct pipe_sampler_view *sv,
@@ -55,6 +57,12 @@ translate_pe_format(enum pipe_format fmt);
 
 int
 translate_pe_format_rb_swap(enum pipe_format fmt);
+
+uint32_t
+remap_texture_format_rb_swap(uint32_t format);
+
+enum pipe_format
+translate_pe_internal_format(enum pipe_format fmt);
 
 uint32_t
 translate_vertex_format_type(enum pipe_format fmt);
@@ -85,6 +93,24 @@ format_is_128bit(enum pipe_format fmt)
     default:
         return false;
     }
+}
+
+static inline bool
+format_is_emulated_z32f(enum pipe_format fmt)
+{
+    return fmt == PIPE_FORMAT_Z32_FLOAT ||
+           fmt == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT;
+}
+
+/* The emulated depth32f formats are physically stored as D24S8; map them to
+ * that format and leave everything else unchanged. */
+static inline enum pipe_format
+translate_emulated_format_z32f(enum pipe_format fmt)
+{
+    if (format_is_emulated_z32f(fmt))
+        return PIPE_FORMAT_S8_UINT_Z24_UNORM;
+
+    return fmt;
 }
 
 #endif /* ETNAVIV_FORMAT_H_ */

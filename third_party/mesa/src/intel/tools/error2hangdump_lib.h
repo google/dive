@@ -35,5 +35,5 @@ _fail(const char *prefix, const char *format, ...)
 
 void write_header(FILE *f);
 void write_buffer(FILE *f, uint64_t offset, const void *data, uint64_t size, const char *name);
-void write_hw_image_buffer(FILE *f, const void *data, uint64_t size);
+void write_hw_image_buffer(FILE *f, const void *data, uint64_t size, uint64_t offset);
 void write_exec(FILE *f, uint64_t offset);

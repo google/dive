@@ -199,6 +199,18 @@ vlVaHandleVAEncSliceParameterBufferTypeHEVC(vlVaDriver *drv, vlVaContext *contex
    slice_descriptor.slice_type = h265->slice_type;
    assert(slice_descriptor.slice_type <= PIPE_H265_SLICE_TYPE_I);
 
+#ifndef NDEBUG
+   /* Assert that the slices are coming in order */
+   if (context->desc.h265enc.num_slice_descriptors == 0) {
+      assert(slice_descriptor.slice_segment_address == 0);
+   } else {
+      struct h265_slice_descriptor *last_slice_descriptor =
+         &context->desc.h265enc.slices_descriptors[context->desc.h265enc.num_slice_descriptors - 1];
+      assert(last_slice_descriptor->slice_segment_address +
+             last_slice_descriptor->num_ctu_in_slice == slice_descriptor.slice_segment_address);
+   }
+#endif
+
    if (context->desc.h265enc.num_slice_descriptors < ARRAY_SIZE(context->desc.h265enc.slices_descriptors))
       context->desc.h265enc.slices_descriptors[context->desc.h265enc.num_slice_descriptors++] = slice_descriptor;
    else

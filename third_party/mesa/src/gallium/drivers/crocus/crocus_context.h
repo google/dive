@@ -308,8 +308,8 @@ struct crocus_uncompiled_shader {
 
    struct pipe_stream_output_info stream_output;
 
-   /* A SHA1 of the serialized NIR for the disk cache. */
-   unsigned char nir_sha1[20];
+   /* A BLAKE3 of the serialized NIR for the disk cache. */
+   unsigned char nir_blake3[BLAKE3_KEY_LEN];
 
    unsigned program_id;
 
@@ -431,6 +431,10 @@ struct crocus_shader_state {
    uint32_t writable_ssbos;
 
    uint32_t sampler_offset;
+};
+
+struct crocus_scissor_state {
+   uint16_t minx, miny, maxx, maxy;
 };
 
 /**
@@ -570,7 +574,7 @@ struct crocus_context {
       struct pipe_blend_color blend_color;
       struct pipe_poly_stipple poly_stipple;
       struct pipe_viewport_state viewports[CROCUS_MAX_VIEWPORTS];
-      struct pipe_scissor_state scissors[CROCUS_MAX_VIEWPORTS];
+      struct crocus_scissor_state scissors[CROCUS_MAX_VIEWPORTS];
       struct pipe_stencil_ref stencil_ref;
       PIPE_FB_SURFACES; //STOP USING THIS
       struct pipe_framebuffer_state framebuffer;

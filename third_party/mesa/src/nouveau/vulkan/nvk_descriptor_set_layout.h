@@ -54,9 +54,6 @@ struct nvk_descriptor_set_layout {
    /* Maximum possible buffer size for this descriptor set */
    uint32_t max_buffer_size;
 
-   /* Number of dynamic UBO bindings in this set */
-   uint8_t dynamic_buffer_count;
-
    /* Which dynamic buffers are UBOs */
    BITSET_DECLARE(dynamic_ubos, NVK_MAX_DYNAMIC_BUFFERS);
 

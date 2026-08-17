@@ -84,6 +84,16 @@ etna_alu_to_scalar_filter_cb(const nir_instr *instr, const void *data)
       if (!etna_core_has_feature(info, ETNA_FEATURE_HALTI2))
          return true;
       break;
+   case nir_op_bitfield_insert:
+      /* bit_insert_etna applies one offset and bit count to the whole vector,
+       * so scalarize when they vary per component.
+       */
+      for (unsigned i = 1; i < alu->def.num_components; i++) {
+         if (alu->src[2].swizzle[i] != alu->src[2].swizzle[0] ||
+             alu->src[3].swizzle[i] != alu->src[3].swizzle[0])
+            return true;
+      }
+      break;
    default:
       break;
    }
@@ -157,7 +167,7 @@ etna_optimize_loop(nir_shader *s)
       progress |= OPT(s, nir_opt_copy_prop_vars);
       progress |= OPT(s, nir_opt_shrink_stores, true);
       progress |= OPT(s, nir_opt_shrink_vectors, false);
-      progress |= OPT(s, nir_copy_prop);
+      progress |= OPT(s, nir_opt_copy_prop);
       progress |= OPT(s, nir_opt_dce);
       progress |= OPT(s, nir_opt_cse);
 
@@ -177,7 +187,7 @@ etna_optimize_loop(nir_shader *s)
           * things up if we want any hope of nir_opt_if or nir_opt_loop_unroll
           * to make progress.
           */
-         OPT(s, nir_copy_prop);
+         OPT(s, nir_opt_copy_prop);
          OPT(s, nir_opt_dce);
       }
       progress |= OPT(s, nir_opt_loop_unroll);
@@ -188,7 +198,7 @@ etna_optimize_loop(nir_shader *s)
    while (progress);
 }
 
-static int
+static unsigned
 etna_glsl_type_size(const struct glsl_type *type, bool bindless)
 {
    return glsl_count_attribute_slots(type, false);
@@ -361,7 +371,7 @@ ra_src(struct etna_compile *c, nir_src *src)
 static hw_src
 get_src(struct etna_compile *c, nir_src *src)
 {
-   nir_instr *instr = src->ssa->parent_instr;
+   nir_instr *instr = nir_def_instr(src->ssa);
 
    if (instr->pass_flags & BYPASS_SRC) {
       assert(instr->type == nir_instr_type_alu);
@@ -453,7 +463,7 @@ vec_dest_has_swizzle(nir_alu_instr *vec, nir_def *ssa)
 
    /* don't deal with possible bypassed vec/mov chain */
    nir_foreach_use(use_src, ssa) {
-      nir_instr *instr = nir_src_parent_instr(use_src);
+      nir_instr *instr = nir_src_use_instr(use_src);
       if (instr->type != nir_instr_type_alu)
          continue;
 
@@ -543,6 +553,12 @@ emit_alu(struct etna_compile *c, nir_alu_instr * alu)
 
       srcs[i] = src;
    }
+
+   /* src2 is the packed offset and bit count, not per-component data, so keep
+    * it instead of composing the destination swizzle onto it.
+    */
+   if (alu->op == nir_op_bitfield_insert_etna)
+      srcs[2] = src_swizzle(get_src(c, &alu->src[2].src), SWIZZLE(X, Y, Y, Y));
 
    etna_emit_alu(c, alu->op, dst, srcs, alu->op == nir_op_fsat);
 }
@@ -821,7 +837,7 @@ static nir_const_value *get_alu_cv(nir_alu_src *src)
    nir_const_value *cv = nir_src_as_const_value(src->src);
 
    if (!cv &&
-       (src->src.ssa->parent_instr->type == nir_instr_type_alu)) {
+       (nir_src_is_alu(src->src))) {
       nir_alu_instr *parent = nir_def_as_alu(src->src.ssa);
 
       if ((parent->op == nir_op_fabs) ||
@@ -967,11 +983,11 @@ lower_alu(struct etna_compile *c, nir_alu_instr *alu)
       /* check that vecN instruction is only user of this */
       bool need_mov = false;
       nir_foreach_use_including_if(use_src, ssa) {
-         if (nir_src_is_if(use_src) || nir_src_parent_instr(use_src) != &alu->instr)
+         if (nir_src_is_if(use_src) || nir_src_use_instr(use_src) != &alu->instr)
             need_mov = true;
       }
 
-      nir_instr *instr = ssa->parent_instr;
+      nir_instr *instr = nir_def_instr(ssa);
       switch (instr->type) {
       case nir_instr_type_alu:
       case nir_instr_type_tex:
@@ -1072,10 +1088,10 @@ emit_shader(struct etna_compile *c, unsigned *num_temps, unsigned *num_consts)
          case nir_intrinsic_store_deref: {
             nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
             nir_src *src = &intr->src[1];
-            if (nir_src_is_const(*src) || is_sysval(src->ssa->parent_instr) ||
+            if (nir_src_is_const(*src) || is_sysval(nir_def_instr(src->ssa)) ||
                 (shader->info.stage == MESA_SHADER_FRAGMENT &&
                  deref->var->data.location == FRAG_RESULT_DEPTH &&
-                 src->ssa->parent_instr->type != nir_instr_type_alu)) {
+                 !nir_def_is_alu(src->ssa))) {
                b.cursor = nir_before_instr(instr);
                nir_src_rewrite(src, nir_mov(&b, src->ssa));
             }
@@ -1187,10 +1203,24 @@ alu_width_cb(const nir_instr *instr, UNUSED const void *cb_data)
    if (instr->type == nir_instr_type_alu) {
       nir_alu_instr *alu = nir_instr_as_alu(instr);
 
-      if (alu->op == nir_op_fdot2 ||
-          alu->op == nir_op_fdot3 ||
-          alu->op == nir_op_fdot4)
-         return 0;
+      switch (alu->op) {
+      case nir_op_ball_fequal2:
+      case nir_op_ball_fequal3:
+      case nir_op_ball_fequal4:
+      case nir_op_bany_fnequal2:
+      case nir_op_bany_fnequal3:
+      case nir_op_bany_fnequal4:
+      case nir_op_ball_iequal2:
+      case nir_op_ball_iequal3:
+      case nir_op_ball_iequal4:
+      case nir_op_bany_inequal2:
+      case nir_op_bany_inequal3:
+      case nir_op_bany_inequal4: return 1;
+      case nir_op_fdot2:
+      case nir_op_fdot3:
+      case nir_op_fdot4: return 0;
+      default: break;
+      }
    }
 
    return 4;
@@ -1216,14 +1246,13 @@ etna_compile_shader(struct etna_shader_variant *v)
 
    v->stage = s->info.stage;
    v->uses_discard = s->info.fs.uses_discard;
-   v->num_loops = 0; /* TODO */
    v->vs_id_in_reg = -1;
    v->vs_pos_out_reg = -1;
    v->vs_pointsize_out_reg = -1;
    v->ps_depth_out_reg = -1;
 
    if (s->info.stage == MESA_SHADER_FRAGMENT)
-      NIR_PASS(_, s, nir_lower_fragcolor, specs->num_rts);
+      NIR_PASS(_, s, nir_lower_fragcolor, v->shader->compiler->max_render_targets);
 
    /*
     * Lower glTexCoord, fixes e.g. neverball point sprite (exit cylinder stars)
@@ -1273,8 +1302,10 @@ etna_compile_shader(struct etna_shader_variant *v)
             (nir_lower_io_options)0);
 
    NIR_PASS(_, s, nir_lower_vars_to_ssa);
-   NIR_PASS(_, s, nir_lower_indirect_derefs, nir_var_all, UINT32_MAX);
+   NIR_PASS(_, s, nir_lower_indirect_derefs_to_if_else_trees, nir_var_all,
+            UINT32_MAX);
    NIR_PASS(_, s, etna_nir_lower_texture, &v->key, v->shader->info);
+   NIR_PASS(_, s, etna_nir_lower_128bit, &v->key);
    NIR_PASS(_, s, nir_lower_alu_width, alu_width_cb, NULL);
 
    NIR_PASS(_, s, nir_lower_alu_to_scalar, etna_alu_to_scalar_filter_cb, c->info);
@@ -1318,7 +1349,7 @@ etna_compile_shader(struct etna_shader_variant *v)
    NIR_PASS(_, s, nir_opt_algebraic_late);
 
    NIR_PASS(_, s, nir_move_vec_src_uses_to_dest, false);
-   NIR_PASS(_, s, nir_copy_prop);
+   NIR_PASS(_, s, nir_opt_copy_prop);
    /* need copy prop after uses_to_dest, and before src mods: see
     * dEQP-GLES2.functional.shaders.random.all_features.fragment.95
     */
@@ -1326,7 +1357,8 @@ etna_compile_shader(struct etna_shader_variant *v)
    NIR_PASS(_, s, nir_opt_dce);
    NIR_PASS(_, s, nir_opt_cse);
 
-   NIR_PASS(_, s, nir_lower_bool_to_bitsize);
+   NIR_PASS(_, s, etna_nir_lower_bitfield_insert);
+   NIR_PASS(_, s, nir_lower_bool_to_int32);
    NIR_PASS(_, s, etna_lower_alu, c->specs->has_new_transcendentals);
 
    /* needs to be the last pass that touches pass_flags! */

@@ -20,7 +20,7 @@ public:
    elk_compiler compiler;
    elk_compile_params params;
    intel_device_info devinfo;
-   struct elk_wm_prog_data prog_data;
+   struct elk_fs_prog_data prog_data;
    struct gl_shader_program *shader_prog;
 
    elk_fs_visitor *shader_a;

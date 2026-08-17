@@ -29,17 +29,12 @@ INSTALL=$(realpath -s "$PWD"/install)
 # Modifiying here directly LD_LIBRARY_PATH may cause problems when
 # using a command wrapper. Hence, we will just set it when running the
 # command.
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}:$INSTALL/lib/:/vkd3d-proton-tests/lib/"
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}:$INSTALL/lib/"
 
 
 # Set the Vulkan driver to use.
 ARCH=$(uname -m)
 export VK_DRIVER_FILES="$INSTALL/share/vulkan/icd.d/${VK_DRIVER}_icd.$ARCH.json"
-
-# Set environment for Wine.
-export WINEDEBUG="-all"
-export WINEPREFIX="/vkd3d-proton-wine64"
-export WINEESYNC=1
 
 if [ -f "$INSTALL/$GPU_VERSION-vkd3d-skips.txt" ]; then
   mapfile -t skips < <(grep -vE '^#|^$' "$INSTALL/$GPU_VERSION-vkd3d-skips.txt")
@@ -51,9 +46,19 @@ fi
 # Sanity check to ensure that our environment is sufficient to make our tests
 # run against the Mesa built by CI, rather than any installed distro version.
 MESA_VERSION=$(cat "$INSTALL/VERSION")
+
+if [ "${VKD3D_FORCE_ASAN:-0}" -eq 1 ]; then
+    export LD_PRELOAD="libasan.so.8:$INSTALL/lib/libdlclose-skip.so"
+    export ASAN_OPTIONS="malloc_fill_byte=1"
+fi
+
 if ! vulkaninfo | grep driverInfo | tee /tmp/version.txt | grep -qF "Mesa $MESA_VERSION"; then
     printf "%s\n" "Found $(cat /tmp/version.txt), expected $MESA_VERSION"
     exit 1
+fi
+
+if [ "${VKD3D_FORCE_ASAN:-0}" -eq 1 ]; then
+    unset LD_PRELOAD
 fi
 
 # Gather the list expected failures
@@ -99,10 +104,15 @@ fi
 
 printf "%s\n" "Running vkd3d-proton testsuite..."
 
+if [ "${VKD3D_FORCE_ASAN:-0}" -eq 1 ]; then
+    export LD_PRELOAD="libasan.so.8:$INSTALL/lib/libdlclose-skip.so"
+    export LD_LIBRARY_PATH="/vkd3d-proton-tests/libs/d3d12:/vkd3d-proton-tests/libs/d3d12core:${LD_LIBRARY_PATH}"
+fi
+
 LOGFILE="$RESULTS_DIR/vkd3d-proton-log.txt"
 TEST_LOGS="/test-logs"
 pushd /vkd3d-proton-tests
-tests/test-runner.sh ./d3d12 --jobs "${FDO_CI_CONCURRENT:-4}" --output-dir "$TEST_LOGS" | tee "$LOGFILE" || true
+tests/test-runner.sh tests/d3d12 --jobs "${FDO_CI_CONCURRENT:-4}" --output-dir "$TEST_LOGS" | tee "$LOGFILE" || true
 popd
 
 printf '\n\n'

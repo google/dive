@@ -24,6 +24,8 @@
 #include <string.h>
 #include "util/libdrm.h"
 
+#include "virtio/intel_virtio.h"
+
 #include "intel_kmd.h"
 
 enum intel_kmd_type
@@ -35,11 +37,16 @@ intel_get_kmd_type(int fd)
    if (!version)
       return type;
 
-   if (strcmp(version->name, "i915") == 0)
+   /*
+    * For virtio, version->name would be either "virtio_gpu" or "i915",
+    * depending on whether vtest is used or not.
+    */
+   if (strcmp(version->name, "i915") == 0 || is_intel_virtio_fd(fd))
       type = INTEL_KMD_TYPE_I915;
    else if (strcmp(version->name, "xe") == 0)
       type = INTEL_KMD_TYPE_XE;
 
    drmFreeVersion(version);
+
    return type;
 }

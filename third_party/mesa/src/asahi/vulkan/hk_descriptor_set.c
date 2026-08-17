@@ -550,7 +550,7 @@ hk_descriptor_set_create(struct hk_device *dev, struct hk_descriptor_pool *pool,
 
    uint32_t mem_size =
       sizeof(struct hk_descriptor_set) +
-      layout->dynamic_buffer_count * sizeof(struct hk_buffer_address);
+      layout->vk.dynamic_descriptor_count * sizeof(struct hk_buffer_address);
 
    set =
       vk_object_zalloc(&dev->vk, NULL, mem_size, VK_OBJECT_TYPE_DESCRIPTOR_SET);

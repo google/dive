@@ -30,6 +30,7 @@
 #include "util/slab.h"
 #include "util/u_screen.h"
 #include "intel/dev/intel_device_info.h"
+#include "intel/dev/virtio/intel_virtio.h"
 #include "intel/isl/isl.h"
 #include "crocus_bufmgr.h"
 #include "compiler/shader_enums.h"
@@ -41,7 +42,7 @@ struct intel_vue_map;
 struct elk_tcs_prog_key;
 struct elk_tes_prog_key;
 struct elk_cs_prog_key;
-struct elk_wm_prog_key;
+struct elk_fs_prog_key;
 struct elk_vs_prog_key;
 struct elk_gs_prog_key;
 struct shader_info;
@@ -132,7 +133,7 @@ struct crocus_vtable {
                            struct elk_gs_prog_key *key);
    void (*populate_fs_key)(const struct crocus_context *ice,
                            const struct shader_info *info,
-                           struct elk_wm_prog_key *key);
+                           struct elk_fs_prog_key *key);
    void (*populate_cs_key)(const struct crocus_context *ice,
                            struct elk_cs_prog_key *key);
    void (*fill_clamp_mask)(const struct crocus_sampler_state *state,
@@ -200,6 +201,7 @@ struct crocus_screen {
       bool always_flush_cache;
       bool limit_trig_input_range;
       float lower_depth_range_rate;
+      float heap_memory_percent;
    } driconf;
 
    uint64_t aperture_bytes;

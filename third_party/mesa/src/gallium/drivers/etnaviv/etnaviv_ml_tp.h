@@ -47,6 +47,7 @@ etna_ml_compile_operation_tp(struct etna_ml_subgraph *subgraph,
                              struct etna_vip_instruction *instruction);
 
 void
-etna_ml_emit_operation_tp(struct etna_ml_subgraph *subgraph,
+etna_ml_emit_operation_tp(struct pipe_context *pctx,
+                          struct etna_ml_subgraph *subgraph,
                           struct etna_vip_instruction *operation,
                           unsigned idx);

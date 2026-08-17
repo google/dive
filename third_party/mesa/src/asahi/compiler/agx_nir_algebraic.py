@@ -34,9 +34,6 @@ lower_pack = [
      ('pack_32_2x16_split', ('ior', ('u2u16', a), ('ishl', ('u2u16', b), 8)),
                             ('ior', ('u2u16', c), ('ishl', ('u2u16', d), 8)))),
 
-    (('unpack_half_2x16_split_x', a), ('f2f32', ('unpack_32_2x16_split_x', a))),
-    (('unpack_half_2x16_split_y', a), ('f2f32', ('unpack_32_2x16_split_y', a))),
-
     (('extract_u16', 'a@32', 0), ('u2u32', ('unpack_32_2x16_split_x', a))),
     (('extract_u16', 'a@32', 1), ('u2u32', ('unpack_32_2x16_split_y', a))),
     (('extract_i16', 'a@32', 0), ('i2i32', ('unpack_32_2x16_split_x', a))),
@@ -91,7 +88,7 @@ lower_pack = [
 lower_selects = []
 for T, sizes, one in [('f', [16, 32], 1.0),
                       ('i', [8, 16, 32], 1),
-                      ('b', [16, 32], -1)]:
+                      ('b', [32], -1)]:
     for size in sizes:
         lower_selects.extend([
             ((f'b2{T}{size}', ('inot', 'a@1')), ('bcsel', a, 0, one)),

@@ -259,7 +259,7 @@ struct fixed31_32 vpe_fixpt_cos(struct fixed31_32 arg)
 
     do {
         res = vpe_fixpt_sub(
-            vpe_fixpt_one, vpe_fixpt_div_int(vpe_fixpt_mul(square, res), n * (n - 1)));
+            vpe_fixpt_one, vpe_fixpt_div_int(vpe_fixpt_mul(square, res), (long long)n * (n - 1)));
 
         n -= 2;
     } while (n != 0);

@@ -16,18 +16,18 @@ section_start crosvm "Building crosvm"
 git config --global user.email "mesa@example.com"
 git config --global user.name "Mesa CI"
 
-CROSVM_VERSION=4a6b4316155742fbfa1be7087c2ee578cfee884d
+CROSVM_VERSION=f58c8e685f3f21d733861a080a0857acafd0da56
 git clone --single-branch -b main --no-checkout https://chromium.googlesource.com/crosvm/crosvm /platform/crosvm
 pushd /platform/crosvm
 git checkout "$CROSVM_VERSION"
 git submodule update --init
 
-VIRGLRENDERER_VERSION=06d43ce974b664f9dc521b706a0ad7f91dbf2866
+VIRGLRENDERER_VERSION=37168812546aba59e79eb032d65e150c38ad3996
 rm -rf third_party/virglrenderer
 git clone --single-branch -b main --no-checkout https://gitlab.freedesktop.org/virgl/virglrenderer.git third_party/virglrenderer
 pushd third_party/virglrenderer
 git checkout "$VIRGLRENDERER_VERSION"
-meson setup build/ -D libdir=lib -D render-server-worker=process -D venus=true ${EXTRA_MESON_ARGS:-}
+meson setup build/ -D libdir=lib -D venus=true ${EXTRA_MESON_ARGS:-}
 meson install -C build
 popd
 

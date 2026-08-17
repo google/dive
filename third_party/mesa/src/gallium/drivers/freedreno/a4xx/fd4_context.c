@@ -46,6 +46,10 @@ fd4_context_create(struct pipe_screen *pscreen, void *priv,
                    unsigned flags) in_dt
 {
    struct fd_screen *screen = fd_screen(pscreen);
+
+   if (flags & PIPE_CONTEXT_COMPUTE_ONLY)
+      return NULL;
+
    struct fd4_context *fd4_ctx = CALLOC_STRUCT(fd4_context);
    struct pipe_context *pctx;
 

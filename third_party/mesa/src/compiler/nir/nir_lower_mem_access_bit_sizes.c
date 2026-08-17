@@ -52,7 +52,7 @@ dup_mem_intrinsic(nir_builder *b, nir_intrinsic_instr *intrin,
    }
 
    dup->num_components = num_components;
-   for (unsigned i = 0; i < info->num_indices; i++)
+   for (unsigned i = 0; i < info->num_index_slots; i++)
       dup->const_index[i] = intrin->const_index[i];
 
    nir_set_io_offset(dup, offset);
@@ -181,9 +181,9 @@ lower_mem_load(nir_builder *b, nir_intrinsic_instr *intrin,
       return false;
 
    /* Otherwise, we have to break it into chunks.  We could end up with as
-    * many as 32 chunks if we're loading a u64vec16 as individual dwords.
+    * many as 128 chunks if we're loading a u64vec16 as individual bytes.
     */
-   nir_def *chunks[32];
+   nir_def *chunks[128];
    unsigned num_chunks = 0;
    unsigned chunk_start = 0;
    while (chunk_start < bytes_read) {
@@ -475,7 +475,7 @@ lower_mem_store(nir_builder *b, nir_intrinsic_instr *intrin,
                            align_mul, chunk_align_offset, packed,
                            requested.num_components, requested.bit_size);
       }
-      BITSET_CLEAR_RANGE(mask, chunk_start, (chunk_start + chunk_bytes - 1));
+      BITSET_CLEAR_COUNT(mask, chunk_start, chunk_bytes);
    }
 
    nir_instr_remove(&intrin->instr);
@@ -496,13 +496,19 @@ intrin_to_variable_mode(nir_intrinsic_op intrin)
       return nir_var_mem_ubo;
 
    case nir_intrinsic_load_push_constant:
+   case nir_intrinsic_load_push_data_intel:
       return nir_var_mem_push_const;
 
    case nir_intrinsic_load_global:
+   case nir_intrinsic_load_global_bounded:
    case nir_intrinsic_store_global:
+   case nir_intrinsic_load_global_offset:
+   case nir_intrinsic_store_global_offset:
       return nir_var_mem_global;
 
    case nir_intrinsic_load_global_constant:
+   case nir_intrinsic_load_global_constant_bounded:
+   case nir_intrinsic_load_global_constant_offset:
    case nir_intrinsic_load_constant:
       return nir_var_mem_constant;
 
@@ -541,7 +547,11 @@ lower_mem_access_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *_data)
    case nir_intrinsic_load_ubo:
    case nir_intrinsic_load_push_constant:
    case nir_intrinsic_load_global:
+   case nir_intrinsic_load_global_bounded:
+   case nir_intrinsic_load_global_offset:
    case nir_intrinsic_load_global_constant:
+   case nir_intrinsic_load_global_constant_bounded:
+   case nir_intrinsic_load_global_constant_offset:
    case nir_intrinsic_load_constant:
    case nir_intrinsic_load_ssbo:
    case nir_intrinsic_load_shared:
@@ -553,6 +563,7 @@ lower_mem_access_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *_data)
       return lower_mem_load(b, intrin, state->callback, state->cb_data);
 
    case nir_intrinsic_store_global:
+   case nir_intrinsic_store_global_offset:
    case nir_intrinsic_store_ssbo:
    case nir_intrinsic_store_shared:
    case nir_intrinsic_store_scratch:

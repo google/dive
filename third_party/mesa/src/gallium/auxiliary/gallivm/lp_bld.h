@@ -57,6 +57,9 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
+
+#include "util/simple_mtx.h"
 
 /**
  * Redefine these LLVM entrypoints as invalid macros to make sure we
@@ -87,12 +90,17 @@
 #define LLVMInsertBasicBlock ILLEGAL_LLVM_FUNCTION
 #define LLVMCreateBuilder ILLEGAL_LLVM_FUNCTION
 
+/* ORC's ThreadSafeContext only locks during add-to-JIT; IR building
+ * touches the LLVMContext without that lock, so a separate mutex is
+ * needed for shareable shaders. Aliasing copies (owned=false) share
+ * the same mutex pointer.
+ */
 typedef struct lp_context_ref {
-#if GALLIVM_USE_ORCJIT
-   LLVMOrcThreadSafeContextRef ref;
-#else
    LLVMContextRef ref;
+#if GALLIVM_USE_ORCJIT
+   LLVMOrcThreadSafeContextRef tsref;
 #endif
+   simple_mtx_t *mutex;
    bool owned;
 } lp_context_ref;
 
@@ -100,21 +108,52 @@ static inline void
 lp_context_create(lp_context_ref *context)
 {
    assert(context != NULL);
+
+   context->mutex = NULL;
+
 #if GALLIVM_USE_ORCJIT
-   context->ref = LLVMOrcCreateNewThreadSafeContext();
+#if LLVM_VERSION_MAJOR >= 21
+   context->ref = LLVMContextCreate();
+   /* Ownership of ref is then transferred to tsref */
+   context->tsref = LLVMOrcCreateNewThreadSafeContextFromLLVMContext(context->ref);
+#else
+   context->tsref = LLVMOrcCreateNewThreadSafeContext();
+   context->ref = LLVMOrcThreadSafeContextGetContext(context->tsref);
+#endif
 #else
    context->ref = LLVMContextCreate();
 #endif
    context->owned = true;
 #if LLVM_VERSION_MAJOR == 15
    if (context->ref) {
-#if GALLIVM_USE_ORCJIT
-      LLVMContextSetOpaquePointers(LLVMOrcThreadSafeContextGetContext(context->ref), false);
-#else
       LLVMContextSetOpaquePointers(context->ref, false);
-#endif
    }
 #endif
+}
+
+/* Like lp_context_create, but also creates the mutex that serializes
+ * LLVMContext access for shareable shaders. Only the screen's shared context
+ * needs it; per-context users call lp_context_create.
+ */
+static inline void
+lp_context_create_thread_safe(lp_context_ref *context)
+{
+   assert(context != NULL);
+
+   simple_mtx_t *mutex = (simple_mtx_t *)malloc(sizeof(simple_mtx_t));
+   if (!mutex) {
+      /* Caller checks ref == NULL to detect failure. */
+      context->ref = NULL;
+#if GALLIVM_USE_ORCJIT
+      context->tsref = NULL;
+#endif
+      context->owned = false;
+      return;
+   }
+   simple_mtx_init(mutex, mtx_plain);
+
+   lp_context_create(context);
+   context->mutex = mutex;
 }
 
 static inline void
@@ -123,12 +162,17 @@ lp_context_destroy(lp_context_ref *context)
    assert(context != NULL);
    if (context->owned) {
 #if GALLIVM_USE_ORCJIT
-      LLVMOrcDisposeThreadSafeContext(context->ref);
+      LLVMOrcDisposeThreadSafeContext(context->tsref);
 #else
       LLVMContextDispose(context->ref);
 #endif
       context->ref = NULL;
+      if (context->mutex) {
+         simple_mtx_destroy(context->mutex);
+         free(context->mutex);
+      }
    }
 }
+
 
 #endif /* LP_BLD_H */

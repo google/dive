@@ -55,6 +55,12 @@ enum mesa_log_control {
    MESA_LOG_CONTROL_WAIT = 1 << 8,
 };
 
+enum logger_vasnprintf_affix {
+   LOGGER_VASNPRINTF_AFFIX_TAG = 1 << 0,
+   LOGGER_VASNPRINTF_AFFIX_LEVEL = 1 << 1,
+   LOGGER_VASNPRINTF_AFFIX_NEWLINE = 1 << 2,
+};
+
 static const struct debug_control mesa_log_control_options[] = {
    /* loggers */
    { "null", MESA_LOG_CONTROL_NULL },
@@ -96,6 +102,13 @@ level_from_str(const char *str)
 static uint32_t mesa_log_control;
 static FILE *mesa_log_file;
 static enum mesa_log_level mesa_max_log_level;
+static int mesa_log_file_affixes;
+
+static const struct debug_named_value log_prefix_options[] = {
+   {"tag",     LOGGER_VASNPRINTF_AFFIX_TAG,     "include log tag"},
+   {"level",   LOGGER_VASNPRINTF_AFFIX_LEVEL,   "include log level"},
+   DEBUG_NAMED_VALUE_END
+};
 
 static void
 mesa_log_init_once(void)
@@ -123,17 +136,34 @@ mesa_log_init_once(void)
    if (log_level != NULL)
       mesa_max_log_level = level_from_str(log_level);
 
+   mesa_log_file_affixes =
+      debug_get_flags_option("MESA_LOG_PREFIX", log_prefix_options,
+                             LOGGER_VASNPRINTF_AFFIX_TAG | LOGGER_VASNPRINTF_AFFIX_LEVEL);
+
    mesa_log_file = stderr;
 
 #if !DETECT_OS_WINDOWS
    if (__normal_user()) {
-      const char *log_file = os_get_option("MESA_LOG_FILE");
-      if (log_file) {
-         FILE *fp = fopen(log_file, "w");
-         if (fp) {
-            mesa_log_file = fp;
-            mesa_log_control |= MESA_LOG_CONTROL_FILE;
-         }
+      FILE *fp = NULL;
+
+      if (os_get_option("MESA_LOG_FILE_AUTO")) {
+         char log_file[512];
+         int fd;
+
+         snprintf(log_file, sizeof(log_file), "/tmp/mesa_%s_%d_XXXXXX.log", util_get_process_name(),
+                  getpid());
+         fd = mkstemps(log_file, 4);
+         if (fd >= 0)
+            fp = fdopen(fd, "w");
+      } else {
+         const char *log_file = os_get_option("MESA_LOG_FILE");
+         if (log_file)
+            fp = fopen(log_file, "w");
+      }
+
+      if (fp) {
+         mesa_log_file = fp;
+         mesa_log_control |= MESA_LOG_CONTROL_FILE;
       }
    }
 #endif
@@ -172,7 +202,7 @@ mesa_log_if_debug(enum mesa_log_level level, const char *outputString)
 
    /* Init the local 'debug' var once. */
    if (debug == -1) {
-      const char *env = getenv("MESA_DEBUG");
+      const char *env = os_get_option("MESA_DEBUG");
       bool silent = env && strstr(env, "silent") != NULL;
 #ifndef NDEBUG
       /* in debug builds, print messages unless MESA_DEBUG="silent" */
@@ -192,12 +222,6 @@ mesa_log_if_debug(enum mesa_log_level level, const char *outputString)
    if (debug)
       mesa_log(level, "Mesa", "%s", outputString);
 }
-
-enum logger_vasnprintf_affix {
-   LOGGER_VASNPRINTF_AFFIX_TAG = 1 << 0,
-   LOGGER_VASNPRINTF_AFFIX_LEVEL = 1 << 1,
-   LOGGER_VASNPRINTF_AFFIX_NEWLINE = 1 << 2,
-};
 
 /* Try vsnprintf first and fall back to vasprintf if buf is too small.  This
  * function handles all errors and never fails.
@@ -281,8 +305,7 @@ logger_file(enum mesa_log_level level,
    FILE *fp = mesa_log_file;
    char local_msg[1024];
    char *msg = logger_vasnprintf(local_msg, sizeof(local_msg),
-         LOGGER_VASNPRINTF_AFFIX_TAG |
-         LOGGER_VASNPRINTF_AFFIX_LEVEL |
+         mesa_log_file_affixes |
          LOGGER_VASNPRINTF_AFFIX_NEWLINE,
          level, tag, format, va);
 

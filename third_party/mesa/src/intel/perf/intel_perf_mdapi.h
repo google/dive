@@ -109,6 +109,66 @@ struct gfx9_mdapi_metrics {
    uint32_t Reserved4;
 };
 
+#define GTDI_QUERY_XEHP_METRICS_OA_COUNT  38
+#define GTDI_QUERY_XEHP_METRICS_NOA_COUNT 16
+
+struct gfx12_5_mdapi_metrics
+{
+   uint64_t TotalTime;
+   uint64_t GPUTicks;
+   uint64_t OaCntr[GTDI_QUERY_XEHP_METRICS_OA_COUNT];
+   uint64_t NoaCntr[GTDI_QUERY_XEHP_METRICS_NOA_COUNT];
+   uint64_t BeginTimestamp;
+   uint64_t Reserved1;
+   uint64_t Reserved2;
+   uint32_t MidQueryEvents;
+   uint32_t OverrunOccured;
+   uint64_t MarkerUser;
+   uint64_t MarkerDriver;
+
+   uint64_t SliceFrequency;
+   uint64_t UnsliceFrequency;
+   uint64_t PerfCounter1;
+   uint64_t PerfCounter2;
+   uint32_t SplitOccured;
+   uint32_t CoreFrequencyChanged;
+   uint64_t CoreFrequency;
+   uint32_t ReportId;
+   uint32_t ReportsCount;
+   uint64_t UserCntr[GTDI_MAX_READ_REGS];
+   uint32_t UserCntrCfgId;
+   uint32_t Flags;
+};
+
+#define GTDI_QUERY_XE2_METRICS_PEC_COUNT 64
+#define GTDI_QUERY_XE2_METRICS_VISA_COUNT 16
+
+struct gfx20_mdapi_metrics
+{
+   uint64_t TotalTime;
+   uint64_t GpuTicks;
+   uint64_t PerformanceEventCounter[GTDI_QUERY_XE2_METRICS_PEC_COUNT];
+   uint64_t VisaCounter[GTDI_QUERY_XE2_METRICS_VISA_COUNT];
+   uint64_t BeginTimestamp;
+   uint64_t Reserved1;
+   uint64_t Reserved2;
+   uint32_t MidQueryEvents;
+   uint32_t OverrunOccured;
+   uint64_t MarkerUser;
+   uint64_t MarkerDriver;
+
+   uint64_t SliceFrequency;
+   uint64_t UnsliceFrequency;
+   uint32_t SplitOccured;
+   uint32_t CoreFrequencyChanged;
+   uint64_t CoreFrequency;
+   uint32_t ReportId;
+   uint32_t ReportsCount;
+   uint64_t UserCntr[GTDI_MAX_READ_REGS];
+   uint32_t UserCntrCfgId;
+   uint32_t Flags;
+};
+
 /* Add new definition */
 #define gfx11_mdapi_metrics gfx9_mdapi_metrics
 

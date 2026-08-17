@@ -515,42 +515,6 @@ static int fill_h265_enc_picture_desc(const struct pipe_picture_desc *desc,
     return 0;
 }
 
-static int fill_mpeg4_picture_desc(const struct pipe_picture_desc *desc,
-                                   union virgl_picture_desc *vdsc)
-{
-    unsigned i;
-    struct virgl_video_buffer *vbuf;
-    struct virgl_mpeg4_picture_desc *vmpeg4 = &vdsc->mpeg4;
-    struct pipe_mpeg4_picture_desc *mpeg4 = (struct pipe_mpeg4_picture_desc *)desc;
-
-    fill_base_picture_desc(desc, &vmpeg4->base);
-
-    ITEM_CPY(vmpeg4, mpeg4, trd);
-    ITEM_CPY(vmpeg4, mpeg4, trb);
-    ITEM_SET(vmpeg4, mpeg4, vop_time_increment_resolution);
-    ITEM_SET(vmpeg4, mpeg4, vop_coding_type);
-    ITEM_SET(vmpeg4, mpeg4, vop_fcode_forward);
-    ITEM_SET(vmpeg4, mpeg4, vop_fcode_backward);
-    ITEM_SET(vmpeg4, mpeg4, resync_marker_disable);
-    ITEM_SET(vmpeg4, mpeg4, interlaced);
-    ITEM_SET(vmpeg4, mpeg4, quant_type);
-    ITEM_SET(vmpeg4, mpeg4, quarter_sample);
-    ITEM_SET(vmpeg4, mpeg4, short_video_header);
-    ITEM_SET(vmpeg4, mpeg4, rounding_control);
-    ITEM_SET(vmpeg4, mpeg4, alternate_vertical_scan_flag);
-    ITEM_SET(vmpeg4, mpeg4, top_field_first);
-
-    memcpy(vmpeg4->intra_matrix, mpeg4->intra_matrix, 64);
-    memcpy(vmpeg4->non_intra_matrix, mpeg4->non_intra_matrix, 64);
-
-    for (i = 0; i < ARRAY_SIZE(mpeg4->ref); i++) {
-        vbuf = virgl_video_buffer(mpeg4->ref[i]);
-        vmpeg4->ref[i] = vbuf ? vbuf->handle : 0;
-    }
-
-    return 0;
-}
-
 static int fill_mpeg12_picture_desc(const struct pipe_picture_desc *desc,
                                     union virgl_picture_desc *vdsc)
 {
@@ -936,8 +900,6 @@ static int fill_picture_desc(const struct pipe_picture_desc *desc,
                              union virgl_picture_desc *vdsc)
 {
     switch (u_reduce_video_profile(desc->profile)) {
-    case PIPE_VIDEO_FORMAT_MPEG4:
-        return fill_mpeg4_picture_desc(desc, vdsc);
     case PIPE_VIDEO_FORMAT_MPEG4_AVC:
         return fill_h264_picture_desc(desc, vdsc);
     case PIPE_VIDEO_FORMAT_HEVC:
@@ -1195,13 +1157,11 @@ virgl_video_create_codec(struct pipe_context *ctx,
 
     if (virgl_debug & VIRGL_DEBUG_VIDEO)
         debug_printf("VIDEO: create codec. profile=%d, level=%u, entryp=%d, "
-                     "chroma_fmt=%d, size=%ux%u, max_ref=%u, expect=%d\n",
+                     "size=%ux%u, max_ref=%u\n",
                      templ->profile, templ->level, templ->entrypoint,
-                     templ->chroma_format, templ->width, templ->height,
-                     templ->max_references, templ->expect_chunked_decode);
+                     templ->width, templ->height, templ->max_references);
 
     switch (u_reduce_video_profile(templ->profile)) {
-    case PIPE_VIDEO_FORMAT_MPEG4: /* fall through */
     case PIPE_VIDEO_FORMAT_MPEG4_AVC:
         width = align(width, VL_MACROBLOCK_WIDTH);
         height = align(height, VL_MACROBLOCK_HEIGHT);

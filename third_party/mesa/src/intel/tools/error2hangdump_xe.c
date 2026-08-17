@@ -13,6 +13,7 @@
 #include "error_decode_xe_lib.h"
 #include "error2hangdump_lib.h"
 #include "intel/common/intel_gem.h"
+#include "error2hangdump_xe_lib.h"
 #include "intel/dev/intel_device_info.h"
 #include "util/macros.h"
 
@@ -31,6 +32,7 @@ read_xe_data_file(FILE *dump_file, FILE *hang_dump_file, bool verbose)
    } batch_buffers = { .addrs = NULL, .len = 0 };
    uint32_t i;
 
+   write_header(hang_dump_file);
    error_decode_xe_vm_init(&xe_vm);
 
    while (getline(&line, &line_size, dump_file) > 0) {
@@ -82,6 +84,12 @@ read_xe_data_file(FILE *dump_file, FILE *hang_dump_file, bool verbose)
             case XE_VM_TOPIC_TYPE_ERROR:
                printf("HWCTX not present in dump, content will be zeroed: %s\n", line);
                break;
+            case XE_VM_TOPIC_TYPE_REPLAY_OFFSET:
+               error_decode_xe_vm_hw_ctx_set_offset(&xe_vm, strtoul(value_ptr, NULL, 0));
+               break;
+            case XE_VM_TOPIC_TYPE_REPLAY_LENGTH:
+               /* replay_length is implicitly contained in size, so we don't need to save it */
+               break;
             default:
                printf("Not expected line in HWCTX: %s", line);
             }
@@ -96,6 +104,11 @@ read_xe_data_file(FILE *dump_file, FILE *hang_dump_file, bool verbose)
 
          type = error_decode_xe_read_vm_line(line, &address, &value_ptr);
          switch (type) {
+         case XE_VM_TOPIC_TYPE_GLOBAL_VM_FLAGS: {
+            uint32_t vm_flags = strtoul(value_ptr, NULL, 0);
+            write_xe_vm_flags(hang_dump_file, vm_flags);
+            break;
+         }
          case XE_VM_TOPIC_TYPE_DATA: {
             if (!error_decode_xe_ascii85_decode_allocated(value_ptr, vm_entry_data, vm_entry_len))
                printf("Failed to parse VMA 0x%" PRIx64 " data\n", address);
@@ -108,7 +121,15 @@ read_xe_data_file(FILE *dump_file, FILE *hang_dump_file, bool verbose)
                printf("Out of memory to allocate a buffer to store content of VMA 0x%" PRIx64 "\n", address);
                break;
             }
-            if (!error_decode_xe_vm_append(&xe_vm, address, vm_entry_len, vm_entry_data)) {
+
+            break;
+         }
+         case XE_VM_TOPIC_TYPE_PROPERTY: {
+            struct xe_vma_properties props = {0};
+            if (!error_decode_xe_read_vm_property_line(&props, value_ptr)) {
+               printf("xe_vm_properties failed for VMA 0x%" PRIx64 "\n", address);
+            }
+            if (!error_decode_xe_vm_append(&xe_vm, address, vm_entry_len, &props, vm_entry_data)) {
                printf("xe_vm_append() failed for VMA 0x%" PRIx64 "\n", address);
             }
             break;
@@ -149,11 +170,12 @@ read_xe_data_file(FILE *dump_file, FILE *hang_dump_file, bool verbose)
             name = "batch";
       }
 
-      write_buffer(hang_dump_file, entry->address, entry->data, entry->length, name);
+      write_xe_buffer(hang_dump_file, entry->address, entry->data, entry->length, &entry->props, name);
    }
 
    fprintf(stderr, "writing image buffer size=0x%016" PRIx32 "\n", xe_vm.hw_context.length);
-   write_hw_image_buffer(hang_dump_file, xe_vm.hw_context.data, xe_vm.hw_context.length);
+   write_hw_image_buffer(hang_dump_file, xe_vm.hw_context.data, xe_vm.hw_context.length,
+                         xe_vm.hw_context.address);
 
    for (i = 0; i < batch_buffers.len; i++) {
       write_exec(hang_dump_file, batch_buffers.addrs[i]);

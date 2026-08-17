@@ -27,15 +27,36 @@
         }))
 
 static uint32_t
-get_sampler_count(const struct anv_shader *shader)
+get_surface_count(const struct anv_device *device,
+                  const struct anv_shader *shader)
 {
-   uint32_t count_by_4 = DIV_ROUND_UP(shader->bind_map.sampler_count, 4);
+#if GFX_VERx10 >= 125
+   if (shader->vk.stage == MESA_SHADER_COMPUTE &&
+       !device->physical->instance->drirc.perf.cs_surface_prefetch)
+      return 0;
+#endif
+   return shader->bind_map.surface_count;
+}
 
-   /* We can potentially have way more than 32 samplers and that's ok.
-    * However, the 3DSTATE_XS packets only have 3 bits to specify how
-    * many to pre-fetch and all values above 4 are marked reserved.
+static uint32_t
+get_sampler_count(const struct anv_device *device,
+                  const struct anv_shader *shader)
+{
+#if GFX_VER == 11
+   /* Wa_1606682166:
+    *
+    * Incorrect TDL's SSP address shift in SARB for 16:6 & 18:8 modes. Disable
+    * the Sampler state prefetch functionality in the SARB by programming
+    * 0xB000[30] to '1'.
     */
-   return MIN2(count_by_4, 4);
+   return 0;
+#else
+   if (!device->physical->instance->drirc.perf.sampler_prefetch)
+      return 0;
+
+   return DIV_ROUND_UP(
+      CLAMP(shader->bind_map.sampler_count, 0, 16), 4);
+#endif
 }
 
 static UNUSED struct anv_address
@@ -53,26 +74,6 @@ static UNUSED uint32_t
 get_scratch_space(const struct anv_shader *shader)
 {
    return ffs(shader->prog_data->total_scratch / 2048);
-}
-
-static UNUSED uint32_t
-get_scratch_surf(struct anv_batch *batch,
-                 struct anv_device *device,
-                 struct anv_shader *shader,
-                 bool protected)
-{
-   if (shader->prog_data->total_scratch == 0)
-      return 0;
-
-   struct anv_scratch_pool *pool = protected ?
-      &device->protected_scratch_pool : &device->scratch_pool;
-   struct anv_bo *bo =
-      anv_scratch_pool_alloc(device, pool, shader->vk.stage,
-                             shader->prog_data->total_scratch);
-   anv_reloc_list_add_bo(batch->relocs, bo);
-   return anv_scratch_pool_get_surf(
-      device, pool, shader->prog_data->total_scratch) >>
-      ANV_SCRATCH_SPACE_SHIFT(GFX_VER);
 }
 
 /* Streamout (can be used by several shaders) */
@@ -288,6 +289,14 @@ vertex_element_comp_control(enum isl_format format, unsigned comp)
    }
 }
 
+static inline uint32_t
+vertex_element_slot(uint32_t elements, uint32_t elements_double, uint32_t a)
+{
+   return __builtin_popcount(elements & ((1 << a) - 1)) -
+          DIV_ROUND_UP(__builtin_popcount(elements_double &
+                                         ((1 << a) - 1)), 2);
+}
+
 static void
 emit_ves_vf_instancing(struct anv_batch *batch,
                        uint32_t *vertex_element_dws,
@@ -322,19 +331,12 @@ emit_ves_vf_instancing(struct anv_batch *batch,
        *
        * TODO: Compact vertex elements so we never end up with holes.
        */
-      struct GENX(VERTEX_ELEMENT_STATE) element = {
-         .Valid = true,
-         .Component0Control = VFCOMP_STORE_0,
-         .Component1Control = VFCOMP_STORE_0,
-         .Component2Control = VFCOMP_STORE_0,
-         .Component3Control = VFCOMP_STORE_0,
-      };
-      GENX(VERTEX_ELEMENT_STATE_pack)(NULL,
-                                      &vertex_element_dws[i * 2],
-                                      &element);
+      memcpy(&vertex_element_dws[i * 2],
+             device->physical->gfx_default.empty_vs_input,
+             sizeof(device->physical->gfx_default.empty_vs_input));
    }
 
-   u_foreach_bit(a, vi->attributes_valid) {
+   u_foreach_bit(a, vi->attributes_valid & elements) {
       enum isl_format format = anv_get_vbo_format(
          device->physical, vi->attributes[a].format);
       assume(format < ISL_NUM_FORMATS);
@@ -342,13 +344,7 @@ emit_ves_vf_instancing(struct anv_batch *batch,
       uint32_t binding = vi->attributes[a].binding;
       assert(binding < get_max_vbs(device->info));
 
-      if ((elements & (1 << a)) == 0)
-         continue; /* Binding unused */
-
-      uint32_t slot =
-         __builtin_popcount(elements & ((1 << a) - 1)) -
-         DIV_ROUND_UP(__builtin_popcount(elements_double &
-                                        ((1 << a) -1)), 2);
+      uint32_t slot = vertex_element_slot(elements, elements_double, a);
 
       struct GENX(VERTEX_ELEMENT_STATE) element = {
          .VertexBufferIndex = vi->attributes[a].binding,
@@ -364,11 +360,14 @@ emit_ves_vf_instancing(struct anv_batch *batch,
       GENX(VERTEX_ELEMENT_STATE_pack)(NULL,
                                       &vertex_element_dws[slot * 2],
                                       &element);
+   }
 
-      /* On Broadwell and later, we have a separate VF_INSTANCING packet
-       * that controls instancing.  On Haswell and prior, that's part of
-       * VERTEX_BUFFER_STATE which we emit later.
-       */
+   u_foreach_bit(a, vi->attributes_valid & elements) {
+      uint32_t binding = vi->attributes[a].binding;
+      assert(binding < get_max_vbs(device->info));
+
+      uint32_t slot = vertex_element_slot(elements, elements_double, a);
+
       anv_batch_emit(batch, GENX(3DSTATE_VF_INSTANCING), vfi) {
          bool per_instance = vi->bindings[binding].input_rate ==
             VK_VERTEX_INPUT_RATE_INSTANCE;
@@ -400,12 +399,13 @@ genX(batch_emit_vertex_input)(struct anv_batch *batch,
       memcpy(p + 1, device->physical->gfx_default.empty_vs_input,
              sizeof(device->physical->gfx_default.empty_vs_input));
    } else {
-      /* Use dyn->vi to emit the dynamic VERTEX_ELEMENT_STATE input. */
-      emit_ves_vf_instancing(batch, p + 1, device, shader, vi);
-      /* Then append the VERTEX_ELEMENT_STATE for the draw parameters */
+      /* Fill the system values VERTEX_ELEMENT_STATE entries for the draw parameters. */
       memcpy(p + 1 + 2 * shader->vs.input_elements,
              shader->vs.sgvs_elements,
              4 * 2 * shader->vs.sgvs_count);
+
+      /* Use dyn->vi to emit the dynamic VERTEX_ELEMENT_STATE input. */
+      emit_ves_vf_instancing(batch, p + 1, device, shader, vi);
    }
 }
 
@@ -532,7 +532,7 @@ emit_vs_shader(struct anv_batch *batch,
    }
 #endif
 
-   if (device->physical->instance->vf_component_packing) {
+   if (device->physical->instance->drirc.perf.vf_comp_packing) {
       anv_shader_emit(batch, shader, vs.vf_component_packing,
                       GENX(3DSTATE_VF_COMPONENT_PACKING), vfc) {
          vfc.VertexElementEnablesDW[0] = vs_prog_data->vf_component_packing[0];
@@ -552,18 +552,12 @@ emit_vs_shader(struct anv_batch *batch,
          vs_prog_data->base.dispatch_mode == DISPATCH_MODE_SIMD8;
 #endif
 
-      assert(!vs_prog_data->base.base.use_alt_mode);
 #if GFX_VER < 11
       vs.SingleVertexDispatch       = false;
 #endif
       vs.VectorMaskEnable           = false;
-      /* Wa_1606682166:
-       * Incorrect TDL's SSP address shift in SARB for 16:6 & 18:8 modes.
-       * Disable the Sampler state prefetch functionality in the SARB by
-       * programming 0xB000[30] to '1'.
-       */
-      vs.SamplerCount               = GFX_VER == 11 ? 0 : get_sampler_count(shader);
-      vs.BindingTableEntryCount     = shader->bind_map.surface_count;
+      vs.SamplerCount               = get_sampler_count(device, shader);
+      vs.BindingTableEntryCount     = get_surface_count(device, shader);
       vs.FloatingPointMode          = IEEE754;
       vs.IllegalOpcodeExceptionEnable = false;
       vs.SoftwareExceptionEnable    = false;
@@ -586,7 +580,9 @@ emit_vs_shader(struct anv_batch *batch,
 
    anv_shader_emit_merge(batch, shader, vs.vs, vs_dwords, GENX(3DSTATE_VS), vs) {
 #if GFX_VERx10 >= 125
-      vs.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      vs.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
 #else
       vs.PerThreadScratchSpace = get_scratch_space(shader);
       vs.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -596,7 +592,9 @@ emit_vs_shader(struct anv_batch *batch,
       anv_shader_emit_merge(batch, shader, vs.vs_protected,
                             vs_dwords, GENX(3DSTATE_VS), vs) {
 #if GFX_VERx10 >= 125
-         vs.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, true);
+         vs.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             true);
 #else
          vs.PerThreadScratchSpace = get_scratch_space(shader);
          vs.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -619,9 +617,8 @@ emit_hs_shader(struct anv_batch *batch,
       hs.Enable = true;
       hs.StatisticsEnable = true;
       hs.KernelStartPointer = shader->kernel.offset;
-      /* Wa_1606682166 */
-      hs.SamplerCount = GFX_VER == 11 ? 0 : get_sampler_count(shader);
-      hs.BindingTableEntryCount = shader->bind_map.surface_count;
+      hs.SamplerCount = get_sampler_count(device, shader);
+      hs.BindingTableEntryCount = get_surface_count(device, shader);
 
 #if GFX_VER >= 12
       /* Wa_1604578095:
@@ -665,7 +662,9 @@ emit_hs_shader(struct anv_batch *batch,
 
    anv_shader_emit_merge(batch, shader, hs.hs, hs_dwords, GENX(3DSTATE_HS), hs) {
 #if GFX_VERx10 >= 125
-      hs.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      hs.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
 #else
       hs.PerThreadScratchSpace = get_scratch_space(shader);
       hs.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -675,7 +674,9 @@ emit_hs_shader(struct anv_batch *batch,
       anv_shader_emit_merge(batch, shader, hs.hs_protected,
                             hs_dwords, GENX(3DSTATE_HS), hs) {
 #if GFX_VERx10 >= 125
-         hs.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+         hs.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             false);
 #else
          hs.PerThreadScratchSpace = get_scratch_space(shader);
          hs.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -695,8 +696,6 @@ emit_ds_shader(struct anv_batch *batch,
 
    anv_shader_emit(batch, shader, ds.te, GENX(3DSTATE_TE), te) {
       te.TEEnable = true;
-      te.Partitioning = tes_prog_data->partitioning;
-      te.TEDomain = tes_prog_data->domain;
       te.MaximumTessellationFactorOdd = 63.0;
       te.MaximumTessellationFactorNotOdd = 64.0;
 #if GFX_VERx10 >= 125
@@ -726,28 +725,16 @@ emit_ds_shader(struct anv_batch *batch,
       ds.Enable = true;
       ds.StatisticsEnable = true;
       ds.KernelStartPointer = shader->kernel.offset;
-      /* Wa_1606682166 */
-      ds.SamplerCount = GFX_VER == 11 ? 0 : get_sampler_count(shader);
-      ds.BindingTableEntryCount = shader->bind_map.surface_count;
+      ds.SamplerCount = get_sampler_count(device, shader);
+      ds.BindingTableEntryCount = get_surface_count(device, shader);
       ds.MaximumNumberofThreads = devinfo->max_tes_threads - 1;
-
-      ds.ComputeWCoordinateEnable =
-         tes_prog_data->domain == INTEL_TESS_DOMAIN_TRI;
 
       ds.PatchURBEntryReadLength = tes_prog_data->base.urb_read_length;
       ds.PatchURBEntryReadOffset = 0;
       ds.DispatchGRFStartRegisterForURBData =
          tes_prog_data->base.base.dispatch_grf_start_reg;
 
-#if GFX_VER < 11
-      ds.DispatchMode =
-         tes_prog_data->base.dispatch_mode == DISPATCH_MODE_SIMD8 ?
-         DISPATCH_MODE_SIMD8_SINGLE_PATCH :
-         DISPATCH_MODE_SIMD4X2;
-#else
-      assert(tes_prog_data->base.dispatch_mode == INTEL_DISPATCH_MODE_SIMD8);
       ds.DispatchMode = DISPATCH_MODE_SIMD8_SINGLE_PATCH;
-#endif
 
       ds.UserClipDistanceClipTestEnableBitmask =
          tes_prog_data->base.clip_distance_mask;
@@ -765,7 +752,9 @@ emit_ds_shader(struct anv_batch *batch,
 
    anv_shader_emit_merge(batch, shader, ds.ds, ds_dwords, GENX(3DSTATE_DS), ds) {
 #if GFX_VERx10 >= 125
-      ds.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      ds.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
 #else
       ds.PerThreadScratchSpace = get_scratch_space(shader);
       ds.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -775,7 +764,9 @@ emit_ds_shader(struct anv_batch *batch,
       anv_shader_emit_merge(batch, shader, ds.ds_protected,
                             ds_dwords, GENX(3DSTATE_DS), ds) {
 #if GFX_VERx10 >= 125
-         ds.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, true);
+         ds.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             true);
 #else
          ds.PerThreadScratchSpace = get_scratch_space(shader);
          ds.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -804,9 +795,8 @@ emit_gs_shader(struct anv_batch *batch,
 
       gs.SingleProgramFlow       = false;
       gs.VectorMaskEnable        = false;
-      /* Wa_1606682166 */
-      gs.SamplerCount            = GFX_VER == 11 ? 0 : get_sampler_count(shader);
-      gs.BindingTableEntryCount  = shader->bind_map.surface_count;
+      gs.SamplerCount            = get_sampler_count(device, shader);
+      gs.BindingTableEntryCount  = get_surface_count(device, shader);
       gs.IncludeVertexHandles    = gs_prog_data->base.include_vue_handles;
       gs.IncludePrimitiveID      = gs_prog_data->include_primitive_id;
 
@@ -840,7 +830,9 @@ emit_gs_shader(struct anv_batch *batch,
 
    anv_shader_emit_merge(batch, shader, gs.gs, gs_dwords, GENX(3DSTATE_GS), gs) {
 #if GFX_VERx10 >= 125
-      gs.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      gs.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
 #else
       gs.PerThreadScratchSpace = get_scratch_space(shader);
       gs.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -850,7 +842,9 @@ emit_gs_shader(struct anv_batch *batch,
       anv_shader_emit_merge(batch, shader, gs.gs_protected,
                             gs_dwords, GENX(3DSTATE_GS), gs) {
 #if GFX_VERx10 >= 125
-         gs.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, true);
+         gs.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             true);
 #else
          gs.PerThreadScratchSpace = get_scratch_space(shader);
          gs.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -880,12 +874,16 @@ emit_task_shader(struct anv_batch *batch,
 
    anv_shader_emit_merge(batch, shader, ts.control,
                          task_control_dwords, GENX(3DSTATE_TASK_CONTROL), tc) {
-      tc.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      tc.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
    }
    if (device_needs_protected(device)) {
       anv_shader_emit_merge(batch, shader, ts.control_protected,
                             task_control_dwords, GENX(3DSTATE_TASK_CONTROL), tc) {
-         tc.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, true);
+         tc.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             true);
       }
    }
 
@@ -907,12 +905,7 @@ emit_task_shader(struct anv_batch *batch,
                                                       task_dispatch.group_size,
                                                       task_dispatch.simd_size);
 
-      /*
-       * 3DSTATE_TASK_SHADER_DATA.InlineData[0:1] will be used for an address
-       * of a buffer with push constants and descriptor set table and
-       * InlineData[2:7] will be used for first few push constants.
-       */
-      task.EmitInlineParameter = true;
+      task.EmitInlineParameter = shader->bind_map.inline_dwords_count > 0;
       task.IndirectDataLength = align(shader->bind_map.push_ranges[0].length * 32, 64);
 
       task.XP0Required = task_prog_data->uses_drawid;
@@ -956,12 +949,16 @@ emit_mesh_shader(struct anv_batch *batch,
 
    anv_shader_emit_merge(batch, shader, ms.control,
                          mesh_control_dwords, GENX(3DSTATE_MESH_CONTROL), mc) {
-      mc.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      mc.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
    }
    if (device_needs_protected(device)) {
       anv_shader_emit_merge(batch, shader, ms.control_protected,
                             mesh_control_dwords, GENX(3DSTATE_MESH_CONTROL), mc) {
-         mc.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, true);
+         mc.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             true);
       }
    }
 
@@ -1007,12 +1004,7 @@ emit_mesh_shader(struct anv_batch *batch,
                                                       mesh_dispatch.group_size,
                                                       mesh_dispatch.simd_size);
 
-      /*
-       * 3DSTATE_MESH_SHADER_DATA.InlineData[0:1] will be used for an address
-       * of a buffer with push constants and descriptor set table and
-       * InlineData[2:7] will be used for first few push constants.
-       */
-      mesh.EmitInlineParameter = true;
+      mesh.EmitInlineParameter = shader->bind_map.inline_dwords_count > 0;
       mesh.IndirectDataLength = align(shader->bind_map.push_ranges[0].length * 32, 64);
 
       mesh.XP0Required = mesh_prog_data->uses_drawid;
@@ -1046,15 +1038,15 @@ emit_ps_shader(struct anv_batch *batch,
                struct anv_shader *shader)
 {
    const struct intel_device_info *devinfo = device->info;
-   const struct brw_wm_prog_data *wm_prog_data =
-      get_shader_wm_prog_data(shader);
+   const struct brw_fs_prog_data *fs_prog_data =
+      get_shader_fs_prog_data(shader);
 
    uint32_t ps_dwords[GENX(3DSTATE_PS_length)];
    anv_shader_emit_tmp(batch, ps_dwords, GENX(3DSTATE_PS), ps) {
 #if GFX_VER == 12
-      assert(wm_prog_data->dispatch_multi == 0 ||
-             (wm_prog_data->dispatch_multi == 16 && wm_prog_data->max_polygons == 2));
-      ps.DualSIMD8DispatchEnable = wm_prog_data->dispatch_multi;
+      assert(fs_prog_data->dispatch_multi == 0 ||
+             (fs_prog_data->dispatch_multi == 16 && fs_prog_data->max_polygons == 2));
+      ps.DualSIMD8DispatchEnable = fs_prog_data->dispatch_multi;
       /* XXX - No major improvement observed from enabling
        *       overlapping subspans, but it could be helpful
        *       in theory when the requirements listed on the
@@ -1064,26 +1056,25 @@ emit_ps_shader(struct anv_batch *batch,
 #endif
 
       ps.SingleProgramFlow          = false;
-      ps.VectorMaskEnable           = wm_prog_data->uses_vmask;
-      /* Wa_1606682166 */
-      ps.SamplerCount               = GFX_VER == 11 ? 0 : get_sampler_count(shader);
-      ps.BindingTableEntryCount     = shader->bind_map.surface_count;
+      ps.VectorMaskEnable           = fs_prog_data->uses_vmask;
+      ps.SamplerCount               = get_sampler_count(device, shader);
+      ps.BindingTableEntryCount     = get_surface_count(device, shader);
 #if GFX_VER < 20
-      ps.PushConstantEnable         =
-         wm_prog_data->base.nr_params > 0 ||
-         wm_prog_data->base.ubo_ranges[0].length;
+      ps.PushConstantEnable         = fs_prog_data->base.push_sizes[0] > 0;
 #endif
 
       ps.MaximumNumberofThreadsPerPSD = devinfo->max_threads_per_psd - 1;
 
 #if GFX_VER >= 30
-      ps.RegistersPerThread = ptl_register_blocks(wm_prog_data->base.grf_used);
+      ps.RegistersPerThread = ptl_register_blocks(fs_prog_data->base.grf_used);
 #endif
    }
 
    anv_shader_emit_merge(batch, shader, ps.ps, ps_dwords, GENX(3DSTATE_PS), ps) {
 #if GFX_VERx10 >= 125
-      ps.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, false);
+      ps.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                          shader->prog_data->total_scratch,
+                                                          false);
 #else
       ps.PerThreadScratchSpace = get_scratch_space(shader);
       ps.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -1093,7 +1084,9 @@ emit_ps_shader(struct anv_batch *batch,
       anv_shader_emit_merge(batch, shader, ps.ps_protected,
                             ps_dwords, GENX(3DSTATE_PS), ps) {
 #if GFX_VERx10 >= 125
-         ps.ScratchSpaceBuffer = get_scratch_surf(batch, device, shader, true);
+         ps.ScratchSpaceBuffer = anv_shader_get_scratch_surf(batch, device, shader->vk.stage,
+                                                             shader->prog_data->total_scratch,
+                                                             true);
 #else
          ps.PerThreadScratchSpace = get_scratch_space(shader);
          ps.ScratchSpaceBasePointer = get_scratch_address(device, shader);
@@ -1104,29 +1097,29 @@ emit_ps_shader(struct anv_batch *batch,
    anv_shader_emit(batch, shader, ps.ps_extra, GENX(3DSTATE_PS_EXTRA), ps) {
       ps.PixelShaderValid              = true;
 #if GFX_VER < 20
-      ps.AttributeEnable               = wm_prog_data->num_varying_inputs > 0;
+      ps.AttributeEnable               = fs_prog_data->num_varying_inputs > 0;
 #endif
-      ps.oMaskPresenttoRenderTarget    = wm_prog_data->uses_omask;
-      ps.PixelShaderComputedDepthMode  = wm_prog_data->computed_depth_mode;
-      ps.PixelShaderUsesSourceDepth    = wm_prog_data->uses_src_depth;
-      ps.PixelShaderUsesSourceW        = wm_prog_data->uses_src_w;
+      ps.oMaskPresenttoRenderTarget    = fs_prog_data->uses_omask;
+      ps.PixelShaderComputedDepthMode  = fs_prog_data->computed_depth_mode;
+      ps.PixelShaderUsesSourceDepth    = fs_prog_data->uses_src_depth;
+      ps.PixelShaderUsesSourceW        = fs_prog_data->uses_src_w;
 
-      ps.PixelShaderComputesStencil    = wm_prog_data->computed_stencil;
+      ps.PixelShaderComputesStencil    = fs_prog_data->computed_stencil;
 #if GFX_VER >= 20
-      assert(!wm_prog_data->pulls_bary);
+      assert(!fs_prog_data->pulls_bary);
 #else
-      ps.PixelShaderPullsBary          = wm_prog_data->pulls_bary;
+      ps.PixelShaderPullsBary          = fs_prog_data->pulls_bary;
 #endif
 
 #if GFX_VER >= 11
       ps.PixelShaderRequiresSubpixelSampleOffsets =
-         wm_prog_data->uses_sample_offsets;
+         fs_prog_data->uses_sample_offsets;
       ps.PixelShaderRequiresNonPerspectiveBaryPlaneCoefficients =
-         wm_prog_data->uses_npc_bary_coefficients;
+         fs_prog_data->uses_npc_bary_coefficients;
       ps.PixelShaderRequiresPerspectiveBaryPlaneCoefficients =
-         wm_prog_data->uses_pc_bary_coefficients;
+         fs_prog_data->uses_pc_bary_coefficients;
       ps.PixelShaderRequiresSourceDepthandorWPlaneCoefficients =
-         wm_prog_data->uses_depth_w_coefficients;
+         fs_prog_data->uses_depth_w_coefficients;
 #endif
    }
 
@@ -1136,9 +1129,9 @@ emit_ps_shader(struct anv_batch *batch,
       wm.LineAntialiasingRegionWidth         = _10pixels;
       wm.PointRasterizationRule              = RASTRULE_UPPER_LEFT;
 
-      if (wm_prog_data->early_fragment_tests) {
+      if (fs_prog_data->early_fragment_tests) {
          wm.EarlyDepthStencilControl         = EDSC_PREPS;
-      } else if (wm_prog_data->has_side_effects) {
+      } else if (fs_prog_data->has_side_effects) {
          wm.EarlyDepthStencilControl         = EDSC_PSEXEC;
       } else {
          wm.EarlyDepthStencilControl         = EDSC_NORMAL;
@@ -1184,11 +1177,8 @@ emit_cs_shader(struct anv_batch *batch,
       },
       .InterfaceDescriptor            = {
          .KernelStartPointer                = shader->kernel.offset,
-         .SamplerCount                      = DIV_ROUND_UP(
-            CLAMP(shader->bind_map.sampler_count, 0, 16), 4),
-         /* Typically set to 0 to avoid prefetching on every thread dispatch. */
-         .BindingTableEntryCount            = devinfo->verx10 == 125 ?
-                                              0 : 1 + MIN2(shader->bind_map.surface_count, 30),
+         .SamplerCount                      = get_sampler_count(device, shader),
+         .BindingTableEntryCount            = MIN2(get_surface_count(device, shader), 31),
          .NumberofThreadsinGPGPUThreadGroup = dispatch.threads,
          .SharedLocalMemorySize             = intel_compute_slm_encode_size(
             GFX_VER, cs_prog_data->base.total_shared),
@@ -1200,7 +1190,7 @@ emit_cs_shader(struct anv_batch *batch,
          .RegistersPerThread                = ptl_register_blocks(cs_prog_data->base.grf_used),
 #endif
       },
-      .EmitInlineParameter            = cs_prog_data->uses_inline_push_addr,
+      .EmitInlineParameter            = shader->bind_map.inline_dwords_count > 0,
    };
 
    assert(ARRAY_SIZE(shader->cs.gfx125.compute_walker_body) >=
@@ -1210,7 +1200,7 @@ emit_cs_shader(struct anv_batch *batch,
                                   &walker);
 #else
    const uint32_t vfe_curbe_allocation =
-      ALIGN(cs_prog_data->push.per_thread.regs * dispatch.threads +
+      align(cs_prog_data->push.per_thread.regs * dispatch.threads +
             cs_prog_data->push.cross_thread.regs, 2);
 
    anv_shader_emit(batch, shader, cs.gfx9.vfe, GENX(MEDIA_VFE_STATE), vfe) {
@@ -1238,16 +1228,8 @@ emit_cs_shader(struct anv_batch *batch,
          shader->kernel.offset +
          brw_cs_prog_data_prog_offset(cs_prog_data, dispatch.simd_size),
 
-      /* Wa_1606682166 */
-      .SamplerCount           = GFX_VER == 11 ? 0 : get_sampler_count(shader),
-
-      /* We add 1 because the CS indirect parameters buffer isn't accounted
-       * for in bind_map.surface_count.
-       *
-       * Typically set to 0 to avoid prefetching on every thread dispatch.
-       */
-      .BindingTableEntryCount = devinfo->verx10 == 125 ?
-         0 : MIN2(shader->bind_map.surface_count, 30),
+      .SamplerCount           = get_sampler_count(device, shader),
+      .BindingTableEntryCount = MIN2(get_surface_count(device, shader), 31),
       .BarrierEnable          = cs_prog_data->uses_barrier,
       .SharedLocalMemorySize  =
          intel_compute_slm_encode_size(GFX_VER, cs_prog_data->base.total_shared),
@@ -1278,6 +1260,75 @@ emit_cs_shader(struct anv_batch *batch,
    GENX(INTERFACE_DESCRIPTOR_DATA_pack)(batch,
                                         shader->cs.gfx9.idd,
                                         &desc);
+#endif
+}
+
+void
+genX(write_cs_descriptor)(struct anv_dgc_cs_descriptor *desc,
+                          struct anv_device *device,
+                          struct anv_shader *shader)
+{
+   const struct anv_pipeline_bind_map *bind_map = &shader->bind_map;
+   const struct anv_push_range *push_range = &bind_map->push_ranges[0];
+
+   *desc = (struct anv_dgc_cs_descriptor) {
+      .push_data_offset = 32 * (push_range->set == ANV_DESCRIPTOR_SET_PUSH_CONSTANTS ?
+                                push_range->start : 0),
+   };
+
+   const struct brw_cs_prog_data *prog_data =
+      brw_cs_prog_data_const(shader->prog_data);
+   const struct intel_cs_dispatch_info dispatch =
+      brw_cs_get_dispatch_info(device->info, prog_data, NULL);
+
+   desc->right_mask = dispatch.right_mask;
+   desc->threads = dispatch.threads;
+   desc->simd_size = dispatch.simd_size;
+
+#if GFX_VERx10 >= 125
+   GENX(COMPUTE_WALKER_pack)(NULL, desc->gfx125.compute_walker,
+                             &(struct GENX(COMPUTE_WALKER)) {
+                                GENX(COMPUTE_WALKER_header),
+                                .body = {
+                                   .PostSync.MOCS = anv_mocs(device, NULL, 0),
+                                },
+                             });
+
+   assert(sizeof(desc->gfx125.compute_walker) >
+          sizeof(shader->cs.gfx125.compute_walker_body));
+   for (uint32_t i = 0; i < ARRAY_SIZE(shader->cs.gfx125.compute_walker_body); i++)
+      desc->gfx125.compute_walker[1 + i] |= shader->cs.gfx125.compute_walker_body[i];
+   desc->gfx125.inline_dwords_count = bind_map->inline_dwords_count;
+   assert(sizeof(desc->gfx125.inline_dwords) ==
+          sizeof(bind_map->inline_dwords));
+   memcpy(desc->gfx125.inline_dwords,
+          bind_map->inline_dwords,
+          sizeof(bind_map->inline_dwords));
+
+#else
+   assert(sizeof(desc->gfx9.media_vfe_state) ==
+          shader->cs.gfx9.vfe.len * 4);
+   assert(sizeof(desc->gfx9.interface_descriptor_data) ==
+          sizeof(shader->cs.gfx9.idd));
+
+   memcpy(desc->gfx9.media_vfe_state,
+          &shader->cmd_data[shader->cs.gfx9.vfe.offset],
+          shader->cs.gfx9.vfe.len * 4);
+   memcpy(desc->gfx9.interface_descriptor_data,
+          shader->cs.gfx9.idd,
+          sizeof(desc->gfx9.interface_descriptor_data));
+
+   desc->gfx9.n_threads = dispatch.threads;
+   desc->gfx9.cross_thread_push_size = prog_data->push.cross_thread.size;
+   desc->gfx9.per_thread_push_size = prog_data->push.per_thread.size;
+   desc->gfx9.subgroup_id_offset =
+      offsetof(struct anv_push_constants, cs.subgroup_id) -
+      (32 * push_range->start + prog_data->push.cross_thread.size);
+
+   GENX(GPGPU_WALKER_pack)(NULL, desc->gfx9.gpgpu_walker,
+                           &(struct GENX(GPGPU_WALKER)) {
+                                GENX(GPGPU_WALKER_header),
+                           });
 #endif
 }
 

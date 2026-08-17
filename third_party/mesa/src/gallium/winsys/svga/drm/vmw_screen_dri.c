@@ -21,6 +21,7 @@
 
 #include "vmwgfx_drm.h"
 #include <xf86drm.h>
+#include "drm-uapi/drm_fourcc.h"
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -319,6 +320,7 @@ vmw_drm_surface_get_handle(struct svga_winsys_screen *sws,
     whandle->handle = vsrf->sid;
     whandle->stride = stride;
     whandle->offset = 0;
+    whandle->modifier = DRM_FORMAT_MOD_LINEAR;
 
     switch (whandle->type) {
     case WINSYS_HANDLE_TYPE_SHARED:

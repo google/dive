@@ -49,6 +49,7 @@
 #include "indices/u_primconvert.h"
 #include "util/u_atomic.h"
 #include "util/u_blitter.h"
+#include "util/set.h"
 #include "util/u_dual_blend.h"
 #include "util/u_framebuffer.h"
 #include "util/u_helpers.h"
@@ -61,6 +62,11 @@
 #include <dxguids/dxguids.h>
 #include <string.h>
 #include "d3d12_interop_public.h"
+
+#ifndef _GAMING_XBOX
+#include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
+#endif
 
 static void
 d3d12_context_destroy(struct pipe_context *pctx)
@@ -80,12 +86,6 @@ d3d12_context_destroy(struct pipe_context *pctx)
    }
 
    struct d3d12_screen *screen = d3d12_screen(pctx->screen);
-   mtx_lock(&screen->submit_mutex);
-   list_del(&ctx->context_list_entry);
-   if (ctx->id != D3D12_CONTEXT_NO_ID)
-      screen->context_id_list[screen->context_id_count++] = ctx->id;
-   mtx_unlock(&screen->submit_mutex);
-
 
 #ifdef HAVE_GALLIUM_D3D12_GRAPHICS
    if ((screen->max_feature_level >= D3D_FEATURE_LEVEL_11_0) && !(ctx->flags & PIPE_CONTEXT_MEDIA_ONLY)) {
@@ -102,6 +102,22 @@ d3d12_context_destroy(struct pipe_context *pctx)
       ctx->cmdlist2->Release();
    if (ctx->cmdlist8)
       ctx->cmdlist8->Release();
+
+   mtx_lock(&screen->submit_mutex);
+   list_del(&ctx->context_list_entry);
+   if (ctx->id != D3D12_CONTEXT_NO_ID) {
+      unsigned context_bit = 1u << ctx->id;
+      set_foreach(ctx->local_state_bos, entry) {
+         struct d3d12_bo *bo = (struct d3d12_bo *)entry->key;
+         if (bo->local_context_state_mask & context_bit) {
+            d3d12_destroy_context_state_table_entry(&bo->local_context_states[ctx->id]);
+            bo->local_context_state_mask &= ~context_bit;
+         }
+      }
+      _mesa_set_clear(ctx->local_state_bos, nullptr);
+      screen->context_id_list[screen->context_id_count++] = ctx->id;
+   }
+   mtx_unlock(&screen->submit_mutex);
 
 #ifdef HAVE_GALLIUM_D3D12_GRAPHICS
    if ((screen->max_feature_level >= D3D_FEATURE_LEVEL_11_0) && !(ctx->flags & PIPE_CONTEXT_MEDIA_ONLY)) {
@@ -205,6 +221,8 @@ d3d12_flush_resource(struct pipe_context *pctx,
                                    D3D12_RESOURCE_STATE_COMMON,
                                    D3D12_TRANSITION_FLAG_INVALIDATE_BINDINGS);
    d3d12_apply_resource_states(ctx, false);
+   d3d12_batch_reference_resource(d3d12_current_batch(ctx), res, true);
+   ctx->has_commands = true;
 }
 
 static void
@@ -265,10 +283,6 @@ d3d12_memory_barrier(struct pipe_context *pctx, unsigned flags)
    if (flags & PIPE_BARRIER_STREAMOUT_BUFFER)
       ctx->state_dirty |= D3D12_DIRTY_STREAM_OUTPUT;
 
-   /* TODO:
-    * PIPE_BARRIER_INDIRECT_BUFFER
-    */
-
    for (unsigned i = 0; i < D3D12_GFX_SHADER_STAGES; ++i) {
       if (flags & PIPE_BARRIER_CONSTANT_BUFFER)
          ctx->shader_dirty[i] |= D3D12_SHADER_DIRTY_CONSTBUF;
@@ -291,7 +305,70 @@ d3d12_memory_barrier(struct pipe_context *pctx, unsigned flags)
       PIPE_BARRIER_QUERY_BUFFER;
    d3d12_current_batch(ctx)->pending_memory_barrier = (flags & ~ignored_barrier_flags) != 0;
 
-   if (flags & (PIPE_BARRIER_IMAGE | PIPE_BARRIER_SHADER_BUFFER)) {
+   struct d3d12_screen *screen = d3d12_screen(pctx->screen);
+   bool use_enhanced_barriers = screen->opts12.EnhancedBarriersSupported && ctx->cmdlist8;
+
+   /* The stateful nature of pending_memory_barrier means that we can end up unable to issue
+    * appropriate resource-scope transitions to correctly order GPU work; the relevant resource
+    * may end up in a read state when it was actually being written. When we can, use enhanced
+    * barriers to insert the needed sync/access handling. This is best-effort.
+    */
+   if (use_enhanced_barriers) {
+      D3D12_BARRIER_SYNC sync_after = D3D12_BARRIER_SYNC_NONE;
+      D3D12_BARRIER_ACCESS access_after = (D3D12_BARRIER_ACCESS)0;
+
+      if (flags & PIPE_BARRIER_VERTEX_BUFFER) {
+         sync_after |= D3D12_BARRIER_SYNC_VERTEX_SHADING;
+         access_after |= D3D12_BARRIER_ACCESS_VERTEX_BUFFER;
+      }
+      if (flags & PIPE_BARRIER_INDEX_BUFFER) {
+         sync_after |= D3D12_BARRIER_SYNC_INDEX_INPUT;
+         access_after |= D3D12_BARRIER_ACCESS_INDEX_BUFFER;
+      }
+      if (flags & PIPE_BARRIER_CONSTANT_BUFFER) {
+         sync_after |= D3D12_BARRIER_SYNC_ALL_SHADING;
+         access_after |= D3D12_BARRIER_ACCESS_CONSTANT_BUFFER;
+      }
+      if (flags & PIPE_BARRIER_TEXTURE) {
+         sync_after |= D3D12_BARRIER_SYNC_ALL_SHADING;
+         access_after |= D3D12_BARRIER_ACCESS_SHADER_RESOURCE;
+      }
+      if (flags & (PIPE_BARRIER_IMAGE | PIPE_BARRIER_SHADER_BUFFER)) {
+         sync_after |= D3D12_BARRIER_SYNC_ALL_SHADING;
+         access_after |= D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+      }
+      if (flags & PIPE_BARRIER_INDIRECT_BUFFER) {
+         sync_after |= D3D12_BARRIER_SYNC_EXECUTE_INDIRECT;
+         access_after |= D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT;
+      }
+      if (flags & PIPE_BARRIER_FRAMEBUFFER) {
+         sync_after |= D3D12_BARRIER_SYNC_RENDER_TARGET;
+         access_after |= D3D12_BARRIER_ACCESS_RENDER_TARGET;
+      }
+      if (flags & PIPE_BARRIER_STREAMOUT_BUFFER) {
+         sync_after |= D3D12_BARRIER_SYNC_VERTEX_SHADING;
+         access_after |= D3D12_BARRIER_ACCESS_STREAM_OUTPUT;
+      }
+      if (flags & (PIPE_BARRIER_UPDATE_BUFFER | PIPE_BARRIER_UPDATE_TEXTURE | PIPE_BARRIER_QUERY_BUFFER)) {
+         sync_after |= D3D12_BARRIER_SYNC_COPY;
+         access_after |= D3D12_BARRIER_ACCESS_COPY_DEST | D3D12_BARRIER_ACCESS_COPY_SOURCE;
+      }
+
+      if (sync_after != D3D12_BARRIER_SYNC_NONE) {
+         D3D12_GLOBAL_BARRIER global = {};
+         global.SyncBefore = D3D12_BARRIER_SYNC_ALL;
+         global.SyncAfter = sync_after;
+         global.AccessBefore = D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+         global.AccessAfter = access_after;
+
+         D3D12_BARRIER_GROUP group = {};
+         group.Type = D3D12_BARRIER_TYPE_GLOBAL;
+         group.NumBarriers = 1;
+         group.pGlobalBarriers = &global;
+         ctx->cmdlist8->Barrier(1, &group);
+         ctx->has_commands = true;
+      }
+   } else if (flags & (PIPE_BARRIER_IMAGE | PIPE_BARRIER_SHADER_BUFFER)) {
       D3D12_RESOURCE_BARRIER uavBarrier;
       uavBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
       uavBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -473,6 +550,7 @@ d3d12_context_set_queue_priority_manager(struct pipe_context *ctx, struct d3d12_
    return 0;
 }
 
+#ifdef HAVE_GALLIUM_D3D12_VIDEO
 int
 d3d12_video_encoder_set_max_async_queue_depth(struct pipe_context *ctx, uint32_t max_async_depth)
 {
@@ -485,6 +563,7 @@ d3d12_video_encoder_set_max_async_queue_depth(struct pipe_context *ctx, uint32_t
    d3d12_ctx->max_video_encoding_async_depth = max_async_depth;
    return 0;
 }
+#endif // HAVE_GALLIUM_D3D12_VIDEO
 
 struct pipe_context *
 d3d12_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)

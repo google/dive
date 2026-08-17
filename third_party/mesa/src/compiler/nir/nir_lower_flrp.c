@@ -52,16 +52,8 @@ replace_with_strict_ffma(struct nir_builder *bld, struct u_vector *dead_flrp,
    nir_def *const c = nir_ssa_for_alu_src(bld, alu, 2);
 
    nir_def *const neg_a = nir_fneg(bld, a);
-   nir_def_as_alu(neg_a)->exact = alu->exact;
-   nir_def_as_alu(neg_a)->fp_fast_math = alu->fp_fast_math;
-
-   nir_def *const inner_ffma = nir_ffma(bld, neg_a, c, a);
-   nir_def_as_alu(inner_ffma)->exact = alu->exact;
-   nir_def_as_alu(inner_ffma)->fp_fast_math = alu->fp_fast_math;
-
-   nir_def *const outer_ffma = nir_ffma(bld, b, c, inner_ffma);
-   nir_def_as_alu(outer_ffma)->exact = alu->exact;
-   nir_def_as_alu(outer_ffma)->fp_fast_math = alu->fp_fast_math;
+   nir_def *const inner_ffma = nir_ffma_weak(bld, neg_a, c, a);
+   nir_def *const outer_ffma = nir_ffma_weak(bld, b, c, inner_ffma);
 
    nir_def_rewrite_uses(&alu->def, outer_ffma);
 
@@ -84,21 +76,10 @@ replace_with_single_ffma(struct nir_builder *bld, struct u_vector *dead_flrp,
    nir_def *const c = nir_ssa_for_alu_src(bld, alu, 2);
 
    nir_def *const neg_c = nir_fneg(bld, c);
-   nir_def_as_alu(neg_c)->exact = alu->exact;
-   nir_def_as_alu(neg_c)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const one_minus_c =
       nir_fadd(bld, nir_imm_floatN_t(bld, 1.0f, c->bit_size), neg_c);
-   nir_def_as_alu(one_minus_c)->exact = alu->exact;
-   nir_def_as_alu(one_minus_c)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const b_times_c = nir_fmul(bld, b, c);
-   nir_def_as_alu(b_times_c)->exact = alu->exact;
-   nir_def_as_alu(b_times_c)->fp_fast_math = alu->fp_fast_math;
-
-   nir_def *const final_ffma = nir_ffma(bld, a, one_minus_c, b_times_c);
-   nir_def_as_alu(final_ffma)->exact = alu->exact;
-   nir_def_as_alu(final_ffma)->fp_fast_math = alu->fp_fast_math;
+   nir_def *const final_ffma = nir_ffma_weak(bld, a, one_minus_c, b_times_c);
 
    nir_def_rewrite_uses(&alu->def, final_ffma);
 
@@ -121,25 +102,11 @@ replace_with_strict(struct nir_builder *bld, struct u_vector *dead_flrp,
    nir_def *const c = nir_ssa_for_alu_src(bld, alu, 2);
 
    nir_def *const neg_c = nir_fneg(bld, c);
-   nir_def_as_alu(neg_c)->exact = alu->exact;
-   nir_def_as_alu(neg_c)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const one_minus_c =
       nir_fadd(bld, nir_imm_floatN_t(bld, 1.0f, c->bit_size), neg_c);
-   nir_def_as_alu(one_minus_c)->exact = alu->exact;
-   nir_def_as_alu(one_minus_c)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const first_product = nir_fmul(bld, a, one_minus_c);
-   nir_def_as_alu(first_product)->exact = alu->exact;
-   nir_def_as_alu(first_product)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const second_product = nir_fmul(bld, b, c);
-   nir_def_as_alu(second_product)->exact = alu->exact;
-   nir_def_as_alu(second_product)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const sum = nir_fadd(bld, first_product, second_product);
-   nir_def_as_alu(sum)->exact = alu->exact;
-   nir_def_as_alu(sum)->fp_fast_math = alu->fp_fast_math;
 
    nir_def_rewrite_uses(&alu->def, sum);
 
@@ -162,20 +129,9 @@ replace_with_fast(struct nir_builder *bld, struct u_vector *dead_flrp,
    nir_def *const c = nir_ssa_for_alu_src(bld, alu, 2);
 
    nir_def *const neg_a = nir_fneg(bld, a);
-   nir_def_as_alu(neg_a)->exact = alu->exact;
-   nir_def_as_alu(neg_a)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const b_minus_a = nir_fadd(bld, b, neg_a);
-   nir_def_as_alu(b_minus_a)->exact = alu->exact;
-   nir_def_as_alu(b_minus_a)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const product = nir_fmul(bld, c, b_minus_a);
-   nir_def_as_alu(product)->exact = alu->exact;
-   nir_def_as_alu(product)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const sum = nir_fadd(bld, a, product);
-   nir_def_as_alu(sum)->exact = alu->exact;
-   nir_def_as_alu(sum)->fp_fast_math = alu->fp_fast_math;
 
    nir_def_rewrite_uses(&alu->def, sum);
 
@@ -201,27 +157,16 @@ replace_with_expanded_ffma_and_add(struct nir_builder *bld,
    nir_def *const c = nir_ssa_for_alu_src(bld, alu, 2);
 
    nir_def *const b_times_c = nir_fmul(bld, b, c);
-   nir_def_as_alu(b_times_c)->exact = alu->exact;
-   nir_def_as_alu(b_times_c)->fp_fast_math = alu->fp_fast_math;
 
    nir_def *inner_sum;
-
    if (subtract_c) {
       nir_def *const neg_c = nir_fneg(bld, c);
-      nir_def_as_alu(neg_c)->exact = alu->exact;
-      nir_def_as_alu(neg_c)->fp_fast_math = alu->fp_fast_math;
-
       inner_sum = nir_fadd(bld, a, neg_c);
    } else {
       inner_sum = nir_fadd(bld, a, c);
    }
 
-   nir_def_as_alu(inner_sum)->exact = alu->exact;
-   nir_def_as_alu(inner_sum)->fp_fast_math = alu->fp_fast_math;
-
    nir_def *const outer_sum = nir_fadd(bld, inner_sum, b_times_c);
-   nir_def_as_alu(outer_sum)->exact = alu->exact;
-   nir_def_as_alu(outer_sum)->fp_fast_math = alu->fp_fast_math;
 
    nir_def_rewrite_uses(&alu->def, outer_sum);
 
@@ -353,7 +298,7 @@ get_similar_flrp_stats(nir_alu_instr *alu, struct similar_flrp_stats *st)
 
    nir_foreach_use(other_use, alu->src[2].src.ssa) {
       /* Is the use also a flrp? */
-      nir_instr *const other_instr = nir_src_parent_instr(other_use);
+      nir_instr *const other_instr = nir_src_use_instr(other_use);
       if (other_instr->type != nir_instr_type_alu)
          continue;
 
@@ -386,19 +331,11 @@ convert_flrp_instruction(nir_builder *bld,
                          nir_alu_instr *alu,
                          bool always_precise)
 {
-   bool have_ffma = false;
    unsigned bit_size = alu->def.bit_size;
-
-   if (bit_size == 16)
-      have_ffma = !bld->shader->options->lower_ffma16;
-   else if (bit_size == 32)
-      have_ffma = !bld->shader->options->lower_ffma32;
-   else if (bit_size == 64)
-      have_ffma = !bld->shader->options->lower_ffma64;
-   else
-      UNREACHABLE("invalid bit_size");
+   bool have_ffma = !nir_prefers_fmad(bld->shader, bit_size);
 
    bld->cursor = nir_before_instr(&alu->instr);
+   bld->fp_math_ctrl = alu->fp_math_ctrl;
 
    /* There are two methods to implement flrp(x, y, t).  The strictly correct
     * implementation according to the GLSL spec is:
@@ -443,7 +380,7 @@ convert_flrp_instruction(nir_builder *bld,
     *   subtract, a multiply, and an FMA)... but in that case the other
     *   formulation should have been used.
     */
-   if (alu->exact) {
+   if (nir_alu_instr_is_exact(alu)) {
       if (have_ffma)
          replace_with_strict_ffma(bld, dead_flrp, alu);
       else
@@ -600,7 +537,7 @@ convert_flrp_instruction(nir_builder *bld,
     *   There is no need to handle t = 0.5 specially.  nir_opt_algebraic
     *   already has optimizations to convert 0.5x + 0.5y to 0.5(x + y).
     */
-   if (alu->src[2].src.ssa->parent_instr->type == nir_instr_type_load_const) {
+   if (nir_src_is_const(alu->src[2].src)) {
       replace_with_strict(bld, dead_flrp, alu);
       return;
    }
@@ -620,6 +557,7 @@ lower_flrp_impl(nir_function_impl *impl,
                 bool always_precise)
 {
    nir_builder b = nir_builder_create(impl);
+   b.constant_fold_alu = true;
 
    nir_foreach_block(block, impl) {
       nir_foreach_instr_safe(instr, block) {
@@ -651,6 +589,9 @@ nir_lower_flrp(nir_shader *shader,
                unsigned lowering_mask,
                bool always_precise)
 {
+   if (shader->info.flrp_lowered || lowering_mask == 0)
+      return false;
+
    struct u_vector dead_flrp;
 
    if (!u_vector_init_pow2(&dead_flrp, 8, sizeof(struct nir_alu_instr *)))
@@ -670,6 +611,8 @@ nir_lower_flrp(nir_shader *shader,
       nir_instr_remove(&(*instr)->instr);
 
    u_vector_finish(&dead_flrp);
+
+   shader->info.flrp_lowered = true;
 
    return progress;
 }

@@ -9,69 +9,6 @@
 #include "util/macros.h"
 
 bool
-brw_reg_saturate_immediate(brw_reg *reg)
-{
-   union {
-      unsigned ud;
-      int d;
-      float f;
-      double df;
-   } imm, sat_imm = { 0 };
-
-   const unsigned size = brw_type_size_bytes(reg->type);
-
-   /* We want to either do a 32-bit or 64-bit data copy, the type is otherwise
-    * irrelevant, so just check the size of the type and copy from/to an
-    * appropriately sized field.
-    */
-   if (size < 8)
-      imm.ud = reg->ud;
-   else
-      imm.df = reg->df;
-
-   switch (reg->type) {
-   case BRW_TYPE_UD:
-   case BRW_TYPE_D:
-   case BRW_TYPE_UW:
-   case BRW_TYPE_W:
-   case BRW_TYPE_UQ:
-   case BRW_TYPE_Q:
-      /* Nothing to do. */
-      return false;
-   case BRW_TYPE_F:
-      sat_imm.f = SATURATE(imm.f);
-      break;
-   case BRW_TYPE_DF:
-      sat_imm.df = SATURATE(imm.df);
-      break;
-   case BRW_TYPE_UB:
-   case BRW_TYPE_B:
-      UNREACHABLE("no UB/B immediates");
-   case BRW_TYPE_V:
-   case BRW_TYPE_UV:
-   case BRW_TYPE_VF:
-      UNREACHABLE("unimplemented: saturate vector immediate");
-   case BRW_TYPE_HF:
-      UNREACHABLE("unimplemented: saturate HF immediate");
-   default:
-      UNREACHABLE("invalid type");
-   }
-
-   if (size < 8) {
-      if (imm.ud != sat_imm.ud) {
-         reg->ud = sat_imm.ud;
-         return true;
-      }
-   } else {
-      if (imm.df != sat_imm.df) {
-         reg->df = sat_imm.df;
-         return true;
-      }
-   }
-   return false;
-}
-
-bool
 brw_reg_negate_immediate(brw_reg *reg)
 {
    switch (reg->type) {

@@ -25,39 +25,18 @@ struct radv_amdgpu_winsys_bo_log {
    uint8_t virtual_mapping : 1;
 };
 
-struct radv_amdgpu_map_range {
-   uint64_t offset;
-   uint64_t size;
-   struct radv_amdgpu_winsys_bo *bo;
-   uint64_t bo_offset;
-};
-
 struct radv_amdgpu_winsys_bo {
    struct radeon_winsys_bo base;
    amdgpu_va_handle va_handle;
+   uint32_t flags;
    uint8_t priority;
 
-   union {
-      /* physical bo */
-      struct {
-         ac_drm_bo bo;
-         uint32_t bo_handle;
+   ac_drm_bo bo;
+   uint32_t bo_handle;
 
-         void *cpu_map;
-      };
-      /* virtual bo */
-      struct {
-         struct u_rwlock lock;
+   void *cpu_map;
 
-         struct radv_amdgpu_map_range *ranges;
-         uint32_t range_count;
-         uint32_t range_capacity;
-
-         struct radv_amdgpu_winsys_bo **bos;
-         uint32_t bo_count;
-         uint32_t bo_capacity;
-      };
-   };
+   bool emulate_sparse_residency;
 };
 
 static inline struct radv_amdgpu_winsys_bo *

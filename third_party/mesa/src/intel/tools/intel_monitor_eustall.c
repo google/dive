@@ -130,7 +130,8 @@ eustall_sample(void *cfg)
       intel_perf_eustall_accumulate_results(&eustall_cfg->result,
                                             eustall_cfg->buf,
                                             eustall_cfg->buf + bytes_read,
-                                            eustall_cfg->record_size);
+                                            eustall_cfg->record_size,
+                                            eustall_cfg->devinfo->ver);
    }
 
    return true;

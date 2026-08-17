@@ -555,8 +555,9 @@ init_gallivm_state(struct gallivm_state *gallivm, const char *name,
 
    gallivm->cache = cache;
 
-   gallivm->_ts_context = context->ref;
-   gallivm->context = LLVMContextCreate();
+   gallivm->_ts_context = context->tsref;
+   gallivm->context = context->ref;
+   gallivm->context_mutex = context->mutex;
 
    gallivm->module_name = LPJit::get_unique_name(name);
    gallivm->module = LLVMModuleCreateWithNameInContext(gallivm->module_name,
@@ -591,11 +592,25 @@ gallivm_create(const char *name, lp_context_ref *context,
 }
 
 void
-gallivm_destroy(struct gallivm_state *gallivm)
+gallivm_destroy_locked(struct gallivm_state *gallivm)
 {
    LPJit::remove_jd(gallivm->_per_module_jd);
    gallivm->_per_module_jd = nullptr;
    FREE(gallivm);
+}
+
+void
+gallivm_destroy(struct gallivm_state *gallivm)
+{
+   /* Serialize LLVMContext teardown against concurrent compiles. */
+   simple_mtx_t *mutex = gallivm->context_mutex;
+   if (mutex)
+      simple_mtx_lock(mutex);
+
+   gallivm_destroy_locked(gallivm);
+
+   if (mutex)
+      simple_mtx_unlock(mutex);
 }
 
 void
@@ -646,6 +661,23 @@ gallivm_compile_module(struct gallivm_state *gallivm)
          (void *)os_time_get_nano);
 
    lp_build_coro_add_malloc_hooks(gallivm);
+
+   /* Dump bitcode to a file */
+   if (gallivm_debug & GALLIVM_DEBUG_DUMP_BC &&
+       !(gallivm->cache && gallivm->cache->data_size)) {
+      char filename[256];
+      assert(gallivm->module_name);
+      snprintf(filename, sizeof(filename), "ir_%s.bc", gallivm->module_name);
+      LLVMWriteBitcodeToFile(gallivm->module, filename);
+      debug_printf("%s written\n", filename);
+      debug_printf("Invoke as \"opt -passes=%s %s | llc -O%d %s%s\"\n",
+                   gallivm_perf & GALLIVM_PERF_NO_OPT ? "mem2reg" :
+                   "sroa,early-cse,simplifycfg,reassociate,"
+                   "mem2reg,instsimplify,instcombine",
+                   filename, gallivm_perf & GALLIVM_PERF_NO_OPT ? 0 : 2,
+                   "[-mcpu=<-mcpu option>] ",
+                   "[-mattr=<-mattr option(s)>]");
+   }
 
    LPJit::add_ir_module_to_jd(gallivm->_ts_context, gallivm->module,
       gallivm->_per_module_jd);

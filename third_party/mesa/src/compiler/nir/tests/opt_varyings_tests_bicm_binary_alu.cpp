@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* Tests for Backward Inter-Shader Code Motion. */
+/* Tests for Backward Inter-Shader Code Motion with binary ALU opcodes. */
 
 #include "nir_opt_varyings_test.h"
+
+namespace {
 
 class nir_opt_varyings_test_bicm_binary_alu : public nir_opt_varyings_test
 {};
@@ -43,7 +45,8 @@ TEST_F(nir_opt_varyings_test_bicm_binary_alu, \
          input = load_uniform(b1, bitsize, 0); \
       else \
          input = load_input(b1, (gl_varying_slot)0, s, nir_type_##type##bitsize, 0, 0); \
-      store[s] = store_output(b1, (gl_varying_slot)pslot[s], s, nir_type_##type##bitsize, input, -1); \
+      store[s] = store_output(b1, (gl_varying_slot)pslot[s], s, \
+                              nir_type_##type##bitsize, input, -1, false); \
    } \
    \
    nir_def *load[2] = {NULL}; \
@@ -54,7 +57,7 @@ TEST_F(nir_opt_varyings_test_bicm_binary_alu, \
    if (value->bit_size == 1) \
       value = nir_u2u##bitsize(b2, value); \
    \
-   store_output(b2, VARYING_SLOT_VAR0, 0, nir_type_##type##bitsize, value, 0); \
+   store_output(b2, VARYING_SLOT_VAR0, 0, nir_type_##type##bitsize, value, 0, false); \
    \
    divergent[0] &= !is_patch((gl_varying_slot)pslot[0]); \
    divergent[1] &= !is_patch((gl_varying_slot)pslot[1]); \
@@ -73,7 +76,7 @@ TEST_F(nir_opt_varyings_test_bicm_binary_alu, \
          /* TES uses fadd and fmul for interpolation, so it's always present. */ \
          if (MESA_SHADER_##consumer_stage != MESA_SHADER_TESS_EVAL || \
              (nir_op_##alu != nir_op_fadd && nir_op_##alu != nir_op_fmul && \
-              nir_op_##alu != nir_op_ffma)) { \
+              nir_op_##alu != nir_op_fmad && nir_op_##alu != nir_op_ffma)) { \
             ASSERT_TRUE(!shader_contains_alu_op(b2, nir_op_##alu, bitsize)); \
          } \
       } \
@@ -82,7 +85,7 @@ TEST_F(nir_opt_varyings_test_bicm_binary_alu, \
       ASSERT_TRUE(!shader_contains_def(b2, load[0])); \
       ASSERT_TRUE(!shader_contains_def(b2, load[1])); \
    } else { \
-      ASSERT_EQ(opt_varyings(), 0); \
+      ASSERT_EQ(opt_varyings() & nir_progress_consumer, 0); \
       ASSERT_TRUE(!shader_contains_alu_op(b1, nir_op_##alu, bitsize)); \
       ASSERT_TRUE(shader_contains_alu_op(b2, nir_op_##alu, bitsize)); \
       ASSERT_TRUE(shader_contains_instr(b1, &store[0]->instr)); \

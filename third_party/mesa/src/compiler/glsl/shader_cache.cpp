@@ -36,7 +36,7 @@
  * such as SSO, attribute bindings, frag data bindings, etc.
  *
  * In order to avoid caching any actual IR we use the put_key/get_key support
- * in the disk_cache to put the SHA-1 hash for each successfully compiled
+ * in the disk_cache to put the BLAKE3 hash for each successfully compiled
  * shader into the cache, and optimisticly return early from glCompileShader
  * (if the identical shader had been successfully compiled in the past),
  * in the hope that the final linked shader will be found in the cache.
@@ -55,7 +55,7 @@
 #include "nir.h"
 #include "serialize.h"
 #include "shader_cache.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "string_to_uint_map.h"
 #include "main/mtypes.h"
 
@@ -94,8 +94,8 @@ shader_cache_write_program_metadata(struct gl_context *ctx,
     * TODO: In future we should use another method to generate a key for ff
     * programs, and SPIR-V shaders.
     */
-   static const char zero[sizeof(prog->data->sha1)] = {0};
-   if (memcmp(prog->data->sha1, zero, sizeof(prog->data->sha1)) == 0)
+   static const char zero[sizeof(prog->data->blake3)] = {0};
+   if (memcmp(prog->data->blake3, zero, sizeof(prog->data->blake3)) == 0)
       return;
 
    struct blob metadata;
@@ -121,17 +121,17 @@ shader_cache_write_program_metadata(struct gl_context *ctx,
       goto fail;
 
    for (unsigned i = 0; i < prog->NumShaders; i++) {
-      memcpy(cache_item_metadata.keys[i], prog->Shaders[i]->disk_cache_sha1,
+      memcpy(cache_item_metadata.keys[i], prog->Shaders[i]->disk_cache_blake3,
              sizeof(cache_key));
    }
 
-   disk_cache_put(cache, prog->data->sha1, metadata.data, metadata.size,
+   disk_cache_put(cache, prog->data->blake3, metadata.data, metadata.size,
                   &cache_item_metadata);
 
-   char sha1_buf[41];
+   char blake3_buf[BLAKE3_HEX_LEN];
    if (ctx->_Shader->Flags & GLSL_CACHE_INFO) {
-      _mesa_sha1_format(sha1_buf, prog->data->sha1);
-      fprintf(stderr, "putting program metadata in cache: %s\n", sha1_buf);
+      _mesa_blake3_format(blake3_buf, prog->data->blake3);
+      fprintf(stderr, "putting program metadata in cache: %s\n", blake3_buf);
    }
 
 fail:
@@ -153,7 +153,7 @@ shader_cache_read_program_metadata(struct gl_context *ctx,
    if (!cache)
       return false;
 
-   /* Include bindings when creating sha1. These bindings change the resulting
+   /* Include bindings when creating blake3. These bindings change the resulting
     * binary so they are just as important as the shader source.
     */
    char *buf = ralloc_strdup(NULL, "vb: ");
@@ -169,7 +169,7 @@ shader_cache_read_program_metadata(struct gl_context *ctx,
    }
 
    /* SSO has an effect on the linked program so include this when generating
-    * the sha also.
+    * the blake3 also.
     */
    ralloc_asprintf_append(&buf, "sso: %s\n",
                           prog->SeparateShader ? "T" : "F");
@@ -193,23 +193,23 @@ shader_cache_read_program_metadata(struct gl_context *ctx,
    }
 
    /* DRI config options may also change the output from the compiler so
-    * include them as an input to sha1 creation.
+    * include them as an input to blake3 creation.
     */
-   char sha1buf[41];
-   _mesa_sha1_format(sha1buf, ctx->Const.dri_config_options_sha1);
-   ralloc_strcat(&buf, sha1buf);
+   char blake3buf[BLAKE3_HEX_LEN];
+   _mesa_blake3_format(blake3buf, ctx->Const.dri_config_options_blake3);
+   ralloc_strcat(&buf, blake3buf);
 
    for (unsigned i = 0; i < prog->NumShaders; i++) {
       struct gl_shader *sh = prog->Shaders[i];
-      _mesa_sha1_format(sha1buf, sh->disk_cache_sha1);
+      _mesa_blake3_format(blake3buf, sh->disk_cache_blake3);
       ralloc_asprintf_append(&buf, "%s: %s\n",
-                             _mesa_shader_stage_to_abbrev(sh->Stage), sha1buf);
+                             _mesa_shader_stage_to_abbrev(sh->Stage), blake3buf);
    }
-   disk_cache_compute_key(cache, buf, strlen(buf), prog->data->sha1);
+   disk_cache_compute_key(cache, buf, strlen(buf), prog->data->blake3);
    ralloc_free(buf);
 
    size_t size;
-   uint8_t *buffer = (uint8_t *) disk_cache_get(cache, prog->data->sha1,
+   uint8_t *buffer = (uint8_t *) disk_cache_get(cache, prog->data->blake3,
                                                 &size);
    if (buffer == NULL) {
       /* Cached program not found. We may have seen the individual shaders
@@ -227,9 +227,9 @@ shader_cache_read_program_metadata(struct gl_context *ctx,
    }
 
    if (ctx->_Shader->Flags & GLSL_CACHE_INFO) {
-      _mesa_sha1_format(sha1buf, prog->data->sha1);
+      _mesa_blake3_format(blake3buf, prog->data->blake3);
       fprintf(stderr, "loading shader program meta data from cache: %s\n",
-              sha1buf);
+              blake3buf);
    }
 
    struct blob_reader metadata;
@@ -248,7 +248,7 @@ shader_cache_read_program_metadata(struct gl_context *ctx,
                  "cache item)\n");
       }
 
-      disk_cache_remove(cache, prog->data->sha1);
+      disk_cache_remove(cache, prog->data->blake3);
       compile_shaders(ctx, prog);
       free(buffer);
       return false;

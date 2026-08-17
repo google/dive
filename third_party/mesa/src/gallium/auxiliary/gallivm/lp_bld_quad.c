@@ -114,9 +114,8 @@ lp_build_packed_ddx_ddy_onecoord(struct lp_build_context *bld,
 
 
 /*
- * Helper for building packed ddx/ddy vector for one coord (scalar per quad
- * values). The vector will look like this (8-wide):
- * ds1dx ds1dy dt1dx dt1dy ds2dx ds2dy dt2dx dt2dy
+ * Helper for building packed ddx/ddy vector for one coord, 4 values per quad:
+ *   dsdx0, dsdy0, dtdx0, dtdy0, dsdx1, dsdy1, dtdx1, dtdy1, dsdx2, ...
  * This only needs 2 (v)shufps.
  */
 LLVMValueRef

@@ -47,6 +47,8 @@ enum lp_texture_usage
 
 enum llvmpipe_memory_fd_type
 {
+   LLVMPIPE_MEMORY_FD_TYPE_INVALID,
+   LLVMPIPE_MEMORY_FD_TYPE_ANONYMOUS,
    LLVMPIPE_MEMORY_FD_TYPE_OPAQUE,
    LLVMPIPE_MEMORY_FD_TYPE_DMA_BUF,
 };
@@ -87,7 +89,6 @@ struct llvmpipe_resource
     * usage.
     */
    struct sw_displaytarget *dt;
-   enum pipe_format dt_format;
 
    /**
     * Malloc'ed data for regular textures, or a mapping to dt above.
@@ -137,7 +138,6 @@ struct llvmpipe_memory_allocation
    uint64_t size;
    enum llvmpipe_memory_fd_type type;
    int mem_fd;
-   int dmabuf_fd;
 };
 
 struct llvmpipe_memory_object

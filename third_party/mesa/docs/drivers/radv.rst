@@ -18,6 +18,39 @@ The easiest way to track the feature set of RADV (and other Vulkan drivers in Me
 take a look at the
 `Mesa matrix <https://mesamatrix.net/#Vulkan>`__.
 
+Contributing to RADV
+~~~~~~~~~~~~~~~~~~~~
+
+RADV is part of Mesa, so we recommend reading Mesa's
+guidelines for :doc:`submitting patches <../submittingpatches>`.
+
+Additionally, the RADV team agreed on the following workflow for contributions:
+
+* Do NOT merge any MRs without at least one approval from someone familiar with
+  the code.
+* There are different types of approvals:
+
+  - Reviewed-by tag
+
+  - MR approval button
+
+  - Acked-by tag
+
+* After receiving the first approval, please wait at least 24 hours (excluding
+  weekends) before merging the MR. This is to make sure that anyone who may be
+  interested had opportunity and time to look at the MR (eg. timezone
+  differences). The wait is not required in the following cases:
+
+  - The MR is trivial (eg. very simple cleanups, typos, CI flakes updates)
+
+  - The MR has been approved by two or more developers
+
+* Even if your MR has been approved and is ready to be merged, please make sure
+  to resolve any open conversations about potentially controversial commits.
+
+In case your MR needs to be merged immediately (should be rarely needed), feel
+free to ping the developers to get more approvals.
+
 Supported hardware
 ~~~~~~~~~~~~~~~~~~
 
@@ -186,12 +219,23 @@ For a list of environment variables to debug RADV, please see
 
 Instructions for debugging GPU hangs can be found :ref:`here <radv-debug-hang>`.
 
+DRI Configuration Options
+-------------------------
+
+RADV supports per-application option overrides via ``~/.drirc``, ``/etc/drirc``,
+or a file in ``/etc/drirc.d/``. Options can also be set like environment
+variables.
+
+See the `driconf documentation <https://dri.freedesktop.org/wiki/DriConf>`__ for the file format.
+
+.. include:: ../_generated/radv_drirc.rst
+
 Hardware Documentation
 ----------------------
 
 You can find a list of documentation for the various generations of
 AMD hardware on the `X.Org wiki
-<https://www.x.org/wiki/RadeonFeature/#documentation>`__.
+<https://www.x.org/RadeonFeature/#documentation>`__.
 
 Additional community-written documentation is also available in Mesa:
 

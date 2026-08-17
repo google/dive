@@ -44,7 +44,7 @@ sparse_debug(const char *format, ...)
 
    va_list args;
    va_start(args, format);
-   vfprintf(stderr, format, args);
+   mesa_logi_v(format, args);
    va_end(args);
 }
 
@@ -421,7 +421,7 @@ anv_trtt_bind_list_add_entry(struct util_dynarray *binds, uint64_t pte_addr,
       .pte_addr = pte_addr,
       .entry_addr = entry_addr,
    };
-   util_dynarray_append(binds, struct anv_trtt_bind, b);
+   util_dynarray_append(binds, b);
 }
 
 /* Adds elements to the anv_trtt_bind structs passed. This doesn't write the
@@ -802,7 +802,7 @@ anv_sparse_bind_trtt(struct anv_device *device,
       struct anv_trtt_bind *ptr = alloca(alloc_size);
       util_dynarray_init_from_stack(&l1_binds, ptr, alloc_size);
    } else {
-      util_dynarray_init(&l1_binds, NULL);
+      l1_binds = UTIL_DYNARRAY_INIT;
       if (!util_dynarray_ensure_cap(&l1_binds,
             l1_binds_capacity * sizeof(struct anv_trtt_bind)))
          goto out_dynarrays;
@@ -1349,11 +1349,12 @@ out_debug:
 
 static struct anv_vm_bind
 vk_bind_to_anv_vm_bind(struct anv_sparse_binding_data *sparse,
+                       uint64_t binding_offset,
                        const struct VkSparseMemoryBind *vk_bind)
 {
    struct anv_vm_bind anv_bind = {
       .bo = NULL,
-      .address = sparse->address + vk_bind->resourceOffset,
+      .address = sparse->address + binding_offset + vk_bind->resourceOffset,
       .bo_offset = 0,
       .size = vk_bind->size,
       .op = ANV_VM_BIND,
@@ -1371,15 +1372,31 @@ vk_bind_to_anv_vm_bind(struct anv_sparse_binding_data *sparse,
    return anv_bind;
 }
 
+static void
+anv_sparse_addr_bind_report(struct anv_device *device,
+                            struct vk_object_base *obj_base,
+                            struct anv_vm_bind *bind_op)
+{
+   if (bind_op->bo != NULL) {
+      ANV_ADDR_BINDING_REPORT_ADDR_BIND(device, obj_base,
+                                        bind_op->address, bind_op->size);
+   } else {
+      ANV_ADDR_BINDING_REPORT_ADDR_UNBIND(device, obj_base,
+                                          bind_op->address, bind_op->size);
+   }
+}
+
 static VkResult
 anv_sparse_bind_resource_memory(struct anv_device *device,
+                                struct vk_object_base *obj_base,
                                 struct anv_sparse_binding_data *sparse,
                                 uint64_t resource_size,
                                 const VkSparseMemoryBind *vk_bind,
                                 struct anv_sparse_submission *submit)
 {
-   struct anv_vm_bind bind = vk_bind_to_anv_vm_bind(sparse, vk_bind);
+   struct anv_vm_bind bind = vk_bind_to_anv_vm_bind(sparse, 0, vk_bind);
    uint64_t rem = vk_bind->size % ANV_SPARSE_BLOCK_SIZE;
+   VkResult res;
 
    if (rem != 0) {
       if (vk_bind->resourceOffset + vk_bind->size == resource_size)
@@ -1388,7 +1405,10 @@ anv_sparse_bind_resource_memory(struct anv_device *device,
          return vk_error(device, VK_ERROR_VALIDATION_FAILED_EXT);
    }
 
-   return anv_sparse_submission_add(device, submit, &bind);
+   res = anv_sparse_submission_add(device, submit, &bind);
+   anv_sparse_addr_bind_report(device, obj_base, &bind);
+
+   return res;
 }
 
 VkResult
@@ -1397,7 +1417,8 @@ anv_sparse_bind_buffer(struct anv_device *device,
                        const VkSparseMemoryBind *vk_bind,
                        struct anv_sparse_submission *submit)
 {
-   return anv_sparse_bind_resource_memory(device, &buffer->sparse_data,
+   return anv_sparse_bind_resource_memory(device, &buffer->vk.base,
+                                          &buffer->sparse_data,
                                           buffer->vk.size,
                                           vk_bind, submit);
 }
@@ -1425,7 +1446,8 @@ anv_sparse_bind_image_opaque(struct anv_device *device,
       sparse_debug("\n");
    }
 
-   return anv_sparse_bind_resource_memory(device, &b->sparse_data,
+   return anv_sparse_bind_resource_memory(device, &image->vk.base,
+                                          &image->sparse_data,
                                           b->memory_range.size,
                                           vk_bind, submit);
 }
@@ -1446,7 +1468,7 @@ anv_sparse_bind_image_memory(struct anv_queue *queue,
    struct anv_image_binding *img_binding = image->disjoint ?
       &image->bindings[anv_image_aspect_to_binding(image, aspect)] :
       &image->bindings[ANV_IMAGE_MEMORY_BINDING_MAIN];
-   struct anv_sparse_binding_data *sparse_data = &img_binding->sparse_data;
+   struct anv_sparse_binding_data *sparse_data = &image->sparse_data;
 
    const uint32_t plane = anv_image_aspect_to_plane(image, aspect);
    struct isl_surf *surf = &image->planes[plane].primary_surface.isl;
@@ -1547,12 +1569,14 @@ anv_sparse_bind_image_memory(struct anv_queue *queue,
          assert(opaque_bind.resourceOffset % ANV_SPARSE_BLOCK_SIZE == 0);
          assert(opaque_bind.size % ANV_SPARSE_BLOCK_SIZE == 0);
 
-         struct anv_vm_bind anv_bind = vk_bind_to_anv_vm_bind(sparse_data,
-                                                              &opaque_bind);
+         struct anv_vm_bind anv_bind = vk_bind_to_anv_vm_bind(
+            sparse_data, img_binding->memory_range.offset, &opaque_bind);
          VkResult result = anv_sparse_submission_add(device, submit,
                                                      &anv_bind);
          if (result != VK_SUCCESS)
             return result;
+
+         anv_sparse_addr_bind_report(device, &image->vk.base, &anv_bind);
       }
    }
 
@@ -1634,15 +1658,30 @@ anv_sparse_image_check_support(struct anv_physical_device *pdevice,
       return VK_ERROR_FEATURE_NOT_PRESENT;
    }
 
-   /* While our hardware allows us to support sparse with some depth/stencil
-    * formats (e.g., single-sampled 2D), the spec seems to be expecting that,
-    * if we support a format, we have to support it with all the multi-sampled
-    * flags we support for non-sparse. Therefore, just give up depth/stencil
-    * entirely since games don't seem to be requiring it.
+   /* Please see ISL's filter_tiling() functions for accurate explanations on
+    * why depth/stencil images are not always supported with the tiling
+    * formats we want.
     */
    VkImageAspectFlags aspects = vk_format_aspects(vk_format);
-   if (aspects & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT))
-      return VK_ERROR_FORMAT_NOT_SUPPORTED;
+   if (aspects & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) {
+      /* For multi-sampled images, the image layouts for color and
+       * depth/stencil are different, and only the color layout is compatible
+       * with the standard block shapes.
+       */
+      valid_samples &= VK_SAMPLE_COUNT_1_BIT;
+
+      /* For 125+, isl_gfx125_filter_tiling() claims 3D is not supported.
+       * For the previous platforms, isl_gfx6_filter_tiling() says only 2D is
+       * supported.
+       */
+      if (pdevice->info.verx10 >= 125) {
+         if (type == VK_IMAGE_TYPE_3D)
+            return VK_ERROR_FORMAT_NOT_SUPPORTED;
+      } else {
+         if (type != VK_IMAGE_TYPE_2D)
+            return VK_ERROR_FORMAT_NOT_SUPPORTED;
+      }
+   }
 
    const struct anv_format *anv_format = anv_get_format(pdevice, vk_format);
    if (!anv_format)
@@ -1684,6 +1723,9 @@ anv_sparse_image_check_support(struct anv_physical_device *pdevice,
 
    if (valid_samples_out)
       *valid_samples_out = valid_samples;
+
+   if (!valid_samples)
+      return VK_ERROR_FORMAT_NOT_SUPPORTED;
 
    return VK_SUCCESS;
 }

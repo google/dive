@@ -28,6 +28,7 @@
 #include "anv_measure.h"
 #include "vk_format.h"
 #include "vk_render_pass.h"
+#include "vk_synchronization.h"
 #include "vk_util.h"
 #include "util/fast_idiv_by_const.h"
 
@@ -2296,7 +2297,9 @@ emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
                             "descriptor does not have NonReadable "
                             "set and the image does not have a "
                             "corresponding SPIR-V format enum.");
-                  vk_debug_report(&cmd_buffer->device->physical->instance->vk,
+                  struct vk_instance *instance =
+                     &cmd_buffer->device->physical->instance->vk;
+                  vk_debug_report(&instance->debug_report,
                                   VK_DEBUG_REPORT_ERROR_BIT_EXT,
                                   &desc->image_view->vk.base,
                                   __LINE__, 0, "anv",
@@ -2665,7 +2668,7 @@ get_push_range_bound_size(struct anv_cmd_buffer *cmd_buffer,
       return (range->start + range->length) * 32;
 
    case ANV_DESCRIPTOR_SET_SHADER_CONSTANTS:
-      return ALIGN(shader->prog_data->const_data_size, ANV_UBO_ALIGNMENT);
+      return align(shader->prog_data->const_data_size, ANV_UBO_ALIGNMENT);
 
    default: {
       assert(range->set < MAX_SETS);
@@ -2989,8 +2992,8 @@ cmd_buffer_emit_viewport(struct anv_cmd_buffer *cmd_buffer)
       };
 
       /* Fix depth test misrenderings by lowering translated depth range */
-      if (instance->lower_depth_range_rate != 1.0f)
-         sfv.ViewportMatrixElementm32 *= instance->lower_depth_range_rate;
+      if (instance->drirc.quality.lower_depth_range_rate != 1.0f)
+         sfv.ViewportMatrixElementm32 *= instance->drirc.quality.lower_depth_range_rate;
 
       const uint32_t fb_size_max = 1 << 14;
       uint32_t x_min = 0, x_max = fb_size_max;
@@ -4652,10 +4655,6 @@ void genX(CmdDispatchBase)(
                            0);
 }
 
-#define GPGPU_DISPATCHDIMX 0x2500
-#define GPGPU_DISPATCHDIMY 0x2504
-#define GPGPU_DISPATCHDIMZ 0x2508
-
 void genX(CmdDispatchIndirect)(
     VkCommandBuffer                             commandBuffer,
     VkBuffer                                    _buffer,
@@ -4701,9 +4700,9 @@ void genX(CmdDispatchIndirect)(
    struct mi_value size_y = mi_mem32(anv_address_add(addr, 4));
    struct mi_value size_z = mi_mem32(anv_address_add(addr, 8));
 
-   mi_store(&b, mi_reg32(GPGPU_DISPATCHDIMX), size_x);
-   mi_store(&b, mi_reg32(GPGPU_DISPATCHDIMY), size_y);
-   mi_store(&b, mi_reg32(GPGPU_DISPATCHDIMZ), size_z);
+   mi_store(&b, mi_reg32(GENX(GPGPU_DISPATCHDIMX_num)), size_x);
+   mi_store(&b, mi_reg32(GENX(GPGPU_DISPATCHDIMY_num)), size_y);
+   mi_store(&b, mi_reg32(GENX(GPGPU_DISPATCHDIMZ_num)), size_z);
 
 #if GFX_VER <= 7
    /* predicate = (compute_dispatch_indirect_x_size == 0); */
@@ -5811,14 +5810,8 @@ void genX(CmdSetEvent2)(
    ANV_FROM_HANDLE(anv_cmd_buffer, cmd_buffer, commandBuffer);
    ANV_FROM_HANDLE(anv_event, event, _event);
 
-   VkPipelineStageFlags2 src_stages = 0;
-
-   for (uint32_t i = 0; i < pDependencyInfo->memoryBarrierCount; i++)
-      src_stages |= pDependencyInfo->pMemoryBarriers[i].srcStageMask;
-   for (uint32_t i = 0; i < pDependencyInfo->bufferMemoryBarrierCount; i++)
-      src_stages |= pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask;
-   for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; i++)
-      src_stages |= pDependencyInfo->pImageMemoryBarriers[i].srcStageMask;
+   VkPipelineStageFlags2 src_stages =
+      vk_collect_dependency_info_src_stages(pDependencyInfo);
 
    cmd_buffer->state.pending_pipe_bits |= ANV_PIPE_POST_SYNC_BIT;
    genX(cmd_buffer_apply_pipe_flushes)(cmd_buffer);
@@ -5925,7 +5918,7 @@ void genX(CmdBindIndexBuffer2KHR)(
    cmd_buffer->state.gfx.index_buffer = buffer;
    cmd_buffer->state.gfx.index_type = vk_to_intel_index_type(indexType);
    cmd_buffer->state.gfx.index_offset = offset;
-   cmd_buffer->state.gfx.index_size = vk_buffer_range(&buffer->vk, offset, size);
+   cmd_buffer->state.gfx.index_size = buffer ? vk_buffer_range(&buffer->vk, offset, size) : 0;
    cmd_buffer->state.gfx.dirty |= ANV_CMD_DIRTY_INDEX_BUFFER;
 }
 

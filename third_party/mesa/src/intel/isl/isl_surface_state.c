@@ -89,6 +89,7 @@ static const uint32_t isl_encode_aux_mode[] = {
    [ISL_AUX_USAGE_MCS_CCS] = AUX_MCS,
    [ISL_AUX_USAGE_STC_CCS] = AUX_NONE,
    [ISL_AUX_USAGE_HIZ_CCS_WT] = AUX_NONE,
+   [ISL_AUX_USAGE_ZCS] = AUX_NONE,
 };
 #elif GFX_VER >= 12
 static const uint32_t isl_encode_aux_mode[] = {
@@ -98,6 +99,7 @@ static const uint32_t isl_encode_aux_mode[] = {
    [ISL_AUX_USAGE_FCV_CCS_E] = AUX_CCS_E,
    [ISL_AUX_USAGE_CCS_E] = AUX_CCS_E,
    [ISL_AUX_USAGE_HIZ_CCS_WT] = AUX_CCS_E,
+   [ISL_AUX_USAGE_ZCS] = AUX_CCS_E,
    [ISL_AUX_USAGE_MCS_CCS] = AUX_MCS_LCE,
    [ISL_AUX_USAGE_STC_CCS] = AUX_CCS_E,
 };
@@ -243,9 +245,10 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
                            ISL_SURF_USAGE_STORAGE_BIT);
    /* They may only specify one of the above bits at a time */
    assert(__builtin_popcount(_base_usage) == 1);
-   /* The only other allowed bit is ISL_SURF_USAGE_CUBE_BIT */
+   /* Check that only the other allowed bits are set */
    assert((info->view->usage & ~(ISL_SURF_USAGE_CUBE_BIT |
-                                 ISL_SURF_USAGE_PROTECTED_BIT)) ==
+                                 ISL_SURF_USAGE_PROTECTED_BIT |
+                                 ISL_SURF_USAGE_NO_ARRAY_OVERFETCH_BIT)) ==
           _base_usage);
 #endif
 
@@ -326,11 +329,12 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
     *     are already covered by other bits.
     *
     * Under these assumptions, it makes sense for ISL to model this bit as
-    * being an extension of AuxiliarySurfaceMode where STC_CCS and HIZ_CCS_WT
-    * are indicated by AuxiliarySurfaceMode == CCS_E and DepthStencilResource
-    * == true.
+    * being an extension of AuxiliarySurfaceMode where STC_CCS, ZCS, and
+    * HIZ_CCS_WT are indicated by AuxiliarySurfaceMode == CCS_E and
+    * DepthStencilResource == true.
     */
    s.DepthStencilResource = info->aux_usage == ISL_AUX_USAGE_HIZ_CCS_WT ||
+                            info->aux_usage == ISL_AUX_USAGE_ZCS ||
                             info->aux_usage == ISL_AUX_USAGE_STC_CCS;
 #endif
 
@@ -449,7 +453,9 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    }
 
 #if GFX_VER >= 7
-   if (INTEL_NEEDS_WA_1806565034) {
+   if (info->view->usage & ISL_SURF_USAGE_NO_ARRAY_OVERFETCH_BIT) {
+      s.SurfaceArray = false;
+   } else if (INTEL_NEEDS_WA_1806565034) {
       /* Wa_1806565034:
        *
        *    "Only set SurfaceArray if arrayed surface is > 1."
@@ -534,8 +540,31 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
       assert(isl_tiling_is_any_y(info->surf->tiling));
 
    s.TileMode = isl_encode_tiling[info->surf->tiling];
-   if (isl_tiling_is_std_y(info->surf->tiling))
+   if (isl_tiling_is_std_y(info->surf->tiling)) {
       s.TiledResourceMode = isl_tiling_encode_trmode[info->surf->tiling];
+#if GFX_VER >= 11
+      /* Use the ICL swizzles for CMS and UMS surfaces. Although the
+       * RENDER_SURFACE_STATE field of the ICL+ PRMs command us to leave this
+       * bit cleared (and thus use the SKL swizzles), the TGL and DG1 PRMs
+       * seem to explain that the command was based on the lack of driver
+       * support. ISL has support for these swizzles however. From the TGL
+       * PRM:
+       *
+       *    This field should always be programmed to 0h. Tiling mode is the
+       *    standard tile layout for 3D.
+       *
+       *    This field should NOT be programmed to 1h as the Tiling (for
+       *    Standard Tiling) Address Mapping mode is not supported by SW.
+       *
+       * Additionally, the multisampled SKL swizzles for Yf are not explicitly
+       * defined as being applicable for ICL+ in the ICL PRM, Volume 5,
+       * "Tiling for CMS and UMS Surfaces" section. Compare this to the SKL
+       * PRM which provides the same table for multisampled Yf/Ys.
+       */
+      s.TileAddressMappingMode =
+         info->surf->msaa_layout == ISL_MSAA_LAYOUT_ARRAY;
+#endif
+   }
 #elif GFX_VER >= 8
    assert(isl_format_get_layout(info->view->format)->txc != ISL_TXC_ASTC);
    assert(!isl_tiling_is_std_y(info->surf->tiling));
@@ -641,7 +670,9 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
    assert(isl_swizzle_is_identity(info->view->swizzle));
 #endif
 
+#if GFX_VER >= 9
    assert(info->address % info->surf->alignment_B == 0);
+#endif
    s.SurfaceBaseAddress = info->address;
 
 #if GFX_VER >= 6
@@ -689,7 +720,15 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
 #if GFX_VER >= 7
    if (info->aux_usage != ISL_AUX_USAGE_NONE) {
       /* Check valid aux usages per-gen */
-      if (GFX_VER >= 12) {
+      if (GFX_VERx10 >= 125) {
+         assert(info->aux_usage == ISL_AUX_USAGE_MCS ||
+                info->aux_usage == ISL_AUX_USAGE_CCS_E ||
+                info->aux_usage == ISL_AUX_USAGE_MC ||
+                info->aux_usage == ISL_AUX_USAGE_ZCS ||
+                info->aux_usage == ISL_AUX_USAGE_HIZ_CCS_WT ||
+                info->aux_usage == ISL_AUX_USAGE_MCS_CCS ||
+                info->aux_usage == ISL_AUX_USAGE_STC_CCS);
+      } else if (GFX_VERx10 >= 120) {
          assert(info->aux_usage == ISL_AUX_USAGE_MCS ||
                 info->aux_usage == ISL_AUX_USAGE_CCS_E ||
                 info->aux_usage == ISL_AUX_USAGE_FCV_CCS_E ||
@@ -720,13 +759,15 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
       if (GFX_VER < 12)
          assert(!(info->view->usage & ISL_SURF_USAGE_STORAGE_BIT));
 
-      if (isl_surf_usage_is_depth(info->surf->usage))
-         assert(isl_aux_usage_has_hiz(info->aux_usage));
+      if (isl_surf_usage_is_depth(info->surf->usage)) {
+         assert(isl_aux_usage_has_hiz(info->aux_usage) ||
+                info->aux_usage == ISL_AUX_USAGE_ZCS);
+      }
 
       if (isl_surf_usage_is_stencil(info->surf->usage))
          assert(info->aux_usage == ISL_AUX_USAGE_STC_CCS);
 
-      if (isl_aux_usage_has_hiz(info->aux_usage)) {
+      if (isl_surf_usage_is_depth(info->surf->usage)) {
          /* For Gfx8-11, there are some restrictions around sampling from HiZ.
           * The Skylake PRM docs for RENDER_SURFACE_STATE::AuxiliarySurfaceMode
           * say:
@@ -749,12 +790,12 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
           * compression, this means that we can't even specify MSAA depth CCS
           * in RENDER_SURFACE_STATE::AuxiliarySurfaceMode.
           *
-          * On Xe2+, the above restriction is not mentioned in the
+          * On GFX12.5+, the above restriction is not mentioned in the
           * RENDER_SURFACE_STATE::AuxiliarySurfaceMode.
           *
           * Bspec 57023 (r58975)
           */
-         assert(GFX_VER >= 20 || info->surf->samples == 1);
+         assert(GFX_VERx10 >= 125 || info->surf->samples == 1);
 
          /* Prior to Gfx12, the dimension must not be 3D */
          if (info->aux_usage == ISL_AUX_USAGE_HIZ)
@@ -778,15 +819,16 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
       if (info->view->usage & (ISL_SURF_USAGE_RENDER_TARGET_BIT |
                                ISL_SURF_USAGE_STORAGE_BIT)) {
          s.CompressionFormat =
-            isl_get_render_compression_format(info->surf->format);
+            isl_get_render_compression_format(info->aux_format);
       }
 #elif GFX_VERx10 == 125
       if (info->aux_usage == ISL_AUX_USAGE_MC) {
          s.CompressionFormat =
-            get_media_compression_format(info->mc_format, info->surf->format);
+            get_media_compression_format(info->aux_format,
+                                         info->surf->format);
       } else {
          s.CompressionFormat =
-            isl_get_render_compression_format(info->surf->format);
+            isl_get_render_compression_format(info->aux_format);
       }
 #endif
 #if GFX_VER == 12
@@ -810,7 +852,7 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
        * cases.
        */
       s.DecompressInL3 =
-         !isl_formats_have_same_bits_per_channel(info->surf->format,
+         !isl_formats_have_same_bits_per_channel(info->aux_format,
                                                  info->view->format);
 #endif
 #if GFX_VER >= 9
@@ -875,7 +917,9 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
       uint32_t pitch_in_tiles =
          info->aux_surf->row_pitch_B / tile_info.phys_extent_B.width;
 
+#if GFX_VER >= 9
       assert(info->aux_address % info->aux_surf->alignment_B == 0);
+#endif
       s.AuxiliarySurfaceBaseAddress = info->aux_address;
       s.AuxiliarySurfacePitch = pitch_in_tiles - 1;
 
@@ -884,8 +928,15 @@ isl_genX(surf_fill_state_s)(const struct isl_device *dev, void *state,
        * doesn't expect our definition of the compression, it expects qpitch
        * in units of samples on the main surface.
        */
-      s.AuxiliarySurfaceQPitch =
-         isl_surf_get_array_pitch_sa_rows(info->aux_surf) >> 2;
+      uint32_t aux_qpitch = isl_surf_get_array_pitch_sa_rows(info->aux_surf);
+
+      /* From RENDER_SURFACE_STATE::AuxiliarySurfaceQPitch on BDW+,
+       *
+       *    This field must be set to an integer multiple of the Surface
+       *    Vertical Alignment
+       */
+      assert(aux_qpitch % image_align.h == 0);
+      s.AuxiliarySurfaceQPitch = aux_qpitch >> 2;
 #endif
    }
 #endif
@@ -996,10 +1047,11 @@ isl_genX(buffer_fill_state_s)(const struct isl_device *dev, void *state,
        !info->is_scratch) {
       assert(info->stride_B == 1);
       uint64_t aligned_size = isl_align(buffer_size, 4);
-      buffer_size = aligned_size + (aligned_size - buffer_size);
+      buffer_size = MIN2(aligned_size + (aligned_size - buffer_size),
+                         dev->max_buffer_size);
    }
 
-   uint32_t num_elements = buffer_size / info->stride_B;
+   uint64_t num_elements = buffer_size / info->stride_B;
 
    assert(num_elements > 0);
    if (info->format == ISL_FORMAT_RAW) {
@@ -1027,8 +1079,8 @@ isl_genX(buffer_fill_state_s)(const struct isl_device *dev, void *state,
        * newer are enough to fit 32bit num_elements.
        */
       if (num_elements > (1 << 27)) {
-         mesa_logw("%s: num_elements is too big: %u (buffer size: %"PRIu64")\n",
-                   __func__, num_elements, buffer_size);
+         mesa_logw_once("%s: num_elements is too big: %"PRIu64" (buffer size: %"PRIu64")\n",
+                        __func__, num_elements, buffer_size);
       }
    }
 
@@ -1139,13 +1191,16 @@ isl_genX(buffer_fill_state_s)(const struct isl_device *dev, void *state,
 #endif
 
 #if (GFX_VERx10 >= 75)
-   struct isl_swizzle swz = isl_get_shader_channel_select(info->format,
-                                                          info->swizzle);
+   if (info->format != ISL_FORMAT_RAW) {
+      struct isl_swizzle swz =
+         isl_get_shader_channel_select(info->format,
+                                       info->swizzle);
 
-   s.ShaderChannelSelectRed = (enum GENX(ShaderChannelSelect)) swz.r;
-   s.ShaderChannelSelectGreen = (enum GENX(ShaderChannelSelect)) swz.g;
-   s.ShaderChannelSelectBlue = (enum GENX(ShaderChannelSelect)) swz.b;
-   s.ShaderChannelSelectAlpha = (enum GENX(ShaderChannelSelect)) swz.a;
+      s.ShaderChannelSelectRed = (enum GENX(ShaderChannelSelect)) swz.r;
+      s.ShaderChannelSelectGreen = (enum GENX(ShaderChannelSelect)) swz.g;
+      s.ShaderChannelSelectBlue = (enum GENX(ShaderChannelSelect)) swz.b;
+      s.ShaderChannelSelectAlpha = (enum GENX(ShaderChannelSelect)) swz.a;
+   }
 #endif
 
    GENX(RENDER_SURFACE_STATE_pack)(NULL, state, &s);

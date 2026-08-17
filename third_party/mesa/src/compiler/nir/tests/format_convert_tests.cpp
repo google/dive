@@ -225,9 +225,8 @@ TEST_P(rgba, pack)
       uses[i] = nir_use(b, packed);
    }
 
-   nir_lower_undef_to_zero(b->shader);
+   nir_lower_undef_to_zero(b->shader, NULL);
    ASSERT_TRUE(nir_opt_constant_folding(b->shader));
-   ASSERT_TRUE(nir_opt_dce(b->shader));
 
    for (unsigned i = 0; i < NUM_COLORS; i++) {
       char expected[16] = { 0, };
@@ -287,9 +286,8 @@ TEST_P(rgba, unpack)
       uses[i] = nir_use(b, rgba);
    }
 
-   nir_lower_undef_to_zero(b->shader);
+   nir_lower_undef_to_zero(b->shader, NULL);
    ASSERT_TRUE(nir_opt_constant_folding(b->shader));
-   ASSERT_TRUE(nir_opt_dce(b->shader));
 
    for (unsigned i = 0; i < NUM_COLORS; i++) {
       char expected[16] = { 0, };

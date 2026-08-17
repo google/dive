@@ -221,6 +221,8 @@ struct tc_unflushed_batch_token;
  * - it's conformant
  * - doesn't cause any known issues
  * - massively improves performance
+ *
+ * update 2026: chromium svg rendering requires this due to skia bugs
  */
 #define TC_RESOLVE_STRICT 0
 
@@ -475,6 +477,14 @@ struct tc_renderpass_info {
       /* zsbuf fb info is in data8[3] & BITFIELD_MASK(4) */
       uint8_t data8[8];
    };
+   struct {
+      uint16_t x;
+      uint16_t y;
+      uint16_t z;
+      uint16_t width;
+      uint16_t height;
+      uint16_t depth;
+   } resolve_geometry;
    /* only valid if has_resolve is true and the resolve member of pipe_framebuffer_state is NULL */
    struct pipe_resource *resolve[2]; //[color, depth]
 };
@@ -531,6 +541,7 @@ struct tc_batch {
    uint64_t slots[TC_SLOTS_PER_BATCH];
    struct util_dynarray renderpass_infos;
 #if !defined(NDEBUG)
+   bool tc_set_vertex_elements_for_call_pending;
    bool closed;
 #endif
 };
@@ -654,8 +665,8 @@ struct threaded_context {
    unsigned fb_layers;
 
 #if TC_RESOLVE_STRICT
-   uint16_t fb_width;
-   uint16_t fb_height;
+   unsigned fb_width;
+   unsigned fb_height;
 #endif
 
    unsigned last, next, next_buf_list;
@@ -734,7 +745,8 @@ tc_add_set_vertex_buffers_call(struct pipe_context *_pipe, unsigned count);
 
 struct pipe_vertex_buffer *
 tc_add_set_vertex_elements_and_buffers_call(struct pipe_context *_pipe,
-                                            unsigned count);
+                                            unsigned count,
+                                            bool account_for_unmaps);
 
 void
 tc_draw_vbo(struct pipe_context *_pipe, const struct pipe_draw_info *info,
@@ -864,9 +876,16 @@ tc_track_vertex_buffer(struct pipe_context *_pipe, unsigned index,
  * buffers.
  */
 static inline void
-tc_set_vertex_elements_for_call(struct pipe_vertex_buffer *buffers,
+tc_set_vertex_elements_for_call(struct pipe_context *_pipe,
+                                struct pipe_vertex_buffer *buffers,
                                 void *state)
 {
+#if !defined(NDEBUG)
+   struct threaded_context *tc = threaded_context(_pipe);
+   struct tc_batch *next = &tc->batch_slots[tc->next];
+   assert(next->tc_set_vertex_elements_for_call_pending);
+   next->tc_set_vertex_elements_for_call_pending = false;
+#endif
    void **ptr = (void**)buffers;
    ptr[-1] = state;
 }

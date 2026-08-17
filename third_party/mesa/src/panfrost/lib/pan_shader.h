@@ -1,25 +1,6 @@
 /*
  * Copyright (C) 2021 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __PAN_SHADER_H__
@@ -27,88 +8,8 @@
 
 #include "compiler/nir/nir.h"
 #include "genxml/gen_macros.h"
-#include "panfrost/compiler/bifrost/disassemble.h"
-#include "panfrost/compiler/valhall/disassemble.h"
 #include "panfrost/lib/pan_props.h"
-#include "panfrost/midgard/disassemble.h"
-#include "panfrost/util/pan_ir.h"
-#include "panfrost/util/pan_lower_framebuffer.h"
-
-void bifrost_preprocess_nir(nir_shader *nir, unsigned gpu_id);
-void bifrost_postprocess_nir(nir_shader *nir, unsigned gpu_id);
-void bifrost_lower_texture_nir(nir_shader *nir, unsigned gpu_id);
-void midgard_preprocess_nir(nir_shader *nir, unsigned gpu_id);
-void midgard_postprocess_nir(nir_shader *nir, unsigned gpu_id);
-void midgard_lower_texture_nir(nir_shader *nir, unsigned gpu_id);
-
-static unsigned
-pan_get_fixed_varying_mask(unsigned varyings_used)
-{
-   return (varyings_used & BITFIELD_MASK(VARYING_SLOT_VAR0)) &
-      ~VARYING_BIT_POS & ~VARYING_BIT_PSIZ;
-}
-
-static inline void
-pan_shader_preprocess(nir_shader *nir, unsigned gpu_id)
-{
-   if (pan_arch(gpu_id) >= 6)
-      bifrost_preprocess_nir(nir, gpu_id);
-   else
-      midgard_preprocess_nir(nir, gpu_id);
-}
-
-static inline void
-pan_shader_postprocess(nir_shader *nir, unsigned gpu_id)
-{
-   if (pan_arch(gpu_id) >= 6)
-      bifrost_postprocess_nir(nir, gpu_id);
-   else
-      midgard_postprocess_nir(nir, gpu_id);
-}
-
-static inline void
-pan_shader_lower_texture_early(nir_shader *nir, unsigned gpu_id)
-{
-   nir_lower_tex_options lower_tex_options = {
-      .lower_txs_lod = true,
-      .lower_txp = ~0,
-      .lower_tg4_offsets = true,
-      .lower_tg4_broadcom_swizzle = true,
-      .lower_txd = pan_arch(gpu_id) < 6,
-      .lower_txd_cube_map = true,
-      .lower_invalid_implicit_lod = true,
-      .lower_index_to_offset = pan_arch(gpu_id) >= 6,
-   };
-
-   NIR_PASS(_, nir, nir_lower_tex, &lower_tex_options);
-}
-
-static inline void
-pan_shader_lower_texture(nir_shader *nir, unsigned gpu_id)
-{
-   if (pan_arch(gpu_id) >= 6)
-      bifrost_lower_texture_nir(nir, gpu_id);
-   else
-      midgard_lower_texture_nir(nir, gpu_id);
-}
-
-static inline void
-pan_shader_disassemble(FILE *fp, const void *code, size_t size, unsigned gpu_id,
-                       bool verbose)
-{
-   if (pan_arch(gpu_id) >= 9)
-      disassemble_valhall(fp, (const uint64_t *)code, size, verbose);
-   else if (pan_arch(gpu_id) >= 6)
-      disassemble_bifrost(fp, code, size, verbose);
-   else
-      disassemble_midgard(fp, code, size, gpu_id, verbose);
-}
-
-void pan_shader_compile(nir_shader *nir, struct pan_compile_inputs *inputs,
-                        struct util_dynarray *binary,
-                        struct pan_shader_info *info);
-
-const nir_shader_compiler_options *pan_shader_get_compiler_options(unsigned arch);
+#include "panfrost/compiler/pan_compiler.h"
 
 #ifdef PAN_ARCH
 
@@ -150,9 +51,10 @@ static inline void
 pan_shader_prepare_midgard_rsd(const struct pan_shader_info *info,
                                struct MALI_RENDERER_STATE *rsd)
 {
-   assert((info->push.count & 3) == 0);
+   unsigned push_count = info->fau.count;
+   assert((push_count & 3) == 0);
 
-   rsd->properties.uniform_count = info->push.count / 4;
+   rsd->properties.uniform_count = push_count / 4;
    rsd->properties.shader_has_side_effects = info->writes_global;
    rsd->properties.fp_mode = MALI_FP_MODE_GL_INF_NAN_ALLOWED;
 
@@ -236,7 +138,7 @@ static inline void
 pan_shader_prepare_bifrost_rsd(const struct pan_shader_info *info,
                                struct MALI_RENDERER_STATE *rsd)
 {
-   unsigned fau_count = DIV_ROUND_UP(info->push.count, 2);
+   unsigned fau_count = DIV_ROUND_UP(info->fau.count, 2);
    rsd->preload.uniform_count = fau_count;
 
 #if PAN_ARCH >= 7
@@ -288,8 +190,7 @@ pan_shader_prepare_rsd(const struct pan_shader_info *shader_info,
 
    rsd->shader.shader = shader_ptr;
    rsd->shader.attribute_count = shader_info->attribute_count;
-   rsd->shader.varying_count =
-      shader_info->varyings.input_count + shader_info->varyings.output_count;
+   rsd->shader.varying_count = shader_info->varyings.formats.count;
    rsd->shader.texture_count = shader_info->texture_count;
    rsd->shader.sampler_count = shader_info->sampler_count;
    rsd->properties.shader_contains_barrier = shader_info->contains_barrier;

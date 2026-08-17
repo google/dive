@@ -1,24 +1,6 @@
 /*
  * Copyright © 2019 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "compiler/nir/nir_builder.h"
@@ -109,23 +91,16 @@ brw_nir_lower_alpha_to_coverage(nir_shader *shader)
          assert(block->cf_node.parent == &impl->cf_node);
          assert(nir_cf_node_is_last(&block->cf_node));
 
-         /* See store_output in brw_shader::nir_emit_fs_intrinsic */
-         const unsigned store_offset = nir_src_as_uint(intrin->src[1]);
-         const unsigned driver_location = nir_intrinsic_base(intrin) +
-            SET_FIELD(store_offset, BRW_NIR_FRAG_OUTPUT_LOCATION);
+         const nir_io_semantics sem = nir_intrinsic_io_semantics(intrin);
 
-         /* Extract the FRAG_RESULT */
-         const unsigned location =
-            GET_FIELD(driver_location, BRW_NIR_FRAG_OUTPUT_LOCATION);
-
-         if (location == FRAG_RESULT_SAMPLE_MASK) {
+         if (sem.location == FRAG_RESULT_SAMPLE_MASK) {
             assert(sample_mask_write == NULL);
             sample_mask_write = intrin;
             sample_mask_write_first = (color0_write == NULL);
          }
 
-         if (location == FRAG_RESULT_COLOR ||
-             location == FRAG_RESULT_DATA0) {
+         if (sem.location == FRAG_RESULT_COLOR ||
+             sem.location == FRAG_RESULT_DATA0) {
             uint32_t mask = nir_intrinsic_write_mask(intrin) <<
                             nir_intrinsic_component(intrin);
             /* need the w component */
@@ -169,9 +144,8 @@ brw_nir_lower_alpha_to_coverage(nir_shader *shader)
    nir_def *dither_mask = build_dither_mask(&b, color0);
    dither_mask = nir_iand(&b, sample_mask, dither_mask);
 
-   nir_def *msaa_flags = nir_load_fs_msaa_intel(&b);
-   nir_def *alpha_to_coverage =
-      nir_test_mask(&b, msaa_flags, INTEL_MSAA_FLAG_ALPHA_TO_COVERAGE);
+   nir_def *alpha_to_coverage = nir_test_fs_config_intel(
+      &b, 1, INTEL_FS_CONFIG_ALPHA_TO_COVERAGE);
    dither_mask = nir_bcsel(&b, alpha_to_coverage,
                            dither_mask, sample_mask_write->src[0].ssa);
 

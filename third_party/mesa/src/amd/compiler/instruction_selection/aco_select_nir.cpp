@@ -8,6 +8,7 @@
 #include "aco_builder.h"
 #include "aco_instruction_selection.h"
 #include "aco_ir.h"
+#include "aco_nir_call_attribs.h"
 
 #include "amdgfxregs.h"
 #include <array>
@@ -16,8 +17,6 @@
 
 namespace aco {
 namespace {
-
-void visit_cf_list(struct isel_context* ctx, struct exec_list* list);
 
 void
 visit_load_const(isel_context* ctx, nir_load_const_instr* instr)
@@ -65,10 +64,8 @@ Temp merged_wave_info_to_mask(isel_context* ctx, unsigned i);
 void
 get_const_vec(nir_def* vec, nir_const_value* cv[4])
 {
-   if (vec->parent_instr->type != nir_instr_type_alu)
-      return;
-   nir_alu_instr* vec_instr = nir_def_as_alu(vec);
-   if (vec_instr->op != nir_op_vec(vec->num_components))
+   nir_alu_instr* vec_instr = nir_def_as_alu_or_null(vec);
+   if (!vec_instr || vec_instr->op != nir_op_vec(vec->num_components))
       return;
 
    for (unsigned i = 0; i < vec->num_components; i++) {
@@ -291,20 +288,16 @@ visit_tex(isel_context* ctx, nir_tex_instr* instr)
       has_derivs = true;
    }
 
-   unsigned dim = 0;
-   bool da = false;
-   if (instr->sampler_dim != GLSL_SAMPLER_DIM_BUF) {
-      dim = ac_get_sampler_dim(ctx->options->gfx_level, instr->sampler_dim, instr->is_array);
-      da = should_declare_array((ac_image_dim)dim);
-   }
+   assert(instr->sampler_dim != GLSL_SAMPLER_DIM_BUF);
+
+   unsigned dim = ac_get_sampler_dim(ctx->options->gfx_level, instr->sampler_dim, instr->is_array);
+   bool da = should_declare_array((ac_image_dim)dim);
 
    /* Build tex instruction */
    unsigned dmask = nir_def_components_read(&instr->def);
    /* Mask out the bit set for the sparse info. */
    if (instr->is_sparse)
       dmask &= ~(1u << (instr->def.num_components - 1));
-   if (instr->sampler_dim == GLSL_SAMPLER_DIM_BUF)
-      dmask = u_bit_consecutive(0, util_last_bit(dmask));
    /* Set the 5th bit for the sparse code. */
    if (instr->is_sparse)
       dmask = MAX2(dmask, 1) | 0x10;
@@ -429,47 +422,6 @@ visit_tex(isel_context* ctx, nir_tex_instr* instr)
       }
       coords[0] = new_coords[0];
       coords[1] = new_coords[1];
-   }
-
-   if (instr->sampler_dim == GLSL_SAMPLER_DIM_BUF) {
-      // FIXME: if (ctx->abi->gfx9_stride_size_workaround) return
-      // ac_build_buffer_load_format_gfx9_safe()
-
-      assert(coords.size() == 1);
-      aco_opcode op;
-      if (d16) {
-         switch (util_last_bit(dmask & 0xf)) {
-         case 1: op = aco_opcode::buffer_load_format_d16_x; break;
-         case 2: op = aco_opcode::buffer_load_format_d16_xy; break;
-         case 3: op = aco_opcode::buffer_load_format_d16_xyz; break;
-         case 4: op = aco_opcode::buffer_load_format_d16_xyzw; break;
-         default: UNREACHABLE("Tex instruction loads more than 4 components.");
-         }
-      } else {
-         switch (util_last_bit(dmask & 0xf)) {
-         case 1: op = aco_opcode::buffer_load_format_x; break;
-         case 2: op = aco_opcode::buffer_load_format_xy; break;
-         case 3: op = aco_opcode::buffer_load_format_xyz; break;
-         case 4: op = aco_opcode::buffer_load_format_xyzw; break;
-         default: UNREACHABLE("Tex instruction loads more than 4 components.");
-         }
-      }
-
-      aco_ptr<Instruction> mubuf{
-         create_instruction(op, Format::MUBUF, 3 + instr->is_sparse + 2 * disable_wqm, 1)};
-      mubuf->operands[0] = Operand(resource);
-      mubuf->operands[1] = Operand(coords[0]);
-      mubuf->operands[2] = Operand::c32(0);
-      mubuf->definitions[0] = Definition(tmp_dst);
-      mubuf->mubuf().idxen = true;
-      mubuf->mubuf().tfe = instr->is_sparse;
-      if (mubuf->mubuf().tfe)
-         mubuf->operands[3] = emit_tfe_init(bld, tmp_dst);
-      init_disable_wqm(bld, mubuf->mubuf(), disable_wqm);
-      ctx->block->instructions.emplace_back(std::move(mubuf));
-
-      expand_vector(ctx, tmp_dst, dst, instr->def.num_components, dmask);
-      return;
    }
 
    /* gather MIMG address components */
@@ -729,9 +681,9 @@ Operand
 get_phi_operand(isel_context* ctx, nir_def* ssa, RegClass rc)
 {
    Temp tmp = get_ssa_temp(ctx, ssa);
-   if (ssa->parent_instr->type == nir_instr_type_undef) {
+   if (nir_def_is_undef(ssa)) {
       return Operand(rc);
-   } else if (ssa->bit_size == 1 && ssa->parent_instr->type == nir_instr_type_load_const) {
+   } else if (ssa->bit_size == 1 && nir_def_is_const(ssa)) {
       bool val = nir_def_as_load_const(ssa)->value[0].b;
       return Operand::c32_or_c64(val ? -1 : 0, ctx->program->lane_mask == s2);
    } else {
@@ -785,9 +737,145 @@ visit_jump(isel_context* ctx, nir_jump_instr* instr)
 
    switch (instr->type) {
    case nir_jump_break: emit_loop_break(ctx); break;
-   case nir_jump_continue: emit_loop_continue(ctx); break;
+   case nir_jump_abort: emit_abort(ctx); break;
    default: isel_err(&instr->instr, "Unknown NIR jump instr"); abort();
    }
+}
+
+void
+visit_call(isel_context* ctx, nir_call_instr* instr)
+{
+   assert(!ctx->program->preserve_s2);
+
+   Builder bld(ctx->program, ctx->block);
+
+   unsigned nir_abi = instr->callee->driver_attributes & ACO_NIR_FUNCTION_ATTRIB_ABI_MASK;
+   param_assignment_hints hints;
+
+   if (nir_abi == ACO_NIR_CALL_ABI_AHIT_ISEC)
+      hints = get_ahit_isec_param_hints(ctx->callee_info, ctx->program->info.descriptor_heap);
+
+   ABI abi = nir_abi_to_aco(instr->callee->driver_attributes);
+
+   RegisterDemand limit = get_addr_regs_from_waves(ctx->program, ctx->program->min_waves);
+
+   struct callee_info info =
+      get_callee_info(ctx->program->gfx_level, ctx->program->wave_size, abi,
+                      instr->callee->num_params, instr->callee->params, nullptr, limit, hints);
+   std::vector<parameter_info> return_infos;
+
+   /* Before setting up the call itself, set up parameters stored in scratch memory.
+    * The stack layout during a call looks something like this:
+    * -------------------------------------------------------------------
+    * | caller stack area | callee's scratch params | callee stack area
+    * -------------------------------------------------------------------
+    * ^ caller's stack ptr                          ^ callee's stack ptr
+    *
+    * Since we don't know how big our own stack area is yet (spilling and register preservation may
+    * add to the stack size), we query the callee's stack pointer using p_callee_stack_ptr and use
+    * negative offsets to index into the scratch parameter area (similar to how the callee will load
+    * the parameters as well).
+    */
+
+   Temp stack_ptr, param_stack_ptr;
+   if (ctx->program->is_callee && ctx->program->gfx_level >= GFX9) {
+      param_stack_ptr = bld.pseudo(aco_opcode::p_callee_stack_ptr, bld.def(s1), bld.def(s1, scc),
+                                   Operand::c32(info.scratch_param_size),
+                                   Operand(ctx->callee_info.stack_ptr.def.getTemp()));
+      stack_ptr = ctx->callee_info.stack_ptr.def.getTemp();
+   } else {
+      param_stack_ptr = bld.pseudo(aco_opcode::p_callee_stack_ptr, bld.def(s1),
+                                   Operand::c32(info.scratch_param_size));
+      stack_ptr = bld.pseudo(aco_opcode::p_parallelcopy, bld.def(s1), Operand::c32(0));
+   }
+
+   for (unsigned i = 0; i < info.param_infos.size(); ++i) {
+      if (info.param_infos[i].is_reg)
+         continue;
+
+      store_scratch_param(ctx, bld, info.param_infos[i], param_stack_ptr, info.scratch_param_size,
+                          get_ssa_temp(ctx, instr->params[i].ssa));
+   }
+
+   unsigned extra_def_count = 1;
+   unsigned extra_param_count = 2;
+
+   unsigned param_size = info.scratch_param_size;
+   if (ctx->program->gfx_level < GFX9)
+      param_size *= ctx->program->wave_size;
+
+   assert(info.param_infos[0].is_reg);
+   Instruction* call_instr = create_instruction(aco_opcode::p_call, Format::PSEUDO_CALL,
+                                                info.reg_param_count + extra_param_count,
+                                                info.reg_discardable_param_count + extra_def_count);
+   call_instr->call().abi = abi;
+   if (ctx->program->gfx_level >= GFX9) {
+      call_instr->operands[0] = Operand(stack_ptr, info.stack_ptr.def.physReg());
+   } else {
+      call_instr->operands[0] = Operand(load_scratch_resource(ctx->program, bld, ctx->program->private_segment_buffers.size() - 1, true));
+      call_instr->operands[0].setPrecolored(info.stack_ptr.def.physReg());
+   }
+
+   call_instr->operands[1] = Operand::c32(param_size);
+   call_instr->definitions[0] = Definition(bld.tmp(s2), info.return_address.def.physReg());
+
+   /* Set up parameters stored in registers. Every parameter corresponds to an operand,
+    * and parameters that may have their value clobbered (i.e. discardable and return params)
+    * also have a definition.
+    */
+   unsigned reg_param_idx = 0;
+   unsigned reg_discardable_param_idx = 0;
+   for (unsigned i = 0; i < info.param_infos.size(); ++i) {
+      if (!info.param_infos[i].is_reg) {
+         /* While setting up parameters, also capture information about where return parameters
+          * are stored, in order to reload them later.
+          * Since return_infos stores return parameters contiguously, and return parameters in
+          * scratch may be at any position in the parameter list, we need to add information about
+          * returned scratch parameters in the same loop as returned parameters stored in registers.
+          */
+         if (instr->callee->params[i].is_return) {
+            parameter_info return_info = {};
+            return_info.is_reg = false;
+            return_info.scratch_offset = info.param_infos[i].scratch_offset;
+            return_infos.emplace_back(return_info);
+         }
+         continue;
+      }
+
+      Operand& op = call_instr->operands[reg_param_idx + extra_param_count];
+      op.setPrecolored(info.param_infos[i].def.physReg());
+
+      if (instr->callee->params[i].is_uniform || instr->callee->params[i].bit_size == 1)
+         op.setTemp(bld.as_uniform(get_ssa_temp(ctx, instr->params[i].ssa)));
+      else
+         op.setTemp(as_vgpr(ctx, get_ssa_temp(ctx, instr->params[i].ssa)));
+
+      if ((instr->callee->params[i].driver_attributes & ACO_NIR_PARAM_ATTRIB_DISCARDABLE) ||
+          instr->callee->params[i].is_return) {
+         Definition def = bld.def(op.regClass(), op.physReg());
+         call_instr->definitions[extra_def_count + reg_discardable_param_idx++] = def;
+         if (instr->callee->params[i].is_return) {
+            assert(!instr->callee->params[i].is_uniform);
+            parameter_info return_info = {};
+            return_info.is_reg = true;
+            return_info.def = def;
+            return_infos.emplace_back(return_info);
+         }
+      }
+
+      ++reg_param_idx;
+   }
+
+   ctx->block->instructions.emplace_back(static_cast<Instruction*>(call_instr));
+
+   ctx->call_infos.emplace_back(call_info{
+      instr,
+      call_instr,
+      std::move(return_infos),
+      info.scratch_param_size,
+   });
+   ctx->block->kind |= block_kind_contains_call;
+   ctx->program->has_call = true;
 }
 
 void
@@ -807,6 +895,44 @@ visit_debug_info(isel_context* ctx, nir_instr_debug_info* instr_info)
    bld.pseudo(aco_opcode::p_debug_info, Operand::c32(ctx->program->debug_info.size()));
 
    ctx->program->debug_info.push_back(info);
+}
+
+void
+push_cf_list(isel_context* ctx, struct exec_list* l)
+{
+   if (nir_cf_list_is_empty_block(l))
+      return;
+
+   nir_cf_node* node = exec_node_data_head(nir_cf_node, l, node);
+
+   cf_traversal_state state;
+   state.phase = CF_TRAVERSAL_PHASE_ENTER;
+   state.node = node;
+   state.saved_skipping_empty_exec = ctx->skipping_empty_exec;
+   ctx->skipping_empty_exec = false;
+
+   ctx->traversal_stack.push_back(std::move(state));
+}
+
+void
+pop_cf_list(isel_context* ctx)
+{
+   end_empty_exec_skip(ctx);
+   cf_traversal_state& head = ctx->traversal_stack.back();
+   ctx->skipping_empty_exec = head.saved_skipping_empty_exec;
+   ctx->traversal_stack.pop_back();
+}
+
+void
+advance_cf_list(isel_context* ctx, nir_cf_node* node)
+{
+   if (!nir_cf_node_is_last(node)) {
+      cf_traversal_state& head = ctx->traversal_stack.back();
+      head.node = nir_cf_node_next(node);
+      head.phase = CF_TRAVERSAL_PHASE_ENTER;
+   } else {
+      pop_cf_list(ctx);
+   }
 }
 
 void
@@ -841,119 +967,141 @@ visit_block(isel_context* ctx, nir_block* block)
       case nir_instr_type_undef: visit_undef(ctx, nir_instr_as_undef(instr)); break;
       case nir_instr_type_deref: break;
       case nir_instr_type_jump: visit_jump(ctx, nir_instr_as_jump(instr)); break;
+      case nir_instr_type_call: visit_call(ctx, nir_instr_as_call(instr)); break;
       default: isel_err(instr, "Unknown NIR instr type");
       }
    }
+
+   advance_cf_list(ctx, (nir_cf_node*)block);
 }
 
 void
-visit_loop(isel_context* ctx, nir_loop* loop)
+visit_loop(isel_context* ctx, nir_loop* loop, cf_traversal_phase phase)
 {
-   assert(!nir_loop_has_continue_construct(loop));
-   loop_context lc;
-   begin_loop(ctx, &lc);
-   ctx->cf_info.parent_loop.has_divergent_break =
-      loop->divergent_break && nir_loop_first_block(loop)->predecessors.entries > 1;
-   ctx->cf_info.in_divergent_cf |= ctx->cf_info.parent_loop.has_divergent_break;
+   if (phase == CF_TRAVERSAL_PHASE_ENTER) {
+      assert(!nir_loop_has_continue_construct(loop));
 
-   visit_cf_list(ctx, &loop->body);
+      begin_loop(ctx);
 
-   end_loop(ctx, &lc);
+      ctx->cf_info.parent_loop.has_divergent_break =
+         loop->divergent_break && nir_block_num_preds(nir_loop_first_block(loop)) > 1;
+      ctx->cf_info.in_divergent_cf |= ctx->cf_info.parent_loop.has_divergent_break;
+
+      ctx->traversal_stack.back().phase = CF_TRAVERSAL_PHASE_LEAVE;
+      push_cf_list(ctx, &loop->body);
+      return; /* Return to driver to process body */
+   } else if (phase == CF_TRAVERSAL_PHASE_LEAVE) {
+      end_loop(ctx);
+
+      advance_cf_list(ctx, (nir_cf_node*)loop);
+   }
 }
 
+/**
+ * Uniform conditionals are represented in the following way*) :
+ *
+ * The linear and logical CFG:
+ *                        BB_IF
+ *                        /    \
+ *       BB_THEN (logical)      BB_ELSE (logical)
+ *                        \    /
+ *                        BB_ENDIF
+ *
+ * *) Exceptions may be due to break and continue statements within loops
+ *    If a break/continue happens within uniform control flow, it branches
+ *    to the loop exit/entry block. Otherwise, it branches to the next
+ *    merge block.
+ *
+ * To maintain a logical and linear CFG without critical edges,
+ * non-uniform conditionals are represented in the following way*) :
+ *
+ * The linear CFG:
+ *                        BB_IF
+ *                        /    \
+ *       BB_THEN (logical)      BB_THEN (linear)
+ *                        \    /
+ *                        BB_INVERT (linear)
+ *                        /    \
+ *       BB_ELSE (logical)      BB_ELSE (linear)
+ *                        \    /
+ *                        BB_ENDIF
+ *
+ * The logical CFG:
+ *                        BB_IF
+ *                        /    \
+ *       BB_THEN (logical)      BB_ELSE (logical)
+ *                        \    /
+ *                        BB_ENDIF
+ *
+ *
+ * Exceptions may be due to break and continue statements within loops:
+ *
+ * The linear CFG:
+ *                        BB_IF
+ *                        /    \
+ *       BB_THEN (logical)      \
+ *           /    \              \
+ *    BB_JUMP    BB_CONTINUE    BB_ELSE     (all linear)
+ *                        \      /
+ *                        BB_ENDIF
+ **/
 void
-visit_if(isel_context* ctx, nir_if* if_stmt)
+visit_if(isel_context* ctx, nir_if* if_stmt, cf_traversal_phase phase)
 {
-   Temp cond = get_ssa_temp(ctx, if_stmt->condition.ssa);
-   Builder bld(ctx->program, ctx->block);
-   aco_ptr<Instruction> branch;
-   if_context ic;
+   if (phase == CF_TRAVERSAL_PHASE_ENTER) {
+      Temp cond = get_ssa_temp(ctx, if_stmt->condition.ssa);
 
-   if (!nir_src_is_divergent(&if_stmt->condition)) { /* uniform condition */
-      /**
-       * Uniform conditionals are represented in the following way*) :
-       *
-       * The linear and logical CFG:
-       *                        BB_IF
-       *                        /    \
-       *       BB_THEN (logical)      BB_ELSE (logical)
-       *                        \    /
-       *                        BB_ENDIF
-       *
-       * *) Exceptions may be due to break and continue statements within loops
-       *    If a break/continue happens within uniform control flow, it branches
-       *    to the loop exit/entry block. Otherwise, it branches to the next
-       *    merge block.
-       **/
+      if (!nir_src_is_divergent(&if_stmt->condition)) {
+         assert(cond.regClass() == ctx->program->lane_mask);
+         cond = bool_to_scalar_condition(ctx, cond);
+         begin_uniform_if_then(ctx, cond);
+      } else {
+         begin_divergent_if_then(ctx, cond, if_stmt->control);
+      }
+      ctx->traversal_stack.back().phase = CF_TRAVERSAL_PHASE_IN_ELSE;
+      push_cf_list(ctx, &if_stmt->then_list);
+      return; /* Return to driver to process then_list */
+   }
 
-      assert(cond.regClass() == ctx->program->lane_mask);
-      cond = bool_to_scalar_condition(ctx, cond);
+   if (phase == CF_TRAVERSAL_PHASE_IN_ELSE) {
+      if (!nir_src_is_divergent(&if_stmt->condition)) {
+         begin_uniform_if_else(ctx);
+      } else {
+         begin_divergent_if_else(ctx, if_stmt->control);
+      }
 
-      begin_uniform_if_then(ctx, &ic, cond);
-      visit_cf_list(ctx, &if_stmt->then_list);
+      ctx->traversal_stack.back().phase = CF_TRAVERSAL_PHASE_LEAVE;
+      push_cf_list(ctx, &if_stmt->else_list);
+      return; /* Return to driver to process else_list */
+   }
 
-      begin_uniform_if_else(ctx, &ic);
-      visit_cf_list(ctx, &if_stmt->else_list);
+   if (phase == CF_TRAVERSAL_PHASE_LEAVE) {
+      if (!nir_src_is_divergent(&if_stmt->condition)) {
+         end_uniform_if(ctx);
+      } else {
+         end_divergent_if(ctx);
+      }
 
-      end_uniform_if(ctx, &ic);
-   } else { /* non-uniform condition */
-      /**
-       * To maintain a logical and linear CFG without critical edges,
-       * non-uniform conditionals are represented in the following way*) :
-       *
-       * The linear CFG:
-       *                        BB_IF
-       *                        /    \
-       *       BB_THEN (logical)      BB_THEN (linear)
-       *                        \    /
-       *                        BB_INVERT (linear)
-       *                        /    \
-       *       BB_ELSE (logical)      BB_ELSE (linear)
-       *                        \    /
-       *                        BB_ENDIF
-       *
-       * The logical CFG:
-       *                        BB_IF
-       *                        /    \
-       *       BB_THEN (logical)      BB_ELSE (logical)
-       *                        \    /
-       *                        BB_ENDIF
-       *
-       * *) Exceptions may be due to break and continue statements within loops
-       **/
-
-      begin_divergent_if_then(ctx, &ic, cond, if_stmt->control);
-      visit_cf_list(ctx, &if_stmt->then_list);
-
-      begin_divergent_if_else(ctx, &ic, if_stmt->control);
-      visit_cf_list(ctx, &if_stmt->else_list);
-
-      end_divergent_if(ctx, &ic);
+      advance_cf_list(ctx, (nir_cf_node*)if_stmt);
    }
 }
 
 void
-visit_cf_list(isel_context* ctx, struct exec_list* list)
+visit_function_impl(isel_context* ctx, struct nir_function_impl* impl)
 {
-   if (nir_cf_list_is_empty_block(list))
-      return;
+   push_cf_list(ctx, &impl->body);
 
-   bool skipping_empty_exec_old = ctx->skipping_empty_exec;
-   if_context empty_exec_skip_old = std::move(ctx->empty_exec_skip);
-   ctx->skipping_empty_exec = false;
+   while (!ctx->traversal_stack.empty()) {
+      nir_cf_node* node = ctx->traversal_stack.back().node;
+      cf_traversal_phase phase = ctx->traversal_stack.back().phase;
 
-   foreach_list_typed (nir_cf_node, node, node, list) {
       switch (node->type) {
       case nir_cf_node_block: visit_block(ctx, nir_cf_node_as_block(node)); break;
-      case nir_cf_node_if: visit_if(ctx, nir_cf_node_as_if(node)); break;
-      case nir_cf_node_loop: visit_loop(ctx, nir_cf_node_as_loop(node)); break;
+      case nir_cf_node_if: visit_if(ctx, nir_cf_node_as_if(node), phase); break;
+      case nir_cf_node_loop: visit_loop(ctx, nir_cf_node_as_loop(node), phase); break;
       default: UNREACHABLE("unimplemented cf list type");
       }
    }
-
-   end_empty_exec_skip(ctx);
-   ctx->skipping_empty_exec = skipping_empty_exec_old;
-   ctx->empty_exec_skip = std::move(empty_exec_skip_old);
 }
 
 void
@@ -1154,32 +1302,52 @@ merged_wave_info_to_mask(isel_context* ctx, unsigned i)
 }
 
 void
-insert_rt_jump_next(isel_context& ctx, const struct ac_shader_args* args)
+insert_return(isel_context& ctx)
 {
-   unsigned src_count = 0;
-   for (unsigned i = 0; i < ctx.args->arg_count; i++)
-      src_count += !!BITSET_TEST(ctx.output_args, i);
+   assert(ctx.callee_info.stack_ptr.needs_explicit_preservation);
+   assert(
+      ctx.callee_info.param_infos[ACO_NIR_CALL_SYSTEM_ARG_UNIFORM_PC].needs_explicit_preservation);
+   assert(
+      ctx.callee_info.param_infos[ACO_NIR_CALL_SYSTEM_ARG_DIVERGENT_PC].needs_explicit_preservation);
 
+   /* stack_ptr always needs to be explicitly preserved */
+   unsigned preserved_param_count = 1;
+   if (ctx.callee_info.return_address.needs_explicit_preservation)
+      ++preserved_param_count;
+   for (auto param_info : ctx.callee_info.param_infos) {
+      if (!param_info.is_reg || !param_info.needs_explicit_preservation)
+         continue;
+      ++preserved_param_count;
+   }
+   unsigned src_count = preserved_param_count + 1;
    Instruction* ret = create_instruction(aco_opcode::p_return, Format::PSEUDO, src_count, 0);
    ctx.block->instructions.emplace_back(ret);
 
-   src_count = 0;
-   for (unsigned i = 0; i < ctx.args->arg_count; i++) {
-      if (!BITSET_TEST(ctx.output_args, i))
+   unsigned def_idx = 0;
+   ret->operands[def_idx++] = Operand();
+
+   Operand stack_op = Operand(ctx.callee_info.stack_ptr.def.getTemp());
+   stack_op.setPrecolored(ctx.callee_info.stack_ptr.def.physReg());
+   ret->operands[def_idx++] = stack_op;
+
+   for (unsigned i = 0; i < ctx.callee_info.param_infos.size(); ++i) {
+      const auto& param_info = ctx.callee_info.param_infos[i];
+      if (!param_info.is_reg || !param_info.needs_explicit_preservation)
          continue;
-
-      enum ac_arg_regfile file = ctx.args->args[i].file;
-      unsigned size = ctx.args->args[i].size;
-      unsigned reg = ctx.args->args[i].offset + (file == AC_ARG_SGPR ? 0 : 256);
-      RegClass type = RegClass(file == AC_ARG_SGPR ? RegType::sgpr : RegType::vgpr, size);
-      Operand op = ctx.arg_temps[i].id() ? Operand(ctx.arg_temps[i], PhysReg{reg})
-                                         : Operand(PhysReg{reg}, type);
-      ret->operands[src_count] = op;
-      src_count++;
+      Temp param_temp = param_info.def.getTemp();
+      if (i == ACO_NIR_CALL_SYSTEM_ARG_DIVERGENT_PC)
+         param_temp = ctx.next_divergent_pc;
+      else if (i == ACO_NIR_CALL_SYSTEM_ARG_UNIFORM_PC)
+         param_temp = ctx.next_pc;
+      Operand op = Operand(param_temp);
+      op.setPrecolored(param_info.def.physReg());
+      ret->operands[def_idx++] = op;
    }
-
-   Builder bld(ctx.program, ctx.block);
-   bld.sop1(aco_opcode::s_setpc_b64, get_arg(&ctx, ctx.args->rt.uniform_shader_addr));
+   if (ctx.callee_info.return_address.needs_explicit_preservation) {
+      Operand op = Operand(ctx.callee_info.return_address.def.getTemp());
+      op.setPrecolored(ctx.callee_info.return_address.def.physReg());
+      ret->operands[def_idx++] = op;
+   }
 }
 
 void
@@ -1196,20 +1364,58 @@ select_program_rt(isel_context& ctx, unsigned shader_count, struct nir_shader* c
       init_context(&ctx, nir);
       setup_fp_mode(&ctx, nir);
 
-      Instruction* startpgm = add_startpgm(&ctx);
+      RegisterDemand limit = get_addr_regs_from_waves(ctx.program, ctx.program->min_waves);
+
+      nir_function_impl* impl = NULL;
+      nir_function* traversal_function = NULL;
+      nir_function* ahit_isec_function = NULL;
+      nir_foreach_function (func, nir) {
+         unsigned func_nir_abi = (func->driver_attributes & ACO_NIR_FUNCTION_ATTRIB_ABI_MASK);
+
+         if (func->impl)
+            impl = func->impl;
+         if (func_nir_abi == ACO_NIR_CALL_ABI_TRAVERSAL)
+            traversal_function = func;
+         if (func_nir_abi == ACO_NIR_CALL_ABI_AHIT_ISEC)
+            ahit_isec_function = func;
+         if (impl && traversal_function && ahit_isec_function)
+            break;
+      }
+
+      unsigned nir_abi = (impl->function->driver_attributes & ACO_NIR_FUNCTION_ATTRIB_ABI_MASK);
+      param_assignment_hints callee_hints;
+      if (nir_abi == ACO_NIR_CALL_ABI_AHIT_ISEC) {
+         assert(traversal_function);
+         callee_info traversal_info = get_callee_info(
+            ctx.program->gfx_level, ctx.program->wave_size, rtTraversalABI,
+            traversal_function->num_params, traversal_function->params, NULL, limit);
+         callee_hints =
+            get_ahit_isec_param_hints(traversal_info, ctx.program->info.descriptor_heap);
+      }
+
+      /* TODO: callable abi? */
+      ctx.callee_abi = nir_abi_to_aco(impl->function->driver_attributes);
+      ctx.program->callee_abi = ctx.callee_abi;
+      ctx.callee_info = get_callee_info(ctx.program->gfx_level, ctx.program->wave_size,
+                                        ctx.callee_abi, impl->function->num_params,
+                                        impl->function->params, ctx.program, limit, callee_hints);
+      ctx.program->is_callee = true;
+
+      Instruction* startpgm = add_startpgm(&ctx, true);
+
       append_logical_start(ctx.block);
       split_arguments(&ctx, startpgm);
-      visit_cf_list(&ctx, &nir_shader_get_entrypoint(nir)->body);
-      append_logical_end(ctx.block);
+      visit_function_impl(&ctx, impl);
+      /* This block doesn't need a p_reload_preserved, we add it manually after p_return */
+      append_logical_end(&ctx, false);
       ctx.block->kind |= block_kind_uniform;
 
-      /* Fix output registers and jump to next shader. We can skip this when dealing with a raygen
-       * shader without shader calls.
-       */
-      if (shader_count > 1 || shaders[i]->info.stage != MESA_SHADER_RAYGEN)
-         insert_rt_jump_next(ctx, args);
-      else
+      if (ctx.next_pc != Temp()) {
+         insert_return(ctx);
+         Builder(ctx.program, ctx.block).sop1(aco_opcode::s_setpc_b64, Operand(ctx.next_pc));
+      } else {
          Builder(ctx.program, ctx.block).sopp(aco_opcode::s_endpgm);
+      }
 
       cleanup_context(&ctx);
    }
@@ -1274,8 +1480,8 @@ create_end_for_merged_shader(isel_context* ctx)
 
 void
 select_shader(isel_context& ctx, nir_shader* nir, const bool need_startpgm, const bool need_endpgm,
-              const bool need_barrier, if_context* ic_merged_wave_info,
-              const bool check_merged_wave_info, const bool endif_merged_wave_info)
+              const bool need_barrier, const bool check_merged_wave_info,
+              const bool endif_merged_wave_info)
 {
    init_context(&ctx, nir);
    setup_fp_mode(&ctx, nir);
@@ -1307,7 +1513,7 @@ select_shader(isel_context& ctx, nir_shader* nir, const bool need_startpgm, cons
       const unsigned i =
          nir->info.stage == MESA_SHADER_VERTEX || nir->info.stage == MESA_SHADER_TESS_EVAL ? 0 : 1;
       const Temp cond = merged_wave_info_to_mask(&ctx, i);
-      begin_divergent_if_then(&ctx, ic_merged_wave_info, cond);
+      begin_divergent_if_then(&ctx, cond);
    }
 
    if (need_barrier) {
@@ -1316,13 +1522,12 @@ select_shader(isel_context& ctx, nir_shader* nir, const bool need_startpgm, cons
                                   ? scope_subgroup
                                   : scope_workgroup;
 
-      Builder(ctx.program, ctx.block)
-         .barrier(aco_opcode::p_barrier, memory_sync_info(storage_shared, semantic_acqrel, scope),
-                  scope);
+      Builder bld(ctx.program, ctx.block);
+      emit_barrier(bld, memory_sync_info(storage_shared, semantic_acqrel, scope), scope);
    }
 
    nir_function_impl* func = nir_shader_get_entrypoint(nir);
-   visit_cf_list(&ctx, &func->body);
+   visit_function_impl(&ctx, func);
 
    if (ctx.program->info.ps.has_epilog) {
       if (ctx.stage == fragment_fs) {
@@ -1337,8 +1542,8 @@ select_shader(isel_context& ctx, nir_shader* nir, const bool need_startpgm, cons
    }
 
    if (endif_merged_wave_info) {
-      begin_divergent_if_else(&ctx, ic_merged_wave_info);
-      end_divergent_if(&ctx, ic_merged_wave_info);
+      begin_divergent_if_else(&ctx);
+      end_divergent_if(&ctx);
    }
 
    bool is_first_stage_of_merged_shader = false;
@@ -1359,7 +1564,7 @@ select_shader(isel_context& ctx, nir_shader* nir, const bool need_startpgm, cons
    if (need_endpgm) {
       program->config->float_mode = program->blocks[0].fp_mode.val;
 
-      append_logical_end(ctx.block);
+      append_logical_end(&ctx);
       ctx.block->kind |= block_kind_uniform;
 
       if ((!program->info.ps.has_epilog && !is_first_stage_of_merged_shader) ||
@@ -1374,7 +1579,6 @@ select_shader(isel_context& ctx, nir_shader* nir, const bool need_startpgm, cons
 void
 select_program_merged(isel_context& ctx, const unsigned shader_count, nir_shader* const* shaders)
 {
-   if_context ic_merged_wave_info;
    const bool ngg_gs = ctx.stage.hw == AC_HW_NEXT_GEN_GEOMETRY_SHADER && ctx.stage.has(SWStage::GS);
    const bool hs = ctx.stage.hw == AC_HW_HULL_SHADER;
 
@@ -1408,8 +1612,8 @@ select_program_merged(isel_context& ctx, const unsigned shader_count, nir_shader
       /* A barrier is usually needed at the beginning of the second shader, with exceptions. */
       const bool need_barrier = i != 0 && !ngg_gs && !tcs_skip_barrier;
 
-      select_shader(ctx, nir, need_startpgm, need_endpgm, need_barrier, &ic_merged_wave_info,
-                    check_merged_wave_info, endif_merged_wave_info);
+      select_shader(ctx, nir, need_startpgm, need_endpgm, need_barrier, check_merged_wave_info,
+                    endif_merged_wave_info);
 
       if (i == 0 && ctx.stage == vertex_tess_control_hs && ctx.tcs_in_out_eq) {
          /* Special handling when TCS input and output patch size is the same.
@@ -1439,7 +1643,6 @@ select_program(Program* program, unsigned shader_count, struct nir_shader* const
       select_program_merged(ctx, shader_count, shaders);
    } else {
       bool need_barrier = false, check_merged_wave_info = false, endif_merged_wave_info = false;
-      if_context ic_merged_wave_info;
 
       /* Handle separate compilation of VS+TCS and {VS,TES}+GS on GFX9+. */
       if (ctx.program->info.merged_shader_compiled_separately) {
@@ -1456,8 +1659,8 @@ select_program(Program* program, unsigned shader_count, struct nir_shader* const
          }
       }
 
-      select_shader(ctx, shaders[0], true, true, need_barrier, &ic_merged_wave_info,
-                    check_merged_wave_info, endif_merged_wave_info);
+      select_shader(ctx, shaders[0], true, true, need_barrier, check_merged_wave_info,
+                    endif_merged_wave_info);
    }
 }
 

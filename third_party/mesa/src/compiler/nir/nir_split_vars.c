@@ -1188,7 +1188,7 @@ mark_deref_used(nir_deref_instr *deref,
       bool indirect = false;
       if (deref->deref_type == nir_deref_type_array) {
          indirect = !nir_src_is_const(deref->arr.index);
-         nir_shader *shader = nir_cf_node_get_function(&deref->instr.block->cf_node)->function->shader;
+         nir_shader *shader = deref->instr.block->impl->function->shader;
          max_used = nir_unsigned_upper_bound(shader, range_ht, nir_get_scalar(deref->arr.index.ssa, 0));
       } else {
          /* For wildcards, we read or wrote the whole thing. */
@@ -1258,7 +1258,7 @@ get_non_self_referential_store_comps(nir_intrinsic_instr *store)
 {
    nir_component_mask_t comps = nir_intrinsic_write_mask(store);
 
-   nir_instr *src_instr = store->src[1].ssa->parent_instr;
+   nir_instr *src_instr = nir_def_instr(store->src[1].ssa);
    if (src_instr->type != nir_instr_type_alu)
       return comps;
 

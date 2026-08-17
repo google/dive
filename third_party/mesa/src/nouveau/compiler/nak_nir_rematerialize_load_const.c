@@ -43,13 +43,12 @@ rematerialize_load_const(nir_src *src, void *_ctx)
 static bool
 rematerialize_load_const_impl(nir_function_impl *impl)
 {
-   bool progress = false;
-
    struct remat_ctx ctx = {
       .remap = _mesa_pointer_hash_table_create(NULL),
       .b = nir_builder_create(impl),
    };
 
+   bool progress = false;
    nir_foreach_block(block, impl) {
       _mesa_hash_table_clear(ctx.remap, NULL);
       ctx.block = block;
@@ -82,12 +81,14 @@ rematerialize_load_const_impl(nir_function_impl *impl)
             }
          }
       }
+
+      if (ctx.remap->entries > 0)
+         progress = true;
    }
 
    _mesa_hash_table_destroy(ctx.remap, NULL);
 
-   return nir_progress(progress, impl, nir_metadata_control_flow |
-                                       nir_metadata_divergence);
+   return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
 bool

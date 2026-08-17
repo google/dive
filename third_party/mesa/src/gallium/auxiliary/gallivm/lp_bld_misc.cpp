@@ -80,8 +80,6 @@
 #endif
 
 #include "c11/threads.h"
-#include "util/u_thread.h"
-#include "util/detect.h"
 #include "util/u_debug.h"
 #include "util/u_cpu_detect.h"
 
@@ -119,7 +117,7 @@ void lp_bld_init_native_targets()
    llvm::InitializeNativeTargetDisassembler();
 #if MESA_DEBUG
    {
-      char *env_llc_options = getenv("GALLIVM_LLC_OPTIONS");
+      char *env_llc_options = os_get_option_dup("GALLIVM_LLC_OPTIONS");
       if (env_llc_options) {
          char *option;
          char *options[64] = {(char *) "llc"};      // Warning without cast
@@ -135,6 +133,7 @@ void lp_bld_init_native_targets()
          }
          LLVMParseCommandLineOptions(n + 1, options, NULL);
       }
+      free(env_llc_options);
    }
 #endif
    lp_run_atexit_for_destructors();
@@ -332,7 +331,7 @@ lp_build_fill_mattrs(std::vector<std::string> &MAttrs)
       llvm::sys::getHostCPUFeatures(features);
    #endif
 
-   for (llvm::StringMapIterator<bool> f = features.begin();
+   for (auto f = features.begin();
         f != features.end();
         ++f) {
       MAttrs.push_back(((*f).second ? "+" : "-") + (*f).first().str());
@@ -411,11 +410,15 @@ lp_build_fill_mattrs(std::vector<std::string> &MAttrs)
 #endif
 
 #if DETECT_ARCH_RISCV64 == 1
-   /* Before riscv is more matured and util_get_cpu_caps() is implemented,
-    * assume this for now since most of linux capable riscv machine are
-    * riscv64gc
-    */
-   MAttrs = {"+m","+c","+a","+d","+f"};
+   /* Linux currently requires IMA, so hardcode it */
+   MAttrs = {"+m","+a"};
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_fd ? "+f" : "-f");
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_fd ? "+d" : "-d");
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_c ? "+c" : "-c");
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_v ? "+v" : "-v");
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_zba ? "+zba" : "-zba");
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_zbb ? "+zbb" : "-zbb");
+   MAttrs.push_back(util_get_cpu_caps()->has_rv_zbs ? "+zbb" : "-zbs");
 #endif
 
 #if DETECT_ARCH_LOONGARCH64 == 1
@@ -515,6 +518,37 @@ lp_build_create_jit_compiler_for_module(LLVMExecutionEngineRef *OutJIT,
     LLVMSetTarget(M, "aarch64-pc-win32-elf");
 #  else
 #    error Unsupported architecture for MCJIT on Windows.
+#  endif
+#endif
+
+#if DETECT_OS_APPLE
+    /*
+     * Apple systems frequently cross-compile and have fat binaries with
+     * multiple archs. Initialize all possible targets, then select desired target.
+     * Override default set by <llvm/Config/llvm-config.h>
+     */
+
+   llvm::InitializeAllTargets();
+   llvm::InitializeAllTargetMCs();
+   llvm::InitializeAllAsmPrinters();
+   llvm::InitializeAllDisassemblers();
+
+#  if DETECT_ARCH_X86_64
+    LLVMSetTarget(M, "x86_64-apple-darwin");
+#  elif DETECT_ARCH_X86
+    LLVMSetTarget(M, "i686-apple-darwin");
+#  elif DETECT_ARCH_AARCH64
+
+#   if defined(__arm64e__)
+      LLVMSetTarget(M, "arm64e-apple-darwin");
+#   elif defined(__arm64__) && defined(__ILP32__)
+      LLVMSetTarget(M, "arm64_32-apple-watchos");
+#   else
+      LLVMSetTarget(M, "arm64-apple-darwin");
+#   endif
+
+#  else
+#    error Unsupported architecture for MCJIT on Apple.
 #  endif
 #endif
 

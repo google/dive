@@ -134,7 +134,7 @@ _mesa_Fogfv( GLenum pname, const GLfloat *params )
          ctx->Fog.End = *params;
          break;
       case GL_FOG_INDEX:
-         if (ctx->API != API_OPENGL_COMPAT)
+         if (!_mesa_is_desktop_gl_compat(ctx))
             goto invalid_pname;
  	 if (ctx->Fog.Index == *params)
 	    return;
@@ -156,7 +156,7 @@ _mesa_Fogfv( GLenum pname, const GLfloat *params )
          break;
       case GL_FOG_COORDINATE_SOURCE_EXT: {
 	 GLenum p = (GLenum) (GLint) *params;
-         if (ctx->API != API_OPENGL_COMPAT ||
+         if (!_mesa_is_desktop_gl_compat(ctx) ||
              (p != GL_FOG_COORDINATE_EXT && p != GL_FRAGMENT_DEPTH_EXT)) {
 	    _mesa_error(ctx, GL_INVALID_ENUM, "glFog");
 	    return;
@@ -169,7 +169,7 @@ _mesa_Fogfv( GLenum pname, const GLfloat *params )
       }
       case GL_FOG_DISTANCE_MODE_NV: {
 	 GLenum p = (GLenum) (GLint) *params;
-         if (ctx->API != API_OPENGL_COMPAT || !ctx->Extensions.NV_fog_distance ||
+         if (!_mesa_is_desktop_gl_compat(ctx) || !ctx->Extensions.NV_fog_distance ||
              (p != GL_EYE_RADIAL_NV && p != GL_EYE_PLANE && p != GL_EYE_PLANE_ABSOLUTE_NV)) {
 	    _mesa_error(ctx, GL_INVALID_ENUM, "glFog");
 	    return;

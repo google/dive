@@ -30,14 +30,14 @@
                     t_swizzle(y), t_src_class(vpi->SrcReg[x].File), RC_MASK_NONE) |             \
     (vpi->SrcReg[x].RelAddr << 4))
 
-static unsigned long
+static uint32_t
 t_dst_mask(unsigned int mask)
 {
    /* RC_MASK_* is equivalent to VSF_FLAG_* */
    return mask & RC_MASK_XYZW;
 }
 
-static unsigned long
+static uint32_t
 t_dst_class(rc_register_file file)
 {
    switch (file) {
@@ -53,7 +53,7 @@ t_dst_class(rc_register_file file)
    }
 }
 
-static unsigned long
+static uint32_t
 t_dst_index(struct r300_vertex_program_code *vp, struct rc_dst_register *dst)
 {
    if (dst->File == RC_FILE_OUTPUT)
@@ -62,7 +62,7 @@ t_dst_index(struct r300_vertex_program_code *vp, struct rc_dst_register *dst)
    return dst->Index;
 }
 
-static unsigned long
+static uint32_t
 t_src_class(rc_register_file file)
 {
    switch (file) {
@@ -82,8 +82,8 @@ t_src_class(rc_register_file file)
 static int
 t_src_conflict(struct rc_src_register a, struct rc_src_register b)
 {
-   unsigned long aclass = t_src_class(a.File);
-   unsigned long bclass = t_src_class(b.File);
+   uint32_t aclass = t_src_class(a.File);
+   uint32_t bclass = t_src_class(b.File);
 
    if (aclass != bclass)
       return 0;
@@ -98,14 +98,14 @@ t_src_conflict(struct rc_src_register a, struct rc_src_register b)
    return 0;
 }
 
-static inline unsigned long
-t_swizzle(unsigned int swizzle)
+static inline uint32_t
+t_swizzle(uint32_t swizzle)
 {
    /* this is in fact a NOP as the Mesa RC_SWIZZLE_* are all identical to VSF_IN_COMPONENT_* */
    return swizzle;
 }
 
-static unsigned long
+static uint32_t
 t_src_index(struct r300_vertex_program_code *vp, struct rc_src_register *src)
 {
    if (src->File == RC_FILE_INPUT) {
@@ -122,7 +122,7 @@ t_src_index(struct r300_vertex_program_code *vp, struct rc_src_register *src)
 
 /* these two functions should probably be merged... */
 
-static unsigned long
+static uint32_t
 t_src(struct r300_vertex_program_code *vp, struct rc_src_register *src)
 {
    /* src->Negate uses the RC_MASK_ flags from program_instruction.h,
@@ -135,7 +135,7 @@ t_src(struct r300_vertex_program_code *vp, struct rc_src_register *src)
           (src->RelAddr << 4) | (src->Abs << 3);
 }
 
-static unsigned long
+static uint32_t
 t_src_scalar(struct r300_vertex_program_code *vp, struct rc_src_register *src)
 {
    /* src->Negate uses the RC_MASK_ flags from program_instruction.h,
@@ -242,41 +242,6 @@ ei_cmp(struct r300_vertex_program_code *vp, struct rc_sub_instruction *vpi, unsi
 }
 
 static void
-ei_lit(struct r300_vertex_program_code *vp, struct rc_sub_instruction *vpi, unsigned int *inst)
-{
-   // LIT TMP 1.Y Z TMP 1{} {X W Z Y} TMP 1{} {Y W Z X} TMP 1{} {Y X Z W}
-
-   inst[0] = PVS_OP_DST_OPERAND(ME_LIGHT_COEFF_DX, 1, 0, t_dst_index(vp, &vpi->DstReg),
-                                t_dst_mask(vpi->DstReg.WriteMask), t_dst_class(vpi->DstReg.File),
-                                vpi->SaturateMode == RC_SATURATE_ZERO_ONE);
-   /* NOTE: Users swizzling might not work. */
-   inst[1] = PVS_SRC_OPERAND(t_src_index(vp, &vpi->SrcReg[0]),
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 0)), // X
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 3)), // W
-                             PVS_SRC_SELECT_FORCE_0,                        // Z
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 1)), // Y
-                             t_src_class(vpi->SrcReg[0].File),
-                             vpi->SrcReg[0].Negate ? RC_MASK_XYZW : RC_MASK_NONE) |
-             (vpi->SrcReg[0].RelAddr << 4);
-   inst[2] = PVS_SRC_OPERAND(t_src_index(vp, &vpi->SrcReg[0]),
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 1)), // Y
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 3)), // W
-                             PVS_SRC_SELECT_FORCE_0,                        // Z
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 0)), // X
-                             t_src_class(vpi->SrcReg[0].File),
-                             vpi->SrcReg[0].Negate ? RC_MASK_XYZW : RC_MASK_NONE) |
-             (vpi->SrcReg[0].RelAddr << 4);
-   inst[3] = PVS_SRC_OPERAND(t_src_index(vp, &vpi->SrcReg[0]),
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 1)), // Y
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 0)), // X
-                             PVS_SRC_SELECT_FORCE_0,                        // Z
-                             t_swizzle(GET_SWZ(vpi->SrcReg[0].Swizzle, 3)), // W
-                             t_src_class(vpi->SrcReg[0].File),
-                             vpi->SrcReg[0].Negate ? RC_MASK_XYZW : RC_MASK_NONE) |
-             (vpi->SrcReg[0].RelAddr << 4);
-}
-
-static void
 ei_mad(struct r300_vertex_program_code *vp, struct rc_sub_instruction *vpi, unsigned int *inst)
 {
    unsigned int i;
@@ -351,6 +316,42 @@ ei_pow(struct r300_vertex_program_code *vp, struct rc_sub_instruction *vpi, unsi
 }
 
 static void
+ei_vector0(struct r300_vertex_program_code *vp,
+           struct rc_sub_instruction *vpi,
+           unsigned int hw_opcode,
+           unsigned int *inst)
+{
+   inst[0] = PVS_OP_DST_OPERAND(hw_opcode, 0, 0, 0, 0, PVS_DST_REG_TEMPORARY, 0);
+   inst[1] = __CONST(0, RC_SWIZZLE_ZERO);
+   inst[2] = inst[1];
+   inst[3] = inst[1];
+}
+
+static void
+pad_vertex_program_instructions(struct radeon_compiler *c)
+{
+   const unsigned min_inst_count = 4;
+   unsigned inst_count = 0;
+
+   for (struct rc_instruction *inst = c->Program.Instructions.Next;
+        inst != &c->Program.Instructions; inst = inst->Next)
+      inst_count++;
+
+   unsigned orig_inst_count = inst_count;
+
+   while (inst_count < min_inst_count) {
+      struct rc_instruction *inst = rc_insert_new_instruction(c, c->Program.Instructions.Prev);
+      inst->U.I.Opcode = RC_OPCODE_NOP;
+      inst->U.I.SrcReg[0].File = RC_FILE_NONE;
+      inst_count++;
+   }
+
+   if (orig_inst_count < min_inst_count)
+      rc_debug(c, "r300: padded tiny VS from %u to %u instructions\n",
+               orig_inst_count, inst_count);
+}
+
+static void
 translate_vertex_program(struct radeon_compiler *c, void *user)
 {
    struct r300_vertex_program_compiler *compiler = (struct r300_vertex_program_compiler *)c;
@@ -368,6 +369,10 @@ translate_vertex_program(struct radeon_compiler *c, void *user)
    compiler->code->last_pos_write = 0;
 
    compiler->SetHwInputOutput(compiler);
+
+   /* Vertex shaders shorter than 4 instructions can hard-lock r3xx GPUs. */
+   if (!c->is_r400 && !c->is_r500)
+      pad_vertex_program_instructions(c);
 
    for (rci = compiler->Base.Program.Instructions.Next; rci != &compiler->Base.Program.Instructions;
         rci = rci->Next) {
@@ -396,6 +401,9 @@ translate_vertex_program(struct radeon_compiler *c, void *user)
              (vpi->Opcode != RC_OPCODE_SEQ && vpi->Opcode != RC_OPCODE_SNE));
 
       switch (vpi->Opcode) {
+      case RC_OPCODE_NOP:
+         ei_vector0(compiler->code, vpi, VECTOR_NO_OP, inst);
+         break;
       case RC_OPCODE_ADD:
          ei_vector2(compiler->code, VE_ADD, vpi, inst);
          break;
@@ -429,9 +437,6 @@ translate_vertex_program(struct radeon_compiler *c, void *user)
       case RC_OPCODE_LG2:
          ei_math1_select(compiler->code, compiler->Base.math_rules, ME_LOG_BASE2_IEEE,
                          ME_LOG_BASE2_FULL_DX, ME_LOG_BASE2_FULL_DX, vpi, inst);
-         break;
-      case RC_OPCODE_LIT:
-         ei_lit(compiler->code, vpi, inst);
          break;
       case RC_OPCODE_LOG:
          ei_math1(compiler->code, ME_LOG_BASE2_DX, vpi, inst);

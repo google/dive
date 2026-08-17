@@ -39,7 +39,7 @@ if [ -n "${FLUSTER_TAG:-}" ]; then
   export LIBVA_MESSAGING_LEVEL=1
 fi
 
-if [ -n "$PIGLIT_TAG" ]; then
+if [ -n "${PIGLIT_TAG:-}" ]; then
   # Are we using the right Piglit version?
   ci_tag_test_time_check "PIGLIT_TAG"
 elif [ -d "/piglit" ]; then
@@ -48,6 +48,19 @@ elif [ -d "/piglit" ]; then
   # and also optimise our dependencies so we don't pull unneeded stuff.
   rm -r /piglit
 fi
+
+if [ -n "$VKD3D_PROTON_TAG" ]; then
+  # Are we using the right vkd3d-proton version?
+  ci_tag_test_time_check "VKD3D_PROTON_TAG"
+fi
+
+if [ -n "${OPENCL_CTS_TAG:-}" ]; then
+  # Are we using the right OpenCL-CTS version?
+  ci_tag_test_time_check "OPENCL_CTS_TAG"
+elif [ -d "/opencl-cts" ]; then
+  rm -r /opencl-cts
+fi
+
 
 # Ensure Mesa Shader Cache resides on tmpfs.
 SHADER_CACHE_HOME=${XDG_CACHE_HOME:-${HOME}/.cache}
@@ -58,11 +71,13 @@ findmnt -n tmpfs ${SHADER_CACHE_HOME} || findmnt -n tmpfs ${SHADER_CACHE_DIR} ||
     mount -t tmpfs -o nosuid,nodev,size=2G,mode=1755 tmpfs ${SHADER_CACHE_DIR}
 }
 
-touch /fails.txt
-touch /flakes.txt
-cat $INSTALL/all-skips.txt > /skips.txt
+FILE_ARGS=""
 
-add_if_exists() {
+touch /fails.txt
+
+# There must be a single baseline expected fails list, this lets us cat together
+# xfails from multiple possible sources. Do we actually use this, though?
+cat_if_exists() {
   prefix=$1
   kind=$2
   if [ -e "$INSTALL/$prefix-$kind.txt" ]; then
@@ -70,22 +85,31 @@ add_if_exists() {
   fi
 }
 
+add_if_exists() {
+  if [ -e "$INSTALL/$2" ]; then
+    FILE_ARGS="$FILE_ARGS $1 $INSTALL/$2"
+  fi
+}
+
 # remove duplicate values to avoid reading the same file multiple times
-{
+for prefix in $({
+  echo "all"
   echo "$DRIVER_NAME"
   echo "$GPU_VERSION"
-} | sort -u | while read -r prefix; do
-  add_if_exists "$prefix" fails
-  add_if_exists "$prefix" flakes
-  add_if_exists "$prefix" skips
+} | sort -u); do
+  cat_if_exists "$prefix" fails
+  add_if_exists "--flakes" "$prefix-flakes.txt"
+  add_if_exists "--skips" "$prefix-skips.txt"
+  add_if_exists "--single-thread" "$prefix-single-thread.txt"
 done
 
-if [ -e "$INSTALL/$GPU_VERSION-slow-skips.txt" ] && [[ $CI_JOB_NAME != *full* ]]; then
-    cat "$INSTALL/$GPU_VERSION-slow-skips.txt" >> /skips.txt
+if [[ $CI_JOB_NAME != *full* ]]; then
+  FILE_ARGS="$FILE_ARGS --skips $INSTALL/all-slow-skips.txt"
+  add_if_exists "--skips" "$GPU_VERSION-slow-skips.txt"
 fi
 
 if [ -n "${ANGLE_TAG:-}" ]; then
-    cat "$INSTALL/angle-skips.txt" >> /skips.txt
+    FILE_ARGS="$FILE_ARGS --skips $INSTALL/angle-skips.txt"
 fi
 
 # Set the path to VK validation layer settings (in case it ends up getting loaded)
@@ -124,6 +148,9 @@ for api in vk-main vk gl gles; do
     cat "$deqp_version_log"
   fi
 done
+if [ -r /opencl-cts/opencl-cts-version ]; then
+  echo "OpenCL-CTS commit: $(cat /opencl-cts/opencl-cts-version)"
+fi
 set -x
 
 # If you change the format of the suite toml filenames or the
@@ -137,15 +164,14 @@ deqp-runner \
     --suite $INSTALL/deqp-$DEQP_SUITE.toml \
     --output $RESULTS_DIR \
     --baseline /fails.txt \
-    --skips /skips.txt \
-    --flakes /flakes.txt \
+    $FILE_ARGS \
     --testlog-to-xml /deqp-tools/testlog-to-xml \
     --fraction-start ${CI_NODE_INDEX:-1} \
     --fraction $((CI_NODE_TOTAL * ${DEQP_FRACTION:-1})) \
     --jobs ${FDO_CI_CONCURRENT:-4} \
     ${DEQP_RUNNER_MAX_FAILS:+--max-fails "$DEQP_RUNNER_MAX_FAILS"} \
     ${DEQP_RUNNER_SHADER_CACHE_DIR:+--shader-cache-dir "$DEQP_RUNNER_SHADER_CACHE_DIR"} \
-    ${DEQP_FORCE_ASAN:+--env LD_PRELOAD=libasan.so.8:/install/lib/libdlclose-skip.so}; DEQP_EXITCODE=$?
+    ${DEQP_FORCE_ASAN:+--env LD_PRELOAD=libasan.so.8:/install/lib/libdlclose-skip.so --env ASAN_OPTIONS=malloc_fill_byte=1}; DEQP_EXITCODE=$?
 
 { set +x; } 2>/dev/null
 
@@ -156,9 +182,20 @@ set -x
 
 report_load
 
-# Remove all but the first 50 individual XML files uploaded as artifacts, to
-# save fd.o space when you break everything.
+# Remove all but the first 50 individual XML, test log and caselist
+# files uploaded as artifacts, to save fd.o space and avoid job log spam
+# when you break everything.
+# Note that each of these pattern gets to keep 50 files, but there is nothing
+# making sure the remaining 50 files of each correspond to the same tests.
 find $RESULTS_DIR -name \*.xml | \
+    sort -n |
+    sed -n '1,+49!p' | \
+    xargs rm -f
+find $RESULTS_DIR -name 'c*.r*.caselist.txt' | \
+    sort -n |
+    sed -n '1,+49!p' | \
+    xargs rm -f
+find $RESULTS_DIR -name 'c*.r*.log' | \
     sort -n |
     sed -n '1,+49!p' | \
     xargs rm -f

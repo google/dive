@@ -9,10 +9,13 @@ KHR-GLES31.core.shader_image_load_store.basic-allFormats-store-fs
 KHR-GLES31.core.tessellation_shader.tessellation_control_to_tessellation_evaluation.gl_MaxPatchVertices_Position_PointSize
 KHR-GL46.copy_image.functional
 
-# Flaky when run in parallel due to DRM control node acquisition.
-dEQP-VK.wsi.*display.*
-
 # Exclude WSI related tests for a618-vk-asan
 # The ones that weren't being skipped were causing leaks
 asan-dEQP-VK.image.swapchain_mutable.*
 asan-dEQP-VK.wsi.*
+
+# Skip single-threaded gmem testing that doesn't give useful extra coverage.
+gmem-dEQP-VK.wsi.direct_drm.*
+
+# Mainly for testing platform features. Skip as take too long. Passes reliably though.
+awsi-dEQP-VK.wsi.android.incremental_present.*

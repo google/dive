@@ -42,29 +42,18 @@ files_libintel_common = files(
   'intel_uuid.h',
   'intel_measure.c',
   'intel_measure.h',
-  'intel_mem.c',
-  'intel_mem.h',
-  'intel_pixel_hash.h'
+  'intel_pixel_hash.h',
+  'intel_pagefault.c',
+  'intel_pagefault.h',
 )
 
 libintel_common_links = [libisl]
-
-if with_clflushopt
-  libintel_clflushopt = static_library(
-    'intel_clflushopt',
-    ['intel_clflushopt.c'],
-    include_directories : [inc_include, inc_src],
-    c_args : [no_override_init_args] + clflushopt_args,
-    gnu_symbol_visibility : 'hidden',
-  )
-  libintel_common_links += libintel_clflushopt
-endif
 
 libintel_common = static_library(
   'intel_common',
   [files_libintel_common, genX_xml_h, sha1_h],
   include_directories : [inc_include, inc_src, inc_intel],
-  c_args : [no_override_init_args, sse2_args],
+  c_args : [no_override_init_args, soong_compat_c_args, sse2_args],
   gnu_symbol_visibility : 'hidden',
   link_with : libintel_common_links,
   dependencies : [dep_libdrm, dep_thread, idep_genxml, idep_mesautil, idep_intel_dev],

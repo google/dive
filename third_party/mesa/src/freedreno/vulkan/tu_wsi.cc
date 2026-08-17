@@ -8,9 +8,10 @@
 
 #include "tu_wsi.h"
 
+#include "drm-uapi/drm_fourcc.h"
+
 #include "vk_util.h"
 #include "wsi_common_drm.h"
-#include "drm-uapi/drm_fourcc.h"
 
 #include "tu_device.h"
 
@@ -43,7 +44,7 @@ tu_wsi_init(struct tu_physical_device *physical_device)
                             tu_wsi_proc_addr,
                             &physical_device->instance->vk.alloc,
                             physical_device->master_fd,
-                            &physical_device->instance->dri_options,
+                            &physical_device->instance->drirc.options,
                             &options);
    if (result != VK_SUCCESS)
       return result;

@@ -112,7 +112,7 @@ public:
 
    int dest_chan() const { return m_dest ? m_dest->chan() : m_fallback_chan; }
 
-   void pin_dest_to_chan() override;
+   void pin_registers() override;
 
    const VirtualValue *psrc(unsigned i) const { return i < m_src.size() ? m_src[i] : nullptr; }
    PVirtualValue psrc(unsigned i) { return i < m_src.size() ? m_src[i] : nullptr; }
@@ -208,6 +208,8 @@ public:
    auto set_output_modifier(const OutputMod m) { m_output_modifier = m; }
    auto output_modifier() const { return m_output_modifier; }
    auto has_output_modifier() const { return m_output_modifier != omod_none; }
+
+   void override_or_clear_dest(PRegister dummy_reg);
 
 private:
    friend class AluGroup;

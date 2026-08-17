@@ -24,7 +24,7 @@
 #include "anv_nir.h"
 #include "nir_builder.h"
 #include "compiler/elk/elk_nir.h"
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 
 #define sizeof_field(type, field) sizeof(((type *)0)->field)
 
@@ -112,7 +112,7 @@ anv_nir_compute_push_layout(nir_shader *nir,
     * scalar, it needs to be aligned to a DWORD.
     */
    const unsigned alignment = compiler->scalar_stage[nir->info.stage] ? 4 : 16;
-   nir->num_uniforms = ALIGN(push_end - push_start, alignment);
+   nir->num_uniforms = align(push_end - push_start, alignment);
    prog_data->nr_params = nir->num_uniforms / 4;
    prog_data->param = rzalloc_array(mem_ctx, uint32_t, prog_data->nr_params);
 
@@ -122,36 +122,47 @@ anv_nir_compute_push_layout(nir_shader *nir,
       .length = DIV_ROUND_UP(push_end - push_start, 32),
    };
 
-   if (has_push_intrinsic) {
-      nir_foreach_function_impl(impl, nir) {
-         nir_foreach_block(block, impl) {
-            nir_foreach_instr_safe(instr, block) {
-               if (instr->type != nir_instr_type_intrinsic)
-                  continue;
+   nir_foreach_function_impl(impl, nir) {
+      nir_builder b = nir_builder_create(impl);
+      bool impl_progress = false;
 
-               nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
-               switch (intrin->intrinsic) {
-               case nir_intrinsic_load_push_constant: {
-                  /* With bindless shaders we load uniforms with SEND
-                   * messages. All the push constants are located after the
-                   * RT_DISPATCH_GLOBALS. We just need to add the offset to
-                   * the address right after RT_DISPATCH_GLOBALS (see
-                   * elk_nir_lower_rt_intrinsics.c).
-                   */
-                  unsigned base_offset = push_start;
-                  intrin->intrinsic = nir_intrinsic_load_uniform;
-                  nir_intrinsic_set_base(intrin,
-                                         nir_intrinsic_base(intrin) -
-                                         base_offset);
-                  break;
-               }
+      nir_foreach_block(block, impl) {
+         nir_foreach_instr_safe(instr, block) {
+            if (instr->type != nir_instr_type_intrinsic)
+               continue;
 
-               default:
-                  break;
-               }
+            nir_intrinsic_instr *intrin = nir_instr_as_intrinsic(instr);
+            switch (intrin->intrinsic) {
+            case nir_intrinsic_load_push_constant: {
+               /* With bindless shaders we load uniforms with SEND
+                * messages. All the push constants are located after the
+                * RT_DISPATCH_GLOBALS. We just need to add the offset to
+                * the address right after RT_DISPATCH_GLOBALS (see
+                * elk_nir_lower_rt_intrinsics.c).
+                */
+               unsigned base_offset = push_start;
+
+               b.cursor = nir_before_instr(instr);
+
+               nir_def *load =
+                  nir_load_uniform(&b, intrin->def.num_components,
+                                   intrin->def.bit_size, intrin->src->ssa,
+                                   .base = nir_intrinsic_base(intrin) - base_offset,
+                                   .range = nir_intrinsic_range(intrin),
+                                   .dest_type = nir_type_uint | intrin->def.bit_size);
+
+               nir_def_replace(&intrin->def, load);
+               impl_progress = true;
+               break;
+            }
+
+            default:
+               break;
             }
          }
       }
+
+      nir_progress(impl_progress, impl, nir_metadata_control_flow);
    }
 
    if (push_ubo_ranges) {
@@ -234,10 +245,10 @@ anv_nir_compute_push_layout(nir_shader *nir,
     * bind map, hash it.  This lets us quickly determine if the actual
     * mapping has changed and not just a no-op pipeline change.
     */
-   _mesa_sha1_compute(map->push_ranges,
+   _mesa_blake3_compute(map->push_ranges,
                       sizeof(map->push_ranges),
-                      map->push_sha1);
-  return false;
+                      map->push_blake3);
+   return has_push_intrinsic;
 }
 
 void

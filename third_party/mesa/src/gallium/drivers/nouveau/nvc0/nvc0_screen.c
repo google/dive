@@ -239,7 +239,6 @@ nvc0_init_screen_caps(struct nvc0_screen *screen)
    caps->max_varyings = 0x1f0 / 16;
    caps->max_vertex_buffers = 16;
    caps->gl_begin_end_buffer_size = 512 * 1024; /* TODO: Investigate tuning this */
-   caps->max_texture_mb = 0; /* TODO: use 1/2 of VRAM for this? */
 
    caps->timer_resolution = 1000;
 
@@ -319,7 +318,6 @@ nvc0_init_screen_caps(struct nvc0_screen *screen)
    caps->legacy_math_rules = true;
    caps->doubles = true;
    caps->int64 = true;
-   caps->tgsi_tex_txf_lz = true;
    caps->shader_clock = true;
    caps->compute = true;
    caps->can_bind_const_buffer_as_vertex = true;
@@ -391,6 +389,9 @@ nvc0_init_screen_caps(struct nvc0_screen *screen)
    caps->min_conservative_raster_dilate = 0.0f;
    caps->max_conservative_raster_dilate = class_3d >= GM200_3D_CLASS ? 0.75f : 0.0f;
    caps->conservative_raster_dilate_granularity = class_3d >= GM200_3D_CLASS ? 0.25f : 0.0f;
+
+   /* Up to 16 bytes are accelerated */
+   caps->hw_clear_buffer_sizes = 1 | 2 | 4 | 8 | 16;
 }
 
 static void

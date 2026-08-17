@@ -196,6 +196,16 @@ vk_format_is_srgb(VkFormat format)
    return util_format_is_srgb(vk_format_to_pipe_format(format));
 }
 
+static inline VkFormat
+vk_format_srgb_to_linear(VkFormat format)
+{
+   if (!vk_format_is_srgb(format))
+      return format;
+
+   return vk_format_from_pipe_format(
+      util_format_linear(vk_format_to_pipe_format(format)));
+}
+
 static inline bool vk_format_is_alpha(VkFormat format)
 {
    return util_format_is_alpha(vk_format_to_pipe_format(format));
@@ -296,6 +306,9 @@ vk_format_get_bpc(VkFormat format)
 
 VkFormat
 vk_format_get_plane_format(VkFormat format, unsigned plane_id);
+
+VkFormat
+vk_format_get_plane_aspect_format(VkFormat format, const VkImageAspectFlags aspect);
 
 VkFormat
 vk_format_get_aspect_format(VkFormat format, const VkImageAspectFlags aspect);

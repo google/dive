@@ -48,13 +48,13 @@ vc4_resource_bo_alloc(struct vc4_resource *rsc)
         struct vc4_bo *bo;
 
         if (VC4_DBG(SURFACE)) {
-                fprintf(stderr, "alloc %p: size %d + offset %d -> %d\n",
-                        rsc,
-                        rsc->slices[0].size,
-                        rsc->slices[0].offset,
-                        rsc->slices[0].offset +
-                        rsc->slices[0].size +
-                        rsc->cube_map_stride * (prsc->array_size - 1));
+                mesa_logd("alloc %p: size %d + offset %d -> %d",
+                          rsc,
+                          rsc->slices[0].size,
+                          rsc->slices[0].offset,
+                          rsc->slices[0].offset +
+                          rsc->slices[0].size +
+                          rsc->cube_map_stride * (prsc->array_size - 1));
         }
 
         bo = vc4_bo_alloc(vc4_screen(pscreen),
@@ -108,6 +108,13 @@ vc4_map_usage_prep(struct pipe_context *pctx,
         MESA_TRACE_FUNC();
 
         if (usage & PIPE_MAP_DISCARD_WHOLE_RESOURCE) {
+                /* Flush any pending write jobs before replacing the BO.
+                 * The RCL reads rsc->bo at job submit time, so if we
+                 * replace the BO first, a later flush of the pending
+                 * job would resolve the new BO instead of the old one,
+                 * corrupting the new data with a stale store.
+                 */
+                vc4_flush_jobs_writing_resource(vc4, prsc);
                 if (vc4_resource_bo_alloc(rsc)) {
                         /* If it might be bound as one of our vertex buffers,
                          * make sure we re-emit vertex buffer state.
@@ -188,7 +195,7 @@ vc4_resource_transfer_map(struct pipe_context *pctx,
         else
                 buf = vc4_bo_map(rsc->bo);
         if (!buf) {
-                fprintf(stderr, "Failed to map bo\n");
+                mesa_loge("Failed to map bo");
                 goto fail;
         }
 
@@ -328,7 +335,7 @@ vc4_resource_get_handle(struct pipe_screen *pscreen,
                         /* This could probably be supported, assuming that a
                          * control node was used for pl111.
                          */
-                        fprintf(stderr, "flink unsupported with pl111\n");
+                        mesa_loge("flink unsupported with pl111");
                         return false;
                 }
 
@@ -378,8 +385,8 @@ vc4_resource_get_param(struct pipe_screen *pscreen,
 }
 
 static void
-vc4_setup_slices(struct vc4_resource *rsc, const char *caller,
-                 bool force_format_t)
+vc4_setup_slices(struct vc4_screen *screen, struct vc4_resource *rsc,
+                 const char *caller, bool force_format_t)
 {
         struct pipe_resource *prsc = &rsc->base;
         uint32_t width = prsc->width0;
@@ -435,6 +442,19 @@ vc4_setup_slices(struct vc4_resource *rsc, const char *caller,
                 slice->offset = offset;
                 slice->stride = (level_width * rsc->cpp *
                                  MAX2(prsc->nr_samples, 1));
+
+#ifdef USE_VC4_SIMULATOR
+                /* Ensure stride alignment matches the one required by the GPU
+                 * that drives the display.
+                 */
+                if (slice->tiling == VC4_TILING_FORMAT_LINEAR &&
+                    prsc->target == PIPE_TEXTURE_2D) {
+                       slice->stride =
+                              align(slice->stride,
+                                    vc4_simulator_get_raster_stride_align(screen->fd));
+                }
+#endif
+
                 slice->size = level_height * slice->stride;
 
                 offset += slice->size;
@@ -445,16 +465,15 @@ vc4_setup_slices(struct vc4_resource *rsc, const char *caller,
                                 [VC4_TILING_FORMAT_LT] = 'L',
                                 [VC4_TILING_FORMAT_T] = 'T'
                         };
-                        fprintf(stderr,
-                                "rsc %s %p (format %s: vc4 %d), %dx%d: "
-                                "level %d (%c) -> %dx%d, stride %d@0x%08x\n",
-                                caller, rsc,
-                                util_format_short_name(prsc->format),
-                                rsc->vc4_format,
-                                prsc->width0, prsc->height0,
-                                i, tiling_chars[slice->tiling],
-                                level_width, level_height,
-                                slice->stride, slice->offset);
+                        mesa_logd("rsc %s %p (format %s: vc4 %d), %dx%d: "
+                                  "level %d (%c) -> %dx%d, stride %d@0x%08x",
+                                  caller, rsc,
+                                  util_format_short_name(prsc->format),
+                                  rsc->vc4_format,
+                                  prsc->width0, prsc->height0,
+                                  i, tiling_chars[slice->tiling],
+                                  level_width, level_height,
+                                  slice->stride, slice->offset);
                 }
         }
 
@@ -576,14 +595,14 @@ vc4_resource_create_with_modifiers(struct pipe_screen *pscreen,
         } else if (drm_find_modifier(DRM_FORMAT_MOD_LINEAR, modifiers, count)) {
                 rsc->tiled = false;
         } else {
-                fprintf(stderr, "Unsupported modifier requested\n");
+                mesa_loge("Unsupported modifier requested");
                 return NULL;
         }
 
         if (tmpl->target != PIPE_BUFFER)
                 rsc->vc4_format = get_resource_texture_format(prsc);
 
-        vc4_setup_slices(rsc, "create", tmpl->bind & PIPE_BIND_SHARED);
+        vc4_setup_slices(screen, rsc, "create", tmpl->bind & PIPE_BIND_SHARED);
         if (!vc4_resource_bo_alloc(rsc))
                 goto fail;
 
@@ -659,9 +678,8 @@ vc4_resource_from_handle(struct pipe_screen *pscreen,
                 rsc->bo = vc4_bo_open_dmabuf(screen, whandle->handle);
                 break;
         default:
-                fprintf(stderr,
-                        "Attempt to import unsupported handle type %d\n",
-                        whandle->type);
+                mesa_logw("Attempt to import unsupported handle type %d",
+                          whandle->type);
         }
 
         if (!rsc->bo)
@@ -677,9 +695,8 @@ vc4_resource_from_handle(struct pipe_screen *pscreen,
         } else if (whandle->modifier == DRM_FORMAT_MOD_INVALID) {
                 whandle->modifier = get_tiling.modifier;
         } else if (whandle->modifier != get_tiling.modifier) {
-                fprintf(stderr,
-                        "Modifier 0x%llx vs. tiling (0x%llx) mismatch\n",
-                        (long long)whandle->modifier, get_tiling.modifier);
+                mesa_loge("Modifier 0x%llx vs. tiling (0x%llx) mismatch",
+                          (long long)whandle->modifier, (long long)get_tiling.modifier);
                 goto fail;
         }
 
@@ -691,21 +708,19 @@ vc4_resource_from_handle(struct pipe_screen *pscreen,
                 rsc->tiled = true;
                 break;
         default:
-                fprintf(stderr,
-                        "Attempt to import unsupported modifier 0x%llx\n",
-                        (long long)whandle->modifier);
+                mesa_logw("Attempt to import unsupported modifier 0x%llx",
+                          (long long)whandle->modifier);
                 goto fail;
         }
 
         rsc->vc4_format = get_resource_texture_format(prsc);
-        vc4_setup_slices(rsc, "import", true);
+        vc4_setup_slices(screen, rsc, "import", true);
 
         if (whandle->offset != 0) {
                 if (rsc->tiled) {
-                        fprintf(stderr,
-                                "Attempt to import unsupported "
-                                "winsys offset %u\n",
-                                whandle->offset);
+                        mesa_loge("Attempt to import unsupported "
+                                  "winsys offset %u",
+                                  whandle->offset);
                         goto fail;
                 }
 
@@ -713,11 +728,11 @@ vc4_resource_from_handle(struct pipe_screen *pscreen,
 
                 if (rsc->slices[0].offset + rsc->slices[0].size >
                     rsc->bo->size) {
-                        fprintf(stderr, "Attempt to import "
-                                "with overflowing offset (%d + %d > %d)\n",
-                                whandle->offset,
-                                rsc->slices[0].size,
-                                rsc->bo->size);
+                        mesa_loge("Attempt to import "
+                                  "with overflowing offset (%d + %d > %d)",
+                                  whandle->offset,
+                                  rsc->slices[0].size,
+                                  rsc->bo->size);
                         goto fail;
                 }
         }
@@ -734,17 +749,12 @@ vc4_resource_from_handle(struct pipe_screen *pscreen,
         }
 
         if (rsc->tiled && whandle->stride != slice->stride) {
-                static bool warned = false;
-                if (!warned) {
-                        warned = true;
-                        fprintf(stderr,
-                                "Attempting to import %dx%d %s with "
-                                "unsupported stride %d instead of %d\n",
-                                prsc->width0, prsc->height0,
-                                util_format_short_name(prsc->format),
-                                whandle->stride,
-                                slice->stride);
-                }
+                mesa_loge_once("Attempting to import %dx%d %s with "
+                               "unsupported stride %d instead of %d",
+                               prsc->width0, prsc->height0,
+                               util_format_short_name(prsc->format),
+                               whandle->stride,
+                               slice->stride);
                 goto fail;
         } else if (!rsc->tiled) {
                 slice->stride = whandle->stride;
@@ -758,13 +768,13 @@ fail:
 }
 
 static void
-vc4_dump_surface_non_msaa(struct pipe_surface *psurf)
+vc4_dump_surface_non_msaa(struct log_stream *stream, struct pipe_surface *psurf)
 {
         struct pipe_resource *prsc = psurf->texture;
         struct vc4_resource *rsc = vc4_resource(prsc);
         uint32_t *map = vc4_bo_map(rsc->bo);
         uint32_t stride = rsc->slices[0].stride / 4;
-        uint16_t width, height;
+        unsigned width, height;
         pipe_surface_size(psurf, &width, &height);
         uint32_t chunk_w = width / 79;
         uint32_t chunk_h = height / 40;
@@ -772,8 +782,8 @@ vc4_dump_surface_non_msaa(struct pipe_surface *psurf)
         uint32_t num_found_colors = 0;
 
         if (rsc->vc4_format != VC4_TEXTURE_TYPE_RGBA32R) {
-                fprintf(stderr, "%s: Unsupported format %s\n",
-                        __func__, util_format_short_name(psurf->format));
+                mesa_loge("%s: Unsupported format %s",
+                          __func__, util_format_short_name(psurf->format));
                 return;
         }
 
@@ -826,8 +836,8 @@ vc4_dump_surface_non_msaa(struct pipe_surface *psurf)
                                 for (i = 0; i < ARRAY_SIZE(named_colors); i++) {
                                         if (named_colors[i].val ==
                                             found_colors[all_found_color]) {
-                                                fprintf(stderr, "%s",
-                                                        named_colors[i].c);
+                                                mesa_log_stream_printf(stream, "%s",
+                                                                       named_colors[i].c);
                                                 break;
                                         }
                                 }
@@ -836,20 +846,20 @@ vc4_dump_surface_non_msaa(struct pipe_surface *psurf)
                                  * end.
                                  */
                                 if (i == ARRAY_SIZE(named_colors)) {
-                                        fprintf(stderr, "%c",
-                                                '0' + all_found_color);
+                                        mesa_log_stream_printf(stream, "%c",
+                                                               '0' + all_found_color);
                                 }
                         } else {
                                 /* If there's no consistent color, print this.
                                  */
-                                fprintf(stderr, ".");
+                                mesa_log_stream_printf(stream, ".");
                         }
                 }
-                fprintf(stderr, "\n");
+                mesa_log_stream_printf(stream, "\n");
         }
 
         for (int i = 0; i < num_found_colors; i++) {
-                fprintf(stderr, "color %d: 0x%08x\n", i, found_colors[i]);
+                mesa_log_stream_printf(stream, "color %d: 0x%08x\n", i, found_colors[i]);
         }
 }
 
@@ -859,7 +869,7 @@ vc4_surface_msaa_get_sample(struct pipe_surface *psurf,
 {
         struct pipe_resource *prsc = psurf->texture;
         struct vc4_resource *rsc = vc4_resource(prsc);
-        uint16_t width, height;
+        unsigned width, height;
         pipe_surface_size(psurf, &width, &height);
         uint32_t tile_w = 32, tile_h = 32;
         uint32_t tiles_w = DIV_ROUND_UP(width, 32);
@@ -883,7 +893,8 @@ vc4_surface_msaa_get_sample(struct pipe_surface *psurf,
 }
 
 static void
-vc4_dump_surface_msaa_char(struct pipe_surface *psurf,
+vc4_dump_surface_msaa_char(struct log_stream *stream,
+                           struct pipe_surface *psurf,
                            uint32_t start_x, uint32_t start_y,
                            uint32_t w, uint32_t h)
 {
@@ -918,22 +929,22 @@ vc4_dump_surface_msaa_char(struct pipe_surface *psurf,
                 int i;
                 for (i = 0; i < ARRAY_SIZE(named_colors); i++) {
                         if (named_colors[i].val == all_pix) {
-                                fprintf(stderr, "%s",
-                                        named_colors[i].c);
+                                mesa_log_stream_printf(stream, "%s",
+                                                       named_colors[i].c);
                                 return;
                         }
                 }
-                fprintf(stderr, "x");
+                mesa_log_stream_printf(stream, "x");
         } else {
-                fprintf(stderr, ".");
+                mesa_log_stream_printf(stream, ".");
         }
 }
 
 static void
-vc4_dump_surface_msaa(struct pipe_surface *psurf)
+vc4_dump_surface_msaa(struct log_stream *stream, struct pipe_surface *psurf)
 {
         uint32_t tile_w = 32, tile_h = 32;
-        uint16_t width, height;
+        unsigned width, height;
         pipe_surface_size(psurf, &width, &height);
         uint32_t tiles_w = DIV_ROUND_UP(width, tile_w);
         uint32_t tiles_h = DIV_ROUND_UP(height, tile_h);
@@ -941,12 +952,12 @@ vc4_dump_surface_msaa(struct pipe_surface *psurf)
         uint32_t char_w_per_tile = char_w / tiles_w - 1;
         uint32_t char_h_per_tile = char_h / tiles_h - 1;
 
-        fprintf(stderr, "Surface: %dx%d (%dx MSAA)\n",
-                width, height, psurf->texture->nr_samples);
+        mesa_log_stream_printf(stream, "Surface: %dx%d (%dx MSAA)\n",
+                               width, height, psurf->texture->nr_samples);
 
         for (int x = 0; x < (char_w_per_tile + 1) * tiles_w; x++)
-                fprintf(stderr, "-");
-        fprintf(stderr, "\n");
+                mesa_log_stream_printf(stream, "-");
+        mesa_log_stream_printf(stream, "\n");
 
         for (int ty = 0; ty < height; ty += tile_h) {
                 for (int y = 0; y < char_h_per_tile; y++) {
@@ -962,20 +973,21 @@ vc4_dump_surface_msaa(struct pipe_surface *psurf)
                                         uint32_t by2 = ((y + 1) * tile_h /
                                                         char_h_per_tile);
 
-                                        vc4_dump_surface_msaa_char(psurf,
+                                        vc4_dump_surface_msaa_char(stream,
+                                                                   psurf,
                                                                    tx + bx1,
                                                                    ty + by1,
                                                                    bx2 - bx1,
                                                                    by2 - by1);
                                 }
-                                fprintf(stderr, "|");
+                                mesa_log_stream_printf(stream, "|");
                         }
-                        fprintf(stderr, "\n");
+                        mesa_log_stream_printf(stream, "\n");
                 }
 
                 for (int x = 0; x < (char_w_per_tile + 1) * tiles_w; x++)
-                        fprintf(stderr, "-");
-                fprintf(stderr, "\n");
+                        mesa_log_stream_printf(stream, "-");
+                mesa_log_stream_printf(stream, "\n");
         }
 }
 
@@ -986,10 +998,14 @@ vc4_dump_surface(struct pipe_surface *psurf)
         if (!psurf)
                 return;
 
+        struct log_stream *stream = mesa_log_streami();
+
         if (psurf->texture->nr_samples > 1)
-                vc4_dump_surface_msaa(psurf);
+                vc4_dump_surface_msaa(stream, psurf);
         else
-                vc4_dump_surface_non_msaa(psurf);
+                vc4_dump_surface_non_msaa(stream, psurf);
+
+        mesa_log_stream_destroy(stream);
 }
 
 static void
@@ -1044,8 +1060,7 @@ vc4_flush_resource(struct pipe_context *pctx, struct pipe_resource *prsc)
                 rsc->cube_map_stride = new_rsc->cube_map_stride;
                 rsc->tiled = new_rsc->tiled;
 
-                struct pipe_resource *new_prsc = (struct pipe_resource *)&new_rsc;
-                pipe_resource_reference(&new_prsc, NULL);
+                pipe_resource_reference((struct pipe_resource **)&new_rsc, NULL);
         }
 }
 
@@ -1128,12 +1143,6 @@ vc4_get_shadow_index_buffer(struct pipe_context *pctx,
         struct vc4_resource *orig = vc4_resource(info->index.resource);
         perf_debug("Fallback conversion for %d uint indices\n", count);
 
-        void *data;
-        struct pipe_resource *shadow_rsc = NULL;
-        u_upload_alloc_ref(vc4->uploader, 0, count * 2, 4,
-                       shadow_offset, &shadow_rsc, &data);
-        uint16_t *dst = data;
-
         struct pipe_transfer *src_transfer = NULL;
         const uint32_t *src;
         if (info->has_user_indices) {
@@ -1144,6 +1153,20 @@ vc4_get_shadow_index_buffer(struct pipe_context *pctx,
                                             count * 4,
                                             PIPE_MAP_READ, &src_transfer);
         }
+
+        /* We need to do the upload alloc ref after the
+         * pipe_buffer_map_range() because there is a risk that the alloc
+         * frees and destroy its internal buffer, which might be the original
+         * base buffer we want to copy. Calling it afterwards, we guarantee
+         * that pipe_buffer_map_range() increases the reference counter so if
+         * upload alloc ref needs to unreference it, the buffer doesn't reach
+         * 0 refcounts and thus it won't be destroyed.
+         */
+        void *data;
+        struct pipe_resource *shadow_rsc = NULL;
+        u_upload_alloc_ref(vc4->uploader, 0, count * 2, 4,
+                       shadow_offset, &shadow_rsc, &data);
+        uint16_t *dst = data;
 
         for (int i = 0; i < count; i++) {
                 uint32_t src_index = src[i];

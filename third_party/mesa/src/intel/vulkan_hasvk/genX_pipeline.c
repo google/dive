@@ -333,7 +333,7 @@ emit_urb_setup(struct anv_graphics_pipeline *pipeline)
 static void
 emit_3dstate_sbe(struct anv_graphics_pipeline *pipeline)
 {
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
 
    if (!anv_pipeline_has_stage(pipeline, MESA_SHADER_FRAGMENT)) {
       anv_batch_emit(&pipeline->base.batch, GENX(3DSTATE_SBE), sbe);
@@ -347,8 +347,8 @@ emit_3dstate_sbe(struct anv_graphics_pipeline *pipeline)
       GENX(3DSTATE_SBE_header),
       .AttributeSwizzleEnable = anv_pipeline_is_primitive(pipeline),
       .PointSpriteTextureCoordinateOrigin = UPPERLEFT,
-      .NumberofSFOutputAttributes = wm_prog_data->num_varying_inputs,
-      .ConstantInterpolationEnable = wm_prog_data->flat_inputs,
+      .NumberofSFOutputAttributes = fs_prog_data->num_varying_inputs,
+      .ConstantInterpolationEnable = fs_prog_data->flat_inputs,
    };
 
 #if GFX_VER >= 8
@@ -363,14 +363,14 @@ emit_3dstate_sbe(struct anv_graphics_pipeline *pipeline)
    const struct intel_vue_map *fs_input_map =
       &anv_pipeline_get_last_vue_prog_data(pipeline)->vue_map;
 
-   int first_slot = elk_compute_first_urb_slot_required(wm_prog_data->inputs,
+   int first_slot = elk_compute_first_urb_slot_required(fs_prog_data->inputs,
                                                         fs_input_map);
    assert(first_slot % 2 == 0);
    unsigned urb_entry_read_offset = first_slot / 2;
    int max_source_attr = 0;
-   for (uint8_t idx = 0; idx < wm_prog_data->urb_setup_attribs_count; idx++) {
-      uint8_t attr = wm_prog_data->urb_setup_attribs[idx];
-      int input_index = wm_prog_data->urb_setup[attr];
+   for (uint8_t idx = 0; idx < fs_prog_data->urb_setup_attribs_count; idx++) {
+      uint8_t attr = fs_prog_data->urb_setup_attribs[idx];
+      int input_index = fs_prog_data->urb_setup[attr];
 
       assert(0 <= input_index);
 
@@ -849,7 +849,7 @@ emit_cb_state(struct anv_graphics_pipeline *pipeline,
               const struct vk_render_pass_state *rp)
 {
    struct anv_device *device = pipeline->base.device;
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
 
    struct GENX(BLEND_STATE) blend_state = {
 #if GFX_VER >= 8
@@ -951,7 +951,7 @@ emit_cb_state(struct anv_graphics_pipeline *pipeline,
        * There is no way to gracefully fix this undefined situation
        * so we just disable the blending to prevent possible issues.
        */
-      if (!wm_prog_data->dual_src_blend &&
+      if (!fs_prog_data->dual_src_blend &&
           (is_dual_src_blend_factor(a->src_color_blend_factor) ||
            is_dual_src_blend_factor(a->dst_color_blend_factor) ||
            is_dual_src_blend_factor(a->src_alpha_blend_factor) ||
@@ -1011,8 +1011,8 @@ emit_3dstate_clip(struct anv_graphics_pipeline *pipeline,
                   const struct vk_viewport_state *vp,
                   const struct vk_rasterization_state *rs)
 {
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
-   (void) wm_prog_data;
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
+   (void) fs_prog_data;
 
    struct GENX(3DSTATE_CLIP) clip = {
       GENX(3DSTATE_CLIP_header),
@@ -1082,8 +1082,8 @@ emit_3dstate_clip(struct anv_graphics_pipeline *pipeline,
    clip.ViewportZClipTestEnable = pipeline->depth_clip_enable;
 #endif
 
-   clip.NonPerspectiveBarycentricEnable = wm_prog_data ?
-      wm_prog_data->uses_nonperspective_interp_modes : 0;
+   clip.NonPerspectiveBarycentricEnable = fs_prog_data ?
+      fs_prog_data->uses_nonperspective_interp_modes : 0;
 
    GENX(3DSTATE_CLIP_pack)(NULL, pipeline->gfx7.clip, &clip);
 }
@@ -1558,7 +1558,7 @@ emit_3dstate_wm(struct anv_graphics_pipeline *pipeline,
                 const struct vk_color_blend_state *cb,
                 const struct vk_graphics_pipeline_state *state)
 {
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
 
    struct GENX(3DSTATE_WM) wm = {
       GENX(3DSTATE_WM_header),
@@ -1569,9 +1569,9 @@ emit_3dstate_wm(struct anv_graphics_pipeline *pipeline,
    wm.PointRasterizationRule              = RASTRULE_UPPER_LEFT;
 
    if (anv_pipeline_has_stage(pipeline, MESA_SHADER_FRAGMENT)) {
-      if (wm_prog_data->early_fragment_tests) {
+      if (fs_prog_data->early_fragment_tests) {
             wm.EarlyDepthStencilControl         = EDSC_PREPS;
-      } else if (wm_prog_data->has_side_effects) {
+      } else if (fs_prog_data->has_side_effects) {
          wm.EarlyDepthStencilControl         = EDSC_PSEXEC;
       } else {
          wm.EarlyDepthStencilControl         = EDSC_NORMAL;
@@ -1595,18 +1595,18 @@ emit_3dstate_wm(struct anv_graphics_pipeline *pipeline,
        * Given two bad options, we choose the one which works.
        */
       pipeline->force_fragment_thread_dispatch =
-         wm_prog_data->has_side_effects ||
-         wm_prog_data->uses_kill;
+         fs_prog_data->has_side_effects ||
+         fs_prog_data->uses_kill;
 #endif
 
       wm.BarycentricInterpolationMode =
-         elk_wm_prog_data_barycentric_modes(wm_prog_data, 0);
+         elk_fs_prog_data_barycentric_modes(fs_prog_data, 0);
 
 #if GFX_VER < 8
-      wm.PixelShaderComputedDepthMode  = wm_prog_data->computed_depth_mode;
-      wm.PixelShaderUsesSourceDepth    = wm_prog_data->uses_src_depth;
-      wm.PixelShaderUsesSourceW        = wm_prog_data->uses_src_w;
-      wm.PixelShaderUsesInputCoverageMask = wm_prog_data->uses_sample_mask;
+      wm.PixelShaderComputedDepthMode  = fs_prog_data->computed_depth_mode;
+      wm.PixelShaderUsesSourceDepth    = fs_prog_data->uses_src_depth;
+      wm.PixelShaderUsesSourceW        = fs_prog_data->uses_src_w;
+      wm.PixelShaderUsesInputCoverageMask = fs_prog_data->uses_sample_mask;
 
       /* If the subpass has a depth or stencil self-dependency, then we
        * need to force the hardware to do the depth/stencil write *after*
@@ -1616,16 +1616,16 @@ emit_3dstate_wm(struct anv_graphics_pipeline *pipeline,
        * than the previous one.
        */
       wm.PixelShaderKillsPixel         = state_has_ds_self_dep(state) ||
-                                         wm_prog_data->uses_kill ||
-                                         wm_prog_data->uses_omask;
+                                         fs_prog_data->uses_kill ||
+                                         fs_prog_data->uses_omask;
 
       pipeline->force_fragment_thread_dispatch =
          wm.PixelShaderComputedDepthMode != PSCDEPTH_OFF ||
-         wm_prog_data->has_side_effects ||
+         fs_prog_data->has_side_effects ||
          wm.PixelShaderKillsPixel;
 
       if (ms != NULL && ms->rasterization_samples > 1) {
-         if (elk_wm_prog_data_is_persample(wm_prog_data, 0)) {
+         if (elk_fs_prog_data_is_persample(fs_prog_data, 0)) {
             wm.MultisampleDispatchMode = MSDISPMODE_PERSAMPLE;
          } else {
             wm.MultisampleDispatchMode = MSDISPMODE_PERPIXEL;
@@ -1665,14 +1665,14 @@ emit_3dstate_ps(struct anv_graphics_pipeline *pipeline,
       return;
    }
 
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
 
 #if GFX_VER < 8
    /* The hardware wedges if you have this bit set but don't turn on any dual
     * source blend factors.
     */
    bool dual_src_blend = false;
-   if (wm_prog_data->dual_src_blend && cb) {
+   if (fs_prog_data->dual_src_blend && cb) {
       for (uint32_t i = 0; i < cb->attachment_count; i++) {
          const struct vk_color_blend_attachment_state *a =
             &cb->attachments[i];
@@ -1690,29 +1690,29 @@ emit_3dstate_ps(struct anv_graphics_pipeline *pipeline,
 #endif
 
    anv_batch_emit(&pipeline->base.batch, GENX(3DSTATE_PS), ps) {
-      intel_set_ps_dispatch_state(&ps, devinfo, wm_prog_data,
+      intel_set_ps_dispatch_state(&ps, devinfo, fs_prog_data,
                                   ms != NULL ? ms->rasterization_samples : 1,
-                                  0 /* msaa_flags */);
+                                  0 /* fs_config */);
 
       ps.KernelStartPointer0 = fs_bin->kernel.offset +
-                               elk_wm_prog_data_prog_offset(wm_prog_data, ps, 0);
+                               elk_fs_prog_data_prog_offset(fs_prog_data, ps, 0);
       ps.KernelStartPointer1 = fs_bin->kernel.offset +
-                               elk_wm_prog_data_prog_offset(wm_prog_data, ps, 1);
+                               elk_fs_prog_data_prog_offset(fs_prog_data, ps, 1);
       ps.KernelStartPointer2 = fs_bin->kernel.offset +
-                               elk_wm_prog_data_prog_offset(wm_prog_data, ps, 2);
+                               elk_fs_prog_data_prog_offset(fs_prog_data, ps, 2);
 
       ps.SingleProgramFlow          = false;
       ps.VectorMaskEnable           = GFX_VER >= 8 &&
-                                      wm_prog_data->uses_vmask;
+                                      fs_prog_data->uses_vmask;
       ps.SamplerCount               = get_sampler_count(fs_bin);
       ps.BindingTableEntryCount     = fs_bin->bind_map.surface_count;
-      ps.PushConstantEnable         = wm_prog_data->base.nr_params > 0 ||
-                                      wm_prog_data->base.ubo_ranges[0].length;
-      ps.PositionXYOffsetSelect     = wm_prog_data->uses_pos_offset ?
+      ps.PushConstantEnable         = fs_prog_data->base.nr_params > 0 ||
+                                      fs_prog_data->base.ubo_ranges[0].length;
+      ps.PositionXYOffsetSelect     = fs_prog_data->uses_pos_offset ?
                                       POSOFFSET_SAMPLE: POSOFFSET_NONE;
 #if GFX_VER < 8
-      ps.AttributeEnable            = wm_prog_data->num_varying_inputs > 0;
-      ps.oMaskPresenttoRenderTarget = wm_prog_data->uses_omask;
+      ps.AttributeEnable            = fs_prog_data->num_varying_inputs > 0;
+      ps.oMaskPresenttoRenderTarget = fs_prog_data->uses_omask;
       ps.DualSourceBlendEnable      = dual_src_blend;
 #endif
 
@@ -1731,11 +1731,11 @@ emit_3dstate_ps(struct anv_graphics_pipeline *pipeline,
 #endif
 
       ps.DispatchGRFStartRegisterForConstantSetupData0 =
-         elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 0);
+         elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 0);
       ps.DispatchGRFStartRegisterForConstantSetupData1 =
-         elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 1);
+         elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 1);
       ps.DispatchGRFStartRegisterForConstantSetupData2 =
-         elk_wm_prog_data_dispatch_grf_start_reg(wm_prog_data, ps, 2);
+         elk_fs_prog_data_dispatch_grf_start_reg(fs_prog_data, ps, 2);
 
       ps.PerThreadScratchSpace   = get_scratch_space(fs_bin);
       ps.ScratchSpaceBasePointer =
@@ -1749,7 +1749,7 @@ emit_3dstate_ps_extra(struct anv_graphics_pipeline *pipeline,
                       const struct vk_rasterization_state *rs,
                       const struct vk_graphics_pipeline_state *state)
 {
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
 
    if (!anv_pipeline_has_stage(pipeline, MESA_SHADER_FRAGMENT)) {
       anv_batch_emit(&pipeline->base.batch, GENX(3DSTATE_PS_EXTRA), ps);
@@ -1758,13 +1758,13 @@ emit_3dstate_ps_extra(struct anv_graphics_pipeline *pipeline,
 
    anv_batch_emit(&pipeline->base.batch, GENX(3DSTATE_PS_EXTRA), ps) {
       ps.PixelShaderValid              = true;
-      ps.AttributeEnable               = wm_prog_data->num_varying_inputs > 0;
-      ps.oMaskPresenttoRenderTarget    = wm_prog_data->uses_omask;
+      ps.AttributeEnable               = fs_prog_data->num_varying_inputs > 0;
+      ps.oMaskPresenttoRenderTarget    = fs_prog_data->uses_omask;
       ps.PixelShaderIsPerSample        =
-         elk_wm_prog_data_is_persample(wm_prog_data, 0);
-      ps.PixelShaderComputedDepthMode  = wm_prog_data->computed_depth_mode;
-      ps.PixelShaderUsesSourceDepth    = wm_prog_data->uses_src_depth;
-      ps.PixelShaderUsesSourceW        = wm_prog_data->uses_src_w;
+         elk_fs_prog_data_is_persample(fs_prog_data, 0);
+      ps.PixelShaderComputedDepthMode  = fs_prog_data->computed_depth_mode;
+      ps.PixelShaderUsesSourceDepth    = fs_prog_data->uses_src_depth;
+      ps.PixelShaderUsesSourceW        = fs_prog_data->uses_src_w;
 
       /* If the subpass has a depth or stencil self-dependency, then we need
        * to force the hardware to do the depth/stencil write *after* fragment
@@ -1773,9 +1773,9 @@ emit_3dstate_ps_extra(struct anv_graphics_pipeline *pipeline,
        * or stencil value from the current draw rather than the previous one.
        */
       ps.PixelShaderKillsPixel         = state_has_ds_self_dep(state) ||
-                                         wm_prog_data->uses_kill;
+                                         fs_prog_data->uses_kill;
 
-      ps.PixelShaderUsesInputCoverageMask = wm_prog_data->uses_sample_mask;
+      ps.PixelShaderUsesInputCoverageMask = fs_prog_data->uses_sample_mask;
    }
 }
 #endif
@@ -1798,7 +1798,7 @@ compute_kill_pixel(struct anv_graphics_pipeline *pipeline,
       return;
    }
 
-   const struct elk_wm_prog_data *wm_prog_data = get_wm_prog_data(pipeline);
+   const struct elk_fs_prog_data *fs_prog_data = get_fs_prog_data(pipeline);
 
    /* This computes the KillPixel portion of the computation for whether or
     * not we want to enable the PMA fix on gfx8 or gfx9.  It's given by this
@@ -1816,8 +1816,8 @@ compute_kill_pixel(struct anv_graphics_pipeline *pipeline,
     */
    pipeline->kill_pixel =
       state_has_ds_self_dep(state) ||
-      wm_prog_data->uses_kill ||
-      wm_prog_data->uses_omask ||
+      fs_prog_data->uses_kill ||
+      fs_prog_data->uses_omask ||
       (ms && ms->alpha_to_coverage_enable);
 }
 
@@ -1885,7 +1885,7 @@ genX(compute_pipeline_emit)(struct anv_compute_pipeline *pipeline)
    const struct intel_cs_dispatch_info dispatch =
       elk_cs_get_dispatch_info(devinfo, cs_prog_data, NULL);
    const uint32_t vfe_curbe_allocation =
-      ALIGN(cs_prog_data->push.per_thread.regs * dispatch.threads +
+      align(cs_prog_data->push.per_thread.regs * dispatch.threads +
             cs_prog_data->push.cross_thread.regs, 2);
 
    const struct anv_shader_bin *cs_bin = pipeline->cs;

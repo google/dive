@@ -48,6 +48,9 @@ struct vn_device_memory {
    uint64_t bo_roundtrip_seqno;
 
    VkDeviceSize map_end;
+
+   /* only valid when wsi platform is used */
+   struct vn_image *dedicated_img;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(vn_device_memory,
                                base.vk.base,

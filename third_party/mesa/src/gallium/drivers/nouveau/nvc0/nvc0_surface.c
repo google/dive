@@ -693,6 +693,7 @@ nvc0_clear_depth_stencil(struct pipe_context *pipe,
 
 void
 nvc0_clear(struct pipe_context *pipe, unsigned buffers,
+           uint32_t color_clear_mask, uint8_t stencil_clear_mask,
            const struct pipe_scissor_state *scissor_state,
            const union pipe_color_union *color,
            double depth, unsigned stencil)
@@ -962,26 +963,26 @@ nvc0_blit_set_dst(struct nvc0_blitctx *ctx,
 {
    struct nvc0_context *nvc0 = ctx->nvc0;
    struct pipe_context *pipe = &nvc0->base.pipe;
-   struct pipe_surface templ;
 
-   /* We are going to reset this, so no point in refcounting */
-   templ.texture = res;
    if (util_format_is_depth_or_stencil(format))
-      templ.format = nv50_blit_zeta_to_colour_format(format);
-   else
-      templ.format = format;
+      format = nv50_blit_zeta_to_colour_format(format);
 
-   templ.level = level;
-   templ.first_layer = templ.last_layer = layer;
+   /* this will be overwritten (not released) at the end of the blit */
+   nvc0->framebuffer.cbufs[0] = (struct pipe_surface) {
+      .texture = res,
+      .format = format,
+      .level = level,
+      .first_layer = layer,
+      .last_layer = layer,
+   };
 
    if (layer == -1) {
-      templ.first_layer = 0;
-      templ.last_layer =
+      nvc0->framebuffer.cbufs[0].first_layer = 0;
+      nvc0->framebuffer.cbufs[0].last_layer =
          (res->target == PIPE_TEXTURE_3D ? res->depth0 : res->array_size) - 1;
    }
 
-   nvc0->framebuffer.cbufs[0] = templ;
-   nvc0->fb_cbufs[0] = nvc0_miptree_surface_new(pipe, res, &templ);
+   nvc0->fb_cbufs[0] = nvc0_miptree_surface_new(pipe, res, &nvc0->framebuffer.cbufs[0]);
    nvc0->framebuffer.nr_cbufs = 1;
    memset(&nvc0->framebuffer.zsbuf, 0, sizeof(nvc0->framebuffer.zsbuf));
    pipe_surface_size(&nvc0->framebuffer.cbufs[0], &nvc0->framebuffer.width, &nvc0->framebuffer.height);

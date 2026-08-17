@@ -15,6 +15,7 @@
       <stat name="Estimated cycles stalled on SS" display="(ss)-stall">A better metric to estimate the impact of SS syncs.</stat>
       <stat name="Estimated cycles stalled on SY" display="(sy)-stall">A better metric to estimate the impact of SY syncs.</stat>
       <stat name="cat# instructions" display="cat#" count="8">Number of cat# instructions.</stat>
+      <stat name="Loops">Number of hardware loops</stat>
       <stat name="STP Count" display="STPs">Number of STore Private instructions in the final generated shader executable.</stat>
       <stat name="LDP Count" display="LDPs">Number of LoaD Private instructions in the final generated shader executable.</stat>
       <stat name="Preamble Instruction Count" display="Preamble inst">Total number of IR3 instructions in the preamble.</stat>
@@ -65,6 +66,9 @@
         <stat name="Loops">Number of hardware loops</stat>
         <stat name="Spills">Number of spill instructions</stat>
         <stat name="Fills">Number of fill instructions</stat>
+        <stat name="Spill cost">Cost of spill and fill instructions</stat>
+	<stat name="Registers used">Number of registers used</stat>
+	<stat name="Uniforms used">Uniform registers used</stat>
      </isa>
 
      <isa name="Valhall">
@@ -73,6 +77,7 @@
         <stat name="FMA" type="float">Estimated normalized FMA (Fused Multiply-Add) cycles</stat>
         <stat name="CVT" type="float">Estimated normalized CVT (ConVerT) cycles</stat>
         <stat name="SFU" type="float">Estimated normalized SFU (Special Function Unit) cycles</stat>
+        <stat name="ALU" type="float">Estimated normalized ALU (Arithmetic Logical Unit) cycles</stat>
         <stat name="Varying" display="V" type="float">Estimated normalized Varying cycles</stat>
         <stat name="Texture" display="T" type="float">Estimated normalized Texture cycles</stat>
         <stat name="Load/store" display="LS" type="float">Estimated normalized Load/Store cycles</stat>
@@ -81,6 +86,9 @@
         <stat name="Loops">Number of hardware loops</stat>
         <stat name="Spills">Number of spill instructions</stat>
         <stat name="Fills">Number of fill instructions</stat>
+        <stat name="Spill cost">Cost of spill and fill instructions</stat>
+	<stat name="Registers used">Number of registers used</stat>
+	<stat name="Uniforms used">Uniform registers used</stat>
      </isa>
    </family>
 
@@ -126,34 +134,32 @@
       <isa name="GenISA">
          <stat name="Dispatch width" hidden="true">0 for vec4</stat>
          <stat name="Max polygons" hidden="true"/>
-         <stat name="Instruction Count" display="Instrs">
+         <stat name="Instructions" display="Instrs">
             Number of GEN instructions in the final generated shader executable.
          </stat>
-         <stat name="SEND Count" display="Send messages">
+         <stat name="Code size">
+            Code size in bytes
+         </stat>
+         <stat name="SENDs" display="Sends">
             Number of instructions in the final generated shader executable
             which access external units such as the constant cache or the sampler.
          </stat>
-         <stat name="Serialized SEND Count" display="Serialized send messages">
-            Number of instructions in the final generated shader
-            executable which access external units such as the
-            constant cache or the sampler in a serialized way.
-         </stat>
-         <stat name="Loop Count" display="Loop count">
+         <stat name="Loops">
             Number of loops (not unrolled) in the final generated shader
             executable.
          </stat>
-         <stat name="Cycle Count" display="Cycle count">
+         <stat name="Cycles">
             Estimate of the number of EU cycles required to execute the final
             generated executable. This is an estimate only and may vary greatly
             from actual run-time performance.
          </stat>
-         <stat name="Spill Count" display="Spill count">
+         <stat name="Spills">
             Number of scratch spill operations. This gives a rough estimate of
             the cost incurred due to spilling temporary values to memory. If
             this is non-zero, you may want to adjust your shader to reduce
             register pressure.
          </stat>
-         <stat name="Fill Count" display="Fill count">
+         <stat name="Fills">
             Number of scratch fill operations. This gives a rough estimate of
             the cost incurred due to spilling temporary values to memory. If
             this is non-zero, you may want to adjust your shader to reduce
@@ -166,6 +172,12 @@
          </stat>
          <stat name="GRF registers">
             Number of GRF registers required by the shader.
+         </stat>
+         <stat name="Push constant ranges">
+            Number of push constants ranges provided to the shader.
+         </stat>
+         <stat name="Push constant registers">
+            Number of GRF registers in the payload registers dedicated to constants.
          </stat>
          <stat name="Max dispatch width" more="better">
             Largest SIMD dispatch width.
@@ -180,9 +192,27 @@
          <stat name="Non SSA regs after NIR">
             Non SSA regs after NIR translation to BRW.
          </stat>
-         <stat name="Source hash" hash="true">
-            Hash generated from shader source.
+         <stat name="Source hash" hash="true" type="u64">
+            Hash generated from shader source or vkd3d-proton provided.
+         </stat>
+         <stat name="Scheduler mode" type="str">
+            Scheduling mode selected for this binary.
          </stat>
        </isa>
     </family>
+
+   <family name="PVR">
+      <isa name="Rogue">
+         <stat name="Code size">Binary size in bytes</stat>
+         <stat name="Scratch size">Scratch size per instance in bytes</stat>
+         <stat name="Spill count">Number of spilled registers per instance</stat>
+         <stat name="Temp count">Number of allocated temp registers</stat>
+         <stat name="Vtxin count">Number of used vertex input registers</stat>
+         <stat name="Loop count">Number of not unrolled loops in the shader</stat>
+         <stat name="Inst group count">Total number of instruction groups</stat>
+         <stat name="Main inst group count">Number of main instruction groups</stat>
+         <stat name="Bitwise inst group count">Number of bitwise instruction groups</stat>
+         <stat name="Control inst group count">Number of control instruction groups</stat>
+      </isa>
+   </family>
 </shaderdb>

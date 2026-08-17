@@ -65,7 +65,7 @@ static void ac_roll_context(struct ac_context_roll_ctx *ctx)
 
    /* Ignore the first context at the beginning or after waiting for idle. */
    if (ctx->num_busy_contexts > 1) {
-      util_dynarray_append(&ctx->rolls, struct ac_context_reg_state *, last);
+      util_dynarray_append(&ctx->rolls, last);
    } else {
       FREE(last);
    }
@@ -253,7 +253,7 @@ static void ac_ib_gather_context_rolls(struct ac_context_roll_ctx *ctx, uint32_t
          break;
 
       case PKT3_ACQUIRE_MEM:
-         if (G_580_PWS_ENA2(ib[cur_dw])) {
+         if (G_581B_PWS_ENA2(ib[cur_dw])) {
             ac_record_wait_idle(ctx);
          } else {
             ac_roll_context(ctx);
@@ -266,7 +266,7 @@ static void ac_ib_gather_context_rolls(struct ac_context_roll_ctx *ctx, uint32_t
          break;
 
       case PKT3_EVENT_WRITE:
-         if (G_490_EVENT_TYPE(ib[cur_dw]) == V_028A90_PS_PARTIAL_FLUSH)
+         if (G_491_EVENT_TYPE(ib[cur_dw]) == V_028A90_PS_PARTIAL_FLUSH)
             ac_record_wait_idle(ctx);
          break;
 
@@ -313,7 +313,7 @@ void ac_gather_context_rolls(FILE *f, uint32_t **ibs, uint32_t *ib_dw_sizes, uns
    memset(&ctx, 0, sizeof(ctx));
    ctx.info = info;
    ctx.cur = CALLOC_STRUCT(ac_context_reg_state);
-   util_dynarray_init(&ctx.rolls, NULL);
+   ctx.rolls = UTIL_DYNARRAY_INIT;
 
    /* Parse the IBs. */
    for (unsigned i = 0; i < num_ibs; i++)

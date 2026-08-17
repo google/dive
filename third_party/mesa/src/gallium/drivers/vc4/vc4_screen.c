@@ -27,6 +27,7 @@
 #include "pipe/p_screen.h"
 #include "pipe/p_state.h"
 
+#include "util/os_misc.h"
 #include "util/u_debug.h"
 #include "util/u_memory.h"
 #include "util/format/u_format.h"
@@ -199,9 +200,7 @@ vc4_init_screen_caps(struct vc4_screen *screen)
 
         caps->vendor_id = 0x14E4;
 
-        uint64_t system_memory;
-        caps->video_memory = os_get_total_physical_memory(&system_memory) ?
-                system_memory >> 20 : 0;
+        caps->video_memory = os_get_gpu_heap_size(1.0f, NULL) >> 20;
 
         caps->uma = true;
 
@@ -422,15 +421,15 @@ vc4_get_chip_info(struct vc4_screen *screen)
                         screen->v3d_ver = 21;
                         return true;
                 } else {
-                        fprintf(stderr, "Couldn't get V3D IDENT0: %s\n",
-                                strerror(errno));
+                        mesa_loge("Couldn't get V3D IDENT0: %s",
+                                  strerror(errno));
                         return false;
                 }
         }
         ret = vc4_ioctl(screen->fd, DRM_IOCTL_VC4_GET_PARAM, &ident1);
         if (ret != 0) {
-                fprintf(stderr, "Couldn't get V3D IDENT1: %s\n",
-                        strerror(errno));
+                mesa_loge("Couldn't get V3D IDENT1: %s",
+                          strerror(errno));
                 return false;
         }
 
@@ -439,10 +438,9 @@ vc4_get_chip_info(struct vc4_screen *screen)
         screen->v3d_ver = major * 10 + minor;
 
         if (screen->v3d_ver != 21 && screen->v3d_ver != 26) {
-                fprintf(stderr,
-                        "V3D %d.%d not supported by this version of Mesa.\n",
-                        screen->v3d_ver / 10,
-                        screen->v3d_ver % 10);
+                mesa_loge("V3D %d.%d not supported by this version of Mesa.",
+                          screen->v3d_ver / 10,
+                          screen->v3d_ver % 10);
                 return false;
         }
 

@@ -5,8 +5,10 @@
  */
 
 #include "si_pipe.h"
+#include "gfx/si_gfx.h"
 #include "sid.h"
 #include "si_build_pm4.h"
+#include "ac_cmdbuf_cp.h"
 
 /* Set this if you want the ME to wait until CP DMA is done.
  * It should be set on the last CP DMA packet. */
@@ -23,16 +25,10 @@ static inline unsigned cp_dma_max_byte_count(struct si_context *sctx)
 {
    unsigned max =
       sctx->gfx_level >= GFX11 ? 32767 :
-      sctx->gfx_level >= GFX9 ? S_415_BYTE_COUNT_GFX9(~0u) : S_415_BYTE_COUNT_GFX6(~0u);
+      sctx->gfx_level >= GFX9 ? S_506_BYTE_COUNT(~0u) : S_415_BYTE_COUNT(~0u);
 
    /* make it aligned for optimal performance */
    return max & ~(SI_CPDMA_ALIGNMENT - 1);
-}
-
-/* should cp dma skip the hole in sparse bo */
-static inline bool cp_dma_sparse_wa(struct si_context *sctx, struct si_resource *sdst)
-{
-   return sctx->gfx_level == GFX9 && sdst->flags & RADEON_FLAG_SPARSE;
 }
 
 /* Emit a CP DMA packet to do a copy from one buffer to another, or to clear
@@ -55,26 +51,26 @@ static void si_emit_cp_dma(struct si_context *sctx, struct radeon_cmdbuf *cs, ui
    }
 
    if (sctx->gfx_level >= GFX9)
-      command |= S_415_BYTE_COUNT_GFX9(size);
+      command |= S_506_BYTE_COUNT(size);
    else
-      command |= S_415_BYTE_COUNT_GFX6(size);
+      command |= S_415_BYTE_COUNT(size);
 
-   /* Sync flags. */
-   if (flags & CP_DMA_SYNC)
-      header |= S_411_CP_SYNC(1);
+   /* Sync flags. Only present for PFP/ME. MEC always sync. */
+   if ((flags & CP_DMA_SYNC) && sctx->is_gfx_queue)
+      header |= S_501_CP_SYNC(1);
 
    if (flags & CP_DMA_RAW_WAIT)
-      command |= S_415_RAW_WAIT(1);
+      command |= S_506_RAW_WAIT(1);
 
    /* Src and dst flags. */
    /* GFX12: TC_L2 means MALL, which should always be set. */
    if (sctx->screen->info.cp_dma_use_L2 || sctx->gfx_level == GFX12)
-      header |= S_501_DST_SEL(V_501_DST_ADDR_TC_L2);
+      header |= S_501_DST_SEL(V_501_DST_ADDR_USING_L2);
 
    if (flags & CP_DMA_CLEAR) {
-      header |= S_411_SRC_SEL(V_411_DATA);
+      header |= S_501_SRC_SEL(V_501_DATA);
    } else if (sctx->screen->info.cp_dma_use_L2 || sctx->gfx_level == GFX12) {
-      header |= S_501_SRC_SEL(V_501_SRC_ADDR_TC_L2);
+      header |= S_501_SRC_SEL(V_501_SRC_ADDR_USING_L2);
    }
 
    radeon_begin(cs);
@@ -88,7 +84,7 @@ static void si_emit_cp_dma(struct si_context *sctx, struct radeon_cmdbuf *cs, ui
       radeon_emit(dst_va >> 32); /* DST_ADDR_HI [31:0] */
       radeon_emit(command);
    } else {
-      header |= S_411_SRC_ADDR_HI(src_va >> 32);
+      header |= S_412_SRC_ADDR_HI(src_va >> 32);
 
       radeon_emit(PKT3(PKT3_CP_DMA, 4, 0));
       radeon_emit(src_va);                  /* SRC_ADDR_LO [31:0] */
@@ -128,7 +124,7 @@ static void si_cp_dma_prepare(struct si_context *sctx, struct pipe_resource *dst
     * Also wait for the previous CP DMA operations.
     */
    if (*is_first)
-      si_emit_barrier_direct(sctx);
+      si_emit_barrier_direct(sctx, 0);
 
    if (*is_first && !(*packet_flags & CP_DMA_CLEAR))
       *packet_flags |= CP_DMA_RAW_WAIT;
@@ -153,10 +149,8 @@ void si_cp_dma_clear_buffer(struct si_context *sctx, struct radeon_cmdbuf *cs,
    assert(!sctx->screen->info.cp_sdma_ge_use_system_memory_scope);
    assert(size && size % 4 == 0);
 
-   if (!sctx->screen->info.cp_dma_use_L2) {
-      sctx->barrier_flags |= SI_BARRIER_INV_L2;
-      si_mark_atom_dirty(sctx, &sctx->atoms.s.barrier);
-   }
+   if (!sctx->screen->info.cp_dma_use_L2)
+      si_set_barrier_flags(sctx, SI_BARRIER_INV_L2);
 
    /* Mark the buffer range of destination as valid (initialized),
     * so that transfer_map knows it should wait for the GPU when mapping
@@ -166,14 +160,6 @@ void si_cp_dma_clear_buffer(struct si_context *sctx, struct radeon_cmdbuf *cs,
    while (size) {
       unsigned byte_count = MIN2(size, cp_dma_max_byte_count(sctx));
       unsigned dma_flags = CP_DMA_CLEAR;
-
-      if (cp_dma_sparse_wa(sctx, sdst)) {
-         unsigned skip_count =
-            sctx->ws->buffer_find_next_committed_memory(sdst->buf,
-                  va - sdst->gpu_address, &byte_count);
-         va += skip_count;
-         size -= skip_count;
-      }
 
       if (!byte_count)
          continue;
@@ -236,10 +222,8 @@ void si_cp_dma_copy_buffer(struct si_context *sctx, struct pipe_resource *dst,
    assert(size);
    assert(dst && src);
 
-   if (!sctx->screen->info.cp_dma_use_L2) {
-      sctx->barrier_flags |= SI_BARRIER_INV_L2;
-      si_mark_atom_dirty(sctx, &sctx->atoms.s.barrier);
-   }
+   if (!sctx->screen->info.cp_dma_use_L2)
+      si_set_barrier_flags(sctx, SI_BARRIER_INV_L2);
 
    /* Mark the buffer range of destination as valid (initialized),
     * so that transfer_map knows it should wait for the GPU when mapping
@@ -293,24 +277,6 @@ void si_cp_dma_copy_buffer(struct si_context *sctx, struct pipe_resource *dst,
       unsigned byte_count = MIN2(size, cp_dma_max_byte_count(sctx));
       unsigned dma_flags = 0;
 
-      if (cp_dma_sparse_wa(sctx, si_resource(dst))) {
-         unsigned skip_count =
-            sctx->ws->buffer_find_next_committed_memory(si_resource(dst)->buf,
-                  main_dst_offset - si_resource(dst)->gpu_address, &byte_count);
-         main_dst_offset += skip_count;
-         main_src_offset += skip_count;
-         size -= skip_count;
-      }
-
-      if (cp_dma_sparse_wa(sctx, si_resource(src))) {
-         unsigned skip_count =
-            sctx->ws->buffer_find_next_committed_memory(si_resource(src)->buf,
-                  main_src_offset - si_resource(src)->gpu_address, &byte_count);
-         main_dst_offset += skip_count;
-         main_src_offset += skip_count;
-         size -= skip_count;
-      }
-
       if (!byte_count)
          continue;
 
@@ -349,19 +315,14 @@ void si_cp_write_data(struct si_context *sctx, struct si_resource *buf, unsigned
    assert(offset % 4 == 0);
    assert(size % 4 == 0);
 
-   if (sctx->gfx_level == GFX6 && dst_sel == V_370_MEM)
-      dst_sel = V_370_MEM_GRBM;
+   if (sctx->gfx_level == GFX6 && dst_sel == V_371_MEMORY)
+      dst_sel = V_371_MEM_GRBM;
 
    radeon_add_to_buffer_list(sctx, cs, buf, RADEON_USAGE_WRITE | RADEON_PRIO_CP_DMA);
    uint64_t va = buf->gpu_address + offset;
 
-   radeon_begin(cs);
-   radeon_emit(PKT3(PKT3_WRITE_DATA, 2 + size / 4, 0));
-   radeon_emit(S_370_DST_SEL(dst_sel) | S_370_WR_CONFIRM(1) | S_370_ENGINE_SEL(engine));
-   radeon_emit(va);
-   radeon_emit(va >> 32);
-   radeon_emit_array((const uint32_t *)data, size / 4);
-   radeon_end();
+   ac_emit_cp_write_data(&cs->current, engine, dst_sel, va, size / 4,
+                         (const uint32_t *)data, false);
 }
 
 void si_cp_copy_data(struct si_context *sctx, struct radeon_cmdbuf *cs, unsigned dst_sel,
@@ -379,12 +340,6 @@ void si_cp_copy_data(struct si_context *sctx, struct radeon_cmdbuf *cs, unsigned
    uint64_t dst_va = (dst ? dst->gpu_address : 0ull) + dst_offset;
    uint64_t src_va = (src ? src->gpu_address : 0ull) + src_offset;
 
-   radeon_begin(cs);
-   radeon_emit(PKT3(PKT3_COPY_DATA, 4, 0));
-   radeon_emit(COPY_DATA_SRC_SEL(src_sel) | COPY_DATA_DST_SEL(dst_sel) | COPY_DATA_WR_CONFIRM);
-   radeon_emit(src_va);
-   radeon_emit(src_va >> 32);
-   radeon_emit(dst_va);
-   radeon_emit(dst_va >> 32);
-   radeon_end();
+   ac_emit_cp_copy_data(&cs->current, src_sel, dst_sel, src_va, dst_va,
+                        AC_CP_COPY_DATA_WR_CONFIRM, false);
 }

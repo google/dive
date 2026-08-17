@@ -25,6 +25,7 @@
 
 #include "nir.h"
 #include "nir_builder.h"
+#include "nir_blend_equation_advanced_helper.h"
 #include "gl_nir.h"
 #include "program/prog_instruction.h"
 
@@ -68,123 +69,6 @@ static nir_def *
 swizzle_w(nir_builder *b, nir_def *src)
 {
    return nir_channel(b, src, 3);
-}
-
-static nir_def *
-blend_multiply(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) = Cs*Cd */
-   return nir_fmul(b, src, dst);
-}
-
-static nir_def *
-blend_screen(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) = Cs+Cd-Cs*Cd */
-   return nir_fsub(b, nir_fadd(b, src, dst), nir_fmul(b, src, dst));
-}
-
-static nir_def *
-blend_overlay(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) = 2*Cs*Cd, if Cd <= 0.5
-    *            1-2*(1-Cs)*(1-Cd), otherwise
-    */
-   nir_def *rule_1 = nir_fmul(b, nir_fmul(b, src, dst), imm3(b, 2.0));
-   nir_def *rule_2 =
-      nir_fsub(b, imm3(b, 1.0), nir_fmul(b, nir_fmul(b, nir_fsub(b, imm3(b, 1.0), src), nir_fsub(b, imm3(b, 1.0), dst)), imm3(b, 2.0)));
-   return nir_bcsel(b, nir_fge(b, imm3(b, 0.5f), dst), rule_1, rule_2);
-}
-
-static nir_def *
-blend_darken(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) = min(Cs,Cd) */
-   return nir_fmin(b, src, dst);
-}
-
-static nir_def *
-blend_lighten(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) = max(Cs,Cd) */
-   return nir_fmax(b, src, dst);
-}
-
-static nir_def *
-blend_colordodge(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) =
-    *   0, if Cd <= 0
-    *   min(1,Cd/(1-Cs)), if Cd > 0 and Cs < 1
-    *   1, if Cd > 0 and Cs >= 1
-    */
-   return nir_bcsel(b, nir_fge(b, imm3(b, 0.0), dst), imm3(b, 0.0),
-                    nir_bcsel(b, nir_fge(b, src, imm3(b, 1.0)), imm3(b, 1.0),
-                              nir_fmin(b, imm3(b, 1.0), nir_fdiv(b, dst, nir_fsub(b, imm3(b, 1.0), src)))));
-}
-
-static nir_def *
-blend_colorburn(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) =
-    *   1, if Cd >= 1
-    *   1 - min(1,(1-Cd)/Cs), if Cd < 1 and Cs > 0
-    *   0, if Cd < 1 and Cs <= 0
-    */
-   return nir_bcsel(b, nir_fge(b, dst, imm3(b, 1.0)), imm3(b, 1.0),
-                    nir_bcsel(b, nir_fge(b, imm3(b, 0.0), src), imm3(b, 0.0),
-                              nir_fsub(b, imm3(b, 1.0), nir_fmin(b, imm3(b, 1.0), nir_fdiv(b, nir_fsub(b, imm3(b, 1.0), dst), src)))));
-}
-
-static nir_def *
-blend_hardlight(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) = 2*Cs*Cd, if Cs <= 0.5
-    *            1-2*(1-Cs)*(1-Cd), otherwise
-    */
-   nir_def *rule_1 = nir_fmul(b, imm3(b, 2.0), nir_fmul(b, src, dst));
-   nir_def *rule_2 =
-      nir_fsub(b, imm3(b, 1.0), nir_fmul(b, imm3(b, 2.0), nir_fmul(b, nir_fsub(b, imm3(b, 1.0), src), nir_fsub(b, imm3(b, 1.0), dst))));
-   return nir_bcsel(b, nir_fge(b, imm3(b, 0.5), src), rule_1, rule_2);
-}
-
-static nir_def *
-blend_softlight(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   /* f(Cs,Cd) =
-    *   Cd-(1-2*Cs)*Cd*(1-Cd),
-    *     if Cs <= 0.5
-    *   Cd+(2*Cs-1)*Cd*((16*Cd-12)*Cd+3),
-    *     if Cs > 0.5 and Cd <= 0.25
-    *   Cd+(2*Cs-1)*(sqrt(Cd)-Cd),
-    *     if Cs > 0.5 and Cd > 0.25
-    *
-    * We can simplify this to
-    *
-    * f(Cs,Cd) = Cd+(2*Cs-1)*g(Cs,Cd) where
-    * g(Cs,Cd) = Cd*Cd-Cd             if Cs <= 0.5
-    *            Cd*((16*Cd-12)*Cd+3) if Cs > 0.5 and Cd <= 0.25
-    *            sqrt(Cd)-Cd,         otherwise
-    */
-   nir_def *factor_1 = nir_fmul(b, dst, nir_fsub(b, imm3(b, 1.0), dst));
-   nir_def *factor_2 =
-      nir_fmul(b, dst, nir_fadd(b, nir_fmul(b, nir_fsub(b, nir_fmul(b, imm3(b, 16.0), dst), imm3(b, 12.0)), dst), imm3(b, 3.0)));
-   nir_def *factor_3 = nir_fsub(b, nir_fsqrt(b, dst), dst);
-   nir_def *factor = nir_bcsel(b, nir_fge(b, imm3(b, 0.5), src), factor_1,
-                                   nir_bcsel(b, nir_fge(b, imm3(b, 0.25), dst), factor_2, factor_3));
-   return nir_fadd(b, dst, nir_fmul(b, nir_fsub(b, nir_fmul(b, imm3(b, 2.0), src), imm3(b, 1.0)), factor));
-}
-
-static nir_def *
-blend_difference(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   return nir_fabs(b, nir_fsub(b, dst, src));
-}
-
-static nir_def *
-blend_exclusion(nir_builder *b, nir_def *src, nir_def *dst)
-{
-   return nir_fadd(b, src, nir_fsub(b, dst, nir_fmul(b, imm3(b, 2.0), nir_fmul(b, src, dst))));
 }
 
 /* Return the minimum of a vec3's components */
@@ -303,7 +187,7 @@ set_lum_sat(nir_builder *b,
 }
 
 static nir_def *
-is_mode(nir_builder *b, nir_variable *mode, enum gl_advanced_blend_mode q)
+is_mode(nir_builder *b, nir_variable *mode, enum pipe_advanced_blend_mode q)
 {
    return nir_ieq_imm(b, nir_load_var(b, mode), (unsigned) q);
 }
@@ -318,7 +202,7 @@ calc_blend_result(nir_builder *b,
    nir_variable *result = add_temp_var(b, "__blend_result", glsl_vec4_type());
 
    /* If we're not doing advanced blending, just write the original value. */
-   nir_if *if_blending = nir_push_if(b, is_mode(b, mode, BLEND_NONE));
+   nir_if *if_blending = nir_push_if(b, is_mode(b, mode, PIPE_ADVANCED_BLEND_NONE));
    nir_store_var(b, result, blend_src, ~0);
 
    nir_push_else(b, if_blending);
@@ -362,59 +246,61 @@ calc_blend_result(nir_builder *b,
 
    unsigned choices = blend_qualifiers;
    while (choices) {
-      enum gl_advanced_blend_mode choice = (enum gl_advanced_blend_mode)u_bit_scan(&choices);
+      enum pipe_advanced_blend_mode choice = (enum pipe_advanced_blend_mode)u_bit_scan(&choices);
 
       nir_if *iff = nir_push_if(b, is_mode(b, mode, choice));
       nir_def *val = NULL;
 
       switch (choice) {
-      case BLEND_MULTIPLY:
+      case PIPE_ADVANCED_BLEND_MULTIPLY:
          val = blend_multiply(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_SCREEN:
+      case PIPE_ADVANCED_BLEND_SCREEN:
          val = blend_screen(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_OVERLAY:
+      case PIPE_ADVANCED_BLEND_OVERLAY:
          val = blend_overlay(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_DARKEN:
+      case PIPE_ADVANCED_BLEND_DARKEN:
          val = blend_darken(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_LIGHTEN:
+      case PIPE_ADVANCED_BLEND_LIGHTEN:
          val = blend_lighten(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_COLORDODGE:
+      case PIPE_ADVANCED_BLEND_COLORDODGE:
          val = blend_colordodge(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_COLORBURN:
+      case PIPE_ADVANCED_BLEND_COLORBURN:
          val = blend_colorburn(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_HARDLIGHT:
+      case PIPE_ADVANCED_BLEND_HARDLIGHT:
          val = blend_hardlight(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_SOFTLIGHT:
+      case PIPE_ADVANCED_BLEND_SOFTLIGHT:
          val = blend_softlight(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_DIFFERENCE:
+      case PIPE_ADVANCED_BLEND_DIFFERENCE:
          val = blend_difference(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_EXCLUSION:
+      case PIPE_ADVANCED_BLEND_EXCLUSION:
          val = blend_exclusion(b, src_rgb_def, dst_rgb_def);
          break;
-      case BLEND_HSL_HUE:
+      case PIPE_ADVANCED_BLEND_HSL_HUE:
          set_lum_sat(b, factor, src_rgb, dst_rgb, dst_rgb);
          break;
-      case BLEND_HSL_SATURATION:
+      case PIPE_ADVANCED_BLEND_HSL_SATURATION:
          set_lum_sat(b, factor, dst_rgb, src_rgb, dst_rgb);
          break;
-      case BLEND_HSL_COLOR:
+      case PIPE_ADVANCED_BLEND_HSL_COLOR:
          set_lum(b, factor, src_rgb, dst_rgb);
          break;
-      case BLEND_HSL_LUMINOSITY:
+      case PIPE_ADVANCED_BLEND_HSL_LUMINOSITY:
          set_lum(b, factor, dst_rgb, src_rgb);
          break;
-      case BLEND_NONE:
+      case PIPE_ADVANCED_BLEND_NONE:
          UNREACHABLE("not real cases");
+      default:
+         UNREACHABLE("not supported advanced blend mode");
       }
 
       if (val)

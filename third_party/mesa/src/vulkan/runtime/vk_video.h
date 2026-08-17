@@ -56,7 +56,7 @@ struct vk_video_h265_sps {
    StdVideoH265ProfileTierLevel tier_level;
    StdVideoH265DecPicBufMgr dec_pic_buf_mgr;
    StdVideoH265ScalingLists scaling_lists;
-   StdVideoH265ShortTermRefPicSet short_term_ref_pic_set;
+   StdVideoH265ShortTermRefPicSet short_term_ref_pic_set[STD_VIDEO_H265_MAX_SHORT_TERM_REF_PIC_SETS];
    StdVideoH265LongTermRefPicsSps long_term_ref_pics_sps;
    StdVideoH265SubLayerHrdParameters hrd_parameters_nal;
    StdVideoH265SubLayerHrdParameters hrd_parameters_vcl;
@@ -83,12 +83,21 @@ struct vk_video_session {
    VkVideoCodecOperationFlagsKHR op;
    VkVideoComponentBitDepthFlagsKHR luma_bit_depth;
    VkVideoComponentBitDepthFlagsKHR chroma_bit_depth;
+   VkVideoChromaSubsamplingFlagsKHR chroma_subsampling;
    VkExtent2D max_coded;
    VkFormat picture_format;
    VkFormat ref_format;
    uint32_t max_dpb_slots;
    uint32_t max_active_ref_pics;
    VkVideoEncodeIntraRefreshModeFlagBitsKHR intra_refresh_mode;
+
+   bool perform_rgb_conversion;
+   struct {
+      VkVideoEncodeRgbModelConversionFlagBitsVALVE rgb_model;
+      VkVideoEncodeRgbRangeCompressionFlagBitsVALVE rgb_range;
+      VkVideoEncodeRgbChromaOffsetFlagBitsVALVE x_chroma_offset;
+      VkVideoEncodeRgbChromaOffsetFlagBitsVALVE y_chroma_offset;
+   } rgb_conv;
 
    struct {
       VkVideoEncodeUsageFlagsKHR video_usage_hints;
@@ -295,6 +304,7 @@ struct vk_video_h265_reference {
    StdVideoDecodeH265ReferenceInfoFlags flags;
    uint32_t slot_index;
    int32_t pic_order_cnt;
+   bool lt;
 };
 
 int vk_video_h265_poc_by_slot(const struct VkVideoDecodeInfoKHR *frame_info, int slot);

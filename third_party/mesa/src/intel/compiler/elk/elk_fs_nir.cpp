@@ -1,24 +1,6 @@
 /*
  * Copyright © 2010 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_fs.h"
@@ -395,7 +377,7 @@ fs_nir_emit_if(nir_to_elk_state &ntb, nir_if *if_stmt)
    /* If the condition has the form !other_condition, use other_condition as
     * the source, but invert the predicate on the if instruction.
     */
-   nir_alu_instr *cond = nir_src_as_alu_instr(if_stmt->condition);
+   nir_alu_instr *cond = nir_src_as_alu(if_stmt->condition);
    if (cond != NULL && cond->op == nir_op_inot) {
       invert = true;
       cond_reg = get_nir_src(ntb, cond->src[0].src);
@@ -481,10 +463,7 @@ optimize_extract_to_float(nir_to_elk_state &ntb, nir_alu_instr *instr,
    /* No fast path for f16 or f64. */
    assert(instr->op == nir_op_i2f32 || instr->op == nir_op_u2f32);
 
-   if (!instr->src[0].src.ssa->parent_instr)
-      return false;
-
-   if (instr->src[0].src.ssa->parent_instr->type != nir_instr_type_alu)
+   if (nir_def_instr(instr->src[0].src.ssa)->type != nir_instr_type_alu)
       return false;
 
    nir_alu_instr *src0 = nir_def_as_alu(instr->src[0].src.ssa);
@@ -547,6 +526,9 @@ optimize_frontfacing_ternary(nir_to_elk_state &ntb,
 {
    const intel_device_info *devinfo = ntb.devinfo;
    elk_fs_visitor &s = ntb.s;
+
+   if (instr->def.bit_size != 32)
+      return false;
 
    nir_intrinsic_instr *src0 = nir_src_as_intrinsic(instr->src[0].src);
    if (src0 == NULL || src0->intrinsic != nir_intrinsic_load_front_face)
@@ -716,7 +698,7 @@ resolve_inot_sources(nir_to_elk_state &ntb, const fs_builder &bld, nir_alu_instr
                      elk_fs_reg *op)
 {
    for (unsigned i = 0; i < 2; i++) {
-      nir_alu_instr *inot_instr = nir_src_as_alu_instr(instr->src[i].src);
+      nir_alu_instr *inot_instr = nir_src_as_alu(instr->src[i].src);
 
       if (inot_instr != NULL && inot_instr->op == nir_op_inot) {
          /* The source of the inot is now the source of instr. */
@@ -740,7 +722,7 @@ try_emit_b2fi_of_inot(nir_to_elk_state &ntb, const fs_builder &bld,
    if (devinfo->ver < 6)
       return false;
 
-   nir_alu_instr *inot_instr = nir_src_as_alu_instr(instr->src[0].src);
+   nir_alu_instr *inot_instr = nir_src_as_alu(instr->src[0].src);
 
    if (inot_instr == NULL || inot_instr->op != nir_op_inot)
       return false;
@@ -789,7 +771,7 @@ emit_fsign(nir_to_elk_state &ntb, const fs_builder &bld, const nir_alu_instr *in
 
    if (instr->op != nir_op_fsign) {
       const nir_alu_instr *const fsign_instr =
-         nir_src_as_alu_instr(instr->src[fsign_src].src);
+         nir_src_as_alu(instr->src[fsign_src].src);
 
       /* op[fsign_src] has the nominal result of the fsign, and op[1 -
        * fsign_src] has the other multiply source.  This must be rearranged so
@@ -882,7 +864,7 @@ can_fuse_fmul_fsign(nir_alu_instr *instr, unsigned fsign_src)
    assert(instr->op == nir_op_fmul);
 
    nir_alu_instr *const fsign_instr =
-      nir_src_as_alu_instr(instr->src[fsign_src].src);
+      nir_src_as_alu(instr->src[fsign_src].src);
 
    /* Rules:
     *
@@ -1096,7 +1078,7 @@ fs_nir_emit_alu(nir_to_elk_state &ntb, nir_alu_instr *instr,
        * that won't be propagated.  By handling both instructions here, a
        * single MOV is emitted.
        */
-      nir_alu_instr *extract_instr = nir_src_as_alu_instr(instr->src[0].src);
+      nir_alu_instr *extract_instr = nir_src_as_alu(instr->src[0].src);
       if (extract_instr != NULL) {
          if (extract_instr->op == nir_op_extract_u8 ||
              extract_instr->op == nir_op_extract_i8) {
@@ -1149,10 +1131,13 @@ fs_nir_emit_alu(nir_to_elk_state &ntb, nir_alu_instr *instr,
                              elk_imm_d(rnd));
       }
 
-      if (op[0].type == ELK_REGISTER_TYPE_HF)
+      if (op[0].type == ELK_REGISTER_TYPE_HF) {
          assert(type_sz(result.type) < 8); /* nir_split_conversion */
 
-      inst = bld.MOV(result, op[0]);
+         inst = bld.F16TO32(result, op[0]);
+      } else {
+         inst = bld.MOV(result, op[0]);
+      }
       break;
 
    case nir_op_fsign:
@@ -1411,7 +1396,7 @@ fs_nir_emit_alu(nir_to_elk_state &ntb, nir_alu_instr *instr,
 
    case nir_op_inot:
       if (devinfo->ver >= 8) {
-         nir_alu_instr *inot_src_instr = nir_src_as_alu_instr(instr->src[0].src);
+         nir_alu_instr *inot_src_instr = nir_src_as_alu(instr->src[0].src);
 
          if (inot_src_instr != NULL &&
              (inot_src_instr->op == nir_op_ior ||
@@ -1573,14 +1558,6 @@ fs_nir_emit_alu(nir_to_elk_state &ntb, nir_alu_instr *instr,
    case nir_op_unpack_half_2x16:
    case nir_op_pack_half_2x16:
       UNREACHABLE("not reached: should be handled by lower_packing_builtins");
-
-   case nir_op_unpack_half_2x16_split_x:
-      inst = bld.F16TO32(result, subscript(op[0], ELK_REGISTER_TYPE_HF, 0));
-      break;
-
-   case nir_op_unpack_half_2x16_split_y:
-      inst = bld.F16TO32(result, subscript(op[0], ELK_REGISTER_TYPE_HF, 1));
-      break;
 
    case nir_op_pack_64_2x32_split:
    case nir_op_pack_32_2x16_split:
@@ -1879,7 +1856,7 @@ get_nir_src_bindless(nir_to_elk_state &ntb, const nir_src &src)
 static bool
 is_resource_src(nir_src src)
 {
-   return src.ssa->parent_instr->type == nir_instr_type_intrinsic &&
+   return nir_src_is_intrinsic(src) &&
           nir_def_as_intrinsic(src.ssa)->intrinsic == nir_intrinsic_resource_intel;
 }
 
@@ -1994,8 +1971,8 @@ emit_pixel_interpolater_send(const fs_builder &bld,
                              const elk_fs_reg &flag_reg,
                              glsl_interp_mode interpolation)
 {
-   struct elk_wm_prog_data *wm_prog_data =
-      elk_wm_prog_data(bld.shader->stage_prog_data);
+   struct elk_fs_prog_data *fs_prog_data =
+      elk_fs_prog_data(bld.shader->stage_prog_data);
 
    elk_fs_reg srcs[INTERP_NUM_SRCS];
    srcs[INTERP_SRC_OFFSET]       = src;
@@ -2011,10 +1988,10 @@ emit_pixel_interpolater_send(const fs_builder &bld,
        *     This field cannot be set to "Linear Interpolation"
        *     unless Non-Perspective Barycentric Enable in 3DSTATE_CLIP is enabled"
        */
-      wm_prog_data->uses_nonperspective_interp_modes = true;
+      fs_prog_data->uses_nonperspective_interp_modes = true;
    }
 
-   wm_prog_data->pulls_bary = true;
+   fs_prog_data->pulls_bary = true;
 
    return inst;
 }
@@ -2505,8 +2482,8 @@ get_indirect_offset(nir_to_elk_state &ntb, nir_intrinsic_instr *instr)
    nir_src *offset_src = nir_get_io_offset_src(instr);
 
    if (nir_src_is_const(*offset_src)) {
-      /* The only constant offset we should find is 0.  elk_nir.c's
-       * add_const_offset_to_base() will fold other constant offsets
+      /* The only constant offset we should find is 0.
+       * nir_opt_constant_folding will fold other constant offsets
        * into the "base" index.
        */
       assert(nir_src_as_uint(*offset_src) == 0);
@@ -3186,8 +3163,8 @@ emit_non_coherent_fb_read(nir_to_elk_state &ntb, const fs_builder &bld, const el
    elk_fs_visitor &s = ntb.s;
 
    assert(bld.shader->stage == MESA_SHADER_FRAGMENT);
-   const elk_wm_prog_key *wm_key =
-      reinterpret_cast<const elk_wm_prog_key *>(s.key);
+   const elk_fs_prog_key *wm_key =
+      reinterpret_cast<const elk_fs_prog_key *>(s.key);
    assert(!wm_key->coherent_fb_fetch);
 
    /* Calculate the fragment coordinates. */
@@ -3263,8 +3240,8 @@ alloc_frag_output(nir_to_elk_state &ntb, unsigned location)
    elk_fs_visitor &s = ntb.s;
 
    assert(s.stage == MESA_SHADER_FRAGMENT);
-   const elk_wm_prog_key *const key =
-      reinterpret_cast<const elk_wm_prog_key *>(s.key);
+   const elk_fs_prog_key *const key =
+      reinterpret_cast<const elk_fs_prog_key *>(s.key);
    const unsigned l = GET_FIELD(location, ELK_NIR_FRAG_OUTPUT_LOCATION);
    const unsigned i = GET_FIELD(location, ELK_NIR_FRAG_OUTPUT_INDEX);
 
@@ -3374,13 +3351,13 @@ emit_samplepos_setup(nir_to_elk_state &ntb)
    elk_fs_visitor &s = ntb.s;
 
    assert(s.stage == MESA_SHADER_FRAGMENT);
-   struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(s.prog_data);
+   struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(s.prog_data);
    assert(devinfo->ver >= 6);
 
    const fs_builder abld = bld.annotate("compute sample position");
    elk_fs_reg pos = abld.vgrf(ELK_REGISTER_TYPE_F, 2);
 
-   if (wm_prog_data->persample_dispatch == ELK_NEVER) {
+   if (fs_prog_data->persample_dispatch == ELK_NEVER) {
       /* From ARB_sample_shading specification:
        * "When rendering to a non-multisample buffer, or if multisample
        *  rasterization is disabled, gl_SamplePosition will always be
@@ -3415,16 +3392,6 @@ emit_samplepos_setup(nir_to_elk_state &ntb)
       abld.MUL(offset(pos, abld, i), tmp_f, elk_imm_f(1 / 16.0f));
    }
 
-   if (wm_prog_data->persample_dispatch == ELK_SOMETIMES) {
-      check_dynamic_msaa_flag(abld, wm_prog_data,
-                              INTEL_MSAA_FLAG_PERSAMPLE_DISPATCH);
-      for (unsigned i = 0; i < 2; i++) {
-         set_predicate(ELK_PREDICATE_NORMAL,
-                       bld.SEL(offset(pos, abld, i), offset(pos, abld, i),
-                               elk_imm_f(0.5f)));
-      }
-   }
-
    return pos;
 }
 
@@ -3436,8 +3403,8 @@ emit_sampleid_setup(nir_to_elk_state &ntb)
    elk_fs_visitor &s = ntb.s;
 
    assert(s.stage == MESA_SHADER_FRAGMENT);
-   ASSERTED elk_wm_prog_key *key = (elk_wm_prog_key*) s.key;
-   struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(s.prog_data);
+   ASSERTED elk_fs_prog_key *key = (elk_fs_prog_key*) s.key;
+   struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(s.prog_data);
    assert(devinfo->ver >= 6);
 
    const fs_builder abld = bld.annotate("compute sample id");
@@ -3537,8 +3504,8 @@ emit_sampleid_setup(nir_to_elk_state &ntb)
    }
 
    if (key->multisample_fbo == ELK_SOMETIMES) {
-      check_dynamic_msaa_flag(abld, wm_prog_data,
-                              INTEL_MSAA_FLAG_MULTISAMPLE_FBO);
+      check_dynamic_fs_config(abld, fs_prog_data,
+                              INTEL_FS_CONFIG_MULTISAMPLE_FBO);
       set_predicate(ELK_PREDICATE_NORMAL,
                     abld.SEL(sample_id, sample_id, elk_imm_ud(0)));
    }
@@ -3554,13 +3521,13 @@ emit_samplemaskin_setup(nir_to_elk_state &ntb)
    elk_fs_visitor &s = ntb.s;
 
    assert(s.stage == MESA_SHADER_FRAGMENT);
-   struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(s.prog_data);
+   struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(s.prog_data);
    assert(devinfo->ver >= 6);
 
    elk_fs_reg coverage_mask =
       fetch_payload_reg(bld, s.fs_payload().sample_mask_in_reg, ELK_REGISTER_TYPE_D);
 
-   if (wm_prog_data->persample_dispatch == ELK_NEVER)
+   if (fs_prog_data->persample_dispatch == ELK_NEVER)
       return coverage_mask;
 
    /* gl_SampleMaskIn[] comes from two sources: the input coverage mask,
@@ -3584,13 +3551,6 @@ emit_samplemaskin_setup(nir_to_elk_state &ntb)
    abld.SHL(enabled_mask, one, ntb.system_values[SYSTEM_VALUE_SAMPLE_ID]);
    elk_fs_reg mask = bld.vgrf(ELK_REGISTER_TYPE_D);
    abld.AND(mask, enabled_mask, coverage_mask);
-
-   if (wm_prog_data->persample_dispatch == ELK_ALWAYS)
-      return mask;
-
-   check_dynamic_msaa_flag(abld, wm_prog_data,
-                           INTEL_MSAA_FLAG_PERSAMPLE_DISPATCH);
-   set_predicate(ELK_PREDICATE_NORMAL, abld.SEL(mask, mask, coverage_mask));
 
    return mask;
 }
@@ -3669,7 +3629,7 @@ fs_nir_emit_fs_intrinsic(nir_to_elk_state &ntb,
       const unsigned target = l - FRAG_RESULT_DATA0 + load_offset;
       const elk_fs_reg tmp = bld.vgrf(dest.type, 4);
 
-      assert(!reinterpret_cast<const elk_wm_prog_key *>(s.key)->coherent_fb_fetch);
+      assert(!reinterpret_cast<const elk_fs_prog_key *>(s.key)->coherent_fb_fetch);
       emit_non_coherent_fb_read(ntb, bld, tmp, target);
 
       for (unsigned j = 0; j < instr->num_components; j++) {
@@ -3692,7 +3652,7 @@ fs_nir_emit_fs_intrinsic(nir_to_elk_state &ntb,
       elk_fs_inst *cmp = NULL;
       if (instr->intrinsic == nir_intrinsic_demote_if ||
           instr->intrinsic == nir_intrinsic_terminate_if) {
-         nir_alu_instr *alu = nir_src_as_alu_instr(instr->src[0]);
+         nir_alu_instr *alu = nir_src_as_alu(instr->src[0]);
 
          if (alu != NULL &&
              alu->op != nir_op_bcsel &&
@@ -3787,11 +3747,8 @@ fs_nir_emit_fs_intrinsic(nir_to_elk_state &ntb,
       break;
    }
 
-   case nir_intrinsic_load_input:
-   case nir_intrinsic_load_per_primitive_input: {
-      /* In Fragment Shaders load_input is used either for flat inputs or
-       * per-primitive inputs.
-       */
+   case nir_intrinsic_load_input: {
+      /* In Fragment Shaders load_input is used for flat inputs */
       assert(instr->def.bit_size == 32);
       unsigned base = nir_intrinsic_base(instr);
       unsigned comp = nir_intrinsic_component(instr);
@@ -3803,18 +3760,10 @@ fs_nir_emit_fs_intrinsic(nir_to_elk_state &ntb,
       else if (base == VARYING_SLOT_VIEWPORT)
          comp = 2;
 
-      if (BITFIELD64_BIT(base) & s.nir->info.per_primitive_inputs) {
-         assert(base != VARYING_SLOT_PRIMITIVE_INDICES);
-         for (unsigned int i = 0; i < num_components; i++) {
-            bld.MOV(offset(dest, bld, i),
-                    retype(s.per_primitive_reg(bld, base, comp + i), dest.type));
-         }
-      } else {
-         const unsigned k = 3;
-         for (unsigned int i = 0; i < num_components; i++) {
-            bld.MOV(offset(dest, bld, i),
-                    retype(s.interp_reg(bld, base, comp + i, k), dest.type));
-         }
+      const unsigned k = 3;
+      for (unsigned int i = 0; i < num_components; i++) {
+         bld.MOV(offset(dest, bld, i),
+                 retype(s.interp_reg(bld, base, comp + i, k), dest.type));
       }
       break;
    }
@@ -3860,13 +3809,13 @@ fs_nir_emit_fs_intrinsic(nir_to_elk_state &ntb,
       }
 
       elk_fs_reg flag_reg;
-      struct elk_wm_prog_key *wm_prog_key = (struct elk_wm_prog_key *) s.key;
-      if (wm_prog_key->multisample_fbo == ELK_SOMETIMES) {
-         struct elk_wm_prog_data *wm_prog_data = elk_wm_prog_data(s.prog_data);
+      struct elk_fs_prog_key *fs_prog_key = (struct elk_fs_prog_key *) s.key;
+      if (fs_prog_key->multisample_fbo == ELK_SOMETIMES) {
+         struct elk_fs_prog_data *fs_prog_data = elk_fs_prog_data(s.prog_data);
 
-         check_dynamic_msaa_flag(bld.exec_all().group(8, 0),
-                                 wm_prog_data,
-                                 INTEL_MSAA_FLAG_MULTISAMPLE_FBO);
+         check_dynamic_fs_config(bld.exec_all().group(8, 0),
+                                 fs_prog_data,
+                                 INTEL_FS_CONFIG_MULTISAMPLE_FBO);
          flag_reg = elk_flag_reg(0, 0);
       }
 
@@ -3935,8 +3884,7 @@ fs_nir_emit_fs_intrinsic(nir_to_elk_state &ntb,
       break;
 
    case nir_intrinsic_load_interpolated_input: {
-      assert(instr->src[0].ssa &&
-             instr->src[0].ssa->parent_instr->type == nir_instr_type_intrinsic);
+      assert(nir_def_instr(instr->src[0].ssa)->type == nir_instr_type_intrinsic);
       nir_intrinsic_instr *bary_intrinsic = nir_def_as_intrinsic(instr->src[0].ssa);
       nir_intrinsic_op bary_intrin = bary_intrinsic->intrinsic;
       elk_fs_reg dst_xy;
@@ -4237,7 +4185,7 @@ add_rebuild_src(nir_src *src, void *state)
          return true;
    }
 
-   nir_foreach_src(src->ssa->parent_instr, add_rebuild_src, state);
+   nir_foreach_src(nir_def_instr(src->ssa), add_rebuild_src, state);
    res->array.push_back(src->ssa);
    return true;
 }
@@ -4251,7 +4199,7 @@ try_rebuild_resource(nir_to_elk_state &ntb, const elk::fs_builder &bld, nir_def 
    struct rebuild_resource resources = {};
    resources.idx = 0;
 
-   if (!nir_foreach_src(resource_def->parent_instr,
+   if (!nir_foreach_src(nir_def_instr(resource_def),
                         add_rebuild_src, &resources))
       return elk_fs_reg();
    resources.array.push_back(resource_def);
@@ -4259,12 +4207,12 @@ try_rebuild_resource(nir_to_elk_state &ntb, const elk::fs_builder &bld, nir_def 
    if (resources.array.size() == 1) {
       nir_def *def = resources.array[0];
 
-      if (def->parent_instr->type == nir_instr_type_load_const) {
+      if (nir_def_is_const(def)) {
          nir_load_const_instr *load_const =
             nir_def_as_load_const(def);
          return elk_imm_ud(load_const->value[0].i32);
       } else {
-         assert(def->parent_instr->type == nir_instr_type_intrinsic &&
+         assert(nir_def_is_intrinsic(def) &&
                 (nir_def_as_intrinsic(def)->intrinsic ==
                  nir_intrinsic_load_uniform));
          nir_intrinsic_instr *intrin = nir_def_as_intrinsic(def);
@@ -4279,7 +4227,7 @@ try_rebuild_resource(nir_to_elk_state &ntb, const elk::fs_builder &bld, nir_def 
    for (unsigned i = 0; i < resources.array.size(); i++) {
       nir_def *def = resources.array[i];
 
-      nir_instr *instr = def->parent_instr;
+      nir_instr *instr = nir_def_instr(def);
       switch (instr->type) {
       case nir_instr_type_load_const: {
          nir_load_const_instr *load_const =
@@ -4784,7 +4732,7 @@ fs_nir_emit_intrinsic(nir_to_elk_state &ntb,
          ugm_fence = modes & (nir_var_mem_ssbo | nir_var_mem_global);
          slm_fence = modes & nir_var_mem_shared;
          tgm_fence = modes & nir_var_image;
-         urb_fence = modes & (nir_var_shader_out | nir_var_mem_task_payload);
+         urb_fence = modes & nir_var_shader_out;
          if (nir_intrinsic_memory_scope(instr) != SCOPE_NONE)
             opcode = ELK_SHADER_OPCODE_MEMORY_FENCE;
          break;
@@ -5040,7 +4988,7 @@ fs_nir_emit_intrinsic(nir_to_elk_state &ntb,
             }
 
             const unsigned total_dwords =
-               ALIGN(instr->num_components, REG_SIZE * reg_unit(devinfo) / 4);
+               align(instr->num_components, REG_SIZE * reg_unit(devinfo) / 4);
             unsigned loaded_dwords = 0;
 
             const elk_fs_reg packed_consts =
@@ -5229,7 +5177,7 @@ fs_nir_emit_intrinsic(nir_to_elk_state &ntb,
       break;
 
    case nir_intrinsic_load_global_constant_uniform_block_intel: {
-      const unsigned total_dwords = ALIGN(instr->num_components,
+      const unsigned total_dwords = align(instr->num_components,
                                           REG_SIZE * reg_unit(devinfo) / 4);
       unsigned loaded_dwords = 0;
 
@@ -5364,7 +5312,7 @@ fs_nir_emit_intrinsic(nir_to_elk_state &ntb,
          srcs[SURFACE_LOGICAL_SRC_SURFACE] = elk_fs_reg(elk_imm_ud(GFX7_BTI_SLM));
       }
 
-      const unsigned total_dwords = ALIGN(instr->num_components,
+      const unsigned total_dwords = align(instr->num_components,
                                           REG_SIZE * reg_unit(devinfo) / 4);
       unsigned loaded_dwords = 0;
 
@@ -5421,8 +5369,8 @@ fs_nir_emit_intrinsic(nir_to_elk_state &ntb,
       unsigned num_components = instr->num_components;
       unsigned first_component = nir_intrinsic_component(instr);
 
-      elk_fs_reg new_dest = retype(offset(s.outputs[instr->const_index[0]], bld,
-                                      4 * store_offset), src.type);
+      elk_fs_reg new_dest = retype(offset(s.outputs[nir_intrinsic_base(instr)], bld,
+                                   4 * store_offset), src.type);
       for (unsigned j = 0; j < num_components; j++) {
          bld.MOV(offset(new_dest, bld, j + first_component),
                  offset(src, bld, j));
@@ -7006,7 +6954,7 @@ nir_to_elk(elk_fs_visitor *s)
    fs_nir_setup_outputs(ntb);
    fs_nir_setup_uniforms(ntb.s);
    fs_nir_emit_system_values(ntb);
-   ntb.s.last_scratch = ALIGN(ntb.nir->scratch_size, 4) * ntb.s.dispatch_width;
+   ntb.s.last_scratch = align(ntb.nir->scratch_size, 4) * ntb.s.dispatch_width;
 
    fs_nir_emit_impl(ntb, nir_shader_get_entrypoint((nir_shader *)ntb.nir));
 

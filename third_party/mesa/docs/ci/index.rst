@@ -308,6 +308,27 @@ directory.  You can hack on mesa and iterate testing the build with:
 
    sudo docker run --rm -v `pwd`:/mesa $IMAGE meson compile -C /mesa/_build
 
+Filtering the CI hardware jobs
+------------------------------
+
+By default, every CI hardware job affected by the changes you are
+pushing will be created in the CI pipeline(s) associated to your push.
+
+It is however possible to further filter the list of jobs by setting
+the ``hw_jobs`` `CI input <https://docs.gitlab.com/ci/inputs/>`_ at
+push time (using ``git push -o ci.input='hw_jobs=["tag1", ...]'``), or
+by creating a new MR pipeline by clicking ``Run pipeline with modified
+values``.
+
+To make this possible, every hardware job has been tagged with labels
+that, if none of them is set in ``hw_jobs``, the job will simply not be
+added to the CI pipeline. The list of labels associated to each job is
+usually composed of: ``all``, ``${mesa_driver_name}``, and
+``${kernel_driver_name}.ko``.
+
+You may view the list of available tags at the top of the
+``.gitlab-ci.yml`` file.
+
 Running specific CI jobs
 ------------------------
 
@@ -344,6 +365,17 @@ scope permissions.
     `create-a-personal-access-token <https://docs.gitlab.com/user/profile/personal_access_tokens/#create-a-personal-access-token>`_
     and select the ``api`` scope. The token will only be shown once after creation,
     so make sure you store it securely.
+
+Reproducing CI jobs locally
+---------------------------
+
+If you need to debug a CI job failure, you can often reproduce it locally
+without needing the target hardware by using ``drm-shim``.
+
+.. toctree::
+   :maxdepth: 1
+
+   drm-shim
 
 Marge queue
 -----------

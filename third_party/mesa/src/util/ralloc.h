@@ -672,6 +672,7 @@ void *linear_zalloc_child_array(linear_ctx *ctx, size_t size, unsigned count) MA
 char *linear_strdup(linear_ctx *ctx, const char *str) MALLOCLIKE;
 char *linear_asprintf(linear_ctx *ctx, const char *fmt, ...) PRINTFLIKE(2, 3) MALLOCLIKE;
 char *linear_vasprintf(linear_ctx *ctx, const char *fmt, va_list args) MALLOCLIKE;
+void *linear_memdup(linear_ctx *ctx, const void *mem, size_t n) MALLOCLIKE;
 bool linear_asprintf_append(linear_ctx *ctx, char **str, const char *fmt, ...) PRINTFLIKE(3, 4);
 bool linear_vasprintf_append(linear_ctx *ctx, char **str, const char *fmt,
                              va_list args);

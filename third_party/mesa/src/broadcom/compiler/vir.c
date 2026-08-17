@@ -25,6 +25,7 @@
 #include "v3d_compiler.h"
 #include "compiler/nir/nir_schedule.h"
 #include "compiler/nir/nir_builder.h"
+#include "compiler/nir/nir_builtin_builder.h"
 #include "compiler/nir/nir_format_convert.h"
 #include "util/perf/cpu_trace.h"
 
@@ -64,6 +65,10 @@ vir_has_side_effects(struct v3d_compile *c, struct qinst *inst)
                 case V3D_QPU_A_STVPMP:
                 case V3D_QPU_A_VPMWT:
                 case V3D_QPU_A_TMUWT:
+                case V3D_QPU_A_SETNNMODE_UU:
+                case V3D_QPU_A_SETNNMODE_SU:
+                case V3D_QPU_A_SETNNMODE_US:
+                case V3D_QPU_A_SETNNMODE_SS:
                         return true;
                 default:
                         break;
@@ -210,6 +215,36 @@ vir_set_pack(struct qinst *inst, enum v3d_qpu_output_pack pack)
                 assert(vir_is_mul(inst));
                 inst->qpu.alu.mul.output_pack = pack;
         }
+}
+
+/* Return the input unpack mode applied to source src of inst.
+ * For non-ALU instructions (TMU writes, signals, etc.) we conservatively
+ * return UNPACK_NONE (the source is read as a full 32-bit value).
+ */
+enum v3d_qpu_input_unpack
+vir_get_unpack(struct qinst *inst, int src)
+{
+        if (inst->qpu.type != V3D_QPU_INSTR_TYPE_ALU)
+                return V3D_QPU_UNPACK_NONE;
+
+        assert(src == 0 || src == 1);
+
+        if (vir_is_add(inst))
+                return src == 0 ? inst->qpu.alu.add.a.unpack
+                                : inst->qpu.alu.add.b.unpack;
+        else
+                return src == 0 ? inst->qpu.alu.mul.a.unpack
+                                : inst->qpu.alu.mul.b.unpack;
+}
+
+/* Return the output pack mode for the pipe that writes inst's destination. */
+enum v3d_qpu_output_pack
+vir_get_pack(struct qinst *inst)
+{
+        if (vir_is_mul(inst))
+                return inst->qpu.alu.mul.output_pack;
+        else
+                return inst->qpu.alu.add.output_pack;
 }
 
 void
@@ -588,7 +623,7 @@ vir_compile_init(const struct v3d_compiler *compiler,
         return c;
 }
 
-static int
+static unsigned
 type_size_vec4(const struct glsl_type *type, bool bindless)
 {
         return glsl_count_attribute_slots(type, false);
@@ -631,7 +666,7 @@ v3d_nir_lower_null_pointers_cb(nir_builder *b,
                 return false;
 
         /* Otherwise, see if it comes from a bcsel including a null pointer */
-        if (src->ssa->parent_instr->type != nir_instr_type_alu)
+        if (!nir_def_is_alu(src->ssa))
                 return false;
 
         nir_alu_instr *alu = nir_def_as_alu(src->ssa);
@@ -683,10 +718,40 @@ v3d_nir_lower_null_pointers(nir_shader *s)
 static unsigned
 lower_bit_size_cb(const nir_instr *instr, void *_data)
 {
+        const struct v3d_compile *c = _data;
+        assert(c);
+
+        if (instr->type == nir_instr_type_intrinsic) {
+                /* Widen vote_feq/vote_ieq when the source operand is sub-32-bit:
+                 * the V3D backend lowers these to ALLFEQ/ALLEQ on full 32-bit
+                 * channels, so the comparison input must be 32-bit.
+                 */
+                nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+                if (intr->intrinsic != nir_intrinsic_vote_feq &&
+                    intr->intrinsic != nir_intrinsic_vote_ieq)
+                        return 0;
+                unsigned src_bit_size = intr->src[0].ssa->bit_size;
+                if (src_bit_size != 1 && src_bit_size < 32)
+                        return 32;
+                return 0;
+        }
+
         if (instr->type != nir_instr_type_alu)
                 return 0;
 
         nir_alu_instr *alu = nir_instr_as_alu(instr);
+
+        /* On V3D 7.1+ we have native 16-bit float instructions */
+        if (c->devinfo->ver >= 71 && alu->def.bit_size == 16 &&
+            (alu->op == nir_op_fsub ||
+             alu->op == nir_op_fadd ||
+             alu->op == nir_op_fneg ||
+             alu->op == nir_op_fabs ||
+             alu->op == nir_op_fmul ||
+             alu->op == nir_op_fmin ||
+             alu->op == nir_op_fmax)) {
+                return 0;
+        }
 
         switch (alu->op) {
         case nir_op_mov:
@@ -766,7 +831,14 @@ v3d_lower_nir(struct v3d_compile *c)
         NIR_PASS(_, c->s, nir_lower_compute_system_values, NULL);
         NIR_PASS(_, c->s, nir_lower_is_helper_invocation);
         NIR_PASS(_, c->s, v3d_nir_lower_null_pointers);
-        NIR_PASS(_, c->s, nir_lower_bit_size, lower_bit_size_cb, NULL);
+        NIR_PASS(_, c->s, nir_lower_bit_size, lower_bit_size_cb, c);
+
+        /* Lower frexp after bit_size so the decomposition operates at 32-bit.
+         * If lowered at 16-bit, the widening pass applies f2f32 to float ops
+         * (fabs) but u2u32 to int ops (ushr/iand), breaking the implicit
+         * float-to-int bit reinterpretation that frexp lowering relies on.
+         */
+        NIR_PASS(_, c->s, nir_lower_frexp);
 }
 
 static void
@@ -1003,8 +1075,10 @@ v3d_return_qpu_insts(struct v3d_compile *c, uint32_t *final_assembly_size)
         *final_assembly_size = c->qpu_inst_count * sizeof(uint64_t);
 
         uint64_t *qpu_insts = malloc(*final_assembly_size);
-        if (!qpu_insts)
+        if (!qpu_insts) {
+                vir_compile_destroy(c);
                 return NULL;
+        }
 
         memcpy(qpu_insts, c->qpu_insts, *final_assembly_size);
 
@@ -1040,6 +1114,7 @@ v3d_nir_lower_vs_early(struct v3d_compile *c)
         NIR_PASS(_, c->s, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
                  type_size_vec4,
                  (nir_lower_io_options)0);
+        c->s->info.disable_output_offset_src_constant_folding = true;
 
         /* For geometry stages using the same segment for inputs and outputs
          * we need to read all inputs before writing any output. If we switch
@@ -1082,6 +1157,8 @@ v3d_nir_lower_gs_early(struct v3d_compile *c)
         NIR_PASS(_, c->s, nir_lower_io, nir_var_shader_in | nir_var_shader_out,
                  type_size_vec4,
                  (nir_lower_io_options)0);
+        c->s->info.disable_output_offset_src_constant_folding = true;
+
         /* clean up nir_lower_io's deref_var remains and do a constant folding pass
          * on the code it generated.
          */
@@ -1214,7 +1291,7 @@ v3d_nir_lower_fs_early(struct v3d_compile *c)
                         assert(c->fs_key->msaa);
 
                         NIR_PASS(_, c->s, nir_lower_alpha_to_coverage,
-                                 V3D_MAX_SAMPLES, true, NULL);
+                                 true, NULL);
                 }
 
                 if (c->fs_key->sample_alpha_to_one)
@@ -1258,7 +1335,7 @@ v3d_nir_lower_fs_late(struct v3d_compile *c)
         NIR_PASS(_, c->s, nir_lower_io_to_scalar, nir_var_shader_in, NULL, NULL);
 }
 
-static uint32_t
+uint32_t
 vir_get_max_temps(struct v3d_compile *c)
 {
         int max_ip = 0;
@@ -1344,13 +1421,48 @@ v3d_instr_delay_cb(nir_instr *instr, void *data)
    switch (instr->type) {
    case nir_instr_type_undef:
    case nir_instr_type_load_const:
-   case nir_instr_type_alu:
    case nir_instr_type_deref:
    case nir_instr_type_jump:
-   case nir_instr_type_parallel_copy:
    case nir_instr_type_call:
+   case nir_instr_type_cmat_call:
    case nir_instr_type_phi:
       return 1;
+
+   case nir_instr_type_alu: {
+      nir_alu_instr *alu = nir_instr_as_alu(instr);
+      switch (alu->op) {
+      /* We implement integer downcasts with a MOV, which can be copy
+       * propagated in the backend.
+       */
+      case nir_op_u2u16:
+      case nir_op_i2i16:
+            return nir_src_bit_size(alu->src[0].src) == 32 ? 0 : 1;
+      case nir_op_u2u8:
+      case nir_op_i2i8:
+         return 0;
+
+      /* This is a FMOV with unpack which can be copy propagated in the
+       * backend.
+       */
+      case nir_op_f2f32:
+         return 0;
+
+      /* We assume ushr by const 16 is probably part of a common NIR sequence
+       * to extract the high or low 16-bit of a 2x16-bit value, wich will
+       * optimized away by the backend.
+       */
+      case nir_op_ushr: {
+         nir_scalar s = nir_get_scalar(alu->src[1].src.ssa, 0);
+         if (!nir_scalar_is_const(s))
+            return false;
+
+         return nir_scalar_as_uint(s) == 16u;
+      }
+
+      default:
+         return 1;
+      }
+   }
 
    /* We should not use very large delays for TMU instructions. Typically,
     * thread switches will be sufficient to hide all or most of the latency,
@@ -1397,21 +1509,6 @@ v3d_instr_delay_cb(nir_instr *instr, void *data)
    }
 
    return 0;
-}
-
-static bool
-should_split_wrmask(const nir_instr *instr, const void *data)
-{
-        nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
-        switch (intr->intrinsic) {
-        case nir_intrinsic_store_ssbo:
-        case nir_intrinsic_store_shared:
-        case nir_intrinsic_store_global:
-        case nir_intrinsic_store_scratch:
-                return true;
-        default:
-                return false;
-        }
 }
 
 static nir_intrinsic_instr *
@@ -1579,7 +1676,7 @@ v3d_nir_sort_constant_ubo_load(nir_block *block, nir_intrinsic_instr *ref)
                                  */
                                 break;
                         }
-                        if (intr->src[1].ssa->parent_instr == tmp) {
+                        if (nir_def_instr(intr->src[1].ssa) == tmp) {
                                 offset_inst = tmp;
                                 break;
                         }
@@ -1768,10 +1865,70 @@ should_lower_robustness(const nir_intrinsic_instr *intr, const void *data)
         case nir_intrinsic_image_store:
         case nir_intrinsic_image_atomic:
         case nir_intrinsic_image_atomic_swap:
-                return key->robust_image_access;
+                return key->robust_image_access || key->robust_image_access_2;
 
         default:
                 return false;
+        }
+}
+
+static bool
+v3d_lower_txf_lod_robustness_instr(nir_builder *b, nir_tex_instr *txf, void *data)
+{
+        int lod_idx = nir_tex_instr_src_index(txf, nir_tex_src_lod);
+        if (txf->op != nir_texop_txf || lod_idx < 0 ||
+            (nir_src_is_const(txf->src[lod_idx].src) &&
+             nir_src_as_const_value(txf->src[lod_idx].src)->u32 == 0)) {
+                return false;
+        }
+
+        nir_src lod_src = txf->src[lod_idx].src;
+        b->cursor = nir_before_instr(&txf->instr);
+        nir_def *lod = lod_src.ssa;
+        unsigned lod_bit_size = lod->bit_size;
+        nir_def *levels = nir_build_texture_query(b, txf,
+                                                   nir_texop_query_levels, 1,
+                                                   nir_type_uint32,
+                                                   false, false);
+        int coord_idx = nir_tex_instr_src_index(txf, nir_tex_src_coord);
+        assert(coord_idx >= 0);
+
+        nir_def *lod_in_bounds = nir_iand(b, nir_ige(b, lod,
+                                         nir_imm_intN_t(b, 0, lod_bit_size)),
+                                         nir_ilt(b, lod, levels));
+        nir_def *coord = txf->src[coord_idx].src.ssa;
+        nir_if *if_stmt = nir_push_if(b, nir_inot(b, lod_in_bounds));
+        nir_def *oob_elem = nir_imm_intN_t(b, 0x1fffffff, coord->bit_size);
+        nir_def *coord_oob = nir_vector_insert_imm(b, coord, oob_elem, 0);
+        nir_pop_if(b, if_stmt);
+        nir_def *coord_sel = nir_if_phi(b, coord_oob, coord);
+        nir_src_rewrite(&txf->src[coord_idx].src, coord_sel);
+
+        return true;
+}
+
+static bool
+v3d_nir_lower_txf_lod_robustness(nir_shader *s)
+{
+        return nir_shader_tex_pass(s, v3d_lower_txf_lod_robustness_instr,
+                                    nir_metadata_none, NULL);
+}
+
+static bool
+intrinsic_try_skip_helpers(nir_intrinsic_instr *intr, UNUSED void *data)
+{
+        switch(intr->intrinsic) {
+                case nir_intrinsic_image_load:
+                case nir_intrinsic_load_uniform:
+                case nir_intrinsic_load_ubo:
+                case nir_intrinsic_load_ssbo:
+                case nir_intrinsic_load_scratch:
+                case nir_intrinsic_load_shared:
+                case nir_intrinsic_load_global:
+                case nir_intrinsic_load_global_constant:
+                        return true;
+                default:
+                        return false;
         }
 }
 
@@ -1826,7 +1983,18 @@ v3d_attempt_compile(struct v3d_compile *c)
 
         NIR_PASS(_, c->s, v3d_nir_lower_io, c);
         NIR_PASS(_, c->s, v3d_nir_lower_txf_ms);
+        /* On V3D 4.2, txf instructions with an out-of-bounds LOD do not
+         * return robust values (zero) as required by robustImageAccess2.
+         * This pass rewrites the fetch to a guaranteed out-of-bounds
+         * coordinate when LOD is invalid.
+         */
+        if (c->devinfo->ver < 71 && c->key->robust_image_access_2)
+                NIR_PASS(_, c->s, v3d_nir_lower_txf_lod_robustness);
+
         NIR_PASS(_, c->s, v3d_nir_lower_image_load_store, c);
+
+        if (c->key->null_descriptor)
+                NIR_PASS(_, c->s, v3d_nir_lower_null_descriptors);
 
         NIR_PASS(_, c->s, nir_opt_idiv_const, 8);
         nir_lower_idiv_options idiv_options = {
@@ -1836,14 +2004,14 @@ v3d_attempt_compile(struct v3d_compile *c)
         NIR_PASS(_, c->s, nir_lower_alu);
 
         if (c->key->robust_uniform_access || c->key->robust_storage_access ||
-            c->key->robust_image_access) {
+            c->key->robust_image_access || c->key->robust_image_access_2) {
                 /* nir_lower_robust_access assumes constant buffer
                  * indices on ubo/ssbo intrinsics so run copy propagation and
                  * constant folding passes before we run the lowering to warrant
                  * this. We also want to run the lowering before v3d_optimize to
                  * clean-up redundant get_buffer_size calls produced in the pass.
                  */
-                NIR_PASS(_, c->s, nir_copy_prop);
+                NIR_PASS(_, c->s, nir_opt_copy_prop);
                 NIR_PASS(_, c->s, nir_opt_constant_folding);
 
                 NIR_PASS(_, c->s, nir_lower_robust_access,
@@ -1851,13 +2019,11 @@ v3d_attempt_compile(struct v3d_compile *c)
         }
 
         NIR_PASS(_, c->s, nir_lower_vars_to_scratch,
-                 nir_var_function_temp,
                  0,
                  glsl_get_natural_size_align_bytes,
                  glsl_get_natural_size_align_bytes);
 
         NIR_PASS(_, c->s, v3d_nir_lower_global_2x32);
-        NIR_PASS(_, c->s, nir_lower_wrmasks, should_split_wrmask, c->s);
         NIR_PASS(_, c->s, v3d_nir_lower_load_store_bitsize);
         NIR_PASS(_, c->s, v3d_nir_lower_scratch);
 
@@ -1875,11 +2041,28 @@ v3d_attempt_compile(struct v3d_compile *c)
                 .lower_subgroup_masks = true,
                 .lower_relative_shuffle = true,
                 .lower_quad = true,
+                .lower_quad_vote = true,
                 .lower_reduce = true,
+                .lower_rotate_to_shuffle = true,
         };
         NIR_PASS(_, c->s, nir_lower_subgroups, &subgroup_opts);
 
+        /* nir_lower_subgroups can introduce sub-32-bit ALU ops that escape
+         * the bit_size lowering done in v3d_lower_nir. Re-run bit_size
+         * lowering so the new ops also get widened with proper sign/zero
+         * extension on inputs and the matching narrow on outputs.
+         */
+        NIR_PASS(_, c->s, nir_lower_bit_size, lower_bit_size_cb, c);
+
         v3d_optimize_nir(c, c->s);
+
+        const unsigned lower_flrp =
+                (c->s->options->lower_flrp16 ? 16 : 0) |
+                (c->s->options->lower_flrp32 ? 32 : 0) |
+                (c->s->options->lower_flrp64 ? 64 : 0);
+
+        NIR_PASS(_, c->s, nir_lower_flrp, lower_flrp,
+                 false /* always_precise */);
 
         /* Do late algebraic optimization to turn add(a, neg(b)) back into
          * subs, then the mandatory cleanup after algebraic.  Note that it may
@@ -1891,14 +2074,23 @@ v3d_attempt_compile(struct v3d_compile *c)
                 more_late_algebraic = false;
                 NIR_PASS(more_late_algebraic, c->s, nir_opt_algebraic_late);
                 NIR_PASS(_, c->s, nir_opt_constant_folding);
-                NIR_PASS(_, c->s, nir_copy_prop);
+                NIR_PASS(_, c->s, nir_opt_copy_prop);
                 NIR_PASS(_, c->s, nir_opt_dce);
                 NIR_PASS(_, c->s, nir_opt_cse);
         }
 
         NIR_PASS(_, c->s, nir_lower_bool_to_int32);
-        NIR_PASS(_, c->s, nir_convert_to_lcssa, true, true);
         nir_divergence_analysis(c->s);
+
+        if (c->s->info.stage == MESA_SHADER_FRAGMENT) {
+                nir_opt_load_skip_helpers_options skip_helper_options = {
+                        .no_add_divergence = true,
+                        .intrinsic_cb = intrinsic_try_skip_helpers,
+                };
+                NIR_PASS(_, c->s, nir_opt_load_skip_helpers,
+                         &skip_helper_options);
+        }
+
         NIR_PASS(_, c->s, nir_convert_from_ssa, true, true);
 
         struct nir_schedule_options schedule_options = {
@@ -1983,10 +2175,14 @@ int v3d_shaderdb_dump(struct v3d_compile *c,
  * that will be used to try to compile the shader successfully. The
  * default strategy is to enable all optimizations which will have
  * the highest register pressure but is expected to produce most
- * optimal code. Following strategies incrementally disable specific
- * optimizations that are known to contribute to register pressure
- * in order to be able to compile the shader successfully while meeting
- * thread count requirements.
+ * optimal code. Following strategies disable optimizations that are known
+ * to contribute to register pressure in order to be able to compile the
+ * shader successfully while meeting thread count requirements.
+ *
+ * Note that strategies 4 ("disable TMU pipelining") and 5 ("fallback
+ * scheduler") are kept as separate entries: 4 uses the normal scheduler and
+ * is the best result for a number of shaders, while 5 (the last entry, which
+ * vir_compile_init flags as the fallback scheduler) is the last resort.
  *
  * V3D 4.1+ has a min thread count of 2, but we can use 1 here to also
  * cover previous hardware as well (meaning that we are not limiting
@@ -1994,19 +2190,12 @@ int v3d_shaderdb_dump(struct v3d_compile *c,
  * because v3d_nir_to_vir will cap this to the actual minimum.
  */
 static const struct v3d_compiler_strategy strategies[] = {
-        /*0*/  { "default",                        4, 4, false, false, false, false, false, false,  0 },
-        /*1*/  { "disable general TMU sched",      4, 4, true,  false, false, false, false, false,  0 },
-        /*2*/  { "disable gcm",                    4, 4, true,  true,  false, false, false, false,  0 },
-        /*3*/  { "disable loop unrolling",         4, 4, true,  true,  true,  false, false, false,  0 },
-        /*4*/  { "disable UBO load sorting",       4, 4, true,  true,  true,  true,  false, false,  0 },
-        /*5*/  { "disable TMU pipelining",         4, 4, true,  true,  true,  true,  false, true,   0 },
-        /*6*/  { "lower thread count",             2, 1, false, false, false, false, false, false, -1 },
-        /*7*/  { "disable general TMU sched (2t)", 2, 1, true,  false, false, false, false, false, -1 },
-        /*8*/  { "disable gcm (2t)",               2, 1, true,  true,  false, false, false, false, -1 },
-        /*9*/  { "disable loop unrolling (2t)",    2, 1, true,  true,  true,  false, false, false, -1 },
-        /*10*/ { "Move buffer loads (2t)",         2, 1, true,  true,  true,  true,  true,  false, -1 },
-        /*11*/ { "disable TMU pipelining (2t)",    2, 1, true,  true,  true,  true,  true,  true,  -1 },
-        /*12*/ { "fallback scheduler",             2, 1, true,  true,  true,  true,  true,  true,  -1 }
+        /*0*/ { "default",                        4, 4, false, false, false, false, false, false,  0 },
+        /*1*/ { "disable 4t pressure opts",       4, 4, true,  true,  true,  true,  false, false,  0 },
+        /*2*/ { "lower thread count",             2, 1, false, false, false, false, false, false, -1 },
+        /*3*/ { "disable 2t pressure opts",       2, 1, true,  true,  true,  true,  true,  false, -1 },
+        /*4*/ { "disable TMU pipelining (2t)",    2, 1, true,  true,  true,  true,  true,  true,  -1 },
+        /*5*/ { "fallback scheduler",             2, 1, true,  true,  true,  true,  true,  true,  -1 }
 };
 
 /**
@@ -2033,36 +2222,29 @@ skip_compile_strategy(struct v3d_compile *c, uint32_t idx)
    }
 
    switch (idx) {
-   /* General TMU sched.: skip if we didn't emit any TMU loads */
-   case 1:
-   case 7:
-           return !c->has_general_tmu_load;
-   /* Global code motion: skip if nir_opt_gcm didn't make any progress */
-   case 2:
-   case 8:
-           return !c->gcm_progress;
-   /* Loop unrolling: skip if we didn't unroll any loops */
-   case 3:
-   case 9:
-           return !c->unrolled_any_loops;
-   /* UBO load sorting: skip if we didn't sort any loads */
-   case 4:
-           return !c->sorted_any_ubo_loads;
-   /* Move buffer loads: we assume any shader with difficult RA
-    * most likely has UBO / SSBO loads so we never try to skip.
-    * For now, we only try this for 2-thread compiles since it
-    * is expected to impact instruction counts and latency.
+   /* "disable 4t pressure opts": disables general TMU scheduling, GCM,
+    * loop unrolling and UBO load sorting at once. Only worth trying if at
+    * least one of those optimizations actually did something; otherwise the
+    * result would be identical to the previous attempt.
     */
-   case 10:
+   case 1:
+           return !c->has_general_tmu_load && !c->gcm_progress &&
+                  !c->unrolled_any_loops && !c->sorted_any_ubo_loads;
+   /* "disable 2t pressure opts": disables the same four optimizations as
+    * strategy 1 and additionally moves buffer loads, all at 2 threads. We
+    * assume any shader with difficult RA most likely has UBO / SSBO loads so
+    * we never try to skip it.
+    */
+   case 3:
           assert(c->threads < 4);
           return false;
    /* TMU pipelining: skip if we didn't pipeline any TMU ops */
-   case 5:
-   case 11:
+   case 4:
            return !c->pipelined_any_tmu;
-   /* Lower thread count: skip if we already tried less that 4 threads */
-   case 6:
-          return c->threads < 4;
+   /* Strategy 2 ("lower thread count") changes spilling behaviour and is
+    * handled by the max_tmu_spills guard above; strategy 5 (fallback
+    * scheduler) is the last resort and is never skipped.
+    */
    default:
            return false;
    };
@@ -2076,6 +2258,328 @@ set_best_compile(struct v3d_compile **best, struct v3d_compile *c)
    *best = c;
 }
 
+/* Emits a compile-strategy message through the compile's debug_output
+ * callback and the log, only with V3D_DEBUG=perf.
+ */
+static void PRINTFLIKE(2, 3)
+log_strategy(struct v3d_compile *c, const char *fmt, ...)
+{
+        if (!V3D_DBG(PERF))
+                return;
+
+        va_list args;
+        char *msg;
+
+        va_start(args, fmt);
+        int ret = vasprintf(&msg, fmt, args);
+        va_end(args);
+        if (ret < 0)
+                return;
+
+        mesa_logi("%s", msg);
+        c->debug_output(msg, c->debug_output_data);
+        free(msg);
+}
+
+static void
+log_strategy_fallback(struct v3d_compile *c)
+{
+        log_strategy(c, "Falling back to strategy '%s' for %s prog %d/%d",
+                     strategies[c->compile_strategy_idx].name,
+                     vir_get_stage_name(c),
+                     c->program_id, c->variant_id);
+}
+
+static void
+log_compile_failed(struct v3d_compile *c)
+{
+        mesa_loge("Failed to compile %s prog %d/%d with strategy %d",
+                  vir_get_stage_name(c), c->program_id,
+                  c->variant_id, c->compile_strategy_idx);
+}
+
+/* A 2-thread compile has an allocation budget of ~64 registers and the
+ * pre-spill pressure (max simultaneously-live temps) is an accurate
+ * predictor: shaders at/under the budget allocate with little or no spilling,
+ * while shaders far above it spill on every 2-thread strategy. The latter are
+ * routed to the pressure-probe (one spill loop instead of one per strategy);
+ * the rest take the normal ladder, which is cheap for them and stops at the
+ * first 0-spill compile. The cutoff is set well above the budget so only
+ * heavily-spilling shaders, where the probe actually pays off, are diverted.
+ */
+#define V3D_PROBE_HEAVY_PRESSURE (2 * 64)
+
+/* In the heavy path, besides the lowest-pressure strategy we also finish any
+ * whose pressure is within this margin of it: a small tie in pre-spill pressure
+ * does not reliably predict which strategy spills least.
+ */
+#define V3D_PROBE_PRESSURE_MARGIN 8
+
+static struct v3d_compile *
+probe_strategy(const struct v3d_compiler *compiler, struct v3d_key *key,
+               nir_shader *s,
+               void (*debug_output)(const char *, void *),
+               void *debug_output_data, int program_id, int variant_id,
+               int32_t strategy)
+{
+        struct v3d_compile *p =
+                vir_compile_init(compiler, key, s, debug_output,
+                                 debug_output_data, program_id, variant_id,
+                                 strategy, &strategies[strategy],
+                                 strategy == ARRAY_SIZE(strategies) - 1);
+        p->probe_only = true;
+        v3d_attempt_compile(p);
+        return p;
+}
+
+static void
+finish_strategy(struct v3d_compile *p)
+{
+        assert(p->probe_only);
+        p->probe_only = false;
+        v3d_nir_to_vir_finish(p);
+}
+
+/* qsort comparator: order by pre-spill pressure, breaking ties on the strategy
+ * index so the pressure-order walk below selects the same strategy the ladder
+ * (which tries them in index order) would.
+ */
+static int
+cmp_candidate_pressure(const void *pa, const void *pb)
+{
+        const struct v3d_compile *a = *(const struct v3d_compile **)pa;
+        const struct v3d_compile *b = *(const struct v3d_compile **)pb;
+        if (a->max_pressure != b->max_pressure)
+                return a->max_pressure < b->max_pressure ? -1 : 1;
+        if (a->compile_strategy_idx != b->compile_strategy_idx)
+                return a->compile_strategy_idx < b->compile_strategy_idx ? -1 : 1;
+        return 0;
+}
+
+/* Compile with the 2-thread strategies, from index "first" on, and return
+ * the best compile (callers must check its compilation_result).
+ *
+ * The first strategy is probed (VIR built up to the point of register
+ * allocation, measuring the pre-spill pressure) to route between two paths:
+ *
+ * "Light" shaders: compile all 2-thread strategies assuming the full RA loop
+ * is relatively cheap, choose the one with the least spills. Skip early if we
+ * find one which doesn't spill.
+ *
+ * "Heavy" shaders (which will spill on every strategy, paying a full spill
+ * loop per attempt) probe every strategy first and run the spill loop only
+ * on the lowest-pressure candidate(s).
+ */
+static struct v3d_compile *
+compile_2t_strategies(const struct v3d_compiler *compiler,
+                      struct v3d_key *key,
+                      nir_shader *s,
+                      void (*debug_output)(const char *msg,
+                                           void *debug_output_data),
+                      void *debug_output_data,
+                      int program_id, int variant_id,
+                      int32_t first)
+{
+        const int nstrat = ARRAY_SIZE(strategies);
+        struct v3d_compile *candidates[ARRAY_SIZE(strategies)] = { NULL };
+        int num_candidates = 0;
+        struct v3d_compile *chosen = NULL;
+
+        assert(first > 0 && first < nstrat);
+        /* Route on the first 2-thread strategy's pre-spill pressure. */
+        assert(strategies[first].max_threads == 2);
+        struct v3d_compile *p0 =
+                probe_strategy(compiler, key, s, debug_output,
+                               debug_output_data, program_id, variant_id,
+                               first);
+
+        if (p0->max_pressure <= V3D_PROBE_HEAVY_PRESSURE) {
+                /* Light register pressure: compile all 2-thread strategies
+                 * assuming full RA loop is relatively cheap, choose the one
+                 * with the least spills.
+                 */
+                uint32_t best_spill_fill_count = UINT32_MAX;
+                struct v3d_compile *prev = NULL;
+                for (int32_t strat = first; strat < nstrat; strat++) {
+                        assert(strategies[strat].max_threads == 2);
+                        struct v3d_compile *c;
+                        if (strat == first) {
+                                c = p0;
+                                finish_strategy(c);
+                        } else {
+                                if (skip_compile_strategy(prev, strat))
+                                        continue;
+                                c = vir_compile_init(compiler, key, s,
+                                                     debug_output,
+                                                     debug_output_data,
+                                                     program_id, variant_id,
+                                                     strat, &strategies[strat],
+                                                     strat == nstrat - 1);
+                                /* Cap the spill budget at the best result so
+                                 * far so a strictly-worse spill loop aborts
+                                 * early. best_spill_fill_count is UINT32_MAX
+                                 * until a strategy succeeds, so this is a
+                                 * no-op until then.
+                                 */
+                                c->max_tmu_spills = best_spill_fill_count;
+                                v3d_attempt_compile(c);
+                        }
+                        candidates[num_candidates++] = c;
+                        log_strategy_fallback(c);
+                        prev = c;
+
+                        /* Broken shader or driver bug */
+                        if (c->compilation_result == V3D_COMPILATION_FAILED) {
+                                log_compile_failed(c);
+                                continue;
+                        }
+                        if (c->compilation_result != V3D_COMPILATION_SUCCEEDED)
+                                continue;
+                        if (c->spills == 0) {
+                                chosen = c;
+                                break;
+                        }
+                        if (c->spills + c->fills < best_spill_fill_count) {
+                                best_spill_fill_count = c->spills + c->fills;
+                                chosen = c;
+                        }
+
+                        log_strategy(c, "Compiled %s prog %d/%d with %d "
+                                     "spills and %d fills. Will try more "
+                                     "strategies.",
+                                     vir_get_stage_name(c),
+                                     c->program_id, c->variant_id,
+                                     c->spills, c->fills);
+                }
+        } else {
+                /* Heavy path: probe the remaining strategies, then run
+                 * the spill loop only on a small candidate set and keep
+                 * the minimum spill+fill:
+                 *  - the lowest-pressure strategy and any within
+                 *    V3D_PROBE_PRESSURE_MARGIN of it (pre-spill pressure
+                 *    ties don't reliably predict the min-spill strategy),
+                 *  - the fallback scheduler also within a wider band (up to
+                 *    2x the minimum pressure): its pressure runs higher for
+                 *    comparable spilling, but far beyond the band its spill
+                 *    loop is the most expensive of all strategies and never
+                 *    wins.
+                 * Escalate to the remaining strategies in pressure order if
+                 * every candidate failed register allocation.
+                 */
+                candidates[num_candidates++] = p0;
+                for (int32_t strat = first + 1; strat < nstrat; strat++) {
+                        if (skip_compile_strategy(candidates[num_candidates - 1], strat))
+                                continue;
+                        candidates[num_candidates++] =
+                                probe_strategy(compiler, key, s, debug_output,
+                                               debug_output_data, program_id,
+                                               variant_id, strat);
+                }
+
+                /* Sort candidates by pre-spill pressure */
+                qsort(candidates, num_candidates, sizeof(*candidates),
+                      cmp_candidate_pressure);
+
+                uint32_t min_pressure = candidates[0]->max_pressure;
+                bool finished[ARRAY_SIZE(strategies)] = { false };
+                for (int rank = 0; rank < num_candidates; rank++) {
+                        struct v3d_compile *p = candidates[rank];
+                        /* The fallback scheduler optimises its own NIR-level
+                         * pressure estimate, which diverges from the pre-spill
+                         * pressure measured on the VIR, so its probe runs high
+                         * for comparable spilling; give it a wider, relative
+                         * band (up to 2x the minimum) rather than the small
+                         * fixed margin the other strategies use. Measured over
+                         * fossilize captures, shader-db and CTS, every fallback
+                         * win was below 1.6x the minimum probed pressure, while
+                         * from ~2.4x on it always lost with the most expensive
+                         * spill loop of all strategies (up to ~50x slower).
+                         */
+                        if (p->compile_strategy_idx == nstrat - 1) {
+                                if (p->max_pressure > 2 * min_pressure)
+                                        continue;
+                        } else if (p->max_pressure >
+                                   min_pressure + V3D_PROBE_PRESSURE_MARGIN) {
+                                continue;
+                        }
+                        /* A candidate that spills more than the best result
+                         * so far can never be selected, so cap its spill
+                         * budget at that count: register allocation aborts
+                         * (reported as a spill failure) once it is exceeded,
+                         * skipping the rest of the unsuccessful spill loop. The
+                         * budget is the exact count, so a candidate can still
+                         * tie it and win the strategy-index tie-break below;
+                         * only strictly-worse spilling is cut short.
+                         */
+                        if (chosen)
+                                p->max_tmu_spills = chosen->spills + chosen->fills;
+                        log_strategy_fallback(p);
+                        finish_strategy(p);
+                        finished[rank] = true;
+
+                        /* Broken shader or driver bug */
+                        if (p->compilation_result == V3D_COMPILATION_FAILED) {
+                                log_compile_failed(p);
+                                continue;
+                        }
+                        if (p->compilation_result != V3D_COMPILATION_SUCCEEDED)
+                                continue;
+                        /* Keep the minimum spill+fill; break ties on the
+                         * strategy index so we select the same strategy the
+                         * ladder (which tries them in index order) would.
+                         */
+                        if (!chosen ||
+                            p->spills + p->fills <
+                            chosen->spills + chosen->fills ||
+                            (p->spills + p->fills ==
+                             chosen->spills + chosen->fills &&
+                             p->compile_strategy_idx <
+                             chosen->compile_strategy_idx)) {
+                                chosen = p;
+                                /* Nothing can beat a 0-spill compile */
+                                if (p->spills == 0)
+                                        break;
+                        }
+                }
+                /* If no candidate succeeded, escalate through the remaining
+                 * strategies in pressure order (this is a register allocation
+                 * failure: spilling is unrestricted in 2-thread strategies,
+                 * but RA can still fail).
+                 */
+                for (int rank = 0; rank < num_candidates && !chosen; rank++) {
+                        if (finished[rank])
+                                continue;
+                        struct v3d_compile *p = candidates[rank];
+                        log_strategy_fallback(p);
+                        finish_strategy(p);
+                        finished[rank] = true;
+                        /* Stop at the first success. A hard failure (broken
+                         * shader or driver bug) is logged but, like a register
+                         * allocation failure, keeps escalating.
+                         */
+                        if (p->compilation_result == V3D_COMPILATION_SUCCEEDED) {
+                                chosen = p;
+                                break;
+                        }
+                        if (p->compilation_result == V3D_COMPILATION_FAILED)
+                                log_compile_failed(p);
+                }
+        }
+        /* No strategy succeeded (all failed register allocation, or hit a
+         * broken shader / driver bug). It doesn't matter which one we return;
+         * every candidate has been finished by now, so return the last one.
+         */
+        if (!chosen)
+                chosen = candidates[num_candidates - 1];
+
+        for (int i = 0; i < num_candidates; i++) {
+                if (candidates[i] != chosen)
+                        vir_compile_destroy(candidates[i]);
+        }
+
+        return chosen;
+}
+
 uint64_t *v3d_compile(const struct v3d_compiler *compiler,
                       struct v3d_key *key,
                       struct v3d_prog_data **out_prog_data,
@@ -2087,34 +2591,41 @@ uint64_t *v3d_compile(const struct v3d_compiler *compiler,
                       uint32_t *final_assembly_size)
 {
         struct v3d_compile *c = NULL;
-        uint32_t best_spill_fill_count = UINT32_MAX;
         struct v3d_compile *best_c = NULL;
 
         MESA_TRACE_FUNC();
 
         for (int32_t strat = 0; strat < ARRAY_SIZE(strategies); strat++) {
-                /* Fallback strategy */
+                /* Once the 4-thread strategies are exhausted
+                 * compile_2t_strategies() will choose the best 2-thread
+                 * strategy.
+                 */
+                if (strategies[strat].min_threads != 4) {
+                        /* All previous strategies failed register allocation
+                         * (a success breaks out of the loop and best_c is
+                         * only set then), so the last 4-thread compile is no
+                         * longer needed.
+                         */
+                        assert(!best_c);
+                        if (c)
+                                vir_compile_destroy(c);
+
+                        c = compile_2t_strategies(compiler, key, s,
+                                                  debug_output,
+                                                  debug_output_data,
+                                                  program_id, variant_id,
+                                                  strat);
+                        set_best_compile(&best_c, c);
+                        break;
+                }
+
+                /* 4-thread strategy: no spilling allowed, so it either
+                 * succeeds with 0 spills or fails register allocation.
+                 */
                 if (strat > 0) {
                         assert(c);
                         if (skip_compile_strategy(c, strat))
                                 continue;
-
-                        char *debug_msg;
-                        int ret = asprintf(&debug_msg,
-                                           "Falling back to strategy '%s' "
-                                           "for %s prog %d/%d",
-                                           strategies[strat].name,
-                                           vir_get_stage_name(c),
-                                           c->program_id, c->variant_id);
-
-                        if (ret >= 0) {
-                                if (V3D_DBG(PERF))
-                                        fprintf(stderr, "%s\n", debug_msg);
-
-                                c->debug_output(debug_msg, c->debug_output_data);
-                                free(debug_msg);
-                        }
-
                         if (c != best_c)
                                 vir_compile_destroy(c);
                 }
@@ -2125,86 +2636,42 @@ uint64_t *v3d_compile(const struct v3d_compiler *compiler,
                                      strat, &strategies[strat],
                                      strat == ARRAY_SIZE(strategies) - 1);
 
+                if (strat > 0)
+                        log_strategy_fallback(c);
+
                 v3d_attempt_compile(c);
 
                 /* Broken shader or driver bug */
-                if (c->compilation_result == V3D_COMPILATION_FAILED)
-                        break;
-
-                /* If we compiled without spills, choose this.
-                 * Otherwise if this is a 4-thread compile, choose this (these
-                 * have a very low cap on the allowed TMU spills so we assume
-                 * it will be better than a 2-thread compile without spills).
-                 * Otherwise, keep going while tracking the strategy with the
-                 * lowest spill count.
-                 */
-                if (c->compilation_result == V3D_COMPILATION_SUCCEEDED) {
-                        if (c->spills == 0 ||
-                            strategies[strat].min_threads == 4 ||
-                            V3D_DBG(OPT_COMPILE_TIME)) {
-                                set_best_compile(&best_c, c);
-                                break;
-                        } else if (c->spills + c->fills <
-                                   best_spill_fill_count) {
-                                set_best_compile(&best_c, c);
-                                best_spill_fill_count = c->spills + c->fills;
-                        }
-
-                        if (V3D_DBG(PERF)) {
-                                char *debug_msg;
-                                int ret = asprintf(&debug_msg,
-                                                   "Compiled %s prog %d/%d with %d "
-                                                   "spills and %d fills. Will try "
-                                                   "more strategies.",
-                                                   vir_get_stage_name(c),
-                                                   c->program_id, c->variant_id,
-                                                   c->spills, c->fills);
-                                if (ret >= 0) {
-                                        fprintf(stderr, "%s\n", debug_msg);
-                                        c->debug_output(debug_msg, c->debug_output_data);
-                                        free(debug_msg);
-                                }
-                        }
+                if (c->compilation_result == V3D_COMPILATION_FAILED) {
+                        log_compile_failed(c);
+                        continue;
                 }
-
-                /* Only try next streategy if we failed to register allocate
-                 * or we had to spill.
-                 */
+                if (c->compilation_result == V3D_COMPILATION_SUCCEEDED) {
+                        set_best_compile(&best_c, c);
+                        break;
+                }
                 assert(c->compilation_result ==
-                       V3D_COMPILATION_FAILED_REGISTER_ALLOCATION ||
-                       c->spills > 0);
+                       V3D_COMPILATION_FAILED_REGISTER_ALLOCATION);
         }
 
         /* If the best strategy was not the last, choose that */
         if (best_c && c != best_c)
                 set_best_compile(&c, best_c);
 
-        if (V3D_DBG(PERF) &&
-            c->compilation_result !=
-            V3D_COMPILATION_FAILED_REGISTER_ALLOCATION &&
-            c->spills > 0) {
-                char *debug_msg;
-                int ret = asprintf(&debug_msg,
-                                   "Compiled %s prog %d/%d with %d "
-                                   "spills and %d fills",
-                                   vir_get_stage_name(c),
-                                   c->program_id, c->variant_id,
-                                   c->spills, c->fills);
-                fprintf(stderr, "%s\n", debug_msg);
-
-                if (ret >= 0) {
-                        c->debug_output(debug_msg, c->debug_output_data);
-                        free(debug_msg);
-                }
-        }
-
         if (c->compilation_result != V3D_COMPILATION_SUCCEEDED) {
-                fprintf(stderr, "Failed to compile %s prog %d/%d "
-                        "with any strategy.\n",
-                        vir_get_stage_name(c), c->program_id, c->variant_id);
+                mesa_loge("Failed to compile %s prog %d/%d with any strategy",
+                          vir_get_stage_name(c), c->program_id, c->variant_id);
 
                 vir_compile_destroy(c);
                 return NULL;
+        }
+
+        if (c->spills > 0) {
+                log_strategy(c, "Compiled %s prog %d/%d with %d spills "
+                             "and %d fills",
+                             vir_get_stage_name(c),
+                             c->program_id, c->variant_id,
+                             c->spills, c->fills);
         }
 
         struct v3d_prog_data *prog_data;
@@ -2219,7 +2686,7 @@ uint64_t *v3d_compile(const struct v3d_compiler *compiler,
         int ret = v3d_shaderdb_dump(c, &shaderdb);
         if (ret >= 0) {
                 if (V3D_DBG(SHADERDB))
-                        fprintf(stderr, "SHADER-DB-%s - %s\n", s->info.name, shaderdb);
+                        mesa_logi("SHADER-DB-%s - %s", s->info.name, shaderdb);
 
                 c->debug_output(shaderdb, c->debug_output_data);
                 free(shaderdb);
@@ -2407,9 +2874,8 @@ vir_uniform(struct v3d_compile *c,
                 if (stage_progress) {                                   \
                         progress = true;                                \
                         if (print_opt_debug) {                          \
-                                fprintf(stderr,                         \
-                                        "VIR opt pass %2d: %s progress\n", \
-                                        pass, #func);                   \
+                                mesa_logd("VIR opt pass %2d: %s progress\n", \
+                                          pass, #func);                 \
                         }                                               \
                         /*XXX vir_validate(c);*/                        \
                 }                                                       \
@@ -2429,6 +2895,8 @@ vir_optimize(struct v3d_compile *c)
                 OPTPASS(vir_opt_dead_code);
                 OPTPASS(vir_opt_small_immediates);
                 OPTPASS(vir_opt_constant_alu);
+                OPTPASS(vir_opt_alu);
+                OPTPASS(vir_opt_redundant_setnnmode);
 
                 if (!progress)
                         break;

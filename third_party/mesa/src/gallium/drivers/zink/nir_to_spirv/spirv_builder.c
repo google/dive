@@ -32,7 +32,6 @@
 #include "util/hash_table.h"
 #define XXH_INLINE_ALL
 #include "util/xxhash.h"
-#include "vk_util.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -175,14 +174,16 @@ spirv_builder_emit_exec_mode_literal3(struct spirv_builder *b, SpvId entry_point
 }
 
 void
-spirv_builder_emit_exec_mode_id3(struct spirv_builder *b, SpvId entry_point,
-                                SpvExecutionMode exec_mode, SpvId param[3])
+spirv_builder_emit_exec_mode_id(struct spirv_builder *b, SpvId entry_point,
+                                SpvExecutionMode exec_mode,
+                                SpvId *param, size_t num_params)
 {
-   spirv_buffer_prepare(&b->exec_modes, b->mem_ctx, 6);
-   spirv_buffer_emit_word(&b->exec_modes, SpvOpExecutionModeId | (6 << 16));
+   int words = 3 + num_params;
+   spirv_buffer_prepare(&b->exec_modes, b->mem_ctx, words);
+   spirv_buffer_emit_word(&b->exec_modes, SpvOpExecutionModeId | (words << 16));
    spirv_buffer_emit_word(&b->exec_modes, entry_point);
    spirv_buffer_emit_word(&b->exec_modes, exec_mode);
-   for (unsigned i = 0; i < 3; i++)
+   for (unsigned i = 0; i < num_params; i++)
       spirv_buffer_emit_word(&b->exec_modes, param[i]);
 }
 
@@ -227,6 +228,14 @@ spirv_builder_emit_decoration(struct spirv_builder *b, SpvId target,
                               SpvDecoration decoration)
 {
    emit_decoration(b, target, decoration, NULL, 0);
+}
+
+void
+spirv_builder_emit_fp_fast_math_mode(struct spirv_builder *b, SpvId target,
+                                     SpvFPFastMathModeMask fp_mode)
+{
+   uint32_t args[] = { fp_mode };
+   emit_decoration(b, target, SpvDecorationFPFastMathMode, args, ARRAY_SIZE(args));
 }
 
 void
@@ -396,6 +405,22 @@ spirv_builder_emit_member_offset(struct spirv_builder *b, SpvId target,
    uint32_t args[] = { offset };
    emit_member_decoration(b, target, member, SpvDecorationOffset,
                           args, ARRAY_SIZE(args));
+}
+
+void
+spirv_builder_emit_member_matrix_stride(struct spirv_builder *b, SpvId target,
+                                        uint32_t member, uint32_t stride)
+{
+   uint32_t args[] = { stride };
+   emit_member_decoration(b, target, member, SpvDecorationMatrixStride,
+                          args, ARRAY_SIZE(args));
+}
+
+void
+spirv_builder_emit_member_matrix_major(struct spirv_builder *b, SpvId target,
+                                       uint32_t member, bool rowmajor)
+{
+   emit_member_decoration(b, target, member, rowmajor ? SpvDecorationRowMajor : SpvDecorationColMajor, NULL, 0);
 }
 
 SpvId
@@ -1700,6 +1725,17 @@ spirv_builder_const_float(struct spirv_builder *b, int width, double val)
    }
 
    UNREACHABLE("unhandled float-width");
+}
+
+SpvId
+spirv_builder_const_null(struct spirv_builder *b, SpvId result_type)
+{
+   SpvId result = spirv_builder_new_id(b);
+   spirv_buffer_prepare(&b->types_const_defs, b->mem_ctx, 3);
+   spirv_buffer_emit_word(&b->types_const_defs, SpvOpConstantNull | (3 << 16));
+   spirv_buffer_emit_word(&b->types_const_defs, result_type);
+   spirv_buffer_emit_word(&b->types_const_defs, result);
+   return result;
 }
 
 SpvId

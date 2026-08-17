@@ -513,9 +513,11 @@ dri3_handle_present_event(struct loader_dri3_drawable *draw,
          /* Only assume wraparound if that results in exactly the previous
           * SBC + 1, otherwise ignore received SBC > sent SBC (those are
           * probably from a previous loader_dri3_drawable instance) to avoid
-          * calculating bogus target MSC values in loader_dri3_swap_buffers_msc
+          * calculating bogus target MSC values in loader_dri3_swap_buffers_msc.
+          * Since events can be received out of order, don't let recv_sbc go
+          * back unless for wraparound.
           */
-         if (recv_sbc <= draw->send_sbc)
+         if (recv_sbc <= draw->send_sbc && draw->recv_sbc <= recv_sbc)
             draw->recv_sbc = recv_sbc;
          else if (recv_sbc == (draw->recv_sbc + 0x100000001ULL))
             draw->recv_sbc = recv_sbc - 0x100000000ULL;
@@ -1090,11 +1092,34 @@ loader_dri3_swap_buffers_msc(struct loader_dri3_drawable *draw,
        * request. target_msc=divisor=remainder=0 means "Use glXSwapBuffers()
        * semantic"
        */
-      ++draw->send_sbc;
-      if (target_msc == 0 && divisor == 0 && remainder == 0)
-         target_msc = draw->msc + abs(draw->swap_interval) *
-                      (draw->send_sbc - draw->recv_sbc);
-      else if (divisor == 0 && remainder > 0) {
+      if (target_msc == 0 && divisor == 0 && remainder == 0) {
+         /* Wait for previous send present request gets its complete event
+          * to update the window msc before send next present request.
+          *
+          * This is to prevent we send too many present requests before we
+          * get an up to date msc value from server when application
+          * start or pause for a while. Otherwise most of the sent
+          * request will be wasted as server just use the latest one and
+          * skip all the previous ones before a vblank. This also match the
+          * swap behavior for interval != 0.
+          *
+          * For example, client side window msc is 0 at the beginning,
+          * when swap interval=1, we will send present request with target
+          * msc = 1, 2, 3, ..., N, before server send back the complete
+          * event for target msc = 1.
+          *
+          * But server side window msc is way bigger than N, so it will
+          * think all these present requests are outdated and just show the
+          * Nth request at the next vblank. [1 .. N-1] requests are skipped.
+          */
+         if (draw->swap_interval != 0) {
+            while (draw->recv_sbc != draw->send_sbc) {
+               if (!dri3_wait_for_event_locked(draw, NULL))
+                  break;
+            }
+         }
+         target_msc = draw->msc + abs(draw->swap_interval);
+      } else if (divisor == 0 && remainder > 0) {
          /* From the GLX_OML_sync_control spec:
           *     "If <divisor> = 0, the swap will occur when MSC becomes
           *      greater than or equal to <target_msc>."
@@ -1105,6 +1130,8 @@ loader_dri3_swap_buffers_msc(struct loader_dri3_drawable *draw,
           */
          remainder = 0;
       }
+
+      ++draw->send_sbc;
 
       /* From the GLX_EXT_swap_control spec
        * and the EGL 1.4 spec (page 53):
@@ -1290,6 +1317,10 @@ dri3_cpp_for_fourcc(uint32_t format) {
    case DRM_FORMAT_ARGB8888:
    case DRM_FORMAT_ABGR8888:
    case DRM_FORMAT_XBGR8888:
+   case DRM_FORMAT_BGRX8888:
+   case DRM_FORMAT_BGRA8888:
+   case DRM_FORMAT_RGBX8888:
+   case DRM_FORMAT_RGBA8888:
    case DRM_FORMAT_XRGB2101010:
    case DRM_FORMAT_ARGB2101010:
    case DRM_FORMAT_XBGR2101010:

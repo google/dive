@@ -85,8 +85,9 @@ enum svga_hud {
 #define CONST0_UPLOAD_ALIGNMENT 256
 #define SVGA_MAX_UAVIEWS        SVGA3D_DX11_1_MAX_UAVIEWS
 #define SVGA_MAX_IMAGES         SVGA3D_DX11_MAX_UAVIEWS
-#define SVGA_MAX_SHADER_BUFFERS SVGA3D_DX11_MAX_UAVIEWS
+#define SVGA_MAX_SHADER_BUFFERS 16
 #define SVGA_MAX_ATOMIC_BUFFERS SVGA3D_DX11_MAX_UAVIEWS
+
 
 enum svga_surface_state
 {
@@ -365,7 +366,7 @@ struct svga_state
 
    /* HW atomic buffers */
    unsigned num_atomic_buffers;
-   struct svga_shader_buffer atomic_buffers[SVGA_MAX_SHADER_BUFFERS];
+   struct svga_shader_buffer atomic_buffers[SVGA_MAX_ATOMIC_BUFFERS];
 
    struct {
       /* Determine the layout of the grid (in block units) to be used. */
@@ -502,7 +503,7 @@ struct svga_hw_draw_state
 
    /* HW Atomic Buffers */
    unsigned num_atomic_buffers;
-   struct svga_shader_buffer atomic_buffers[SVGA_MAX_SHADER_BUFFERS];
+   struct svga_shader_buffer atomic_buffers[SVGA_MAX_ATOMIC_BUFFERS];
 
    /* UAV state */
    unsigned num_uavs;

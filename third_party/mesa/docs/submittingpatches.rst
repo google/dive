@@ -49,10 +49,44 @@ that code change came from, whether they wrote it themselves, used an
 includes making sure that the code change can be submitted under the
 MIT license that Mesa uses.
 
+This extends through the use of the tool you are using to submit your
+contributions. It is not allowed to use autonomously acting tools to
+submit any contributions, that is every contributions needs explicit
+oversight and your review. This includes interactions with GitLab issues
+or MRs in any autonomous way through such tools. It will be decided by the
+community and maintainers which and how such tooling will be used within
+the Mesa project and might be made available for other contributors to use
+through our GitLab instance. Do not under any circumstances wire up any
+review bot or similar tools.
+
 The submitter needs to understand what code they are changing,
 what the change does, and justify that change in the commit messages.
 Using coding assistants or "AI" or other tools does not grant additional
 privileges or reduce our expectations.
+
+Disclosure is always required when "AI" was involved in the creative
+process of coming up with the code, except in the following cases:
+
+-  Trivial or small changes that wouldn't be copyrightable regardless of
+   "AI" involvement. For example something like a "min" function fit this
+   category.
+-  Mechanical changes where the expected result is obvious and not up to
+   interpretation, ie. when it would be the same regardless of what
+   tooling was used. For example, autocomplete, refactoring the name of a
+   variable and similar activities fit this category. In these cases it is
+   still recommended (but not required) to disclose the tool used,
+   eg. "AI", "sed", "cocinelle", etc. in order to ease the review process.
+
+We suggest the following scheme to disclose the level "AI" tooling was
+involved:
+
+-  ``Assisted-by: TOOL (OPTIONAL: MODEL)`` for when "AI" was involved in making
+   decisions or also generated parts of the code.
+-  ``Generated-by: TOOL (OPTIONAL: MODEL)`` for when almost all the code was
+   generated through "AI".
+
+Do not use the ``Co-authored-by`` tag as this one is reserved for human
+co-authors.
 
 If you don't know programming (and don't want to learn), but you are
 interested in the Mesa project, there are plenty of other ways to
@@ -115,7 +149,7 @@ Patch formatting
 
    ::
 
-      Closes: https://gitlab.freedesktop.org/mesa/mesa/-/issues/1
+      Closes: https://gitlab.freedesktop.org/mesa/mesa/-/work_items/1
 
    Prefer the full URL to just ``Closes: #1``, since the URL makes it
    easier to get to the bug page from ``git log``
@@ -179,7 +213,7 @@ You can produce those fixes lines by running this command once::
 After that, using ``git fixes <sha1>`` will print the full line for you.
 
 The stable tag
-~~~~~~~~~~~~~~
+--------------
 
 If you want a commit to be applied to a stable branch, you should add an
 appropriate note to the commit message.
@@ -197,6 +231,9 @@ following example::
 This will backport the commit to the 21.0 branch, as well as any more recent
 stable branch. Multiple ``Backport-to:`` lines are allowed, but only the
 lowest number mentioned actually matters, so for clarity, please only use one.
+You can also use the special ``Backport-to: *`` which will nominate the commit
+to be backported to every active stable branch, making it a synonym to the ``Cc:
+mesa-stable`` below.
 
 The last option is deprecated and mostly here for historical reasons
 dating back to when patch submission was done via emails: using a ``Cc:``
@@ -386,6 +423,25 @@ Do not merge someone else's MR unless you are sure they don't have a new
 version that they are testing locally for instance.
 **When in doubt, ask**, for instance by leaving a comment on that MR.
 
+Common issues when merging
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``This branch couldn't be merged: Manual Step encountered with run-manual-jobs set to False``
+   The Marge script rebases the MR's branch onto the MR's target branch
+   (usually ``main``) and adds some extra info to the commit messages (e.g.
+   ``Part-of:`` which contains the URL back to the MR that merged the commit).
+   If there is nothing to rebase and nothing to add to the commit messages
+   (e.g. if the user took the commits from Marge, modified them and pushed
+   that), then Marge will have nothing to push, skipping the creation of the
+   merge pipeline.
+
+   The solution is to either wait until something else is merged, causing
+   Marge to rebase, or remove the ``Part-of:`` trailer from at least one
+   commit message (the top commit is enough, not need to edit all of them),
+   causing Marge to add it back. Either of these causes Marge to push new
+   commits, falling back into the normal case.
+
+
 Nominating a commit for a stable branch
 ---------------------------------------
 
@@ -497,11 +553,12 @@ Our documentation is written as `reStructuredText`_ files in the
 .. code-block:: sh
 
    # Install dependencies (adapt for your distribution)
-   apk add coreutils graphviz py3-clang clang-dev musl-dev linux-headers
-   pip3 install sphinx===5.1.1 mako===1.2.3 hawkmoth===0.16.0
+   apk add coreutils graphviz clang-dev musl-dev linux-headers
+   python3 -m venv docs-build
+   ./docs-build/bin/pip3 install sphinx===8.2.3 mako===1.2.3 hawkmoth===0.19.0 clang===$(llvm-config --version)
 
-   # Build docs
-   sphinx-build -W -b html docs docs-html/
+   # Build docs (on Debian, set LD_LIBRARY_PATH to /usr/lib/llvm-VERSION/lib so it can find libclang.so)
+   ./docs-build/bin/sphinx-build -W -b html docs docs-html/
 
 The preferred language of the documentation is US English. This
 doesn't mean that everyone is expected to pay close attention to

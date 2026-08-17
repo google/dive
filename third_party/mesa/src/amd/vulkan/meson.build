@@ -1,6 +1,26 @@
 # Copyright © 2017 Intel Corporation
 # SPDX-License-Identifier: MIT
 
+radv_tracepoints = custom_target(
+  'radv_tracepoints.[ch]',
+  input: ['radv_tracepoints.py', vk_api_xml],
+  output: ['radv_tracepoints.c', 'radv_entrypoint_tracepoints.c', 'radv_tracepoints_perfetto.h', 'radv_tracepoints.h'],
+  command: [
+    prog_python, '@INPUT0@',
+    '--import-path', mesa_python_path,
+    '--src','@OUTPUT0@',
+    '--entrypoints-src', '@OUTPUT1@',
+    '--perfetto-hdr', '@OUTPUT2@',
+    '--hdr', '@OUTPUT3@',
+    '--xml', '@INPUT1@',
+  ],
+  depend_files: u_trace_py,
+)
+
+idep_radv_tracepoints = declare_dependency(
+  sources: radv_tracepoints,
+)
+
 radv_entrypoints_gen_command = [
   prog_python, '@INPUT0@', '--xml', '@INPUT1@', '--proto', '--weak',
   '--out-h', '@OUTPUT0@', '--out-c', '@OUTPUT1@',
@@ -16,11 +36,7 @@ radv_entrypoints_gen_command += [
   '--device-prefix', 'rra',
   '--device-prefix', 'rmv',
   '--device-prefix', 'ctx_roll',
-
-  # Application layer entrypoints
-  '--device-prefix', 'metro_exodus',
-  '--device-prefix', 'rage2',
-  '--device-prefix', 'quantic_dream',
+  '--device-prefix', 'utrace',
 
   # Command buffer annotation layer entrypoints
   '--device-prefix', 'annotate',
@@ -34,15 +50,27 @@ radv_entrypoints = custom_target(
   depend_files : vk_entrypoints_gen_depend_files,
 )
 
+radv_drirc = custom_target(
+  'radv_drirc',
+  input  : [files('radv_drirc_gen.py'), drirc_gen, '00-radv-defaults.conf'],
+  output : ['radv_drirc.c', 'radv_drirc.h'],
+  command : [
+    prog_python, '@INPUT0@',
+    '--import-path', join_paths(dir_source_root, 'src/util'),
+    '--drirc-src', '@OUTPUT0@',
+    '--drirc-hdr', '@OUTPUT1@',
+    '--validate', '@INPUT2@',
+  ],
+)
+
 libradv_files = files(
-  'bvh/bvh.h',
+  'bvh/bvh_defines.h',
+  'layers/radv_app_workarounds.c',
   'layers/radv_ctx_roll_layer.c',
-  'layers/radv_metro_exodus.c',
-  'layers/radv_rage2.c',
-  'layers/radv_quantic_dream.c',
   'layers/radv_rmv_layer.c',
   'layers/radv_rra_layer.c',
   'layers/radv_sqtt_layer.c',
+  'layers/radv_utrace_layer.c',
   'meta/radv_meta.c',
   'meta/radv_meta.h',
   'meta/radv_meta_astc_decode.c',
@@ -53,6 +81,8 @@ libradv_files = files(
   'meta/radv_meta_clear.c',
   'meta/radv_meta_clear_hiz.c',
   'meta/radv_meta_copy.c',
+  'meta/radv_meta_copy_indirect_cs.c',
+  'meta/radv_meta_copy_indirect_fs.c',
   'meta/radv_meta_copy_vrs_htile.c',
   'meta/radv_meta_dcc_retile.c',
   'meta/radv_meta_decompress.c',
@@ -66,33 +96,48 @@ libradv_files = files(
   'nir/radv_meta_nir.c',
   'nir/radv_meta_nir.h',
   'nir/radv_nir.h',
-  'nir/radv_nir_apply_pipeline_layout.c',
   'nir/radv_nir_export_multiview.c',
   'nir/radv_nir_lower_abi.c',
+  'nir/radv_nir_lower_call_abi.c',
   'nir/radv_nir_lower_cooperative_matrix.c',
+  'nir/radv_nir_lower_descriptors.c',
   'nir/radv_nir_lower_fs_barycentric.c',
   'nir/radv_nir_lower_fs_intrinsics.c',
   'nir/radv_nir_lower_hit_attrib_derefs.c',
   'nir/radv_nir_lower_immediate_samplers.c',
   'nir/radv_nir_lower_intrinsics_early.c',
   'nir/radv_nir_lower_io.c',
+  'nir/radv_nir_lower_opt_fs_frag_pos.c',
   'nir/radv_nir_lower_primitive_shading_rate.c',
   'nir/radv_nir_lower_printf.c',
   'nir/radv_nir_lower_ray_queries.c',
-  'nir/radv_nir_lower_view_index.c',
-  'nir/radv_nir_lower_viewport_to_zero.c',
   'nir/radv_nir_lower_vs_inputs.c',
   'nir/radv_nir_opt_fs_builtins.c',
   'nir/radv_nir_opt_tid_function.c',
   'nir/radv_nir_remap_color_attachment.c',
   'nir/radv_nir_rt_common.c',
-  'nir/radv_nir_rt_shader.c',
-  'winsys/null/radv_null_bo.c',
-  'winsys/null/radv_null_bo.h',
-  'winsys/null/radv_null_cs.c',
-  'winsys/null/radv_null_cs.h',
-  'winsys/null/radv_null_winsys.c',
-  'winsys/null/radv_null_winsys_public.h',
+  'nir/radv_nir_rt_stage_common.c',
+  'nir/radv_nir_rt_stage_cps.c',
+  'nir/radv_nir_rt_stage_functions.c',
+  'nir/radv_nir_rt_stage_monolithic.c',
+  'nir/radv_nir_rt_traversal_shader.c',
+  'nir/radv_nir_trim_fs_color_exports.c',
+  'tools/radv_debug_hang.c',
+  'tools/radv_debug_hang.h',
+  'tools/radv_debug_nir.c',
+  'tools/radv_debug_nir.h',
+  'tools/radv_debug.c',
+  'tools/radv_debug.h',
+  'tools/radv_rmv.c',
+  'tools/radv_rmv.h',
+  'tools/radv_rra_gfx10_3.c',
+  'tools/radv_rra_gfx12.c',
+  'tools/radv_rra.c',
+  'tools/radv_rra.h',
+  'tools/radv_spm.c',
+  'tools/radv_spm.h',
+  'tools/radv_sqtt.c',
+  'tools/radv_sqtt.h',
   'radv_acceleration_structure.c',
   'radv_android.c',
   'radv_android.h',
@@ -108,10 +153,6 @@ libradv_files = files(
   'radv_cp_reg_shadowing.h',
   'radv_cs.c',
   'radv_cs.h',
-  'radv_debug_nir.c',
-  'radv_debug_nir.h',
-  'radv_debug.c',
-  'radv_debug.h',
   'radv_device.c',
   'radv_device.h',
   'radv_device_memory.c',
@@ -155,12 +196,6 @@ libradv_files = files(
   'radv_queue.c',
   'radv_queue.h',
   'radv_radeon_winsys.h',
-  'radv_rmv.c',
-  'radv_rmv.h',
-  'radv_rra_gfx10_3.c',
-  'radv_rra_gfx12.c',
-  'radv_rra.c',
-  'radv_rra.h',
   'radv_sampler.c',
   'radv_sampler.h',
   'radv_sdma.c',
@@ -173,10 +208,6 @@ libradv_files = files(
   'radv_shader_info.h',
   'radv_shader_object.c',
   'radv_shader_object.h',
-  'radv_spm.c',
-  'radv_spm.h',
-  'radv_sqtt.c',
-  'radv_sqtt.h',
   'radv_query.c',
   'radv_query.h',
   'radv_video.c',
@@ -239,9 +270,14 @@ if radv_build_id != ''
   radv_flags += '-DRADV_BUILD_ID_OVERRIDE="' + radv_build_id + '"'
 endif
 
+radv_u_trace = get_option('radv-u_trace')
+if radv_u_trace
+  radv_flags += '-DRADV_U_TRACE=1'
+endif
+
 libvulkan_radeon = shared_library(
   'vulkan_radeon',
-  [libradv_files, radv_entrypoints, sha1_h, radix_sort_spv, bvh_spv, radv_annotate_layer],
+  [libradv_files, radv_entrypoints, radv_drirc, sha1_h, radix_sort_spv, bvh_spv, radv_annotate_layer],
   vs_module_defs : vulkan_api_def,
   include_directories : [
     inc_include, inc_src, inc_amd, inc_amd_common, inc_amd_common_llvm,
@@ -254,7 +290,8 @@ libvulkan_radeon = shared_library(
     dep_llvm, dep_libdrm_amdgpu, dep_thread, dep_elf, dep_dl, dep_m,
     dep_valgrind, radv_deps, idep_aco,
     idep_mesautil, idep_nir, idep_vulkan_util, idep_vulkan_wsi,
-    idep_vulkan_runtime, idep_amdgfxregs_h, idep_xmlconfig,
+    idep_vulkan_runtime, idep_amd_generated_headers, idep_xmlconfig,
+    idep_radv_tracepoints,
   ],
   c_args : [no_override_init_args, radv_flags, c_msvc_compat_args],
   cpp_args : [radv_flags, cpp_msvc_compat_args],
@@ -287,7 +324,8 @@ icd_command = [
   prog_python, '@INPUT0@',
   '--api-version', '1.4', '--xml', '@INPUT1@',
   '--sizeof-pointer', sizeof_pointer,
-  '--lib-path', vulkan_icd_lib_path / icd_file_name,
+  '--icd-lib-path', vulkan_icd_lib_path,
+  '--icd-filename', icd_file_name,
   '--out', '@OUTPUT@',
 ]
 if with_platform_windows
@@ -297,7 +335,7 @@ endif
 radeon_icd = custom_target(
   'radeon_icd',
   input : [vk_icd_gen, vk_api_xml],
-  output : 'radeon_icd.@0@.json'.format(host_machine.cpu()),
+  output : 'radeon_icd.' + vulkan_manifest_suffix,
   command : icd_command,
   build_by_default : true,
   install_dir : with_vulkan_icd_dir,
@@ -314,15 +352,14 @@ _dev_icd = custom_target(
     prog_python, '@INPUT0@',
     '--api-version', '1.4', '--xml', '@INPUT1@',
     '--sizeof-pointer', sizeof_pointer,
-    '--lib-path', meson.current_build_dir() / icd_file_name,
+    '--icd-lib-path', meson.current_build_dir(),
+    '--icd-filename', icd_file_name,
     '--out', '@OUTPUT@',
   ],
   build_by_default : true,
 )
 
 devenv.append('VK_DRIVER_FILES', _dev_icd.full_path())
-# Deprecated: replaced by VK_DRIVER_FILES above
-devenv.append('VK_ICD_FILENAMES', _dev_icd.full_path())
 
 if with_radv_tests
   test(
@@ -348,10 +385,14 @@ if with_radv_tests
         inc_util,
         include_directories('.'),
       ],
-      link_with  : [ libvulkan_radeon ],
+      link_with  : [ libamd_common, libvulkan_radeon, libamdgpu_noop_drm_shim ],
       dependencies : [dep_llvm, dep_thread, idep_gtest, idep_nir, idep_mesautil, idep_vulkan_util_headers],
     ),
     suite : ['compiler', 'nir'],
     protocol : 'gtest',
+    env : [
+      'LD_PRELOAD=@0@'.format(libamdgpu_noop_drm_shim.full_path()),
+      'AMDGPU_GPU_ID=navi21',
+    ],
   )
 endif

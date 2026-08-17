@@ -1,28 +1,192 @@
 /*
  * Copyright © 2024 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "compiler/nir/nir_builder.h"
+#include "compiler/nir/nir_builtin_builder.h"
+#include "compiler/nir/nir_format_convert.h"
 #include "brw_nir.h"
+#include "brw_sampler.h"
+
+/**
+ * Takes care of lowering to target HW messages payload.
+ *
+ * For example:
+ *    - HW has no gather4_po_i_b so lower to gather_po_l.
+ *    - HW has no sample_po_b_c message, so lower the bias into the LOD to switch
+ *      to sample_po_c_l instead.
+ */
+static bool
+pre_lower_tex_instr(nir_builder *b, nir_tex_instr *tex,
+                    const struct intel_device_info *devinfo)
+{
+   switch (tex->op) {
+   case nir_texop_txs: {
+      unsigned mask = nir_component_mask(tex->def.num_components);
+
+      tex->op = nir_texop_resinfo_intel;
+      tex->def.num_components = 4;
+
+      b->cursor = nir_after_instr(&tex->instr);
+      nir_def_rewrite_uses_after(&tex->def, nir_channels(b, &tex->def, mask));
+      return true;
+   }
+   case nir_texop_query_levels: {
+      tex->op = nir_texop_resinfo_intel;
+      tex->def.num_components = 4;
+
+      b->cursor = nir_after_instr(&tex->instr);
+      nir_def *level = nir_channel(b, &tex->def, 3);
+
+      if (devinfo->ver == 9) {
+         /* Wa_1940217:
+          *
+          * When a surface of type SURFTYPE_NULL is accessed by resinfo,
+          * the MIPCount returned is undefined instead of 0.
+          */
+         nir_def *width_nonzero = nir_i2b(b, nir_channel(b, &tex->def, 0));
+         level = nir_bcsel(b, width_nonzero, level, nir_imm_int(b, 0));
+      }
+
+      nir_def_rewrite_uses_after(&tex->def, level);
+      return true;
+   }
+   case nir_texop_txb: {
+      int bias_index = nir_tex_instr_src_index(tex, nir_tex_src_bias);
+      assert(bias_index != -1);
+      int comparator_index = nir_tex_instr_src_index(tex, nir_tex_src_comparator);
+      int offset_index = nir_tex_instr_src_index(tex, nir_tex_src_offset);
+
+      if (comparator_index == -1 || offset_index == -1)
+         return false;
+
+      if (brw_nir_tex_offset_in_constant_range(tex, offset_index))
+         return false;
+
+      b->cursor = nir_before_instr(&tex->instr);
+
+      tex->op = nir_texop_txl;
+
+      nir_def *bias = tex->src[bias_index].src.ssa;
+      nir_tex_instr_remove_src(tex, bias_index);
+
+      nir_def *lod = nir_fadd(b, bias, nir_get_texture_lod(b, tex));
+      nir_tex_instr_add_src(tex, nir_tex_src_lod, lod);
+      return true;
+   }
+
+   case nir_texop_tg4: {
+      if (!tex->is_gather_implicit_lod)
+         return false;
+
+      nir_def *bias = nir_steal_tex_src(tex, nir_tex_src_bias);
+      if (!bias)
+         return false;
+
+      b->cursor = nir_before_instr(&tex->instr);
+
+      tex->is_gather_implicit_lod = false;
+
+      nir_def *lod = nir_fadd(b, bias, nir_get_texture_lod(b, tex));
+      nir_tex_instr_add_src(tex, nir_tex_src_lod, lod);
+      return true;
+   }
+
+   default:
+      return false;
+   }
+}
+
+/* Lower size intrinsic to use the sampler. */
+static bool
+pre_lower_intrinsic_instr(nir_builder *b, nir_intrinsic_instr *intrin)
+{
+   enum glsl_sampler_dim dim = GLSL_SAMPLER_DIM_BUF;
+   bool is_array = false;
+
+   switch (intrin->intrinsic) {
+   case nir_intrinsic_get_ssbo_size:
+      break;
+
+   case nir_intrinsic_bindless_image_size:
+   case nir_intrinsic_image_size:
+      dim = nir_intrinsic_image_dim(intrin);
+      is_array = nir_intrinsic_image_array(intrin);
+      break;
+
+   default:
+      return false;
+   }
+
+   b->cursor = nir_before_instr(&intrin->instr);
+
+   nir_src *surface = nir_get_io_index_src(intrin);
+   nir_intrinsic_instr *rsrc = nir_src_as_intrinsic(*surface);
+
+   bool bindless = rsrc && (nir_intrinsic_resource_access_intel(rsrc) &
+                            nir_resource_intel_bindless);
+
+   nir_def *resinfo =
+      nir_build_tex(b, nir_texop_resinfo_intel,
+                    .lod = nir_imm_int(b, 0),
+                    .dim = dim, .is_array = is_array,
+                    .texture_offset = bindless ? NULL : surface->ssa,
+                    .texture_handle = bindless ? surface->ssa : NULL);
+   nir_def *txs =
+      nir_channels(b, resinfo, nir_component_mask(intrin->def.num_components));
+
+   /* SKL PRM, vol07, 3D Media GPGPU Engine, Bounds Checking and Faulting:
+    *
+    * "Out-of-bounds checking is always performed at a DWord granularity. If
+    * any part of the DWord is out-of-bounds then the whole DWord is
+    * considered out-of-bounds."
+    *
+    * This implies that types with size smaller than 4-bytes need to be
+    * padded if they don't complete the last dword of the buffer. But as we
+    * need to maintain the original size we need to reverse the padding
+    * calculation to return the correct size to know the number of elements
+    * of an unsized array. As we stored in the last two bits of the surface
+    * size the needed padding for the buffer, we calculate here the
+    * original buffer_size reversing the surface_size calculation:
+    *
+    * surface_size = isl_align(buffer_size, 4) +
+    *                (isl_align(buffer_size) - buffer_size)
+    *
+    * buffer_size = surface_size & ~3 - surface_size & 3
+    */
+   if (intrin->intrinsic == nir_intrinsic_get_ssbo_size)
+      txs = nir_isub(b, txs, nir_imul_imm(b, nir_iand_imm(b, txs, 3), 2));
+
+   nir_def_replace(&intrin->def, txs);
+
+   return true;
+}
+
+static bool
+pre_lower_texture_instr(nir_builder *b, nir_instr *instr, void *data)
+{
+   switch (instr->type) {
+   case nir_instr_type_tex:
+      return pre_lower_tex_instr(b, nir_instr_as_tex(instr), data);
+
+   case nir_instr_type_intrinsic:
+      return pre_lower_intrinsic_instr(b, nir_instr_as_intrinsic(instr));
+
+   default:
+      return false;
+   }
+}
+
+bool
+brw_nir_pre_lower_texture(nir_shader *shader,
+                          const struct intel_device_info *devinfo)
+{
+   return nir_shader_instructions_pass(shader,
+                                       pre_lower_texture_instr,
+                                       nir_metadata_control_flow,
+                                       (void*) devinfo);
+}
 
 /**
  * Pack either the explicit LOD or LOD bias and the array index together.
@@ -97,11 +261,30 @@ pack_lod_and_array_index(nir_builder *b, nir_tex_instr *tex)
    return true;
 }
 
+static nir_def *
+build_packed_offset(nir_builder *b,
+                    nir_def *offset,
+                    unsigned offset_bits,
+                    unsigned offset_count)
+{
+   offset = nir_iand_imm(b, offset, BITFIELD_MASK(offset_bits));
+
+   nir_def *offuvr = nir_channel(b, offset, 0);
+   for (unsigned i = 1; i < MIN2(offset->num_components, offset_count); i++) {
+      nir_def *chan = nir_channel(b, offset, i);
+      offuvr = nir_ior(b, offuvr, nir_ishl_imm(b, chan, i * offset_bits));
+   }
+
+   return offuvr;
+}
+
 /**
  * Pack either the explicit LOD/Bias and the offset together.
  */
 static bool
-pack_lod_or_bias_and_offset(nir_builder *b, nir_tex_instr *tex)
+pack_lod_or_bias_and_offset(nir_builder *b, nir_tex_instr *tex,
+                            unsigned offset_bits,
+                            unsigned offset_count)
 {
    int offset_index = nir_tex_instr_src_index(tex, nir_tex_src_offset);
    if (offset_index < 0)
@@ -131,7 +314,6 @@ pack_lod_or_bias_and_offset(nir_builder *b, nir_tex_instr *tex)
    }
 
    nir_def *lod = tex->src[lod_index].src.ssa;
-   nir_def *offset = tex->src[offset_index].src.ssa;
 
    b->cursor = nir_before_instr(&tex->instr);
 
@@ -148,16 +330,105 @@ pack_lod_or_bias_and_offset(nir_builder *b, nir_tex_instr *tex)
     *    ------------------------------------------
     *    |OffsetUV | LOD/Bias | OffsetV | OffsetU |
     *    ------------------------------------------
+    *
+    * Or
+    *    ---------------------------------------------------
+    *    |Bits     | [31:12]  |  [11:9] |  [8:5]  |  [4:0]  |
+    *    ----------------------------------------------------
+    *    |OffsetUV | LOD/Bias | OffsetR | OffsetV | OffsetU |
+    *    ----------------------------------------------------
     */
-   nir_def *offu = nir_iand_imm(b, nir_channel(b, offset, 0), 0x3F);
-   nir_def *offv = nir_iand_imm(b, nir_channel(b, offset, 1), 0x3F);
+   nir_def *offuvr = build_packed_offset(
+      b, tex->src[offset_index].src.ssa, offset_bits, offset_count);
 
-   nir_def *offsetUV = nir_ior(b, offu, nir_ishl_imm(b, offv, 6));
-
-   nir_def *lod_offsetUV = nir_ior(b, offsetUV,
-                                   nir_iand_imm(b, lod, 0xFFFFF000));
+   nir_def *packed = nir_ior(b, offuvr, nir_iand_imm(b, lod, 0xFFFFF000));
    nir_tex_instr_remove_src(tex, offset_index);
-   nir_tex_instr_add_src(tex, nir_tex_src_backend2, lod_offsetUV);
+   nir_tex_instr_add_src(tex, nir_tex_src_backend1, packed);
+
+   return true;
+}
+
+static bool
+pack_offset_r(nir_builder *b, nir_tex_instr *tex,
+              unsigned offset_bits, unsigned offset_count)
+{
+   nir_def *offset = nir_steal_tex_src(tex, nir_tex_src_offset);
+   if (!offset)
+      return false;
+
+   const int coord_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+   assert(coord_index >= 0);
+
+   b->cursor = nir_before_instr(&tex->instr);
+
+   nir_def *coord = tex->src[coord_index].src.ssa;
+
+   nir_def *offuvr = build_packed_offset(
+      b, offset, offset_bits, offset_count);
+
+   nir_def *packed = nir_ishl_imm(b, offuvr, 12);
+
+   assert(tex->coord_components != 4);
+   if (tex->coord_components == 3) {
+      nir_def *clamped_r =
+         nir_umin_imm(
+            b,
+            nir_f2u32(b, nir_fround_even(b, nir_channel(b, coord, 2))),
+            0xfff);
+
+      packed = nir_ior(b, packed, clamped_r);
+
+      nir_def *reduced_coord = nir_trim_vector(b, coord, 2);
+      tex->coord_components = 2;
+
+      nir_src_rewrite(&tex->src[coord_index].src, reduced_coord);
+   }
+
+   nir_tex_instr_add_src(tex, nir_tex_src_backend1, packed);
+
+   return true;
+}
+
+static bool
+pack_offset(nir_builder *b, nir_tex_instr *tex,
+            unsigned offset_bits, unsigned offset_count)
+{
+   nir_def *offset = nir_steal_tex_src(tex, nir_tex_src_offset);
+   if (!offset)
+      return false;
+
+   b->cursor = nir_before_instr(&tex->instr);
+
+   nir_def *offuvr = build_packed_offset(
+      b, offset, offset_bits, offset_count);
+
+   nir_tex_instr_add_src(tex, nir_tex_src_backend1, offuvr);
+
+   return true;
+}
+
+/* Sampler header offset format described in SKL PRMs Volume 7:
+ * 3D-Media-GPGPU, Sampler, Message Header.
+ */
+static bool
+pack_header_offset(nir_builder *b, nir_tex_instr *tex)
+{
+   nir_def *_offset = nir_steal_tex_src(tex, nir_tex_src_offset);
+   if (!_offset)
+      return false;
+
+   b->cursor = nir_before_instr(&tex->instr);
+
+   static const unsigned bits4[] = { 4, 4, 4, };
+   nir_def *offset = nir_iand_imm(b, nir_format_clamp_sint(b, _offset, bits4), 0xf);
+
+   nir_def *offuvr = nir_ishl_imm(b, nir_channel(b, offset, 0), 8);
+   for (unsigned i = 1; i < MIN2(offset->num_components, 3); i++) {
+      nir_def *chan = nir_channel(b, offset, i);
+      offuvr = nir_ior(b, offuvr, nir_ishl_imm(b, chan, 8 - (4 * i)));
+   }
+
+   nir_tex_instr_add_src(tex, nir_tex_src_backend2, offuvr);
 
    return true;
 }
@@ -165,40 +436,101 @@ pack_lod_or_bias_and_offset(nir_builder *b, nir_tex_instr *tex)
 static bool
 brw_nir_lower_texture_instr(nir_builder *b, nir_tex_instr *tex, void *cb_data)
 {
-   const struct brw_nir_lower_texture_opts *opts = cb_data;
+   enum brw_sampler_opcode sampler_opcode = tex->backend_flags;
+   bool progress = false;
 
-   switch (tex->op) {
-   case nir_texop_txl:
-   case nir_texop_txb:
-   case nir_texop_tg4:
-      if (tex->is_array &&
-          tex->sampler_dim == GLSL_SAMPLER_DIM_CUBE &&
-          opts->combined_lod_and_array_index) {
-         return pack_lod_and_array_index(b, tex);
+   const struct brw_sampler_payload_desc *payload_desc =
+      brw_get_sampler_payload_desc(sampler_opcode);
+   bool has_offset_param = false;
+
+   for (uint32_t i = 0; payload_desc->sources[i].param != BRW_SAMPLER_PAYLOAD_PARAM_INVALID; i++) {
+#define PARAM_CASE(name) case BRW_SAMPLER_PAYLOAD_PARAM_##name
+      switch (payload_desc->sources[i].param) {
+      PARAM_CASE(LOD_AI):
+      PARAM_CASE(BIAS_AI):
+         progress |= pack_lod_and_array_index(b, tex);
+         break;
+      PARAM_CASE(BIAS_OFFUV6):
+      PARAM_CASE(LOD_OFFUV6):
+         progress |= pack_lod_or_bias_and_offset(b, tex, 6, 2);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(BIAS_OFFUVR4):
+      PARAM_CASE(LOD_OFFUVR4):
+         progress |= pack_lod_or_bias_and_offset(b, tex, 4, 3);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUV4_R):
+         progress |= pack_offset_r(b, tex, 4, 2);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUVR4_R):
+         progress |= pack_offset_r(b, tex, 4, 3);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUV6_R):
+         progress |= pack_offset_r(b, tex, 6, 2);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUV4):
+         progress |= pack_offset(b, tex, 4, 2);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUVR4):
+         progress |= pack_offset(b, tex, 4, 3);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUV6):
+         progress |= pack_offset(b, tex, 6, 2);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFUVR6):
+         progress |= pack_offset(b, tex, 6, 3);
+         has_offset_param = true;
+         break;
+      PARAM_CASE(OFFU):
+      PARAM_CASE(OFFV):
+         has_offset_param = true;
+         break;
+      default:
+         break;
       }
-
-      if (tex->op == nir_texop_tg4 && opts->combined_lod_or_bias_and_offset) {
-         return pack_lod_or_bias_and_offset(b, tex);
-      }
-
-      return false;
-
-   default:
-      /* Nothing to do */
-      return false;
+#undef PARAM_CASE
    }
 
-   return false;
+   /* Handle pre-Xe2 dynamic programmable offsets */
+   int offset_idx;
+   if (!has_offset_param &&
+       (offset_idx = nir_tex_instr_src_index(tex, nir_tex_src_offset)) >= 0 &&
+       !brw_nir_tex_offset_in_constant_range(tex, offset_idx))
+      progress |= pack_header_offset(b, tex);
+
+   return progress;
 }
 
 bool
-brw_nir_lower_texture(nir_shader *shader,
-                      const struct brw_nir_lower_texture_opts *opts)
+brw_nir_lower_texture(nir_shader *shader)
 {
-   return nir_shader_tex_pass(shader,
-                              brw_nir_lower_texture_instr,
-                              nir_metadata_control_flow,
-                              (void *)opts);
+   return nir_shader_tex_pass(shader, brw_nir_lower_texture_instr,
+                              nir_metadata_none, NULL);
+}
+
+static bool
+brw_nir_lower_texture_opcode_instr(nir_builder *b, nir_tex_instr *tex, void *cb_data)
+{
+   const struct intel_device_info *devinfo = cb_data;
+
+   tex->backend_flags = brw_get_sampler_opcode_from_tex(devinfo, tex);
+
+   return true;
+}
+
+bool
+brw_nir_texture_backend_opcode(nir_shader *shader,
+                               const struct intel_device_info *devinfo)
+{
+   return nir_shader_tex_pass(shader, brw_nir_lower_texture_opcode_instr,
+                              nir_metadata_all, (void *)devinfo);
 }
 
 static bool
@@ -271,7 +603,7 @@ brw_nir_lower_mcs_fetch_instr(nir_builder *b, nir_tex_instr *tex, void *cb_data)
          break;
 
       default:
-         continue;
+         break;
       }
    }
 
@@ -313,4 +645,58 @@ brw_nir_lower_mcs_fetch(nir_shader *shader,
                               brw_nir_lower_mcs_fetch_instr,
                               nir_metadata_control_flow,
                               (void *)devinfo);
+}
+
+static bool
+brw_nir_apply_sampler_undef_derivatives_workaround_instr(nir_builder *b,
+                                                         nir_tex_instr *tex,
+                                                         void *cb_data)
+{
+   if (!tex->instr.block->divergent)
+      return false;
+
+   if (tex->op != nir_texop_tex)
+      return false;
+
+   b->cursor = nir_before_instr(&tex->instr);
+
+   const int coord_index = nir_tex_instr_src_index(tex, nir_tex_src_coord);
+   assert(coord_index >= 0);
+
+   nir_def *disabled_lanes =
+      nir_inot(b, nir_ballot(b, 1, 32, nir_imm_true(b)));
+   nir_def *disabled_quad =
+      nir_ishl(b, disabled_lanes,
+                  nir_iand_imm(b, nir_load_subgroup_invocation(b), ~3));
+
+   nir_def *coord = tex->src[coord_index].src.ssa;
+   nir_def *zero = nir_imm_zero(b, coord->num_components, coord->bit_size);
+
+   /* Calculate DDX_COARSE, or zero if lanes 0 or 1 are disabled */
+   nir_def *ddx =
+      nir_bcsel(b, nir_i2b(b, nir_iand_imm(b, disabled_quad, 0b0011)),
+                   zero, nir_ddx_coarse(b, coord));
+
+   /* Calculate DDY_COARSE, or zero if lanes 0 or 2 are disabled */
+   nir_def *ddy =
+      nir_bcsel(b, nir_i2b(b, nir_iand_imm(b, disabled_quad, 0b0101)),
+                   zero, nir_ddy_coarse(b, coord));
+
+   /* Convert the texture instruction to a sample_d with the sanitized DDX/DDY */
+   tex->op = nir_texop_txd;
+   nir_tex_instr_add_src(tex, nir_tex_src_ddx, ddx);
+   nir_tex_instr_add_src(tex, nir_tex_src_ddy, ddy);
+
+   return true;
+}
+
+bool brw_nir_apply_sampler_undef_derivatives_workaround(nir_shader *nir)
+{
+   nir_function_impl *impl = nir_shader_get_entrypoint(nir);
+   nir_metadata_require(impl, nir_metadata_divergence);
+
+   return nir_shader_tex_pass(nir,
+                              brw_nir_apply_sampler_undef_derivatives_workaround_instr,
+                              nir_metadata_control_flow,
+                              NULL);
 }

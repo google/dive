@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "git_sha1.h"
 
 /* (Re)define UUID_SIZE to avoid including vulkan.h (or p_defines.h) here. */
@@ -27,27 +27,27 @@ fd_get_driver_uuid(void *uuid)
     * driver. People who want to share memory need to also check the device
     * UUID.
     */
-   struct mesa_sha1 sha1_ctx;
-   _mesa_sha1_init(&sha1_ctx);
+   blake3_hasher blake3_ctx;
+   _mesa_blake3_init(&blake3_ctx);
 
-   _mesa_sha1_update(&sha1_ctx, driver_id, strlen(driver_id));
+   _mesa_blake3_update(&blake3_ctx, driver_id, strlen(driver_id));
 
-   uint8_t sha1[SHA1_DIGEST_LENGTH];
-   _mesa_sha1_final(&sha1_ctx, sha1);
+   uint8_t blake3[BLAKE3_KEY_LEN];
+   _mesa_blake3_final(&blake3_ctx, blake3);
 
-   assert(SHA1_DIGEST_LENGTH >= UUID_SIZE);
-   memcpy(uuid, sha1, UUID_SIZE);
+   assert(BLAKE3_KEY_LEN >= UUID_SIZE);
+   memcpy(uuid, blake3, UUID_SIZE);
 }
 
 void
 fd_get_device_uuid(void *uuid, const struct fd_dev_id *id)
 {
-   struct mesa_sha1 sha1_ctx;
-   _mesa_sha1_init(&sha1_ctx);
+   blake3_hasher blake3_ctx;
+   _mesa_blake3_init(&blake3_ctx);
 
    /* The device UUID uniquely identifies the given device within the machine.
     * Since we never have more than one device, this doesn't need to be a real
-    * UUID, so we use SHA1("freedreno" + gpu_id).
+    * UUID, so we use BLAKE3("freedreno" + gpu_id).
     *
     * @TODO: Using the GPU id could be too restrictive on the off-chance that
     * someone would like to use this UUID to cache pre-tiled images or something
@@ -64,13 +64,13 @@ fd_get_device_uuid(void *uuid, const struct fd_dev_id *id)
     */
 
    static const char *device_name = "freedreno";
-   _mesa_sha1_update(&sha1_ctx, device_name, strlen(device_name));
+   _mesa_blake3_update(&blake3_ctx, device_name, strlen(device_name));
 
-   _mesa_sha1_update(&sha1_ctx, id, sizeof(*id));
+   _mesa_blake3_update(&blake3_ctx, id, sizeof(*id));
 
-   uint8_t sha1[SHA1_DIGEST_LENGTH];
-   _mesa_sha1_final(&sha1_ctx, sha1);
+   uint8_t blake3[BLAKE3_KEY_LEN];
+   _mesa_blake3_final(&blake3_ctx, blake3);
 
-   assert(SHA1_DIGEST_LENGTH >= UUID_SIZE);
-   memcpy(uuid, sha1, UUID_SIZE);
+   assert(BLAKE3_KEY_LEN >= UUID_SIZE);
+   memcpy(uuid, blake3, UUID_SIZE);
 }

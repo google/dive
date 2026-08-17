@@ -595,7 +595,8 @@ fd_ringbuffer_sp_attach_ring_nonobj(struct fd_ringbuffer *ring,
    if (!(target->flags & _FD_RINGBUFFER_OBJECT))
       return size;
 
-   if (fd_submit->seqno != fd_target->u.last_submit_seqno) {
+   if ((fd_submit->seqno != fd_target->u.last_submit_seqno) ||
+       (target->flags & FD_RINGBUFFER_SHAREABLE)) {
       for (unsigned i = 0; i < fd_target->u.nr_reloc_bos; i++) {
          fd_submit_append_bo(fd_submit, fd_target->u.reloc_bos[i]);
       }

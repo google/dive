@@ -201,8 +201,8 @@ virgl_drm_winsys_resource_create_blob(struct virgl_winsys *qws,
       return NULL;
 
    /* Make sure blob is page aligned. */
-   width = ALIGN(width, getpagesize());
-   size = ALIGN(size, getpagesize());
+   width = align(width, getpagesize());
+   size = align(size, getpagesize());
 
    blob_id = p_atomic_inc_return(&qdws->blob_id);
    cmd[0] = VIRGL_CMD0(VIRGL_CCMD_PIPE_RESOURCE_CREATE, 0, VIRGL_PIPE_RES_CREATE_SIZE);
@@ -677,7 +677,12 @@ static bool virgl_drm_winsys_resource_get_handle(struct virgl_winsys *qws,
    } else if (whandle->type == WINSYS_HANDLE_TYPE_KMS) {
       whandle->handle = res->bo_handle;
    } else if (whandle->type == WINSYS_HANDLE_TYPE_FD) {
-      if (drmPrimeHandleToFD(qdws->fd, res->bo_handle, DRM_CLOEXEC, (int*)&whandle->handle))
+      const uint32_t blob_flags = VIRGL_RESOURCE_FLAG_MAP_PERSISTENT |
+                                  VIRGL_RESOURCE_FLAG_MAP_COHERENT;
+      uint32_t flags = DRM_CLOEXEC;
+      if (!(res->flags & blob_flags))
+         flags |= DRM_RDWR;
+      if (drmPrimeHandleToFD(qdws->fd, res->bo_handle, flags, (int*)&whandle->handle))
             return false;
       mtx_lock(&qdws->bo_handles_mutex);
       _mesa_hash_table_insert(qdws->bo_handles, (void *)(uintptr_t)res->bo_handle, res);

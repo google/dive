@@ -1,24 +1,6 @@
 /*
  * Copyright (C) 2021 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "pan_blend.h"
@@ -299,16 +281,24 @@ main(int argc, const char **argv)
 {
    unsigned nr_pass = 0, nr_fail = 0;
 
+   /* The architecture we test for is arbitrary and used only for checking
+    * whether we can use fixed function. If we really wanted to be paranoid
+    * we could add a loop checking all architectures, but in practice there's
+    * not much difference and we're only checking for internal consistency
+    * anyway
+    */
+   unsigned arch = 10;
+
    for (unsigned i = 0; i < ARRAY_SIZE(blend_tests); ++i) {
       struct test T = blend_tests[i];
       ASSERT_EQ(T.constant_mask, pan_blend_constant_mask(T.eq));
       ASSERT_EQ(T.reads_dest, pan_blend_reads_dest(T.eq));
       ASSERT_EQ(T.opaque, pan_blend_is_opaque(T.eq));
-      ASSERT_EQ(T.fixed_function, pan_blend_can_fixed_function(T.eq, true));
+      ASSERT_EQ(T.fixed_function, pan_blend_can_fixed_function(arch, T.eq, true));
       ASSERT_EQ(T.alpha_zero_nop, pan_blend_alpha_zero_nop(T.eq));
       ASSERT_EQ(T.alpha_one_store, pan_blend_alpha_one_store(T.eq));
 
-      if (pan_blend_can_fixed_function(T.eq, true)) {
+      if (pan_blend_can_fixed_function(arch, T.eq, true)) {
          ASSERT_EQ(T.hardware, pan_pack_blend(T.eq));
       }
    }

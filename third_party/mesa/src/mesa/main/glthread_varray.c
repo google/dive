@@ -32,6 +32,7 @@
 #include "main/hash.h"
 #include "dispatch.h"
 #include "main/varray.h"
+#include "main/context.h"
 
 static unsigned
 element_size(union gl_vertex_format_user format)
@@ -746,7 +747,7 @@ unbind_uploaded_vbos(void *_vao, void *_ctx)
    struct gl_context *ctx = _ctx;
    struct gl_vertex_array_object *vao = _vao;
 
-   assert(ctx->API != API_OPENGL_CORE);
+   assert(!_mesa_is_desktop_gl_core(ctx));
 
    for (unsigned i = 0; i < ARRAY_SIZE(vao->BufferBinding); i++) {
       if (vao->BufferBinding[i].BufferObj &&
@@ -767,7 +768,7 @@ unbind_uploaded_vbos(void *_vao, void *_ctx)
 void
 _mesa_glthread_unbind_uploaded_vbos(struct gl_context *ctx)
 {
-   assert(ctx->API != API_OPENGL_CORE);
+   assert(!_mesa_is_desktop_gl_core(ctx));
 
    /* Iterate over all VAOs. */
    _mesa_HashWalk(&ctx->Array.Objects, unbind_uploaded_vbos, ctx);

@@ -492,8 +492,7 @@ BEGIN_TEST(optimizer_postRA.dpp_vcmpx)
    Operand a(inputs[0], PhysReg(256));
    Operand b(inputs[1], PhysReg(257));
 
-   //! v1: %tmp0:v[2] = v_mov_b32 %a:v[0] row_mirror bound_ctrl:1 fi
-   //! s2: %res0:exec = v_cmpx_lt_f32 %tmp0:v[2], %b:v[1]
+   //! s2: %res0:exec = v_cmpx_lt_f32 %a:v[0], %b:v[1] row_mirror bound_ctrl:1 fi
    //! p_unit_test 0, %res0:exec
    Temp tmp0 = bld.vop1_dpp(aco_opcode::v_mov_b32, bld.def(v1, reg_v2), a, dpp_row_mirror);
    Temp res0 = bld.vopc(aco_opcode::v_cmpx_lt_f32, bld.def(bld.lm, exec), Operand(tmp0, reg_v2), b);

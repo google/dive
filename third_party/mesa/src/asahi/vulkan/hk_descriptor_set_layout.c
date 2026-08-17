@@ -80,7 +80,7 @@ hk_descriptor_stride_align_for_type(
          *stride = MAX2(*stride, desc_stride);
          *alignment = MAX2(*alignment, desc_align);
       }
-      *stride = ALIGN(*stride, *alignment);
+      *stride = align(*stride, *alignment);
       break;
 
    default:
@@ -257,7 +257,7 @@ hk_CreateDescriptorSetLayout(VkDevice device,
    }
 
    layout->non_variable_descriptor_buffer_size = buffer_size;
-   layout->dynamic_buffer_count = dynamic_buffer_count;
+   layout->vk.dynamic_descriptor_count = dynamic_buffer_count;
 
    struct mesa_blake3 blake3_ctx;
    _mesa_blake3_init(&blake3_ctx);
@@ -265,7 +265,7 @@ hk_CreateDescriptorSetLayout(VkDevice device,
 #define BLAKE3_UPDATE_VALUE(x)                                                 \
    _mesa_blake3_update(&blake3_ctx, &(x), sizeof(x));
    BLAKE3_UPDATE_VALUE(layout->non_variable_descriptor_buffer_size);
-   BLAKE3_UPDATE_VALUE(layout->dynamic_buffer_count);
+   BLAKE3_UPDATE_VALUE(layout->vk.dynamic_descriptor_count);
    BLAKE3_UPDATE_VALUE(layout->binding_count);
 
    for (uint32_t b = 0; b < num_bindings; b++) {
@@ -330,6 +330,7 @@ hk_GetDescriptorSetLayoutSupport(
    uint64_t non_variable_size = 0;
    uint32_t variable_stride = 0;
    uint32_t variable_count = 0;
+   bool variable_is_inline_uniform_block = false;
    uint8_t dynamic_buffer_count = 0;
 
    for (uint32_t i = 0; i < pCreateInfo->bindingCount; i++) {
@@ -362,6 +363,10 @@ hk_GetDescriptorSetLayoutSupport(
              */
             variable_count = MAX2(1, binding->descriptorCount);
             variable_stride = stride;
+
+            variable_is_inline_uniform_block =
+               binding->descriptorType ==
+               VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK;
          } else {
             /* Since we're aligning to the maximum and since this is just a
              * check for whether or not the max buffer size is big enough, we
@@ -393,12 +398,21 @@ hk_GetDescriptorSetLayoutSupport(
       switch (ext->sType) {
       case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT: {
          VkDescriptorSetVariableDescriptorCountLayoutSupport *vs = (void *)ext;
+         uint32_t max_var_count;
+
          if (variable_stride > 0) {
-            vs->maxVariableDescriptorCount =
+            max_var_count =
                (max_buffer_size - non_variable_size) / variable_stride;
          } else {
-            vs->maxVariableDescriptorCount = 0;
+            max_var_count = 0;
          }
+
+         if (variable_is_inline_uniform_block) {
+            max_var_count =
+               MIN2(max_var_count, HK_MAX_INLINE_UNIFORM_BLOCK_SIZE);
+         }
+
+         vs->maxVariableDescriptorCount = max_var_count;
          break;
       }
 

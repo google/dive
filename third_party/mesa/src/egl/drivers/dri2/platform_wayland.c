@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <xf86drm.h>
+#include "util/libdrm.h"
 #include "drm-uapi/drm_fourcc.h"
 #include <sys/mman.h>
 #include <vulkan/vulkan_core.h>
@@ -92,6 +92,18 @@ static const struct dri2_wl_visual {
       PIPE_FORMAT_R16G16B16X16_FLOAT,
       PIPE_FORMAT_NONE,
       DRM_FORMAT_XBGR16161616F,
+   },
+   {
+      DRM_FORMAT_ABGR16161616,
+      PIPE_FORMAT_R16G16B16A16_UNORM,
+      PIPE_FORMAT_NONE,
+      DRM_FORMAT_XBGR16161616,
+   },
+   {
+      DRM_FORMAT_XBGR16161616,
+      PIPE_FORMAT_R16G16B16X16_UNORM,
+      PIPE_FORMAT_NONE,
+      DRM_FORMAT_XBGR16161616,
    },
    {
       DRM_FORMAT_XRGB2101010,
@@ -422,7 +434,7 @@ dmabuf_feedback_init(struct dmabuf_feedback *dmabuf_feedback)
    if (dmabuf_feedback_tranche_init(&dmabuf_feedback->pending_tranche) < 0)
       return -1;
 
-   util_dynarray_init(&dmabuf_feedback->tranches, NULL);
+   dmabuf_feedback->tranches = UTIL_DYNARRAY_INIT;
 
    dmabuf_feedback_format_table_init(&dmabuf_feedback->format_table);
 
@@ -616,8 +628,7 @@ surface_dmabuf_feedback_tranche_done(
    struct dmabuf_feedback *feedback = &dri2_surf->pending_dmabuf_feedback;
 
    /* Add tranche to array of tranches. */
-   util_dynarray_append(&feedback->tranches, struct dmabuf_feedback_tranche,
-                        feedback->pending_tranche);
+   util_dynarray_append(&feedback->tranches, feedback->pending_tranche);
 
    dmabuf_feedback_tranche_init(&feedback->pending_tranche);
 }
@@ -2301,6 +2312,10 @@ registry_handle_global_drm(void *data, struct wl_registry *registry,
          wl_registry_bind(registry, name, &wp_presentation_interface, 1);
       wp_presentation_add_listener(dri2_dpy->wp_presentation,
                                    &presentation_listener, dri2_dpy);
+#ifdef WL_FIXES_INTERFACE
+   } else if (strcmp(interface, wl_fixes_interface.name) == 0) {
+      dri2_dpy->wl_fixes = wl_registry_bind(registry, name, &wl_fixes_interface, 1);
+#endif
    }
 }
 
@@ -2530,6 +2545,8 @@ dri2_wl_add_configs_for_visuals(_EGLDisplay *disp)
    /* Try to create an EGLConfig for every config the driver declares */
    for (unsigned i = 0; dri2_dpy->driver_configs[i]; i++) {
       struct dri2_egl_config *dri2_conf;
+      enum pipe_format format = PIPE_FORMAT_NONE;
+      EGLint config_group = 0;
       bool conversion = false;
       bool server_supported = true;
       int idx = dri2_wl_visual_idx_from_config(dri2_dpy->driver_configs[i]);
@@ -2549,14 +2566,24 @@ dri2_wl_add_configs_for_visuals(_EGLDisplay *disp)
             /* The alternate format is supported by the server, so we can
              * convert whilst we do a blit. */
             conversion = true;
+            format = dri2_wl_visuals[idx].alt_pipe_format;
          } else {
             /* Not supported at all by the server. */
             server_supported = false;
          }
+      } else {
+         format = dri2_wl_visuals[idx].pipe_format;
       }
+
+      /* Put the 16 bpc rgb[a] unorm formats into a lower priority EGL config
+       * group 1, so they don't get preferably chosen by eglChooseConfig().
+       */
+      if (server_supported && util_format_is_unorm16(util_format_description(format)))
+         config_group = 1;
 
       EGLint attr_list[] = {
          EGL_NATIVE_VISUAL_ID, dri2_wl_visuals[idx].wl_drm_format,
+         EGL_CONFIG_SELECT_GROUP_EXT, config_group,
          EGL_NONE,
       };
 
@@ -3127,6 +3154,10 @@ registry_handle_global_swrast(void *data, struct wl_registry *registry,
          wl_registry_bind(registry, name, &wp_presentation_interface, 1);
       wp_presentation_add_listener(dri2_dpy->wp_presentation,
                                    &presentation_listener, dri2_dpy);
+#ifdef WL_FIXES_INTERFACE
+   } else if (strcmp(interface, wl_fixes_interface.name) == 0) {
+      dri2_dpy->wl_fixes = wl_registry_bind(registry, name, &wl_fixes_interface, 1);
+#endif
    }
 
 }
@@ -3271,8 +3302,17 @@ dri2_teardown_wayland(struct dri2_egl_display *dri2_dpy)
       zwp_linux_dmabuf_v1_destroy(dri2_dpy->wl_dmabuf);
    if (dri2_dpy->wl_shm)
       wl_shm_destroy(dri2_dpy->wl_shm);
-   if (dri2_dpy->wl_registry)
+   if (dri2_dpy->wl_registry) {
+#ifdef WL_FIXES_INTERFACE
+      if (dri2_dpy->wl_fixes)
+         wl_fixes_destroy_registry(dri2_dpy->wl_fixes, dri2_dpy->wl_registry);
+#endif
       wl_registry_destroy(dri2_dpy->wl_registry);
+   }
+#ifdef WL_FIXES_INTERFACE
+   if (dri2_dpy->wl_fixes)
+      wl_fixes_destroy(dri2_dpy->wl_fixes);
+#endif
    if (dri2_dpy->wl_dpy_wrapper)
       wl_proxy_wrapper_destroy(dri2_dpy->wl_dpy_wrapper);
    if (dri2_dpy->wl_queue)

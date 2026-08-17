@@ -1,26 +1,7 @@
 /*
  * Copyright © 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
-
-/**
  * @file iris_resource.c
  *
  * Resources are images, buffers, and other objects used by the GPU.
@@ -659,12 +640,15 @@ iris_get_aux_clear_color_state_size(struct iris_screen *screen,
 
    assert(!isl_surf_usage_is_stencil(res->surf.usage));
 
-   /* Depth packets can't specify indirect clear values. The only time depth
-    * buffers can use indirect clear values is when they're accessed by the
-    * sampler via render surface state objects.
+   /* Depth packets can't specify indirect clear values. The only time
+    * depth buffers can use indirect clear values is when they're
+    * accessed by the sampler, either because HiZ can remain enabled
+    * during sampling or because we have a HIZ_CCS_* usage that allows
+    * us to keep the surface CCS-compressed during sampling with a
+    * Gfx12.5 partial resolve.
     */
    if (isl_surf_usage_is_depth(res->surf.usage) &&
-       !iris_sample_with_depth_aux(screen->devinfo, res))
+       !iris_depth_texture_aux_usage(screen->devinfo, res))
       return 0;
 
    return screen->isl_dev.ss.clear_color_state_size;
@@ -760,6 +744,115 @@ target_to_isl_surf_dim(enum pipe_texture_target target)
 }
 
 static bool
+pipe_format_has_pot_view_class(enum pipe_format format)
+{
+   /* See the view class table at the top of src/mesa/main/textureview.c. */
+   switch (format) {
+
+   /* VIEW_CLASS_128_BITS */
+   case PIPE_FORMAT_R32G32B32A32_FLOAT:
+   case PIPE_FORMAT_R32G32B32A32_UINT:
+   case PIPE_FORMAT_R32G32B32A32_SINT:
+
+   /* VIEW_CLASS_64_BITS */
+   case PIPE_FORMAT_R16G16B16A16_FLOAT:
+   case PIPE_FORMAT_R32G32_FLOAT:
+
+   case PIPE_FORMAT_R16G16B16A16_UINT:
+   case PIPE_FORMAT_R32G32_UINT:
+
+   case PIPE_FORMAT_R16G16B16A16_SINT:
+   case PIPE_FORMAT_R32G32_SINT:
+
+   case PIPE_FORMAT_R16G16B16A16_UNORM:
+   case PIPE_FORMAT_R16G16B16A16_SNORM:
+
+   /* VIEW_CLASS_32_BITS */
+   case PIPE_FORMAT_R16G16_FLOAT:
+   case PIPE_FORMAT_R11G11B10_FLOAT:
+   case PIPE_FORMAT_R32_FLOAT:
+
+   case PIPE_FORMAT_R10G10B10A2_UINT:
+   case PIPE_FORMAT_R8G8B8A8_UINT:
+   case PIPE_FORMAT_R16G16_UINT:
+   case PIPE_FORMAT_R32_UINT:
+
+   case PIPE_FORMAT_R8G8B8A8_SINT:
+   case PIPE_FORMAT_R16G16_SINT:
+   case PIPE_FORMAT_R32_SINT:
+
+   case PIPE_FORMAT_R10G10B10A2_UNORM:
+   case PIPE_FORMAT_R8G8B8A8_UNORM:
+   case PIPE_FORMAT_R16G16_UNORM:
+
+   case PIPE_FORMAT_R8G8B8A8_SNORM:
+   case PIPE_FORMAT_R16G16_SNORM:
+
+   case PIPE_FORMAT_R8G8B8A8_SRGB:
+
+   case PIPE_FORMAT_R9G9B9E5_FLOAT:
+
+   /* VIEW_CLASS_16_BITS */
+   case PIPE_FORMAT_R16_FLOAT:
+
+   case PIPE_FORMAT_R8G8_UINT:
+   case PIPE_FORMAT_R16_UINT:
+
+   case PIPE_FORMAT_R8G8_SINT:
+   case PIPE_FORMAT_R16_SINT:
+
+   case PIPE_FORMAT_R8G8_UNORM:
+   case PIPE_FORMAT_R16_UNORM:
+
+   case PIPE_FORMAT_R8G8_SNORM:
+   case PIPE_FORMAT_R16_SNORM:
+
+   /* VIEW_CLASS_8_BITS */
+   case PIPE_FORMAT_R8_UINT:
+   case PIPE_FORMAT_R8_SINT:
+   case PIPE_FORMAT_R8_UNORM:
+   case PIPE_FORMAT_R8_SNORM:
+      return true;
+
+   default:
+      return false;
+   }
+}
+
+static bool
+resource_needs_storage_usage(const struct pipe_resource *templ)
+{
+   if (templ->bind & PIPE_BIND_SHADER_IMAGE)
+      return true;
+
+   /* Gallium doesn't use PIPE_BIND_SHADER_IMAGE where expected for GL. Use
+    * a heuristic to determine if it's needed.
+    */
+   if (templ->flags & PIPE_RESOURCE_FLAG_TEXTURING_MORE_LIKELY) {
+      /* We don't support multisampled storage images (see
+       * iris_is_format_supported).
+       */
+      if (templ->nr_samples > 1)
+         return false;
+
+      /* If the image format is immutable, we only need to check that the
+       * original format supports load/store. If the format is mutable, we
+       * need to check if it's possible to texture view to a format supporting
+       * load/store. Gallium doesn't provide any information on format
+       * mutability. So, we must assume that the format is mutable.
+       *
+       * The formats allowed in a texture view are constrained by the view
+       * class. Every format supported for image load/store belongs to a
+       * power-of-two view class (see _mesa_is_shader_image_format_supported).
+       * So, check if the resource format belongs to such a view class.
+       */
+      return pipe_format_has_pot_view_class(templ->format);
+   }
+
+   return false;
+}
+
+static bool
 iris_resource_configure_main(const struct iris_screen *screen,
                              struct iris_resource *res,
                              const struct pipe_resource *templ,
@@ -792,11 +885,18 @@ iris_resource_configure_main(const struct iris_screen *screen,
       tiling_flags = ISL_TILING_X_BIT;
    } else {
       tiling_flags = ISL_TILING_ANY_MASK;
-   }
 
-   /* We don't support Yf or Ys tiling yet */
-   tiling_flags &= ~ISL_TILING_STD_Y_MASK;
-   assert(tiling_flags != 0);
+      if (screen->devinfo->verx10 == 120 &&
+          util_format_get_blocksizebits(templ->format) == 32 &&
+          resource_needs_storage_usage(templ) &&
+          templ->target == PIPE_TEXTURE_3D) {
+         /* iris_image_view_aux_usage() will disable compression for atomic
+          * operations. Unfortunately BLORP can't resolve CCS on Ys tiled
+          * images on this platform. So, don't use it for now.
+          */
+         tiling_flags &= ~ISL_TILING_ICL_Ys_BIT;
+      }
+   }
 
    isl_surf_usage_flags_t usage = 0;
 
@@ -830,7 +930,7 @@ iris_resource_configure_main(const struct iris_screen *screen,
    if (templ->bind & PIPE_BIND_SAMPLER_VIEW)
       usage |= ISL_SURF_USAGE_TEXTURE_BIT;
 
-   if (templ->bind & PIPE_BIND_SHADER_IMAGE)
+   if (resource_needs_storage_usage(templ))
       usage |= ISL_SURF_USAGE_STORAGE_BIT;
 
    if (templ->bind & PIPE_BIND_SCANOUT)
@@ -918,7 +1018,7 @@ iris_resource_configure_aux(struct iris_screen *screen,
       isl_surf_get_hiz_surf(&screen->isl_dev, &res->surf, &res->aux.surf);
 
    bool has_ccs = devinfo->has_aux_map || devinfo->has_flat_ccs ?
-      isl_surf_supports_ccs(&screen->isl_dev, &res->surf, &res->aux.surf) :
+      isl_surf_supports_ccs(&screen->isl_dev, &res->surf) :
       isl_surf_get_ccs_surf(&screen->isl_dev, &res->surf, &res->aux.surf, 0);
 
    /* TODO: We should be able to drop this. */
@@ -950,6 +1050,9 @@ iris_resource_configure_aux(struct iris_screen *screen,
       if (isl_surf_usage_is_stencil(res->surf.usage)) {
          assert(!res->mod_info);
          res->aux.usage = ISL_AUX_USAGE_STC_CCS;
+      } else if (isl_surf_usage_is_depth(res->surf.usage)) {
+         assert(!res->mod_info);
+         res->aux.usage = ISL_AUX_USAGE_ZCS;
       } else if (res->mod_info && res->mod_info->supports_media_compression) {
          res->aux.usage = ISL_AUX_USAGE_MC;
       } else if (want_ccs_e_for_format(devinfo, res->surf.format)) {
@@ -2254,7 +2357,7 @@ iris_map_tiled_memcpy(struct iris_transfer *map)
    struct iris_resource *res = (struct iris_resource *) xfer->resource;
    struct isl_surf *surf = &res->surf;
 
-   xfer->stride = ALIGN(surf->row_pitch_B, 16);
+   xfer->stride = align(surf->row_pitch_B, 16);
    xfer->layer_stride = xfer->stride * box->height;
 
    unsigned x1, x2, y1, y2;
@@ -2507,8 +2610,11 @@ iris_transfer_map(struct pipe_context *ctx,
    if (prefer_cpu_access(res, box, usage, level, map_would_stall))
       usage |= PIPE_MAP_DIRECTLY;
 
-   /* TODO: Teach iris_map_tiled_memcpy about Tile64... */
-   if (isl_tiling_is_64(res->surf.tiling))
+   /* Disable support for tilings that are not supported by ISL's tiled-memcpy
+    * functions.
+    */
+   if (isl_tiling_is_64(res->surf.tiling) ||
+       isl_tiling_is_std_y(res->surf.tiling))
       usage &= ~PIPE_MAP_DIRECTLY;
 
    if (!(usage & PIPE_MAP_DIRECTLY)) {
@@ -2634,6 +2740,7 @@ iris_texture_subdata(struct pipe_context *ctx,
     */
    if (surf->tiling == ISL_TILING_LINEAR ||
        isl_tiling_is_64(res->surf.tiling) ||
+       isl_tiling_is_std_y(res->surf.tiling) ||
        isl_aux_usage_has_compression(res->aux.usage) ||
        resource_is_busy(ice, res) ||
        iris_bo_mmap_mode(res->bo) == IRIS_MMAP_NONE) {
@@ -2816,6 +2923,17 @@ iris_init_screen_resource_functions(struct pipe_screen *pscreen)
                                U_TRANSFER_HELPER_SEPARATE_Z32S8 |
                                U_TRANSFER_HELPER_SEPARATE_STENCIL |
                                U_TRANSFER_HELPER_MSAA_MAP);
+}
+
+void
+iris_surface_destroy(struct iris_surface *surf)
+{
+   pipe_resource_reference(&surf->surface_state.ref.res, NULL);
+   pipe_resource_reference(&surf->surface_state_read.ref.res, NULL);
+   free(surf->surface_state.cpu);
+   surf->surface_state.cpu = NULL;
+   free(surf->surface_state_read.cpu);
+   surf->surface_state_read.cpu = NULL;
 }
 
 void

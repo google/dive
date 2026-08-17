@@ -8,7 +8,7 @@ use compiler::dataflow::BackwardDataflow;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::{max, min, Ord, Ordering};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LiveSet {
     live: PerRegFile<u32>,
     set: FxHashSet<SSAValue>,
@@ -16,10 +16,12 @@ pub struct LiveSet {
 
 impl LiveSet {
     pub fn new() -> LiveSet {
-        LiveSet {
-            live: Default::default(),
-            set: Default::default(),
-        }
+        Default::default()
+    }
+
+    pub fn clear(&mut self) {
+        self.live = Default::default();
+        self.set.clear();
     }
 
     pub fn contains(&self, ssa: &SSAValue) -> bool {
@@ -108,6 +110,8 @@ impl LiveSet {
 impl FromIterator<SSAValue> for LiveSet {
     fn from_iter<T: IntoIterator<Item = SSAValue>>(iter: T) -> Self {
         let mut set = LiveSet::new();
+        let iter = iter.into_iter();
+        set.set.reserve(iter.size_hint().0);
         for ssa in iter {
             set.insert(ssa);
         }
@@ -117,6 +121,8 @@ impl FromIterator<SSAValue> for LiveSet {
 
 impl Extend<SSAValue> for LiveSet {
     fn extend<T: IntoIterator<Item = SSAValue>>(&mut self, iter: T) {
+        let iter = iter.into_iter();
+        self.set.reserve(iter.size_hint().0);
         for ssa in iter {
             self.insert(ssa);
         }

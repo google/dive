@@ -90,6 +90,10 @@ ir_loop::accept(ir_hierarchical_visitor *v)
    if (s == visit_stop)
       return s;
 
+   s = visit_list_elements(v, &this->continue_instructions);
+   if (s == visit_stop)
+      return s;
+
    return v->visit_leave(this);
 }
 

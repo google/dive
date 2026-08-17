@@ -99,7 +99,7 @@ algebraic_ops = [
 ]
 
 no_16bit_conv += [
-  (('f2f32', ('u2u16', 'a@32')), ('unpack_half_2x16_split_x', 'a')),
+  (('f2f32', ('u2u16', 'a@32')), ('unpack_half_x_dxil', a)),
   (('u2u32', ('f2f16_rtz', 'a@32')), ('pack_half_2x16_split', 'a', 0)),
 ]
 

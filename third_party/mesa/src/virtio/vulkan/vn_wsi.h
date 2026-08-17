@@ -30,10 +30,23 @@ vn_wsi_create_image(struct vn_device *dev,
                     const VkAllocationCallbacks *alloc,
                     struct vn_image **out_img);
 
+void
+vn_wsi_memory_info_init(struct vn_device_memory *mem,
+                        const VkMemoryAllocateInfo *alloc_info);
+
 bool
 vn_wsi_validate_image_format_info(
    struct vn_physical_device *physical_dev,
    const VkPhysicalDeviceImageFormatInfo2 *info);
+
+VkResult
+vn_wsi_fence_wait(VkQueue queue_handle);
+
+void
+vn_wsi_sync_wait(struct vn_device *dev, int fd);
+
+void
+vn_wsi_flush(VkQueue queue_handle);
 
 #else
 
@@ -58,11 +71,35 @@ vn_wsi_create_image(struct vn_device *dev,
    return VK_ERROR_OUT_OF_HOST_MEMORY;
 }
 
+static inline void
+vn_wsi_memory_info_init(struct vn_device_memory *mem,
+                        const VkMemoryAllocateInfo *alloc_info)
+{
+}
+
 static inline bool
 vn_wsi_validate_image_format_info(struct vn_physical_device *physical_dev,
                                   const VkPhysicalDeviceImageFormatInfo2 *info)
 {
    return true;
+}
+
+static inline VkResult
+vn_wsi_fence_wait(VkQueue queue_handle)
+{
+   return VK_SUCCESS;
+}
+
+static inline void
+vn_wsi_sync_wait(struct vn_device *dev, int fd)
+{
+   return;
+}
+
+static inline void
+vn_wsi_flush(VkQueue queue_handle)
+{
+   return;
 }
 
 #endif /* VN_USE_WSI_PLATFORM */

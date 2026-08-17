@@ -1,33 +1,14 @@
 GTF-GL46.gtf40.GL3Tests.transform_feedback2.transform_feedback2_two_buffers,Fail
-KHR-GL46.texture_lod_basic.lod_selection,Fail
-dEQP-GLES2.functional.texture.mipmap.cube.projected.nearest_linear,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_dst_x,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_dst_y,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_src_dst_x,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_src_dst_y,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_src_x,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_mag_reverse_src_y,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_dst_x,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_dst_y,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_src_dst_x,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_src_dst_y,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_src_x,Fail
-dEQP-GLES3.functional.fbo.blit.rect.nearest_consistency_out_of_bounds_min_reverse_src_y,Fail
+
+# Autotune regression
+dEQP-GLES3.functional.multisample.fbo_4_samples.stencil,Fail
+dEQP-GLES3.functional.multisample.fbo_max_samples.stencil,Fail
 
 GTF-GL46.gtf30.GL3Tests.sgis_texture_lod.sgis_texture_lod_basic_lod_selection,Fail
-
-KHR-Single-GL46.arrays_of_arrays_gl.SubroutineFunctionCalls2,Crash
 
 # Turnip has maxFragmentInputComponents = 124, while GL requires
 # gl_MaxFragmentInputComponents >= 128
 KHR-GL46.limits.max_fragment_input_components,Fail
-
-# https://gitlab.freedesktop.org/mesa/mesa/-/issues/6723
-KHR-GL46.copy_image.functional,Fail
-KHR-GL46.texture_view.view_classes,Fail
-
 
 dEQP-GLES3.functional.shaders.matrix.inverse.dynamic.lowp_mat4_float_vertex,Fail
 dEQP-GLES3.functional.shaders.matrix.inverse.dynamic.mediump_mat4_float_vertex,Fail
@@ -78,14 +59,12 @@ spec@!opengl 3.2@gl-3.2-adj-prims line cull-front pv-first,Fail
 spec@!opengl 3.2@gl-3.2-adj-prims pv-first,Fail
 spec@!opengl 3.2@minmax,Fail
 spec@!opengl 3.3@minmax,Fail
-spec@arb_depth_buffer_float@fbo-clear-formats stencil,Crash
 spec@arb_framebuffer_object@fbo-blit-scaled-linear,Fail
 spec@arb_gl_spirv@execution@uniform@atomic-uint-aoa-cs,Fail
 spec@arb_gl_spirv@execution@uniform@atomic-uint-array-cs,Fail
 spec@arb_gl_spirv@execution@uniform@atomic-uint-cs,Fail
 spec@arb_gpu_shader5@arb_gpu_shader5-interpolateatsample-dynamically-nonuniform,Fail
 spec@arb_gpu_shader_fp64@execution@arb_gpu_shader_fp64-tf-separate,Fail
-spec@arb_gpu_shader_fp64@execution@glsl-fs-loop-unroll-mul-fp64,Crash
 spec@arb_gpu_shader_fp64@uniform_buffers@fs-ubo-load.indirect.3,Fail
 spec@arb_sample_shading@samplemask 2 all,Fail
 spec@arb_sample_shading@samplemask 2 all@0.500000 mask_in_one,Fail
@@ -115,86 +94,6 @@ spec@arb_sample_shading@samplemask 4@noms partition,Fail
 spec@arb_sample_shading@samplemask 4@sample mask_in_one,Fail
 spec@arb_shading_language_packing@execution@built-in-functions@fs-packhalf2x16,Fail
 spec@arb_shading_language_packing@execution@built-in-functions@vs-packhalf2x16,Fail
-spec@arb_texture_buffer_object@formats (fs- arb),Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA16,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_ALPHA8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY16,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY8,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_INTENSITY8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE16,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE16_ALPHA16,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE8,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE8_ALPHA8,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (fs- arb)@GL_LUMINANCE_ALPHA8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb),Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA16,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_ALPHA8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY16,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY8,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_INTENSITY8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE16,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE16_ALPHA16,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE8,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE8UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE8_ALPHA8,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA16F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA16I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA16UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA32F_ARB,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA32I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA32UI_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA8I_EXT,Fail
-spec@arb_texture_buffer_object@formats (vs- arb)@GL_LUMINANCE_ALPHA8UI_EXT,Fail
 spec@arb_texture_rectangle@1-1-linear-texture,Fail
 spec@egl 1.4@eglterminate then unbind context,Fail
 spec@egl_chromium_sync_control@conformance,Fail
@@ -237,24 +136,12 @@ spec@ext_framebuffer_multisample@alpha-to-coverage-no-draw-buffer-zero 2,Fail
 spec@ext_framebuffer_multisample@alpha-to-coverage-no-draw-buffer-zero 4,Fail
 spec@ext_framebuffer_multisample@draw-buffers-alpha-to-coverage 2,Fail
 spec@ext_framebuffer_multisample@draw-buffers-alpha-to-coverage 4,Fail
-spec@ext_framebuffer_multisample@enable-flag,Fail
 spec@ext_framebuffer_multisample@formats 2,Fail
 spec@ext_framebuffer_multisample@formats 4,Fail
 spec@ext_framebuffer_multisample@formats all_samples,Fail
-spec@ext_framebuffer_multisample@interpolation 2 centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 2 centroid-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 2 non-centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 2 non-centroid-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 centroid-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 non-centroid-deriv-disabled,Fail
-spec@ext_framebuffer_multisample@interpolation 4 non-centroid-disabled,Fail
 spec@ext_framebuffer_multisample@sample-alpha-to-coverage 2 color,Fail
 spec@ext_framebuffer_multisample@sample-alpha-to-coverage 4 color,Fail
-spec@ext_packed_depth_stencil@fbo-clear-formats stencil,Crash
-spec@ext_transform_feedback@max-varyings,Fail
-spec@ext_transform_feedback@max-varyings@max-varying-arrays-of-arrays,Fail
-spec@ext_transform_feedback@max-varyings@max-varying-single-dimension-array,Fail
+
 spec@ext_transform_feedback@tessellation quad_strip wireframe,Fail
 spec@ext_transform_feedback@tessellation quads wireframe,Fail
 spec@ext_transform_feedback@tessellation triangle_fan flat_first,Fail
@@ -269,10 +156,6 @@ spec@glsl-1.50@execution@geometry@point-size-out,Fail
 spec@glsl-1.50@execution@geometry@primitive-id-restart gl_line_strip_adjacency other,Fail
 spec@glsl-1.50@execution@redeclare-pervertex-out-subset-gs,Fail
 spec@glsl-1.50@execution@variable-indexing@gs-output-array-vec4-index-wr,Fail
-spec@ovr_multiview2@triangle_compare_frag_index_uniform,Fail
-spec@ovr_multiview2@triangle_compare_frag_index_uniform_base2,Fail
-spec@ovr_multiview2@triangle_compare_frag_vary_color,Fail
-spec@ovr_multiview2@triangle_compare_frag_vary_color_base2,Fail
 
 spec@glsl-3.30@built-in constants,Fail
 spec@glsl-3.30@built-in constants@gl_MaxFragmentInputComponents,Fail
@@ -308,3 +191,9 @@ spec@khr_texture_compression_astc@sliced-3d-miptree-gles hdr,Fail
 spec@khr_texture_compression_astc@sliced-3d-miptree-gles hdr@HDR Profile,Fail
 spec@khr_texture_compression_astc@sliced-3d-miptree-gles srgb-fp,Fail
 spec@khr_texture_compression_astc@sliced-3d-miptree-gles srgb-fp@sRGB decode full precision,Fail
+
+# uprev Piglit in Mesa
+glx@glx-make-current,Fail
+spec@!opengl 1.1@large-tex,Fail
+spec@!opengl 1.1@large-tex@test_image_load_store,Fail
+

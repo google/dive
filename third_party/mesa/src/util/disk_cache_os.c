@@ -43,7 +43,7 @@
 #include <windows.h>
 
 bool
-disk_cache_get_function_identifier(void *ptr, struct mesa_sha1 *ctx)
+disk_cache_get_function_identifier(void *ptr, blake3_hasher *ctx)
 {
    HMODULE mod = NULL;
    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -72,7 +72,7 @@ disk_cache_get_function_identifier(void *ptr, struct mesa_sha1 *ctx)
    FILETIME time;
    bool ret = GetFileTime(mod_as_file, NULL, NULL, &time);
    if (ret)
-      _mesa_sha1_update(ctx, &time, sizeof(time));
+      _mesa_blake3_update(ctx, &time, sizeof(time));
    CloseHandle(mod_as_file);
    return ret;
 }
@@ -441,9 +441,9 @@ static void
 make_cache_file_directory(struct disk_cache *cache, const cache_key key)
 {
    char *dir;
-   char buf[41];
+   char buf[BLAKE3_HEX_LEN];
 
-   _mesa_sha1_format(buf, key);
+   _mesa_blake3_format(buf, key);
    if (asprintf(&dir, "%s/%c%c", cache->path, buf[0], buf[1]) == -1)
       return;
 
@@ -624,8 +624,7 @@ parse_and_validate_cache_item(struct disk_cache *cache, void *cache_item,
    return uncompressed_data;
 
  fail:
-   if (uncompressed_data)
-      free(uncompressed_data);
+   free(uncompressed_data);
 
    return NULL;
 }
@@ -664,10 +663,8 @@ disk_cache_load_item(struct disk_cache *cache, char *filename, size_t *size)
    return uncompressed_data;
 
  fail:
-   if (data)
-      free(data);
-   if (filename)
-      free(filename);
+   free(data);
+   free(filename);
    if (fd != -1)
       close(fd);
 
@@ -681,13 +678,13 @@ disk_cache_load_item(struct disk_cache *cache, char *filename, size_t *size)
 char *
 disk_cache_get_cache_filename(struct disk_cache *cache, const cache_key key)
 {
-   char buf[41];
+   char buf[BLAKE3_HEX_LEN];
    char *filename;
 
    if (cache->path_init_failed)
       return NULL;
 
-   _mesa_sha1_format(buf, key);
+   _mesa_blake3_format(buf, key);
    if (asprintf(&filename, "%s/%c%c/%s", cache->path, buf[0],
                 buf[1], buf + 2) == -1)
       return NULL;
@@ -930,7 +927,7 @@ disk_cache_generate_cache_dir(void *mem_ctx, const char *gpu_name,
    }
 
    if (path == NULL) {
-      char *xdg_cache_home = secure_getenv("XDG_CACHE_HOME");
+      const char *xdg_cache_home = os_get_option_secure("XDG_CACHE_HOME");
 
       if (xdg_cache_home) {
          path = concatenate_and_mkdir(mem_ctx, xdg_cache_home, cache_dir_name,
@@ -941,7 +938,7 @@ disk_cache_generate_cache_dir(void *mem_ctx, const char *gpu_name,
    }
 
    if (!path) {
-      char *home = getenv("HOME");
+      const char *home = os_get_option("HOME");
 
       if (home) {
          path = concatenate_and_mkdir(mem_ctx, home, ".cache", mkdir);
@@ -1024,9 +1021,9 @@ disk_cache_enabled()
 #endif
    char *envvar_name = "MESA_SHADER_CACHE_DISABLE";
 #if !DETECT_OS_ANDROID
-   if (!getenv(envvar_name)) {
+   if (!os_get_option(envvar_name)) {
       envvar_name = "MESA_GLSL_CACHE_DISABLE";
-      if (getenv(envvar_name))
+      if (os_get_option(envvar_name))
          fprintf(stderr,
                  "*** MESA_GLSL_CACHE_DISABLE is deprecated; "
                  "use MESA_SHADER_CACHE_DISABLE instead ***\n");

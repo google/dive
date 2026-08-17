@@ -53,7 +53,7 @@ foreach g : [['40', isl_gfx4_files], ['50', []], ['60', isl_gfx6_files],
              ['70', isl_gfx7_files], ['75', []], ['80', isl_gfx8_files],
              ['90', isl_gfx9_files], ['110', []], ['120', isl_gfx12_files],
              ['125', isl_gfx12_files], ['200', isl_gfx20_files],
-             ['300', isl_gfx20_files]]
+             ['300', isl_gfx20_files], ['350', isl_gfx20_files]]
   _gfx_ver = g[0]
   isl_per_hw_ver_libs += static_library(
     'isl_per_hw_ver@0@'.format(_gfx_ver),
@@ -91,7 +91,7 @@ isl_tiled_memcpy = static_library(
   ],
 
   dependencies : [idep_mesautil, idep_intel_dev],
-  c_args : [no_override_init_args, sse2_arg],
+  c_args : [no_override_init_args, soong_compat_c_args, sse2_arg],
   gnu_symbol_visibility : 'hidden',
   extra_files : ['isl_tiled_memcpy.c']
 )

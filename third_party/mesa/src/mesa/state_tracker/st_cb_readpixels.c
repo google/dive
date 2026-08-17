@@ -137,19 +137,10 @@ try_pbo_readpixels(struct st_context *st, struct gl_renderbuffer *rb,
    if (!st_pbo_addresses_pixelstore(st, GL_TEXTURE_2D, false, pack, pixels, &addr))
       return false;
 
-   cso_save_state(cso, (CSO_BIT_FRAGMENT_SAMPLERS |
-                        CSO_BIT_BLEND |
-                        CSO_BIT_VERTEX_ELEMENTS |
-                        CSO_BIT_FRAMEBUFFER |
-                        CSO_BIT_VIEWPORT |
-                        CSO_BIT_RASTERIZER |
-                        CSO_BIT_DEPTH_STENCIL_ALPHA |
-                        CSO_BIT_STREAM_OUTPUTS |
+   /* Save only states that have no st_atom — they can't be re-derived. */
+   cso_save_state(cso, (CSO_BIT_STREAM_OUTPUTS |
                         (st->active_queries ? CSO_BIT_PAUSE_QUERIES : 0) |
-                        CSO_BIT_SAMPLE_MASK |
-                        CSO_BIT_MIN_SAMPLES |
-                        CSO_BIT_RENDER_CONDITION |
-                        CSO_BITS_ALL_SHADERS));
+                        CSO_BIT_RENDER_CONDITION));
 
    cso_set_sample_mask(cso, ~0);
    cso_set_min_samples(cso, 1);
@@ -259,10 +250,27 @@ fail:
    cso_restore_state(cso, CSO_UNBIND_FS_SAMPLERVIEWS | CSO_UNBIND_FS_IMAGE0);
    st->state.num_sampler_views[MESA_SHADER_FRAGMENT] = 0;
 
-   st->ctx->Array.NewVertexElements = true;
-   ST_SET_STATE4(st->ctx->NewDriverState, ST_NEW_FS_CONSTANTS,
-                 ST_NEW_FS_IMAGES, ST_NEW_FS_SAMPLER_VIEWS,
-                 ST_NEW_VERTEX_ARRAYS);
+   /* Invalidate all states this meta-op modified. The atoms will
+    * re-derive them from GL state before the next draw.
+    */
+   st_context_invalidate_state(st,
+                               ST_INVALIDATE_FS_SAMPLERS |
+                               ST_INVALIDATE_BLEND |
+                               ST_INVALIDATE_VERTEX_BUFFERS |
+                               ST_INVALIDATE_FB_STATE |
+                               ST_INVALIDATE_VIEWPORT |
+                               ST_INVALIDATE_RASTERIZER |
+                               ST_INVALIDATE_DSA |
+                               ST_INVALIDATE_SAMPLE_MASK |
+                               ST_INVALIDATE_SAMPLE_SHADING |
+                               ST_INVALIDATE_FS_CONSTBUF0 |
+                               ST_INVALIDATE_FS_IMAGES |
+                               ST_INVALIDATE_VS_STATE |
+                               ST_INVALIDATE_FS_STATE |
+                               ST_INVALIDATE_GS_STATE |
+                               ST_INVALIDATE_TCS_STATE |
+                               ST_INVALIDATE_TES_STATE |
+                               ST_INVALIDATE_MESH_STATE);
 
    return success;
 }
@@ -371,10 +379,10 @@ try_cached_readpixels(struct st_context *st, struct gl_renderbuffer *rb,
          /* Heuristic: If previous successive calls read at least a fraction
           * of the surface _and_ we read again, trigger the cache.
           */
-         unsigned threshold = MAX2(1, rb->Width * rb->Height / 8);
+         size_t threshold = MAX2(1, (size_t)rb->Width * rb->Height / 8);
 
          if (st->readpix_cache.hits < threshold) {
-            st->readpix_cache.hits += width * height;
+            st->readpix_cache.hits += (size_t)width * height;
             return NULL;
          }
 
@@ -551,7 +559,7 @@ st_ReadPixels(struct gl_context *ctx, GLint x, GLint y,
                                          type, 0, 0);
 
       if (tex_xfer->stride == bytesPerRow && destStride == bytesPerRow) {
-         memcpy(dest, map, bytesPerRow * height);
+         memcpy(dest, map, (size_t)bytesPerRow * height);
       } else {
          GLuint row;
 

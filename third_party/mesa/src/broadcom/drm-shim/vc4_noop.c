@@ -27,8 +27,7 @@
 #include <sys/ioctl.h>
 #include "drm-uapi/vc4_drm.h"
 #include "drm-shim/drm_shim.h"
-
-bool drm_shim_driver_prefers_first_render_node = true;
+#include "util/log.h"
 
 static int
 vc4_ioctl_noop(int fd, unsigned long request, void *arg)
@@ -109,7 +108,7 @@ vc4_ioctl_get_param(int fd, unsigned long request, void *arg)
                 return 0;
         }
 
-        fprintf(stderr, "Unknown DRM_IOCTL_VC4_GET_PARAM %d\n", gp->param);
+        mesa_loge("Unknown DRM_IOCTL_VC4_GET_PARAM %d", gp->param);
         return -1;
 }
 
@@ -125,14 +124,8 @@ static ioctl_fn_t driver_ioctls[] = {
 void
 drm_shim_driver_init(void)
 {
-        shim_device.bus_type = DRM_BUS_PLATFORM;
-        shim_device.driver_name = "vc4";
         shim_device.driver_ioctls = driver_ioctls;
         shim_device.driver_ioctl_count = ARRAY_SIZE(driver_ioctls);
 
-        drm_shim_override_file("OF_FULLNAME=/rdb/vc4\n"
-                               "OF_COMPATIBLE_N=1\n"
-                               "OF_COMPATIBLE_0=brcm,7278-vc4\n",
-                               "/sys/dev/char/%d:%d/device/uevent",
-                               DRM_MAJOR, render_node_minor);
+        drm_shim_platform_device_setup("vc4", "/rdb/vc4", "brcm,7278-vc4");
 }

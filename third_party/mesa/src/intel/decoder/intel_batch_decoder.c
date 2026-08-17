@@ -183,31 +183,6 @@ ctx_disassemble_program(struct intel_batch_decode_ctx *ctx,
    ctx->disassemble_program(ctx, ksp, short_name, name);
 }
 
-/* Heuristic to determine whether a uint32_t is probably actually a float
- * (http://stackoverflow.com/a/2953466)
- */
-
-static bool
-probably_float(uint32_t bits)
-{
-   int exp = ((bits & 0x7f800000U) >> 23) - 127;
-   uint32_t mant = bits & 0x007fffff;
-
-   /* +- 0.0 */
-   if (exp == -127 && mant == 0)
-      return true;
-
-   /* +- 1 billionth to 1 billion */
-   if (-30 <= exp && exp <= 30)
-      return true;
-
-   /* some value with only a few binary digits */
-   if ((mant & 0x0000ffff) == 0)
-      return true;
-
-   return false;
-}
-
 static void
 ctx_print_buffer(struct intel_batch_decode_ctx *ctx,
                  struct intel_batch_decode_bo bo,
@@ -232,7 +207,7 @@ ctx_print_buffer(struct intel_batch_decode_ctx *ctx,
       }
       fprintf(ctx->fp, column_count == 0 ? "  " : " ");
 
-      if ((ctx->flags & INTEL_BATCH_DECODE_FLOATS) && probably_float(*dw))
+      if ((ctx->flags & INTEL_BATCH_DECODE_FLOATS) && util_is_probably_float(*dw))
          fprintf(ctx->fp, "  %8.2f", *(float *) dw);
       else
          fprintf(ctx->fp, "  0x%08x", *dw);
@@ -1257,6 +1232,27 @@ decode_load_register_imm(struct intel_batch_decode_ctx *ctx, const uint32_t *p)
 }
 
 static void
+decode_store_data_imm(struct intel_batch_decode_ctx *ctx, const uint32_t *p)
+{
+   /* Record a _potential_ shader hash. (We won't know if the data is a hash
+    * from a dummy MI_STORE_DATA_IMM or a real case of the same command until
+    * the next command gets parsed.)
+    *
+    * Since shader hash injection is supported, a hash was 32 bit and then
+    * is extended to 64 bit. There is a chance that a decoder supporting 64
+    * bit hash is used to parse an older dump generated with 32 bit hash. We
+    * have to look into the dword length field (bits 9:0 of BG 0) to
+    * determine the width of the hash.
+    *
+    * So far, dword 3 and 4 of MI_STORE_DATA_IMM are defined same way among
+    * all GFX generations, so we simply use the hard-coded indexes to get
+    * their values.
+    */
+   uint64_t hash_hi = (*p & 0x3ff) == 2 ? 0 : p[4];
+   ctx->shader_hash.hash = (hash_hi << 32) + p[3];
+}
+
+static void
 disasm_program_from_group(struct intel_batch_decode_ctx *ctx,
                           struct intel_group *strct, const void *map,
                           const char *short_name, const char *type)
@@ -1540,6 +1536,7 @@ struct custom_decoder custom_decoders[] = {
    { "3DSTATE_SCISSOR_STATE_POINTERS", decode_3dstate_scissor_state_pointers },
    { "3DSTATE_SLICE_TABLE_STATE_POINTERS", decode_3dstate_slice_table_state_pointers },
    { "MI_LOAD_REGISTER_IMM", decode_load_register_imm },
+   { "MI_STORE_DATA_IMM", decode_store_data_imm },
    { "3DSTATE_PIPELINED_POINTERS", decode_pipelined_pointers },
    { "3DSTATE_CPS_POINTERS", decode_cps_pointers },
    { "CONSTANT_BUFFER", decode_gfx4_constant_buffer },
@@ -1584,15 +1581,14 @@ compare_inst_ptr(const void *v1, const void *v2)
 static void
 intel_print_accumulated_instrs(struct intel_batch_decode_ctx *ctx)
 {
-   struct util_dynarray arr;
-   util_dynarray_init(&arr, NULL);
+   struct util_dynarray arr = UTIL_DYNARRAY_INIT;
 
    hash_table_foreach(ctx->commands, entry) {
       struct inst_ptr inst = {
          .inst = (struct intel_group *)entry->key,
          .ptr  = entry->data,
       };
-      util_dynarray_append(&arr, struct inst_ptr, inst);
+      util_dynarray_append(&arr, inst);
    }
    qsort(util_dynarray_begin(&arr),
          util_dynarray_num_elements(&arr, struct inst_ptr),
@@ -1771,6 +1767,8 @@ intel_print_batch(struct intel_batch_decode_ctx *ctx,
       } else if (strcmp(inst->name, "MI_BATCH_BUFFER_END") == 0) {
          break;
       }
+
+      ctx->shader_hash.last_inst = inst;
    }
 
    ctx->n_batch_buffer_start--;
@@ -1886,15 +1884,14 @@ compare_inst_stat(const void *v1, const void *v2)
 void
 intel_batch_print_stats(struct intel_batch_decode_ctx *ctx)
 {
-   struct util_dynarray arr;
-   util_dynarray_init(&arr, NULL);
+   struct util_dynarray arr = UTIL_DYNARRAY_INIT;
 
    hash_table_foreach(ctx->stats, entry) {
       struct inst_stat inst = {
          .name = (const char *)entry->key,
          .count = (uintptr_t)entry->data,
       };
-      util_dynarray_append(&arr, struct inst_stat, inst);
+      util_dynarray_append(&arr, inst);
    }
    qsort(util_dynarray_begin(&arr),
          util_dynarray_num_elements(&arr, struct inst_stat),

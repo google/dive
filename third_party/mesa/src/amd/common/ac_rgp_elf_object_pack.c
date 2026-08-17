@@ -82,8 +82,10 @@ get_hw_stage_symbol(struct rgp_code_object_record *record, unsigned index)
 }
 
 static const char *
-rt_subtype_from_stage(mesa_shader_stage stage)
+rt_subtype_from_stage(mesa_shader_stage stage, uint32_t is_rt_traversal)
 {
+   if (is_rt_traversal)
+      return "Traversal";
    switch (stage) {
    case MESA_SHADER_RAYGEN:
       return "RayGeneration";
@@ -93,10 +95,10 @@ rt_subtype_from_stage(mesa_shader_stage stage)
       return "ClosestHit";
    case MESA_SHADER_CALLABLE:
       return "Callable";
+   case MESA_SHADER_ANY_HIT:
+      return "AnyHit";
    case MESA_SHADER_INTERSECTION:
-      return "Traversal";
-   /* There are also AnyHit and Intersection subtypes, but on RADV
-    * these are inlined into the traversal shader */
+      return "Intersection";
    default:
       return "Unknown";
    }
@@ -224,7 +226,7 @@ ac_rgp_write_msgpack(FILE *output,
                            ac_msgpack_add_uint(&msgpack, record->shader_data[i].rt_stack_size);
 
                            ac_msgpack_add_fixstr(&msgpack, ".shader_subtype");
-                           ac_msgpack_add_fixstr(&msgpack, rt_subtype_from_stage(i));
+                           ac_msgpack_add_fixstr(&msgpack, rt_subtype_from_stage(i, record->shader_data[i].is_rt_traversal));
                            ac_msgpack_add_fixstr(&msgpack, ".api_shader_hash");
                            ac_msgpack_add_fixarray_op(&msgpack, 2);
                               ac_msgpack_add_uint(&msgpack, record->pipeline_hash[0]);
@@ -245,7 +247,7 @@ ac_rgp_write_msgpack(FILE *output,
                      }
             }
    ac_msgpack_resize_if_required(&msgpack, 4 - (msgpack.offset % 4));
-   msgpack.offset = ALIGN(msgpack.offset, 4);
+   msgpack.offset = align(msgpack.offset, 4);
    fwrite(msgpack.mem, 1, msgpack.offset, output);
    *written_size = msgpack.offset;
    ac_msgpack_destroy(&msgpack);
@@ -321,7 +323,7 @@ ac_rgp_file_write_elf_text(FILE *output, uint32_t *elf_size_calc,
    }
 
    symbol_offset += rgp_shader_data->code_size;
-   uint32_t aligned = ALIGN(symbol_offset, 256) - symbol_offset;
+   uint32_t aligned = align(symbol_offset, 256) - symbol_offset;
    fseek(output, aligned, SEEK_CUR);
    *elf_size_calc += aligned;
    *text_size = symbol_offset + aligned;

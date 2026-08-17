@@ -479,7 +479,43 @@ zink_create_depth_stencil_alpha_state(struct pipe_context *pctx,
 
    cso->hw_state.depth_write = depth_stencil_alpha->depth_writemask;
 
+   if (cso->hw_state.depth_test && cso->hw_state.depth_write && cso->hw_state.depth_compare_op == VK_COMPARE_OP_ALWAYS && zink_debug & ZINK_DEBUG_PERFINFO)
+      mesa_loge("zink: perf warning: depth test enabled with depth write and compareOp=ALWAYS may disable depth buffer compression\n");
+
    return cso;
+}
+
+void
+zink_update_depth_state(struct zink_context *ctx)
+{
+   if (!ctx->dsa_state)
+      return;
+
+   VkCompareOp prev_op = ctx->dsa_state->hw_state.depth_compare_op;
+   assert(ctx->in_rp);
+
+   if (ctx->can_promote_depth_op && ctx->fb_state.zsbuf.texture &&
+       ctx->dynamic_fb.attachments[PIPE_MAX_COLOR_BUFS].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR &&
+       ctx->dsa_state->base.depth_enabled &&
+       ctx->dsa_state->base.depth_writemask &&
+       ctx->dsa_state->base.depth_func == PIPE_FUNC_ALWAYS) {
+      float val = ctx->dynamic_fb.attachments[PIPE_MAX_COLOR_BUFS].clearValue.depthStencil.depth;
+      /* if depth clear is 0.0, use >= */
+      if (fabs(val) < FLT_EPSILON) {
+         ctx->dsa_state->hw_state.depth_compare_op = VK_COMPARE_OP_GREATER_OR_EQUAL;
+      /* if depth clear is 1.0, use <= */
+      } else if (fabs(val - 1.0) < FLT_EPSILON) {
+         ctx->dsa_state->hw_state.depth_compare_op = VK_COMPARE_OP_LESS_OR_EQUAL;
+      } else {
+         ctx->dsa_state->hw_state.depth_compare_op = compare_op(ctx->dsa_state->base.depth_func);
+      }
+      ctx->depth_op_promoted = ctx->dsa_state->hw_state.depth_compare_op != compare_op(ctx->dsa_state->base.depth_func);
+   } else {
+      ctx->dsa_state->hw_state.depth_compare_op = compare_op(ctx->dsa_state->base.depth_func);
+      ctx->depth_op_promoted = false;
+      ctx->can_promote_depth_op = false;
+   }
+   ctx->dsa_state_changed |= prev_op != ctx->dsa_state->hw_state.depth_compare_op;
 }
 
 static void
@@ -495,6 +531,11 @@ zink_bind_depth_stencil_alpha_state(struct pipe_context *pctx, void *cso)
          state->dyn_state1.depth_stencil_alpha_state = &ctx->dsa_state->hw_state;
          state->dirty |= !zink_screen(pctx->screen)->info.have_EXT_extended_dynamic_state;
          ctx->dsa_state_changed = true;
+         ctx->dsa_state->hw_state.depth_compare_op = compare_op(ctx->dsa_state->base.depth_func);
+         if (ctx->in_rp)
+            zink_update_depth_state(ctx);
+         else
+            ctx->depth_op_promoted = false;
       }
    }
    if (!ctx->track_renderpasses && !ctx->blitting)
@@ -558,7 +599,14 @@ zink_create_rasterizer_state(struct pipe_context *pctx,
       state->hw_state.polygon_mode = VK_POLYGON_MODE_FILL;
       state->cull_mode = VK_CULL_MODE_NONE;
    } else {
-      state->hw_state.polygon_mode = rs_state->fill_front; // same values
+      if (rs_state->fill_front != PIPE_POLYGON_MODE_FILL &&
+          !screen->info.feats.features.fillModeNonSolid) {
+         static bool warned = false;
+         warn_missing_feature(warned, "fillModeNonSolid");
+         state->hw_state.polygon_mode = VK_POLYGON_MODE_FILL;
+      } else {
+         state->hw_state.polygon_mode = rs_state->fill_front; // same values
+      }
       state->cull_mode = rs_state->cull_face; // same bits
    }
 
@@ -624,6 +672,7 @@ zink_bind_rasterizer_state(struct pipe_context *pctx, void *cso)
    bool rasterizer_discard = ctx->rast_state ? ctx->rast_state->base.rasterizer_discard : false;
    bool half_pixel_center = ctx->rast_state ? ctx->rast_state->base.half_pixel_center : true;
    bool representative_fragment_test = ctx->rast_state ? ctx->rast_state->base.representative_fragment_test : false;
+   bool multisample = ctx->rast_state ? ctx->rast_state->base.multisample : false;
    float line_width = ctx->rast_state ? ctx->rast_state->base.line_width : 1.0;
    ctx->rast_state = cso;
 
@@ -639,12 +688,15 @@ zink_bind_rasterizer_state(struct pipe_context *pctx, void *cso)
       ctx->rast_state_changed = true;
 
       if (clip_halfz != ctx->rast_state->base.clip_halfz) {
-         if (screen->info.have_EXT_depth_clip_control)
-            ctx->gfx_pipeline_state.dirty = ctx->gfx_pipeline_state.mesh_dirty = true;
+         if (screen->info.have_EXT_depth_clip_control) {
+            ctx->gfx_pipeline_state.dirty |= !screen->have_full_ds3;
+            ctx->gfx_pipeline_state.mesh_dirty |= !screen->have_full_ds3;
+         }
          else
             zink_set_last_vertex_key(ctx)->clip_halfz = ctx->rast_state->base.clip_halfz;
          ctx->vp_state_changed = true;
       }
+      ctx->sample_locations_changed |= screen->base.caps.programmable_sample_locations && (multisample != ctx->rast_state->base.multisample);
 
       if (screen->info.have_EXT_extended_dynamic_state3) {
 #define STATE_CHECK(NAME, FLAG) \
@@ -719,6 +771,12 @@ zink_bind_rasterizer_state(struct pipe_context *pctx, void *cso)
                                    FLT_DIFF(offset_scale);
       else
          ctx->depth_bias_changed = true;
+      if (ctx->depth_bias_changed && ctx->rast_state->offset_fill) {
+         /* tricky to calculate this, safer to skip entirely */
+         ctx->can_promote_depth_op = false;
+         if (ctx->in_rp)
+            zink_update_depth_state(ctx);
+      }
 
       if (!screen->optimal_keys)
          zink_update_gs_key_rectangular_line(ctx);

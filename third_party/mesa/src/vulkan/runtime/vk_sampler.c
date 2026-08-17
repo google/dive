@@ -25,6 +25,7 @@
 #include "vk_sampler.h"
 #include "vk_device.h"
 #include "vk_format.h"
+#include "vk_limits.h"
 #include "vk_util.h"
 #include "vk_ycbcr_conversion.h"
 
@@ -121,6 +122,7 @@ vk_sampler_state_init(struct vk_sampler_state *state,
    if (!vk_border_color_is_custom(pCreateInfo->borderColor))
       state->border_color_value = vk_border_color_value(pCreateInfo->borderColor);
    state->reduction_mode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE;
+   state->border_color_index = MESA_VK_MAX_CUSTOM_BORDER_COLOR;
 
    vk_foreach_struct_const(ext, pCreateInfo->pNext) {
       switch (ext->sType) {
@@ -173,6 +175,12 @@ vk_sampler_state_init(struct vk_sampler_state *state,
          break;
       }
 
+      case VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_INDEX_CREATE_INFO_EXT: {
+         const VkSamplerCustomBorderColorIndexCreateInfoEXT *bc_info = (void *)ext;
+         state->border_color_index = bc_info->index;
+         break;
+      }
+
       default:
          break;
       }
@@ -190,6 +198,10 @@ vk_sampler_init(struct vk_device *device,
 
    vk_sampler_state_init(&state, pCreateInfo);
 
+   sampler->flags = state.flags;
+   sampler->address_mode_u = state.address_mode_u;
+   sampler->address_mode_v = state.address_mode_v;
+   sampler->address_mode_w = state.address_mode_w;
    sampler->format = state.format;
    sampler->border_color = state.border_color;
    sampler->border_color_value = state.border_color_value;

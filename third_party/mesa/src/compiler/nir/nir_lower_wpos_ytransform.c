@@ -106,8 +106,8 @@ emit_wpos_adjustment(lower_wpos_ytransform_state *state,
        */
       unsigned base = invert ? 0 : 2;
       /* wpos.y = wpos.y * trans.x/z + trans.y/w */
-      wpos[1] = nir_ffma(b, wpos[1], nir_channel(b, wpostrans, base),
-                         nir_channel(b, wpostrans, base + 1));
+      wpos[1] = nir_ffma_weak(b, wpos[1], nir_channel(b, wpostrans, base),
+                              nir_channel(b, wpostrans, base + 1));
    }
 
    nir_def *new_wpos = nir_vec(b, &wpos[c], intr->num_components);
@@ -258,8 +258,8 @@ lower_load_sample_pos(lower_wpos_ytransform_state *state,
    nir_def *scale = nir_channel(b, wpostrans, 0);
    nir_def *neg_scale = nir_channel(b, wpostrans, 2);
    /* Either y or 1-y for scale equal to 1 or -1 respectively. */
-   nir_def *flipped_y = nir_ffma(b, nir_channel(b, pos, 1), scale,
-                                 nir_fmax(b, neg_scale, nir_imm_float(b, 0.0)));
+   nir_def *flipped_y = nir_ffma_weak(b, nir_channel(b, pos, 1), scale,
+                                      nir_fmax(b, neg_scale, nir_imm_float(b, 0.0)));
    nir_def *flipped_pos = nir_vector_insert_imm(b, pos, flipped_y, 1);
 
    nir_def_rewrite_uses_after(&intr->def, flipped_pos);
@@ -279,7 +279,8 @@ lower_wpos_ytransform_instr(nir_builder *b, nir_intrinsic_instr *intr,
       nir_deref_instr *deref = nir_src_as_deref(intr->src[0]);
       nir_variable *var = nir_deref_instr_get_variable(deref);
       if (var->data.mode == nir_var_system_value &&
-          var->data.location == SYSTEM_VALUE_FRAG_COORD) {
+          (var->data.location == SYSTEM_VALUE_FRAG_COORD ||
+           var->data.location == SYSTEM_VALUE_FRAG_COORD_XY)) {
          /* gl_FragCoord should not have array/struct derefs: */
          return lower_fragcoord(state, intr);
       } else if (var->data.mode == nir_var_system_value &&
@@ -295,6 +296,7 @@ lower_wpos_ytransform_instr(nir_builder *b, nir_intrinsic_instr *intr,
       return false;
    }
    case nir_intrinsic_load_frag_coord:
+   case nir_intrinsic_load_frag_coord_xy:
       return lower_fragcoord(state, intr);
    case nir_intrinsic_load_sample_pos:
       return lower_load_sample_pos(state, intr);

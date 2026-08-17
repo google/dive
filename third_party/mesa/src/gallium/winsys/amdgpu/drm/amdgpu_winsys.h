@@ -126,6 +126,8 @@ enum amdgpu_queue_index {
    AMDGPU_QUEUE_USES_ALT_FENCE = INT_MAX,
 };
 
+extern char amdgpu_userq_str[AMDGPU_MAX_QUEUES][8];
+
 /* This can use any integer type because the logic handles integer wraparounds robustly, but
  * uint8_t wraps around so quickly that some BOs might never become idle because we don't
  * remove idle fences from BOs, so they become "busy" again after a queue sequence number wraps
@@ -207,6 +209,8 @@ struct amdgpu_winsys {
 
    /* Protected by bo_fence_lock. */
    struct amdgpu_queue queues[AMDGPU_MAX_QUEUES];
+   pthread_t userq_job_log_thread;
+   bool userq_job_log; /* enable userq job log thread */
 
    struct pb_cache bo_cache;
    struct pb_slabs bo_slabs;  /* Slab allocator. */
@@ -214,13 +218,13 @@ struct amdgpu_winsys {
    ac_drm_device *dev;
 
    simple_mtx_t bo_fence_lock;
+   simple_mtx_t stats_lock;
 
    int num_cs; /* The number of command streams created. */
-   uint32_t surf_index_color;
-   uint32_t surf_index_fmask;
    uint32_t next_bo_unique_id;
    uint64_t allocated_vram;
    uint64_t allocated_gtt;
+   uint32_t allocated_oa;
    uint64_t mapped_vram;
    uint64_t mapped_gtt;
    uint64_t slab_wasted_vram;

@@ -144,7 +144,6 @@ can_move_intrinsic(nir_intrinsic_instr *instr, opt_preamble_ctx *ctx)
    case nir_intrinsic_load_work_dim:
    case nir_intrinsic_load_num_workgroups:
    case nir_intrinsic_load_ray_launch_size:
-   case nir_intrinsic_load_sbt_base_amd:
    case nir_intrinsic_load_is_indexed_draw:
    case nir_intrinsic_load_viewport_scale:
    case nir_intrinsic_load_user_clip_plane:
@@ -180,6 +179,7 @@ can_move_intrinsic(nir_intrinsic_instr *instr, opt_preamble_ctx *ctx)
    case nir_intrinsic_load_cull_any_enabled_amd:
    case nir_intrinsic_load_cull_small_triangle_precision_amd:
    case nir_intrinsic_load_vbo_base_agx:
+   case nir_intrinsic_load_push_data_intel:
       return true;
 
    /* Intrinsics which can be moved depending on hardware */
@@ -216,12 +216,15 @@ can_move_intrinsic(nir_intrinsic_instr *instr, opt_preamble_ctx *ctx)
    case nir_intrinsic_image_levels:
    case nir_intrinsic_image_deref_levels:
    case nir_intrinsic_bindless_image_levels:
+   case nir_intrinsic_image_heap_levels:
    case nir_intrinsic_image_samples:
    case nir_intrinsic_image_deref_samples:
    case nir_intrinsic_bindless_image_samples:
+   case nir_intrinsic_image_heap_samples:
    case nir_intrinsic_image_size:
    case nir_intrinsic_image_deref_size:
    case nir_intrinsic_bindless_image_size:
+   case nir_intrinsic_image_heap_size:
    case nir_intrinsic_vulkan_resource_index:
    case nir_intrinsic_vulkan_resource_reindex:
    case nir_intrinsic_load_vulkan_descriptor:
@@ -241,11 +244,12 @@ can_move_intrinsic(nir_intrinsic_instr *instr, opt_preamble_ctx *ctx)
    case nir_intrinsic_image_load:
    case nir_intrinsic_image_samples_identical:
    case nir_intrinsic_bindless_image_load:
+   case nir_intrinsic_image_heap_load:
    case nir_intrinsic_load_global_bounded:
    case nir_intrinsic_load_ssbo:
    case nir_intrinsic_load_ssbo_intel:
    case nir_intrinsic_load_ssbo_ir3:
-   case nir_intrinsic_load_global_ir3:
+   case nir_intrinsic_load_global_offset:
    case nir_intrinsic_load_agx:
       return (nir_intrinsic_access(instr) & ACCESS_CAN_REORDER) &&
              can_move_srcs(&instr->instr, ctx);
@@ -515,7 +519,7 @@ replace_for_block(nir_builder *b, opt_preamble_ctx *ctx,
             nir_before_block_after_phis(nir_cursor_current_block(b->cursor));
 
          nir_def *repl = nir_if_phi(b, then_def, else_def);
-         clone = repl->parent_instr;
+         clone = nir_def_instr(repl);
 
          _mesa_hash_table_insert(remap_table, &phi->def, repl);
       } else {
@@ -790,7 +794,7 @@ nir_opt_preamble(nir_shader *shader, const nir_opt_preamble_options *options,
             if (nir_src_is_if(use)) {
                is_can_move_user = false;
             } else {
-               nir_def *use_def = nir_instr_def(nir_src_parent_instr(use));
+               nir_def *use_def = nir_instr_def(nir_src_use_instr(use));
                is_can_move_user = use_def != NULL &&
                                   ctx.states[use_def->index].can_move &&
                                   !ctx.states[use_def->index].must_stay;

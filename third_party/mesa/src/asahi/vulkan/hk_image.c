@@ -984,18 +984,9 @@ hk_CreateImage(VkDevice _device, const VkImageCreateInfo *pCreateInfo,
    struct hk_image *image;
    VkResult result;
 
-#ifdef HK_USE_WSI_PLATFORM
-   /* Ignore swapchain creation info on Android. Since we don't have an
-    * implementation in Mesa, we're guaranteed to access an Android object
-    * incorrectly.
-    */
-   const VkImageSwapchainCreateInfoKHR *swapchain_info =
-      vk_find_struct_const(pCreateInfo->pNext, IMAGE_SWAPCHAIN_CREATE_INFO_KHR);
-   if (swapchain_info && swapchain_info->swapchain != VK_NULL_HANDLE) {
-      return wsi_common_create_swapchain_image(
-         &pdev->wsi_device, pCreateInfo, swapchain_info->swapchain, pImage);
-   }
-#endif
+   if (wsi_common_is_swapchain_image(pCreateInfo))
+      return wsi_common_create_swapchain_image(&pdev->wsi_device, pCreateInfo,
+                                               pImage);
 
    image = vk_zalloc2(&dev->vk.alloc, pAllocator, sizeof(*image), 8,
                       VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
@@ -1424,6 +1415,13 @@ hk_copy_memory_to_image(struct hk_device *device, struct hk_image *dst_image,
    uint32_t src_height = info->memoryImageHeight ?: extent.height;
 
    uint32_t blocksize_B = util_format_get_blocksize(layout->format);
+
+   /* Align width and height to block */
+   src_width =
+      DIV_ROUND_UP(src_width, util_format_get_blockwidth(layout->format));
+   src_height =
+      DIV_ROUND_UP(src_height, util_format_get_blockheight(layout->format));
+
    uint32_t src_pitch = src_width * blocksize_B;
 
    unsigned start_layer = (dst_image->vk.image_type == VK_IMAGE_TYPE_3D)
@@ -1496,6 +1494,13 @@ hk_copy_image_to_memory(struct hk_device *device, struct hk_image *src_image,
 #endif
 
    uint32_t blocksize_B = util_format_get_blocksize(layout->format);
+
+   /* Align width and height to block */
+   dst_width =
+      DIV_ROUND_UP(dst_width, util_format_get_blockwidth(layout->format));
+   dst_height =
+      DIV_ROUND_UP(dst_height, util_format_get_blockheight(layout->format));
+
    uint32_t dst_pitch = dst_width * blocksize_B;
 
    unsigned start_layer = (src_image->vk.image_type == VK_IMAGE_TYPE_3D)
@@ -1649,11 +1654,6 @@ hk_copy_image_to_image_cpu(struct hk_device *device, struct hk_image *src_image,
             &device->physical_device->ubwc_config);
 #endif
       } else {
-         /* Work tile-by-tile, holding the unswizzled tile in a temporary
-          * buffer.
-          */
-         char temp_tile[16384];
-
          unsigned src_level = info->srcSubresource.mipLevel;
          unsigned dst_level = info->dstSubresource.mipLevel;
          uint32_t block_width = src_layout->tilesize_el[src_level].width_el;
@@ -1667,6 +1667,12 @@ hk_copy_image_to_image_cpu(struct hk_device *device, struct hk_image *src_image,
          }
 
          uint32_t temp_pitch = block_width * src_block_B;
+         size_t temp_tile_size = temp_pitch * (src_offset.y + extent.height);
+
+         /* Work tile-by-tile, holding the unswizzled tile in a temporary
+          * buffer.
+          */
+         char *temp_tile = malloc(temp_tile_size);
 
          for (unsigned by = src_offset.y / block_height;
               by * block_height < src_offset.y + extent.height; by++) {
@@ -1683,14 +1689,14 @@ hk_copy_image_to_image_cpu(struct hk_device *device, struct hk_image *src_image,
                   MIN2((bx + 1) * block_width, src_offset.x + extent.width) -
                   src_x_start;
 
-               assert(height * temp_pitch <= ARRAY_SIZE(temp_tile));
-
                ail_detile((void *)src, temp_tile, src_layout, src_level,
                           temp_pitch, src_x_start, src_y_start, width, height);
                ail_tile(dst, temp_tile, dst_layout, dst_level, temp_pitch,
                         dst_x_start, dst_y_start, width, height);
             }
          }
+
+         free(temp_tile);
       }
    }
 }

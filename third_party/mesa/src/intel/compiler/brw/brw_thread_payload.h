@@ -53,8 +53,7 @@ struct brw_gs_thread_payload : public brw_thread_payload {
 };
 
 struct brw_fs_thread_payload : public brw_thread_payload {
-   brw_fs_thread_payload(const brw_shader &v,
-                     bool &source_depth_to_render_target);
+   brw_fs_thread_payload(const brw_shader &v);
 
    uint8_t subspan_coord_reg[2];
    uint8_t source_depth_reg[2];

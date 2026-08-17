@@ -30,6 +30,7 @@
 #endif
 #include "util/compiler.h"
 #include "util/macros.h"
+#include "util/u_debug.h"
 
 #include "eglcurrent.h"
 #include "egldevice.h"
@@ -464,6 +465,8 @@ _eglQueryDevicesEXT(EGLint max_devices, _EGLDevice **devices,
 {
    _EGLDevice *dev, *devs, *swrast;
    int i = 0, num_devs;
+   bool request_software =
+      debug_get_bool_option("LIBGL_ALWAYS_SOFTWARE", false);
 
    if ((devices && max_devices <= 0) || !num_devices)
       return _eglError(EGL_BAD_PARAMETER, "eglQueryDevicesEXT");
@@ -485,7 +488,13 @@ _eglQueryDevicesEXT(EGLint max_devices, _EGLDevice **devices,
 
    /* bail early if we only care about the count */
    if (!devices) {
-      *num_devices = num_devs;
+      *num_devices = request_software ? !!swrast : num_devs;
+      goto out;
+   }
+
+   if (request_software) {
+      *num_devices = !!swrast;
+      devices[0] = swrast;
       goto out;
    }
 

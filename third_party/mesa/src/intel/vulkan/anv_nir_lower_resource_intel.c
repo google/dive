@@ -36,6 +36,9 @@ update_resource_intel_block(nir_builder *b, nir_intrinsic_instr *intrin,
    if (intrin->intrinsic != nir_intrinsic_resource_intel)
       return false;
 
+   if (nir_intrinsic_resource_access_intel(intrin) & nir_resource_intel_internal)
+      return false;
+
    /* If the array index in the descriptor binding is not const, we won't be
     * able to turn this load_ubo into a push constant.
     *
@@ -119,7 +122,7 @@ lower_resource_intel(nir_builder *b, nir_intrinsic_instr *intrin, void *data)
     */
    if (state->desc_type == ANV_PIPELINE_DESCRIPTOR_SET_LAYOUT_TYPE_DIRECT ||
        state->desc_type == ANV_PIPELINE_DESCRIPTOR_SET_LAYOUT_TYPE_BUFFER) {
-      if (!state->device->uses_ex_bso) {
+      if (!intel_has_extended_bindless(&state->device->info)) {
          /* We're trying to reduce the number of instructions in the shaders
           * to compute surface handles. The assumption is that we're using
           * more surface handles than sampler handles (UBO, SSBO, images,

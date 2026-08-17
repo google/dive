@@ -35,7 +35,6 @@
 #include <llvm/Config/llvm-config.h>
 
 #include "util/u_cpu_detect.h"
-#include "util/u_memory.h"
 #include "util/u_debug.h"
 
 #include "lp_bld_type.h"
@@ -489,23 +488,31 @@ lp_build_select_aos(struct lp_build_context *bld,
 
 
 /**
- * Return (scalar-cast)val ? true : false;
+ * Return "scalar_cast(val) != 0" for "num_channels == 1".
+ * For "num_channels > 1" this check is split across "num_channels" channels.
  */
 LLVMValueRef
-lp_build_any_true_range(struct lp_build_context *bld,
-                        unsigned real_length,
-                        LLVMValueRef val)
+lp_build_any_true_range_n(struct lp_build_context *bld,
+                          unsigned real_length,
+                          unsigned num_channels,
+                          LLVMValueRef val)
 {
-   LLVMBuilderRef builder = bld->gallivm->builder;
-   LLVMTypeRef scalar_type;
-   LLVMTypeRef true_type;
-
    assert(real_length <= bld->type.length);
 
-   true_type = LLVMIntTypeInContext(bld->gallivm->context,
-                                    bld->type.width * real_length);
-   scalar_type = LLVMIntTypeInContext(bld->gallivm->context,
-                                      bld->type.width * bld->type.length);
+   LLVMBuilderRef builder = bld->gallivm->builder;
+
+   LLVMTypeRef true_type = LLVMIntTypeInContext(bld->gallivm->context,
+      bld->type.width * real_length / num_channels);
+   if (num_channels > 1) {
+      true_type = LLVMVectorType(true_type, num_channels);
+   }
+
+   LLVMTypeRef scalar_type = LLVMIntTypeInContext(bld->gallivm->context,
+      bld->type.width * bld->type.length / num_channels);
+   if (num_channels > 1) {
+      scalar_type = LLVMVectorType(scalar_type, num_channels);
+   }
+
    val = LLVMBuildBitCast(builder, val, scalar_type, "");
    /*
     * We're using always native types so we can use intrinsics.
@@ -515,6 +522,18 @@ lp_build_any_true_range(struct lp_build_context *bld,
    if (real_length < bld->type.length) {
       val = LLVMBuildTrunc(builder, val, true_type, "");
    }
-   return LLVMBuildICmp(builder, LLVMIntNE,
-                        val, LLVMConstNull(true_type), "");
+
+   return LLVMBuildICmp(builder, LLVMIntNE, val, LLVMConstNull(true_type), "");
+}
+
+
+/**
+ * Return (scalar-cast)val ? true : false;
+ */
+LLVMValueRef
+lp_build_any_true_range(struct lp_build_context *bld,
+                        unsigned real_length,
+                        LLVMValueRef val)
+{
+   return lp_build_any_true_range_n(bld, real_length, 1, val);
 }

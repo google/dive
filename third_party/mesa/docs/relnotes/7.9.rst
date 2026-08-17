@@ -28,7 +28,7 @@ New features
 ------------
 
 -  New, improved GLSL compiler written by Intel. See the :doc:`Shading
-   Language <../shading>` page for more information.
+   Language <../glsl>` page for more information.
 -  New, very experimental Gallium driver for R600-R700 Radeons.
 -  Support for AMD Evergreen-based Radeons (HD 5xxx)
 -  GL_EXT_timer_query extension (i965 driver and softpipe only)

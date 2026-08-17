@@ -341,6 +341,7 @@ vk_render_pass_attachment_init(struct vk_render_pass_attachment *att,
 {
    *att = (struct vk_render_pass_attachment) {
       .format                 = desc->format,
+      .flags                  = desc->flags,
       .aspects                = vk_format_aspects(desc->format),
       .samples                = desc->samples,
       .view_mask              = 0,
@@ -355,6 +356,25 @@ vk_render_pass_attachment_init(struct vk_render_pass_attachment *att,
       .has_external_format =
          vk_android_rp_attachment_has_external_format(desc),
    };
+
+   /* We require separate stencil layouts */
+   if (att->aspects & VK_IMAGE_ASPECT_DEPTH_BIT) {
+      att->initial_layout = vk_image_layout_depth_only(att->initial_layout);
+      att->final_layout = vk_image_layout_depth_only(att->final_layout);
+   } else if (att->aspects == VK_IMAGE_ASPECT_STENCIL_BIT) {
+      att->initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+      att->final_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+   }
+
+   if (att->aspects & VK_IMAGE_ASPECT_STENCIL_BIT) {
+      att->initial_stencil_layout =
+         vk_image_layout_stencil_only(att->initial_stencil_layout);
+      att->final_stencil_layout =
+         vk_image_layout_stencil_only(att->final_stencil_layout);
+   } else {
+      assert(att->initial_stencil_layout == VK_IMAGE_LAYOUT_UNDEFINED);
+      assert(att->final_stencil_layout == VK_IMAGE_LAYOUT_UNDEFINED);
+   }
 }
 
 static void
@@ -383,6 +403,17 @@ vk_subpass_attachment_init(struct vk_subpass_attachment *att,
       .layout =         ref->layout,
       .stencil_layout = vk_att_ref_stencil_layout(ref, attachments),
    };
+
+   /* We require separate stencil layouts */
+   if (att->aspects & VK_IMAGE_ASPECT_DEPTH_BIT)
+      att->layout = vk_image_layout_depth_only(att->layout);
+   else if (att->aspects == VK_IMAGE_ASPECT_STENCIL_BIT)
+      att->layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+   if (att->aspects & VK_IMAGE_ASPECT_STENCIL_BIT)
+      att->stencil_layout = vk_image_layout_stencil_only(att->stencil_layout);
+   else
+      assert(att->stencil_layout == VK_IMAGE_LAYOUT_UNDEFINED);
 
    switch (usage) {
    case VK_IMAGE_USAGE_TRANSFER_DST_BIT:
@@ -1032,6 +1063,26 @@ vk_get_command_buffer_inheritance_rendering_info(
                                COMMAND_BUFFER_INHERITANCE_RENDERING_INFO);
 }
 
+VkRenderingAttachmentFlagsKHR
+vk_get_rendering_attachment_flags(const VkRenderingAttachmentInfo *att)
+{
+   const VkRenderingAttachmentFlagsInfoKHR *flags_info =
+      vk_find_struct_const(att->pNext, RENDERING_ATTACHMENT_FLAGS_INFO_KHR);
+
+   return flags_info != NULL ? flags_info->flags : 0;
+}
+
+static VkRenderingAttachmentFlagBitsKHR
+vk_attachment_description_flags_to_rendering_flags(VkAttachmentDescriptionFlags flags)
+{
+   VkRenderingAttachmentFlagBitsKHR ret = 0;
+   if (flags & VK_ATTACHMENT_DESCRIPTION_RESOLVE_SKIP_TRANSFER_FUNCTION_BIT_KHR)
+      ret |= VK_RENDERING_ATTACHMENT_RESOLVE_SKIP_TRANSFER_FUNCTION_BIT_KHR;
+   if (flags & VK_ATTACHMENT_DESCRIPTION_RESOLVE_ENABLE_TRANSFER_FUNCTION_BIT_KHR)
+      ret |= VK_RENDERING_ATTACHMENT_RESOLVE_ENABLE_TRANSFER_FUNCTION_BIT_KHR;
+   return ret;
+}
+
 const VkRenderingInfo *
 vk_get_command_buffer_inheritance_as_rendering_resume(
    VkCommandBufferLevel level,
@@ -1081,20 +1132,32 @@ vk_get_command_buffer_inheritance_as_rendering_resume(
    };
 
    VkRenderingAttachmentInfo *attachments = data->attachments;
+   VkRenderingAttachmentFlagsInfoKHR *attachments_flags = (VkRenderingAttachmentFlagsInfoKHR *)
+      (data->attachments + subpass->color_count +
+       2 * (subpass->depth_stencil_attachment != NULL));
 
    for (unsigned i = 0; i < subpass->color_count; i++) {
       const struct vk_subpass_attachment *sp_att =
          &subpass->color_attachments[i];
       if (sp_att->attachment == VK_ATTACHMENT_UNUSED) {
          attachments[i] = (VkRenderingAttachmentInfo) {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = VK_NULL_HANDLE,
          };
          continue;
       }
 
       assert(sp_att->attachment < pass->attachment_count);
+
+      attachments_flags[i] = (VkRenderingAttachmentFlagsInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_FLAGS_INFO_KHR,
+         .flags = vk_attachment_description_flags_to_rendering_flags(
+            pass->attachments[sp_att->attachment].flags),
+      };
+
       attachments[i] = (VkRenderingAttachmentInfo) {
          .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+         .pNext = &attachments_flags[i],
          .imageView = fb->attachments[sp_att->attachment],
          .imageLayout = sp_att->layout,
          .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -1772,8 +1835,14 @@ load_attachment(struct vk_command_buffer *cmd_buffer,
    if (!need_load_store)
       return;
 
+   const VkRenderingAttachmentFlagsInfoKHR att_flags = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_FLAGS_INFO_KHR,
+      .flags = vk_attachment_description_flags_to_rendering_flags(rp_att->flags),
+   };
+
    const VkRenderingAttachmentInfo att = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .pNext = &att_flags,
       .imageView = vk_image_view_to_handle(att_state->image_view),
       .imageLayout = layout,
       .loadOp = rp_att->load_op,
@@ -1783,6 +1852,7 @@ load_attachment(struct vk_command_buffer *cmd_buffer,
 
    const VkRenderingAttachmentInfo stencil_att = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .pNext = &att_flags,
       .imageView = vk_image_view_to_handle(att_state->image_view),
       .imageLayout = stencil_layout,
       .loadOp = rp_att->stencil_load_op,
@@ -1792,7 +1862,7 @@ load_attachment(struct vk_command_buffer *cmd_buffer,
 
    VkRenderingInfo render = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-      .flags = VK_RENDERING_INPUT_ATTACHMENT_NO_CONCURRENT_WRITES_BIT_MESA,
+      .flags = VK_RENDERING_LOCAL_READ_CONCURRENT_ACCESS_CONTROL_BIT_KHR,
       .renderArea = cmd_buffer->render_area,
       .layerCount = pass->is_multiview ? 1 : framebuffer->layers,
       .viewMask = pass->is_multiview ? view_mask : 0,
@@ -1831,6 +1901,8 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
     * or quick vkCmdBegin/EndRendering to do the load op.
     */
 
+   STACK_ARRAY(VkRenderingAttachmentFlagsInfoKHR, color_attachments_flags,
+               subpass->color_count);
    STACK_ARRAY(VkRenderingAttachmentInfo, color_attachments,
                subpass->color_count);
    STACK_ARRAY(VkRenderingAttachmentInitialLayoutInfoMESA,
@@ -1840,6 +1912,8 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
    for (uint32_t i = 0; i < subpass->color_count; i++) {
       const struct vk_subpass_attachment *sp_att =
          &subpass->color_attachments[i];
+      VkRenderingAttachmentFlagsInfoKHR *color_attachment_flags =
+         &color_attachments_flags[i];
       VkRenderingAttachmentInfo *color_attachment = &color_attachments[i];
 
       if (sp_att->attachment == VK_ATTACHMENT_UNUSED) {
@@ -1856,8 +1930,13 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
       struct vk_attachment_state *att_state =
          &cmd_buffer->attachments[sp_att->attachment];
 
+      *color_attachment_flags = (VkRenderingAttachmentFlagsInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_FLAGS_INFO_KHR,
+      };
+
       *color_attachment = (VkRenderingAttachmentInfo) {
          .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+         .pNext = color_attachment_flags,
          .imageView = vk_image_view_to_handle(att_state->image_view),
          .imageLayout = sp_att->layout,
       };
@@ -1933,6 +2012,9 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
          color_attachment->resolveImageView =
             vk_image_view_to_handle(res_att_state->image_view);
          color_attachment->resolveImageLayout = sp_att->resolve->layout;
+
+         color_attachment_flags->flags =
+            vk_attachment_description_flags_to_rendering_flags(resolve_att->flags);
       } else if (subpass->mrtss.multisampledRenderToSingleSampledEnable &&
                  rp_att->samples == VK_SAMPLE_COUNT_1_BIT) {
          if (vk_format_is_int(att_state->image_view->format))
@@ -1947,6 +2029,12 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
    };
    VkRenderingAttachmentInfo stencil_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+   };
+   VkRenderingAttachmentFlagsInfoKHR depth_attachment_flags = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_FLAGS_INFO_KHR,
+   };
+   VkRenderingAttachmentFlagsInfoKHR stencil_attachment_flags = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_FLAGS_INFO_KHR,
    };
    VkRenderingAttachmentInitialLayoutInfoMESA depth_initial_layout = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INITIAL_LAYOUT_INFO_MESA,
@@ -1971,13 +2059,22 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
          depth_attachment.imageView =
             vk_image_view_to_handle(att_state->image_view);
          depth_attachment.imageLayout = sp_att->layout;
+         depth_attachment_flags.flags =
+            vk_attachment_description_flags_to_rendering_flags(rp_att->flags);
       }
 
       if (rp_att->aspects & VK_IMAGE_ASPECT_STENCIL_BIT) {
          stencil_attachment.imageView =
             vk_image_view_to_handle(att_state->image_view);
          stencil_attachment.imageLayout = sp_att->stencil_layout;
+         stencil_attachment_flags.flags =
+            vk_attachment_description_flags_to_rendering_flags(rp_att->flags);
       }
+
+      __vk_append_struct(&depth_attachment,
+                         &depth_attachment_flags);
+      __vk_append_struct(&stencil_attachment,
+                         &stencil_attachment_flags);
 
       if (!(subpass->view_mask & att_state->views_loaded)) {
          /* None of these views have been used before */
@@ -2323,7 +2420,7 @@ begin_subpass(struct vk_command_buffer *cmd_buffer,
 
    VkRenderingInfo rendering = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-      .flags = VK_RENDERING_INPUT_ATTACHMENT_NO_CONCURRENT_WRITES_BIT_MESA,
+      .flags = VK_RENDERING_LOCAL_READ_CONCURRENT_ACCESS_CONTROL_BIT_KHR,
       .renderArea = cmd_buffer->render_area,
       .layerCount = pass->is_multiview ? 1 : framebuffer->layers,
       .viewMask = pass->is_multiview ? subpass->view_mask : 0,

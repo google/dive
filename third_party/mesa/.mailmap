@@ -41,10 +41,11 @@ Alex Deucher <alexdeucher@gmail.com> <alex@botch2.(none)>
 Alex Deucher <alexdeucher@gmail.com> <alex@cube.(none)>
 Alex Deucher <alexdeucher@gmail.com> <alex@samba.(none)>
 
-Alyssa Rosenzweig <alyssa@rosenzweig.io> <alyssa.rosenzweig@intel.com>
-Alyssa Rosenzweig <alyssa@rosenzweig.io> <alyssa.rosenzweig@collabora.com>
-Alyssa Rosenzweig <alyssa@rosenzweig.io> <a@rosenzweig.io>
-Alyssa Rosenzweig <alyssa@rosenzweig.io> <alyssa@collabora.com>
+Alyssa Rosenzweig <alyssa@rosenz.ca> <alyssa.rosenzweig@intel.com>
+Alyssa Rosenzweig <alyssa@rosenz.ca> <alyssa.rosenzweig@collabora.com>
+Alyssa Rosenzweig <alyssa@rosenz.ca> <alyssa@rosenzweig.io>
+Alyssa Rosenzweig <alyssa@rosenz.ca> <a@rosenzweig.io>
+Alyssa Rosenzweig <alyssa@rosenz.ca> <alyssa@collabora.com>
 
 Andreas Fänger <a.faenger@e-sign.com> <a.faenger@e-sign.com>
 
@@ -234,12 +235,13 @@ Emmanuel Gil Peyrot <linkmauve@linkmauve.fr> <emmanuel.peyrot@collabora.com>
 
 Emmanuel Vadot <manu@FreeBSD.org> Emmanuel <manu@FreeBSD.org>
 
-Emma Anholt <emma@anholt.net> <anholt@FreeBSD.org>
-Emma Anholt <emma@anholt.net> <eric@anholt.net>
+Emma Anholt <anholt@igalia.com> <anholt@FreeBSD.org>
+Emma Anholt <anholt@igalia.com> <eric@anholt.net>
+Emma Anholt <anholt@igalia.com> <emma@anholt.net>
 
-Eric Engestrom <eric@igalia.com> <eric@engestrom.ch>
-Eric Engestrom <eric@igalia.com> <eric.engestrom@imgtec.com>
-Eric Engestrom <eric@igalia.com> <eric.engestrom@intel.com>
+Eric Engestrom <eric@engestrom.ch> <eric.engestrom@imgtec.com>
+Eric Engestrom <eric@engestrom.ch> <eric.engestrom@intel.com>
+Eric Engestrom <eric@engestrom.ch> <eric@igalia.com>
 
 Erik Faye-Lund <erik.faye-lund@collabora.com> <kusmabite@gmail.com>
 
@@ -289,6 +291,9 @@ Ian Romanick <ian.d.romanick@intel.com> <idr@freedesktop.org>
 Ian Romanick <ian.d.romanick@intel.com> <idr@us.ibm.com>
 
 Icecream95 <ixn@disroot.org> <ixn@keemail.me>
+
+Icenowy Zheng <uwu@icenowy.me> <zhengxingda@iscas.ac.cn>
+Icenowy Zheng <uwu@icenowy.me> <icenowy@aosc.io>
 
 Igor Gnatenko <i.gnatenko.brain@gmail.com> <ignatenko@redhat.com>
 
@@ -426,6 +431,9 @@ Lionel Landwerlin <lionel.g.landwerlin@intel.com> <llandwerlin@gmail.com>
 
 Liviu Prodea <liviuprodea@yahoo.com>
 
+Lorenzo Rossi <lorenzo.rossi@collabora.com> <snowycoder@gmail.com>
+Lorenzo Rossi <lorenzo.rossi@collabora.com> <git@rossilorenzo.dev>
+
 Lucas Fryzek <lfryzek@igalia.com> <lucas.fryzek@gmail.com>
 
 Lucas Stach <dev@lynxeye.de> <l.stach@pengutronix.de>
@@ -459,6 +467,8 @@ Martin Roukala (né Peres) <martin.roukala@mupuf.org>
 Martin Roukala (né Peres) <martin.roukala@mupuf.org> <martin.peres@mupuf.org>
 Martin Roukala (né Peres) <martin.roukala@mupuf.org> <martin.peres@linux.intel.com>
 Martin Roukala (né Peres) <martin.roukala@mupuf.org> <martin.peres@labri.fr>
+
+Mary Guillemard <mary@mary.zone> <mary.guillemard@collabora.com>
 
 Mathias Fröhlich <mathias.froehlich@gmx.net> Mathias Froehlich <Mathias.Froehlich@gmx.net>
 Mathias Fröhlich <mathias.froehlich@gmx.net> Mathias Froehlich <Mathias.Froehlich@web.de>
@@ -508,7 +518,8 @@ Mike Stroyan <mike@lunarg.com> <mike@LunarG.com>
 
 Mun Gwan-gyeong <elongbug@gmail.com> Gwan-gyeong Mun <elongbug@gmail.com>
 
-Natalie Vock <natalie.vock@gmx.de> <friedrich.vock@gmx.de>
+Natalie Vock <nat@pixelcluster.dev> <friedrich.vock@gmx.de>
+Natalie Vock <nat@pixelcluster.dev> <natalie.vock@gmx.de>
 
 Neha Bhende <bhenden@vmware.com> <nbhende@vmware.com>
 
@@ -613,6 +624,8 @@ Roy Spliet <rspliet@eclipso.eu> <r.spliet@student.tudelft.nl>
 Rune Petersen <rune@megahurts.dk> Rune Peterson <rune@megahurts.dk>
 
 Ryan Houdek <sonicadvance1@gmail.com> <Sonicadvance1@gmail.com>
+
+Ryan Mckeever <ryan.mckeever@collabora.com> <rebecca.mckeever@collabora.com>
 
 Sam Hocevar <sam@hocevar.net> Sam Hocevar <sam@zoy.org>
 

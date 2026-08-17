@@ -1,24 +1,6 @@
 /*
  * Copyright © 2021 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_private.h"
@@ -53,15 +35,26 @@ get_cs_prog_data(elk_simd_selection_state &state)
       return nullptr;
 }
 
-struct elk_stage_prog_data *
-get_prog_data(elk_simd_selection_state &state)
-{
-   if (std::holds_alternative<struct elk_cs_prog_data *>(state.prog_data))
-      return &std::get<struct elk_cs_prog_data *>(state.prog_data)->base;
-   else
-      return nullptr;
 }
 
+/**
+ * Return true if INTEL_SIMD_DEBUG allows the given SIMD mode.
+ */
+static bool
+simd_debug_allowed(unsigned simd)
+{
+   assert(simd <= 2);
+   return intel_simd & (DEBUG_CS_SIMD8 << simd);
+}
+
+/**
+ * Return true if INTEL_SIMD_DEBUG force-enables the given SIMD mode.
+ */
+static bool
+simd_debug_forced(unsigned simd)
+{
+   return (intel_simd_overridden & (1 << MESA_SHADER_COMPUTE)) &&
+          simd_debug_allowed(simd);
 }
 
 bool
@@ -71,7 +64,6 @@ elk_simd_should_compile(elk_simd_selection_state &state, unsigned simd)
    assert(!state.compiled[simd]);
 
    const auto cs_prog_data = get_cs_prog_data(state);
-   const auto prog_data = get_prog_data(state);
    const unsigned width = 8u << simd;
 
    /* For shaders with variable size workgroup, in most cases we can compile
@@ -115,32 +107,16 @@ elk_simd_should_compile(elk_simd_selection_state &state, unsigned simd)
        * TODO: Use performance_analysis and drop this rule.
        */
       if (width == 32) {
-         if (!INTEL_DEBUG(DEBUG_DO32) && (state.compiled[0] || state.compiled[1])) {
-            state.error[simd] = "SIMD32 not required (use INTEL_DEBUG=do32 to force)";
+         if (!simd_debug_forced(2) &&
+             (state.compiled[0] || state.compiled[1])) {
+            state.error[simd] = "SIMD32 not required (use INTEL_SIMD_DEBUG=cs32 to force)";
             return false;
          }
       }
    }
 
-   uint64_t start;
-   switch (prog_data->stage) {
-   case MESA_SHADER_COMPUTE:
-      start = DEBUG_CS_SIMD8;
-      break;
-   default:
-      UNREACHABLE("unknown shader stage in elk_simd_should_compile");
-   }
-
-   const bool env_skip[] = {
-      (intel_simd & (start << 0)) == 0,
-      (intel_simd & (start << 1)) == 0,
-      (intel_simd & (start << 2)) == 0,
-   };
-
-   static_assert(ARRAY_SIZE(env_skip) == SIMD_COUNT);
-
-   if (unlikely(env_skip[simd])) {
-      state.error[simd] = "Disabled by INTEL_DEBUG environment variable";
+   if (unlikely(!simd_debug_allowed(simd))) {
+      state.error[simd] = "Disabled by INTEL_SIMD_DEBUG environment variable";
       return false;
    }
 

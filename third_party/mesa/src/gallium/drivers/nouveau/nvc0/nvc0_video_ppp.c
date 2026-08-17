@@ -102,7 +102,6 @@ nvc0_decoder_ppp(struct nouveau_vp3_decoder *dec, union pipe_desc desc, struct n
       nvc0_decoder_setup_ppp(dec, target, 0x1410 | mpeg2);
       break;
    }
-   case PIPE_VIDEO_FORMAT_MPEG4: nvc0_decoder_setup_ppp(dec, target, 0x1414); break;
    case PIPE_VIDEO_FORMAT_VC1: ppp_caps = nvc0_decoder_vc1_ppp(dec, desc.vc1, target); break;
    case PIPE_VIDEO_FORMAT_MPEG4_AVC: nvc0_decoder_setup_ppp(dec, target, 0x1413); break;
    default: assert(0);

@@ -11,18 +11,18 @@
 #ifndef RADV_DEVICE_H
 #define RADV_DEVICE_H
 
-#include "ac_descriptors.h"
 #include "ac_spm.h"
 #include "ac_sqtt.h"
 
-#include "util/bitset.h"
 #include "util/mesa-blake3.h"
 
-#include "radv_debug_nir.h"
+#include "tools/radv_debug.h"
+#include "tools/radv_debug_nir.h"
+#include "tools/radv_rra.h"
+
 #include "radv_pipeline.h"
 #include "radv_queue.h"
 #include "radv_radeon_winsys.h"
-#include "radv_rra.h"
 #include "radv_shader.h"
 
 #include "vk_acceleration_structure.h"
@@ -43,6 +43,7 @@ enum radv_dispatch_table {
    RADV_RGP_DISPATCH_TABLE,
    RADV_RRA_DISPATCH_TABLE,
    RADV_RMV_DISPATCH_TABLE,
+   RADV_UTRACE_DISPATCH_TABLE,
    RADV_CTX_ROLL_DISPATCH_TABLE,
    RADV_DISPATCH_TABLE_COUNT,
 };
@@ -53,17 +54,8 @@ struct radv_layer_dispatch_tables {
    struct vk_device_dispatch_table rgp;
    struct vk_device_dispatch_table rra;
    struct vk_device_dispatch_table rmv;
+   struct vk_device_dispatch_table utrace;
    struct vk_device_dispatch_table ctx_roll;
-};
-
-struct radv_device_cache_key {
-   uint32_t keep_shader_info : 1;
-   uint32_t image_2d_view_of_3d : 1;
-   uint32_t mesh_shader_queries : 1;
-   uint32_t primitives_generated_query : 1;
-   uint32_t trap_excp_flags : 4;
-
-   uint32_t reserved : 24;
 };
 
 enum radv_force_vrs {
@@ -93,7 +85,8 @@ struct radv_meta_state {
    mtx_t mtx;
 
    struct {
-      struct radix_sort_vk *radix_sort;
+      struct radix_sort_vk *radix_sort_64;
+      struct radix_sort_vk *radix_sort_96;
       struct vk_acceleration_structure_build_ops build_ops;
       struct vk_acceleration_structure_build_args build_args;
    } accel_struct_build;
@@ -140,6 +133,12 @@ struct radv_pso_cache_stats {
    uint32_t misses;
 };
 
+struct radv_shader_abort_data {
+   uint32_t buffer_size;
+   struct radv_backed_buffer buffer;
+   VkDeviceAddress buffer_addr;
+};
+
 struct radv_device {
    struct vk_device vk;
 
@@ -153,7 +152,9 @@ struct radv_device {
    struct radv_meta_state meta_state;
 
    struct radv_queue *queues[RADV_MAX_QUEUE_FAMILIES];
+   struct radv_queue *queues_protected[RADV_MAX_QUEUE_FAMILIES];
    int queue_count[RADV_MAX_QUEUE_FAMILIES];
+   int queue_count_protected[RADV_MAX_QUEUE_FAMILIES];
 
    bool pbb_allowed;
    uint32_t scratch_waves;
@@ -171,27 +172,16 @@ struct radv_device {
    /* GFX7 and later */
    uint32_t gfx_init_size_dw;
    struct radeon_winsys_bo *gfx_init;
+   struct radeon_winsys_bo *zero_bo;
 
    struct radeon_winsys_bo *trace_bo;
    struct radv_trace_data *trace_data;
-
-   VkDeviceMemory va_validation_memory;
-   VkBuffer va_validation_buffer;
-   BITSET_WORD *valid_vas;
-   uint64_t valid_vas_addr;
 
    /* Whether to keep shader debug info, for debugging. */
    bool keep_shader_info;
 
    /* Backup in-memory cache to be used if the app doesn't provide one */
    struct vk_pipeline_cache *mem_cache;
-
-   /*
-    * use different counters so MSAA MRTs get consecutive surface indices,
-    * even if MASK is allocated in between.
-    */
-   uint32_t image_mrt_offset_counter;
-   uint32_t fmask_mrt_offset_counter;
 
    struct list_head shader_arenas;
    struct hash_table_u64 *capture_replay_arena_vas;
@@ -213,12 +203,6 @@ struct radv_device {
    /* Whether to DMA shaders to invisible VRAM or to upload directly through BAR. */
    bool shader_use_invisible_vram;
 
-   /* Whether to inline the compute dispatch size in user sgprs. */
-   bool load_grid_size_from_user_sgpr;
-
-   /* Whether the driver uses a global BO list. */
-   bool use_global_bo_list;
-
    /* Whether anisotropy is forced with RADV_TEX_ANISO (-1 is disabled). */
    int force_aniso;
 
@@ -232,6 +216,13 @@ struct radv_device {
    bool sqtt_enabled;
    bool sqtt_triggered;
 
+   VkCommandBuffer sqtt_start_cmdbuf[2];
+   VkCommandBuffer sqtt_stop_cmdbuf[2];
+
+   uint64_t sqtt_size;
+   struct radv_backed_buffer sqtt_buffer;
+   struct radv_backed_buffer sqtt_staging_buffer;
+
    /* SQTT timestamps for queue events. */
    simple_mtx_t sqtt_timestamp_mtx;
    struct radv_sqtt_timestamp sqtt_timestamp;
@@ -240,11 +231,21 @@ struct radv_device {
    simple_mtx_t sqtt_command_pool_mtx;
    struct vk_command_pool *sqtt_command_pool[2];
 
+   /* Whether to use a staging buffer for SQTT/SPM buffers. */
+   bool rgp_use_staging_buffer;
+
+   /* Count the number of submits for per-submit RGP captures. */
+   uint32_t rgp_num_submits;
+
    /* Memory trace. */
    struct radv_memory_trace_data memory_trace;
 
    /* SPM. */
    struct ac_spm spm;
+   struct ac_spm_user_config *spm_user_config;
+
+   struct radv_backed_buffer spm_buffer;
+   struct radv_backed_buffer spm_staging_buffer;
 
    /* Radeon Raytracing Analyzer trace. */
    struct radv_rra_trace_data rra_trace;
@@ -305,9 +306,8 @@ struct radv_device {
    struct hash_table *rt_handles;
    simple_mtx_t rt_handles_mtx;
 
-   struct radv_printf_data printf;
+   struct radv_debug_nir debug_nir;
 
-   struct radv_device_cache_key cache_key;
    blake3_hash cache_hash;
 
    /* Not NULL if a GPU hang report has been generated for VK_EXT_device_fault. */
@@ -317,7 +317,18 @@ struct radv_device {
    simple_mtx_t pso_cache_stats_mtx;
    struct radv_pso_cache_stats pso_cache_stats[RADV_PIPELINE_TYPE_COUNT];
 
+   simple_mtx_t blit_queue_mtx;
+
    struct radv_address_binding_tracker *addr_binding_tracker;
+
+   struct radv_compiler_info compiler_info;
+
+   struct radv_shader_abort_data shader_abort;
+
+   struct {
+      struct u_trace_context *context;
+      simple_mtx_t lock;
+   } utrace;
 };
 
 VK_DEFINE_HANDLE_CASTS(radv_device, vk.base, VkDevice, VK_OBJECT_TYPE_DEVICE)
@@ -352,26 +363,6 @@ unsigned radv_get_default_max_sample_dist(int log_samples);
 void radv_emit_default_sample_locations(const struct radv_physical_device *pdev, struct radv_cmd_stream *cs,
                                         int nr_samples);
 
-struct radv_color_buffer_info {
-   struct ac_cb_surface ac;
-};
-
-struct radv_ds_buffer_info {
-   struct ac_ds_surface ac;
-
-   uint32_t db_render_override2;
-   uint32_t db_render_control;
-};
-
-void radv_initialise_color_surface(struct radv_device *device, struct radv_color_buffer_info *cb,
-                                   struct radv_image_view *iview);
-
-void radv_initialise_vrs_surface(struct radv_image *image, struct radv_buffer *htile_buffer,
-                                 struct radv_ds_buffer_info *ds);
-
-void radv_initialise_ds_surface(const struct radv_device *device, struct radv_ds_buffer_info *ds,
-                                struct radv_image_view *iview, VkImageAspectFlags ds_aspects);
-
 void radv_gfx11_set_db_render_control(const struct radv_device *device, unsigned num_samples,
                                       unsigned *db_render_control);
 
@@ -382,5 +373,9 @@ bool radv_device_acquire_performance_counters(struct radv_device *device);
 void radv_device_release_performance_counters(struct radv_device *device);
 
 bool radv_device_should_clear_vram(const struct radv_device *device);
+
+VkResult radv_device_init_utrace(struct radv_device *device);
+
+void radv_device_finish_utrace(struct radv_device *device);
 
 #endif /* RADV_DEVICE_H */

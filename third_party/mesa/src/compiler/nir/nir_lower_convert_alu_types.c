@@ -58,6 +58,7 @@ lower_convert_alu_types_instr(nir_builder *b, nir_intrinsic_instr *conv, void *d
       return false;
 
    b->cursor = nir_instr_remove(&conv->instr);
+   b->fp_math_ctrl = nir_intrinsic_fp_math_ctrl(conv);
    nir_def *val =
       nir_convert_with_rounding(b, conv->src[0].ssa,
                                 nir_intrinsic_src_type(conv),
@@ -124,6 +125,7 @@ static nir_def *
 lower_alu_conversion(nir_builder *b, nir_instr *instr, UNUSED void *_data)
 {
    nir_alu_instr *alu = nir_instr_as_alu(instr);
+   b->fp_math_ctrl = alu->fp_math_ctrl;
    nir_def *src = nir_ssa_for_alu_src(b, alu, 0);
    nir_alu_type src_type = nir_op_infos[alu->op].input_types[0] | src->bit_size;
    nir_alu_type dst_type = nir_op_infos[alu->op].output_type;

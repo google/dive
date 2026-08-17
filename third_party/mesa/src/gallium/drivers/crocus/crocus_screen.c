@@ -37,6 +37,7 @@
 #include "pipe/p_state.h"
 #include "pipe/p_context.h"
 #include "pipe/p_screen.h"
+#include "util/os_misc.h"
 #include "util/u_debug.h"
 #include "util/u_inlines.h"
 #include "util/format/u_format.h"
@@ -170,7 +171,8 @@ crocus_init_shader_caps(struct crocus_screen *screen)
 
       /* Lie about these to avoid st/mesa's GLSL IR lowering of indirects,
        * which we don't want.  Our compiler backend will check elk_compiler's
-       * options and call nir_lower_indirect_derefs appropriately anyway.
+       * options and call nir_lower_indirect_derefs_to_if_else_trees
+       * appropriately anyway.
        */
       caps->indirect_temp_addr = true;
       caps->indirect_const_addr = true;
@@ -271,7 +273,6 @@ crocus_init_screen_caps(struct crocus_screen *screen)
    caps->texture_float_linear = true;
    caps->texture_half_float_linear = true;
    caps->polygon_offset_clamp = true;
-   caps->tgsi_tex_txf_lz = true;
    caps->multisample_z_resolve = true;
    caps->shader_group_vote = true;
    caps->vs_window_space_position = true;
@@ -383,8 +384,9 @@ crocus_init_screen_caps(struct crocus_screen *screen)
    const unsigned gpu_mappable_megabytes =
       (screen->aperture_threshold) / (1024 * 1024);
 
-   uint64_t system_memory_bytes;
-   if (!os_get_total_physical_memory(&system_memory_bytes)) {
+   uint64_t system_memory_bytes =
+      os_get_gpu_heap_size(screen->driconf.heap_memory_percent, NULL);
+   if (!system_memory_bytes) {
       caps->video_memory = -1;
    } else {
       const unsigned system_memory_megabytes =
@@ -402,7 +404,7 @@ crocus_init_screen_caps(struct crocus_screen *screen)
     * extensive checking in the driver for correctness, e.g. to prevent
     * illegal snoop <-> snoop transfers.
     */
-   caps->resource_from_user_memory = devinfo->has_llc;
+   caps->resource_from_user_memory = devinfo->has_llc && devinfo->has_userptr_uapi;
    caps->throttle = !screen->driconf.disable_throttling;
 
    caps->context_priority_mask =
@@ -465,6 +467,7 @@ crocus_screen_destroy(struct crocus_screen *screen)
    u_transfer_helper_destroy(screen->base.transfer_helper);
    crocus_bufmgr_unref(screen->bufmgr);
    disk_cache_destroy(screen->disk_cache);
+   intel_virtio_unref_fd(screen->winsys_fd);
    close(screen->winsys_fd);
    ralloc_free(screen);
 }
@@ -549,6 +552,9 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
    if (!screen)
       return NULL;
 
+   if (intel_virtio_init_fd(fd) < 0)
+      return NULL;
+
    if (!intel_get_device_info_from_fd(fd, &screen->devinfo, 4, 8))
       return NULL;
    screen->pci_id = screen->devinfo.pci_device_id;
@@ -559,7 +565,7 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
    if (screen->devinfo.ver == 8) {
       /* bind to cherryview or bdw if forced */
       if (screen->devinfo.platform != INTEL_PLATFORM_CHV &&
-          !getenv("CROCUS_GEN8"))
+          !os_get_option("CROCUS_GEN8"))
          return NULL;
    }
 
@@ -568,8 +574,8 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
    screen->aperture_bytes = get_aperture_size(fd);
    screen->aperture_threshold = screen->aperture_bytes * 3 / 4;
 
-   driParseConfigFiles(config->options, config->options_info, 0, "crocus",
-                       NULL, NULL, NULL, 0, NULL, 0);
+   driParseConfigFiles(config->options, config->options_info,
+                       &(driConfigFileParseParams) { .driverName = "crocus" });
 
    bool bo_reuse = false;
    int bo_reuse_mode = driQueryOptioni(config->options, "bo_reuse");
@@ -599,6 +605,11 @@ crocus_screen_create(int fd, const struct pipe_screen_config *config)
       driQueryOptionb(config->options, "limit_trig_input_range");
    screen->driconf.lower_depth_range_rate =
       driQueryOptionf(config->options, "lower_depth_range_rate");
+
+   screen->driconf.heap_memory_percent =
+      driQueryOptionf(config->options, "heap_memory_percent");
+   if (screen->driconf.heap_memory_percent == OS_GPU_HEAP_SIZE_HEURISTIC)
+      screen->driconf.heap_memory_percent = 1.0f;
 
    screen->precompile = debug_get_bool_option("shader_precompile", true);
 

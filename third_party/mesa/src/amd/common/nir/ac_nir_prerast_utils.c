@@ -6,7 +6,7 @@
 
 #include "ac_nir.h"
 #include "ac_nir_helpers.h"
-#include "sid.h"
+#include "amdgfxregs.h"
 
 #include "nir_builder.h"
 #include "nir_xfb_info.h"
@@ -126,6 +126,9 @@ void ac_nir_gather_prerast_store_output_info(nir_builder *b, nir_intrinsic_instr
       /* Components of the same output slot may belong to different streams. */
       info->stream |= stream << (c * 2);
       info->components_mask |= BITFIELD_BIT(c);
+      if (io_sem.clamp) {
+         info->clamp_components_mask |= BITFIELD_BIT(c);
+      }
 
       if (!io_sem.no_varying)
          info->as_varying_mask |= BITFIELD_BIT(c);
@@ -209,15 +212,15 @@ void ac_nir_gather_prerast_store_output_info(nir_builder *b, nir_intrinsic_instr
 }
 
 static nir_intrinsic_instr *
-export(nir_builder *b, nir_def *val, nir_def *row, unsigned base, unsigned flags,
+export(nir_builder *b, nir_def *val, nir_def *row, unsigned target, unsigned flags,
        unsigned write_mask)
 {
    if (row) {
-      return nir_export_row_amd(b, val, row, .base = base, .flags = flags,
-                                .write_mask = write_mask);
+      return nir_export_row_amd(b, val, row, .target = target, .flags = flags,
+                                .enabled_channels = write_mask);
    } else {
-      return nir_export_amd(b, val, .base = base, .flags = flags,
-                            .write_mask = write_mask);
+      return nir_export_amd(b, val, .target = target, .flags = flags,
+                            .enabled_channels = write_mask);
    }
 }
 
@@ -463,8 +466,8 @@ ac_nir_export_parameters(nir_builder *b,
 
       nir_export_amd(
          b, get_export_output(b, out->outputs[slot]),
-         .base = V_008DFC_SQ_EXP_PARAM + offset,
-         .write_mask = write_mask);
+         .target = V_008DFC_SQ_EXP_PARAM + offset,
+         .enabled_channels = write_mask);
       exported_params |= BITFIELD_BIT(offset);
    }
 }
@@ -782,21 +785,27 @@ ac_nir_clamp_vertex_color_outputs(nir_builder *b, ac_nir_prerast_out *out)
                                             VARYING_BIT_BFC0 | VARYING_BIT_BFC1)))
       return;
 
-   nir_def *color_channels[16] = {0};
+   unsigned i = 0;
+   nir_def **color_channels[16] = {0};
+   nir_def *color_channels_clamped[16] = {0};
 
    nir_if *if_clamp = nir_push_if(b, nir_load_clamp_vertex_color_amd(b));
    {
-      for (unsigned i = 0; i < 16; i++) {
-         const unsigned slot = (i / 8 ? VARYING_SLOT_BFC0 : VARYING_SLOT_COL0) + (i % 8) / 4;
-         if (out->outputs[slot][i % 4])
-            color_channels[i] = nir_fsat(b, out->outputs[slot][i % 4]);
+      for (unsigned slot = 0; slot < NUM_TOTAL_VARYING_SLOTS; slot++) {
+         unsigned clamp_mask = out->infos[slot].clamp_components_mask;
+         u_foreach_bit(comp, clamp_mask) {
+            assert(i < 16 && comp < 4);
+            color_channels[i] = &out->outputs[slot][comp];
+            color_channels_clamped[i] = nir_fsat(b, out->outputs[slot][comp]);
+            i++;
+         }
       }
    }
    nir_pop_if(b, if_clamp);
+
    for (unsigned i = 0; i < 16; i++) {
       if (color_channels[i]) {
-         const unsigned slot = (i / 8 ? VARYING_SLOT_BFC0 : VARYING_SLOT_COL0) + (i % 8) / 4;
-         out->outputs[slot][i % 4] = nir_if_phi(b, color_channels[i], out->outputs[slot][i % 4]);
+         *color_channels[i] = nir_if_phi(b, color_channels_clamped[i], *color_channels[i]);
       }
    }
 }
@@ -824,17 +833,17 @@ ac_nir_ngg_alloc_vertices_fully_culled_workaround(nir_builder *b,
       {
          /* The vertex indices are 0, 0, 0. */
          nir_export_amd(b, nir_imm_zero(b, 4, 32),
-                        .base = V_008DFC_SQ_EXP_PRIM,
+                        .target = V_008DFC_SQ_EXP_PRIM,
                         .flags = AC_EXP_FLAG_DONE,
-                        .write_mask = 1);
+                        .enabled_channels = 1);
 
          /* The HW culls primitives with NaN. -1 is also NaN and can save
           * a dword in binary code by inlining constant.
           */
          nir_export_amd(b, nir_imm_ivec4(b, -1, -1, -1, -1),
-                        .base = V_008DFC_SQ_EXP_POS,
+                        .target = V_008DFC_SQ_EXP_POS,
                         .flags = AC_EXP_FLAG_DONE,
-                        .write_mask = 0xf);
+                        .enabled_channels = 0xf);
       }
       nir_pop_if(b, if_thread_0);
    }
@@ -1050,6 +1059,8 @@ ac_nir_ngg_build_streamout_buffer_info(nir_builder *b,
 
                nir_loop *loop = nir_push_loop(b);
                {
+                  nir_loop_add_continue_construct(loop);
+
                   for (unsigned i = 0; i < NUM_ATOMICS_IN_FLIGHT; i++) {
                      int issue_index = (NUM_ATOMICS_IN_FLIGHT - 1 + i) % NUM_ATOMICS_IN_FLIGHT;
                      int read_index = i;
@@ -1129,8 +1140,10 @@ ac_nir_ngg_build_streamout_buffer_info(nir_builder *b,
          nir_def *overflow = nir_ilt(b, buffer_size, buffer_offset);
 
          any_overflow = nir_ior(b, any_overflow, overflow);
+         nir_def *new_buffer_offset = nir_iadd(b, buffer_offset,
+                                               workgroup_buffer_sizes[buffer]);
          overflow_amount[buffer] = nir_imax(b, nir_imm_int(b, 0),
-                                            nir_isub(b, buffer_offset, buffer_size));
+                                            nir_isub(b, new_buffer_offset, buffer_size));
 
          unsigned stream = info->buffer_to_stream[buffer];
          /* when previous workgroup overflow, we can't emit any primitive */

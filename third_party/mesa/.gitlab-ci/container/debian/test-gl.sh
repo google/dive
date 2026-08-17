@@ -7,7 +7,7 @@ set -e
 
 set -o xtrace
 
-uncollapsed_section_start debian_setup "Base Debian system setup"
+section_start debian_setup "Base Debian system setup"
 
 export DEBIAN_FRONTEND=noninteractive
 : "${LLVM_VERSION:?llvm version not set!}"
@@ -50,6 +50,7 @@ EPHEMERAL=(
     patch
     pkgconf
     python-is-python3
+    spirv-headers
     xz-utils
 )
 
@@ -94,6 +95,10 @@ PIGLIT_OPTS="-DPIGLIT_USE_WAFFLE=ON
 	     -DPIGLIT_BUILD_DMA_BUF_TESTS=ON" \
   . .gitlab-ci/container/build-piglit.sh
 
+############### Build OpenCL-CTS
+
+. .gitlab-ci/container/build-opencl-cts.sh
+
 ############### Build dEQP GL
 
 DEQP_API=tools \
@@ -123,7 +128,7 @@ fi
 
 ############### Uninstall the build software
 
-uncollapsed_section_switch debian_cleanup "Cleaning up base Debian system"
+section_switch debian_cleanup "Cleaning up base Debian system"
 
 apt-get purge -y "${EPHEMERAL[@]}"
 

@@ -24,7 +24,13 @@
 #include "vk_descriptors.h"
 #include "vk_util.h"
 
-#include "v3dv_private.h"
+#include "v3dv_device.h"
+#include "v3dv_cmd_buffer.h"
+#include "v3dv_image.h"
+#include "v3dv_entrypoints.h"
+#include "v3dv_version_dispatch.h"
+#include "vk_ycbcr_conversion.h"
+#include "vk_descriptor_update_template.h"
 
 /*
  * For a given descriptor defined by the descriptor_set it belongs, its
@@ -190,8 +196,6 @@ v3dv_descriptor_map_get_sampler(struct v3dv_descriptor_state *descriptor_state,
    assert(descriptor->type == VK_DESCRIPTOR_TYPE_SAMPLER ||
           descriptor->type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-   assert(descriptor->sampler);
-
    return descriptor->sampler;
 }
 
@@ -232,13 +236,15 @@ v3dv_descriptor_map_get_texture_bo(struct v3dv_descriptor_state *descriptor_stat
    switch (descriptor->type) {
    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-      assert(descriptor->buffer_view);
+      if (!descriptor->buffer_view)
+         return NULL;
       return descriptor->buffer_view->buffer->mem->bo;
    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
-      assert(descriptor->image_view);
+      if (!descriptor->image_view)
+         return NULL;
       struct v3dv_image *image =
          (struct v3dv_image *) descriptor->image_view->vk.image;
       assert(map->plane[index] < image->plane_count);
@@ -276,33 +282,33 @@ v3dv_descriptor_map_get_texture_shader_state(struct v3dv_device *device,
    return reloc;
 }
 
-#define SHA1_UPDATE_VALUE(ctx, x) _mesa_sha1_update(ctx, &(x), sizeof(x));
+#define BLAKE3_UPDATE_VALUE(ctx, x) _mesa_blake3_update(ctx, &(x), sizeof(x));
 
 static void
-sha1_update_ycbcr_conversion(struct mesa_sha1 *ctx,
+blake3_update_ycbcr_conversion(blake3_hasher *ctx,
                              const struct vk_ycbcr_conversion_state *conversion)
 {
-   SHA1_UPDATE_VALUE(ctx, conversion->format);
-   SHA1_UPDATE_VALUE(ctx, conversion->ycbcr_model);
-   SHA1_UPDATE_VALUE(ctx, conversion->ycbcr_range);
-   SHA1_UPDATE_VALUE(ctx, conversion->mapping);
-   SHA1_UPDATE_VALUE(ctx, conversion->chroma_offsets);
-   SHA1_UPDATE_VALUE(ctx, conversion->chroma_reconstruction);
+   BLAKE3_UPDATE_VALUE(ctx, conversion->format);
+   BLAKE3_UPDATE_VALUE(ctx, conversion->ycbcr_model);
+   BLAKE3_UPDATE_VALUE(ctx, conversion->ycbcr_range);
+   BLAKE3_UPDATE_VALUE(ctx, conversion->mapping);
+   BLAKE3_UPDATE_VALUE(ctx, conversion->chroma_offsets);
+   BLAKE3_UPDATE_VALUE(ctx, conversion->chroma_reconstruction);
 }
 
 static void
-sha1_update_descriptor_set_binding_layout(struct mesa_sha1 *ctx,
+blake3_update_descriptor_set_binding_layout(blake3_hasher *ctx,
                                           const struct v3dv_descriptor_set_binding_layout *layout,
                                           const struct v3dv_descriptor_set_layout *set_layout)
 {
-   SHA1_UPDATE_VALUE(ctx, layout->type);
-   SHA1_UPDATE_VALUE(ctx, layout->array_size);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_index);
-   SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
-   SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_index);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_offset);
-   SHA1_UPDATE_VALUE(ctx, layout->immutable_samplers_offset);
-   SHA1_UPDATE_VALUE(ctx, layout->plane_stride);
+   BLAKE3_UPDATE_VALUE(ctx, layout->type);
+   BLAKE3_UPDATE_VALUE(ctx, layout->array_size);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_index);
+   BLAKE3_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->dynamic_offset_index);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_offset);
+   BLAKE3_UPDATE_VALUE(ctx, layout->immutable_samplers_offset);
+   BLAKE3_UPDATE_VALUE(ctx, layout->plane_stride);
 
    if (layout->immutable_samplers_offset) {
       const struct v3dv_sampler *immutable_samplers =
@@ -311,23 +317,23 @@ sha1_update_descriptor_set_binding_layout(struct mesa_sha1 *ctx,
       for (unsigned i = 0; i < layout->array_size; i++) {
          const struct v3dv_sampler *sampler = &immutable_samplers[i];
          if (sampler->conversion)
-            sha1_update_ycbcr_conversion(ctx, &sampler->conversion->state);
+            blake3_update_ycbcr_conversion(ctx, &sampler->conversion->state);
       }
    }
 }
 
 static void
-sha1_update_descriptor_set_layout(struct mesa_sha1 *ctx,
+blake3_update_descriptor_set_layout(blake3_hasher *ctx,
                                   const struct v3dv_descriptor_set_layout *layout)
 {
-   SHA1_UPDATE_VALUE(ctx, layout->flags);
-   SHA1_UPDATE_VALUE(ctx, layout->binding_count);
-   SHA1_UPDATE_VALUE(ctx, layout->shader_stages);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_count);
-   SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->flags);
+   BLAKE3_UPDATE_VALUE(ctx, layout->binding_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->shader_stages);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
 
    for (uint16_t i = 0; i < layout->binding_count; i++)
-      sha1_update_descriptor_set_binding_layout(ctx, &layout->binding[i], layout);
+      blake3_update_descriptor_set_binding_layout(ctx, &layout->binding[i], layout);
 }
 
 
@@ -384,15 +390,15 @@ v3dv_CreatePipelineLayout(VkDevice _device,
 
    layout->dynamic_offset_count = dynamic_offset_count;
 
-   struct mesa_sha1 ctx;
-   _mesa_sha1_init(&ctx);
+   blake3_hasher ctx;
+   _mesa_blake3_init(&ctx);
    for (unsigned s = 0; s < layout->num_sets; s++) {
-      sha1_update_descriptor_set_layout(&ctx, layout->set[s].layout);
-      _mesa_sha1_update(&ctx, &layout->set[s].dynamic_offset_start,
+      blake3_update_descriptor_set_layout(&ctx, layout->set[s].layout);
+      _mesa_blake3_update(&ctx, &layout->set[s].dynamic_offset_start,
                         sizeof(layout->set[s].dynamic_offset_start));
    }
-   _mesa_sha1_update(&ctx, &layout->num_sets, sizeof(layout->num_sets));
-   _mesa_sha1_final(&ctx, layout->sha1);
+   _mesa_blake3_update(&ctx, &layout->num_sets, sizeof(layout->num_sets));
+   _mesa_blake3_final(&ctx, layout->blake3);
 
    *pPipelineLayout = v3dv_pipeline_layout_to_handle(layout);
 
@@ -714,7 +720,8 @@ v3dv_CreateDescriptorSetLayout(VkDevice _device,
 
    VkDescriptorSetLayoutBinding *bindings = NULL;
    VkResult result = vk_create_sorted_bindings(pCreateInfo->pBindings,
-                                               pCreateInfo->bindingCount, &bindings);
+                                               pCreateInfo->bindingCount, &bindings,
+                                               NULL, NULL);
    if (result != VK_SUCCESS) {
       v3dv_descriptor_set_layout_destroy(device, set_layout);
       return vk_error(device, result);
@@ -1052,6 +1059,17 @@ write_buffer_descriptor(struct v3dv_descriptor *descriptor,
 
    descriptor->type = desc_type;
    descriptor->buffer = buffer;
+
+   /* This can happen when nullDescriptor is used. In that
+    * case the compiler will not emit the buffer access so
+    * the descriptor won't be accessed at all.
+    */
+   if (!buffer) {
+      descriptor->offset = 0;
+      descriptor->range = 0;
+      return;
+   }
+
    descriptor->offset = buffer_info->offset;
    if (buffer_info->range == VK_WHOLE_SIZE) {
       descriptor->range = buffer->size - buffer_info->offset;
@@ -1075,11 +1093,45 @@ write_image_descriptor(struct v3dv_device *device,
    descriptor->sampler = sampler;
    descriptor->image_view = iview;
 
-   assert(iview || sampler);
-   uint8_t plane_count = iview ? iview->plane_count : sampler->plane_count;
+   if (!device->vk.enabled_features.nullDescriptor)
+      assert(iview || sampler);
+
+   /* When VK_KHR_robustness2 nullDescriptor is enabled, applications are
+    * allowed to write VK_NULL_HANDLE for the imageView and sampler.
+    */
+   const bool sampler_required =
+      (desc_type == VK_DESCRIPTOR_TYPE_SAMPLER ||
+       desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) &&
+      !binding_layout->immutable_samplers_offset;
+
+   const bool image_required =
+      desc_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+      desc_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
+      desc_type == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT ||
+      desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
    void *desc_map = descriptor_bo_map(device, set,
                                       binding_layout, array_index);
+
+   if ((image_required && !iview) || (sampler_required && !sampler)) {
+      /* Multiplanar YCbCr descriptors require immutable samplers and a non-null
+       * imageView (VUID-VkWriteDescriptorSet-descriptorType-02738) both of
+       * which are not true here so we must never reach the null path
+       * with plane count > 1 when VK_KHR_robustness2 nullDescriptor is enabled.
+       */
+      const uint32_t size =
+         v3d_X((&device->devinfo), descriptor_bo_size)(desc_type) *
+         binding_layout->plane_stride;
+      memset(desc_map, 0, size);
+
+      v3d_X((&device->devinfo), pack_null_texture_state)(device, desc_map);
+
+      descriptor->sampler = NULL;
+      descriptor->image_view = NULL;
+      return;
+   }
+
+   uint8_t plane_count = iview ? iview->plane_count : sampler->plane_count;
 
    for (uint8_t plane = 0; plane < plane_count; plane++) {
       if (iview) {
@@ -1121,11 +1173,18 @@ write_buffer_view_descriptor(struct v3dv_device *device,
                              struct v3dv_buffer_view *bview,
                              uint32_t array_index)
 {
-   assert(bview);
+   assert(bview || device->vk.enabled_features.nullDescriptor);
+
    descriptor->type = desc_type;
    descriptor->buffer_view = bview;
 
    void *desc_map = descriptor_bo_map(device, set, binding_layout, array_index);
+
+   if (!bview) {
+      memset(desc_map, 0, sizeof(bview->texture_shader_state));
+      v3d_X((&device->devinfo), pack_null_texture_state)(device, desc_map);
+      return;
+   }
 
    memcpy(desc_map,
           bview->texture_shader_state,
@@ -1233,7 +1292,7 @@ v3dv_UpdateDescriptorSets(VkDevice  _device,
                 * image sampler, but for YCbCr we kwnow that we must use
                 * immutable combined image samplers
                 */
-               assert(iview->plane_count == 1);
+               assert(!iview || iview->plane_count == 1);
                V3DV_FROM_HANDLE(v3dv_sampler, _sampler, image_info->sampler);
                sampler = _sampler;
             }
@@ -1338,7 +1397,7 @@ v3dv_GetDescriptorSetLayoutSupport(
    V3DV_FROM_HANDLE(v3dv_device, device, _device);
    VkDescriptorSetLayoutBinding *bindings = NULL;
    VkResult result = vk_create_sorted_bindings(
-      pCreateInfo->pBindings, pCreateInfo->bindingCount, &bindings);
+      pCreateInfo->pBindings, pCreateInfo->bindingCount, &bindings, NULL, NULL);
    if (result != VK_SUCCESS) {
       pSupport->supported = false;
       return;
@@ -1410,7 +1469,16 @@ v3dv_UpdateDescriptorSetWithTemplate(
          break;
 
       case VK_DESCRIPTOR_TYPE_SAMPLER:
-      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+         for (uint32_t j = 0; j < entry->array_count; j++) {
+            const VkDescriptorImageInfo *info =
+               pData + entry->offset + j * entry->stride;
+            V3DV_FROM_HANDLE(v3dv_sampler, sampler, info->sampler);
+            write_image_descriptor(device, descriptor + entry->array_element + j,
+                                   entry->type, set, binding_layout, NULL,
+                                   sampler, entry->array_element + j);
+         }
+         break;
+
       case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
       case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
@@ -1418,10 +1486,29 @@ v3dv_UpdateDescriptorSetWithTemplate(
             const VkDescriptorImageInfo *info =
                pData + entry->offset + j * entry->stride;
             V3DV_FROM_HANDLE(v3dv_image_view, iview, info->imageView);
-            V3DV_FROM_HANDLE(v3dv_sampler, sampler, info->sampler);
             write_image_descriptor(device, descriptor + entry->array_element + j,
                                    entry->type, set, binding_layout, iview,
-                                   sampler, entry->array_element + j);
+                                   NULL, entry->array_element + j);
+         }
+         break;
+
+      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+         for (uint32_t j = 0; j < entry->array_count; j++) {
+            const VkDescriptorImageInfo *info =
+               pData + entry->offset + j * entry->stride;
+            V3DV_FROM_HANDLE(v3dv_image_view, iview, info->imageView);
+            struct v3dv_sampler *sampler = NULL;
+            if (!binding_layout->immutable_samplers_offset) {
+               /* In general we ignore the sampler when updating a combined
+                * image sampler, but for YCbCr we know that we must use
+                * immutable combined image samplers.
+                */
+               assert(!iview || iview->plane_count == 1);
+               sampler = v3dv_sampler_from_handle(info->sampler);
+            }
+            write_image_descriptor(device, descriptor + entry->array_element + j,
+                                   entry->type, set, binding_layout,
+                                   iview, sampler, entry->array_element + j);
          }
          break;
 

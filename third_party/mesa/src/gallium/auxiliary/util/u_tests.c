@@ -181,7 +181,7 @@ util_set_common_states_and_clear(struct cso_context *cso, struct pipe_context *c
    util_set_rasterizer_normal(cso);
    util_set_max_viewport(cso, cb);
 
-   ctx->clear(ctx, PIPE_CLEAR_COLOR0, NULL, (void*)clear_color, 0, 0);
+   ctx->clear(ctx, PIPE_CLEAR_COLOR0, 0xf, 0xff, NULL, (void*)clear_color, 0, 0);
 }
 
 static void
@@ -359,6 +359,7 @@ tgsi_vs_window_space_position(struct pipe_context *ctx)
                                        cb->width0, cb->height0, red);
 
    /* Cleanup. */
+   cso_unbind_context(cso);
    cso_destroy_context(cso);
    ctx->delete_vs_state(ctx, vs);
    ctx->delete_fs_state(ctx, fs);
@@ -399,7 +400,8 @@ null_sampler_view(struct pipe_context *ctx, unsigned tgsi_tex_target)
    /* Fragment shader. */
    fs = util_make_fragment_tex_shader(ctx, tgsi_tex_target,
                                       TGSI_RETURN_TYPE_FLOAT,
-                                      TGSI_RETURN_TYPE_FLOAT, false, false);
+                                      TGSI_RETURN_TYPE_FLOAT,
+                                      false, false);
    cso_set_fragment_shader_handle(cso, fs);
 
    /* Vertex shader. */
@@ -412,6 +414,7 @@ null_sampler_view(struct pipe_context *ctx, unsigned tgsi_tex_target)
                                   num_expected);
 
    /* Cleanup. */
+   cso_unbind_context(cso);
    cso_destroy_context(cso);
    ctx->delete_vs_state(ctx, vs);
    ctx->delete_fs_state(ctx, fs);
@@ -469,6 +472,7 @@ util_test_constant_buffer(struct pipe_context *ctx,
                                        cb->height0, zero);
 
    /* Cleanup. */
+   cso_unbind_context(cso);
    cso_destroy_context(cso);
    ctx->delete_vs_state(ctx, vs);
    ctx->delete_fs_state(ctx, fs);
@@ -508,6 +512,7 @@ disabled_fragment_shader(struct pipe_context *ctx)
    ctx->get_query_result(ctx, query, true, &qresult);
 
    /* Cleanup. */
+   cso_unbind_context(cso);
    cso_destroy_context(cso);
    ctx->delete_vs_state(ctx, vs);
    ctx->delete_fs_state(ctx, fs);
@@ -614,6 +619,7 @@ test_sync_file_fences(struct pipe_context *ctx)
    screen->fence_reference(screen, &merged_fence, NULL);
    screen->fence_reference(screen, &final_fence, NULL);
 
+   cso_unbind_context(cso);
    cso_destroy_context(cso);
    pipe_resource_reference(&buf, NULL);
    pipe_resource_reference(&tex, NULL);
@@ -788,6 +794,7 @@ test_texture_barrier(struct pipe_context *ctx, bool use_fbfetch,
                                     cb->width0, cb->height0, expected);
 
    /* Cleanup. */
+   cso_unbind_context(cso);
    cso_destroy_context(cso);
    ctx->delete_vs_state(ctx, vs);
    ctx->delete_fs_state(ctx, fs);

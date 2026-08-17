@@ -25,6 +25,17 @@ union radv_descriptor {
    };
 };
 
+struct radv_color_buffer_info {
+   struct ac_cb_surface ac;
+};
+
+struct radv_ds_buffer_info {
+   struct ac_ds_surface ac;
+
+   uint32_t db_render_override2;
+   uint32_t db_render_control;
+};
+
 struct radv_image_view {
    struct vk_image_view vk;
    struct radv_image *image; /**< VkImageViewCreateInfo::image */
@@ -47,6 +58,16 @@ struct radv_image_view {
 
    /* Block-compressed image views on GFX10+. */
    struct ac_surf_nbc_view nbc_view;
+
+   union {
+      struct radv_color_buffer_info color_desc;
+
+      struct {
+         struct radv_ds_buffer_info depth_stencil_desc;
+         struct radv_ds_buffer_info depth_only_desc;
+         struct radv_ds_buffer_info stencil_only_desc;
+      };
+   };
 };
 
 VK_DEFINE_NONDISP_HANDLE_CASTS(radv_image_view, vk.base, VkImageView, VK_OBJECT_TYPE_IMAGE_VIEW);
@@ -56,6 +77,8 @@ struct radv_image_view_extra_create_info {
    bool enable_compression;
    bool disable_dcc_mrt;
    bool disable_tc_compat_cmask_mrt;
+   bool depth_compress_disable;
+   bool stencil_compress_disable;
    bool from_client; /**< Set only if this came from vkCreateImage */
 };
 
@@ -79,5 +102,8 @@ void radv_make_texture_descriptor(struct radv_device *device, struct radv_image 
                                   unsigned width, unsigned height, unsigned depth, float min_lod, uint32_t *state,
                                   uint32_t *fmask_state, const struct ac_surf_nbc_view *nbc_view,
                                   const VkImageViewSlicedCreateInfoEXT *sliced_3d);
+
+void radv_initialise_vrs_surface(struct radv_image *image, struct radv_buffer *htile_buffer,
+                                 struct radv_ds_buffer_info *ds);
 
 #endif /* RADV_IMAGE_VIEW_H */

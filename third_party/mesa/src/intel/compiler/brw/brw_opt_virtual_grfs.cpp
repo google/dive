@@ -29,6 +29,8 @@ brw_opt_split_virtual_grfs(brw_shader &s)
    brw_opt_compact_virtual_grfs(s);
 
    unsigned num_vars = s.alloc.count;
+   brw_analysis_dependency_class dirty_bits = BRW_DEPENDENCY_INSTRUCTION_DETAIL |
+                                              BRW_DEPENDENCY_VARIABLES;
 
    /* Count the total number of registers */
    unsigned reg_count = 0;
@@ -157,6 +159,7 @@ brw_opt_split_virtual_grfs(brw_shader &s)
                size_written += undef->size_written;
             }
             inst->remove();
+            dirty_bits |= BRW_DEPENDENCY_INSTRUCTIONS;
          } else {
             reg = vgrf_to_reg[inst->dst.nr];
             assert(new_reg_offset[reg] == 0);
@@ -193,8 +196,7 @@ brw_opt_split_virtual_grfs(brw_shader &s)
          }
       }
    }
-   s.invalidate_analysis(BRW_DEPENDENCY_INSTRUCTION_DETAIL |
-                         BRW_DEPENDENCY_VARIABLES);
+   s.invalidate_analysis(dirty_bits);
 
    progress = true;
 

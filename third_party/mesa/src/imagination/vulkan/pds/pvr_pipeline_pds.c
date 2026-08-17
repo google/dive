@@ -142,8 +142,7 @@ static void pvr_write_pds_const_map_entry_vertex_attribute_address(
          PVR_PDS_CONST_MAP_ENTRY_TYPE_ROBUST_VERTEX_ATTRIBUTE_ADDRESS;
       robust_attribute_entry->const_offset = const_val;
       robust_attribute_entry->binding_index = DMA->binding_index;
-      robust_attribute_entry->component_size_in_bytes =
-         DMA->component_size_in_bytes;
+      robust_attribute_entry->attrib_size_in_bytes = DMA->attrib_size_in_bytes;
       robust_attribute_entry->offset = DMA->offset;
       robust_attribute_entry->stride = DMA->stride;
       robust_attribute_entry->size_in_dwords = DMA->size_in_dwords;
@@ -1056,14 +1055,14 @@ void pvr_pds_generate_vertex_primary_program(
        *	if (test == 1) {
        *	   // DDMAD(T)
        *	   if (calculated_source_address[39:0] + (burst_size<<2) <=
-       *         base_address[39:0] + buffer_size) {
-       *        OOB := 0
-       *        DOUTD calculated_source_address,dma_paramters
-       *     } else {
-       *        OOB := 1
-       *        if (last_instance == 1) {
-       *           dma_parameters[BURST_SIZE] := 0
-       *           DOUTD calculated_source_address,dma_paramters
+       *	       base_address[39:0] + buffer_size) {
+       *	      OOB := 0
+       *	      DOUTD calculated_source_address,dma_paramters
+       *	   } else {
+       *	      OOB := 1
+       *	      if (last_instance == 1) {
+       *	         dma_parameters[BURST_SIZE] := 0
+       *	         DOUTD calculated_source_address,dma_paramters
        *	      }
        *	   }
        *	} else {
@@ -1094,15 +1093,19 @@ void pvr_pds_generate_vertex_primary_program(
 
          if (use_robust_vertex_fetch) {
             struct pvr_pds_const_map_entry_vertex_attr_ddmadt_oob_buffer_size
-               *obb_buffer_size;
-            obb_buffer_size =
+               *oob_buffer_size;
+            oob_buffer_size =
                pvr_prepare_next_pds_const_map_entry(&entry_write_state,
-                                                    sizeof(*obb_buffer_size));
+                                                    sizeof(*oob_buffer_size));
 
-            obb_buffer_size->type =
+            oob_buffer_size->type =
                PVR_PDS_CONST_MAP_ENTRY_TYPE_VERTEX_ATTR_DDMADT_OOB_BUFFER_SIZE;
-            obb_buffer_size->const_offset = const_base + 7;
-            obb_buffer_size->binding_index = vertex_dma->binding_index;
+            oob_buffer_size->const_offset = const_base + 7;
+            oob_buffer_size->offset = vertex_dma->offset;
+            oob_buffer_size->binding_index = vertex_dma->binding_index;
+            oob_buffer_size->size_in_dwords = vertex_dma->size_in_dwords;
+            oob_buffer_size->attrib_size_in_bytes =
+               vertex_dma->attrib_size_in_bytes;
          } else {
             literal_entry =
                pvr_prepare_next_pds_const_map_entry(&entry_write_state,
@@ -1226,8 +1229,8 @@ void pvr_pds_generate_vertex_primary_program(
             max_index_entry->offset = vertex_dma->offset;
             max_index_entry->stride = vertex_dma->stride;
             max_index_entry->size_in_dwords = vertex_dma->size_in_dwords;
-            max_index_entry->component_size_in_bytes =
-               vertex_dma->component_size_in_bytes;
+            max_index_entry->attrib_size_in_bytes =
+               vertex_dma->attrib_size_in_bytes;
 
             PVR_PDS_MODE_TOGGLE(
                code,
@@ -1613,7 +1616,8 @@ void pvr_pds_generate_descriptor_upload_program(
       case PVR_BUFFER_TYPE_TILE_BUFFERS:
       case PVR_BUFFER_TYPE_SPILL_INFO:
       case PVR_BUFFER_TYPE_SCRATCH_INFO:
-      case PVR_BUFFER_TYPE_SAMPLE_LOCATIONS: {
+      case PVR_BUFFER_TYPE_SAMPLE_LOCATIONS:
+      case PVR_BUFFER_TYPE_GLOBAL_SHMEM: {
          struct pvr_const_map_entry_special_buffer *special_buffer_entry;
 
          special_buffer_entry =

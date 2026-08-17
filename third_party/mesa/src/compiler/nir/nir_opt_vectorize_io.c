@@ -89,8 +89,7 @@ compare_is_not_vectorizable(nir_intrinsic_instr *a, nir_intrinsic_instr *b)
          return a->def.bit_size > b->def.bit_size ? 1 : -1;
    }
 
-   nir_shader *shader =
-      nir_cf_node_get_function(&a->instr.block->cf_node)->function->shader;
+   nir_shader *shader = a->instr.block->impl->function->shader;
 
    /* Compare the types. */
    if (!(shader->options->io_options & nir_io_vectorizer_ignores_types)) {
@@ -176,6 +175,18 @@ vectorize_load(nir_intrinsic_instr *chan[8], unsigned start, unsigned count,
 
    nir_io_semantics sem = nir_intrinsic_io_semantics(new_intr);
 
+   for (unsigned i = start; i < start + count; i++) {
+      if (chan[i]) {
+         if (!nir_intrinsic_io_semantics(chan[i]).no_signed_zero)
+            sem.no_signed_zero = 0;
+      }
+
+      if (step == merge_low_high_16_to_32 && chan[4 + i]) {
+         if (!nir_intrinsic_io_semantics(chan[4 + i]).no_signed_zero)
+            sem.no_signed_zero = 0;
+      }
+   }
+
    if (step == vectorize_high_16_separately) {
       assert(start >= 4);
       sem.high_16bits = 1;
@@ -234,21 +245,18 @@ vectorize_store(nir_intrinsic_instr *chan[8], unsigned start, unsigned count,
     * because we need to read some info from "last" before overwriting it.
     */
    if (nir_intrinsic_has_io_xfb(last)) {
-      /* 0 = low/full XY channels
-       * 1 = low/full ZW channels
-       * 2 = high XY channels
-       * 3 = high ZW channels
+      /* 0 = low/full channels
+       * 1 = high channels
        */
-      nir_io_xfb xfb[4] = { { { { 0 } } } };
+      nir_io_xfb xfb[2] = { { { { 0 } } } };
 
       for (unsigned i = start; i < start + count; i++) {
-         xfb[i / 2].out[i % 2] =
-            ((i % 4) < 2 ? nir_intrinsic_io_xfb(chan[i]) : nir_intrinsic_io_xfb2(chan[i])).out[i % 2];
+         xfb[i / 4].out[i % 4] = nir_intrinsic_io_xfb(chan[i]).out[i % 4];
 
          /* Merging low and high 16 bits to 32 bits is not possible
           * with xfb in some cases.
           */
-         assert(!xfb[i / 2].out[i % 2].num_components ||
+         assert(!xfb[i / 4].out[i % 4].num_components ||
                 step != merge_low_high_16_to_32);
       }
 
@@ -261,23 +269,21 @@ vectorize_store(nir_intrinsic_instr *chan[8], unsigned start, unsigned count,
             nir_intrinsic_io_semantics(chan[i]).medium_precision ? 32 : chan[i]->src[0].ssa->bit_size;
 
          for (unsigned j = i + 1; j < start + count; j++) {
-            if (xfb[i / 2].out[i % 2].buffer != xfb[j / 2].out[j % 2].buffer ||
-                xfb[i / 2].out[i % 2].offset != xfb[j / 2].out[j % 2].offset +
+            if (xfb[i / 4].out[i % 4].buffer != xfb[j / 4].out[j % 4].buffer ||
+                xfb[i / 4].out[i % 4].offset != xfb[j / 4].out[j % 4].offset +
                                                    xfb_comp_size * (j - i))
                break;
 
-            xfb[i / 2].out[i % 2].num_components++;
-            memset(&xfb[j / 2].out[j % 2], 0, sizeof(xfb[j / 2].out[j % 2]));
+            xfb[i / 4].out[i % 4].num_components++;
+            memset(&xfb[j / 4].out[j % 4], 0, sizeof(xfb[j / 4].out[j % 4]));
          }
       }
 
       if (start >= 4) {
-         nir_intrinsic_set_io_xfb(last, xfb[2]);
-         nir_intrinsic_set_io_xfb2(last, xfb[3]);
+         nir_intrinsic_set_io_xfb(last, xfb[1]);
       } else {
          assert(start + count <= 4);
          nir_intrinsic_set_io_xfb(last, xfb[0]);
-         nir_intrinsic_set_io_xfb2(last, xfb[1]);
       }
    }
 
@@ -303,6 +309,8 @@ vectorize_store(nir_intrinsic_instr *chan[8], unsigned start, unsigned count,
          sem.no_sysval_output = 0;
       if (!nir_intrinsic_io_semantics(chan[i]).no_varying)
          sem.no_varying = 0;
+      if (!nir_intrinsic_io_semantics(chan[i]).no_signed_zero)
+         sem.no_signed_zero = 0;
    }
 
    if (step == merge_low_high_16_to_32) {
@@ -312,6 +320,8 @@ vectorize_store(nir_intrinsic_instr *chan[8], unsigned start, unsigned count,
             sem.no_sysval_output = 0;
          if (!nir_intrinsic_io_semantics(chan[4 + i]).no_varying)
             sem.no_varying = 0;
+         if (!nir_intrinsic_io_semantics(chan[4 + i]).no_signed_zero)
+            sem.no_signed_zero = 0;
       }
 
       /* Update the type. */
@@ -390,14 +400,8 @@ vectorize_slot(nir_intrinsic_instr *chan[8], unsigned mask, bool allow_holes)
                if (nir_intrinsic_has_io_xfb(chan[i])) {
                   unsigned hi = i + 4;
 
-                  if ((i < 2 ? nir_intrinsic_io_xfb(chan[i])
-                             : nir_intrinsic_io_xfb2(chan[i]))
-                         .out[i % 2]
-                         .num_components ||
-                      (i < 2 ? nir_intrinsic_io_xfb(chan[hi])
-                             : nir_intrinsic_io_xfb2(chan[hi]))
-                         .out[i % 2]
-                         .num_components)
+                  if (nir_intrinsic_io_xfb(chan[i]).out[i].num_components ||
+                      nir_intrinsic_io_xfb(chan[hi]).out[i].num_components)
                      continue;
                }
 
@@ -414,16 +418,18 @@ vectorize_slot(nir_intrinsic_instr *chan[8], unsigned mask, bool allow_holes)
          scan_mask = mask & BITFIELD_RANGE(4, 4);
          mask &= ~scan_mask;
 
-         if (is_load && allow_holes) {
+         if (is_load && allow_holes && scan_mask) {
             unsigned num = util_last_bit(scan_mask);
-            scan_mask = BITFIELD_RANGE(4, num - 4);
+            unsigned start = ffs(scan_mask) - 1;
+            scan_mask = BITFIELD_RANGE(start, num - start);
          }
       } else {
          scan_mask = mask;
 
-         if (is_load && allow_holes) {
+         if (is_load && allow_holes && scan_mask) {
             unsigned num = util_last_bit(scan_mask);
-            scan_mask = BITFIELD_MASK(num);
+            unsigned start = ffs(scan_mask) - 1;
+            scan_mask = BITFIELD_RANGE(start, num - start);
          }
       }
 
@@ -555,8 +561,7 @@ nir_opt_vectorize_io(nir_shader *shader, nir_variable_mode modes,
    }
 
    /* Initialize dynamic arrays. */
-   struct util_dynarray io_instructions;
-   util_dynarray_init(&io_instructions, NULL);
+   struct util_dynarray io_instructions = UTIL_DYNARRAY_INIT;
    bool global_progress = false;
 
    nir_foreach_function_impl(impl, shader) {
@@ -648,7 +653,7 @@ nir_opt_vectorize_io(nir_shader *shader, nir_variable_mode modes,
             assert(value->num_components == 1);
             assert(value->bit_size == 16 || value->bit_size == 32);
 
-            util_dynarray_append(&io_instructions, void *, intr);
+            util_dynarray_append(&io_instructions, intr);
             if (is_output)
                BITSET_SET(is_load ? has_output_loads : has_output_stores, index);
          }

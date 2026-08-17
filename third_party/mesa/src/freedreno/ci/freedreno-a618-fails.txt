@@ -1,15 +1,15 @@
 KHR-GL46.shader_image_load_store.basic-allFormats-store,Fail
-KHR-GL46.shader_image_load_store.basic-allTargets-store,Fail
 KHR-GL46.shading_language_420pack.binding_images,Fail
-
-# https://gitlab.freedesktop.org/mesa/mesa/-/issues/5582
-KHR-GLES31.core.texture_cube_map_array.color_depth_attachments,Fail
-KHR-GL46.texture_cube_map_array.color_depth_attachments,Fail
 
 #
 # new fails with gl45:
 #
 
+spec@!opengl 1.1@getteximage-depth,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D-GL_DEPTH_COMPONENT32,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_COMPONENT16,Fail
+spec@!opengl 1.1@getteximage-depth@GL_TEXTURE_1D_ARRAY-GL_DEPTH_COMPONENT32,Fail
 
 spec@arb_depth_buffer_float@fbo-generatemipmap-formats,Fail
 spec@arb_depth_buffer_float@fbo-generatemipmap-formats@GL_DEPTH_COMPONENT32F,Fail
@@ -200,6 +200,7 @@ spec@glsl-4.00@execution@built-in-functions@fs-op-div-dmat4-dmat4,Fail
 glx@glx-swap-pixmap-bad,Fail
 spec@!opengl 1.0@rasterpos@glsl_vs_ssbo,Fail
 spec@arb_occlusion_query@occlusion_query_order,Fail
+spec@arb_gpu_shader_fp64@execution@fs-indirect-temp-double-src,Crash
 spec@glsl-1.30@execution@fs-uint-to-float-of-extract-int16,Fail
 spec@glsl-1.30@execution@fs-uint-to-float-of-extract-int8,Fail
 spec@khr_texture_compression_astc@miptree-gles srgb-fp,Fail
@@ -211,28 +212,18 @@ spec@ext_base_instance@arb_base_instance-drawarrays_gles3,Fail
 
 # New failures appeared after Piglit uprev to 28d1349844eacda869f0f82f551bcd4ac0c4edfe
 spec@arb_gl_spirv@execution@vs-instance-id,Fail
-spec@arb_gl_spirv@execution@xfb@vs_two_sets_mixing_order,Fail
 
 # glcts update
-dEQP-GLES2.functional.texture.mipmap.cube.projected.nearest_linear,Fail
 KHR-GL46.texture_view.view_classes,Fail
 KHR-GLES3.framebuffer_blit.framebuffer_blit_functionality_multisampled_to_singlesampled_blit,Fail
 KHR-GL46.texture_lod_bias.texture_lod_bias_all,Fail
-KHR-GL46.texture_lod_basic.lod_selection,Fail
 
 # New failures with GL CTS 4.6.6.0 & ES CTS 3.2.12.0
-KHR-GL46.shading_language_420pack.binding_images_texture_type_1D,Fail
 KHR-GLES3.framebuffer_blit.multisampled_to_singlesampled_blit_depth_config_test,Fail
-
-x11-dEQP-EGL.functional.image.modify.tex_rgb5_a1_renderbuffer_clear_color,Fail
-wayland-dEQP-EGL.functional.image.modify.tex_rgb5_a1_renderbuffer_clear_color,Fail
 
 # GL tests above, Vulkan tests below
 
 # New fails in 1.4.3.3
-dEQP-VK.memory.concurrent_access.shader_and_host,Fail
-dEQP-VK.pipeline.fast_linked_library.vertex_input.misc.unused_binding_dynamic,Crash
-dEQP-VK.pipeline.monolithic.vertex_input.misc.unused_binding_dynamic,Crash
 dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_16,Fail
 dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_244,Fail
 dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_508,Fail
@@ -251,21 +242,44 @@ dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_counter_offset_508
 dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_16,Fail
 dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_244,Fail
 dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_508,Fail
+android-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_244,Fail
+asan-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_16,Fail
+asan-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_244,Fail
+gmem-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_16,Fail
+gmem-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_multiview_counter_offset_16,Fail
+gmem-dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_508,Fail
 gmem-dEQP-VK.transform_feedback.simple.draw_indirect_multiview_counter_offset_16,Fail
 nobin-dEQP-VK.transform_feedback.simple.draw_indirect_multiview_counter_offset_16,Fail
+nobin-dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_244,Fail
+nobin-dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_508,Fail
+nobin-dEQP-VK.transform_feedback.simple.draw_indirect_multiview_counter_offset_244,Fail
+nobin-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_16,Fail
+nobin-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_multiview_counter_offset_16,Fail
+nobin-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_multiview_counter_offset_244,Fail
+nobin-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_multiview_counter_offset_508,Fail
+nobin-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_counter_offset_16,Fail
+nobin-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_counter_offset_244,Fail
+nobin-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_counter_offset_508,Fail
+nobin-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_16,Fail
+nobin-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_244,Fail
+
+# New failures with VKCTS 1.4.4.0
+dEQP-VK.tessellation.misc_draw.tess_factor_barrier_bug,Crash
+gmem-dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_16,Fail
+gmem-dEQP-VK.transform_feedback.simple.draw_indirect_multiview_counter_offset_508,Fail
+gmem-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_244,Fail
+gmem-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_508,Fail
+gmem-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_508,Fail
+nobin-dEQP-VK.transform_feedback.simple.draw_indirect_counter_offset_16,Fail
+nobin-dEQP-VK.transform_feedback.simple.draw_indirect_multiview_counter_offset_508,Fail
+nobin-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_244,Fail
+nobin-dEQP-VK.transform_feedback.simple_fast_gpl.draw_indirect_counter_offset_508,Fail
+nobin-dEQP-VK.transform_feedback.simple_optimized_gpl.draw_indirect_multiview_counter_offset_508,Fail
 
 # OpenCL tests below
 #
 ## rusticl-core issues:
 #
-#Unexpected CL error: CL_BUILD_PROGRAM_FAILURE -11
-#Expected CL error: CL_INVALID_BUILD_OPTIONS -43
-api@clbuildprogram,Fail
-
-#Unexpected CL error: CL_COMPILE_PROGRAM_FAILURE -15
-#Expected CL error: CL_INVALID_COMPILER_OPTIONS -66
-api@clcompileprogram,Fail
-
 #Unexpected CL error: CL_SUCCESS 0
 #Expected CL error: CL_KERNEL_ARG_INFO_NOT_AVAILABLE -19
 api@clgetkernelarginfo,Fail
@@ -279,9 +293,6 @@ api@clgetkernelarginfo,Fail
 #Unexpected CL error: CL_SUCCESS 0
 #Expected CL error: CL_LINK_PROGRAM_FAILURE -17
 api@cllinkprogram,Fail
-
-# can be resolved by RUSTICL_FEATURES=fp16,fp64
-program@build@vector-data-types,Fail
 
 # https://gitlab.freedesktop.org/mesa/mesa/-/issues/8408
 program@execute@global-offset,Fail
@@ -318,6 +329,10 @@ program@execute@builtin@builtin-float-nextafter-1.0.generated@nextafter float8,F
 
 # (file=input,line=0,column=0,index=0): Unresolved external reference to "_Z21convert_char4_sat_rteDv4_i".
 program@execute@vector-conversion,Fail
+
+# Piglit checks the pre 3.1 behavior
+api@clsetkernelarg,Fail
+api@clsetkernelarg@Input checks,Fail
 
 # piles of new fails since updating skqp; to be re-evaluated with new upstream
 gl_all_bitmap_configs,Fail
@@ -453,4 +468,42 @@ vk_xfermodes3,Fail
 
 # Initial ANGLE failures
 angle-dEQP-GLES2.functional.shaders.algorithm.rgb_to_hsl_vertex,Fail
-angle-dEQP-GLES2.functional.texture.mipmap.cube.projected.nearest_linear,Fail
+
+# Early-fragment multisample autotune regressions
+dEQP-VK.fragment_operations.early_fragment.sample_count_early_fragment_tests_depth_alpha_to_coverage_samples_2_maintenance5,Fail
+dEQP-VK.fragment_operations.early_fragment.sample_count_early_fragment_tests_depth_alpha_to_coverage_samples_4_maintenance5,Fail
+dEQP-VK.fragment_operations.early_fragment.sample_count_early_fragment_tests_depth_samples_2,Fail
+dEQP-VK.fragment_operations.early_fragment.sample_count_early_fragment_tests_depth_samples_2_maintenance5,Fail
+dEQP-VK.fragment_operations.early_fragment.sample_count_early_fragment_tests_depth_samples_4,Fail
+dEQP-VK.fragment_operations.early_fragment.sample_count_early_fragment_tests_depth_samples_4_maintenance5,Fail
+
+# Autotune regression
+angle-dEQP-GLES3.functional.fbo.msaa.2_samples.rg8,Fail
+angle-dEQP-GLES3.functional.fbo.msaa.4_samples.rg8,Fail
+
+# VKCTS 1.4.4.2 -> 1.4.5.3 uprev.
+# [  118.945672] *** gpu fault: ttbr0=00000001d0f38000 iova=00000000040ff000 dir=READ type=TRANSLATION source=TP|VFD (0,0,0,1)
+# Not entirely reliable -- which ones crash vs pass may flip around, so clear the flakes entry when it's fixed.
+dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.fast_lib.fdm_subsampled_pre_resolve_info_frag_out_only_resolve_info_frag_shader_no_formats,Crash
+dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.fast_lib.fdm_subsampled_resolve_info_frag_shader_no_formats,Crash
+dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.fast_lib.fdm_subsampled,Crash
+dEQP-VK.renderpasses.renderpass1.custom_resolve.fast_lib.fdm_subsampled,Crash
+dEQP-VK.renderpasses.renderpass1.custom_resolve.monolithic.fdm_subsampled,Crash
+
+# uprev Piglit in Mesa
+spec@!opengl 1.1@large-tex,Fail
+spec@!opengl 1.1@large-tex@test_image_load_store,Fail
+
+# VKCTS 1.4.5.3 -> 1.4.6.1 uprev
+# [  254.112811] *** gpu fault: ttbr0=000000010778d000 iova=00000000040fff00 dir=READ type=TRANSLATION source=TP|VFD (0,0,0,1)
+# Not entirely reliable -- which ones crash vs pass may flip around, so clear the flakes entry when it's fixed.
+dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.monolithic.fdm_nonsubsampled_large_fb_with_offset,Crash
+dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.monolithic.fdm_nonsubsampled_multilayer_with_offset,Fail
+dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.monolithic.fdm_nonsubsampled_with_offset,Fail
+dEQP-VK.renderpasses.renderpass2.custom_resolve.fast_lib.fdm_nonsubsampled_multilayer_large_fb_with_offset,Crash
+dEQP-VK.renderpasses.renderpass2.custom_resolve.fast_lib.fdm_nonsubsampled_multilayer_with_offset,Fail
+dEQP-VK.renderpasses.renderpass2.custom_resolve.fast_lib.fdm_nonsubsampled_multiview_large_fb_with_offset,Crash
+dEQP-VK.renderpasses.renderpass2.custom_resolve.monolithic.fdm_nonsubsampled_multiview_with_offset,Crash
+dEQP-VK.renderpasses.renderpass2.custom_resolve.monolithic.fdm_nonsubsampled_with_offset,Fail
+gmem-dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.fast_lib.fdm_nonsubsampled_with_offset,Fail
+gmem-dEQP-VK.renderpasses.dynamic_rendering.primary_cmd_buff.custom_resolve.monolithic.fdm_nonsubsampled_multilayer_with_offset,Fail

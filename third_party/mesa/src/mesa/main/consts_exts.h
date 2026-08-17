@@ -188,6 +188,7 @@ struct gl_extensions
    GLboolean EXT_shader_image_load_formatted;
    GLboolean EXT_shader_image_load_store;
    GLboolean EXT_shader_integer_mix;
+   GLboolean EXT_shader_pixel_local_storage;
    GLboolean EXT_shader_realtime_clock;
    GLboolean EXT_shader_samples_identical;
    GLboolean EXT_sRGB;
@@ -399,7 +400,6 @@ struct gl_constants
     */
    GLbitfield DriverSupportedPrimMask;
 
-   GLuint MaxTextureMbytes;      /**< Max memory per image, in MB */
    GLuint MaxTextureSize;        /**< Max 1D/2D texture size, in pixels*/
    GLuint Max3DTextureLevels;    /**< Max mipmap levels for 3D textures */
    GLuint MaxCubeTextureLevels;  /**< Max mipmap levels for cube textures */
@@ -540,6 +540,12 @@ struct gl_constants
     * Allow a subset of GLSL 1.20 in GLSL 1.10 as needed by SPECviewperf13.
     */
    GLboolean AllowGLSL120SubsetIn110;
+
+   /**
+    * Allow a embedded structure declarations which were allowed in GLSL 1.10
+    * but are no longer allowed in GLSL 1.20+
+    */
+   GLboolean AllowGLSLEmbeddedStructureDeclarations;
 
    /**
     * Allow builtins as part of constant expressions. This was not allowed
@@ -868,8 +874,8 @@ struct gl_constants
    /** GL_ARB_sparse_buffer */
    GLuint SparseBufferPageSize;
 
-   /** Used as an input for sha1 generation in the on-disk shader cache */
-   unsigned char *dri_config_options_sha1;
+   /** Used as an input for blake3 generation in the on-disk shader cache */
+   unsigned char *dri_config_options_blake3;
 
    /** When drivers are OK with mapped buffers during draw and other calls. */
    bool AllowMappedBuffersDuringExecution;
@@ -925,6 +931,7 @@ struct gl_constants
    /** GL_ARB_spirv_extensions */
    struct spirv_supported_extensions *SpirVExtensions;
 
+   char *ForceExplicitUniformLocZero;
    char *VendorOverride;
    char *RendererOverride;
 
@@ -943,6 +950,9 @@ struct gl_constants
     * a frame, but always getting framebuffer completeness.
     */
    bool GLThreadNopCheckFramebufferStatus;
+
+   /** (driconf) Initialize outputs of vertex program to a default value vec4(0, 0, 0, 1) */
+   GLboolean VertexProgramDefaultOut;
 
    /** GL_ARB_sparse_texture */
    GLuint MaxSparseTextureSize;

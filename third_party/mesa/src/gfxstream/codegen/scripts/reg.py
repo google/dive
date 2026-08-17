@@ -333,12 +333,20 @@ class Registry:
         self.typedict = {}
         for type_elem in self.reg.findall('types/type'):
             # If the <type> does not already have a 'name' attribute, set
-            # it from contents of its <name> tag.
-            if type_elem.get('name') is None:
-                name_elem = type_elem.find('name')
+            # it from contents of its <name> tag, or from the contents of
+            # its <proto><name> tag for funcpointer types.
+            name = type_elem.get('name')
+            if name is None:
+                if type_elem.get('category') == 'funcpointer':
+                    name_elem = type_elem.find('proto/name')
+                    if name_elem is None:
+                        name_elem = type_elem.find('name')
+                else:
+                    name_elem = type_elem.find('name')
                 if name_elem is None or not name_elem.text:
                     raise RuntimeError("Type without a name!")
-                type_elem.set('name', name_elem.text)
+                name = name_elem.text
+                type_elem.set('name', name)
             self.addElementInfo(type_elem, TypeInfo(type_elem), 'type', self.typedict)
 
         # Create dictionary of registry enum groups from <enums> tags.
@@ -661,7 +669,6 @@ class Registry:
 
         if not f.required:
             return
-
         # If feature is not required, or has already been declared, return
         if f.declared:
             return

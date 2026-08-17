@@ -1,24 +1,6 @@
 /*
  * Copyright © 2010, 2022 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 /**
@@ -133,8 +115,8 @@ setup_color_payload(const fs_builder &bld, elk_fs_reg *dst, elk_fs_reg color,
 
 static void
 lower_fb_write_logical_send(const fs_builder &bld, elk_fs_inst *inst,
-                            const struct elk_wm_prog_data *prog_data,
-                            const elk_wm_prog_key *key,
+                            const struct elk_fs_prog_data *prog_data,
+                            const elk_fs_prog_key *key,
                             const elk_fs_thread_payload &payload)
 {
    assert(inst->src[FB_WRITE_LOGICAL_SRC_COMPONENTS].file == IMM);
@@ -847,15 +829,12 @@ lower_sampler_logical_send_gfx7(const fs_builder &bld, elk_fs_inst *inst, elk_op
       bld.MOV(sources[length++], elk_imm_ud(0));
       break;
    case ELK_SHADER_OPCODE_TXF:
-   case ELK_SHADER_OPCODE_TXF_LZ:
       /* Unfortunately, the parameters for LD are intermixed: u, lod, v, r. */
       sources[length] = retype(sources[length], payload_signed_type);
       bld.MOV(sources[length++], coordinate);
 
-      if (op != ELK_SHADER_OPCODE_TXF_LZ) {
-         sources[length] = retype(sources[length], payload_signed_type);
-         bld.MOV(sources[length++], lod);
-      }
+      sources[length] = retype(sources[length], payload_signed_type);
+      bld.MOV(sources[length++], lod);
 
       for (unsigned i = 1; i < coord_components; i++) {
          sources[length] = retype(sources[length], payload_signed_type);
@@ -1517,7 +1496,6 @@ static void
 lower_varying_pull_constant_logical_send(const fs_builder &bld, elk_fs_inst *inst)
 {
    const intel_device_info *devinfo = bld.shader->devinfo;
-   const elk_compiler *compiler = bld.shader->compiler;
 
    if (devinfo->ver >= 7) {
       elk_fs_reg surface = inst->src[PULL_VARYING_CONSTANT_SRC_SURFACE];
@@ -1531,9 +1509,6 @@ lower_varying_pull_constant_logical_send(const fs_builder &bld, elk_fs_inst *ins
       elk_fs_reg ubo_offset = bld.vgrf(ELK_REGISTER_TYPE_UD);
       bld.MOV(ubo_offset, offset_B);
 
-      assert(inst->src[PULL_VARYING_CONSTANT_SRC_ALIGNMENT].file == ELK_IMMEDIATE_VALUE);
-      unsigned alignment = inst->src[PULL_VARYING_CONSTANT_SRC_ALIGNMENT].ud;
-
       inst->opcode = ELK_SHADER_OPCODE_SEND;
       inst->mlen = inst->exec_size / 8;
       inst->resize_sources(3);
@@ -1541,57 +1516,15 @@ lower_varying_pull_constant_logical_send(const fs_builder &bld, elk_fs_inst *ins
       /* src[0] is filled by setup_surface_descriptors() */
       inst->src[1] = ubo_offset; /* payload */
 
-      if (compiler->indirect_ubos_use_sampler) {
-         const unsigned simd_mode =
-            inst->exec_size <= 8 ? ELK_SAMPLER_SIMD_MODE_SIMD8 :
-                                   ELK_SAMPLER_SIMD_MODE_SIMD16;
-         const uint32_t desc = elk_sampler_desc(devinfo, 0, 0,
-                                                GFX5_SAMPLER_MESSAGE_SAMPLE_LD,
-                                                simd_mode, 0);
+      const unsigned simd_mode =
+         inst->exec_size <= 8 ? ELK_SAMPLER_SIMD_MODE_SIMD8 :
+                                ELK_SAMPLER_SIMD_MODE_SIMD16;
+      const uint32_t desc = elk_sampler_desc(devinfo, 0, 0,
+                                             GFX5_SAMPLER_MESSAGE_SAMPLE_LD,
+                                             simd_mode, 0);
 
-         inst->sfid = ELK_SFID_SAMPLER;
-         setup_surface_descriptors(bld, inst, desc, surface, surface_handle);
-      } else if (alignment >= 4) {
-         const uint32_t desc =
-            elk_dp_untyped_surface_rw_desc(devinfo, inst->exec_size,
-                                           4, /* num_channels */
-                                           false   /* write */);
-
-         inst->sfid = (devinfo->verx10 >= 75 ?
-                       HSW_SFID_DATAPORT_DATA_CACHE_1 :
-                       GFX7_SFID_DATAPORT_DATA_CACHE);
-         setup_surface_descriptors(bld, inst, desc, surface, surface_handle);
-      } else {
-         const uint32_t desc =
-            elk_dp_byte_scattered_rw_desc(devinfo, inst->exec_size,
-                                          32,     /* bit_size */
-                                          false   /* write */);
-
-         inst->sfid = GFX7_SFID_DATAPORT_DATA_CACHE;
-         setup_surface_descriptors(bld, inst, desc, surface, surface_handle);
-
-         /* The byte scattered messages can only read one dword at a time so
-          * we have to duplicate the message 4 times to read the full vec4.
-          * Hopefully, dead code will clean up the mess if some of them aren't
-          * needed.
-          */
-         assert(inst->size_written == 16 * inst->exec_size);
-         inst->size_written /= 4;
-         for (unsigned c = 1; c < 4; c++) {
-            /* Emit a copy of the instruction because we're about to modify
-             * it.  Because this loop starts at 1, we will emit copies for the
-             * first 3 and the final one will be the modified instruction.
-             */
-            bld.emit(*inst);
-
-            /* Offset the source */
-            inst->src[1] = bld.vgrf(ELK_REGISTER_TYPE_UD);
-            bld.ADD(inst->src[1], ubo_offset, elk_imm_ud(c * 4));
-
-            /* Offset the destination */
-            inst->dst = offset(inst->dst, bld, 1);
-         }
-      }
+      inst->sfid = ELK_SFID_SAMPLER;
+      setup_surface_descriptors(bld, inst, desc, surface, surface_handle);
    } else {
       elk_fs_reg surface = inst->src[PULL_VARYING_CONSTANT_SRC_SURFACE];
       elk_fs_reg offset = inst->src[PULL_VARYING_CONSTANT_SRC_OFFSET];
@@ -1644,8 +1577,8 @@ lower_math_logical_send(const fs_builder &bld, elk_fs_inst *inst)
 
 static void
 lower_interpolator_logical_send(const fs_builder &bld, elk_fs_inst *inst,
-                                const struct elk_wm_prog_key *wm_prog_key,
-                                const struct elk_wm_prog_data *wm_prog_data)
+                                const struct elk_fs_prog_key *fs_prog_key,
+                                const struct elk_fs_prog_data *fs_prog_data)
 {
    const intel_device_info *devinfo = bld.shader->devinfo;
 
@@ -1792,8 +1725,8 @@ elk_fs_visitor::lower_logical_sends()
       case ELK_FS_OPCODE_FB_WRITE_LOGICAL:
          assert(stage == MESA_SHADER_FRAGMENT);
          lower_fb_write_logical_send(ibld, inst,
-                                     elk_wm_prog_data(prog_data),
-                                     (const elk_wm_prog_key *)key,
+                                     elk_fs_prog_data(prog_data),
+                                     (const elk_fs_prog_key *)key,
                                      fs_payload());
          break;
 
@@ -1920,8 +1853,8 @@ elk_fs_visitor::lower_logical_sends()
       case ELK_FS_OPCODE_INTERPOLATE_AT_SHARED_OFFSET:
       case ELK_FS_OPCODE_INTERPOLATE_AT_PER_SLOT_OFFSET:
          lower_interpolator_logical_send(ibld, inst,
-                                         (const elk_wm_prog_key *)key,
-                                         elk_wm_prog_data(prog_data));
+                                         (const elk_fs_prog_key *)key,
+                                         elk_fs_prog_data(prog_data));
          break;
 
       case ELK_SHADER_OPCODE_URB_READ_LOGICAL:

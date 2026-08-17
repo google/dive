@@ -17,6 +17,8 @@
 extern "C" {
 #endif
 
+#define AC_MULTIVIEW_MAX_VIEWS 8
+
 enum
 {
    /* SPI_PS_INPUT_CNTL_i.OFFSET[0:4] */
@@ -34,6 +36,13 @@ enum {
    AC_EXP_FLAG_COMPRESSED = (1 << 0),
    AC_EXP_FLAG_DONE       = (1 << 1),
    AC_EXP_FLAG_VALID_MASK = (1 << 2),
+};
+
+enum {
+   /* Whether nir_tex_instr should treat the deref or handle as an image binding
+    * (image_load lowered to tex, etc.).
+    */
+   AC_NIR_TEX_BACKEND_FLAG_IS_IMAGE = BITFIELD_BIT(0),
 };
 
 struct ac_nir_config {
@@ -54,13 +63,15 @@ typedef struct nir_xfb_info nir_xfb_info;
 /* Executed by ac_nir_cull when the current primitive is accepted. */
 typedef void (*ac_nir_cull_accepted)(nir_builder *b, void *state);
 
+struct ac_compiler_info;
+
 void
-ac_nir_set_options(struct radeon_info *info, bool use_llvm,
+ac_nir_set_options(const struct ac_compiler_info *info, bool use_llvm,
                    nir_shader_compiler_options *options);
 
 nir_def *
 ac_nir_load_arg_at_offset(nir_builder *b, const struct ac_shader_args *ac_args,
-                          struct ac_arg arg, unsigned relative_index);
+                          struct ac_arg arg, unsigned relative_index, bool scalar_wg_div);
 
 nir_def *
 ac_nir_load_arg(nir_builder *b, const struct ac_shader_args *ac_args, struct ac_arg arg);
@@ -77,15 +88,25 @@ ac_nir_unpack_arg(nir_builder *b, const struct ac_shader_args *ac_args, struct a
                   unsigned rshift, unsigned bitwidth);
 
 nir_def *
+ac_nir_unpack_arg_wg_div(nir_builder *b, const struct ac_shader_args *ac_args, struct ac_arg arg,
+                         unsigned rshift, unsigned bitwidth);
+
+nir_def *
 ac_nir_load_smem(nir_builder *b, unsigned num_components, nir_def *addr, nir_def *offset,
                  unsigned align_mul, enum gl_access_qualifier access);
 
-bool ac_nir_lower_sin_cos(nir_shader *shader);
+typedef struct {
+   enum amd_gfx_level gfx_level;
+   bool has_ls_vgpr_init_bug;
+   const enum ac_hw_stage hw_stage;
+   unsigned wave_size;
+   unsigned workgroup_size;
+   bool use_llvm;
+   bool load_grid_size_from_user_sgpr;
+} ac_nir_lower_intrinsics_to_args_options;
 
-bool ac_nir_lower_intrinsics_to_args(nir_shader *shader, const enum amd_gfx_level gfx_level,
-                                     bool has_ls_vgpr_init_bug, const enum ac_hw_stage hw_stage,
-                                     unsigned wave_size, unsigned workgroup_size,
-                                     const struct ac_shader_args *ac_args);
+bool ac_nir_lower_intrinsics_to_args(nir_shader *shader, const struct ac_shader_args *ac_args,
+                                     const ac_nir_lower_intrinsics_to_args_options *options);
 
 nir_xfb_info *ac_nir_get_sorted_xfb_info(const nir_shader *nir);
 
@@ -141,11 +162,12 @@ ac_nir_lower_tes_inputs_to_mem(nir_shader *shader,
                                ac_nir_map_io_driver_location map);
 
 void
-ac_nir_compute_tess_wg_info(const struct radeon_info *info, const ac_nir_tess_io_info *io_info,
-                            unsigned tcs_vertices_out, unsigned wave_size, bool tess_uses_primid,
+ac_nir_compute_tess_wg_info(const struct ac_compiler_info *info,
+                            const ac_nir_tess_io_info *io_info, unsigned tcs_vertices_out,
+                            unsigned wave_size, bool tess_uses_primid,
                             unsigned num_tcs_input_cp, unsigned lds_input_vertex_size,
-                            unsigned num_remapped_tess_level_outputs, unsigned *num_patches_per_wg,
-                            unsigned *hw_lds_size);
+                            unsigned num_remapped_tess_level_outputs,
+                            unsigned *num_patches_per_wg, unsigned *lds_size);
 
 bool
 ac_nir_lower_es_outputs_to_mem(nir_shader *shader,
@@ -161,14 +183,17 @@ ac_nir_lower_gs_inputs_to_mem(nir_shader *shader,
                               bool triangle_strip_adjacency_fix);
 
 bool
-ac_nir_lower_indirect_derefs(nir_shader *shader,
-                             enum amd_gfx_level gfx_level);
+ac_nir_lower_indirect_derefs_early(nir_shader *shader);
+
+bool
+ac_nir_lower_indirect_derefs(nir_shader *shader);
 
 typedef struct {
-   const struct radeon_info *hw_info;
+   const struct ac_compiler_info *compiler_info;
 
    unsigned max_workgroup_size;
    unsigned wave_size;
+
    /* The mask of clip and cull distances that the shader should export.
     *
     * Clip/cull distance components that are missing in export_clipdist_mask are removed, improving
@@ -182,20 +207,23 @@ typedef struct {
     * not exporting any cull distances (2 pos exports -> 1 pos export).
     */
    uint8_t export_clipdist_mask;
+
+   const uint8_t *vs_output_param_offset; /* GFX11+ */
+   bool has_param_exports;
+   bool has_gen_prim_query;
+   bool has_ms_gs_invocations_query;
+
+   /* VS/GS */
    /* The mask of clip and cull distances that the shader should cull against.
     * If no clip and cull distance outputs are present, it will load clip planes and cull
     * either against CLIP_VERTEX or POS.
     */
    uint8_t cull_clipdist_mask;
    bool write_pos_to_clipvertex;
-   const uint8_t *vs_output_param_offset; /* GFX11+ */
-   bool has_param_exports;
    bool can_cull; /* if true, cull distances are not exported because the shader culls against them */
    bool disable_streamout;
-   bool has_gen_prim_query;
    bool has_xfb_prim_query;
    bool use_gfx12_xfb_intrinsic;
-   bool has_gs_invocations_query;
    bool has_gs_primitives_query;
    bool force_vrs;
    bool compact_primitives;
@@ -214,6 +242,9 @@ typedef struct {
    bool export_primitive_id;
    bool export_primitive_id_per_prim;
    uint32_t instance_rate_inputs;
+
+   /* MS */
+   bool multiview;
 } ac_nir_lower_ngg_options;
 
 bool
@@ -225,30 +256,18 @@ ac_nir_lower_ngg_gs(nir_shader *shader, const ac_nir_lower_ngg_options *options,
                     uint32_t *out_lds_vertex_size, uint8_t *out_lds_scratch_size);
 
 bool
-ac_nir_lower_ngg_mesh(nir_shader *shader,
-                      const struct radeon_info *hw_info,
-                      uint32_t clipdist_enable_mask,
-                      const uint8_t *vs_output_param_offset,
-                      bool has_param_exports,
-                      bool *out_needs_scratch_ring,
-                      unsigned wave_size,
-                      unsigned workgroup_size,
-                      bool multiview,
-                      bool has_query);
+ac_nir_lower_ngg_mesh(nir_shader *shader, const ac_nir_lower_ngg_options *options,
+                      bool *out_needs_scratch_ring);
 
 bool
 ac_nir_lower_task_outputs_to_mem(nir_shader *shader,
-                                 unsigned task_payload_entry_bytes,
-                                 unsigned task_num_entries,
                                  bool has_query);
 
 bool
-ac_nir_lower_mesh_inputs_to_mem(nir_shader *shader,
-                                unsigned task_payload_entry_bytes,
-                                unsigned task_num_entries);
+ac_nir_lower_mesh_inputs_to_mem(nir_shader *shader, bool has_task_shader);
 
 bool
-ac_nir_lower_global_access(nir_shader *shader);
+ac_nir_lower_global_access(nir_shader *shader, enum amd_gfx_level gfx_level);
 
 bool ac_nir_lower_resinfo(nir_shader *nir, enum amd_gfx_level gfx_level);
 bool ac_nir_lower_image_opcodes(nir_shader *nir);
@@ -291,46 +310,28 @@ ac_nir_lower_legacy_gs(nir_shader *nir, ac_nir_lower_legacy_gs_options *options,
 typedef struct {
    /* System values. */
    bool msaa_disabled; /* true if MSAA is disabled, false may mean that the state is unknown */
-   bool uses_vrs_coarse_shading;
-   bool load_sample_positions_always_loads_current_ones;
-   bool dynamic_rasterization_samples;
+   bool load_sample_positions_always_loads_current_ones; /* TODO: unify with RADV or remove */
+   bool dynamic_rasterization_samples; /* TODO: unify with RADV or remove */
    int force_front_face; /* 0 -> keep, 1 -> set to true, -1 -> set to false */
-   bool optimize_frag_coord; /* TODO: remove this after RADV can handle it */
-   bool frag_coord_is_center; /* GL requirement for sample shading */
+   bool sample_shading;
 
-   /* frag_coord/pixel_coord:
-    *    allow_pixel_coord && (frag_coord_is_center || ps_iter_samples == 1 || msaa_disabled ||
-    *                          the fractional part of frag_coord.xy isn't used):
-    *       * frag_coord.xy is replaced by u2f(pixel_coord) + 0.5.
-    *    else:
-    *       * pixel_coord is replaced by f2u16(frag_coord.xy)
-    *       * ps_iter_samples == 0 means the state is unknown.
-    *
-    * barycentrics:
+   /* barycentrics:
     *    msaa_disabled:
     *       * All barycentrics including at_sample but excluding at_offset are changed to
     *         barycentric_pixel
-    *    ps_iter_samples >= 2:
+    *    sample_shading:
     *       * All barycentrics are changed to per-sample interpolation except at_offset/at_sample.
     *       * barycentric_at_sample(sample_id) is replaced by barycentric_sample.
-    *
-    * sample_mask_in:
-    *    msaa_disabled && !uses_vrs_coarse_shading:
-    *       * sample_mask_in is replaced by b2i32(!helper_invocation)
-    *    ps_iter_samples == 2, 4:
-    *       * sample_mask_in is changed to (sample_mask_in & (ps_iter_mask << sample_id))
-    *    ps_iter_samples == 8:
-    *       * sample_mask_in is replaced by 1 << sample_id.
-    *
-    * When ps_iter_samples is equal to rasterization samples, set ps_iter_samples = 8 for this pass.
     */
-   unsigned ps_iter_samples;
 
    /* fbfetch_output */
    bool fbfetch_is_1D;
    bool fbfetch_layered;
    bool fbfetch_msaa;
    bool fbfetch_apply_fmask;
+
+   /* Inputs. */
+   bool lower_color_inputs_to_load_color01;
 
    /* Outputs. */
    bool clamp_color;                /* GL only */
@@ -346,12 +347,58 @@ typedef struct {
 bool
 ac_nir_lower_ps_early(nir_shader *nir, const ac_nir_lower_ps_early_options *options);
 
+typedef enum {
+   /* sample_mask_in is replaced with b2i32(inot(load_helper_invocation)).
+    *
+    * If fragmentShadingRateWithSampleMask == VK_FALSE, pass this flag to the pass even if VRS is
+    * enabled.
+    */
+   ac_nir_lower_samplemask_1sample_no_vrs,
+
+   /* sample_mask_in is replaced with:
+    *    nir_load_use_sample_mask_in_amd ? load_sample_mask_in : b2i32(inot(load_helper_invocation))
+    *
+    * Sample shading can't use this.
+    */
+   ac_nir_lower_samplemask_unknown_states_no_sample_shading,
+
+   /* ps_iter_samples == 0 means that the value is unknown (dependent on dynamic rasterization
+    * samples), and the real value is one of: 1, 2, 4. That requires loading PS_ITER_MASK from
+    * a user SGPR to compute sample_mask_in.
+    *
+    * If (ps_iter_samples)
+    *    sample_mask_in is ANDed with (nir_imm_int(ac_get_ps_iter_mask(num_samples)) << sample_id);
+    * else
+    *    sample_mask_in is ANDed with (load_ps_iter_mask_amd << sample_id);
+    *
+    * This is only used with min_sample_shading < 1.
+    */
+   ac_nir_lower_samplemask_sample_shading_partial,
+
+   /* sample_mask_in is replaced with b2i32(inot(load_helper_invocation)) << sample_id.
+    *
+    * This is only used with min_sample_shading == 1.
+    */
+   ac_nir_lower_samplemask_sample_shading_max,
+} ac_nir_lower_sample_mask_in_behavior;
+
+typedef struct {
+   ac_nir_lower_sample_mask_in_behavior behavior;
+
+   /* The number of sample shading samples. Only for ac_nir_lower_samplemask_sample_shading_partial.
+    * Set to 0 if unknown.
+    */
+   unsigned ps_iter_samples;
+} ac_nir_lower_sample_mask_in_options;
+
+bool
+ac_nir_lower_sample_mask_in(nir_shader *nir, const ac_nir_lower_sample_mask_in_options *options);
+
 /* This is a post-link pass. It shouldn't eliminate any code and it shouldn't affect shader_info
  * (those should be done in the early pass).
  */
 typedef struct {
    enum amd_gfx_level gfx_level;
-   enum radeon_family family;
    bool use_aco;
 
    /* System values. */
@@ -362,7 +409,7 @@ typedef struct {
    bool uses_discard;
    bool dcc_decompress_gfx11;
    bool alpha_to_coverage_via_mrtz;
-   bool dual_src_blend_swizzle;
+   bool dual_src_blend;
    unsigned spi_shader_col_format;
    unsigned color_is_int8;
    unsigned color_is_int10;
@@ -395,16 +442,20 @@ typedef struct {
     */
    bool fix_derivs_in_divergent_cf;
    unsigned max_wqm_vgprs;
-} ac_nir_lower_tex_options;
+} ac_nir_lower_tex_coords_options;
 
 bool
-ac_nir_lower_tex(nir_shader *nir, const ac_nir_lower_tex_options *options);
+ac_nir_lower_tex_coords(nir_shader *nir, const ac_nir_lower_tex_coords_options *options);
+
+typedef struct {
+   enum amd_gfx_level gfx_level;
+} ac_nir_lower_image_tex_options;
+
+bool
+ac_nir_lower_image_tex(nir_shader *nir, const ac_nir_lower_image_tex_options *options);
 
 void
 ac_nir_store_debug_log_amd(nir_builder *b, nir_def *uvec4);
-
-bool
-ac_nir_opt_pack_half(nir_shader *shader, enum amd_gfx_level gfx_level);
 
 unsigned
 ac_nir_varying_expression_max_cost(nir_shader *producer, nir_shader *consumer);
@@ -413,7 +464,17 @@ bool
 ac_nir_opt_shared_append(nir_shader *shader);
 
 bool
+ac_nir_opt_flip_if_for_mem_loads(nir_shader *shader);
+
+bool
 ac_nir_flag_smem_for_loads(nir_shader *shader, enum amd_gfx_level gfx_level, bool use_llvm);
+
+bool
+ac_nir_fixup_mem_access_gfx6(nir_shader *shader,
+                             struct ac_shader_args *args,
+                             const uint32_t padding_bytes,
+                             const bool fixup_null_desc,
+                             const bool fixup_robust_oob);
 
 bool
 ac_nir_lower_mem_access_bit_sizes(nir_shader *shader, enum amd_gfx_level gfx_level, bool use_llvm);
@@ -433,7 +494,7 @@ ac_nir_mem_vectorize_callback(unsigned align_mul, unsigned align_offset, unsigne
                               nir_intrinsic_instr *low, nir_intrinsic_instr *high, void *data);
 
 bool
-ac_nir_scalarize_overfetching_loads_callback(const nir_instr *instr, const void *data);
+ac_nir_scalarize_overfetching_loads_callback(const nir_intrinsic_instr *intr, const void *data);
 
 bool
 ac_nir_store_may_be_subdword(const nir_intrinsic_instr *instr);
@@ -443,6 +504,21 @@ ac_nir_lower_phis_to_scalar_cb(const nir_instr *instr, const void *_);
 
 bool
 ac_nir_allow_offset_wrap_cb(nir_intrinsic_instr *instr, const void *data);
+
+bool
+ac_nir_op_supports_packed_math_16bit(const nir_alu_instr* alu);
+
+uint8_t
+ac_nir_opt_vectorize_cb(const nir_instr *instr, const void *data);
+
+unsigned
+ac_nir_get_io_driver_location(const nir_shader *nir, unsigned location, bool is_input);
+
+bool
+ac_nir_assign_fs_input_locations(nir_shader *nir);
+
+bool
+ac_nir_fixup_smem_loads_null_prt(nir_shader *shader, uint8_t address_prt_wa_control_bit);
 
 #ifdef __cplusplus
 }

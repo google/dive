@@ -27,92 +27,44 @@
 #include "vk_ycbcr_conversion.h"
 #include "nir_builder.h"
 
+#include "util/u_ycbcr.h"
+
 #include <math.h>
 
-static nir_def *
-y_range(nir_builder *b,
-        nir_def *y_channel,
-        int bpc,
-        VkSamplerYcbcrRange range)
+static void
+ycbcr_range_to_coeffs(float out[3][2], VkSamplerYcbcrRange range,
+                      const unsigned bpc[3])
 {
    switch (range) {
    case VK_SAMPLER_YCBCR_RANGE_ITU_FULL:
-      return y_channel;
+      util_get_full_range_coeffs(out, bpc);
+      break;
    case VK_SAMPLER_YCBCR_RANGE_ITU_NARROW:
-      return nir_fmul_imm(b,
-                          nir_fadd_imm(b,
-                                       nir_fmul_imm(b, y_channel,
-                                                    pow(2, bpc) - 1),
-                                       -16.0f * pow(2, bpc - 8)),
-                          1.0f / (219.0f * pow(2, bpc - 8)));
-
+      util_get_narrow_range_coeffs(out, bpc);
+      break;
    default:
       UNREACHABLE("missing Ycbcr range");
-      return NULL;
    }
 }
 
-static nir_def *
-chroma_range(nir_builder *b,
-             nir_def *chroma_channel,
-             int bpc,
-             VkSamplerYcbcrRange range)
-{
-   switch (range) {
-   case VK_SAMPLER_YCBCR_RANGE_ITU_FULL:
-      return nir_fadd(b, chroma_channel,
-                      nir_imm_float(b, -pow(2, bpc - 1) / (pow(2, bpc) - 1.0f)));
-   case VK_SAMPLER_YCBCR_RANGE_ITU_NARROW:
-      return nir_fmul_imm(b,
-                          nir_fadd_imm(b,
-                                       nir_fmul_imm(b, chroma_channel,
-                                                    pow(2, bpc) - 1),
-                                       -128.0f * pow(2, bpc - 8)),
-                          1.0f / (224.0f * pow(2, bpc - 8)));
-   default:
-      UNREACHABLE("missing Ycbcr range");
-      return NULL;
-   }
-}
-
-typedef struct nir_const_value_3_4 {
-   nir_const_value v[3][4];
-} nir_const_value_3_4;
-
-static const nir_const_value_3_4 *
-ycbcr_model_to_rgb_matrix(VkSamplerYcbcrModelConversion model)
+static void
+ycbcr_model_to_rgb_matrix(float out[3][4], VkSamplerYcbcrModelConversion model)
 {
    switch (model) {
-   case VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_601: {
-      static const nir_const_value_3_4 bt601 = { {
-         { { .f32 =  1.402f             }, { .f32 = 1.0f }, { .f32 =  0.0f               }, { .f32 = 0.0f } },
-         { { .f32 = -0.714136286201022f }, { .f32 = 1.0f }, { .f32 = -0.344136286201022f }, { .f32 = 0.0f } },
-         { { .f32 =  0.0f               }, { .f32 = 1.0f }, { .f32 =  1.772f             }, { .f32 = 0.0f } },
-      } };
+   case VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_601:
+      util_get_ycbcr_to_rgb_matrix(out, util_ycbcr_bt601_coeffs);
+      break;
 
-      return &bt601;
-   }
-   case VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709: {
-      static const nir_const_value_3_4 bt709 = { {
-         { { .f32 =  1.5748031496063f   }, { .f32 = 1.0f }, { .f32 =  0.0f               }, { .f32 = 0.0f } },
-         { { .f32 = -0.468125209181067f }, { .f32 = 1.0f }, { .f32 = -0.187327487470334f }, { .f32 = 0.0f } },
-         { { .f32 =  0.0f               }, { .f32 = 1.0f }, { .f32 =  1.85563184264242f  }, { .f32 = 0.0f } },
-      } };
+   case VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709:
+      util_get_ycbcr_to_rgb_matrix(out, util_ycbcr_bt709_coeffs);
+      break;
 
-      return &bt709;
-   }
-   case VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020: {
-      static const nir_const_value_3_4 bt2020 = { {
-         { { .f32 =  1.4746f            }, { .f32 = 1.0f }, { .f32 =  0.0f               }, { .f32 = 0.0f } },
-         { { .f32 = -0.571353126843658f }, { .f32 = 1.0f }, { .f32 = -0.164553126843658f }, { .f32 = 0.0f } },
-         { { .f32 =  0.0f               }, { .f32 = 1.0f }, { .f32 =  1.8814f            }, { .f32 = 0.0f } },
-      } };
+   case VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020:
+      util_get_ycbcr_to_rgb_matrix(out, util_ycbcr_bt2020_coeffs);
+      break;
 
-      return &bt2020;
-   }
    default:
       UNREACHABLE("missing Ycbcr model");
-      return NULL;
    }
 }
 
@@ -123,23 +75,27 @@ nir_convert_ycbcr_to_rgb(nir_builder *b,
                          nir_def *raw_channels,
                          uint32_t *bpcs)
 {
+   const unsigned bpc[3] = { bpcs[1], bpcs[2], bpcs[0] };
+   float range_coeffs[3][2];
+   ycbcr_range_to_coeffs(range_coeffs, range, bpc);
+
    nir_def *expanded_channels =
       nir_vec4(b,
-               chroma_range(b, nir_channel(b, raw_channels, 0), bpcs[0], range),
-               y_range(b, nir_channel(b, raw_channels, 1), bpcs[1], range),
-               chroma_range(b, nir_channel(b, raw_channels, 2), bpcs[2], range),
+               nir_ffma_weak_imm12(b, nir_channel(b, raw_channels, 0), range_coeffs[2][0], range_coeffs[2][1]),
+               nir_ffma_weak_imm12(b, nir_channel(b, raw_channels, 1), range_coeffs[0][0], range_coeffs[0][1]),
+               nir_ffma_weak_imm12(b, nir_channel(b, raw_channels, 2), range_coeffs[1][0], range_coeffs[1][1]),
                nir_channel(b, raw_channels, 3));
 
    if (model == VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_IDENTITY)
       return expanded_channels;
 
-   const nir_const_value_3_4 *conversion_matrix =
-      ycbcr_model_to_rgb_matrix(model);
+   float m[3][4];
+   ycbcr_model_to_rgb_matrix(m, model);
 
    nir_def *converted_channels[] = {
-      nir_fdot(b, expanded_channels, nir_build_imm(b, 4, 32, conversion_matrix->v[0])),
-      nir_fdot(b, expanded_channels, nir_build_imm(b, 4, 32, conversion_matrix->v[1])),
-      nir_fdot(b, expanded_channels, nir_build_imm(b, 4, 32, conversion_matrix->v[2]))
+      nir_fdot(b, expanded_channels, nir_imm_vec4(b, m[0][2], m[0][0], m[0][1], 0.0f)),
+      nir_fdot(b, expanded_channels, nir_imm_vec4(b, m[1][2], m[1][0], m[1][1], 0.0f)),
+      nir_fdot(b, expanded_channels, nir_imm_vec4(b, m[2][2], m[2][0], m[2][1], 0.0f))
    };
 
    return nir_vec4(b,
@@ -151,19 +107,33 @@ struct ycbcr_state {
    nir_builder *builder;
    nir_def *image_size;
    nir_tex_instr *origin_tex;
-   nir_deref_instr *tex_deref;
+   nir_tex_src tex_handle;
    const struct vk_ycbcr_conversion_state *conversion;
    const struct vk_format_ycbcr_info *format_ycbcr_info;
 };
 
 /* TODO: we should probably replace this with a push constant/uniform. */
 static nir_def *
-get_texture_size(struct ycbcr_state *state, nir_deref_instr *texture)
+get_texture_size(struct ycbcr_state *state)
 {
-   if (!state->image_size) {
-      nir_builder *b = state->builder;
-      state->image_size = nir_i2f32(b, nir_txs(b, .texture_deref = texture));
-   }
+   if (state->image_size)
+      return state->image_size;
+
+   nir_builder *b = state->builder;
+   nir_tex_instr *tex = nir_tex_instr_create(b->shader, 1);
+
+   tex->op = nir_texop_txs;
+   tex->sampler_dim = state->origin_tex->sampler_dim,
+   tex->is_array = state->origin_tex->is_array,
+   tex->is_shadow = state->origin_tex->is_shadow,
+   tex->dest_type = nir_type_int32;
+
+   tex->src[0] = state->tex_handle;
+
+   nir_def_init(&tex->instr, &tex->def, nir_tex_instr_dest_size(tex), 32);
+   nir_builder_instr_insert(b, &tex->instr);
+
+   state->image_size = nir_i2f32(b, &tex->def);
 
    return state->image_size;
 }
@@ -185,7 +155,7 @@ implicit_downsampled_coords(struct ycbcr_state *state,
 {
    nir_builder *b = state->builder;
    const struct vk_ycbcr_conversion_state *conversion = state->conversion;
-   nir_def *image_size = get_texture_size(state, state->tex_deref);
+   nir_def *image_size = get_texture_size(state);
    nir_def *comp[4] = { NULL, };
    int c;
 
@@ -247,6 +217,7 @@ create_plane_tex_instr_implicit(struct ycbcr_state *state,
    tex->is_new_style_shadow = old_tex->is_new_style_shadow;
    tex->component = old_tex->component;
 
+   tex->embedded_sampler = old_tex->embedded_sampler;
    tex->texture_index = old_tex->texture_index;
    tex->sampler_index = old_tex->sampler_index;
    tex->is_array = old_tex->is_array;
@@ -282,14 +253,9 @@ struct lower_ycbcr_tex_state {
 };
 
 static bool
-lower_ycbcr_tex_instr(nir_builder *b, nir_instr *instr, void *_state)
+lower_ycbcr_tex_instr(nir_builder *b, nir_tex_instr *tex, void *_state)
 {
    const struct lower_ycbcr_tex_state *state = _state;
-
-   if (instr->type != nir_instr_type_tex)
-      return false;
-
-   nir_tex_instr *tex = nir_instr_as_tex(instr);
 
    /* For the following instructions, we don't apply any change and let the
     * instruction apply to the first plane.
@@ -299,25 +265,40 @@ lower_ycbcr_tex_instr(nir_builder *b, nir_instr *instr, void *_state)
        tex->op == nir_texop_lod)
       return false;
 
-   int deref_src_idx = nir_tex_instr_src_index(tex, nir_tex_src_texture_deref);
-   assert(deref_src_idx >= 0);
-   nir_deref_instr *deref = nir_src_as_deref(tex->src[deref_src_idx].src);
+   nir_tex_src tex_handle;
+   const struct vk_ycbcr_conversion_state *conversion;
+   if (tex->embedded_sampler) {
+      const int heap_src_idx =
+         nir_tex_instr_src_index(tex, nir_tex_src_texture_heap_offset);
+      tex_handle = tex->src[heap_src_idx];
 
-   nir_variable *var = nir_deref_instr_get_variable(deref);
-   uint32_t set = var->data.descriptor_set;
-   uint32_t binding = var->data.binding;
-
-   assert(tex->texture_index == 0);
-   unsigned array_index = 0;
-   if (deref->deref_type != nir_deref_type_var) {
-      assert(deref->deref_type == nir_deref_type_array);
-      if (!nir_src_is_const(deref->arr.index))
+      conversion = state->cb(state->cb_data,
+                             VK_NIR_YCBCR_SET_IMMUTABLE_SAMPLERS,
+                             tex->sampler_index, 0);
+   } else {
+      const int deref_src_idx =
+         nir_tex_instr_src_index(tex, nir_tex_src_texture_deref);
+      if (deref_src_idx < 0)
          return false;
-      array_index = nir_src_as_uint(deref->arr.index);
-   }
 
-   const struct vk_ycbcr_conversion_state *conversion =
-      state->cb(state->cb_data, set, binding, array_index);
+      tex_handle = tex->src[deref_src_idx];
+      nir_deref_instr *deref = nir_src_as_deref(tex_handle.src);
+
+      nir_variable *var = nir_deref_instr_get_variable(deref);
+      uint32_t set = var->data.descriptor_set;
+      uint32_t binding = var->data.binding;
+
+      assert(tex->texture_index == 0);
+      unsigned array_index = 0;
+      if (deref->deref_type != nir_deref_type_var) {
+         assert(deref->deref_type == nir_deref_type_array);
+         if (!nir_src_is_const(deref->arr.index))
+            return false;
+         array_index = nir_src_as_uint(deref->arr.index);
+      }
+
+      conversion = state->cb(state->cb_data, set, binding, array_index);
+   }
    if (conversion == NULL)
       return false;
 
@@ -362,7 +343,7 @@ lower_ycbcr_tex_instr(nir_builder *b, nir_instr *instr, void *_state)
       struct ycbcr_state tex_state = {
          .builder = b,
          .origin_tex = tex,
-         .tex_deref = deref,
+         .tex_handle = tex_handle,
          .conversion = conversion,
          .format_ycbcr_info = format_ycbcr_info,
       };
@@ -432,7 +413,6 @@ bool nir_vk_lower_ycbcr_tex(nir_shader *nir,
       .cb_data = cb_data,
    };
 
-   return nir_shader_instructions_pass(nir, lower_ycbcr_tex_instr,
-                                       nir_metadata_control_flow,
-                                       &state);
+   return nir_shader_tex_pass(nir, lower_ycbcr_tex_instr,
+                              nir_metadata_control_flow, &state);
 }

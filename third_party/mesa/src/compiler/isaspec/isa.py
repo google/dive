@@ -201,6 +201,8 @@ class BitSetCase(object):
             self.fields[f.name] = f
 
         for field in xml.findall('field'):
+            if 'name' not in field.attrib:
+                print("missing field name in {}".format(self.name))
             dbg("{}.{}".format(self.name, field.attrib['name']))
             f = BitSetField(bitset.isa, field)
             update_field_mask(self, f)
@@ -460,6 +462,15 @@ class BitSetExpression(object):
     def get_c_name(self):
         return 'expr_' + get_c_name(self.name)
 
+def undefined_bits(bits):
+    assert (bits != 0)
+    if bits & (bits - 1):
+        # more than one bit set
+        return "0x{:x}".format(bits)
+    else:
+        # just return the bit number.
+        return "b{}".format((bits & -bits).bit_length()-1)
+
 class ISA(object):
     """Class that encapsulates all the parsed bitset rules
     """
@@ -595,8 +606,8 @@ class ISA(object):
             for bitset in bitsets:
                 pat = bitset.get_pattern()
                 sz  = bitset.get_size()
-                assert ((pat.mask | pat.field_mask) == (1 << sz) - 1), "leaf bitset {} has undefined bits: {:x}".format(
-                    bitset.name, ~(pat.mask | pat.field_mask) & ((1 << sz) - 1))
+                assert ((pat.mask | pat.field_mask) == (1 << sz) - 1), "leaf bitset {} has undefined bits: {}".format(
+                    bitset.name, undefined_bits(~(pat.mask | pat.field_mask) & ((1 << sz) - 1)))
 
         # TODO somehow validating that only one bitset in a hierarchy
         # matches any given bit pattern would be useful.

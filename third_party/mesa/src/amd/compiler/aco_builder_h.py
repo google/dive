@@ -213,7 +213,8 @@ public:
 
    std::vector<aco_ptr<Instruction>> *instructions;
    std::vector<aco_ptr<Instruction>>::iterator it;
-   bool is_precise = false;
+   bool is_no_contract = false;
+   bool is_no_reassoc = false;
    bool is_sz_preserve = false;
    bool is_inf_preserve = false;
    bool is_nan_preserve = false;
@@ -225,7 +226,8 @@ public:
 
    Builder precise() const {
       Builder res = *this;
-      res.is_precise = true;
+      res.is_no_contract = true;
+      res.is_no_reassoc = true;
       return res;
    };
 
@@ -488,12 +490,14 @@ public:
       if (!post_ra && (!b.op.hasRegClass() || b.op.regClass().type() == RegType::sgpr))
          b = copy(def(v1), b);
 
+      carry_out |= program->gfx_level < GFX9 || !carry_in.op.isUndefined();
+      Definition carry = carry_out ? (post_ra ? vcc(def(lm)) : def(lm)) : Definition();
       if (!carry_in.op.isUndefined())
-         return vop2(aco_opcode::v_addc_co_u32, Definition(dst), def(lm), a, b, carry_in);
+         return vop2(aco_opcode::v_addc_co_u32, Definition(dst), carry, a, b, carry_in);
       else if (program->gfx_level >= GFX10 && carry_out)
-         return vop3(aco_opcode::v_add_co_u32_e64, Definition(dst), def(lm), a, b);
-      else if (program->gfx_level < GFX9 || carry_out)
-         return vop2(aco_opcode::v_add_co_u32, Definition(dst), def(lm), a, b);
+         return vop3(aco_opcode::v_add_co_u32_e64, Definition(dst), carry, a, b);
+      else if (carry_out)
+         return vop2(aco_opcode::v_add_co_u32, Definition(dst), carry, a, b);
       else
          return vop2(aco_opcode::v_add_u32, Definition(dst), a, b);
    }
@@ -563,7 +567,7 @@ public:
 <%
 import itertools
 formats = [("pseudo", [Format.PSEUDO], list(itertools.product(range(5), range(7))) + [(8, 1), (1, 8), (1, 7)]),
-           ("sop1", [Format.SOP1], [(0, 1), (1, 0), (1, 1), (2, 1), (3, 2)]),
+           ("sop1", [Format.SOP1], [(0, 1), (1, 0), (1, 1), (1, 2), (2, 1), (3, 2)]),
            ("sop2", [Format.SOP2], itertools.product([1, 2], [2, 3])),
            ("sopk", [Format.SOPK], itertools.product([0, 1, 2], [0, 1])),
            ("sopp", [Format.SOPP], [(0, 0), (0, 1)]),
@@ -637,7 +641,8 @@ formats = [(f if len(f) == 5 else f + ('',)) for f in formats]
       Instruction* instr = create_instruction(opcode, (Format)(${'|'.join('(int)Format::%s' % f.name for f in formats)}), num_ops, ${num_definitions});
         % for i in range(num_definitions):
             instr->definitions[${i}] = def${i};
-            instr->definitions[${i}].setPrecise(is_precise);
+            instr->definitions[${i}].setNoContract(is_no_contract);
+            instr->definitions[${i}].setNoReassoc(is_no_reassoc);
             instr->definitions[${i}].setSZPreserve(is_sz_preserve);
             instr->definitions[${i}].setInfPreserve(is_inf_preserve);
             instr->definitions[${i}].setNaNPreserve(is_nan_preserve);

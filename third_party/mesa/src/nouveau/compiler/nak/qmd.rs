@@ -80,6 +80,11 @@ macro_rules! qmd_impl_common {
             let w = paste! {$c::[<$s _CTA_RASTER_WIDTH>]};
             let h = paste! {$c::[<$s _CTA_RASTER_HEIGHT>]};
             let d = paste! {$c::[<$s _CTA_RASTER_DEPTH>]};
+
+            let local_w = paste! {$c::[<$s _CTA_THREAD_DIMENSION0>]};
+            let local_h = paste! {$c::[<$s _CTA_THREAD_DIMENSION1>]};
+            let local_d = paste! {$c::[<$s _CTA_THREAD_DIMENSION2>]};
+
             nak_qmd_dispatch_size_layout {
                 x_start: w.start as u16,
                 x_end: w.end as u16,
@@ -87,6 +92,12 @@ macro_rules! qmd_impl_common {
                 y_end: h.end as u16,
                 z_start: d.start as u16,
                 z_end: d.end as u16,
+                local_x_start: local_w.start as u16,
+                local_x_end: local_w.end as u16,
+                local_y_start: local_h.start as u16,
+                local_y_end: local_h.end as u16,
+                local_z_start: local_d.start as u16,
+                local_z_end: local_d.end as u16,
             }
         };
 
@@ -642,7 +653,7 @@ fn fill_qmd<Q: QMD>(
     qmd.set_slm_size(info.slm_size);
 
     assert!(qmd_info.smem_size <= u32::from(dev.max_smem_per_wg_kB) * 1024);
-    qmd.set_smem_size(qmd_info.smem_size.into(), dev, info);
+    qmd.set_smem_size(qmd_info.smem_size, dev, info);
 
     for i in 0..qmd_info.num_cbufs {
         let cb = &qmd_info.cbufs[usize::try_from(i).unwrap()];

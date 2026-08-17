@@ -30,7 +30,6 @@
 #include <xf86drm.h>
 
 #include "drm-uapi/pvr_drm.h"
-#include "pvr_csb.h"
 #include "pvr_drm.h"
 #include "pvr_drm_job_common.h"
 #include "pvr_drm_job_compute.h"
@@ -52,16 +51,20 @@ struct pvr_drm_winsys_compute_ctx {
    container_of(ctx, struct pvr_drm_winsys_compute_ctx, base)
 
 static void pvr_drm_compute_ctx_static_state_init(
+   enum pvr_device_arch arch,
    const struct pvr_winsys_compute_ctx_create_info *create_info,
    uint8_t *stream_ptr_start,
    uint32_t *stream_len_ptr)
 {
-   const struct pvr_winsys_compute_ctx_static_state *ws_static_state =
-      &create_info->static_state;
+   /* TODO: handle non-rogue GPUs */
+   assert(arch == PVR_DEVICE_ARCH_ROGUE);
+   const struct pvr_rogue_winsys_compute_ctx_static_state *ws_static_state =
+      &create_info->static_state.rogue;
+
    uint64_t *stream_ptr = (uint64_t *)stream_ptr_start;
 
    /* Leave space for stream header. */
-   stream_ptr += pvr_cmd_length(KMD_STREAM_HDR) / 2;
+   stream_ptr++;
 
    *stream_ptr++ = ws_static_state->cdm_ctx_store_pds0;
    *stream_ptr++ = ws_static_state->cdm_ctx_store_pds1;
@@ -73,14 +76,13 @@ static void pvr_drm_compute_ctx_static_state_init(
 
    *stream_len_ptr = ((uint8_t *)stream_ptr - stream_ptr_start);
 
-   pvr_csb_pack ((uint64_t *)stream_ptr_start, KMD_STREAM_HDR, value) {
-      value.length = *stream_len_ptr;
-   }
+   *((uint64_t *)stream_ptr_start) = *stream_len_ptr;
 }
 
 VkResult pvr_drm_winsys_compute_ctx_create(
    struct pvr_winsys *ws,
    const struct pvr_winsys_compute_ctx_create_info *create_info,
+   const struct pvr_device_info *dev_info,
    struct pvr_winsys_compute_ctx **const ctx_out)
 {
    uint8_t static_ctx_state_fw_stream[64];
@@ -105,7 +107,8 @@ VkResult pvr_drm_winsys_compute_ctx_create(
       goto err_out;
    }
 
-   pvr_drm_compute_ctx_static_state_init(create_info,
+   pvr_drm_compute_ctx_static_state_init(dev_info->ident.arch,
+                                         create_info,
                                          static_ctx_state_fw_stream,
                                          &ctx_args.static_context_state_len);
 

@@ -309,7 +309,7 @@ st_setup_current(struct st_context *st,
        * times (thousands of times), so a better placement is going to
        * perform better.
        */
-      struct u_upload_mgr *uploader = st->can_bind_const_buffer_as_vertex ?
+      struct u_upload_mgr *uploader = st->screen->caps.can_bind_const_buffer_as_vertex ?
                                       st->pipe->const_uploader :
                                       st->pipe->stream_uploader;
       uint8_t *ptr = NULL;
@@ -429,12 +429,21 @@ st_update_array_templ(struct st_context *st,
       num_vbuffers_tc = util_bitcount_fast<POPCNT>(inputs_read &
                                                    enabled_arrays);
 
+      /* Call this before tc_add_set_vertex_elements_and_buffers_call to not
+       * insert tc_resource_release calls before tc_set_vertex_elements_for_call
+       * is used.
+       */
+      if (UPDATE_VELEMS && ALLOW_ZERO_STRIDE_ATTRIBS &&
+          st->release_counter != st->work_counter)
+         st_prune_releasebufs(st);
+
       /* Add up to 1 vertex buffer for zero-stride vertex attribs. */
       num_vbuffers_tc += ALLOW_ZERO_STRIDE_ATTRIBS &&
                          inputs_read & ~enabled_arrays;
       vbuffer = UPDATE_VELEMS ?
          tc_add_set_vertex_elements_and_buffers_call(st->pipe,
-                                                     num_vbuffers_tc) :
+                                                     num_vbuffers_tc,
+                                                     ALLOW_ZERO_STRIDE_ATTRIBS) :
          tc_add_set_vertex_buffers_call(st->pipe, num_vbuffers_tc);
    } else {
       vbuffer = vbuffer_local;
@@ -468,7 +477,7 @@ st_update_array_templ(struct st_context *st,
       /* Set vertex buffers and elements. */
       if (FILL_TC_SET_VB) {
          void *state = cso_get_vertex_elements_for_bind(cso, &velements);
-         tc_set_vertex_elements_for_call(vbuffer, state);
+         tc_set_vertex_elements_for_call(st->pipe, vbuffer, state);
       } else {
          cso_set_vertex_buffers_and_elements(cso, &velements, num_vbuffers,
                                              uses_user_vertex_buffers, vbuffer);

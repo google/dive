@@ -1,6 +1,12 @@
+.enforce-hw-jobs-lavapipe-rules:
+  rules:
+    - if: '$INPUT_HW_JOBS !~ /"(all|lavapipe)"/i'
+      when: never
+
 .lavapipe-rules:
   stage: software-renderer
   rules:
+    - !reference [.enforce-hw-jobs-lavapipe-rules, rules]
     - !reference [.test, rules]
     - !reference [.vulkan-rules, rules]
     - !reference [.gallium-core-rules, rules]
@@ -17,6 +23,7 @@
         - src/gallium/frontends/lavapipe/ci/$GALLIUM_DRIVER-skips.txt
         - src/gallium/frontends/lavapipe/ci/$DRIVER_NAME-skips.txt
         - src/gallium/frontends/lavapipe/ci/$PIGLIT_TRACES_FILE
+        - src/gallium/frontends/lavapipe/ci/$REPLAY_CONFIG
         - src/gallium/winsys/sw/**/*
         - src/gallium/auxiliary/draw/**/*
         - src/gallium/auxiliary/gallivm/**/*
@@ -26,6 +33,7 @@
   stage: software-renderer-nightly
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-lavapipe-rules, rules]
     - !reference [.test, rules]
     - !reference [.vulkan-manual-rules, rules]
     - !reference [.gl-manual-rules, rules]

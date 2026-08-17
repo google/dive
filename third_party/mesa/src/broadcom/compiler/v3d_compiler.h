@@ -416,6 +416,8 @@ struct v3d_key {
         bool robust_uniform_access;
         bool robust_storage_access;
         bool robust_image_access;
+        bool robust_image_access_2;
+        bool null_descriptor;
 };
 
 struct v3d_fs_key {
@@ -429,6 +431,7 @@ struct v3d_fs_key {
         bool sample_alpha_to_one;
         bool can_earlyz_with_discard;
         bool software_blend;
+        bool ignore_sample_mask;
         /* Mask of which color render targets are present. */
         uint8_t cbufs;
         uint8_t swap_color_rb;
@@ -842,6 +845,21 @@ struct v3d_compile {
         uint32_t spill_size;
         /* Shader-db stats */
         uint32_t spills, fills, loops;
+        /* Pre-spill register pressure (max simultaneously-live temps), computed
+         * in probe_only mode and used by v3d_compile() to route and rank the
+         * 2-thread compile strategies.
+         */
+        uint32_t max_pressure;
+
+        /* Pressure probe: when set, v3d_nir_to_vir builds the VIR and computes
+         * max_pressure, then returns WITHOUT register allocation.
+         */
+        bool probe_only;
+        /* Pre-RA thrsw state, stashed by v3d_nir_to_vir() for
+         * v3d_nir_to_vir_finish().
+         */
+        struct qinst *restore_last_thrsw;
+        bool restore_scoreboard_lock;
 
         /* Whether we are in the process of spilling registers for
          * register allocation
@@ -1179,6 +1197,8 @@ void vir_set_uf(struct v3d_compile *c, struct qinst *inst, enum v3d_qpu_uf uf);
 void vir_set_unpack(struct qinst *inst, int src,
                     enum v3d_qpu_input_unpack unpack);
 void vir_set_pack(struct qinst *inst, enum v3d_qpu_output_pack pack);
+enum v3d_qpu_input_unpack vir_get_unpack(struct qinst *inst, int src);
+enum v3d_qpu_output_pack vir_get_pack(struct qinst *inst);
 
 struct qreg vir_get_temp(struct v3d_compile *c);
 void vir_calculate_live_intervals(struct v3d_compile *c);
@@ -1202,9 +1222,10 @@ void ntq_add_pending_tmu_flush(struct v3d_compile *c, nir_def *def,
 void ntq_flush_tmu(struct v3d_compile *c);
 void vir_emit_thrsw(struct v3d_compile *c);
 
-void vir_dump(struct v3d_compile *c);
-void vir_dump_inst(struct v3d_compile *c, struct qinst *inst);
-void vir_dump_uniform(enum quniform_contents contents, uint32_t data);
+void vir_dumpi(struct v3d_compile *c);
+void vir_dumpe(struct v3d_compile *c);
+char *vir_dump_inst(struct v3d_compile *c, struct qinst *inst);
+char *vir_dump_uniform(enum quniform_contents contents, uint32_t data);
 
 void vir_validate(struct v3d_compile *c);
 
@@ -1218,12 +1239,15 @@ bool vir_opt_redundant_flags(struct v3d_compile *c);
 bool vir_opt_small_immediates(struct v3d_compile *c);
 bool vir_opt_vpm(struct v3d_compile *c);
 bool vir_opt_constant_alu(struct v3d_compile *c);
+bool vir_opt_alu(struct v3d_compile *c);
+bool vir_opt_redundant_setnnmode(struct v3d_compile *c);
 bool v3d_nir_lower_io(nir_shader *s, struct v3d_compile *c);
 bool v3d_nir_lower_line_smooth(nir_shader *shader);
 bool v3d_nir_lower_logic_ops(nir_shader *s, struct v3d_compile *c);
 bool v3d_nir_lower_scratch(nir_shader *s);
 bool v3d_nir_lower_txf_ms(nir_shader *s);
 bool v3d_nir_lower_image_load_store(nir_shader *s, struct v3d_compile *c);
+bool v3d_nir_lower_null_descriptors(nir_shader *s);
 bool v3d_nir_lower_global_2x32(nir_shader *s);
 bool v3d_nir_lower_load_store_bitsize(nir_shader *s);
 bool v3d_nir_lower_algebraic(struct nir_shader *shader, const struct v3d_compile *c);
@@ -1240,6 +1264,8 @@ void v3d_vir_to_qpu(struct v3d_compile *c, struct qpu_reg *temp_registers);
 uint32_t v3d_qpu_schedule_instructions(struct v3d_compile *c);
 void qpu_validate(struct v3d_compile *c);
 struct qpu_reg *v3d_register_allocate(struct v3d_compile *c);
+uint32_t vir_get_max_temps(struct v3d_compile *c);
+void v3d_nir_to_vir_finish(struct v3d_compile *c);
 bool vir_init_reg_sets(struct v3d_compiler *compiler);
 
 int v3d_shaderdb_dump(struct v3d_compile *c, char **shaderdb_str);
@@ -1388,9 +1414,17 @@ vir_##name##_dest(struct v3d_compile *c, struct qreg dest,               \
 #define VIR_A_NODST_0(name) VIR_NODST_0(name, vir_add_inst, V3D_QPU_A_##name)
 
 VIR_A_ALU2(FADD)
+VIR_A_ALU2(VFADD)
 VIR_A_ALU2(VFPACK)
 VIR_A_ALU2(FSUB)
+VIR_A_ALU2(VFSUB)
+VIR_A_ALU2(VFCMP)
+VIR_A_ALU1(VFMOV)
+VIR_A_ALU1(VFABS)
+VIR_A_ALU1(VFNEG)
+VIR_A_ALU1(VFNAB)
 VIR_A_ALU2(FMIN)
+VIR_A_ALU2(VFMIN)
 VIR_A_ALU2(FMAX)
 
 VIR_A_ALU2(ADD)
@@ -1460,7 +1494,9 @@ VIR_A_ALU1(CLZ)
 VIR_A_ALU1(UTOF)
 
 VIR_M_ALU2(UMUL24)
+VIR_M_ALU2(UMUL24_RTOP0)
 VIR_M_ALU2(FMUL)
+VIR_M_ALU2(VFMUL)
 VIR_M_ALU2(SMUL24)
 VIR_M_NODST_2(MULTOP)
 
@@ -1500,6 +1536,13 @@ VIR_M_ALU1(FUNPACKSNORMHI)
 
 VIR_M_ALU1(VFTOUNORM10LO)
 VIR_M_ALU1(VFTOUNORM10HI)
+
+/* V3D 7.1 v8dot and its signedness configuration */
+VIR_M_ALU2(V8DOT)
+VIR_A_NODST_0(SETNNMODE_UU)
+VIR_A_NODST_0(SETNNMODE_SU)
+VIR_A_NODST_0(SETNNMODE_US)
+VIR_A_NODST_0(SETNNMODE_SS)
 
 static inline struct qinst *
 vir_MOV_cond(struct v3d_compile *c, enum v3d_qpu_cond cond,
@@ -1631,5 +1674,14 @@ v3d_double_buffer_score_ok(struct v3d_double_buffer_score *score)
 #define vir_for_each_inst_inorder_safe(inst, c)                         \
         vir_for_each_block(_block, c)                                   \
                 vir_for_each_inst_safe(inst, _block)
+
+#define LOG_INST_OPT(_message, _c, _inst)                                 \
+        for (char *before_inst = debug ? vir_dump_inst(_c, _inst) : NULL, \
+                  *_once = (char *)1;                                     \
+             _once;                                                       \
+             _once = debug ? (mesa_logd(_message ": \"%s\" to \"%s\"",    \
+                                        before_inst,                      \
+                                        vir_dump_inst(_c, _inst)), NULL)  \
+                           : NULL)
 
 #endif /* V3D_COMPILER_H */

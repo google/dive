@@ -33,6 +33,6 @@ st_CopyImageSubData(struct gl_context *ctx,
                     struct gl_texture_image *dst_image,
                     struct gl_renderbuffer *dst_renderbuffer,
                     int dst_x, int dst_y, int dst_z,
-                    int src_width, int src_height);
+                    int src_width, int src_height, int src_depth);
 
 #endif /* ST_CB_COPY_IMAGE_H */

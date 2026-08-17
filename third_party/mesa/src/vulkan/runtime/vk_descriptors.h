@@ -33,7 +33,9 @@ extern "C" {
 
 VkResult
 vk_create_sorted_bindings(const VkDescriptorSetLayoutBinding *bindings, unsigned count,
-                          VkDescriptorSetLayoutBinding **sorted_bindings);
+                          VkDescriptorSetLayoutBinding **sorted_bindings,
+                          const VkDescriptorSetLayoutBindingFlagsCreateInfo *binding_flags_info,
+                          VkDescriptorBindingFlags **sorted_binding_flags);
 
 #ifdef __cplusplus
 }

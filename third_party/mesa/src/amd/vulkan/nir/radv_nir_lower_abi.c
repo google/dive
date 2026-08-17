@@ -12,7 +12,6 @@
 #include "radv_pipeline_graphics.h"
 #include "radv_shader.h"
 #include "radv_shader_args.h"
-#include "sid.h"
 
 #define GET_SGPR_FIELD_NIR(arg, field)                                                                                 \
    ac_nir_unpack_arg(b, &s->args->ac, arg, field##__SHIFT, util_bitcount(field##__MASK))
@@ -243,7 +242,7 @@ lower_abi_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
          replacement = ac_nir_load_arg(b, &s->args->ac, s->args->vgt_esgs_ring_itemsize);
       } else {
          const unsigned stride =
-            s->info->is_ngg ? s->info->ngg_info.vgt_esgs_ring_itemsize : s->info->gs_ring_info.esgs_itemsize;
+            s->info->is_ngg ? s->info->ngg_info.vgt_esgs_ring_itemsize : s->info->legacy_gs_info.esgs_itemsize / 4;
          replacement = nir_imm_int(b, stride);
       }
       break;
@@ -294,8 +293,8 @@ lower_abi_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
 
       offset = nir_iadd_imm_nuw(b, offset, sample_pos_offset);
       addr = nir_iadd(b, addr, nir_u2u64(b, offset));
-      replacement = nir_build_load_global(b, 2, 32, addr,
-                                          .access = ACCESS_NON_WRITEABLE | ACCESS_CAN_SPECULATE | ACCESS_CAN_REORDER);
+      replacement =
+         nir_load_global(b, 2, 32, addr, .access = ACCESS_NON_WRITEABLE | ACCESS_CAN_SPECULATE | ACCESS_CAN_REORDER);
       break;
    }
    case nir_intrinsic_load_rasterization_samples_amd:
@@ -441,6 +440,18 @@ lower_abi_instr(nir_builder *b, nir_intrinsic_instr *intrin, void *state)
       assert(s->gfx_state->unknown_rast_prim);
       /* Load the primitive topology from an user SGPR when it's unknown at compile time (GPL). */
       replacement = GET_SGPR_FIELD_NIR(s->args->ps_state, PS_STATE_RAST_PRIM);
+      break;
+   case nir_intrinsic_load_use_float_frag_coord_xy_amd:
+      replacement = nir_ine_imm(b, GET_SGPR_FIELD_NIR(s->args->ps_state, PS_STATE_USE_FLOAT_FRAG_COORD_XY), 0);
+      break;
+   case nir_intrinsic_load_use_quad_pos_amd:
+      replacement = nir_ine_imm(b, GET_SGPR_FIELD_NIR(s->args->ps_state, PS_STATE_USE_QUAD_POS), 0);
+      break;
+   case nir_intrinsic_load_ps_iter_mask_amd:
+      replacement = GET_SGPR_FIELD_NIR(s->args->ps_state, PS_STATE_PS_ITER_MASK);
+      break;
+   case nir_intrinsic_load_use_sample_mask_in_amd:
+      replacement = nir_ine_imm(b, GET_SGPR_FIELD_NIR(s->args->ps_state, PS_STATE_USE_SAMPLE_MASK_IN), 0);
       break;
    default:
       progress = false;

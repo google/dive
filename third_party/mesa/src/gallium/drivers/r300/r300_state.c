@@ -15,7 +15,7 @@
 #include "util/u_transfer.h"
 #include "util/u_blend.h"
 
-#include "tgsi/tgsi_parse.h"
+#include "nir/tgsi_to_nir.h"
 
 #include "util/detect.h"
 
@@ -30,7 +30,6 @@
 #include "r300_texture.h"
 #include "r300_vs.h"
 #include "compiler/r300_nir.h"
-#include "compiler/nir_to_rc.h"
 
 /* r300_state: Functions used to initialize state context by translating
  * Gallium state objects into semi-native r300 state objects. */
@@ -40,6 +39,122 @@
         atom.state = cso;    \
         r300_mark_atom_dirty(r300, &(atom));   \
     }
+
+static void
+r300_get_scissor_from_viewport(const struct pipe_viewport_state *vp,
+                               struct pipe_scissor_state *scissor)
+{
+    /* SC_CLIP_*_A/B fields are 13 bits. */
+    unsigned max_scissor = 16384;
+    float half_w = fabsf(vp->scale[0]);
+    float half_h = fabsf(vp->scale[1]);
+    scissor->minx = CLAMP(-half_w + vp->translate[0], 0, max_scissor);
+    scissor->maxx = CLAMP(half_w + vp->translate[0], 0, max_scissor);
+    scissor->miny = CLAMP(-half_h + vp->translate[1], 0, max_scissor);
+    scissor->maxy = CLAMP(half_h + vp->translate[1], 0, max_scissor);
+}
+
+#define R300_MAX_VIEWPORT_RANGE 16384.0f
+
+void r300_update_guardband_state(struct r300_context *r300)
+{
+    struct r300_guardband_state *guard =
+        (struct r300_guardband_state *)r300->guardband_state.state;
+
+    if (!guard)
+        return;
+
+    const float distance = r300->current_clip_discard_distance;
+
+    if (distance == 0.0f) {
+        if (guard->vert_clip != 1.0f || guard->vert_disc != 1.0f ||
+            guard->horz_clip != 1.0f || guard->horz_disc != 1.0f) {
+            DBG(r300, DBG_RS, "r300: guardband reset for zero distance\n");
+            guard->vert_clip = 1.0f;
+            guard->vert_disc = 1.0f;
+            guard->horz_clip = 1.0f;
+            guard->horz_disc = 1.0f;
+            r300_mark_atom_dirty(r300, &r300->pvs_flush);
+            r300_mark_atom_dirty(r300, &r300->guardband_state);
+        }
+        return;
+    }
+
+    const struct pipe_viewport_state *vp = &r300->viewport;
+    float scale_x = fabs(vp->scale[0]);
+    float scale_y = fabs(vp->scale[1]);
+    float translate_x = vp->translate[0];
+    float translate_y = vp->translate[1];
+
+    /* Treat a 0x0 viewport as 1x1 to prevent a division by zero. */
+    if (scale_x == 0.0f)
+        scale_x = 0.5f;
+    if (scale_y == 0.0f)
+        scale_y = 0.5f;
+
+    /* Find the biggest guard band that is inside the supported viewport
+     * range. The guard band is specified as a horizontal and vertical
+     * distance from (0,0) in clip space.
+     *
+     * This is done by applying the inverse viewport transformation
+     * on the viewport limits to get those limits in clip space.
+     *
+     * Use a limit one pixel smaller to allow for some precision error.
+     */
+    const float max_range = R300_MAX_VIEWPORT_RANGE - 1.0f;
+    float left = (-max_range - translate_x) / scale_x;
+    float right = (max_range - translate_x) / scale_x;
+    float top = (-max_range - translate_y) / scale_y;
+    float bottom = (max_range - translate_y) / scale_y;
+    assert(left <= -1 && top <= -1 && right >= 1 && bottom >= 1);
+
+    float guardband_x = MIN2(-left, right);
+    float guardband_y = MIN2(-top, bottom);
+
+    float discard_x = 1.0f + distance / (2.0f * scale_x);
+    float discard_y = 1.0f + distance / (2.0f * scale_y);
+
+    discard_x = MIN2(discard_x, guardband_x);
+    discard_y = MIN2(discard_y, guardband_y);
+
+    if (guard->vert_clip == guardband_y &&
+        guard->vert_disc == discard_y &&
+        guard->horz_clip == guardband_x &&
+        guard->horz_disc == discard_x) {
+        return;
+    }
+
+    guard->vert_clip = guardband_y;
+    guard->vert_disc = discard_y;
+    guard->horz_clip = guardband_x;
+    guard->horz_disc = discard_x;
+
+    r300_mark_atom_dirty(r300, &r300->pvs_flush);
+    r300_mark_atom_dirty(r300, &r300->guardband_state);
+}
+
+void r300_set_clip_discard_distance(struct r300_context *r300, float distance)
+{
+    /* Determine whether the guardband registers change.
+     *
+     * When we see a value greater than min_clip_discard_distance_watermark, we increase it
+     * up to a certain number to eliminate those state changes next time they happen.
+     * See the comment at min_clip_discard_distance_watermark.
+     */
+    if (distance > r300->min_clip_discard_distance_watermark) {
+        /* This is based on r600, which is based on Viewperf. The number is in half-pixels. */
+        r300->min_clip_discard_distance_watermark = MIN2(distance, 6.0f);
+    }
+
+    float new_distance = distance > 0.0f ?
+        MAX2(distance, r300->min_clip_discard_distance_watermark) : 0.0f;
+
+    if (r300->current_clip_discard_distance != new_distance) {
+        r300->current_clip_discard_distance = new_distance;
+    }
+
+    r300_update_guardband_state(r300);
+}
 
 static void r300_delete_vs_state(struct pipe_context* pipe, void* shader);
 static void r300_delete_fs_state(struct pipe_context* pipe, void* shader);
@@ -561,7 +676,6 @@ static void r300_set_blend_color(struct pipe_context* pipe,
         (struct r300_blend_color_state*)r300->blend_color_state.state;
     struct pipe_blend_color c;
     struct pipe_surface *cb;
-    float tmp;
     CB_LOCALS;
 
     state->state = *color; /* Save it, so that we can reuse it in set_fb_state */
@@ -590,13 +704,68 @@ static void r300_set_blend_color(struct pipe_context* pipe,
             c.color[2] = c.color[3];
             break;
 
+#if UTIL_ARCH_BIG_ENDIAN
+        case PIPE_FORMAT_A8R8G8B8_UNORM: {
+            /* A8R8G8B8 constant-color blending consumes the register lanes
+             * in a different order from pipe RGBA. Program the inverse
+             * order so GL_CONSTANT_COLOR sees pipe RGBA.
+             */
+            float r = c.color[0];
+            float g = c.color[1];
+            float b = c.color[2];
+            float a = c.color[3];
+            c.color[0] = g;
+            c.color[1] = r;
+            c.color[2] = a;
+            c.color[3] = b;
+            break;
+        }
+
         case PIPE_FORMAT_R8G8B8A8_UNORM:
         case PIPE_FORMAT_R8G8B8X8_UNORM:
         case PIPE_FORMAT_R10G10B10A2_UNORM:
-            tmp = c.color[0];
+        case PIPE_FORMAT_B5G6R5_UNORM: {
+            /* These formats consume constant-color register lanes in A,R,G,B
+             * order. Program the inverse order so constant blend factors see
+             * pipe RGBA/RGB.
+             */
+            float r = c.color[0];
+            float g = c.color[1];
+            float b = c.color[2];
+            float a = c.color[3];
+            c.color[0] = g;
+            c.color[1] = b;
+            c.color[2] = a;
+            c.color[3] = r;
+            break;
+        }
+
+        case PIPE_FORMAT_B5G5R5A1_UNORM:
+        case PIPE_FORMAT_B5G5R5X1_UNORM: {
+            /* 1555 colorbuffer blending consumes the constant color in
+             * colorbuffer-lane order. Match the B5G5R5* output swizzle so
+             * GL_CONSTANT_COLOR blending sees pipe RGBA.
+             */
+            float r = c.color[0];
+            float g = c.color[1];
+            float b = c.color[2];
+            float a = c.color[3];
+            c.color[0] = g;
+            c.color[1] = r;
+            c.color[2] = a;
+            c.color[3] = b;
+            break;
+        }
+#else
+        case PIPE_FORMAT_R8G8B8A8_UNORM:
+        case PIPE_FORMAT_R8G8B8X8_UNORM:
+        case PIPE_FORMAT_R10G10B10A2_UNORM: {
+            float tmp = c.color[0];
             c.color[0] = c.color[2];
             c.color[2] = tmp;
             break;
+        }
+#endif
 
         default:;
         }
@@ -865,6 +1034,10 @@ void r300_mark_fb_state_dirty(struct r300_context *r300,
         r300_mark_atom_dirty(r300, &r300->fb_state_pipelined);
     }
 
+    if (r300->query_current) {
+        r300_mark_atom_dirty(r300, &r300->query_start);
+    }
+
     /* Now compute the fb_state atom size. */
     r300->fb_state.size = 2 + (8 * state->nr_cbufs);
 
@@ -884,6 +1057,44 @@ void r300_mark_fb_state_dirty(struct r300_context *r300,
     }
 
     /* The size of the rest of atoms stays the same. */
+}
+
+void
+r300_framebuffer_init(struct pipe_context *pctx, const struct pipe_framebuffer_state *fb, struct pipe_surface **cbufs, struct pipe_surface **zsbuf)
+{
+   if (fb) {
+      for (unsigned i = 0; i < fb->nr_cbufs; i++) {
+         if (cbufs[i] && pipe_surface_equal(&fb->cbufs[i], cbufs[i]))
+            continue;
+
+         struct pipe_surface *psurf = fb->cbufs[i].texture ? r300_create_surface(pctx, fb->cbufs[i].texture, &fb->cbufs[i]) : NULL;
+         if (cbufs[i])
+            pipe_surface_unref(pctx, &cbufs[i], r300_surface_destroy);
+         cbufs[i] = psurf;
+      }
+
+      for (unsigned i = fb->nr_cbufs; i < PIPE_MAX_COLOR_BUFS; i++) {
+         if (cbufs[i])
+            pipe_surface_unref(pctx, &cbufs[i], r300_surface_destroy);
+         cbufs[i] = NULL;
+      }
+
+      if (*zsbuf && pipe_surface_equal(&fb->zsbuf, *zsbuf))
+         return;
+      struct pipe_surface *zsurf = fb->zsbuf.texture ? r300_create_surface(pctx, fb->zsbuf.texture, &fb->zsbuf) : NULL;
+      if (*zsbuf)
+         pipe_surface_unref(pctx, zsbuf, r300_surface_destroy);
+      *zsbuf = zsurf;
+   } else {
+      for (unsigned i = 0; i < PIPE_MAX_COLOR_BUFS; i++) {
+         if (cbufs[i])
+            pipe_surface_unref(pctx, &cbufs[i], r300_surface_destroy);
+         cbufs[i] = NULL;
+      }
+      if (*zsbuf)
+         pipe_surface_unref(pctx, zsbuf, r300_surface_destroy);
+      *zsbuf = NULL;
+   }
 }
 
 static void
@@ -921,7 +1132,7 @@ r300_set_framebuffer_state(struct pipe_context* pipe,
             }
         } else {
             /* We don't bind another zbuffer, so lock the current one. */
-            pipe_surface_reference(&r300->locked_zbuffer, r300->fb_zsbuf);
+            pipe_surface_reference(&r300->locked_zbuffer, r300->fb_zsbuf, pipe, r300_surface_destroy);
         }
     } else if (r300->locked_zbuffer) {
         /* We have a locked zbuffer now, what are we gonna do? */
@@ -944,8 +1155,34 @@ r300_set_framebuffer_state(struct pipe_context* pipe,
         r300_mark_atom_dirty(r300, &r300->dsa_state);
     }
 
-    util_framebuffer_init(pipe, state, r300->fb_cbufs, &r300->fb_zsbuf);
+    r300_framebuffer_init(pipe, state, r300->fb_cbufs, &r300->fb_zsbuf);
     util_copy_framebuffer_state(r300->fb_state.state, state);
+
+    /* DXTC blits require that blocks are 2x1 or 4x1 pixels, but
+     * pipe_surface_width sets the framebuffer width as if blocks were 1x1
+     * pixels. Override the width to correct that.
+     */
+    if (state->nr_cbufs == 1 && state->cbufs[0].texture &&
+        state->cbufs[0].format == PIPE_FORMAT_R8G8B8A8_UNORM &&
+        util_format_is_compressed(state->cbufs[0].texture->format)) {
+        struct pipe_framebuffer_state *fb =
+            (struct pipe_framebuffer_state*)r300->fb_state.state;
+        const struct util_format_description *desc =
+            util_format_description(state->cbufs[0].texture->format);
+        unsigned width = u_minify(state->cbufs[0].texture->width0,
+                                  state->cbufs[0].level);
+
+        assert(desc->block.width == 4 && desc->block.height == 4);
+
+        /* Each 64-bit DXT block is 2x1 pixels, and each 128-bit DXT
+         * block is 4x1 pixels when blitting.
+         */
+        width = align(width, 4); /* align to the DXT block width. */
+        if (desc->block.bits == 64)
+           width = DIV_ROUND_UP(width, 2);
+
+        fb->width = width;
+    }
 
     /* Remove trailing NULL colorbuffers. */
     while (current_state->nr_cbufs && !current_state->cbufs[current_state->nr_cbufs-1].texture)
@@ -962,7 +1199,7 @@ r300_set_framebuffer_state(struct pipe_context* pipe,
     r300_set_blend_color(pipe, &((struct r300_blend_color_state*)r300->blend_color_state.state)->state);
 
     if (unlock_zbuffer) {
-        pipe_surface_reference(&r300->locked_zbuffer, NULL);
+        pipe_surface_reference(&r300->locked_zbuffer, NULL, pipe, r300_surface_destroy);
     }
 
     r300_mark_fb_state_dirty(r300, R300_CHANGED_FB_STATE);
@@ -1048,8 +1285,9 @@ static void* r300_create_fs_state(struct pipe_context* pipe,
         }
     } else {
        assert(fs->state.type == PIPE_SHADER_IR_TGSI);
-       /* we need to keep a local copy of the tokens */
-       fs->state.tokens = tgsi_dup_tokens(fs->state.tokens);
+       /* Convert to NIR. */
+       fs->state.ir.nir = tgsi_to_nir(fs->state.tokens, pipe->screen, false);
+       fs->state.type = PIPE_SHADER_IR_NIR;
     }
 
     /* Precompile the fragment shader at creation time to avoid jank at runtime.
@@ -1060,7 +1298,7 @@ static void* r300_create_fs_state(struct pipe_context* pipe,
 
     if (fs->state.type == PIPE_SHADER_IR_NIR) {
         /* Pick something for the shadow samplers so that we have somewhat reliable shader stats later. */
-        nir_foreach_function_impl(impl, shader->ir.nir) {
+        nir_foreach_function_impl(impl, fs->state.ir.nir) {
             nir_foreach_block_safe(block, impl) {
                 nir_foreach_instr_safe(instr, block) {
                     if (instr->type != nir_instr_type_tex)
@@ -1139,21 +1377,16 @@ static void r300_delete_fs_state(struct pipe_context* pipe, void* shader)
     struct r300_fragment_shader* fs = (struct r300_fragment_shader*)shader;
     struct r300_fragment_shader_code *tmp, *ptr = fs->first;
 
-    free(fs->shader->code.constants_remap_table);
-
     while (ptr) {
         tmp = ptr;
         ptr = ptr->next;
+        FREE(tmp->code.constants_remap_table);
         rc_constants_destroy(&tmp->code.constants);
         FREE(tmp->cb_code);
         free(tmp->error);
         FREE(tmp);
     }
-    if (fs->state.type == PIPE_SHADER_IR_NIR) {
-        ralloc_free(fs->state.ir.nir);
-    } else {
-        FREE((void*)fs->state.tokens);
-    }
+    ralloc_free(fs->state.ir.nir);
     FREE(shader);
 }
 
@@ -1226,6 +1459,7 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
         (pack_float_16_6x(state->point_size) << R300_POINTSIZE_X_SHIFT);
 
     /* Point size clamping. */
+    float max_point_size;
     if (state->point_size_per_vertex) {
         /* Per-vertex point size.
          * Clamp to [0, max FB size] */
@@ -1234,6 +1468,7 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
         point_minmax =
             (pack_float_16_6x(min_psiz) << R300_GA_POINT_MINMAX_MIN_SHIFT) |
             (pack_float_16_6x(max_psiz) << R300_GA_POINT_MINMAX_MAX_SHIFT);
+        max_point_size = max_psiz;
     } else {
         /* We cannot disable the point-size vertex output,
          * so clamp it. */
@@ -1241,6 +1476,7 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
         point_minmax =
             (pack_float_16_6x(psiz) << R300_GA_POINT_MINMAX_MIN_SHIFT) |
             (pack_float_16_6x(psiz) << R300_GA_POINT_MINMAX_MAX_SHIFT);
+        max_point_size = psiz;
     }
 
     /* Line control. */
@@ -1304,7 +1540,8 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
         rs->color_control = R300_SHADE_MODEL_SMOOTH;
     }
 
-    clip_rule = state->scissor ? 0xAAAA : 0xFFFF;
+    /* We always clip, either to the user specified settings or the viewport. */
+    clip_rule = 0xAAAA;
 
     /* Point sprites coord mode */
     if (rs->rs.sprite_coord_enable) {
@@ -1359,8 +1596,8 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
 
     /* Build the two command buffers for polygon offset setup. */
     if (polygon_offset_enable) {
-        float scale = state->offset_scale * 12;
-        float offset = state->offset_units * 4;
+        float scale = state->offset_scale * 16 * 12;
+        float offset = state->offset_units * 256 * 2;
 
         BEGIN_CB(rs->cb_poly_offset_zb16, 5);
         OUT_CB_REG_SEQ(R300_SU_POLY_OFFSET_FRONT_SCALE, 4);
@@ -1371,6 +1608,7 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
         END_CB;
 
         offset = state->offset_units * 2;
+        scale = state->offset_scale * 12;
 
         BEGIN_CB(rs->cb_poly_offset_zb24, 5);
         OUT_CB_REG_SEQ(R300_SU_POLY_OFFSET_FRONT_SCALE, 4);
@@ -1380,6 +1618,9 @@ static void* r300_create_rs_state(struct pipe_context* pipe,
         OUT_CB_32F(offset);
         END_CB;
     }
+
+    rs->max_point_size = max_point_size;
+    rs->line_width = state->line_width;
 
     return (void*)rs;
 }
@@ -1394,9 +1635,13 @@ static void r300_bind_rs_state(struct pipe_context* pipe, void* state)
     bool last_msaa_enable = r300->msaa_enable;
     bool last_flatshade = r300->flatshade;
     bool last_clip_halfz = r300->clip_halfz;
+    bool last_scissor_enabled = r300->scissor_enabled;
 
     if (r300->draw && rs) {
-        draw_set_rasterizer_state(r300->draw, &rs->rs_draw, state);
+        bool frontface_emul = r300->vs_state.state &&
+                              r300_vs(r300)->shader->key.frontface;
+        rs->rs_draw.light_twoside = rs->rs.light_twoside || frontface_emul;
+        draw_set_rasterizer_state(r300->draw, &rs->rs_draw, rs);
     }
 
     if (rs) {
@@ -1406,6 +1651,7 @@ static void r300_bind_rs_state(struct pipe_context* pipe, void* state)
         r300->msaa_enable = rs->rs.multisample;
         r300->flatshade = rs->rs.flatshade;
         r300->clip_halfz = rs->rs.clip_halfz;
+        r300->scissor_enabled = rs->rs.scissor;
     } else {
         r300->polygon_offset_enabled = false;
         r300->sprite_coord_enable = 0;
@@ -1413,6 +1659,7 @@ static void r300_bind_rs_state(struct pipe_context* pipe, void* state)
         r300->msaa_enable = false;
         r300->flatshade = false;
         r300->clip_halfz = false;
+        r300->scissor_enabled = false;
     }
 
     UPDATE_STATE(state, r300->rs_state);
@@ -1437,6 +1684,20 @@ static void r300_bind_rs_state(struct pipe_context* pipe, void* state)
 
     if (r300->screen->caps.has_tcl && last_clip_halfz != r300->clip_halfz) {
         r300_mark_atom_dirty(r300, &r300->vs_state);
+    }
+
+    if (last_scissor_enabled != r300->scissor_enabled) {
+        r300_mark_atom_dirty(r300, &r300->scissor_state);
+    }
+
+    if (rs) {
+        if (r300->current_rast_prim == MESA_PRIM_POINTS) {
+            r300_set_clip_discard_distance(r300, rs->max_point_size);
+        } else if (r300_prim_is_lines(r300->current_rast_prim)) {
+            r300_set_clip_discard_distance(r300, rs->line_width);
+        }
+    } else {
+        r300_set_clip_discard_distance(r300, 0.0f);
     }
 }
 
@@ -1744,6 +2005,13 @@ static void r300_set_viewport_states(struct pipe_context* pipe,
 
     r300->viewport = *state;
 
+    struct pipe_scissor_state vp_scissor;
+    r300_get_scissor_from_viewport(state, &vp_scissor);
+    if (memcmp(&vp_scissor, &r300->viewport_scissor, sizeof(vp_scissor)) != 0) {
+        r300->viewport_scissor = vp_scissor;
+        r300_mark_atom_dirty(r300, &r300->scissor_state);
+    }
+
     if (r300->draw) {
         draw_set_viewport_states(r300->draw, start_slot, num_viewports, state);
         viewport->vte_control = R300_VTX_XY_FMT | R300_VTX_Z_FMT;
@@ -1883,7 +2151,8 @@ static void* r300_create_vertex_elements_state(struct pipe_context* pipe,
 
     /* R300 Programmable Stream Control (PSC) doesn't support 0 vertex elements. */
     if (!count) {
-        dummy_attrib.src_format = PIPE_FORMAT_R8G8B8A8_UNORM;
+        /* Keep the dummy format 32-bit so the big-endian VAP path accepts it. */
+        dummy_attrib.src_format = PIPE_FORMAT_R32_FLOAT;
         attribs = &dummy_attrib;
         count = 1;
     } else if (count > 16) {
@@ -1941,6 +2210,8 @@ static void r300_delete_vertex_elements_state(struct pipe_context *pipe, void *s
     FREE(state);
 }
 
+static bool r300_can_emulate_frontface(nir_shader *nir);
+
 static void* r300_create_vs_state(struct pipe_context* pipe,
                                   const struct pipe_shader_state* shader)
 {
@@ -1950,31 +2221,30 @@ static void* r300_create_vs_state(struct pipe_context* pipe,
     /* Copy state directly into shader. */
     vs->state = *shader;
 
-    if (vs->state.type == PIPE_SHADER_IR_NIR) {
-        r300_optimize_nir(shader->ir.nir, r300->screen);
+    /* Always convert TGSI input to NIR up front */
+    if (vs->state.type == PIPE_SHADER_IR_TGSI) {
+       vs->state.ir.nir = tgsi_to_nir(vs->state.tokens, pipe->screen, false);
+       vs->state.type = PIPE_SHADER_IR_NIR;
+    }
 
+    if (r300->screen->caps.has_tcl) {
+        r300_optimize_nir(vs->state.ir.nir, r300->screen);
         /* R300/R400 can not do any kind of control flow, so abort early here. */
-        if (!r300->screen->caps.is_r500 && r300->screen->caps.has_tcl) {
-            char *msg = r300_check_control_flow(shader->ir.nir);
+        if (!r300->screen->caps.is_r500) {
+            char *msg = r300_check_control_flow(vs->state.ir.nir);
             if (msg && shader->report_compile_error) {
                 fprintf(stderr, "r300 VP: Compiler error: %s\n", msg);
                 ((struct pipe_shader_state *)shader)->error_message = strdup(msg);
-                ralloc_free(shader->ir.nir);
+                ralloc_free(vs->state.ir.nir);
                 FREE(vs);
                 return NULL;
             }
         }
-
-       struct r300_fragment_program_external_state state = {};
-       vs->state.tokens = nir_to_rc(shader->ir.nir, pipe->screen, state);
-    } else {
-       assert(vs->state.type == PIPE_SHADER_IR_TGSI);
-       /* we need to keep a local copy of the tokens */
-       vs->state.tokens = tgsi_dup_tokens(vs->state.tokens);
     }
 
-    if (!vs->first)
-        vs->first = vs->shader = CALLOC_STRUCT(r300_vertex_shader_code);
+    vs->can_emulate_frontface = r300_can_emulate_frontface(vs->state.ir.nir);
+
+    vs->first = vs->shader = CALLOC_STRUCT(r300_vertex_shader_code);
     if (r300->screen->caps.has_tcl) {
         r300_translate_vertex_shader(r300, vs);
     } else {
@@ -1997,6 +2267,66 @@ static void* r300_create_vs_state(struct pipe_context* pipe,
     return vs;
 }
 
+static bool r300_can_emulate_frontface(nir_shader *nir)
+{
+    /* FACE emulation uses the two-sided color path, so it cannot coexist
+     * with regular front/back color outputs. */
+    nir_foreach_shader_out_variable(var, nir) {
+        switch (var->data.location) {
+        case VARYING_SLOT_COL0:
+        case VARYING_SLOT_COL1:
+        case VARYING_SLOT_BFC0:
+        case VARYING_SLOT_BFC1:
+            return false;
+        default:
+            break;
+        }
+    }
+
+    return true;
+}
+
+void r300_mark_vs_code_dirty(struct r300_context *r300)
+{
+    struct r300_vertex_shader *vs = r300_vs(r300);
+    unsigned fc_op_dwords = r300->screen->caps.is_r500 ? 3 : 2;
+
+    r300_mark_atom_dirty(r300, &r300->vs_state);
+    r300->vs_state.size = vs->shader->code.length + 9 +
+            (R300_VS_MAX_FC_OPS * fc_op_dwords + 4);
+
+    r300_mark_atom_dirty(r300, &r300->vs_constants);
+    r300->vs_constants.size =
+            2 +
+            (vs->shader->externals_count ? vs->shader->externals_count * 4 + 3 : 0) +
+            (vs->shader->immediates_count ? vs->shader->immediates_count * 4 + 3 : 0);
+
+    ((struct r300_constant_buffer*)r300->vs_constants.state)->remap_table =
+            vs->shader->code.constants_remap_table;
+
+    r300_mark_atom_dirty(r300, &r300->pvs_flush);
+}
+
+void r300_bind_vertex_shader_variant(struct r300_context *r300)
+{
+    if (r300->screen->caps.has_tcl) {
+        r300_mark_vs_code_dirty(r300);
+    } else {
+        draw_bind_vertex_shader(r300->draw,
+                (struct draw_vertex_shader*)r300_vs(r300)->shader->draw_vs);
+
+        struct r300_rs_state *rs = r300->rs_state.state;
+        bool frontface_emul = r300_vs(r300)->shader->key.frontface;
+        bool light_twoside = rs &&
+            (rs->rs.light_twoside || frontface_emul);
+
+        if (rs && rs->rs_draw.light_twoside != light_twoside) {
+            rs->rs_draw.light_twoside = light_twoside;
+            draw_set_rasterizer_state(r300->draw, &rs->rs_draw, rs);
+        }
+    }
+}
+
 static void r300_bind_vs_state(struct pipe_context* pipe, void* shader)
 {
     struct r300_context* r300 = r300_context(pipe);
@@ -2014,48 +2344,31 @@ static void r300_bind_vs_state(struct pipe_context* pipe, void* shader)
     /* The majority of the RS block bits is dependent on the vertex shader. */
     r300_mark_atom_dirty(r300, &r300->rs_block_state); /* Will be updated before the emission. */
 
-    if (r300->screen->caps.has_tcl) {
-        unsigned fc_op_dwords = r300->screen->caps.is_r500 ? 3 : 2;
-        r300_mark_atom_dirty(r300, &r300->vs_state);
-        r300->vs_state.size = vs->shader->code.length + 9 +
-			(R300_VS_MAX_FC_OPS * fc_op_dwords + 4);
-
-        r300_mark_atom_dirty(r300, &r300->vs_constants);
-        r300->vs_constants.size =
-                2 +
-                (vs->shader->externals_count ? vs->shader->externals_count * 4 + 3 : 0) +
-                (vs->shader->immediates_count ? vs->shader->immediates_count * 4 + 3 : 0);
-
-        ((struct r300_constant_buffer*)r300->vs_constants.state)->remap_table =
-                vs->shader->code.constants_remap_table;
-
-        r300_mark_atom_dirty(r300, &r300->pvs_flush);
-    } else {
-        draw_bind_vertex_shader(r300->draw,
-                (struct draw_vertex_shader*)vs->draw_vs);
-    }
+    r300_bind_vertex_shader_variant(r300);
 }
 
 static void r300_delete_vs_state(struct pipe_context* pipe, void* shader)
 {
     struct r300_context* r300 = r300_context(pipe);
     struct r300_vertex_shader* vs = (struct r300_vertex_shader*)shader;
+    struct r300_vertex_shader_code *code;
 
-    if (r300->screen->caps.has_tcl) {
-        while (vs->shader) {
-            rc_constants_destroy(&vs->shader->code.constants);
-            FREE(vs->shader->code.constants_remap_table);
-            free(vs->shader->error);
-            vs->shader = vs->shader->next;
-            FREE(vs->first);
-            vs->first = vs->shader;
-	}
-    } else {
-        draw_delete_vertex_shader(r300->draw,
-                (struct draw_vertex_shader*)vs->draw_vs);
+    while ((code = vs->first)) {
+        vs->first = code->next;
+
+        if (r300->screen->caps.has_tcl) {
+            rc_constants_destroy(&code->code.constants);
+            FREE(code->code.constants_remap_table);
+        } else {
+            draw_delete_vertex_shader(r300->draw,
+                    (struct draw_vertex_shader*)code->draw_vs);
+        }
+
+        free(code->error);
+        FREE(code);
     }
 
-    FREE((void*)vs->state.tokens);
+    ralloc_free(vs->state.ir.nir);
     FREE(shader);
 }
 

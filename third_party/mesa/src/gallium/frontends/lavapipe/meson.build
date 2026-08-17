@@ -1,4 +1,17 @@
 
+lvp_drirc = custom_target(
+  'lvp_drirc',
+  input  : [files('lvp_drirc_gen.py'), drirc_gen, '00-lavapipe-defaults.conf'],
+  output : ['lvp_drirc.c', 'lvp_drirc.h'],
+  command : [
+    prog_python, '@INPUT0@',
+    '--import-path', join_paths(dir_source_root, 'src/util'),
+    '--drirc-src', '@OUTPUT0@',
+    '--drirc-hdr', '@OUTPUT1@',
+    '--validate', '@INPUT2@',
+  ],
+)
+
 lvp_entrypoints = custom_target(
   'lvp_entrypoints',
   input : [vk_entrypoints_gen, vk_api_xml],
@@ -12,9 +25,12 @@ lvp_entrypoints = custom_target(
 )
 
 liblvp_files = files(
+    'nir/lvp_nir_lower_cooperative_matrix.c',
+    'nir/lvp_nir_lower_descriptor_heaps.c',
     'nir/lvp_nir_lower_exec_graph.c',
     'nir/lvp_nir_lower_input_attachments.c',
     'nir/lvp_nir_lower_pipeline_layout.c',
+    'nir/lvp_nir_lower_push_constants.c',
     'nir/lvp_nir_lower_ray_queries.c',
     'nir/lvp_nir_lower_sparse_residency.c',
     'nir/lvp_nir_opt_robustness.c',
@@ -52,8 +68,8 @@ endif
 
 liblavapipe_st = static_library(
   'lavapipe_st',
-  [liblvp_files, lvp_entrypoints, sha1_h],
-  c_args : [ c_msvc_compat_args, lvp_flags],
+  [liblvp_files, lvp_entrypoints, lvp_drirc, sha1_h],
+  c_args : [ c_msvc_compat_args, lvp_flags, soong_compat_c_args],
   gnu_symbol_visibility : 'hidden',
   include_directories : [ inc_include, inc_src, inc_util, inc_gallium, inc_gallium_aux, inc_llvmpipe ],
   dependencies : [ dep_llvm, idep_nir, idep_mesautil, idep_vulkan_util, idep_vulkan_wsi,

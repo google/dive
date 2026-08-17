@@ -44,7 +44,7 @@ function CP_SET_MARKER(pkt, size)
 end
 
 local last_tex_const = {}
-function A6XX_TEX_CONST(pkt, size)
+function A6XX_TEX_MEMOBJ(pkt, size)
 	last_tex_const.format = pkt[0].FMT
 	last_tex_const.tile_mode = pkt[0].TILE_MODE
 	last_tex_const.swap = pkt[0].SWAP

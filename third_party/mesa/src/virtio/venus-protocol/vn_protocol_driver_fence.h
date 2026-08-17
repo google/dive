@@ -84,7 +84,7 @@ vn_sizeof_VkFenceCreateInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkFenceCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkFenceCreateInfo_pnext(((const VkExportFenceCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkExportFenceCreateInfo_self((const VkExportFenceCreateInfo *)pnext);
             return size;
         default:
@@ -128,7 +128,7 @@ vn_encode_VkFenceCreateInfo_pnext(struct vn_cs_encoder *enc, const void *val)
         case VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkFenceCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkFenceCreateInfo_pnext(enc, ((const VkExportFenceCreateInfo *)pnext)->pNext);
             vn_encode_VkExportFenceCreateInfo_self(enc, (const VkExportFenceCreateInfo *)pnext);
             return;
         default:

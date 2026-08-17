@@ -1,29 +1,12 @@
 /*
  * Copyright © 2014 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_fs.h"
 #include "elk_cfg.h"
 #include "elk_eu.h"
+#include "util/half_float.h"
 
 /** @file elk_fs_cmod_propagation.cpp
  *
@@ -50,6 +33,26 @@
 
 using namespace elk;
 
+static double
+src_as_float(const elk_fs_reg &src)
+{
+   assert(src.file == IMM);
+
+   switch (src.type) {
+   case ELK_REGISTER_TYPE_HF:
+      return _mesa_half_to_float((uint16_t)src.d);
+
+   case ELK_REGISTER_TYPE_F:
+      return src.f;
+
+   case ELK_REGISTER_TYPE_DF:
+      return src.df;
+
+   default:
+      UNREACHABLE("Invalid float type.");
+   }
+}
+
 static bool
 cmod_propagate_cmp_to_add(const intel_device_info *devinfo, elk_bblock_t *block,
                           elk_fs_inst *inst)
@@ -57,7 +60,48 @@ cmod_propagate_cmp_to_add(const intel_device_info *devinfo, elk_bblock_t *block,
    bool read_flag = false;
    const unsigned flags_written = inst->flags_written(devinfo);
 
+   /* The floating point comparison can only be removed if we can prove that
+    * either the addition is not ±Inf - (±Inf) or that ±Inf - (±Inf) compared
+    * with zero has the same result as ±Inf compared with ±Inf.
+    *
+    * The former can only be proven at this point in compilation if src[1] is
+    * an immediate value. Otherwise we can't know that nether value is
+    * ±Inf. For the latter, consider this table:
+    *
+    *      A     B   A+(-B)  A<B  A-B<0  A<=B  A-B<=0  A>B  A-B>0  A>=B  A-B>=0  A==B  A-B==0  A!=B  A-B!=0
+    *     Inf   Inf   NaN     F     F     T       F     F     F     T      F      T      F      F       T
+    *     Inf  -Inf   Inf     F     F     F       F     T     T     T      T      F      F      T       T
+    *    -Inf   Inf  -Inf     T     T     T       T     F     F     F      F      F      F      T       T
+    *    -Inf  -Inf   NaN     F     F     T       F     F     F     T      F      T      F      F       T
+    *
+    * The column for A<B and A-B<0 is identical, and the column for A>B and
+    * A-B>0 are identical.
+    *
+    * If src[1] is NaN, the transformation is always valid.
+    */
+   if (elk_reg_type_is_floating_point(inst->src[0].type)) {
+      if (inst->conditional_mod != ELK_CONDITIONAL_L &&
+          inst->conditional_mod != ELK_CONDITIONAL_G) {
+         if (inst->src[1].file != IMM)
+            return false;
+
+         if (isinf(src_as_float(inst->src[1])) != 0)
+            return false;
+      }
+   }
+
    foreach_inst_in_block_reverse_starting_from(elk_fs_inst, scan_inst, inst) {
+      /* If either of the sources of the CMP is modified, the optimization
+       * cannot occur. This is the case even if the instruction modifying the
+       * value is an ADD of the appropriate form.
+       */
+      if (regions_overlap(scan_inst->dst, scan_inst->size_written,
+                          inst->src[0], inst->size_read(0)) ||
+          regions_overlap(scan_inst->dst, scan_inst->size_written,
+                          inst->src[1], inst->size_read(1))) {
+         break;
+      }
+
       if (scan_inst->opcode == ELK_OPCODE_ADD &&
           !scan_inst->is_partial_write() &&
           scan_inst->exec_size == inst->exec_size) {

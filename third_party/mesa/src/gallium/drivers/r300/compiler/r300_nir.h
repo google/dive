@@ -17,7 +17,7 @@ static inline bool
 is_ubo_or_input(UNUSED const nir_search_state *state, const nir_alu_instr *instr, unsigned src,
                 unsigned num_components, const uint8_t *swizzle)
 {
-   nir_instr *parent = instr->src[src].src.ssa->parent_instr;
+   nir_instr *parent = nir_def_instr(instr->src[src].src.ssa);
    if (parent->type != nir_instr_type_intrinsic)
       return false;
 
@@ -53,7 +53,7 @@ is_only_used_by_intrinsic(const nir_alu_instr *instr, nir_intrinsic_op op)
    nir_foreach_use (src, &instr->def) {
       is_used = true;
 
-      nir_instr *user_instr = nir_src_parent_instr(src);
+      nir_instr *user_instr = nir_src_use_instr(src);
       if (user_instr->type != nir_instr_type_intrinsic)
          return false;
 
@@ -103,7 +103,7 @@ check_instr_and_src_value(nir_op op, nir_instr **instr, double value)
          }
       }
    }
-   *instr = alu->src[1 - i].src.ssa->parent_instr;
+   *instr = nir_def_instr(alu->src[1 - i].src.ssa);
    return true;
 }
 
@@ -115,7 +115,7 @@ needs_vs_trig_input_fixup(UNUSED const nir_search_state *state, const nir_alu_in
     * emitted by us and also some wined3d shaders.
     * Start with check for fadd(a, -pi).
     */
-   nir_instr *parent = instr->src[src].src.ssa->parent_instr;
+   nir_instr *parent = nir_def_instr(instr->src[src].src.ssa);
    if (!check_instr_and_src_value(nir_op_fadd, &parent, -3.141592))
       return true;
    /* Now check for fmul(a, 2 * pi). */
@@ -155,10 +155,14 @@ extern bool r300_nir_post_integer_lowering(struct nir_shader *shader);
 
 extern bool r300_nir_lower_fcsel_r500(nir_shader *shader);
 
-extern bool r300_nir_lower_fcsel_r300(nir_shader *shader);
+extern bool r300_nir_lower_vs_alu_r300(nir_shader *shader);
 
 extern bool r300_nir_lower_flrp(nir_shader *shader);
 
 extern bool r300_nir_lower_comparison_fs(nir_shader *shader);
+
+extern bool r300_nir_lower_frontface(nir_shader *shader);
+
+extern bool r300_nir_add_wpos(nir_shader *shader, nir_variable **wpos_var_out);
 
 #endif /* R300_NIR_H */

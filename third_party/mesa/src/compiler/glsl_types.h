@@ -288,6 +288,13 @@ enum {
    GLSL_PRECISION_LOW
 };
 
+enum {
+   GLSL_PIXEL_LOCAL_STORAGE_NONE = 0,
+   GLSL_PIXEL_LOCAL_STORAGE_IN,
+   GLSL_PIXEL_LOCAL_STORAGE_OUT,
+   GLSL_PIXEL_LOCAL_STORAGE_INOUT
+};
+
 enum glsl_cmat_use {
    GLSL_CMAT_USE_NONE = 0,
    GLSL_CMAT_USE_A,
@@ -296,15 +303,14 @@ enum glsl_cmat_use {
 };
 
 struct glsl_cmat_description {
-   /* MSVC can't merge bitfields of different types and also sign extend enums,
-    * so use uint8_t for those cases.
-    */
-   uint8_t element_type:5; /* enum glsl_base_type */
-   uint8_t scope:3; /* mesa_scope */
-   uint8_t rows;
-   uint8_t cols;
+   uint16_t rows;
+   uint16_t cols;
+   uint16_t element_type; /* enum glsl_base_type */
+   uint8_t scope; /* mesa_scope */
    uint8_t use; /* enum glsl_cmat_use */
 };
+static_assert(sizeof(struct glsl_cmat_description) == 8,
+              "glsl_cmat_description must fit in two NIR const_index slots");
 
 const char *glsl_get_type_name(const glsl_type *type);
 
@@ -465,6 +471,11 @@ struct glsl_struct_field {
           * Precision qualifier
           */
          unsigned precision:2;
+
+         /**
+          * Pixel local storage qualifier
+          */
+         unsigned pixel_local_storage:2;
 
          /**
           * Memory qualifiers, applicable to buffer variables defined in shader
@@ -662,6 +673,14 @@ static inline bool
 glsl_type_is_e5m2(const glsl_type *t)
 {
    return t->base_type == GLSL_TYPE_FLOAT_E5M2;
+}
+
+static inline bool
+glsl_type_is_nonnative_float(const glsl_type *t)
+{
+   return t->base_type == GLSL_TYPE_BFLOAT16 ||
+          t->base_type == GLSL_TYPE_FLOAT_E4M3FN ||
+          t->base_type == GLSL_TYPE_FLOAT_E5M2;
 }
 
 static inline bool

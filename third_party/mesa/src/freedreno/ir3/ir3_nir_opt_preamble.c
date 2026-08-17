@@ -36,7 +36,7 @@ all_uses_float(nir_def *def, bool allow_src2)
       if (nir_src_is_if(use))
          return false;
 
-      nir_instr *use_instr = nir_src_parent_instr(use);
+      nir_instr *use_instr = nir_src_use_instr(use);
       if (use_instr->type != nir_instr_type_alu)
          return false;
       nir_alu_instr *use_alu = nir_instr_as_alu(use_instr);
@@ -66,7 +66,7 @@ all_uses_bit(nir_def *def)
       if (nir_src_is_if(use))
          return false;
 
-      nir_instr *use_instr = nir_src_parent_instr(use);
+      nir_instr *use_instr = nir_src_use_instr(use);
       if (use_instr->type != nir_instr_type_alu)
          return false;
       nir_alu_instr *use_alu = nir_instr_as_alu(use_instr);
@@ -180,6 +180,15 @@ instr_cost(nir_instr *instr, const void *data)
          return 8;
       }
 
+      case nir_intrinsic_load_global_offset: {
+         /* If we can lower this to ldg.k, that should be preferred as it can
+          * use shared sources.
+          */
+         if (ir3_nir_can_lower_to_ldg_k(intrin))
+            return 0;
+         return 8;
+      }
+
       case nir_intrinsic_load_ssbo:
       case nir_intrinsic_load_ssbo_ir3:
       case nir_intrinsic_get_ssbo_size:
@@ -222,7 +231,7 @@ rewrite_cost(nir_def *def, const void *data)
 
    bool mov_needed = false;
    nir_foreach_use (use, def) {
-      nir_instr *parent_instr = nir_src_parent_instr(use);
+      nir_instr *parent_instr = nir_src_use_instr(use);
       if (parent_instr->type == nir_instr_type_alu) {
          nir_alu_instr *alu = nir_instr_as_alu(parent_instr);
          if (alu->op == nir_op_vec2 ||
@@ -238,7 +247,7 @@ rewrite_cost(nir_def *def, const void *data)
          nir_intrinsic_instr *parent_intrin =
             nir_instr_as_intrinsic(parent_instr);
 
-         if (v->compiler->has_alias_rt && v->type == MESA_SHADER_FRAGMENT &&
+         if (v->compiler->info->props.has_alias_rt && v->type == MESA_SHADER_FRAGMENT &&
              parent_intrin->intrinsic == nir_intrinsic_store_output &&
              def->bit_size == 32) {
             /* For FS outputs, alias.rt can use const registers without a mov.
@@ -359,7 +368,7 @@ bool
 ir3_def_is_rematerializable_for_preamble(nir_def *def,
                                          nir_def **preamble_defs)
 {
-   switch (def->parent_instr->type) {
+   switch (nir_def_instr_type(def)) {
    case nir_instr_type_load_const:
       return true;
    case nir_instr_type_intrinsic: {
@@ -469,10 +478,10 @@ _rematerialize_def(nir_builder *b, struct hash_table *remap_ht,
                    struct set *instr_set, nir_def **preamble_defs,
                    nir_def *def)
 {
-   if (_mesa_hash_table_search(remap_ht, def->parent_instr))
+   if (_mesa_hash_table_search(remap_ht, nir_def_instr(def)))
       return NULL;
 
-   switch (def->parent_instr->type) {
+   switch (nir_def_instr_type(def)) {
    case nir_instr_type_load_const:
       break;
    case nir_instr_type_intrinsic: {
@@ -500,7 +509,7 @@ _rematerialize_def(nir_builder *b, struct hash_table *remap_ht,
       UNREACHABLE("should not get here");
    }
 
-   nir_instr *instr = nir_instr_clone_deep(b->shader, def->parent_instr,
+   nir_instr *instr = nir_instr_clone_deep(b->shader, nir_def_instr(def),
                                            remap_ht);
 
    /* Find a legal place to insert the new instruction. We cannot simply put it
@@ -714,6 +723,12 @@ get_preamble_offset(nir_def *def)
    return nir_intrinsic_base(nir_def_as_intrinsic(def));
 }
 
+static bool
+should_prefetch_descriptor(nir_def *desc)
+{
+   return desc != NULL && ir3_bindless_resource(nir_src_for_ssa(desc));
+}
+
 /* Prefetch descriptors in the preamble. This is an optimization introduced on
  * a7xx, mainly useful when the preamble is an early preamble, and replaces the
  * use of CP_LOAD_STATE on a6xx to prefetch descriptors in HLSQ.
@@ -765,8 +780,9 @@ ir3_nir_opt_prefetch_descriptors(nir_shader *nir, struct ir3_shader_variant *v)
          nir_def *preamble_descs[2] = { NULL, NULL };
          get_descriptors(instr, descs);
 
-         /* We must have found at least one descriptor */
-         if (!descs[0] && !descs[1])
+         /* Bail unless we found at least one bindless descriptor */
+         if (!(should_prefetch_descriptor(descs[0]) ||
+               should_prefetch_descriptor(descs[1])))
             continue;
 
          /* The instruction itself must be hoistable.
@@ -800,7 +816,31 @@ ir3_nir_opt_prefetch_descriptors(nir_shader *nir, struct ir3_shader_variant *v)
             preamble = nir_shader_get_preamble(nir);
          }
 
-         b = nir_builder_at(nir_after_impl(preamble));
+         /* When rematerializing defs in the preamble, we make sure to insert
+          * them in a block dominated by all their sources. When inserting a def
+          * that doesn't have any sources we have to make sure to insert them as
+          * early as possible. This important for sequences like this:
+          *
+          * 32      %34 = load_const (0x00000007 = 0.000000)
+          * ...
+          * if ... {
+          *     32     %184 = @load_preamble (base=8)
+          *     32     %185 = @bindless_resource_ir3 (%184) (desc_set=0)
+          *     32     %186 = @bindless_resource_ir3 (%34 (0x7)) (desc_set=1)
+          *     32x4   %187 = (float32)tex %186 (texture_handle), %185 (sampler_handle), ...
+          *     ...
+          *  }
+          *
+          * %185 has to be rematerialized in control flow since its source is
+          * defined there. %186 does not as its source is defined outside
+          * control flow. We used to insert %186 as late as possible
+          * (nir_after_impl(preamble)) but this causes issues as we cannot find
+          * a valid block (i.e., a block that is dominated by both) to insert
+          * the descriptor prefetch for (%185, %186). Therefore, we set the
+          * default block to insert rematerialized defs as the preamble's start
+          * block.
+          */
+         b = nir_builder_at(nir_before_impl(preamble));
 
          /* Materialize descriptors for the prefetch. Note that we deduplicate
           * descriptors so that we don't blow our budget when repeatedly loading
@@ -856,8 +896,9 @@ ir3_nir_lower_preamble(nir_shader *nir, struct ir3_shader_variant *v)
    unsigned preamble_size =
       const_state->allocs.consts[IR3_CONST_ALLOC_PREAMBLE].size_vec4 * 4;
 
-   BITSET_DECLARE(promoted_to_float, preamble_size);
-   memset(promoted_to_float, 0, sizeof(promoted_to_float));
+   /* Avoid zero-size VLA. */
+   BITSET_DECLARE(promoted_to_float, preamble_size > 0 ? preamble_size : 1);
+   BITSET_ZERO(promoted_to_float);
 
    nir_builder builder_main = nir_builder_create(main);
    nir_builder *b = &builder_main;
@@ -956,6 +997,7 @@ ir3_nir_lower_preamble(nir_shader *nir, struct ir3_shader_variant *v)
     */
 
    /* @decl_regs need to stay in the first block. */
+   b = &builder_main;
    b->cursor = nir_after_reg_decls(main);
 
    nir_if *outer_if = nir_push_if(b, nir_preamble_start_ir3(b, 1));

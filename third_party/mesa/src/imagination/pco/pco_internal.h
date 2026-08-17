@@ -37,6 +37,9 @@ typedef struct _pco_ctx {
    /** Device information. */
    const struct pvr_device_info *dev_info;
 
+   /** Device runtime information. */
+   const struct pvr_device_runtime_info *dev_runtime_info;
+
    /** Device-specific NIR options. */
    nir_shader_compiler_options nir_options;
 
@@ -47,16 +50,25 @@ typedef struct _pco_ctx {
    const nir_shader *usclib;
 } pco_ctx;
 
-void pco_setup_spirv_options(const struct pvr_device_info *dev_info,
-                             struct spirv_to_nir_options *spirv_options);
-void pco_setup_nir_options(const struct pvr_device_info *dev_info,
-                           nir_shader_compiler_options *nir_options);
+void pco_setup_spirv_options(
+   const struct pvr_device_info *dev_info,
+   const struct pvr_device_runtime_info *dev_runtime_info,
+   struct spirv_to_nir_options *spirv_options);
+void pco_setup_nir_options(
+   const struct pvr_device_info *dev_info,
+   const struct pvr_device_runtime_info *dev_runtime_info,
+   nir_shader_compiler_options *nir_options);
 
 /* Debug. */
 enum pco_debug {
    PCO_DEBUG_VAL_SKIP = BITFIELD64_BIT(0),
    PCO_DEBUG_REINDEX = BITFIELD64_BIT(1),
    PCO_DEBUG_NO_PRED_CF = BITFIELD64_BIT(2),
+   PCO_DEBUG_ALLOC_EXTRA_VTXINS = BITFIELD64_BIT(3),
+   PCO_DEBUG_INT_SMP = BITFIELD64_BIT(4),
+   PCO_DEBUG_GLOBAL_SHMEM = BITFIELD64_BIT(5),
+   PCO_DEBUG_RA_FORCE_SPILL = BITFIELD64_BIT(6),
+   PCO_DEBUG_RA_SKIP_OPT = BITFIELD64_BIT(7),
 };
 
 extern uint64_t pco_debug;
@@ -75,6 +87,7 @@ enum pco_debug_print {
    PCO_DEBUG_PRINT_BINARY = BITFIELD64_BIT(6),
    PCO_DEBUG_PRINT_VERBOSE = BITFIELD64_BIT(7),
    PCO_DEBUG_PRINT_RA = BITFIELD64_BIT(8),
+   PCO_DEBUG_PRINT_STATS = BITFIELD64_BIT(9),
 };
 
 extern uint64_t pco_debug_print;
@@ -92,6 +105,7 @@ typedef struct _pco_cf_node pco_cf_node;
 typedef struct _pco_func pco_func;
 typedef struct _pco_block pco_block;
 typedef struct _pco_instr pco_instr;
+typedef struct _pco_builder pco_builder;
 
 #define PCO_REF_VAL_BITS (32U)
 
@@ -352,6 +366,7 @@ typedef struct _pco_func {
    unsigned next_loop; /** Next loop index. */
 
    unsigned temps; /** Number of temps allocated. */
+   unsigned vtxins; /** Number of vertex input registers used. */
 
    pco_ref emc; /** Execution mask counter register. */
 
@@ -729,6 +744,10 @@ PCO_DEFINE_CAST(pco_cf_node_as_func,
 #define pco_foreach_instr_src_hwreg(psrc, instr) \
    pco_foreach_instr_src (psrc, instr)           \
       if (pco_ref_is_hwreg(*psrc))
+
+#define pco_foreach_instr_src_vtxin_reg(psrc, instr) \
+   pco_foreach_instr_src (psrc, instr)               \
+      if (pco_ref_is_vtxin(*psrc))
 
 #define pco_cf_node_head(list) list_first_entry(list, pco_cf_node, link)
 #define pco_cf_node_tail(list) list_last_entry(list, pco_cf_node, link)
@@ -1489,6 +1508,18 @@ static inline pco_instr *pco_last_instr(pco_block *block)
 }
 
 /**
+ * \brief Returns whether an instruction is the last instruction in its block.
+ *
+ * \param[in] instr The instruction.
+ * \return True if the instruction is the last instruction in its block.
+ */
+static inline bool pco_is_last_instr(pco_instr *instr)
+{
+   pco_instr *last_instr = pco_last_instr(instr->parent_block);
+   return instr == last_instr;
+}
+
+/**
  * \brief Returns the next instruction.
  *
  * \param[in] instr The current instruction.
@@ -1534,6 +1565,9 @@ static inline pco_instr *pco_prev_instr(pco_instr *instr)
  */
 static inline pco_igrp *pco_first_igrp(pco_block *block)
 {
+   if (list_is_empty(&block->instrs))
+      return NULL;
+
    return list_first_entry(&block->instrs, pco_igrp, link);
 }
 
@@ -1545,7 +1579,10 @@ static inline pco_igrp *pco_first_igrp(pco_block *block)
  */
 static inline pco_igrp *pco_last_igrp(pco_block *block)
 {
-   return list_first_entry(&block->instrs, pco_igrp, link);
+   if (list_is_empty(&block->instrs))
+      return NULL;
+
+   return list_last_entry(&block->instrs, pco_igrp, link);
 }
 
 /**
@@ -1721,6 +1758,24 @@ static inline bool pco_should_print_binary(pco_shader *shader)
    return true;
 }
 
+static inline bool pco_should_print_stats(pco_shader *shader)
+{
+   if (!PCO_DEBUG_PRINT(STATS))
+      return false;
+
+   if (shader->is_internal && !PCO_DEBUG_PRINT(INTERNAL))
+      return false;
+
+   if (shader->stage == MESA_SHADER_VERTEX && !PCO_DEBUG_PRINT(VS))
+      return false;
+   else if (shader->stage == MESA_SHADER_FRAGMENT && !PCO_DEBUG_PRINT(FS))
+      return false;
+   else if (shader->stage == MESA_SHADER_COMPUTE && !PCO_DEBUG_PRINT(CS))
+      return false;
+
+   return true;
+}
+
 /* Interface with NIR. */
 typedef union PACKED _pco_smp_flags {
    struct PACKED {
@@ -1749,10 +1804,11 @@ bool pco_const_imms(pco_shader *shader);
 bool pco_bool(pco_shader *shader);
 bool pco_cf(pco_shader *shader);
 bool pco_dce(pco_shader *shader);
+bool pco_post_ra_legalize(pco_shader *shader);
+bool pco_pre_ra_legalize(pco_shader *shader);
 bool pco_end(pco_shader *shader);
 bool pco_group_instrs(pco_shader *shader);
 bool pco_index(pco_shader *shader, bool skip_ssa);
-bool pco_legalize(pco_shader *shader);
 bool pco_opt_comp_only_vecs(pco_shader *shader);
 bool pco_nir_compute_instance_check(nir_shader *shader);
 bool pco_nir_link_clip_cull_vars(nir_shader *producer, nir_shader *consumer);
@@ -1764,18 +1820,20 @@ bool pco_nir_lower_algebraic_late(nir_shader *shader);
 bool pco_nir_lower_alpha_to_coverage(nir_shader *shader);
 bool pco_nir_lower_atomics(nir_shader *shader, pco_data *data);
 bool pco_nir_lower_barriers(nir_shader *shader, pco_data *data);
-bool pco_nir_lower_clip_cull_vars(nir_shader *shader);
+void pco_nir_lower_clip_cull_vars(nir_shader *shader);
 bool pco_nir_lower_fs_intrinsics(nir_shader *shader);
 bool pco_nir_lower_vs_intrinsics(nir_shader *shader);
-bool pco_nir_lower_images(nir_shader *shader, pco_data *data);
+bool pco_nir_lower_images(nir_shader *shader, pco_data *data, pco_ctx *ctx);
 bool pco_nir_lower_interpolation(nir_shader *shader, pco_fs_data *fs);
 bool pco_nir_lower_io(nir_shader *shader);
+bool pco_nir_lower_shared_io_to_global(nir_shader *shader, unsigned usc_slots);
 bool pco_nir_lower_subgroups(nir_shader *shader);
 bool pco_nir_lower_tex(nir_shader *shader, pco_data *data, pco_ctx *ctx);
 bool pco_nir_lower_variables(nir_shader *shader, bool inputs, bool outputs);
 bool pco_nir_lower_vk(nir_shader *shader, pco_data *data);
 bool pco_nir_pfo(nir_shader *shader, pco_fs_data *fs);
 bool pco_nir_point_size(nir_shader *shader);
+bool pco_nir_prop_access(nir_shader *shader);
 bool pco_nir_pvi(nir_shader *shader, pco_vs_data *vs);
 bool pco_opt(pco_shader *shader);
 bool pco_ra(pco_shader *shader);
@@ -1785,11 +1843,10 @@ bool pco_shrink_vecs(pco_shader *shader);
 typedef enum {
    pco_nir_lower_null_descriptor_ubo = (1 << 0),
    pco_nir_lower_null_descriptor_ssbo = (1 << 1),
-   pco_nir_lower_null_descriptor_global = (1 << 2),
-   pco_nir_lower_null_descriptor_texture = (1 << 3),
-   pco_nir_lower_null_descriptor_image = (1 << 4),
+   pco_nir_lower_null_descriptor_texture = (1 << 2),
+   pco_nir_lower_null_descriptor_image = (1 << 3),
 
-   pco_nir_lower_null_descriptor_all = BITFIELD_MASK(5),
+   pco_nir_lower_null_descriptor_all = BITFIELD_MASK(4),
 } pco_nir_lower_null_descriptor_options;
 
 bool pco_nir_lower_null_descriptors(
@@ -1958,6 +2015,17 @@ static inline bool pco_ref_is_drc(pco_ref ref)
 static inline bool pco_ref_is_scalar(pco_ref ref)
 {
    return !ref.chans;
+}
+
+/**
+ * \brief Return whether a reference is a vertex input register.
+ *
+ * \param[in] ref PCO reference.
+ * \return True if the reference is a vertex input register.
+ */
+static inline bool pco_ref_is_vtxin(pco_ref ref)
+{
+   return ref.type == PCO_REF_TYPE_REG && ref.reg_class == PCO_REG_CLASS_VTXIN;
 }
 
 /* PCO ref getters. */
@@ -3063,10 +3131,15 @@ static inline unsigned pco_branch_rel_offset(pco_igrp *br, pco_cf_node *cf_node)
    return pco_cf_node_offset(cf_node) - pco_igrp_offset(br);
 }
 
-static inline unsigned pco_branch_rel_offset_next_igrp(pco_igrp *br)
+static inline unsigned pco_branch_rel_offset_next_igrp(pco_igrp *br, bool skip_next)
 {
    pco_igrp *next_igrp = pco_next_igrp(br);
    assert(next_igrp);
+
+   if (skip_next) {
+      next_igrp = pco_next_igrp(next_igrp);
+      assert(next_igrp);
+   }
 
    return pco_igrp_offset(next_igrp) - pco_igrp_offset(br);
 }
@@ -3099,8 +3172,9 @@ static inline bool pco_should_skip_pass(const char *pass)
 
 /* Common hw constants/references. */
 
-/** Integer/float zero. */
+/** Integer/float zero/false. */
 #define pco_zero pco_ref_hwreg(0, PCO_REG_CLASS_CONST)
+#define pco_false pco_zero
 
 /** Integer one. */
 #define pco_one pco_ref_hwreg(1, PCO_REG_CLASS_CONST)
@@ -3120,8 +3194,9 @@ static inline bool pco_should_skip_pass(const char *pass)
 /** Integer 31. */
 #define pco_31 pco_ref_hwreg(31, PCO_REG_CLASS_CONST)
 
-/** Integer -1/true/0xffffffff. */
+/** Integer -1/true/0xffffffff/u32max. */
 #define pco_true pco_ref_hwreg(143, PCO_REG_CLASS_CONST)
+#define pco_u32max pco_true
 
 /** Float 1. */
 #define pco_fone pco_ref_hwreg(64, PCO_REG_CLASS_CONST)
@@ -3175,5 +3250,15 @@ pco_unpack_desc(uint32_t packed, unsigned *desc_set, unsigned *binding)
    *desc_set = packed & 0xffff;
    *binding = packed >> 16;
 }
+
+/**
+ * \brief Returns a reference to the execution mask counter,
+ *        allocating and initialising one if it doesn't exist.
+ *
+ * \param[in,out] func The PCO function.
+ * \param[in,out] b The PCO builder.
+ * \return The execution mask counter reference.
+ */
+pco_ref pco_emc_ref(pco_func *func, pco_builder *b);
 
 #endif /* PCO_INTERNAL_H */

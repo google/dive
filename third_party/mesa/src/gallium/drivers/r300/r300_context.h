@@ -40,6 +40,18 @@ enum colormask_swizzle {
     COLORMASK_NUM_SWIZZLES
 };
 
+static inline bool r300_prim_is_lines(unsigned prim)
+{
+    switch (prim) {
+    case MESA_PRIM_LINES:
+    case MESA_PRIM_LINE_LOOP:
+    case MESA_PRIM_LINE_STRIP:
+        return true;
+    default:
+        return false;
+    }
+}
+
 struct r300_atom {
     /* Name, for debugging. */
     const char* name;
@@ -144,6 +156,9 @@ struct r300_rs_state {
 
     /* This is emitted in the draw function. */
     uint32_t color_control;         /* R300_GA_COLOR_CONTROL: 0x4278 */
+
+    float max_point_size;
+    float line_width;
 };
 
 struct r300_rs_block {
@@ -201,6 +216,13 @@ struct r300_texture_sampler_state {
     uint32_t filter0;      /* R300_TX_FILTER0: 0x4400 */
     uint32_t filter1;      /* R300_TX_FILTER1: 0x4440 */
     uint32_t border_color; /* R300_TX_BORDER_COLOR: 0x45c0 */
+};
+
+struct r300_guardband_state {
+    float vert_clip;
+    float vert_disc;
+    float horz_clip;
+    float horz_disc;
 };
 
 struct r300_textures_state {
@@ -499,6 +521,8 @@ struct r300_context {
     struct r300_atom scissor_state;
     /* Sample mask. */
     struct r300_atom sample_mask;
+    /* Guard band configuration. */
+    struct r300_atom guardband_state;
     /* Invariant state. This must be emitted to get the engine started. */
     struct r300_atom invariant_state;
     /* Viewport state. */
@@ -545,6 +569,7 @@ struct r300_context {
 
     struct pipe_stencil_ref stencil_ref;
     struct pipe_viewport_state viewport;
+    struct pipe_scissor_state viewport_scissor;
 
     /* Stream locations for SWTCL. */
     int stream_loc_notcl[16];
@@ -563,6 +588,7 @@ struct r300_context {
     int sprite_coord_enable;
     /* Whether we are drawing points, to disable sprite coord if not */
     bool is_point;
+    bool scissor_enabled;
     /* Whether two-sided color selection is enabled (AKA light_twoside). */
     bool two_sided_color;
     bool flatshade;
@@ -577,6 +603,24 @@ struct r300_context {
     bool msaa_enable;
     bool alpha_to_one;
     bool alpha_to_coverage;
+
+    /* The number of pixels outside the viewport that are not culled by the clipper.
+     * Normally, the clipper clips everything outside the viewport, however, points and lines
+     * can have vertices outside the viewport, but their edges can be inside the viewport. Those
+     * shouldn't be culled. The problem is that the register setting (VAP_GB_*_DISC_ADJ) that
+     * controls the discard distance, which depends on the point size and line width, applies to
+     * all primitive types, and we would have to set 0 distance for triangles and non-zero for
+     * points and lines whenever the primitive type changes, which would add overhead and cause
+     * context rolls.
+     *
+     * To reduce that, whenever the discard distance changes for points and lines, we keep it
+     * at that higher value up to a certain small number for all primitive types including all
+     * points and lines within a specific size. This is slightly inefficient, but it eliminates
+     * a lot of guardband state updates and context register changes.
+     */
+    float current_clip_discard_distance;
+    float min_clip_discard_distance_watermark;
+    unsigned current_rast_prim;
 
     void *dsa_decompress_zmask;
 
@@ -707,6 +751,9 @@ void r300_init_render_functions(struct r300_context *r300);
 void r300_init_state_functions(struct r300_context* r300);
 void r300_init_resource_functions(struct r300_context* r300);
 
+void r300_update_guardband_state(struct r300_context *r300);
+void r300_set_clip_discard_distance(struct r300_context *r300, float distance);
+
 /* r300_blit.c */
 void r300_decompress_zmask(struct r300_context *r300);
 void r300_decompress_zmask_locked_unsafe(struct r300_context *r300);
@@ -727,10 +774,16 @@ void r300_resume_query(struct r300_context *r300,
 void r300_stop_query(struct r300_context *r300);
 
 /* r300_render_translate.c */
+void r300_rebuild_elts_to_uint_userptr(struct pipe_context *context,
+                                       const struct pipe_draw_info *info,
+                                       unsigned add_transfer_flags,
+                                       int index_bias,
+                                       unsigned start, unsigned count,
+                                       void *out);
 void r300_translate_index_buffer(struct r300_context *r300,
                                  const struct pipe_draw_info *info,
                                  struct pipe_resource **out_index_buffer,
-                                 unsigned *index_size, unsigned index_offset,
+                                 unsigned *index_size, int index_offset,
                                  unsigned *start, unsigned count,
                                  const uint8_t **export_ptr);
 
@@ -757,6 +810,8 @@ enum r300_fb_state_change {
 
 void r300_mark_fb_state_dirty(struct r300_context *r300,
                               enum r300_fb_state_change change);
+void r300_mark_vs_code_dirty(struct r300_context *r300);
+void r300_bind_vertex_shader_variant(struct r300_context *r300);
 void r300_mark_fs_code_dirty(struct r300_context *r300);
 
 struct pipe_sampler_view *
@@ -765,6 +820,9 @@ r300_create_sampler_view_custom(struct pipe_context *pipe,
                          const struct pipe_sampler_view *templ,
                          unsigned width0_override,
                          unsigned height0_override);
+
+void
+r300_framebuffer_init(struct pipe_context *pctx, const struct pipe_framebuffer_state *fb, struct pipe_surface **cbufs, struct pipe_surface **zsbuf);
 
 /* r300_state_derived.c */
 void r300_update_derived_state(struct r300_context* r300);

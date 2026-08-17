@@ -1,6 +1,5 @@
 /*
  * Copyright 2025 Arm Ltd.
- *
  * SPDX-License-Identifier: MIT
  */
 

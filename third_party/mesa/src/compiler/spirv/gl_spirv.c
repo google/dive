@@ -1,26 +1,6 @@
 /*
  * Copyright © 2017 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #include "nir_spirv.h"
@@ -82,9 +62,15 @@ spec_constant_decoration_cb(struct vtn_builder *b, struct vtn_value *v,
    if (dec->decoration != SpvDecorationSpecId)
       return;
 
-   for (unsigned i = 0; i < b->num_specializations; i++) {
-      if (b->specializations[i].id == dec->operands[0]) {
-         b->specializations[i].defined_on_module = true;
+   if (!b->specialization)
+      return;
+
+   for (unsigned i = 0; i < b->specialization->num_entries; i++) {
+      struct nir_spirv_specialization_entry *entry =
+         &b->specialization->entries[i];
+
+      if (entry->id == dec->operands[0]) {
+         entry->defined_on_module = true;
          return;
       }
    }
@@ -229,7 +215,7 @@ vtn_validate_handle_constant_instruction(struct vtn_builder *b, SpvOp opcode,
 enum spirv_verify_result
 spirv_verify_gl_specialization_constants(
    const uint32_t *words, size_t word_count,
-   struct nir_spirv_specialization *spec, unsigned num_spec,
+   struct nir_spirv_specialization *spec,
    mesa_shader_stage stage, const char *entry_point_name)
 {
    /* vtn_warn/vtn_log uses debug.func. Setting a null to prevent crash. Not
@@ -268,8 +254,7 @@ spirv_verify_gl_specialization_constants(
       return SPIRV_VERIFY_ENTRY_POINT_NOT_FOUND;
    }
 
-   b->specializations = spec;
-   b->num_specializations = num_spec;
+   b->specialization = spec;
 
    /* Handle constant instructions (we don't need to handle
     * variables or types for gl_spirv)
@@ -279,9 +264,12 @@ spirv_verify_gl_specialization_constants(
 
    ralloc_free(b);
 
-   for (unsigned i = 0; i < num_spec; i++) {
-      if (!spec[i].defined_on_module)
-         return SPIRV_VERIFY_UNKNOWN_SPEC_INDEX;
+   if (spec) {
+      for (unsigned i = 0; i < spec->num_entries; i++) {
+         const struct nir_spirv_specialization_entry *entry = &spec->entries[i];
+         if (!entry->defined_on_module)
+            return SPIRV_VERIFY_UNKNOWN_SPEC_INDEX;
+      }
    }
 
    return SPIRV_VERIFY_OK;

@@ -447,7 +447,6 @@ NirLowerFSOutToVector::create_combined_vector(nir_builder *b,
       UNREACHABLE("combined vector must have 2 to 4 components");
    }
    nir_alu_instr *instr = nir_alu_instr_create(b->shader, op);
-   instr->exact = b->exact;
 
    int i = 0;
    unsigned k = 0;

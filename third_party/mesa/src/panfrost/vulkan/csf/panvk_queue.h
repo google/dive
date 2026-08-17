@@ -28,6 +28,7 @@ enum panvk_subqueue_id {
 struct panvk_tiler_heap {
    uint32_t chunk_size;
    struct panvk_priv_mem desc;
+   struct panvk_priv_mem oom_fbd;
    struct {
       uint32_t handle;
       uint64_t dev_addr;
@@ -43,6 +44,17 @@ struct panvk_subqueue {
     * stack pointer, nested function/exception handler calls are not supported.
     */
    struct panvk_priv_mem regs_save;
+
+
+   struct {
+      /* Mask of resources requested by this subqueue. */
+      uint32_t mask;
+      /* Address and size of the linear buffer containing REQ_RESOURCE. */
+      uint32_t cs_buffer_size;
+      uint64_t cs_buffer_addr;
+      /* Allocation */
+      struct panvk_priv_mem buf;
+   } req_resource;
 
    struct {
       struct pan_kmod_bo *bo;

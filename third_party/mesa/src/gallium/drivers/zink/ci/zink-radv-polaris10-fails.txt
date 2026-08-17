@@ -13,6 +13,7 @@ glx@glx-multithread-buffer,Crash
 glx@glx-multithread-buffer-busy-tracking-bug,Crash
 glx@glx-multithread-texture,Crash
 glx@glx-shader-sharing,Crash
+glx@glx-shader-sharing-uniforms,Crash
 
 spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex,Fail
 spec@arb_program_interface_query@arb_program_interface_query-getprogramresourceindex@'vs_input2[1][0]' on GL_PROGRAM_INPUT,Fail

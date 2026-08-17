@@ -634,14 +634,14 @@ sched_dag_init(struct ir3_postsched_ctx *ctx)
       }
 
       if (is_input(instr)) {
-         util_dynarray_append(&inputs, struct ir3_instruction *, instr);
+         util_dynarray_append(&inputs, instr);
       } else if (is_kill_or_demote(instr)) {
          util_dynarray_foreach (&inputs, struct ir3_instruction *, instrp) {
             struct ir3_instruction *input = *instrp;
             struct ir3_postsched_node *in = input->data;
             dag_add_edge_max_data(&in->dag, &n->dag, 0);
          }
-         util_dynarray_append(&kills, struct ir3_instruction *, instr);
+         util_dynarray_append(&kills, instr);
       } else if (is_tex(instr) || is_mem(instr)) {
          util_dynarray_foreach (&kills, struct ir3_instruction *, instrp) {
             struct ir3_instruction *kill = *instrp;
@@ -763,8 +763,13 @@ sched_block(struct ir3_postsched_ctx *ctx, struct ir3_block *block)
 
    sched_dag_destroy(ctx);
 
-   if (terminator)
+   if (terminator) {
+      terminator->flags |= ir3_required_sync_flags(
+         &bd->legalize_state, ctx->v->compiler, terminator);
+      ir3_update_legalize_state(&bd->legalize_state, ctx->v->compiler,
+                                terminator);
       list_addtail(&terminator->node, &block->instr_list);
+   }
 }
 
 static bool

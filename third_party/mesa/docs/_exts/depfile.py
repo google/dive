@@ -20,6 +20,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
 def create_depfile(app, env):
     if not app.config.depfile:
         return
@@ -28,6 +29,7 @@ def create_depfile(app, env):
         for doc in env.found_docs:
             path = env.doc2path(doc)
             f.write('{0}: {1}\n'.format(app.outdir, path))
+
 
 def setup(app):
     app.add_config_value('depfile', None, 'env')

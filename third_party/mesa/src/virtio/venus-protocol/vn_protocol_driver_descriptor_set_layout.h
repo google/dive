@@ -127,7 +127,7 @@ vn_sizeof_VkDescriptorSetLayoutCreateInfo_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorSetLayoutCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkDescriptorSetLayoutCreateInfo_pnext(((const VkDescriptorSetLayoutBindingFlagsCreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkDescriptorSetLayoutBindingFlagsCreateInfo_self((const VkDescriptorSetLayoutBindingFlagsCreateInfo *)pnext);
             return size;
         case VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT:
@@ -135,7 +135,7 @@ vn_sizeof_VkDescriptorSetLayoutCreateInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorSetLayoutCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkDescriptorSetLayoutCreateInfo_pnext(((const VkMutableDescriptorTypeCreateInfoEXT *)pnext)->pNext);
             size += vn_sizeof_VkMutableDescriptorTypeCreateInfoEXT_self((const VkMutableDescriptorTypeCreateInfoEXT *)pnext);
             return size;
         default:
@@ -187,7 +187,7 @@ vn_encode_VkDescriptorSetLayoutCreateInfo_pnext(struct vn_cs_encoder *enc, const
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDescriptorSetLayoutCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkDescriptorSetLayoutCreateInfo_pnext(enc, ((const VkDescriptorSetLayoutBindingFlagsCreateInfo *)pnext)->pNext);
             vn_encode_VkDescriptorSetLayoutBindingFlagsCreateInfo_self(enc, (const VkDescriptorSetLayoutBindingFlagsCreateInfo *)pnext);
             return;
         case VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT:
@@ -195,7 +195,7 @@ vn_encode_VkDescriptorSetLayoutCreateInfo_pnext(struct vn_cs_encoder *enc, const
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDescriptorSetLayoutCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkDescriptorSetLayoutCreateInfo_pnext(enc, ((const VkMutableDescriptorTypeCreateInfoEXT *)pnext)->pNext);
             vn_encode_VkMutableDescriptorTypeCreateInfoEXT_self(enc, (const VkMutableDescriptorTypeCreateInfoEXT *)pnext);
             return;
         default:
@@ -353,7 +353,7 @@ vn_sizeof_VkDescriptorSetLayoutSupport_pnext(const void *val)
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorSetLayoutSupport_pnext(pnext->pNext);
+            size += vn_sizeof_VkDescriptorSetLayoutSupport_pnext(((const VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext)->pNext);
             size += vn_sizeof_VkDescriptorSetVariableDescriptorCountLayoutSupport_self((const VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext);
             return size;
         default:
@@ -407,7 +407,7 @@ vn_decode_VkDescriptorSetLayoutSupport_pnext(struct vn_cs_decoder *dec, const vo
 
     switch ((int32_t)pnext->sType) {
     case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT:
-        vn_decode_VkDescriptorSetLayoutSupport_pnext(dec, pnext->pNext);
+        vn_decode_VkDescriptorSetLayoutSupport_pnext(dec, ((VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext)->pNext);
         vn_decode_VkDescriptorSetVariableDescriptorCountLayoutSupport_self(dec, (VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext);
         break;
     default:
@@ -446,7 +446,7 @@ vn_sizeof_VkDescriptorSetLayoutSupport_pnext_partial(const void *val)
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT:
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkDescriptorSetLayoutSupport_pnext_partial(pnext->pNext);
+            size += vn_sizeof_VkDescriptorSetLayoutSupport_pnext_partial(((const VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext)->pNext);
             size += vn_sizeof_VkDescriptorSetVariableDescriptorCountLayoutSupport_self_partial((const VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext);
             return size;
         default:
@@ -490,7 +490,7 @@ vn_encode_VkDescriptorSetLayoutSupport_pnext_partial(struct vn_cs_encoder *enc, 
         case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT:
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkDescriptorSetLayoutSupport_pnext_partial(enc, pnext->pNext);
+            vn_encode_VkDescriptorSetLayoutSupport_pnext_partial(enc, ((const VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext)->pNext);
             vn_encode_VkDescriptorSetVariableDescriptorCountLayoutSupport_self_partial(enc, (const VkDescriptorSetVariableDescriptorCountLayoutSupport *)pnext);
             return;
         default:

@@ -107,13 +107,14 @@ st_destroy_clear(struct st_context *st)
  * Helper function to set the clear color fragment shader.
  */
 static void
-set_clearcolor_fs(struct st_context *st, union pipe_color_union *color)
+set_clearcolor_fs(struct st_context *st, union pipe_color_union *color,
+                  struct pipe_resource **releasebuf)
 {
    struct pipe_constant_buffer cb = {
       .user_buffer = color->f,
       .buffer_size = 4 * sizeof(float),
    };
-   pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_FRAGMENT, &cb);
+   pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_FRAGMENT, &cb, releasebuf);
 
    if (!st->clear.fs) {
       st->clear.fs = st_nir_make_clearcolor_shader(st);
@@ -215,17 +216,9 @@ clear_with_quad(struct gl_context *ctx, unsigned clear_buffers)
 	  x1, y1);
    */
 
-   cso_save_state(cso, (CSO_BIT_BLEND |
-                        CSO_BIT_STENCIL_REF |
-                        CSO_BIT_DEPTH_STENCIL_ALPHA |
-                        CSO_BIT_RASTERIZER |
-                        CSO_BIT_SAMPLE_MASK |
-                        CSO_BIT_MIN_SAMPLES |
-                        CSO_BIT_VIEWPORT |
-                        CSO_BIT_STREAM_OUTPUTS |
-                        CSO_BIT_VERTEX_ELEMENTS |
-                        (st->active_queries ? CSO_BIT_PAUSE_QUERIES : 0) |
-                        CSO_BITS_ALL_SHADERS));
+   /* Save only states that have no st_atom — they can't be re-derived. */
+   cso_save_state(cso, (CSO_BIT_STREAM_OUTPUTS |
+                        (st->active_queries ? CSO_BIT_PAUSE_QUERIES : 0)));
 
    /* blend state: RGBA masking */
    {
@@ -293,10 +286,10 @@ clear_with_quad(struct gl_context *ctx, unsigned clear_buffers)
                          _mesa_fb_orientation(fb) == Y_0_TOP);
 
    /* Set constant buffer */
-   set_clearcolor_fs(st, (union pipe_color_union*)&ctx->Color.ClearColor);
+   struct pipe_resource *releasebuf = NULL;
+   set_clearcolor_fs(st, (union pipe_color_union*)&ctx->Color.ClearColor, &releasebuf);
    cso_set_tessctrl_shader_handle(cso, NULL);
    cso_set_tesseval_shader_handle(cso, NULL);
-   cso_set_task_shader_handle(cso, NULL);
    cso_set_mesh_shader_handle(cso, NULL);
 
    if (num_layers > 1)
@@ -320,10 +313,29 @@ clear_with_quad(struct gl_context *ctx, unsigned clear_buffers)
       _mesa_error(ctx, GL_OUT_OF_MEMORY, "glClear");
    }
 
-   /* Restore pipe state */
+   pipe_resource_release(cso->pipe, releasebuf);
+
+   /* Restore atomless states via CSO. */
    cso_restore_state(cso, 0);
-   ctx->Array.NewVertexElements = true;
-   ST_SET_STATE2(ctx->NewDriverState, ST_NEW_VERTEX_ARRAYS, ST_NEW_FS_CONSTANTS);
+
+   /* Invalidate all states this meta-op modified. The atoms will
+    * re-derive them from GL state before the next draw.
+    */
+   st_context_invalidate_state(st,
+                               ST_INVALIDATE_BLEND |
+                               ST_INVALIDATE_DSA |
+                               ST_INVALIDATE_RASTERIZER |
+                               ST_INVALIDATE_SAMPLE_MASK |
+                               ST_INVALIDATE_SAMPLE_SHADING |
+                               ST_INVALIDATE_VIEWPORT |
+                               ST_INVALIDATE_VERTEX_BUFFERS |
+                               ST_INVALIDATE_FS_CONSTBUF0 |
+                               ST_INVALIDATE_VS_STATE |
+                               ST_INVALIDATE_FS_STATE |
+                               ST_INVALIDATE_GS_STATE |
+                               ST_INVALIDATE_TCS_STATE |
+                               ST_INVALIDATE_TES_STATE |
+                               ST_INVALIDATE_MESH_STATE);
 }
 
 
@@ -388,6 +400,8 @@ st_Clear(struct gl_context *ctx, GLbitfield mask)
       = ctx->DrawBuffer->Attachment[BUFFER_DEPTH].Renderbuffer;
    struct gl_renderbuffer *stencilRb
       = ctx->DrawBuffer->Attachment[BUFFER_STENCIL].Renderbuffer;
+   uint32_t color_clear_mask = ctx->Color.ColorMask;
+   uint8_t stencil_clear_mask = ctx->Stencil.WriteMask[0] & 0xff;
    GLbitfield quad_buffers = 0x0;
    GLbitfield clear_buffers = 0x0;
    bool have_scissor_buffers = false;
@@ -425,7 +439,7 @@ st_Clear(struct gl_context *ctx, GLbitfield mask)
             bool scissor = is_scissor_enabled(ctx, rb);
             if ((scissor && !st->can_scissor_clear) ||
                 is_window_rectangle_enabled(ctx) ||
-                ((colormask & surf_colormask) != surf_colormask))
+                (((colormask & surf_colormask) != surf_colormask) && !st->pipe->screen->caps.clear_masked))
                quad_buffers |= PIPE_CLEAR_COLOR0 << i;
             else
                clear_buffers |= PIPE_CLEAR_COLOR0 << i;
@@ -450,7 +464,7 @@ st_Clear(struct gl_context *ctx, GLbitfield mask)
          bool scissor = is_scissor_enabled(ctx, stencilRb);
          if ((scissor && !st->can_scissor_clear) ||
              is_window_rectangle_enabled(ctx) ||
-             is_stencil_masked(ctx, stencilRb))
+             (is_stencil_masked(ctx, stencilRb) && !st->pipe->screen->caps.clear_masked))
             quad_buffers |= PIPE_CLEAR_STENCIL;
          else
             clear_buffers |= PIPE_CLEAR_STENCIL;
@@ -504,7 +518,9 @@ st_Clear(struct gl_context *ctx, GLbitfield mask)
       /* We can't translate the clear color to the colorbuffer format,
        * because different colorbuffers may have different formats.
        */
-      st->pipe->clear(st->pipe, clear_buffers, have_scissor_buffers ? &scissor_state : NULL,
+      st->pipe->clear(st->pipe, clear_buffers,
+                      color_clear_mask, stencil_clear_mask,
+                      have_scissor_buffers ? &scissor_state : NULL,
                       (union pipe_color_union*)&ctx->Color.ClearColor,
                       ctx->Depth.Clear, ctx->Stencil.Clear);
    }

@@ -786,14 +786,6 @@ img_deref(nir_builder *b, const struct vk_meta_copy_image_view *view,
    return nir_build_deref_var(b, image_var);
 }
 
-static nir_def *
-read_texel(nir_builder *b, nir_deref_instr *tex, nir_def *coords,
-           nir_def *sample_id)
-{
-   return sample_id ? nir_txf_ms(b, coords, sample_id, .texture_deref = tex)
-                    : nir_txf(b, coords, .texture_deref = tex);
-}
-
 static nir_variable *
 frag_var(nir_builder *b, const struct vk_meta_copy_image_view *view,
          VkImageAspectFlags aspect, uint32_t rt)
@@ -974,7 +966,7 @@ build_image_to_buffer_shader(const struct vk_meta_device *meta,
       copy_img_view_format_for_aspect(&key->img.view, key->img.aspect);
    nir_deref_instr *tex =
       tex_deref(b, &key->img.view, key->img.aspect, VK_SAMPLE_COUNT_1_BIT, 0);
-   nir_def *texel = read_texel(b, tex, img_coords, NULL);
+   nir_def *texel = nir_txf(b, img_coords, .texture_deref = tex);
 
    texel = convert_texel(b, iview_fmt, buf_fmt, texel);
 
@@ -994,8 +986,8 @@ build_image_to_buffer_shader(const struct vk_meta_device *meta,
     * that's fine because we pass a write_mask to store_global.
     */
    assert(texel->num_components >= comp_count);
-   nir_store_global(b, copy_img_buf_addr(b, buf_pfmt, copy_id),
-                    comp_sz / 8, texel, nir_component_mask(comp_count));
+   nir_store_global(b, texel, copy_img_buf_addr(b, buf_pfmt, copy_id),
+                    .write_mask = nir_component_mask(comp_count));
 
    nir_pop_if(b, NULL);
 
@@ -1063,7 +1055,7 @@ build_buffer_to_image_fs(const struct vk_meta_device *meta,
 
    coords = nir_isub(b, coords, img_offs);
 
-   nir_def *texel = nir_build_load_global(b,
+   nir_def *texel = nir_load_global(b,
       comp_count, comp_sz, copy_img_buf_addr(b, buf_pfmt, coords),
       .align_mul = 1 << (ffs(blk_sz) - 1));
 
@@ -1161,7 +1153,7 @@ build_buffer_to_image_cs(const struct vk_meta_device *meta,
    unsigned bit_sz = blk_sz & 1 ? 8 : blk_sz & 2 ? 16 : 32;
    unsigned comp_count = blk_sz * 8 / bit_sz;
 
-   nir_def *texel = nir_build_load_global(b,
+   nir_def *texel = nir_load_global(b,
          comp_count, bit_sz, copy_img_buf_addr(b, buf_pfmt, copy_id),
          .align_mul = 1 << (ffs(blk_sz) - 1));
 
@@ -1726,7 +1718,8 @@ build_copy_image_fs(const struct vk_meta_device *meta, const void *key_data)
          copy_img_view_format_for_aspect(&key->dst.view, dst_aspect);
       nir_deref_instr *tex =
          tex_deref(b, &key->src.view, src_aspect, key->samples, tex_binding++);
-      nir_def *texel = read_texel(b, tex, src_coords, sample_id);
+      nir_def *texel = nir_txf(b, src_coords, .texture_deref = tex,
+                               .ms_index = sample_id);
 
       if (!color_var || !depth_stencil_interleaved(&key->dst.view)) {
          color_var =
@@ -1826,7 +1819,8 @@ build_copy_image_cs(const struct vk_meta_device *meta, const void *key_data)
       for (uint32_t s = 0; s < key->samples; s++) {
          nir_def *sample_id =
             key->samples == VK_SAMPLE_COUNT_1_BIT ? NULL : nir_imm_int(b, s);
-         nir_def *texel = read_texel(b, tex, src_coords, sample_id);
+         nir_def *texel = nir_txf(b, src_coords, .texture_deref = tex,
+                                                 .ms_index = sample_id);
 
          texel = convert_texel(b, src_fmt, dst_fmt, texel);
          write_img(b, &key->dst.view, dst_aspect, key->samples, img, dst_coords,
@@ -2369,11 +2363,11 @@ build_copy_buffer_shader(const struct vk_meta_device *meta,
 
    nir_def *src_addr = load_info(b, struct vk_meta_copy_buffer_info, src_addr);
    nir_def *dst_addr = nir_load_push_constant(b, 1, 64, nir_imm_int(b, 8));
-   nir_def *data = nir_build_load_global(b, chunk_comp_count, chunk_bit_size,
+   nir_def *data = nir_load_global(b, chunk_comp_count, chunk_bit_size,
                                          nir_iadd(b, src_addr, offset),
                                          .align_mul = chunk_bit_size / 8);
 
-   nir_build_store_global(b, data, nir_iadd(b, dst_addr, offset),
+   nir_store_global(b, data, nir_iadd(b, dst_addr, offset),
                           .align_mul = key->chunk_size);
 
    nir_pop_if(b, NULL);
@@ -2552,7 +2546,7 @@ build_fill_buffer_shader(const struct vk_meta_device *meta,
    nir_def *buf_addr =
       load_info(b, struct vk_meta_fill_buffer_info, buf_addr);
 
-   nir_build_store_global(b, data, nir_iadd(b, buf_addr, offset),
+   nir_store_global(b, data, nir_iadd(b, buf_addr, offset),
                           .align_mul = 4);
 
    nir_pop_if(b, NULL);

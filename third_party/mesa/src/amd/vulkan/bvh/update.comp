@@ -8,7 +8,9 @@
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-#include "build_interface.h"
+#include "bvh_defines.h"
+#define VK_USED_BUILD_FLAGS RADV_UPDATE_BUILD_FLAGS
+#include "bvh_helpers.h"
 #include "update.h"
 
 layout(push_constant) uniform CONSTS {
@@ -42,22 +44,13 @@ void main() {
     VOID_REF dst_ptr = OFFSET(dst_bvh, dst_offset);
     uint32_t src_offset = gl_GlobalInvocationID.x * args.geom_data.stride;
 
-    vk_aabb bounds;
-    bool is_active;
+    vk_aabb bounds = vk_aabb(vec3(0.0f), vec3(0.0f));
     if (args.geom_data.geometry_type == VK_GEOMETRY_TYPE_TRIANGLES_KHR) {
-        is_active = radv_build_triangle(bounds, dst_ptr, args.geom_data, gl_GlobalInvocationID.x, false);
+        radv_build_triangle(bounds, dst_ptr, args.geom_data, gl_GlobalInvocationID.x, false);
     } else {
         VOID_REF src_ptr = OFFSET(args.geom_data.data, src_offset);
-        is_active = radv_build_aabb(bounds, src_ptr, dst_ptr, args.geom_data.geometry_id, gl_GlobalInvocationID.x, false);
+        radv_build_aabb(bounds, src_ptr, dst_ptr, args.geom_data.geometry_id, gl_GlobalInvocationID.x, false);
     }
-
-    if (!is_active)
-        return;
-
-    DEREF(INDEX(vk_aabb, args.leaf_bounds, leaf_node_id)) = bounds;
-    memoryBarrier(gl_ScopeDevice,
-        gl_StorageSemanticsBuffer,
-        gl_SemanticsAcquireRelease | gl_SemanticsMakeAvailable | gl_SemanticsMakeVisible);
 
     uint32_t node_id = pack_node_id(dst_offset, 0);
     uint32_t parent_id = fetch_parent_node(src_bvh, node_id);
@@ -69,16 +62,26 @@ void main() {
         if (parent_id == RADV_BVH_ROOT_NODE)
             parent_index = 0;
 
-        /* Make accesses to internal nodes in dst_bvh available and visible */
-        memoryBarrier(gl_ScopeDevice,
-                      gl_StorageSemanticsBuffer,
-                      gl_SemanticsAcquireRelease | gl_SemanticsMakeAvailable | gl_SemanticsMakeVisible);
-
         REF(radv_bvh_box32_node) src_node = REF(radv_bvh_box32_node)OFFSET(src_bvh, offset);
         REF(radv_bvh_box32_node) dst_node = REF(radv_bvh_box32_node)OFFSET(dst_bvh, offset);
         uint32_t children[4];
         for (uint32_t i = 0; i < 4; ++i)
             children[i] = DEREF(src_node).children[i];
+
+        uint32_t child_index = 0;
+        if (node_id == children[1])
+            child_index = 1;
+        if (node_id == children[2])
+            child_index = 2;
+        if (node_id == children[3])
+            child_index = 3;
+
+        DEREF(dst_node).coords[child_index] = bounds;
+
+        /* Make accesses to internal nodes in dst_bvh available and visible */
+        memoryBarrier(gl_ScopeDevice,
+                      gl_StorageSemanticsBuffer,
+                      gl_SemanticsAcquireRelease | gl_SemanticsMakeAvailable | gl_SemanticsMakeVisible);
 
         uint32_t valid_child_count = 0;
         for (uint32_t i = 0; i < 4; ++valid_child_count, ++i)
@@ -96,43 +99,24 @@ void main() {
         if (ready_child_count != valid_child_count - 1)
             break;
 
-        if (!VK_BUILD_FLAG(RADV_BUILD_FLAG_UPDATE_IN_PLACE)) {
+        if (!RADV_TEST_BUILD_FLAG_UPDATE_IN_PLACE) {
             for (uint32_t i = 0; i < 4; ++i)
                 DEREF(dst_node).children[i] = children[i];
+            if (VK_TEST_BUILD_FLAG_PROPAGATE_CULL_FLAGS)
+                DEREF(dst_node).flags = DEREF(src_node).flags;
         }
 
+        bounds = vk_aabb(vec3(INFINITY), vec3(-INFINITY));
         for (uint32_t i = 0; i < valid_child_count; ++i) {
-            uint32_t child_offset = id_to_offset(children[i]);
-            vk_aabb child_bounds;
-            if (child_offset == dst_offset)
-                child_bounds = bounds;
-            else if (child_offset >= internal_nodes_offset) {
-                child_bounds = vk_aabb(vec3(INFINITY), vec3(-INFINITY));
-                REF(radv_bvh_box32_node) child_node = REF(radv_bvh_box32_node)OFFSET(dst_bvh, child_offset);
-                for (uint32_t j = 0; j < 4; ++j) {
-                    if (DEREF(child_node).children[j] == RADV_BVH_INVALID_NODE)
-                        break;
-                    child_bounds.min = min(child_bounds.min, DEREF(child_node).coords[j].min);
-                    child_bounds.max = max(child_bounds.max, DEREF(child_node).coords[j].max);
-                }
-            } else {
-                uint32_t child_index = (child_offset - first_leaf_offset) / leaf_node_size;
-                child_bounds = DEREF(INDEX(vk_aabb, args.leaf_bounds, child_index));
-            }
-
-            DEREF(dst_node).coords[i] = child_bounds;
+            vk_aabb child_bounds = DEREF(dst_node).coords[i];
+            bounds.min = min(bounds.min, child_bounds.min);
+            bounds.max = max(bounds.max, child_bounds.max);
         }
 
-        if (parent_id == RADV_BVH_ROOT_NODE) {
-            vk_aabb root_bounds = vk_aabb(vec3(INFINITY), vec3(-INFINITY));
-            for (uint32_t i = 0; i < valid_child_count; ++i) {
-                vk_aabb bounds = DEREF(dst_node).coords[i];
-                root_bounds.min = min(root_bounds.min, bounds.min);
-                root_bounds.max = max(root_bounds.max, bounds.max);
-            }
-            DEREF(args.dst).aabb = root_bounds;
-        }
+        if (parent_id == RADV_BVH_ROOT_NODE)
+            DEREF(args.dst).aabb = bounds;
 
-        parent_id = fetch_parent_node(src_bvh, parent_id);
+        node_id = parent_id;
+        parent_id = fetch_parent_node(src_bvh, node_id);
     }
 }

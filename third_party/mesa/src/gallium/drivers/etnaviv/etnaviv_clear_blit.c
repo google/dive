@@ -64,7 +64,16 @@ etna_blit_save_state(struct etna_context *ctx, bool render_cond)
    util_blitter_save_depth_stencil_alpha(ctx->blitter, ctx->zsa);
    util_blitter_save_stencil_ref(ctx->blitter, &ctx->stencil_ref_s);
    util_blitter_save_sample_mask(ctx->blitter, ctx->sample_mask, 0);
-   util_blitter_save_framebuffer(ctx->blitter, &ctx->framebuffer_s);
+
+   /* Save the framebuffer without the appended 128-bit companion slots, the
+    * restore goes through etna_set_framebuffer_state(..) which appends them
+    * again.
+    */
+   struct pipe_framebuffer_state fb = ctx->framebuffer_s.base;
+   while (fb.nr_cbufs && ctx->framebuffer_s.companion_src[fb.nr_cbufs - 1] != -1)
+      fb.nr_cbufs--;
+
+   util_blitter_save_framebuffer(ctx->blitter, &fb);
    util_blitter_save_fragment_sampler_states(ctx->blitter,
          ctx->num_fragment_samplers, (void **)ctx->sampler);
    util_blitter_save_fragment_sampler_views(ctx->blitter,
@@ -83,6 +92,7 @@ etna_clear_blit_pack_rgba(enum pipe_format format, const union pipe_color_union 
 {
    union util_color uc;
 
+   format = translate_pe_internal_format(format);
    util_pack_color_union(format, &uc, color);
 
    switch (util_format_get_blocksize(format)) {
@@ -98,6 +108,33 @@ etna_clear_blit_pack_rgba(enum pipe_format format, const union pipe_color_union 
    default:
       return (uint64_t) uc.ui[1] << 32 | uc.ui[0];
    }
+}
+
+static void
+etna_blit_stencil_fallback(struct pipe_context *pctx,
+                           const struct pipe_blit_info *info)
+{
+   struct etna_context *ctx = etna_context(pctx);
+   struct pipe_surface dst_templ;
+
+   util_blitter_default_dst_texture(&dst_templ, info->dst.resource,
+                                    info->dst.level, info->dst.box.z);
+
+   etna_blit_save_state(ctx, info->render_condition_enable);
+   util_blitter_clear_depth_stencil(ctx->blitter, &dst_templ,
+                                    PIPE_CLEAR_STENCIL, 0, 0,
+                                    info->dst.box.x, info->dst.box.y,
+                                    info->dst.box.width,
+                                    info->dst.box.height);
+
+   etna_blit_save_state(ctx, info->render_condition_enable);
+   util_blitter_stencil_fallback(ctx->blitter,
+                                 info->dst.resource, info->dst.level,
+                                 &info->dst.box,
+                                 info->src.resource, info->src.level,
+                                 &info->src.box,
+                                 info->scissor_enable ? &info->scissor
+                                                      : NULL);
 }
 
 static void
@@ -131,6 +168,20 @@ etna_blit(struct pipe_context *pctx, const struct pipe_blit_info *blit_info)
                                  &etna_resource(info.dst.resource)->levels[info.dst.level]))
       info.dst.resource = dst->texture;
 
+   /* RS/BLT can only copy whole pixels, so a multisampled depth-stencil
+    * surface can not be resolved for depth or stencil alone.
+    * Promote the mask to the full format and resolve the whole pixel, like the
+    * blob does.
+    */
+   if (info.src.resource->nr_samples > 1 &&
+       info.src.format == info.dst.format &&
+       util_format_is_depth_and_stencil(info.dst.format)) {
+      unsigned format_mask = util_format_get_mask(info.dst.format);
+
+      if (info.mask & format_mask)
+         info.mask |= format_mask;
+   }
+
    if (ctx->blit(pctx, &info))
       goto success;
 
@@ -138,8 +189,22 @@ etna_blit(struct pipe_context *pctx, const struct pipe_blit_info *blit_info)
       goto success;
 
    if (info.mask & PIPE_MASK_S) {
-      DBG("cannot blit stencil, skipping");
-      info.mask &= ~PIPE_MASK_S;
+      enum pipe_format stencil_format = util_format_stencil_only(info.src.format);
+      struct pipe_screen *screen = pctx->screen;
+
+      if (stencil_format != PIPE_FORMAT_NONE &&
+          screen->is_format_supported(screen, stencil_format,
+                                      info.src.resource->target,
+                                      info.src.resource->nr_samples,
+                                      info.src.resource->nr_storage_samples,
+                                      PIPE_BIND_SAMPLER_VIEW)) {
+         etna_blit_stencil_fallback(pctx, &info);
+         info.mask &= ~PIPE_MASK_S;
+         if (!info.mask)
+            goto success;
+      } else {
+         DBG("cannot blit stencil, skipping");
+      }
    }
 
    if (!util_blitter_is_blit_supported(ctx->blitter, &info)) {
@@ -209,26 +274,67 @@ etna_resource_copy_region(struct pipe_context *pctx, struct pipe_resource *dst,
 static void
 etna_flush_resource(struct pipe_context *pctx, struct pipe_resource *prsc)
 {
+   struct etna_context *ctx = etna_context(pctx);
    struct etna_resource *rsc = etna_resource(prsc);
+
+   /* When flushing a shared resource with an RB_SWAP format, the PE has
+    * written BGRA bytes internally. Convert to RGBA during the flush copy
+    * so the shared buffer has the correct byte order for external consumers. */
+   const bool flush_rb_swap = rsc->shared &&
+                              translate_pe_format_rb_swap(prsc->format);
 
    if (rsc->render) {
       if (etna_resource_older(rsc, etna_resource(rsc->render))) {
          if (rsc->damage) {
             for (unsigned i = 0; i < rsc->num_damage; i++) {
-               etna_copy_resource_box(pctx, prsc, rsc->render, 0, 0, &rsc->damage[i]);
+               etna_copy_resource_box(pctx, prsc, rsc->render, 0, 0,
+                                      &rsc->damage[i], flush_rb_swap);
             }
          } else {
-            etna_copy_resource(pctx, prsc, rsc->render, 0, 0);
+            etna_copy_resource(pctx, prsc, rsc->render, 0, 0, flush_rb_swap);
          }
+
+         if (flush_rb_swap)
+            rsc->shared_native_order = true;
       }
    } else if (!etna_resource_ext_ts(rsc) && etna_resource_needs_flush(rsc)) {
-      etna_copy_resource(pctx, prsc, prsc, 0, 0);
+      etna_copy_resource(pctx, prsc, prsc, 0, 0, flush_rb_swap);
+
+      if (flush_rb_swap) {
+         rsc->shared_native_order = true;
+         etna_resource_level_mark_changed(&rsc->levels[0]);
+      }
+   } else if (flush_rb_swap) {
+      /* No render shadow and no TS — PE rendered directly into the shared
+       * buffer. If the fragment shader already swapped R/B (LINEAR_PE),
+       * bytes are already correct. Otherwise we need to swap here. */
+      if (!rsc->shared_native_order) {
+         assert(prsc->last_level == 0);
+         struct etna_resource_level *lev = &rsc->levels[0];
+         struct pipe_blit_info blit = {
+            .mask = util_format_get_mask(prsc->format),
+            .filter = PIPE_TEX_FILTER_NEAREST,
+            .src.resource = blit.dst.resource = prsc,
+            .src.format = blit.dst.format = prsc->format,
+            .src.box.width = blit.dst.box.width = lev->width,
+            .src.box.height = blit.dst.box.height = lev->height,
+            .src.box.depth = blit.dst.box.depth = 1,
+         };
+
+         ctx->blit_rb_swap = true;
+         ctx->blit(pctx, &blit);
+         ctx->blit_rb_swap = false;
+
+         rsc->shared_native_order = true;
+         etna_resource_level_mark_changed(&rsc->levels[0]);
+      }
    }
 }
 
 void
 etna_copy_resource(struct pipe_context *pctx, struct pipe_resource *dst,
-                   struct pipe_resource *src, int first_level, int last_level)
+                   struct pipe_resource *src, int first_level, int last_level,
+                   bool rb_swap)
 {
    struct etna_context *ctx = etna_context(pctx);
    struct etna_resource *src_priv = etna_resource(src);
@@ -237,6 +343,8 @@ etna_copy_resource(struct pipe_context *pctx, struct pipe_resource *dst,
    assert(src->format == dst->format || util_format_is_yuv(src->format));
    assert(src->array_size == dst->array_size);
    assert(last_level <= dst->last_level && last_level <= src->last_level);
+
+   ctx->blit_rb_swap = rb_swap;
 
    struct pipe_blit_info blit = {};
    blit.mask = util_format_get_mask(dst->format);
@@ -282,12 +390,14 @@ etna_copy_resource(struct pipe_context *pctx, struct pipe_resource *dst,
       else
          etna_resource_level_copy_seqno(&dst_priv->levels[level], &src_priv->levels[level]);
    }
+
+   ctx->blit_rb_swap = false;
 }
 
 void
 etna_copy_resource_box(struct pipe_context *pctx, struct pipe_resource *dst,
                        struct pipe_resource *src, int dst_level, int src_level,
-                       struct pipe_box *box)
+                       struct pipe_box *box, bool rb_swap)
 {
    struct etna_context *ctx = etna_context(pctx);
    struct etna_resource *src_priv = etna_resource(src);
@@ -297,14 +407,18 @@ etna_copy_resource_box(struct pipe_context *pctx, struct pipe_resource *dst,
    assert(src->array_size == dst->array_size);
    assert(!etna_resource_level_needs_flush(&dst_priv->levels[dst_level]));
 
+   ctx->blit_rb_swap = rb_swap;
+
+   enum pipe_format format = translate_emulated_format_z32f(dst->format);
+
    struct pipe_blit_info blit = {};
-   blit.mask = util_format_get_mask(dst->format);
+   blit.mask = util_format_get_mask(format);
    blit.filter = PIPE_TEX_FILTER_NEAREST;
    blit.src.resource = src;
-   blit.src.format = src->format;
+   blit.src.format = format;
    blit.src.box = *box;
    blit.dst.resource = dst;
-   blit.dst.format = dst->format;
+   blit.dst.format = format;
    blit.dst.box = *box;
 
    blit.dst.box.depth = blit.src.box.depth = 1;
@@ -324,6 +438,8 @@ etna_copy_resource_box(struct pipe_context *pctx, struct pipe_resource *dst,
    else
       etna_resource_level_copy_seqno(&dst_priv->levels[dst_level],
                                      &src_priv->levels[src_level]);
+
+   ctx->blit_rb_swap = false;
 }
 
 void

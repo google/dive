@@ -153,9 +153,11 @@ driCreateConfigs(enum pipe_format format,
    unsigned num_accum_bits = (enable_accum) ? 2 : 1;
    bool is_srgb;
    bool is_float;
+   bool is_unorm16;
 
    is_srgb = util_format_is_srgb(format);
    is_float = util_format_is_float(format);
+   is_unorm16 = util_format_is_unorm16(util_format_description(format));
 
    for (i = 0; i < 4; i++) {
       color_bits[i] =
@@ -168,7 +170,11 @@ driCreateConfigs(enum pipe_format format,
          shifts[i] = -1;
       }
 
-      if (is_float || color_bits[i] == 0)
+      /* is_float and is_unorm16 is only true on non-x11 target platforms, which
+       * don't actually use redMask, greenMask, ..., so avoid setting masks[]
+       * to prevent a meaningless "undefined behaviour" build warning.
+       */
+      if (is_float || is_unorm16 || color_bits[i] == 0)
          masks[i] = 0;
       else
          masks[i] = ((1u << color_bits[i]) - 1) << shifts[i];
@@ -324,6 +330,8 @@ dri_fill_in_modes(struct dri_screen *screen)
       PIPE_FORMAT_B5G6R5_UNORM,
       PIPE_FORMAT_R16G16B16A16_FLOAT,
       PIPE_FORMAT_R16G16B16X16_FLOAT,
+      PIPE_FORMAT_R16G16B16A16_UNORM,
+      PIPE_FORMAT_R16G16B16X16_UNORM,
       PIPE_FORMAT_RGBA8888_UNORM,
       PIPE_FORMAT_RGBX8888_UNORM,
       PIPE_FORMAT_RGBA8888_SRGB,
@@ -341,6 +349,7 @@ dri_fill_in_modes(struct dri_screen *screen)
    bool mixed_color_depth;
    bool allow_rgba_ordering;
    bool allow_rgb10;
+   bool allow_rgb16;
    bool allow_fp16;
 
    static const bool db_modes[] = { false, true };
@@ -350,6 +359,7 @@ dri_fill_in_modes(struct dri_screen *screen)
 
    allow_rgba_ordering = dri_loader_get_cap(screen, DRI_LOADER_CAP_RGBA_ORDERING);
    allow_rgb10 = driQueryOptionb(&screen->dev->option_cache, "allow_rgb10_configs");
+   allow_rgb16 = driQueryOptionb(&screen->dev->option_cache, "allow_rgb16_configs");
    allow_fp16 = dri_loader_get_cap(screen, DRI_LOADER_CAP_FP16);
 
 #define HAS_ZS(fmt) \
@@ -372,6 +382,8 @@ dri_fill_in_modes(struct dri_screen *screen)
 
    if (HAS_ZS(Z32_UNORM))
       zs_formats[num_zs_formats++] = PIPE_FORMAT_Z32_UNORM;
+   else if (HAS_ZS(Z32_FLOAT))
+      zs_formats[num_zs_formats++] = PIPE_FORMAT_Z32_FLOAT;
 
 #undef HAS_ZS
 
@@ -403,6 +415,16 @@ dri_fill_in_modes(struct dri_screen *screen)
                                          UTIL_FORMAT_COLORSPACE_RGB, 1) == 10 &&
           util_format_get_component_bits(pipe_formats[f],
                                          UTIL_FORMAT_COLORSPACE_RGB, 2) == 10)
+         continue;
+
+      /* Block RGB[A]16_UNORM formats, if forbidden by config */
+      if (!allow_rgb16 && !util_format_is_float(pipe_formats[f]) &&
+          util_format_get_component_bits(pipe_formats[f],
+                                         UTIL_FORMAT_COLORSPACE_RGB, 0) == 16 &&
+          util_format_get_component_bits(pipe_formats[f],
+                                         UTIL_FORMAT_COLORSPACE_RGB, 1) == 16 &&
+          util_format_get_component_bits(pipe_formats[f],
+                                         UTIL_FORMAT_COLORSPACE_RGB, 2) == 16)
          continue;
 
       if (!allow_fp16 && util_format_is_float(pipe_formats[f]))
@@ -574,6 +596,7 @@ dri_destroy_screen(struct dri_screen *screen)
 {
    dri_release_screen(screen);
 
+   free(screen->options.force_explicit_uniform_loc_zero);
    free(screen->options.force_gl_vendor);
    free(screen->options.force_gl_renderer);
    free(screen->options.mesa_extension_override);
@@ -583,17 +606,6 @@ dri_destroy_screen(struct dri_screen *screen)
 
    /* The caller in dri_util preserves the fd ownership */
    free(screen);
-}
-
-static void
-dri_postprocessing_init(struct dri_screen *screen)
-{
-   unsigned i;
-
-   for (i = 0; i < PP_FILTERS; i++) {
-      screen->pp_enabled[i] = driQueryOptioni(&screen->dev->option_cache,
-                                              pp_filters[i].name);
-   }
 }
 
 static void
@@ -623,7 +635,6 @@ dri_init_screen(struct dri_screen *screen,
       screen->target = PIPE_TEXTURE_RECT;
 
    dri_init_options(screen);
-   dri_postprocessing_init(screen);
 
    st_api_query_versions(&screen->base,
                          &screen->options,

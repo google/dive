@@ -893,6 +893,8 @@ void vpe10_dpp_set_hdr_multiplier(struct dpp *dpp, uint32_t multiplier);
 /*Program Scaler*/
 void vpe10_dpp_set_segment_scaler(struct dpp *dpp, const struct scaler_data *scl_data);
 
+void vpe10_dpp_dscl_set_scaler_position(struct dpp *dpp, const struct scaler_data *scl_data);
+
 void vpe10_dpp_set_frame_scaler(struct dpp *dpp, const struct scaler_data *scl_data);
 
 /*Scalar helper functions*/
@@ -903,6 +905,8 @@ enum vpe10_coef_filter_type_sel {
     SCL_COEF_CHROMA_HORZ_FILTER = 3,
     SCL_COEF_ALPHA_VERT_FILTER  = 4,
     SCL_COEF_ALPHA_HORZ_FILTER  = 5,
+    SCL_COEF_VERTICAL_BLUR_SCALE   = SCL_COEF_ALPHA_VERT_FILTER,
+    SCL_COEF_HORIZONTAL_BLUR_SCALE = SCL_COEF_ALPHA_HORZ_FILTER
 };
 
 enum vpe10_dscl_autocal_mode {
@@ -944,10 +948,8 @@ void vpe10_dpp_dscl_set_scale_ratio(struct dpp *dpp, const struct scaler_data *d
 
 void vpe10_dpp_dscl_set_taps(struct dpp *dpp, const struct scaler_data *scl_data);
 
-void vpe10_dpp_dscl_set_scl_filter(struct dpp *dpp, const struct scaler_data *scl_data,
-    enum vpe10_dscl_mode_sel scl_mode, bool chroma_coef_mode);
-
-void vpe10_dpp_dscl_set_dscl_mode(struct dpp *dpp, enum vpe10_dscl_mode_sel dscl_mode);
+void vpe10_dpp_dscl_set_scl_filter_and_dscl_mode(struct dpp *dpp,
+    const struct scaler_data *scl_data, enum vpe10_dscl_mode_sel scl_mode, bool chroma_coef_mode);
 
 enum vpe10_dscl_mode_sel vpe10_dpp_dscl_get_dscl_mode(const struct scaler_data *data);
 
@@ -955,6 +957,8 @@ void vpe10_dpp_dscl_set_scaler_filter(struct dpp *dpp, uint32_t taps,
     enum vpe10_coef_filter_type_sel filter_type, const uint16_t *filter);
 
 bool vpe10_dpp_dscl_is_ycbcr(const enum vpe_surface_pixel_format format);
+
+bool vpe10_dpp_dscl_is_video_subsampled(const enum vpe_surface_pixel_format format);
 
 void vpe10_dpp_program_gamcor_lut(struct dpp *dpp, const struct pwl_params *params);
 

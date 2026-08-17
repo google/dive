@@ -24,12 +24,9 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 
 #include <cstdlib>
-#include <filesystem>
 #include <sstream>
 #include <mutex>
 
-#include "util/ralloc.h"
-#include "util/set.h"
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/IR/DiagnosticPrinter.h>
 #include <llvm/IR/DiagnosticInfo.h>
@@ -68,7 +65,17 @@
 #include <llvm/Support/VirtualFileSystem.h>
 #endif
 
+#if LLVM_VERSION_MAJOR >= 22
+#include <clang/Options/OptionUtils.h>
+#endif
+
+/* We have to include our own headers after LLVM/clang as they seem to use
+ * `UNUSED` within enum definitions:
+ * https://github.com/llvm/llvm-project/blob/ea443eeb2ab8ed49ffb783c2025fed6629a36f10/clang/include/clang/Basic/OffloadArch.h#L19
+ */
 #include "util/macros.h"
+#include "util/ralloc.h"
+#include "util/set.h"
 #include "util/u_dl.h"
 #include "glsl_types.h"
 
@@ -84,8 +91,6 @@
 #endif
 
 #include "clc_helpers.h"
-
-namespace fs = std::filesystem;
 
 /* Use the highest version of SPIRV supported by SPIRV-Tools. */
 constexpr spv_target_env spirv_target = SPV_ENV_UNIVERSAL_1_6;
@@ -915,27 +920,29 @@ clc_compile_to_llvm_module(LLVMContext &llvm_ctx,
    // GetResourcePath is a way to retrieve the actual libclang resource dir based on a given binary
    // or library.
    auto tmp_res_path =
-#if LLVM_VERSION_MAJOR >= 20
+#if LLVM_VERSION_MAJOR >= 22
+      clang::GetResourcesPath(std::string(clang_path));
+#elif LLVM_VERSION_MAJOR >= 20
       Driver::GetResourcesPath(std::string(clang_path));
 #else
       Driver::GetResourcesPath(std::string(clang_path), CLANG_RESOURCE_DIR);
 #endif
-   auto clang_res_path = fs::path(tmp_res_path) / "include";
+   auto clang_res_path = tmp_res_path + "/include";
 
    free(clang_path);
 
    c->getHeaderSearchOpts().UseBuiltinIncludes = true;
    c->getHeaderSearchOpts().UseStandardSystemIncludes = true;
-   c->getHeaderSearchOpts().ResourceDir = clang_res_path.string();
+   c->getHeaderSearchOpts().ResourceDir = clang_res_path;
 
    // Add opencl-c generic search path
-   c->getHeaderSearchOpts().AddPath(clang_res_path.string(),
+   c->getHeaderSearchOpts().AddPath(clang_res_path,
                                     clang::frontend::Angled,
                                     false, false);
 
    auto clang_install_res_path =
-      fs::path(LLVM_LIB_DIR) / "clang" / std::to_string(LLVM_VERSION_MAJOR) / "include";
-   c->getHeaderSearchOpts().AddPath(clang_install_res_path.string(),
+      std::string(LLVM_LIB_DIR) + "/clang/" + std::to_string(LLVM_VERSION_MAJOR) + "/include";
+   c->getHeaderSearchOpts().AddPath(clang_install_res_path,
                                     clang::frontend::Angled,
                                     false, false);
 #endif
@@ -959,6 +966,12 @@ clc_compile_to_llvm_module(LLVMContext &llvm_ctx,
    c->getPreprocessorOpts().addMacroDef("cl_khr_expect_assume=1");
 
    bool needs_opencl_c_h = false;
+   if (args->features.atomic_order_seq_cst) {
+      c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+__opencl_c_atomic_order_seq_cst");
+   }
+   if (args->features.atomic_scope_device) {
+      c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+__opencl_c_atomic_scope_device");
+   }
    if (args->features.extended_bit_ops) {
       c->getPreprocessorOpts().addMacroDef("cl_khr_extended_bit_ops=1");
    }
@@ -968,6 +981,9 @@ clc_compile_to_llvm_module(LLVMContext &llvm_ctx,
    if (args->features.fp64) {
       c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+cl_khr_fp64");
       c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+__opencl_c_fp64");
+   }
+   if (args->features.generic_address_space) {
+      c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+__opencl_c_generic_address_space");
    }
    if (args->features.int64) {
       c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+cles_khr_int64");
@@ -1024,14 +1040,32 @@ clc_compile_to_llvm_module(LLVMContext &llvm_ctx,
    }
    if (args->features.subgroups) {
       c->getTargetOpts().OpenCLExtensionsAsWritten.push_back("+__opencl_c_subgroups");
+      if (args->features.subgroups_ballot) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_ballot=1");
+      }
+      if (args->features.subgroups_clustered) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_clustered_reduce=1");
+      }
+      if (args->features.subgroups_extended_types) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_extended_types=1");
+      }
+      if (args->features.subgroups_named_barrier) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_named_barrier=1");
+      }
+      if (args->features.subgroups_non_uniform_arithmetic) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_non_uniform_arithmetic=1");
+      }
+      if (args->features.subgroups_non_uniform_vote) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_non_uniform_vote=1");
+      }
+      if (args->features.subgroups_rotate) {
+         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_rotate=1");
+      }
       if (args->features.subgroups_shuffle) {
          c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_shuffle=1");
       }
       if (args->features.subgroups_shuffle_relative) {
          c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_shuffle_relative=1");
-      }
-      if (args->features.subgroups_ballot) {
-         c->getPreprocessorOpts().addMacroDef("cl_khr_subgroup_ballot=1");
       }
    }
    if (args->features.subgroups_ifp) {
@@ -1152,15 +1186,14 @@ llvm_mod_to_spirv(std::unique_ptr<::llvm::Module> mod,
    if (args->use_llvm_spirv_target) {
       const char *triple = args->address_bits == 32 ? "spirv-unknown-unknown" : "spirv64-unknown-unknown";
       std::string error_msg("");
-      auto target = TargetRegistry::lookupTarget(triple, error_msg);
-      if (target) {
-         auto TM = target->createTargetMachine(
 #if LLVM_VERSION_MAJOR >= 21
-            llvm::Triple(triple),
+      auto temp_triple = llvm::Triple(triple);
 #else
-            triple,
+      auto temp_triple = triple;
 #endif
-            "", "", {}, std::nullopt, std::nullopt,
+      auto target = TargetRegistry::lookupTarget(temp_triple, error_msg);
+      if (target) {
+         auto TM = target->createTargetMachine(temp_triple, "", "", {}, std::nullopt, std::nullopt,
 #if LLVM_VERSION_MAJOR >= 18
             ::llvm::CodeGenOptLevel::None
 #else

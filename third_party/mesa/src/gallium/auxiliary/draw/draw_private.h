@@ -44,12 +44,17 @@
 #include "pipe/p_state.h"
 #include "pipe/p_defines.h"
 #include "pipe/p_shader_tokens.h"
+#include "util/mesa-blake3.h"
 
 #include "draw_vertex_header.h"
 
 #if DRAW_LLVM_AVAILABLE
 struct gallivm_state;
+struct draw_tcs_inputs;
+struct draw_tcs_outputs;
+struct draw_tes_inputs;
 #endif
+struct draw_gs_run_state;
 
 /**
  * The max stage the draw stores resources for.
@@ -119,9 +124,6 @@ struct draw_vertex_buffer {
 /* NOTE: It should match vertex_id size above */
 #define UNDEFINED_VERTEX_ID 0xffff
 
-
-/* maximum number of shader variants we can cache */
-#define DRAW_MAX_SHADER_VARIANTS 512
 
 struct draw_buffer_info {
    const void *ptr;
@@ -313,6 +315,15 @@ struct draw_context
       unsigned position_output;
       unsigned clipvertex_output;
 
+#if DRAW_LLVM_AVAILABLE
+      struct draw_gs_llvm_variant *current_variant;
+#endif
+
+      /* Per-context execution state for the bound GS, the shader CSO may
+       * be shared across contexts.
+       */
+      struct draw_gs_run_state *run_state;
+
       /** Fields for TGSI interpreter / execution */
       struct {
          struct tgsi_exec_machine *machine;
@@ -326,6 +337,14 @@ struct draw_context
    /* Tessellation state */
    struct {
       struct draw_tess_ctrl_shader *tess_ctrl_shader;
+#if DRAW_LLVM_AVAILABLE
+      struct draw_tcs_llvm_variant *current_variant;
+      /* Per-context input/output staging buffers, the shader CSO may be
+       * shared across contexts.
+       */
+      struct draw_tcs_inputs *tcs_input;
+      struct draw_tcs_outputs *tcs_output;
+#endif
    } tcs;
 
    struct {
@@ -333,6 +352,11 @@ struct draw_context
       unsigned num_tes_outputs;  /**< convenience, from tess_eval_shader */
       unsigned position_output;
       unsigned clipvertex_output;
+#if DRAW_LLVM_AVAILABLE
+      struct draw_tes_llvm_variant *current_variant;
+      /* Per-context input staging buffer, see tcs comment above. */
+      struct draw_tes_inputs *tes_input;
+#endif
    } tes;
 
    /** Fragment shader state */
@@ -399,10 +423,10 @@ struct draw_context
    void *disk_cache_cookie;
    void (*disk_cache_find_shader)(void *cookie,
                                   struct lp_cached_code *cache,
-                                  unsigned char ir_sha1_cache_key[20]);
+                                  unsigned char ir_blake3_cache_key[BLAKE3_KEY_LEN]);
    void (*disk_cache_insert_shader)(void *cookie,
                                     struct lp_cached_code *cache,
-                                    unsigned char ir_sha1_cache_key[20]);
+                                    unsigned char ir_blake3_cache_key[BLAKE3_KEY_LEN]);
 
    void *driver_private;
 };

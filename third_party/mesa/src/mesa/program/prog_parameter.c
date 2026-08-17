@@ -422,21 +422,31 @@ _mesa_add_typed_unnamed_constant(struct gl_program_parameter_list *paramList,
 }
 
 GLint
-_mesa_add_sized_state_reference(struct gl_program_parameter_list *paramList,
-                                const gl_state_index16 stateTokens[STATE_LENGTH],
-                                const unsigned size, bool pad_and_align)
+_mesa_lookup_state_param_idx(struct gl_program_parameter_list *paramList,
+                             const gl_state_index16 stateTokens[STATE_LENGTH])
 {
-   char *name;
-   GLint index;
-
-   /* Check if the state reference is already in the list */
-   for (index = 0; index < (GLint) paramList->NumParameters; index++) {
+   for (GLint index = 0; index < (GLint) paramList->NumParameters; index++) {
       if (!memcmp(paramList->Parameters[index].StateIndexes,
                   stateTokens,
                   sizeof(paramList->Parameters[index].StateIndexes))) {
          return index;
       }
    }
+
+   return -1;
+}
+
+GLint
+_mesa_add_sized_state_reference(struct gl_program_parameter_list *paramList,
+                                const gl_state_index16 stateTokens[STATE_LENGTH],
+                                const unsigned size, bool pad_and_align)
+{
+   char *name;
+
+   /* Check if the state reference is already in the list */
+   GLint index = _mesa_lookup_state_param_idx(paramList, stateTokens);
+   if (index >= 0)
+      return index;
 
    name = _mesa_program_state_string(stateTokens);
    index = _mesa_add_parameter(paramList, PROGRAM_STATE_VAR, name,

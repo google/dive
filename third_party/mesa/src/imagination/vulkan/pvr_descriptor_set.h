@@ -20,6 +20,7 @@
 #include "vk_descriptor_set_layout.h"
 
 #include "pvr_common.h"
+#include "pvr_macros.h"
 #include "pvr_types.h"
 
 struct pvr_descriptor_set_layout_binding {
@@ -70,25 +71,6 @@ struct pvr_descriptor_pool {
    struct util_vma_heap heap; /** Pool (sub)allocation heap. */
 };
 
-struct pvr_descriptor {
-   VkDescriptorType type;
-
-   union {
-      struct {
-         struct pvr_buffer_view *bview;
-         pvr_dev_addr_t buffer_dev_addr;
-         VkDeviceSize buffer_desc_range;
-         VkDeviceSize buffer_whole_range;
-      };
-
-      struct {
-         VkImageLayout layout;
-         const struct pvr_image_view *iview;
-         const struct pvr_sampler *sampler;
-      };
-   };
-};
-
 struct pvr_descriptor_set {
    struct vk_object_base base;
    struct list_head link; /** Link in pvr_descriptor_pool::desc_sets. */
@@ -123,5 +105,13 @@ vk_to_pvr_descriptor_set_layout(struct vk_descriptor_set_layout *layout)
 {
    return container_of(layout, struct pvr_descriptor_set_layout, vk);
 }
+
+#ifdef PVR_PER_ARCH
+
+void PVR_PER_ARCH(descriptor_set_write_immutable_samplers)(
+   struct pvr_descriptor_set_layout *layout,
+   struct pvr_descriptor_set *set);
+
+#endif
 
 #endif /* PVR_DESCRIPTOR_SET_H */

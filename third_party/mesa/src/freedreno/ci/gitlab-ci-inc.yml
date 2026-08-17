@@ -1,3 +1,18 @@
+.enforce-hw-jobs-freedreno-rules:
+  rules:
+    - if: '$INPUT_HW_JOBS !~ /"(all|freedreno|msm.ko)"/i'
+      when: never
+
+.enforce-hw-jobs-turnip-rules:
+  rules:
+    - if: '$INPUT_HW_JOBS !~ /"(all|turnip|msm.ko)"/i'
+      when: never
+
+.enforce-hw-jobs-freedreno-turnip-rules:
+  rules:
+    - if: '$INPUT_HW_JOBS !~ /"(all|freedreno|turnip|msm.ko)"/i'
+      when: never
+
 # Rules for changes that impact either freedreno or turnip.
 .freedreno-common-rules:
   rules:
@@ -12,6 +27,7 @@
         - src/freedreno/ci/$GPU_VERSION-skips.txt
         - src/freedreno/ci/$GPU_VERSION-slow-skips.txt
         - src/freedreno/ci/$PIGLIT_TRACES_FILE
+        - src/freedreno/ci/$REPLAY_CONFIG
         - src/freedreno/ci/$GPU_VERSION-vkd3d-fails.txt
         - src/freedreno/ci/$GPU_VERSION-vkd3d-flakes.txt
         - src/freedreno/ci/$GPU_VERSION-vkd3d-skips.txt
@@ -34,6 +50,7 @@
 
 .freedreno-rules:
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.freedreno-common-rules, rules]
     - !reference [.gl-rules, rules]
     - changes: &freedreno_file_list
@@ -44,6 +61,7 @@
 
 .freedreno-manual-rules:
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.freedreno-common-manual-rules, rules]
     - !reference [.gl-manual-rules, rules]
     - changes: *freedreno_file_list
@@ -51,6 +69,7 @@
 
 .turnip-rules:
   rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
     - !reference [.freedreno-common-rules, rules]
     - !reference [.vulkan-rules, rules]
     - changes: &turnip_file_list
@@ -59,6 +78,7 @@
 
 .turnip-manual-rules:
   rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
     - !reference [.freedreno-common-manual-rules, rules]
     - !reference [.vulkan-manual-rules, rules]
     - changes: *turnip_file_list
@@ -68,6 +88,7 @@
 .collabora-freedreno-rules:
   stage: freedreno
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.test, rules]
     - !reference [.collabora-farm-rules, rules]
     - !reference [.freedreno-rules, rules]
@@ -76,6 +97,7 @@
   stage: freedreno-nightly
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.test, rules]
     - !reference [.collabora-farm-manual-rules, rules]
     - !reference [.freedreno-manual-rules, rules]
@@ -84,14 +106,24 @@
 .collabora-turnip-rules:
   stage: freedreno
   rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
     - !reference [.test, rules]
     - !reference [.collabora-farm-rules, rules]
     - !reference [.turnip-rules, rules]
+
+.collabora-turnip-restricted-rules:
+  stage: freedreno
+  rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
+    - !reference [.test, rules]
+    - !reference [.restricted-rules, rules]
+    - !reference [.collabora-turnip-rules, rules]
 
 .collabora-turnip-manual-rules:
   stage: freedreno-nightly
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
     - !reference [.test, rules]
     - !reference [.collabora-farm-manual-rules, rules]
     - !reference [.turnip-manual-rules, rules]
@@ -100,6 +132,7 @@
 .collabora-freedreno-turnip-rules:
   stage: freedreno
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-turnip-rules, rules]
     - !reference [.test, rules]
     - !reference [.collabora-freedreno-rules, rules]
     - !reference [.collabora-turnip-rules, rules]
@@ -108,6 +141,7 @@
   stage: freedreno-nightly
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-turnip-rules, rules]
     - !reference [.test, rules]
     - !reference [.collabora-freedreno-manual-rules, rules]
     - !reference [.collabora-turnip-manual-rules, rules]
@@ -116,6 +150,7 @@
   stage: freedreno-nightly
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.test, rules]
     - !reference [.valve-farm-manual-rules, rules]
     - !reference [.freedreno-manual-rules, rules]
@@ -123,21 +158,48 @@
 .valve-turnip-rules:
   stage: freedreno
   rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
     - !reference [.test, rules]
     - !reference [.valve-farm-rules, rules]
     - !reference [.turnip-rules, rules]
+
+.valve-turnip-restricted-rules:
+  stage: freedreno
+  rules:
+    - !reference [.test, rules]
+    - !reference [.restricted-rules, rules]
+    - !reference [.valve-turnip-rules, rules]
 
 .valve-turnip-manual-rules:
   stage: freedreno-nightly
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-turnip-rules, rules]
     - !reference [.test, rules]
     - !reference [.valve-farm-manual-rules, rules]
     - !reference [.turnip-manual-rules, rules]
 
+.lumag-freedreno-rules:
+  stage: freedreno
+  rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
+    - !reference [.test, rules]
+    - !reference [.lumag-farm-rules, rules]
+    - !reference [.freedreno-rules, rules]
+
+.lumag-freedreno-manual-rules:
+  stage: freedreno-nightly
+  extends: .no-auto-retry
+  rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
+    - !reference [.test, rules]
+    - !reference [.lumag-farm-manual-rules, rules]
+    - !reference [.freedreno-manual-rules, rules]
+
 .collabora-freedreno-rules-restricted:
   stage: freedreno
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.test, rules]
     - !reference [.restricted-rules, rules]
     - !reference [.collabora-freedreno-rules, rules]
@@ -146,6 +208,7 @@
   stage: performance
   extends: .no-auto-retry
   rules:
+    - !reference [.enforce-hw-jobs-freedreno-rules, rules]
     - !reference [.test, rules]
     - !reference [.performance-rules, rules]
     - !reference [.collabora-freedreno-manual-rules, rules]
@@ -174,7 +237,6 @@
     KERNEL_IMAGE_TYPE: ""
     RUNNER_TAG: mesa-ci-x86-64-lava-dragonboard-410c
     LAVA_FIRMWARE: qcom-lava
-    KERNEL_TAG: msm-fixes-for-mesa-ci-14102025
 
 # Status: https://lava.collabora.dev/scheduler/device_type/dragonboard-820c
 .lava-dragonboard-820c:arm64:
@@ -189,7 +251,6 @@
     KERNEL_IMAGE_TYPE: ""
     RUNNER_TAG: mesa-ci-x86-64-lava-dragonboard-820c
     LAVA_FIRMWARE: qcom-lava
-    KERNEL_TAG: msm-fixes-for-mesa-ci-14102025
 
 # Status: https://lava.collabora.dev/scheduler/device_type/sc7180-trogdor-kingoftown
 .lava-sc7180-trogdor-kingoftown:arm64:
@@ -208,14 +269,13 @@
     DRIVER_NAME: freedreno-a6xx
     VK_DRIVER: freedreno
     LAVA_FIRMWARE: qcom-lava
-    KERNEL_TAG: msm-fixes-for-mesa-ci-14102025
 
-# Status: https://lava.collabora.dev/scheduler/device_type/sc7180-trogdor-lazor-limozeen
-.lava-sc7180-trogdor-lazor-limozeen:arm64:
+# Status: https://lava.collabora.dev/scheduler/device_type/sc7180-trogdor-wormdingler-rev1-boe
+.lava-sc7180-trogdor-wormdingler-rev1-boe:arm64:
   variables:
     BOOT_METHOD: depthcharge
-    DEVICE_TYPE: sc7180-trogdor-lazor-limozeen
-    DTB: sc7180-trogdor-lazor-limozeen-nots-r5
+    DEVICE_TYPE: sc7180-trogdor-wormdingler-rev1-boe
+    DTB: sc7180-trogdor-wormdingler-rev1-boe
     FDO_CI_CONCURRENT: 8
     # Increase the hangcheck timer for our spilling tests which bump up against
     # the .5s default.
@@ -223,11 +283,10 @@
     FARM: collabora
     GPU_VERSION: freedreno-a618
     KERNEL_IMAGE_TYPE: ""
-    RUNNER_TAG: mesa-ci-x86-64-lava-sc7180-trogdor-lazor-limozeen
+    RUNNER_TAG: mesa-ci-x86-64-lava-sc7180-trogdor-wormdingler-rev1-boe
     DRIVER_NAME: freedreno-a6xx
     VK_DRIVER: freedreno
     LAVA_FIRMWARE: qcom-lava
-    KERNEL_TAG: msm-fixes-for-mesa-ci-14102025
 
 # Status: https://lava.collabora.dev/scheduler/device_type/sm8350-hdk
 .lava-sm8350-hdk:arm64:
@@ -249,19 +308,39 @@
     DRIVER_NAME: freedreno-a6xx
     VK_DRIVER: freedreno
     LAVA_FIRMWARE: qcom-lava
-    KERNEL_TAG: msm-fixes-for-mesa-ci-14102025
 
 
 # CI-tron
+
+.a200:
+  variables:
+    FDO_CI_CONCURRENT: 2
+    CI_TRON_DUT_SETUP_TAGS: dt_gpu:codename:a200
+    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__URL: 'https://${S3_BASE_PATH}/${FIRMWARE_REPO}/qcom-${FIRMWARE_TAG}.tar'
+    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__FORMAT__0__ARCHIVE__EXTENSION: 'cpio'
+    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__FORMAT__0__ARCHIVE__KEEP__0__PATH: '(./lib/firmware/qcom/yamato.*)'
+    # as good as anything else, works for now
+    CI_TRON_DTB__0__URL: '$KERNEL_IMAGE_BASE/armhf/imx53-qsrb.dtb'
+    CI_TRON__B2C_SWAP_SIZE: '4g'
+    CI_TRON_TIMEOUT__FIRST_CONSOLE_ACTIVITY__MINUTES: 0.5
+    CI_TRON_TIMEOUT__FIRST_CONSOLE_ACTIVITY__RETRIES: 3
+    CI_TRON_WATCHDOG__FIRMWARE_TO_LINUX__MINUTES: 1.0
+    CI_TRON_WATCHDOG__FIRMWARE_TO_LINUX__RETRIES: 5
+    CI_TRON_WATCHDOG__FIRMWARE_TO_LINUX__START_REGEX: 'Model: Freescale i.MX53 Quick Start Board'  # A line repeated during firmware boot
+    CI_TRON_WATCHDOG__FIRMWARE_TO_LINUX__STOP_REGEX: 'CPU identified as i.MX53'                    # A line repeated during Linux boot
+    GPU_VERSION: freedreno-a200
+    RUNNER_FARM_LOCATION: lumag
+
 
 .a750:
   variables:
     FDO_CI_CONCURRENT: 8
     CI_TRON_DUT_SETUP_TAGS: dt_gpu:codename:a750
-    CI_TRON_KERNEL__URL: 'https://fs.mupuf.org/hdk8650/2025-08-22-msm-fixes-for-mesa-ci//linux-arm64'
-    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__URL: 'https://fs.mupuf.org/hdk8650/sm8650-hdk-firmware.cpio.xz'
-    CI_TRON_DTB__0__URL: 'https://fs.mupuf.org/hdk8650/2025-08-22-msm-fixes-for-mesa-ci//linux-arm64.dtbs.cpio.xz'
-    CI_TRON_DTB__0__FORMAT__0__ARCHIVE__MATCH: 'boot/dtbs/qcom/sm8650-hdk.dtb'
+    CI_TRON_KERNEL__URL: '$KERNEL_IMAGE_BASE/arm64/Image.gz'
+    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__URL: "https://${S3_BASE_PATH}/${FIRMWARE_REPO}/qcom-${FIRMWARE_TAG}.tar"
+    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__FORMAT__0__ARCHIVE__EXTENSION: cpio
+    CI_TRON_INITRAMFS_CATEGORY__50_PLATFORM__0__FORMAT__0__ARCHIVE__KEEP__0__PATH: './lib/firmware/qcom/(sm8650/)?.*gen70900.*'
+    CI_TRON_DTB__0__URL: '$KERNEL_IMAGE_BASE/arm64/sm8650-hdk.dtb'
     CI_TRON__B2C_SWAP_SIZE: '16g'
     CI_TRON_TIMEOUT__FIRST_CONSOLE_ACTIVITY__MINUTES: 0.5
     CI_TRON_TIMEOUT__FIRST_CONSOLE_ACTIVITY__RETRIES: 3

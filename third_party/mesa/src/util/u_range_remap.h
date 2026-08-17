@@ -27,25 +27,43 @@
 extern "C" {
 #endif
 
-struct range_entry {
-    struct list_head node;
+struct range_remap {
+   /* Linked list of range remap entries */
+   struct list_head r_list;
 
+   void *list_mem_ctx;
+
+   /* Sorted array built from the linked list for fast binary searches */
+   struct range_entry *sorted_array;
+   unsigned sorted_array_length;
+};
+
+struct range_entry {
     unsigned start, end;
     void *ptr;
 };
 
+struct list_range_entry {
+    struct list_head node;
+    struct range_entry entry;
+};
+
 struct range_entry *
 util_range_insert_remap(unsigned start, unsigned end,
-                        struct list_head *r_list, void *ptr);
+                        struct range_remap *r_remap, void *ptr,
+                        bool allow_range_truncation);
 
 struct range_entry *
-util_range_remap(unsigned n, const struct list_head *r_list);
+util_range_remap(unsigned n, const struct range_remap *r_remap);
 
-struct list_head *
+struct range_remap *
 util_create_range_remap(void);
 
-struct list_head *
-util_reset_range_remap(struct list_head *r_list);
+struct range_remap *
+util_reset_range_remap(struct range_remap *r_remap);
+
+void
+util_range_switch_to_sorted_array(struct range_remap *r_remap);
 
 #ifdef __cplusplus
 }

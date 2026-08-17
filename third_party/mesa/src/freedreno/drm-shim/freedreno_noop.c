@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,9 +11,8 @@
 #include "drm-uapi/msm_drm.h"
 #include <sys/ioctl.h>
 
+#include "util/os_misc.h"
 #include "util/u_math.h"
-
-bool drm_shim_driver_prefers_first_render_node = true;
 
 struct msm_device_info {
    uint64_t chip_id;
@@ -122,8 +122,10 @@ msm_ioctl_get_param(int fd, unsigned long request, void *arg)
       gp->value = 0;
       return 0;
    case MSM_PARAM_VA_START:
-   case MSM_PARAM_VA_SIZE:
       gp->value = 0x100000000ULL;
+      return 0;
+   case MSM_PARAM_VA_SIZE:
+      gp->value = (1ULL << 48) - 0x100000000ULL;
       return 0;
    case MSM_PARAM_RAYTRACING:
       gp->value = 1;
@@ -131,6 +133,24 @@ msm_ioctl_get_param(int fd, unsigned long request, void *arg)
    case MSM_PARAM_UCHE_TRAP_BASE:
       gp->value = 0x1fffffffff000ull;
       return 0;
+
+   case MSM_PARAM_HAS_PRR:
+      gp->value = 1;
+      return 0;
+
+      /* UBWC config values from some GPU, but we don't actually maintain the
+       * device list mapping because it doesn't matter to shader compiles.
+       */
+   case MSM_PARAM_UBWC_SWIZZLE:
+      gp->value = 0x6;
+      return 0;
+   case MSM_PARAM_HIGHEST_BANK_BIT:
+      gp->value = 15;
+      return 0;
+   case MSM_PARAM_MACROTILE_MODE:
+      gp->value = 0;
+      return 0;
+
    default:
       fprintf(stderr, "Unknown DRM_IOCTL_MSM_GET_PARAM %d\n", gp->param);
       return -1;
@@ -144,7 +164,10 @@ msm_ioctl_set_param(int fd, unsigned long request, void *arg)
 
    switch (sp->param) {
    case MSM_PARAM_EN_VM_BIND:
-      return -1;
+      /* Shim doesn't have to do anything with this -- it's binding iovas to
+       * BOs, but since we don't exec the iovas don't matter.
+       */
+      return 0;
    default:
       return 0;
    }
@@ -157,6 +180,14 @@ msm_ioctl_gem_madvise(int fd, unsigned long request, void *arg)
 
    args->retained = true;
 
+   return 0;
+}
+
+static int
+msm_ioctl_vm_bind(int fd, unsigned long request, void *arg)
+{
+   struct drm_msm_vm_bind *vm_bind = arg;
+   vm_bind->fence_fd = -1;
    return 0;
 }
 
@@ -173,6 +204,8 @@ static ioctl_fn_t driver_ioctls[] = {
    [DRM_MSM_SUBMITQUEUE_NEW] = msm_ioctl_noop,
    [DRM_MSM_SUBMITQUEUE_CLOSE] = msm_ioctl_noop,
    [DRM_MSM_SUBMITQUEUE_QUERY] = msm_ioctl_noop,
+   [DRM_MSM_VM_BIND] = msm_ioctl_vm_bind,
+   [DRM_MSM_PERFCNTR_CONFIG] = msm_ioctl_noop,
 };
 
 #define CHIPID(maj, min, rev, pat)                                             \
@@ -246,6 +279,11 @@ static const struct msm_device_info device_infos[] = {
       .gmem_size = 1024 * 1024,
    },
    {
+      .gpu_id = 610,
+      .chip_id = CHIPID(6, 1, 0, 0),
+      .gmem_size = 128 * 1024 + 4 * 1024,
+   },
+   {
       .gpu_id = 618,
       .chip_id = CHIPID(6, 1, 8, 0xff),
       .gmem_size = 512 * 1024,
@@ -275,12 +313,57 @@ static const struct msm_device_info device_infos[] = {
       .chip_id = 0x43051401,
       .gmem_size = 3 * 1024 * 1024,
    },
+   {
+      .gpu_id = 810,
+      .chip_id = 0x44010000,
+      .gmem_size = 576 * 1024,
+   },
+   {
+      .gpu_id = 830,
+      .chip_id = 0x44050000,
+      .gmem_size = 12 * 1024 * 1024,
+   },
 };
+
+static void
+print_supported_chips_and_abort(const char *unrecognized_env)
+{
+
+   fprintf(stderr, "%s unrecognized, shim supports:\n", unrecognized_env);
+
+   for (int i = 1; i < ARRAY_SIZE(device_infos); i++) {
+      fprintf(stderr, "- gpu_id=%" PRIu32 ", chip_id=0x%" PRIx64 "\n",
+              device_infos[i].gpu_id, device_infos[i].chip_id);
+   }
+
+   abort();
+}
 
 static void
 msm_driver_get_device_info(void)
 {
-   const char *env = getenv("FD_GPU_ID");
+   const char *chip_id_env = os_get_option("FD_CHIP_ID");
+
+   if (chip_id_env) {
+      char *endptr;
+      uint64_t chip_id = strtoul(chip_id_env, &endptr, 16);
+
+      if (endptr == chip_id_env || *endptr != '\0') {
+         fprintf(stderr, "Invalid hex value for FD_CHIP_ID\n");
+         abort();
+      }
+
+      for (int i = 0; i < ARRAY_SIZE(device_infos); i++) {
+         if (device_infos[i].chip_id == chip_id) {
+            device_info = &device_infos[i];
+            return;
+         }
+      }
+
+      print_supported_chips_and_abort("FD_CHIP_ID");
+   }
+
+   const char *env = os_get_option("FD_GPU_ID");
 
    if (!env) {
       device_info = &device_infos[0];
@@ -295,19 +378,12 @@ msm_driver_get_device_info(void)
       }
    }
 
-   fprintf(stderr, "FD_GPU_ID unrecognized, shim supports %d",
-           device_infos[0].gpu_id);
-   for (int i = 1; i < ARRAY_SIZE(device_infos); i++)
-      fprintf(stderr, ", %d", device_infos[i].gpu_id);
-   fprintf(stderr, "\n");
-   abort();
+   print_supported_chips_and_abort("FD_GPU_ID");
 }
 
 void
 drm_shim_driver_init(void)
 {
-   shim_device.bus_type = DRM_BUS_PLATFORM;
-   shim_device.driver_name = "msm";
    shim_device.driver_ioctls = driver_ioctls;
    shim_device.driver_ioctl_count = ARRAY_SIZE(driver_ioctls);
 
@@ -318,9 +394,5 @@ drm_shim_driver_init(void)
 
    msm_driver_get_device_info();
 
-   drm_shim_override_file("OF_FULLNAME=/rdb/msm\n"
-                          "OF_COMPATIBLE_N=1\n"
-                          "OF_COMPATIBLE_0=qcom,adreno\n",
-                          "/sys/dev/char/%d:%d/device/uevent", DRM_MAJOR,
-                          render_node_minor);
+   drm_shim_platform_device_setup("msm", "/rdb/msm", "qcom,adreno");
 }

@@ -125,7 +125,7 @@ texgenfv( GLuint texunitIndex, GLenum coord, GLenum pname,
             _mesa_error( ctx, GL_INVALID_ENUM, "glTexGenfv(param)" );
             return;
          }
-         if (ctx->API != API_OPENGL_COMPAT
+         if (!_mesa_is_desktop_gl_compat(ctx)
              && (bit & (TEXGEN_REFLECTION_MAP_NV | TEXGEN_NORMAL_MAP_NV)) == 0) {
             _mesa_error( ctx, GL_INVALID_ENUM, "glTexGenfv(param)" );
             return;
@@ -140,7 +140,7 @@ texgenfv( GLuint texunitIndex, GLenum coord, GLenum pname,
 
    case GL_OBJECT_PLANE:
       {
-         if (ctx->API != API_OPENGL_COMPAT) {
+         if (!_mesa_is_desktop_gl_compat(ctx)) {
             _mesa_error( ctx, GL_INVALID_ENUM, "glTexGenfv(param)" );
             return;
          }
@@ -155,7 +155,7 @@ texgenfv( GLuint texunitIndex, GLenum coord, GLenum pname,
       {
          GLfloat tmp[4];
 
-         if (ctx->API != API_OPENGL_COMPAT) {
+         if (!_mesa_is_desktop_gl_compat(ctx)) {
             _mesa_error( ctx, GL_INVALID_ENUM, "glTexGenfv(param)" );
             return;
          }
@@ -235,14 +235,14 @@ gettexgenfv( GLenum texunitIndex, GLenum coord, GLenum pname,
       params[0] = ENUM_TO_FLOAT(texgen->Mode);
       break;
    case GL_OBJECT_PLANE:
-      if (ctx->API != API_OPENGL_COMPAT) {
+      if (!_mesa_is_desktop_gl_compat(ctx)) {
          _mesa_error( ctx, GL_INVALID_ENUM, "%s(param)", caller );
          return;
       }
       COPY_4V(params, unit->ObjectPlane[index]);
       break;
    case GL_EYE_PLANE:
-      if (ctx->API != API_OPENGL_COMPAT) {
+      if (!_mesa_is_desktop_gl_compat(ctx)) {
          _mesa_error( ctx, GL_INVALID_ENUM, "%s(param)", caller );
          return;
       }
@@ -276,7 +276,7 @@ gettexgeniv( GLenum texunitIndex, GLenum coord, GLenum pname,
       params[0] = texgen->Mode;
       break;
    case GL_OBJECT_PLANE:
-      if (ctx->API != API_OPENGL_COMPAT) {
+      if (!_mesa_is_desktop_gl_compat(ctx)) {
          _mesa_error( ctx, GL_INVALID_ENUM, "%s(param)" , caller);
          return;
       }
@@ -286,7 +286,7 @@ gettexgeniv( GLenum texunitIndex, GLenum coord, GLenum pname,
       params[3] = (GLint) unit->ObjectPlane[index][3];
       break;
    case GL_EYE_PLANE:
-      if (ctx->API != API_OPENGL_COMPAT) {
+      if (!_mesa_is_desktop_gl_compat(ctx)) {
          _mesa_error( ctx, GL_INVALID_ENUM, "%s(param)" , caller);
          return;
       }

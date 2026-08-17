@@ -43,7 +43,7 @@ static bool
 add_src_to_worklist(nir_src *src, void *state_)
 {
    struct move_discard_state *state = state_;
-   nir_instr *instr = src->ssa->parent_instr;
+   nir_instr *instr = nir_def_instr(src->ssa);
    if (instr->pass_flags)
       return true;
 
@@ -88,7 +88,7 @@ add_src_to_worklist(nir_src *src, void *state_)
     * cleanup.
     */
    instr->pass_flags = MOVE_INSTR_FLAG(state->discard_id);
-   util_dynarray_append(&state->worklist, nir_instr *, instr);
+   util_dynarray_append(&state->worklist, instr);
 
    return true;
 }
@@ -124,7 +124,7 @@ try_move_discard(nir_intrinsic_instr *discard, unsigned *next_discard_id)
    struct move_discard_state state;
    state.discard_id = *next_discard_id;
    util_dynarray_init_from_stack(&state.worklist, work_, sizeof(work_));
-   util_dynarray_append(&state.worklist, nir_instr *, &discard->instr);
+   util_dynarray_append(&state.worklist, &discard->instr);
 
    unsigned next = 0;
    bool can_move_discard = true;
@@ -177,12 +177,15 @@ can_move_intrinsic_after_discard(nir_intrinsic_instr *intrin)
    case nir_intrinsic_image_deref_load:
    case nir_intrinsic_image_load:
    case nir_intrinsic_bindless_image_load:
+   case nir_intrinsic_image_heap_load:
    case nir_intrinsic_image_deref_sparse_load:
    case nir_intrinsic_image_sparse_load:
    case nir_intrinsic_bindless_image_sparse_load:
+   case nir_intrinsic_image_heap_sparse_load:
    case nir_intrinsic_image_deref_samples_identical:
    case nir_intrinsic_image_samples_identical:
    case nir_intrinsic_bindless_image_samples_identical:
+   case nir_intrinsic_image_heap_samples_identical:
    case nir_intrinsic_load_ssbo:
    case nir_intrinsic_load_output:
    case nir_intrinsic_load_shared:
@@ -241,6 +244,7 @@ opt_move_discards_to_top_impl(nir_function_impl *impl)
             continue;
 
          case nir_instr_type_call:
+         case nir_instr_type_cmat_call:
             instr->pass_flags = STOP_PROCESSING_INSTR_FLAG;
             /* We don't know what the function will do */
             goto break_all;
@@ -288,9 +292,6 @@ opt_move_discards_to_top_impl(nir_function_impl *impl)
             }
             continue;
          }
-
-         case nir_instr_type_parallel_copy:
-            UNREACHABLE("Unhanded instruction type");
          }
       }
    }

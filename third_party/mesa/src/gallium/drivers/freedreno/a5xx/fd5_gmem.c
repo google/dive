@@ -134,7 +134,7 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
       OUT_PKT4(ring, REG_A5XX_RB_DEPTH_BUFFER_INFO, 5);
       OUT_RING(ring, A5XX_RB_DEPTH_BUFFER_INFO_DEPTH_FORMAT(fmt));
       if (gmem) {
-         OUT_RING(ring, gmem->zsbuf_base[0]); /* RB_DEPTH_BUFFER_BASE_LO */
+         OUT_RING(ring, gmem->zsbuf_base[0]); /* RB_DEPTH_BUFFER_BASE */
          OUT_RING(ring, 0x00000000);          /* RB_DEPTH_BUFFER_BASE_HI */
       } else {
          OUT_RELOC(ring, rsc->bo,
@@ -147,25 +147,25 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
       OUT_PKT4(ring, REG_A5XX_GRAS_SU_DEPTH_BUFFER_INFO, 1);
       OUT_RING(ring, A5XX_GRAS_SU_DEPTH_BUFFER_INFO_DEPTH_FORMAT(fmt));
 
-      OUT_PKT4(ring, REG_A5XX_RB_DEPTH_FLAG_BUFFER_BASE_LO, 3);
-      OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_BASE_LO */
+      OUT_PKT4(ring, REG_A5XX_RB_DEPTH_FLAG_BUFFER_BASE, 3);
+      OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_BASE */
       OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_BASE_HI */
       OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_PITCH */
 
       if (rsc->lrz) {
-         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_BUFFER_BASE_LO, 3);
+         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_BUFFER_BASE, 3);
          OUT_RELOC(ring, rsc->lrz, 0x1000, 0, 0);
          OUT_RING(ring, A5XX_GRAS_LRZ_BUFFER_PITCH(rsc->lrz_layout.lrz_pitch));
 
-         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_FAST_CLEAR_BUFFER_BASE_LO, 2);
+         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_FAST_CLEAR_BUFFER_BASE, 2);
          OUT_RELOC(ring, rsc->lrz, 0, 0, 0);
       } else {
-         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_BUFFER_BASE_LO, 3);
+         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_BUFFER_BASE, 3);
          OUT_RING(ring, 0x00000000);
          OUT_RING(ring, 0x00000000);
          OUT_RING(ring, 0x00000000); /* GRAS_LRZ_BUFFER_PITCH */
 
-         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_FAST_CLEAR_BUFFER_BASE_LO, 2);
+         OUT_PKT4(ring, REG_A5XX_GRAS_LRZ_FAST_CLEAR_BUFFER_BASE, 2);
          OUT_RING(ring, 0x00000000);
          OUT_RING(ring, 0x00000000);
       }
@@ -206,8 +206,8 @@ emit_zs(struct fd_ringbuffer *ring, struct pipe_surface *zsbuf,
       OUT_PKT4(ring, REG_A5XX_GRAS_SU_DEPTH_BUFFER_INFO, 1);
       OUT_RING(ring, A5XX_GRAS_SU_DEPTH_BUFFER_INFO_DEPTH_FORMAT(DEPTH5_NONE));
 
-      OUT_PKT4(ring, REG_A5XX_RB_DEPTH_FLAG_BUFFER_BASE_LO, 3);
-      OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_BASE_LO */
+      OUT_PKT4(ring, REG_A5XX_RB_DEPTH_FLAG_BUFFER_BASE, 3);
+      OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_BASE */
       OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_BASE_HI */
       OUT_RING(ring, 0x00000000); /* RB_DEPTH_FLAG_BUFFER_PITCH */
 
@@ -525,15 +525,15 @@ emit_mem2gmem_surf(struct fd_batch *batch, uint32_t base,
    stride = gmem->bin_w << fdl_cpp_shift(&rsc->layout);
    size = stride * gmem->bin_h;
 
-   OUT_PKT4(ring, REG_A5XX_RB_BLIT_FLAG_DST_LO, 4);
-   OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_LO */
+   OUT_PKT4(ring, REG_A5XX_RB_BLIT_FLAG_DST, 4);
+   OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_HI */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_PITCH */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_ARRAY_PITCH */
 
    OUT_PKT4(ring, REG_A5XX_RB_RESOLVE_CNTL_3, 5);
    OUT_RING(ring, 0x00000000); /* RB_RESOLVE_CNTL_3 */
-   OUT_RING(ring, base);       /* RB_BLIT_DST_LO */
+   OUT_RING(ring, base);       /* RB_BLIT_DST */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_DST_HI */
    OUT_RING(ring, A5XX_RB_BLIT_DST_PITCH(stride));
    OUT_RING(ring, A5XX_RB_BLIT_DST_ARRAY_PITCH(size));
@@ -627,7 +627,7 @@ emit_gmem2mem_surf(struct fd_batch *batch, uint32_t base,
 
    assert(psurf->first_layer == psurf->last_layer);
 
-   OUT_PKT4(ring, REG_A5XX_RB_BLIT_FLAG_DST_LO, 4);
+   OUT_PKT4(ring, REG_A5XX_RB_BLIT_FLAG_DST, 4);
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_LO */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_HI */
    OUT_RING(ring, 0x00000000); /* RB_BLIT_FLAG_DST_PITCH */

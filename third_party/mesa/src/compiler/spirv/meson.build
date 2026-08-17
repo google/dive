@@ -53,7 +53,7 @@ libvtn = static_library(
    vtn_generator_ids_h,
   ],
   include_directories : [inc_include, inc_src],
-  c_args : [c_msvc_compat_args, no_override_init_args],
+  c_args : [c_msvc_compat_args, soong_compat_c_args, no_override_init_args],
   gnu_symbol_visibility : 'hidden',
   dependencies : [dep_spirv_tools, idep_nir, dep_valgrind],
   build_by_default : false,
@@ -94,7 +94,7 @@ if get_option('mesa-clc') != 'system' and (with_driver_using_cl or \
    )
 endif
 
-if with_tests
+if with_tests and not with_nir_headers_only
   test(
     'spirv_tests',
     executable(

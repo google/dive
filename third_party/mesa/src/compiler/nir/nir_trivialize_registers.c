@@ -116,7 +116,7 @@ trivialize_src(nir_src *src, void *state_)
 {
    struct trivialize_src_state *state = state_;
 
-   nir_instr *parent = src->ssa->parent_instr;
+   nir_instr *parent = nir_def_instr(src->ssa);
    if (parent->type != nir_instr_type_intrinsic)
       return true;
 
@@ -173,7 +173,7 @@ trivialize_loads(nir_function_impl *impl, nir_block *block)
             nir_intrinsic_instr *reg = nir_reg_get_decl(intr->src[1].ssa);
 
             nir_foreach_reg_load(load, reg) {
-               nir_instr *parent = nir_src_parent_instr(load);
+               nir_instr *parent = nir_src_use_instr(load);
                nir_intrinsic_instr *intr = nir_instr_as_intrinsic(parent);
 
                BITSET_CLEAR(state.trivial_loads, intr->def.index);
@@ -335,7 +335,7 @@ clear_def(nir_def *def, void *state)
       if (nir_src_is_if(src))
          continue;
 
-      nir_instr *parent = nir_src_parent_instr(src);
+      nir_instr *parent = nir_src_use_instr(src);
       if (parent->type != nir_instr_type_intrinsic)
          continue;
 
@@ -429,7 +429,7 @@ trivialize_stores(nir_function_impl *impl, nir_block *block)
             nontrivial |= !list_is_singular(&value->uses);
 
             /* SSA-only instruction types */
-            nir_instr *parent = value->parent_instr;
+            nir_instr *parent = nir_def_instr(value);
             nontrivial |= (parent->type == nir_instr_type_load_const) ||
                           (parent->type == nir_instr_type_undef);
 

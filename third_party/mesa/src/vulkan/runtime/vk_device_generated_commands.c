@@ -54,6 +54,7 @@ vk_indirect_command_layout_create(struct vk_device *device,
       const VkIndirectCommandsLayoutTokenEXT *token = &pCreateInfo->pTokens[i];
       switch (token->type) {
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT:
+      case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_EXT:
          n_pc_layouts++;
          break;
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_VERTEX_BUFFER_EXT:
@@ -101,6 +102,7 @@ vk_indirect_command_layout_create(struct vk_device *device,
          elayout->dgc_info |= BITFIELD_BIT(MESA_VK_DGC_IB);
          break;
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_EXT:
+      case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_EXT:
          elayout->dgc_info |= BITFIELD_BIT(MESA_VK_DGC_PC);
          pc_layouts[elayout->n_pc_layouts++] = (struct vk_indirect_command_push_constant_layout) {
             .stages       = token->data.pPushConstant->updateRange.stageFlags,
@@ -110,6 +112,7 @@ vk_indirect_command_layout_create(struct vk_device *device,
          };
          break;
       case VK_INDIRECT_COMMANDS_TOKEN_TYPE_SEQUENCE_INDEX_EXT:
+      case VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_DATA_SEQUENCE_INDEX_EXT:
          assert(token->data.pPushConstant->updateRange.size == 4);
          elayout->dgc_info |= BITFIELD_BIT(MESA_VK_DGC_SI);
          elayout->si_layout = (struct vk_indirect_command_push_constant_layout) {
@@ -155,13 +158,14 @@ vk_indirect_command_layout_create(struct vk_device *device,
    }
 
    if (elayout->dgc_info & (BITFIELD_BIT(MESA_VK_DGC_PC) | BITFIELD_BIT(MESA_VK_DGC_SI))) {
+      const VkPipelineLayoutCreateInfo *plci = vk_find_struct_const(pCreateInfo->pNext, PIPELINE_LAYOUT_CREATE_INFO);
+
       if (pCreateInfo->pipelineLayout) {
          elayout->layout = pCreateInfo->pipelineLayout;
-      } else {
+      } else if (plci) {
          const struct vk_device_dispatch_table *disp = &device->dispatch_table;
+
          assert(device->enabled_features.dynamicGeneratedPipelineLayout);
-         const VkPipelineLayoutCreateInfo *plci = vk_find_struct_const(pCreateInfo->pNext, PIPELINE_LAYOUT_CREATE_INFO);
-         assert(plci);
          disp->CreatePipelineLayout(vk_device_to_handle(device), plci, NULL, &elayout->layout);
          elayout->delete_layout = true;
       }

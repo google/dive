@@ -11,29 +11,18 @@
 #define TU_IMAGE_H
 
 #include "tu_common.h"
-#include "fdl/freedreno_lrz_layout.h"
 
+#include "fdl/freedreno_lrz_layout.h"
 #include "tu_knl.h"
 
 #define TU_MAX_PLANE_COUNT 3
-
-#define tu_fdl_view_stencil(view, x)                                         \
-   pkt_field_set(A6XX_##x##_COLOR_FORMAT, (view)->x, FMT6_8_UINT)
-
-#define tu_fdl_view_depth(view, x)                                           \
-   pkt_field_set(A6XX_##x##_COLOR_FORMAT, (view)->x, FMT6_32_FLOAT)
-
-#define tu_image_view_stencil(iview, x) \
-   tu_fdl_view_stencil(&iview->view, x)
-
-#define tu_image_view_depth(iview, x) \
-   tu_fdl_view_depth(&iview->view, x)
 
 struct tu_image
 {
    struct vk_image vk;
 
    struct fdl_layout layout[3];
+   uint64_t subsampled_metadata_offset;
    uint64_t total_size;
 
    /* Set when bound */
@@ -51,11 +40,17 @@ struct tu_image
 
    struct fdl_lrz_layout lrz_layout;
 
-   bool ubwc_enabled;
-   bool force_linear_tile;
-   bool is_mutable;
+   /* Maximum width/height of tiles for use with this image, or ~0 if no constraints. */
+   uint32_t max_tile_w_constraint_fdm;
+   uint32_t max_tile_h_constraint_fdm;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(tu_image, vk.base, VkImage, VK_OBJECT_TYPE_IMAGE)
+
+template <chip CHIP>
+VkResult
+tu_image_init(struct tu_device *device, struct tu_image *image,
+              const VkImageCreateInfo *pCreateInfo, uint64_t modifier,
+              const VkSubresourceLayout *plane_layouts);
 
 struct tu_image_view
 {
@@ -64,21 +59,29 @@ struct tu_image_view
    struct tu_image *image; /**< VkImageViewCreateInfo::image */
 
    struct fdl6_view view;
+   struct fdl6_view view_ds_other_aspect; /* for d32s8 separate depth/stencil */
+
+   struct fdl6_view *view_depth;
+   struct fdl6_view *view_stencil;
 
    unsigned char swizzle[4];
-
-   /* for d32s8 separate depth */
-   uint64_t depth_base_addr;
-   uint32_t depth_layer_size;
-   uint32_t depth_pitch;
-
-   /* for d32s8 separate stencil */
-   uint64_t stencil_base_addr;
-   uint32_t stencil_layer_size;
-   uint32_t stencil_pitch;
 };
 VK_DEFINE_NONDISP_HANDLE_CASTS(tu_image_view, vk.base, VkImageView,
                                VK_OBJECT_TYPE_IMAGE_VIEW);
+
+static inline const struct fdl6_view *
+tu_image_view_fdl_view(const struct tu_image_view *iview, bool stencil)
+{
+   if (iview->image->vk.format != VK_FORMAT_D32_SFLOAT_S8_UINT)
+      return &iview->view;
+
+   return stencil ? iview->view_stencil : iview->view_depth;
+}
+
+void
+tu_image_view_init(struct tu_device *device,
+                   struct tu_image_view *iview,
+                   const VkImageViewCreateInfo *pCreateInfo);
 
 uint32_t tu6_plane_count(VkFormat format);
 
@@ -106,14 +109,11 @@ template <chip CHIP>
 void
 tu_cs_image_ref_2d(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer, bool src);
 
+uint64_t
+tu_layer_flag_address(const struct fdl6_view *iview, uint32_t layer);
+
 void
 tu_cs_image_flag_ref(struct tu_cs *cs, const struct fdl6_view *iview, uint32_t layer);
-
-void
-tu_cs_image_stencil_ref(struct tu_cs *cs, const struct tu_image_view *iview, uint32_t layer);
-
-void
-tu_cs_image_depth_ref(struct tu_cs *cs, const struct tu_image_view *iview, uint32_t layer);
 
 bool
 tiling_possible(VkFormat format);
@@ -140,10 +140,6 @@ tu_fragment_density_map_sample(const struct tu_image_view *fdm,
                                int32_t x, int32_t y,
                                uint32_t width, uint32_t height,
                                uint32_t layer, struct tu_frag_area *area);
-
-VkResult
-tu_image_update_layout(struct tu_device *device, struct tu_image *image,
-                       uint64_t modifier, const VkSubresourceLayout *plane_layouts);
 
 void
 tu_bind_sparse_image(struct tu_device *device, void *submit,

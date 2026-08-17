@@ -1,28 +1,6 @@
 /*
  * Copyright (C) 2021 Collabora, Ltd.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * Authors:
- *   Alyssa Rosenzweig <alyssa.rosenzweig@collabora.com>
- *   Boris Brezillon <boris.brezillon@collabora.com>
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef __PAN_DESC_H
@@ -48,9 +26,17 @@ struct pan_compute_dim {
    uint32_t x, y, z;
 };
 
+struct pan_crc_state {
+   /* Pointer to BO mapping. */
+   struct pan_ptr *ptr;
+
+   /* Is the CRC buffer valid? Implicitly refers to the first slice. */
+   bool valid;
+};
+
 struct pan_fb_color_attachment {
    const struct pan_image_view *view;
-   bool *crc_valid;
+   struct pan_crc_state *crc_state;
    bool clear;
    bool preload;
    bool discard;
@@ -87,6 +73,9 @@ struct pan_tiler_context {
          /* A tiler descriptor can only handle a limited amount of layers.
           * If the number of layers is bigger than this, several tiler
           * descriptors will be issued, each with a different layer_offset.
+          *
+          * Note: on v14+, only up to one tiler descriptor is supported and
+          * layer_offset is deprecated.
           */
          uint8_t layer_offset;
       } valhall;
@@ -129,12 +118,20 @@ struct pan_fb_bifrost_info {
    } pre_post;
 };
 
+struct pan_bbox {
+   unsigned minx, miny, maxx, maxy;
+};
+
 struct pan_fb_info {
    unsigned width, height;
-   struct {
-      /* Max values are inclusive */
-      unsigned minx, miny, maxx, maxy;
-   } extent;
+   /* Draw-extent controlled by viewports/scissors.
+    * Max values are exclusive */
+   struct pan_bbox draw_extent;
+   /* frame_bounding_box controls the bounding box in the framebuffer
+    * descriptor for the entire pass. This is being controlled by the
+    * renderArea of a renderpass in Vulkan. On GL, this covers the
+    * entire frame. Max values are exclusive. */
+   struct pan_bbox frame_bounding_box;
    unsigned nr_samples;
    unsigned force_samples; /* samples used for rasterization */
    unsigned rt_count;
@@ -162,7 +159,104 @@ struct pan_fb_info {
    /* Only used on Valhall */
    bool sprite_coord_origin;
    bool first_provoking_vertex;
+   bool allow_hsr_prepass;
+
+   /* indicates whether pixel local storage is enabled */
+   bool pls_enabled;
 };
+
+struct pan_crc {
+   /* Empty Tile Elimination clear color */
+   uint64_t clear_color;
+
+   /* Selected RT index (8 max), -1 if none. */
+   int8_t index;
+
+   /* Transaction Elimination flags */
+   bool read  : 1;
+   bool write : 1;
+
+   /* Force clean writes for CRC buffer init */
+   bool force_clean_tile_write : 1;
+
+   /* Empty Tile Elimination flags */
+   bool empty_tile_read  : 1;
+   bool empty_tile_write : 1;
+};
+
+static inline bool
+pan_crc_is_enabled(struct pan_crc *crc)
+{
+   return crc->index != -1;
+}
+
+struct pan_clean_tile {
+   /* clean_tile_write_enable mask on the 8 color attachments. */
+   uint8_t write_rt_mask;
+
+   /* clean_tile_write_enable flag on the depth/stencil attachment. */
+   uint8_t write_zs : 1;
+};
+
+static inline bool
+pan_fb_info_is_fully_covered(const struct pan_fb_info *fb)
+{
+   return !fb->draw_extent.minx &&
+      !fb->draw_extent.miny &&
+      fb->draw_extent.maxx == (fb->width - 1) &&
+      fb->draw_extent.maxy == (fb->height - 1);
+}
+
+static inline void
+pan_crc_state_invalidate(struct pan_crc_state *state)
+{
+   state->valid = false;
+}
+
+static inline void
+pan_crc_state_set_ptr(struct pan_crc_state *state, struct pan_ptr *ptr)
+{
+   state->ptr = ptr;
+}
+
+static inline bool
+pan_clean_tile_write_rt_enabled(struct pan_clean_tile clean_tile,
+                                unsigned index)
+{
+   return (clean_tile.write_rt_mask >> index) & 1;
+}
+
+static inline bool
+pan_clean_tile_write_zs_enabled(struct pan_clean_tile clean_tile)
+{
+   return clean_tile.write_zs;
+}
+
+static inline bool
+pan_clean_tile_write_any_set(struct pan_clean_tile clean_tile)
+{
+   return clean_tile.write_rt_mask || clean_tile.write_zs;
+}
+
+static inline unsigned
+pan_zsbuf_bytes_per_pixel(const struct pan_fb_info *fb)
+{
+   unsigned samples = fb->nr_samples;
+
+   const struct pan_image_view *zs_view = fb->zs.view.zs;
+   if (zs_view)
+      samples = zs_view->nr_samples;
+
+   const struct pan_image_view *s_view = fb->zs.view.s;
+   if (s_view)
+      samples = MAX2(samples, s_view->nr_samples);
+
+   /* Depth is always stored in a 32-bit float. Stencil requires depth to
+    * be allocated, but doesn't have it's own budget; it's tied to the
+    * depth buffer.
+    */
+   return sizeof(float) * samples;
+}
 
 static inline unsigned
 pan_wls_instances(const struct pan_compute_dim *dim)
@@ -257,59 +351,108 @@ pan_sample_pattern(unsigned samples)
    }
 }
 
+static inline struct pan_image_block_size
+pan_effective_tile_block_size(unsigned tile_size)
+{
+   /* Tile is either a square or a rect whose width is twice the height. */
+   unsigned shift_h = util_logbase2(tile_size);
+   unsigned shift_w = shift_h + 1;
+   unsigned h = 1 << (shift_h >> 1);
+   unsigned w = 1 << (shift_w >> 1);
+
+   return (struct pan_image_block_size){w, h};
+}
+
+#if PAN_ARCH >= 6
+/* All GPUs starting from Bifrost are affected by issue TSIX-2033:
+ *
+ *      Forcing clean_tile_writes breaks INTERSECT readbacks
+ *
+ * To workaround, use the pre-frame shader mode ALWAYS instead of INTERSECT if
+ * clean_tile_write_enable is set on either one of the color, depth or stencil
+ * buffers. Since INTERSECT is a hint that the hardware may ignore, this
+ * cannot affect correctness, only performance. */
+
+static enum mali_pre_post_frame_shader_mode
+pan_fix_frame_shader_mode(enum mali_pre_post_frame_shader_mode mode,
+                          bool force_clean_tile)
+{
+   if (force_clean_tile && mode == MALI_PRE_POST_FRAME_SHADER_MODE_INTERSECT)
+      return MALI_PRE_POST_FRAME_SHADER_MODE_ALWAYS;
+   else
+      return mode;
+}
+#endif
+
 void GENX(pan_select_tile_size)(struct pan_fb_info *fb);
+
+bool GENX(pan_force_clean_write_on)(const struct pan_image *image,
+                                    unsigned fb_tile_size_px);
+
+struct pan_clean_tile
+   GENX(pan_get_clean_tile_info)(const struct pan_fb_info *fb);
 
 void GENX(pan_emit_tls)(const struct pan_tls_info *info,
                         struct mali_local_storage_packed *out);
 
 int GENX(pan_select_crc_rt)(const struct pan_fb_info *fb, unsigned tile_size);
 
+struct pan_attachment_info {
+   const struct pan_image_view *iview;
+   unsigned layer_or_z_slice;
+   unsigned fb_tile_size_px;
+};
+
 #if PAN_ARCH >= 5
-void GENX(pan_emit_linear_color_attachment)(const struct pan_fb_info *fb,
-                                            unsigned rt_idx,
-                                            unsigned layer_or_z_slice,
-                                            unsigned cbuf_offset,
-                                            void *payload);
-void GENX(pan_emit_linear_s_attachment)(const struct pan_fb_info *fb,
-                                        unsigned layer_or_z_slice,
-                                        void *payload);
-void GENX(pan_emit_linear_zs_attachment)(const struct pan_fb_info *fb,
-                                         unsigned layer_or_z_slice,
-                                         void *payload);
-void GENX(pan_emit_u_tiled_color_attachment)(const struct pan_fb_info *fb,
-                                             unsigned rt_idx,
-                                             unsigned layer_or_z_slice,
-                                             unsigned cbuf_offset,
+void GENX(pan_emit_default_color_attachment)(enum pipe_format format,
                                              void *payload);
-void GENX(pan_emit_u_tiled_s_attachment)(const struct pan_fb_info *fb,
-                                         unsigned layer_or_z_slice,
+void GENX(pan_emit_linear_color_attachment)(const struct pan_attachment_info *att,
+                                            void *payload);
+void GENX(pan_emit_linear_s_attachment)(const struct pan_attachment_info *att,
+                                        void *payload);
+void GENX(pan_emit_linear_zs_attachment)(const struct pan_attachment_info *att,
                                          void *payload);
-void GENX(pan_emit_u_tiled_zs_attachment)(const struct pan_fb_info *fb,
-                                          unsigned layer_or_z_slice,
+void GENX(pan_emit_u_tiled_color_attachment)(const struct pan_attachment_info *att,
+                                             void *payload);
+void GENX(pan_emit_u_tiled_s_attachment)(const struct pan_attachment_info *att,
+                                         void *payload);
+void GENX(pan_emit_u_tiled_zs_attachment)(const struct pan_attachment_info *att,
                                           void *payload);
-void GENX(pan_emit_afbc_color_attachment)(const struct pan_fb_info *fb,
-                                          unsigned rt_idx,
-                                          unsigned layer_or_z_slice,
-                                          unsigned cbuf_offset, void *payload);
-void GENX(pan_emit_afbc_zs_attachment)(const struct pan_fb_info *fb,
-                                       unsigned layer_or_z_slice,
+void GENX(pan_emit_afbc_color_attachment)(const struct pan_attachment_info *att,
+                                          void *payload);
+void GENX(pan_emit_afbc_zs_attachment)(const struct pan_attachment_info *att,
                                        void *payload);
-void GENX(pan_emit_afbc_s_attachment)(const struct pan_fb_info *fb,
-                                      unsigned layer_or_z_slice,
+void GENX(pan_emit_afbc_s_attachment)(const struct pan_attachment_info *att,
                                       void *payload);
 #endif
 
 #if PAN_ARCH >= 10
-void GENX(pan_emit_afrc_color_attachment)(const struct pan_fb_info *fb,
-                                          unsigned rt_idx,
-                                          unsigned layer_or_z_slice,
-                                          unsigned cbuf_offset, void *payload);
+void
+GENX(pan_emit_interleaved_64k_color_attachment)(const struct pan_attachment_info *att,
+                                                void *payload);
+void GENX(pan_emit_interleaved_64k_zs_attachment)(const struct pan_attachment_info *att,
+                                                  void *payload);
+void GENX(pan_emit_interleaved_64k_s_attachment)(const struct pan_attachment_info *att,
+                                                 void *payload);
+
+void GENX(pan_emit_afrc_color_attachment)(const struct pan_attachment_info *att,
+                                          void *payload);
 #endif
+
+struct pan_fbd_descs {
+#if PAN_ARCH <= 13
+   struct mali_framebuffer_packed *fbd;
+#endif
+#if PAN_ARCH >= 5
+   struct mali_zs_crc_extension_packed *zs_crc;
+   struct mali_render_target_packed *rts;
+#endif
+};
 
 unsigned GENX(pan_emit_fbd)(const struct pan_fb_info *fb, unsigned layer_idx,
                             const struct pan_tls_info *tls,
                             const struct pan_tiler_context *tiler_ctx,
-                            void *out);
+                            const struct pan_fbd_descs *out);
 
 #if PAN_ARCH >= 6
 unsigned GENX(pan_select_tiler_hierarchy_mask)(uint32_t width, uint32_t height,

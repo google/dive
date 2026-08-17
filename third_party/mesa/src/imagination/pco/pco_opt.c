@@ -145,7 +145,7 @@ static inline bool pco_opt_prep_mods(pco_shader *shader,
 
          pco_builder b = pco_builder_create(func, pco_cursor_before_instr(mod));
          pco_instr *mov = pco_mov(&b, mod->dest[0], src);
-         util_dynarray_append(&ctx->mods, pco_instr *, mov);
+         util_dynarray_append(&ctx->mods, mov);
          pco_instr_delete(mod);
 
          progress = true;
@@ -761,13 +761,13 @@ bool pco_opt_comp_only_vecs(pco_shader *shader)
          bool used_by_noncomps = false;
          pco_ref dest = vec->dest[0];
 
-         struct util_dynarray comps;
-         util_dynarray_init(&comps, NULL);
+         struct util_dynarray comps = UTIL_DYNARRAY_INIT;
 
          pco_foreach_instr_in_func_from (instr, vec) {
             if (instr->op == PCO_OP_COMP) {
-               if (instr->src[0].val == dest.val)
-                  util_dynarray_append(&comps, pco_instr *, instr);
+               if (instr->src[0].val == dest.val) {
+                  util_dynarray_append(&comps, instr);
+               }
 
                continue;
             }

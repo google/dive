@@ -4,9 +4,11 @@
 use crate::api::icd::CLResult;
 use crate::api::icd::DISPATCH;
 use crate::core::device::*;
+use crate::core::meta::Meta;
 use crate::core::version::*;
 
 use mesa_rust::pipe::screen::ScreenVMAllocation;
+use mesa_rust::util;
 use mesa_rust::util::vm::VM;
 use mesa_rust_gen::*;
 use mesa_rust_util::string::char_arr_to_cstr;
@@ -20,6 +22,7 @@ use std::ops::Deref;
 use std::ptr;
 use std::ptr::addr_of;
 use std::ptr::addr_of_mut;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::Once;
 
@@ -49,6 +52,8 @@ pub struct Platform {
     pub extensions: Vec<cl_name_version>,
     // lifetime has to match the one of devs
     pub vm: Option<PlatformVM<'static>>,
+    pub worker_queue: LazyLock<util::queue::Queue>,
+    pub meta: LazyLock<Meta>,
 }
 
 pub enum PerfDebugLevel {
@@ -86,6 +91,12 @@ static mut PLATFORM: Platform = Platform {
     extension_string: String::new(),
     extensions: Vec::new(),
     vm: None,
+    worker_queue: LazyLock::new(|| {
+        let worker_count = u32::max(util::cpu_count() / 2, 1);
+        let max_job_count = worker_count * 8;
+        util::queue::Queue::new(c"clctxworker", max_job_count, worker_count)
+    }),
+    meta: LazyLock::new(|| Meta::new(&Platform::get().devs)),
 };
 static mut PLATFORM_DBG: PlatformDebug = PlatformDebug {
     allow_invalid_spirv: false,
@@ -276,6 +287,9 @@ impl Platform {
         // SAFETY: no concurrent static mut access due to std::Once
         #[allow(static_mut_refs)]
         PLATFORM_ONCE.call_once(|| unsafe { PLATFORM.init() });
+
+        // Also force initialize Meta so we know it's ready.
+        LazyLock::force(&Self::get().meta);
     }
 
     pub fn all_devs_have_semaphores(&self) -> bool {
@@ -341,5 +355,19 @@ macro_rules! perf_warning {
             $crate::core::platform::PerfDebugLevel::Spam => perf_warning!(@PRINT $format, $($arg)*),
             _ => (),
         }
+    };
+}
+
+#[macro_export]
+macro_rules! rusticl_warn_once {
+    (@PRINT $format:tt, $($arg:tt)*) => {
+        eprintln!(std::concat!("=== Rusticl warning: ", $format, " ==="), $($arg)*)
+    };
+
+    ($format:tt $(, $arg:tt)*) => {
+        static WARN_ONCE: std::sync::Once = std::sync::Once::new();
+        WARN_ONCE.call_once(|| {
+            rusticl_warn_once!(@PRINT $format, $($arg)*);
+        });
     };
 }

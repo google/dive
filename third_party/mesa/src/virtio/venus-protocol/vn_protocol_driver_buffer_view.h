@@ -26,7 +26,7 @@ vn_sizeof_VkBufferViewCreateInfo_pnext(const void *val)
                 break;
             size += vn_sizeof_simple_pointer(pnext);
             size += vn_sizeof_VkStructureType(&pnext->sType);
-            size += vn_sizeof_VkBufferViewCreateInfo_pnext(pnext->pNext);
+            size += vn_sizeof_VkBufferViewCreateInfo_pnext(((const VkBufferUsageFlags2CreateInfo *)pnext)->pNext);
             size += vn_sizeof_VkBufferUsageFlags2CreateInfo_self((const VkBufferUsageFlags2CreateInfo *)pnext);
             return size;
         default:
@@ -76,7 +76,7 @@ vn_encode_VkBufferViewCreateInfo_pnext(struct vn_cs_encoder *enc, const void *va
                 break;
             vn_encode_simple_pointer(enc, pnext);
             vn_encode_VkStructureType(enc, &pnext->sType);
-            vn_encode_VkBufferViewCreateInfo_pnext(enc, pnext->pNext);
+            vn_encode_VkBufferViewCreateInfo_pnext(enc, ((const VkBufferUsageFlags2CreateInfo *)pnext)->pNext);
             vn_encode_VkBufferUsageFlags2CreateInfo_self(enc, (const VkBufferUsageFlags2CreateInfo *)pnext);
             return;
         default:

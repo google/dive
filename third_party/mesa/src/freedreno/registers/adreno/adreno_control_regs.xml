@@ -3,10 +3,11 @@
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 <import file="freedreno_copyright.xml"/>
+<import file="adreno/adreno_common.xml"/>
 
 <!--
 	This documents the internal register spaces used by the CP firmware since
-	the afuc instruction set was introduced.
+	the QRisc instruction set was introduced.
 -->
 
 <domain name="A6XX_SQE_REG" width="32">
@@ -37,7 +38,7 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 	<reg32 name="REG_WRITE_ADDR" offset="0x010"/>
 	<reg32 name="REG_WRITE" offset="0x011"/>
 
-	<doc> Controls high 32 bits used by store afuc instruction </doc>
+	<doc> Controls high 32 bits used by store QRisc instruction </doc>
 	<reg32 name="STORE_HI" offset="0x038"/>
 
 	<reg64 name="IB1_BASE" offset="0x0b0"/>
@@ -150,7 +151,7 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 	<doc> Controls whether RB, IB1, or IB2 is executed </doc>
 	<reg32 name="IB_LEVEL" offset="0x054"/>
 
-	<doc> Controls high 32 bits used by load and store afuc instructions </doc>
+	<doc> Controls high 32 bits used by load and store QRisc instructions </doc>
 	<reg32 name="LOAD_STORE_HI" offset="0x058"/>
 
 	<doc>
@@ -359,7 +360,7 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 	<doc> Controls whether RB, IB1, IB2, IB3, or SDS is executed </doc>
 	<reg32 name="IB_LEVEL" offset="0x054"/>
 
-	<doc> Controls high 32 bits used by load and store afuc instructions </doc>
+	<doc> Controls high 32 bits used by load and store qrisc instructions </doc>
 	<reg32 name="LOAD_STORE_HI" offset="0x058"/>
 
 	<reg32 name="REG_READ_TEST_RESULT" offset="0x05b">
@@ -459,7 +460,7 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 
 <!-- Starting with a750, the control registers are shuffled around -->
 
-<domain name="A7XX_GEN3_CONTROL_REG" width="32">
+<domain name="A7XX_GEN3_CONTROL_REG" width="32" prefix="variant" varset="chip">
 	<reg32 name="COPROCESSOR_LOCK" offset="0x014"/>
 
 	<reg32 name="REG_WRITE_ADDR" offset="0x018"/>
@@ -499,6 +500,12 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 	<reg64 name="LPAC_INSTR_BASE" offset="0x083"/>
 	<reg32 name="LPAC_CNTL" offset="0x085"/>
 
+	<reg64 name="DDE_BR_INSTR_BASE" offset="0x088" variants="A8XX-"/>
+	<reg32 name="DDE_BR_CNTL" offset="0x08a" variants="A8XX-"/>
+
+	<reg64 name="DDE_BV_INSTR_BASE" offset="0x08b" variants="A8XX-"/>
+	<reg32 name="DDE_BV_CNTL" offset="0x08d" variants="A8XX-"/>
+
 	<reg32 name="LOAD_STORE_RANGE_MIN" offset="0x0a2"/>
 	<reg32 name="LOAD_STORE_RANGE_LEN" offset="0x0a3"/>
 
@@ -536,6 +543,12 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 		<bitfield name="SYS_WFI_STALL" low="28" high="29" type="sqe_perfcntr_cntl"/>
 	</reg32>
 
+	<reg32 name="COMPLETED_BR_COUNT" offset="0x101"/>
+	<reg32 name="COMPLETED_BV_COUNT" offset="0x102"/>
+	<reg32 name="TIMESTAMP_SUM" offset="0x103"/>
+	<reg32 name="GLOBAL_TIMESTAMP" offset="0x104"/>
+	<reg32 name="LOCAL_TIMESTAMP" offset="0x105"/>
+
 	<reg32 name="CONTEXT_SWITCH_CNTL" offset="0x131"/>
 	<reg32 name="PREEMPT_COOKIE" offset="0x132"/>
 	<reg32 name="PREEMPT_ENABLE" offset="0x133"/>
@@ -548,6 +561,8 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
 	<reg32 name="PREEMPTION_TIMER_CNTL" offset="0x141">
 		<bitfield name="RUNNING" pos="0"/>
 	</reg32>
+
+	<reg32 name="DDE_PM4_WRITE" offset="0x191" variants="A8XX-"/>
 
 	<reg64 name="AQE1_PREEMPT_BASE" offset="0x26e"/>
 	<reg64 name="AQE0_PREEMPT_BASE" offset="0x275"/>

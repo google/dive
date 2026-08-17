@@ -41,9 +41,13 @@ export JOB_START_S=$(
   { date -u +"%s" -D "%Y-%m-%dT%H:%M:%SZ" "$CI_JOB_STARTED_AT" 2>/dev/null || true; }
 )
 
-function get_current_minsec {
+function get_job_seconds {
     DATE_S=$(date -u +"%s")
-    CURR_TIME=$((DATE_S-JOB_START_S))
+    echo $((DATE_S-JOB_START_S))
+}
+
+function get_current_minsec {
+    CURR_TIME=$(get_job_seconds)
     printf "%02d:%02d" $((CURR_TIME/60)) $((CURR_TIME%60))
 }
 
@@ -126,11 +130,11 @@ export -f _error_msg
 
 if [ -z "${RESULTS_DIR:-}" ]; then
 	export RESULTS_DIR="${PWD%/}/results"
-	if [ -e "${RESULTS_DIR}" ]; then
+	if [ "${GIT_STRATEGY:-}" = none ]; then
 		rm -rf "${RESULTS_DIR}"
 	fi
-	mkdir -p "${RESULTS_DIR}"
 fi
+mkdir -p "${RESULTS_DIR}"
 
 function error {
     # we force the following to be not in a section

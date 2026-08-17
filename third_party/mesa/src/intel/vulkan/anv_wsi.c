@@ -48,8 +48,11 @@ anv_init_wsi(struct anv_physical_device *physical_device)
                             anv_wsi_proc_addr,
                             &physical_device->instance->vk.alloc,
                             physical_device->master_fd,
-                            &physical_device->instance->dri_options,
-                            &(struct wsi_device_options){.sw_device = false});
+                            &physical_device->instance->drirc.options,
+                            &(struct wsi_device_options){
+                               .sw_device = false,
+                               .emulate_24as32 = true,
+                            });
    if (result != VK_SUCCESS)
       return result;
 

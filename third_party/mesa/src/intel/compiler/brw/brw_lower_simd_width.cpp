@@ -162,69 +162,35 @@ static unsigned
 get_sampler_lowered_simd_width(const struct intel_device_info *devinfo,
                                const brw_tex_inst *tex)
 {
-   /* On gfx12 parameters are fixed to 16-bit values and therefore they all
-    * always fit regardless of the execution size.
-    */
-   if (tex->sampler_opcode == SAMPLER_OPCODE_TXF_CMS_W_GFX12_LOGICAL)
-      return MIN2(16, tex->exec_size);
-
    /* TXD is unsupported in SIMD16 mode previous to Xe2. SIMD32 is still
     * unsuppported on Xe2.
     */
-   if (tex->sampler_opcode == SAMPLER_OPCODE_TXD_LOGICAL)
+   if (tex->sampler_opcode == BRW_SAMPLER_OPCODE_SAMPLE_D ||
+       tex->sampler_opcode == BRW_SAMPLER_OPCODE_SAMPLE_D_REDUCED ||
+       tex->sampler_opcode == BRW_SAMPLER_OPCODE_SAMPLE_D_C ||
+       tex->sampler_opcode == BRW_SAMPLER_OPCODE_SAMPLE_D_C_PACKED)
       return devinfo->ver < 20 ? 8 : 16;
 
-   /* If we have a min_lod parameter on anything other than a simple sample
-    * message, it will push it over 5 arguments and we have to fall back to
-    * SIMD8.
-    */
-   if (tex->sampler_opcode != SAMPLER_OPCODE_TEX_LOGICAL &&
-       tex->components_read(TEX_LOGICAL_SRC_MIN_LOD))
-      return devinfo->ver < 20 ? 8 : 16;
+   const unsigned max_payload_size =
+      MAX_SAMPLER_MESSAGE_SIZE *
+      (reg_unit(devinfo) * 8) /* min SIMD */ *
+      4 /* dword */;
+   const unsigned payload_param_size =
+      brw_type_size_bytes(tex->src[TEX_LOGICAL_SRC_PAYLOAD0].type);
+   unsigned payload_size =
+      (tex->sources - TEX_LOGICAL_SRC_PAYLOAD0) *
+      tex->exec_size *
+      payload_param_size;
 
-   /* On Gfx9+ the LOD argument is for free if we're able to use the LZ
-    * variant of the TXL or TXF message.
-    */
-   const bool implicit_lod = (tex->sampler_opcode == SAMPLER_OPCODE_TXL_LOGICAL ||
-                              tex->sampler_opcode == SAMPLER_OPCODE_TXF_LOGICAL) &&
-                             tex->src[TEX_LOGICAL_SRC_LOD].is_zero();
-
-   /* Calculate the total number of argument components that need to be passed
-    * to the sampler unit.
-    */
-   unsigned num_payload_components =
-      tex->coord_components +
-      tex->components_read(TEX_LOGICAL_SRC_SHADOW_C) +
-      (implicit_lod ? 0 : tex->components_read(TEX_LOGICAL_SRC_LOD)) +
-      tex->components_read(TEX_LOGICAL_SRC_LOD2) +
-      tex->components_read(TEX_LOGICAL_SRC_SAMPLE_INDEX) +
-      (tex->sampler_opcode == SAMPLER_OPCODE_TG4_OFFSET_LOGICAL ?
-       tex->components_read(TEX_LOGICAL_SRC_TG4_OFFSET) : 0) +
-      tex->components_read(TEX_LOGICAL_SRC_MCS) +
-      tex->components_read(TEX_LOGICAL_SRC_MIN_LOD);
-
-
-   if (tex->sampler_opcode == SAMPLER_OPCODE_TXB_LOGICAL && devinfo->ver >= 20) {
-      num_payload_components += 3 - tex->coord_components;
-   } else if (tex->sampler_opcode == SAMPLER_OPCODE_TXD_LOGICAL &&
-            devinfo->verx10 >= 125 && devinfo->ver < 20) {
-      num_payload_components +=
-         3 - tex->coord_components + (2 - tex->grad_components) * 2;
-   } else {
-      num_payload_components += 4 - tex->coord_components;
-      if (tex->sampler_opcode == SAMPLER_OPCODE_TXD_LOGICAL)
-         num_payload_components += (3 - tex->grad_components) * 2;
+   unsigned simd_width = tex->exec_size;
+   while (payload_size > max_payload_size) {
+      payload_size /= 2;
+      simd_width /= 2;
    }
 
+   const unsigned max_hw_simd = devinfo->ver < 20 ? 16 : 32;
 
-   const unsigned simd_limit = reg_unit(devinfo) *
-      (num_payload_components > MAX_SAMPLER_MESSAGE_SIZE / 2 ? 8 : 16);
-
-   /* SIMD16 (SIMD32 on Xe2) messages with more than five arguments exceed the
-    * maximum message size supported by the sampler, regardless of whether a
-    * header is provided or not.
-    */
-   return MIN2(tex->exec_size, simd_limit);
+   return MIN2(simd_width, max_hw_simd);
 }
 
 static bool
@@ -239,6 +205,31 @@ is_half_float_src_dst(const brw_inst *inst)
    }
 
    return false;
+}
+
+/**
+ * Send instructions are writing physical registers so it's important to
+ * allocate physically aligned register size when lowering. With types >=
+ * 4bytes this is always the case but with fp16 sampler loads it's not.
+ */
+static bool
+is_send_inst(const brw_inst *inst)
+{
+   switch (inst->opcode) {
+   case FS_OPCODE_UNIFORM_PULL_CONSTANT_LOAD:
+   case FS_OPCODE_FB_WRITE_LOGICAL:
+   case FS_OPCODE_FB_READ_LOGICAL:
+   case SHADER_OPCODE_SAMPLER:
+   case SHADER_OPCODE_MEMORY_LOAD_LOGICAL:
+   case SHADER_OPCODE_MEMORY_STORE_LOGICAL:
+   case SHADER_OPCODE_MEMORY_ATOMIC_LOGICAL:
+   case SHADER_OPCODE_URB_READ_LOGICAL:
+   case SHADER_OPCODE_URB_WRITE_LOGICAL:
+      return true;
+
+   default:
+      return false;
+   }
 }
 
 /**
@@ -293,6 +284,7 @@ brw_get_lowered_simd_width(const brw_shader *shader, const brw_inst *inst)
    case BRW_OPCODE_BFI1:
    case BRW_OPCODE_BFI2:
    case BRW_OPCODE_BFN:
+   case SHADER_OPCODE_READ_ARCH_REG:
       return get_fpu_lowered_simd_width(shader, inst);
 
    case SHADER_OPCODE_RCP:
@@ -396,6 +388,9 @@ brw_get_lowered_simd_width(const brw_shader *shader, const brw_inst *inst)
    case SHADER_OPCODE_URB_WRITE_LOGICAL:
       return MIN2(devinfo->ver < 20 ? 8 : 16, inst->exec_size);
 
+   case RT_OPCODE_TRACE_RAY_LOGICAL:
+      return MIN2(16, inst->exec_size);
+
    case SHADER_OPCODE_QUAD_SWIZZLE: {
       const unsigned swiz = inst->src[1].ud;
       return (is_uniform(inst->src[0]) ?
@@ -405,7 +400,7 @@ brw_get_lowered_simd_width(const brw_shader *shader, const brw_inst *inst)
               get_fpu_lowered_simd_width(shader, inst));
    }
    case SHADER_OPCODE_MOV_INDIRECT:
-   case FS_OPCODE_READ_ATTRIBUTE_PAYLOAD: {
+   case SHADER_OPCODE_LOAD_ATTRIBUTE_PAYLOAD: {
       /* From IVB and HSW PRMs:
        *
        * "2.When the destination requires two registers and the sources are
@@ -527,6 +522,23 @@ needs_dst_copy(const brw_builder &lbld, const brw_inst *inst)
    if (inst->dst.is_null())
       return false;
 
+   /* If we have a SIMD16 SEND message with a destination format like this :
+    *
+    *   g0 : |hf15|hf14|hf13|       ...      |hf7|hf6|hf5|hf4|hf3|hf2|hf1|hf0|
+    *
+    * and we have to lower to SIMD8, the lowered format will be this :
+    *
+    *   g0 : |           unused              |hf7|hf6|hf5|hf4|hf3|hf2|hf1|hf0|
+    *
+    * Since SEND messages operate on physical register, we need a copy of the
+    * destination because the second lowered SIMD8 message cannot write to the
+    * upper unused part of the register.
+    */
+   if (is_send_inst(inst) &&
+       (inst->dst.component_size(lbld.dispatch_width()) %
+        (reg_unit(lbld.shader->devinfo) * REG_SIZE)) != 0)
+      return true;
+
    /* If the instruction writes more than one component we'll have to shuffle
     * the results of multiple lowered instructions in order to make sure that
     * they end up arranged correctly in the original destination region.
@@ -549,7 +561,7 @@ needs_dst_copy(const brw_builder &lbld, const brw_inst *inst)
        */
       if (regions_overlap(inst->dst, inst->size_written,
                           inst->src[i], inst->size_read(lbld.shader->devinfo, i)) &&
-          !inst->dst.equals(inst->src[i]))
+          !inst->dst.equals(inst->src[i].without_src_mods()))
         return true;
    }
 
@@ -589,9 +601,23 @@ emit_zip(const brw_builder &lbld_before, const brw_builder &lbld_after,
       (reg_unit(devinfo) * REG_SIZE) : 0;
    const unsigned dst_size = (inst->size_written - residency_size) /
       inst->dst.component_size(inst->exec_size);
+   unsigned tmp_comp_size;
+   brw_reg tmp;
 
-   const brw_reg tmp = lbld_after.vgrf(inst->dst.type,
-                                      dst_size + inst->has_sampler_residency());
+   if (is_send_inst(inst)) {
+      /* For SEND messages, align the allocation to physical registers */
+      tmp_comp_size =
+         align(inst->dst.component_size(lbld_after.dispatch_width()),
+               reg_unit(devinfo) * REG_SIZE);
+      const unsigned tmp_size =
+         (dst_size * tmp_comp_size + residency_size) / REG_SIZE;
+      tmp = retype(brw_allocate_vgrf_units(*lbld_after.shader, tmp_size),
+                   inst->dst.type);
+   } else {
+      tmp_comp_size = inst->dst.component_size(lbld_after.dispatch_width());
+      tmp = lbld_after.vgrf(inst->dst.type, dst_size +
+         inst->has_sampler_residency() * reg_unit(devinfo));
+   }
 
    if (inst->predicate) {
       /* Handle predication by copying the original contents of the
@@ -599,7 +625,7 @@ emit_zip(const brw_builder &lbld_before, const brw_builder &lbld_after,
        * instruction.
        */
       for (unsigned k = 0; k < dst_size; ++k) {
-         lbld_before.MOV(offset(tmp, lbld_before, k),
+         lbld_before.MOV(byte_offset(tmp, tmp_comp_size * k),
                          offset(dst, inst->exec_size, k));
       }
    }
@@ -607,7 +633,7 @@ emit_zip(const brw_builder &lbld_before, const brw_builder &lbld_after,
    for (unsigned k = 0; k < dst_size; ++k) {
       /* Copy the (split) temp into the original (larger) destination */
       lbld_after.MOV(offset(dst, inst->exec_size, k),
-                     offset(tmp, lbld_after, k));
+                     byte_offset(tmp, tmp_comp_size * k));
    }
 
    if (inst->has_sampler_residency()) {
@@ -619,7 +645,8 @@ emit_zip(const brw_builder &lbld_before, const brw_builder &lbld_after,
        */
       const brw_builder rbld = lbld_after.uniform();
       brw_reg local_res_reg = component(
-         retype(offset(tmp, lbld_before, dst_size), BRW_TYPE_UW), 0);
+         retype(offset(tmp, lbld_before, dst_size),
+                BRW_TYPE_UW), 0);
       brw_reg final_res_reg =
          retype(byte_offset(inst->dst,
                             inst->size_written - residency_size +
@@ -733,9 +760,14 @@ brw_lower_simd_width(brw_shader &s)
 
          split_inst->dst = emit_zip(lbld.before(inst),
                                    lbld_after, inst);
-         split_inst->size_written =
-            split_inst->dst.component_size(lower_width) * dst_size +
-            residency_size;
+         unsigned comp_size =
+            split_inst->dst.component_size(lower_width);
+
+         /* For SEND messages, align the data size to physical registers */
+         if (is_send_inst(split_inst))
+            comp_size = align(comp_size, REG_SIZE * reg_unit(s.devinfo));
+
+         split_inst->size_written = comp_size * dst_size + residency_size;
 
          lbld.after(inst).emit(split_inst);
       }

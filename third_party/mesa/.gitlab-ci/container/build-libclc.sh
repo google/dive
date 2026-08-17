@@ -2,7 +2,7 @@
 
 set -uex
 
-uncollapsed_section_start libclc "Building libclc"
+section_start libclc "Building libclc"
 
 export LLVM_CONFIG="llvm-config-${LLVM_VERSION:?"llvm unset!"}"
 LLVM_TAG="llvmorg-15.0.7"

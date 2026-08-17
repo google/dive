@@ -97,7 +97,6 @@ SOFTWARE.
 	<field name="3D" pos="48" type="bool" display=".3d"/>
 	<field name="A" pos="49" type="bool" display=".a"/>
 	<field name="S2EN_BINDLESS" pos="51" type="bool"/>
-	<field name="O" pos="52" type="bool" display=".o"/>
 	<!-- OPC -->
 	<field name="JP" pos="59" type="bool" display="(jp)"/>
 	<field name="SY" pos="60" type="bool" display="(sy)"/>
@@ -137,7 +136,7 @@ SOFTWARE.
 			The s2en (indirect) or bindless case
 		</doc>
 		<display>
-			{SY}{JP}{NAME}{3D}{A}{O}{P}{SV}{S2EN}{UNIFORM}{NONUNIFORM}{BASE}{1D}{CLP}{RCK} {TYPE}({WRMASK}){DST_HALF}{DST}{SRC1}{SRC2}{SRC3}{A1}
+			{SY}{JP}{NAME}{3D}{A}{O}{P}{SV}{MATCH_MODE}{S2EN}{UNIFORM}{NONUNIFORM}{BASE}{1D}{CLP}{RCK} {TYPE}({WRMASK}){DST_HALF}{DST}{SRC1}{SRC2}{SRC3}{A1}
 		</display>
 		<field name="BASE_HI" low="19" high="20" type="uint"/>
 		<field name="SRC3" low="21" high="28" type="#cat5-src3">
@@ -156,6 +155,7 @@ SOFTWARE.
 		<derived name="UNIFORM" expr="#cat5-s2enb-is-uniform" type="bool" display=".uniform"/>
 		<derived name="NONUNIFORM" expr="#cat5-s2enb-is-nonuniform" type="bool" display=".nonuniform"/>
 		<derived name="A1" expr="#cat5-s2enb-uses_a1" type="bool" display=", a1.x"/>
+		<derived name="MATCH_MODE" expr="#false" type="bool" display=""/>
 	</override>
 
 	<assert low="19" high="20">00</assert>   <!-- BASE_HI -->
@@ -165,6 +165,7 @@ SOFTWARE.
 	<field name="CLP" pos="18" type="bool" display=".clp"/>
 	<field name="SV" pos="50" type="bool" display=".s"/>
 	<field name="P" pos="53" type="bool" display=".p"/>
+	<field name="O" pos="52" type="bool" display=".o"/>
 	<derived name="1D" expr="#false" type="bool" display=""/>
 
 	<encode>
@@ -186,12 +187,80 @@ SOFTWARE.
 	     without it set. The blob disassembles it as .1d when not set. -->
 	<field name="1D" pos="18" type="bool_inv" display=".1d"/>
 	<field name="SV" pos="50" type="bool" display=".v"/>
+	<field name="O" pos="52" type="bool" display=".o"/>
 	<field name="SRC2_IMM_OFFSET" pos="53" type="bool"/>
 
 	<encode>
 		<map name="SV">!!(src->flags &amp; IR3_INSTR_V)</map>
 		<map name="1D">!!(src->flags &amp; IR3_INSTR_INV_1D)</map>
 		<map name="SRC2_IMM_OFFSET">!!(src->flags &amp; IR3_INSTR_IMM_OFFSET)</map>
+	</encode>
+</bitset>
+
+<enum name="#cat5-block-match-mode">
+	<value val="0" display=".sad">
+		<doc>
+			Sum of Absolute Difference
+		</doc>
+	</value>
+	<value val="1" display=".ssd">
+		<doc>
+			Sum of Squared Difference
+		</doc>
+	</value>
+</enum>
+
+<bitset name="img_bindless.hof" extends="#instruction-cat5-tex-base">
+	<doc>
+		Higher order filtering -- SampleWeighted from VK_QCOM_image_processing.
+	</doc>
+	<derived name="NUM_SRC" expr="#one" type="uint"/>
+	<derived name="HAS_SAMP" expr="#true" type="bool"/>
+	<derived name="HAS_TEX" expr="#true" type="bool"/>
+	<derived name="HAS_TYPE" expr="#true" type="bool"/>
+	<derived name="SV" expr="#false" type="bool" display=""/>
+	<derived name="CLP" expr="#false" type="bool" display=""/>
+	<derived name="O" expr="#false" type="bool" display=""/>
+
+	<pattern low="52" high="58">1110100</pattern>
+	<pattern low="50" high="50">0</pattern>
+	<pattern pos="18">0</pattern>
+</bitset>
+
+<bitset name="img_bindless.pcmn" extends="#instruction-cat5-tex-base">
+	<doc>
+		Phase-controlled M/N downscale filtering -- BoxFilter from VK_QCOM_image_processing.
+	</doc>
+	<derived name="NUM_SRC" expr="#two" type="uint"/>
+	<derived name="HAS_SAMP" expr="#true" type="bool"/>
+	<derived name="HAS_TEX" expr="#true" type="bool"/>
+	<derived name="HAS_TYPE" expr="#true" type="bool"/>
+	<derived name="SV" expr="#false" type="bool" display=""/>
+	<derived name="CLP" expr="#false" type="bool" display=""/>
+	<derived name="O" expr="#false" type="bool" display=""/>
+
+	<pattern low="52" high="58">1110100</pattern>
+	<pattern low="50" high="50">1</pattern>
+	<pattern pos="18">0</pattern>
+</bitset>
+
+<bitset name="img_bindless" extends="#instruction-cat5-tex-base">
+	<doc>
+		SAD/SSD block matching from VK_QCOM_image_processing.
+	</doc>
+	<derived name="NUM_SRC" expr="#two" type="uint"/>
+	<derived name="HAS_SAMP" expr="#false" type="bool"/>
+	<derived name="HAS_TEX" expr="#true" type="bool"/>
+	<derived name="HAS_TYPE" expr="#true" type="bool"/>
+	<derived name="SV" expr="#false" type="bool" display=""/>
+	<derived name="CLP" expr="#false" type="bool" display=""/>
+	<derived name="O" expr="#false" type="bool" display=""/>
+
+	<pattern low="52" high="58">1110101</pattern>
+	<pattern pos="18">0</pattern>
+	<field name="MATCH_MODE" pos="50" type="#cat5-block-match-mode"/>
+	<encode type="struct ir3_instruction *">
+		<map name="MATCH_MODE">src->cat5.match_mode</map>
 	</encode>
 </bitset>
 
@@ -481,6 +550,10 @@ SOFTWARE.
 </bitset>
 
 <bitset name="rgetpos" extends="#instruction-cat5-tex">
+	<doc>
+		Returns the sample id's position within a pixel, centered around
+		(0.0, 0.0)
+	</doc>
 	<pattern low="54" high="58">11010</pattern>
 	<derived name="NUM_SRC" expr="#one" type="uint"/>
 	<derived name="HAS_SAMP" expr="#false" type="bool"/>
@@ -514,6 +587,7 @@ SOFTWARE.
 <bitset name="#instruction-cat5-brcst" extends="#instruction-cat5">
 	<pattern pos="18">0</pattern>
 	<pattern pos="50">0</pattern>
+	<field name="O" pos="52" type="bool" display=".o"/>
 	<derived name="CLP" expr="#false" type="bool" display=""/>
 </bitset>
 

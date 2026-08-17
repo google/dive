@@ -25,7 +25,9 @@
 #include <dlfcn.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#if defined(HAVE_LIBGBM)
 #include <gbm.h>
+#endif
 #include "drm-uapi/drm_fourcc.h"
 
 #define EGL_PLATFORM_GBM_MESA             0x31D7
@@ -372,7 +374,9 @@ init_dri2_configs(int fd)
    struct gbm_device *gbm = NULL;
    if (fd != -1) {
       /* try opening GBM for hardware driver info */
+#if defined(HAVE_LIBGBM)
       gbm = gbm_create_device(fd);
+#endif
       if (!gbm)
          goto out;
    }
@@ -444,8 +448,10 @@ out_egl:
    peglTerminate(dpy);
 
 out_gbm:
+#if defined(HAVE_LIBGBM)
    if (gbm)
       gbm_device_destroy(gbm);
+#endif
 out:
    dlclose(egl);
    if (c)

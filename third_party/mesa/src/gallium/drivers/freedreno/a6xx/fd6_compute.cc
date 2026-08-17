@@ -7,9 +7,9 @@
  */
 
 #include "drm/freedreno_ringbuffer.h"
-#define FD_BO_NO_HARDPIN 1
 
 #include "pipe/p_state.h"
+#include "util/simple_mtx.h"
 #include "util/u_dump.h"
 #include "u_tracepoints.h"
 
@@ -26,7 +26,7 @@
 /* nregs: 2 */
 template <chip CHIP>
 static void
-cs_program_emit_local_size(struct fd_context *ctx, fd_crb &crb,
+cs_program_emit_local_size(struct fd_screen *screen, fd_crb &crb,
                            struct ir3_shader_variant *v, uint16_t local_size[3])
 {
    /*
@@ -35,10 +35,10 @@ cs_program_emit_local_size(struct fd_context *ctx, fd_crb &crb,
     * which is always set to THREAD128.
     */
    enum a6xx_threadsize thrsz = v->info.double_threadsize ? THREAD128 : THREAD64;
-   enum a6xx_threadsize thrsz_cs = ctx->screen->info->a6xx
+   enum a6xx_threadsize thrsz_cs = screen->info->props
       .supports_double_threadsize ? thrsz : THREAD128;
 
-   if (CHIP == A7XX) {
+   if (CHIP >= A7XX) {
       unsigned tile_height = (local_size[1] % 8 == 0)   ? 3
                              : (local_size[1] % 4 == 0) ? 5
                              : (local_size[1] % 2 == 0) ? 9
@@ -63,7 +63,7 @@ cs_program_emit_local_size(struct fd_context *ctx, fd_crb &crb,
 /* nregs: 9 */
 template <chip CHIP>
 static void
-cs_program_emit(struct fd_context *ctx, fd_crb &crb, struct ir3_shader_variant *v)
+cs_program_emit(struct fd_screen *screen, fd_crb &crb, struct ir3_shader_variant *v)
    assert_dt
 {
    crb.add(SP_UPDATE_CNTL(CHIP,
@@ -98,7 +98,7 @@ cs_program_emit(struct fd_context *ctx, fd_crb &crb, struct ir3_shader_variant *
     * which is always set to THREAD128.
     */
    enum a6xx_threadsize thrsz = v->info.double_threadsize ? THREAD128 : THREAD64;
-   enum a6xx_threadsize thrsz_cs = ctx->screen->info->a6xx
+   enum a6xx_threadsize thrsz_cs = screen->info->props
       .supports_double_threadsize ? thrsz : THREAD128;
 
    if (CHIP == A6XX) {
@@ -113,11 +113,11 @@ cs_program_emit(struct fd_context *ctx, fd_crb &crb, struct ir3_shader_variant *
          .threadsize = thrsz_cs,
       ));
 
-      if (!ctx->screen->info->a6xx.supports_double_threadsize) {
+      if (!screen->info->props.supports_double_threadsize) {
          crb.add(SP_PS_WAVE_CNTL(CHIP, .threadsize = thrsz));
       }
 
-      if (ctx->screen->info->a6xx.has_lpac) {
+      if (screen->info->props.has_lpac) {
          crb.add(A6XX_SP_CS_WIE_CNTL_0(
             .wgidconstid = work_group_id,
             .wgsizeconstid = INVALID_REG,
@@ -144,11 +144,11 @@ cs_program_emit(struct fd_context *ctx, fd_crb &crb, struct ir3_shader_variant *
             v->cs.force_linear_dispatch ? WORKITEMRASTORDER_LINEAR
                                           : WORKITEMRASTORDER_TILED,
       ));
-      crb.add(SP_CS_UNKNOWN_A9BE(CHIP, 0)); // Sometimes is 0x08000000
+      crb.add(SP_CS_HYSTERESIS(CHIP, 0)); // Sometimes is 0x08000000
    }
 
    if (!v->local_size_variable)
-      cs_program_emit_local_size<CHIP>(ctx, crb, v, v->local_size);
+      cs_program_emit_local_size<CHIP>(screen, crb, v, v->local_size);
 }
 
 template <chip CHIP>
@@ -156,24 +156,38 @@ static void
 fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
 {
    struct fd6_compute_state *cp = (struct fd6_compute_state *)ctx->compute;
-   fd_cs cs(ctx->batch->draw);
 
    if (unlikely(!cp->v)) {
-      struct ir3_shader_state *hwcso = (struct ir3_shader_state *)cp->hwcso;
-      struct ir3_shader_key key = {};
+      struct fd_screen *screen = ctx->screen;
+      static simple_mtx_t lock = SIMPLE_MTX_INITIALIZER;
 
-      cp->v = ir3_shader_variant(ir3_get_shader(hwcso), key, false, &ctx->debug);
-      if (!cp->v)
-         return;
+      simple_mtx_lock(&lock);
+      /* check again under lock: */
+      if (!cp->v) {
+         struct ir3_shader_state *hwcso = (struct ir3_shader_state *)cp->hwcso;
+         struct ir3_shader_key key = {};
 
-      cp->stateobj = fd_ringbuffer_new_object(ctx->pipe, 0x1000);
-      fd_cs cs(cp->stateobj);
-      with_crb (cs, 9)
-         cs_program_emit<CHIP>(ctx, crb, cp->v);
-      fd6_emit_shader<CHIP>(ctx, cs, cp->v);
+         struct ir3_shader_variant *v =
+            ir3_shader_variant(ir3_get_shader(hwcso), key, false, &ctx->debug);
+         if (v) {
+            cp->stateobj = fd_ringbuffer_new_shareable_object(ctx->pipe, 0x1000);
+            fd_cs cs(cp->stateobj);
+            with_crb (cs, 9)
+               cs_program_emit<CHIP>(screen, crb, v);
+            fd6_emit_shader<CHIP>(screen, cs, v);
+
+            cp->v = v;
+         }
+      }
+
+      simple_mtx_unlock(&lock);
    }
 
-   trace_start_compute(&ctx->batch->trace, cs.ring(), !!info->indirect, info->work_dim,
+   fd_cs cs(ctx->batch->draw);
+
+   fd6_set_render_mode<CHIP>(cs, {RM6_COMPUTE});
+
+   trace_start_compute(&ctx->batch->trace, cs, !!info->indirect, info->work_dim,
                        info->block[0], info->block[1], info->block[2],
                        info->grid[0],  info->grid[1],  info->grid[2],
                        cp->v->shader_id);
@@ -181,7 +195,7 @@ fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
    fd6_barrier_flush<CHIP>(cs, ctx->batch);
 
    bool emit_instrlen_workaround =
-      cp->v->instrlen > ctx->screen->info->a6xx.instr_cache_size;
+      cp->v->instrlen > ctx->screen->info->props.instr_cache_size;
 
    /* There appears to be a HW bug where in some rare circumstances it appears
     * to accidentally use the FS instrlen instead of the CS instrlen, which
@@ -213,9 +227,6 @@ fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
    if (cp->v->need_driver_params)
       fd6_emit_cs_driver_params<CHIP>(ctx, cs, cp->v, info);
 
-   fd_pkt7(cs, CP_SET_MARKER, 1)
-      .add(A6XX_CP_SET_MARKER_0_MODE(RM6_COMPUTE));
-
    const unsigned *local_size =
       info->block; // v->shader->nir->info->workgroup_size;
    const unsigned *num_groups = info->grid;
@@ -234,7 +245,7 @@ fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
          .constantrammode = mode,
       ));
 
-      if (CHIP == A6XX && ctx->screen->info->a6xx.has_lpac) {
+      if (CHIP == A6XX && ctx->screen->info->props.has_lpac) {
          crb.add(HLSQ_CS_CTRL_REG1(CHIP,
             .shared_size = shared_size,
             .constantrammode = mode,
@@ -243,7 +254,7 @@ fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
 
       if (cp->v->local_size_variable) {
          uint16_t wg[] = {local_size[0], local_size[1], local_size[2]};
-         cs_program_emit_local_size<CHIP>(ctx, crb, cp->v, wg);
+         cs_program_emit_local_size<CHIP>(ctx->screen, crb, cp->v, wg);
       }
 
       crb.add(SP_CS_NDRANGE_0(CHIP,
@@ -265,9 +276,9 @@ fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
       ));
       crb.add(SP_CS_NDRANGE_6(CHIP, .globaloff_z = 0));
 
-      crb.add(SP_CS_KERNEL_GROUP_X(CHIP, 1));
-      crb.add(SP_CS_KERNEL_GROUP_Y(CHIP, 1));
-      crb.add(SP_CS_KERNEL_GROUP_Z(CHIP, 1));
+      crb.add(SP_CS_KERNEL_GROUP_X(CHIP, num_groups[0]));
+      crb.add(SP_CS_KERNEL_GROUP_Y(CHIP, num_groups[1]));
+      crb.add(SP_CS_KERNEL_GROUP_Z(CHIP, num_groups[2]));
    }
 
    if (info->indirect) {
@@ -289,7 +300,7 @@ fd6_launch_grid(struct fd_context *ctx, const struct pipe_grid_info *info) in_dt
          .add(CP_EXEC_CS_3(info->grid[2]));
    }
 
-   trace_end_compute(&ctx->batch->trace, cs.ring());
+   trace_end_compute(&ctx->batch->trace, cs);
 
    fd_context_all_clean(ctx);
 }
@@ -314,13 +325,14 @@ fd6_compute_state_delete(struct pipe_context *pctx, void *_hwcso)
    free(hwcso);
 }
 
+static struct ir3_shader_key null_key; /* static is implicitly zeroed */
+
 static void
 fd6_get_compute_state_info(struct pipe_context *pctx, void *cso, struct pipe_compute_state_object_info *cinfo)
 {
-   static struct ir3_shader_key key; /* static is implicitly zeroed */
    struct fd6_compute_state *cs = (struct fd6_compute_state *)cso;
    struct ir3_shader_state *hwcso = (struct ir3_shader_state *)cs->hwcso;
-   struct ir3_shader_variant *v = ir3_shader_variant(ir3_get_shader(hwcso), key, false, &pctx->debug);
+   struct ir3_shader_variant *v = ir3_shader_variant(ir3_get_shader(hwcso), null_key, false, &pctx->debug);
    const struct fd_dev_info *info = fd_context(pctx)->screen->info;
    uint32_t threadsize_base = info->threadsize_base;
 
@@ -328,14 +340,13 @@ fd6_get_compute_state_info(struct pipe_context *pctx, void *cso, struct pipe_com
    cinfo->simd_sizes = threadsize_base;
    cinfo->preferred_simd_size = threadsize_base;
 
-   if (info->a6xx.supports_double_threadsize && v->info.double_threadsize) {
-
+   if (info->props.supports_double_threadsize && v->info.double_threadsize) {
       cinfo->max_threads *= 2;
-      cinfo->simd_sizes |= (threadsize_base * 2);
+      cinfo->simd_sizes *= 2;
       cinfo->preferred_simd_size *= 2;
    }
 
-   unsigned reg_file_size_vec4 = info->a6xx.reg_size_vec4 * threadsize_base * info->wave_granularity;
+   unsigned reg_file_size_vec4 = info->props.reg_size_vec4 * threadsize_base * info->wave_granularity;
    unsigned vec4_regs_per_thread = MAX2(v->info.max_reg + 1, 1);
 
    cinfo->max_threads = MIN2(cinfo->max_threads, reg_file_size_vec4 / vec4_regs_per_thread);

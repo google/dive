@@ -100,14 +100,6 @@ blorp_surface_reloc(struct blorp_batch *batch, uint32_t ss_offset,
    write_reloc(cmd_buffer->device, dest, address_u64, false);
 }
 
-static uint64_t
-blorp_get_surface_address(struct blorp_batch *blorp_batch,
-                          struct blorp_address address)
-{
-   /* We'll let blorp_surface_reloc write the address. */
-   return 0;
-}
-
 static struct blorp_address
 blorp_get_surface_base_address(struct blorp_batch *batch)
 {
@@ -301,7 +293,7 @@ blorp_exec_on_render(struct blorp_batch *batch,
    BITSET_CLEAR(dyn_dirty, MESA_VK_DYNAMIC_RS_LINE_STIPPLE);
    BITSET_CLEAR(dyn_dirty, MESA_VK_DYNAMIC_FSR);
    BITSET_CLEAR(dyn_dirty, MESA_VK_DYNAMIC_MS_SAMPLE_LOCATIONS);
-   if (!params->wm_prog_data) {
+   if (!params->fs_prog_data) {
       BITSET_CLEAR(dyn_dirty, MESA_VK_DYNAMIC_CB_COLOR_WRITE_ENABLES);
       BITSET_CLEAR(dyn_dirty, MESA_VK_DYNAMIC_CB_LOGIC_OP);
    }

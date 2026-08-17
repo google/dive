@@ -167,6 +167,7 @@ lp_blit(struct pipe_context *pipe,
    util_blitter_save_vertex_elements(lp->blitter, (void*)lp->velems);
    util_blitter_save_vertex_shader(lp->blitter, (void*)lp->vs);
    util_blitter_save_geometry_shader(lp->blitter, (void*)lp->gs);
+   util_blitter_save_mesh_shader(lp->blitter, (void*)lp->mhs);
    util_blitter_save_so_targets(lp->blitter, lp->num_so_targets,
                      (struct pipe_stream_output_target**)lp->so_targets, MESA_PRIM_UNKNOWN);
    util_blitter_save_rasterizer(lp->blitter, (void*)lp->rasterizer);
@@ -230,7 +231,6 @@ llvmpipe_create_surface(struct pipe_context *pipe,
    if (ps) {
       pipe_reference_init(&ps->reference, 1);
       pipe_resource_reference(&ps->texture, pt);
-      ps->context = pipe;
       ps->format = surf_tmpl->format;
       assert(surf_tmpl->level <= pt->last_level);
       assert(surf_tmpl->first_layer <= surf_tmpl->last_layer);
@@ -513,8 +513,6 @@ llvmpipe_init_surface_functions(struct llvmpipe_context *lp)
 {
    lp->pipe.clear_render_target = llvmpipe_clear_render_target;
    lp->pipe.clear_depth_stencil = llvmpipe_clear_depth_stencil;
-   lp->pipe.create_surface = llvmpipe_create_surface;
-   lp->pipe.surface_destroy = llvmpipe_surface_destroy;
    /* These are not actually functions dealing with surfaces */
    lp->pipe.clear_texture = llvmpipe_clear_texture;
    lp->pipe.clear_buffer = llvmpipe_clear_buffer;

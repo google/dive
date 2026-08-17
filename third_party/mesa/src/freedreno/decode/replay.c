@@ -762,7 +762,8 @@ device_create(uint64_t base_addr)
    struct kgsl_drawctxt_create drawctxt_req = {
       .flags = KGSL_CONTEXT_SAVE_GMEM |
               KGSL_CONTEXT_NO_GMEM_ALLOC |
-              KGSL_CONTEXT_PREAMBLE,
+              KGSL_CONTEXT_PREAMBLE |
+              KGSL_CONTEXT_NO_FAULT_TOLERANCE,
    };
 
    ret = safe_ioctl(dev->fd, IOCTL_KGSL_DRAWCTXT_CREATE, &drawctxt_req);
@@ -821,7 +822,21 @@ device_submit_cmdstreams(struct device *dev)
    ret = safe_ioctl(dev->fd, IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID, &wait);
 
    if (ret) {
-      err(1, "IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID failure %d", ret);
+      warn("IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID failure %d", ret);
+
+      uint32_t value = dev->context_id;
+      struct kgsl_device_getproperty getprop = {
+         .type = KGSL_PROP_GPU_RESET_STAT,
+         .value = &value,
+         .sizebytes = sizeof(value),
+      };
+
+      ret = safe_ioctl(dev->fd, IOCTL_KGSL_DEVICE_GETPROPERTY, &getprop);
+      if (ret) {
+         err(1, "IOCTL_KGSL_DEVICE_GETPROPERTY failure %d", ret);
+      }
+
+      warnx("KGSL_PROP_GPU_RESET_STAT value %u", value);
    }
 
    u_vector_finish(&dev->cmdstreams);

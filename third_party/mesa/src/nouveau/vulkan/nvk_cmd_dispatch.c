@@ -150,13 +150,17 @@ nvk_flush_compute_state(struct nvk_cmd_buffer *cmd,
                                        0, 3, base_workgroup);
    nvk_descriptor_state_set_root_array(cmd, desc, cs.group_count,
                                        0, 3, global_size);
+
+   if (NAK_CAN_PRINTF)
+      nvk_cmd_buffer_flush_printf_buffer(cmd, desc);
 }
 
 static VkResult
 nvk_cmd_upload_qmd(struct nvk_cmd_buffer *cmd,
                    const struct nvk_shader *shader,
                    const struct nvk_descriptor_state *desc,
-                   const struct nvk_root_descriptor_table *root,
+                   const void *root,
+                   size_t root_size,
                    uint32_t global_size[3],
                    uint64_t *qmd_addr_out,
                    uint64_t *root_desc_addr_out)
@@ -171,17 +175,16 @@ nvk_cmd_upload_qmd(struct nvk_cmd_buffer *cmd,
     * simply allocated a buffer and upload data to it, make sure its size is
     * 0x100 aligned.
     */
-   STATIC_ASSERT((sizeof(*root) & 0xff) == 0);
-   assert(sizeof(*root) % min_cbuf_alignment == 0);
+   assert(root_size % min_cbuf_alignment == 0);
 
    void *root_desc_map;
    uint64_t root_desc_addr;
-   result = nvk_cmd_buffer_upload_alloc(cmd, sizeof(*root), min_cbuf_alignment,
+   result = nvk_cmd_buffer_upload_alloc(cmd, root_size, min_cbuf_alignment,
                                         &root_desc_addr, &root_desc_map);
    if (unlikely(result != VK_SUCCESS))
       return result;
 
-   memcpy(root_desc_map, root, sizeof(*root));
+   memcpy(root_desc_map, root, root_size);
 
    uint64_t qmd_addr = 0;
    if (shader != NULL) {
@@ -203,7 +206,7 @@ nvk_cmd_upload_qmd(struct nvk_cmd_buffer *cmd,
          if (cbuf->type == NVK_CBUF_TYPE_ROOT_DESC) {
             ba = (struct nvk_buffer_address) {
                .base_addr = root_desc_addr,
-               .size = sizeof(*root),
+               .size = root_size,
             };
          } else {
             ASSERTED bool direct_descriptor =
@@ -252,9 +255,11 @@ nvk_cmd_flush_cs_qmd(struct nvk_cmd_buffer *cmd,
                      uint64_t *root_desc_addr_out)
 {
    const struct nvk_descriptor_state *desc = &state->cs.descriptors;
+   STATIC_ASSERT((sizeof(desc->root) & 0xff) == 0);
 
-   return nvk_cmd_upload_qmd(cmd, state->cs.shader,
-                             desc, (void *)desc->root, global_size,
+   return nvk_cmd_upload_qmd(cmd, state->cs.shader, desc,
+                             desc->root, sizeof(desc->root),
+                             global_size,
                              qmd_addr_out, root_desc_addr_out);
 }
 
@@ -309,20 +314,25 @@ nvk_CmdDispatchBase(VkCommandBuffer commandBuffer,
       return;
    }
 
-   const uint32_t local_size = nvk_compute_local_size(cmd);
-   const uint64_t cs_invocations =
-      (uint64_t)local_size * (uint64_t)groupCountX *
-      (uint64_t)groupCountY * (uint64_t)groupCountZ;
+   /* Only emit this if we have a compute shader invocations query */
+   if (cmd->state.cs.active_compute_invocations_query ||
+       cmd->state.inherited_pipeline_statistics &
+          VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT) {
+      const uint32_t local_size = nvk_compute_local_size(cmd);
+      const uint64_t cs_invocations =
+         (uint64_t)local_size * (uint64_t)groupCountX *
+         (uint64_t)groupCountY * (uint64_t)groupCountZ;
 
-   struct nv_push *p = nvk_cmd_buffer_push(cmd, 7);
+      struct nv_push *p = nvk_cmd_buffer_push(cmd, 3);
+      if (nvk_cmd_buffer_compute_cls(cmd) >= AMPERE_COMPUTE_B)
+         P_1INC(p, NVC7C0, CALL_MME_MACRO(NVK_MME_ADD_CS_INVOCATIONS));
+      else
+         P_1INC(p, NV9097, CALL_MME_MACRO(NVK_MME_ADD_CS_INVOCATIONS));
+      P_INLINE_DATA(p, cs_invocations >> 32);
+      P_INLINE_DATA(p, cs_invocations);
+   }
 
-   if (nvk_cmd_buffer_compute_cls(cmd) >= AMPERE_COMPUTE_B)
-      P_1INC(p, NVC7C0, CALL_MME_MACRO(NVK_MME_ADD_CS_INVOCATIONS));
-   else
-      P_1INC(p, NV9097, CALL_MME_MACRO(NVK_MME_ADD_CS_INVOCATIONS));
-   P_INLINE_DATA(p, cs_invocations >> 32);
-   P_INLINE_DATA(p, cs_invocations);
-
+   struct nv_push *p = nvk_cmd_buffer_push(cmd, 4);
    P_MTHD(p, NVA0C0, SEND_PCAS_A);
    P_NVA0C0_SEND_PCAS_A(p, qmd_addr >> 8);
 
@@ -338,28 +348,22 @@ nvk_CmdDispatchBase(VkCommandBuffer commandBuffer,
 }
 
 void
-nvk_cmd_dispatch_shader(struct nvk_cmd_buffer *cmd,
-                        struct nvk_shader *shader,
-                        const void *push_data, size_t push_size,
-                        uint32_t groupCountX,
-                        uint32_t groupCountY,
-                        uint32_t groupCountZ)
+nvk_cmd_dispatch_with_root(struct nvk_cmd_buffer *cmd,
+                           struct nvk_shader *shader,
+                           const void *root,
+                           size_t root_size,
+                           uint32_t groupCountX,
+                           uint32_t groupCountY,
+                           uint32_t groupCountZ)
 {
    struct nvk_device *dev = nvk_cmd_buffer_device(cmd);
 
-   struct nvk_root_descriptor_table root = {
-      .cs.group_count = {
-         groupCountX,
-         groupCountY,
-         groupCountZ,
-      },
-   };
-   assert(push_size <= sizeof(root.push));
-   memcpy(root.push, push_data, push_size);
+   uint32_t group_count[3] = { groupCountX, groupCountY, groupCountZ };
 
    uint64_t qmd_addr;
-   VkResult result = nvk_cmd_upload_qmd(cmd, shader, NULL, &root,
-                                        root.cs.group_count,
+   VkResult result = nvk_cmd_upload_qmd(cmd, shader, NULL,
+                                        root, root_size,
+                                        group_count,
                                         &qmd_addr, NULL);
    if (result != VK_SUCCESS) {
       vk_command_buffer_set_error(&cmd->vk, result);
@@ -390,6 +394,35 @@ nvk_cmd_dispatch_shader(struct nvk_cmd_buffer *cmd,
    }
 
    P_IMMD(p, NVA0C0, SET_RENDER_ENABLE_OVERRIDE, MODE_USE_RENDER_ENABLE);
+}
+
+void
+nvk_cmd_dispatch_shader(struct nvk_cmd_buffer *cmd,
+                        struct nvk_shader *shader,
+                        const void *push_data, size_t push_size,
+                        uint32_t groupCountX,
+                        uint32_t groupCountY,
+                        uint32_t groupCountZ)
+{
+   struct nvk_device *dev = nvk_cmd_buffer_device(cmd);
+
+   struct nvk_root_descriptor_table root = {
+      .cs.group_count = {
+         groupCountX,
+         groupCountY,
+         groupCountZ,
+      },
+   };
+   assert(push_size <= sizeof(root.push));
+   memcpy(root.push, push_data, push_size);
+
+   if (NAK_CAN_PRINTF) {
+      struct nvkmd_mem *bo = (struct nvkmd_mem *)dev->printf.bo;
+      root.printf_buffer_addr = bo->va->addr;
+   }
+
+   nvk_cmd_dispatch_with_root(cmd, shader, &root, sizeof(root),
+                              groupCountX, groupCountY, groupCountZ);
 }
 
 static void
@@ -537,16 +570,14 @@ nvk_mme_dispatch_indirect(struct mme_builder *b)
 }
 
 VKAPI_ATTR void VKAPI_CALL
-nvk_CmdDispatchIndirect(VkCommandBuffer commandBuffer,
-                        VkBuffer _buffer,
-                        VkDeviceSize offset)
+nvk_CmdDispatchIndirect2KHR(VkCommandBuffer commandBuffer,
+                            const VkDispatchIndirect2InfoKHR* pInfo)
 {
    VK_FROM_HANDLE(nvk_cmd_buffer, cmd, commandBuffer);
-   VK_FROM_HANDLE(nvk_buffer, buffer, _buffer);
    struct nvk_device *dev = nvk_cmd_buffer_device(cmd);
    const struct nvk_physical_device *pdev = nvk_device_physical(dev);
 
-   uint64_t dispatch_addr = vk_buffer_address(&buffer->vk, offset);
+   uint64_t dispatch_addr = pInfo->addressRange.address;
 
    /* We set these through the MME */
    uint32_t base_workgroup[3] = { 0, 0, 0 };
@@ -564,8 +595,18 @@ nvk_CmdDispatchIndirect(VkCommandBuffer commandBuffer,
    struct nv_push *p;
    if (nvk_cmd_buffer_compute_cls(cmd) >= TURING_COMPUTE_A) {
       p = nvk_cmd_buffer_push(cmd, 14);
-      if (nvk_cmd_buffer_compute_cls(cmd) < BLACKWELL_COMPUTE_A)
+      if (nvk_cmd_buffer_compute_cls(cmd) < BLACKWELL_COMPUTE_A) {
          P_IMMD(p, NVC597, SET_MME_DATA_FIFO_CONFIG, FIFO_SIZE_SIZE_4KB);
+      } else {
+         /* The line in the other side of the if causes an implicit wfi
+          * due to the subc switch which we apparently rely on for
+          * correctness (!?). Anyway, to prevent issues on blackwell
+          * we need to wfi here too.
+          * TODO: delete this
+          */
+         P_IMMD(p, NVC86F, WFI, 0);
+      }
+
       if (nvk_cmd_buffer_compute_cls(cmd) >= AMPERE_COMPUTE_B)
          P_1INC(p, NVC7C0, CALL_MME_MACRO(NVK_MME_DISPATCH_INDIRECT));
       else

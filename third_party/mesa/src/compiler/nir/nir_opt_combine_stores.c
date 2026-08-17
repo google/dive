@@ -279,7 +279,8 @@ static void
 combine_stores_block(struct combine_stores_state *state, nir_block *block)
 {
    nir_foreach_instr_safe(instr, block) {
-      if (instr->type == nir_instr_type_call) {
+      if (instr->type == nir_instr_type_call ||
+          instr->type == nir_instr_type_cmat_call) {
          combine_stores_with_modes(state, nir_var_shader_out |
                                              nir_var_shader_temp |
                                              nir_var_function_temp |
@@ -343,7 +344,8 @@ combine_stores_block(struct combine_stores_state *state, nir_block *block)
       }
 
       case nir_intrinsic_load_deref_block_intel:
-      case nir_intrinsic_store_deref_block_intel: {
+      case nir_intrinsic_store_deref_block_intel:
+      case nir_intrinsic_load_deref_transpose_amd: {
          /* Combine all the stores that may alias with the whole variable (or
           * cast).
           */

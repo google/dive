@@ -24,6 +24,11 @@
 #ifndef V3D_TFU_H
 #define V3D_TFU_H
 
+/* Maximum width and height (in pixels) per submitted TFU job. The ios
+ * register encodes width and height as 14-bit values each.
+ */
+#define V3D_TFU_MAX_DIM 16384
+
 /* Disable level 0 write, just write following mipmaps */
 #define V3D33_TFU_IOA_DIMTW (1 << 0)
 #define V3D33_TFU_IOA_FORMAT_SHIFT 3
@@ -51,11 +56,12 @@
 /* Disable level 0 write, just write following mipmaps */
 #define V3D71_TFU_IOC_DIMTW (1 << 0)
 #define V3D71_TFU_IOC_FORMAT_SHIFT              12
+#define V3D71_TFU_IOC_FORMAT_RASTER              0
 #define V3D71_TFU_IOC_FORMAT_LINEARTILE          3
-#define V3D71_TFU_IOA_FORMAT_UBLINEAR_1_COLUMN   4
-#define V3D71_TFU_IOA_FORMAT_UBLINEAR_2_COLUMN   5
-#define V3D71_TFU_IOA_FORMAT_UIF_NO_XOR          6
-#define V3D71_TFU_IOA_FORMAT_UIF_XOR             7
+#define V3D71_TFU_IOC_FORMAT_UBLINEAR_1_COLUMN   4
+#define V3D71_TFU_IOC_FORMAT_UBLINEAR_2_COLUMN   5
+#define V3D71_TFU_IOC_FORMAT_UIF_NO_XOR          6
+#define V3D71_TFU_IOC_FORMAT_UIF_XOR             7
 
 #define V3D71_TFU_IOC_STRIDE_SHIFT              16
 #define V3D71_TFU_IOC_NUMMM_SHIFT                4
@@ -63,12 +69,12 @@
 #define V3D71_TFU_ICFG_OTYPE_SHIFT              16
 #define V3D71_TFU_ICFG_IFORMAT_SHIFT            23
 #define V3D71_TFU_ICFG_FORMAT_RASTER             0
-#define V3D71_TFU_ICFG_FORMAT_SAND_128           1
-#define V3D71_TFU_ICFG_FORMAT_SAND_256           2
-#define V3D71_TFU_ICFG_FORMAT_LINEARTILE        11
-#define V3D71_TFU_ICFG_FORMAT_UBLINEAR_1_COLUMN 12
-#define V3D71_TFU_ICFG_FORMAT_UBLINEAR_2_COLUMN 13
-#define V3D71_TFU_ICFG_FORMAT_UIF_NO_XOR        14
-#define V3D71_TFU_ICFG_FORMAT_UIF_XOR           15
+#define V3D71_TFU_ICFG_FORMAT_SAND               1
+#define V3D71_TFU_ICFG_FORMAT_CONSTANT_COLOUR    2
+#define V3D71_TFU_ICFG_FORMAT_LINEARTILE         3
+#define V3D71_TFU_ICFG_FORMAT_UBLINEAR_1_COLUMN  4
+#define V3D71_TFU_ICFG_FORMAT_UBLINEAR_2_COLUMN  5
+#define V3D71_TFU_ICFG_FORMAT_UIF_NO_XOR         6
+#define V3D71_TFU_ICFG_FORMAT_UIF_XOR            7
 
 #endif

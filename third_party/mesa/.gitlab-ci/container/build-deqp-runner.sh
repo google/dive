@@ -3,14 +3,13 @@
 
 # When changing this file, you need to bump the following
 # .gitlab-ci/image-tags.yml tags:
-# DEBIAN_TEST_ANDROID_TAG
 # DEBIAN_TEST_BASE_TAG
 
 set -uex
 
 section_start deqp-runner "Building deqp-runner"
 
-DEQP_RUNNER_VERSION=0.20.3
+DEQP_RUNNER_VERSION=0.23.2
 
 commits_to_backport=(
 )

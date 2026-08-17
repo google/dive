@@ -24,6 +24,7 @@
 #include "pvr_formats.h"
 #include "pvr_hw_pass.h"
 #include "pvr_pass.h"
+#include "pvr_sampler.h"
 #include "pvr_usc.h"
 #include "util/macros.h"
 
@@ -49,6 +50,30 @@ static pco_shader *build_shader(pco_ctx *ctx, nir_shader *nir, pco_data *data)
    pco_encode_ir(ctx, shader);
 
    return shader;
+}
+
+/**
+ * Generate a fragment passthrough shader that does a dummy store.
+ *
+ * \param ctx PCO context.
+ * \return The fragment passthrough shader.
+ */
+nir_shader *pvr_usc_fs_pfo_passthrough_nir(pco_ctx *ctx)
+{
+   nir_builder b = nir_builder_init_simple_shader(MESA_SHADER_FRAGMENT,
+                                                  pco_nir_options(),
+                                                  "fs_pfo_passthrough");
+
+   /* Need to mark the shader as not internal for the compiler to
+    * emit the pfo code for the sample mask.
+    */
+   b.shader->info.internal = false;
+   nir_frag_store_pco(&b, nir_imm_int(&b, 0), .base = 0);
+   nir_jump(&b, nir_jump_return);
+
+   pco_preprocess_nir(ctx, b.shader);
+
+   return b.shader;
 }
 
 /**
@@ -633,7 +658,7 @@ static nir_def *resolve_samples(nir_builder *b,
 
    switch (resolve_op) {
    case PVR_RESOLVE_BLEND:
-      op = nir_op_ffma;
+      op = nir_op_ffma_weak;
       coeff = nir_imm_float(b, 1.0 / num_samples);
       break;
 
@@ -658,7 +683,7 @@ static nir_def *resolve_samples(nir_builder *b,
 
    for (unsigned i = 1; i < num_samples; i++) {
       if (resolve_op == PVR_RESOLVE_BLEND)
-         accum = nir_ffma(b, samples[i], coeff, accum);
+         accum = nir_ffma_weak(b, samples[i], coeff, accum);
       else
          accum = nir_build_alu2(b, op, samples[i], accum);
    }
@@ -695,6 +720,9 @@ static nir_def *pvr_uscgen_tq_frag_conv(nir_builder *b,
       return nir_vec2(b,
                       nir_undef(b, 1, 32),
                       nir_ushr_imm(b, nir_channel(b, src, 0), 24));
+
+   case PVR_TRANSFER_PBE_PIXEL_SRC_SMRG_D32S8_D32S8:
+      return nir_vec2(b, nir_undef(b, 1, 32), nir_channel(b, src, 1));
 
    case PVR_TRANSFER_PBE_PIXEL_SRC_SWAP_LMSB:
       return nir_ushr_imm(b, nir_channel(b, src, 0), 24);
@@ -789,6 +817,9 @@ pvr_uscgen_tq_frag_load(nir_builder *b,
       else if (layer_props->sample)
          params.sampler_dim = GLSL_SAMPLER_DIM_3D;
 
+      params.sample_components =
+         pvr_pbe_format_num_sample_components(layer_props->pbe_format);
+
       nir_intrinsic_instr *smp = pco_emit_nir_smp(b, &params);
       samples[sample_idx] = &smp->def;
    }
@@ -835,7 +866,7 @@ pvr_uscgen_tq_frag_coords(nir_builder *b,
          nir_vec2(b,
                   nir_load_preamble(b, 1, 32, .base = *next_sh + base_sh + 1),
                   nir_load_preamble(b, 1, 32, .base = *next_sh + base_sh + 3));
-      coords = nir_fmad(b, coords, mult, add);
+      coords = nir_ffma_weak(b, coords, mult, add);
       *next_sh += 4;
    }
 
@@ -1172,6 +1203,7 @@ pco_shader *pvr_uscgen_loadop(pco_ctx *ctx, struct pvr_load_op *load_op)
 
       u_foreach_bit (rt_idx, load_op->clears_loads_state.rt_load_mask) {
          nir_def *tex_state = nir_load_preamble(&b, 4, 32, .base = shared_regs);
+         nir_def *tex_meta = nir_load_preamble(&b, PCO_IMAGE_META_COUNT, 32, .base = (shared_regs + ROGUE_NUM_TEXSTATE_DWORDS));
          shared_regs += sizeof(struct pvr_image_descriptor) / sizeof(uint32_t);
 
          nir_def *smp_state = nir_load_preamble(&b, 4, 32, .base = shared_regs);
@@ -1198,6 +1230,13 @@ pco_shader *pvr_uscgen_loadop(pco_ctx *ctx, struct pvr_load_op *load_op)
 
             .ms_index = msaa ? nir_load_sample_id(&b) : NULL,
          };
+
+         if (load_op->clears_loads_state.rt_2d_view_3d_mask & BITFIELD_BIT(rt_idx)) {
+            params.sampler_dim = GLSL_SAMPLER_DIM_3D;
+            params.coords = nir_pad_vector(&b, params.coords, 3);
+            nir_def *z_slice = nir_channel(&b, tex_meta, PCO_IMAGE_META_Z_SLICE);
+            params.coords = nir_vector_insert_imm(&b, params.coords, z_slice, 2);
+         }
 
          nir_intrinsic_instr *smp = pco_emit_nir_smp(&b, &params);
          nir_def *smp_data =

@@ -19,6 +19,7 @@
 #include "util/list.h"
 #include "util/macros.h"
 #include "util/ralloc.h"
+#include "util/shader_stats.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -37,14 +38,18 @@ static void pco_ctx_destructor(UNUSED void *ptr)
  * \brief Allocates and sets up a PCO compiler context.
  *
  * \param[in] dev_info Device info.
+ * \param[in] dev_runtime_info Device runtime info.
  * \param[in] mem_ctx Ralloc memory allocation context.
  * \return The PCO compiler context, or NULL on failure.
  */
-pco_ctx *pco_ctx_create(const struct pvr_device_info *dev_info, void *mem_ctx)
+pco_ctx *pco_ctx_create(const struct pvr_device_info *dev_info,
+                        const struct pvr_device_runtime_info *dev_runtime_info,
+                        void *mem_ctx)
 {
    pco_ctx *ctx = rzalloc_size(mem_ctx, sizeof(*ctx));
 
    ctx->dev_info = dev_info;
+   ctx->dev_runtime_info = dev_runtime_info;
 
    pco_debug_init();
 
@@ -315,4 +320,142 @@ pco_precomp_data pco_get_precomp_data(pco_shader *shader)
       .shareds = shader->data.common.shareds,
       .size_dwords = size_dwords,
    };
+}
+
+/**
+ * \brief Returns statistics for a shader.
+ *
+ * \param[in] shader PCO shader.
+ * \return The shader statistics.
+ */
+struct pvr_stats pco_get_pvr_stats(pco_shader *shader)
+{
+   assert(shader->is_grouped);
+
+   unsigned shader_size = pco_shader_binary_size(shader);
+   assert(shader_size > 0);
+
+   unsigned loop_count = 0;
+   unsigned igrp_count = 0;
+
+   unsigned main_count = 0;
+   unsigned bitwise_count = 0;
+   unsigned control_count = 0;
+
+   pco_foreach_func_in_shader (func, shader) {
+      pco_foreach_loop_in_func (loop, func) {
+         loop_count++;
+      }
+      pco_foreach_igrp_in_func (igrp, func) {
+         igrp_count++;
+         switch (igrp->hdr.alutype) {
+         case PCO_ALUTYPE_MAIN:
+            main_count++;
+            break;
+
+         case PCO_ALUTYPE_BITWISE:
+            bitwise_count++;
+            break;
+
+         case PCO_ALUTYPE_CONTROL:
+            control_count++;
+            break;
+
+         default:
+            UNREACHABLE("Invalid pco_alutype");
+         }
+      }
+   }
+
+   return (struct pvr_stats){
+      .isa = PVR_STAT_ROGUE,
+      .rogue = (struct rogue_stats) {
+         .code_size = shader_size,
+         .scratch_size = shader->data.common.scratch,
+         .spill_count = shader->data.common.spilled_temps,
+         .temp_count = shader->data.common.temps,
+         .vtxin_count = shader->data.common.vtxins,
+         .loop_count = loop_count,
+         .inst_group_count = igrp_count,
+         .main_inst_group_count = main_count,
+         .bitwise_inst_group_count = bitwise_count,
+         .control_inst_group_count = control_count,
+      },
+   };
+}
+
+enum pco_pck_format pco_pipe_to_pck_format(enum pipe_format format,
+                                           bool *scale,
+                                           bool *roundzero,
+                                           bool *split)
+{
+   enum pco_pck_format pck_format = ~0;
+   *scale = false;
+   *roundzero = false;
+   *split = false;
+
+   switch (format) {
+   case PIPE_FORMAT_R8_UNORM:
+   case PIPE_FORMAT_R8G8_UNORM:
+   case PIPE_FORMAT_R8G8B8_UNORM:
+   case PIPE_FORMAT_R8G8B8A8_UNORM:
+      pck_format = PCO_PCK_FORMAT_U8888;
+      *scale = true;
+      break;
+
+   case PIPE_FORMAT_R8_SNORM:
+   case PIPE_FORMAT_R8G8_SNORM:
+   case PIPE_FORMAT_R8G8B8_SNORM:
+   case PIPE_FORMAT_R8G8B8A8_SNORM:
+      pck_format = PCO_PCK_FORMAT_S8888;
+      *scale = true;
+      break;
+
+   case PIPE_FORMAT_R11G11B10_FLOAT:
+      pck_format = PCO_PCK_FORMAT_F111110;
+      break;
+
+   /* TODO: better way to do the 1x2 component. */
+   case PIPE_FORMAT_R10G10B10A2_UNORM:
+      pck_format = PCO_PCK_FORMAT_U1010102;
+      *scale = true;
+      break;
+
+   /* TODO: better way to do the 1x2 component. */
+   case PIPE_FORMAT_R10G10B10A2_SNORM:
+      pck_format = PCO_PCK_FORMAT_S1010102;
+      *scale = true;
+      break;
+
+   case PIPE_FORMAT_R16_FLOAT:
+   case PIPE_FORMAT_R16G16_FLOAT:
+   case PIPE_FORMAT_R16G16B16_FLOAT:
+   case PIPE_FORMAT_R16G16B16A16_FLOAT:
+      pck_format = PCO_PCK_FORMAT_F16F16;
+      *split = true;
+      break;
+
+   case PIPE_FORMAT_R16_UNORM:
+   case PIPE_FORMAT_R16G16_UNORM:
+   case PIPE_FORMAT_R16G16B16_UNORM:
+   case PIPE_FORMAT_R16G16B16A16_UNORM:
+      pck_format = PCO_PCK_FORMAT_U1616;
+      *scale = true;
+      *split = true;
+      break;
+
+   case PIPE_FORMAT_R16_SNORM:
+   case PIPE_FORMAT_R16G16_SNORM:
+   case PIPE_FORMAT_R16G16B16_SNORM:
+   case PIPE_FORMAT_R16G16B16A16_SNORM:
+      pck_format = PCO_PCK_FORMAT_S1616;
+      *scale = true;
+      *split = true;
+      break;
+
+   default:
+      break;
+   }
+
+   return pck_format;
 }

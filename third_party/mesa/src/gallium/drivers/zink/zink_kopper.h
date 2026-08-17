@@ -61,7 +61,7 @@ struct kopper_swapchain {
    unsigned last_present;
    unsigned num_images;
    uint32_t last_present_prune;
-   struct hash_table *presents;
+   struct hash_table_u64 *presents;
    VkSwapchainCreateInfoKHR scci;
    unsigned num_acquires;
    unsigned max_acquires;

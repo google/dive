@@ -6,7 +6,8 @@
  * Kernel interface layer for turnip running on virtio_gpu (aka virtgpu)
  */
 
-#include "tu_knl.h"
+#include "drm-uapi/msm_drm.h"
+#include "drm-uapi/virtgpu_drm.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -14,24 +15,26 @@
 #include <sys/mman.h>
 #include <xf86drm.h>
 
-#include "vk_util.h"
-
-#include "drm-uapi/msm_drm.h"
-#include "drm-uapi/virtgpu_drm.h"
-#include "util/u_debug.h"
 #include "util/hash_table.h"
 #include "util/libsync.h"
+#include "util/u_debug.h"
 #include "util/u_process.h"
+#include "vk_util.h"
 
 #include "tu_cmd_buffer.h"
 #include "tu_cs.h"
 #include "tu_device.h"
 #include "tu_dynamic_rendering.h"
+#include "tu_knl.h"
 #include "tu_knl_drm.h"
 #include "tu_queue.h"
 
+/* NOLINTBEGIN */
+/* clang-format off */
 #include "vdrm.h"
 #include "msm_proto.h"
+/* clang-format on */
+/* NOLINTEND */
 
 struct tu_userspace_fence_cmd {
    uint32_t pkt[4];    /* first 4 dwords of packet */
@@ -427,10 +430,11 @@ tu_wait_fence(struct tu_device *dev,
       if (ret)
          goto out;
 
-      if (os_time_get_nano() >= end_time)
-         break;
-
       ret = rsp->ret;
+
+      if (timeout_ns != OS_TIMEOUT_INFINITE &&
+          os_time_get_nano() >= end_time)
+         break;
    } while (ret == -ETIMEDOUT);
 
 out:
@@ -439,7 +443,7 @@ out:
    return VK_ERROR_UNKNOWN;
 }
 
-VkResult
+static VkResult
 virtio_queue_wait_fence(struct tu_queue *queue, uint32_t fence,
                         uint64_t timeout_ns)
 {
@@ -593,7 +597,7 @@ tu_bo_init(struct tu_device *dev,
       if (!new_ptr) {
          dev->submit_bo_count--;
          mtx_unlock(&dev->bo_mutex);
-         vdrm_bo_close(dev->vdev->vdrm, bo->gem_handle);
+         vdrm_bo_close(dev->vdev->vdrm, gem_handle);
          return VK_ERROR_OUT_OF_HOST_MEMORY;
       }
 
@@ -733,7 +737,7 @@ virtio_bo_init(struct tu_device *dev,
    req.blob_id = p_atomic_inc_return(&vdev->next_blob_id);;
 
    uint32_t handle =
-      vdrm_bo_create(vdev->vdrm, size, blob_flags, req.blob_id, &req.hdr);
+      vdrm_bo_create(vdev->vdrm, size, blob_flags, req.blob_id, 0, &req.hdr);
 
    if (!handle) {
       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -753,6 +757,8 @@ virtio_bo_init(struct tu_device *dev,
    }
 
    *out_bo = bo;
+   if (lazy_vma)
+      lazy_vma->msm.backs_lazy_bo = true;
 
    /* We don't use bo->name here because for the !TU_DEBUG=bo case bo->name is NULL. */
    tu_bo_set_kernel_name(dev, bo, name);
@@ -773,9 +779,11 @@ virtio_bo_init(struct tu_device *dev,
    return VK_SUCCESS;
 
 fail:
-   mtx_lock(&dev->vma_mutex);
-   util_vma_heap_free(&dev->vma, req.iova, size);
-   mtx_unlock(&dev->vma_mutex);
+   if (!lazy_vma) {
+      mtx_lock(&dev->vma_mutex);
+      util_vma_heap_free(&dev->vma, req.iova, size);
+      mtx_unlock(&dev->vma_mutex);
+   }
    return result;
 }
 
@@ -783,12 +791,14 @@ static VkResult
 virtio_bo_init_dmabuf(struct tu_device *dev,
                    struct tu_bo **out_bo,
                    uint64_t size,
+                   enum tu_bo_alloc_flags flags,
                    int prime_fd)
 {
    MESA_TRACE_FUNC();
    struct vdrm_device *vdrm = dev->vdev->vdrm;
    VkResult result;
    struct tu_bo* bo = NULL;
+   flags = (enum tu_bo_alloc_flags)(flags | TU_BO_ALLOC_DMABUF);
 
    /* lseek() to get the real size */
    off_t real_size = lseek(prime_fd, 0, SEEK_END);
@@ -818,7 +828,7 @@ virtio_bo_init_dmabuf(struct tu_device *dev,
 
    res_id = vdrm_handle_to_res_id(vdrm, handle);
    if (!res_id) {
-      /* XXX gem_handle potentially leaked here since no refcnt */
+      vdrm_bo_close(vdrm, handle);
       result = vk_error(dev, VK_ERROR_INVALID_EXTERNAL_HANDLE);
       goto out_unlock;
    }
@@ -836,24 +846,25 @@ virtio_bo_init_dmabuf(struct tu_device *dev,
    bo->res_id = res_id;
 
    mtx_lock(&dev->vma_mutex);
-   result = virtio_allocate_userspace_iova_locked(dev, handle, size, 0,
-                                                  TU_BO_ALLOC_DMABUF, &iova);
+   result = virtio_allocate_userspace_iova_locked(dev, handle, size, 0, flags,
+                                                  &iova);
    mtx_unlock(&dev->vma_mutex);
    if (result != VK_SUCCESS) {
-      vdrm_bo_close(dev->vdev->vdrm, handle);
+      vdrm_bo_close(vdrm, handle);
       goto out_unlock;
    }
 
    result =
-      tu_bo_init(dev, NULL, bo, handle, size, iova, TU_BO_ALLOC_NO_FLAGS, "dmabuf");
+      tu_bo_init(dev, NULL, bo, handle, size, iova, flags, "dmabuf");
    if (result != VK_SUCCESS) {
+      mtx_lock(&dev->vma_mutex);
       util_vma_heap_free(&dev->vma, iova, size);
+      mtx_unlock(&dev->vma_mutex);
       memset(bo, 0, sizeof(*bo));
    } else {
       *out_bo = bo;
+      set_iova(dev, bo->res_id, iova);
    }
-
-   set_iova(dev, bo->res_id, iova);
 
 out_unlock:
    u_rwlock_wrunlock(&dev->dma_bo_lock);
@@ -946,9 +957,14 @@ static void
 virtio_sparse_vma_finish(struct tu_device *dev,
                          struct tu_sparse_vma *vma)
 {
-   mtx_lock(&dev->vma_mutex);
-   util_vma_heap_free(&dev->vma, vma->msm.iova, vma->msm.size);
-   mtx_unlock(&dev->vma_mutex);
+   /* For has_set_iova, if a lazy BO was mapped into this sparse VMA
+    * the allocation will be handed off to the zombie VMA mechanism.
+    */
+   if (!vma->msm.backs_lazy_bo) {
+      mtx_lock(&dev->vma_mutex);
+      util_vma_heap_free(&dev->vma, vma->msm.iova, vma->msm.size);
+      mtx_unlock(&dev->vma_mutex);
+   }
 }
 
 static VkResult
@@ -1327,6 +1343,7 @@ tu_knl_drm_virtio_load(struct tu_instance *instance,
    device->has_set_iova   = true;
    device->has_lazy_bos   = true;
    device->has_preemption = has_preemption;
+   device->is_perf_cntr_selectable = true;
    device->uche_trap_base = uche_trap_base;
 
    device->ubwc_config.bank_swizzle_levels = bank_swizzle_levels;

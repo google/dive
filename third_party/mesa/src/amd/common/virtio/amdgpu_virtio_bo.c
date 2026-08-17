@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Advanced Micro Devices, Inc.
+ * Copyright 2026 Advanced Micro Devices, Inc.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -7,12 +7,8 @@
 #include "drm-uapi/amdgpu_drm.h"
 
 #include "amdgpu_virtio_private.h"
-#include "ac_linux_drm.h"
-#include "util/list.h"
 #include "util/log.h"
 #include "util/os_mman.h"
-#include "util/os_time.h"
-#include "util/u_math.h"
 #include "sid.h"
 
 #include <xf86drm.h>
@@ -64,6 +60,10 @@ struct amdvgpu_host_blob *create_host_blob(uint32_t kms_handle,
 
 static
 void destroy_host_blob(amdvgpu_device_handle dev, struct amdvgpu_host_blob *hb) {
+   if (hb->cpu_addr) {
+      int r = os_munmap(hb->cpu_addr, hb->alloc_size);
+      assert(r == 0);
+   }
    simple_mtx_destroy(&hb->cpu_access_mutex);
 
    vdrm_bo_close(dev->vdev, hb->handle);
@@ -79,7 +79,7 @@ alloc_host_blob(amdvgpu_bo_handle bo,
 
       /* Create the host blob requires 2 steps. First create the host blob... */
       kms_handle = vdrm_bo_create(bo->dev->vdev, req->r.alloc_size, blob_flags,
-                                  req->blob_id, &req->hdr);
+                                  req->blob_id, 0, &req->hdr);
 
       /* 0 is an invalid handle and is used by vdrm_bo_create to signal an error. */
       if (kms_handle == 0)
@@ -91,7 +91,7 @@ alloc_host_blob(amdvgpu_bo_handle bo,
       bo->host_blob = create_host_blob(kms_handle, res_id, req->r.alloc_size, req);
 
       simple_mtx_lock(&bo->dev->handle_to_vbo_mutex);
-      _mesa_hash_table_insert(bo->dev->handle_to_vbo, (void*)(intptr_t)bo->host_blob->handle, bo);
+      _mesa_hash_table_u64_insert(bo->dev->handle_to_vbo, bo->host_blob->handle, bo);
       simple_mtx_unlock(&bo->dev->handle_to_vbo_mutex);
 
       return 0;
@@ -125,28 +125,29 @@ int amdvgpu_bo_export(amdvgpu_device_handle dev, amdvgpu_bo_handle bo,
 }
 
 int amdvgpu_bo_free(amdvgpu_device_handle dev, struct amdvgpu_bo *bo) {
+   simple_mtx_lock(&dev->handle_to_vbo_mutex);
    int refcnt = p_atomic_dec_return(&bo->refcount);
 
    if (refcnt == 0) {
-      /* Flush pending ops. */
-      vdrm_flush(dev->vdev);
-
       /* Remove it from the bo table. */
       if (bo->host_blob->handle > 0) {
-         simple_mtx_lock(&dev->handle_to_vbo_mutex);
-         struct hash_entry *entry = _mesa_hash_table_search(dev->handle_to_vbo,
-                                                            (void*)(intptr_t)bo->host_blob->handle);
+         void *entry = _mesa_hash_table_u64_search(dev->handle_to_vbo, bo->host_blob->handle);
          if (entry) {
             /* entry can be NULL for the shmem buffer. */
-            _mesa_hash_table_remove(dev->handle_to_vbo, entry);
+            _mesa_hash_table_u64_remove(dev->handle_to_vbo, bo->host_blob->handle);
          }
-         simple_mtx_unlock(&dev->handle_to_vbo_mutex);
       }
+      simple_mtx_unlock(&dev->handle_to_vbo_mutex);
+
+      /* Flush pending ops. */
+      vdrm_flush(dev->vdev);
 
       if (bo->host_blob)
          destroy_host_blob(dev, bo->host_blob);
 
       free(bo);
+   } else {
+      simple_mtx_unlock(&dev->handle_to_vbo_mutex);
    }
 
    return 0;
@@ -241,10 +242,9 @@ int amdvgpu_bo_import(amdvgpu_device_handle dev, enum amdgpu_bo_handle_type type
 
    /* Look up existing bo. */
    simple_mtx_lock(&dev->handle_to_vbo_mutex);
-   struct hash_entry *entry = _mesa_hash_table_search(dev->handle_to_vbo, (void*)(intptr_t)kms_handle);
+   struct amdvgpu_bo *bo = _mesa_hash_table_u64_search(dev->handle_to_vbo, kms_handle);
 
-   if (entry) {
-      struct amdvgpu_bo *bo = entry->data;
+   if (bo) {
       p_atomic_inc(&bo->refcount);
       simple_mtx_unlock(&dev->handle_to_vbo_mutex);
       result->buf_handle = (void*)bo;
@@ -265,7 +265,7 @@ int amdvgpu_bo_import(amdvgpu_device_handle dev, enum amdgpu_bo_handle_type type
    }
    lseek(handle, 0, SEEK_CUR);
 
-   struct amdvgpu_bo *bo = calloc(1, sizeof(struct amdvgpu_bo));
+   bo = calloc(1, sizeof(struct amdvgpu_bo));
    bo->dev = dev;
    bo->size = size;
    bo->host_blob = create_host_blob(kms_handle, res_id, size, NULL);
@@ -275,7 +275,7 @@ int amdvgpu_bo_import(amdvgpu_device_handle dev, enum amdgpu_bo_handle_type type
    result->alloc_size = bo->size;
 
    simple_mtx_lock(&dev->handle_to_vbo_mutex);
-   _mesa_hash_table_insert(dev->handle_to_vbo, (void*)(intptr_t)bo->host_blob->handle, bo);
+   _mesa_hash_table_u64_insert(dev->handle_to_vbo, bo->host_blob->handle, bo);
    simple_mtx_unlock(&dev->handle_to_vbo_mutex);
 
    return 0;

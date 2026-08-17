@@ -27,7 +27,6 @@
 #include "freedreno_query_hw.h"
 #include "freedreno_resource.h"
 #include "freedreno_screen.h"
-#include "freedreno_surface.h"
 #include "freedreno_util.h"
 
 #include <errno.h>
@@ -147,6 +146,8 @@ rebind_resource(struct fd_resource *rsc) assert_dt
 {
    struct fd_screen *screen = fd_screen(rsc->b.b.screen);
 
+   assert(!(rsc->b.b.bind & FD_BIND_GLOBAL_BUFFER));
+
    fd_screen_lock(screen);
    fd_resource_lock(rsc);
 
@@ -198,8 +199,10 @@ realloc_bo(struct fd_resource *rsc, uint32_t size)
       COND(prsc->bind & PIPE_BIND_SHARED, FD_BO_SHARED) |
       COND(prsc->bind & PIPE_BIND_SCANOUT, FD_BO_SCANOUT);
 
-   if (rsc->bo)
+   if (rsc->bo) {
+      assert(!(rsc->b.b.bind & FD_BIND_GLOBAL_BUFFER));
       fd_bo_del(rsc->bo);
+   }
 
    struct fd_bo *bo =
       fd_bo_new(screen->dev, size, flags, "%ux%ux%u@%u:%x", prsc->width0,
@@ -267,6 +270,8 @@ fd_replace_buffer_storage(struct pipe_context *pctx, struct pipe_resource *pdst,
    assert(src->track->batch_mask == 0);
    assert(src->track->write_batch == NULL);
    assert(memcmp(&dst->layout, &src->layout, sizeof(dst->layout)) == 0);
+   assert(!(psrc->bind & FD_BIND_GLOBAL_BUFFER));
+   assert(!(pdst->bind & FD_BIND_GLOBAL_BUFFER));
 
    /* get rid of any references that batch-cache might have to us (which
     * should empty/destroy rsc->batches hashset)
@@ -357,6 +362,9 @@ fd_try_shadow_resource(struct fd_context *ctx, struct fd_resource *rsc,
    bool fallback = false;
 
    if (prsc->next)
+      return false;
+
+   if (prsc->bind & FD_BIND_GLOBAL_BUFFER)
       return false;
 
    /* Flush any pending batches writing the resource before we go mucking around
@@ -887,9 +895,19 @@ resource_transfer_map(struct pipe_context *pctx, struct pipe_resource *prsc,
           (usage & PIPE_MAP_DISCARD_RANGE)) {
 
          /* try shadowing only if it avoids a flush, otherwise staging would
-          * be better:
+          * be better.
+          *
+          * Compute-only contexts don't have GMEM tile passes, so the simpler
+          * staging path is better.
+          *
+          * TODO if a resource is shared across contexts with no clear
+          * barrier transition, the staging path could be problematic, since
+          * another thread could race a read reference on the resource after
+          * the rsc->track is swapped but before the shadow blit completes.
+          * I think this scenario only comes up with rusticl.
           */
          if (needs_flush && !(usage & TC_TRANSFER_MAP_NO_INVALIDATE) &&
+               !(ctx->flags & PIPE_CONTEXT_COMPUTE_ONLY) &&
                fd_try_shadow_resource(ctx, rsc, level, box, DRM_FORMAT_MOD_LINEAR)) {
             needs_flush = busy = false;
             ctx->stats.shadow_uploads++;
@@ -1186,6 +1204,7 @@ fd_resource_resize(struct pipe_resource *prsc, uint32_t sz)
 void
 fd_resource_layout_init(struct pipe_resource *prsc)
 {
+   const struct fd_dev_info *info = fd_screen(prsc->screen)->info;
    struct fd_resource *rsc = fd_resource(prsc);
    struct fdl_layout *layout = &rsc->layout;
 
@@ -1198,6 +1217,9 @@ fd_resource_layout_init(struct pipe_resource *prsc)
    layout->cpp = util_format_get_blocksize(prsc->format);
    layout->cpp *= fd_resource_nr_samples(prsc);
    layout->cpp_shift = ffs(util_next_power_of_two(layout->cpp)) - 1;
+
+   layout->linear_fallback_threshold_texels =
+      fdl_linear_fallback_threshold_texels(layout, info);
 }
 
 static struct fd_resource *
@@ -1270,7 +1292,9 @@ get_best_layout(struct fd_screen *screen,
    if (!screen->tile_mode(tmpl))
       return FD_LAYOUT_LINEAR;
 
-   if (tmpl->target == PIPE_BUFFER)
+   if ((tmpl->target == PIPE_BUFFER) ||
+       (tmpl->target == PIPE_TEXTURE_1D) ||
+       (tmpl->target == PIPE_TEXTURE_1D_ARRAY))
       return FD_LAYOUT_LINEAR;
 
    if ((tmpl->usage == PIPE_USAGE_STAGING) &&
@@ -1295,7 +1319,7 @@ get_best_layout(struct fd_screen *screen,
       return FD_LAYOUT_LINEAR;
    }
 
-   bool ubwc_ok = is_a6xx(screen) && !screen->info->a6xx.is_a702;
+   bool ubwc_ok = is_a6xx(screen) && !screen->info->props.is_a702;
    if (FD_DBG(NOUBWC))
       ubwc_ok = false;
 
@@ -1372,7 +1396,7 @@ fd_resource_allocate_and_resolve(struct pipe_screen *pscreen,
       rsc->b.is_shared = true;
 
    enum fd_layout_type layout =
-      get_best_layout(screen, tmpl, modifiers, count);
+      get_best_layout(screen, prsc, modifiers, count);
    if (layout == FD_LAYOUT_ERROR) {
       free(prsc);
       return NULL;
@@ -1508,8 +1532,11 @@ fd_resource_from_handle(struct pipe_screen *pscreen,
    rsc->b.is_shared = true;
 
    struct fd_bo *bo = fd_screen_bo_from_handle(pscreen, handle);
-   if (!bo)
+   if (!bo) {
+      if (FD_DBG(LAYOUT))
+         mesa_loge("handle import failed for: %" PRSC_FMT, PRSC_ARGS(tmpl));
       goto fail;
+   }
 
    fd_resource_set_bo(rsc, bo);
 
@@ -1518,11 +1545,17 @@ fd_resource_from_handle(struct pipe_screen *pscreen,
    if (tmpl->target == PIPE_BUFFER) {
       fdl_layout_buffer(&rsc->layout, tmpl->width0);
    } else if (!screen->layout_resource_for_handle(rsc, handle)) {
+      if (FD_DBG(LAYOUT))
+         mesa_loge("layout failed for: %" PRSC_FMT, PRSC_ARGS(tmpl));
       goto fail;
    }
 
-   if (rsc->layout.pitch0 != handle->stride)
+   if (rsc->layout.pitch0 != handle->stride) {
+      if (FD_DBG(LAYOUT))
+         mesa_loge("invalid pitch (%u vs %u) for: %" PRSC_FMT, rsc->layout.pitch0,
+                   handle->stride, PRSC_ARGS(tmpl));
       goto fail;
+   }
 
    if (screen->ro) {
       rsc->scanout =
@@ -1686,7 +1719,6 @@ fd_resource_from_memobj(struct pipe_screen *pscreen,
                         const struct pipe_resource *tmpl,
                         struct pipe_memory_object *pmemobj, uint64_t offset)
 {
-   struct fd_screen *screen = fd_screen(pscreen);
    struct fd_memory_object *memobj = fd_memory_object(pmemobj);
    struct pipe_resource *prsc;
    struct fd_resource *rsc;
@@ -1705,8 +1737,6 @@ fd_resource_from_memobj(struct pipe_screen *pscreen,
       modifiers = metadata.modifier;
    } else if (tmpl->bind & PIPE_BIND_LINEAR) {
       modifiers = DRM_FORMAT_MOD_LINEAR;
-   } else if (is_a6xx(screen) && tmpl->width0 >= FDL_MIN_UBWC_WIDTH) {
-      modifiers = DRM_FORMAT_MOD_QCOM_COMPRESSED;
    }
 
    /* Allocate new pipe resource. */
@@ -1809,8 +1839,6 @@ fd_resource_context_init(struct pipe_context *pctx)
    pctx->texture_unmap = u_transfer_helper_transfer_unmap;
    pctx->buffer_subdata = u_default_buffer_subdata;
    pctx->texture_subdata = u_default_texture_subdata;
-   pctx->create_surface = fd_create_surface;
-   pctx->surface_destroy = fd_surface_destroy;
    pctx->resource_copy_region = fd_resource_copy_region;
    pctx->blit = fd_blit_pipe;
    pctx->flush_resource = fd_flush_resource;

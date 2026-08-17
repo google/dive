@@ -8,6 +8,7 @@
 #include "ir3_nir.h"
 
 struct state {
+   struct ir3_compiler *compiler;
    uint32_t topology;
 
    struct primitive_map {
@@ -15,6 +16,9 @@ struct state {
       unsigned loc[13 + 32];
       unsigned stride;
    } map;
+
+   uint32_t view_mask;
+   unsigned view_count;
 
    nir_def *header;
 
@@ -122,7 +126,8 @@ shader_io_get_unique_index(gl_varying_slot slot)
 
 static nir_def *
 build_local_offset(nir_builder *b, struct state *state, nir_def *vertex,
-                   uint32_t location, uint32_t comp, nir_def *offset)
+                   nir_def *view, uint32_t location, uint32_t comp,
+                   nir_def *offset)
 {
    nir_def *primitive_stride = nir_load_vs_primitive_stride_ir3(b);
    nir_def *primitive_offset =
@@ -146,6 +151,9 @@ build_local_offset(nir_builder *b, struct state *state, nir_def *vertex,
    default:
       UNREACHABLE("bad shader stage");
    }
+
+   if (state->view_count > 1)
+      vertex = nir_iadd(b, nir_imul_imm(b, vertex, state->view_count), view);
 
    nir_def *vertex_offset = nir_imul24(b, vertex, vertex_stride);
 
@@ -181,6 +189,35 @@ replace_intrinsic(nir_builder *b, nir_intrinsic_instr *intr,
    nir_instr_remove(&intr->instr);
 
    return new_intr;
+}
+
+static void
+replace_with_load_global(nir_builder *b, struct ir3_compiler *compiler,
+                         nir_intrinsic_instr *intr, nir_def *addr,
+                         nir_def *offset)
+{
+   /* Our offsets are in units of 4B. */
+   nir_io_offset global_offset =
+      ir3_nir_get_global_offset(b, compiler, offset, 2);
+   nir_def *load = nir_load_global_offset(
+      b, intr->def.num_components, intr->def.bit_size, addr, global_offset.def,
+      .align_mul = 4, .align_offset = 0, .offset_shift = global_offset.shift);
+   nir_def_replace(&intr->def, load);
+}
+
+static void
+replace_with_store_global(nir_builder *b, struct ir3_compiler *compiler,
+                          nir_intrinsic_instr *intr, nir_def *val,
+                          nir_def *addr, nir_def *offset)
+{
+   /* Our offsets are in units of 4B. */
+   nir_io_offset global_offset =
+      ir3_nir_get_global_offset(b, compiler, offset, 2);
+   nir_store_global_offset(b, val, addr, global_offset.def, .align_mul = 4,
+                           .align_offset = 0,
+                           .offset_shift = global_offset.shift,
+                           .write_mask = MASK(intr->num_components));
+   nir_instr_remove(&intr->instr);
 }
 
 static void
@@ -249,10 +286,17 @@ lower_block_to_explicit_output(nir_block *block, nir_builder *b,
          continue;
 
       nir_intrinsic_instr *intr = nir_instr_as_intrinsic(instr);
+      nir_def *view = NULL;
 
       switch (intr->intrinsic) {
+      case nir_intrinsic_store_per_view_output:
+         view = intr->src[1].ssa;
+         FALLTHROUGH;
       case nir_intrinsic_store_output: {
          // src[] = { value, offset }.
+         nir_def *intr_offset = intr->intrinsic ==
+            nir_intrinsic_store_per_view_output ? intr->src[2].ssa :
+            intr->src[1].ssa;
 
          /* nir_lower_io_vars_to_temporaries replaces all access to output
           * variables with temp variables and then emits a nir_copy_var at
@@ -266,8 +310,9 @@ lower_block_to_explicit_output(nir_block *block, nir_builder *b,
 
          nir_def *vertex_id = build_vertex_id(b, state);
          nir_def *offset = build_local_offset(
-            b, state, vertex_id, nir_intrinsic_io_semantics(intr).location,
-            nir_intrinsic_component(intr), intr->src[1].ssa);
+            b, state, vertex_id, view,
+            nir_intrinsic_io_semantics(intr).location,
+            nir_intrinsic_component(intr), intr_offset);
 
          nir_store_shared_ir3(b, intr->src[0].ssa, offset);
          progress = true;
@@ -295,6 +340,9 @@ ir3_nir_lower_to_explicit_output(nir_shader *shader,
 {
    struct state state = {};
 
+   state.view_mask = shader->info.view_mask;
+   state.view_count = MAX2(1, util_bitcount(shader->info.view_mask));
+
    build_primitive_map(shader, &state.map);
    memcpy(v->output_loc, state.map.loc, sizeof(v->output_loc));
 
@@ -314,6 +362,7 @@ ir3_nir_lower_to_explicit_output(nir_shader *shader,
       progress |= lower_block_to_explicit_output(block, &b, &state);
 
    v->output_size = state.map.stride;
+   v->view_count = state.view_count;
    return nir_progress(progress, impl, nir_metadata_control_flow);
 }
 
@@ -335,9 +384,29 @@ lower_block_to_explicit_input(nir_block *block, nir_builder *b,
 
          b->cursor = nir_before_instr(&intr->instr);
 
+         nir_def *view = NULL;
+         if (state->view_count > 1) {
+            view = nir_load_view_index(b);
+            /* nir_lower_multiview tightly packs the outputs, skipping over
+             * inactive views. This means we need to compute the tightly packed
+             * index from the original view_index if the view mask is not
+             * contiguous (i.e. not a power of two minus one):
+             *
+             * mask = (1u << view) - 1
+             * packed_view = bitcount(mask & view_mask)
+             */
+            if (!util_is_power_of_two_or_zero(state->view_mask + 1)) {
+               nir_def *mask =
+                  nir_iadd_imm(b, nir_ishl(b, nir_imm_int(b, 1), view), -1);
+               view =
+                  nir_bit_count(b, nir_iand_imm(b, mask, state->view_mask));
+            }
+         }
+
          nir_def *offset = build_local_offset(
             b, state,
             intr->src[0].ssa, // this is typically gl_InvocationID
+            view,
             nir_intrinsic_io_semantics(intr).location,
             nir_intrinsic_component(intr), intr->src[1].ssa);
 
@@ -370,11 +439,14 @@ ir3_nir_lower_to_explicit_input(nir_shader *shader,
 {
    struct state state = {};
 
+   state.view_mask = shader->info.view_mask;
+   state.view_count = MAX2(1, util_bitcount(shader->info.view_mask));
+
    /* when using stl/ldl (instead of stlw/ldlw) for linking VS and HS,
     * HS uses a different primitive id, which starts at bit 16 in the header
     */
    if (shader->info.stage == MESA_SHADER_TESS_CTRL &&
-       v->compiler->tess_use_shared)
+       v->compiler->info->props.tess_use_shared)
       state.local_primitive_id_start = 16;
 
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
@@ -420,7 +492,7 @@ build_per_vertex_offset(nir_builder *b, struct state *state,
       offset = nir_imm_int(b, 0);
    } else {
       /* Offset is in vec4's, but we need it in unit of components for the
-       * load/store_global_ir3 offset.
+       * load/store_global_offset offset.
        */
       offset = nir_ishl_imm(b, offset, 2);
    }
@@ -535,8 +607,7 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
             nir_intrinsic_io_semantics(intr).location,
             nir_intrinsic_component(intr), intr->src[1].ssa);
 
-         replace_intrinsic(b, intr, nir_intrinsic_load_global_ir3, address,
-                           offset, NULL);
+         replace_with_load_global(b, state->compiler, intr, address, offset);
          break;
       }
 
@@ -556,8 +627,8 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
             nir_intrinsic_io_semantics(intr).location,
             nir_intrinsic_component(intr), intr->src[2].ssa);
 
-         replace_intrinsic(b, intr, nir_intrinsic_store_global_ir3, value,
-                           address, offset);
+         replace_with_store_global(b, state->compiler, intr, value, address,
+                                   offset);
 
          break;
       }
@@ -569,14 +640,8 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
 
          nir_def *address, *offset;
 
-         /* note if vectorization of the tess level loads ever happens:
-          * "ldg" across 16-byte boundaries can behave incorrectly if results
-          * are never used. most likely some issue with (sy) not properly
-          * syncing with values coming from a second memory transaction.
-          */
          gl_varying_slot location = nir_intrinsic_io_semantics(intr).location;
          if (is_tess_levels(location)) {
-            assert(intr->def.num_components == 1);
             address = load_tess_factor_base(b);
             offset = build_tessfactor_base(
                b, location, nir_intrinsic_component(intr), state);
@@ -587,8 +652,7 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
                                         intr->src[0].ssa);
          }
 
-         replace_intrinsic(b, intr, nir_intrinsic_load_global_ir3, address,
-                           offset, NULL);
+         replace_with_load_global(b, state->compiler, intr, address, offset);
          break;
       }
 
@@ -607,8 +671,6 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
          if (is_tess_levels(location)) {
             uint32_t inner_levels, outer_levels, levels;
             tess_level_components(state, &inner_levels, &outer_levels);
-
-            assert(intr->src[0].ssa->num_components == 1);
 
             nir_if *nif = NULL;
             if (location != VARYING_SLOT_PRIMITIVE_ID) {
@@ -630,10 +692,9 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
             nir_def *offset = build_tessfactor_base(
                b, location, nir_intrinsic_component(intr), state);
 
-            replace_intrinsic(b, intr, nir_intrinsic_store_global_ir3,
-                              intr->src[0].ssa,
-                              load_tess_factor_base(b),
-                              nir_iadd(b, intr->src[1].ssa, offset));
+            replace_with_store_global(
+               b, state->compiler, intr, intr->src[0].ssa,
+               load_tess_factor_base(b), nir_iadd(b, intr->src[1].ssa, offset));
 
             if (location != VARYING_SLOT_PRIMITIVE_ID) {
                nir_pop_if(b, nif);
@@ -644,8 +705,8 @@ lower_tess_ctrl_block(nir_block *block, nir_builder *b, struct state *state)
                b, state, location, nir_intrinsic_component(intr),
                intr->src[1].ssa);
 
-            replace_intrinsic(b, intr, nir_intrinsic_store_global_ir3,
-                              intr->src[0].ssa, address, offset);
+            replace_with_store_global(b, state->compiler, intr,
+                                      intr->src[0].ssa, address, offset);
          }
          break;
       }
@@ -660,7 +721,7 @@ bool
 ir3_nir_lower_tess_ctrl(nir_shader *shader, struct ir3_shader_variant *v,
                         unsigned topology)
 {
-   struct state state = {.topology = topology};
+   struct state state = {.topology = topology, .compiler = v->compiler};
 
    if (shader_debug_enabled(shader->info.stage, shader->info.internal)) {
       mesa_logi("NIR (before tess lowering) for %s shader:",
@@ -670,7 +731,13 @@ ir3_nir_lower_tess_ctrl(nir_shader *shader, struct ir3_shader_variant *v,
 
    build_primitive_map(shader, &state.map);
    memcpy(v->output_loc, state.map.loc, sizeof(v->output_loc));
-   v->output_size = state.map.stride;
+
+   /* Empirically, TCS outputs have to be aligned to 64 bytes,
+    * otherwise stale data may be read in rare cases. The exact
+    * reason is not clear, but tests and proprietary driver behavior
+    * strongly point at the need for 64 byte alignment.
+    */
+   v->output_size = ALIGN_POT(state.map.stride, 16);
 
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
    assert(impl);
@@ -747,8 +814,7 @@ lower_tess_eval_block(nir_block *block, nir_builder *b, struct state *state)
             nir_intrinsic_io_semantics(intr).location,
             nir_intrinsic_component(intr), intr->src[1].ssa);
 
-         replace_intrinsic(b, intr, nir_intrinsic_load_global_ir3, address,
-                           offset, NULL);
+         replace_with_load_global(b, state->compiler, intr, address, offset);
          break;
       }
 
@@ -759,14 +825,8 @@ lower_tess_eval_block(nir_block *block, nir_builder *b, struct state *state)
 
          nir_def *address, *offset;
 
-         /* note if vectorization of the tess level loads ever happens:
-          * "ldg" across 16-byte boundaries can behave incorrectly if results
-          * are never used. most likely some issue with (sy) not properly
-          * syncing with values coming from a second memory transaction.
-          */
          gl_varying_slot location = nir_intrinsic_io_semantics(intr).location;
          if (is_tess_levels(location)) {
-            assert(intr->def.num_components == 1);
             address = load_tess_factor_base(b);
             offset = build_tessfactor_base(
                b, location, nir_intrinsic_component(intr), state);
@@ -777,8 +837,7 @@ lower_tess_eval_block(nir_block *block, nir_builder *b, struct state *state)
                                         intr->src[0].ssa);
          }
 
-         replace_intrinsic(b, intr, nir_intrinsic_load_global_ir3, address,
-                           offset, NULL);
+         replace_with_load_global(b, state->compiler, intr, address, offset);
          break;
       }
 
@@ -792,7 +851,7 @@ bool
 ir3_nir_lower_tess_eval(nir_shader *shader, struct ir3_shader_variant *v,
                         unsigned topology)
 {
-   struct state state = {.topology = topology};
+   struct state state = {.topology = topology, .compiler = v->compiler};
 
    if (shader_debug_enabled(shader->info.stage, shader->info.internal)) {
       mesa_logi("NIR (before tess lowering) for %s shader:",
@@ -1065,7 +1124,7 @@ ir3_nir_lower_gs(nir_shader *shader)
     * them to this new if statement, rather than emitting this code at every
     * return statement.
     */
-   assert(impl->end_block->predecessors.entries == 1);
+   assert(nir_block_num_preds(impl->end_block) == 1);
    nir_block *block = nir_impl_last_block(impl);
    b.cursor = nir_after_block_before_jump(block);
 

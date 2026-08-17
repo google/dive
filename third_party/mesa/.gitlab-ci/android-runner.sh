@@ -8,8 +8,18 @@ set -uex
 
 : "${ADB:=adb}"
 
-$ADB wait-for-device root
-sleep 1
+$ADB wait-for-device
+for i in $(seq 1 5); do
+    if $ADB root; then
+        break
+    fi
+    if [ "$i" -eq 5 ]; then
+        echo "Failed to get adb root after 5 attempts"
+        exit 1
+    fi
+    sleep 2
+done
+$ADB wait-for-device
 
 # overlay 
 
@@ -71,17 +81,10 @@ $ADB push "$INSTALL/lib/libEGL.so" /vendor/lib64/egl/libEGL_mesa.so
 $ADB push "$INSTALL/lib/libGLESv1_CM.so" /vendor/lib64/egl/libGLESv1_CM_mesa.so
 $ADB push "$INSTALL/lib/libGLESv2.so" /vendor/lib64/egl/libGLESv2_mesa.so
 
-# Remove and replace Vulkan drivers:
-# - For Cuttlefish virtual machines, replace lavapipe or venus
-# - For Android hardware, replace the Vulkan driver specified by VK_DRIVER
-if [ -n "${CUTTLEFISH_GPU_MODE:-}" ]; then
-  if [ "$CUTTLEFISH_GPU_MODE" = "mesa_swrast" ] || [ "$CUTTLEFISH_GPU_MODE" = "mesa_swrast_guest_angle" ]; then
-    $ADB shell rm -f /vendor/lib64/hw/vulkan.lvp.so*
-    $ADB push "$INSTALL/lib/libvulkan_lvp.so" /vendor/lib64/hw/vulkan.lvp.so
-  else
-    $ADB shell rm -f /vendor/lib64/hw/vulkan.virtio.so*
-    $ADB push "$INSTALL/lib/libvulkan_virtio.so" /vendor/lib64/hw/vulkan.virtio.so
-  fi
+# Remove and replace Vulkan drivers
+if [ "${CUTTLEFISH_GPU_MODE:-}" = "venus" ] || [ "${CUTTLEFISH_GPU_MODE:-}" = "venus_guest_angle" ]; then
+  $ADB shell rm -f /vendor/lib64/hw/vulkan.virtio.so*
+  $ADB push "$INSTALL/lib/libvulkan_virtio.so" /vendor/lib64/hw/vulkan.virtio.so
 else
   $ADB shell rm -f /vendor/lib64/hw/vulkan.${VK_DRIVER}.so*
   $ADB push "$INSTALL/lib/libvulkan_${VK_DRIVER}.so" /vendor/lib64/hw/vulkan.${VK_DRIVER}.so
@@ -129,7 +132,6 @@ if ! printf "%s" "$VK_RUNTIME_VERSION" | grep -Fq -- "${MESA_BUILD_VERSION}"; th
 fi
 
 get_surfaceflinger_pid() {
-  while [ "$($ADB shell dumpsys -l | grep 'SurfaceFlinger$')" = "" ] ; do sleep 1; done
   $ADB shell ps -A | grep -i surfaceflinger | tr -s ' ' | cut -d ' ' -f 2
 }
 

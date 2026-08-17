@@ -1,24 +1,6 @@
 /*
- * Copyright 2017 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * on the rights to use, copy, modify, merge, publish, distribute, sub
- * license, and/or sell copies of the Software, and to permit persons to whom
- * the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
- * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * Copyright © 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
  */
 #ifndef IRIS_RESOURCE_H
 #define IRIS_RESOURCE_H
@@ -256,7 +238,6 @@ struct iris_image_view {
  * depth/stencil attachment.
  */
 struct iris_surface {
-   struct pipe_surface base;
    struct isl_view view;
    struct isl_view read_view;
    union isl_color_value clear_color;
@@ -265,6 +246,17 @@ struct iris_surface {
    struct iris_surface_state surface_state;
    /** The resource (BO) holding our SURFACE_STATE for read. */
    struct iris_surface_state surface_state_read;
+};
+
+/**
+ * Framebuffer object
+ *
+ * contains color, depth, and stencil attachments for rendering.
+ */
+struct iris_framebuffer_state {
+   struct pipe_framebuffer_state base;
+   struct iris_surface i_cbufs[PIPE_MAX_COLOR_BUFS];
+   struct iris_surface i_zsbuf;
 };
 
 /**
@@ -483,8 +475,9 @@ bool iris_has_invalid_primary(const struct iris_resource *res,
 void iris_resource_check_level_layer(const struct iris_resource *res,
                                      uint32_t level, uint32_t layer);
 
-bool iris_sample_with_depth_aux(const struct intel_device_info *devinfo,
-                                const struct iris_resource *res);
+enum isl_aux_usage
+iris_depth_texture_aux_usage(const struct intel_device_info *devinfo,
+                             const struct iris_resource *res);
 
 bool iris_has_color_unresolved(const struct iris_resource *res,
                                unsigned start_level, unsigned num_levels,
@@ -510,4 +503,6 @@ void iris_resource_finish_render(struct iris_context *ice,
                                  struct iris_resource *res, uint32_t level,
                                  uint32_t start_layer, uint32_t layer_count,
                                  enum isl_aux_usage aux_usage);
+
+void iris_surface_destroy(struct iris_surface *surf);
 #endif

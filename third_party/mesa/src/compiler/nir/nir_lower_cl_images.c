@@ -109,6 +109,12 @@ nir_dedup_inline_samplers(nir_shader *nir)
 bool
 nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_sampler_derefs)
 {
+   nir_foreach_function_with_impl(function, impl, shader) {
+      if (function->is_entrypoint)
+         continue;
+      nir_no_progress(impl);
+   }
+
    nir_function_impl *impl = nir_shader_get_entrypoint(shader);
 
    ASSERTED int last_loc = -1;
@@ -144,12 +150,10 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
    }
    shader->info.num_textures = num_rd_images;
    BITSET_ZERO(shader->info.textures_used);
-   if (num_rd_images)
-      BITSET_SET_RANGE(shader->info.textures_used, 0, num_rd_images - 1);
+   BITSET_SET_COUNT(shader->info.textures_used, 0, num_rd_images);
 
    BITSET_ZERO(shader->info.images_used);
-   if (num_wr_images)
-      BITSET_SET_RANGE(shader->info.images_used, 0, num_wr_images - 1);
+   BITSET_SET_COUNT(shader->info.images_used, 0, num_wr_images);
    shader->info.num_images = num_wr_images;
 
    last_loc = -1;
@@ -167,8 +171,7 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
       }
    }
    BITSET_ZERO(shader->info.samplers_used);
-   if (num_samplers)
-      BITSET_SET_RANGE(shader->info.samplers_used, 0, num_samplers - 1);
+   BITSET_SET_COUNT(shader->info.samplers_used, 0, num_samplers);
 
    nir_builder b = nir_builder_create(impl);
 
@@ -274,7 +277,7 @@ nir_lower_cl_images(nir_shader *shader, bool lower_image_derefs, bool lower_samp
                b.cursor = nir_before_instr(&intrin->instr);
                /* Back-ends expect a 32-bit thing, not 64-bit */
                nir_def *offset = nir_u2u32(&b, intrin->src[0].ssa);
-               nir_rewrite_image_intrinsic(intrin, offset, false);
+               nir_rewrite_image_intrinsic(intrin, offset, nir_image_intrinsic_type_default);
                progress = true;
                break;
             }

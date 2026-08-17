@@ -3485,6 +3485,8 @@ enum {
  * 2. CLEAR_VALUE: Value to write into HIZ RAM.
  */
 #define R300_PACKET3_3D_CLEAR_HIZ           0x00003700
+/* 3D_CLEAR_HIZ COUNT field width (COUNT[13:0]). */
+#define R300_CLEAR_HIZ_COUNT_MAX            0x3fff
 #define R300_PACKET3_3D_CLEAR_CMASK         0x00003800
 
 /* Draws a set of primitives using vertex buffers pointed by the state data.

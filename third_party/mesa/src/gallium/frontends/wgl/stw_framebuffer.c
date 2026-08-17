@@ -54,12 +54,12 @@
  * Else, return NULL.
  */
 static struct stw_framebuffer *
-stw_framebuffer_from_hwnd_locked(HWND hwnd)
+stw_framebuffer_from_hwnd_hdc_locked(HWND hwnd, HDC hdc)
 {
    struct stw_framebuffer *fb;
 
    for (fb = stw_dev->fb_head; fb != NULL; fb = fb->next)
-      if (fb->hWnd == hwnd) {
+      if ((hwnd && fb->hWnd == hwnd) || (hdc && fb->hDC == hdc)) {
          stw_framebuffer_lock(fb);
 
          /* When running with Zink, during the Vulkan surface creation
@@ -143,7 +143,6 @@ stw_framebuffer_get_size(struct stw_framebuffer *fb)
    /*
     * Sanity checking.
     */
-   assert(fb->hWnd);
    assert(fb->width && fb->height);
    assert(fb->client_rect.right  == fb->client_rect.left + fb->width);
    assert(fb->client_rect.bottom == fb->client_rect.top  + fb->height);
@@ -151,7 +150,7 @@ stw_framebuffer_get_size(struct stw_framebuffer *fb)
    /*
     * Get the client area size.
     */
-   if (!GetClientRect(fb->hWnd, &client_rect)) {
+   if (!fb->hWnd || !GetClientRect(fb->hWnd, &client_rect)) {
       return;
    }
 
@@ -254,7 +253,7 @@ stw_call_window_proc(int nCode, WPARAM wParam, LPARAM lParam)
       }
       else if (pParams->message == WM_DESTROY) {
          stw_lock_framebuffers(stw_dev);
-         fb = stw_framebuffer_from_hwnd_locked( pParams->hwnd );
+         fb = stw_framebuffer_from_hwnd_hdc_locked( pParams->hwnd, NULL );
          if (fb) {
             struct stw_context *current_context = stw_current_context();
             struct st_context *st = current_context &&
@@ -282,7 +281,7 @@ stw_call_window_proc_xbox(HWND hWnd, UINT message,
    if (stw_dev && stw_dev->initialized) {
       if (message == WM_DESTROY) {
          stw_lock_framebuffers(stw_dev);
-         struct stw_framebuffer *fb = stw_framebuffer_from_hwnd_locked(hWnd);
+         struct stw_framebuffer *fb = stw_framebuffer_from_hwnd_hdc_locked(hWnd, NULL);
          if (fb) {
             struct stw_context *current_context = stw_current_context();
             struct st_context *st = current_context &&
@@ -309,7 +308,7 @@ stw_call_window_proc_xbox(HWND hWnd, UINT message,
  * with its mutex locked.
  */
 struct stw_framebuffer *
-stw_framebuffer_create(HWND hWnd, const struct stw_pixelformat_info *pfi, enum stw_framebuffer_owner owner,
+stw_framebuffer_create(HDC hdc, HWND hWnd, const struct stw_pixelformat_info *pfi, enum stw_framebuffer_owner owner,
                        struct pipe_frontend_screen *fscreen)
 {
    struct stw_framebuffer *fb;
@@ -319,8 +318,9 @@ stw_framebuffer_create(HWND hWnd, const struct stw_pixelformat_info *pfi, enum s
       return NULL;
 
    fb->hWnd = hWnd;
+   fb->hDC = hdc;
 
-   if (stw_dev->stw_winsys->create_framebuffer)
+   if (fb->hWnd && stw_dev->stw_winsys->create_framebuffer)
       fb->winsys_framebuffer =
          stw_dev->stw_winsys->create_framebuffer(stw_dev->screen, hWnd, pfi->iPixelFormat);
 
@@ -330,7 +330,8 @@ stw_framebuffer_create(HWND hWnd, const struct stw_pixelformat_info *pfi, enum s
    }
 
 #ifdef _GAMING_XBOX
-   fb->prev_wndproc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)&stw_call_window_proc_xbox);
+   if (fb->hWnd)
+      fb->prev_wndproc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)&stw_call_window_proc_xbox);
 #endif
 
    /*
@@ -473,11 +474,8 @@ stw_framebuffer_from_hdc_locked(HDC hdc)
    HWND hwnd;
 
    hwnd = WindowFromDC(hdc);
-   if (!hwnd) {
-      return NULL;
-   }
 
-   return stw_framebuffer_from_hwnd_locked(hwnd);
+   return stw_framebuffer_from_hwnd_hdc_locked(hwnd, hwnd ? NULL : hdc);
 }
 
 
@@ -511,7 +509,7 @@ stw_framebuffer_from_hwnd(HWND hwnd)
    struct stw_framebuffer *fb;
 
    stw_lock_framebuffers(stw_dev);
-   fb = stw_framebuffer_from_hwnd_locked(hwnd);
+   fb = stw_framebuffer_from_hwnd_hdc_locked(hwnd, NULL);
    stw_unlock_framebuffers(stw_dev);
 
    return fb;
@@ -548,7 +546,7 @@ DrvSetPixelFormat(HDC hdc, LONG iPixelFormat)
 
    const struct stw_pixelformat_info *pfi = stw_pixelformat_get_info(iPixelFormat);
 
-   fb = stw_framebuffer_create(WindowFromDC(hdc), pfi, STW_FRAMEBUFFER_WGL_WINDOW, stw_dev->fscreen);
+   fb = stw_framebuffer_create(hdc, WindowFromDC(hdc), pfi, STW_FRAMEBUFFER_WGL_WINDOW, stw_dev->fscreen);
    if (!fb) {
       return false;
    }
@@ -764,7 +762,7 @@ stw_framebuffer_swap_locked(HDC hdc, struct stw_framebuffer *fb)
       wait_swap_interval(fb, interval);
    }
 
-   return stw_st_swap_framebuffer_locked(hdc, fb->drawable);
+   return stw_st_swap_framebuffer_locked(ctx ? ctx->st : NULL, hdc, fb->drawable);
 }
 
 BOOL APIENTRY

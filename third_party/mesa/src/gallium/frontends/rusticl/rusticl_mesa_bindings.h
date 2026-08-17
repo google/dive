@@ -21,11 +21,12 @@
 #include "pipe/p_state.h"
 #include "pipe-loader/pipe_loader.h"
 
+#include "util/blake3/blake3.h"
 #include "util/blob.h"
 #include "util/disk_cache.h"
 #include "util/hex.h"
 #include "util/os_time.h"
-#include "util/sha1/sha1.h"
+#include "util/perf/u_perfetto.h"
 #include "util/u_cpu_detect.h"
 #include "util/u_inlines.h"
 #include "util/u_upload_mgr.h"

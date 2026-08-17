@@ -34,6 +34,7 @@
 #include "util/set.h"
 #include "vl/vl_deint_filter.h"
 #include "vl/vl_winsys.h"
+#include "vl/vl_proc.h"
 
 #include "va_private.h"
 #ifdef HAVE_DRISW_KMS
@@ -213,20 +214,6 @@ VA_DRIVER_INIT_FUNC(VADriverContextP ctx)
    if (!drv->htab)
       goto error_htab;
 
-   bool can_init_compositor = drv->vscreen->pscreen->caps.graphics ||
-                              drv->vscreen->pscreen->caps.compute;
-
-   if (can_init_compositor) {
-      if (!vl_compositor_init(&drv->compositor, drv->pipe, compute_only))
-         goto error_compositor;
-      if (!vl_compositor_init_state(&drv->cstate, drv->pipe))
-         goto error_compositor_state;
-
-      vl_csc_get_matrix(VL_CSC_COLOR_STANDARD_BT_601, NULL, true, &drv->csc);
-      if (!vl_compositor_set_csc_matrix(&drv->cstate, (const vl_csc_matrix *)&drv->csc, 1.0f, 0.0f))
-         goto error_csc_matrix;
-   }
-
    (void) mtx_init(&drv->mutex, mtx_plain);
 
    ctx->pDriverData = (void *)drv;
@@ -251,17 +238,6 @@ VA_DRIVER_INIT_FUNC(VADriverContextP ctx)
    ctx->str_vendor = drv->vendor_string;
 
    return VA_STATUS_SUCCESS;
-
-error_csc_matrix:
-   if (can_init_compositor)
-      vl_compositor_cleanup_state(&drv->cstate);
-
-error_compositor_state:
-   if (can_init_compositor)
-      vl_compositor_cleanup(&drv->compositor);
-
-error_compositor:
-   handle_table_destroy(drv->htab);
 
 error_htab:
    drv->pipe->destroy(drv->pipe);
@@ -304,13 +280,7 @@ vlVaCreateContext(VADriverContextP ctx, VAConfigID config_id, int picture_width,
    if (!(picture_width && picture_height) && !is_vpp)
       return VA_STATUS_ERROR_INVALID_IMAGE_FORMAT;
 
-   create_decoder = is_encode;
-
-   if (is_vpp && drv->vscreen->pscreen->get_video_param(drv->vscreen->pscreen,
-                                                        PIPE_VIDEO_PROFILE_UNKNOWN,
-                                                        PIPE_VIDEO_ENTRYPOINT_PROCESSING,
-                                                        PIPE_VIDEO_CAP_SUPPORTED))
-      create_decoder = true;
+   create_decoder = is_encode || is_vpp;
 
    if (!is_vpp) {
       min_supported_width = drv->vscreen->pscreen->get_video_param(drv->vscreen->pscreen,
@@ -337,10 +307,8 @@ vlVaCreateContext(VADriverContextP ctx, VAConfigID config_id, int picture_width,
 
    context->templat.profile = config->profile;
    context->templat.entrypoint = config->entrypoint;
-   context->templat.chroma_format = PIPE_VIDEO_CHROMA_FORMAT_420;
    context->templat.width = picture_width;
    context->templat.height = picture_height;
-   context->templat.expect_chunked_decode = true;
    context->desc.base.profile = config->profile;
    context->desc.base.entry_point = config->entrypoint;
 
@@ -350,7 +318,6 @@ vlVaCreateContext(VADriverContextP ctx, VAConfigID config_id, int picture_width,
    switch (u_reduce_video_profile(context->templat.profile)) {
    case PIPE_VIDEO_FORMAT_MPEG12:
    case PIPE_VIDEO_FORMAT_VC1:
-   case PIPE_VIDEO_FORMAT_MPEG4:
       context->templat.max_references = 2;
       break;
 
@@ -380,7 +347,7 @@ vlVaCreateContext(VADriverContextP ctx, VAConfigID config_id, int picture_width,
             context->desc.h264enc.rate_ctrl[i].frame_rate_den = 1;
          }
          context->desc.h264enc.frame_idx = util_hash_table_create_ptr_keys();
-         util_dynarray_init(&context->desc.h264enc.raw_headers, NULL);
+         context->desc.h264enc.raw_headers = UTIL_DYNARRAY_INIT;
       }
       break;
 
@@ -410,7 +377,7 @@ vlVaCreateContext(VADriverContextP ctx, VAConfigID config_id, int picture_width,
             context->desc.h265enc.rc[i].frame_rate_den = 1;
          }
          context->desc.h265enc.frame_idx = util_hash_table_create_ptr_keys();
-         util_dynarray_init(&context->desc.h265enc.raw_headers, NULL);
+         context->desc.h265enc.raw_headers = UTIL_DYNARRAY_INIT;
       }
       break;
 
@@ -439,17 +406,23 @@ vlVaCreateContext(VADriverContextP ctx, VAConfigID config_id, int picture_width,
    context->surfaces = _mesa_set_create(NULL, _mesa_hash_pointer, _mesa_key_pointer_equal);
    context->buffers = _mesa_set_create(NULL, _mesa_hash_pointer, _mesa_key_pointer_equal);
 
-   if (create_decoder) {
-      mtx_lock(&drv->mutex);
-      context->decoder = drv->pipe->create_video_codec(drv->pipe, &context->templat);
-      mtx_unlock(&drv->mutex);
-      if (!context->decoder)
-         return VA_STATUS_ERROR_ALLOCATION_FAILED;
-   }
-
    mtx_lock(&drv->mutex);
    *context_id = handle_table_add(drv->htab, context);
    mtx_unlock(&drv->mutex);
+
+   if (create_decoder) {
+      mtx_lock(&drv->mutex);
+      if (is_vpp)
+         context->decoder = vl_create_proc(drv->pipe, &context->templat);
+      else
+         context->decoder = drv->pipe->create_video_codec(drv->pipe, &context->templat);
+      mtx_unlock(&drv->mutex);
+      if (!context->decoder) {
+         vlVaDestroyContext(ctx, *context_id);
+         *context_id = VA_INVALID_ID;
+         return VA_STATUS_ERROR_ALLOCATION_FAILED;
+      }
+   }
 
    return VA_STATUS_SUCCESS;
 }
@@ -499,53 +472,57 @@ vlVaDestroyContext(VADriverContextP ctx, VAContextID context_id)
    }
    _mesa_set_destroy(context->buffers, NULL);
 
-   if (context->decoder) {
-      if (context->desc.base.entry_point == PIPE_VIDEO_ENTRYPOINT_ENCODE) {
-         if (u_reduce_video_profile(context->decoder->profile) ==
-             PIPE_VIDEO_FORMAT_MPEG4_AVC) {
-            if (context->desc.h264enc.frame_idx)
-               _mesa_hash_table_destroy(context->desc.h264enc.frame_idx, NULL);
-            for (uint32_t i = 0; i < ARRAY_SIZE(context->desc.h264enc.dpb); i++) {
-               struct pipe_video_buffer *buf = context->desc.h264enc.dpb[i].buffer;
-               if (buf && !context->desc.h264enc.dpb[i].id)
-                  buf->destroy(buf);
-            }
-            util_dynarray_fini(&context->desc.h264enc.raw_headers);
+   bool is_encode = context->desc.base.entry_point == PIPE_VIDEO_ENTRYPOINT_ENCODE;
+   switch (u_reduce_video_profile(context->desc.base.profile)) {
+   case PIPE_VIDEO_FORMAT_MPEG4_AVC:
+      if (is_encode) {
+         if (context->desc.h264enc.frame_idx)
+            _mesa_hash_table_destroy(context->desc.h264enc.frame_idx, NULL);
+         for (uint32_t i = 0; i < ARRAY_SIZE(context->desc.h264enc.dpb); i++) {
+            struct pipe_video_buffer *buf = context->desc.h264enc.dpb[i].buffer;
+            if (buf && !context->desc.h264enc.dpb[i].id)
+               buf->destroy(buf);
          }
-         if (u_reduce_video_profile(context->decoder->profile) ==
-             PIPE_VIDEO_FORMAT_HEVC) {
-            if (context->desc.h265enc.frame_idx)
-               _mesa_hash_table_destroy(context->desc.h265enc.frame_idx, NULL);
-            for (uint32_t i = 0; i < ARRAY_SIZE(context->desc.h265enc.dpb); i++) {
-               struct pipe_video_buffer *buf = context->desc.h265enc.dpb[i].buffer;
-               if (buf && !context->desc.h265enc.dpb[i].id)
-                  buf->destroy(buf);
-            }
-            util_dynarray_fini(&context->desc.h265enc.raw_headers);
-         }
-         if (u_reduce_video_profile(context->decoder->profile) ==
-             PIPE_VIDEO_FORMAT_AV1) {
-            for (uint32_t i = 0; i < ARRAY_SIZE(context->desc.av1enc.dpb); i++) {
-               struct pipe_video_buffer *buf = context->desc.av1enc.dpb[i].buffer;
-               if (buf && !context->desc.av1enc.dpb[i].id)
-                  buf->destroy(buf);
-            }
-            util_dynarray_fini(&context->desc.av1enc.raw_headers);
-         }
+         util_dynarray_fini(&context->desc.h264enc.raw_headers);
       } else {
-         if (u_reduce_video_profile(context->decoder->profile) ==
-               PIPE_VIDEO_FORMAT_MPEG4_AVC) {
-            FREE(context->desc.h264.pps->sps);
-            FREE(context->desc.h264.pps);
-         }
-         if (u_reduce_video_profile(context->decoder->profile) ==
-               PIPE_VIDEO_FORMAT_HEVC) {
-            FREE(context->desc.h265.pps->sps);
-            FREE(context->desc.h265.pps);
-         }
+         FREE(context->desc.h264.pps->sps);
+         FREE(context->desc.h264.pps);
       }
-      context->decoder->destroy(context->decoder);
+      break;
+
+   case PIPE_VIDEO_FORMAT_HEVC:
+      if (is_encode) {
+         if (context->desc.h265enc.frame_idx)
+            _mesa_hash_table_destroy(context->desc.h265enc.frame_idx, NULL);
+         for (uint32_t i = 0; i < ARRAY_SIZE(context->desc.h265enc.dpb); i++) {
+            struct pipe_video_buffer *buf = context->desc.h265enc.dpb[i].buffer;
+            if (buf && !context->desc.h265enc.dpb[i].id)
+               buf->destroy(buf);
+         }
+         util_dynarray_fini(&context->desc.h265enc.raw_headers);
+      } else {
+         FREE(context->desc.h265.pps->sps);
+         FREE(context->desc.h265.pps);
+      }
+      break;
+
+   case PIPE_VIDEO_FORMAT_AV1:
+      if (is_encode) {
+         for (uint32_t i = 0; i < ARRAY_SIZE(context->desc.av1enc.dpb); i++) {
+            struct pipe_video_buffer *buf = context->desc.av1enc.dpb[i].buffer;
+            if (buf && !context->desc.av1enc.dpb[i].id)
+               buf->destroy(buf);
+         }
+         util_dynarray_fini(&context->desc.av1enc.raw_headers);
+      }
+      break;
+
+   default:
+      break;
    }
+
+   if (context->decoder)
+      context->decoder->destroy(context->decoder);
    if (context->deint) {
       vl_deint_filter_cleanup(context->deint);
       FREE(context->deint);
@@ -553,8 +530,8 @@ vlVaDestroyContext(VADriverContextP ctx, VAContextID context_id)
    mtx_unlock(&context->mutex);
    mtx_destroy(&context->mutex);
    FREE(context->desc.base.decrypt_key);
-   FREE(context->bs.buffers);
-   FREE(context->bs.sizes);
+   util_dynarray_fini(&context->bs.buffers);
+   util_dynarray_fini(&context->bs.sizes);
    FREE(context);
    handle_table_remove(drv->htab, context_id);
    mtx_unlock(&drv->mutex);
@@ -571,8 +548,8 @@ vlVaTerminate(VADriverContextP ctx)
       return VA_STATUS_ERROR_INVALID_CONTEXT;
 
    drv = ctx->pDriverData;
-   vl_compositor_cleanup_state(&drv->cstate);
-   vl_compositor_cleanup(&drv->compositor);
+   if (drv->proc)
+      drv->proc->destroy(drv->proc);
    if (drv->pipe2)
       drv->pipe2->destroy(drv->pipe2);
    drv->pipe->destroy(drv->pipe);

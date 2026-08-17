@@ -1,24 +1,6 @@
 /*
  * Copyright © 2015 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 /*
@@ -142,7 +124,7 @@ select_entry_point(void *mem_ctx, const uint32_t *words, size_t word_count,
          mesa_shader_stage stage = vtn_stage_for_execution_model(w[1]);
 
          struct entry_point e = { name, stage };
-         util_dynarray_append(&candidates, struct entry_point, e);
+         util_dynarray_append(&candidates, e);
       } else if (seen_entry_point) {
          /* List of entry_points is over, we can break now. */
          break;
@@ -288,7 +270,7 @@ int main(int argc, char **argv)
    if (entry_point.stage == MESA_SHADER_KERNEL)
       spirv_opts.environment = NIR_SPIRV_OPENCL;
 
-   nir_shader *nir = spirv_to_nir(map, word_count, NULL, 0,
+   nir_shader *nir = spirv_to_nir(map, word_count, NULL,
                                   entry_point.stage, entry_point.name,
                                   &spirv_opts, &nir_opts);
 
@@ -310,7 +292,7 @@ int main(int argc, char **argv)
             OPT(nir_opt_cse);
             OPT(nir_opt_dead_cf);
             OPT(nir_lower_vars_to_ssa);
-            OPT(nir_copy_prop);
+            OPT(nir_opt_copy_prop);
             OPT(nir_opt_deref);
             OPT(nir_opt_constant_folding);
             OPT(nir_opt_copy_prop_vars);

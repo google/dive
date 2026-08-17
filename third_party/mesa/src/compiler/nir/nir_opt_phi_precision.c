@@ -217,7 +217,7 @@ try_move_narrowing_dst(nir_builder *b, nir_phi_instr *phi)
       if (nir_src_is_if(use))
          return false;
 
-      op = narrowing_conversion_op(nir_src_parent_instr(use), op);
+      op = narrowing_conversion_op(nir_src_use_instr(use), op);
 
       /* Not a (compatible) narrowing conversion: */
       if (op == INVALID_OP)
@@ -237,7 +237,7 @@ try_move_narrowing_dst(nir_builder *b, nir_phi_instr *phi)
    /* Push the conversion into the new phi sources: */
    nir_foreach_phi_src(src, phi) {
       /* insert new conversion instr in block of original phi src: */
-      b->cursor = nir_after_instr_and_phis(src->src.ssa->parent_instr);
+      b->cursor = nir_after_instr_and_phis(nir_def_instr(src->src.ssa));
       nir_def *old_src = src->src.ssa;
       nir_def *new_src = nir_build_alu(b, op, old_src, NULL, NULL, NULL);
 
@@ -253,8 +253,9 @@ try_move_narrowing_dst(nir_builder *b, nir_phi_instr *phi)
       /* We've previously established that all the uses were alu
        * conversion ops.  Turn them into movs instead.
        */
-      nir_alu_instr *alu = nir_instr_as_alu(nir_src_parent_instr(use));
+      nir_alu_instr *alu = nir_instr_as_alu(nir_src_use_instr(use));
       alu->op = nir_op_mov;
+      alu->fp_math_ctrl = nir_op_valid_fp_math_ctrl(alu->op, alu->fp_math_ctrl);
    }
    nir_def_rewrite_uses(&phi->def, &new_phi->def);
 
@@ -268,13 +269,21 @@ try_move_narrowing_dst(nir_builder *b, nir_phi_instr *phi)
 static bool
 can_convert_load_const(nir_load_const_instr *lc, nir_op op)
 {
-   nir_alu_type type = op_to_type(op);
+   const nir_op_info *info = &nir_op_infos[op];
+
+   nir_alu_type dest_type = nir_alu_type_get_base_type(info->output_type);
+   nir_alu_type src_type = nir_alu_type_get_base_type(info->input_types[0]);
 
    /* Note that we only handle phi's with bit_size == 32: */
    assert(lc->def.bit_size == 32);
+   assert(info->num_inputs == 1);
+
+   /* TODO: handle conversions between float and ints */
+   if (dest_type != src_type)
+      return false;
 
    for (unsigned i = 0; i < lc->def.num_components; i++) {
-      switch (type) {
+      switch (dest_type) {
       case nir_type_int:
          if (lc->value[i].i32 != (int32_t)(int16_t)lc->value[i].i32)
             return false;
@@ -309,7 +318,7 @@ find_widening_op(nir_phi_instr *phi, unsigned *bit_size)
    *bit_size = 0;
 
    nir_foreach_phi_src(src, phi) {
-      nir_instr *instr = src->src.ssa->parent_instr;
+      nir_instr *instr = nir_def_instr(src->src.ssa);
       if (instr->type == nir_instr_type_load_const) {
          has_load_const = true;
          continue;
@@ -338,6 +347,9 @@ find_widening_op(nir_phi_instr *phi, unsigned *bit_size)
    if ((op == INVALID_OP) || !has_load_const)
       return op;
 
+   if (*bit_size != 16)
+      return INVALID_OP;
+
    /* If we could otherwise move widening sources, but load_const is
     * one of the phi sources (and does not have a widening conversion,
     * but could have a narrowing->widening sequence inserted without
@@ -345,7 +357,7 @@ find_widening_op(nir_phi_instr *phi, unsigned *bit_size)
     * sequence to make the rest of the transformation possible:
     */
    nir_foreach_phi_src(src, phi) {
-      nir_instr *instr = src->src.ssa->parent_instr;
+      nir_instr *instr = nir_def_instr(src->src.ssa);
       if (instr->type != nir_instr_type_load_const)
          continue;
 
@@ -379,7 +391,7 @@ try_move_widening_src(nir_builder *b, nir_phi_instr *phi)
 
    /* Remove the widening conversions from the phi sources: */
    nir_foreach_phi_src(src, phi) {
-      nir_instr *instr = src->src.ssa->parent_instr;
+      nir_instr *instr = nir_def_instr(src->src.ssa);
       nir_def *new_src;
 
       b->cursor = nir_after_instr(instr);

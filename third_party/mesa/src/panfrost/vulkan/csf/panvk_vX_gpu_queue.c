@@ -1,6 +1,5 @@
 /*
  * Copyright © 2024 Collabora Ltd.
- *
  * SPDX-License-Identifier: MIT
  */
 
@@ -15,6 +14,8 @@
 #include "panvk_macros.h"
 #include "panvk_queue.h"
 #include "panvk_utrace.h"
+
+#include "pan_trace.h"
 
 #include "util/bitscan.h"
 #include "vk_drm_syncobj.h"
@@ -44,6 +45,9 @@ finish_render_desc_ringbuf(struct panvk_gpu_queue *queue)
    }
 
    if (ringbuf->addr.dev) {
+      panvk_address_binding_report(dev, NULL, ringbuf->addr.dev, ringbuf->size,
+                                   VK_DEVICE_ADDRESS_BINDING_TYPE_UNBIND_EXT);
+
       struct pan_kmod_vm_op op = {
          .type = PAN_KMOD_VM_OP_TYPE_UNMAP,
          .va = {
@@ -56,7 +60,8 @@ finish_render_desc_ringbuf(struct panvk_gpu_queue *queue)
          pan_kmod_vm_bind(dev->kmod.vm, PAN_KMOD_VM_OP_MODE_IMMEDIATE, &op, 1);
       assert(!ret);
 
-      panvk_as_free(dev, ringbuf->addr.dev, ringbuf->size * 2);
+      panvk_as_free(dev, dev->as.priv_heap, ringbuf->addr.dev,
+                    ringbuf->size * 2);
    }
 
    if (ringbuf->addr.host) {
@@ -95,9 +100,8 @@ init_render_desc_ringbuf(struct panvk_gpu_queue *queue)
                           "Failed to create a descriptor ring buffer context");
 
    if (!(flags & PAN_KMOD_BO_FLAG_NO_MMAP)) {
-      ringbuf->addr.host =
-         pan_kmod_bo_mmap(ringbuf->bo, 0, ringbuf->size, PROT_READ | PROT_WRITE,
-                          MAP_SHARED, NULL);
+      ringbuf->addr.host = pan_kmod_bo_mmap(ringbuf->bo, PROT_READ | PROT_WRITE,
+                                            MAP_SHARED, NULL);
       if (ringbuf->addr.host == MAP_FAILED)
          return panvk_errorf(dev, VK_ERROR_OUT_OF_HOST_MEMORY,
                              "Failed to CPU map ringbuf BO");
@@ -106,7 +110,8 @@ init_render_desc_ringbuf(struct panvk_gpu_queue *queue)
    /* We choose the alignment to guarantee that we won't ever cross a 4G
     * boundary when accessing the mapping. This way we can encode the wraparound
     * using 32-bit operations. */
-   dev_addr = panvk_as_alloc(dev, ringbuf->size * 2, ringbuf->size * 2);
+   dev_addr = panvk_as_alloc(dev, dev->as.priv_heap, ringbuf->size * 2,
+                             ringbuf->size * 2);
 
    if (!dev_addr)
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
@@ -142,12 +147,15 @@ init_render_desc_ringbuf(struct panvk_gpu_queue *queue)
    ret = pan_kmod_vm_bind(dev->kmod.vm, PAN_KMOD_VM_OP_MODE_IMMEDIATE, vm_ops,
                           tracing_enabled ? 1 : ARRAY_SIZE(vm_ops));
    if (ret) {
-      panvk_as_free(dev, dev_addr, ringbuf->size * 2);
+      panvk_as_free(dev, dev->as.priv_heap, dev_addr, ringbuf->size * 2);
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                           "Failed to GPU map ringbuf BO");
    }
 
    ringbuf->addr.dev = dev_addr;
+
+   panvk_address_binding_report(dev, NULL, ringbuf->addr.dev, ringbuf->size,
+                                VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT);
 
    if (dev->debug.decode_ctx) {
       pandecode_inject_mmap(dev->debug.decode_ctx, ringbuf->addr.dev,
@@ -164,16 +172,15 @@ init_render_desc_ringbuf(struct panvk_gpu_queue *queue)
    };
 
    ringbuf->syncobj = panvk_pool_alloc_mem(&dev->mempools.rw, alloc_info);
-
-   struct panvk_cs_sync32 *syncobj = panvk_priv_mem_host_addr(ringbuf->syncobj);
-
-   if (!syncobj)
+   if (!panvk_priv_mem_check_alloc(ringbuf->syncobj))
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                           "Failed to create the render desc ringbuf context");
 
-   *syncobj = (struct panvk_cs_sync32){
-      .seqno = RENDER_DESC_RINGBUF_SIZE,
-   };
+   panvk_priv_mem_write(ringbuf->syncobj, 0, struct panvk_cs_sync32, syncobj) {
+      *syncobj = (struct panvk_cs_sync32){
+         .seqno = RENDER_DESC_RINGBUF_SIZE,
+      };
+   }
 
    return VK_SUCCESS;
 }
@@ -187,6 +194,10 @@ finish_subqueue_tracing(struct panvk_gpu_queue *queue,
 
    if (subq->tracebuf.addr.dev) {
       uint64_t pgsize = panvk_get_gpu_page_size(dev);
+
+      panvk_address_binding_report(dev, NULL, subq->tracebuf.addr.dev,
+                                   subq->tracebuf.size,
+                                   VK_DEVICE_ADDRESS_BINDING_TYPE_UNBIND_EXT);
 
       pandecode_inject_free(dev->debug.decode_ctx, subq->tracebuf.addr.dev,
                             subq->tracebuf.size);
@@ -203,8 +214,8 @@ finish_subqueue_tracing(struct panvk_gpu_queue *queue,
          pan_kmod_vm_bind(dev->kmod.vm, PAN_KMOD_VM_OP_MODE_IMMEDIATE, &op, 1);
       assert(!ret);
 
-      panvk_as_free(dev, subq->tracebuf.addr.dev,
-                         subq->tracebuf.size + pgsize);
+      panvk_as_free(dev, dev->as.priv_heap, subq->tracebuf.addr.dev,
+                    subq->tracebuf.size + pgsize);
    }
 
    if (subq->tracebuf.addr.host) {
@@ -248,9 +259,8 @@ init_subqueue_tracing(struct panvk_gpu_queue *queue,
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                           "Failed to create a CS tracebuf");
 
-   subq->tracebuf.addr.host =
-      pan_kmod_bo_mmap(subq->tracebuf.bo, 0, subq->tracebuf.size,
-                       PROT_READ | PROT_WRITE, MAP_SHARED, NULL);
+   subq->tracebuf.addr.host = pan_kmod_bo_mmap(
+      subq->tracebuf.bo, PROT_READ | PROT_WRITE, MAP_SHARED, NULL);
    if (subq->tracebuf.addr.host == MAP_FAILED) {
       subq->tracebuf.addr.host = NULL;
       return panvk_errorf(dev, VK_ERROR_OUT_OF_HOST_MEMORY,
@@ -259,7 +269,8 @@ init_subqueue_tracing(struct panvk_gpu_queue *queue,
 
    /* Add a guard page. */
    uint64_t pgsize = panvk_get_gpu_page_size(dev);
-   dev_addr = panvk_as_alloc(dev, subq->tracebuf.size + pgsize, pgsize);
+   dev_addr = panvk_as_alloc(dev, dev->as.priv_heap,
+                             subq->tracebuf.size + pgsize, pgsize);
 
    if (!dev_addr)
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
@@ -282,12 +293,17 @@ init_subqueue_tracing(struct panvk_gpu_queue *queue,
    int ret =
       pan_kmod_vm_bind(dev->kmod.vm, PAN_KMOD_VM_OP_MODE_IMMEDIATE, &vm_op, 1);
    if (ret) {
-      panvk_as_free(dev, dev_addr, subq->tracebuf.size + pgsize);
+      panvk_as_free(dev, dev->as.priv_heap, dev_addr,
+                    subq->tracebuf.size + pgsize);
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                           "Failed to GPU map ringbuf BO");
    }
 
    subq->tracebuf.addr.dev = dev_addr;
+
+   panvk_address_binding_report(dev, NULL, subq->tracebuf.addr.dev,
+                                subq->tracebuf.size,
+                                VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT);
 
    if (dev->debug.decode_ctx) {
       pandecode_inject_mmap(dev->debug.decode_ctx, subq->tracebuf.addr.dev,
@@ -302,6 +318,7 @@ static void
 finish_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
 {
    panvk_pool_free_mem(&queue->subqueues[subqueue].context);
+   panvk_pool_free_mem(&queue->subqueues[subqueue].req_resource.buf);
    panvk_pool_free_mem(&queue->subqueues[subqueue].regs_save);
    finish_subqueue_tracing(queue, subqueue);
 }
@@ -328,6 +345,21 @@ init_utrace(struct panvk_gpu_queue *queue)
    return VK_SUCCESS;
 }
 
+static uint32_t
+get_resource_mask(enum panvk_subqueue_id subqueue)
+{
+   switch (subqueue) {
+   case PANVK_SUBQUEUE_VERTEX_TILER:
+      return CS_IDVS_RES | CS_TILER_RES;
+   case PANVK_SUBQUEUE_FRAGMENT:
+      return CS_FRAG_RES;
+   case PANVK_SUBQUEUE_COMPUTE:
+      return CS_COMPUTE_RES;
+   default:
+      UNREACHABLE("Unknown subqueue");
+   }
+}
+
 static VkResult
 init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
 {
@@ -335,7 +367,6 @@ init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
    struct panvk_subqueue *subq = &queue->subqueues[subqueue];
    const struct panvk_physical_device *phys_dev =
       to_panvk_physical_device(queue->vk.base.device->physical);
-   struct panvk_cs_sync64 *syncobjs = panvk_priv_mem_host_addr(queue->syncobjs);
 
    VkResult result = init_subqueue_tracing(queue, subqueue);
    if (result != VK_SUCCESS)
@@ -347,54 +378,116 @@ init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
       alloc_info.size = dev->dump_region_size[subqueue];
       alloc_info.alignment = sizeof(uint32_t);
       subq->regs_save = panvk_pool_alloc_mem(&dev->mempools.rw, alloc_info);
-      if (!panvk_priv_mem_host_addr(subq->regs_save)) {
+      if (!panvk_priv_mem_check_alloc(subq->regs_save)) {
          return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                              "Failed to allocate register save area");
       }
    }
-
-   alloc_info.size = sizeof(struct panvk_cs_subqueue_context);
-   alloc_info.alignment = 64;
 
    /* When tracing is enabled, we want to use a non-cached pool, so can get
     * up-to-date context even if the CS crashed in the middle. */
    struct panvk_pool *mempool =
       PANVK_DEBUG(TRACE) ? &dev->mempools.rw_nc : &dev->mempools.rw;
 
-   subq->context = panvk_pool_alloc_mem(mempool, alloc_info);
-   if (!panvk_priv_mem_host_addr(subq->context))
+   alloc_info.size = sizeof(uint64_t);
+   alloc_info.alignment = 64;
+   subq->req_resource.buf = panvk_pool_alloc_mem(mempool, alloc_info);
+   if (!panvk_priv_mem_check_alloc(subq->req_resource.buf))
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
-                          "Failed to create a queue context");
+                          "Failed to create a req_resource buffer");
 
-   struct panvk_cs_subqueue_context *cs_ctx =
-      panvk_priv_mem_host_addr(subq->context);
-
-   *cs_ctx = (struct panvk_cs_subqueue_context){
-      .syncobjs = panvk_priv_mem_dev_addr(queue->syncobjs),
-      .debug.tracebuf.cs = subq->tracebuf.addr.dev,
-#if PAN_ARCH == 10
-      /* Iterator scoreboard will be picked in CS and wrap back to SB_ITER(0) on
-         first RUN_* so we ensure an invalid value here that is handled by our
-         partial modulo implementation */
-      .iter_sb = SB_ITER(dev->csf.sb.iter_count),
-#endif
-      .reg_dump_addr = panvk_priv_mem_dev_addr(subq->regs_save),
-   };
-
-   /* We use the geometry buffer for our temporary CS buffer. */
-   struct cs_buffer root_cs = {
-      .cpu = panvk_priv_mem_host_addr(queue->tiler_heap.desc) + 4096,
-      .gpu = panvk_priv_mem_dev_addr(queue->tiler_heap.desc) + 4096,
-      .capacity = 64 * 1024 / sizeof(uint64_t),
-   };
+   struct cs_builder b;
    const struct drm_panthor_csif_info *csif_info =
       panthor_kmod_get_csif_props(dev->kmod.dev);
-   const struct cs_builder_conf conf = {
+
+   struct cs_buffer root_cs = {
+      .cpu = panvk_priv_mem_host_addr(subq->req_resource.buf),
+      .gpu = panvk_priv_mem_dev_addr(subq->req_resource.buf),
+      .capacity = 1,
+   };
+   struct cs_builder_conf conf = {
       .nr_registers = csif_info->cs_reg_count,
       .nr_kernel_registers = MAX2(csif_info->unpreserved_cs_reg_count, 4),
       .ls_sb_slot = SB_ID(LS),
    };
-   struct cs_builder b;
+
+   cs_builder_init(&b, &conf, root_cs);
+   cs_req_res(&b, get_resource_mask(subqueue));
+   cs_end(&b);
+   assert(cs_is_valid(&b));
+   subq->req_resource.cs_buffer_size = cs_root_chunk_size(&b);
+   subq->req_resource.cs_buffer_addr = cs_root_chunk_gpu_addr(&b);
+   cs_builder_fini(&b);
+   panvk_priv_mem_flush(subq->req_resource.buf, 0,
+                        subq->req_resource.cs_buffer_size);
+
+   alloc_info.size = sizeof(struct panvk_cs_subqueue_context);
+   alloc_info.alignment = 64;
+
+   subq->context = panvk_pool_alloc_mem(mempool, alloc_info);
+   if (!panvk_priv_mem_check_alloc(subq->context))
+      return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                          "Failed to create a queue context");
+
+   panvk_priv_mem_write(subq->context, 0, struct panvk_cs_subqueue_context,
+                        cs_ctx) {
+      *cs_ctx = (struct panvk_cs_subqueue_context){
+         .syncobjs = panvk_priv_mem_dev_addr(queue->syncobjs),
+         .debug.tracebuf.cs = subq->tracebuf.addr.dev,
+#if PAN_ARCH == 10
+         /* On the VT/COMPUTE queue, the first iter_sb will skipped since
+          * cs_next_iter_sb() is called before the first use, but that's okay,
+          * because the next slot will be equally free, and the skipped one will
+          * be re-used at some point.
+          * On the fragment queue, we increment the iterator when the
+          * FINISH_FRAGMENT job is issued, which is why we need this value
+          * to point to a valid+free scoreboard from the start.
+          */
+         .iter_sb = SB_ITER(0),
+#endif
+         .reg_dump_addr = panvk_priv_mem_dev_addr(subq->regs_save),
+      };
+
+      if (subqueue != PANVK_SUBQUEUE_COMPUTE) {
+         cs_ctx->render.tiler_heap =
+            panvk_priv_mem_dev_addr(queue->tiler_heap.desc);
+         /* Our geometry buffer comes 4k after the tiler heap, and we encode the
+          * size in the lower 12 bits so the address can be copied directly
+          * to the tiler descriptors. */
+         cs_ctx->render.geom_buf =
+            (cs_ctx->render.tiler_heap + 4096) | ((64 * 1024) >> 12);
+
+         /* Initialize the ringbuf */
+         cs_ctx->render.desc_ringbuf = (struct panvk_cs_desc_ringbuf){
+            .syncobj =
+               panvk_priv_mem_dev_addr(queue->render_desc_ringbuf.syncobj),
+            .ptr = queue->render_desc_ringbuf.addr.dev,
+            .pos = 0,
+         };
+      }
+
+      if (subqueue == PANVK_SUBQUEUE_FRAGMENT) {
+         /* The tiler OOM exception handler is registered to the fragment
+          * queue, so the scratch FBD buffer is only needed there. We leave
+          * it to NULL on other queues to make sure any attempt to access it
+          * results in a NULL deref that can be caught.
+          */
+         cs_ctx->tiler_oom_ctx.ir_scratch_fbd_ptr =
+            panvk_priv_mem_dev_addr(queue->tiler_heap.oom_fbd);
+      }
+   }
+
+   /* We use the geometry buffer for our temporary CS buffer. */
+   root_cs = (struct cs_buffer){
+      .cpu = panvk_priv_mem_host_addr(queue->tiler_heap.desc) + 4096,
+      .gpu = panvk_priv_mem_dev_addr(queue->tiler_heap.desc) + 4096,
+      .capacity = 64 * 1024 / sizeof(uint64_t),
+   };
+   conf = (struct cs_builder_conf){
+      .nr_registers = csif_info->cs_reg_count,
+      .nr_kernel_registers = MAX2(csif_info->unpreserved_cs_reg_count, 4),
+      .ls_sb_slot = SB_ID(LS),
+   };
 
    assert(panvk_priv_mem_dev_addr(queue->tiler_heap.desc) != 0);
 
@@ -406,9 +499,12 @@ init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
    /* Intialize scoreboard slots used for asynchronous operations. */
 #if PAN_ARCH >= 11
    cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_SEL_ENDPOINT, SB_ITER(0));
+   cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_MASK_WAIT, SB_WAIT_ITER(0));
    cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_SEL_OTHER, SB_ID(LS));
-   cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_SEL_DEFERRED, SB_ID(DEFERRED_SYNC));
-   cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_MASK_STREAM, dev->csf.sb.all_iters_mask);
+   cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_SEL_DEFERRED,
+                      SB_ID(DEFERRED_SYNC));
+   cs_set_state_imm32(&b, MALI_CS_SET_STATE_TYPE_SB_MASK_STREAM,
+                      dev->csf.sb.all_iters_mask & ~SB_WAIT_ITER(0));
 #else
    cs_set_scoreboard_entry(&b, SB_ITER(0), SB_ID(LS));
 #endif
@@ -416,51 +512,24 @@ init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
    /* We do greater than test on sync objects, and given the reference seqno
     * registers are all zero at init time, we need to initialize all syncobjs
     * with a seqno of one. */
-   syncobjs[subqueue].seqno = 1;
+   panvk_priv_mem_write(queue->syncobjs,
+                        subqueue * sizeof(struct panvk_cs_sync64),
+                        struct panvk_cs_sync64, syncobj) {
+      syncobj->seqno = 1;
+   }
 
    if (subqueue != PANVK_SUBQUEUE_COMPUTE) {
-      cs_ctx->render.tiler_heap =
-         panvk_priv_mem_dev_addr(queue->tiler_heap.desc);
-      /* Our geometry buffer comes 4k after the tiler heap, and we encode the
-       * size in the lower 12 bits so the address can be copied directly
-       * to the tiler descriptors. */
-      cs_ctx->render.geom_buf =
-         (cs_ctx->render.tiler_heap + 4096) | ((64 * 1024) >> 12);
-
-      /* Initialize the ringbuf */
-      cs_ctx->render.desc_ringbuf = (struct panvk_cs_desc_ringbuf){
-         .syncobj = panvk_priv_mem_dev_addr(queue->render_desc_ringbuf.syncobj),
-         .ptr = queue->render_desc_ringbuf.addr.dev,
-         .pos = 0,
-      };
-
       struct cs_index heap_ctx_addr = cs_scratch_reg64(&b, 0);
 
       /* Pre-set the heap context on the vertex-tiler/fragment queues. */
       cs_move64_to(&b, heap_ctx_addr, queue->tiler_heap.context.dev_addr);
       cs_heap_set(&b, heap_ctx_addr);
    }
-
-   /* Request resources for each subqueue during initialization, as the req_res
-    * is an expensive operation which should be called sparingly. */
-   switch (subqueue) {
-   case PANVK_SUBQUEUE_VERTEX_TILER:
-      cs_req_res(&b, CS_IDVS_RES | CS_TILER_RES);
-      break;
-   case PANVK_SUBQUEUE_FRAGMENT:
-      cs_req_res(&b, CS_FRAG_RES);
-      break;
-   case PANVK_SUBQUEUE_COMPUTE:
-      cs_req_res(&b, CS_COMPUTE_RES);
-      break;
-   default:
-      UNREACHABLE("Unknown subqueue");
-      break;
-   }
-
-   cs_finish(&b);
+   cs_end(&b);
 
    assert(cs_is_valid(&b));
+
+   panvk_priv_mem_flush(queue->tiler_heap.desc, 4096, cs_root_chunk_size(&b));
 
    struct drm_panthor_sync_op syncop = {
       .flags =
@@ -479,6 +548,10 @@ init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
       .group_handle = queue->group_handle,
       .queue_submits = DRM_PANTHOR_OBJ_ARRAY(1, &qsubmit),
    };
+
+   cs_builder_fini(&b);
+
+   pan_kmod_flush_bo_map_syncs(dev->kmod.dev);
 
    int ret = pan_kmod_ioctl(dev->drm_fd, DRM_IOCTL_PANTHOR_GROUP_SUBMIT,
                             &gsubmit);
@@ -499,7 +572,7 @@ init_subqueue(struct panvk_gpu_queue *queue, enum panvk_subqueue_id subqueue)
                          subqueue);
       pandecode_cs_binary(dev->debug.decode_ctx, qsubmit.stream_addr,
                           qsubmit.stream_size,
-                          phys_dev->kmod.props.gpu_id);
+                          phys_dev->kmod.dev->props.gpu_id);
    }
 
    return VK_SUCCESS;
@@ -534,7 +607,7 @@ init_queue(struct panvk_gpu_queue *queue)
    };
 
    queue->syncobjs = panvk_pool_alloc_mem(&dev->mempools.rw, alloc_info);
-   if (!panvk_priv_mem_host_addr(queue->syncobjs))
+   if (!panvk_priv_mem_check_alloc(queue->syncobjs))
       return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                           "Failed to allocate subqueue sync objects");
 
@@ -564,7 +637,8 @@ err_cleanup_queue:
 
 static VkResult
 create_group(struct panvk_gpu_queue *queue,
-             enum drm_panthor_group_priority group_priority)
+             enum drm_panthor_group_priority group_priority,
+             uint32_t shader_core_count)
 {
    const struct panvk_device *dev = to_panvk_device(queue->vk.base.device);
    const struct panvk_physical_device *phys_dev =
@@ -588,12 +662,20 @@ create_group(struct panvk_gpu_queue *queue,
          },
    };
 
+   uint8_t max_compute_cores = util_bitcount64(phys_dev->compute_core_mask);
+   uint8_t max_fragment_cores = util_bitcount64(phys_dev->fragment_core_mask);
+
+   if (shader_core_count) {
+      max_compute_cores = MIN2(shader_core_count, max_compute_cores);
+      max_fragment_cores = MIN2(shader_core_count, max_fragment_cores);
+   }
+
    struct drm_panthor_group_create gc = {
       .compute_core_mask = phys_dev->compute_core_mask,
       .fragment_core_mask = phys_dev->fragment_core_mask,
       .tiler_core_mask = 1,
-      .max_compute_cores = util_bitcount64(phys_dev->compute_core_mask),
-      .max_fragment_cores = util_bitcount64(phys_dev->fragment_core_mask),
+      .max_compute_cores = max_compute_cores,
+      .max_fragment_cores = max_fragment_cores,
       .max_tiler_cores = 1,
       .priority = group_priority,
       .queues = DRM_PANTHOR_OBJ_ARRAY(ARRAY_SIZE(qc), qc),
@@ -640,13 +722,27 @@ init_tiler(struct panvk_gpu_queue *queue)
    };
 
    tiler_heap->desc = panvk_pool_alloc_mem(&dev->mempools.rw, alloc_info);
-   if (!panvk_priv_mem_host_addr(tiler_heap->desc)) {
+   if (!panvk_priv_mem_check_alloc(tiler_heap->desc)) {
       result = panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                             "Failed to create a tiler heap context");
       goto err_free_desc;
    }
 
    tiler_heap->chunk_size = phys_dev->csf.tiler.chunk_size;
+
+   alloc_info.size = get_fbd_size(true, MAX_RTS);
+#if PAN_ARCH >= 14
+   const unsigned fbds_alignment = alignof(struct panvk_fb_layer_state);
+#else
+   const unsigned fbds_alignment = pan_alignment(FRAMEBUFFER);
+#endif
+   alloc_info.alignment = fbds_alignment;
+   tiler_heap->oom_fbd = panvk_pool_alloc_mem(&dev->mempools.rw, alloc_info);
+   if (!panvk_priv_mem_check_alloc(tiler_heap->oom_fbd)) {
+      result = panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                            "Failed to create a scratch FBD");
+      goto err_free_desc;
+   }
 
    struct drm_panthor_tiler_heap_create thc = {
       .vm_id = pan_kmod_vm_handle(dev->kmod.vm),
@@ -667,8 +763,7 @@ init_tiler(struct panvk_gpu_queue *queue)
    tiler_heap->context.handle = thc.handle;
    tiler_heap->context.dev_addr = thc.tiler_heap_ctx_gpu_va;
 
-   pan_cast_and_pack(panvk_priv_mem_host_addr(tiler_heap->desc), TILER_HEAP,
-                     cfg) {
+   panvk_priv_mem_write_desc(tiler_heap->desc, 0, TILER_HEAP, cfg) {
       cfg.size = tiler_heap->chunk_size;
       cfg.base = thc.first_heap_chunk_gpu_va;
       cfg.bottom = cfg.base + 64;
@@ -679,6 +774,7 @@ init_tiler(struct panvk_gpu_queue *queue)
 
 err_free_desc:
    panvk_pool_free_mem(&tiler_heap->desc);
+   panvk_pool_free_mem(&tiler_heap->oom_fbd);
    return result;
 }
 
@@ -695,6 +791,7 @@ cleanup_tiler(struct panvk_gpu_queue *queue)
    assert(!ret);
 
    panvk_pool_free_mem(&tiler_heap->desc);
+   panvk_pool_free_mem(&tiler_heap->oom_fbd);
 }
 
 struct panvk_queue_submit {
@@ -705,11 +802,10 @@ struct panvk_queue_submit {
    bool process_utrace;
    bool force_sync;
 
-   uint32_t used_queue_mask;
-
    uint32_t qsubmit_count;
-   bool needs_waits;
-   bool needs_signals;
+   uint32_t wait_queue_mask;
+   uint32_t signal_queue_mask;
+   uint32_t req_resource_subqueue_mask;
 
    struct drm_panthor_queue_submit *qsubmits;
    struct drm_panthor_sync_op *wait_ops;
@@ -736,7 +832,7 @@ static void
 panvk_queue_submit_init(struct panvk_queue_submit *submit,
                         struct vk_queue *vk_queue)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
    struct vk_device *vk_dev = vk_queue->base.device;
 
    *submit = (struct panvk_queue_submit){
@@ -747,7 +843,7 @@ panvk_queue_submit_init(struct panvk_queue_submit *submit,
 
    submit->process_utrace =
       u_trace_should_process(&submit->dev->utrace.utctx) &&
-      submit->phys_dev->kmod.props.timestamp_frequency;
+      submit->phys_dev->kmod.dev->props.timestamp_frequency;
 
    submit->force_sync = PANVK_DEBUG(TRACE) || PANVK_DEBUG(SYNC);
 }
@@ -757,8 +853,9 @@ panvk_queue_submit_init_storage(
    struct panvk_queue_submit *submit, const struct vk_queue_submit *vk_submit,
    struct panvk_queue_submit_stack_storage *stack_storage)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
    submit->utrace.first_subqueue = PANVK_SUBQUEUE_COUNT;
+   VkPipelineStageFlags2 cmd_stage_mask = VK_PIPELINE_STAGE_2_NONE;
    for (uint32_t i = 0; i < vk_submit->command_buffer_count; i++) {
       struct panvk_cmd_buffer *cmdbuf = container_of(
          vk_submit->command_buffers[i], struct panvk_cmd_buffer, vk);
@@ -769,8 +866,18 @@ panvk_queue_submit_init_storage(
          if (cs_is_empty(b))
             continue;
 
-         submit->used_queue_mask |= BITFIELD_BIT(j);
+         cmd_stage_mask |= panvk_get_subqueue_stages(j);
          submit->qsubmit_count++;
+
+         struct panvk_subqueue *subq = &submit->queue->subqueues[j];
+         /* If we need a resource the subqueue has not requested yet. */
+         if (b->req_resource_mask & (~subq->req_resource.mask)) {
+            /* Ensure we do not need a resource not expected for this subqueue. */
+            assert(!(b->req_resource_mask & (~get_resource_mask(j))));
+            submit->qsubmit_count++;
+            submit->req_resource_subqueue_mask |= BITFIELD_BIT(j);
+            subq->req_resource.mask = get_resource_mask(j);
+         }
 
          struct u_trace *ut = &cmdbuf->utrace.uts[j];
          if (submit->process_utrace && u_trace_has_points(ut)) {
@@ -790,25 +897,56 @@ panvk_queue_submit_init_storage(
       }
    }
 
-   /* Synchronize all subqueues if we have no command buffer submitted. */
-   if (!submit->qsubmit_count)
-      submit->used_queue_mask = BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+   /* wait_stages_mask is pipeline stages which limit
+    * the second synchronization scope of a semaphore wait operation */
+   VkPipelineStageFlags2 wait_stages_mask = cmd_stage_mask;
+   for (uint32_t i = 0; i < vk_submit->wait_count; i++) {
+      wait_stages_mask |= vk_submit->waits[i].stage_mask;
+   }
+
+   /* signal_stages_mask is pipeline stages which limit
+    * the first synchronization scope of a semaphore signal operation */
+   VkPipelineStageFlags2 signal_stages_mask = cmd_stage_mask;
+   for (uint32_t i = 0; i < vk_submit->signal_count; i++) {
+      signal_stages_mask |= vk_submit->signals[i].stage_mask;
+   }
+
+   /* if there is no cs in any subqueue */
+   if (cmd_stage_mask == VK_PIPELINE_STAGE_2_NONE) {
+      /* signal stage mask is TOP_OF_PIPE/NONE, signal immediately */
+      if (signal_stages_mask == VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT ||
+          signal_stages_mask == VK_PIPELINE_STAGE_2_NONE) {
+         signal_stages_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+      }
+
+      /* wait stage mask is BOTTOM_OF_PIPE/NONE, wait deferred */
+      if (wait_stages_mask == VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT ||
+          wait_stages_mask == VK_PIPELINE_STAGE_2_NONE) {
+         wait_stages_mask = panvk_get_subqueue_stages(PANVK_SUBQUEUE_FRAGMENT) |
+                            panvk_get_subqueue_stages(PANVK_SUBQUEUE_COMPUTE);
+      }
+   }
+
+   submit->wait_queue_mask =
+      vk_stages_to_subqueue_mask(wait_stages_mask, SYNC_SCOPE_SECOND);
+
+   submit->signal_queue_mask =
+      vk_stages_to_subqueue_mask(signal_stages_mask, SYNC_SCOPE_FIRST) |
+      submit->utrace.queue_mask;
+
+   /* Signal all subqueues if force_sync */
+   if (submit->force_sync) {
+      submit->signal_queue_mask |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+   }
 
    uint32_t syncop_count = 0;
 
-   submit->needs_waits = vk_submit->wait_count > 0;
-   submit->needs_signals = vk_submit->signal_count > 0 || submit->force_sync ||
-                           submit->utrace.queue_mask;
-
    /* We add sync-only queue submits to place our wait/signal operations. */
-   if (submit->needs_waits) {
-      submit->qsubmit_count += util_bitcount(submit->used_queue_mask);
-      syncop_count += vk_submit->wait_count;
-   }
-   if (submit->needs_signals) {
-      submit->qsubmit_count += util_bitcount(submit->used_queue_mask);
-      syncop_count += util_bitcount(submit->used_queue_mask);
-   }
+   submit->qsubmit_count += util_bitcount(submit->wait_queue_mask);
+   syncop_count += vk_submit->wait_count;
+
+   submit->qsubmit_count += util_bitcount(submit->signal_queue_mask);
+   syncop_count += util_bitcount(submit->signal_queue_mask);
 
    submit->qsubmits =
       submit->qsubmit_count <= ARRAY_SIZE(stack_storage->qsubmits)
@@ -848,7 +986,7 @@ static void
 panvk_queue_submit_init_utrace(struct panvk_queue_submit *submit,
                                const struct vk_queue_submit *vk_submit)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
 
    if (!submit->utrace.queue_mask)
       return;
@@ -876,11 +1014,32 @@ panvk_queue_submit_init_utrace(struct panvk_queue_submit *submit,
 }
 
 static void
+panvk_queue_submit_init_req_resource(struct panvk_queue_submit *submit)
+{
+   if (!submit->req_resource_subqueue_mask)
+      return;
+
+   struct panvk_device *dev = submit->dev;
+   uint32_t flush_id = panthor_kmod_get_flush_id(dev->kmod.dev);
+
+   u_foreach_bit(i, submit->req_resource_subqueue_mask) {
+      struct panvk_subqueue *subq = &submit->queue->subqueues[i];
+      submit->qsubmits[submit->qsubmit_count++] =
+         (struct drm_panthor_queue_submit){
+            .queue_index = i,
+            .stream_size = subq->req_resource.cs_buffer_size,
+            .stream_addr = subq->req_resource.cs_buffer_addr,
+            .latest_flush = flush_id,
+         };
+   }
+}
+
+static void
 panvk_queue_submit_init_waits(struct panvk_queue_submit *submit,
                               const struct vk_queue_submit *vk_submit)
 {
-   MESA_TRACE_FUNC();
-   if (!submit->needs_waits)
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
+   if (!submit->wait_queue_mask)
       return;
 
    for (uint32_t i = 0; i < vk_submit->wait_count; i++) {
@@ -898,7 +1057,7 @@ panvk_queue_submit_init_waits(struct panvk_queue_submit *submit,
       };
    }
 
-   u_foreach_bit(i, submit->used_queue_mask) {
+   u_foreach_bit(i, submit->wait_queue_mask) {
       submit->qsubmits[submit->qsubmit_count++] =
          (struct drm_panthor_queue_submit){
             .queue_index = i,
@@ -912,7 +1071,7 @@ static void
 panvk_queue_submit_init_cmdbufs(struct panvk_queue_submit *submit,
                                 const struct vk_queue_submit *vk_submit)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
    struct panvk_device *dev = submit->dev;
 
    for (uint32_t i = 0; i < vk_submit->command_buffer_count; i++) {
@@ -999,14 +1158,11 @@ static void
 panvk_queue_submit_init_signals(struct panvk_queue_submit *submit,
                                 const struct vk_queue_submit *vk_submit)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
    struct panvk_gpu_queue *queue = submit->queue;
 
-   if (!submit->needs_signals)
-      return;
-
    uint32_t signal_op = 0;
-   u_foreach_bit(i, submit->used_queue_mask) {
+   u_foreach_bit(i, submit->signal_queue_mask) {
       submit->signal_ops[signal_op] = (struct drm_panthor_sync_op){
          .flags = DRM_PANTHOR_SYNC_OP_HANDLE_TYPE_TIMELINE_SYNCOBJ |
                   DRM_PANTHOR_SYNC_OP_SIGNAL,
@@ -1033,18 +1189,23 @@ panvk_queue_submit_ioctl(struct panvk_queue_submit *submit)
       /* If we're tracing, we need to reset the desc ringbufs and the CS
        * tracebuf. */
       for (uint32_t i = 0; i < ARRAY_SIZE(queue->subqueues); i++) {
-         struct panvk_cs_subqueue_context *ctx =
-            panvk_priv_mem_host_addr(queue->subqueues[i].context);
+         panvk_priv_mem_rmw(queue->subqueues[i].context, 0,
+                            struct panvk_cs_subqueue_context, ctx) {
+            if (ctx->render.desc_ringbuf.ptr) {
+               ctx->render.desc_ringbuf.ptr =
+                  queue->render_desc_ringbuf.addr.dev;
+               ctx->render.desc_ringbuf.pos = 0;
+            }
 
-         if (ctx->render.desc_ringbuf.ptr) {
-            ctx->render.desc_ringbuf.ptr = queue->render_desc_ringbuf.addr.dev;
-            ctx->render.desc_ringbuf.pos = 0;
+            if (ctx->debug.tracebuf.cs)
+               ctx->debug.tracebuf.cs = queue->subqueues[i].tracebuf.addr.dev;
          }
-
-         if (ctx->debug.tracebuf.cs)
-            ctx->debug.tracebuf.cs = queue->subqueues[i].tracebuf.addr.dev;
       }
    }
+
+   /* Flush pending synchronization requests before submitting the job, to
+    * make sure things are GPU-visible. */
+   pan_kmod_flush_bo_map_syncs(dev->kmod.dev);
 
    struct drm_panthor_group_submit gsubmit = {
       .group_handle = queue->group_handle,
@@ -1065,13 +1226,13 @@ panvk_queue_submit_process_signals(struct panvk_queue_submit *submit,
 {
    struct panvk_device *dev = submit->dev;
    struct panvk_gpu_queue *queue = submit->queue;
-   int ret;
+   ASSERTED int ret;
 
-   if (!submit->needs_signals)
+   if (!submit->signal_queue_mask)
       return;
 
    if (submit->force_sync) {
-      uint64_t point = util_bitcount(submit->used_queue_mask);
+      uint64_t point = util_bitcount(submit->signal_queue_mask);
       ret = drmSyncobjTimelineWait(dev->drm_fd, &queue->syncobj_handle,
                                    &point, 1, INT64_MAX,
                                    DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL, NULL);
@@ -1104,13 +1265,27 @@ panvk_queue_submit_process_signals(struct panvk_queue_submit *submit,
 }
 
 static void
-panvk_queue_submit_process_debug(const struct panvk_queue_submit *submit)
+panvk_queue_submit_process_debug(const struct panvk_queue_submit *submit,
+                                 const struct vk_queue_submit *vk_submit)
 {
    struct panvk_gpu_queue *queue = submit->queue;
+   struct panvk_device *dev = to_panvk_device(queue->vk.base.device);
    struct pandecode_context *decode_ctx = submit->dev->debug.decode_ctx;
 
    if (PANVK_DEBUG(TRACE)) {
-      const struct pan_kmod_dev_props *props = &submit->phys_dev->kmod.props;
+      const struct pan_kmod_dev_props *props =
+         &submit->phys_dev->kmod.dev->props;
+
+      /* First we invalidate all desc buffers to make sure we see GPU updates
+       * on those. */
+      for (uint32_t i = 0; i < vk_submit->command_buffer_count; i++) {
+         struct panvk_cmd_buffer *cmdbuf = container_of(
+            vk_submit->command_buffers[i], struct panvk_cmd_buffer, vk);
+
+         panvk_pool_invalidate_maps(&cmdbuf->desc_pool);
+      }
+
+      pan_kmod_flush_bo_map_syncs(dev->kmod.dev);
 
       for (uint32_t i = 0; i < submit->qsubmit_count; i++) {
          const struct drm_panthor_queue_submit *qsubmit = &submit->qsubmits[i];
@@ -1125,28 +1300,30 @@ panvk_queue_submit_process_debug(const struct panvk_queue_submit *submit)
       }
 
       for (uint32_t i = 0; i < ARRAY_SIZE(queue->subqueues); i++) {
-         struct panvk_cs_subqueue_context *ctx =
-            panvk_priv_mem_host_addr(queue->subqueues[i].context);
+         panvk_priv_mem_readback(queue->subqueues[i].context, 0,
+                                 struct panvk_cs_subqueue_context, ctx) {
+            size_t trace_size =
+               ctx->debug.tracebuf.cs - queue->subqueues[i].tracebuf.addr.dev;
 
-         size_t trace_size =
-            ctx->debug.tracebuf.cs - queue->subqueues[i].tracebuf.addr.dev;
-         if (!trace_size)
-            continue;
+            if (trace_size) {
+               assert(
+                  trace_size <= queue->subqueues[i].tracebuf.size ||
+                  !"OOB access on the CS tracebuf, pass a bigger PANVK_CS_TRACEBUF_SIZE");
 
-         assert(
-            trace_size <= queue->subqueues[i].tracebuf.size ||
-            !"OOB access on the CS tracebuf, pass a bigger PANVK_CS_TRACEBUF_SIZE");
+               assert(
+                  !ctx->render.desc_ringbuf.ptr ||
+                  ctx->render.desc_ringbuf.pos <=
+                     queue->render_desc_ringbuf.size ||
+                  !"OOB access on the desc tracebuf, pass a bigger PANVK_DESC_TRACEBUF_SIZE");
 
-         assert(
-            !ctx->render.desc_ringbuf.ptr ||
-            ctx->render.desc_ringbuf.pos <= queue->render_desc_ringbuf.size ||
-            !"OOB access on the desc tracebuf, pass a bigger PANVK_DESC_TRACEBUF_SIZE");
+               uint64_t trace = queue->subqueues[i].tracebuf.addr.dev;
 
-         uint64_t trace = queue->subqueues[i].tracebuf.addr.dev;
-
-         pandecode_user_msg(decode_ctx, "\nCS traces on subqueue %d\n\n", i);
-         pandecode_cs_trace(decode_ctx, trace, trace_size, props->gpu_id);
-         pandecode_user_msg(decode_ctx, "\n");
+               pandecode_user_msg(decode_ctx, "\nCS traces on subqueue %d\n\n",
+                                  i);
+               pandecode_cs_trace(decode_ctx, trace, trace_size, props->gpu_id);
+               pandecode_user_msg(decode_ctx, "\n");
+            }
+         }
       }
    }
 
@@ -1164,7 +1341,7 @@ panvk_queue_submit_process_debug(const struct panvk_queue_submit *submit)
 VkResult
 panvk_per_arch(gpu_queue_submit)(struct vk_queue *vk_queue, struct vk_queue_submit *vk_submit)
 {
-   MESA_TRACE_FUNC();
+   PAN_TRACE_FUNC(PAN_TRACE_VK_CSF);
    struct panvk_queue_submit_stack_storage stack_storage;
    struct panvk_queue_submit submit;
    VkResult result = VK_SUCCESS;
@@ -1175,6 +1352,7 @@ panvk_per_arch(gpu_queue_submit)(struct vk_queue *vk_queue, struct vk_queue_subm
    panvk_queue_submit_init(&submit, vk_queue);
    panvk_queue_submit_init_storage(&submit, vk_submit, &stack_storage);
    panvk_queue_submit_init_utrace(&submit, vk_submit);
+   panvk_queue_submit_init_req_resource(&submit);
    panvk_queue_submit_init_waits(&submit, vk_submit);
    panvk_queue_submit_init_cmdbufs(&submit, vk_submit);
    panvk_queue_submit_init_signals(&submit, vk_submit);
@@ -1184,7 +1362,7 @@ panvk_per_arch(gpu_queue_submit)(struct vk_queue *vk_queue, struct vk_queue_subm
       goto out;
 
    panvk_queue_submit_process_signals(&submit, vk_submit);
-   panvk_queue_submit_process_debug(&submit);
+   panvk_queue_submit_process_debug(&submit, vk_submit);
 
 out:
    panvk_queue_submit_cleanup_storage(&submit, &stack_storage);
@@ -1242,7 +1420,12 @@ panvk_per_arch(create_gpu_queue)(struct panvk_device *dev,
    if (result != VK_SUCCESS)
       goto err_destroy_syncobj;
 
-   result = create_group(queue, get_panthor_group_priority(create_info));
+   const VkDeviceQueueShaderCoreControlCreateInfoARM *core_ctrl =
+      vk_find_struct_const(create_info->pNext,
+                           DEVICE_QUEUE_SHADER_CORE_CONTROL_CREATE_INFO_ARM);
+
+   result = create_group(queue, get_panthor_group_priority(create_info),
+                         core_ctrl ? core_ctrl->shaderCoreCount : 0);
    if (result != VK_SUCCESS)
       goto err_cleanup_tiler;
 
@@ -1296,16 +1479,24 @@ panvk_per_arch(gpu_queue_check_status)(struct vk_queue *vk_queue)
 
    /* check for CS error and treat it as device lost */
    for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
-      const struct panvk_cs_subqueue_context *subq_ctx =
-         panvk_priv_mem_host_addr(queue->subqueues[i].context);
-      if (subq_ctx->last_error != 0)
-         return vk_queue_set_lost(&queue->vk, "CS_FAULT");
+      panvk_priv_mem_readback(queue->subqueues[i].context, 0,
+                              struct panvk_cs_subqueue_context, subq_ctx) {
+         if (subq_ctx->last_error != 0) {
+            /* Check printf buffer one more time before exiting */
+            u_printf_with_ctx(stdout, &dev->printf.ctx);
+
+            return vk_queue_set_lost(&queue->vk, "CS_FAULT");
+         }
+      }
    }
 
    int ret = pan_kmod_ioctl(dev->drm_fd, DRM_IOCTL_PANTHOR_GROUP_GET_STATE,
                             &state);
    if (!ret && !state.state)
       return VK_SUCCESS;
+
+   /* Check printf buffer one more time before exiting */
+   u_printf_with_ctx(stdout, &dev->printf.ctx);
 
    vk_queue_set_lost(&queue->vk,
                      "group state: err=%d, state=0x%x, fatal_queues=0x%x", ret,

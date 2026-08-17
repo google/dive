@@ -57,7 +57,7 @@ struct u_log_context;
 #define DBG_ALL_SHADERS		(DBG_FS - 1)
 #define DBG_FS			(1 << 6) /* fetch shader */
 #define DBG_TEX			(1 << 7)
-#define DBG_NIR			(1 << 8)
+/* gap */
 #define DBG_COMPUTE		(1 << 9)
 /* gap */
 #define DBG_VM			(1 << 11)
@@ -77,6 +77,8 @@ struct u_log_context;
 #define DBG_INFO		(1ull << 40)
 #define DBG_NO_WC		(1ull << 41)
 #define DBG_CHECK_VM		(1ull << 42)
+/* shader-db */
+#define DBG_SHADER_DB		(1ull << 43)
 /* gap */
 #define DBG_TEST_VMFAULT_CP	(1ull << 51)
 #define DBG_TEST_VMFAULT_SDMA	(1ull << 52)
@@ -475,6 +477,8 @@ struct r600_viewports {
 struct r600_window_rectangles {
 	unsigned			number;
 	bool				include;
+	bool				fbo_cayman_workaround;
+	bool				viewport_cayman_workaround;
 	struct pipe_scissor_state	states[R600_MAX_WINDOW_RECTANGLES];
 	struct r600_atom		atom;
 };
@@ -843,10 +847,19 @@ void *r600_texture_transfer_map(struct pipe_context *ctx,
 			       struct pipe_transfer **ptransfer);
 void r600_texture_transfer_unmap(struct pipe_context *ctx,
 				struct pipe_transfer* transfer);
+void r600_copy_region_with_blit(struct pipe_context *pipe,
+				struct pipe_resource *dst,
+				unsigned dst_level,
+				unsigned dstx, unsigned dsty, unsigned dstz,
+				struct pipe_resource *src,
+				unsigned src_level,
+				const struct pipe_box *src_box);
 
 /* r600_viewport.c */
 void evergreen_apply_scissor_bug_workaround(struct r600_common_context *rctx,
 					    struct pipe_scissor_state *scissor);
+void cayman_apply_scissor_workaround_1x1(struct r600_common_context *rctx,
+					 struct radeon_cmdbuf *cs);
 void r600_update_vs_writes_viewport_index(struct r600_common_context *rctx,
 					  struct tgsi_shader_info *info);
 void r600_init_viewport_functions(struct r600_common_context *rctx);

@@ -43,5 +43,5 @@ zink_tc_init_zs_attachment(struct zink_context *ctx, const struct tc_renderpass_
 void
 zink_tc_init_color_attachment(struct zink_context *ctx, const struct tc_renderpass_info *info, unsigned i, struct zink_rt_attrib *rt);
 void
-zink_render_msaa_expand(struct zink_context *ctx, uint32_t msaa_expand_mask);
+zink_render_attachment_shadow(struct zink_context *ctx, uint32_t attachment_shadow_mask);
 #endif

@@ -348,8 +348,8 @@ agx_round_registers(unsigned halfregs)
 
 static const nir_shader_compiler_options agx_nir_options = {
    .lower_fdiv = true,
-   .fuse_ffma16 = true,
-   .fuse_ffma32 = true,
+   .float_mul_add16 = nir_float_muladd_support_has_ffma | nir_float_muladd_support_fuse,
+   .float_mul_add32 = nir_float_muladd_support_has_ffma | nir_float_muladd_support_fuse,
    .lower_flrp16 = true,
    .lower_flrp32 = true,
    .lower_fpow = true,
@@ -369,7 +369,6 @@ static const nir_shader_compiler_options agx_nir_options = {
    .lower_fminmax_signed_zero = true,
    .lower_fdph = true,
    .lower_ffract = true,
-   .lower_ldexp = true,
    .lower_pack_half_2x16 = true,
    .lower_pack_unorm_2x16 = true,
    .lower_pack_snorm_2x16 = true,
@@ -401,6 +400,7 @@ static const nir_shader_compiler_options agx_nir_options = {
                               BITFIELD_BIT(MESA_SHADER_TESS_EVAL) |
                               BITFIELD_BIT(MESA_SHADER_FRAGMENT),
    .support_indirect_outputs = (uint8_t)BITFIELD_MASK(MESA_SHADER_STAGES),
+   .max_samples = 4,
    .lower_fquantize2f16 = true,
    .compact_arrays = true,
    .discard_is_demote = true,

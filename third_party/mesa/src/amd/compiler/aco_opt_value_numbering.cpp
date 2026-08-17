@@ -316,8 +316,8 @@ can_eliminate(aco_ptr<Instruction>& instr)
    if (instr->definitions.empty() || instr->opcode == aco_opcode::p_phi ||
        instr->opcode == aco_opcode::p_linear_phi ||
        instr->opcode == aco_opcode::p_pops_gfx9_add_exiting_wave_id ||
-       instr->opcode == aco_opcode::p_shader_cycles_hi_lo_hi ||
-       instr->definitions[0].isNoCSE())
+       instr->opcode == aco_opcode::p_shader_cycles_hi_lo_hi || instr->definitions[0].isNoCSE() ||
+       instr->opcode == aco_opcode::p_reload_preserved)
       return false;
 
    return true;
@@ -399,8 +399,10 @@ process_block(vn_ctx& ctx, Block& block)
                assert(instr->definitions[i].regClass() == orig_instr->definitions[i].regClass());
                assert(instr->definitions[i].isTemp());
                ctx.renames[instr->definitions[i].tempId()] = orig_instr->definitions[i].getTemp();
-               if (instr->definitions[i].isPrecise())
-                  orig_instr->definitions[i].setPrecise(true);
+               if (instr->definitions[i].isNoContract())
+                  orig_instr->definitions[i].setNoContract(true);
+               if (instr->definitions[i].isNoReassoc())
+                  orig_instr->definitions[i].setNoReassoc(true);
                if (instr->definitions[i].isSZPreserve())
                   orig_instr->definitions[i].setSZPreserve(true);
                if (instr->definitions[i].isInfPreserve())
@@ -422,6 +424,21 @@ process_block(vn_ctx& ctx, Block& block)
       } else {
          new_instructions.emplace_back(std::move(instr));
       }
+   }
+
+   block.instructions = std::move(new_instructions);
+}
+
+void
+dce_instructions(vn_ctx& ctx, Block& block)
+{
+   std::vector<aco_ptr<Instruction>> new_instructions;
+   new_instructions.reserve(block.instructions.size());
+
+   for (aco_ptr<Instruction>& instr : block.instructions) {
+      if (is_dead(ctx.uses, instr.get()))
+         continue;
+      new_instructions.emplace_back(std::move(instr));
    }
 
    block.instructions = std::move(new_instructions);
@@ -459,22 +476,23 @@ value_numbering(Program* program)
       if (block.kind & block_kind_merge) {
          ctx.exec_id--;
       } else if (block.kind & block_kind_loop_exit) {
-         ctx.exec_id -= program->blocks[loop_headers.back()].linear_preds.size();
-         ctx.exec_id -= block.linear_preds.size();
+         ctx.exec_id -= (block.linear_preds.size() + 1);
          loop_headers.pop_back();
       }
 
       if (block.logical_idom == (int)block.index)
          ctx.expr_values.clear();
 
-      if (block.logical_idom != -1)
+      if (block.logical_idom != -1) {
          process_block(ctx, block);
-      else
+      } else {
+         dce_instructions(ctx, block);
          rename_phi_operands(block, ctx.renames);
+      }
 
       /* increment exec_id when entering nested control flow */
       if (block.kind & block_kind_branch || block.kind & block_kind_loop_preheader ||
-          block.kind & block_kind_break || block.kind & block_kind_continue)
+          block.kind & block_kind_break)
          ctx.exec_id++;
    }
 

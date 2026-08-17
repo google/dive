@@ -3,5 +3,6 @@
 
 pvr_xml_pack = []
 subdir('rogue')
+subdir('volcanic')
 
 dep_csbgen = declare_dependency(sources : [pvr_xml_pack])

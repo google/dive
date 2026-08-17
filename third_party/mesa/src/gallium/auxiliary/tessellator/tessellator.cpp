@@ -27,6 +27,9 @@
 #define min(x,y) (x < y ? x : y)
 #define max(x,y) (x > y ? x : y)
 
+// Working around -Wmissing-prototype without deleting un-used code.
+int GetMSB(int val);
+
 //=================================================================================================================================
 // Some D3D Compliant Float Math (reference rasterizer implements these in RefALU class)
 //=================================================================================================================================
@@ -382,7 +385,7 @@ static const FXP s_fixedReciprocal[PIPE_TESSELLATOR_MAX_TESSELLATION_FACTOR+1] =
 //---------------------------------------------------------------------------------------------------------------------------------
 // floatToFixed
 //---------------------------------------------------------------------------------------------------------------------------------
-FXP floatToFixed(const float& input)
+static FXP floatToFixed(const float& input)
 {
     return floatToIDotF< FXP_INTEGER_BITS, FXP_FRACTION_BITS, /*bSigned*/false >( input );
 }
@@ -390,7 +393,7 @@ FXP floatToFixed(const float& input)
 //---------------------------------------------------------------------------------------------------------------------------------
 // fixedToFloat
 //---------------------------------------------------------------------------------------------------------------------------------
-float fixedToFloat(const FXP& input)
+static float fixedToFloat(const FXP& input)
 {
     // not worrying about denorm flushing the float operations (the DX spec behavior for div), since the numbers will not be that small during tessellation.
     return ((float)(input>>FXP_FRACTION_BITS) + (float)(input&FXP_FRACTION_MASK)/(1<<FXP_FRACTION_BITS));
@@ -399,7 +402,7 @@ float fixedToFloat(const FXP& input)
 //---------------------------------------------------------------------------------------------------------------------------------
 // isEven
 //---------------------------------------------------------------------------------------------------------------------------------
-bool isEven(const float& input)
+static bool isEven(const float& input)
 {
     return (((int)input) & 1) ? false : true;
 }
@@ -407,7 +410,7 @@ bool isEven(const float& input)
 //---------------------------------------------------------------------------------------------------------------------------------
 // fxpCeil
 //---------------------------------------------------------------------------------------------------------------------------------
-FXP fxpCeil(const FXP& input)
+static FXP fxpCeil(const FXP& input)
 {
     if( input & FXP_FRACTION_MASK )
     {
@@ -419,7 +422,7 @@ FXP fxpCeil(const FXP& input)
 //---------------------------------------------------------------------------------------------------------------------------------
 // fxpFloor
 //---------------------------------------------------------------------------------------------------------------------------------
-FXP fxpFloor(const FXP& input)
+static FXP fxpFloor(const FXP& input)
 {
     return (input & FXP_INTEGER_MASK);
 }
@@ -1690,7 +1693,7 @@ void CHWTessellator::DumpAllPointsAsInOrderLineList()
 //---------------------------------------------------------------------------------------------------------------------------------
 // RemoveMSB
 //---------------------------------------------------------------------------------------------------------------------------------
-int RemoveMSB(int val)
+static int RemoveMSB(int val)
 {
     int check;
     if( val <= 0x0000ffff ) { check = ( val <= 0x000000ff ) ? 0x00000080 : 0x00008000; }

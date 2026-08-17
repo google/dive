@@ -35,7 +35,7 @@ anv_pipeline_layout_get_push_set(struct anv_descriptor_set_layout * const *set_l
 
       if (!set_layout ||
           !(set_layout->vk.flags &
-            VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR))
+            VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT))
          continue;
 
       if (set_idx)
@@ -137,8 +137,7 @@ anv_nir_loads_push_desc_buffer(nir_shader *nir,
 
             const struct anv_pipeline_binding *binding =
                &bind_map->surface_to_descriptor[bt_idx];
-            if ((binding->set == ANV_DESCRIPTOR_SET_DESCRIPTORS ||
-                 binding->set == ANV_DESCRIPTOR_SET_DESCRIPTORS_BUFFER) &&
+            if (binding->set == ANV_DESCRIPTOR_SET_DESCRIPTORS &&
                 binding->index == push_set) {
                return BITFIELD_BIT(push_set);
             }
@@ -196,13 +195,16 @@ anv_nir_push_desc_ubo_fully_promoted(nir_shader *nir,
 
             /* Don't check the load_ubo from descriptor buffers */
             nir_intrinsic_instr *resource =
-               intrin->src[0].ssa->parent_instr->type == nir_instr_type_intrinsic ?
-               nir_def_as_intrinsic(intrin->src[0].ssa) : NULL;
+               nir_src_as_intrinsic(intrin->src[0]);
             if (resource == NULL || resource->intrinsic != nir_intrinsic_resource_intel)
                continue;
 
             /* Skip load_ubo not loading from the push descriptor */
             if (nir_intrinsic_desc_set(resource) != push_set)
+               continue;
+
+            /* Skip load_ubo loading the descriptor buffer (not a binding) */
+            if (nir_intrinsic_binding(resource) == UINT32_MAX)
                continue;
 
             uint32_t binding = nir_intrinsic_binding(resource);

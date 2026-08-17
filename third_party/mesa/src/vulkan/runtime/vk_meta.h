@@ -180,6 +180,7 @@ enum vk_meta_object_key_type {
    VK_META_OBJECT_KEY_LBVH_MAIN,
    VK_META_OBJECT_KEY_LBVH_GENERATE_IR,
    VK_META_OBJECT_KEY_PLOC,
+   VK_META_OBJECT_KEY_HPLOC,
 
    /* Should be used as an offset for driver-specific object types. */
    VK_META_OBJECT_KEY_DRIVER_OFFSET = 0x80000000,
@@ -450,6 +451,31 @@ vk_image_view_type_is_array(VkImageViewType view_type)
 
    default:
       UNREACHABLE("");
+   }
+}
+
+static inline VkFormat
+vk_meta_get_uint_format_for_blk_size(unsigned blk_sz)
+{
+   switch (blk_sz) {
+   case 1:
+      return VK_FORMAT_R8_UINT;
+   case 2:
+      return VK_FORMAT_R8G8_UINT;
+   case 3:
+      return VK_FORMAT_R8G8B8_UINT;
+   case 4:
+      return VK_FORMAT_R8G8B8A8_UINT;
+   case 6:
+      return VK_FORMAT_R16G16B16_UINT;
+   case 8:
+      return VK_FORMAT_R32G32_UINT;
+   case 12:
+      return VK_FORMAT_R32G32B32_UINT;
+   case 16:
+      return VK_FORMAT_R32G32B32A32_UINT;
+   default:
+      return VK_FORMAT_UNDEFINED;
    }
 }
 

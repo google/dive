@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "pipe/p_state.h"
 
 #include "freedreno_resource.h"
@@ -72,7 +70,7 @@ fd6_image_descriptor(struct fd_context *ctx, const struct pipe_image_view *buf,
 
       struct fdl6_view view;
       fdl6_view_init<CHIP>(&view, &layouts, &args,
-                           ctx->screen->info->a6xx.has_z24uint_s8uint);
+                           ctx->screen->info->props.has_z24uint_s8uint);
 
       memcpy(descriptor, view.storage_descriptor, sizeof(view.storage_descriptor));
    } else if (buf->resource->target == PIPE_BUFFER) {
@@ -112,7 +110,7 @@ fd6_image_descriptor(struct fd_context *ctx, const struct pipe_image_view *buf,
       struct fd_resource *rsc = fd_resource(buf->resource);
       const struct fdl_layout *layouts[3] = { &rsc->layout, NULL, NULL };
       fdl6_view_init<CHIP>(&view, layouts, &args,
-                           ctx->screen->info->a6xx.has_z24uint_s8uint);
+                           ctx->screen->info->props.has_z24uint_s8uint);
 
       memcpy(descriptor, view.storage_descriptor, sizeof(view.storage_descriptor));
    }
@@ -249,8 +247,7 @@ fd6_build_bindless_state(struct fd_context *ctx, mesa_shader_stage shader,
                .cs = &desc_buf[(idx + i) * FDL6_TEX_CONST_DWORDS],
                .val = i,
             };
-            util_dynarray_append(&ctx->batch->fb_read_patches,
-                                 __typeof__(patch), patch);
+            util_dynarray_append(&ctx->batch->fb_read_patches, patch);
          }
       }
    }
@@ -284,7 +281,7 @@ fd6_build_bindless_state(struct fd_context *ctx, mesa_shader_stage shader,
          }
       }
 
-      if (bufso->enabled_mask) {
+      if ((CHIP < A8XX) && bufso->enabled_mask) {
          fd_pkt7(cs, CP_LOAD_STATE6_FRAG, 3)
             .add(CP_LOAD_STATE6_0(
                .dst_off     = IR3_BINDLESS_SSBO_OFFSET,
@@ -300,7 +297,7 @@ fd6_build_bindless_state(struct fd_context *ctx, mesa_shader_stage shader,
             ));
       }
 
-      if (imgso->enabled_mask) {
+      if ((CHIP < A8XX) && imgso->enabled_mask) {
          fd_pkt7(cs, CP_LOAD_STATE6_FRAG, 3)
             .add(CP_LOAD_STATE6_0(
                .dst_off     = IR3_BINDLESS_IMAGE_OFFSET,
@@ -330,7 +327,7 @@ fd6_build_bindless_state(struct fd_context *ctx, mesa_shader_stage shader,
          }
       }
 
-      if (bufso->enabled_mask) {
+      if ((CHIP < A8XX) && bufso->enabled_mask) {
          fd_pkt7(cs, CP_LOAD_STATE6, 3)
             .add(CP_LOAD_STATE6_0(
                .dst_off     = IR3_BINDLESS_SSBO_OFFSET,
@@ -346,7 +343,7 @@ fd6_build_bindless_state(struct fd_context *ctx, mesa_shader_stage shader,
             ));
       }
 
-      if (imgso->enabled_mask) {
+      if ((CHIP < A8XX) && imgso->enabled_mask) {
          fd_pkt7(cs, CP_LOAD_STATE6, 3)
             .add(CP_LOAD_STATE6_0(
                .dst_off     = IR3_BINDLESS_IMAGE_OFFSET,
@@ -363,7 +360,7 @@ fd6_build_bindless_state(struct fd_context *ctx, mesa_shader_stage shader,
       }
    }
 
-   return cs.ring();
+   return cs;
 }
 FD_GENX(fd6_build_bindless_state);
 

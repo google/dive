@@ -143,8 +143,8 @@ R32G32B32X32_FLOAT      , RF32_GF32_BF32_X32    , R32_G32_B32_A32   , FFFF , F  
 R32G32B32X32_SINT       , RS32_GS32_BS32_X32    , R32_G32_B32_A32   , IIII , I      , RGB1 , CT
 R32G32B32X32_UINT       , RU32_GU32_BU32_X32    , R32_G32_B32_A32   , UUUU , U      , RGB1 , CT
 
-R64_SINT                , NONE                  , R32_G32           , II   , I      , RG01 , S
-R64_UINT                , NONE                  , R32_G32           , UU   , U      , RG01 , S
+R64_SINT                , NONE                  , R32_G32           , II   , I      , RG01 , BS
+R64_UINT                , NONE                  , R32_G32           , UU   , U      , RG01 , BS
 
 # Depth/stencil formats
 Z16_UNORM               , Z16                   , Z16               , N    , N      , R001 , TZ        , MaxwellA

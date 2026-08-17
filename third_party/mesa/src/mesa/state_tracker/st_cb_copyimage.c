@@ -676,7 +676,7 @@ st_CopyImageSubData(struct gl_context *ctx,
                     struct gl_texture_image *dst_image,
                     struct gl_renderbuffer *dst_renderbuffer,
                     int dst_x, int dst_y, int dst_z,
-                    int src_width, int src_height)
+                    int src_width, int src_height, int src_depth)
 {
    struct st_context *st = st_context(ctx);
    struct pipe_context *pipe = st->pipe;
@@ -718,13 +718,15 @@ st_CopyImageSubData(struct gl_context *ctx,
       dst_level = 0;
    }
 
-   u_box_2d_zslice(src_x, src_y, src_z, src_width, src_height, &box);
+   u_box_3d(src_x, src_y, src_z, src_width, src_height, src_depth, &box);
 
    if ((src_image && st_compressed_format_fallback(st, src_image->TexFormat)) ||
        (dst_image && st_compressed_format_fallback(st, dst_image->TexFormat))) {
-      fallback_copy_image(st, dst_image, dst_res, dst_x, dst_y, orig_dst_z,
-                          src_image, src_res, src_x, src_y, orig_src_z,
-                          src_width, src_height);
+      for (int i = 0; i < src_depth; i++) {
+         fallback_copy_image(st, dst_image, dst_res, dst_x, dst_y, orig_dst_z + i,
+                             src_image, src_res, src_x, src_y, orig_src_z + i,
+                             src_width, src_height);
+      }
    } else {
       copy_image(pipe, dst_res, dst_level, dst_x, dst_y, dst_z,
                  src_res, src_level, &box);

@@ -21,3 +21,4 @@ dEQP-GLES3.functional.multisample.fbo_8_samples.constancy_both
 # uprev ANGLE in Mesa
 KHR-GLES31.core.blend_equation_advanced.test_coherency.multiplySequence
 
+dEQP-GLES3.functional.multisample.fbo_max_samples.constancy_alpha_to_coverage

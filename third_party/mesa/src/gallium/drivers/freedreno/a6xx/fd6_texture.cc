@@ -7,8 +7,6 @@
  *    Rob Clark <robclark@freedesktop.org>
  */
 
-#define FD_BO_NO_HARDPIN 1
-
 #include "pipe/p_state.h"
 #include "util/format/u_format.h"
 #include "util/hash_table.h"
@@ -96,7 +94,7 @@ setup_border_color(struct fd_screen *screen,
                    struct fd6_bcolor_entry *e)
 {
    STATIC_ASSERT(sizeof(struct fd6_bcolor_entry) == FD6_BORDER_COLOR_SIZE);
-   const bool has_z24uint_s8uint = screen->info->a6xx.has_z24uint_s8uint;
+   const bool has_z24uint_s8uint = screen->info->props.has_z24uint_s8uint;
    const union pipe_color_union *bc = &sampler->border_color;
 
    enum pipe_format format = sampler->border_color_format;
@@ -250,6 +248,7 @@ get_bcolor_offset(struct fd_context *ctx, const struct pipe_sampler_state *sampl
    return idx;
 }
 
+template <chip CHIP>
 static void *
 fd6_sampler_state_create(struct pipe_context *pctx,
                          const struct pipe_sampler_state *cso)
@@ -276,28 +275,67 @@ fd6_sampler_state_create(struct pipe_context *pctx,
       cso->min_img_filter == PIPE_TEX_FILTER_LINEAR;
 
    bool needs_border = false;
-   so->descriptor[0] =
-      COND(miplinear, A6XX_TEX_SAMP_0_MIPFILTER_LINEAR_NEAR) |
-      A6XX_TEX_SAMP_0_XY_MAG(tex_filter(cso->mag_img_filter, aniso)) |
-      A6XX_TEX_SAMP_0_XY_MIN(tex_filter(cso->min_img_filter, aniso)) |
-      A6XX_TEX_SAMP_0_ANISO((enum a6xx_tex_aniso)aniso) |
-      A6XX_TEX_SAMP_0_WRAP_S(tex_clamp(cso->wrap_s, &needs_border)) |
-      A6XX_TEX_SAMP_0_WRAP_T(tex_clamp(cso->wrap_t, &needs_border)) |
-      A6XX_TEX_SAMP_0_WRAP_R(tex_clamp(cso->wrap_r, &needs_border)) |
-      A6XX_TEX_SAMP_0_LOD_BIAS(cso->lod_bias);
 
-   so->descriptor[1] =
-      COND(cso->compare_mode, A6XX_TEX_SAMP_1_COMPARE_FUNC((enum adreno_compare_func)cso->compare_func)) |
-      COND(cso->min_mip_filter == PIPE_TEX_MIPFILTER_NONE,
-           A6XX_TEX_SAMP_1_MIPFILTER_LINEAR_FAR) |
-      COND(!cso->seamless_cube_map, A6XX_TEX_SAMP_1_CUBEMAPSEAMLESSFILTOFF) |
-      COND(cso->unnormalized_coords, A6XX_TEX_SAMP_1_UNNORM_COORDS) |
-      A6XX_TEX_SAMP_1_MIN_LOD(cso->min_lod) |
-      A6XX_TEX_SAMP_1_MAX_LOD(cso->max_lod);
+   if (CHIP <= A7XX) {
+      so->descriptor[0] =
+         COND(miplinear, A6XX_TEX_SAMP_0_MIPFILTER_LINEAR_NEAR) |
+         A6XX_TEX_SAMP_0_XY_MAG(tex_filter(cso->mag_img_filter, aniso)) |
+         A6XX_TEX_SAMP_0_XY_MIN(tex_filter(cso->min_img_filter, aniso)) |
+         A6XX_TEX_SAMP_0_ANISO((enum a6xx_tex_aniso)aniso) |
+         A6XX_TEX_SAMP_0_WRAP_S(tex_clamp(cso->wrap_s, &needs_border)) |
+         A6XX_TEX_SAMP_0_WRAP_T(tex_clamp(cso->wrap_t, &needs_border)) |
+         A6XX_TEX_SAMP_0_WRAP_R(tex_clamp(cso->wrap_r, &needs_border)) |
+         A6XX_TEX_SAMP_0_LOD_BIAS(cso->lod_bias);
 
-   so->descriptor[2] =
-      A6XX_TEX_SAMP_2_REDUCTION_MODE(reduction_mode(cso->reduction_mode)) |
-      COND(chroma_linear, A6XX_TEX_SAMP_2_CHROMA_LINEAR);
+      so->descriptor[1] =
+         COND(cso->compare_mode, A6XX_TEX_SAMP_1_COMPARE_FUNC((enum adreno_compare_func)cso->compare_func)) |
+         COND(cso->min_mip_filter == PIPE_TEX_MIPFILTER_NONE,
+            A6XX_TEX_SAMP_1_MIPFILTER_LINEAR_FAR) |
+         COND(!cso->seamless_cube_map, A6XX_TEX_SAMP_1_CUBEMAPSEAMLESSFILTOFF) |
+         COND(cso->unnormalized_coords, A6XX_TEX_SAMP_1_UNNORM_COORDS) |
+         A6XX_TEX_SAMP_1_MIN_LOD(cso->min_lod) |
+         A6XX_TEX_SAMP_1_MAX_LOD(cso->max_lod);
+
+      so->descriptor[2] =
+         A6XX_TEX_SAMP_2_REDUCTION_MODE(reduction_mode(cso->reduction_mode)) |
+         COND(chroma_linear, A6XX_TEX_SAMP_2_CHROMA_LINEAR);
+
+   } else if (CHIP >= A8XX) {
+      const float MAX_LOD = 4095.0f / 256.0f;
+
+      so->descriptor[0] =
+         COND(miplinear, A8XX_TEX_SAMP_0_MIPFILTER_LINEAR_NEAR) |
+         COND(cso->min_mip_filter == PIPE_TEX_MIPFILTER_NONE,
+            A8XX_TEX_SAMP_0_MIPMAPING_DIS) |
+         A8XX_TEX_SAMP_0_XY_MAG(tex_filter(cso->mag_img_filter, aniso)) |
+         A8XX_TEX_SAMP_0_XY_MIN(tex_filter(cso->min_img_filter, aniso)) |
+         A8XX_TEX_SAMP_0_WRAP_S(tex_clamp(cso->wrap_s, &needs_border)) |
+         A8XX_TEX_SAMP_0_WRAP_T(tex_clamp(cso->wrap_t, &needs_border)) |
+         A8XX_TEX_SAMP_0_WRAP_R(tex_clamp(cso->wrap_r, &needs_border)) |
+         A8XX_TEX_SAMP_0_LOD_BIAS(CLAMP(cso->lod_bias, -16, MAX_LOD)) |
+         A8XX_TEX_SAMP_0_ANISO((enum a6xx_tex_aniso)aniso);
+
+      float min_lod, max_lod;
+
+      if (cso->unnormalized_coords) {
+         min_lod = max_lod = 0;
+      } else if (cso->min_mip_filter != PIPE_TEX_MIPFILTER_NONE) {
+         min_lod = CLAMP(cso->min_lod, 0.0f, MAX_LOD);
+         max_lod = CLAMP(cso->max_lod, 0.0f, MAX_LOD);
+      } else {
+         min_lod = CLAMP(cso->min_lod, 0.0f, 0.25f);
+         max_lod = CLAMP(cso->max_lod, 0.0f, 0.25f);
+      }
+
+      so->descriptor[1] =
+         A8XX_TEX_SAMP_1_MAX_LOD(max_lod) |
+         A8XX_TEX_SAMP_1_MIN_LOD(min_lod) |
+         A8XX_TEX_SAMP_1_REDUCTION_MODE(reduction_mode(cso->reduction_mode)) |
+         COND(cso->compare_mode, A8XX_TEX_SAMP_1_COMPARE_FUNC((enum adreno_compare_func)cso->compare_func)) |
+         COND(chroma_linear, A8XX_TEX_SAMP_1_CHROMA_LINEAR) |
+         COND(!cso->seamless_cube_map, A8XX_TEX_SAMP_1_CUBEMAPSEAMLESSFILTOFF) |
+         COND(cso->unnormalized_coords, A8XX_TEX_SAMP_1_UNNORM_COORDS);
+   }
 
    if (needs_border) {
       bool fast_border_color_enable = false;
@@ -328,11 +366,20 @@ fd6_sampler_state_create(struct pipe_context *pctx,
          fast_border_color = A6XX_BORDER_COLOR_1_1_1_1;
       }
 
-      if (fast_border_color_enable) {
-         so->descriptor[2] |= A6XX_TEX_SAMP_2_FASTBORDERCOLOR(fast_border_color) |
-                              A6XX_TEX_SAMP_2_FASTBORDERCOLOREN;
-      } else {
-         so->descriptor[2] |= A6XX_TEX_SAMP_2_BCOLOR(get_bcolor_offset(ctx, cso));
+      if (CHIP <= A7XX) {
+         if (fast_border_color_enable) {
+            so->descriptor[2] |= A6XX_TEX_SAMP_2_FASTBORDERCOLOR(fast_border_color) |
+                                 A6XX_TEX_SAMP_2_FASTBORDERCOLOREN;
+         } else {
+            so->descriptor[2] |= A6XX_TEX_SAMP_2_BCOLOR(get_bcolor_offset(ctx, cso));
+         }
+      } else if (CHIP >= A8XX) {
+         if (fast_border_color_enable) {
+            so->descriptor[2] |= A8XX_TEX_SAMP_2_FASTBORDERCOLOR(fast_border_color) |
+                                 A8XX_TEX_SAMP_2_FASTBORDERCOLOREN;
+         } else {
+            so->descriptor[2] |= A8XX_TEX_SAMP_2_BCOLOR(get_bcolor_offset(ctx, cso));
+         }
       }
    }
 
@@ -462,7 +509,7 @@ fd6_sampler_view_update(struct fd_context *ctx,
 
       struct fdl6_view view;
       fdl6_view_init<CHIP>(&view, &layouts, &args,
-                           ctx->screen->info->a6xx.has_z24uint_s8uint);
+                           ctx->screen->info->props.has_z24uint_s8uint);
 
       memcpy(so->descriptor, view.descriptor, sizeof(so->descriptor));
    } else if (cso->target == PIPE_BUFFER) {
@@ -511,7 +558,7 @@ fd6_sampler_view_update(struct fd_context *ctx,
       };
       struct fdl6_view view;
       fdl6_view_init<CHIP>(&view, layouts, &args,
-                           ctx->screen->info->a6xx.has_z24uint_s8uint);
+                           ctx->screen->info->props.has_z24uint_s8uint);
       memcpy(so->descriptor, view.descriptor, sizeof(so->descriptor));
    }
 }
@@ -711,7 +758,7 @@ build_texture_state(struct fd_context *ctx, mesa_shader_stage type,
          fd_bo_del(tex_desc);
    }
 
-   return cs.ring();
+   return cs;
 }
 
 /**
@@ -877,7 +924,7 @@ fd6_texture_init(struct pipe_context *pctx) disable_thread_safety_analysis
    struct fd_context *ctx = fd_context(pctx);
    struct fd6_context *fd6_ctx = fd6_context(ctx);
 
-   pctx->create_sampler_state = fd6_sampler_state_create;
+   pctx->create_sampler_state = fd6_sampler_state_create<CHIP>;
    pctx->delete_sampler_state = fd6_sampler_state_delete;
    pctx->bind_sampler_states = fd_sampler_states_bind;
 

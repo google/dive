@@ -124,7 +124,6 @@ spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SR
 spec@ext_texture_srgb@texwrap formats-s3tc bordercolor-swizzled@GL_COMPRESSED_SRGB_S3TC_DXT1_EXT- swizzled- border color only,Fail
 spec@glsl-1.50@execution@geometry@tri-strip-ordering-with-prim-restart gl_triangle_strip_adjacency ffs,Fail
 spec@glsl-1.50@execution@geometry@tri-strip-ordering-with-prim-restart gl_triangle_strip_adjacency other,Fail
-spec@glsl-es-1.00@linker@glsl-mismatched-uniform-precision-unused,Fail
 spec@glsl-es-3.00@execution@built-in-functions@fs-packhalf2x16,Fail
 spec@glsl-es-3.00@execution@built-in-functions@vs-packhalf2x16,Fail
 spec@khr_texture_compression_astc@miptree-gl srgb-fp,Fail
@@ -220,9 +219,6 @@ KHR-GL46.packed_pixels.varied_rectangle.rgba32ui_format_rgba_integer,Fail
 KHR-GL46.packed_pixels.varied_rectangle.rgba8i_format_rgba_integer,Fail
 KHR-GL46.packed_pixels.varied_rectangle.rgba8ui_format_rgba_integer,Fail
 KHR-GL46.texture_cube_map_array.sampling,Fail
-KHR-GL46.texture_query_lod.sampler1D_test,Fail
-KHR-GL46.texture_query_lod.sampler2D_test,Fail
-KHR-GL46.texture_query_lod.sampler3D_test,Fail
 
 KHR-GLES31.core.texture_cube_map_array.sampling,Fail
 KHR-GLES32.core.ext_texture_shadow_lod.texture.samplercubearrayshadow_bias_fragment,Fail

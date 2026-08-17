@@ -863,25 +863,39 @@ static bool
 get_embedded_xml_data_by_name(const char *filename,
                               void **data, size_t *data_len)
 {
-   int filename_len = strlen(filename);
-   if (filename_len < 8 || filename_len > 10)
-      return false;
+   static const struct {
+      const char *filename;
+      int verx10;
+   } filename_to_verx10[] = {
+      { "gen40.xml",     40 },
+      { "gen45.xml",     45 },
+      { "gen50.xml",     50 },
+      { "gen60.xml",     60 },
+      { "gen70.xml",     70 },
+      { "gen75.xml",     75 },
+      { "gen80.xml",     80 },
+      { "gen90.xml",     90 },
+      { "gen110.xml",   110 },
+      { "gen120.xml",   120 },
+      { "gen125.xml",   125 },
+      { "xe2.xml",      200 },
+      { "xe3.xml",      300 },
+      { "xe3p.xml",     350 },
+   };
 
-   if (strncmp(filename, "gen", 3) != 0 ||
-       strcmp(filename + filename_len - 4, ".xml") != 0)
-      return false;
-
-   char *numstr = strndup(filename + 3, filename_len - 7);
-   char *endptr;
-   long num = strtol(numstr, &endptr, 10);
-   if (*endptr != '\0') {
-      free(numstr);
-      return false;
+   int num = -1;
+   for (int i = 0; i < ARRAY_SIZE(filename_to_verx10); i++) {
+      if (strcmp(filename, filename_to_verx10[i].filename) == 0) {
+         num = filename_to_verx10[i].verx10;
+         break;
+      }
    }
 
    assert(num >= 40);
 
-   free(numstr);
+   if (num < 0)
+      return false;
+
    return get_embedded_xml_data(num, data, data_len);
 }
 

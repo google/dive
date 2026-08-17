@@ -30,7 +30,6 @@ struct panvk_physical_device {
 
    struct {
       struct pan_kmod_dev *dev;
-      struct pan_kmod_dev_props props;
    } kmod;
 
    const struct pan_model *model;
@@ -57,6 +56,17 @@ struct panvk_physical_device {
 
    char name[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
    uint8_t cache_uuid[VK_UUID_SIZE];
+
+   struct {
+      VkMemoryHeap heaps[1];
+      uint32_t heap_count;
+
+      VkMemoryType types[4];
+      uint32_t type_count;
+
+      uint64_t max_supported_va;
+      alignas(8) uint64_t heap_used;
+   } memory;
 
    struct vk_sync_type drm_syncobj_type;
    struct vk_sync_timeline_type sync_timeline_type;
@@ -92,9 +102,16 @@ VkSampleCountFlags panvk_get_sample_counts(unsigned arch,
                                            unsigned max_cbuf_atts,
                                            unsigned format_size);
 
+VkDeviceSize
+panvk_get_max_resource_size(const struct panvk_physical_device *device);
+
+VkDeviceSize
+panvk_get_max_buffer_size(const struct panvk_physical_device *device);
+
 #ifdef PAN_ARCH
 void panvk_per_arch(get_physical_device_extensions)(
    const struct panvk_physical_device *device,
+   const struct panvk_instance *instance,
    struct vk_device_extension_table *ext);
 
 void panvk_per_arch(get_physical_device_features)(

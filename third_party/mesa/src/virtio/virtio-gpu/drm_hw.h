@@ -30,6 +30,7 @@ struct virgl_renderer_capset_drm {
    uint32_t version_patchlevel;
 #define VIRTGPU_DRM_CONTEXT_MSM      1
 #define VIRTGPU_DRM_CONTEXT_AMDGPU   2
+#define VIRTGPU_DRM_CONTEXT_I915     3
    uint32_t context_type;
    uint32_t pad;
    union {
@@ -52,13 +53,22 @@ struct virgl_renderer_capset_drm {
       } msm;  /* context_type == VIRTGPU_DRM_CONTEXT_MSM */
       struct {
          uint32_t address32_hi;
-         uint32_t __pad;
+         uint32_t has_vm_always_valid : 1;
+         uint32_t __pad : 31;
 #ifdef ENABLE_DRM_AMDGPU
          struct amdgpu_buffer_size_alignments alignments;
          struct amdgpu_gpu_info gpu_info;
 #endif
          char marketing_name[128];
       } amdgpu;   /* context_type == VIRTGPU_DRM_CONTEXT_AMDGPU */
+      struct {
+         uint32_t pci_bus;
+         uint32_t pci_dev;
+         uint32_t pci_func;
+         uint32_t pci_revision_id;
+         uint32_t pci_domain;
+         uint32_t pci_device_id;
+      } intel;  /* context_type == VIRTGPU_DRM_CONTEXT_I915 */
    } u;
 };
 

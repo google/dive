@@ -21,10 +21,6 @@
 #include <sys/utsname.h>
 #include <stdlib.h>
 
-#if AMD_LLVM_AVAILABLE
-#include <llvm-c/TargetMachine.h>
-#endif
-
 struct r600_multi_fence {
 	struct pipe_reference reference;
 	struct pipe_fence_handle *gfx;
@@ -73,7 +69,7 @@ void r600_gfx_write_event_eop(struct r600_common_context *ctx,
 
 	if (buf)
 		r600_emit_reloc(ctx, &ctx->gfx, buf, RADEON_USAGE_WRITE |
-				RADEON_PRIO_QUERY);
+				RADEON_PRIO_QUERY, 0);
 }
 
 unsigned r600_gfx_write_fence_dwords(struct r600_common_screen *screen)
@@ -102,7 +98,7 @@ void r600_gfx_wait_fence(struct r600_common_context *ctx,
 
 	if (buf)
 		r600_emit_reloc(ctx, &ctx->gfx, buf, RADEON_USAGE_READ |
-				RADEON_PRIO_QUERY);
+				RADEON_PRIO_QUERY, 0);
 }
 
 void r600_draw_rectangle(struct blitter_context *blitter,
@@ -201,6 +197,7 @@ void r600_draw_rectangle(struct blitter_context *blitter,
 	rctx->b.set_vertex_buffers(&rctx->b, 1, &vbuffer);
 	util_draw_arrays_instanced(&rctx->b, R600_PRIM_RECTANGLE_LIST, 0, 3,
 				   0, num_instances);
+	pipe_resource_reference(&buf, NULL);
 }
 
 static void r600_dma_emit_wait_idle(struct r600_common_context *rctx)
@@ -669,7 +666,6 @@ void r600_common_context_cleanup(struct r600_common_context *rctx)
 static const struct debug_named_value common_debug_options[] = {
 	/* logging */
 	{ "tex", DBG_TEX, "Print texture info" },
-	{ "nir", DBG_NIR, "Enable experimental NIR shaders" },
 	{ "compute", DBG_COMPUTE, "Print compute info" },
 	{ "vm", DBG_VM, "Print virtual addresses when creating resources" },
 	{ "info", DBG_INFO, "Print driver information" },
@@ -682,7 +678,7 @@ static const struct debug_named_value common_debug_options[] = {
 	{ "cs", DBG_CS, "Print compute shaders" },
 	{ "tcs", DBG_TCS, "Print tessellation control shaders" },
 	{ "tes", DBG_TES, "Print tessellation evaluation shaders" },
-	{ "preoptir", DBG_PREOPT_IR, "Print the LLVM IR before initial optimizations" },
+	{ "preoptir", DBG_PREOPT_IR, "Print the NIR before initial optimizations" },
 	{ "checkir", DBG_CHECK_IR, "Enable additional sanity checks on shader IR" },
 
 	{ "testdma", DBG_TEST_DMA, "Invoke SDMA tests and exit." },
@@ -701,6 +697,10 @@ static const struct debug_named_value common_debug_options[] = {
 	{ "forcedma", DBG_FORCE_DMA, "Use asynchronous DMA for all operations when possible." },
 	{ "nowc", DBG_NO_WC, "Disable GTT write combining" },
 	{ "check_vm", DBG_CHECK_VM, "Check VM faults and dump debug info." },
+
+	/* shared-db */
+	{ "shaderdb", DBG_SHADER_DB, "Dump shader-db analysis." },
+	{ "precompile", DBG_SHADER_DB, "Synonym for shaderdb. This is needed to maintain the compatibility with the shader-db repository." },
 
 	DEBUG_NAMED_VALUE_END /* must be last */
 };
@@ -753,17 +753,17 @@ static void r600_disk_cache_create(struct r600_common_screen *rscreen)
 	if (rscreen->debug_flags & DBG_ALL_SHADERS)
 		return;
 
-	struct mesa_sha1 ctx;
-	unsigned char sha1[20];
-	char cache_id[20 * 2 + 1];
+	blake3_hasher ctx;
+	unsigned char blake3[BLAKE3_KEY_LEN];
+	char cache_id[BLAKE3_HEX_LEN];
 
-	_mesa_sha1_init(&ctx);
+	_mesa_blake3_init(&ctx);
 	if (!disk_cache_get_function_identifier(r600_disk_cache_create,
 						&ctx))
 		return;
 
-	_mesa_sha1_final(&ctx, sha1);
-	mesa_bytes_to_hex(cache_id, sha1, 20);
+	_mesa_blake3_final(&ctx, blake3);
+	mesa_bytes_to_hex(cache_id, blake3, BLAKE3_KEY_LEN);
 
 	/* These flags affect shader compilation. */
 	rscreen->disk_shader_cache =
@@ -934,16 +934,16 @@ static void r600_get_driver_uuid(UNUSED struct pipe_screen *screen, char *uuid)
 	 * OpenGL driver. People who want to share memory need to also check
 	 * the device UUID.
 	 */
-	struct mesa_sha1 sha1_ctx;
-	_mesa_sha1_init(&sha1_ctx);
+	blake3_hasher blake3_ctx;
+	_mesa_blake3_init(&blake3_ctx);
 
-	_mesa_sha1_update(&sha1_ctx, driver_id, strlen(driver_id));
+	_mesa_blake3_update(&blake3_ctx, driver_id, strlen(driver_id));
 
-	uint8_t sha1[SHA1_DIGEST_LENGTH];
-	_mesa_sha1_final(&sha1_ctx, sha1);
+	uint8_t blake3[BLAKE3_KEY_LEN];
+	_mesa_blake3_final(&blake3_ctx, blake3);
 
-	assert(SHA1_DIGEST_LENGTH >= PIPE_UUID_SIZE);
-	memcpy(uuid, sha1, PIPE_UUID_SIZE);
+	assert(BLAKE3_KEY_LEN >= PIPE_UUID_SIZE);
+	memcpy(uuid, blake3, PIPE_UUID_SIZE);
 }
 
 static void r600_get_device_uuid(struct pipe_screen *screen, char *uuid)
@@ -954,8 +954,8 @@ static void r600_get_device_uuid(struct pipe_screen *screen, char *uuid)
 	assert(PIPE_UUID_SIZE >= sizeof(uint32_t) * 4);
 
 	/* Copied from ac_device_info
-	 * Use the device info directly instead of using a sha1. GL/VK UUIDs
-	 * are 16 byte vs 20 byte for sha1, and the truncation that would be
+	 * Use the device info directly instead of using a blake3. GL/VK UUIDs
+	 * are 16 byte vs 20 byte for blake3, and the truncation that would be
 	 * required would get rid of part of the little entropy we have.
 	 */
 	memset(uuid, 0, PIPE_UUID_SIZE);
@@ -985,11 +985,7 @@ bool r600_common_screen_init(struct r600_common_screen *rscreen,
 			 " / %s", uname_data.release);
 
 	snprintf(rscreen->renderer_string, sizeof(rscreen->renderer_string),
-		 "%s (%sDRM %i.%i.%i%s"
-#if AMD_LLVM_AVAILABLE
-		 ", LLVM " MESA_LLVM_VERSION_STRING
-#endif
-		 ")",
+		 "%s (%sDRM %i.%i.%i%s)",
 		 chip_name, family_name, rscreen->info.drm_major,
 		 rscreen->info.drm_minor, rscreen->info.drm_patchlevel,
 		 kernel_version);
@@ -1082,15 +1078,17 @@ bool r600_common_screen_init(struct r600_common_screen *rscreen,
 		printf("r600_num_banks = %i\n", rscreen->info.r600_num_banks);
 		printf("num_render_backends = %i\n", rscreen->info.max_render_backends);
 		printf("num_tile_pipes = %i\n", rscreen->info.num_tile_pipes);
-		printf("pipe_interleave_bytes = %i\n", rscreen->info.pipe_interleave_bytes);
+		printf("pipe_interleave_bytes = %i\n", rscreen->info.r600_pipe_interleave_bytes);
 		printf("enabled_rb_mask = 0x%" PRIx64 "\n", rscreen->info.enabled_rb_mask);
 		printf("max_alignment = %u\n", (unsigned)rscreen->info.max_alignment);
 	}
 
+	const bool fp64_emulation = rscreen->info.gfx_level < CAYMAN;
+
 	const struct nir_shader_compiler_options nir_options = {
-		.fuse_ffma16 = true,
-		.fuse_ffma32 = true,
-		.fuse_ffma64 = true,
+		.float_mul_add16 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
+		.float_mul_add32 = nir_float_muladd_support_has_fmad | nir_float_muladd_support_fuse,
+		.float_mul_add64 = fp64_emulation ? 0 : nir_float_muladd_support_has_ffma | nir_float_muladd_support_fuse,
 		.lower_flrp32 = true,
 		.lower_flrp64 = true,
 		.lower_fdiv = true,
@@ -1108,7 +1106,6 @@ bool r600_common_screen_init(struct r600_common_screen *rscreen,
 		.lower_extract_word = true,
 		.lower_insert_byte = true,
 		.lower_insert_word = true,
-		.lower_ldexp = true,
 		/* due to a bug in the shader compiler, some loops hang
 		 * if they are not unrolled, see:
 		 *    https://bugs.freedesktop.org/show_bug.cgi?id=86720
@@ -1157,7 +1154,7 @@ bool r600_common_screen_init(struct r600_common_screen *rscreen,
 		rscreen->nir_options.lower_bitfield_reverse = true;
 	}
 
-	if (rscreen->info.gfx_level < CAYMAN) {
+	if (fp64_emulation) {
 		rscreen->nir_options.lower_atomic_offset_to_range_base = true;
 
 		rscreen->nir_options.lower_doubles_options =

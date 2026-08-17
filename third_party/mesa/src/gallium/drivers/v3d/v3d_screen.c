@@ -22,8 +22,6 @@
  * IN THE SOFTWARE.
  */
 
-#include <sys/sysinfo.h>
-
 #include "common/v3d_device_info.h"
 #include "common/v3d_limits.h"
 #include "util/os_misc.h"
@@ -202,26 +200,26 @@ v3d_init_compute_caps(struct v3d_screen *screen)
          */
         caps->max_grid_size[0] =
         caps->max_grid_size[1] =
-        caps->max_grid_size[2] = 65535;
+        caps->max_grid_size[2] = V3D_MAX_CSD_WG_COUNT;
 
         /* GL_MAX_COMPUTE_WORK_GROUP_SIZE */
         caps->max_block_size[0] =
         caps->max_block_size[1] =
-        caps->max_block_size[2] = 256;
+        caps->max_block_size[2] = V3D_MAX_CSD_WG_SIZE;
 
         /* GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS: This is
          * limited by WG_SIZE in the CSD.
          */
         caps->max_threads_per_block =
-        caps->max_variable_threads_per_block = 256;
+        caps->max_variable_threads_per_block = V3D_MAX_CSD_WG_SIZE;
 
         /* GL_MAX_COMPUTE_SHARED_MEMORY_SIZE */
-        caps->max_local_size = 32768;
+        caps->max_local_size = V3D_MAX_COMPUTE_SHARED_MEMORY_SIZE;
 
-        struct sysinfo si;
-        sysinfo(&si);
-        caps->max_global_size = si.totalram;
-        caps->max_mem_alloc_size = MIN2(V3D_MAX_BUFFER_RANGE, si.totalram);
+        caps->max_global_size =
+                os_get_gpu_heap_size(screen->heap_memory_percent, NULL);
+        caps->max_mem_alloc_size =
+                MIN2(V3D_MAX_BUFFER_RANGE, caps->max_global_size);
 
         caps->max_compute_units = 1;
         caps->subgroup_sizes = 16;
@@ -331,16 +329,15 @@ v3d_init_screen_caps(struct v3d_screen *screen)
         caps->max_texture_3d_levels = V3D_MAX_MIP_LEVELS;
         caps->max_texture_array_layers = V3D_MAX_ARRAY_LAYERS;
 
-        caps->max_render_targets = V3D_MAX_RENDER_TARGETS(screen->devinfo.ver);
+        caps->max_render_targets = screen->devinfo.max_render_targets;
         caps->fbfetch = caps->max_render_targets;
         caps->fbfetch_coherent = true;
         caps->max_dual_source_render_targets = 1;
 
         caps->vendor_id = 0x14E4;
 
-        uint64_t system_memory;
-        caps->video_memory = os_get_total_physical_memory(&system_memory) ?
-                system_memory >> 20 : 0;
+        caps->video_memory =
+                os_get_gpu_heap_size(screen->heap_memory_percent, NULL) >> 20;
 
         caps->uma = true;
 
@@ -362,6 +359,7 @@ v3d_init_screen_caps(struct v3d_screen *screen)
         caps->supported_prim_modes_with_restart = screen->prim_types;
 
         caps->texture_buffer_objects = true;
+        caps->buffer_sampler_view_rgba_only = true;
 
         caps->texture_buffer_offset_alignment = V3D_TMU_TEXEL_ALIGN;
 
@@ -371,6 +369,7 @@ v3d_init_screen_caps(struct v3d_screen *screen)
 
         caps->clip_planes = 0;
         caps->depth_clip_disable = screen->devinfo.ver >= 71;
+        caps->clip_halfz = screen->devinfo.ver >= 71;
 
         caps->min_line_width =
         caps->min_line_width_aa =
@@ -391,6 +390,8 @@ v3d_init_screen_caps(struct v3d_screen *screen)
 
         caps->device_reset_status_query = screen->devinfo.has_reset_counter;
         caps->robust_buffer_access_behavior = true;
+
+        caps->sample_shading = true;
 
         /* FIXME: same settings as v3dv, maybe put them in a common place. */
         if (screen->devinfo.ver >= 71) {
@@ -579,35 +580,38 @@ v3d_screen_get_compiler_options(struct pipe_screen *pscreen,
                 .lower_unpack_32_2x16_split = true,
                 .lower_fdiv = true,
                 .lower_find_lsb = true,
-                .lower_ffma16 = true,
-                .lower_ffma32 = true,
-                .lower_ffma64 = true,
                 .lower_flrp32 = true,
                 .lower_fpow = true,
                 .lower_fsqrt = true,
                 .lower_ifind_msb = true,
                 .lower_isign = true,
-                .lower_ldexp = true,
                 .lower_hadd = true,
                 .lower_fisnormal = true,
                 .lower_mul_high = true,
                 .lower_wpos_pntc = true,
                 .lower_to_scalar = true,
+                .lower_interpolate_at = true,
                 .lower_int64_options =
                         nir_lower_bcsel64 |
+                        nir_lower_bit_count64 |
                         nir_lower_conv64 |
+                        nir_lower_divmod64 |
+                        nir_lower_iabs64 |
                         nir_lower_iadd64 |
                         nir_lower_icmp64 |
                         nir_lower_imul_2x32_64 |
                         nir_lower_imul64 |
                         nir_lower_ineg64 |
                         nir_lower_logic64 |
+                        nir_lower_minmax64 |
                         nir_lower_shift64 |
                         nir_lower_ufind_msb64,
                 .lower_fquantize2f16 = true,
                 .lower_ufind_msb = true,
                 .has_fsub = true,
                 .has_isub = true,
+                .has_imul24 = true,
+                .has_umul24 = true,
                 .has_uclz = true,
                 .divergence_analysis_options =
                        nir_divergence_multiple_workgroup_per_compute_subgroup,
@@ -617,6 +621,7 @@ v3d_screen_get_compiler_options(struct pipe_screen *pscreen,
                  * limit register pressure impact.
                  */
                 .max_unroll_iterations = 16,
+                .max_samples = 4,
                 .force_indirect_unrolling_sampler = true,
                 .scalarize_ddx = true,
                 .max_varying_expression_cost = 4,
@@ -749,6 +754,7 @@ v3d_screen_get_compatible_tlb_format(struct pipe_screen *screen,
         }
 }
 
+#ifdef ENABLE_SHADER_CACHE
 static struct disk_cache *
 v3d_screen_get_disk_shader_cache(struct pipe_screen *pscreen)
 {
@@ -756,6 +762,7 @@ v3d_screen_get_disk_shader_cache(struct pipe_screen *pscreen)
 
         return screen->disk_cache;
 }
+#endif
 
 static int
 v3d_screen_get_fd(struct pipe_screen *pscreen)
@@ -798,8 +805,8 @@ v3d_screen_create(int fd, const struct pipe_screen_config *config,
         if (!screen->perfcnt)
                 goto fail;
 
-        driParseConfigFiles(config->options, config->options_info, 0, "v3d",
-                            NULL, NULL, NULL, 0, NULL, 0);
+        driParseConfigFiles(config->options, config->options_info,
+                            &(driConfigFileParseParams) { .driverName = "v3d" });
 
         /* We have to driCheckOption for the simulator mode to not assertion
          * fail on not having our XML config.
@@ -808,6 +815,11 @@ v3d_screen_create(int fd, const struct pipe_screen_config *config,
         screen->nonmsaa_texture_size_limit =
                 driCheckOption(config->options, nonmsaa_name, DRI_BOOL) &&
                 driQueryOptionb(config->options, nonmsaa_name);
+
+        screen->heap_memory_percent =
+                driQueryOptionf(config->options, "heap_memory_percent");
+        if (screen->heap_memory_percent == OS_GPU_HEAP_SIZE_HEURISTIC)
+                screen->heap_memory_percent = 1.0f;
 
         slab_create_parent(&screen->transfer_pool, sizeof(struct v3d_transfer), 16);
 
@@ -833,7 +845,9 @@ v3d_screen_create(int fd, const struct pipe_screen_config *config,
         pscreen->get_name = v3d_screen_get_name;
         pscreen->get_vendor = v3d_screen_get_vendor;
         pscreen->get_device_vendor = v3d_screen_get_vendor;
+#ifdef ENABLE_SHADER_CACHE
         pscreen->get_disk_shader_cache = v3d_screen_get_disk_shader_cache;
+#endif
         pscreen->query_dmabuf_modifiers = v3d_screen_query_dmabuf_modifiers;
         pscreen->is_dmabuf_modifier_supported =
                 v3d_screen_is_dmabuf_modifier_supported;

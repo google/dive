@@ -13,8 +13,7 @@
 #include "drm/freedreno_drmif.h"
 #include "drm/freedreno_ringbuffer.h"
 
-#include "adreno_common.xml.h"
-#include "adreno_pm4.xml.h"
+#include "common/fd_hw_common.h"
 
 #include "ir3/ir3_assembler.h"
 
@@ -50,7 +49,7 @@ struct perfcntr {
 /* per-generation entry-points: */
 struct backend {
    struct kernel *(*assemble)(struct backend *b, FILE *in);
-   void (*disassemble)(struct kernel *kernel, FILE *out);
+   void (*disassemble)(struct kernel *kernel, struct ir3_disasm_options *);
    void (*emit_grid)(struct kernel *kernel, uint32_t grid[3],
                      struct fd_submit *submit);
 

@@ -42,13 +42,13 @@ mark_query_read(struct set *queries,
    nir_def *rq_def = intrin->src[0].ssa;
 
    nir_variable *query;
-   if (rq_def->parent_instr->type == nir_instr_type_intrinsic) {
+   if (nir_def_is_intrinsic(rq_def)) {
       nir_intrinsic_instr *load_deref =
          nir_def_as_intrinsic(rq_def);
       assert(load_deref->intrinsic == nir_intrinsic_load_deref);
 
       query = nir_intrinsic_get_var(load_deref, 0);
-   } else if (rq_def->parent_instr->type == nir_instr_type_deref) {
+   } else if (nir_def_is_deref(rq_def)) {
       query = nir_deref_instr_get_variable(nir_def_as_deref(rq_def));
    } else {
       return;
@@ -151,7 +151,7 @@ nir_opt_ray_queries(nir_shader *shader)
  *
  * 1. Store all the ray queries we will consider into an array for
  *    convenient access. Ignore arrays since it would be really complex
- *    to handle and will be rare in praxis.
+ *    to handle and will be rare in practise.
  *
  * 2. Count the number of ray query ranges and allocate the required ranges.
  *
@@ -300,6 +300,19 @@ nir_opt_ray_query_ranges(nir_shader *shader)
 
          struct hash_entry *index_entry =
             _mesa_hash_table_search(range_indices, ray_query_deref->var);
+         if (!index_entry) {
+            /* The range doesn't exist yet which means that the first instruction
+             * isn't the initialize. Ignore it.
+             */
+            for (uint32_t i = 0; i < ray_query_count; i++) {
+               if (ray_queries[i] == ray_query_deref->var) {
+                  ray_queries[i] = NULL;
+                  break;
+               }
+            }
+            continue;
+         }
+
          struct rq_range *range = ranges + (uintptr_t)index_entry->data;
 
          if (intrinsic->intrinsic != nir_intrinsic_rq_initialize) {
@@ -333,7 +346,7 @@ nir_opt_ray_query_ranges(nir_shader *shader)
             range->last = MAX2(range->last, instr->index);
          }
 
-         util_dynarray_append(&range->instrs, nir_instr *, instr);
+         util_dynarray_append(&range->instrs, instr);
 
          if (parent_loop)
             _mesa_set_add(range->loops, parent_loop);

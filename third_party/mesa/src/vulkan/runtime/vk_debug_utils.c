@@ -33,6 +33,7 @@
 #include "stdarg.h"
 #include "util/u_dynarray.h"
 #include "util/u_printf.h"
+#include "vulkan/vulkan_core.h"
 
 void
 vk_debug_message(struct vk_instance *instance,
@@ -261,8 +262,6 @@ vk_common_DebugMarkerSetObjectNameEXT(
 {
    VK_FROM_HANDLE(vk_device, device, _device);
 
-   assert(pNameInfo->sType == VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT);
-
    VkObjectType object_type;
    switch (pNameInfo->objectType) {
    case VK_DEBUG_REPORT_OBJECT_TYPE_SURFACE_KHR_EXT:
@@ -296,6 +295,50 @@ vk_common_DebugMarkerSetObjectNameEXT(
    };
 
    return device->dispatch_table.SetDebugUtilsObjectNameEXT(_device, &name_info);
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL
+vk_common_DebugMarkerSetObjectTagEXT(
+   VkDevice _device,
+   const VkDebugMarkerObjectTagInfoEXT *pTagInfo)
+{
+   VK_FROM_HANDLE(vk_device, device, _device);
+
+   VkObjectType object_type;
+   switch (pTagInfo->objectType) {
+      case VK_DEBUG_REPORT_OBJECT_TYPE_SURFACE_KHR_EXT:
+         object_type = VK_OBJECT_TYPE_SURFACE_KHR;
+         break;
+      case VK_DEBUG_REPORT_OBJECT_TYPE_SWAPCHAIN_KHR_EXT:
+         object_type = VK_OBJECT_TYPE_SWAPCHAIN_KHR;
+         break;
+      case VK_DEBUG_REPORT_OBJECT_TYPE_DEBUG_REPORT_CALLBACK_EXT_EXT:
+         object_type = VK_OBJECT_TYPE_DEBUG_REPORT_CALLBACK_EXT;
+         break;
+      case VK_DEBUG_REPORT_OBJECT_TYPE_DISPLAY_KHR_EXT:
+         object_type = VK_OBJECT_TYPE_DISPLAY_KHR;
+         break;
+      case VK_DEBUG_REPORT_OBJECT_TYPE_DISPLAY_MODE_KHR_EXT:
+         object_type = VK_OBJECT_TYPE_DISPLAY_MODE_KHR;
+         break;
+      case VK_DEBUG_REPORT_OBJECT_TYPE_VALIDATION_CACHE_EXT_EXT:
+         object_type = VK_OBJECT_TYPE_VALIDATION_CACHE_EXT;
+         break;
+      default:
+         object_type = (VkObjectType)pTagInfo->objectType;
+         break;
+   }
+
+   VkDebugUtilsObjectTagInfoEXT tag_info = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_TAG_INFO_EXT,
+      .objectType = object_type,
+      .objectHandle = pTagInfo->object,
+      .tagName = pTagInfo->tagName,
+      .tagSize = pTagInfo->tagSize,
+      .pTag = pTagInfo->pTag
+   };
+   
+   return device->dispatch_table.SetDebugUtilsObjectTagEXT(_device, &tag_info);
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL
@@ -352,7 +395,7 @@ vk_common_append_debug_label(struct vk_device *device,
                              struct util_dynarray *labels,
                              const VkDebugUtilsLabelEXT *pLabelInfo)
 {
-   util_dynarray_append(labels, VkDebugUtilsLabelEXT, *pLabelInfo);
+   util_dynarray_append(labels, *pLabelInfo);
    VkDebugUtilsLabelEXT *current_label =
       util_dynarray_top_ptr(labels, VkDebugUtilsLabelEXT);
    current_label->pLabelName =
@@ -434,17 +477,50 @@ vk_common_CmdInsertDebugUtilsLabelEXT(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-vk_common_QueueBeginDebugUtilsLabelEXT(
-   VkQueue _queue,
-   const VkDebugUtilsLabelEXT *pLabelInfo)
+vk_common_CmdDebugMarkerBeginEXT(
+   VkCommandBuffer _commandBuffer,
+   const VkDebugMarkerMarkerInfoEXT *pMarkerInfo)
 {
-   VK_FROM_HANDLE(vk_queue, queue, _queue);
+   VkDebugUtilsLabelEXT label_info = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+      .pNext = pMarkerInfo->pNext,
+      .pLabelName = pMarkerInfo->pMarkerName,
+   };
+   memcpy(label_info.color, pMarkerInfo->color, sizeof(label_info.color));
+   
+   vk_common_CmdBeginDebugUtilsLabelEXT(_commandBuffer, &label_info);
+}
 
+VKAPI_ATTR void VKAPI_CALL
+vk_common_CmdDebugMarkerEndEXT(VkCommandBuffer _commandBuffer)
+{
+   vk_common_CmdEndDebugUtilsLabelEXT(_commandBuffer);
+}
+
+VKAPI_ATTR void VKAPI_CALL
+vk_common_CmdDebugMarkerInsertEXT(
+   VkCommandBuffer _commandBuffer,
+   const VkDebugMarkerMarkerInfoEXT *pMarkerInfo)
+{
+   VkDebugUtilsLabelEXT label_info = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+      .pNext = pMarkerInfo->pNext,
+      .pLabelName = pMarkerInfo->pMarkerName,
+   };
+   memcpy(label_info.color, pMarkerInfo->color, sizeof(label_info.color));
+   
+   vk_common_CmdInsertDebugUtilsLabelEXT(_commandBuffer, &label_info);
+}
+
+void
+vk_queue_begin_debug_utils_label(struct vk_queue *queue,
+                                 const VkDebugUtilsLabelEXT *pLabelInfo)
+{
    /* If the latest label was submitted by QueueInsertDebugUtilsLabelEXT, we
     * should remove it first.
     */
    if (!queue->region_begin)
-      (void)util_dynarray_pop(&queue->labels, VkDebugUtilsLabelEXT);
+      vk_common_pop_debug_label(queue->base.device, &queue->labels);
 
    vk_common_append_debug_label(queue->base.device,
                                 &queue->labels,
@@ -453,10 +529,20 @@ vk_common_QueueBeginDebugUtilsLabelEXT(
 }
 
 VKAPI_ATTR void VKAPI_CALL
-vk_common_QueueEndDebugUtilsLabelEXT(VkQueue _queue)
+vk_common_QueueBeginDebugUtilsLabelEXT(
+   VkQueue _queue,
+   const VkDebugUtilsLabelEXT *pLabelInfo)
 {
    VK_FROM_HANDLE(vk_queue, queue, _queue);
 
+   vk_queue_lock(queue);
+   vk_queue_begin_debug_utils_label(queue, pLabelInfo);
+   vk_queue_unlock(queue);
+}
+
+void
+vk_queue_end_debug_utils_label(struct vk_queue *queue)
+{
    /* If the latest label was submitted by QueueInsertDebugUtilsLabelEXT, we
     * should remove it first.
     */
@@ -468,12 +554,19 @@ vk_common_QueueEndDebugUtilsLabelEXT(VkQueue _queue)
 }
 
 VKAPI_ATTR void VKAPI_CALL
-vk_common_QueueInsertDebugUtilsLabelEXT(
-   VkQueue _queue,
-   const VkDebugUtilsLabelEXT *pLabelInfo)
+vk_common_QueueEndDebugUtilsLabelEXT(VkQueue _queue)
 {
    VK_FROM_HANDLE(vk_queue, queue, _queue);
 
+   vk_queue_lock(queue);
+   vk_queue_end_debug_utils_label(queue);
+   vk_queue_unlock(queue);
+}
+
+static void
+vk_queue_insert_debug_utils_label(struct vk_queue *queue,
+                                  const VkDebugUtilsLabelEXT *pLabelInfo)
+{
    /* If the latest label was submitted by QueueInsertDebugUtilsLabelEXT, we
     * should remove it first.
     */
@@ -484,6 +577,18 @@ vk_common_QueueInsertDebugUtilsLabelEXT(
                                 &queue->labels,
                                 pLabelInfo);
    queue->region_begin = false;
+}
+
+VKAPI_ATTR void VKAPI_CALL
+vk_common_QueueInsertDebugUtilsLabelEXT(
+   VkQueue _queue,
+   const VkDebugUtilsLabelEXT *pLabelInfo)
+{
+   VK_FROM_HANDLE(vk_queue, queue, _queue);
+
+   vk_queue_lock(queue);
+   vk_queue_insert_debug_utils_label(queue, pLabelInfo);
+   vk_queue_unlock(queue);
 }
 
 VkResult

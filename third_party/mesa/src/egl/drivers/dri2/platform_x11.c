@@ -42,7 +42,7 @@
 #include <vulkan/vulkan_xcb.h>
 /* clang-format on */
 #ifdef HAVE_LIBDRM
-#include <xf86drm.h>
+#include "util/libdrm.h"
 #include "platform_x11_dri3.h"
 #endif
 #include "util/bitscan.h"
@@ -51,7 +51,9 @@
 #include "util/log.h"
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/ipc.h>
 #include "x11_dri3.h"
+#include "x11_display.h"
 #include "kopper_interface.h"
 #include "loader.h"
 #include "platform_x11.h"
@@ -792,17 +794,6 @@ dri2_fourcc_for_depth(struct dri2_egl_display *dri2_dpy, uint32_t depth)
    }
 }
 
-static int
-box_intersection_area(int16_t a_x, int16_t a_y, int16_t a_width,
-                      int16_t a_height, int16_t b_x, int16_t b_y,
-                      int16_t b_width, int16_t b_height)
-{
-   int w = MIN2(a_x + a_width, b_x + b_width) - MAX2(a_x, b_x);
-   int h = MIN2(a_y + a_height, b_y + b_height) - MAX2(a_y, b_y);
-
-   return (w < 0 || h < 0) ? 0 : w * h;
-}
-
 EGLBoolean
 dri2_x11_get_msc_rate(_EGLDisplay *display, _EGLSurface *surface,
                       EGLint *numerator, EGLint *denominator)
@@ -872,6 +863,8 @@ dri2_x11_get_msc_rate(_EGLDisplay *display, _EGLSurface *surface,
    /* If the window is entirely off-screen, then area will still be 0.
     * We defaulted to the first CRTC in the list's refresh rate, earlier.
     */
+
+   free(reply);
 
    return EGL_TRUE;
 }
@@ -993,8 +986,6 @@ kopperSetSurfaceCreateInfo(void *_draw, struct kopper_loader_info *ci)
       dri2_egl_display(dri2_surf->base.Resource.Display);
    VkXcbSurfaceCreateInfoKHR *xcb = (VkXcbSurfaceCreateInfoKHR *)&ci->bos;
 
-   if (dri2_surf->base.Type != EGL_WINDOW_BIT)
-      return;
    xcb->sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
    xcb->pNext = NULL;
    xcb->flags = 0;
@@ -1122,37 +1113,6 @@ dri2_x11_setup_swap_interval(_EGLDisplay *disp)
 }
 
 static bool
-check_xshm(struct dri2_egl_display *dri2_dpy)
-{
-   xcb_void_cookie_t cookie;
-   xcb_generic_error_t *error;
-   int ret = true;
-   xcb_query_extension_cookie_t shm_cookie;
-   xcb_query_extension_reply_t *shm_reply;
-   bool has_mit_shm;
-
-   shm_cookie = xcb_query_extension(dri2_dpy->conn, 7, "MIT-SHM");
-   shm_reply = xcb_query_extension_reply(dri2_dpy->conn, shm_cookie, NULL);
-
-   has_mit_shm = shm_reply && shm_reply->present;
-   free(shm_reply);
-   if (!has_mit_shm)
-      return false;
-
-   cookie = xcb_shm_detach_checked(dri2_dpy->conn, 0);
-   if ((error = xcb_request_check(dri2_dpy->conn, cookie))) {
-      /* BadRequest means we're a remote client. If we were local we'd
-       * expect BadValue since 'info' has an invalid segment name.
-       */
-      if (error->error_code == BadRequest)
-         ret = false;
-      free(error);
-   }
-
-   return ret;
-}
-
-static bool
 platform_x11_finalize(_EGLDisplay *disp, bool force_zink)
 {
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
@@ -1218,7 +1178,7 @@ dri2_initialize_x11_swrast(_EGLDisplay *disp)
 {
    struct dri2_egl_display *dri2_dpy = dri2_egl_display(disp);
 
-   if (check_xshm(dri2_dpy)) {
+   if (x11_xcb_display_supports_xshm(dri2_dpy->conn, NULL)) {
       dri2_dpy->loader_extensions = swrast_loader_shm_extensions;
    } else {
       dri2_dpy->loader_extensions = swrast_loader_extensions;

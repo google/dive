@@ -924,17 +924,18 @@ download_texture_compute(struct st_context *st,
       if (st->force_specialized_compute_transfer) {
          struct pbo_async_data *async = he->data;
          struct pbo_spec_async_data *spec = add_spec_data(async, &pd);
-         if (spec->cs) {
-            cs = spec->cs;
-         } else {
+         if (!spec->cs) {
             create_spec_shader_async(spec, NULL, 0);
             struct pipe_shader_state state = {
                .type = PIPE_SHADER_IR_NIR,
                .ir.nir = spec->nir,
             };
-            cs = spec->cs = st_create_nir_shader(st, &state);
+            spec->cs = st_create_nir_shader(st, &state);
+            if (!spec->cs)
+               return NULL;
             spec->nir = NULL;
          }
+         cs = spec->cs;
          cb.buffer_size = 2 * sizeof(uint32_t);
       } else if (!st->force_compute_based_texture_transfer && screen->driver_thread_add_job) {
          struct pbo_async_data *async = he->data;
@@ -946,6 +947,8 @@ download_texture_compute(struct st_context *st,
             /* cs job not yet started */
             assert(async->nir && !async->cs);
             async->cs = pipe_shader_from_nir(pipe, async->nir);
+            if (!async->cs)
+               return NULL;
             async->nir = NULL;
          }
          /* cs *may* be done */
@@ -957,6 +960,8 @@ download_texture_compute(struct st_context *st,
             if (spec->created) {
                if (!spec->cs) {
                   spec->cs = pipe_shader_from_nir(pipe, spec->nir);
+                  if (!spec->cs)
+                     return NULL;
                   spec->nir = NULL;
                }
                if (screen->is_parallel_shader_compilation_finished &&
@@ -988,9 +993,12 @@ download_texture_compute(struct st_context *st,
             .type = PIPE_SHADER_IR_NIR,
             .ir.nir = spec->nir,
          };
-         cs = spec->cs = st_create_nir_shader(st, &state);
+         spec->cs = st_create_nir_shader(st, &state);
+         if (!spec->cs)
+            return NULL;
          spec->nir = NULL;
          cb.buffer_size = 2 * sizeof(uint32_t);
+         cs = spec->cs;
       } else {
          nir_shader *nir = create_conversion_shader(st, view_target, num_components);
          struct pipe_shader_state state = {
@@ -998,13 +1006,16 @@ download_texture_compute(struct st_context *st,
             .ir.nir = nir,
          };
          cs = st_create_nir_shader(st, &state);
-         he = _mesa_hash_table_insert(st->pbo.shaders, (void*)(uintptr_t)hash_key, cs);
+         if (!cs)
+            return NULL;
+         _mesa_hash_table_insert(st->pbo.shaders, (void*)(uintptr_t)hash_key, cs);
       }
    }
    assert(cs);
    struct cso_context *cso = st->cso_context;
 
-   pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_COMPUTE, &cb);
+   struct pipe_resource *releasebuf = NULL;
+   pipe_upload_constant_buffer0(st->pipe, MESA_SHADER_COMPUTE, &cb, &releasebuf);
 
    cso_save_compute_state(cso, CSO_BIT_COMPUTE_SHADER | CSO_BIT_COMPUTE_SAMPLERS);
    cso_set_compute_shader_handle(cso, cs);
@@ -1126,7 +1137,7 @@ download_texture_compute(struct st_context *st,
                          src->target == PIPE_TEXTURE_CUBE_ARRAY ?
                          /* only use image stride for 3d images to avoid pulling in IMAGE_HEIGHT pixelstore */
                          _mesa_image_image_stride(pack, width, height, format, type) :
-                         _mesa_image_row_stride(pack, width, format, type) * height;
+                         (size_t)_mesa_image_row_stride(pack, width, format, type) * height;
    intptr_t buffer_size = (depth + (dim == 3 ? pack->SkipImages : 0)) * img_stride;
    assert(buffer_size <= UINT32_MAX);
    {
@@ -1174,6 +1185,8 @@ fail:
    ST_SET_STATE3(st->ctx->NewDriverState, ST_NEW_CS_CONSTANTS,
                  ST_NEW_CS_SSBOS, ST_NEW_CS_SAMPLER_VIEWS);
 
+   pipe_resource_release(pipe, releasebuf);
+
    return dst;
 }
 
@@ -1182,7 +1195,6 @@ copy_converted_buffer(struct gl_context * ctx,
                     struct gl_pixelstore_attrib *pack,
                     enum pipe_texture_target view_target,
                     struct pipe_resource *dst, enum pipe_format dst_format,
-                    GLint xoffset, GLint yoffset, GLint zoffset,
                     GLsizei width, GLsizei height, GLint depth,
                     GLenum format, GLenum type, void *pixels)
 {
@@ -1199,8 +1211,6 @@ copy_converted_buffer(struct gl_context * ctx,
       if (view_target == PIPE_TEXTURE_1D_ARRAY) {
          depth = height;
          height = 1;
-         zoffset = yoffset;
-         yoffset = 0;
       }
 
       struct gl_pixelstore_attrib packing = *pack;
@@ -1214,13 +1224,13 @@ copy_converted_buffer(struct gl_context * ctx,
 
       for (unsigned z = 0; z < depth; z++) {
          for (unsigned y = 0; y < height; y++) {
-            GLubyte *dst = _mesa_image_address(dim, pack, pixels,
-                                       width, height, format, type,
-                                       z, y, 0);
+            GLubyte *dstpx = _mesa_image_address(dim, pack, pixels,
+                                                 width, height, format, type,
+                                                 z, y, 0);
             GLubyte *srcpx = _mesa_image_address(dim, &packing, map,
                                                  width, height, format, type,
                                                  z, y, 0);
-            util_streaming_load_memcpy(dst, srcpx, util_format_get_stride(dst_format, width));
+            util_streaming_load_memcpy(dstpx, srcpx, util_format_get_stride(dst_format, width));
          }
       }
    } else {
@@ -1304,11 +1314,12 @@ st_GetTexSubImage_shader(struct gl_context * ctx,
       return false;
 
    view_target = get_target_from_texture(src);
-   /* I don't know why this works
-    * only for the texture rects
-    * but that's how it is
-    */
-   if ((src->target != PIPE_TEXTURE_RECT &&
+
+   /* 64K x 64K aren't supported by the shader (pbo_data::width/height have 16 bits) */
+   if (width >= UINT16_MAX || height >= UINT16_MAX ||
+       /* I don't know why this works only for the texture rects
+        * but that's how it is. */
+       (src->target != PIPE_TEXTURE_RECT &&
        /* this would need multiple samplerviews */
        ((util_format_is_depth_and_stencil(src_format) && util_format_is_depth_and_stencil(dst_format)) ||
        /* these format just doesn't work and science can't explain why */
@@ -1324,8 +1335,8 @@ st_GetTexSubImage_shader(struct gl_context * ctx,
       return false;
 
    if (!can_copy_direct(&ctx->Pack) || !ctx->Pack.BufferObj) {
-      copy_converted_buffer(ctx, &ctx->Pack, view_target, dst, dst_format, xoffset, yoffset, zoffset,
-                          width, height, depth, format, type, pixels);
+      copy_converted_buffer(ctx, &ctx->Pack, view_target, dst, dst_format, width, height, depth, format,
+                            type, pixels);
 
       pipe_resource_reference(&dst, NULL);
    }

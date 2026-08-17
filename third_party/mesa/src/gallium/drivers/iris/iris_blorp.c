@@ -1,26 +1,7 @@
 /*
  * Copyright © 2018 Intel Corporation
+ * SPDX-License-Identifier: MIT
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
-
-/**
  * @file iris_blorp.c
  *
  * ============================= GENXML CODE =============================
@@ -340,8 +321,13 @@ iris_blorp_exec_render(struct blorp_batch *blorp_batch,
    }
 
    if (params->depth.enabled &&
-       !(blorp_batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL))
-      genX(emit_depth_state_workarounds)(ice, batch, &params->depth.surf);
+       !(blorp_batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL)) {
+      if (INTEL_NEEDS_WA_1808121037 && params->num_samples == 1 &&
+          params->depth.surf.format == ISL_FORMAT_R16_UNORM) {
+         /* Disable HiZ planes on D16 1x MSAA to avoid sporadic corruption. */
+         genX(batch_disable_hiz_planes)(batch);
+      }
+   }
 
    iris_require_command_space(batch, 1400);
 
@@ -419,7 +405,7 @@ iris_blorp_exec_render(struct blorp_batch *blorp_batch,
    if (blorp_batch->flags & BLORP_BATCH_NO_EMIT_DEPTH_STENCIL)
       skip_bits |= IRIS_DIRTY_DEPTH_BUFFER;
 
-   if (!params->wm_prog_data)
+   if (!params->fs_prog_data)
       skip_bits |= IRIS_DIRTY_BLEND_STATE | IRIS_DIRTY_PS_BLEND;
 
    ice->state.dirty |= ~skip_bits;
@@ -464,6 +450,13 @@ iris_blorp_exec_blitter(struct blorp_batch *blorp_batch,
 
    iris_bo_bump_seqno(params->dst.addr.buffer, batch->next_seqno,
                       IRIS_DOMAIN_OTHER_WRITE);
+
+#if INTEL_NEEDS_WA_14025112257
+   if (batch->name == IRIS_BATCH_COMPUTE) {
+      iris_emit_pipe_control_flush(batch, "WA_14025112257",
+                                   PIPE_CONTROL_STATE_CACHE_INVALIDATE);
+   }
+#endif
 }
 
 static void
@@ -523,6 +516,7 @@ genX(init_blorp)(struct iris_context *ice)
 #endif
    ice->blorp.lookup_shader = iris_blorp_lookup_shader;
    ice->blorp.upload_shader = iris_blorp_upload_shader;
+   ice->blorp.get_surface_address = blorp_get_surface_address;
    ice->blorp.exec = iris_blorp_exec;
    ice->blorp.enable_tbimr = screen->driconf.enable_tbimr;
 }
@@ -544,4 +538,11 @@ blorp_emit_post_draw(struct blorp_batch *blorp_batch, const struct blorp_params 
    genX(emit_3dprimitive_was)(batch, NULL, MESA_PRIM_QUAD_STRIP, 3);
    genX(maybe_emit_breakpoint)(batch, false);
    blorp_measure_end(blorp_batch, params);
+}
+
+static bool *
+blorp_get_write_fencing_status(struct blorp_batch *blorp_batch)
+{
+   struct iris_batch *batch = blorp_batch->driver_batch;
+   return &batch->write_fence_status;
 }

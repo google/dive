@@ -210,8 +210,9 @@ void ir_print_visitor::visit(ir_variable *ir)
    const char *const memory_restrict = (ir->data.memory_restrict) ? "restrict " : "";
    const char *const mode[] = { "", "uniform ", "shader_storage ",
                                 "shader_shared ", "task_payload ", "shader_in ", "shader_out ",
+                                "shader_pixel_local ",
                                 "in ", "out ", "inout ",
-			        "const_in ", "sys ", "temporary " };
+                                "const_in ", "sys ", "temporary " };
    const char *const per_primitive = (ir->data.per_primitive) ? "per_primitive " : "";
    STATIC_ASSERT(ARRAY_SIZE(mode) == ir_var_mode_count);
    const char *const interp[] = { "", "smooth", "flat", "noperspective", "explicit" };
@@ -647,6 +648,12 @@ ir_print_visitor::visit(ir_loop *ir)
    indentation++;
 
    ir_foreach_in_list(ir_instruction, inst, &ir->body_instructions) {
+      indent();
+      inst->accept(this);
+      fprintf(f, "\n");
+   }
+   fprintf(stderr, ") continue (\n");
+   ir_foreach_in_list(ir_instruction, inst, &ir->continue_instructions) {
       indent();
       inst->accept(this);
       fprintf(f, "\n");

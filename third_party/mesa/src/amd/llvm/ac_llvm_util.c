@@ -3,19 +3,17 @@
  *
  * SPDX-License-Identifier: MIT
  */
-/* based on pieces from si_pipe.c and radeon_llvm_emit.c */
-#include "ac_llvm_util.h"
-
-#include "ac_llvm_build.h"
-#include "c11/threads.h"
-#include "util/bitscan.h"
-#include "util/u_math.h"
-#include <llvm-c/Core.h>
-#include <llvm-c/Support.h>
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Support.h>
+
+#include "c11/threads.h"
+#include "ac_llvm_util.h"
+#include "ac_llvm_build.h"
 
 static void ac_init_llvm_target(void)
 {
@@ -150,9 +148,7 @@ void ac_llvm_set_target_features(LLVMValueRef F, struct ac_llvm_context *ctx, bo
 {
    char features[2048];
 
-   snprintf(features, sizeof(features), "+DumpCode%s%s%s",
-            /* GFX9 has broken VGPR indexing, so always promote alloca to scratch. */
-            ctx->gfx_level == GFX9 ? ",-promote-alloca" : "",
+   snprintf(features, sizeof(features), "+dumpcode%s%s",
             /* Wave32 is the default. */
             ctx->gfx_level >= GFX10 && ctx->wave_size == 64 ?
                ",+wavefrontsize64,-wavefrontsize32" : "",

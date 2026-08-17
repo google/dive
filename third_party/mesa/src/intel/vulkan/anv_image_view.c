@@ -64,11 +64,10 @@ anv_image_fill_surface_state(struct anv_device *device,
    /* Propagate the protection flag of the image to the view. */
    view_usage |= surface->isl.usage & ISL_SURF_USAGE_PROTECTED_BIT;
 
-   /* If this is a HiZ buffer we can sample from with a programmable clear
-    * value (SKL+), define the clear value to the optimal constant.
-    */
    union isl_color_value default_clear_color = { .u32 = { 0, } };
-   if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT)
+   if (aspect & VK_IMAGE_ASPECT_ANY_COLOR_BIT_ANV)
+      default_clear_color = anv_image_color_clear_value(device->info, image);
+   else if (aspect == VK_IMAGE_ASPECT_DEPTH_BIT)
       default_clear_color = anv_image_hiz_clear_value(image);
 
    if (!clear_color)
@@ -119,6 +118,7 @@ anv_image_fill_surface_state(struct anv_device *device,
                        .clear_color = *clear_color,
                        .aux_surf = &aux_surface->isl,
                        .aux_usage = aux_usage,
+                       .aux_format = isl_surf->format,
                        .aux_address = anv_address_physical(aux_address),
                        .clear_address = anv_address_physical(clear_address),
                        .use_clear_address =
@@ -150,7 +150,7 @@ anv_image_fill_surface_state(struct anv_device *device,
    if (device->info->ver >= 10 && clear_address.bo) {
       uint32_t *clear_addr_dw = surface_state_map +
          device->isl_dev.ss.clear_color_state_offset;
-      assert((clear_address.offset & 0x3f) == 0);
+      assert(util_is_aligned(clear_address.offset, 64));
       state_inout->clear_address.offset |= *clear_addr_dw & 0x3f;
    }
 
@@ -295,17 +295,17 @@ anv_image_view_finish(struct anv_image_view *iview)
    if (!iview->use_surface_state_stream) {
       for (uint32_t plane = 0; plane < iview->n_planes; plane++) {
          if (iview->planes[plane].optimal_sampler.state.alloc_size) {
-            anv_state_pool_free(&device->bindless_surface_state_pool,
+            anv_state_pool_free(anv_device_get_bindless_surface_state_pool(device),
                   iview->planes[plane].optimal_sampler.state);
          }
 
          if (iview->planes[plane].general_sampler.state.alloc_size) {
-            anv_state_pool_free(&device->bindless_surface_state_pool,
+            anv_state_pool_free(anv_device_get_bindless_surface_state_pool(device),
                   iview->planes[plane].general_sampler.state);
          }
 
          if (iview->planes[plane].storage.state.alloc_size) {
-            anv_state_pool_free(&device->bindless_surface_state_pool,
+            anv_state_pool_free(anv_device_get_bindless_surface_state_pool(device),
                   iview->planes[plane].storage.state);
          }
       }

@@ -226,7 +226,7 @@ void cayman_emit_msaa_state(struct radeon_cmdbuf *cs, int nr_samples,
 		if (nr_samples > 1) {
 			radeon_set_context_reg(cs, CM_R_028804_DB_EQAA,
 					       S_028804_MAX_ANCHOR_SAMPLES(log_samples) |
-					       S_028804_PS_ITER_SAMPLES(log_ps_iter_samples) |
+					       S_028804_PS_ITER_SAMPLES(log_ps_iter_samples ? log_samples : 0) |
 					       S_028804_MASK_EXPORT_NUM_SAMPLES(log_samples) |
 					       S_028804_ALPHA_TO_MASK_NUM_SAMPLES(log_samples) |
 					       S_028804_HIGH_QUALITY_INTERSECTIONS(1) |

@@ -73,6 +73,14 @@ xe_query_config(int fd, struct intel_device_info *devinfo)
 
    if (config->info[DRM_XE_QUERY_CONFIG_FLAGS] & DRM_XE_QUERY_CONFIG_FLAG_HAS_VRAM)
       devinfo->has_local_mem = true;
+   if (config->info[DRM_XE_QUERY_CONFIG_FLAGS] & DRM_XE_QUERY_CONFIG_FLAG_HAS_LOW_LATENCY)
+      devinfo->supports_low_latency_hint = true;
+   if (config->info[DRM_XE_QUERY_CONFIG_FLAGS] & DRM_XE_QUERY_CONFIG_FLAG_HAS_NO_COMPRESSION_HINT)
+      devinfo->xe2_has_no_compression_hint = true;
+   if (config->info[DRM_XE_QUERY_CONFIG_FLAGS] & DRM_XE_QUERY_CONFIG_FLAG_HAS_DISABLE_STATE_CACHE_PERF_FIX)
+      devinfo->xe_has_state_cache_perf_fix = true;
+   if (config->info[DRM_XE_QUERY_CONFIG_FLAGS] & DRM_XE_QUERY_CONFIG_FLAG_HAS_PURGING_SUPPORT)
+      devinfo->has_madvise_purgeable = true;
 
    if (!has_gmd_ip_version(devinfo))
       devinfo->revision = (config->info[DRM_XE_QUERY_CONFIG_REV_AND_DEVICE_ID] >> 16) & 0xFFFF;
@@ -359,6 +367,7 @@ intel_device_info_xe_get_info_from_fd(int fd, struct intel_device_info *devinfo)
    devinfo->has_partial_mmap_offset = true;
    devinfo->has_caching_uapi = false;
    devinfo->has_set_pat_uapi = true;
+   devinfo->has_userptr_uapi = true;
 
    return true;
 }

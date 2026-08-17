@@ -7,7 +7,7 @@ use crate::legalize::{
 };
 use crate::sm30_instr_latencies::{
     encode_kepler_shader, instr_exec_latency, instr_latency,
-    KeplerInstructionEncoder,
+    latency_upper_bound, KeplerInstructionEncoder,
 };
 use bitview::*;
 
@@ -104,6 +104,10 @@ impl ShaderModel for ShaderModel20 {
         13
     }
 
+    fn latency_upper_bound(&self) -> u32 {
+        latency_upper_bound()
+    }
+
     fn worst_latency(&self, write: &Op, dst_idx: usize) -> u32 {
         instr_latency(self.sm, write, dst_idx)
     }
@@ -144,7 +148,9 @@ enum AluSrc {
 impl AluSrc {
     fn from_src(src: Option<&Src>) -> AluSrc {
         if let Some(src) = src {
-            assert!(src.src_swizzle.is_none());
+            assert!(
+                src.src_swizzle.is_none() || src.src_swizzle == SrcSwizzle::Yy
+            );
             // do not assert src_mod, can be encoded by opcode.
 
             match &src.src_ref {
@@ -295,7 +301,7 @@ impl SM20Encoder<'_> {
     }
 
     fn set_reg_src(&mut self, range: Range<usize>, src: &Src) {
-        assert!(src.src_swizzle.is_none());
+        assert!(src.src_swizzle.is_none() || src.src_swizzle == SrcSwizzle::Yy);
         self.set_reg_src_ref(range, &src.src_ref);
     }
 
@@ -470,9 +476,10 @@ impl SM20Encoder<'_> {
         self.set_field(26..58, imm_src1);
     }
 
-    fn encode_form_b(
+    fn encode_form_b_explicit_src(
         &mut self,
         unit: SM20Unit,
+        src_unit: SM20Unit,
         opcode: u8,
         dst: &Dst,
         src: &Src,
@@ -480,20 +487,20 @@ impl SM20Encoder<'_> {
         self.set_opcode(unit, opcode);
         self.set_dst(14..20, dst);
 
-        match AluSrc::from_src(Some(&src)) {
+        match AluSrc::from_src(Some(src)) {
             AluSrc::None => panic!("src is always Some"),
             AluSrc::Reg(reg) => {
                 self.set_reg(26..32, reg);
             }
             AluSrc::Imm(imm32) => {
-                match unit {
+                match src_unit {
                     SM20Unit::Float | SM20Unit::Double => {
                         self.set_src_imm_f20(26..45, 45, imm32);
                     }
                     SM20Unit::Int | SM20Unit::Move | SM20Unit::Tex => {
                         self.set_src_imm_i20(26..45, 45, imm32);
                     }
-                    _ => panic!("Unknown unit for immediate: {unit}"),
+                    _ => panic!("Unknown unit for immediate: {src_unit}"),
                 }
                 self.set_field(46..48, 3_u8);
             }
@@ -506,6 +513,16 @@ impl SM20Encoder<'_> {
                 self.set_field(46..48, 1_u8);
             }
         }
+    }
+
+    fn encode_form_b(
+        &mut self,
+        unit: SM20Unit,
+        opcode: u8,
+        dst: &Dst,
+        src: &Src,
+    ) {
+        self.encode_form_b_explicit_src(unit, unit, opcode, dst, src);
     }
 
     fn encode_form_b_imm32(&mut self, opcode: u8, dst: &Dst, imm_src: u32) {
@@ -1436,7 +1453,13 @@ impl SM20Op for OpF2F {
     }
 
     fn encode(&self, e: &mut SM20Encoder<'_>) {
-        e.encode_form_b(SM20Unit::Move, 0x4, &self.dst, &self.src);
+        e.encode_form_b_explicit_src(
+            SM20Unit::Move,
+            SM20Unit::Float,
+            0x4,
+            &self.dst,
+            &self.src,
+        );
         e.set_bit(5, false); // .sat
         e.set_bit(6, self.src.src_mod.has_fabs());
         e.set_bit(7, self.integer_rnd);
@@ -1445,7 +1468,7 @@ impl SM20Op for OpF2F {
         e.set_field(23..25, (self.src_type.bits() / 8).ilog2());
         e.set_rnd_mode(49..51, self.rnd_mode);
         e.set_bit(55, self.ftz);
-        e.set_bit(56, self.high);
+        e.set_bit(56, self.src.src_swizzle == SrcSwizzle::Yy);
     }
 }
 
@@ -1456,7 +1479,13 @@ impl SM20Op for OpF2I {
     }
 
     fn encode(&self, e: &mut SM20Encoder<'_>) {
-        e.encode_form_b(SM20Unit::Move, 0x5, &self.dst, &self.src);
+        e.encode_form_b_explicit_src(
+            SM20Unit::Move,
+            SM20Unit::Float,
+            0x5,
+            &self.dst,
+            &self.src,
+        );
         e.set_bit(6, self.src.src_mod.has_fabs());
         e.set_bit(7, self.dst_type.is_signed());
         e.set_bit(8, self.src.src_mod.has_fneg());
@@ -1464,7 +1493,7 @@ impl SM20Op for OpF2I {
         e.set_field(23..25, (self.src_type.bits() / 8).ilog2());
         e.set_rnd_mode(49..51, self.rnd_mode);
         e.set_bit(55, self.ftz);
-        e.set_bit(56, false); // .high
+        e.set_bit(56, self.src.src_swizzle == SrcSwizzle::Yy);
     }
 }
 
@@ -2305,6 +2334,8 @@ impl SM20Op for OpLd {
     }
 
     fn encode(&self, e: &mut SM20Encoder<'_>) {
+        assert_eq!(self.stride, OffsetStride::X1);
+        assert!(self.pred.is_true());
         match self.access.space {
             MemSpace::Global(addr_type) => {
                 e.set_opcode(SM20Unit::Mem, 0x20);
@@ -2384,6 +2415,7 @@ impl SM20Op for OpSt {
     }
 
     fn encode(&self, e: &mut SM20Encoder<'_>) {
+        assert_eq!(self.stride, OffsetStride::X1);
         match self.access.space {
             MemSpace::Global(addr_type) => {
                 e.set_opcode(SM20Unit::Mem, 0x24);
@@ -2468,6 +2500,7 @@ impl SM20Op for OpAtom {
             panic!("SM20 only supports global atomics");
         };
         assert!(addr_type == MemAddrType::A64);
+        assert_eq!(self.addr_stride, OffsetStride::X1);
 
         if self.dst.is_none() {
             e.set_opcode(SM20Unit::Mem, 0x1);
@@ -2490,7 +2523,7 @@ impl SM20Op for OpAtom {
         e.set_field(5..9, op);
 
         let typ = match self.atom_type {
-            AtomType::F16x2 => panic!("Unsupported atomic type"),
+            AtomType::F16v2 => panic!("Unsupported atomic type"),
             // AtomType::U8 => 0x0_u8,
             // AtomType::I8 => 0x1_u8,
             // AtomType::U16 => 0x2_u8,

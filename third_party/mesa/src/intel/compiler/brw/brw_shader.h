@@ -1,28 +1,6 @@
 /*
  * Copyright © 2010 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *
- * Authors:
- *    Eric Anholt <eric@anholt.net>
- *
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
@@ -35,6 +13,18 @@
 #include "brw_analysis.h"
 #include "brw_thread_payload.h"
 
+/* UBO_START is a pseudo-register number that must be greater than the maximum
+ * number of physical hardware registers.
+ * It is used in earlier compiler stages as a source for instructions where
+ * nir_intrinsic_load_ubo has been promoted to push constants.
+ * At those stages, the exact location of the push constant data in the thread
+ * payload is not yet known.
+ *
+ * Later, in brw_shader::assign_curb_setup(), once this location is determined,
+ * the compiler checks if a register number is greater than or equal to UBO_START.
+ * If it is, the compiler calculates the actual hardware register where the push
+ * constant data will be loaded and update the instruction.
+ */
 #define UBO_START ((1 << 16) - 4)
 
 struct brw_shader_stats {
@@ -67,7 +57,6 @@ struct brw_shader_params
    const nir_shader *nir;
    const brw_base_prog_key *key;
    brw_stage_prog_data *prog_data;
-
    unsigned dispatch_width;
 
    /* Fragment shader. */
@@ -96,13 +85,12 @@ public:
 
    void vfail(const char *msg, va_list args);
    void fail(const char *msg, ...);
-   void limit_dispatch_width(unsigned n, const char *msg);
 
-   void emit_urb_writes(const brw_reg &gs_vertex_count = brw_reg());
    void emit_gs_control_data_bits(const brw_reg &vertex_count);
    brw_reg gs_urb_channel_mask(const brw_reg &dword_index);
    brw_reg gs_urb_per_slot_dword_index(const brw_reg &vertex_count);
    bool mark_last_urb_write_with_eot();
+   void emit_tes_terminate();
    void emit_cs_terminate();
 
    const struct brw_compiler *compiler;
@@ -136,7 +124,6 @@ public:
    const brw_base_prog_key *const key;
 
    struct brw_stage_prog_data *prog_data;
-
    brw_analysis<brw_live_variables, brw_shader> live_analysis;
    brw_analysis<brw_register_pressure, brw_shader> regpressure_analysis;
    brw_analysis<brw_performance, brw_shader> performance_analysis;
@@ -144,11 +131,17 @@ public:
    brw_analysis<brw_def_analysis, brw_shader> def_analysis;
    brw_analysis<brw_ip_ranges, brw_shader> ip_ranges_analysis;
 
-   /** Number of uniform variable components visited. */
-   unsigned uniforms;
+   /** Amount data push constant data delivered to the shader
+    *
+    * Aligned to native GRF registers
+    */
+   unsigned push_data_size;
 
    /** Byte-offset for the next available spot in the scratch space buffer. */
    unsigned last_scratch;
+
+   /** Byte-offset for the next logical, non-reused spill slot. */
+   unsigned last_logical_scratch;
 
    brw_reg frag_depth;
    brw_reg frag_stencil;
@@ -189,17 +182,20 @@ public:
    DEFINE_PAYLOAD_ACCESSOR(brw_bs_thread_payload, bs_payload,
                            stage >= MESA_SHADER_RAYGEN && stage <= MESA_SHADER_CALLABLE);
 
-   bool source_depth_to_render_target;
-
-   brw_reg pixel_x;
-   brw_reg pixel_y;
+   brw_reg uw_pixel_x;
+   brw_reg uw_pixel_y;
    brw_reg pixel_z;
    brw_reg wpos_w;
    brw_reg pixel_w;
+   brw_reg x_start;
+   brw_reg y_start;
+   brw_reg z_cx;
+   brw_reg z_cy;
+   brw_reg z_c0;
+
    brw_reg delta_xy[INTEL_BARYCENTRIC_MODE_COUNT];
    brw_reg final_gs_vertex_count;
    brw_reg control_data_bits;
-   brw_reg invocation_id;
 
    struct {
       unsigned control_data_bits_per_vertex;
@@ -215,9 +211,13 @@ public:
    bool spilled_any_registers;
    bool needs_register_pressure;
 
+   /* Offset of this shader's code within the binary returned by
+    * brw_to_binary().  Filled in by brw_to_binary(); meaningless before.
+    */
+   unsigned start_offset;
+
    const unsigned dispatch_width; /**< 8, 16 or 32 */
    const unsigned max_polygons;
-   unsigned max_dispatch_width;
 
    /* The API selected subgroup size */
    unsigned api_subgroup_size; /**< 0, 8, 16, 32 */
@@ -249,8 +249,6 @@ void brw_print_instruction(const brw_shader &s, const brw_inst *inst,
                            FILE *file = stderr,
                            const brw_def_analysis *defs = nullptr);
 
-void brw_print_swsb(FILE *f, const struct intel_device_info *devinfo, const tgl_swsb swsb);
-
 /**
  * Return the flag register used in fragment shaders to keep track of live
  * samples.  On Gfx7+ we use f1.0-f1.1 to allow discard jumps in SIMD32
@@ -264,27 +262,33 @@ sample_mask_flag_subreg(const brw_shader &s)
 }
 
 inline brw_reg
-brw_dynamic_msaa_flags(const struct brw_wm_prog_data *wm_prog_data)
+brw_dynamic_fs_config(struct brw_fs_prog_data *fs_prog_data)
 {
-   return brw_uniform_reg(wm_prog_data->msaa_flags_param, BRW_TYPE_UD);
+   fs_prog_data->uses_fs_config = true;
+   return byte_offset(
+      brw_uniform_reg(
+         fs_prog_data->fs_config_param / REG_SIZE, BRW_TYPE_UD),
+      fs_prog_data->fs_config_param % REG_SIZE);
 }
 
 inline brw_reg
-brw_dynamic_per_primitive_remap(const struct brw_wm_prog_data *wm_prog_data)
+brw_dynamic_per_primitive_remap(const struct brw_fs_prog_data *fs_prog_data)
 {
-   return brw_uniform_reg(wm_prog_data->per_primitive_remap_param, BRW_TYPE_UD);
+   return byte_offset(
+      brw_uniform_reg(
+         fs_prog_data->per_primitive_remap_param / REG_SIZE, BRW_TYPE_UW),
+      fs_prog_data->per_primitive_remap_param % REG_SIZE);
 }
 
-enum intel_barycentric_mode brw_barycentric_mode(const struct brw_wm_prog_key *key,
-                                                 nir_intrinsic_instr *intr);
+enum intel_barycentric_mode
+brw_barycentric_mode(nir_intrinsic_instr *intr);
 
 uint32_t brw_fb_write_msg_control(const brw_inst *inst,
-                                  const struct brw_wm_prog_data *prog_data);
+                                  const struct brw_fs_prog_data *prog_data);
 
-void brw_compute_urb_setup_index(struct brw_wm_prog_data *wm_prog_data);
+void brw_compute_urb_setup_index(struct brw_fs_prog_data *fs_prog_data);
 
-int brw_get_subgroup_id_param_index(const intel_device_info *devinfo,
-                                    const brw_stage_prog_data *prog_data);
+void brw_assign_urb_setup(brw_shader &s);
 
 void brw_from_nir(brw_shader *s);
 
@@ -328,6 +332,7 @@ bool brw_lower_constant_loads(brw_shader &s);
 bool brw_lower_csel(brw_shader &s);
 bool brw_lower_derivatives(brw_shader &s);
 bool brw_lower_dpas(brw_shader &s);
+bool brw_lower_fill_and_spill(brw_shader &s);
 bool brw_lower_find_live_channel(brw_shader &s);
 bool brw_lower_indirect_mov(brw_shader &s);
 bool brw_lower_integer_multiplication(brw_shader &s);
@@ -347,11 +352,14 @@ bool brw_lower_sub_sat(brw_shader &s);
 bool brw_lower_subgroup_ops(brw_shader &s);
 bool brw_lower_uniform_pull_constant_loads(brw_shader &s);
 void brw_lower_vgrfs_to_fixed_grfs(brw_shader &s);
+brw_reg brw_lower_vgrf_to_fixed_grf(const struct intel_device_info *devinfo,
+                                    const brw_inst *inst, const brw_reg &reg);
 
 bool brw_opt_address_reg_load(brw_shader &s);
 bool brw_opt_algebraic(brw_shader &s);
 bool brw_opt_bank_conflicts(brw_shader &s);
 bool brw_opt_cmod_propagation(brw_shader &s);
+bool brw_opt_cmp_flag_destination(brw_shader &s, bool uses_kill);
 bool brw_opt_combine_constants(brw_shader &s);
 bool brw_opt_combine_convergent_txf(brw_shader &s);
 bool brw_opt_compact_virtual_grfs(brw_shader &s);
@@ -361,6 +369,8 @@ bool brw_opt_copy_propagation_defs(brw_shader &s);
 bool brw_opt_cse_defs(brw_shader &s);
 bool brw_opt_dead_code_eliminate(brw_shader &s);
 bool brw_opt_eliminate_find_live_channel(brw_shader &s);
+bool brw_opt_fill_and_spill(brw_shader &s);
+bool brw_opt_predicate_logic(brw_shader &s);
 bool brw_opt_register_coalesce(brw_shader &s);
 bool brw_opt_remove_extra_rounding_modes(brw_shader &s);
 bool brw_opt_remove_redundant_halts(brw_shader &s);
@@ -375,6 +385,7 @@ bool brw_workaround_emit_dummy_mov_instruction(brw_shader &s);
 bool brw_workaround_memory_fence_before_eot(brw_shader &s);
 bool brw_workaround_nomask_control_flow(brw_shader &s);
 bool brw_workaround_source_arf_before_eot(brw_shader &s);
+bool brw_workaround_emit_dummy_mov_mulmac(brw_shader &s);
 
 /* Helpers. */
 unsigned brw_get_lowered_simd_width(const brw_shader *shader,
@@ -403,3 +414,40 @@ brw_inst *brw_clone_inst(brw_shader &s, const brw_inst *inst);
 brw_inst *brw_transform_inst(brw_shader &s, brw_inst *inst, enum opcode new_opcode,
                              unsigned new_num_srcs = UINT_MAX);
 
+/* Maximum number of entries in brw_to_binary_params::shaders.
+ *
+ * This covers the most demanding caller (brw_compile_fs, which emits up to
+ * four variants: vmulti, simd8, simd16, simd32).
+ */
+#define BRW_TO_BINARY_MAX_SHADERS 4
+
+struct brw_to_binary_params {
+   const struct brw_compiler *compiler;
+   const struct brw_compile_params *params;
+   struct brw_stage_prog_data *prog_data;
+
+   /* Main shaders.  Slots with shader == NULL are skipped.  Non-skipped
+    * slots are processed in array order, each consuming (in turn) one entry
+    * from params->stats if it is non-NULL.
+    *
+    * After the call, each emitted shader's start_offset field is set to the
+    * offset of its code within the returned binary.
+    */
+   brw_shader *shaders[BRW_TO_BINARY_MAX_SHADERS];
+
+   /* Bindless-only: resume shaders for ray-tracing.  Their shader binding
+    * table entries are computed internally from each resume shader's
+    * start_offset (set by this call) plus its dispatch_width and grf_used,
+    * and are appended to the output (with relocs).
+    */
+   brw_shader *const *resume_shaders;
+   unsigned num_resume_shaders;
+
+   /* Optional extra data appended to the output after params->nir->constant_data,
+    * aligned to 32 bytes.  Used e.g. by the mesh wa_18019110168 remap table.
+    */
+   const void *extra_const_data;
+   unsigned extra_const_data_size;
+};
+
+const unsigned *brw_to_binary(const brw_to_binary_params *p);

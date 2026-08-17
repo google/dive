@@ -245,6 +245,10 @@ etna_emit_state(struct etna_context *ctx)
    struct etna_screen *screen = ctx->screen;
    unsigned ccw = ctx->rasterizer->front_ccw;
 
+   if (!ctx->dirty &&
+       !ctx->dirty_sampler_views &&
+       likely(!DBG_ENABLED(ETNA_DBG_CFLUSH_ALL)))
+      return;
 
    /* Pre-reserve the command buffer space which we are likely to need.
     * This must cover all the state emitted below, and the following
@@ -255,6 +259,7 @@ etna_emit_state(struct etna_context *ctx)
 
    /* Pre-processing: see what caches we need to flush before making state changes. */
    uint32_t to_flush = 0, to_flush_separate = 0;
+   bool stall_before_flush = false;
    if (unlikely(dirty & (ETNA_DIRTY_BLEND)))
       to_flush |= VIVS_GL_FLUSH_CACHE_COLOR;
    if (unlikely(dirty & ETNA_DIRTY_ZSA))
@@ -262,6 +267,8 @@ etna_emit_state(struct etna_context *ctx)
    if (unlikely(dirty & (ETNA_DIRTY_TEXTURE_CACHES))) {
       to_flush |= VIVS_GL_FLUSH_CACHE_TEXTURE;
       to_flush_separate |= VIVS_GL_FLUSH_CACHE_TEXTUREVS;
+      if (screen->info->halti < 5)
+         stall_before_flush = true;
    }
    if (unlikely(dirty & ETNA_DIRTY_SHADER_CACHES))
       to_flush |= VIVS_GL_FLUSH_CACHE_SHADER_L1;
@@ -271,7 +278,12 @@ etna_emit_state(struct etna_context *ctx)
       to_flush |= VIVS_GL_FLUSH_CACHE_TEXTURE | VIVS_GL_FLUSH_CACHE_COLOR |
                   VIVS_GL_FLUSH_CACHE_DEPTH;
       to_flush_separate |= VIVS_GL_FLUSH_CACHE_TEXTUREVS;
+      if (screen->info->halti < 5)
+         stall_before_flush = true;
    }
+
+   if (stall_before_flush)
+      etna_stall(stream, SYNC_RECIPIENT_FE, SYNC_RECIPIENT_PE);
 
    if (to_flush) {
       etna_set_state(stream, VIVS_GL_FLUSH_CACHE, to_flush);
@@ -353,8 +365,6 @@ etna_emit_state(struct etna_context *ctx)
    if (likely(dirty & (ETNA_DIRTY_INDEX_BUFFER))) {
       /*00644*/ EMIT_STATE_RELOC(FE_INDEX_STREAM_BASE_ADDR, &ctx->index_buffer.FE_INDEX_STREAM_BASE_ADDR);
       /*00648*/ EMIT_STATE(FE_INDEX_STREAM_CONTROL, ctx->index_buffer.FE_INDEX_STREAM_CONTROL);
-   }
-   if (likely(dirty & (ETNA_DIRTY_INDEX_BUFFER))) {
       /*00674*/ EMIT_STATE(FE_PRIMITIVE_RESTART_INDEX, ctx->index_buffer.FE_PRIMITIVE_RESTART_INDEX);
    }
    if (likely(dirty & (ETNA_DIRTY_VERTEX_BUFFERS))) {
@@ -473,6 +483,19 @@ etna_emit_state(struct etna_context *ctx)
    if (unlikely(VIV_FEATURE(screen, ETNA_FEATURE_MSAA_FRAGMENT_OPERATION) &&
                 (dirty & ETNA_DIRTY_BLEND))) {
       /*01054*/ EMIT_STATE(PS_MSAA_CONFIG, etna_blend_state(ctx->blend)->PS_MSAA_CONFIG);
+
+      if (ctx->blend->alpha_to_coverage &&
+          !ctx->alpha_coverage_dither_emitted) {
+         /*01058*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(0), 0x6e80e680);
+         /*0105C*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(1), 0x2ac42a4c);
+         /*01060*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(2), 0x15fb5d3b);
+         /*01064*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(3), 0x9d7391f7);
+         /*01068*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(4), 0x08e691f7);
+         /*0106C*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(5), 0x4ca25d3b);
+         /*01070*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(6), 0xbf512a4c);
+         /*01074*/ EMIT_STATE(PS_ALPHA_TO_COVERAGE_DITHER(7), 0x37d9e680);
+         ctx->alpha_coverage_dither_emitted = true;
+      }
    }
    if (unlikely(dirty & (ETNA_DIRTY_ZSA | ETNA_DIRTY_FRAMEBUFFER))) {
       /*01400*/ EMIT_STATE(PE_DEPTH_CONFIG, (etna_zsa_state(ctx->zsa)->PE_DEPTH_CONFIG |
@@ -669,19 +692,6 @@ etna_emit_state(struct etna_context *ctx)
 
    ctx->emit_texture_state(ctx);
 
-   /* We need to update the uniform cache only if one of the following bits are
-    * set in ctx->dirty:
-    * - ETNA_DIRTY_SHADER
-    * - ETNA_DIRTY_CONSTBUF
-    * - uniforms_dirty_bits
-    *
-    * In case of ETNA_DIRTY_SHADER we need load all uniforms from the cache. In
-    * all
-    * other cases we can load on the changed uniforms.
-    */
-   static const uint32_t uniform_dirty_bits =
-      ETNA_DIRTY_SHADER | ETNA_DIRTY_CONSTBUF;
-
    /**** Large dynamically-sized state ****/
    bool need_steering = screen->info->halti < 5 &&
                         (screen->specs.has_unified_instmem ||
@@ -800,19 +810,17 @@ etna_emit_state(struct etna_context *ctx)
          etna_stall(stream, SYNC_RECIPIENT_RA, SYNC_RECIPIENT_PE);
       }
    } else {
-      /* ideally this cache would only be flushed if there are VS uniform changes */
-      if (need_steering)
-         etna_set_state(stream, VIVS_SH_CONTROL, 0x0);
-
-      if (dirty & (uniform_dirty_bits | ctx->shader.vs->uniforms_dirty_bits))
+      if (dirty & (ETNA_DIRTY_CONSTBUF | ctx->shader.vs->uniforms_dirty_bits)) {
+         if (need_steering)
+            etna_set_state(stream, VIVS_SH_CONTROL, 0x0);
          etna_uniforms_write(ctx, ctx->shader.vs, ctx->constant_buffer[MESA_SHADER_VERTEX].cb);
+      }
 
-      /* ideally this cache would only be flushed if there are PS uniform changes */
-      if (need_steering)
-         etna_set_state(stream, VIVS_SH_CONTROL, VIVS_SH_CONTROL_PS_UNIFORM);
-
-      if (dirty & (uniform_dirty_bits | ctx->shader.fs->uniforms_dirty_bits))
+      if (dirty & (ETNA_DIRTY_CONSTBUF | ctx->shader.fs->uniforms_dirty_bits)) {
+         if (need_steering)
+            etna_set_state(stream, VIVS_SH_CONTROL, VIVS_SH_CONTROL_PS_UNIFORM);
          etna_uniforms_write(ctx, ctx->shader.fs, ctx->constant_buffer[MESA_SHADER_FRAGMENT].cb);
+      }
    }
 /**** End of state update ****/
 #undef EMIT_STATE

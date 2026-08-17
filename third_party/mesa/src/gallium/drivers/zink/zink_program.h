@@ -509,6 +509,11 @@ zink_sanitize_optimal_key_mesh(struct zink_shader **shaders, uint32_t val)
       k.fs.force_dual_color_blend = false;
    return k.val;
 }
+
+uint32_t
+zink_get_subgroup_size_for_block(struct zink_screen *screen, struct zink_compute_program *comp,
+                                 const uint32_t block[3]);
+
 #ifdef __cplusplus
 }
 #endif

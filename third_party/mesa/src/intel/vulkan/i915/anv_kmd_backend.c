@@ -183,10 +183,17 @@ i915_gem_mmap_offset(struct anv_device *device, struct anv_bo *bo,
    /* The Kernel uAPI doesn't allow us to map with an offset. To work around,
     * overallocate and then unmap the unneeded region
     */
-   void *ptr = mmap(placed_addr, offset + size,
-                    PROT_READ | PROT_WRITE,
-                    (placed_addr != NULL ? MAP_FIXED : 0) | MAP_SHARED,
-                    device->fd, gem_mmap.offset);
+   void *ptr;
+
+   if (device->physical->info.is_virtio)
+      ptr = intel_virtio_bo_mmap(device->fd, bo->gem_handle,
+                                 offset + size, placed_addr);
+   else
+      ptr = mmap(placed_addr, offset + size,
+                 PROT_READ | PROT_WRITE,
+                 (placed_addr != NULL ? MAP_FIXED : 0) | MAP_SHARED,
+                 device->fd, gem_mmap.offset);
+
    if (ptr == MAP_FAILED)
       return ptr;
 
@@ -214,6 +221,40 @@ i915_gem_mmap_legacy(struct anv_device *device, struct anv_bo *bo, uint64_t offs
    return (void *)(uintptr_t) gem_mmap.addr_ptr;
 }
 
+static enum intel_device_info_mmap_mode
+anv_bo_get_mmap_mode(struct anv_device *device, struct anv_bo *bo)
+{
+   enum anv_bo_alloc_flags alloc_flags = bo->alloc_flags;
+
+   if (device->info->has_set_pat_uapi)
+      return anv_device_get_pat_entry(device, alloc_flags)->mmap;
+
+   if (anv_physical_device_has_vram(device->physical)) {
+      if ((alloc_flags & ANV_BO_ALLOC_NO_LOCAL_MEM) ||
+          (alloc_flags & ANV_BO_ALLOC_IMPORTED))
+         return INTEL_DEVICE_INFO_MMAP_MODE_WB;
+
+      return INTEL_DEVICE_INFO_MMAP_MODE_WC;
+   }
+
+   /* gfx9 atom */
+   if (!device->info->has_llc) {
+      /* user wants a cached and coherent memory but to achieve it without
+       * LLC in older platforms DRM_IOCTL_I915_GEM_SET_CACHING needs to be
+       * supported and set.
+       */
+      if (alloc_flags & ANV_BO_ALLOC_HOST_CACHED)
+         return INTEL_DEVICE_INFO_MMAP_MODE_WB;
+
+      return INTEL_DEVICE_INFO_MMAP_MODE_WC;
+   }
+
+   if (alloc_flags & (ANV_BO_ALLOC_SCANOUT | ANV_BO_ALLOC_EXTERNAL))
+      return INTEL_DEVICE_INFO_MMAP_MODE_WC;
+
+   return INTEL_DEVICE_INFO_MMAP_MODE_WB;
+}
+
 static uint32_t
 mmap_calc_flags(struct anv_device *device, struct anv_bo *bo)
 {
@@ -225,8 +266,6 @@ mmap_calc_flags(struct anv_device *device, struct anv_bo *bo)
    case INTEL_DEVICE_INFO_MMAP_MODE_WC:
       flags = I915_MMAP_WC;
       break;
-   case INTEL_DEVICE_INFO_MMAP_MODE_UC:
-      UNREACHABLE("Missing");
    default:
       /* no flags == WB */
       flags = 0;

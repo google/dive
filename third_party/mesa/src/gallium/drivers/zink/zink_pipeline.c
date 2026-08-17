@@ -138,12 +138,6 @@ zink_create_gfx_pipeline(struct zink_screen *screen,
       ms_state.sampleShadingEnable = VK_TRUE;
       ms_state.minSampleShading = MIN2((float)(state->rast_samples + 1) / (state->min_samples + 1), 1.0f);
    }
-   VkPipelineSampleLocationsStateCreateInfoEXT pslsci = {
-      VK_STRUCTURE_TYPE_PIPELINE_SAMPLE_LOCATIONS_STATE_CREATE_INFO_EXT,
-      NULL,
-      VK_TRUE,
-      .sampleLocationsInfo.sType = VK_STRUCTURE_TYPE_SAMPLE_LOCATIONS_INFO_EXT
-   };
 
    VkPipelineViewportStateCreateInfo viewport_state = {0};
    VkPipelineViewportDepthClipControlCreateInfoEXT clip = {
@@ -214,10 +208,6 @@ zink_create_gfx_pipeline(struct zink_screen *screen,
       VK_DYNAMIC_STATE_STENCIL_REFERENCE,
    };
    unsigned state_count = 4;
-   if (state->custom_sample_locations) {
-      dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_LOCATIONS_EXT;
-      ms_state.pNext = &pslsci;
-   }
    if (screen->info.have_EXT_extended_dynamic_state) {
       dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT;
       dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT;
@@ -281,6 +271,10 @@ zink_create_gfx_pipeline(struct zink_screen *screen,
       }
       if (screen->info.dynamic_state3_feats.extendedDynamicState3RepresentativeFragmentTestEnable)
          dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_REPRESENTATIVE_FRAGMENT_TEST_ENABLE_NV;
+   }
+   if (screen->base.caps.programmable_sample_locations) {
+      dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_LOCATIONS_EXT;
+      dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_LOCATIONS_ENABLE_EXT;
    }
    if (screen->info.have_EXT_color_write_enable)
       dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_COLOR_WRITE_ENABLE_EXT;
@@ -489,6 +483,19 @@ zink_create_compute_pipeline(struct zink_screen *screen, struct zink_compute_pro
       STATIC_ASSERT(ARRAY_SIZE(data) == ARRAY_SIZE(me));
    }
 
+   /* pin the subgroup size whenever the driver can't tell us on compute kernels. */
+   VkPipelineShaderStageRequiredSubgroupSizeCreateInfo subInfo = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
+   };
+   if (comp->shader->info.stage == MESA_SHADER_KERNEL &&
+       screen->info.feats13.subgroupSizeControl &&
+       (screen->info.props13.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT) &&
+       screen->info.props13.minSubgroupSize != screen->info.props13.maxSubgroupSize &&
+       !screen->info.have_KHR_pipeline_executable_properties) {
+      subInfo.requiredSubgroupSize = zink_get_subgroup_size_for_block(screen, comp, state->local_size);
+      stage.pNext = &subInfo;
+   }
+
    pci.stage = stage;
 
    VkPipeline pipeline;
@@ -529,24 +536,18 @@ zink_create_gfx_pipeline_output(struct zink_screen *screen, struct zink_gfx_pipe
       ms_state.sampleShadingEnable = VK_TRUE;
       ms_state.minSampleShading = MIN2((float)(state->rast_samples + 1) / (state->min_samples + 1), 1.0f);
    }
-   VkPipelineSampleLocationsStateCreateInfoEXT pslsci = {
-      VK_STRUCTURE_TYPE_PIPELINE_SAMPLE_LOCATIONS_STATE_CREATE_INFO_EXT,
-      NULL,
-      VK_TRUE,
-      .sampleLocationsInfo.sType = VK_STRUCTURE_TYPE_SAMPLE_LOCATIONS_INFO_EXT
-   };
 
    VkDynamicState dynamicStateEnables[30] = {
       VK_DYNAMIC_STATE_BLEND_CONSTANTS,
    };
    unsigned state_count = 1;
-   if (state->custom_sample_locations) {
-      dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_LOCATIONS_EXT;
-      ms_state.pNext = &pslsci;
-   }
    if (screen->info.have_EXT_color_write_enable)
       dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_COLOR_WRITE_ENABLE_EXT;
 
+   if (screen->base.caps.programmable_sample_locations) {
+      dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_LOCATIONS_EXT;
+      dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_LOCATIONS_ENABLE_EXT;
+   }
    if (screen->have_full_ds3) {
       dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_SAMPLE_MASK_EXT;
       dynamicStateEnables[state_count++] = VK_DYNAMIC_STATE_RASTERIZATION_SAMPLES_EXT;

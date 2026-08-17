@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 void *util_sysprof_begin(const char *name);
-void util_sysprof_end(void **scope);
+void util_sysprof_end(void *trace);
 
 #ifdef __cplusplus
 }

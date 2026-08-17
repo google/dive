@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include "util/bitscan.h"
 #include "util/macros.h"
+#include "ralloc.h"
 
 /****************************************************************************
  * generic bitset implementation
@@ -46,6 +47,7 @@
  */
 #define BITSET_WORDS(bits) (((bits) + BITSET_WORDBITS - 1) / BITSET_WORDBITS)
 #define BITSET_DECLARE(name, bits) BITSET_WORD name[BITSET_WORDS(bits)]
+#define BITSET_BYTES(bits) (BITSET_WORDS(bits) * sizeof(BITSET_WORD))
 
 /* bitset operations
  */
@@ -57,6 +59,18 @@
 
 #define BITSET_BITWORD(b) ((b) / BITSET_WORDBITS)
 #define BITSET_BIT(b) (1u << ((b) % BITSET_WORDBITS))
+
+static inline void
+__bitset_zero(BITSET_WORD *r, unsigned n)
+{
+   memset(r, 0, n * sizeof(BITSET_WORD));
+}
+
+static inline void
+__bitset_copy(BITSET_WORD *r, const BITSET_WORD *x, unsigned n)
+{
+   memcpy(r, x, n * sizeof(BITSET_WORD));
+}
 
 /* single bit operations
  */
@@ -225,13 +239,13 @@ __bitset_shl(BITSET_WORD *x, unsigned amount, unsigned n)
    (assert (!"BITSET_CLEAR_RANGE: bit range crosses word boundary"), 0))
 
 static inline bool
-__bitset_test_range(const BITSET_WORD *r, unsigned start, unsigned end)
+__bitset_test_range(const BITSET_WORD *r, int start, int end)
 {
    while (start <= end) {
       unsigned start_mod = start % BITSET_WORDBITS;
-      unsigned size = MIN2(BITSET_WORDBITS - start_mod, end - start + 1);
+      unsigned size = MIN2(BITSET_WORDBITS - start_mod, end - start + 1u);
 
-      if (!BITSET_TEST_RANGE_INSIDE_WORD(r, start, start + size - 1, 0))
+      if (!BITSET_TEST_RANGE_INSIDE_WORD(r, start, start + size - 1u, 0))
          return true;
 
       start += size;
@@ -244,13 +258,13 @@ __bitset_test_range(const BITSET_WORD *r, unsigned start, unsigned end)
    __bitset_test_range(x, b, e)
 
 static inline void
-__bitset_set_range(BITSET_WORD *r, unsigned start, unsigned end)
+__bitset_set_range(BITSET_WORD *r, int start, int end)
 {
    while (start <= end) {
       unsigned start_mod = start % BITSET_WORDBITS;
-      unsigned size = MIN2(BITSET_WORDBITS - start_mod, end - start + 1);
+      unsigned size = MIN2(BITSET_WORDBITS - start_mod, end - start + 1u);
 
-      BITSET_SET_RANGE_INSIDE_WORD(r, start, start + size - 1);
+      BITSET_SET_RANGE_INSIDE_WORD(r, start, start + size - 1u);
       start += size;
    }
 }
@@ -259,23 +273,28 @@ __bitset_set_range(BITSET_WORD *r, unsigned start, unsigned end)
    __bitset_set_range(x, b, e)
 
 static inline void
-__bitclear_clear_range(BITSET_WORD *r, unsigned start, unsigned end)
+__bitset_clear_range(BITSET_WORD *r, int start, int end)
 {
    while (start <= end) {
       unsigned start_mod = start % BITSET_WORDBITS;
-      unsigned size = MIN2(BITSET_WORDBITS - start_mod, end - start + 1);
+      unsigned size = MIN2(BITSET_WORDBITS - start_mod, end - start + 1u);
 
-      BITSET_CLEAR_RANGE_INSIDE_WORD(r, start, start + size - 1);
+      BITSET_CLEAR_RANGE_INSIDE_WORD(r, start, start + size - 1u);
       start += size;
    }
 }
 
 #define BITSET_CLEAR_RANGE(x, b, e) \
-   __bitclear_clear_range(x, b, e)
+   __bitset_clear_range(x, b, e)
+
+#define BITSET_CLEAR_COUNT(x, b, n) BITSET_CLEAR_RANGE(x, (b), (b) + (n) - 1)
+#define BITSET_TEST_COUNT(x, b, n)  BITSET_TEST_RANGE(x,  (b), (b) + (n) - 1)
+#define BITSET_SET_COUNT(x, b, n)   BITSET_SET_RANGE(x,   (b), (b) + (n) - 1)
 
 static inline unsigned
 __bitset_extract(const BITSET_WORD *r, unsigned start, unsigned count)
 {
+   assert(count <= BITSET_WORDBITS);
    unsigned shift = start % BITSET_WORDBITS;
    BITSET_WORD lower = r[BITSET_BITWORD(start)] >> shift;
    BITSET_WORD upper = shift ? r[BITSET_BITWORD(start + count - 1)] << (BITSET_WORDBITS - shift) : 0;
@@ -421,7 +440,7 @@ __bitset_next_set(unsigned i, BITSET_WORD *tmp,
 #define BITSET_FOREACH_SET(__i, __set, __size) \
    for (BITSET_WORD __tmp = (__size) == 0 ? 0 : *(__set), *__foo = &__tmp; __foo != NULL; __foo = NULL) \
       for (__i = 0; \
-           (__i = __bitset_next_set(__i, &__tmp, __set, __size)) < __size;)
+           (__i = __bitset_next_set(__i, &__tmp, __set, __size)) < (__size);)
 
 static inline void
 __bitset_next_range(unsigned *start, unsigned *end, const BITSET_WORD *set,
@@ -492,6 +511,18 @@ static inline BITSET_WORD *
 BITSET_CALLOC(unsigned size)
 {
     return (BITSET_WORD *) calloc(BITSET_WORDS(size), sizeof(BITSET_WORD));
+}
+
+static inline BITSET_WORD *
+BITSET_RZALLOC(const void *memctx, unsigned size)
+{
+   return (BITSET_WORD *)rzalloc_size(memctx, BITSET_BYTES(size));
+}
+
+static inline BITSET_WORD *
+BITSET_LINEAR_ZALLOC(linear_ctx *memctx, unsigned size)
+{
+   return (BITSET_WORD *)linear_zalloc_child(memctx, BITSET_BYTES(size));
 }
 
 #ifdef __cplusplus

@@ -1,24 +1,6 @@
 /*
  * Copyright © 2015 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 #include "elk_nir.h"
@@ -40,7 +22,7 @@
 static uint8_t
 get_resolve_status_for_src(nir_src *src)
 {
-   nir_instr *src_instr = src->ssa->parent_instr;
+   nir_instr *src_instr = nir_def_instr(src->ssa);
    uint8_t resolve_status = src_instr->pass_flags & ELK_NIR_BOOLEAN_MASK;
 
    /* If the source instruction needs resolve, then from the perspective
@@ -59,7 +41,7 @@ get_resolve_status_for_src(nir_src *src)
 static bool
 src_mark_needs_resolve(nir_src *src, void *void_state)
 {
-   nir_instr *src_instr = src->ssa->parent_instr;
+   nir_instr *src_instr = nir_def_instr(src->ssa);
    uint8_t resolve_status = src_instr->pass_flags & ELK_NIR_BOOLEAN_MASK;
 
    /* If the source instruction is unresolved, then mark it as needing

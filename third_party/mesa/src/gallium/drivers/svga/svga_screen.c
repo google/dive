@@ -136,16 +136,16 @@ get_bool_cap(struct svga_winsys_screen *sws, SVGA3dDevCapIndex cap,
    .lower_extract_word = true,                                                \
    .lower_insert_byte = true,                                                 \
    .lower_insert_word = true,                                                 \
+   .float_mul_add32 = nir_float_muladd_support_keep_weak_ffma,                \
    .lower_int64_options = nir_lower_imul_2x32_64 | nir_lower_divmod64,        \
    .lower_fdph = true,                                                        \
    .lower_flrp64 = true,                                                      \
-   .lower_ldexp = true,                                                       \
    .lower_uniforms_to_ubo = true,                                             \
-   .lower_vector_cmp = true,                                                  \
    .lower_cs_local_index_to_id = true,                                        \
    .max_unroll_iterations = 32
 
 #define VGPU10_OPTIONS                                                        \
+   .float_mul_add64 = nir_float_muladd_support_keep_weak_ffma,                \
    .lower_doubles_options = nir_lower_dfloor | nir_lower_dsign | nir_lower_dceil | nir_lower_dtrunc | nir_lower_dround_even, \
    .lower_fmod = true,                                                        \
    .lower_fpow = true,                                                        \
@@ -386,6 +386,7 @@ svga_init_screen_caps(struct svga_screen *svgascreen)
    caps->occlusion_query = true;
    caps->texture_buffer_objects = sws->have_vgpu10;
    caps->texture_buffer_offset_alignment = sws->have_vgpu10 ? 16 : 0;
+   caps->texture_mirror_clamp_to_edge = sws->have_vgpu10;
 
    caps->texture_swizzle = true;
    caps->constant_buffer_offset_alignment = 256;
@@ -429,6 +430,7 @@ svga_init_screen_caps(struct svga_screen *svgascreen)
 
    caps->fragment_shader_texture_lod = true;
    caps->fragment_shader_derivatives = true;
+   caps->fs_fine_derivative = sws->have_sm5;
 
    caps->depth_clip_disable =
    caps->indep_blend_enable =
@@ -438,6 +440,7 @@ svga_init_screen_caps(struct svga_screen *svgascreen)
    caps->vertex_element_instance_divisor =
    caps->seamless_cube_map =
    caps->fake_sw_msaa = sws->have_vgpu10;
+   caps->conditional_render_inverted = sws->have_set_predication_cmd;
 
    caps->max_stream_output_buffers = sws->have_vgpu10 ? SVGA3D_DX_MAX_SOTARGETS : 0;
    caps->max_stream_output_separate_components = sws->have_vgpu10 ? 4 : 0;
@@ -526,7 +529,7 @@ svga_init_screen_caps(struct svga_screen *svgascreen)
 
    caps->vendor_id = 0x15ad; /* VMware Inc. */
    caps->device_id = sws->device_id ? sws->device_id : 0x0405; /* assume SVGA II */
-   caps->video_memory = 1; /* XXX: Query the host ? */
+   caps->video_memory = sws->max_mob_memory_mib ? sws->max_mob_memory_mib : 1;
    caps->copy_between_compressed_and_plain_formats = sws->have_vgpu10;
    caps->doubles = sws->have_sm5;
    caps->uma = false;
@@ -556,6 +559,7 @@ svga_init_screen_caps(struct svga_screen *svgascreen)
       get_uint_cap(sws, SVGA3D_DEVCAP_MAX_TEXTURE_ANISOTROPY, 4);
 
    caps->max_texture_lod_bias = 15.0;
+   caps->query_pipeline_statistics = sws->have_vgpu10;
 }
 
 static void

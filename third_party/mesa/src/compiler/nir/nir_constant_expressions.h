@@ -31,9 +31,24 @@
 #include "nir_defines.h"
 #include "nir_opcodes.h"
 
-void nir_eval_const_opcode(nir_op op, nir_const_value *dest,
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * Evaluates the NIR opcode for the given source constant values.
+ *
+ * If @poison is non-NULL, it will containe the nir_component_mask of output
+ * channels that invoked undefined behavior (define not used here, to avoid
+ * pulling in all of nir.h).
+ */
+void nir_eval_const_opcode(nir_op op, nir_const_value *dest, uint16_t *poison,
                            unsigned num_components, unsigned bit_size,
                            nir_const_value **src,
                            unsigned float_controls_execution_mode);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* NIR_CONSTANT_EXPRESSIONS_H */

@@ -21,7 +21,16 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
+#include "v3dv_device.h"
+#include "v3dv_image.h"
+#include "v3dv_cmd_buffer.h"
+#include "v3dv_entrypoints.h"
+#include "v3dv_version_dispatch.h"
+#include "vk_format.h"
+#include "vk_log.h"
+
+#define V3D_VERSION 42
+#include "v3dv_format_table.h"
 
 static uint32_t
 num_subpass_attachments(const VkSubpassDescription2 *desc)

@@ -37,9 +37,10 @@
 static brw_inst *const UNSEEN = (brw_inst *) (uintptr_t) 1;
 
 void
-brw_def_analysis::mark_invalid(int nr)
+brw_def_analysis::mark_invalid(const brw_reg &reg)
 {
-   def_insts[nr] = NULL;
+   if (reg.file == VGRF)
+      def_insts[reg.nr] = NULL;
 }
 
 void
@@ -50,7 +51,7 @@ brw_def_analysis::update_for_reads(const brw_idom_tree &idom,
     * implicitly reads the accumulator, we don't consider it to produce a def.
     */
    if (inst->reads_accumulator_implicitly())
-      mark_invalid(inst->dst.nr);
+      mark_invalid(inst->dst);
 
    for (int i = 0; i < inst->sources; i++) {
       const int nr = inst->src[i].nr;
@@ -59,11 +60,12 @@ brw_def_analysis::update_for_reads(const brw_idom_tree &idom,
          /* Similarly, explicit reads of accumulators, address registers,
           * and flags make the destination not a def, as we don't track those.
           */
-         if (inst->src[i].file == ARF &&
-             (nr == BRW_ARF_ADDRESS ||
-              nr == BRW_ARF_ACCUMULATOR ||
-              nr == BRW_ARF_FLAG))
-            mark_invalid(inst->dst.nr);
+         if (inst->src[i].file == ADDRESS ||
+             (inst->src[i].file == ARF &&
+              (brw_reg_is_arf(inst->src[i], BRW_ARF_ADDRESS) ||
+               brw_reg_is_arf(inst->src[i], BRW_ARF_ACCUMULATOR) ||
+               brw_reg_is_arf(inst->src[i], BRW_ARF_FLAG))))
+            mark_invalid(inst->dst);
 
          continue;
       }
@@ -79,7 +81,7 @@ brw_def_analysis::update_for_reads(const brw_idom_tree &idom,
           */
          if (def_insts[nr] == UNSEEN ||
              !idom.dominates(def_insts[nr]->block, inst->block))
-            mark_invalid(nr);
+            mark_invalid(inst->src[i]);
       }
 
       /* Additionally, if one of our sources is not a def, then our
@@ -87,8 +89,8 @@ brw_def_analysis::update_for_reads(const brw_idom_tree &idom,
        */
       if (inst->opcode != SHADER_OPCODE_LOAD_REG &&
           inst->opcode != SHADER_OPCODE_LOAD_PAYLOAD &&
-          !def_insts[nr] && inst->dst.file == VGRF)
-         mark_invalid(inst->dst.nr);
+          !def_insts[nr])
+         mark_invalid(inst->dst);
    }
 }
 
@@ -117,7 +119,7 @@ brw_def_analysis::update_for_write(const brw_shader *v,
       /* Otherwise this is a second write or a partial write, in which
        * case we know with certainty that this isn't an SSA def.
        */
-      mark_invalid(nr);
+      mark_invalid(inst->dst);
    }
 }
 
@@ -162,7 +164,7 @@ brw_def_analysis::brw_def_analysis(const brw_shader *v)
             /* If our "def" reads a non-SSA source, then it isn't a def. */
             if (def->opcode != SHADER_OPCODE_LOAD_REG &&
                 (!def_insts[nr] || def_insts[nr] == UNSEEN)) {
-               mark_invalid(def->dst.nr);
+               mark_invalid(def->dst);
                iterate = true;
                break;
             }

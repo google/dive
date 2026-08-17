@@ -148,7 +148,9 @@ lima_update_job_wb(struct lima_context *ctx, unsigned buffers)
 }
 
 static void
-lima_clear(struct pipe_context *pctx, unsigned buffers, const struct pipe_scissor_state *scissor_state,
+lima_clear(struct pipe_context *pctx, unsigned buffers,
+           uint32_t color_clear_mask, uint8_t stencil_clear_mask,
+           const struct pipe_scissor_state *scissor_state,
            const union pipe_color_union *color, double depth, unsigned stencil)
 {
    struct lima_context *ctx = lima_context(pctx);

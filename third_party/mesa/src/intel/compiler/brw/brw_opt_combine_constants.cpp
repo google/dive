@@ -1,24 +1,6 @@
 /*
  * Copyright © 2014 Intel Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * SPDX-License-Identifier: MIT
  */
 
 /** @file
@@ -229,19 +211,19 @@ negation_exists(nir_const_value v, unsigned bit_size,
 
    case 16:
       if (base_type == float_only)
-         return !util_is_half_nan(v.i16);
+         return !util_is_half_nan(v.i16) && !util_is_half_subnormal(v.i16);
       else
          return v.i16 != 0 && v.i16 != INT16_MIN;
 
    case 32:
       if (base_type == float_only)
-         return !isnan(v.f32);
+         return !isnan(v.f32) && fpclassify(v.f32) != FP_SUBNORMAL;
       else
          return v.i32 != 0 && v.i32 != INT32_MIN;
 
    case 64:
       if (base_type == float_only)
-         return !isnan(v.f64);
+         return !isnan(v.f64) && fpclassify(v.f64) != FP_SUBNORMAL;
       else
          return v.i64 != 0 && v.i64 != INT64_MIN;
 
@@ -1167,14 +1149,18 @@ add_candidate_immediate(struct table *table, brw_inst *inst, unsigned ip,
    }
 
    /* It is safe to change the type of the operands of a select instruction
-    * that has no conditional modifier, no source modifiers, and no saturate
-    * modifer.
+    * that has no conditional modifier, no source modifiers, no saturate
+    * modifier, and no accumulators are used. The types of accumulator accesses
+    * cannot be arbitrarily changed.
     */
    if (inst->opcode == BRW_OPCODE_SEL &&
        inst->conditional_mod == BRW_CONDITIONAL_NONE &&
        !inst->src[0].negate && !inst->src[0].abs &&
        !inst->src[1].negate && !inst->src[1].abs &&
-       !inst->saturate) {
+       !inst->saturate &&
+       !inst->src[0].is_accumulator() &&
+       !inst->src[1].is_accumulator() &&
+       !inst->dst.is_accumulator()) {
       v->type = either_type;
    }
 }
@@ -1574,7 +1560,7 @@ brw_opt_combine_constants(brw_shader &s)
        * seem to have additional alignment requirements, so account for that
        * too.
        */
-      assert(reg.offset == ALIGN(reg.offset, get_alignment_for_imm(imm)));
+      assert(reg.offset == align(reg.offset, get_alignment_for_imm(imm)));
 
       struct brw_reg imm_reg = build_imm_reg_for_copy(imm);
 

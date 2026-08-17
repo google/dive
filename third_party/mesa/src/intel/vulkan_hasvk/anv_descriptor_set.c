@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "util/mesa-sha1.h"
+#include "util/mesa-blake3.h"
 #include "vk_util.h"
 
 #include "anv_private.h"
@@ -665,7 +665,7 @@ anv_descriptor_set_layout_descriptor_buffer_size(const struct anv_descriptor_set
    const struct anv_descriptor_set_binding_layout *dynamic_binding =
       set_layout_dynamic_binding(set_layout);
    if (dynamic_binding == NULL)
-      return ALIGN(set_layout->descriptor_buffer_size, ANV_UBO_ALIGNMENT);
+      return align(set_layout->descriptor_buffer_size, ANV_UBO_ALIGNMENT);
 
    assert(var_desc_count <= dynamic_binding->array_size);
    uint32_t shrink = dynamic_binding->array_size - var_desc_count;
@@ -681,7 +681,7 @@ anv_descriptor_set_layout_descriptor_buffer_size(const struct anv_descriptor_set
                  shrink * dynamic_binding->descriptor_stride;
    }
 
-   return ALIGN(set_size, ANV_UBO_ALIGNMENT);
+   return align(set_size, ANV_UBO_ALIGNMENT);
 }
 
 void anv_DestroyDescriptorSetLayout(
@@ -698,52 +698,52 @@ void anv_DestroyDescriptorSetLayout(
    anv_descriptor_set_layout_unref(device, set_layout);
 }
 
-#define SHA1_UPDATE_VALUE(ctx, x) _mesa_sha1_update(ctx, &(x), sizeof(x));
+#define BLAKE3_UPDATE_VALUE(ctx, x) _mesa_blake3_update(ctx, &(x), sizeof(x));
 
 static void
-sha1_update_immutable_sampler(struct mesa_sha1 *ctx,
+blake3_update_immutable_sampler(blake3_hasher *ctx,
                               const struct anv_sampler *sampler)
 {
    if (!sampler->conversion)
       return;
 
    /* The only thing that affects the shader is ycbcr conversion */
-   _mesa_sha1_update(ctx, sampler->conversion,
+   _mesa_blake3_update(ctx, sampler->conversion,
                      sizeof(*sampler->conversion));
 }
 
 static void
-sha1_update_descriptor_set_binding_layout(struct mesa_sha1 *ctx,
+blake3_update_descriptor_set_binding_layout(blake3_hasher *ctx,
    const struct anv_descriptor_set_binding_layout *layout)
 {
-   SHA1_UPDATE_VALUE(ctx, layout->flags);
-   SHA1_UPDATE_VALUE(ctx, layout->data);
-   SHA1_UPDATE_VALUE(ctx, layout->max_plane_count);
-   SHA1_UPDATE_VALUE(ctx, layout->array_size);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_index);
-   SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_index);
-   SHA1_UPDATE_VALUE(ctx, layout->buffer_view_index);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_offset);
+   BLAKE3_UPDATE_VALUE(ctx, layout->flags);
+   BLAKE3_UPDATE_VALUE(ctx, layout->data);
+   BLAKE3_UPDATE_VALUE(ctx, layout->max_plane_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->array_size);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_index);
+   BLAKE3_UPDATE_VALUE(ctx, layout->dynamic_offset_index);
+   BLAKE3_UPDATE_VALUE(ctx, layout->buffer_view_index);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_offset);
 
    if (layout->immutable_samplers) {
       for (uint16_t i = 0; i < layout->array_size; i++)
-         sha1_update_immutable_sampler(ctx, layout->immutable_samplers[i]);
+         blake3_update_immutable_sampler(ctx, layout->immutable_samplers[i]);
    }
 }
 
 static void
-sha1_update_descriptor_set_layout(struct mesa_sha1 *ctx,
+blake3_update_descriptor_set_layout(blake3_hasher *ctx,
                                   const struct anv_descriptor_set_layout *layout)
 {
-   SHA1_UPDATE_VALUE(ctx, layout->binding_count);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_count);
-   SHA1_UPDATE_VALUE(ctx, layout->shader_stages);
-   SHA1_UPDATE_VALUE(ctx, layout->buffer_view_count);
-   SHA1_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
-   SHA1_UPDATE_VALUE(ctx, layout->descriptor_buffer_size);
+   BLAKE3_UPDATE_VALUE(ctx, layout->binding_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->shader_stages);
+   BLAKE3_UPDATE_VALUE(ctx, layout->buffer_view_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->dynamic_offset_count);
+   BLAKE3_UPDATE_VALUE(ctx, layout->descriptor_buffer_size);
 
    for (uint16_t i = 0; i < layout->binding_count; i++)
-      sha1_update_descriptor_set_binding_layout(ctx, &layout->binding[i]);
+      blake3_update_descriptor_set_binding_layout(ctx, &layout->binding[i]);
 }
 
 /*
@@ -782,15 +782,15 @@ VkResult anv_CreatePipelineLayout(
    }
    assert(dynamic_offset_count < MAX_DYNAMIC_BUFFERS);
 
-   struct mesa_sha1 ctx;
-   _mesa_sha1_init(&ctx);
+   blake3_hasher ctx;
+   _mesa_blake3_init(&ctx);
    for (unsigned s = 0; s < layout->num_sets; s++) {
-      sha1_update_descriptor_set_layout(&ctx, layout->set[s].layout);
-      _mesa_sha1_update(&ctx, &layout->set[s].dynamic_offset_start,
+      blake3_update_descriptor_set_layout(&ctx, layout->set[s].layout);
+      _mesa_blake3_update(&ctx, &layout->set[s].dynamic_offset_start,
                         sizeof(layout->set[s].dynamic_offset_start));
    }
-   _mesa_sha1_update(&ctx, &layout->num_sets, sizeof(layout->num_sets));
-   _mesa_sha1_final(&ctx, layout->sha1);
+   _mesa_blake3_update(&ctx, &layout->num_sets, sizeof(layout->num_sets));
+   _mesa_blake3_final(&ctx, layout->blake3);
 
    *pPipelineLayout = anv_pipeline_layout_to_handle(layout);
 
@@ -904,7 +904,7 @@ VkResult anv_CreateDescriptorPool(
       descriptor_bo_size +=
          ANV_UBO_ALIGNMENT * inline_info->maxInlineUniformBlockBindings;
    }
-   descriptor_bo_size = ALIGN(descriptor_bo_size, 4096);
+   descriptor_bo_size = align(descriptor_bo_size, 4096);
 
    const size_t pool_size =
       pCreateInfo->maxSets * sizeof(struct anv_descriptor_set) +

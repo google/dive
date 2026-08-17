@@ -27,6 +27,7 @@
 #define LP_STATE_CS_H
 
 #include "util/u_thread.h"
+#include "util/u_shader_variant_cache.h"
 #include "pipe/p_state.h"
 
 #include "gallivm/lp_bld.h"
@@ -35,6 +36,24 @@
 #include "lp_state_fs.h"
 
 struct lp_compute_shader_variant;
+
+struct lp_cs_job_info {
+   unsigned grid_size[3];
+   unsigned iter_size[3];
+   unsigned grid_base[3];
+   unsigned block_size[3];
+   unsigned req_local_mem;
+   unsigned work_dim;
+   unsigned draw_id;
+   bool zero_initialize_shared_memory;
+   bool use_iters;
+   struct lp_cs_exec *current;
+   struct vertex_header *io;
+   size_t io_stride;
+   void *payload;
+   size_t payload_stride;
+};
+
 
 struct lp_compute_shader_variant_key
 {
@@ -69,37 +88,21 @@ lp_cs_variant_key_images(const struct lp_compute_shader_variant_key *key)
       &(lp_cs_variant_key_samplers(key)[MAX2(key->nr_samplers, key->nr_sampler_views)]);
 }
 
-struct lp_cs_variant_list_item
-{
-   struct list_head list;
-   struct lp_compute_shader_variant *base;
-};
-
 struct lp_compute_shader_variant
 {
+   struct util_shader_variant base;
+
    struct gallivm_state *gallivm;
 
-   LLVMTypeRef jit_cs_context_type;
-   LLVMTypeRef jit_cs_context_ptr_type;
-   LLVMTypeRef jit_cs_thread_data_type;
-   LLVMTypeRef jit_resources_type;
-   LLVMTypeRef jit_resources_ptr_type;
-   LLVMTypeRef jit_cs_thread_data_ptr_type;
-
-   /* for mesh shaders */
-   LLVMTypeRef jit_vertex_header_type;
-   LLVMTypeRef jit_vertex_header_ptr_type;
-   LLVMTypeRef jit_prim_type;
-   LLVMValueRef function;
-   char *function_name;
    lp_jit_cs_func jit_function;
 
    /* Total number of LLVM instructions generated */
    unsigned nr_instrs;
 
-   struct lp_cs_variant_list_item list_item_global, list_item_local;
-
    struct lp_compute_shader *shader;
+
+   /* shader stage as declared in the shader (i.e. can be kernel) */
+   mesa_shader_stage stage;
 
    /* For debugging/profiling purposes */
    unsigned no;
@@ -111,7 +114,7 @@ struct lp_compute_shader_variant
 struct lp_compute_shader {
    struct pipe_shader_state base;
 
-   struct lp_cs_variant_list_item variants;
+   struct util_shader_variant_list variants;
 
    struct draw_mesh_shader *draw_mesh_data;
    uint32_t req_local_mem;
@@ -120,7 +123,6 @@ struct lp_compute_shader {
    unsigned variant_key_size;
    unsigned no;
    unsigned variants_created;
-   unsigned variants_cached;
    bool zero_initialize_shared_memory;
 
    int max_global_buffers;

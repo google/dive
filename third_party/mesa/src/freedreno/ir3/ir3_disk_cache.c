@@ -37,21 +37,21 @@ ir3_disk_cache_init(struct ir3_compiler *compiler)
    const struct build_id_note *note =
       build_id_find_nhdr_for_addr(ir3_disk_cache_init);
    unsigned build_id_len = build_id_length(note);
-   assert(note && build_id_len == 20); /* sha1 */
+   assert(note && build_id_len == BUILD_ID_EXPECTED_HASH_LENGTH); /* sha1 */
 
    const uint8_t *id_sha1 = build_id_data(note);
    assert(id_sha1);
 
-   struct mesa_sha1 ctx;
-   uint8_t sha1[SHA1_DIGEST_LENGTH];
-   _mesa_sha1_init(&ctx);
-   _mesa_sha1_update(&ctx, id_sha1, build_id_len);
-   _mesa_sha1_update(&ctx, &compiler->options.uche_trap_base,
+   blake3_hasher ctx;
+   uint8_t blake3[BLAKE3_KEY_LEN];
+   _mesa_blake3_init(&ctx);
+   _mesa_blake3_update(&ctx, id_sha1, build_id_len);
+   _mesa_blake3_update(&ctx, &compiler->options.uche_trap_base,
                      sizeof(compiler->options.uche_trap_base));
-   _mesa_sha1_final(&ctx, sha1);
+   _mesa_blake3_final(&ctx, blake3);
 
-   char timestamp[41];
-   _mesa_sha1_format(timestamp, sha1);
+   char timestamp[BLAKE3_HEX_LEN];
+   _mesa_blake3_format(timestamp, blake3);
 
    uint64_t driver_flags = ir3_shader_debug_hash_key();
    compiler->disk_cache = disk_cache_create(renderer, timestamp, driver_flags);
@@ -64,9 +64,9 @@ ir3_disk_cache_init_shader_key(struct ir3_compiler *compiler,
    if (!compiler->disk_cache && !ir3_shader_bisect_need_shader_key())
       return;
 
-   struct mesa_sha1 ctx;
+   blake3_hasher ctx;
 
-   _mesa_sha1_init(&ctx);
+   _mesa_blake3_init(&ctx);
 
    /* Serialize the NIR to a binary blob that we can hash for the disk
     * cache.  Drop unnecessary information (like variable names)
@@ -76,23 +76,23 @@ ir3_disk_cache_init_shader_key(struct ir3_compiler *compiler,
    struct blob blob;
    blob_init(&blob);
    nir_serialize(&blob, shader->nir, true);
-   _mesa_sha1_update(&ctx, blob.data, blob.size);
+   _mesa_blake3_update(&ctx, blob.data, blob.size);
    blob_finish(&blob);
 
-   _mesa_sha1_update(&ctx, &shader->options.api_wavesize,
+   _mesa_blake3_update(&ctx, &shader->options.api_wavesize,
                      sizeof(shader->options.api_wavesize));
-   _mesa_sha1_update(&ctx, &shader->options.real_wavesize,
+   _mesa_blake3_update(&ctx, &shader->options.real_wavesize,
                      sizeof(shader->options.real_wavesize));
-   _mesa_sha1_update(&ctx, &shader->options.nir_options,
+   _mesa_blake3_update(&ctx, &shader->options.nir_options,
                      sizeof(shader->options.nir_options));
 
    /* Note that on some gens stream-out is lowered in ir3 to stg.  For later
     * gens we maybe don't need to include stream-out in the cache key.
     */
-   _mesa_sha1_update(&ctx, &shader->stream_output,
+   _mesa_blake3_update(&ctx, &shader->stream_output,
                      sizeof(shader->stream_output));
 
-   _mesa_sha1_final(&ctx, shader->cache_key);
+   _mesa_blake3_final(&ctx, shader->cache_key);
 }
 
 static void
@@ -128,7 +128,7 @@ retrieve_variant(struct blob_reader *blob, struct ir3_shader_variant *v)
       blob_copy_bytes(blob, v->const_state, sizeof(*v->const_state));
    }
 
-   if (!v->compiler->load_shader_consts_via_preamble) {
+   if (!v->compiler->info->props.load_shader_consts_via_preamble) {
       v->imm_state.size = blob_read_uint32(blob);
       v->imm_state.count = v->imm_state.size;
       uint32_t immeds_sz = v->imm_state.size * sizeof(v->imm_state.values[0]);
@@ -157,7 +157,7 @@ store_variant(struct blob *blob, const struct ir3_shader_variant *v)
    /* When load_shader_consts_via_preamble, immediates are loaded in the
     * preamble and hence part of bin.
     */
-   if (!v->compiler->load_shader_consts_via_preamble) {
+   if (!v->compiler->info->props.load_shader_consts_via_preamble) {
       blob_write_uint32(blob, v->imm_state.size);
       uint32_t immeds_sz = v->imm_state.size * sizeof(v->imm_state.values[0]);
       blob_write_bytes(blob, v->imm_state.values, immeds_sz);
@@ -225,9 +225,9 @@ ir3_disk_cache_retrieve(struct ir3_shader *shader,
    compute_variant_key(shader, v, cache_key);
 
    if (debug) {
-      char sha1[41];
-      _mesa_sha1_format(sha1, cache_key);
-      fprintf(stderr, "[mesa disk cache] retrieving variant %s: ", sha1);
+      char blake3[BLAKE3_HEX_LEN];
+      _mesa_blake3_format(blake3, cache_key);
+      fprintf(stderr, "[mesa disk cache] retrieving variant %s: ", blake3);
    }
 
    size_t size;
@@ -264,9 +264,9 @@ ir3_disk_cache_store(struct ir3_shader *shader,
    compute_variant_key(shader, v, cache_key);
 
    if (debug) {
-      char sha1[41];
-      _mesa_sha1_format(sha1, cache_key);
-      fprintf(stderr, "[mesa disk cache] storing variant %s\n", sha1);
+      char blake3[BLAKE3_HEX_LEN];
+      _mesa_blake3_format(blake3, cache_key);
+      fprintf(stderr, "[mesa disk cache] storing variant %s\n", blake3);
    }
 
    struct blob blob;

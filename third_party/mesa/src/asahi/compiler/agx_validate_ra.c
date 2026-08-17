@@ -1,10 +1,10 @@
 /*
  * Copyright 2024 Alyssa Rosenzweig
+ * SPDX-License-Identifier: MIT
  */
 
 #include "agx_compiler.h"
 #include "agx_opcodes.h"
-#include "nir.h"
 
 /* Validatation doesn't make sense in release builds */
 #ifndef NDEBUG

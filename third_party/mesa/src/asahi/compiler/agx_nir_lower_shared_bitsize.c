@@ -10,18 +10,8 @@
 static bool
 pass(struct nir_builder *b, nir_intrinsic_instr *intr, UNUSED void *data)
 {
-   switch (intr->intrinsic) {
-   case nir_intrinsic_load_shared:
-   case nir_intrinsic_store_shared:
-   case nir_intrinsic_shared_atomic:
-   case nir_intrinsic_shared_atomic_swap:
-      break;
-   default:
-      return false;
-   }
-
    nir_src *offset = nir_get_io_offset_src(intr);
-   if (nir_src_bit_size(*offset) == 16)
+   if (!nir_is_shared_access(intr) || nir_src_bit_size(*offset) == 16)
       return false;
 
    b->cursor = nir_before_instr(&intr->instr);

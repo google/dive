@@ -13,8 +13,7 @@
 #include "util/u_atomic.h"
 #include "util/u_debug.h"
 
-#include "adreno_common.xml.h"
-#include "adreno_pm4.xml.h"
+#include "common/fd_hw_common.h"
 #include "freedreno_drmif.h"
 #include "freedreno_pm4.h"
 
@@ -52,8 +51,13 @@ enum fd_ringbuffer_flags {
     */
    FD_RINGBUFFER_GROWABLE = 0x4,
 
+   /* Indicates an _FD_RINGBUFFER_OBJECT that can be shared
+    * across threads
+    */
+   FD_RINGBUFFER_SHAREABLE = 0x8,
+
    /* Internal use only: */
-   _FD_RINGBUFFER_OBJECT = 0x8,
+   _FD_RINGBUFFER_OBJECT = 0x10,
 };
 
 /* A submit object manages/tracks all the state buildup for a "submit"
@@ -123,6 +127,8 @@ struct fd_ringbuffer {
  */
 struct fd_ringbuffer *fd_ringbuffer_new_object(struct fd_pipe *pipe,
                                                uint32_t size);
+struct fd_ringbuffer *
+fd_ringbuffer_new_shareable_object(struct fd_pipe *pipe, uint32_t size);
 
 /*
  * Helpers for ref/unref with some extra debugging.. unref() returns true if

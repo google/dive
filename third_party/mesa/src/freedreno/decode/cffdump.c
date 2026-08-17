@@ -105,7 +105,7 @@ static const struct option opts[] = {
       { "no-pager",        no_argument, &interactive,           0 },
       { "pager",           no_argument, &interactive,           1 },
       { "textures",        no_argument, &options.dump_textures, 1 },
-      { "bindless",        no_argument, &options.dump_bindless, 1 },
+      { "bindless",        no_argument, &options.dump_all_bindless, 1 },
       { "show-compositor", no_argument, &show_comp,             1 },
       { "query-all",       no_argument, &options.query_mode,    QUERY_ALL },
       { "query-written",   no_argument, &options.query_mode,    QUERY_WRITTEN },
@@ -139,6 +139,8 @@ main(int argc, char **argv)
    int c;
 
    interactive = isatty(STDOUT_FILENO);
+
+   internal_lua_pkt_handler_load();
 
    options.color = interactive;
 
@@ -184,7 +186,6 @@ main(int argc, char **argv)
                     (options.nquery + 1) * sizeof(*options.querystrs));
          options.querystrs[options.nquery] = optarg;
          options.nquery++;
-         interactive = 0;
          break;
       case 'h':
       default:
@@ -348,6 +349,7 @@ handle_file(const char *filename, int start, int end, int draw)
    }
 
    script_end_cmdstream();
+   cffdec_finish();
 
    reset_buffers();
 

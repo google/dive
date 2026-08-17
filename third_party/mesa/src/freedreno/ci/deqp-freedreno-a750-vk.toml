@@ -4,9 +4,13 @@ deqp = "/deqp-vk/external/vulkancts/modules/vulkan/deqp-vk"
 caselists = ["/deqp-vk/mustpass/vk-main.txt"]
 renderer_check = "Turnip Adreno .* 750"
 tests_per_group = 10000
+[deqp.env]
+# Enable additional tests that test fp32 denorm preserve.
+tu_enable_softfloat32 = "true"
 
 # force-gmem testing
 # Autotuner forces sysmem on most CTS tests
+# Also force-enable concurrent binning.
 [[deqp]]
 deqp = "/deqp-vk/external/vulkancts/modules/vulkan/deqp-vk"
 caselists = ["/deqp-vk/mustpass/vk-main.txt"]
@@ -14,7 +18,7 @@ prefix = "gmem-"
 fraction = 20
 tests_per_group = 10000
 [deqp.env]
-TU_DEBUG = "gmem,forcebin"
+TU_DEBUG = "gmem,forcebin,forcecb"
 
 # force-gmem with unaligned gmem store testing
 [[deqp]]
@@ -26,6 +30,18 @@ fraction = 10
 tests_per_group = 10000
 [deqp.env]
 TU_DEBUG = "gmem,unaligned_store"
+
+# force-gmem with concurrent binning allowed to test concurrent binning
+[[deqp]]
+deqp = "/deqp-vk/external/vulkancts/modules/vulkan/deqp-vk"
+caselists = ["/deqp-vk/mustpass/vk-main.txt"]
+include = ["dEQP-VK.renderpass2.*"]
+prefix = "gmem-cb-"
+fraction = 20
+tests_per_group = 10000
+[deqp.env]
+TU_DEBUG = "gmem"
+tu_allow_concurrent_binning = "true"
 
 # force-sysmem testing
 [[deqp]]
@@ -73,3 +89,18 @@ TU_DEBUG = "dynamic"
 # TU_DEBUG_STALE_REGS_RANGE = "0x0c00,0xbe01"
 # TU_DEBUG_STALE_REGS_FLAGS = "cmdbuf,renderpass"
 # FREEDRENO_HANGCHECK_MS = "2000"
+
+# force multi queue emulation
+[[deqp]]
+deqp = "/deqp-vk/external/vulkancts/modules/vulkan/deqp-vk"
+caselists = ["/deqp-vk/mustpass/vk-main.txt"]
+include = ["dEQP-VK.synchronization2.op.multi_queue.*", "dEQP-VK.synchronization2.signal_order.*"]
+prefix = "multiq-"
+fraction = 20
+tests_per_group = 10000
+[deqp.env]
+tu_emulate_second_queue = "true"
+
+[[vkd3d]]
+vkd3d_folder = "/vkd3d-proton-tests/"
+prefix="vkd3d-" # The test names are pretty ambiguous, otherwise.

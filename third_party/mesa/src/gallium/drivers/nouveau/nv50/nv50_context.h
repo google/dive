@@ -268,9 +268,11 @@ nv50_resource_validate(struct nv50_context *context, struct nv04_resource *res, 
          res->status |= NOUVEAU_BUFFER_STATUS_GPU_READING;
 
       if (res->mm) {
-         nouveau_fence_ref(context->base.fence, &res->fence);
+         nouveau_fence_ref(context->base.fence, &res->fence,
+                           context->base.screen);
          if (flags & NOUVEAU_BO_WR)
-            nouveau_fence_ref(context->base.fence, &res->fence_wr);
+            nouveau_fence_ref(context->base.fence, &res->fence_wr,
+                              context->base.screen);
       }
    }
 }
@@ -312,6 +314,7 @@ bool nv50_state_validate_3d(struct nv50_context *, uint32_t);
 
 /* nv50_surface.c */
 extern void nv50_clear(struct pipe_context *, unsigned buffers,
+                       uint32_t color_clear_mask, uint8_t stencil_clear_mask,
                        const struct pipe_scissor_state *scissor_state,
                        const union pipe_color_union *color,
                        double depth, unsigned stencil);

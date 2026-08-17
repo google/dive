@@ -149,11 +149,23 @@ ir3_required_sync_flags(struct ir3_legalize_state *state,
             flags |= IR3_INSTR_SY;
          }
       } else if ((reg->flags & IR3_REG_CONST)) {
-         if (state->needs_ss_for_const) {
-            flags |= IR3_INSTR_SS;
-         }
-         if (state->needs_sy_for_const) {
-            flags |= IR3_INSTR_SY;
+         if (reg->flags & IR3_REG_RELATIV) {
+            /* Since we don't know which const reg is accessed, add sync flags
+             * if any const reg need them.
+             */
+            if (!BITSET_IS_EMPTY(state->needs_ss_for_const)) {
+               flags |= IR3_INSTR_SS;
+            }
+            if (!BITSET_IS_EMPTY(state->needs_sy_for_const)) {
+               flags |= IR3_INSTR_SY;
+            }
+         } else {
+            if (BITSET_TEST(state->needs_ss_for_const, reg->num)) {
+               flags |= IR3_INSTR_SS;
+            }
+            if (BITSET_TEST(state->needs_sy_for_const, reg->num)) {
+               flags |= IR3_INSTR_SY;
+            }
          }
       } else if (!(reg->flags & (IR3_REG_IMMED | IR3_REG_RT))) {
          if (regmask_get(&state->needs_ss, reg)) {
@@ -186,7 +198,7 @@ apply_ss(struct ir3_legalize_state *state, bool mergedregs)
    regmask_init(&state->needs_ss_or_sy_scalar_war, mergedregs);
    regmask_init(&state->needs_ss_scalar_full, mergedregs);
    regmask_init(&state->needs_ss_scalar_half, mergedregs);
-   state->needs_ss_for_const = false;
+   BITSET_ZERO(state->needs_ss_for_const);
    state->force_ss = false;
 }
 
@@ -197,7 +209,7 @@ apply_sy(struct ir3_legalize_state *state, bool mergedregs)
    regmask_init(&state->needs_sy_war, mergedregs);
    regmask_init(&state->needs_ss_or_sy_war, mergedregs);
    regmask_init(&state->needs_ss_or_sy_scalar_war, mergedregs);
-   state->needs_sy_for_const = false;
+   BITSET_ZERO(state->needs_sy_for_const);
    state->force_sy = false;
 }
 
@@ -242,7 +254,7 @@ sync_update(struct ir3_legalize_state *state, struct ir3_compiler *compiler,
 
    if (is_tex_or_prefetch(n) && !has_dummy_dst(n)) {
       regmask_set(&state->needs_sy, n->dsts[0]);
-   } else if (n->opc == OPC_RESINFO && !has_dummy_dst(n)) {
+   } else if ((n->opc == OPC_RESINFO || n->opc == OPC_RESBASE) && !has_dummy_dst(n)) {
       regmask_set(&state->needs_ss, n->dsts[0]);
    } else if (is_load(n)) {
       if (is_local_mem_load(n))
@@ -258,10 +270,18 @@ sync_update(struct ir3_legalize_state *state, struct ir3_compiler *compiler,
       } else {
          regmask_set(&state->needs_ss, n->dsts[0]);
       }
-   } else if (n->opc == OPC_PUSH_CONSTS_LOAD_MACRO || n->opc == OPC_STC) {
-      state->needs_ss_for_const = true;
+   } else if (n->opc == OPC_PUSH_CONSTS_LOAD_MACRO) {
+      unsigned const_dst = n->push_consts.dst_base;
+      unsigned const_size = n->push_consts.src_size * 2;
+      BITSET_SET_COUNT(state->needs_ss_for_const, const_dst, const_size);
+   } else if (n->opc == OPC_STC) {
+      unsigned const_dst = n->cat6.dst_offset;
+      unsigned const_size = n->cat6.iim_val;
+      BITSET_SET_COUNT(state->needs_ss_for_const, const_dst, const_size);
    } else if (n->opc == OPC_LDC_K) {
-      state->needs_sy_for_const = true;
+      unsigned const_dst = n->cat6.dst_offset;
+      unsigned const_size = n->cat6.iim_val * 4;
+      BITSET_SET_COUNT(state->needs_sy_for_const, const_dst, const_size);
    }
 
    /* both tex/sfu appear to not always immediately consume
@@ -370,8 +390,10 @@ ir3_merge_pred_legalize_states(struct ir3_legalize_state *state,
       regmask_or(&state->needs_ss_or_sy_war, &state->needs_ss_or_sy_war,
                  &pstate->needs_ss_or_sy_war);
       regmask_or(&state->needs_sy, &state->needs_sy, &pstate->needs_sy);
-      state->needs_ss_for_const |= pstate->needs_ss_for_const;
-      state->needs_sy_for_const |= pstate->needs_sy_for_const;
+      BITSET_OR(state->needs_ss_for_const, state->needs_ss_for_const,
+                pstate->needs_ss_for_const);
+      BITSET_OR(state->needs_sy_for_const, state->needs_sy_for_const,
+                pstate->needs_sy_for_const);
       state->force_ss |= pstate->force_ss;
       state->force_sy |= pstate->force_sy;
 
@@ -631,6 +653,34 @@ ir3_update_legalize_state(struct ir3_legalize_state *state,
       state->cycle += n->repeat + n->nop;
 }
 
+static struct ir3_instruction *
+insert_nop_flags(struct ir3_legalize_ctx *ctx,
+                 struct ir3_legalize_state *state,
+                 struct ir3_instruction *last_n,
+                 struct ir3_builder *build,
+                 enum ir3_instruction_flags flags)
+{
+   if (last_n && last_n->opc == OPC_NOP) {
+      /* Note that reusing the previous nop isn't just an optimization
+       * but prevents infinitely adding nops when this block is in a loop
+       * and needs to be legalized more than once.
+       */
+      last_n->flags |= flags;
+
+      /* If we reuse the last nop, we shouldn't do a full state update as
+       * its delay has already been taken into account.
+       */
+      sync_update(state, ctx->compiler, last_n);
+   } else {
+      struct ir3_instruction *nop = ir3_NOP(build);
+      nop->flags |= flags;
+      ir3_update_legalize_state(state, ctx->compiler, nop);
+      last_n = nop;
+   }
+
+   return last_n;
+}
+
 /* We want to evaluate each block from the position of any other
  * predecessor block, in order that the flags set are the union of
  * all possible program paths.
@@ -720,11 +770,18 @@ legalize_block(struct ir3_legalize_ctx *ctx, struct ir3_block *block)
          last_input_needs_ss = false;
       }
 
-      /* I'm not exactly what this is for, but it seems we need this on every
-       * mova1 in early preambles.
-       */
-      if (writes_addr1(n) && block->in_early_preamble)
-         n->srcs[0]->flags |= IR3_REG_R;
+      /* In earlypreamble we need to use mova.u/ldc.u: */
+      if (block->in_early_preamble) {
+         if (writes_addr1(n) || (n->opc == OPC_LDC))
+            n->flags |= IR3_INSTR_U;
+      }
+
+      /* Ensure no pending uGPR writes before EP ends: */
+      if ((n->opc == OPC_SHPE) && (ctx->compiler->gen >= 8) &&
+          block->in_early_preamble &&
+          regmask_get_any_shared(&state->needs_sy)) {
+         last_n = insert_nop_flags(ctx, state, last_n, &build, IR3_INSTR_SY);
+      }
 
       /* cat5+ does not have an (ss) bit, if needed we need to
        * insert a nop to carry the sync flag.  Would be kinda
@@ -732,24 +789,7 @@ legalize_block(struct ir3_legalize_ctx *ctx, struct ir3_block *block)
        * this should be a pretty rare case:
        */
       if ((n->flags & IR3_INSTR_SS) && !supports_ss(n)) {
-         if (last_n && last_n->opc == OPC_NOP) {
-            /* Note that reusing the previous nop isn't just an optimization
-             * but prevents infinitely adding nops when this block is in a loop
-             * and needs to be legalized more than once.
-             */
-            last_n->flags |= IR3_INSTR_SS;
-
-            /* If we reuse the last nop, we shouldn't do a full state update as
-             * its delay has already been taken into account.
-             */
-            sync_update(state, ctx->compiler, last_n);
-         } else {
-            struct ir3_instruction *nop = ir3_NOP(&build);
-            nop->flags |= IR3_INSTR_SS;
-            ir3_update_legalize_state(state, ctx->compiler, nop);
-            last_n = nop;
-         }
-
+         last_n = insert_nop_flags(ctx, state, last_n, &build, IR3_INSTR_SS);
          n->flags &= ~IR3_INSTR_SS;
       }
 
@@ -786,8 +826,8 @@ legalize_block(struct ir3_legalize_ctx *ctx, struct ir3_block *block)
       }
 
       if (ctx->compiler->samgq_workaround &&
-          ctx->type != MESA_SHADER_FRAGMENT &&
-          ctx->type != MESA_SHADER_COMPUTE && n->opc == OPC_SAMGQ) {
+          !is_compute_or_frag(ctx->type) &&
+          n->opc == OPC_SAMGQ) {
          struct ir3_instruction *samgp;
 
          list_delinit(&n->node);
@@ -945,7 +985,7 @@ apply_push_consts_load_macro(struct ir3_legalize_ctx *ctx,
          stsc->cat6.iim_val = n->push_consts.src_size;
          stsc->cat6.type = TYPE_U32;
 
-         if (ctx->compiler->stsc_duplication_quirk) {
+         if (ctx->compiler->info->props.stsc_duplication_quirk) {
             struct ir3_builder build = ir3_builder_at(ir3_after_instr(stsc));
             struct ir3_instruction *nop = ir3_NOP(&build);
             nop->flags |= IR3_INSTR_SS;
@@ -1206,7 +1246,7 @@ static void
 mark_xvergence_points(struct ir3 *ir)
 {
    foreach_block (block, &ir->block_list) {
-      if (block->reconvergence_point)
+      if (block->reconvergence_point || block->wave_reconvergence_point)
          mark_jp(block);
    }
 }
@@ -1335,11 +1375,11 @@ add_predication_workaround(struct ir3_compiler *compiler,
                            struct ir3_instruction *predtf,
                            struct ir3_instruction *prede)
 {
-   if (predtf && compiler->predtf_nop_quirk) {
+   if (predtf && compiler->info->props.predtf_nop_quirk) {
       add_nop_before_block(predtf->block->predecessors[0]->successors[1], 4);
    }
 
-   if (compiler->prede_nop_quirk) {
+   if (compiler->info->props.prede_nop_quirk) {
       add_nop_before_block(prede->block->successors[0], 6);
    }
 }
@@ -1438,6 +1478,11 @@ prede_sched(struct ir3 *ir)
       list_delinit(&succ0_terminator->node);
       struct ir3_builder build = ir3_builder_at(ir3_before_terminator(succ0));
       struct ir3_instruction *prede = ir3_PREDE(&build);
+
+      /* legalize_block might have set sync flags on the terminator that we just
+       * removed; set them on prede instead.
+       */
+      prede->flags |= succ0_terminator->flags;
       add_predication_workaround(ir->compiler, NULL, prede);
       remove_unused_block(succ1);
       block->successors[1] = succ0->successors[0];
@@ -1576,103 +1621,315 @@ dbg_expand_rpt(struct ir3 *ir)
    }
 }
 
-struct ir3_helper_block_data {
-   /* Whether helper invocations may be used on any path starting at the
-    * beginning of the block.
-    */
-   bool uses_helpers_beginning;
-
-   /* Whether helper invocations may be used by the end of the block. Branch
-    * instructions are considered to be "between" blocks, because (eq) has to be
-    * inserted after them in the successor blocks, so branch instructions using
-    * helpers will result in uses_helpers_end = true for their block.
-    */
-   bool uses_helpers_end;
+struct ir3_mark_helpers_data {
+   bool valid;
+   regmask_t needs_helpers;
 };
 
-/* Insert (eq) after the last instruction using the results of helper
- * invocations. Use a backwards dataflow analysis to determine at which points
- * in the program helper invocations are definitely never used, and then insert
- * (eq) at the point where we cross from a point where they may be used to a
- * point where they are never used.
- */
 static void
-helper_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
+instr_mark_helpers(struct ir3_mark_helpers_data *bd,
+                   struct ir3_instruction *instr)
+{
+   if (instr->flags & IR3_INSTR_NEEDS_HELPERS) {
+      return;
+   }
+
+   foreach_dst (dst, instr) {
+      if (dst->flags & (IR3_REG_RT | IR3_REG_DUMMY)) {
+         continue;
+      }
+
+      if (regmask_get(&bd->needs_helpers, dst)) {
+         instr->flags |= IR3_INSTR_NEEDS_HELPERS;
+         return;
+      }
+   }
+
+   switch (instr->opc) {
+   case OPC_MOVMSK:
+   case OPC_BRCST_ACTIVE:
+   case OPC_QUAD_SHUFFLE_BRCST:
+   case OPC_QUAD_SHUFFLE_HORIZ:
+   case OPC_QUAD_SHUFFLE_VERT:
+   case OPC_QUAD_SHUFFLE_DIAG:
+   case OPC_BALL:
+   case OPC_BANY:
+      /* Subgroup operations don't require helper invocations to be present, but
+       * will use helper invocations if they are present.
+       */
+      instr->flags |= IR3_INSTR_NEEDS_HELPERS;
+      return;
+
+   case OPC_SAM:
+   case OPC_SAMB:
+   case OPC_GETLOD:
+   case OPC_DSX:
+   case OPC_DSY:
+   case OPC_DSXPP_1:
+   case OPC_DSYPP_1: {
+      if (instr->opc == OPC_SAM && has_dummy_dst(instr)) {
+         /* sam requires helper invocations except for dummy prefetch
+          * instructions.
+          */
+         return;
+      }
+
+      /* These instructions don't use helpers themselves but have a src that
+       * needs to be calculated using helpers (e.g., the coordinates used to
+       * calculate derivatives). Mark the src register as needing helpers so
+       * that we can keep them enabled until it is written.
+       */
+      unsigned nsrcs;
+      unsigned first_src_n = 0;
+
+      if (instr->opc == OPC_SAM || instr->opc == OPC_SAMB ||
+          instr->opc == OPC_GETLOD) {
+         nsrcs = (instr->flags & IR3_INSTR_3D) ? 3 : 2;
+
+         /* sam.s2en has the samp/tex in the first src; skip over it. */
+         if (instr->flags & IR3_INSTR_S2EN) {
+            if (instr->srcs[0]->flags & IR3_REG_FIRST_ALIAS) {
+               assert(ir3_alias_group_size(instr, 0) == 2);
+               first_src_n = 2;
+            } else {
+               first_src_n = 1;
+            }
+         }
+      } else {
+         /* dsx/dsy: derive the number of sources from the dst wrmask since the
+          * src itself may use aliases.
+          */
+         nsrcs = util_last_bit(instr->dsts[0]->wrmask);
+      }
+
+      if (instr->srcs[first_src_n]->flags & IR3_REG_FIRST_ALIAS) {
+         assert(first_src_n + nsrcs <= instr->srcs_count);
+
+         for (unsigned i = first_src_n; i < first_src_n + nsrcs; i++) {
+            struct ir3_register *src = instr->srcs[i];
+
+            if (is_reg_gpr(src)) {
+               regmask_set(&bd->needs_helpers, src);
+            }
+         }
+      } else {
+         regmask_set_masked(&bd->needs_helpers, instr->srcs[first_src_n],
+                            MASK(nsrcs));
+      }
+
+      break;
+   }
+
+   default:
+      break;
+   }
+}
+
+/* Apply IR3_INSTR_NEEDS_HELPERS to instructions that need helper invocations to
+ * be active. Note that we don't necessarily apply it to all instructions that
+ * need helpers, just to the last one in each block, as that gives us enough
+ * information for inserting (eq) to kill helpers.
+ *
+ * We use a backwards data-flow analysis because we cannot always know whether
+ * an instruction needs helpers by just looking at the opcode. For example,
+ * instructions that calculate (implicit) derivatives don't need helpers to be
+ * active but the calculation of their src needs to be done with active helpers.
+ */
+static bool
+mark_helpers(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
              struct ir3_shader_variant *so)
 {
-   bool non_prefetch_helpers = false;
+   foreach_block (block, &ir->block_list) {
+      struct ir3_mark_helpers_data *bd =
+         ralloc(ctx, struct ir3_mark_helpers_data);
+      bd->valid = false;
+      regmask_init(&bd->needs_helpers, ctx->compiler->mergedregs);
+      block->data = bd;
+   }
+
+   bool uses_helpers = false;
+   bool progress;
+
+   do {
+      progress = false;
+
+      foreach_block_rev (block, &ir->block_list) {
+         struct ir3_mark_helpers_data *bd = block->data;
+
+         if (bd->valid) {
+            continue;
+         }
+
+         struct ir3_mark_helpers_data prev_bd = *bd;
+         regmask_init(&bd->needs_helpers, ctx->compiler->mergedregs);
+         bool may_have_needs_helpers_at_entry = true;
+
+         for (unsigned i = 0; i < ARRAY_SIZE(block->successors); i++) {
+            struct ir3_block *succ = block->successors[i];
+            if (!succ) {
+               continue;
+            }
+
+            struct ir3_mark_helpers_data *succ_bd = succ->data;
+            regmask_or(&bd->needs_helpers, &bd->needs_helpers,
+                       &succ_bd->needs_helpers);
+         }
+
+         foreach_instr_rev (instr, &block->instr_list) {
+            instr_mark_helpers(bd, instr);
+
+            /* We only care about the last instruction needing helpers. */
+            if (instr->flags & IR3_INSTR_NEEDS_HELPERS) {
+               uses_helpers = true;
+
+               /* This also means we can stop tracking needs_helpers. This saves
+                * us from unnecessarily invalidating predecessors. Making sure
+                * loops are handled correctly is done in helper_sched.
+                */
+               regmask_init(&bd->needs_helpers, ctx->compiler->mergedregs);
+               may_have_needs_helpers_at_entry = false;
+               break;
+            }
+         }
+
+         bd->valid = true;
+
+         /* We have to invalidate the block's predecessors whenever it has more
+          * needs_helpers registers as the previous time around because this may
+          * cause more instructions being marked as needing helpers in its
+          * predecessors. We don't have to do this when it has less
+          * needs_helpers registers as this won't change anything. This is
+          * checked using may_have_needs_helpers_at_entry which will be false
+          * whenever we cleared needs_helpers.
+          */
+         if (may_have_needs_helpers_at_entry &&
+             memcmp(&prev_bd.needs_helpers, &bd->needs_helpers,
+                    sizeof(prev_bd.needs_helpers)) != 0) {
+            progress = true;
+
+            for (unsigned i = 0; i < block->predecessors_count; i++) {
+               struct ir3_mark_helpers_data *pred_bd =
+                  block->predecessors[i]->data;
+               pred_bd->valid = false;
+            }
+         }
+      }
+   } while (progress);
+
+   struct ir3_block *start_block = ir3_start_block(ir);
+   struct ir3_mark_helpers_data *start_bd = start_block->data;
+
+   foreach_input (input, ir) {
+      if (regmask_get(&start_bd->needs_helpers, input->dsts[0])) {
+         /* If we need helpers for an input reg, we have to make sure helpers
+          * are enabled when we enter the shader. Just mark the first
+          * instruction as needing helpers.
+          */
+         struct ir3_instruction *first = ir3_block_get_first_instr(start_block);
+         first->flags |= IR3_INSTR_NEEDS_HELPERS;
+         uses_helpers = true;
+         break;
+      }
+   }
+
+   return uses_helpers;
+}
+
+struct ir3_end_of_feature_block_data {
+   /* Whether the feature may be used on any path starting at the
+    * beginning of the block.
+    */
+   bool uses_feature_beginning;
+
+   /* Whether the feature may be used by the end of the block. Branch
+    * instructions are considered to be "between" blocks, because the flag has
+    * to be inserted after them in the successor blocks, so branch instructions
+    * using the feature will result in uses_feature_end = true for their block.
+    */
+   bool uses_feature_end;
+};
+
+/* There are NOP flags which signify that certain feature will not be used after
+ * this point. It could be the end of helper invocations (eq), the end of
+ * cat5/cat6 usage (eolm)/(eogm). The common denominator is that such flags are
+ * placed onto nop and cannot be used inside a control flow.
+ *
+ * Use a backwards dataflow analysis to determine at which points
+ * in the feature is definitely never used, and then insert
+ * corresponding flag at the point where we cross from a point where they may be
+ * used to a point where they are never used.
+ */
+static bool
+feature_usage_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
+                    struct ir3_shader_variant *so,
+                    bool (*check_instr)(struct ir3_instruction *),
+                    bool (*cheap_instr)(struct ir3_instruction *),
+                    uint32_t new_flag)
+{
+   bool uses_feature = false;
 
    foreach_block (block, &ir->block_list) {
-      struct ir3_helper_block_data *bd =
-         rzalloc(ctx, struct ir3_helper_block_data);
+      struct ir3_end_of_feature_block_data *bd =
+         rzalloc(ctx, struct ir3_end_of_feature_block_data);
       foreach_instr (instr, &block->instr_list) {
-         if (uses_helpers(instr)) {
-            bd->uses_helpers_beginning = true;
-            if (instr->opc != OPC_META_TEX_PREFETCH) {
-               non_prefetch_helpers = true;
+         if (check_instr(instr)) {
+            uses_feature = true;
+            bd->uses_feature_beginning = true;
+
+            if (is_terminator(instr)) {
+               bd->uses_feature_end = true;
             }
          }
 
          if (instr->opc == OPC_SHPE) {
-            /* (eq) is not allowed in preambles, mark the whole preamble as
-             * requiring helpers to avoid putting it there.
+            /* The flags are not allowed in preambles, mark the whole preamble
+             * as using it to avoid putting it there.
              */
-            bd->uses_helpers_beginning = true;
-            bd->uses_helpers_end = true;
-         }
-      }
-
-      struct ir3_instruction *terminator = ir3_block_get_terminator(block);
-      if (terminator) {
-         if (terminator->opc == OPC_BALL || terminator->opc == OPC_BANY ||
-             (terminator->opc == OPC_GETONE &&
-              (terminator->flags & IR3_INSTR_NEEDS_HELPERS))) {
-            bd->uses_helpers_beginning = true;
-            bd->uses_helpers_end = true;
-            non_prefetch_helpers = true;
+            bd->uses_feature_beginning = true;
+            bd->uses_feature_end = true;
          }
       }
 
       block->data = bd;
    }
 
-   /* If only prefetches use helpers then we can disable them in the shader via
-    * a register setting.
+   /* If the feature was not needed by any instruction, return early.  Features
+    * that aren't used in the shader can generally be disabled at the top level
+    * (helpers disabled at dispatch, local memory size set to 0), so no need to
+    * add a NOP just to add the flag.
     */
-   if (!non_prefetch_helpers) {
-      so->prefetch_end_of_quad = true;
-      return;
-   }
+   if (!uses_feature)
+      return false;
 
    bool progress;
    do {
       progress = false;
       foreach_block_rev (block, &ir->block_list) {
-         struct ir3_helper_block_data *bd = block->data;
+         struct ir3_end_of_feature_block_data *bd = block->data;
 
-         if (!bd->uses_helpers_beginning)
+         if (!bd->uses_feature_beginning)
             continue;
 
          for (unsigned i = 0; i < block->physical_predecessors_count; i++) {
             struct ir3_block *pred = block->physical_predecessors[i];
-            struct ir3_helper_block_data *pred_bd = pred->data;
-            if (!pred_bd->uses_helpers_end) {
-               pred_bd->uses_helpers_end = true;
+            struct ir3_end_of_feature_block_data *pred_bd = pred->data;
+            if (!pred_bd->uses_feature_end) {
+               pred_bd->uses_feature_end = true;
             }
-            if (!pred_bd->uses_helpers_beginning) {
-               pred_bd->uses_helpers_beginning = true;
+            if (!pred_bd->uses_feature_beginning) {
+               pred_bd->uses_feature_beginning = true;
                progress = true;
             }
          }
       }
    } while (progress);
 
-   /* Now, we need to determine the points where helper invocations become
+   /* Now, we need to determine the points where the feature become
     * unused.
     */
    foreach_block (block, &ir->block_list) {
-      struct ir3_helper_block_data *bd = block->data;
-      if (bd->uses_helpers_end)
+      struct ir3_end_of_feature_block_data *bd = block->data;
+      if (bd->uses_feature_end)
          continue;
 
       /* We need to check the predecessors because of situations with critical
@@ -1686,10 +1943,10 @@ helper_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
        *    ...
        *    end
        *
-       * The endif block will have uses_helpers_beginning = false and
-       * uses_helpers_end = false, but because we jump to there from the
-       * beginning of the if where uses_helpers_end = true, we still want to
-       * add an (eq) at the beginning of the block:
+       * The endif block will have uses_feature_beginning = false and
+       * uses_feature_end = false, but because we jump to there from the
+       * beginning of the if where uses_feature_end = true, we still want to
+       * add the flag at the beginning of the block:
        *
        *    br p0.x, #endif
        *    ...
@@ -1717,33 +1974,29 @@ helper_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
        *    ...
        *    end
        *
-       * We also need this to make sure we insert (eq) after branches which use
-       * helper invocations.
+       * We also need this to make sure we insert the flag after branches which use
+       * the feature.
        */
-      bool pred_uses_helpers = bd->uses_helpers_beginning;
+      bool pred_uses_feature = bd->uses_feature_beginning;
       for (unsigned i = 0; i < block->physical_predecessors_count; i++) {
          struct ir3_block *pred = block->physical_predecessors[i];
-         struct ir3_helper_block_data *pred_bd = pred->data;
-         if (pred_bd->uses_helpers_end) {
-            pred_uses_helpers = true;
+         struct ir3_end_of_feature_block_data *pred_bd = pred->data;
+         if (pred_bd->uses_feature_end) {
+            pred_uses_feature = true;
             break;
          }
       }
 
-      if (!pred_uses_helpers)
+      if (!pred_uses_feature)
          continue;
 
-      /* The last use of helpers is somewhere between the beginning and the
-       * end. first_instr will be the first instruction where helpers are no
-       * longer required, or NULL if helpers are not required just at the end.
+      /* The last use of the feature is somewhere between the beginning and the
+       * end. first_instr will be the first instruction where the feature are no
+       * longer required, or NULL if the feature are not required just at the end.
        */
       struct ir3_instruction *first_instr = NULL;
       foreach_instr_rev (instr, &block->instr_list) {
-         /* Skip prefetches because they actually execute before the block
-          * starts and at this stage they aren't guaranteed to be at the start
-          * of the block.
-          */
-         if (uses_helpers(instr) && instr->opc != OPC_META_TEX_PREFETCH)
+         if (check_instr(instr))
             break;
          first_instr = instr;
       }
@@ -1756,18 +2009,12 @@ helper_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
              * insert one.
              */
             if (instr->opc == OPC_NOP) {
-               instr->flags |= IR3_INSTR_EQ;
+               instr->flags |= new_flag;
                killed = true;
                break;
             }
 
-            /* ALU and SFU instructions probably aren't going to benefit much
-             * from killing helper invocations, because they complete at least
-             * an entire quad in a cycle and don't access any quad-divergent
-             * memory, so delay emitting (eq) in the hopes that we find a nop
-             * afterwards.
-             */
-            if (is_alu(instr) || is_sfu(instr))
+            if (cheap_instr(instr))
                continue;
             if (instr->opc == OPC_PREDE)
                continue;
@@ -1787,9 +2034,89 @@ helper_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
                                                 : ir3_before_terminator(block);
          struct ir3_builder build = ir3_builder_at(cursor);
          struct ir3_instruction *nop = ir3_NOP(&build);
-         nop->flags |= IR3_INSTR_EQ;
+         nop->flags |= new_flag;
       }
    }
+
+   return true;
+}
+
+static bool
+uses_helpers(struct ir3_instruction *instr)
+{
+   return !!(instr->flags & IR3_INSTR_NEEDS_HELPERS);
+}
+
+static bool
+is_cheap_for_eq(struct ir3_instruction *instr)
+{
+   /* ALU and SFU instructions probably aren't going to benefit much
+    * from killing helper invocations, because they complete at least
+    * an entire quad in a cycle and don't access any quad-divergent
+    * memory, so delay emitting (eq) in the hopes that we find a nop
+    * afterwards.
+    */
+   return is_alu(instr) || is_sfu(instr);
+}
+
+/* Insert (eq) after the last instruction using the results of helper
+ * invocations. Use a backwards dataflow analysis to determine at which points
+ * in the program helper invocations are definitely never used, and then insert
+ * (eq) at the point where we cross from a point where they may be used to a
+ * point where they are never used.
+ */
+static void
+helper_sched(struct ir3_legalize_ctx *ctx, struct ir3 *ir,
+             struct ir3_shader_variant *so)
+{
+   if (!feature_usage_sched(ctx, ir, so, uses_helpers, is_cheap_for_eq,
+                            IR3_INSTR_EQ) &&
+       so->num_sampler_prefetch) {
+      /* If only prefetches use helpers then we can disable them in the shader
+       * via a register setting.
+       */
+      so->prefetch_end_of_quad = true;
+   }
+}
+
+static bool
+needs_eolm(struct ir3_instruction *instr)
+{
+   switch (instr->opc) {
+   case OPC_STL:
+   case OPC_LDL:
+   case OPC_STLW:
+   case OPC_LDLW:
+   case OPC_ATOMIC_ADD:
+   case OPC_ATOMIC_SUB:
+   case OPC_ATOMIC_XCHG:
+   case OPC_ATOMIC_INC:
+   case OPC_ATOMIC_DEC:
+   case OPC_ATOMIC_CMPXCHG:
+   case OPC_ATOMIC_MIN:
+   case OPC_ATOMIC_MAX:
+   case OPC_ATOMIC_AND:
+   case OPC_ATOMIC_OR:
+   case OPC_ATOMIC_XOR:
+      return true;
+   default:
+      return false;
+   }
+}
+
+static bool
+needs_eogm(struct ir3_instruction *instr)
+{
+   return opc_cat(instr->opc) == 5 || opc_cat(instr->opc) == 6;
+}
+
+static bool
+is_cheap_for_eolm_eogm(struct ir3_instruction *instr)
+{
+   /* Blob inserts these flags as soon as possible, so consider all instructions
+    * expensive.
+    */
+   return false;
 }
 
 struct ir3_last_block_data {
@@ -2209,7 +2536,7 @@ ir3_legalize(struct ir3 *ir, struct ir3_shader_variant *so, int *max_bary)
 
    so->early_preamble = has_preamble && !gpr_in_preamble &&
       !pred_in_preamble && !relative_in_preamble &&
-      ir->compiler->has_early_preamble &&
+      ir->compiler->info->props.has_early_preamble &&
       !(ir3_shader_debug & IR3_DBG_NOEARLYPREAMBLE);
 
    /* On a7xx, sync behavior for a1.x is different in the early preamble. RaW
@@ -2254,14 +2581,6 @@ ir3_legalize(struct ir3 *ir, struct ir3_shader_variant *so, int *max_bary)
       progress |= apply_fine_deriv_macro(ctx, block);
    }
 
-   if (ir3_shader_debug & IR3_DBG_FULLSYNC) {
-      dbg_sync_sched(ir, so);
-   }
-
-   if (ir3_shader_debug & IR3_DBG_FULLNOP) {
-      dbg_nop_sched(ir, so);
-   }
-
    bool cfg_changed = false;
    while (opt_jump(ir))
       cfg_changed = true;
@@ -2274,10 +2593,34 @@ ir3_legalize(struct ir3 *ir, struct ir3_shader_variant *so, int *max_bary)
    if (so->type == MESA_SHADER_FRAGMENT)
       kill_sched(ir, so);
 
+   if ((so->type == MESA_SHADER_FRAGMENT || ir3_shader_compute(so)) &&
+       so->compiler->info->props.has_eolm_eogm) {
+      feature_usage_sched(ctx, ir, so, needs_eolm, is_cheap_for_eolm_eogm,
+                          IR3_INSTR_EOLM);
+      feature_usage_sched(ctx, ir, so, needs_eogm, is_cheap_for_eolm_eogm,
+                          IR3_INSTR_EOGM);
+   }
+
    /* TODO: does (eq) exist before a6xx? */
    if (so->type == MESA_SHADER_FRAGMENT && so->need_pixlod &&
-       so->compiler->gen >= 6)
-      helper_sched(ctx, ir, so);
+       so->compiler->gen >= 6) {
+      if (mark_helpers(ctx, ir, so)) {
+         helper_sched(ctx, ir, so);
+      } else {
+         /* If no instructions use helpers, we can disable them in the shader
+          * via a register setting.
+          */
+         so->prefetch_end_of_quad = true;
+      }
+   }
+
+   if (ir3_shader_debug & IR3_DBG_FULLSYNC) {
+      dbg_sync_sched(ir, so);
+   }
+
+   if (ir3_shader_debug & IR3_DBG_FULLNOP) {
+      dbg_nop_sched(ir, so);
+   }
 
    /* Note: insert (last) before alias.tex to have the sources that are actually
     * read by instructions (as opposed to alias registers) more easily

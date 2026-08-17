@@ -76,6 +76,9 @@ class Extension:
     features_promoted   = False
     properties_promoted = False
     needs_double_load   = False
+    # set from vk.xml when the constructed name doesn't match
+    features_struct_name   = None
+    properties_struct_name = None
     
 
     # these are specific to zink_instance.py:
@@ -159,6 +162,11 @@ class Extension:
         return self.alias + '_' + suffix
 
     def physical_device_struct(self, struct: str):
+        if struct == "Features" and self.features_struct_name:
+            return self.features_struct_name
+        if struct == "Properties" and self.properties_struct_name:
+            return self.properties_struct_name
+
         if self.name_in_camel_case().endswith(struct):
             struct = ""
 

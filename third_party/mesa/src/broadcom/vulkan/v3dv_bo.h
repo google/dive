@@ -24,6 +24,11 @@
 #ifndef V3DV_BO_H
 #define V3DV_BO_H
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <time.h>
+#include "util/list.h"
+
 struct v3dv_device;
 
 struct v3dv_bo {

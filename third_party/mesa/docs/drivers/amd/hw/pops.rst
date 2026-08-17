@@ -473,4 +473,5 @@ No effect was found in `nvpro-samples/vk_order_independent_transparency <https:/
 during testing on GFX9 ``CHIP_RAVEN`` and GFX11 ``CHIP_NAVI31``.
 
 * ``DB_SHADER_CONTROL.EXEC_IF_OVERLAPPED`` on GFX9–10.3.
-* ``PA_SC_BINNER_CNTL_0.BIN_MAPPING_MODE = BIN_MAP_MODE_POPS`` on GFX10+.
+* ``PA_SC_BINNER_CNTL_0.BIN_MAPPING_MODE = BIN_MAP_MODE_POPS`` on GFX10-11.5.
+  This field is reserved on GFX12+ and should be set to 0.

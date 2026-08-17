@@ -33,6 +33,7 @@
  */
 
 #include "util/u_dynarray.h"
+#include "util/u_qsort.h"
 #include "nir.h"
 #include "nir_builder.h"
 #include "nir_vla.h"
@@ -65,6 +66,36 @@ hash_alu_src(uint32_t hash, const nir_alu_src *src,
    return hash_src(hash, &src->src);
 }
 
+static bool
+phi_src_is_compatible(nir_def *def, uint32_t max_vec)
+{
+   /* hash_phi_src() and phi_srcs_equal() look at component 0 after chasing
+    * movs. For multi-component sources, make sure that component represents
+    * the whole source: all components are constants, or all components come
+    * from the same def and remain within the same max_vec.
+    */
+   const nir_scalar first = nir_scalar_chase_movs(nir_get_scalar(def, 0));
+   const bool first_is_const = nir_scalar_is_const(first);
+   const uint32_t mask = ~(max_vec - 1);
+
+   for (uint8_t i = 1; i < def->num_components; i++) {
+      const nir_scalar chased = nir_scalar_chase_movs(nir_get_scalar(def, i));
+      const bool chased_is_const = nir_scalar_is_const(chased);
+
+      if (first_is_const || chased_is_const) {
+         if (first_is_const != chased_is_const)
+            return false;
+         continue;
+      }
+
+      if (chased.def != first.def ||
+          (chased.comp & mask) != (first.comp & mask))
+         return false;
+   }
+
+   return true;
+}
+
 static uint32_t
 hash_phi_src(uint32_t hash, const nir_phi_instr *phi, const nir_phi_src *src,
              uint32_t max_vec)
@@ -81,7 +112,7 @@ hash_phi_src(uint32_t hash, const nir_phi_instr *phi, const nir_phi_src *src,
    } else if (src->pred->index < phi->instr.block->index) {
       hash = HASH(hash, chased.def);
    } else {
-      nir_instr *chased_instr = chased.def->parent_instr;
+      nir_instr *chased_instr = nir_def_instr(chased.def);
       hash = HASH(hash, chased_instr->type);
 
       if (chased_instr->type == nir_instr_type_alu)
@@ -116,7 +147,20 @@ hash_instr(const void *data)
    hash = HASH(hash, alu->op);
    hash = HASH(hash, alu->def.bit_size);
 
-   for (unsigned i = 0; i < nir_op_infos[alu->op].num_inputs; i++)
+   unsigned i = 0;
+   if (nir_op_infos[alu->op].algebraic_properties & NIR_OP_IS_2SRC_COMMUTATIVE) {
+      uint32_t src0_hash = hash_alu_src(hash, &alu->src[0],
+                                        alu->def.num_components,
+                                        instr->pass_flags);
+      uint32_t src1_hash = hash_alu_src(hash, &alu->src[1],
+                                        alu->def.num_components,
+                                        instr->pass_flags);
+
+      hash = src0_hash * src1_hash;
+      i = 2;
+   }
+
+   for (; i < nir_op_infos[alu->op].num_inputs; i++)
       hash = hash_alu_src(hash, &alu->src[i],
                           alu->def.num_components,
                           instr->pass_flags);
@@ -141,6 +185,15 @@ alu_srcs_equal(const nir_alu_src *src1, const nir_alu_src *src2,
       return false;
 
    return srcs_equal(&src1->src, &src2->src);
+}
+
+static bool
+alu_srcs_match_swapped(const nir_alu_instr *alu1, const nir_alu_instr *alu2,
+                       uint32_t max_vec)
+{
+   return (nir_op_infos[alu1->op].algebraic_properties & NIR_OP_IS_2SRC_COMMUTATIVE) &&
+          alu_srcs_equal(&alu1->src[0], &alu2->src[1], max_vec) &&
+          alu_srcs_equal(&alu1->src[1], &alu2->src[0], max_vec);
 }
 
 static bool
@@ -178,8 +231,8 @@ phi_srcs_equal(nir_block *block, const nir_phi_src *src1,
     * (forward-edge) sources are vectorized, chances are the back-edge will
     * also be vectorized.
     */
-   nir_instr *chased_instr1 = chased1.def->parent_instr;
-   nir_instr *chased_instr2 = chased2.def->parent_instr;
+   nir_instr *chased_instr1 = nir_def_instr(chased1.def);
+   nir_instr *chased_instr2 = nir_def_instr(chased2.def);
 
    if (chased_instr1->type != chased_instr2->type)
       return false;
@@ -232,7 +285,11 @@ instrs_equal(const void *data1, const void *data2)
    if (alu1->def.bit_size != alu2->def.bit_size)
       return false;
 
-   for (unsigned i = 0; i < nir_op_infos[alu1->op].num_inputs; i++) {
+   unsigned i = 0;
+   if (alu_srcs_match_swapped(alu1, alu2, instr1->pass_flags))
+      i = 2;
+
+   for (; i < nir_op_infos[alu1->op].num_inputs; i++) {
       if (!alu_srcs_equal(&alu1->src[i], &alu2->src[i], instr1->pass_flags))
          return false;
    }
@@ -279,7 +336,16 @@ instr_can_rewrite(nir_instr *instr)
 
    case nir_instr_type_phi: {
       nir_phi_instr *phi = nir_instr_as_phi(instr);
-      return phi->def.num_components < instr->pass_flags;
+
+      if (phi->def.num_components >= instr->pass_flags)
+         return false;
+
+      nir_foreach_phi_src(src, phi) {
+         if (!phi_src_is_compatible(src->src.ssa, instr->pass_flags))
+            return false;
+      }
+
+      return true;
    }
 
    default:
@@ -295,7 +361,7 @@ rewrite_uses(nir_builder *b, struct set *instr_set, nir_def *def1,
 {
    /* update all ALU uses */
    nir_foreach_use_safe(src, def1) {
-      nir_instr *user_instr = nir_src_parent_instr(src);
+      nir_instr *user_instr = nir_src_use_instr(src);
       if (user_instr->type == nir_instr_type_alu) {
          /* Check if user is found in the hashset */
          struct set_entry *entry = _mesa_set_search(instr_set, user_instr);
@@ -314,14 +380,14 @@ rewrite_uses(nir_builder *b, struct set *instr_set, nir_def *def1,
    }
 
    nir_foreach_use_safe(src, def2) {
-      if (nir_src_parent_instr(src)->type == nir_instr_type_alu) {
+      if (nir_src_use_instr(src)->type == nir_instr_type_alu) {
          /* For ALU instructions, rewrite the source directly to avoid a
           * round-trip through copy propagation.
           */
          nir_src_rewrite(src, new_def);
 
          nir_alu_src *alu_src = container_of(src, nir_alu_src, src);
-         nir_alu_instr *use = nir_instr_as_alu(nir_src_parent_instr(src));
+         nir_alu_instr *use = nir_instr_as_alu(nir_src_use_instr(src));
          unsigned components =
             nir_ssa_alu_instr_src_components(use, alu_src - use->src);
          for (unsigned i = 0; i < components; i++)
@@ -346,8 +412,45 @@ rewrite_uses(nir_builder *b, struct set *instr_set, nir_def *def1,
       nir_def_rewrite_uses(def2, new_def2);
    }
 
-   nir_instr_remove(def1->parent_instr);
-   nir_instr_remove(def2->parent_instr);
+   nir_instr_remove(nir_def_instr(def1));
+   nir_instr_remove(nir_def_instr(def2));
+}
+
+static nir_block *
+get_first_non_const_phi_pred(nir_phi_instr *phi)
+{
+   nir_block *result = NULL;
+   nir_foreach_phi_src(src, phi) {
+      /* Loop back edge source might not be vectors. */
+      if (phi->instr.block->index < src->pred->index)
+         continue;
+
+      /* Find the first predecessor in source order. */
+      if (result && src->pred->index > result->index)
+         continue;
+
+      /* Ignore constant phi sources. */
+      if (nir_scalar_is_const(nir_scalar_resolved(src->src.ssa, 0)))
+         continue;
+
+      result = src->pred;
+   }
+
+   return result;
+}
+
+static int
+compare_scalar(const void *p1, const void *p2, void *data)
+{
+   uint8_t idx1 = *(const uint8_t *)p1;
+   uint8_t idx2 = *(const uint8_t *)p2;
+
+   const nir_scalar *scalars = data;
+
+   if (scalars[idx1].comp == scalars[idx2].comp)
+      return idx1 - idx2;
+
+   return scalars[idx1].comp - scalars[idx2].comp;
 }
 
 static nir_instr *
@@ -374,20 +477,38 @@ instr_try_combine_phi(struct set *instr_set, nir_phi_instr *phi1, nir_phi_instr 
 
    assert(exec_list_length(&phi1->srcs) == exec_list_length(&phi2->srcs));
 
+   uint8_t dest_swizzle[NIR_MAX_VEC_COMPONENTS] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+
+   nir_block *swizzle_pred = get_first_non_const_phi_pred(phi1);
+   /* Try to avoid reverse swizzles at the new phi sources. */
+   if (swizzle_pred) {
+      nir_phi_src *src1 = nir_phi_get_src_from_block(phi1, swizzle_pred);
+      nir_phi_src *src2 = nir_phi_get_src_from_block(phi2, swizzle_pred);
+
+      nir_scalar new_srcs[NIR_MAX_VEC_COMPONENTS];
+
+      for (unsigned i = 0; i < phi1_components; i++)
+         new_srcs[i] = nir_scalar_resolved(src1->src.ssa, i);
+
+      for (unsigned i = 0; i < phi2_components; i++)
+         new_srcs[phi1_components + i] = nir_scalar_resolved(src2->src.ssa, i);
+
+      util_qsort_r(dest_swizzle, total_components, sizeof(dest_swizzle[0]),
+                   compare_scalar, new_srcs);
+   }
+
    nir_foreach_phi_src(src1, phi1) {
       nir_phi_src *src2 = nir_phi_get_src_from_block(phi2, src1->pred);
       nir_block *pred_block = src1->pred;
 
       nir_scalar new_srcs[NIR_MAX_VEC_COMPONENTS];
 
-      for (unsigned i = 0; i < phi1_components; i++) {
-         nir_scalar s = nir_get_scalar(src1->src.ssa, i);
-         new_srcs[i] = nir_scalar_chase_movs(s);
-      }
-
-      for (unsigned i = 0; i < phi2_components; i++) {
-         nir_scalar s = nir_get_scalar(src2->src.ssa, i);
-         new_srcs[phi1_components + i] = nir_scalar_chase_movs(s);
+      for (unsigned i = 0; i < total_components; i++) {
+         unsigned comp = dest_swizzle[i];
+         if (comp < phi1_components)
+            new_srcs[i] = nir_scalar_resolved(src1->src.ssa, comp);
+         else
+            new_srcs[i] = nir_scalar_resolved(src2->src.ssa, comp - phi1_components);
       }
 
       nir_def *new_src;
@@ -405,15 +526,15 @@ instr_try_combine_phi(struct set *instr_set, nir_phi_instr *phi1, nir_phi_instr 
          new_src = nir_build_imm(&b, total_components, bit_size, value);
       } else if (pred_block->index < block->index) {
          nir_def *def = new_srcs[0].def;
-         unsigned swizzle[NIR_MAX_VEC_COMPONENTS];
+         unsigned src_swizzle[NIR_MAX_VEC_COMPONENTS];
 
          for (unsigned i = 0; i < total_components; i++) {
             assert(new_srcs[i].def == def);
-            swizzle[i] = new_srcs[i].comp;
+            src_swizzle[i] = new_srcs[i].comp;
          }
 
-         b.cursor = nir_after_instr_and_phis(def->parent_instr);
-         new_src = nir_swizzle(&b, def, swizzle, total_components);
+         b.cursor = nir_after_instr_and_phis(nir_def_instr(def));
+         new_src = nir_swizzle(&b, def, src_swizzle, total_components);
       } else {
          /* This is a loop back-edge so we haven't vectorized the sources yet.
           * Combine them in a vec which, if they are vectorized later, will be
@@ -429,7 +550,20 @@ instr_try_combine_phi(struct set *instr_set, nir_phi_instr *phi1, nir_phi_instr 
    }
 
    b.cursor = nir_after_phis(block);
-   rewrite_uses(&b, instr_set, &phi1->def, &phi2->def, &new_phi->def);
+
+   nir_alu_src replace_phi1 = { nir_src_for_ssa(&new_phi->def) };
+   nir_alu_src replace_phi2 = { nir_src_for_ssa(&new_phi->def) };
+
+   for (unsigned i = 0; i < total_components; i++) {
+      unsigned comp = dest_swizzle[i];
+      if (comp < phi1_components)
+         replace_phi1.swizzle[comp] = i;
+      else
+         replace_phi2.swizzle[comp - phi1_components] = i;
+   }
+
+   nir_def_rewrite_uses_with_alu_src(&b, &phi1->def, replace_phi1);
+   nir_def_rewrite_uses_with_alu_src(&b, &phi2->def, replace_phi2);
 
    return &new_phi->instr;
 }
@@ -453,15 +587,9 @@ instr_try_combine_alu(struct set *instr_set, nir_alu_instr *alu1, nir_alu_instr 
                 alu1->def.bit_size);
    new_alu->instr.pass_flags = alu1->instr.pass_flags;
 
-   /* If either channel is exact, we have to preserve it even if it's
-    * not optimal for other channels.
+   /* fp_math_ctrl is a set of restrictions, take the union of both.
     */
-   new_alu->exact = alu1->exact || alu2->exact;
-
-   /* fp_fast_math is a set of FLOAT_CONTROLS_*_PRESERVE_*.  Preserve anything
-    * preserved by either instruction.
-    */
-   new_alu->fp_fast_math = alu1->fp_fast_math | alu2->fp_fast_math;
+   new_alu->fp_math_ctrl = alu1->fp_math_ctrl | alu2->fp_math_ctrl;
 
    /* If all channels don't wrap, we can say that the whole vector doesn't
     * wrap.
@@ -469,17 +597,22 @@ instr_try_combine_alu(struct set *instr_set, nir_alu_instr *alu1, nir_alu_instr 
    new_alu->no_signed_wrap = alu1->no_signed_wrap && alu2->no_signed_wrap;
    new_alu->no_unsigned_wrap = alu1->no_unsigned_wrap && alu2->no_unsigned_wrap;
 
+   bool srcs_swapped = alu_srcs_match_swapped(alu1, alu2, alu1->instr.pass_flags);
+
    for (unsigned i = 0; i < nir_op_infos[alu1->op].num_inputs; i++) {
+      unsigned alu2_src_idx = srcs_swapped && i < 2 ? 1 - i : i;
+      const nir_alu_src *alu2_src = &alu2->src[alu2_src_idx];
+
       /* handle constant merging case */
-      if (alu1->src[i].src.ssa != alu2->src[i].src.ssa) {
+      if (alu1->src[i].src.ssa != alu2_src->src.ssa) {
          nir_const_value *c1 = nir_src_as_const_value(alu1->src[i].src);
-         nir_const_value *c2 = nir_src_as_const_value(alu2->src[i].src);
+         nir_const_value *c2 = nir_src_as_const_value(alu2_src->src);
          assert(c1 && c2);
          nir_const_value value[NIR_MAX_VEC_COMPONENTS];
          unsigned bit_size = alu1->src[i].src.ssa->bit_size;
 
          for (unsigned j = 0; j < total_components; j++) {
-            value[j].u64 = j < alu1_components ? c1[alu1->src[i].swizzle[j]].u64 : c2[alu2->src[i].swizzle[j - alu1_components]].u64;
+            value[j].u64 = j < alu1_components ? c1[alu1->src[i].swizzle[j]].u64 : c2[alu2_src->swizzle[j - alu1_components]].u64;
          }
          nir_def *def = nir_build_imm(&b, total_components, bit_size, value);
 
@@ -496,7 +629,7 @@ instr_try_combine_alu(struct set *instr_set, nir_alu_instr *alu1, nir_alu_instr 
 
       for (unsigned j = 0; j < alu2_components; j++) {
          new_alu->src[i].swizzle[j + alu1_components] =
-            alu2->src[i].swizzle[j];
+            alu2_src->swizzle[j];
       }
    }
 

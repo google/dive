@@ -383,7 +383,7 @@ hud_pipe_query_install(struct hud_batch_query_context **pbq,
    if (!gr)
       return;
 
-   strncpy(gr->name, name, sizeof(gr->name));
+   strncpy(gr->name, name, sizeof(gr->name) - 1);
    gr->name[sizeof(gr->name) - 1] = '\0';
    gr->query_data = CALLOC_STRUCT(query_info);
    if (!gr->query_data)

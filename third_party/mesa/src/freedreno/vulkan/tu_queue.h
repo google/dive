@@ -33,6 +33,8 @@ struct tu_queue
    uint32_t sparse_syncobj, gfx_syncobj;
    uint64_t sparse_timepoint, gfx_timepoint;
 
+   unsigned render_pass_idx;
+
    int fence;           /* timestamp/fence of the last queue submission */
 };
 VK_DEFINE_HANDLE_CASTS(tu_queue, vk.base, VkQueue, VK_OBJECT_TYPE_QUEUE)
@@ -41,8 +43,10 @@ VkResult
 tu_queue_init(struct tu_device *device,
               struct tu_queue *queue,
               enum tu_queue_type type,
+              const VkQueueGlobalPriorityKHR global_priority,
               int idx,
-              const VkDeviceQueueCreateInfo *create_info);
+              const VkDeviceQueueCreateInfo *create_info,
+              struct tu_queue *shared_queue);
 
 void
 tu_queue_finish(struct tu_queue *queue);

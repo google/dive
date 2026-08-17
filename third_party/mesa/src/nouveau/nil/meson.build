@@ -57,6 +57,7 @@ _nil_bindings_rs = rust.bindgen(
     '--allowlist-type', 'nil_format_support_flags',
     '--allowlist-type', 'nv_device_info',
     '--allowlist-type', 'nv_device_type',
+    '--allowlist-type', 'nv_zcull_device_info',
     '--allowlist-type', 'pipe_format',
     '--allowlist-type', 'pipe_swizzle',
     '--allowlist-var', 'nil_format_table',
@@ -75,7 +76,7 @@ _libnil_rs_bindings = static_library(
 )
 
 _libnil = static_library(
-  'libnil',
+  'nil',
   files('lib.rs'),
   gnu_symbol_visibility: 'hidden',
   rust_abi: 'c',
@@ -83,6 +84,31 @@ _libnil = static_library(
   link_with: [_libnil_format_table, _libnil_rs_bindings],
   dependencies: _libnil_deps,
 )
+
+# TODO: Linking Rust executables (such as unit tests) doesn't play nicely
+# with the sanitizers because meson doesn't know to pass -fsanitize to the
+# Rust linker.  See also https://github.com/mesonbuild/meson/issues/11741
+if with_tests and get_option('b_sanitize') == 'none'
+  rust.test(
+    'nil',
+    _libnil,
+    suite : ['nouveau'],
+    # This is needed to ensure we link against glibc.
+    # The --no-as-needed/-lm/--as-needed workaround forces the linker to
+    # keep libm for sqrtf in libmesa_util.a. This is needed because rustc
+    # places default libraries (-lm) before static archives in the link
+    # command, and Coverity's cov-build strips rustc's -fuse-ld=lld,
+    # falling back to ld.bfd which has strict left-to-right link order.
+    # Remove this workaround once rustc resolves link ordering of
+    # native libraries (https://github.com/rust-lang/rust/issues/154975).
+    rust_args: [
+      '-C', 'default-linker-libraries',
+      '-C', 'link-arg=-Wl,--no-as-needed',
+      '-C', 'link-arg=-lm',
+      '-C', 'link-arg=-Wl,--as-needed',
+    ],
+  )
+endif
 
 _nil_h = custom_target(
   'nil_h',

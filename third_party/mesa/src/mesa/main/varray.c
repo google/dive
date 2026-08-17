@@ -191,7 +191,7 @@ update_attribute_map_mode(const struct gl_context *ctx,
     * There is no need to change the mapping away from the
     * identity mapping if we are not in compat mode.
     */
-   if (ctx->API != API_OPENGL_COMPAT)
+   if (!_mesa_is_desktop_gl_compat(ctx))
       return;
    /* The generic0 attribute superseeds the position attribute */
    const GLbitfield enabled = vao->Enabled;
@@ -1803,7 +1803,7 @@ _mesa_PointSizePointerOES(GLenum type, GLsizei stride, const GLvoid *ptr)
    GET_CURRENT_CONTEXT(ctx);
 
    GLenum format = GL_RGBA;
-   if (ctx->API != API_OPENGLES) {
+   if (!_mesa_is_gles1(ctx)) {
       _mesa_error(ctx, GL_INVALID_OPERATION,
                   "glPointSizePointer(ES 1.x only)");
       return;
@@ -2093,7 +2093,7 @@ void
 _mesa_update_edgeflag_state_explicit(struct gl_context *ctx,
                                      bool per_vertex_enable)
 {
-   if (ctx->API != API_OPENGL_COMPAT)
+   if (!_mesa_is_desktop_gl_compat(ctx))
       return;
 
    /* Edge flags take effect only if the polygon mode is not FILL on the side
@@ -3003,9 +3003,6 @@ _mesa_LockArraysEXT(GLint first, GLsizei count)
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glLockArrays %d %d\n", first, count);
-
    if (first < 0) {
       _mesa_error( ctx, GL_INVALID_VALUE, "glLockArraysEXT(first)" );
       return;
@@ -3028,9 +3025,6 @@ void GLAPIENTRY
 _mesa_UnlockArraysEXT( void )
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glUnlockArrays\n");
 
    if (ctx->Array.LockCount == 0) {
       _mesa_error( ctx, GL_INVALID_OPERATION, "glUnlockArraysEXT(reexit)" );

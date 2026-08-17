@@ -40,6 +40,10 @@
 #endif
 #endif
 
+#if DETECT_CC_MSVC && DETECT_ARCH_AARCH64
+#include <intrin.h>
+#endif
+
 
 /** log2(x), for x in [1.0, 2.0) */
 float log2_table[LOG2_TABLE_SIZE];
@@ -68,22 +72,43 @@ util_init_math(void)
 }
 
 /**
- * Fetches the contents of the fpstate (mxcsr on x86) register.
+ * Fetches the contents of the fpstate (mxcsr on x86, fpscr/fpcr on arm) register.
  *
  * On platforms without support for it just returns 0.
  */
 unsigned
 util_fpstate_get(void)
 {
-   unsigned mxcsr = 0;
+   unsigned fpstate = 0;
 
 #if DETECT_ARCH_SSE
    if (util_get_cpu_caps()->has_sse) {
-      mxcsr = _mm_getcsr();
+      fpstate = _mm_getcsr();
+   }
+#endif
+#if DETECT_ARCH_ARM
+   if (util_get_cpu_caps()->has_neon) {
+#ifdef HAVE___BUILTIN_ARM_GET_FPSCR
+      fpstate = __builtin_arm_get_fpscr();
+#else
+      __asm__ volatile("vmrs %0, fpscr" : "=r"(fpstate));
+#endif
+   }
+#elif DETECT_ARCH_AARCH64
+   {
+#ifdef HAVE___BUILTIN_AARCH64_GET_FPCR
+      fpstate = (unsigned)__builtin_aarch64_get_fpcr();
+#elif DETECT_CC_MSVC
+      fpstate = (unsigned)_ReadStatusReg(ARM64_FPCR);
+#else
+      uint64_t fpcr;
+      __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+      fpstate = (unsigned)fpcr;
+#endif
    }
 #endif
 
-   return mxcsr;
+   return fpstate;
 }
 
 /**
@@ -93,33 +118,59 @@ util_fpstate_get(void)
  * This is the behavior required by D3D10. OpenGL doesn't care.
  */
 unsigned
-util_fpstate_set_denorms_to_zero(unsigned current_mxcsr)
+util_fpstate_set_denorms_to_zero(unsigned current_fpstate)
 {
 #if DETECT_ARCH_SSE
    if (util_get_cpu_caps()->has_sse) {
       /* Enable flush to zero mode */
-      current_mxcsr |= _MM_FLUSH_ZERO_MASK;
+      current_fpstate |= _MM_FLUSH_ZERO_MASK;
       if (util_get_cpu_caps()->has_daz) {
          /* Enable denormals are zero mode */
-         current_mxcsr |= _MM_DENORMALS_ZERO_MASK;
+         current_fpstate |= _MM_DENORMALS_ZERO_MASK;
       }
-      util_fpstate_set(current_mxcsr);
+      util_fpstate_set(current_fpstate);
    }
 #endif
-   return current_mxcsr;
+#if DETECT_ARCH_ARM || DETECT_ARCH_AARCH64
+   if (util_get_cpu_caps()->has_neon) {
+      current_fpstate |= (1u << 24); /* FPSCR/FPCR FZ bit */
+      util_fpstate_set(current_fpstate);
+   }
+#endif
+   return current_fpstate;
 }
 
 /**
- * Set the state of the fpstate (mxcsr on x86) register.
+ * Set the state of the fpstate (mxcsr on x86, fpscr/fpcr on arm) register.
  *
  * On platforms without support for it's a noop.
  */
 void
-util_fpstate_set(unsigned mxcsr)
+util_fpstate_set(unsigned fpstate)
 {
 #if DETECT_ARCH_SSE
    if (util_get_cpu_caps()->has_sse) {
-      _mm_setcsr(mxcsr);
+      _mm_setcsr(fpstate);
+   }
+#endif
+#if DETECT_ARCH_ARM
+   if (util_get_cpu_caps()->has_neon) {
+#ifdef HAVE___BUILTIN_ARM_SET_FPSCR
+      __builtin_arm_set_fpscr(fpstate);
+#else
+      __asm__ volatile("vmsr fpscr, %0" :: "r"(fpstate));
+#endif
+   }
+#elif DETECT_ARCH_AARCH64
+   {
+#ifdef HAVE___BUILTIN_AARCH64_SET_FPCR
+      __builtin_aarch64_set_fpcr(fpstate);
+#elif DETECT_CC_MSVC
+      _WriteStatusReg(ARM64_FPCR, fpstate);
+#else
+      uint64_t fpcr = fpstate;
+      __asm__ volatile("msr fpcr, %0" :: "r"(fpcr));
+#endif
    }
 #endif
 }

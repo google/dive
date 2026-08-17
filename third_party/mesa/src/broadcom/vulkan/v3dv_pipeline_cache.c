@@ -21,7 +21,10 @@
  * IN THE SOFTWARE.
  */
 
-#include "v3dv_private.h"
+#include "v3dv_device.h"
+#include "v3dv_entrypoints.h"
+#include "vk_log.h"
+#include "util/disk_cache.h"
 #include "vk_util.h"
 #include "util/blob.h"
 #include "nir/nir_serialize.h"
@@ -34,19 +37,19 @@ static const bool dump_stats_on_destroy = false;
 #define V3DV_MAX_PIPELINE_CACHE_ENTRIES 4096
 
 static uint32_t
-sha1_hash_func(const void *sha1)
+blake3_hash_func(const void *blake3)
 {
-   return _mesa_hash_data(sha1, 20);
+   return _mesa_hash_data(blake3, BLAKE3_KEY_LEN);
 }
 
 static bool
-sha1_compare_func(const void *sha1_a, const void *sha1_b)
+blake3_compare_func(const void *blake3_a, const void *blake3_b)
 {
-   return memcmp(sha1_a, sha1_b, 20) == 0;
+   return memcmp(blake3_a, blake3_b, BLAKE3_KEY_LEN) == 0;
 }
 
 struct serialized_nir {
-   unsigned char sha1_key[20];
+   unsigned char blake3_key[BLAKE3_KEY_LEN];
    size_t size;
    char data[0];
 };
@@ -83,7 +86,7 @@ void
 v3dv_pipeline_cache_upload_nir(struct v3dv_pipeline *pipeline,
                                struct v3dv_pipeline_cache *cache,
                                nir_shader *nir,
-                               unsigned char sha1_key[20])
+                               unsigned char blake3_key[BLAKE3_KEY_LEN])
 {
    if (!cache || !cache->nir_cache)
       return;
@@ -93,7 +96,7 @@ v3dv_pipeline_cache_upload_nir(struct v3dv_pipeline *pipeline,
 
    pipeline_cache_lock(cache);
    struct hash_entry *entry =
-      _mesa_hash_table_search(cache->nir_cache, sha1_key);
+      _mesa_hash_table_search(cache->nir_cache, blake3_key);
    pipeline_cache_unlock(cache);
    if (entry)
       return;
@@ -112,7 +115,7 @@ v3dv_pipeline_cache_upload_nir(struct v3dv_pipeline *pipeline,
     * lock.  We could unlock for the big memcpy but it's probably not worth
     * the hassle.
     */
-   entry = _mesa_hash_table_search(cache->nir_cache, sha1_key);
+   entry = _mesa_hash_table_search(cache->nir_cache, blake3_key);
    if (entry) {
       blob_finish(&blob);
       pipeline_cache_unlock(cache);
@@ -121,7 +124,7 @@ v3dv_pipeline_cache_upload_nir(struct v3dv_pipeline *pipeline,
 
    struct serialized_nir *snir =
       ralloc_size(cache->nir_cache, sizeof(*snir) + blob.size);
-   memcpy(snir->sha1_key, sha1_key, 20);
+   memcpy(snir->blake3_key, blake3_key, BLAKE3_KEY_LEN);
    snir->size = blob.size;
    memcpy(snir->data, blob.data, blob.size);
 
@@ -129,14 +132,14 @@ v3dv_pipeline_cache_upload_nir(struct v3dv_pipeline *pipeline,
 
    cache->nir_stats.count++;
    if (debug_cache) {
-      char sha1buf[41];
-      _mesa_sha1_format(sha1buf, snir->sha1_key);
-      mesa_logi("pipeline cache %p, new nir entry %s\n", cache, sha1buf);
+      char blake3buf[BLAKE3_HEX_LEN];
+      _mesa_blake3_format(blake3buf, snir->blake3_key);
+      mesa_logi("pipeline cache %p, new nir entry %s\n", cache, blake3buf);
       if (dump_stats)
          cache_dump_stats(cache);
    }
 
-   _mesa_hash_table_insert(cache->nir_cache, snir->sha1_key, snir);
+   _mesa_hash_table_insert(cache->nir_cache, snir->blake3_key, snir);
 
    pipeline_cache_unlock(cache);
 }
@@ -145,23 +148,23 @@ nir_shader*
 v3dv_pipeline_cache_search_for_nir(struct v3dv_pipeline *pipeline,
                                    struct v3dv_pipeline_cache *cache,
                                    const nir_shader_compiler_options *nir_options,
-                                   unsigned char sha1_key[20])
+                                   unsigned char blake3_key[BLAKE3_KEY_LEN])
 {
    if (!cache || !cache->nir_cache)
       return NULL;
 
    if (debug_cache) {
-      char sha1buf[41];
-      _mesa_sha1_format(sha1buf, sha1_key);
+      char blake3buf[BLAKE3_HEX_LEN];
+      _mesa_blake3_format(blake3buf, blake3_key);
 
-      mesa_logi("pipeline cache %p, search for nir %s\n", cache, sha1buf);
+      mesa_logi("pipeline cache %p, search for nir %s\n", cache, blake3buf);
    }
 
    const struct serialized_nir *snir = NULL;
 
    pipeline_cache_lock(cache);
    struct hash_entry *entry =
-      _mesa_hash_table_search(cache->nir_cache, sha1_key);
+      _mesa_hash_table_search(cache->nir_cache, blake3_key);
    if (entry)
       snir = entry->data;
    pipeline_cache_unlock(cache);
@@ -208,14 +211,14 @@ v3dv_pipeline_cache_init(struct v3dv_pipeline_cache *cache,
    mtx_init(&cache->mutex, mtx_plain);
 
    if (cache_enabled) {
-      cache->nir_cache = _mesa_hash_table_create(NULL, sha1_hash_func,
-                                                 sha1_compare_func);
+      cache->nir_cache = _mesa_hash_table_create(NULL, blake3_hash_func,
+                                                 blake3_compare_func);
       cache->nir_stats.miss = 0;
       cache->nir_stats.hit = 0;
       cache->nir_stats.count = 0;
 
-      cache->cache = _mesa_hash_table_create(NULL, sha1_hash_func,
-                                             sha1_compare_func);
+      cache->cache = _mesa_hash_table_create(NULL, blake3_hash_func,
+                                             blake3_compare_func);
       cache->stats.miss = 0;
       cache->stats.hit = 0;
       cache->stats.count = 0;
@@ -249,23 +252,23 @@ v3dv_pipeline_shared_data_write_to_blob(const struct v3dv_pipeline_shared_data *
  */
 struct v3dv_pipeline_shared_data *
 v3dv_pipeline_cache_search_for_pipeline(struct v3dv_pipeline_cache *cache,
-                                        unsigned char sha1_key[20],
+                                        unsigned char blake3_key[BLAKE3_KEY_LEN],
                                         bool *cache_hit)
 {
    if (!cache || !cache->cache)
       return NULL;
 
    if (debug_cache) {
-      char sha1buf[41];
-      _mesa_sha1_format(sha1buf, sha1_key);
+      char blake3buf[BLAKE3_HEX_LEN];
+      _mesa_blake3_format(blake3buf, blake3_key);
 
-      mesa_logi("pipeline cache %p, search pipeline with key %s\n", cache, sha1buf);
+      mesa_logi("pipeline cache %p, search pipeline with key %s\n", cache, blake3buf);
    }
 
    pipeline_cache_lock(cache);
 
    struct hash_entry *entry =
-      _mesa_hash_table_search(cache->cache, sha1_key);
+      _mesa_hash_table_search(cache->cache, blake3_key);
 
    if (entry) {
       struct v3dv_pipeline_shared_data *cache_entry =
@@ -307,15 +310,15 @@ v3dv_pipeline_cache_search_for_pipeline(struct v3dv_pipeline_cache *cache,
     */
    if (disk_cache && device->instance->pipeline_cache_enabled) {
       cache_key cache_key;
-      disk_cache_compute_key(disk_cache, sha1_key, 20, cache_key);
+      disk_cache_compute_key(disk_cache, blake3_key, BLAKE3_KEY_LEN, cache_key);
 
       size_t buffer_size;
       uint8_t *buffer = disk_cache_get(disk_cache, cache_key, &buffer_size);
       if (V3D_DBG(CACHE)) {
-         char sha1buf[41];
-         _mesa_sha1_format(sha1buf, cache_key);
+         char blake3buf[BLAKE3_HEX_LEN];
+         _mesa_blake3_format(blake3buf, cache_key);
          mesa_logi("[v3dv on-disk cache] %s %s\n",
-                   buffer ? "hit" : "miss", sha1buf);
+                   buffer ? "hit" : "miss", blake3buf);
       }
 
       if (buffer) {
@@ -370,7 +373,7 @@ v3dv_pipeline_shared_data_destroy(struct v3dv_device *device,
 
 static struct v3dv_pipeline_shared_data *
 v3dv_pipeline_shared_data_new(struct v3dv_pipeline_cache *cache,
-                              const unsigned char sha1_key[20],
+                              const unsigned char blake3_key[BLAKE3_KEY_LEN],
                               struct v3dv_descriptor_maps **maps,
                               struct v3dv_shader_variant **variants,
                               const uint64_t *total_assembly,
@@ -390,7 +393,7 @@ v3dv_pipeline_shared_data_new(struct v3dv_pipeline_cache *cache,
       return NULL;
 
    new_entry->ref_cnt = 1;
-   memcpy(new_entry->sha1_key, sha1_key, 20);
+   memcpy(new_entry->blake3_key, blake3_key, BLAKE3_KEY_LEN);
 
    for (uint8_t stage = 0; stage < BROADCOM_SHADER_STAGES; stage++) {
       new_entry->maps[stage] = maps[stage];
@@ -441,7 +444,7 @@ pipeline_cache_upload_shared_data(struct v3dv_pipeline_cache *cache,
     * entry is not on the hash table
     */
    if (!from_disk_cache)
-      entry = _mesa_hash_table_search(cache->cache, shared_data->sha1_key);
+      entry = _mesa_hash_table_search(cache->cache, shared_data->blake3_key);
 
    if (entry) {
       pipeline_cache_unlock(cache);
@@ -449,14 +452,14 @@ pipeline_cache_upload_shared_data(struct v3dv_pipeline_cache *cache,
    }
 
    v3dv_pipeline_shared_data_ref(shared_data);
-   _mesa_hash_table_insert(cache->cache, shared_data->sha1_key, shared_data);
+   _mesa_hash_table_insert(cache->cache, shared_data->blake3_key, shared_data);
    cache->stats.count++;
    if (debug_cache) {
-      char sha1buf[41];
-      _mesa_sha1_format(sha1buf, shared_data->sha1_key);
+      char blake3buf[BLAKE3_HEX_LEN];
+      _mesa_blake3_format(blake3buf, shared_data->blake3_key);
 
-      mesa_logi("pipeline cache %p, new cache entry with sha1 key %s:%p\n\n",
-                cache, sha1buf, shared_data);
+      mesa_logi("pipeline cache %p, new cache entry with blake3 key %s:%p\n\n",
+                cache, blake3buf, shared_data);
       if (dump_stats)
          cache_dump_stats(cache);
    }
@@ -477,12 +480,12 @@ pipeline_cache_upload_shared_data(struct v3dv_pipeline_cache *cache,
       blob_init(&binary);
       if (v3dv_pipeline_shared_data_write_to_blob(shared_data, &binary)) {
          cache_key cache_key;
-         disk_cache_compute_key(disk_cache, shared_data->sha1_key, 20, cache_key);
+         disk_cache_compute_key(disk_cache, shared_data->blake3_key, BLAKE3_KEY_LEN, cache_key);
 
          if (V3D_DBG(CACHE)) {
-            char sha1buf[41];
-            _mesa_sha1_format(sha1buf, shared_data->sha1_key);
-            mesa_logi("[v3dv on-disk cache] storing %s\n", sha1buf);
+            char blake3buf[BLAKE3_HEX_LEN];
+            _mesa_blake3_format(blake3buf, shared_data->blake3_key);
+            mesa_logi("[v3dv on-disk cache] storing %s\n", blake3buf);
          }
          disk_cache_put(disk_cache, cache_key, binary.data, binary.size, NULL);
       }
@@ -504,7 +507,7 @@ static struct serialized_nir*
 serialized_nir_create_from_blob(struct v3dv_pipeline_cache *cache,
                                 struct blob_reader *blob)
 {
-   const unsigned char *sha1_key = blob_read_bytes(blob, 20);
+   const unsigned char *blake3_key = blob_read_bytes(blob, BLAKE3_KEY_LEN);
    uint32_t snir_size = blob_read_uint32(blob);
    const char* snir_data = blob_read_bytes(blob, snir_size);
    if (blob->overrun)
@@ -512,7 +515,7 @@ serialized_nir_create_from_blob(struct v3dv_pipeline_cache *cache,
 
    struct serialized_nir *snir =
       ralloc_size(cache->nir_cache, sizeof(*snir) + snir_size);
-   memcpy(snir->sha1_key, sha1_key, 20);
+   memcpy(snir->blake3_key, blake3_key, BLAKE3_KEY_LEN);
    snir->size = snir_size;
    memcpy(snir->data, snir_data, snir_size);
 
@@ -574,7 +577,7 @@ static struct v3dv_pipeline_shared_data *
 v3dv_pipeline_shared_data_create_from_blob(struct v3dv_pipeline_cache *cache,
                                            struct blob_reader *blob)
 {
-   const unsigned char *sha1_key = blob_read_bytes(blob, 20);
+   const unsigned char *blake3_key = blob_read_bytes(blob, BLAKE3_KEY_LEN);
 
    struct v3dv_descriptor_maps *maps[BROADCOM_SHADER_STAGES] = { 0 };
    struct v3dv_shader_variant *variants[BROADCOM_SHADER_STAGES] = { 0 };
@@ -621,7 +624,7 @@ v3dv_pipeline_shared_data_create_from_blob(struct v3dv_pipeline_cache *cache,
       goto fail;
 
    struct v3dv_pipeline_shared_data *data =
-      v3dv_pipeline_shared_data_new(cache, sha1_key, maps, variants,
+      v3dv_pipeline_shared_data_new(cache, blake3_key, maps, variants,
                                     total_assembly, total_assembly_size);
 
    if (!data)
@@ -680,7 +683,7 @@ pipeline_cache_load(struct v3dv_pipeline_cache *cache,
       if (!snir)
          break;
 
-      _mesa_hash_table_insert(cache->nir_cache, snir->sha1_key, snir);
+      _mesa_hash_table_insert(cache->nir_cache, snir->blake3_key, snir);
       cache->nir_stats.count++;
    }
 
@@ -694,7 +697,7 @@ pipeline_cache_load(struct v3dv_pipeline_cache *cache,
       if (!cache_entry)
          break;
 
-      _mesa_hash_table_insert(cache->cache, cache_entry->sha1_key, cache_entry);
+      _mesa_hash_table_insert(cache->cache, cache_entry->blake3_key, cache_entry);
       cache->stats.count++;
    }
 
@@ -800,7 +803,7 @@ v3dv_MergePipelineCaches(VkDevice device,
          struct serialized_nir *src_snir = entry->data;
          assert(src_snir);
 
-         if (_mesa_hash_table_search(dst->nir_cache, src_snir->sha1_key))
+         if (_mesa_hash_table_search(dst->nir_cache, src_snir->blake3_key))
             continue;
 
          /* FIXME: we are using serialized nir shaders because they are
@@ -811,19 +814,19 @@ v3dv_MergePipelineCaches(VkDevice device,
           */
          struct serialized_nir *snir_dst =
             ralloc_size(dst->nir_cache, sizeof(*snir_dst) + src_snir->size);
-         memcpy(snir_dst->sha1_key, src_snir->sha1_key, 20);
+         memcpy(snir_dst->blake3_key, src_snir->blake3_key, BLAKE3_KEY_LEN);
          snir_dst->size = src_snir->size;
          memcpy(snir_dst->data, src_snir->data, src_snir->size);
 
-         _mesa_hash_table_insert(dst->nir_cache, snir_dst->sha1_key, snir_dst);
+         _mesa_hash_table_insert(dst->nir_cache, snir_dst->blake3_key, snir_dst);
          dst->nir_stats.count++;
          if (debug_cache) {
-            char sha1buf[41];
-            _mesa_sha1_format(sha1buf, snir_dst->sha1_key);
+            char blake3buf[BLAKE3_HEX_LEN];
+            _mesa_blake3_format(blake3buf, snir_dst->blake3_key);
 
             mesa_logi("pipeline cache %p, added nir entry %s "
                       "from pipeline cache %p\n",
-                    dst, sha1buf, src);
+                    dst, blake3buf, src);
             if (dump_stats)
                cache_dump_stats(dst);
          }
@@ -833,20 +836,20 @@ v3dv_MergePipelineCaches(VkDevice device,
          struct v3dv_pipeline_shared_data *cache_entry = entry->data;
          assert(cache_entry);
 
-         if (_mesa_hash_table_search(dst->cache, cache_entry->sha1_key))
+         if (_mesa_hash_table_search(dst->cache, cache_entry->blake3_key))
             continue;
 
          v3dv_pipeline_shared_data_ref(cache_entry);
-         _mesa_hash_table_insert(dst->cache, cache_entry->sha1_key, cache_entry);
+         _mesa_hash_table_insert(dst->cache, cache_entry->blake3_key, cache_entry);
 
          dst->stats.count++;
          if (debug_cache) {
-            char sha1buf[41];
-            _mesa_sha1_format(sha1buf, cache_entry->sha1_key);
+            char blake3buf[BLAKE3_HEX_LEN];
+            _mesa_blake3_format(blake3buf, cache_entry->blake3_key);
 
             mesa_logi("pipeline cache %p, added entry %s "
                       "from pipeline cache %p\n",
-                    dst, sha1buf, src);
+                    dst, blake3buf, src);
             if (dump_stats)
                cache_dump_stats(dst);
          }
@@ -880,7 +883,7 @@ static bool
 v3dv_pipeline_shared_data_write_to_blob(const struct v3dv_pipeline_shared_data *cache_entry,
                                         struct blob *blob)
 {
-   blob_write_bytes(blob, cache_entry->sha1_key, 20);
+   blob_write_bytes(blob, cache_entry->blake3_key, BLAKE3_KEY_LEN);
 
    uint8_t descriptor_maps_count = 0;
    for (uint8_t stage = 0; stage < BROADCOM_SHADER_STAGES; stage++) {
@@ -988,7 +991,7 @@ v3dv_GetPipelineCacheData(VkDevice _device,
 
          size_t save_size = blob.size;
 
-         blob_write_bytes(&blob, snir->sha1_key, 20);
+         blob_write_bytes(&blob, snir->blake3_key, BLAKE3_KEY_LEN);
          blob_write_uint32(&blob, snir->size);
          blob_write_bytes(&blob, snir->data, snir->size);
 

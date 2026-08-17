@@ -60,25 +60,41 @@ extern "C" {
 #define MAX_LINE_SIZE 1024 // without 16 pixels for the seams
 #define MAX_LINE_CNT  4
 
+#define VPE_NO_ALIGNMENT 1
+#define VPE_SUBSAMPLED_OUT_ALIGNMENT 2
+#define VPE_FROD_ALIGNMENT           16
+#define MAX_FROD_VIEWPORT_DIVIDER    8
+
+#define VPE_DESTINATION_AS_INPUT_STREAM_INDEX 0xff
+
+#define OPTIMAL_MIN_PERFORMACE_MODE_SIZE                                                           \
+    400 // Temp smallest value for performance mode to be worth it - need to determine this
+        // experimentally i.e.  values where num_pixels isn't worth cmd_info generation time
 enum vpe_cmd_ops {
     VPE_CMD_OPS_BLENDING,
     VPE_CMD_OPS_BG,
     VPE_CMD_OPS_COMPOSITING,
     VPE_CMD_OPS_BG_VSCF_INPUT,  // For visual confirm input
     VPE_CMD_OPS_BG_VSCF_OUTPUT, // For visual confirm output
-};
-
-enum vpe_cmd_type {
-    VPE_CMD_TYPE_COMPOSITING,
-    VPE_CMD_TYPE_BG,
-    VPE_CMD_TYPE_BG_VSCF_INPUT,  // For visual confirm input
-    VPE_CMD_TYPE_BG_VSCF_OUTPUT, // For visual confirm output
-    VPE_CMD_TYPE_COUNT
+    VPE_CMD_OPS_ALPHA_THROUGH_LUMA,
+    VPE_CMD_OPS_BG_VSCF_PIPE0, // For visual confirm pipe 0
+    VPE_CMD_OPS_BG_VSCF_PIPE1, // For visual confirm pipe 1
+    VPE_CMD_OPS_COUNT
 };
 
 enum vpe_stream_type {
     VPE_STREAM_TYPE_INPUT,
     VPE_STREAM_TYPE_BG_GEN,
+    VPE_STREAM_TYPE_DESTINATION,
+    VPE_STREAM_TYPE_BKGR_BACKGROUND, // New background for the bg replacement (BKGR) feature
+    VPE_STREAM_TYPE_BKGR_VIDEO,      // Video which will have its bg replaced
+    VPE_STREAM_TYPE_BKGR_ALPHA,      // Alpha stream for to combine with BKGR video stream
+};
+
+enum lut3d_type {
+    LUT3D_TYPE_NONE,
+    LUT3D_TYPE_CPU,
+    LUT3D_TYPE_GPU,
 };
 
 /** this represents a segement context.
@@ -87,6 +103,8 @@ struct segment_ctx {
     uint16_t           segment_idx;
     struct stream_ctx *stream_ctx;
     struct scaler_data scaler_data;
+    struct fmt_boundary_mode boundary_mode;
+    struct spl_opp_adjust opp_recout_adjust;
 };
 
 struct vpe_cmd_input {
@@ -97,6 +115,8 @@ struct vpe_cmd_input {
 struct vpe_cmd_output {
     struct vpe_rect dst_viewport;
     struct vpe_rect dst_viewport_c;
+    struct fmt_boundary_mode boundary_mode;
+    struct spl_opp_adjust opp_recout_adjust;
 };
 
 struct vpe_cmd_info {
@@ -111,9 +131,13 @@ struct vpe_cmd_info {
     uint16_t              num_outputs;
     struct vpe_cmd_output outputs[MAX_OUTPUT_PIPE];
 
-    bool tm_enabled;
+    enum lut3d_type lut3d_type;
+
     bool insert_start_csync;
     bool insert_end_csync;
+    struct vpe_surface_info frod_surface[VPE_FROD_MAX_STAGE]; /**< FROD outputs */
+    struct opp_frod_param   frod_param;                       /**< FROD parameters */
+    uint32_t                histo_dsets[MAX_INPUT_PIPE];
 };
 
 struct config_record {
@@ -134,7 +158,7 @@ struct stream_ctx {
 
     // share configs that can be re-used once generated
     struct vpe_vector *configs[MAX_INPUT_PIPE];
-    struct vpe_vector *stream_op_configs[MAX_INPUT_PIPE][VPE_CMD_TYPE_COUNT];
+    struct vpe_vector *stream_op_configs[MAX_INPUT_PIPE][VPE_CMD_OPS_COUNT];
 
     // cached color properties
     bool                     per_pixel_alpha;
@@ -144,6 +168,7 @@ struct stream_ctx {
     uint64_t                 uid_3dlut;                 // UID for current 3D LUT params
     bool                     geometric_scaling;
     bool                     is_yuv_input;
+    struct fixed31_32 csc_renorm_factor; // csc was scaled down to fit into HW format
 
     union {
         struct {
@@ -162,10 +187,21 @@ struct stream_ctx {
     struct transfer_func        *in_shaper_func; // for shaper lut
     struct vpe_3dlut            *lut3d_func;     // for 3dlut
     struct transfer_func        *blend_tf;       // for 1dlut
+    struct vpe_mps_ctx *mps_ctx; // used to store the return values from multi-pipe segmentation.
+                                 // Allocated by the base stream. if non-base stream, access this
+                                 // through ctx->mps_parent_stream->mps_ctx
+    struct stream_ctx
+        *mps_parent_stream;      // point to base stream for multi-pipe segmentation
+                                 // ex. if blending streams 0, 1 & 2, this will point to stream 0
     white_point_gain             white_point_gain;
     bool                         flip_horizonal_output;
     struct vpe_color_adjust      color_adjustments; // stores the current color adjustments params
     struct fixed31_32            tf_scaling_factor; // a gain applied on a transfer function
+    enum vpe_scan_direction scan; // Scan direction based on the h/v mirror and rotation angle
+    struct spl_in  spl_input;
+    struct spl_out spl_output;
+    enum fmt_subsampling_boundary_mode left;
+    enum fmt_subsampling_boundary_mode right;
 };
 
 struct output_ctx {
@@ -193,7 +229,9 @@ struct output_ctx {
         };
         unsigned int u32All;
     } dirty_bits;
-
+    struct vpe_surface_info    frod_surface[VPE_FROD_MAX_STAGE]; // surfaces for FROD
+    struct vpe_csc_matrix*     out_csc_matrix; // for mpc out
+    struct vpe_frod_param      frod_param;     // FROD parameters
     struct transfer_func        *output_tf;
     const struct transfer_func  *in_shaper_func; // for shaper lut
     const struct vpe_3dlut      *lut3d_func;     // for 3dlut
@@ -210,10 +248,11 @@ struct output_ctx {
 #define PIPE_CTX_NO_OWNER ((uint32_t)(-1))
 
 struct pipe_ctx {
-    uint32_t pipe_idx;
-    uint32_t owner; // stream_idx
-    bool     is_top_pipe;
-    int32_t  top_pipe_idx;
+    uint32_t         pipe_idx;
+    uint32_t         owner; // stream_idx
+    bool             is_top_pipe;
+    int32_t          top_pipe_idx;
+    enum vpe_cmd_ops cmd_type;
 };
 
 struct config_frontend_cb_ctx {
@@ -221,7 +260,7 @@ struct config_frontend_cb_ctx {
     uint32_t          stream_idx;
     bool              stream_sharing;
     bool              stream_op_sharing;
-    enum vpe_cmd_type cmd_type; // command type, i.e. bg or compositing
+    enum vpe_cmd_ops  cmd_type; // command type, i.e. bg or compositing
 };
 
 struct config_backend_cb_ctx {
@@ -267,13 +306,14 @@ struct vpe_priv {
     struct vpe_stream      *dummy_stream;
     bool scale_yuv_matrix; // this is a flag that forces scaling the yuv->rgb matrix
                            //  when embedding the color adjustments
-
+    bool is_new_context;   // this is a flag for fw detecting if new context comes in,
+                           // used to decide whether to calculate FPS or not.
     // collaborate sync data counter
     int32_t  collaborate_sync_index;
     uint16_t vpe_num_instance;
     bool     collaboration_mode;
     enum vpe_expansion_mode expansion_mode;
-    const struct vpe_engine       *engine_handle; /**< vpe engine instance */
+    const struct vpe_engine *engine_handle; /**< vpe engine instance */
 };
 
 /** internal vpe engine instance */
@@ -281,10 +321,10 @@ struct vpe_engine_priv {
     struct vpe_engine pub; /**< public member */
 
     /** internal */
-    struct vpe_init_data           init;        /**< vpe init data */
-    uint8_t                        ver_major;   /**< vpe major version */
-    uint8_t                        ver_minor;   /**< vpe minor version */
-    uint8_t                        ver_rev;     /**< vpe revision version */
+    struct vpe_init_data init;      /**< vpe init data */
+    uint8_t              ver_major; /**< vpe major version */
+    uint8_t              ver_minor; /**< vpe minor version */
+    uint8_t              ver_rev;   /**< vpe revision version */
 };
 #ifdef __cplusplus
 }

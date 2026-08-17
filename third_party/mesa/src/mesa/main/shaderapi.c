@@ -126,7 +126,7 @@ GLbitfield
 _mesa_get_shader_flags(void)
 {
    GLbitfield flags = 0x0;
-   const char *env = getenv("MESA_GLSL");
+   const char *env = os_get_option("MESA_GLSL");
 
    if (env) {
       if (strstr(env, "dump_on_error"))
@@ -167,7 +167,7 @@ _mesa_get_shader_flags(void)
 #endif
 
 /**
- * Memoized version of getenv("MESA_SHADER_CAPTURE_PATH").
+ * Memoized version of os_get_option_secure("MESA_SHADER_CAPTURE_PATH").
  */
 const char *
 _mesa_get_shader_capture_path(void)
@@ -176,7 +176,7 @@ _mesa_get_shader_capture_path(void)
    static const char *path = NULL;
 
    if (!read_env_var) {
-      path = secure_getenv("MESA_SHADER_CAPTURE_PATH");
+      path = os_get_option_secure("MESA_SHADER_CAPTURE_PATH");
       read_env_var = true;
 
 #if ANDROID_SHADER_CAPTURE
@@ -1614,9 +1614,7 @@ validate_program(struct gl_context *ctx, GLuint program)
    shProg->data->Validated = validate_shader_program(shProg, errMsg);
    if (!shProg->data->Validated) {
       /* update info log */
-      if (shProg->data->InfoLog) {
-         ralloc_free(shProg->data->InfoLog);
-      }
+      ralloc_free(shProg->data->InfoLog);
       shProg->data->InfoLog = ralloc_strdup(shProg->data, errMsg);
    }
 }
@@ -1658,8 +1656,6 @@ void GLAPIENTRY
 _mesa_CompileShader(GLuint shaderObj)
 {
    GET_CURRENT_CONTEXT(ctx);
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glCompileShader %u\n", shaderObj);
    _mesa_compile_shader(ctx, _mesa_lookup_shader_err(ctx, shaderObj,
                                                      "glCompileShader"));
 }
@@ -1677,10 +1673,6 @@ GLuint GLAPIENTRY
 _mesa_CreateShader(GLenum type)
 {
    GET_CURRENT_CONTEXT(ctx);
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glCreateShader %s\n", _mesa_enum_to_string(type));
-
    return create_shader_err(ctx, type, "glCreateShader");
 }
 
@@ -1705,8 +1697,6 @@ GLuint GLAPIENTRY
 _mesa_CreateProgram(void)
 {
    GET_CURRENT_CONTEXT(ctx);
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glCreateProgram\n");
    return create_shader_program(ctx);
 }
 
@@ -1722,11 +1712,6 @@ _mesa_CreateProgramObjectARB(void)
 void GLAPIENTRY
 _mesa_DeleteObjectARB(GLhandleARB obj)
 {
-   if (MESA_VERBOSE & VERBOSE_API) {
-      GET_CURRENT_CONTEXT(ctx);
-      _mesa_debug(ctx, "glDeleteObjectARB(%lu)\n", (unsigned long)obj);
-   }
-
    if (obj) {
       GET_CURRENT_CONTEXT(ctx);
       FLUSH_VERTICES(ctx, 0, 0);
@@ -1952,9 +1937,6 @@ _mesa_LinkProgram(GLuint programObj)
 {
    GET_CURRENT_CONTEXT(ctx);
 
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glLinkProgram %u\n", programObj);
-
    struct gl_shader_program *shProg =
       _mesa_lookup_shader_program_err(ctx, programObj, "glLinkProgram");
    link_program_error(ctx, shProg);
@@ -1991,14 +1973,14 @@ _mesa_dump_shader_source(const mesa_shader_stage stage, const char *source,
 {
 #ifndef CUSTOM_SHADER_REPLACEMENT
    static bool path_exists = true;
-   char *dump_path;
+   const char *dump_path;
    FILE *f;
    char blake3_str[BLAKE3_OUT_LEN * 2 + 1];
 
    if (!path_exists)
       return;
 
-   dump_path = secure_getenv("MESA_SHADER_DUMP_PATH");
+   dump_path = os_get_option_secure("MESA_SHADER_DUMP_PATH");
    if (!dump_path) {
       path_exists = false;
       return;
@@ -2028,7 +2010,7 @@ GLcharARB *
 _mesa_read_shader_source(const mesa_shader_stage stage, const char *source,
                          const blake3_hash blake3)
 {
-   char *read_path;
+   const char *read_path;
    static bool path_exists = true;
    int len, shader_size = 0;
    GLcharARB *buffer;
@@ -2063,7 +2045,7 @@ _mesa_read_shader_source(const mesa_shader_stage stage, const char *source,
    if (!path_exists)
       return NULL;
 
-   read_path = getenv("MESA_SHADER_READ_PATH");
+   read_path = os_get_option("MESA_SHADER_READ_PATH");
    if (!read_path) {
       path_exists = false;
       return NULL;
@@ -2222,9 +2204,6 @@ use_program(GLuint program, bool no_error)
 {
    GET_CURRENT_CONTEXT(ctx);
    struct gl_shader_program *shProg = NULL;
-
-   if (MESA_VERBOSE & VERBOSE_API)
-      _mesa_debug(ctx, "glUseProgram %u\n", program);
 
    if (no_error) {
       if (program) {

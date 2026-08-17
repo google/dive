@@ -1,26 +1,7 @@
 /*
  * Copyright © 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
  *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
- * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
-
-/**
  * @file iris_bufmgr.c
  *
  * The Iris buffer manager.
@@ -48,7 +29,6 @@
 
 #include "errno.h"
 #include "common/intel_aux_map.h"
-#include "common/intel_mem.h"
 #include "c99_alloca.h"
 #include "dev/intel_debug.h"
 #include "common/intel_common.h"
@@ -667,7 +647,7 @@ bo_unmap(struct iris_bo *bo)
 }
 
 static struct pb_slabs *
-get_slabs(struct iris_bufmgr *bufmgr, uint64_t size)
+get_slabs(struct iris_bufmgr *bufmgr, uint32_t size)
 {
    for (unsigned i = 0; i < NUM_SLAB_ALLOCATORS; i++) {
       struct pb_slabs *slabs = &bufmgr->bo_slabs[i];
@@ -681,7 +661,7 @@ get_slabs(struct iris_bufmgr *bufmgr, uint64_t size)
 
 /* Return the power of two size of a slab entry matching the input size. */
 static unsigned
-get_slab_pot_entry_size(struct iris_bufmgr *bufmgr, unsigned size)
+get_slab_pot_entry_size(struct iris_bufmgr *bufmgr, uint32_t size)
 {
    unsigned entry_size = util_next_power_of_two(size);
    unsigned min_entry_size = 1 << bufmgr->bo_slabs[0].min_order;
@@ -691,7 +671,7 @@ get_slab_pot_entry_size(struct iris_bufmgr *bufmgr, unsigned size)
 
 /* Return the slab entry alignment. */
 static unsigned
-get_slab_entry_alignment(struct iris_bufmgr *bufmgr, unsigned size)
+get_slab_entry_alignment(struct iris_bufmgr *bufmgr, uint32_t size)
 {
    unsigned entry_size = get_slab_pot_entry_size(bufmgr, size);
 
@@ -755,7 +735,7 @@ iris_slab_alloc(void *priv,
    struct iris_bufmgr *bufmgr = priv;
    struct iris_slab *slab = calloc(1, sizeof(struct iris_slab));
    enum bo_alloc_flags flags = BO_ALLOC_NO_SUBALLOC;
-   unsigned slab_size = 0;
+   uint32_t slab_size = 0;
    /* We only support slab allocation for IRIS_MEMZONE_OTHER */
    enum iris_memory_zone memzone = IRIS_MEMZONE_OTHER;
 
@@ -766,7 +746,7 @@ iris_slab_alloc(void *priv,
 
    /* Determine the slab buffer size. */
    for (unsigned i = 0; i < NUM_SLAB_ALLOCATORS; i++) {
-      unsigned max_entry_size =
+      uint32_t max_entry_size =
          1 << (slabs[i].min_order + slabs[i].num_orders - 1);
 
       if (entry_size <= max_entry_size) {
@@ -796,7 +776,7 @@ iris_slab_alloc(void *priv,
           *
           * TODO: move this to intel_device_info?
           */
-         const unsigned pte_size = 2 * 1024 * 1024;
+         const uint32_t pte_size = 2 * 1024 * 1024;
 
          if (i == NUM_SLAB_ALLOCATORS - 1 && slab_size < pte_size)
             slab_size = pte_size;
@@ -861,6 +841,7 @@ iris_slab_alloc(void *priv,
       bo->zeroed = slab->bo->zeroed;
 
       bo->slab.entry.slab = &slab->base;
+      bo->slab.actual_size = entry_size;
 
       bo->slab.real = iris_get_backing_bo(slab->bo);
 
@@ -973,17 +954,17 @@ alloc_bo_from_slabs(struct iris_bufmgr *bufmgr,
       return NULL;
 
    struct pb_slabs *last_slab = &bufmgr->bo_slabs[NUM_SLAB_ALLOCATORS - 1];
-   unsigned max_slab_entry_size =
+   const uint32_t max_slab_entry_size =
       1 << (last_slab->min_order + last_slab->num_orders - 1);
 
    if (size > max_slab_entry_size)
       return NULL;
 
+   assert(size <= UINT32_MAX);
    struct pb_slab_entry *entry;
-
    enum iris_heap heap = flags_to_heap(bufmgr, flags);
 
-   unsigned alloc_size = size;
+   uint32_t alloc_size = size;
 
    /* Always use slabs for sizes less than 4 KB because the kernel aligns
     * everything to 4 KB.
@@ -1018,6 +999,7 @@ alloc_bo_from_slabs(struct iris_bufmgr *bufmgr,
       return NULL;
 
    struct iris_bo *bo = container_of(entry, struct iris_bo, slab.entry);
+   assert(get_slabs(bufmgr, bo->slab.actual_size) == slabs);
 
    if (bo->aux_map_address && bo->bufmgr->aux_map_ctx) {
       /* This buffer was associated with an aux-buffer range.  We only allow
@@ -1437,12 +1419,16 @@ iris_bo_set_prime_fd(struct iris_bo *bo)
    struct iris_bufmgr *bufmgr = bo->bufmgr;
 
    if (needs_prime_fd(bufmgr) && bo->real.prime_fd == -1) {
-      if (drmPrimeHandleToFD(bufmgr->fd, bo->gem_handle,
-                             DRM_CLOEXEC | DRM_RDWR, &bo->real.prime_fd)) {
+      struct drm_prime_handle prime_arg = {
+         .handle = bo->gem_handle,
+         .flags = DRM_CLOEXEC | DRM_RDWR,
+      };
+      if (intel_ioctl(bufmgr->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime_arg)) {
          fprintf(stderr, "Failed to get prime fd for bo %s/%u\n",
                  bo->name, bo->gem_handle);
          return false;
       }
+      bo->real.prime_fd = prime_arg.fd;
    }
 
    return true;
@@ -1717,7 +1703,7 @@ iris_bo_unreference(struct iris_bo *bo)
 
       bo->zeroed = false;
       if (bo->gem_handle == 0) {
-         pb_slab_free(get_slabs(bufmgr, bo->size), &bo->slab.entry);
+         pb_slab_free(get_slabs(bufmgr, bo->slab.actual_size), &bo->slab.entry);
       } else {
          simple_mtx_lock(&bufmgr->lock);
 
@@ -1942,6 +1928,8 @@ iris_bufmgr_destroy(struct iris_bufmgr *bufmgr)
 
    iris_bufmgr_destroy_global_vm(bufmgr);
 
+   intel_virtio_unref_fd(bufmgr->fd);
+
    close(bufmgr->fd);
 
    simple_mtx_unlock(&bufmgr->lock);
@@ -1991,13 +1979,16 @@ iris_bo_import_dmabuf(struct iris_bufmgr *bufmgr, int prime_fd,
    assert(!(flags & BO_ALLOC_NO_VMA));
 
    simple_mtx_lock(&bufmgr->lock);
-   int ret = drmPrimeFDToHandle(bufmgr->fd, prime_fd, &handle);
-   if (ret) {
+   struct drm_prime_handle prime_arg = {
+      .fd = prime_fd,
+   };
+   if (intel_ioctl(bufmgr->fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &prime_arg)) {
       DBG("import_dmabuf: failed to obtain handle from fd: %s\n",
           strerror(errno));
       simple_mtx_unlock(&bufmgr->lock);
       return NULL;
    }
+   handle = prime_arg.handle;
 
    /*
     * See if the kernel has already returned this buffer to us. Just as
@@ -2019,7 +2010,7 @@ iris_bo_import_dmabuf(struct iris_bufmgr *bufmgr, int prime_fd,
     * later, we can lseek on the prime fd to get the size.  Older
     * kernels will just fail, in which case we fall back to the
     * provided (estimated or guess size). */
-   ret = lseek(prime_fd, 0, SEEK_END);
+   int ret = lseek(prime_fd, 0, SEEK_END);
    if (ret != -1)
       bo->size = ret;
 
@@ -2053,12 +2044,15 @@ iris_bo_import_dmabuf(struct iris_bufmgr *bufmgr, int prime_fd,
 
    uint64_t alignment = 1;
 
-   /* When an aux map will be used, there is an alignment requirement on the
-    * main surface from the mapping granularity. Some planes of the image may
-    * have smaller alignment requirements, but this one should work for all.
-    */
    if (bufmgr->devinfo.has_aux_map && isl_drm_modifier_has_aux(modifier))
+      /* There is an alignment requirement on the main surface from the
+       * aux-map's mapping granularity. Some planes of the image may have
+       * smaller alignment requirements, but this one should work for all.
+       */
       alignment = intel_aux_map_get_alignment(bufmgr->aux_map_ctx);
+   else if (bo->size >= 64 * 1024)
+      /* The BO may contain a surface that is tiled with a 64K tiling. */
+      alignment = 64 * 1024;
 
    bo->address = vma_alloc(bufmgr, IRIS_MEMZONE_OTHER, bo->size, alignment);
    if (bo->address == 0ull)
@@ -2139,9 +2133,14 @@ iris_bo_export_dmabuf(struct iris_bo *bo, int *prime_fd)
    /* We cannot export suballocated BOs. */
    assert(iris_bo_is_real(bo));
 
-   if (drmPrimeHandleToFD(bufmgr->fd, bo->gem_handle,
-                          DRM_CLOEXEC | DRM_RDWR, prime_fd) != 0)
+   struct drm_prime_handle prime_arg = {
+      .handle = bo->gem_handle,
+      .flags = DRM_CLOEXEC | DRM_RDWR,
+   };
+   if (intel_ioctl(bufmgr->fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime_arg))
       return -errno;
+
+   *prime_fd = prime_arg.fd;
 
    iris_bo_mark_exported(bo);
 
@@ -2306,7 +2305,7 @@ intel_aux_map_buffer_alloc(void *driver_ctx, uint32_t size)
    struct iris_bufmgr *bufmgr = (struct iris_bufmgr *)driver_ctx;
 
    unsigned int page_size = getpagesize();
-   size = MAX2(ALIGN(size, page_size), page_size);
+   size = MAX2(align(size, page_size), page_size);
 
    struct iris_bo *bo = alloc_fresh_bo(bufmgr, size, BO_ALLOC_CAPTURE);
    if (!bo) {
@@ -2426,6 +2425,8 @@ iris_bufmgr_create(struct intel_device_info *devinfo, int fd, bool bo_reuse)
    bufmgr->fd = os_dupfd_cloexec(fd);
    if (bufmgr->fd == -1)
       goto error_dup;
+
+   intel_virtio_ref_fd(bufmgr->fd);
 
    p_atomic_set(&bufmgr->refcount, 1);
 
@@ -2594,6 +2595,7 @@ error_bucket_cache:
       util_vma_heap_finish(&bufmgr->vma_allocator[i]);
    iris_bufmgr_destroy_global_vm(bufmgr);
 error_init_vm:
+   intel_virtio_unref_fd(bufmgr->fd);
    close(bufmgr->fd);
 error_dup:
    free(bufmgr);
@@ -2655,16 +2657,16 @@ iris_bufmgr_get_for_fd(int fd, bool bo_reuse)
    }
 
    if (!intel_get_device_info_from_fd(fd, &devinfo, 8, -1))
-      return NULL;
+      goto unlock;
 
    if (devinfo.ver < 8 || devinfo.platform == INTEL_PLATFORM_CHV)
-      return NULL;
+      goto unlock;
 
 #ifndef INTEL_USE_ELK
    if (devinfo.ver < 9) {
       WARN_ONCE(devinfo.ver == 8,
                 "ERROR: Iris was compiled without support for Gfx version 8.\n");
-      return NULL;
+      goto unlock;
    }
 #endif
 

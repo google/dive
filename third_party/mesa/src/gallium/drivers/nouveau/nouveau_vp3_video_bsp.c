@@ -42,14 +42,6 @@ struct mpeg12_picparm_bsp {
    uint8_t f_code[2][2];
 };
 
-struct mpeg4_picparm_bsp {
-   uint16_t width;
-   uint16_t height;
-   uint8_t vop_time_increment_size;
-   uint8_t interlaced;
-   uint8_t resync_marker_disable;
-};
-
 struct vc1_picparm_bsp {
    uint16_t width;
    uint16_t height;
@@ -129,31 +121,6 @@ nouveau_vp3_fill_picparm_mpeg12_bsp(struct nouveau_vp3_decoder *dec,
       pic_bsp->f_code[i/2][i%2] = desc->f_code[i/2][i%2] + 1; // FU
 
    return (desc->num_slices << 4) | (dec->base.profile != PIPE_VIDEO_PROFILE_MPEG1);
-}
-
-static uint32_t
-nouveau_vp3_fill_picparm_mpeg4_bsp(struct nouveau_vp3_decoder *dec,
-                                   struct pipe_mpeg4_picture_desc *desc,
-                                   char *map)
-{
-   struct mpeg4_picparm_bsp *pic_bsp = (struct mpeg4_picparm_bsp *)map;
-   uint32_t t, bits = 0;
-   pic_bsp->width = dec->base.width;
-   pic_bsp->height = dec->base.height;
-   assert(desc->vop_time_increment_resolution > 0);
-
-   t = desc->vop_time_increment_resolution - 1;
-   while (t) {
-      bits++;
-      t /= 2;
-   }
-   if (!bits)
-      bits = 1;
-   t = desc->vop_time_increment_resolution - 1;
-   pic_bsp->vop_time_increment_size = bits;
-   pic_bsp->interlaced = desc->interlaced;
-   pic_bsp->resync_marker_disable = desc->resync_marker_disable;
-   return 4;
 }
 
 static uint32_t
@@ -295,10 +262,6 @@ nouveau_vp3_bsp_end(struct nouveau_vp3_decoder *dec, union pipe_desc desc)
    case PIPE_VIDEO_FORMAT_MPEG12:
       endmarker = 0xb7010000;
       caps = nouveau_vp3_fill_picparm_mpeg12_bsp(dec, desc.mpeg12, bsp);
-      break;
-   case PIPE_VIDEO_FORMAT_MPEG4:
-      endmarker = 0xb1010000;
-      caps = nouveau_vp3_fill_picparm_mpeg4_bsp(dec, desc.mpeg4, bsp);
       break;
    case PIPE_VIDEO_FORMAT_VC1: {
       endmarker = 0x0a010000;

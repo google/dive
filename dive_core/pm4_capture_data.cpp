@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #include "archive.h"
@@ -347,9 +348,14 @@ const MemoryAllocationInfo& MemoryManager::GetMemoryAllocationInfo() const
 }
 
 //--------------------------------------------------------------------------------------------------
-bool MemoryManager::RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
-                                       uint64_t size) const
+bool MemoryManager::RetrieveMemoryBuffer(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
+                                         uint64_t size) const
 {
+    // Asssume we don't need the last byte of 64-bit address space.
+    if (std::numeric_limits<uint64_t>::max() - va_addr < size)
+    {
+        return false;
+    }
     // Check the last-used block first, because this is the desired block most of the time
     if (m_last_used_block_ptr != nullptr)
     {
@@ -365,7 +371,7 @@ bool MemoryManager::RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, 
 #ifndef NDEBUG
             if (mem_block.m_data_size >= 16 * 1024 * 1024)
             {
-                std::cout << "MemoryManager::RetrieveMemoryData data.m_data_size: "
+                std::cout << "MemoryManager::RetrieveMemoryBuffer data.m_data_size: "
                           << mem_block.m_data_size << " gpu addr:  " << va_addr << std::endl;
             }
 #endif
@@ -883,10 +889,12 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader& capture_fil
             }
             case RD_GPU_ID:
             {
-                DIVE_ASSERT(block_info.m_data_size == 4);
-                uint32_t gpu_id = 0;
-                capture_file.Read(reinterpret_cast<char*>(&gpu_id), block_info.m_data_size);
-                SetGPUID(gpu_id);
+                std::optional<uint32_t> gpu_id = capture_file.Read<uint32_t>();
+                if (!gpu_id.has_value())
+                {
+                    return LoadResult::kCorruptData;
+                }
+                SetGPUID(gpu_id.value());
             }
             break;
             case RD_CHIP_ID:
@@ -895,11 +903,15 @@ CaptureData::LoadResult Pm4CaptureData::LoadAdrenoRdFile(FileReader& capture_fil
                 // Or if it was an invalid gpu_id, which leads to a kGPUVariantNone
                 if ((GetGPUID() == 0) || (GetGPUVariantType() == kGPUVariantNone))
                 {
-                    DIVE_ASSERT(block_info.m_data_size == 8);
-                    fd_dev_id dev_id{};
-                    capture_file.Read(reinterpret_cast<char*>(&dev_id.chip_id),
-                                      block_info.m_data_size);
-                    dev_id.gpu_id = 0;
+                    std::optional<uint64_t> chip_id = capture_file.Read<uint64_t>();
+                    if (!chip_id.has_value())
+                    {
+                        return LoadResult::kCorruptData;
+                    }
+                    fd_dev_id dev_id{
+                        .gpu_id = 0,
+                        .chip_id = chip_id.value(),
+                    };
                     auto info = fd_dev_info(&dev_id);
                     // It is possible that only RD_GPU_ID is valid, and RD_CHIP_ID contains invalid
                     // values

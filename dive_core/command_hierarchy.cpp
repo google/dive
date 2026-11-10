@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -692,9 +693,13 @@ bool CommandHierarchyCreator::CreateTrees(EngineType engine_type, QueueType queu
         }
 
         // Copy the given va/size from the memory blocks
-        virtual bool RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
-                                        uint64_t size) const
+        virtual bool RetrieveMemoryBuffer(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
+                                          uint64_t size) const
         {
+            if (std::numeric_limits<uint64_t>::max() - va_addr < size)
+            {
+                return false;
+            }
             if ((va_addr + size) > (m_size_in_dwords * sizeof(uint32_t))) return false;
 
             // Treat the va_addr as an offset
@@ -2151,12 +2156,12 @@ void CommandHierarchyCreator::AddConstantsToPacketNode(const IMemoryManager& mem
         {
             if ((i + j) < num_dwords)
             {
-                T value;
+                T value{};
                 uint64_t addr = ext_src_addr + ((i + j) * sizeof(T));
 
                 // For some reason, some captures refer to memory not backed by memory blocks
                 // Let's not treat it as an error, since cffdump handles this gracefully as well
-                if (!mem_manager.RetrieveMemoryData(&value, submit_index, addr, sizeof(T)))
+                if (!mem_manager.RetrieveMemoryBuffer(&value, submit_index, addr, sizeof(T)))
                 {
                     DIVE_LOG("Indirect constant buffer at 0x%p with no backing memory!",
                              ext_src_addr);

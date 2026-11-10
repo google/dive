@@ -19,6 +19,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 #include "common.h"
 #include "dive_core/capture_data.h"
@@ -103,8 +104,8 @@ class MemoryManager : public IMemoryManager
     const MemoryAllocationInfo& GetMemoryAllocationInfo() const;
 
     // Load the given va/size from the memory blocks
-    virtual bool RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
-                                    uint64_t size) const override;
+    virtual bool RetrieveMemoryBuffer(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
+                                      uint64_t size) const override;
 
     // Keep grabbing contiguous memory blocks until the callback returns false
     virtual bool GetMemoryOfUnknownSizeViaCallback(uint32_t submit_index, uint64_t va_addr,
@@ -262,6 +263,18 @@ class FileReader
     FileReader(const char* file_name);
     int Open();
     int64_t Read(char* buf, int64_t size);
+    template <typename T>
+    std::optional<T> Read()
+    {
+        static_assert(std::is_trivially_copyable_v<T>);
+        T data{};
+        if (Read(reinterpret_cast<char*>(&data), sizeof(T)) != sizeof(T))  // NOLINT
+        {
+            return std::nullopt;
+        }
+        return data;
+    }
+
     int Close();
 
  private:

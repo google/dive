@@ -19,6 +19,8 @@
 #pragma once
 #include <stdint.h>
 
+#include <type_traits>
+
 namespace Dive
 {
 
@@ -28,8 +30,20 @@ class IMemoryManager
 {
  public:
     // Copy the given va/size from the memory blocks
-    virtual bool RetrieveMemoryData(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
-                                    uint64_t size) const = 0;
+    virtual bool RetrieveMemoryBuffer(void* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
+                                      uint64_t size) const = 0;
+    template <typename T>
+    bool RetrieveMemoryData(T* buffer_ptr, uint32_t submit_index, uint64_t va_addr,
+                            uint64_t size = sizeof(T)) const
+    {
+        static_assert(sizeof(T) > 1, "Are you trying to read a buffer?");
+        static_assert(std::is_trivially_copyable_v<T>);
+        if (size > sizeof(T))
+        {
+            return false;
+        }
+        return RetrieveMemoryBuffer(buffer_ptr, submit_index, va_addr, size);
+    }
 
     // For resources of unknown size (eg. shaders). The caller is responsible (via return value of
     // callback) with notifying when end of resource is reached. Otherwise MemoryManager will keep
